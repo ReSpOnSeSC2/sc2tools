@@ -91,7 +91,7 @@ function SettingsShellInner({
         value={active}
         onValueChange={requestSwitch}
         orientation="vertical"
-        className="lg:grid-cols-[240px_1fr]"
+        className="lg:grid-cols-[240px_minmax(0,1fr)]"
       >
         {/* Mobile bar — horizontal scroll above content */}
         <div className="lg:hidden">
@@ -136,7 +136,11 @@ function SettingsShellInner({
         </Tabs.List>
 
         {TABS.map((t) => (
-          <Tabs.Content key={t.id} value={t.id} className="space-y-5 pb-24">
+          <Tabs.Content
+            key={t.id}
+            value={t.id}
+            className="space-y-5 pb-24"
+          >
             {renderTab(t.id)}
           </Tabs.Content>
         ))}

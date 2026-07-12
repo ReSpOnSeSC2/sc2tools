@@ -208,7 +208,7 @@ describe("/v1/me/profile", () => {
     const got = await withAuth(request(app).get("/v1/me/profile"));
     expect(got.status).toBe(200);
     expect(got.body.lastKnownMmr).toBe(4730);
-    expect(got.body.lastKnownMmrAt).toBe("2026-05-07T10:00:00Z");
+    expect(got.body.lastKnownMmrAt).toBe("2026-05-07T10:00:00.000Z");
     expect(got.body.lastKnownMmrRegion).toBe("NA");
   });
 
@@ -225,6 +225,33 @@ describe("/v1/me/profile", () => {
       .set("content-type", "application/json");
     expect(second.status).toBe(200);
     expect(second.body.wrote).toBe(false);
+  });
+
+  test("POST /v1/me/last-mmr cannot roll back a newer captured rating", async () => {
+    const newer = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({
+        mmr: 4812,
+        capturedAt: "2026-07-12T15:00:00Z",
+        region: "NA",
+      })
+      .set("content-type", "application/json");
+    expect(newer.status).toBe(200);
+    expect(newer.body.wrote).toBe(true);
+
+    const older = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({
+        mmr: 3100,
+        capturedAt: "2025-01-01T12:00:00Z",
+        region: "EU",
+      })
+      .set("content-type", "application/json");
+    expect(older.status).toBe(200);
+    expect(older.body.wrote).toBe(false);
+
+    const got = await withAuth(request(app).get("/v1/me/profile"));
+    expect(got.body.lastKnownMmr).toBe(4812);
+    expect(got.body.lastKnownMmrAt).toBe("2026-07-12T15:00:00.000Z");
+    expect(got.body.lastKnownMmrRegion).toBe("NA");
   });
 
   test("POST /v1/me/last-mmr rejects out-of-band MMR values", async () => {

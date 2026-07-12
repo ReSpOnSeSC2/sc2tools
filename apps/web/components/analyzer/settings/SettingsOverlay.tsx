@@ -4,19 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Plus,
-  Copy,
   Trash2,
   Tv,
   Check,
   AlertTriangle,
-  Play,
   Square,
   Sparkles,
   RefreshCw,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { apiCall, useApi, API_BASE, type ClientApiError } from "@/lib/clientApi";
-import { gaEvent } from "@/lib/analytics/gtag";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +36,7 @@ import {
   type GhostTarget,
 } from "@/lib/ghostBuild";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
+import { UrlRow } from "./OverlayUrlRow";
 import { OverlayThemeSection } from "./OverlayThemeSection";
 
 /**
@@ -616,13 +614,13 @@ function WidgetList({
     [token.enabledWidgets],
   );
   return (
-    <div className="space-y-2 px-4 py-3">
+    <div className="min-w-0 space-y-2 px-4 py-3">
       <p className="text-caption text-text-muted">
         Add only the widgets you actually use to OBS, position each
         independently. Click <em>Test</em> to fire sample data at one
         widget so you can see it render and decide where to put it.
       </p>
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul className="min-w-0 divide-y divide-border rounded-lg border border-border">
         {WIDGETS.map((w) => {
           const themedUrl = appendOverlayThemeToUrl(
             `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`,
@@ -649,9 +647,9 @@ function WidgetList({
           return (
             <li
               key={w.id}
-              className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
+              className="grid min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center sm:gap-3"
             >
-              <div className="flex items-start gap-3 sm:w-56 sm:flex-none">
+              <div className="flex min-w-0 items-start gap-3">
                 {w.urlArmed ? (
                   <Badge variant="cyan" size="sm">
                     URL
@@ -694,81 +692,6 @@ function WidgetList({
           );
         })}
       </ul>
-    </div>
-  );
-}
-
-export function UrlRow({
-  url,
-  compact,
-  onTest,
-  testing,
-  testDisabled,
-  testTitle,
-}: {
-  url: string;
-  compact: boolean;
-  onTest?: () => void;
-  testing?: boolean;
-  testDisabled?: boolean;
-  testTitle?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-  const onCopy = async () => {
-    if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    gaEvent("overlay_url_copied");
-    window.setTimeout(() => setCopied(false), 1500);
-  };
-  return (
-    <div className="flex flex-wrap items-stretch gap-2">
-      <code
-        title={url}
-        className={[
-          "min-w-0 grow basis-full truncate rounded bg-bg-elevated p-2 font-mono sm:basis-48",
-          compact ? "text-micro" : "text-caption",
-        ].join(" ")}
-      >
-        {url}
-      </code>
-      <div className="flex flex-none gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void onCopy()}
-          iconLeft={
-            copied ? (
-              <Check className="h-4 w-4" aria-hidden />
-            ) : (
-              <Copy className="h-4 w-4" aria-hidden />
-            )
-          }
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-        {onTest ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onTest}
-            // No loading spinner once testing starts — the Stop label
-            // already conveys "in flight". The button stays enabled
-            // so a second click triggers the cancel path.
-            disabled={testDisabled}
-            title={testTitle}
-            iconLeft={
-              testing ? (
-                <Square className="h-4 w-4" aria-hidden />
-              ) : (
-                <Play className="h-4 w-4" aria-hidden />
-              )
-            }
-          >
-            {testing ? "Stop" : "Test"}
-          </Button>
-        ) : null}
-      </div>
     </div>
   );
 }

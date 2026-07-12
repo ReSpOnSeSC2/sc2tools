@@ -113,6 +113,31 @@ _PROCESS_CRASH_STRIKES_THRESHOLD = 3
 # parses already in flight to land without hitting ``queue.Full``.
 _UPLOAD_QUEUE_SOFT_LIMIT = 500
 
+# Keep the executor's internal FIFO bounded as well. Upload-queue depth
+# cannot see parse futures that have been submitted but have not produced
+# an UploadJob yet; a fast filesystem sweep could therefore enqueue all
+# 12k historical replays before the first parse completed. Four waves of
+# workers preserves throughput without letting a resync monopolise memory
+# or bury ordinary maintenance work behind thousands of futures.
+_PARSE_INFLIGHT_MIN = 32
+_PARSE_INFLIGHT_MAX = 256
+_PARSE_INFLIGHT_WAVES = 4
+
+# Replays this fresh use the dedicated live-parse lane. A backfill can
+# place thousands of historical parses into the normal executor's FIFO;
+# without a separate lane, the replay from a game that just ended waits
+# behind the entire backlog. Thirty minutes matches the replay pipeline's
+# existing "live game" freshness window and also covers a missed watchdog
+# event picked up by the next periodic sweep.
+_LIVE_REPLAY_MAX_AGE_SEC = 30 * 60
+
+# A sweep uses mtime only as a fallback signal, and OneDrive can stamp a
+# whole restored library with "now". Admit just the newest eligible file
+# per account root to the latency-sensitive lane on each sweep; watchdog
+# events still bypass this cap immediately. This prevents a mass cloud
+# restore from rebuilding an unbounded FIFO in the one-thread live lane.
+_SWEEP_LIVE_PER_ROOT_LIMIT = 1
+
 
 def _child_smoke_test() -> Tuple[str, str]:
     """Synthetic worker payload — runs ONCE in a probe child at boot.
@@ -370,8 +395,35 @@ class ReplayWatcher:
         executor, uses_processes = self._make_parse_executor()
         self._executor: Executor = executor
         self._uses_processes: bool = uses_processes
+        # Fresh replays must never sit behind a full-history resync in
+        # the normal executor's FIFO. One parent-process thread is
+        # enough for live play (SC2 creates at most one replay at a
+        # time) and works even when the process pool had to fall back.
+        self._live_executor: Executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="sc2tools-live-parse",
+        )
+        # mtime-based sweep fallbacks are less authoritative than real
+        # watchdog creation events (OneDrive can stamp restored history
+        # with "now"). Keep them on a separate single-thread lane so a
+        # slow restored file can never sit in front of the game SC2 just
+        # finished writing.
+        self._sweep_live_executor: Executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="sc2tools-sweep-live-parse",
+        )
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
+        self._sweep_live_lock = threading.Lock()
+        self._sweep_live_paths: dict[str, str] = {}
+        self._sweep_live_roots: set[str] = set()
+        self._parse_inflight_limit = max(
+            _PARSE_INFLIGHT_MIN,
+            min(
+                _PARSE_INFLIGHT_MAX,
+                int(self._cfg.parse_concurrency) * _PARSE_INFLIGHT_WAVES,
+            ),
+        )
         # Lock covering swaps of ``self._executor`` and
         # ``self._uses_processes``. Submission threads (the watchdog
         # observer and the sweep loop) read ``self._executor`` under
@@ -576,6 +628,8 @@ class ReplayWatcher:
         with self._executor_lock:
             executor = self._executor
         executor.shutdown(wait=False, cancel_futures=True)
+        self._live_executor.shutdown(wait=False, cancel_futures=True)
+        self._sweep_live_executor.shutdown(wait=False, cancel_futures=True)
 
     # ---------------- internals ----------------
     def _discover_roots(self) -> list[Path]:
@@ -683,23 +737,16 @@ class ReplayWatcher:
         # 12k-replay backfill.
         sync_filter = self._sync_filter()
         for root in self._roots:
+            sweep_live_submitted = 0
             for path, mtime in _walk_replays(root):
-                # Congestion gate: stop feeding the parse pool while
-                # the upload queue is backed up. Parsing ahead of a
-                # stalled uploader just creates work that gets
-                # deferred (or, pre-fix, wedged the pipeline). The
-                # next sweep cycle picks up exactly where this one
-                # stopped because nothing below was marked uploaded.
-                if self._upload.pending_count() >= _UPLOAD_QUEUE_SOFT_LIMIT:
-                    log.info(
-                        "sweep_paused_upload_queue_congested depth=%d "
-                        "limit=%d (will resume on a later sweep)",
-                        self._upload.pending_count(),
-                        _UPLOAD_QUEUE_SOFT_LIMIT,
-                    )
-                    return
+                live_candidate = (
+                    sweep_live_submitted < _SWEEP_LIVE_PER_ROOT_LIMIT
+                    and _is_fresh_replay_mtime(mtime)
+                )
                 key = str(path)
                 if key in self._state.uploaded:
+                    continue
+                if self._upload.is_pending(path):
                     continue
                 if not sync_filter.mtime_in_range(mtime):
                     # Pre-filter: file mtime is well outside the user's
@@ -708,11 +755,66 @@ class ReplayWatcher:
                     # these entries when the user changes the filter.
                     self._state.uploaded[key] = "filtered"
                     continue
+                live = False
+                if live_candidate:
+                    live = self._reserve_sweep_live(path, root)
+                # Congestion gate: ordinary history waits, while one
+                # bounded mtime-fallback candidate per account may use
+                # the separate sweep-live lane. Roots remain independent,
+                # so a historical root cannot hide a fresh replay in the
+                # next account folder.
+                if (
+                    not live
+                    and self._upload.pending_count()
+                    >= _UPLOAD_QUEUE_SOFT_LIMIT
+                ):
+                    log.info(
+                        "sweep_paused_upload_queue_congested depth=%d "
+                        "limit=%d (deferring this folder)",
+                        self._upload.pending_count(),
+                        _UPLOAD_QUEUE_SOFT_LIMIT,
+                    )
+                    break
                 with self._inflight_lock:
                     if key in self._inflight:
+                        if live:
+                            self._release_sweep_live(path)
                         continue
+                    if (
+                        not live
+                        and len(self._inflight) >= self._parse_inflight_limit
+                    ):
+                        log.info(
+                            "sweep_paused_parse_backlog depth=%d limit=%d "
+                            "(deferring this folder)",
+                            len(self._inflight),
+                            self._parse_inflight_limit,
+                        )
+                        # As above, keep looking through the other roots
+                        # for a fresh replay even while history is capped.
+                        break
                     self._inflight.add(key)
-                self._submit_parse(path)
+                if live:
+                    sweep_live_submitted += 1
+                self._submit_parse(path, live=live)
+
+    def _reserve_sweep_live(self, path: Path, root: Path) -> bool:
+        """Reserve one outstanding mtime-fallback parse for ``root``."""
+        path_key = str(path)
+        root_key = str(root)
+        with self._sweep_live_lock:
+            if root_key in self._sweep_live_roots:
+                return False
+            self._sweep_live_roots.add(root_key)
+            self._sweep_live_paths[path_key] = root_key
+            return True
+
+    def _release_sweep_live(self, path: Path) -> None:
+        path_key = str(path)
+        with self._sweep_live_lock:
+            root_key = self._sweep_live_paths.pop(path_key, None)
+            if root_key is not None:
+                self._sweep_live_roots.discard(root_key)
 
     def _sync_filter(self) -> SyncFilter:
         """Resolve the user's chosen date-range filter from state.
@@ -729,7 +831,7 @@ class ReplayWatcher:
             until_iso=getattr(self._state, "sync_filter_until", None),
         )
 
-    def _submit_parse(self, path: Path) -> None:
+    def _submit_parse(self, path: Path, *, live: bool = False) -> None:
         """Hand a replay to the executor and wire up result handling.
 
         Threading mode: keeps the legacy in-thread path that mutates
@@ -749,6 +851,30 @@ class ReplayWatcher:
         single bad replay doesn't take down parse for the rest of the
         session.
         """
+        if live:
+            with self._sweep_live_lock:
+                is_sweep_fallback = str(path) in self._sweep_live_paths
+            live_executor = (
+                self._sweep_live_executor
+                if is_sweep_fallback
+                else self._live_executor
+            )
+            try:
+                live_executor.submit(
+                    self._handle_replay,
+                    path,
+                    priority=True,
+                )
+            except RuntimeError:
+                # Shutdown raced a final watchdog/sweep event. Leave the
+                # path eligible for the next agent start rather than
+                # leaking its inflight reservation forever.
+                with self._inflight_lock:
+                    self._inflight.discard(str(path))
+                self._release_sweep_live(path)
+                log.debug("live_parse_submit_after_shutdown path=%s", path.name)
+            return
+
         with self._executor_lock:
             executor = self._executor
             uses_processes = self._uses_processes
@@ -1011,7 +1137,7 @@ class ReplayWatcher:
             with self._inflight_lock:
                 self._inflight.discard(submitted_path_str)
 
-    def _handle_replay(self, path: Path) -> None:
+    def _handle_replay(self, path: Path, *, priority: bool = False) -> None:
         try:
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
@@ -1067,10 +1193,17 @@ class ReplayWatcher:
             ):
                 self._state.uploaded[str(path)] = "filtered"
                 return
-            self._upload.submit(UploadJob(file_path=path, game=game))
+            self._upload.submit(
+                UploadJob(
+                    file_path=path,
+                    game=game,
+                    priority=priority,
+                )
+            )
         finally:
             with self._inflight_lock:
                 self._inflight.discard(str(path))
+            self._release_sweep_live(path)
 
     # Called by _Handler on a watchdog event.
     def on_replay_created(self, path: Path) -> None:
@@ -1088,11 +1221,13 @@ class ReplayWatcher:
         key = str(path)
         if key in self._state.uploaded:
             return
+        if self._upload.is_pending(path):
+            return
         with self._inflight_lock:
             if key in self._inflight:
                 return
             self._inflight.add(key)
-        self._submit_parse(path)
+        self._submit_parse(path, live=True)
 
 
 class _Handler(FileSystemEventHandler):
@@ -1172,3 +1307,21 @@ def _wait_for_file_ready(path: Path, timeout_sec: float) -> bool:
         last = cur
         time.sleep(SETTLE_POLL_SEC)
     return False
+
+
+def _is_fresh_replay_mtime(
+    mtime_unix: float,
+    *,
+    now_unix: Optional[float] = None,
+) -> bool:
+    """Whether a replay belongs on the latency-sensitive parse lane."""
+    try:
+        mtime = float(mtime_unix)
+    except (TypeError, ValueError):
+        return False
+    now = time.time() if now_unix is None else float(now_unix)
+    # Small future mtimes happen with clock skew and should still be
+    # treated as live. A wildly future-dated file is also harmless here:
+    # it receives one priority parse, while the sync filter remains the
+    # authority on whether it belongs in the user's import window.
+    return (now - mtime) <= _LIVE_REPLAY_MAX_AGE_SEC

@@ -9,6 +9,7 @@ ApiClient side; if the queue is busy, new replays park in memory.
 
 from __future__ import annotations
 
+import itertools
 import logging
 import queue
 import threading
@@ -16,7 +17,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from ..api_client import ApiClient
 from ..config import AgentConfig
@@ -107,6 +108,7 @@ class _FilteredOutError(TerminalUploadError):
 class UploadJob:
     file_path: Path
     game: CloudGame
+    priority: bool = False
 
 
 class UploadQueue:
@@ -120,11 +122,23 @@ class UploadQueue:
         api: ApiClient,
         on_success: Optional[Callable[[Path], None]] = None,
         on_failure: Optional[Callable[[Path, Exception], None]] = None,
+        on_pending_changed: Optional[Callable[[int], None]] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
         self._api = api
-        self._q: queue.Queue[UploadJob] = queue.Queue(maxsize=1000)
+        self._q: queue.PriorityQueue[Tuple[int, int, UploadJob]] = (
+            queue.PriorityQueue(maxsize=1000)
+        )
+        # Transient failures retain work in a separate unbounded lane.
+        # Re-inserting into the bounded producer queue after a backoff
+        # raced with new parses for the freed slots and caused the exact
+        # ``upload_queue_full_after_retry; dropping`` field failure this
+        # queue is supposed to prevent.
+        self._retry_q: queue.PriorityQueue[Tuple[int, int, UploadJob]] = (
+            queue.PriorityQueue()
+        )
+        self._queue_sequence = itertools.count()
         self._stop = threading.Event()
         # Upload workers. Pre-v0.5.8 there was a single thread; v0.5.8
         # parallelises uploads to ``cfg.upload_concurrency`` threads so
@@ -162,7 +176,25 @@ class UploadQueue:
         self._batch_ceiling: int = self._batch_size
         self._on_success = on_success or (lambda _p: None)
         self._on_failure = on_failure or (lambda _p, _e: None)
+        self._on_pending_changed = on_pending_changed or (lambda _n: None)
         self._lock = threading.Lock()
+        # Preserve notification order across parser + uploader threads.
+        # The callback itself stays outside ``_lock`` so UI work cannot
+        # block state mutations.
+        self._pending_notify_lock = threading.RLock()
+        # Serialize the compare -> cloud patch -> local cursor update.
+        # With two upload workers, an older backfill request could
+        # otherwise finish after a fresh replay and roll the sticky MMR
+        # backward even though both passed the initial date check.
+        self._mmr_push_lock = threading.Lock()
+        # A replay path stays reserved from the moment it enters the
+        # queue until it reaches a terminal outcome. ``state.uploaded``
+        # cannot provide this protection because it is intentionally
+        # written only after the API accepts/rejects a game. Without an
+        # in-memory reservation, the watcher's 10-second sweep sees a
+        # queued replay as "not uploaded" and parses/enqueues it again
+        # for as long as a congested backlog takes to drain.
+        self._pending_paths: set[str] = set()
         # Lifecycle lock for ``start`` / ``stop`` / ``set_concurrency``.
         # Prevents two GUI button clicks racing into overlapping
         # restart sequences (which would leak threads).
@@ -285,7 +317,7 @@ class UploadQueue:
         self._batch_ceiling = new_size
 
     def submit(self, job: UploadJob) -> bool:
-        """Enqueue a job. Returns False if already uploaded.
+        """Enqueue a job. Returns False if uploaded or already pending.
 
         Backpressure (added v0.5.8): when process-mode parse pools
         produce parses faster than the cloud uploader drains them
@@ -308,11 +340,21 @@ class UploadQueue:
         symptom and drop one job than block the entire pipeline
         forever.
         """
-        if str(job.file_path) in self._state.uploaded:
-            log.debug("dedupe_skip %s", job.file_path.name)
-            return False
+        path_key = str(job.file_path)
+        with self._lock:
+            if path_key in self._state.uploaded:
+                log.debug("dedupe_skip_uploaded %s", job.file_path.name)
+                return False
+            if path_key in self._pending_paths:
+                log.debug("dedupe_skip_pending %s", job.file_path.name)
+                return False
+            self._pending_paths.add(path_key)
+        self._notify_pending()
         try:
-            self._q.put(job, timeout=_BACKPRESSURE_TIMEOUT_SEC)
+            self._q.put(
+                self._queue_item(job),
+                timeout=_BACKPRESSURE_TIMEOUT_SEC,
+            )
             return True
         except queue.Full:
             # Queue saturated (slow / unreachable API). NOT a loss:
@@ -323,10 +365,98 @@ class UploadQueue:
                 "(uploads not keeping up — API slow or unreachable)",
                 job.file_path.name,
             )
+            self._release_pending((job,))
             return False
 
     def pending_count(self) -> int:
-        return self._q.qsize()
+        # Include jobs a worker has already pulled from the physical
+        # queue. Those paths are still uploading/retrying and must count
+        # as pending both for watcher backpressure and the GUI's Queued
+        # card; qsize() alone misleadingly drops them to zero mid-flight.
+        with self._lock:
+            return len(self._pending_paths)
+
+    def _queue_item(self, job: UploadJob) -> Tuple[int, int, UploadJob]:
+        """Wrap a job for newest-live-first, stable FIFO ordering."""
+        rank = 0 if job.priority else 1
+        return (rank, next(self._queue_sequence), job)
+
+    def _next_queue_item(
+        self,
+    ) -> Tuple[
+        queue.PriorityQueue[Tuple[int, int, UploadJob]],
+        Tuple[int, int, UploadJob],
+    ]:
+        """Take the next item, preferring fresh work then retries.
+
+        The primary queue is checked first because rank-0 jobs are newly
+        completed games. If its next item is ordinary history, an older
+        transient retry gets the worker instead. This keeps retries in a
+        non-dropping lane without letting a failed historical batch block
+        a live replay after the API recovers.
+        """
+        try:
+            main_item = self._q.get_nowait()
+        except queue.Empty:
+            try:
+                return self._retry_q, self._retry_q.get_nowait()
+            except queue.Empty:
+                # Only producers can wake the system from a fully empty
+                # state, and they always enter through the primary queue.
+                return self._q, self._q.get(timeout=1.0)
+
+        if main_item[0] == 0:
+            return self._q, main_item
+
+        try:
+            retry_item = self._retry_q.get_nowait()
+        except queue.Empty:
+            return self._q, main_item
+
+        # A normal primary item lost to a retained retry. Put it back
+        # with its original sequence so FIFO order remains stable. A
+        # producer can theoretically claim the freed bounded slot first;
+        # if so, keep the primary item and return the retry to its
+        # unbounded lane instead of dropping either one.
+        try:
+            self._q.put_nowait(main_item)
+        except queue.Full:
+            self._retry_q.put_nowait(retry_item)
+            self._retry_q.task_done()
+            return self._q, main_item
+        self._q.task_done()
+        return self._retry_q, retry_item
+
+    def is_pending(self, file_path: Path) -> bool:
+        """Whether ``file_path`` is queued, uploading, or retrying."""
+        with self._lock:
+            return str(file_path) in self._pending_paths
+
+    def _release_pending(self, jobs: Iterable[UploadJob]) -> None:
+        """Release path reservations after a terminal/drop outcome."""
+        keys = {str(job.file_path) for job in jobs}
+        if not keys:
+            return
+        with self._lock:
+            before = len(self._pending_paths)
+            self._pending_paths.difference_update(keys)
+            changed = len(self._pending_paths) != before
+        if changed:
+            self._notify_pending()
+
+    def _notify_pending(self) -> None:
+        """Publish the real queued/uploading/retrying path count."""
+        with self._pending_notify_lock:
+            # Re-read only after acquiring the sequencing lock. A thread
+            # that mutated after an earlier notifier was waiting must be
+            # the last value published, never an out-of-order stale count.
+            with self._lock:
+                count = len(self._pending_paths)
+            try:
+                self._on_pending_changed(count)
+            except Exception:  # noqa: BLE001
+                # UI failures must never interfere with the upload pipeline.
+                log.exception("upload_pending_callback_failed count=%d", count)
 
     def set_paused(self, paused: bool) -> None:
         """Pause or resume the worker. While paused, the worker keeps
@@ -379,48 +509,66 @@ class UploadQueue:
         )
         if not sync_filter.is_active():
             return 0
-        keep: list[UploadJob] = []
+        keep: list[
+            Tuple[
+                queue.PriorityQueue[Tuple[int, int, UploadJob]],
+                UploadJob,
+            ]
+        ] = []
         dropped_jobs: list[UploadJob] = []
         # Drain the entire queue sequentially so we can re-enqueue
         # survivors in submission order. ``get_nowait`` raises
         # ``queue.Empty`` when drained — that's the exit condition.
-        while True:
-            try:
-                job = self._q.get_nowait()
-            except queue.Empty:
-                break
-            try:
-                date_iso = getattr(job.game, "date_iso", None)
-                if sync_filter.replay_in_range(date_iso):
-                    keep.append(job)
-                else:
-                    dropped_jobs.append(job)
-                    log.info(
-                        "queued_upload_dropped_by_filter %s date_iso=%s",
-                        job.file_path.name, date_iso,
-                    )
-            finally:
-                # ``Queue.task_done`` is mandatory for every ``get`` to
-                # keep the implicit ``Queue.join`` counter balanced.
-                self._q.task_done()
+        for source_q in (self._q, self._retry_q):
+            while True:
+                try:
+                    _rank, _sequence, job = source_q.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    date_iso = getattr(job.game, "date_iso", None)
+                    if sync_filter.replay_in_range(date_iso):
+                        keep.append((source_q, job))
+                    else:
+                        dropped_jobs.append(job)
+                        log.info(
+                            "queued_upload_dropped_by_filter %s date_iso=%s",
+                            job.file_path.name, date_iso,
+                        )
+                finally:
+                    source_q.task_done()
         # Re-enqueue survivors. ``put_nowait`` is safe because we just
         # drained the entire queue — capacity is guaranteed.
-        for job in keep:
+        for source_q, job in keep:
             try:
-                self._q.put_nowait(job)
+                source_q.put_nowait(self._queue_item(job))
             except queue.Full:
                 # Defensive: shouldn't happen because we just emptied
                 # the queue. Log and swallow rather than abort.
                 log.error(
                     "requeue_failed_after_drain %s", job.file_path.name,
                 )
+                self._release_pending((job,))
         if dropped_jobs:
             label = sync_filter.short_label()
             err = _FilteredOutError(f"Outside sync window {label}")
-            with self._lock:
+            try:
+                with self._lock:
+                    for job in dropped_jobs:
+                        self._state.uploaded[str(job.file_path)] = "filtered"
+                    save_state(self._cfg.state_dir, self._state)
+                    for job in dropped_jobs:
+                        self._pending_paths.discard(str(job.file_path))
+            except Exception:  # noqa: BLE001
+                # These items have already been removed from their source
+                # queues. Retain them until the state cursor can be saved;
+                # otherwise the reservation would have no worker left to
+                # finish it and the Queued count would stick forever.
+                log.exception("drain_filter_state_save_failed; retaining")
                 for job in dropped_jobs:
-                    self._state.uploaded[str(job.file_path)] = "filtered"
-                save_state(self._cfg.state_dir, self._state)
+                    self._retry_q.put_nowait(self._queue_item(job))
+                return 0
+            self._notify_pending()
             # Mirror callbacks OUTSIDE the lock so a slow GUI handler
             # doesn't hold up the next state mutation.
             for job in dropped_jobs:
@@ -501,16 +649,18 @@ class UploadQueue:
         while not self._stop.is_set():
             batch_cap = max(1, self._batch_size)
             try:
-                first_job = self._q.get(timeout=1.0)
+                source_q, first_item = self._next_queue_item()
+                _rank, _sequence, first_job = first_item
             except queue.Empty:
                 continue
             if self.is_paused():
                 # Re-enqueue and sleep; never lose work because we paused.
                 try:
-                    self._q.put_nowait(first_job)
+                    source_q.put_nowait(self._queue_item(first_job))
                 except queue.Full:
                     log.error("upload_queue_full_during_pause; dropping")
-                self._q.task_done()
+                    self._release_pending((first_job,))
+                source_q.task_done()
                 time.sleep(1.0)
                 continue
             # Drain additional ready jobs into the batch — but DON'T
@@ -518,11 +668,30 @@ class UploadQueue:
             # ``first_job`` we send a 1-element batch immediately
             # rather than dawdling on the off-chance more arrive.
             batch: List[UploadJob] = [first_job]
-            while len(batch) < batch_cap:
-                try:
-                    batch.append(self._q.get_nowait())
-                except queue.Empty:
-                    break
+            # A just-finished game travels alone. Coupling it to up to
+            # 39 historical payloads makes its acknowledgment inherit a
+            # slow/timeout-prone backfill request, defeating the priority
+            # lane before it reaches the API.
+            if not first_job.priority:
+                while len(batch) < batch_cap:
+                    try:
+                        item = source_q.get_nowait()
+                        _rank, _sequence, job = item
+                        if _rank == 0:
+                            # A live replay arrived after this normal batch
+                            # started assembling. Leave it at the head for
+                            # the next request rather than coupling it to
+                            # historical work. Balance the get/put task
+                            # accounting while preserving its sequence.
+                            try:
+                                source_q.put_nowait(item)
+                            except queue.Full:
+                                self._retry_q.put_nowait(item)
+                            source_q.task_done()
+                            break
+                        batch.append(job)
+                    except queue.Empty:
+                        break
             try:
                 self._upload_batch(batch)
                 self._grow_batch_size_after_success(len(batch))
@@ -533,15 +702,46 @@ class UploadQueue:
                 # rejections never reach this branch — they're handled
                 # individually inside ``_upload_batch`` via the
                 # ``rejected`` array of the response.
-                with self._lock:
+                try:
+                    with self._lock:
+                        for job in batch:
+                            log.error(
+                                "upload_rejected %s: %s",
+                                job.file_path.name, exc,
+                            )
+                            self._state.uploaded[str(job.file_path)] = "rejected"
+                        save_state(self._cfg.state_dir, self._state)
+                        for job in batch:
+                            self._pending_paths.discard(str(job.file_path))
+                except Exception as persist_exc:  # noqa: BLE001
+                    # The server outcome is terminal, but until its local
+                    # cursor is durable these popped jobs must stay owned
+                    # by a worker. Retain them instead of killing this
+                    # worker and leaking their reservations forever.
+                    log.exception(
+                        "upload_rejection_state_save_failed; retaining"
+                    )
+                    time.sleep(2.0)
                     for job in batch:
-                        log.error(
-                            "upload_rejected %s: %s",
-                            job.file_path.name, exc,
-                        )
-                        self._on_failure(job.file_path, exc)
-                        self._state.uploaded[str(job.file_path)] = "rejected"
-                    save_state(self._cfg.state_dir, self._state)
+                        self._retry_q.put_nowait(self._queue_item(job))
+                    for job in batch:
+                        try:
+                            self._on_failure(job.file_path, persist_exc)
+                        except Exception:  # noqa: BLE001
+                            log.exception(
+                                "upload_retry_callback_failed %s",
+                                job.file_path.name,
+                            )
+                else:
+                    self._notify_pending()
+                    for job in batch:
+                        try:
+                            self._on_failure(job.file_path, exc)
+                        except Exception:  # noqa: BLE001
+                            log.exception(
+                                "upload_failure_callback_failed %s",
+                                job.file_path.name,
+                            )
             except Exception as exc:  # noqa: BLE001
                 log.warning(
                     "upload_batch_failed size=%d: %s",
@@ -557,28 +757,32 @@ class UploadQueue:
                 # report a real outcome (success or a terminal error) on
                 # the retry. Counting here would double-count the file and
                 # spam the import card with retry noise.
-                for job in batch:
-                    self._on_failure(job.file_path, exc)
-                # Park briefly then retry the whole batch by
-                # re-enqueueing every job. The dedupe-on-submit gate
-                # in ``submit()`` prevents already-uploaded files from
-                # going around twice if a partial success was followed
-                # by a transient error mid-batch.
-                time.sleep(2.0)
-                for job in batch:
+                retry_jobs = [
+                    job for job in batch if self.is_pending(job.file_path)
+                ]
+                for job in retry_jobs:
                     try:
-                        self._q.put_nowait(job)
-                    except queue.Full:
-                        log.error(
-                            "upload_queue_full_after_retry; dropping %s",
+                        self._on_failure(job.file_path, exc)
+                    except Exception:  # noqa: BLE001
+                        log.exception(
+                            "upload_retry_callback_failed %s",
                             job.file_path.name,
                         )
+                # Park briefly, then retain only still-nonterminal jobs
+                # in the unbounded retry lane. Filtered/malformed jobs may
+                # already have reached a terminal outcome inside
+                # ``_upload_batch`` before a remaining valid POST failed;
+                # checking their reservation prevents resurrecting them.
+                if retry_jobs:
+                    time.sleep(2.0)
+                    for job in retry_jobs:
+                        self._retry_q.put_nowait(self._queue_item(job))
             finally:
                 # ``task_done`` once per ``get`` regardless of outcome.
                 # Required for ``Queue.join()`` semantics; tests rely
                 # on it via the implicit accounting.
                 for _ in batch:
-                    self._q.task_done()
+                    source_q.task_done()
 
     def _upload_batch(self, batch: List[UploadJob]) -> None:
         """POST a batch of games as one HTTP request, then mirror the
@@ -635,6 +839,9 @@ class UploadQueue:
                             "filtered"
                         )
                     save_state(self._cfg.state_dir, self._state)
+                    for job in filtered_out:
+                        self._pending_paths.discard(str(job.file_path))
+                self._notify_pending()
                 for job in filtered_out:
                     try:
                         self._on_failure(job.file_path, err)
@@ -653,19 +860,48 @@ class UploadQueue:
         # the server's authoritative gameId rather than file path
         # because the response envelope only carries gameIds.
         payloads: List[Dict[str, Any]] = []
-        by_id: Dict[str, UploadJob] = {}
+        by_id: Dict[str, List[UploadJob]] = {}
+        invalid_jobs: List[UploadJob] = []
+        missing_game_ids = 0
         for job in batch:
             payload = job.game.to_payload()
-            payloads.append(payload)
             gid = payload.get("gameId")
             if isinstance(gid, str) and gid:
-                by_id[gid] = job
-        if len(by_id) < len(batch):
+                aliases = by_id.setdefault(gid, [])
+                if not aliases:
+                    payloads.append(payload)
+                aliases.append(job)
+            else:
+                missing_game_ids += 1
+                invalid_jobs.append(job)
+        if missing_game_ids:
             log.warning(
                 "upload_batch_missing_gameids count=%d expected=%d",
-                len(by_id), len(batch),
+                missing_game_ids, len(batch),
             )
-        log.info("uploading_batch size=%d", len(batch))
+            err = _ServerRejectedError("missing gameId in upload payload")
+            with self._lock:
+                for job in invalid_jobs:
+                    path_str = str(job.file_path)
+                    self._state.uploaded[path_str] = "rejected"
+                save_state(self._cfg.state_dir, self._state)
+                for job in invalid_jobs:
+                    self._pending_paths.discard(str(job.file_path))
+            self._notify_pending()
+            for job in invalid_jobs:
+                try:
+                    self._on_failure(job.file_path, err)
+                except Exception:  # noqa: BLE001
+                    log.exception(
+                        "upload_failure_callback_failed %s",
+                        job.file_path.name,
+                    )
+            if not payloads:
+                return
+        log.info(
+            "uploading_batch size=%d unique_games=%d",
+            len(batch), len(payloads),
+        )
         # Single-item batches still go through the batch endpoint —
         # the server's per-game response envelope is identical for
         # 1-game and N-game batches, so this keeps the worker code
@@ -678,43 +914,71 @@ class UploadQueue:
 
         accepted_jobs: List[UploadJob] = []
         rejected_jobs: List[Tuple[UploadJob, str]] = []
+        terminal_paths: set[str] = set()
         with self._lock:
             now_iso = datetime.now(timezone.utc).isoformat()
             for acc in accepted:
                 gid = acc.get("gameId") if isinstance(acc, dict) else None
-                job = by_id.get(gid) if isinstance(gid, str) else None
-                if not job:
+                jobs = by_id.get(gid) if isinstance(gid, str) else None
+                if not jobs:
                     log.warning("upload_unmapped_accepted gameId=%r", gid)
                     continue
-                path_str = str(job.file_path)
-                self._state.uploaded[path_str] = now_iso
+                for job in jobs:
+                    path_str = str(job.file_path)
+                    if path_str in terminal_paths:
+                        continue
+                    terminal_paths.add(path_str)
+                    self._state.uploaded[path_str] = now_iso
+                    if isinstance(gid, str) and gid:
+                        self._state.path_by_game_id[gid] = path_str
+                    accepted_jobs.append(job)
                 # Reverse-index by gameId so the Socket.io recompute
                 # path can locate this replay's file in O(1) — same
                 # invariant maintained by the pre-batching path.
-                if isinstance(gid, str) and gid:
-                    self._state.path_by_game_id[gid] = path_str
-                accepted_jobs.append(job)
             for rej in rejected:
                 gid = rej.get("gameId") if isinstance(rej, dict) else None
-                job = by_id.get(gid) if isinstance(gid, str) else None
-                if not job:
+                jobs = by_id.get(gid) if isinstance(gid, str) else None
+                if not jobs:
                     log.warning("upload_unmapped_rejected gameId=%r", gid)
                     continue
                 errs = rej.get("errors") if isinstance(rej, dict) else None
                 err_msg = "; ".join(str(e) for e in (errs or [])) or "unknown"
-                self._state.uploaded[str(job.file_path)] = "rejected"
-                rejected_jobs.append((job, err_msg))
+                for job in jobs:
+                    path_str = str(job.file_path)
+                    if path_str in terminal_paths:
+                        continue
+                    terminal_paths.add(path_str)
+                    self._state.uploaded[path_str] = "rejected"
+                    rejected_jobs.append((job, err_msg))
             if accepted_jobs or rejected_jobs:
                 save_state(self._cfg.state_dir, self._state)
+                self._pending_paths.difference_update(terminal_paths)
 
         # User-facing callbacks + the sticky-MMR push happen OUTSIDE
         # the lock — they may take a network round-trip and we don't
         # want to hold the state lock that long.
         for job in accepted_jobs:
-            self._on_success(job.file_path)
+            try:
+                self._on_success(job.file_path)
+            except Exception:  # noqa: BLE001
+                log.exception(
+                    "upload_success_callback_failed %s",
+                    job.file_path.name,
+                )
         for job, err_msg in rejected_jobs:
             log.error("upload_rejected %s: %s", job.file_path.name, err_msg)
-            self._on_failure(job.file_path, _ServerRejectedError(err_msg))
+            try:
+                self._on_failure(job.file_path, _ServerRejectedError(err_msg))
+            except Exception:  # noqa: BLE001
+                log.exception(
+                    "upload_failure_callback_failed %s",
+                    job.file_path.name,
+                )
+        if accepted_jobs or rejected_jobs:
+            # Success sinks historically decrement their own pending
+            # counter. Publish the authoritative reservation count after
+            # those callbacks so GUI/tray/console cannot double-decrement.
+            self._notify_pending()
         # Sticky-MMR: pushing one MMR per accepted game would make
         # N redundant API calls for the older entries (each would
         # short-circuit on the date check after the newest had
@@ -732,20 +996,15 @@ class UploadQueue:
             {a.get("gameId") for a in accepted if isinstance(a, dict)}
             | {r.get("gameId") for r in rejected if isinstance(r, dict)}
         )
-        for gid, job in by_id.items():
+        for gid, jobs in by_id.items():
             if gid in seen:
                 continue
-            log.warning(
-                "upload_unaccounted_game gameId=%s; re-enqueueing %s",
-                gid, job.file_path.name,
-            )
-            try:
-                self._q.put_nowait(job)
-            except queue.Full:
-                log.error(
-                    "upload_queue_full_unaccounted; dropping %s",
-                    job.file_path.name,
+            for job in jobs:
+                log.warning(
+                    "upload_unaccounted_game gameId=%s; re-enqueueing %s",
+                    gid, job.file_path.name,
                 )
+                self._retry_q.put_nowait(self._queue_item(job))
 
     def _push_last_mmr_for_newest(self, jobs: List[UploadJob]) -> None:
         """Run sticky-MMR push for the newest dated game in ``jobs``.
@@ -806,6 +1065,8 @@ class UploadQueue:
             with self._lock:
                 self._state.uploaded[path_str] = "filtered"
                 save_state(self._cfg.state_dir, self._state)
+                self._pending_paths.discard(path_str)
+            self._notify_pending()
             self._on_failure(
                 job.file_path,
                 _FilteredOutError(f"Outside sync window {label}"),
@@ -815,6 +1076,7 @@ class UploadQueue:
         result = self._api.upload_game(job.game.to_payload())
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))
         if not accepted:
+            self._release_pending((job,))
             raise _ServerRejectedError(f"server_rejected: {result!r}")
         path_str = str(job.file_path)
         with self._lock:
@@ -830,7 +1092,13 @@ class UploadQueue:
             if isinstance(game_id, str) and game_id:
                 self._state.path_by_game_id[game_id] = path_str
             save_state(self._cfg.state_dir, self._state)
-        self._on_success(job.file_path)
+            self._pending_paths.discard(path_str)
+        try:
+            self._on_success(job.file_path)
+        finally:
+            # See the batched path above: success sinks decrement first,
+            # then this authoritative count corrects any local estimate.
+            self._notify_pending()
         # Sticky-MMR ping. The session widget falls back to this
         # profile field whenever no game in the user's cloud history
         # carries ``myMmr`` (Tier-2 / Tier-3 / Tier-4 / Tier-5 of
@@ -856,31 +1124,47 @@ class UploadQueue:
         game_date = getattr(job.game, "date_iso", None)
         if not isinstance(game_date, str) or not game_date:
             return
-        with self._lock:
-            stored_date = self._state.last_known_mmr_date_iso
-            if stored_date and stored_date >= game_date:
-                # Older replay than what we already pushed; skip the
-                # round-trip and the state churn. ISO-8601 strings sort
-                # lexicographically iff they share the same shape (UTC
-                # 'Z' suffix), which ``_to_iso`` in replay_pipeline.py
-                # guarantees on every CloudGame.
-                return
-        region = _region_from_toon_handle(getattr(job.game, "my_toon_handle", None))
-        try:
-            self._api.patch_last_mmr(
-                mmr=my_mmr,
-                captured_at=game_date,
-                region=region,
+        with self._mmr_push_lock:
+            with self._lock:
+                stored_date = self._state.last_known_mmr_date_iso
+                if stored_date and stored_date >= game_date:
+                    # Older replay than what we already pushed; skip the
+                    # round-trip and the state churn. ISO-8601 strings sort
+                    # lexicographically iff they share the same shape (UTC
+                    # 'Z' suffix), which ``_to_iso`` in replay_pipeline.py
+                    # guarantees on every CloudGame.
+                    return
+            region = _region_from_toon_handle(
+                getattr(job.game, "my_toon_handle", None)
             )
-        except Exception as exc:  # noqa: BLE001
-            log.debug("last_mmr_push_failed file=%s: %s", job.file_path.name, exc)
-            return
-        with self._lock:
-            self._state.last_known_mmr = my_mmr
-            self._state.last_known_mmr_date_iso = game_date
-            if region:
-                self._state.last_known_mmr_region = region
-            save_state(self._cfg.state_dir, self._state)
+            try:
+                self._api.patch_last_mmr(
+                    mmr=my_mmr,
+                    captured_at=game_date,
+                    region=region,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.debug(
+                    "last_mmr_push_failed file=%s: %s",
+                    job.file_path.name,
+                    exc,
+                )
+                return
+            with self._lock:
+                self._state.last_known_mmr = my_mmr
+                self._state.last_known_mmr_date_iso = game_date
+                if region:
+                    self._state.last_known_mmr_region = region
+                try:
+                    save_state(self._cfg.state_dir, self._state)
+                except Exception:  # noqa: BLE001
+                    # Memory still carries the monotonic cursor, so an
+                    # older worker cannot roll the cloud value backward
+                    # during this run. The next successful save persists it.
+                    log.exception(
+                        "last_mmr_state_save_failed game_date=%s",
+                        game_date,
+                    )
         log.info(
             "last_mmr_pushed mmr=%d region=%s game_date=%s",
             my_mmr, region or "?", game_date,

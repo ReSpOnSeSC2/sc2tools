@@ -569,11 +569,15 @@ class UsersService {
     if (!Number.isInteger(mmr) || mmr < 500 || mmr > 9999) return false;
     /** @type {Record<string, any>} */
     const set = { lastKnownMmr: mmr };
-    if (typeof update.capturedAt === "string" && update.capturedAt) {
-      set.lastKnownMmrAt = update.capturedAt.slice(0, 40);
-    } else {
-      set.lastKnownMmrAt = new Date().toISOString();
-    }
+    const captured =
+      typeof update.capturedAt === "string"
+        ? new Date(update.capturedAt)
+        : null;
+    const hasExplicitCapturedAt =
+      captured !== null && !Number.isNaN(captured.getTime());
+    set.lastKnownMmrAt = hasExplicitCapturedAt
+      ? captured.toISOString()
+      : new Date().toISOString();
     if (typeof update.region === "string" && update.region) {
       set.lastKnownMmrRegion = update.region.slice(0, 8);
     }
@@ -583,18 +587,52 @@ class UsersService {
     // re-sync.
     const existing = await this.db.users.findOne(
       { userId },
-      { projection: { _id: 0, lastKnownMmr: 1, lastKnownMmrRegion: 1 } },
+      {
+        projection: {
+          _id: 0,
+          lastKnownMmr: 1,
+          lastKnownMmrAt: 1,
+          lastKnownMmrRegion: 1,
+        },
+      },
     );
+    const existingCapturedAt =
+      existing && typeof existing.lastKnownMmrAt === "string"
+        ? existing.lastKnownMmrAt
+        : null;
+    // A backfill must never overwrite a rating captured by a newer
+    // replay. This pre-check saves the write in the common sequential
+    // case; the update filter below enforces the same ordering atomically
+    // when two agent upload workers race.
+    if (
+      existingCapturedAt &&
+      existingCapturedAt > set.lastKnownMmrAt
+    ) {
+      return false;
+    }
     if (
       existing &&
       existing.lastKnownMmr === mmr &&
-      existing.lastKnownMmrRegion === set.lastKnownMmrRegion
+      existing.lastKnownMmrRegion === set.lastKnownMmrRegion &&
+      (
+        !hasExplicitCapturedAt ||
+        existingCapturedAt === set.lastKnownMmrAt
+      )
     ) {
       return false;
     }
     stampVersion(set, COLLECTIONS.USERS);
-    await this.db.users.updateOne({ userId }, { $set: set });
-    return true;
+    const wrote = await this.db.users.updateOne(
+      {
+        userId,
+        $or: [
+          { lastKnownMmrAt: { $exists: false } },
+          { lastKnownMmrAt: { $lt: set.lastKnownMmrAt } },
+        ],
+      },
+      { $set: set },
+    );
+    return wrote.modifiedCount > 0;
   }
 }
 
