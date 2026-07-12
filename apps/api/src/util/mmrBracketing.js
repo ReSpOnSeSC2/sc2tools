@@ -28,6 +28,27 @@ const MMR_FLOOR = 1000;
 // infinity for one bad row.
 const MMR_CEILING = 8000;
 
+// Public Ladder Meta Radar bands deliberately use wider, capped ranges
+// than the private per-streamer charts above. The first and final keys
+// are sentinels for the open-ended labels; games themselves must still
+// fall inside [MMR_FLOOR, MMR_CEILING).
+const LADDER_META_BUCKET_WIDTH = 500;
+const LADDER_META_LOW_CAP = 2000;
+const LADDER_META_HIGH_CAP = 6500;
+const LADDER_META_MMR_BANDS = Object.freeze([
+  MMR_FLOOR,
+  2000,
+  2500,
+  3000,
+  3500,
+  4000,
+  4500,
+  5000,
+  5500,
+  6000,
+  LADDER_META_HIGH_CAP,
+]);
+
 /**
  * Parse + clamp the bucket-width query param.
  *
@@ -73,6 +94,43 @@ function bracketLabel(bucketMin, width) {
 }
 
 /**
+ * Return the capped 500-wide bucket key used by Ladder Meta Radar.
+ * ``MMR_FLOOR`` is the sentinel for <2000 and 6500 is the sentinel for
+ * 6500+. Values outside the accepted MMR domain do not participate.
+ *
+ * @param {number} mmr
+ * @returns {number | null}
+ */
+function ladderMetaBucketFor(mmr) {
+  if (!Number.isFinite(mmr) || mmr < MMR_FLOOR || mmr >= MMR_CEILING) {
+    return null;
+  }
+  const bucket = bucketFor(mmr, LADDER_META_BUCKET_WIDTH);
+  if (bucket < LADDER_META_LOW_CAP) return MMR_FLOOR;
+  if (bucket >= LADDER_META_HIGH_CAP) return LADDER_META_HIGH_CAP;
+  return bucket;
+}
+
+/**
+ * Boundary-style display label for a public Ladder Meta MMR band.
+ * Semantics remain half-open even though the upper boundary is shown.
+ *
+ * @param {number} bucketMin
+ * @returns {string | null}
+ */
+function ladderMetaBracketLabel(bucketMin) {
+  if (!isLadderMetaMmrBand(bucketMin)) return null;
+  if (bucketMin === MMR_FLOOR) return "<2000";
+  if (bucketMin === LADDER_META_HIGH_CAP) return "6500+";
+  return `${bucketMin}–${bucketMin + LADDER_META_BUCKET_WIDTH}`;
+}
+
+/** @param {unknown} value @returns {value is number} */
+function isLadderMetaMmrBand(value) {
+  return typeof value === "number" && LADDER_META_MMR_BANDS.includes(value);
+}
+
+/**
  * Whether the bucket is plausible enough to surface on the chart.
  * Drops the obvious garbage (negative, sub-1000, above 8000).
  *
@@ -109,9 +167,16 @@ module.exports = {
   MAX_BUCKET_WIDTH,
   MMR_FLOOR,
   MMR_CEILING,
+  LADDER_META_BUCKET_WIDTH,
+  LADDER_META_LOW_CAP,
+  LADDER_META_HIGH_CAP,
+  LADDER_META_MMR_BANDS,
   parseBucketWidth,
   bucketFor,
   bracketLabel,
+  ladderMetaBucketFor,
+  ladderMetaBracketLabel,
+  isLadderMetaMmrBand,
   isBucketInRange,
   parseMmrDelta,
 };

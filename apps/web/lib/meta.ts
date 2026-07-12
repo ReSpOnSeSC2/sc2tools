@@ -5,7 +5,7 @@
 // The shapes mirror the API's GET /v1/meta/ladder response
 // (apps/api/src/services/ladderMeta.js -> shapeServedRow).
 
-/** One opener bucket within a (league band, matchup) row. Winrate and
+/** One opener bucket within an (opponent band, matchup) row. Winrate and
  *  frequency are fractions in 0..1; the deltas are the change since the
  *  previous nightly run (null when the opener is newly surfaced). */
 export interface MetaOpener {
@@ -20,10 +20,16 @@ export interface MetaOpener {
   isNew: boolean;
 }
 
-/** One served (league band, matchup) row. */
+export type BandAxis = "league" | "mmr";
+
+/** One served (opponent band, matchup) row. League fields remain optional
+ *  because they only exist on league rows for API backwards compatibility. */
 export interface MetaRow {
-  leagueBand: number;
-  league: string;
+  bandType: BandAxis;
+  band: number;
+  bandLabel: string;
+  leagueBand?: number;
+  league?: string;
   matchup: string;
   n: number;
   openers: MetaOpener[];
@@ -33,6 +39,11 @@ export interface MetaRow {
 
 export interface MetaLeague {
   id: number;
+  label: string;
+}
+
+export interface MetaMmrBand {
+  key: number;
   label: string;
 }
 
@@ -46,6 +57,23 @@ export const LEAGUES: readonly MetaLeague[] = [
   { id: 4, label: "Diamond" },
   { id: 5, label: "Master" },
   { id: 6, label: "Grandmaster" },
+];
+
+/** Opponent-MMR bands used by Ladder Meta Radar. The 1000 key is the
+ *  documented sentinel for the open-ended <2000 band; 6500 is the key for
+ *  6500+. Interior labels describe half-open 500-MMR ranges. */
+export const MMR_BANDS: readonly MetaMmrBand[] = [
+  { key: 1000, label: "<2000" },
+  { key: 2000, label: "2000–2500" },
+  { key: 2500, label: "2500–3000" },
+  { key: 3000, label: "3000–3500" },
+  { key: 3500, label: "3500–4000" },
+  { key: 4000, label: "4000–4500" },
+  { key: 4500, label: "4500–5000" },
+  { key: 5000, label: "5000–5500" },
+  { key: 5500, label: "5500–6000" },
+  { key: 6000, label: "6000–6500" },
+  { key: 6500, label: "6500+" },
 ];
 
 /** All nine 1v1 matchups, "<my>v<opp>". */
@@ -62,7 +90,14 @@ export const MATCHUPS: readonly string[] = [
 ];
 
 const DEFAULT_LEAGUE_ID = 4; // Diamond — the densest ladder band
+const DEFAULT_MMR_BAND = 4000;
 const DEFAULT_MATCHUP = "PvZ";
+
+/** Coerce a raw query param into a supported banding axis. */
+export function parseAxis(raw: unknown): BandAxis {
+  if (typeof raw !== "string") return "league";
+  return raw.trim().toLowerCase() === "mmr" ? "mmr" : "league";
+}
 
 /** True for a canonical "<P|T|Z>v<P|T|Z>" matchup string. */
 export function isValidMatchup(raw: unknown): raw is string {
@@ -83,6 +118,32 @@ export function parseLeagueId(raw: unknown): number {
   return LEAGUES.some((l) => l.id === n) ? n : DEFAULT_LEAGUE_ID;
 }
 
+/** Coerce a raw band key for the selected axis, using an axis-specific
+ *  default when the key is missing or not one of the published bands. */
+export function parseBand(axis: BandAxis, raw: unknown): number {
+  const n =
+    typeof raw === "string" || typeof raw === "number" ? Number(raw) : NaN;
+  if (axis === "mmr") {
+    return MMR_BANDS.some((candidate) => candidate.key === n)
+      ? n
+      : DEFAULT_MMR_BAND;
+  }
+  return LEAGUES.some((candidate) => candidate.id === n)
+    ? n
+    : DEFAULT_LEAGUE_ID;
+}
+
+/** Human-readable label for a band on either axis. */
+export function bandLabel(axis: BandAxis, band: number): string {
+  if (axis === "mmr") {
+    return (
+      MMR_BANDS.find((candidate) => candidate.key === band)?.label ??
+      MMR_BANDS.find((candidate) => candidate.key === DEFAULT_MMR_BAND)!.label
+    );
+  }
+  return leagueLabel(parseBand("league", band));
+}
+
 /** Coerce a raw query param into a valid matchup, defaulting to PvZ.
  *
  *  Canonicalizes to the "<X>v<Y>" form MATCHUPS + isValidMatchup use:
@@ -96,6 +157,21 @@ export function parseMatchup(raw: unknown): string {
   const m = raw.trim().toUpperCase().match(/^([PTZ])V([PTZ])$/);
   const canonical = m ? `${m[1]}v${m[2]}` : "";
   return isValidMatchup(canonical) ? canonical : DEFAULT_MATCHUP;
+}
+
+/** Canonical shareable URL for one axis, opponent band, and matchup. */
+export function metaHref(
+  axis: BandAxis,
+  band: number,
+  matchup: string,
+): string {
+  const canonicalAxis = parseAxis(axis);
+  const canonicalBand = parseBand(canonicalAxis, band);
+  const canonicalMatchup = parseMatchup(matchup);
+  return (
+    `/meta?axis=${canonicalAxis}&band=${canonicalBand}` +
+    `&matchup=${encodeURIComponent(canonicalMatchup)}`
+  );
 }
 
 /** Strip the redundant "<X>v<Y> - " matchup prefix the agent bakes into

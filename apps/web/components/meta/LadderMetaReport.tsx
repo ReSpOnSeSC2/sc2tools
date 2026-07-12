@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Ladder Meta Radar — the report body for one (league band, matchup).
+ * Ladder Meta Radar — the report body for one (opponent band, matchup).
  *
  * Presentational + client-only (recharts). It takes an already-fetched
  * ``MetaRow`` as props (the public /meta page fetches server-side via
@@ -25,7 +25,13 @@ import {
   YAxis,
 } from "recharts";
 import { useChartTheme, useReducedMotion } from "@/lib/useChartTheme";
-import { formatOpenerLabel, type MetaOpener, type MetaRow } from "@/lib/meta";
+import {
+  bandLabel,
+  formatOpenerLabel,
+  type BandAxis,
+  type MetaOpener,
+  type MetaRow,
+} from "@/lib/meta";
 
 function pct(fraction: number): number {
   return Math.round(fraction * 1000) / 10;
@@ -48,16 +54,26 @@ function winRateColor(
   return theme.textMuted;
 }
 
-export function LadderMetaReport({ row }: { row: MetaRow }) {
+export function LadderMetaReport({
+  row,
+  axis,
+  band,
+}: {
+  row: MetaRow;
+  axis: BandAxis;
+  band: number;
+}) {
   const theme = useChartTheme();
   const reducedMotion = useReducedMotion();
+  const label = bandLabel(axis, band);
+  const bandContext = `vs ${label} opponents`;
 
   if (row.openers.length === 0) {
     return (
       <p className="rounded-xl border-2 border-line bg-bg-surface p-5 text-body text-text-muted shadow-hard">
-        We have {row.n} {row.league} {row.matchup} games logged, but no single
-        opener has cleared the reporting threshold yet. Check back as more
-        games come in.
+        We have {row.n} {row.matchup} games {bandContext} logged, but no single
+        opener has cleared the reporting threshold yet. Try another band or
+        check back as more games come in.
       </p>
     );
   }
@@ -72,7 +88,7 @@ export function LadderMetaReport({ row }: { row: MetaRow }) {
   const updated = isoDate(row.updatedAt);
 
   const ariaSummary =
-    `Top openers for ${row.league} ${row.matchup}, from ${row.n} ladder games. ` +
+    `Top openers for ${row.matchup} ${bandContext}, from ${row.n} ladder games. ` +
     row.openers
       .map(
         (o) =>
@@ -86,10 +102,20 @@ export function LadderMetaReport({ row }: { row: MetaRow }) {
       <p className="text-body text-text-muted">
         Based on{" "}
         <span className="font-semibold tabular-nums text-text">{row.n}</span>{" "}
-        real <span className="font-semibold text-text">{row.league}</span>{" "}
-        <span className="font-semibold text-text">{row.matchup}</span> ladder
-        games from the SC2 Tools community.
+        real <span className="font-semibold text-text">{row.matchup}</span>{" "}
+        ladder games <span className="font-semibold text-text">{bandContext}</span>{" "}
+        from the SC2 Tools community.
       </p>
+
+      <div>
+        <h2 className="font-display text-lg font-bold text-text">
+          Win rate by opener
+        </h2>
+        <p className="mt-1 text-caption text-text-muted">
+          Share of decided games vs {label} opponents in this{" "}
+          {axis === "mmr" ? "MMR" : "league"} band.
+        </p>
+      </div>
 
       {/* Winrate bars — the at-a-glance "what actually wins" view. */}
       <div
@@ -139,8 +165,8 @@ export function LadderMetaReport({ row }: { row: MetaRow }) {
       <div className="hidden overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard md:block">
         <table className="w-full text-caption">
           <caption className="sr-only">
-            Top {row.matchup} openers in {row.league} by games played, with
-            win rate, prevalence, and week-over-week movement.
+            Top {row.matchup} openers {bandContext} by games played, with win
+            rate, prevalence, and week-over-week movement.
           </caption>
           <thead className="border-b-2 border-line bg-bg-elevated text-micro uppercase tracking-wider text-text-dim">
             <tr>

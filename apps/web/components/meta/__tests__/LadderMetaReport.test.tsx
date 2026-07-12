@@ -17,6 +17,9 @@ class ResizeObserverStub {
 afterEach(cleanup);
 
 const ROW: MetaRow = {
+  bandType: "league",
+  band: 4,
+  bandLabel: "Diamond",
   leagueBand: 4,
   league: "Diamond",
   matchup: "PvZ",
@@ -60,17 +63,20 @@ const ROW: MetaRow = {
   ],
 };
 
+function renderLeagueReport(row: MetaRow = ROW) {
+  return render(<LadderMetaReport row={row} axis="league" band={4} />);
+}
+
 describe("LadderMetaReport", () => {
   it("shows the headline sample size and league/matchup", () => {
-    render(<LadderMetaReport row={ROW} />);
+    renderLeagueReport();
     expect(screen.getByText("67")).toBeTruthy();
-    // "Diamond" and "PvZ" appear in the intro line (and elsewhere).
-    expect(screen.getAllByText("Diamond").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/vs Diamond opponents/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("PvZ").length).toBeGreaterThan(0);
   });
 
   it("lists top openers with matchup prefix stripped, ranked", () => {
-    render(<LadderMetaReport row={ROW} />);
+    renderLeagueReport();
     // Rendered in both the table and the mobile cards.
     expect(screen.getAllByText("Gateway Expand").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4 Gate").length).toBeGreaterThan(0);
@@ -78,14 +84,14 @@ describe("LadderMetaReport", () => {
   });
 
   it("renders win rates as percentages", () => {
-    render(<LadderMetaReport row={ROW} />);
+    renderLeagueReport();
     expect(screen.getAllByText("70%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("40%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("50%").length).toBeGreaterThan(0);
   });
 
   it("shows week-over-week movement: up, down, and new", () => {
-    render(<LadderMetaReport row={ROW} />);
+    renderLeagueReport();
     // +0.05 winrate delta -> +5 pts; -0.03 -> -3 pts.
     expect(screen.getAllByText(/\+5 pts/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/-3 pts/).length).toBeGreaterThan(0);
@@ -94,15 +100,53 @@ describe("LadderMetaReport", () => {
   });
 
   it("exposes an accessible summary on the chart", () => {
-    render(<LadderMetaReport row={ROW} />);
-    const img = screen.getByRole("img", { name: /Top openers for Diamond PvZ/ });
+    renderLeagueReport();
+    const img = screen.getByRole("img", {
+      name: /Top openers for PvZ vs Diamond opponents/,
+    });
     expect(img.getAttribute("aria-label")).toContain("Gateway Expand");
   });
 
   it("shows a threshold message when no opener qualifies", () => {
-    render(<LadderMetaReport row={{ ...ROW, openers: [] }} />);
+    renderLeagueReport({ ...ROW, openers: [] });
     expect(
       screen.getByText(/no single opener has cleared the reporting threshold/i),
+    ).toBeTruthy();
+  });
+
+  it("labels the win-rate section and MMR context throughout", () => {
+    const mmrRow: MetaRow = {
+      ...ROW,
+      bandType: "mmr",
+      band: 4000,
+      bandLabel: "4000–4500",
+      leagueBand: undefined,
+      league: undefined,
+    };
+    render(<LadderMetaReport row={mmrRow} axis="mmr" band={4000} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Win rate by opener" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Share of decided games vs 4000–4500 opponents in this MMR band.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: /PvZ vs 4000–4500 opponents/,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText((_, element) => {
+        const text = element?.textContent ?? "";
+        return (
+          element?.tagName === "P" &&
+          text.includes("real PvZ ladder games") &&
+          text.includes("vs 4000–4500 opponents")
+        );
+      }),
     ).toBeTruthy();
   });
 });

@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * League-band + matchup pickers for the public Ladder Meta Radar page.
+ * Opponent-band axis, band, and matchup pickers for Ladder Meta Radar.
  *
- * Each change navigates to ``/meta?league=<id>&matchup=<XvY>`` so every
- * (band, matchup) view is its own crawlable, shareable URL and the server
+ * Each change navigates to the canonical axis/band URL so every view is its
+ * own crawlable, shareable URL and the server
  * component re-fetches + re-renders. No client-side data fetching — the
  * page is public and its API is fetched server-side (see app/meta/page.tsx),
  * and the authed useApi() hook would never fire for a signed-out visitor.
@@ -12,38 +12,76 @@
 
 import { useRouter } from "next/navigation";
 import { Select } from "@/components/ui/Select";
-import { LEAGUES, MATCHUPS } from "@/lib/meta";
+import {
+  LEAGUES,
+  MATCHUPS,
+  MMR_BANDS,
+  metaHref,
+  parseBand,
+  type BandAxis,
+} from "@/lib/meta";
 
 export function MetaControls({
-  leagueId,
+  axis,
+  band,
   matchup,
 }: {
-  leagueId: number;
+  axis: BandAxis;
+  band: number;
   matchup: string;
 }) {
   const router = useRouter();
 
-  function go(nextLeague: number, nextMatchup: string) {
-    router.push(`/meta?league=${nextLeague}&matchup=${nextMatchup}`);
+  function go(nextAxis: BandAxis, nextBand: number, nextMatchup: string) {
+    router.push(metaHref(nextAxis, nextBand, nextMatchup));
   }
 
   return (
     <div className="flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1">
         <span className="text-micro uppercase tracking-wider text-text-dim">
-          League
+          Filter by
         </span>
-        <span className="w-40">
+        <span className="w-32">
           <Select
-            aria-label="League band"
-            value={leagueId}
-            onChange={(e) => go(Number(e.target.value), matchup)}
+            aria-label="Band axis"
+            value={axis}
+            onChange={(event) => {
+              const nextAxis = event.target.value as BandAxis;
+              go(nextAxis, parseBand(nextAxis, undefined), matchup);
+            }}
           >
-            {LEAGUES.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
+            <option value="league">League</option>
+            <option value="mmr">MMR</option>
+          </Select>
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
+          {axis === "league" ? "League" : "Opponent MMR"}
+        </span>
+        <span className={axis === "league" ? "w-40" : "w-44"}>
+          <Select
+            aria-label={
+              axis === "league" ? "League band" : "Opponent MMR band"
+            }
+            value={band}
+            onChange={(event) =>
+              go(axis, Number(event.target.value), matchup)
+            }
+          >
+            {axis === "league"
+              ? LEAGUES.map((league) => (
+                  <option key={league.id} value={league.id}>
+                    {league.label}
+                  </option>
+                ))
+              : MMR_BANDS.map((mmrBand) => (
+                  <option key={mmrBand.key} value={mmrBand.key}>
+                    {mmrBand.label}
+                  </option>
+                ))}
           </Select>
         </span>
       </label>
@@ -56,7 +94,7 @@ export function MetaControls({
           <Select
             aria-label="Matchup"
             value={matchup}
-            onChange={(e) => go(leagueId, e.target.value)}
+            onChange={(event) => go(axis, band, event.target.value)}
           >
             {MATCHUPS.map((m) => (
               <option key={m} value={m}>

@@ -1,15 +1,17 @@
 "use strict";
 
 const express = require("express");
+const { isLadderMetaMmrBand } = require("../util/mmrBracketing");
 
 /**
  * /v1/meta/ladder — the public Ladder Meta Radar report.
  *
- * Serves the effectiveness-weighted opener meta for one (league band,
- * matchup): the top openers by games with wins/losses/winrate, each
- * opener's prevalence, and week-over-week deltas. Rows are k-anonymous
- * aggregates (n >= MIN_SAMPLE per band, per-opener floor, no user data)
- * computed nightly by jobs/ladderMetaRecomputeJob.
+ * Serves the effectiveness-weighted opener meta for one opponent League
+ * or MMR band plus matchup: the top openers by games with
+ * wins/losses/winrate, each opener's prevalence, and week-over-week
+ * deltas. Rows are k-anonymous aggregates (n >= MIN_SAMPLE per band,
+ * per-opener floor, no user data) computed nightly by
+ * jobs/ladderMetaRecomputeJob.
  *
  * PUBLIC — no auth middleware. Unlike routes/benchmarks.js (which frames
  * a signed-in user's own numbers and is therefore authed), this is a
@@ -28,18 +30,18 @@ function buildLadderMetaRouter(deps) {
 
   router.get("/meta/ladder", async (req, res, next) => {
     try {
-      const leagueId = Number.parseInt(String(req.query.leagueId ?? ""), 10);
-      const matchup = String(req.query.matchup || "").trim();
-      if (!Number.isFinite(leagueId) || !/^[PTZ]v[PTZ]$/i.test(matchup)) {
+      const params = parseLadderMetaQuery(req.query);
+      if (!params) {
         res.status(400).json({
           error: {
             code: "bad_request",
-            message: "leagueId (number) and matchup (e.g. PvZ) required",
+            message:
+              "axis (league|mmr), numeric band, and matchup (e.g. PvZ) required",
           },
         });
         return;
       }
-      const row = await deps.ladderMeta.lookup({ leagueId, matchup });
+      const row = await deps.ladderMeta.lookup(params);
       if (!row) {
         // Not enough corpus for this (band, matchup) yet — the page
         // renders a friendly "not enough data" state.
@@ -55,4 +57,42 @@ function buildLadderMetaRouter(deps) {
   return router;
 }
 
-module.exports = { buildLadderMetaRouter };
+/**
+ * Parse the canonical dual-axis contract, or the legacy leagueId form when
+ * neither canonical key is present. Partial canonical requests are invalid
+ * rather than silently falling back to a different league row.
+ *
+ * @param {Record<string, unknown>} query
+ * @returns {{bandType: "league" | "mmr", band: number, matchup: string} | null}
+ */
+function parseLadderMetaQuery(query) {
+  const matchup = scalarString(query.matchup);
+  if (!matchup || !/^[PTZ]v[PTZ]$/i.test(matchup)) return null;
+
+  const canonical = query.axis !== undefined || query.band !== undefined;
+  if (!canonical) {
+    const band = strictInteger(query.leagueId);
+    return band === null ? null : { bandType: "league", band, matchup };
+  }
+
+  const axis = scalarString(query.axis);
+  const band = strictInteger(query.band);
+  if ((axis !== "league" && axis !== "mmr") || band === null) return null;
+  if (axis === "mmr" && !isLadderMetaMmrBand(band)) return null;
+  return { bandType: axis, band, matchup };
+}
+
+/** @param {unknown} raw @returns {string | null} */
+function scalarString(raw) {
+  return typeof raw === "string" ? raw.trim() : null;
+}
+
+/** @param {unknown} raw @returns {number | null} */
+function strictInteger(raw) {
+  const value = scalarString(raw);
+  if (!value || !/^-?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+module.exports = { buildLadderMetaRouter, parseLadderMetaQuery };

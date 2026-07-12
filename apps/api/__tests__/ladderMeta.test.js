@@ -254,6 +254,9 @@ describe("ladder meta radar", () => {
         [
           "_id",
           "_schemaVersion",
+          "band",
+          "bandLabel",
+          "bandType",
           "league",
           "leagueBand",
           "matchup",
@@ -332,6 +335,10 @@ describe("GET /v1/meta/ladder", () => {
     expect((await get("?leagueId=4")).status).toBe(400);
     expect((await get("?leagueId=4&matchup=XvY")).status).toBe(400);
     expect((await get("?leagueId=abc&matchup=PvZ")).status).toBe(400);
+    expect((await get("?axis=mmr&matchup=PvZ")).status).toBe(400);
+    expect((await get("?axis=mmr&band=4250&matchup=PvZ")).status).toBe(400);
+    expect((await get("?axis=rating&band=4000&matchup=PvZ")).status).toBe(400);
+    expect((await get("?axis=league&band=4junk&matchup=PvZ")).status).toBe(400);
   });
 
   test("404s when the band has no table yet", async () => {
@@ -354,7 +361,7 @@ describe("GET /v1/meta/ladder", () => {
         map: "Meta Map",
         myBuild: A,
         playerCount: 2,
-        opponent: { race: "Zerg", leagueId: 4 },
+        opponent: { race: "Zerg", leagueId: 4, mmr: 4100 },
       });
     }
     for (let i = 0; i < 20; i += 1) {
@@ -368,7 +375,7 @@ describe("GET /v1/meta/ladder", () => {
         map: "Meta Map",
         myBuild: B,
         playerCount: 2,
-        opponent: { race: "Zerg", leagueId: 4 },
+        opponent: { race: "Zerg", leagueId: 4, mmr: 4100 },
       });
     }
     await db.games.insertMany(docs);
@@ -380,5 +387,15 @@ describe("GET /v1/meta/ladder", () => {
     expect(res.body.row.matchup).toBe("PvZ");
     expect(res.body.row.leagueBand).toBe(4);
     expect(res.body.row.openers[0].build).toBe(A);
+
+    const canonicalLeague = await get("?axis=league&band=4&matchup=PvZ");
+    expect(canonicalLeague.status).toBe(200);
+    expect(canonicalLeague.body.row.bandType).toBe("league");
+
+    const mmr = await get("?axis=mmr&band=4000&matchup=PvZ");
+    expect(mmr.status).toBe(200);
+    expect(mmr.body.row.bandType).toBe("mmr");
+    expect(mmr.body.row.band).toBe(4000);
+    expect(mmr.body.row.bandLabel).toBe("4000–4500");
   });
 });
