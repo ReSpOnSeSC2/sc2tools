@@ -149,6 +149,14 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Genuinely distinct overlay frames** — overlay settings add five
+  structural styles: Command Grid, Neon Arcade, Arena Broadcast, Void
+  Nebula, and Terran Foundry. Each has its own geometry, accent-rail layout,
+  texture, shadow, and typography; preset cards now preview those silhouettes
+  instead of showing only a colour dot. Custom controls still override frame
+  defaults, and the new allowlisted style token stays backward-compatible
+  inside existing v1 OBS theme URLs.
+
 - **Forward-only opponent-MMR enrichment** — a new API worker enriches
   recently ingested ladder games that are missing `opponent.mmr` from
   SC2Pulse's current, per-race 1v1 rating. It matches the race the

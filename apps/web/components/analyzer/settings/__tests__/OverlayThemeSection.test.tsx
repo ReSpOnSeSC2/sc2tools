@@ -50,6 +50,20 @@ describe("OverlayThemePreview", () => {
     expect(root!.style.getPropertyValue("--ov-scale")).toBe("1.25");
   });
 
+  it("applies structural style vars to the preview root", () => {
+    const { container } = render(
+      <OverlayThemePreview theme={{ style: "command-grid" }} />,
+    );
+    const root = container.querySelector<HTMLElement>(
+      '[data-testid="overlay-theme-preview"]',
+    );
+    expect(root!.style.getPropertyValue("--ov-clip")).toContain("polygon");
+    expect(root!.style.getPropertyValue("--ov-texture")).toContain(
+      "linear-gradient",
+    );
+    expect(root!.style.getPropertyValue("--ov-panel-flow")).toBe("column");
+  });
+
   it("sets no --ov-* vars for the default theme (zero-cost path)", () => {
     const { container } = render(<OverlayThemePreview theme={{}} />);
     const root = container.querySelector<HTMLElement>(
@@ -97,6 +111,44 @@ describe("OverlayThemeSection", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ font: "mono", radius: "sharp" }),
     );
+  });
+
+  it("selecting a creative preset emits its structural style", () => {
+    const onChange = vi.fn();
+    const { getByRole } = render(
+      <OverlayThemeSection theme={{}} onChange={onChange} />,
+    );
+    fireEvent.click(getByRole("radio", { name: /neon arcade preset/i }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        style: "neon-arcade",
+        font: "mono",
+        accent: "#ff72d2",
+      }),
+    );
+  });
+
+  it("offers every frame style and Classic removes the style key", () => {
+    const onChange = vi.fn();
+    const { getByLabelText } = render(
+      <OverlayThemeSection
+        theme={{ style: "void-nebula", accent: "#c4a7ff" }}
+        onChange={onChange}
+      />,
+    );
+    const styleSelect = getByLabelText("Frame style") as HTMLSelectElement;
+    expect(
+      Array.from(styleSelect.options).map((option) => option.value),
+    ).toEqual([
+      "classic",
+      "command-grid",
+      "neon-arcade",
+      "arena-broadcast",
+      "void-nebula",
+      "terran-foundry",
+    ]);
+    fireEvent.change(styleSelect, { target: { value: "classic" } });
+    expect(onChange).toHaveBeenCalledWith({ accent: "#c4a7ff" });
   });
 
   it("commits only strict hex from the accent text field", () => {

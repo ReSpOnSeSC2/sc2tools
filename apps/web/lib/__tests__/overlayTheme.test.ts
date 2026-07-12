@@ -35,6 +35,7 @@ describe("encode/decode round-trip", () => {
       opacity: 0.55,
       radius: "pill",
       font: "mono",
+      style: "void-nebula",
     };
     expect(decodeOverlayTheme(encodeOverlayTheme(theme))).toEqual(theme);
   });
@@ -65,7 +66,13 @@ describe("encode/decode round-trip", () => {
 
   it("drops default-valued tokens during encode (canonical minimal form)", () => {
     const decoded = decodeOverlayTheme(
-      encodeOverlayTheme({ scale: 1, opacity: 0.94, radius: "rounded", font: "default" }),
+      encodeOverlayTheme({
+        scale: 1,
+        opacity: 0.94,
+        radius: "rounded",
+        font: "default",
+        style: "classic" as never,
+      }),
     );
     expect(decoded).toEqual({});
   });
@@ -175,6 +182,7 @@ describe("decode: hostile input falls back to default silently", () => {
         v: OVERLAY_THEME_VERSION,
         radius: "bouncy",
         font: "comic-sans",
+        style: "attacker-css",
         extra: "field",
         accent: "#3ec",
       }),
@@ -217,6 +225,16 @@ describe("normalizeOverlayTheme", () => {
     expect(normalizeOverlayTheme({ scale: 0.8 }).scale).toBe(0.8);
     expect(normalizeOverlayTheme({ scale: 0.85 }).scale).toBeUndefined();
     expect(normalizeOverlayTheme({ scale: 1 }).scale).toBeUndefined();
+  });
+
+  it("only accepts structural styles from the fixed allowlist", () => {
+    expect(normalizeOverlayTheme({ style: "neon-arcade" }).style).toBe(
+      "neon-arcade",
+    );
+    expect(normalizeOverlayTheme({ style: "classic" }).style).toBeUndefined();
+    expect(
+      normalizeOverlayTheme({ style: "url(javascript:alert(1))" }).style,
+    ).toBeUndefined();
   });
 
   it("returns {} for non-object input", () => {
@@ -290,6 +308,42 @@ describe("themeToCssVars", () => {
     );
   });
 
+  it("maps creative styles to fixed structural chrome", () => {
+    const expected: Record<string, [string, string]> = {
+      "command-grid": ["--ov-clip", "--ov-texture"],
+      "neon-arcade": ["--ov-shell-border", "--ov-accent-track"],
+      "arena-broadcast": ["--ov-panel-flow", "--ov-ornament-clip"],
+      "void-nebula": ["--ov-texture-size", "--ov-shell-shadow"],
+      "terran-foundry": ["--ov-accent-size", "--ov-ornament-bg"],
+    };
+    for (const [style, keys] of Object.entries(expected)) {
+      const vars = themeToCssVars({ style: style as never });
+      expect(vars[keys[0]], `${style} ${keys[0]}`).toBeTruthy();
+      expect(vars[keys[1]], `${style} ${keys[1]}`).toBeTruthy();
+      expect(vars["--ov-panel-bg"], `${style} panel`).toBeTruthy();
+    }
+  });
+
+  it("gives every creative style a distinct structural signature", () => {
+    const styles = [
+      "command-grid",
+      "neon-arcade",
+      "arena-broadcast",
+      "void-nebula",
+      "terran-foundry",
+    ] as const;
+    const signatures = styles.map((style) => {
+      const vars = themeToCssVars({ style });
+      return [
+        vars["--ov-panel-bg"],
+        vars["--ov-clip"],
+        vars["--ov-accent-track"],
+        vars["--ov-texture"],
+      ].join("|");
+    });
+    expect(new Set(signatures).size).toBe(styles.length);
+  });
+
   it("never emits vars for tokens that fail validation", () => {
     const vars = themeToCssVars({
       accent: "</style>",
@@ -332,19 +386,25 @@ describe("contrast math", () => {
 });
 
 describe("presets", () => {
-  it("ships the five required presets", () => {
+  it("keeps the original presets and adds five structural styles", () => {
     expect(OVERLAY_THEME_PRESETS.map((p) => p.id)).toEqual([
       "default",
       "midnight",
       "high-contrast",
       "minimal-glass",
       "retro-terminal",
+      "command-grid",
+      "neon-arcade",
+      "arena-broadcast",
+      "void-nebula",
+      "terran-foundry",
     ]);
   });
 
   it("every preset survives normalization unchanged (already canonical)", () => {
     for (const preset of OVERLAY_THEME_PRESETS) {
       expect(normalizeOverlayTheme(preset.theme)).toEqual(preset.theme);
+      expect(encodeOverlayTheme(preset.theme).length).toBeLessThanOrEqual(512);
     }
   });
 

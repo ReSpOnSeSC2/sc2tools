@@ -17,6 +17,18 @@ type Slot =
 
 export type Accent = "gold" | "cyan" | "magenta" | "green" | "red" | "neutral";
 
+type WidgetShellProps = {
+  slot?: Slot;
+  accent?: Accent;
+  /** When set, takes precedence over `accent` and tints by race. */
+  race?: string;
+  visible?: boolean;
+  width?: number;
+  /** Adds a soft pulsing cyan halo behind the panel for primary widgets. */
+  halo?: boolean;
+  children: ReactNode;
+};
+
 const SLOT_STYLE: Record<Slot, CSSProperties> = {
   "top-center": { top: 40, left: "50%", transform: "translateX(-50%)" },
   "top-center-1": { top: 130, left: "50%", transform: "translateX(-50%)" },
@@ -95,17 +107,7 @@ export function WidgetShell({
   width,
   halo = false,
   children,
-}: {
-  slot?: Slot;
-  accent?: Accent;
-  /** When set, takes precedence over `accent` and tints by race. */
-  race?: string;
-  visible?: boolean;
-  width?: number;
-  /** Adds a soft pulsing cyan halo behind the panel for primary widgets. */
-  halo?: boolean;
-  children: ReactNode;
-}) {
+}: WidgetShellProps) {
   const placement = SLOT_STYLE[slot];
   const effectiveAccent: Accent = race ? raceToAccent(race) : accent;
   const haloColor = ACCENT_HALO[effectiveAccent];
@@ -113,72 +115,141 @@ export function WidgetShell({
   return (
     <div
       className="widget-shell"
-      style={{
-        position: "absolute",
-        ...placement,
-        width: width || 380,
-        opacity: visible ? 1 : 0,
-        transform: `${placement.transform || ""} ${visible ? "" : "translateY(-30px)"}`.trim(),
-        transition: "opacity 220ms ease, transform 320ms cubic-bezier(.34,1.56,.64,1)",
-        background:
-          "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-        color: "#e6e8ee",
-        borderRadius: "var(--ov-radius, 12px)",
-        border: "1px solid rgba(255,255,255,0.10)",
-        boxShadow: [
-          "0 6px 20px rgba(0,0,0,0.55)",
-          "0 0 0 1px var(--ov-rim, rgba(62,192,199,0.10))",
-          `0 0 28px var(--ov-halo, ${haloColor})`,
-        ].join(", "),
-        // Theme font-scale. `zoom` (standardized, long-supported in the
-        // Chromium OBS/Streamlabs embed) scales layout AND the widgets'
-        // inline px font sizes without restyling any widget.
-        zoom: "var(--ov-scale, 1)",
-        pointerEvents: "none",
-        display: "flex",
-        overflow: "hidden",
-        fontFamily:
-          "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
-        fontFeatureSettings: '"tnum"',
-      }}
+      style={shellStyle(placement, width || 380, visible, haloColor)}
     >
-      {halo ? (
+      <div
+        className="widget-shell__panel"
+        style={panelStyle()}
+      >
         <span
           aria-hidden
-          className="widget-halo"
-          style={{
-            position: "absolute",
-            inset: -2,
-            borderRadius: "calc(var(--ov-radius, 12px) + 2px)",
-            background: `radial-gradient(closest-side, var(--ov-halo, ${haloColor}) 0%, transparent 70%)`,
-            opacity: 0.7,
-            animation: "widgetHaloPulse 8s ease-in-out infinite",
-            pointerEvents: "none",
-            zIndex: 0,
-          }}
+          className="widget-shell__texture"
+          style={textureStyle()}
         />
-      ) : null}
-      <div
-        style={{
-          width: 6,
-          background: `var(--ov-accent, ${ACCENT_BG[effectiveAccent]})`,
-          position: "relative",
-          zIndex: 1,
-        }}
-      />
-      <div
-        style={{
-          flex: 1,
-          padding: "14px 18px",
-          position: "relative",
-          zIndex: 1,
-          minWidth: 0,
-        }}
-      >
-        {children}
+        <span
+          aria-hidden
+          className="widget-shell__ornament"
+          style={ornamentStyle()}
+        />
+        {halo ? (
+          <span
+            aria-hidden
+            className="widget-halo"
+            style={haloStyle(haloColor)}
+          />
+        ) : null}
+        <span
+          aria-hidden
+          className="widget-shell__accent"
+          style={accentStyle(effectiveAccent)}
+        />
+        <div className="widget-shell__content" style={contentStyle()}>
+          {children}
+        </div>
       </div>
     </div>
   );
+}
+
+function shellStyle(
+  placement: CSSProperties,
+  width: number,
+  visible: boolean,
+  haloColor: string,
+): CSSProperties {
+  return {
+    position: "absolute",
+    ...placement,
+    width,
+    opacity: visible ? 1 : 0,
+    transform: `${placement.transform || ""} ${visible ? "" : "translateY(-30px)"}`.trim(),
+    transition:
+      "opacity 220ms ease, transform 320ms cubic-bezier(.34,1.56,.64,1)",
+    color: "#e6e8ee",
+    borderRadius: "var(--ov-radius, 12px)",
+    boxShadow: `var(--ov-shell-shadow, 0 6px 20px rgba(0,0,0,0.55), 0 0 0 1px var(--ov-rim, rgba(62,192,199,0.10)), 0 0 28px var(--ov-halo, ${haloColor}))`,
+    zoom: "var(--ov-scale, 1)",
+    pointerEvents: "none",
+    fontFamily:
+      "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
+    fontFeatureSettings: '"tnum"',
+  };
+}
+
+function panelStyle(): CSSProperties {
+  return {
+    position: "relative",
+    width: "100%",
+    display: "flex",
+    flexDirection: "var(--ov-panel-flow, row)" as CSSProperties["flexDirection"],
+    overflow: "hidden",
+    isolation: "isolate",
+    background:
+      "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
+    borderRadius: "var(--ov-radius, 12px)",
+    border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
+    clipPath: "var(--ov-clip, none)",
+    color: "#e6e8ee",
+    minWidth: 0,
+  };
+}
+
+function textureStyle(): CSSProperties {
+  return {
+    position: "absolute",
+    inset: 0,
+    zIndex: 0,
+    pointerEvents: "none",
+    background: "var(--ov-texture, none)",
+    backgroundSize: "var(--ov-texture-size, auto)",
+    opacity: "var(--ov-texture-opacity, 0)",
+  };
+}
+
+function ornamentStyle(): CSSProperties {
+  return {
+    position: "absolute",
+    inset: "var(--ov-ornament-inset, 0 0 auto auto)",
+    width: "var(--ov-ornament-width, 0px)",
+    height: "var(--ov-ornament-height, 0px)",
+    zIndex: 1,
+    pointerEvents: "none",
+    background: "var(--ov-ornament-bg, transparent)",
+    clipPath: "var(--ov-ornament-clip, none)",
+    opacity: "var(--ov-ornament-opacity, 0)",
+  };
+}
+
+function haloStyle(haloColor: string): CSSProperties {
+  return {
+    position: "absolute",
+    inset: -2,
+    borderRadius: "calc(var(--ov-radius, 12px) + 2px)",
+    background: `radial-gradient(closest-side, var(--ov-halo, ${haloColor}) 0%, transparent 70%)`,
+    opacity: 0.7,
+    animation: "widgetHaloPulse 8s ease-in-out infinite",
+    pointerEvents: "none",
+    zIndex: 0,
+  };
+}
+
+function accentStyle(accent: Accent): CSSProperties {
+  return {
+    flex: "0 0 var(--ov-accent-size, 6px)",
+    background: `var(--ov-accent-track, var(--ov-accent, ${ACCENT_BG[accent]}))`,
+    position: "relative",
+    zIndex: 2,
+  };
+}
+
+function contentStyle(): CSSProperties {
+  return {
+    flex: 1,
+    padding: "var(--ov-padding, 14px 18px)",
+    position: "relative",
+    zIndex: 2,
+    minWidth: 0,
+  };
 }
 
 export function WidgetHeader({ children }: { children: ReactNode }) {
@@ -192,7 +263,7 @@ export function WidgetHeader({ children }: { children: ReactNode }) {
         fontSize: 18,
         lineHeight: 1.2,
         fontWeight: 600,
-        letterSpacing: "-0.01em",
+        letterSpacing: "var(--ov-header-tracking, -0.01em)",
       }}
     >
       {children}
