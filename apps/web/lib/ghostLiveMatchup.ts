@@ -67,8 +67,9 @@ export function resolveGhostLiveRaces(
   const ownRaceIsRandom = directOwn.some(isRandomRace);
   const ownRace = ownRaceIsRandom
     ? null
-    : firstConcreteRace(directOwn)
-      ?? normalizeConcreteGhostRace(liveGame.streamerHistory?.myRace);
+    : directOwn.length > 0
+      ? firstConcreteRace(directOwn)
+      : normalizeConcreteGhostRace(liveGame.streamerHistory?.myRace);
 
   const directOpponent = nonBlankRaceValues([
     liveGame.opponent?.race,
@@ -79,8 +80,9 @@ export function resolveGhostLiveRaces(
       && isRandomRace(liveGame.streamerHistory?.oppRace));
   const opponentRace = opponentIsRandom
     ? null
-    : firstConcreteRace(directOpponent)
-      ?? normalizeConcreteGhostRace(liveGame.streamerHistory?.oppRace);
+    : directOpponent.length > 0
+      ? firstConcreteRace(directOpponent)
+      : normalizeConcreteGhostRace(liveGame.streamerHistory?.oppRace);
 
   return { ownRace, opponentRace, opponentIsRandom, ownRaceIsRandom };
 }

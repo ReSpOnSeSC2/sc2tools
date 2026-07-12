@@ -89,6 +89,24 @@ describe("resolveGhostLiveRaces", () => {
     expect(result.opponentRace).toBe("T");
   });
 
+  it("waits on direct unknown races instead of guessing from history", () => {
+    const result = resolveGhostLiveRaces(
+      envelope({
+        user: { name: "Streamer", race: "?" },
+        opponent: { name: "Opponent", race: "unknown" },
+        players: [
+          { name: "Streamer", type: "user", race: "?", result: "Undecided" },
+          { name: "Opponent", type: "user", race: "?", result: "Undecided" },
+        ],
+        streamerHistory: { myRace: "Protoss", oppRace: "Terran" },
+      }),
+    );
+
+    expect(result.ownRace).toBeNull();
+    expect(result.opponentRace).toBeNull();
+    expect(result.opponentIsRandom).toBe(false);
+  });
+
   it("does not replace a direct Random own race with history", () => {
     const result = resolveGhostLiveRaces(
       envelope({

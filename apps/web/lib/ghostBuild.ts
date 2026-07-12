@@ -628,6 +628,11 @@ export function writeArmedGhostConfig(config: GhostBuildConfig): boolean {
   const clean = normalizeGhostBuildConfig(config);
   if (!clean || typeof window === "undefined") return false;
   const encoded = encodeGhostBuildConfig(clean);
+  const hasAssignments = Object.keys(clean.slots).length > 0;
+  // `null` means either a deliberate empty config or a payload that cannot
+  // be represented safely. Never mistake an oversized non-empty loadout for
+  // "clear everything" and erase the user's existing assignments.
+  if (hasAssignments && !encoded) return false;
   try {
     if (encoded) {
       window.localStorage.setItem(GHOST_BUILD_STORAGE_KEY, encoded);
