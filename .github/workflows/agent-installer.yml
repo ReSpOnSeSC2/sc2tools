@@ -86,8 +86,28 @@ jobs:
 
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis -y --no-progress --version 3.10
         working-directory: .  # choco doesn't care; keep CWD clean
+        run: |
+          # community.chocolatey.org intermittently 504s; a single blip
+          # must not sink a tagged release build. Retry with backoff
+          # before giving up.
+          $ErrorActionPreference = 'Stop'
+          $max = 4
+          for ($i = 1; $i -le $max; $i++) {
+            Write-Host "Installing NSIS (attempt $i/$max)..."
+            choco install nsis -y --no-progress --version 3.10
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "NSIS installed."
+              exit 0
+            }
+            Write-Warning "choco install nsis failed (exit $LASTEXITCODE)."
+            if ($i -lt $max) {
+              $delay = [Math]::Pow(2, $i) * 5  # 10s, 20s, 40s
+              Write-Host "Retrying in $delay s..."
+              Start-Sleep -Seconds $delay
+            }
+          }
+          throw "NSIS install failed after $max attempts."
 
       - name: Make NSIS available to subsequent steps
         shell: pwsh

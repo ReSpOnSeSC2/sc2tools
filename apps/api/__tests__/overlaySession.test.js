@@ -35,6 +35,32 @@ jest.mock("@clerk/backend", () => ({
   }),
 }));
 
+// Only fake Date / new Date() — leave timer functions real so
+// mongodb-memory-server's internal heartbeats keep ticking. The service
+// reads ``Date.now()`` and ``new Date()`` to derive both the 14-day
+// cutoff AND the today-day-key filter, so faking just those pins the
+// clock to a fixed instant and keeps time-relative tests from flaking
+// on the hour (e.g. games built at ``now - 25m`` spilling into the
+// previous UTC day when the suite runs just after midnight).
+const TIMER_FAKE_OPTS = {
+  doNotFake: [
+    "setImmediate",
+    "clearImmediate",
+    "setInterval",
+    "clearInterval",
+    "setTimeout",
+    "clearTimeout",
+    "queueMicrotask",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+    "requestIdleCallback",
+    "cancelIdleCallback",
+    "hrtime",
+    "performance",
+    "nextTick",
+  ],
+};
+
 describe("services/games.todaySession", () => {
   let mongo;
   let db;
@@ -50,6 +76,7 @@ describe("services/games.todaySession", () => {
   });
 
   afterEach(async () => {
+    jest.useRealTimers();
     await db.games.deleteMany({});
   });
 
@@ -1008,6 +1035,14 @@ describe("services/games.todaySession", () => {
   });
 
   test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
+    // Pin the clock to mid-day UTC. Without this the games below are
+    // built relative to the wall clock, so a run just after UTC
+    // midnight pushes the earliest ones into the previous day, the
+    // today-key filter drops them, and wins/losses come up short.
+    jest.useFakeTimers({
+      ...TIMER_FAKE_OPTS,
+      now: new Date("2026-05-10T15:00:00Z").getTime(),
+    });
     const t0 = new Date(Date.now() - 25 * 60 * 1000);
     const t1 = new Date(t0.getTime() + 5 * 60 * 1000);
     const t2 = new Date(t0.getTime() + 10 * 60 * 1000);
@@ -1037,31 +1072,6 @@ describe("services/games.todaySession", () => {
   });
 
   describe("4-hour-inactivity reset", () => {
-    // Only fake Date / new Date() — leave timer functions real so
-    // mongodb-memory-server's internal heartbeats keep ticking. The
-    // service reads ``Date.now()`` and ``new Date()`` to derive both the
-    // 14-day cutoff AND the inactivity window, so faking just those
-    // exercises the reset deterministically without depending on what
-    // hour of the day the test happens to run.
-    const TIMER_FAKE_OPTS = {
-      doNotFake: [
-        "setImmediate",
-        "clearImmediate",
-        "setInterval",
-        "clearInterval",
-        "setTimeout",
-        "clearTimeout",
-        "queueMicrotask",
-        "requestAnimationFrame",
-        "cancelAnimationFrame",
-        "requestIdleCallback",
-        "cancelIdleCallback",
-        "hrtime",
-        "performance",
-        "nextTick",
-      ],
-    };
-
     afterEach(() => {
       jest.useRealTimers();
     });
