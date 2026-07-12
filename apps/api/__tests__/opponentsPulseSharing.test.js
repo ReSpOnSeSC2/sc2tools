@@ -138,12 +138,15 @@ describe("cross-user SC2Pulse sharing via the directory", () => {
       mmr: 4000,
       region: "NA",
     });
+    let currentMmrCalls = 0;
     let breakdownCalls = 0;
     const pulse = {
       async getCurrentMmrForAny() {
+        currentMmrCalls += 1;
         return { mmr: 5000, region: "NA" };
       },
       async getCurrentMmr() {
+        currentMmrCalls += 1;
         return { mmr: 5000, region: "NA" };
       },
       async getRaceBreakdown() {
@@ -169,7 +172,11 @@ describe("cross-user SC2Pulse sharing via the directory", () => {
     // sees 5000 from the shared cache.
     const shared = await directory.getFreshMmr({ toonHandle: TOON });
     expect(shared.mmr).toBe(5000);
-    expect(breakdownCalls).toBeGreaterThan(0);
+    expect(currentMmrCalls).toBeGreaterThan(0);
+    // Admin Retry refreshes opponent-profile MMR only. Per-race calls
+    // belong to the profile view and the bounded game-enrichment job;
+    // retry must not invoke the removed historical game-stamp path.
+    expect(breakdownCalls).toBe(0);
   });
 
   test("resolver reuses another user's resolution without hitting SC2Pulse", async () => {

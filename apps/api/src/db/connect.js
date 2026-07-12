@@ -176,6 +176,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
  * Hot queries we index for:
  *   - opponents browse:   {userId, pulseId}
  *   - games by date:      {userId, date}
+ *   - recent MMR enrich:  {createdAt, _id}
  *   - games by opponent:  {opponent.pulseId, userId, date}
  *   - games dedupe:       {userId, gameId}  (unique)
  *   - device pairings:    {code} (unique, TTL)
@@ -198,6 +199,11 @@ async function ensureIndexes(ctx) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
+  // Global recent-row scan for opponentMmrEnrichmentJob. The job is
+  // intentionally bounded by createdAt and walks oldest-first inside
+  // that small window; without a global ingest-time index every
+  // 15-minute tick would scan the full multi-user games corpus.
+  await ctx.games.createIndex({ createdAt: 1, _id: 1 });
   // Opponent lookup uses the nested ``opponent.pulseId`` path
   // (services/overlayLive.js, services/community.js, services/gdpr.js,
   // routes/games.js). Field order matches Atlas Performance Advisor

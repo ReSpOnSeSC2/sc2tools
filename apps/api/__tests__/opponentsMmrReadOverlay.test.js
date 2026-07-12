@@ -8,8 +8,8 @@
  * played in your most recent game against them". The read overlay is
  * race-aware: it RECOGNISES the race the opponent played in the most
  * recent game, then PICKS the most recent game OF THAT RACE that
- * carries an ``opponent.mmr`` (stamped race-correct at ingest by
- * ``_stampGameOpponentMmr`` via the SC2Pulse per-race breakdown). That
+ * carries an ``opponent.mmr`` (from the replay or the race-aware,
+ * recency-bounded opponent-MMR enrichment job). That
  * value is preferred over the opponents-row ``mmr``, which is
  * SC2Pulse's race-AGNOSTIC current rating (``_fetchTeams`` collapses
  * every race to the most-recently-played team) and would surface the
@@ -150,7 +150,7 @@ describe("OpponentsService read-time MMR overlay from games", () => {
       // Mirrors the "trigger" report: the opponents row holds SC2Pulse's
       // collapsed current rating (their Protoss 6360 — the race they
       // ladder most), but the most recent game the user actually played
-      // was the opponent's Terran (5400, stamped race-correct onto the
+      // was the opponent's Terran (5400, enriched race-correctly on the
       // game). The column promises "MMR from the most recent game", so
       // the game value must win.
       await insertOpponent({ mmr: 6360, region: "EU" }); // Protoss, race-agnostic
@@ -189,7 +189,7 @@ describe("OpponentsService read-time MMR overlay from games", () => {
       "recent different-race rating",
     async () => {
       // The crux of the fix: the most recent game is Terran but carries
-      // no stamped mmr; a more-recent-than-the-Terran-with-mmr Protoss
+      // no game-level mmr; a more-recent-than-the-Terran-with-mmr Protoss
       // game DOES carry 6360. We must still show the Terran 5400 (the
       // race actually played most recently), never the Protoss 6360.
       await insertOpponent(); // no stored mmr

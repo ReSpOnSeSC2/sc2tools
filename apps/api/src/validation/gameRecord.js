@@ -71,6 +71,11 @@ const GAME_SCHEMA = {
         // to retry. v0.5.x agents always emit this when ``opp.handle``
         // is present.
         pulseLookupAttempted: { type: "boolean" },
+        // Server-owned one-shot marker for the recent-game SC2Pulse
+        // MMR enrichment job. true means the row was attempted even
+        // when Pulse had no matching-race rating, so misses do not
+        // re-enter the queue forever.
+        mmrLookupAttempted: { type: "boolean" },
         displayName: { type: "string", maxLength: 80 },
         race: { type: "string", maxLength: 24 },
         mmr: { type: "integer", minimum: 0, maximum: 9999 },
