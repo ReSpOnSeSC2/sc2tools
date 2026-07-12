@@ -23,6 +23,23 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Agent 0.13.9 · fresh games no longer wait behind history syncs or
+  upload repeatedly** — newly finished replays use dedicated priority
+  parse and upload lanes, while bounded history work keeps large re-syncs
+  from monopolizing the pipeline. Pending reservations now survive through
+  acknowledgement and retry, duplicate game IDs coalesce, and the desktop
+  Queued count reflects real pending work.
+
+- **Session MMR updates stay monotonic under concurrent uploads** — an
+  older replay/profile snapshot can no longer finish after newer work and
+  roll the current MMR backward. Capture timestamps now travel through
+  ingestion and stale updates are rejected atomically.
+
+- **Long Ghost Build Coach URLs stay inside Overlay Settings** — the
+  generated source URL now wraps within a bounded, copyable field so its
+  Copy and Test controls remain visible without forcing the page wider than
+  the viewport.
+
 - **Skill fingerprint now explains what it measures** — the Trends card
   shows plain-language definitions, raw values, unavailable-signal coverage,
   the exact reason for the current playstyle, and a collapsible reference for

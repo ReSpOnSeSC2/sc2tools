@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.9
+
+### Fixed — newly finished games upload promptly during history sync
+- **What.** Fresh replay parses and uploads shared the same unbounded
+  work lanes as historical re-syncs. A just-finished game could sit
+  behind thousands of old files for 15 minutes or more, while each
+  periodic folder sweep queued the same replay again before the first
+  upload was acknowledged.
+- **Effect.** Live replays now use dedicated priority lanes with bounded
+  history parse-ahead. Queue reservations remain active through upload
+  and retry, duplicate game IDs resolve as one job, and retries use a
+  retained lane that cannot be dropped when the main queue is full.
+  The dashboard's Queued count now reports real pending work instead of
+  remaining stuck at zero.
+
+### Fixed — concurrent uploads cannot roll current MMR backward
+- **What.** Two upload workers could finish out of order, allowing an
+  older replay/profile snapshot to overwrite the newer current-MMR
+  value used by session widgets.
+- **Effect.** MMR snapshots carry their capture time through ingestion,
+  and the cloud applies them monotonically so stale work cannot replace
+  a newer rating.
+
 ## 0.13.8
 
 ### Fixed — one agent owns uploads and live-game widget events
