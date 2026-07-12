@@ -176,6 +176,7 @@ function RaceMatchupGroup({
 
   return (
     <fieldset
+      disabled={disabled}
       className="min-w-0 rounded-xl border border-border bg-bg-surface/60 p-3 sm:p-4"
       data-testid={`ghost-race-group-${group.race.toLowerCase()}`}
     >

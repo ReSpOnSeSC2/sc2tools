@@ -18,7 +18,8 @@
 # grab them directly.
 #
 # To trigger manually: GitHub → Actions → "agent installer" → Run
-# workflow. To cut a release: `git tag agent-v0.3.0 && git push --tags`.
+# workflow. To cut a release, tag the merged commit with the exact version in
+# apps/agent/sc2tools_agent/__init__.py and push that one tag.
 
 name: agent installer
 
@@ -29,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version override (e.g. 0.3.0). Defaults to the value in sc2tools_agent/__init__.py.'
+        description: 'Optional expected version (e.g. 0.14.0). Must match sc2tools_agent/__init__.py.'
         required: false
         type: string
 
@@ -62,17 +63,30 @@ jobs:
         id: ver
         shell: pwsh
         run: |
+          # Always read the package version, including on a tag build. A tag
+          # used to override this value silently, which could publish an
+          # installer named for one version while the running agent reported
+          # another. Fail the release before building if those sources drift.
+          $line = Select-String -Path 'sc2tools_agent\__init__.py' `
+                                -Pattern '^__version__\s*=\s*"([^"]+)"'
+          if (-not $line) { throw 'No __version__ found.' }
+          $packageVersion = $line.Matches[0].Groups[1].Value
+
           $v = '${{ inputs.version }}'
-          if (-not $v) {
-            if ($env:GITHUB_REF -like 'refs/tags/agent-v*') {
-              $v = $env:GITHUB_REF -replace '^refs/tags/agent-v', ''
-            } else {
-              # Read the canonical __version__ from the package.
-              $line = Select-String -Path 'sc2tools_agent\__init__.py' `
-                                    -Pattern '^__version__\s*=\s*"([^"]+)"'
-              if (-not $line) { throw 'No __version__ found.' }
-              $v = $line.Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF -like 'refs/tags/agent-v*') {
+            $tagVersion = $env:GITHUB_REF -replace '^refs/tags/agent-v', ''
+            if ($tagVersion -ne $packageVersion) {
+              throw "Tag version '$tagVersion' does not match sc2tools_agent.__version__ '$packageVersion'."
             }
+            $v = $tagVersion
+          } elseif ($v -and $v -ne $packageVersion) {
+            throw "Requested version '$v' does not match sc2tools_agent.__version__ '$packageVersion'."
+          } elseif (-not $v) {
+            $v = $packageVersion
+          }
+
+          if ($v -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Agent installer version must be X.Y.Z; got '$v'."
           }
           "version=$v" | Out-File -Append $env:GITHUB_OUTPUT
           Write-Host "Building SC2 Tools Agent v$v"

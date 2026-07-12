@@ -16,10 +16,11 @@ import { resolveGhostLiveRaces } from "@/lib/ghostLiveMatchup";
 /**
  * GhostBuildWidget — the Ghost Build practice coach, a persistent HUD.
  *
- * The nine-matchup build config travels in this Browser Source's own URL as the
- * ``?ghost=`` param (versioned base64url, hostile-input safe — see
- * lib/ghostBuild.ts). Zero server state: the widget decodes the param
- * once and everything else derives from the live envelope.
+ * The nine-matchup build config travels in this Browser Source's own URL as a
+ * client-only ``#ghost=`` fragment (versioned base64url, hostile-input safe —
+ * see lib/ghostBuild.ts). Zero server state: the widget decodes the value once
+ * and everything else derives from the live envelope. Previously copied
+ * ``?ghost=`` query links remain a compatibility path in OverlayWidgetClient.
  *
  * Three render states:
  *   1. No target armed — renders nothing (transparent scene). A Test
@@ -53,8 +54,8 @@ export function GhostBuildWidget({
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
-  /** Raw ``?ghost=`` search param from the widget page. Decoded once,
-   *  strict validation — malformed values act like "not armed". */
+  /** Raw validated Ghost URL value from either fragment or legacy query.
+   *  Decoded once; malformed values act like "not armed". */
   ghostParam?: string | null;
 }) {
   const config = useMemo(() => decodeGhostBuildConfig(ghostParam), [ghostParam]);
