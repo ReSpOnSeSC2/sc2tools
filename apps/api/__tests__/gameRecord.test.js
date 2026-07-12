@@ -90,6 +90,46 @@ describe("validateGameRecord", () => {
     }
   });
 
+  test.each([true, false])(
+    "accepts opponent.mmrLookupAttempted=%s",
+    (mmrLookupAttempted) => {
+      const r = validateGameRecord({
+        gameId: "abc-123",
+        date: "2026-05-04T12:00:00.000Z",
+        result: "Victory",
+        myRace: "Protoss",
+        map: "Goldenaura",
+        opponent: {
+          pulseCharacterId: "994428",
+          race: "Terran",
+          mmrLookupAttempted,
+        },
+      });
+      expect(r.valid).toBe(true);
+      if (r.valid) {
+        expect(/** @type {any} */ (r.value).opponent.mmrLookupAttempted).toBe(
+          mmrLookupAttempted,
+        );
+      }
+    },
+  );
+
+  test("rejects a non-boolean opponent.mmrLookupAttempted", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      opponent: {
+        pulseCharacterId: "994428",
+        race: "Terran",
+        mmrLookupAttempted: "true",
+      },
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test("rejects non-numeric pulseCharacterId", () => {
     const r = validateGameRecord({
       gameId: "abc-123",

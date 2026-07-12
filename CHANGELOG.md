@@ -149,6 +149,18 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Forward-only opponent-MMR enrichment** — a new API worker enriches
+  recently ingested ladder games that are missing `opponent.mmr` from
+  SC2Pulse's current, per-race 1v1 rating. It matches the race the
+  opponent played, marks every lookup attempt so misses do not retry
+  forever, and uses the shared Mongo advisory lock plus a 25-game
+  per-tick cap on its 15-minute cadence. The default `createdAt`
+  window is 14 days and is hard-capped at 30, deliberately leaving the
+  historical corpus and all already-stored MMR values untouched. This
+  makes current MMR an explicit approximation of game-time MMR; the
+  downstream MMR-banded Ladder Meta Radar will start sparse and fill
+  naturally as new games arrive.
+
 - **Win rate by map by matchup** — the Maps tab gains a new section that
   cross-tabs each map against opponent race, so you can see (for example)
   that a map is strong PvZ but weak PvT rather than just its overall win

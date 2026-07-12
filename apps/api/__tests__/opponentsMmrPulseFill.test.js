@@ -2,12 +2,11 @@
 "use strict";
 
 /**
- * OpponentsService — SC2Pulse MMR + region fill at game ingest.
+ * OpponentsService — SC2Pulse MMR + region fill on opponent rows.
  *
  * sc2reader almost never carries an opponent's MMR for ranked 1v1
  * ladder replays, so the analyzer's Opponents tab and per-opponent
- * profile would otherwise show "—" forever AND the bingo
- * win_vs_higher_mmr / win_close_mmr predicates would never tick.
+ * profile would otherwise show "—" forever.
  *
  * recordGame / refreshMetadata fix this by:
  *   * Deriving the opponent's region from the toon_handle leading
@@ -15,21 +14,20 @@
  *   * Attempting one rate-limited SC2Pulse fetch per ingest
  *     (preferring the derived region for multi-region opponents),
  *     persisting mmr + region on the opponents row.
- *   * Stamping the resolved values onto game.opponent.mmr /
- *     opponent.region in the games collection so the bingo MMR
- *     predicates have data to read from.
+ *   * Leaving game-level opponent.mmr to replay data or the dedicated,
+ *     race-aware opponent-MMR enrichment job. A current, race-agnostic
+ *     opponent-row rating must never be back-stamped by this service.
  *
  * What this suite pins:
  *   * Region derivation works for every Blizzard region byte.
  *   * Pulse fetch populates mmr + region on first ingest.
  *   * Pulse failure / rate-limit leaves prior values intact.
  *   * Freshness window suppresses re-fetches on bulk re-upload.
- *   * Toon-only rows (no pulseCharacterId) skip the network.
+ *   * Toon-only rows use the toon-handle fallback when supported.
  *   * Pulse exceptions are swallowed.
  *   * refreshMetadata follows the same contract as recordGame.
- *   * The bingo-fix stamp lands on game.opponent.mmr +
- *     opponent.region when the agent didn't supply them, and
- *     respects an explicit agent value when present.
+ *   * recordGame / refreshMetadata may fill game metadata such as
+ *     region, but never back-stamp SC2Pulse MMR; replay MMR survives.
  */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -81,9 +79,9 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         calls.push({ kind: "toon", toon });
         return impl(toon, undefined);
       }),
-      // Per-race breakdown drives the race-correct per-game stamp.
-      // baseGame.race is "P", so surface the impl's value under Protoss
-      // so the stamp picks it for these Protoss games.
+      // Keep a race breakdown available so the ownership-boundary
+      // tests prove recordGame / refreshMetadata do not consume it to
+      // back-stamp game-level MMR.
       getRaceBreakdown: jest.fn(async (ids) => {
         calls.push({ kind: "races", ids });
         const r = await impl(ids[0], undefined);
@@ -300,9 +298,9 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
     expect(row.region).toBe("EU");
   });
 
-  describe("bingo-fix: stamp game.opponent.mmr / opponent.region", () => {
+  describe("game-level MMR ownership boundary", () => {
     beforeEach(async () => {
-      // Insert a slim games row that recordGame can stamp on top of.
+      // Insert a slim games row that recordGame can update metadata on.
       await db.games.insertOne({
         userId: "u1",
         gameId: "g1",
@@ -316,7 +314,7 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
       });
     });
 
-    test("stamps when agent didn't supply mmr/region", async () => {
+    test("recordGame never back-stamps SC2Pulse MMR", async () => {
       const pulseMmr = makePulseStub(async () => ({ mmr: 4321, region: "NA" }));
       const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
         pulseMmr,
@@ -327,15 +325,20 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         gameId: "g1",
       });
       const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
-      expect(game.opponent.mmr).toBe(4321);
+      expect(game.opponent.mmr).toBeUndefined();
       expect(game.opponent.region).toBe("NA");
+      expect(pulseMmr.getRaceBreakdown).not.toHaveBeenCalled();
     });
 
-    test("respects explicit agent-supplied opponent.mmr (no overwrite)", async () => {
+    test("recordGame preserves replay-provided opponent.mmr", async () => {
       const pulseMmr = makePulseStub(async () => ({ mmr: 9999, region: "NA" }));
       const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
         pulseMmr,
       });
+      await db.games.updateOne(
+        { userId: "u1", gameId: "g1" },
+        { $set: { "opponent.mmr": 4321 } },
+      );
       await opponents.recordGame("u1", {
         ...baseGame,
         pulseCharacterId: "452727",
@@ -343,9 +346,8 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         mmr: 4321, // agent already had a value
       });
       const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
-      // Pulse value not stamped because agent's was kept on opponents
-      // row; same logic preserves the agent-supplied value on games.
-      expect(game.opponent.mmr).toBeUndefined();
+      expect(game.opponent.mmr).toBe(4321);
+      expect(pulseMmr.getRaceBreakdown).not.toHaveBeenCalled();
     });
 
     test("no-op when gameId is omitted (defensive)", async () => {
@@ -363,7 +365,7 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
       expect(game.opponent.region).toBeUndefined();
     });
 
-    test("refreshMetadata also stamps the games row", async () => {
+    test("refreshMetadata never back-stamps SC2Pulse MMR", async () => {
       // Pre-fill opponents row from a prior ingest.
       const opponents = new OpponentsService(db, Buffer.alloc(32, 1));
       await opponents.recordGame("u1", {
@@ -385,8 +387,9 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
         gameId: "g1",
       });
       const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
-      expect(game.opponent.mmr).toBe(4500);
+      expect(game.opponent.mmr).toBeUndefined();
       expect(game.opponent.region).toBe("EU");
+      expect(pulseMmr.getRaceBreakdown).not.toHaveBeenCalled();
     });
   });
 });

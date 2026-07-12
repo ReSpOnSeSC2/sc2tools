@@ -276,13 +276,12 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     ).rejects.toThrow(/pulseResolver/);
   });
 
-  test("on hit, fetches pulse MMR and fills games that lack an in-replay value", async () => {
+  test("on hit, fetches opponent-row MMR without back-stamping game MMR", async () => {
     // The "barcode finally got a pulseCharacterId" case. After the
     // backfill resolves the id, the freshly-fetched SC2Pulse MMR
-    // must land on the opponents row AND on games rows that were
-    // missing an MMR — but games that already carry the agent's
-    // in-replay value must be left alone (in-replay is at-game-time
-    // truth; pulse is only the fill-the-gap backup).
+    // lands on the opponents row. Game-level MMR belongs to replay
+    // data or the dedicated enrichment job, so neither a missing MMR
+    // nor an in-replay value is changed here.
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "1-S2-1-1",
@@ -315,9 +314,8 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     const pulseMmr = {
       getCurrentMmr: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
       getCurrentMmrForAny: jest.fn(async () => ({ mmr: 4800, region: "NA" })),
-      // Per-race breakdown drives the race-correct game restamp. The
-      // opponent played Protoss in g1, so their Protoss rating is what
-      // gets stamped.
+      // Available, but this pulse-id backfill must not use it to write
+      // game-level MMR; the dedicated enrichment job owns that write.
       getRaceBreakdown: jest.fn(async () => [
         { race: "Protoss", mmr: 4800, region: "NA" },
       ]),
@@ -335,13 +333,13 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     expect(oppRow.mmr).toBe(4800);
     expect(oppRow.region).toBe("NA");
     expect(oppRow.mmrFetchedAt).toBeInstanceOf(Date);
-    // g1 had no in-replay MMR → pulse fills the gap.
+    expect(pulseMmr.getRaceBreakdown).not.toHaveBeenCalled();
+    // Metadata may be healed, but SC2Pulse MMR is not written here.
     const g1 = await db.games.findOne({ userId: "u1", gameId: "g1" });
-    expect(g1.opponent.mmr).toBe(4800);
+    expect(g1.opponent.mmr).toBeUndefined();
     expect(g1.opponent.region).toBe("NA");
-    // g2 already had the agent's in-replay MMR (3000) → preserved.
-    // Region stamping is gated by the same "lacks MMR" filter so we
-    // don't double-write — g2 keeps the values it had.
+    expect(g1.opponent.pulseCharacterId).toBe("452727");
+    // g2 already had the agent's in-replay MMR (3000), so it survives.
     const g2 = await db.games.findOne({ userId: "u1", gameId: "g2" });
     expect(g2.opponent.mmr).toBe(3000);
     expect(g2.opponent.region).toBeUndefined();
@@ -386,13 +384,13 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
     expect(game.opponent.mmr).toBeUndefined();
     expect(game.opponent.region).toBe("EU");
+    expect(game.opponent.pulseCharacterId).toBe("452727");
   });
 
   test("works without a pulseMmr dep (MMR fetch silently skipped)", async () => {
     // Backfill tick that ran before pulseMmr was injected: still
-    // useful for healing pulseCharacterId + region; the next ingest
-    // (or the next backfill tick when pulseMmr IS available) fills
-    // in MMR.
+    // useful for healing pulseCharacterId + region. The dedicated
+    // enrichment job may later fill game-level MMR.
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "1-S2-1-1",
@@ -418,6 +416,7 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     expect(oppRow.mmr).toBeUndefined();
     const game = await db.games.findOne({ userId: "u1", gameId: "g1" });
     expect(game.opponent.region).toBe("NA");
+    expect(game.opponent.pulseCharacterId).toBe("452727");
     expect(game.opponent.mmr).toBeUndefined();
   });
 });

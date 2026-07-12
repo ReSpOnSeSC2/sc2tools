@@ -2,44 +2,12 @@
 "use strict";
 
 const {
-  STAMP_MAX_AGE_DAYS,
-  stampFloor,
-  isStampableDate,
   canonicalRaceName,
   canonicalRaceLetter,
   pickRaceMmr,
 } = require("../src/services/oppMmrStamp");
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 describe("services/oppMmrStamp", () => {
-  test("STAMP_MAX_AGE_DAYS is the agreed 1-year trust horizon", () => {
-    expect(STAMP_MAX_AGE_DAYS).toBe(365);
-  });
-
-  test("stampFloor is ~365 days before now", () => {
-    const now = Date.UTC(2026, 4, 27);
-    const floor = stampFloor(now);
-    expect(floor.getTime()).toBe(now - 365 * DAY_MS);
-  });
-
-  test("isStampableDate accepts recent games and rejects old ones", () => {
-    const now = Date.UTC(2026, 4, 27);
-    expect(isStampableDate(new Date(now - 30 * DAY_MS), now)).toBe(true);
-    expect(isStampableDate(new Date(now - 364 * DAY_MS), now)).toBe(true);
-    // A 2018 game — the whole reason this guard exists.
-    expect(isStampableDate(new Date(Date.UTC(2018, 5, 16)), now)).toBe(false);
-    expect(isStampableDate(new Date(now - 400 * DAY_MS), now)).toBe(false);
-  });
-
-  test("isStampableDate handles strings and rejects garbage", () => {
-    const now = Date.UTC(2026, 4, 27);
-    expect(isStampableDate(new Date(now - DAY_MS).toISOString(), now)).toBe(true);
-    expect(isStampableDate("not-a-date", now)).toBe(false);
-    expect(isStampableDate(null, now)).toBe(false);
-    expect(isStampableDate(undefined, now)).toBe(false);
-  });
-
   test("canonicalRaceName normalises every spelling", () => {
     expect(canonicalRaceName("Protoss")).toBe("Protoss");
     expect(canonicalRaceName("protoss")).toBe("Protoss");
