@@ -2,6 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.14.0
+
+### Added — reload-safe Ghost matchup races
+- **What.** Live-game envelopes exposed the opponent race but omitted the
+  streamer's own race. A Random selection could also be replaced by the
+  concrete race SC2 reveals later, so a reloaded Ghost Build Coach could
+  select the wrong 3×3 matchup.
+- **Effect.** The agent now derives both players from one deterministic 1v1
+  identity decision, emits `user.race`, and latches an explicit Random
+  selection for either side until the `gameKey` changes. Missing and `?`
+  values remain unknown and can resolve normally on a later poll. Known
+  SC2 abbreviations (`Prot`, `Terr`, `Rand`) and leading clan tags are
+  normalized without fuzzy player-name matching.
+
 ## 0.13.9
 
 ### Fixed — newly finished games upload promptly during history sync

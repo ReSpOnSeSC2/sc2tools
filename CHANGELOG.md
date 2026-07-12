@@ -34,6 +34,16 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Agent 0.14.0 · Ghost matchup selection survives Browser Source
+  reloads** — live envelopes now include the streamer's directly observed
+  race, and an explicit Random selection for either player is retained for
+  the full `gameKey` even if SC2 later reports the spawned concrete race.
+  Unknown and `?` race values remain unresolved instead of being mistaken
+  for Random, so later valid observations can still select the correct 3×3
+  matchup. Clan-tagged player names and SC2's truncated race forms are
+  normalized, and cloud enrichment trusts the direct race even on late
+  playerless snapshots.
+
 - **Agent 0.13.9 · fresh games no longer wait behind history syncs or
   upload repeatedly** — newly finished replays use dedicated priority
   parse and upload lanes, while bounded history work keeps large re-syncs

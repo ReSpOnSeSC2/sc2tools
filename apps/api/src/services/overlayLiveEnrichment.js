@@ -12,7 +12,7 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  * What lives in this module:
  *
  *   - ``pickStreamerRace`` — derive the streamer's race from the
- *     agent's envelope ``players[]`` list.
+ *     agent's direct ``user.race`` field or legacy ``players[]`` list.
  *   - ``pickEnvelopeRegion`` — derive the Blizzard region label from
  *     the opponent's toon_handle or the Pulse profile, with the
  *     ``US → NA`` canonicalisation the rest of the cloud uses.
@@ -39,7 +39,7 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  *
  * @typedef {{
  *   players?: unknown,
- *   user?: { name?: unknown } | null,
+ *   user?: { name?: unknown, race?: unknown } | null,
  *   opponent?: {
  *     name?: unknown,
  *     race?: unknown,
@@ -50,19 +50,47 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  */
 
 /**
- * Pull the streamer's own race out of the agent's envelope. The
- * envelope carries one entry per player on ``players[]``; the
- * streamer's row has ``type === "user"`` AND
- * ``name === envelope.user.name`` (the explicit "you" hint the
- * bridge writes from the player handle cache). Falls back to picking
- * the player whose name matches the user when both players are
- * marked ``user`` in 1v1.
+ * Strict aliases emitted by supported SC2 local-client variants.
+ * @type {Readonly<Record<string, "Protoss"|"Terran"|"Zerg"|"Random">>}
+ */
+const LIVE_RACE_NAMES = Object.freeze({
+  p: "Protoss",
+  prot: "Protoss",
+  protoss: "Protoss",
+  t: "Terran",
+  terr: "Terran",
+  terran: "Terran",
+  z: "Zerg",
+  zerg: "Zerg",
+  r: "Random",
+  rand: "Random",
+  random: "Random",
+});
+
+/**
+ * @param {unknown} value
+ * @returns {"Protoss"|"Terran"|"Zerg"|"Random"|null}
+ */
+function canonicalLiveRace(value) {
+  if (typeof value !== "string") return null;
+  return LIVE_RACE_NAMES[value.trim().toLowerCase()] || null;
+}
+
+/**
+ * Pull the streamer's own race out of the agent's envelope. Agent
+ * 0.14.0+ emits the authoritative, gameKey-latched value directly on
+ * ``user.race``; older agents require deriving it from ``players[]``.
+ * Every candidate is strictly validated so ``?`` or arbitrary strings
+ * remain unknown instead of creating a false matchup/cache key.
  *
  * @param {LiveEnvelopeLike} envelope
  * @returns {string | null}
  */
 function pickStreamerRace(envelope) {
   if (!envelope || typeof envelope !== "object") return null;
+  const directRace = canonicalLiveRace(envelope.user && envelope.user.race);
+  if (directRace) return directRace;
+
   const players = Array.isArray(envelope.players) ? envelope.players : [];
   if (players.length === 0) return null;
   const userName = envelope.user && typeof envelope.user.name === "string"
@@ -73,7 +101,7 @@ function pickStreamerRace(envelope) {
     if (p.type !== "user") continue;
     const pName = typeof p.name === "string" ? p.name.trim().toLowerCase() : "";
     if (userName && pName === userName) {
-      return typeof p.race === "string" ? p.race : null;
+      return canonicalLiveRace(p.race);
     }
   }
   // Fallback: first ``user`` player. In a 1v1 ladder game with no
@@ -81,8 +109,8 @@ function pickStreamerRace(envelope) {
   // queries it powers will simply yield nothing if the guess is
   // wrong, which is acceptable.
   for (const p of players) {
-    if (p && p.type === "user" && typeof p.race === "string") {
-      return p.race;
+    if (p && p.type === "user") {
+      return canonicalLiveRace(p.race);
     }
   }
   return null;
@@ -233,10 +261,10 @@ async function enrichEnvelope(
     opp && typeof opp.toonHandle === "string" && opp.toonHandle.length > 0
       ? opp.toonHandle
       : null;
-  // The agent's envelope carries the streamer's display name on
-  // ``user.name`` and the player race on ``players[].race`` for the
-  // ``user`` player. The streamer's race is what ``buildFromOppName``
-  // needs for matchup-scoped queries.
+  // Agent 0.14.0+ carries the authoritative race on ``user.race``;
+  // legacy envelopes fall back to the matching ``players[]`` row.
+  // The streamer's race is what ``buildFromOppName`` needs for
+  // matchup-scoped queries.
   const myRace = pickStreamerRace(envelope);
   const region = pickEnvelopeRegion(opp, profile);
 
