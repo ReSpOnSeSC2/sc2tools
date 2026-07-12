@@ -26,6 +26,7 @@ import {
   DEFAULT_OVERLAY_OPACITY,
   OVERLAY_THEME_PRESETS,
   OVERLAY_THEME_SCALES,
+  OVERLAY_THEME_STYLE_OPTIONS,
   accentContrastOnPanel,
   expandHex,
   isValidThemeHex,
@@ -35,6 +36,7 @@ import {
   type OverlayThemeFont,
   type OverlayThemeRadius,
   type OverlayThemeScale,
+  type OverlayThemeStyle,
 } from "@/lib/overlayTheme";
 
 /**
@@ -52,6 +54,55 @@ import {
  * normalize builds keys in a fixed order, so stringify is stable. */
 function themeKey(theme: OverlayTheme): string {
   return JSON.stringify(normalizeOverlayTheme(theme));
+}
+
+function PresetSwatch({ theme }: { theme: OverlayTheme }) {
+  const vars = themeToCssVars(theme);
+  return (
+    <span
+      aria-hidden
+      className="relative block h-11 w-full"
+      style={{
+        ...vars,
+        borderRadius: "var(--ov-radius, 8px)",
+        boxShadow: "var(--ov-shell-shadow, none)",
+      }}
+    >
+      <span
+        className="relative flex h-full w-full overflow-hidden"
+        style={{
+          flexDirection:
+            "var(--ov-panel-flow, row)" as CSSProperties["flexDirection"],
+          background:
+            "var(--ov-panel-bg, linear-gradient(135deg, #0b0d12, #161a23))",
+          border: "var(--ov-shell-border, 1px solid rgba(255,255,255,.14))",
+          borderRadius: "var(--ov-radius, 8px)",
+          clipPath: "var(--ov-clip, none)",
+        }}
+      >
+        <span
+          className="absolute inset-0"
+          style={{
+            background: "var(--ov-texture, none)",
+            backgroundSize: "var(--ov-texture-size, auto)",
+            opacity: "var(--ov-texture-opacity, 0)",
+          }}
+        />
+        <span
+          className="relative z-[1] flex-none"
+          style={{
+            flexBasis: "var(--ov-accent-size, 5px)",
+            background:
+              "var(--ov-accent-track, var(--ov-accent, #7c8cff))",
+          }}
+        />
+        <span className="relative z-[1] flex flex-1 items-center gap-2 px-3">
+          <span className="h-2 w-12 rounded-full bg-white/70" />
+          <span className="h-2 w-6 rounded-full bg-white/25" />
+        </span>
+      </span>
+    </span>
+  );
 }
 
 export function OverlayThemeSection({
@@ -91,7 +142,7 @@ export function OverlayThemeSection({
   return (
     <Section
       title="Overlay theme"
-      description="Restyle every widget — accent colour, panel opacity, corners, size and type. The theme travels inside the URLs above, so after changing it re-copy the URLs into your OBS Browser Sources (no re-auth needed)."
+      description="Restyle every widget — structural frame, texture, accent colour, panel opacity, corners, size and type. The theme travels inside the URLs above, so after changing it re-copy the URLs into your OBS Browser Sources (no re-auth needed)."
     >
       <Card>
         <div className="space-y-5 px-2 py-2">
@@ -100,7 +151,7 @@ export function OverlayThemeSection({
               <Paintbrush className="h-4 w-4 text-accent-cyan" aria-hidden />
               Preset
             </legend>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {OVERLAY_THEME_PRESETS.map((preset) => {
                 const checked = themeKey(preset.theme) === activeKey;
                 return (
@@ -122,10 +173,11 @@ export function OverlayThemeSection({
                           : "border-line bg-bg-surface hover:border-border-strong",
                       ].join(" ")}
                     >
+                      <PresetSwatch theme={preset.theme} />
                       <span className="flex items-center gap-2 text-body font-medium text-text">
                         <span
                           aria-hidden
-                          className="inline-block h-3 w-3 flex-shrink-0 rounded-full border border-border"
+                          className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full border border-border"
                           style={{
                             background:
                               preset.theme.accent ?? DEFAULT_OVERLAY_ACCENT,
@@ -143,7 +195,30 @@ export function OverlayThemeSection({
             </div>
           </fieldset>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <Field
+              label="Frame style"
+              hint="Changes geometry, texture and accent-rail layout."
+            >
+              <Select
+                value={theme.style ?? "classic"}
+                onChange={(e) =>
+                  patch({
+                    style:
+                      e.target.value === "classic"
+                        ? undefined
+                        : (e.target.value as OverlayThemeStyle),
+                  })
+                }
+              >
+                {OVERLAY_THEME_STYLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
             <div className="flex flex-col gap-1.5">
               <span className="text-caption font-medium text-text">
                 Accent

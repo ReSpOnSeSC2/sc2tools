@@ -149,6 +149,14 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Genuinely distinct overlay frames** — overlay settings add five
+  structural styles: Command Grid, Neon Arcade, Arena Broadcast, Void
+  Nebula, and Terran Foundry. Each has its own geometry, accent-rail layout,
+  texture, shadow, and typography; preset cards now preview those silhouettes
+  instead of showing only a colour dot. Custom controls still override frame
+  defaults, and the new allowlisted style token stays backward-compatible
+  inside existing v1 OBS theme URLs.
+
 - **Win rate by map by matchup** — the Maps tab gains a new section that
   cross-tabs each map against opponent race, so you can see (for example)
   that a map is strong PvZ but weak PvT rather than just its overall win

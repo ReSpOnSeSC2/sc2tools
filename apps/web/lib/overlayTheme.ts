@@ -31,6 +31,12 @@ export type OverlayThemeScale = (typeof OVERLAY_THEME_SCALES)[number];
 
 export type OverlayThemeRadius = "sharp" | "rounded" | "pill";
 export type OverlayThemeFont = "default" | "condensed" | "mono";
+export type OverlayThemeStyle =
+  | "command-grid"
+  | "neon-arcade"
+  | "arena-broadcast"
+  | "void-nebula"
+  | "terran-foundry";
 
 export type OverlayTheme = {
   /** Accent bar / rim / glow colour — strict #rgb or #rrggbb hex. */
@@ -43,6 +49,8 @@ export type OverlayTheme = {
   radius?: OverlayThemeRadius;
   /** Type treatment. Default = the stock Inter stack. */
   font?: OverlayThemeFont;
+  /** Structural frame treatment. Omitted = the stock classic shell. */
+  style?: OverlayThemeStyle;
 };
 
 /** Stock accent used when the theme doesn't override it (WidgetShell's
@@ -83,7 +91,12 @@ export type OverlayThemePresetId =
   | "midnight"
   | "high-contrast"
   | "minimal-glass"
-  | "retro-terminal";
+  | "retro-terminal"
+  | "command-grid"
+  | "neon-arcade"
+  | "arena-broadcast"
+  | "void-nebula"
+  | "terran-foundry";
 
 export type OverlayThemePreset = {
   id: OverlayThemePresetId;
@@ -128,7 +141,84 @@ export const OVERLAY_THEME_PRESETS: readonly OverlayThemePreset[] = [
     description: "Monospace type, phosphor-green accent, sharp corners.",
     theme: { accent: "#4af626", opacity: 0.9, radius: "sharp", font: "mono" },
   },
+  {
+    id: "command-grid",
+    name: "Command grid",
+    description: "Angular cyan HUD with a tactical scan grid and data rails.",
+    theme: {
+      accent: "#67e8f9",
+      opacity: 0.96,
+      radius: "sharp",
+      font: "mono",
+      style: "command-grid",
+    },
+  },
+  {
+    id: "neon-arcade",
+    name: "Neon arcade",
+    description: "Chunky magenta cabinet frame, scanlines and pixel corners.",
+    theme: {
+      accent: "#ff72d2",
+      opacity: 1,
+      radius: "sharp",
+      font: "mono",
+      style: "neon-arcade",
+    },
+  },
+  {
+    id: "arena-broadcast",
+    name: "Arena broadcast",
+    description: "Fast red lower-third geometry built for tournament streams.",
+    theme: {
+      accent: "#ff7676",
+      opacity: 0.98,
+      radius: "sharp",
+      font: "condensed",
+      style: "arena-broadcast",
+    },
+  },
+  {
+    id: "void-nebula",
+    name: "Void nebula",
+    description: "Deep-space violet glass with stars and a soft orbital bloom.",
+    theme: {
+      accent: "#c4a7ff",
+      opacity: 0.9,
+      radius: "pill",
+      style: "void-nebula",
+    },
+  },
+  {
+    id: "terran-foundry",
+    name: "Terran foundry",
+    description: "Industrial amber plating, hazard rail and riveted texture.",
+    theme: {
+      accent: "#ffd166",
+      opacity: 1,
+      radius: "sharp",
+      font: "condensed",
+      style: "terran-foundry",
+    },
+  },
 ];
+
+export const OVERLAY_THEME_STYLE_OPTIONS: readonly {
+  value: "classic" | OverlayThemeStyle;
+  label: string;
+}[] = [
+  { value: "classic", label: "Classic panel" },
+  { value: "command-grid", label: "Command grid" },
+  { value: "neon-arcade", label: "Neon arcade" },
+  { value: "arena-broadcast", label: "Arena broadcast" },
+  { value: "void-nebula", label: "Void nebula" },
+  { value: "terran-foundry", label: "Terran foundry" },
+];
+
+const OVERLAY_THEME_STYLE_VALUES = new Set<OverlayThemeStyle>(
+  OVERLAY_THEME_STYLE_OPTIONS
+    .map((option) => option.value)
+    .filter((value): value is OverlayThemeStyle => value !== "classic"),
+);
 
 function clamp01(n: number): number {
   if (n < 0) return 0;
@@ -179,6 +269,12 @@ export function normalizeOverlayTheme(input: unknown): OverlayTheme {
   }
   if (raw.font === "condensed" || raw.font === "mono") {
     theme.font = raw.font;
+  }
+  if (
+    typeof raw.style === "string"
+    && OVERLAY_THEME_STYLE_VALUES.has(raw.style as OverlayThemeStyle)
+  ) {
+    theme.style = raw.style as OverlayThemeStyle;
   }
   return theme;
 }
@@ -288,6 +384,154 @@ export function overlayPanelGradient(alpha: number): string {
   return `linear-gradient(135deg, rgba(11,13,18,${a}) 0%, rgba(22,26,35,${a}) 100%)`;
 }
 
+type OverlayStyleVisual = {
+  panel: (alpha: number) => string;
+  vars: Readonly<Record<string, string>>;
+};
+
+function scaledAlpha(alpha: number, factor: number): number {
+  return round2(clamp01(alpha) * factor);
+}
+
+/**
+ * Structural style recipes. These are the only gradients, clip paths,
+ * textures and shadows a theme URL can select; the URL carries just an
+ * allowlisted enum, never attacker-controlled CSS.
+ */
+const OVERLAY_STYLE_VISUALS: Record<OverlayThemeStyle, OverlayStyleVisual> = {
+  "command-grid": {
+    panel: (a) =>
+      `linear-gradient(145deg, rgba(3,15,24,${a}) 0%, rgba(8,29,42,${a}) 58%, rgba(3,12,20,${a}) 100%)`,
+    vars: {
+      "--ov-shell-border": "1px solid rgba(103,232,249,0.52)",
+      "--ov-shell-shadow":
+        "0 10px 28px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(103,232,249,0.12)",
+      "--ov-clip":
+        "polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 16px 100%, 0 calc(100% - 16px))",
+      "--ov-panel-flow": "column",
+      "--ov-accent-size": "4px",
+      "--ov-accent-track":
+        "linear-gradient(90deg, var(--ov-accent, #67e8f9) 0 58%, transparent 58% 64%, var(--ov-accent, #67e8f9) 64% 78%, transparent 78%)",
+      "--ov-texture":
+        "linear-gradient(rgba(103,232,249,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,0.09) 1px, transparent 1px), repeating-linear-gradient(0deg, transparent 0 4px, rgba(255,255,255,0.018) 4px 5px)",
+      "--ov-texture-size": "18px 18px, 18px 18px, auto",
+      "--ov-texture-opacity": "0.72",
+      "--ov-ornament-bg":
+        "linear-gradient(135deg, transparent 0 42%, var(--ov-accent, #67e8f9) 43% 56%, transparent 57%)",
+      "--ov-ornament-width": "48px",
+      "--ov-ornament-height": "48px",
+      "--ov-ornament-opacity": "0.65",
+      "--ov-header-tracking": "0.055em",
+    },
+  },
+  "neon-arcade": {
+    panel: (a) =>
+      `linear-gradient(180deg, rgba(31,7,42,${a}) 0%, rgba(8,4,19,${a}) 100%)`,
+    vars: {
+      "--ov-shell-border": "3px solid var(--ov-accent, #ff72d2)",
+      "--ov-shell-shadow":
+        "6px 6px 0 #07030d, 10px 10px 0 var(--ov-accent, #ff72d2), inset 0 0 0 2px rgba(109,240,255,0.3)",
+      "--ov-clip":
+        "polygon(10px 0, calc(100% - 10px) 0, calc(100% - 10px) 5px, 100% 5px, 100% calc(100% - 10px), calc(100% - 5px) calc(100% - 10px), calc(100% - 5px) 100%, 10px 100%, 10px calc(100% - 5px), 0 calc(100% - 5px), 0 10px, 5px 10px, 5px 5px, 10px 5px)",
+      "--ov-panel-flow": "column",
+      "--ov-accent-size": "8px",
+      "--ov-accent-track":
+        "repeating-linear-gradient(90deg, var(--ov-accent, #ff72d2) 0 18px, #6df0ff 18px 27px, #ffe66d 27px 34px, transparent 34px 40px)",
+      "--ov-texture":
+        "repeating-linear-gradient(0deg, rgba(255,255,255,0.055) 0 1px, transparent 1px 4px), radial-gradient(circle at 92% 18%, rgba(109,240,255,0.22) 0 2px, transparent 3px), radial-gradient(circle at 87% 18%, rgba(255,230,109,0.24) 0 2px, transparent 3px)",
+      "--ov-texture-opacity": "0.8",
+      "--ov-ornament-bg":
+        "repeating-linear-gradient(90deg, #6df0ff 0 6px, transparent 6px 10px)",
+      "--ov-ornament-width": "42px",
+      "--ov-ornament-height": "5px",
+      "--ov-ornament-inset": "12px 14px auto auto",
+      "--ov-ornament-opacity": "0.9",
+      "--ov-header-tracking": "0.08em",
+    },
+  },
+  "arena-broadcast": {
+    panel: (a) =>
+      `linear-gradient(105deg, rgba(16,19,26,${a}) 0%, rgba(22,25,34,${a}) 72%, rgba(62,14,21,${a}) 100%)`,
+    vars: {
+      "--ov-shell-border": "1px solid rgba(255,255,255,0.24)",
+      "--ov-shell-shadow": "0 12px 24px rgba(0,0,0,0.58)",
+      "--ov-clip":
+        "polygon(0 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%)",
+      "--ov-panel-flow": "column",
+      "--ov-accent-size": "5px",
+      "--ov-accent-track":
+        "linear-gradient(90deg, var(--ov-accent, #ff7676) 0 34%, rgba(255,255,255,0.9) 34% 36%, transparent 36% 100%)",
+      "--ov-texture":
+        "linear-gradient(118deg, transparent 0 78%, rgba(255,255,255,0.055) 78% 82%, transparent 82%), linear-gradient(118deg, transparent 0 86%, rgba(255,118,118,0.16) 86% 92%, transparent 92%)",
+      "--ov-texture-opacity": "1",
+      "--ov-ornament-bg": "var(--ov-accent, #ff7676)",
+      "--ov-ornament-width": "58px",
+      "--ov-ornament-height": "9px",
+      "--ov-ornament-inset": "auto 0 0 auto",
+      "--ov-ornament-clip": "polygon(14% 0, 100% 0, 100% 100%, 0 100%)",
+      "--ov-ornament-opacity": "0.95",
+      "--ov-padding": "12px 18px 14px",
+      "--ov-header-tracking": "0.035em",
+    },
+  },
+  "void-nebula": {
+    panel: (a) =>
+      `radial-gradient(circle at 86% 12%, rgba(159,107,255,${scaledAlpha(a, 0.38)}) 0%, transparent 42%), radial-gradient(circle at 5% 88%, rgba(65,214,255,${scaledAlpha(a, 0.2)}) 0%, transparent 38%), linear-gradient(135deg, rgba(13,8,31,${a}) 0%, rgba(24,14,52,${a}) 55%, rgba(8,13,29,${a}) 100%)`,
+    vars: {
+      "--ov-shell-border": "1px solid rgba(196,167,255,0.48)",
+      "--ov-shell-shadow":
+        "0 10px 34px rgba(3,2,15,0.7), 0 0 26px rgba(159,107,255,0.24), inset 0 0 20px rgba(103,232,249,0.07)",
+      "--ov-accent-size": "7px",
+      "--ov-accent-track":
+        "linear-gradient(180deg, #67e8f9 0%, var(--ov-accent, #c4a7ff) 46%, #ff78c9 100%)",
+      "--ov-texture":
+        "radial-gradient(circle at 13% 24%, rgba(255,255,255,0.8) 0 1px, transparent 1.5px), radial-gradient(circle at 76% 72%, rgba(255,255,255,0.65) 0 1px, transparent 1.5px), radial-gradient(circle at 42% 18%, rgba(103,232,249,0.75) 0 1px, transparent 1.5px), radial-gradient(circle at 90% 46%, rgba(196,167,255,0.8) 0 1px, transparent 1.5px)",
+      "--ov-texture-size": "89px 71px, 113px 97px, 131px 83px, 149px 109px",
+      "--ov-texture-opacity": "0.72",
+      "--ov-ornament-bg":
+        "radial-gradient(circle, rgba(196,167,255,0.82) 0 8%, rgba(196,167,255,0.2) 28%, transparent 66%)",
+      "--ov-ornament-width": "92px",
+      "--ov-ornament-height": "92px",
+      "--ov-ornament-inset": "-30px -24px auto auto",
+      "--ov-ornament-opacity": "0.72",
+      "--ov-padding": "16px 20px",
+    },
+  },
+  "terran-foundry": {
+    panel: (a) =>
+      `linear-gradient(145deg, rgba(27,24,19,${a}) 0%, rgba(48,39,26,${a}) 48%, rgba(20,19,18,${a}) 100%)`,
+    vars: {
+      "--ov-shell-border": "2px solid rgba(255,209,102,0.58)",
+      "--ov-shell-shadow":
+        "0 9px 0 rgba(5,5,5,0.76), 0 15px 30px rgba(0,0,0,0.55), inset 0 0 0 2px rgba(0,0,0,0.44)",
+      "--ov-clip":
+        "polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)",
+      "--ov-accent-size": "12px",
+      "--ov-accent-track":
+        "repeating-linear-gradient(135deg, var(--ov-accent, #ffd166) 0 8px, #17130d 8px 16px)",
+      "--ov-texture":
+        "radial-gradient(circle at 8px 8px, rgba(255,209,102,0.4) 0 1.5px, rgba(0,0,0,0.7) 2px 3px, transparent 3.5px), repeating-linear-gradient(135deg, transparent 0 24px, rgba(255,255,255,0.025) 24px 25px)",
+      "--ov-texture-size": "56px 56px, auto",
+      "--ov-texture-opacity": "0.85",
+      "--ov-ornament-bg":
+        "linear-gradient(90deg, var(--ov-accent, #ffd166), transparent)",
+      "--ov-ornament-width": "76px",
+      "--ov-ornament-height": "3px",
+      "--ov-ornament-inset": "10px 12px auto auto",
+      "--ov-ornament-opacity": "0.85",
+      "--ov-header-tracking": "0.045em",
+    },
+  },
+};
+
+function structuralStyleVars(
+  style: OverlayThemeStyle,
+  opacity: number,
+): Record<string, string> {
+  const visual = OVERLAY_STYLE_VISUALS[style];
+  return { ...visual.vars, "--ov-panel-bg": visual.panel(opacity) };
+}
+
 /**
  * Translate a theme into the CSS custom properties WidgetShell reads
  * (each with a stock-value fallback, so an empty object = stock look):
@@ -299,6 +543,7 @@ export function overlayPanelGradient(alpha: number): string {
  *   --ov-radius    corner radius
  *   --ov-scale     zoom factor
  *   --ov-font      font stack
+ *   --ov-* shell geometry/texture vars from a fixed structural style
  *
  * Returns a plain record suitable for spreading into a React ``style``
  * object. Only tokens present in the (normalized) theme emit a var, so
@@ -306,13 +551,18 @@ export function overlayPanelGradient(alpha: number): string {
  */
 export function themeToCssVars(theme: OverlayTheme): Record<string, string> {
   const t = normalizeOverlayTheme(theme);
-  const vars: Record<string, string> = {};
+  const vars: Record<string, string> = t.style
+    ? structuralStyleVars(
+        t.style,
+        t.opacity ?? DEFAULT_OVERLAY_OPACITY,
+      )
+    : {};
   if (t.accent) {
     vars["--ov-accent"] = t.accent;
     vars["--ov-halo"] = hexToRgba(t.accent, 0.22);
     vars["--ov-rim"] = hexToRgba(t.accent, 0.12);
   }
-  if (t.opacity !== undefined) {
+  if (t.opacity !== undefined && !t.style) {
     vars["--ov-panel-bg"] = overlayPanelGradient(t.opacity);
   }
   if (t.radius) {
