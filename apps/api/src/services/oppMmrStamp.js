@@ -1,55 +1,12 @@
 "use strict";
 
 /**
- * Helpers that decide *whether* and *with what* a game's
- * ``opponent.mmr`` may be back-stamped from SC2Pulse.
- *
- * Two rules, both learned the hard way (see the "6159 on 2018 games"
- * report):
- *
- *  1. RECENCY — a current / last-known ladder MMR is only a fair proxy
- *     for the opponent's MMR *at game time* on recent games. Beyond the
- *     trust window we refuse to stamp at all; the game stays "missing
- *     MMR" rather than wearing a rating it never had.
- *
- *  2. RACE — SC2Pulse tracks a *separate* MMR per race. A game where the
- *     opponent played Protoss must take their Protoss MMR, never their
- *     highest / most-recently-played race (which is how a Protoss game
- *     ended up tagged with the opponent's Terran rating). If we don't
- *     have a rating for the race they actually played, we stamp nothing.
- *
- * Pure functions — no DB, no network — so they're trivially testable and
- * shared by the per-game stamp (recordGame / refreshMetadata) and the
- * bulk backfill restamp.
+ * Race-normalisation helpers shared by game-level MMR consumers.
+ * SC2Pulse tracks a separate rating per race, so a Protoss game must
+ * never borrow the opponent's higher Terran rating. The forward-only
+ * enrichment job owns recency and range policy; these pure helpers own
+ * only race identity and matching.
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Trust horizon for treating current MMR as game-time MMR. Mirrors
- *  ``OPP_MMR_TRUST_MAX_AGE_DAYS`` on the read side (trendsOppMmr.js). */
-const STAMP_MAX_AGE_DAYS = 365;
-
-/** @param {number} [now] @returns {Date} */
-function stampFloor(now = Date.now()) {
-  return new Date(now - STAMP_MAX_AGE_DAYS * DAY_MS);
-}
-
-/**
- * Is ``playedAt`` recent enough that a current MMR is a fair proxy?
- * @param {Date|string|number|null|undefined} playedAt
- * @param {number} [now]
- * @returns {boolean}
- */
-function isStampableDate(playedAt, now = Date.now()) {
-  const t =
-    playedAt instanceof Date
-      ? playedAt.getTime()
-      : typeof playedAt === "number"
-        ? playedAt
-        : Date.parse(String(playedAt));
-  if (!Number.isFinite(t)) return false;
-  return t >= now - STAMP_MAX_AGE_DAYS * DAY_MS;
-}
 
 /** @type {Record<string, "Protoss"|"Terran"|"Zerg"|"Random">} */
 const RACE_NAMES = { P: "Protoss", T: "Terran", Z: "Zerg", R: "Random" };
@@ -101,9 +58,6 @@ function pickRaceMmr(races, race) {
 }
 
 module.exports = {
-  STAMP_MAX_AGE_DAYS,
-  stampFloor,
-  isStampableDate,
   canonicalRaceName,
   canonicalRaceLetter,
   pickRaceMmr,

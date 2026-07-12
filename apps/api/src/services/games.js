@@ -126,7 +126,11 @@ class GamesService {
       { userId, gameId: game.gameId },
       {
         $setOnInsert: { createdAt: new Date() },
-        $set: doc,
+        // Patch opponent fields individually. Server-owned enrichment
+        // fields (notably mmrLookupAttempted) are absent from agent
+        // re-uploads and must survive them; $setting the whole parent
+        // object would erase the marker and retry Pulse misses forever.
+        $set: buildSlimSet(doc),
         $unset: unset,
       },
       { upsert: true },
@@ -862,6 +866,29 @@ function sanitizeTopLeaks(breakdown) {
     if (Object.keys(leak).length > 0) out.push(leak);
   }
   return out.length > 0 ? out : null;
+}
+
+/**
+ * Build the atomic slim-row $set patch while preserving server-owned
+ * fields inside ``opponent`` that an agent does not send back on a
+ * re-upload. Top-level fields already have patch semantics; expanding
+ * the opponent object to dotted paths gives its children the same
+ * behavior without a read-before-write race.
+ *
+ * @param {Record<string, any>} doc
+ * @returns {Record<string, any>}
+ */
+function buildSlimSet(doc) {
+  const set = { ...doc };
+  const opponent = set.opponent;
+  if (!opponent || typeof opponent !== "object" || Array.isArray(opponent)) {
+    return set;
+  }
+  delete set.opponent;
+  for (const [key, value] of Object.entries(opponent)) {
+    set[`opponent.${key}`] = value;
+  }
+  return set;
 }
 
 module.exports = { GamesService };

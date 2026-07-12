@@ -15,6 +15,9 @@ const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
+const {
+  buildOpponentMmrEnrichmentJob,
+} = require("./jobs/opponentMmrEnrichmentJob");
 const { buildLadderMapPoolRefreshJob } = require("./jobs/ladderMapPoolRefreshJob");
 const { buildLadderMapBackfillJob } = require("./jobs/ladderMapBackfillJob");
 const {
@@ -171,6 +174,18 @@ async function main() {
   });
   pulseBackfill.start();
 
+  // Forward-only game-level opponent MMR enrichment. Pulse exposes a
+  // current per-race rating, so this worker only considers recently
+  // inserted ladder games and marks every lookup once. It shares the
+  // process-wide PulseMmrService cache and coordinates replicas via a
+  // Mongo advisory lock.
+  const opponentMmrEnrichment = buildOpponentMmrEnrichmentJob({
+    db,
+    pulseMmr: /** @type {any} */ (services).pulseMmr,
+    logger,
+  });
+  opponentMmrEnrichment.start();
+
   // Periodic re-emit of ``overlay:session`` to every connected overlay
   // socket. The session aggregate has a 4-hour-inactivity reset baked
   // into ``GamesService.todaySession``, but that reset only takes
@@ -256,6 +271,7 @@ async function main() {
     }
     await keepalive.stop();
     await pulseBackfill.stop();
+    await opponentMmrEnrichment.stop();
     await sessionRefresher.stop();
     await ladderMapPoolRefresh.stop();
     await ladderMapBackfill.stop();
