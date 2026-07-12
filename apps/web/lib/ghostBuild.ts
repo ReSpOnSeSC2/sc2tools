@@ -33,8 +33,14 @@
  */
 
 import type { BuildOrderStep } from "@/lib/optimizer/types";
+import {
+  MATCHUPS,
+  isMatchupKey,
+  type MatchupKey,
+} from "@/lib/randomizer/types";
 
 export const GHOST_BUILD_VERSION = 1;
+export const GHOST_BUILD_CONFIG_VERSION = 2;
 export const GHOST_BUILD_PARAM = "ghost";
 /**
  * localStorage key the "Arm" affordances write and the game page's
@@ -43,6 +49,10 @@ export const GHOST_BUILD_PARAM = "ghost";
  * validation as the URL param.
  */
 export const GHOST_BUILD_STORAGE_KEY = "sc2tools:ghost-build:armed";
+/** Local library of prior exact-matchup targets. The URL remains fully
+ * self-contained; this library only powers the authenticated settings UI. */
+export const GHOST_BUILD_LIBRARY_STORAGE_KEY =
+  "sc2tools:ghost-build:saved:v2";
 
 /** Hard cap on target steps — a practice target is an opening, not a
  * whole game. Constructors slice; the decoder rejects anything over. */
@@ -57,6 +67,12 @@ const MAX_TARGET_NAME_LENGTH = 80;
  * bigger is garbage or an attack. Mirrors overlayTheme's byte cap.
  */
 const MAX_ENCODED_LENGTH = 8192;
+/** Compact v2 loadouts may carry one max-sized target for each of the nine
+ * concrete matchups. Keep the cap below 64 KiB so malformed URLs are rejected
+ * before base64 decoding allocates a large intermediate string. */
+const MAX_CONFIG_ENCODED_LENGTH = 64 * 1024;
+const MAX_SAVED_GHOST_BUILDS = 100;
+const MAX_LIBRARY_JSON_LENGTH = 2 * 1024 * 1024;
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
 /** Step times beyond 4 hours are nonsense for an SC2 build. */
 const MAX_STEP_TIME_SEC = 4 * 60 * 60;
@@ -81,6 +97,33 @@ export interface GhostTarget {
   steps: GhostStep[];
 }
 
+/** Only concrete races can select homework. Random, unknown and empty values
+ * intentionally normalize to null rather than a fallback race. */
+export type GhostConcreteRace = "P" | "T" | "Z";
+
+/** Streamer-perspective exact matchup (own race first). Re-exported as a
+ * Ghost-specific name so consumers do not need to couple to Randomizer. */
+export type GhostMatchupKey = MatchupKey;
+
+/** Stable display/serialization order, grouped by the streamer's race. */
+export const GHOST_MATCHUPS: ReadonlyArray<GhostMatchupKey> = MATCHUPS;
+
+/** Versioned public model. Undefined keys are deliberately unassigned; there
+ * is no catch-all target because that could coach the wrong matchup. */
+export interface GhostBuildConfig {
+  v: typeof GHOST_BUILD_CONFIG_VERSION;
+  slots: Partial<Record<GhostMatchupKey, GhostTarget>>;
+}
+
+/** A locally saved target that can be assigned to any exact slot by Settings.
+ * `matchup` records the matchup the build came from and is always concrete. */
+export interface SavedGhostBuild {
+  id: string;
+  matchup: GhostMatchupKey;
+  target: GhostTarget;
+  savedAt: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Name handling                                                       */
 /* ------------------------------------------------------------------ */
@@ -95,6 +138,41 @@ export function normalizeGhostName(input: string): string {
   return String(input)
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+}
+
+/** Normalize only the six wire spellings SC2Tools emits. Deliberately avoid
+ * first-letter coercion: values such as "random", "unknown" and "?" must
+ * never accidentally select a build. */
+export function normalizeConcreteGhostRace(
+  input: unknown,
+): GhostConcreteRace | null {
+  if (typeof input !== "string") return null;
+  switch (input.trim().toLowerCase()) {
+    case "p":
+    case "protoss":
+      return "P";
+    case "t":
+    case "terran":
+      return "T";
+    case "z":
+    case "zerg":
+      return "Z";
+    default:
+      return null;
+  }
+}
+
+/** Form an exact streamer-perspective matchup, or null unless both sides are
+ * concrete. This is the single gate runtime consumers should use. */
+export function ghostMatchupKey(
+  myRace: unknown,
+  opponentRace: unknown,
+): GhostMatchupKey | null {
+  const mine = normalizeConcreteGhostRace(myRace);
+  const theirs = normalizeConcreteGhostRace(opponentRace);
+  if (!mine || !theirs) return null;
+  const key = `${mine}v${theirs}`;
+  return isMatchupKey(key) ? key : null;
 }
 
 /** Control characters and zero-width junk have no business in a build
@@ -162,6 +240,7 @@ export function normalizeGhostTarget(input: unknown): GhostTarget | null {
     return null;
   }
   const raw = input as Record<string, unknown>;
+  if (raw.v !== GHOST_BUILD_VERSION) return null;
   const name = sanitizeName(raw.name, MAX_TARGET_NAME_LENGTH);
   if (!name) return null;
   if (!Array.isArray(raw.steps)) return null;
@@ -176,6 +255,90 @@ export function normalizeGhostTarget(input: unknown): GhostTarget | null {
   }
   steps.sort((a, b) => a.t - b.t);
   return { v: GHOST_BUILD_VERSION, name, steps };
+}
+
+export function emptyGhostBuildConfig(): GhostBuildConfig {
+  return { v: GHOST_BUILD_CONFIG_VERSION, slots: {} };
+}
+
+/** Strictly normalize the public (expanded) v2 model. Unknown slot keys and
+ * invalid nested targets reject the whole object rather than producing a
+ * partially wrong practice plan. */
+export function normalizeGhostBuildConfig(
+  input: unknown,
+): GhostBuildConfig | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const raw = input as Record<string, unknown>;
+  if (raw.v !== GHOST_BUILD_CONFIG_VERSION) return null;
+  if (
+    typeof raw.slots !== "object"
+    || raw.slots === null
+    || Array.isArray(raw.slots)
+  ) {
+    return null;
+  }
+  const rawSlots = raw.slots as Record<string, unknown>;
+  if (Object.keys(rawSlots).some((key) => !isMatchupKey(key))) return null;
+
+  const slots: Partial<Record<GhostMatchupKey, GhostTarget>> = {};
+  for (const matchup of GHOST_MATCHUPS) {
+    if (!Object.prototype.hasOwnProperty.call(rawSlots, matchup)) continue;
+    const target = normalizeGhostTarget(rawSlots[matchup]);
+    if (!target) return null;
+    slots[matchup] = target;
+  }
+  return { v: GHOST_BUILD_CONFIG_VERSION, slots };
+}
+
+/** Select only an exact 3x3 slot. Random/unknown on either side and missing
+ * assignments all return null; there is intentionally no legacy fallback. */
+export function selectGhostTarget(
+  config: GhostBuildConfig | null | undefined,
+  myRace: unknown,
+  opponentRace: unknown,
+): GhostTarget | null {
+  const matchup = ghostMatchupKey(myRace, opponentRace);
+  if (!matchup || !config) return null;
+  const clean = normalizeGhostBuildConfig(config);
+  return clean?.slots[matchup] ?? null;
+}
+
+/** Return a fresh config with one exact slot assigned. Invalid public input is
+ * treated as an empty config, while an invalid matchup/target is a no-op. */
+export function assignGhostTarget(
+  config: GhostBuildConfig | null | undefined,
+  matchup: GhostMatchupKey,
+  target: GhostTarget,
+): GhostBuildConfig {
+  const base = normalizeGhostBuildConfig(config) ?? emptyGhostBuildConfig();
+  if (!isMatchupKey(matchup)) return base;
+  const cleanTarget = normalizeGhostTarget(target);
+  if (!cleanTarget) return base;
+  return {
+    v: GHOST_BUILD_CONFIG_VERSION,
+    slots: { ...base.slots, [matchup]: cleanTarget },
+  };
+}
+
+export function assignSavedGhostBuild(
+  config: GhostBuildConfig | null | undefined,
+  matchup: GhostMatchupKey,
+  build: SavedGhostBuild,
+): GhostBuildConfig {
+  return assignGhostTarget(config, matchup, build.target);
+}
+
+export function clearGhostTarget(
+  config: GhostBuildConfig | null | undefined,
+  matchup: GhostMatchupKey,
+): GhostBuildConfig {
+  const base = normalizeGhostBuildConfig(config) ?? emptyGhostBuildConfig();
+  if (!isMatchupKey(matchup) || !base.slots[matchup]) return base;
+  const slots = { ...base.slots };
+  delete slots[matchup];
+  return { v: GHOST_BUILD_CONFIG_VERSION, slots };
 }
 
 /* ------------------------------------------------------------------ */
@@ -252,6 +415,103 @@ export function decodeGhostTarget(
   return normalizeGhostTarget(parsed);
 }
 
+/** Compact URL-only target tuple: [display name, [[supply,time,name], ...]].
+ * Public callers always work with GhostTarget; this shape never leaks out of
+ * the codec. */
+type CompactGhostTarget = [
+  string,
+  Array<[number | null, number, string]>,
+];
+
+function compactTarget(target: GhostTarget): CompactGhostTarget {
+  return [
+    target.name,
+    target.steps.map((step) => [step.supply, step.t, step.name]),
+  ];
+}
+
+function expandCompactTarget(input: unknown): GhostTarget | null {
+  if (!Array.isArray(input) || input.length !== 2 || !Array.isArray(input[1])) {
+    return null;
+  }
+  const rawSteps = input[1] as unknown[];
+  const steps: unknown[] = [];
+  for (const rawStep of rawSteps) {
+    if (!Array.isArray(rawStep) || rawStep.length !== 3) return null;
+    steps.push({ supply: rawStep[0], t: rawStep[1], name: rawStep[2] });
+  }
+  return normalizeGhostTarget({
+    v: GHOST_BUILD_VERSION,
+    name: input[0],
+    steps,
+  });
+}
+
+/** Encode a v2 exact-matchup loadout into a compact, deterministic payload.
+ * Slots serialize in GHOST_MATCHUPS order and field names are shortened only
+ * on the wire, keeping copied OBS URLs substantially smaller than expanded
+ * JSON. Empty configs append nothing and therefore encode to null. */
+export function encodeGhostBuildConfig(
+  config: GhostBuildConfig,
+): string | null {
+  const clean = normalizeGhostBuildConfig(config);
+  if (!clean) return null;
+  const builds: Partial<Record<GhostMatchupKey, CompactGhostTarget>> = {};
+  for (const matchup of GHOST_MATCHUPS) {
+    const target = clean.slots[matchup];
+    if (target) builds[matchup] = compactTarget(target);
+  }
+  if (Object.keys(builds).length === 0) return null;
+  const encoded = toBase64Url(
+    JSON.stringify({ v: GHOST_BUILD_CONFIG_VERSION, b: builds }),
+  );
+  return encoded.length <= MAX_CONFIG_ENCODED_LENGTH ? encoded : null;
+}
+
+/** Strict-decode only the compact v2 loadout. A legacy v1 single-target URL
+ * remains available through decodeGhostTarget for migration/display, but is
+ * never expanded into all nine matchups. */
+export function decodeGhostBuildConfig(
+  raw: string | null | undefined,
+): GhostBuildConfig | null {
+  if (!raw || typeof raw !== "string") return null;
+  if (raw.length > MAX_CONFIG_ENCODED_LENGTH || !BASE64URL_RE.test(raw)) {
+    return null;
+  }
+  const json = fromBase64Url(raw);
+  if (json === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (obj.v !== GHOST_BUILD_CONFIG_VERSION) return null;
+  if (Object.keys(obj).some((key) => key !== "v" && key !== "b")) return null;
+  if (typeof obj.b !== "object" || obj.b === null || Array.isArray(obj.b)) {
+    return null;
+  }
+  const rawBuilds = obj.b as Record<string, unknown>;
+  const keys = Object.keys(rawBuilds);
+  if (keys.length === 0 || keys.some((key) => !isMatchupKey(key))) return null;
+
+  const slots: Partial<Record<GhostMatchupKey, GhostTarget>> = {};
+  for (const matchup of GHOST_MATCHUPS) {
+    if (!Object.prototype.hasOwnProperty.call(rawBuilds, matchup)) continue;
+    const target = expandCompactTarget(rawBuilds[matchup]);
+    if (!target) return null;
+    slots[matchup] = target;
+  }
+  return normalizeGhostBuildConfig({
+    v: GHOST_BUILD_CONFIG_VERSION,
+    slots,
+  });
+}
+
 /**
  * Append the ``?ghost=`` param to an overlay widget URL. Invalid or
  * absent targets append nothing so stock URLs stay byte-identical to
@@ -259,10 +519,12 @@ export function decodeGhostTarget(
  */
 export function appendGhostToUrl(
   url: string,
-  target: GhostTarget | null | undefined,
+  payload: GhostTarget | GhostBuildConfig | null | undefined,
 ): string {
-  if (!target) return url;
-  const encoded = encodeGhostTarget(target);
+  if (!payload) return url;
+  const encoded = payload.v === GHOST_BUILD_CONFIG_VERSION
+    ? encodeGhostBuildConfig(payload as GhostBuildConfig)
+    : encodeGhostTarget(payload as GhostTarget);
   if (!encoded) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}${GHOST_BUILD_PARAM}=${encoded}`;
@@ -344,16 +606,236 @@ export function fromBuildLog(
 }
 
 /* ------------------------------------------------------------------ */
-/* Arm / disarm — the localStorage mirror                              */
+/* Exact-matchup arming + local saved-build library                    */
 /* ------------------------------------------------------------------ */
 
-/**
- * Arm a target: mirror its ENCODED form into localStorage so the game
- * page can grade the next games and the Settings page can bake it into
- * the copyable widget URL. Returns false when the target is invalid or
- * storage is unavailable (SSR, quota, privacy mode) — arming is a
- * nice-to-have, never a crash.
- */
+/** Read v2 only; legacy v1 remains available through
+ * readArmedGhostTarget for an explicit migration flow. */
+export function readArmedGhostConfig(): GhostBuildConfig | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return decodeGhostBuildConfig(
+      window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Persist a v2 config. An empty config means "nothing armed" and removes the
+ * key so Settings emits the stock URL without a ghost query parameter. */
+export function writeArmedGhostConfig(config: GhostBuildConfig): boolean {
+  const clean = normalizeGhostBuildConfig(config);
+  if (!clean || typeof window === "undefined") return false;
+  const encoded = encodeGhostBuildConfig(clean);
+  try {
+    if (encoded) {
+      window.localStorage.setItem(GHOST_BUILD_STORAGE_KEY, encoded);
+    } else {
+      window.localStorage.removeItem(GHOST_BUILD_STORAGE_KEY);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearArmedGhostConfig(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(GHOST_BUILD_STORAGE_KEY);
+  } catch {
+    // Storage denied — nothing to clean up.
+  }
+}
+
+/** Explicit migration helper. A legacy target is safe to migrate only when a
+ * caller supplies the exact matchup; target names are never parsed/guessed. */
+export function migrateLegacyGhostTarget(
+  target: GhostTarget,
+  matchup: GhostMatchupKey,
+): GhostBuildConfig {
+  return assignGhostTarget(emptyGhostBuildConfig(), matchup, target);
+}
+
+const SAVED_ID_RE = /^[A-Za-z0-9:-]{1,128}$/;
+
+function normalizeSavedGhostBuild(input: unknown): SavedGhostBuild | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const raw = input as Record<string, unknown>;
+  if (typeof raw.id !== "string" || !SAVED_ID_RE.test(raw.id)) return null;
+  if (!isMatchupKey(raw.matchup)) return null;
+  if (typeof raw.savedAt !== "string" || raw.savedAt.length > 40) return null;
+  const savedAtMs = Date.parse(raw.savedAt);
+  if (!Number.isFinite(savedAtMs)) return null;
+  const target = normalizeGhostTarget(raw.target);
+  if (!target) return null;
+  return {
+    id: raw.id,
+    matchup: raw.matchup,
+    target,
+    savedAt: new Date(savedAtMs).toISOString(),
+  };
+}
+
+function normalizeSavedGhostBuilds(input: unknown): SavedGhostBuild[] | null {
+  if (!Array.isArray(input) || input.length > MAX_SAVED_GHOST_BUILDS) return null;
+  const builds: SavedGhostBuild[] = [];
+  const ids = new Set<string>();
+  for (const raw of input) {
+    const build = normalizeSavedGhostBuild(raw);
+    if (!build || ids.has(build.id)) return null;
+    ids.add(build.id);
+    builds.push(build);
+  }
+  builds.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  return builds;
+}
+
+export function readSavedGhostBuilds(): SavedGhostBuild[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(GHOST_BUILD_LIBRARY_STORAGE_KEY);
+    if (!raw || raw.length > MAX_LIBRARY_JSON_LENGTH) return [];
+    return normalizeSavedGhostBuilds(JSON.parse(raw)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function savedBuildJson(builds: SavedGhostBuild[]): string | null {
+  const clean = normalizeSavedGhostBuilds(builds);
+  if (!clean) return null;
+  const json = JSON.stringify(clean);
+  return json.length <= MAX_LIBRARY_JSON_LENGTH ? json : null;
+}
+
+function targetFingerprint(target: GhostTarget): string {
+  // Small deterministic FNV-1a id: exact duplicates update their savedAt
+  // instead of filling the library with repeated copies of one replay build.
+  const input = JSON.stringify(compactTarget(target));
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function newSavedGhostBuild(
+  matchup: GhostMatchupKey,
+  target: GhostTarget,
+): SavedGhostBuild {
+  return {
+    id: `${matchup}:${targetFingerprint(target)}`,
+    matchup,
+    target,
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function withSavedBuild(
+  builds: SavedGhostBuild[],
+  entry: SavedGhostBuild,
+): SavedGhostBuild[] {
+  return [entry, ...builds.filter((build) => build.id !== entry.id)]
+    .slice(0, MAX_SAVED_GHOST_BUILDS);
+}
+
+export function saveGhostBuild(
+  matchup: GhostMatchupKey,
+  target: GhostTarget,
+): SavedGhostBuild | null {
+  if (!isMatchupKey(matchup) || typeof window === "undefined") return null;
+  const cleanTarget = normalizeGhostTarget(target);
+  if (!cleanTarget) return null;
+  const entry = newSavedGhostBuild(matchup, cleanTarget);
+  const json = savedBuildJson(withSavedBuild(readSavedGhostBuilds(), entry));
+  if (!json) return null;
+  try {
+    window.localStorage.setItem(GHOST_BUILD_LIBRARY_STORAGE_KEY, json);
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+export function removeSavedGhostBuild(id: string): boolean {
+  if (typeof window === "undefined" || !SAVED_ID_RE.test(id)) return false;
+  const current = readSavedGhostBuilds();
+  const next = current.filter((build) => build.id !== id);
+  if (next.length === current.length) return false;
+  const json = savedBuildJson(next);
+  if (json === null) return false;
+  try {
+    if (next.length === 0) {
+      window.localStorage.removeItem(GHOST_BUILD_LIBRARY_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(GHOST_BUILD_LIBRARY_STORAGE_KEY, json);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function restoreStorageValue(key: string, previous: string | null): void {
+  try {
+    if (previous === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, previous);
+  } catch {
+    // Best-effort rollback when storage itself is unavailable.
+  }
+}
+
+/** Game-detail primary action: save the build to the local library and assign
+ * it to the exact matchup in one rollback-safe localStorage transaction. */
+export function armGhostTargetForMatchup(
+  myRace: unknown,
+  opponentRace: unknown,
+  target: GhostTarget,
+): boolean {
+  const matchup = ghostMatchupKey(myRace, opponentRace);
+  const cleanTarget = normalizeGhostTarget(target);
+  if (!matchup || !cleanTarget || typeof window === "undefined") return false;
+
+  const config = assignGhostTarget(
+    readArmedGhostConfig() ?? emptyGhostBuildConfig(),
+    matchup,
+    cleanTarget,
+  );
+  const encodedConfig = encodeGhostBuildConfig(config);
+  const entry = newSavedGhostBuild(matchup, cleanTarget);
+  const libraryJson = savedBuildJson(
+    withSavedBuild(readSavedGhostBuilds(), entry),
+  );
+  if (!encodedConfig || !libraryJson) return false;
+
+  let previousConfig: string | null;
+  let previousLibrary: string | null;
+  try {
+    previousConfig = window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY);
+    previousLibrary = window.localStorage.getItem(
+      GHOST_BUILD_LIBRARY_STORAGE_KEY,
+    );
+  } catch {
+    return false;
+  }
+  try {
+    window.localStorage.setItem(GHOST_BUILD_STORAGE_KEY, encodedConfig);
+    window.localStorage.setItem(GHOST_BUILD_LIBRARY_STORAGE_KEY, libraryJson);
+    return true;
+  } catch {
+    restoreStorageValue(GHOST_BUILD_STORAGE_KEY, previousConfig);
+    restoreStorageValue(GHOST_BUILD_LIBRARY_STORAGE_KEY, previousLibrary);
+    return false;
+  }
+}
+
+/** @deprecated Use armGhostTargetForMatchup so a build cannot leak into the
+ * wrong matchup. Retained while older pages transition to v2. */
 export function armGhostTarget(target: GhostTarget): boolean {
   const encoded = encodeGhostTarget(target);
   if (!encoded) return false;
@@ -367,19 +849,14 @@ export function armGhostTarget(target: GhostTarget): boolean {
 }
 
 export function disarmGhostTarget(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(GHOST_BUILD_STORAGE_KEY);
-  } catch {
-    // Storage denied — nothing to clean up.
-  }
+  clearArmedGhostConfig();
 }
 
 /**
  * Read the armed target back, running the stored value through the
  * same hostile-input validation as the URL param (a user — or an
- * extension — can edit localStorage freely). Null when nothing valid
- * is armed.
+ * extension — can edit localStorage freely). A v2 config intentionally
+ * returns null because choosing from it without both races would be unsafe.
  */
 export function readArmedGhostTarget(): GhostTarget | null {
   if (typeof window === "undefined") return null;

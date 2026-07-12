@@ -2,10 +2,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ArmGhostFromLogButton, GhostGradeCard } from "../GhostGradeCard";
 import {
+  assignGhostTarget,
+  emptyGhostBuildConfig,
   GHOST_BUILD_STORAGE_KEY,
   GHOST_BUILD_VERSION,
-  encodeGhostTarget,
-  readArmedGhostTarget,
+  readArmedGhostConfig,
+  readSavedGhostBuilds,
+  selectGhostTarget,
+  writeArmedGhostConfig,
   type GhostTarget,
 } from "@/lib/ghostBuild";
 
@@ -28,11 +32,15 @@ const FIXTURE_LOG = [
 ];
 
 function armFixture(target: GhostTarget = TARGET) {
-  window.localStorage.setItem(
-    GHOST_BUILD_STORAGE_KEY,
-    encodeGhostTarget(target)!,
+  writeArmedGhostConfig(
+    assignGhostTarget(emptyGhostBuildConfig(), "PvT", target),
   );
 }
+
+const GRADE_PROPS = {
+  myRace: "Protoss",
+  opponentRace: "Terran",
+} as const;
 
 afterEach(() => {
   cleanup();
@@ -41,27 +49,33 @@ afterEach(() => {
 
 describe("GhostGradeCard", () => {
   it("renders nothing when no target is armed", () => {
-    const { container } = render(<GhostGradeCard buildLog={FIXTURE_LOG} />);
+    const { container } = render(
+      <GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 
   it("renders nothing when the game has no build log", () => {
     armFixture();
-    const { container } = render(<GhostGradeCard buildLog={null} />);
+    const { container } = render(
+      <GhostGradeCard buildLog={null} {...GRADE_PROPS} />,
+    );
     expect(container.firstChild).toBeNull();
-    const empty = render(<GhostGradeCard buildLog={[]} />);
+    const empty = render(<GhostGradeCard buildLog={[]} {...GRADE_PROPS} />);
     expect(empty.container.firstChild).toBeNull();
   });
 
   it("renders nothing when localStorage holds a tampered value", () => {
     window.localStorage.setItem(GHOST_BUILD_STORAGE_KEY, "!!corrupt!!");
-    const { container } = render(<GhostGradeCard buildLog={FIXTURE_LOG} />);
+    const { container } = render(
+      <GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 
   it("grades the executed log against the armed target", () => {
     armFixture();
-    render(<GhostGradeCard buildLog={FIXTURE_LOG} />);
+    render(<GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />);
 
     expect(screen.getByTestId("ghost-grade-card")).toBeTruthy();
     expect(screen.getByText("Ghost Build grade")).toBeTruthy();
@@ -82,6 +96,7 @@ describe("GhostGradeCard", () => {
     render(
       <GhostGradeCard
         buildLog={["[0:17] Pylon", "[0:40] Gateway", "[1:35] TwilightCouncil"]}
+        {...GRADE_PROPS}
       />,
     );
     expect(screen.getByLabelText("Grade S")).toBeTruthy();
@@ -91,7 +106,7 @@ describe("GhostGradeCard", () => {
 
   it("expands the per-step breakdown on demand (collapsed by default)", () => {
     armFixture();
-    render(<GhostGradeCard buildLog={FIXTURE_LOG} />);
+    render(<GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />);
     // Collapsed: no per-step rows yet.
     expect(screen.queryByText(/16 Gateway/)).toBeNull();
     fireEvent.click(
@@ -105,8 +120,8 @@ describe("GhostGradeCard", () => {
 
   it("disarm clears storage and unmounts the card", () => {
     armFixture();
-    render(<GhostGradeCard buildLog={FIXTURE_LOG} />);
-    fireEvent.click(screen.getByRole("button", { name: "Disarm" }));
+    render(<GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear PvT" }));
     expect(screen.queryByTestId("ghost-grade-card")).toBeNull();
     expect(window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY)).toBeNull();
   });
@@ -115,12 +130,21 @@ describe("GhostGradeCard", () => {
 describe("ArmGhostFromLogButton", () => {
   it("arms the build log as the ghost target", () => {
     render(
-      <ArmGhostFromLogButton name="Roach opener" lines={FIXTURE_LOG} />,
+      <ArmGhostFromLogButton
+        name="Blink opener"
+        lines={FIXTURE_LOG}
+        {...GRADE_PROPS}
+      />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /arm this build/i }));
-    const armed = readArmedGhostTarget();
+    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
+    const armed = selectGhostTarget(
+      readArmedGhostConfig(),
+      GRADE_PROPS.myRace,
+      GRADE_PROPS.opponentRace,
+    );
     expect(armed).not.toBeNull();
-    expect(armed!.name).toBe("Roach opener");
+    expect(armed!.name).toBe("Blink opener");
+    expect(readSavedGhostBuilds()).toHaveLength(1);
     // Probe excluded; Pylon/Gateway/Assimilator armed with their times.
     expect(armed!.steps).toEqual([
       { supply: null, t: 17, name: "Pylon" },
@@ -132,20 +156,48 @@ describe("ArmGhostFromLogButton", () => {
   it("makes the grade card appear on the same page via the armed event", () => {
     render(
       <>
-        <ArmGhostFromLogButton name="Roach opener" lines={FIXTURE_LOG} />
-        <GhostGradeCard buildLog={FIXTURE_LOG} />
+        <ArmGhostFromLogButton
+          name="Blink opener"
+          lines={FIXTURE_LOG}
+          {...GRADE_PROPS}
+        />
+        <GhostGradeCard buildLog={FIXTURE_LOG} {...GRADE_PROPS} />
       </>,
     );
     expect(screen.queryByTestId("ghost-grade-card")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /arm this build/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
     // Arming this game's own log grades it against itself — a perfect S.
     expect(screen.getByTestId("ghost-grade-card")).toBeTruthy();
     expect(screen.getByLabelText("Grade S")).toBeTruthy();
   });
 
   it("does not arm anything when the log has no timed steps", () => {
-    render(<ArmGhostFromLogButton name="Empty" lines={["nonsense"]} />);
-    fireEvent.click(screen.getByRole("button", { name: /arm this build/i }));
-    expect(readArmedGhostTarget()).toBeNull();
+    render(
+      <ArmGhostFromLogButton
+        name="Empty"
+        lines={["nonsense"]}
+        {...GRADE_PROPS}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
+    expect(readArmedGhostConfig()).toBeNull();
+  });
+
+  it("disables saving against Random opponents", () => {
+    render(
+      <ArmGhostFromLogButton
+        name="Not safe"
+        lines={FIXTURE_LOG}
+        myRace="Protoss"
+        opponentRace="Random"
+      />,
+    );
+
+    expect(
+      (screen.getByRole("button", {
+        name: /no build vs random/i,
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(readArmedGhostConfig()).toBeNull();
   });
 });

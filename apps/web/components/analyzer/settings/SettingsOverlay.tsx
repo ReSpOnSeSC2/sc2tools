@@ -32,11 +32,21 @@ import {
 } from "@/lib/overlayTheme";
 import {
   appendGhostToUrl,
-  readArmedGhostTarget,
-  type GhostTarget,
+  assignSavedGhostBuild,
+  clearGhostTarget,
+  emptyGhostBuildConfig,
+  GHOST_BUILD_LIBRARY_STORAGE_KEY,
+  GHOST_BUILD_STORAGE_KEY,
+  readArmedGhostConfig,
+  readSavedGhostBuilds,
+  writeArmedGhostConfig,
+  type GhostBuildConfig,
+  type GhostMatchupKey,
+  type SavedGhostBuild,
 } from "@/lib/ghostBuild";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
 import { UrlRow } from "./OverlayUrlRow";
+import { GhostMatchupManager } from "./GhostMatchupManager";
 import { OverlayThemeSection } from "./OverlayThemeSection";
 
 /**
@@ -151,15 +161,61 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   const setTheme = (next: OverlayTheme) =>
     setStoredTheme(normalizeOverlayTheme(next));
 
-  // Armed Ghost Build target — mirrored into localStorage by the "Arm"
-  // affordance on a game page's build log. Read client-side after
-  // mount (SSR-safe) so the Ghost Build widget URL below carries the
-  // armed target as its ?ghost= param. Like the theme, the target
-  // travels in the URL itself — zero server state.
-  const [ghostTarget, setGhostTarget] = useState<GhostTarget | null>(null);
+  // Ghost's nine exact-matchup slots travel in the dedicated widget URL;
+  // the larger saved-build library stays local and only powers the picker.
+  const [ghostConfig, setGhostConfig] = useState<GhostBuildConfig>(() =>
+    emptyGhostBuildConfig(),
+  );
+  const [ghostLibrary, setGhostLibrary] = useState<SavedGhostBuild[]>([]);
   useEffect(() => {
-    setGhostTarget(readArmedGhostTarget());
+    const refreshGhost = () => {
+      setGhostConfig(readArmedGhostConfig() ?? emptyGhostBuildConfig());
+      setGhostLibrary(readSavedGhostBuilds());
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key === GHOST_BUILD_STORAGE_KEY
+        || event.key === GHOST_BUILD_LIBRARY_STORAGE_KEY
+        || event.key === null
+      ) {
+        refreshGhost();
+      }
+    };
+    refreshGhost();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  function assignGhostBuild(
+    matchup: GhostMatchupKey,
+    build: SavedGhostBuild,
+  ) {
+    const next = assignSavedGhostBuild(ghostConfig, matchup, build);
+    if (!writeArmedGhostConfig(next)) {
+      toast.error("Couldn't save Ghost matchup", {
+        description: "Browser storage is unavailable or full. Your existing assignments were left unchanged.",
+      });
+      return;
+    }
+    setGhostConfig(next);
+    toast.success(`${matchup} coach updated`, {
+      description: `Ghost will use “${build.target.name}” when you play ${matchup}. Copy the widget URL again before going live.`,
+    });
+  }
+
+  function clearGhostBuild(matchup: GhostMatchupKey) {
+    const next = clearGhostTarget(ghostConfig, matchup);
+    if (!writeArmedGhostConfig(next)) {
+      toast.error("Couldn't clear Ghost matchup", {
+        description: "Browser storage is unavailable. Please try again.",
+      });
+      return;
+    }
+    setGhostConfig(next);
+    toast.success(`${matchup} coach cleared`, {
+      description: "The saved build remains in your library and can be selected again later.",
+    });
+  }
 
   // Auto-mint a default token on first visit so the user can copy URLs
   // immediately without clicking through a form.
@@ -405,7 +461,7 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
             token={activeToken}
             origin={origin}
             theme={theme}
-            ghostTarget={ghostTarget}
+            ghostConfig={ghostConfig}
             busy={busyToken === activeToken.token}
             onToggleWidget={(w, on) => toggleWidget(activeToken.token, w, on)}
             onTestWidget={(w) => void testWidget(activeToken.token, w)}
@@ -414,6 +470,20 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         </Card>
         <ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} />
         <StuckWidgetHelp />
+      </Section>
+
+      <Section
+        title="Ghost Build coach"
+        description="Choose the timed build Ghost should coach for each of the nine concrete race matchups. Assignments stay on this device and are embedded into the dedicated OBS URL."
+      >
+        <Card>
+          <GhostMatchupManager
+            loadout={ghostConfig}
+            library={ghostLibrary}
+            onAssign={assignGhostBuild}
+            onClear={clearGhostBuild}
+          />
+        </Card>
       </Section>
 
       <OverlayThemeSection theme={theme} onChange={setTheme} />
@@ -593,7 +663,7 @@ function WidgetList({
   token,
   origin,
   theme,
-  ghostTarget,
+  ghostConfig,
   busy,
   onToggleWidget,
   onTestWidget,
@@ -602,8 +672,8 @@ function WidgetList({
   token: OverlayToken;
   origin?: string;
   theme: OverlayTheme;
-  /** Armed Ghost Build target — baked into the ghost-build widget URL. */
-  ghostTarget: GhostTarget | null;
+  /** Exact-matchup Ghost loadout baked into the ghost-build widget URL. */
+  ghostConfig: GhostBuildConfig;
   busy: boolean;
   onToggleWidget: (widget: string, enabled: boolean) => void;
   onTestWidget: (widget: string) => void;
@@ -631,7 +701,7 @@ function WidgetList({
           // the Browser Source needs no server round-trip.
           const url =
             w.id === "ghost-build"
-              ? appendGhostToUrl(themedUrl, ghostTarget)
+              ? appendGhostToUrl(themedUrl, ghostConfig)
               : themedUrl;
           // URL-armed widgets have no server toggle — the ?ghost= param
           // is the opt-in, so the row treats them as always on.
@@ -640,9 +710,9 @@ function WidgetList({
           const anyTesting = testingWidget !== null;
           const hint =
             w.id === "ghost-build"
-              ? ghostTarget
-                ? `Dedicated Browser Source · Armed: ${ghostTarget.name} (${ghostTarget.steps.length} steps) — copy the URL again after re-arming`
-                : "Dedicated Browser Source (not part of All-in-one) — arm a build from a game page's build log, then copy this URL"
+              ? Object.keys(ghostConfig.slots).length > 0
+                ? `Dedicated Browser Source · ${Object.keys(ghostConfig.slots).length}/9 matchups ready — copy the URL again after changing an assignment`
+                : "Dedicated Browser Source (not part of All-in-one) — save a build from a completed game, assign it below, then copy this URL"
               : w.hint;
           return (
             <li

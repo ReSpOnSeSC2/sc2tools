@@ -161,7 +161,11 @@ export function GameDetailPage({
       {/* Ghost Build loop closer — grades this game's executed build
           against the armed practice target. Renders nothing unless a
           target is armed on this device AND a my-side log exists. */}
-      <GhostGradeCard buildLog={buildLogLines} />
+      <GhostGradeCard
+        buildLog={buildLogLines}
+        myRace={game.myRace}
+        opponentRace={game.opponent?.race}
+      />
 
       <BuildOrderColumns
         myEvents={buildReq.data?.events}
@@ -180,6 +184,8 @@ export function GameDetailPage({
                 ?? (game.map ? `Build from ${game.map}` : "My build")
               }
               lines={buildLogLines}
+              myRace={game.myRace}
+              opponentRace={game.opponent?.race}
             />
           ) : null
         }

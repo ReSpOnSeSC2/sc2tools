@@ -54,7 +54,7 @@ import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
-import { decodeGhostTarget } from "@/lib/ghostBuild";
+import { decodeGhostBuildConfig, decodeGhostTarget } from "@/lib/ghostBuild";
 
 /**
  * Per-widget Browser Source.
@@ -154,7 +154,12 @@ export function OverlayWidgetClient({
   // Without a valid target the widget follows the normal machinery
   // (a Test fire shows its placement hint for the standard window).
   const ghostArmed = useMemo(
-    () => widget === "ghost-build" && decodeGhostTarget(ghostParam) !== null,
+    () =>
+      widget === "ghost-build"
+      && (
+        decodeGhostBuildConfig(ghostParam) !== null
+        || decodeGhostTarget(ghostParam) !== null
+      ),
     [widget, ghostParam],
   );
   const effectiveEnabled = widget === "ghost-build" ? true : enabled;
