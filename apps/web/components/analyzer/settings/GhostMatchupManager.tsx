@@ -191,7 +191,7 @@ function RaceMatchupGroup({
         </span>
       </legend>
 
-      <div className="mt-2 grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-3">
+      <div className="mt-2 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
         {group.matchups.map(({ key, opponent }) => (
           <MatchupSlot
             key={key}
@@ -348,7 +348,7 @@ function SelectedTargetSummary({ target }: { target: GhostTarget }) {
       </p>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-micro text-text-muted">
         <span>{target.steps.length} timed step{target.steps.length === 1 ? "" : "s"}</span>
-        <span aria-hidden>\u00b7</span>
+        <span aria-hidden>{"\u00b7"}</span>
         <span className="inline-flex items-center gap-1 tabular-nums">
           <TimerReset className="h-3.5 w-3.5" aria-hidden />
           through {formatDuration(duration)}

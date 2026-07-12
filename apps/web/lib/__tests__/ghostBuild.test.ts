@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   GHOST_BUILD_PARAM,
   GHOST_BUILD_CONFIG_VERSION,
@@ -23,12 +23,14 @@ import {
   fromOptimizerResult,
   ghostMatchupKey,
   migrateLegacyGhostTarget,
+  migrateLegacyGhostTargetInStorage,
   normalizeConcreteGhostRace,
   normalizeGhostBuildConfig,
   normalizeGhostName,
   normalizeGhostTarget,
   readArmedGhostConfig,
   readArmedGhostTarget,
+  readGhostBuildParamFromHash,
   readSavedGhostBuilds,
   removeSavedGhostBuild,
   saveGhostBuild,
@@ -75,6 +77,7 @@ function makeTarget(overrides: Partial<GhostTarget> = {}): GhostTarget {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   window.localStorage.clear();
 });
 
@@ -255,7 +258,7 @@ describe("compact v2 config codec", () => {
     expect(appendGhostToUrl(url, empty)).toBe(url);
   });
 
-  it("appends and decodes a v2 config after an existing theme param", () => {
+  it("appends and decodes a v2 config in a client-only fragment", () => {
     const config = assignGhostTarget(
       emptyGhostBuildConfig(),
       "TvZ",
@@ -265,8 +268,29 @@ describe("compact v2 config codec", () => {
       "https://x.test/overlay/t/widget/ghost-build?theme=abc",
       config,
     );
-    expect(url).toContain("&ghost=");
-    expect(decodeGhostBuildConfig(url.split("ghost=")[1])).toEqual(config);
+    expect(url).toMatch(/^https:\/\/x\.test\/overlay\/t\/widget\/ghost-build\?theme=abc#ghost=/);
+    expect(url.slice(0, url.indexOf("#"))).not.toContain("ghost=");
+    const encoded = readGhostBuildParamFromHash(url.slice(url.indexOf("#")));
+    expect(decodeGhostBuildConfig(encoded)).toEqual(config);
+  });
+
+  it("strict-validates one v2 ghost field from a fragment", () => {
+    const config = assignGhostTarget(
+      emptyGhostBuildConfig(),
+      "ZvP",
+      makeTarget({ name: "Ling pressure" }),
+    );
+    const encoded = encodeGhostBuildConfig(config)!;
+
+    expect(readGhostBuildParamFromHash(`#ghost=${encoded}`)).toBe(encoded);
+    expect(readGhostBuildParamFromHash(`#panel=coach&ghost=${encoded}`)).toBe(encoded);
+    expect(readGhostBuildParamFromHash(`#?ghost=${encoded}`)).toBe(encoded);
+    expect(readGhostBuildParamFromHash(`#ghost=${encoded}&ghost=${encoded}`)).toBeNull();
+    expect(readGhostBuildParamFromHash("#ghost=not-valid")).toBeNull();
+    expect(readGhostBuildParamFromHash(`#ghost=${"A".repeat(65 * 1024)}`)).toBeNull();
+    expect(
+      readGhostBuildParamFromHash(`#ghost=${encodeGhostTarget(makeTarget())}`),
+    ).toBeNull();
   });
 
   it("rejects malformed, unknown and partially invalid compact payloads", () => {
@@ -365,7 +389,7 @@ describe("hostile decode inputs", () => {
     const decoded = decodeGhostTarget(
       rawParam({
         v: 1,
-        name: "Sneaky  build​" + "x".repeat(200),
+        name: "Sneaky\0 build​" + "x".repeat(200),
         steps: [{ supply: null, t: 17, name: "Pylon" }],
       }),
     );
@@ -378,7 +402,7 @@ describe("hostile decode inputs", () => {
   it("rejects a name that is empty after sanitization", () => {
     expect(
       decodeGhostTarget(
-        rawParam({ v: 1, name: " ​  ", steps: [{ t: 1, name: "P" }] }),
+        rawParam({ v: 1, name: "\0​  ", steps: [{ t: 1, name: "P" }] }),
       ),
     ).toBeNull();
   });
@@ -639,6 +663,48 @@ describe("legacy v1 arm / disarm localStorage mirror", () => {
     armGhostTarget(makeTarget());
     const stored = window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY);
     expect(stored).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("migrates a legacy build only after an exact matchup is chosen", () => {
+    const target = makeTarget({ name: "Old ladder build" });
+    expect(armGhostTarget(target)).toBe(true);
+
+    expect(migrateLegacyGhostTargetInStorage(target, "TvZ")).toBe(true);
+    expect(readArmedGhostTarget()).toBeNull();
+    expect(readArmedGhostConfig()?.slots).toEqual({ TvZ: target });
+    expect(readSavedGhostBuilds()).toHaveLength(1);
+    expect(readSavedGhostBuilds()[0]).toMatchObject({
+      matchup: "TvZ",
+      target,
+    });
+  });
+
+  it("keeps the legacy build untouched when the library write fails", () => {
+    const target = makeTarget({ name: "Do not lose me" });
+    expect(armGhostTarget(target)).toBe(true);
+    const legacyValue = window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY);
+    const originalSetItem = Storage.prototype.setItem;
+    let rejectedLibraryWrite = false;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (
+        key === GHOST_BUILD_LIBRARY_STORAGE_KEY
+        && !rejectedLibraryWrite
+      ) {
+        rejectedLibraryWrite = true;
+        throw new DOMException("Storage full", "QuotaExceededError");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(migrateLegacyGhostTargetInStorage(target, "PvP")).toBe(false);
+    expect(window.localStorage.getItem(GHOST_BUILD_STORAGE_KEY)).toBe(legacyValue);
+    expect(readArmedGhostTarget()).toEqual(target);
+    expect(readArmedGhostConfig()).toBeNull();
+    expect(readSavedGhostBuilds()).toEqual([]);
   });
 
   it("returns null for tampered storage instead of crashing", () => {

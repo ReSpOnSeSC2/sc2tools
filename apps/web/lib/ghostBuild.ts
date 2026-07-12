@@ -2,16 +2,16 @@
  * Ghost Build — the data layer for the closed practice loop.
  *
  * A streamer picks a TIMED target build ("tonight's homework"). The
- * target travels in the overlay widget URL as a versioned base64url
- * param (``?ghost=<base64url json>``), mirroring the committed
- * ``?theme=`` pattern in lib/overlayTheme.ts: zero server changes, an
- * existing OBS Browser Source keeps working, and the encoded value is
- * treated as HOSTILE input end to end. The same encoded target is also
+ * target travels in the overlay widget URL as versioned base64url data.
+ * New v2 loadouts use ``#ghost=<base64url json>`` so the potentially large
+ * nine-matchup payload never leaves the browser; legacy v1 links retain
+ * their original ``?ghost=`` shape. The encoded value is treated as HOSTILE
+ * input end to end. The same encoded target is also
  * mirrored into localStorage when the user arms it, so the game page
  * can grade the next games against it without any server state (see
  * lib/ghostGrade.ts).
  *
- * SECURITY: the ``?ghost=`` string arrives on an UNAUTHENTICATED
+ * SECURITY: the ``ghost`` string arrives on an UNAUTHENTICATED
  * overlay page and must be treated as hostile — exactly like
  * ``?theme=``:
  *   - strict validation: versioned envelope, byte-size cap, step-count
@@ -68,9 +68,12 @@ const MAX_TARGET_NAME_LENGTH = 80;
  */
 const MAX_ENCODED_LENGTH = 8192;
 /** Compact v2 loadouts may carry one max-sized target for each of the nine
- * concrete matchups. Keep the cap below 64 KiB so malformed URLs are rejected
- * before base64 decoding allocates a large intermediate string. */
+ * concrete matchups. Cap at 64 KiB so malformed fragments are rejected before
+ * base64 decoding allocates a large intermediate string. */
 const MAX_CONFIG_ENCODED_LENGTH = 64 * 1024;
+/** Allows the field name and a few small coexisting fragment flags without
+ * letting URLSearchParams allocate against an attacker-controlled giant hash. */
+const MAX_GHOST_FRAGMENT_LENGTH = MAX_CONFIG_ENCODED_LENGTH + 256;
 const MAX_SAVED_GHOST_BUILDS = 100;
 const MAX_LIBRARY_JSON_LENGTH = 2 * 1024 * 1024;
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
@@ -513,21 +516,64 @@ export function decodeGhostBuildConfig(
 }
 
 /**
- * Append the ``?ghost=`` param to an overlay widget URL. Invalid or
- * absent targets append nothing so stock URLs stay byte-identical to
- * what streamers already have in OBS.
+ * Read and validate a v2 Ghost loadout from a URL fragment. Fragments are
+ * client-only and are never included in the HTTP request to the overlay
+ * route, which keeps a nine-matchup payload clear of host/proxy URL limits.
+ *
+ * Exactly one ``ghost`` field is accepted. Duplicate or malformed values
+ * are treated as unarmed, and legacy v1 values intentionally remain a query-
+ * string-only compatibility path.
+ */
+export function readGhostBuildParamFromHash(
+  hash: string | null | undefined,
+): string | null {
+  if (typeof hash !== "string" || hash.length === 0) return null;
+  if (hash.length > MAX_GHOST_FRAGMENT_LENGTH) return null;
+  let rawHash = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (rawHash.startsWith("?")) rawHash = rawHash.slice(1);
+  if (!rawHash) return null;
+
+  const values = new URLSearchParams(rawHash).getAll(GHOST_BUILD_PARAM);
+  if (values.length !== 1) return null;
+  const value = values[0];
+  return decodeGhostBuildConfig(value) ? value : null;
+}
+
+function appendQueryParam(url: string, name: string, value: string): string {
+  const hashIndex = url.indexOf("#");
+  const beforeHash = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : "";
+  const separator = beforeHash.includes("?") ? "&" : "?";
+  return `${beforeHash}${separator}${name}=${value}${hash}`;
+}
+
+function appendFragmentParam(url: string, name: string, value: string): string {
+  const hashIndex = url.indexOf("#");
+  if (hashIndex < 0 || hashIndex === url.length - 1) {
+    return `${hashIndex < 0 ? url : url.slice(0, -1)}#${name}=${value}`;
+  }
+  const separator = url.endsWith("&") ? "" : "&";
+  return `${url}${separator}${name}=${value}`;
+}
+
+/**
+ * Append Ghost data to an overlay widget URL. V2 exact-matchup configs use a
+ * client-only fragment; legacy v1 targets keep ``?ghost=`` so existing copied
+ * OBS links remain byte-compatible. Invalid or absent payloads append nothing.
  */
 export function appendGhostToUrl(
   url: string,
   payload: GhostTarget | GhostBuildConfig | null | undefined,
 ): string {
   if (!payload) return url;
-  const encoded = payload.v === GHOST_BUILD_CONFIG_VERSION
+  const isConfig = payload.v === GHOST_BUILD_CONFIG_VERSION;
+  const encoded = isConfig
     ? encodeGhostBuildConfig(payload as GhostBuildConfig)
     : encodeGhostTarget(payload as GhostTarget);
   if (!encoded) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}${GHOST_BUILD_PARAM}=${encoded}`;
+  return isConfig
+    ? appendFragmentParam(url, GHOST_BUILD_PARAM, encoded)
+    : appendQueryParam(url, GHOST_BUILD_PARAM, encoded);
 }
 
 /* ------------------------------------------------------------------ */
@@ -661,6 +707,27 @@ export function migrateLegacyGhostTarget(
   matchup: GhostMatchupKey,
 ): GhostBuildConfig {
   return assignGhostTarget(emptyGhostBuildConfig(), matchup, target);
+}
+
+/**
+ * Transactionally migrate the legacy single-build localStorage value into one
+ * explicit v2 matchup and the saved-build library. The currently stored v1
+ * target must still match the target the Settings UI presented; this prevents
+ * a stale tab from overwriting a newer v2 loadout. The underlying arming helper
+ * restores both storage keys if either write fails, so the v1 value survives a
+ * denied/full storage error unchanged.
+ */
+export function migrateLegacyGhostTargetInStorage(
+  target: GhostTarget,
+  matchup: GhostMatchupKey,
+): boolean {
+  if (!isMatchupKey(matchup)) return false;
+  const storedTarget = readArmedGhostTarget();
+  if (!storedTarget) return false;
+  const expected = encodeGhostTarget(target);
+  const stored = encodeGhostTarget(storedTarget);
+  if (!expected || stored !== expected) return false;
+  return armGhostTargetForMatchup(matchup[0], matchup[2], target);
 }
 
 const SAVED_ID_RE = /^[A-Za-z0-9:-]{1,128}$/;

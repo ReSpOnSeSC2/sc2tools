@@ -16,9 +16,12 @@ workflow builds the Windows installer on each tag push and attaches the
   responsive control center for all nine concrete race pairings (`PvP`
   through `ZvZ`). Completed-game build logs are saved into an exact-matchup
   local library, each slot can be assigned, replaced, or cleared independently,
-  and the dedicated OBS URL carries the compact selected loadout. The live
-  coach selects only the current pairing; Random opponents pause Ghost for the
-  entire game with a clear “No build order vs Random players” message.
+  and the dedicated OBS URL carries the compact selected loadout in a
+  client-only fragment so even nine full builds stay below hosting request
+  limits. Existing single-build Ghost setups get an explicit exact-matchup
+  migration instead of being discarded. The live coach selects only the current
+  pairing; Random opponents pause Ghost for the entire game with a clear
+  “No build order vs Random players” message.
 
 - **Ladder Meta Radar · opponent MMR bands** — `/meta` can now switch
   between opponent League and opponent MMR while keeping matchup as a

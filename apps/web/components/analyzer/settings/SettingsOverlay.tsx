@@ -37,15 +37,19 @@ import {
   emptyGhostBuildConfig,
   GHOST_BUILD_LIBRARY_STORAGE_KEY,
   GHOST_BUILD_STORAGE_KEY,
+  migrateLegacyGhostTargetInStorage,
   readArmedGhostConfig,
+  readArmedGhostTarget,
   readSavedGhostBuilds,
   writeArmedGhostConfig,
   type GhostBuildConfig,
   type GhostMatchupKey,
   type SavedGhostBuild,
+  type GhostTarget,
 } from "@/lib/ghostBuild";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
 import { UrlRow } from "./OverlayUrlRow";
+import { GhostLegacyMigration } from "./GhostLegacyMigration";
 import { GhostMatchupManager } from "./GhostMatchupManager";
 import { OverlayThemeSection } from "./OverlayThemeSection";
 
@@ -167,10 +171,13 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     emptyGhostBuildConfig(),
   );
   const [ghostLibrary, setGhostLibrary] = useState<SavedGhostBuild[]>([]);
+  const [legacyGhostTarget, setLegacyGhostTarget] =
+    useState<GhostTarget | null>(null);
   useEffect(() => {
     const refreshGhost = () => {
       setGhostConfig(readArmedGhostConfig() ?? emptyGhostBuildConfig());
       setGhostLibrary(readSavedGhostBuilds());
+      setLegacyGhostTarget(readArmedGhostTarget());
     };
     const onStorage = (event: StorageEvent) => {
       if (
@@ -185,6 +192,33 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  function migrateLegacyGhostBuild(matchup: GhostMatchupKey) {
+    if (!legacyGhostTarget) return;
+    if (!migrateLegacyGhostTargetInStorage(legacyGhostTarget, matchup)) {
+      toast.error("Couldn't upgrade the previous Ghost build", {
+        description:
+          "Browser storage is unavailable or changed in another tab. Your previous build was left untouched.",
+      });
+      return;
+    }
+
+    const nextConfig = readArmedGhostConfig();
+    if (!nextConfig) {
+      toast.error("Couldn't verify the Ghost upgrade", {
+        description:
+          "Your browser did not return the saved matchup. Reload Settings before trying again.",
+      });
+      return;
+    }
+    setGhostConfig(nextConfig);
+    setGhostLibrary(readSavedGhostBuilds());
+    setLegacyGhostTarget(null);
+    toast.success(`Previous build upgraded to ${matchup}`, {
+      description:
+        "It is now saved in your library and assigned only to that matchup. Copy the updated Ghost Build widget URL before going live.",
+    });
+  }
 
   function assignGhostBuild(
     matchup: GhostMatchupKey,
@@ -477,12 +511,21 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         description="Choose the timed build Ghost should coach for each of the nine concrete race matchups. Assignments stay on this device and are embedded into the dedicated OBS URL."
       >
         <Card>
-          <GhostMatchupManager
-            loadout={ghostConfig}
-            library={ghostLibrary}
-            onAssign={assignGhostBuild}
-            onClear={clearGhostBuild}
-          />
+          <div className="min-w-0 max-w-full space-y-5">
+            {legacyGhostTarget ? (
+              <GhostLegacyMigration
+                target={legacyGhostTarget}
+                onMigrate={migrateLegacyGhostBuild}
+              />
+            ) : null}
+            <GhostMatchupManager
+              loadout={ghostConfig}
+              library={ghostLibrary}
+              onAssign={assignGhostBuild}
+              onClear={clearGhostBuild}
+              disabled={legacyGhostTarget !== null}
+            />
+          </div>
         </Card>
       </Section>
 
@@ -696,15 +739,15 @@ function WidgetList({
             `${origin ?? ""}/overlay/${token.token}/widget/${w.id}`,
             theme,
           );
-          // The Ghost Build widget carries its armed target in the URL
-          // itself (?ghost=…, after ?theme=…) — copy after arming and
-          // the Browser Source needs no server round-trip.
+          // The Ghost Build widget carries its v2 loadout in a client-only
+          // #ghost= fragment after the optional ?theme= query. Copy after
+          // arming; the loadout never needs a server round-trip.
           const url =
             w.id === "ghost-build"
               ? appendGhostToUrl(themedUrl, ghostConfig)
               : themedUrl;
-          // URL-armed widgets have no server toggle — the ?ghost= param
-          // is the opt-in, so the row treats them as always on.
+          // URL-armed widgets have no server toggle — the Ghost URL value is
+          // the opt-in, so the row treats them as always on.
           const isOn = w.urlArmed ? true : enabled.has(w.id);
           const isTesting = testingWidget === w.id;
           const anyTesting = testingWidget !== null;

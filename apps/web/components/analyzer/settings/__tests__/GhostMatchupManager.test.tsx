@@ -72,7 +72,12 @@ describe("GhostMatchupManager", () => {
       expect(fieldset.className.split(/\s+/)).toContain("min-w-0");
       const grid = fieldset.querySelector(".grid");
       expect(grid?.className.split(/\s+/)).toEqual(
-        expect.arrayContaining(["min-w-0", "grid-cols-1", "lg:grid-cols-3"]),
+        expect.arrayContaining([
+          "min-w-0",
+          "grid-cols-1",
+          "md:grid-cols-2",
+          "lg:grid-cols-3",
+        ]),
       );
     }
     for (const slot of screen.getAllByTestId(/^ghost-matchup-slot-/)) {

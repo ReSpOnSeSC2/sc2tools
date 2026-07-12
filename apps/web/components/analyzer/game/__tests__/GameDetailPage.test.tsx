@@ -195,6 +195,22 @@ describe("GameDetailPage", () => {
     expect(screen.getByText(/You won this one/)).toBeTruthy();
   });
 
+  it("uses replay build-order races for the exact Ghost matchup", () => {
+    mockEndpoints({
+      slim: {
+        ...SLIM,
+        myRace: "Protoss",
+        opponent: { ...SLIM.opponent!, race: "Zerg" },
+      },
+    });
+    render(<GameDetailPage gameId="g1" />);
+
+    // BUILD_ORDER says Zerg vs Terran. Those replay-derived values must win
+    // over the conflicting slim summary so the build cannot enter PvZ.
+    expect(screen.getByRole("button", { name: "Save for ZvT" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
+  });
+
   it("degrades to build logs when the macro breakdown was never computed", () => {
     mockEndpoints({ macro: null });
     render(<GameDetailPage gameId="g1" />);

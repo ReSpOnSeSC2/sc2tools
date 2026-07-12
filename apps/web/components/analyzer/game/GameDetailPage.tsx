@@ -125,6 +125,13 @@ export function GameDetailPage({
   const myName = breakdown?.player_stats?.me?.name ?? null;
   const oppName =
     game.opponent?.displayName ?? breakdown?.player_stats?.opponent?.name ?? null;
+  // The build-order endpoint is replay-derived and therefore authoritative
+  // for both concrete races. The slim summary is an older/fallback projection
+  // that can be stale or incomplete, so use it only when the build response
+  // does not carry a race.
+  const ghostMyRace = buildReq.data?.my_race ?? game.myRace;
+  const ghostOpponentRace =
+    buildReq.data?.opp_race ?? game.opponent?.race;
 
   return (
     <GameDetailShell game={game} opponentContext={opponentContext}>
@@ -163,8 +170,8 @@ export function GameDetailPage({
           target is armed on this device AND a my-side log exists. */}
       <GhostGradeCard
         buildLog={buildLogLines}
-        myRace={game.myRace}
-        opponentRace={game.opponent?.race}
+        myRace={ghostMyRace}
+        opponentRace={ghostOpponentRace}
       />
 
       <BuildOrderColumns
@@ -184,8 +191,8 @@ export function GameDetailPage({
                 ?? (game.map ? `Build from ${game.map}` : "My build")
               }
               lines={buildLogLines}
-              myRace={game.myRace}
-              opponentRace={game.opponent?.race}
+              myRace={ghostMyRace}
+              opponentRace={ghostOpponentRace}
             />
           ) : null
         }
