@@ -201,6 +201,14 @@ function buildOverlayTokensRouter(deps) {
         // fire would pin sample data to the scene until the streamer
         // refreshed the Browser Source.
         payload.isTest = true;
+        // Every Browser Source for a token shares the same socket room.
+        // Preserve the requested widget id on per-widget probes so the
+        // clients can ignore this synthetic event unless it targets them.
+        // Payload narrowing remains useful for older clients, but by
+        // itself is insufficient for URL-driven widgets such as Ghost
+        // Build: even a context-only payload looks renderable to generic
+        // widgets like Opponent identity.
+        if (widget) payload.testWidget = widget;
         if (deps.io) {
           deps.io.to(`overlay:${token}`).emit("overlay:live", payload);
           // Single-widget Test for the session card needs a

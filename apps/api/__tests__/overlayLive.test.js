@@ -113,6 +113,20 @@ describe("services/overlayLive — sample payloads", () => {
     expect(p.headToHead).toBeDefined();
   });
 
+  test("buildSamplePayload('ghost-build') does not fall back to Test all", () => {
+    const p = OverlayLiveService.buildSamplePayload("ghost-build");
+    // The coach target lives in the Browser Source's ?ghost= param; it
+    // only needs the universal race/matchup context from this event.
+    expect(p.matchup).toBe("PvZ");
+    expect(p.myRace).toBe("Protoss");
+    expect(p.oppRace).toBe("Zerg");
+    // Regression: the missing registry entry returned FULL and lit every
+    // neighbouring widget when the user clicked the Ghost Build Test.
+    expect(p.session).toBeUndefined();
+    expect(p.streak).toBeUndefined();
+    expect(p.topBuilds).toBeUndefined();
+  });
+
   test("unknown widget falls back to the full sample payload", () => {
     const p = OverlayLiveService.buildSamplePayload("nope-not-a-widget");
     expect(p.session).toBeDefined();

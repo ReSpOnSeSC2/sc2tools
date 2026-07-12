@@ -125,6 +125,20 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
 export const TEST_DURATION_MS = 20 * 1000;
 
 /**
+ * Whether a live payload is intended for this Browser Source. Real
+ * games and Test-all events have no discriminator and reach every
+ * widget; a per-widget Test reaches only the selected source.
+ */
+export function payloadTargetsWidget(
+  payload: { isTest?: boolean; testWidget?: string } | null,
+  widget: WidgetId,
+): boolean {
+  return !payload?.isTest
+    || !payload.testWidget
+    || payload.testWidget === widget;
+}
+
+/**
  * Resolve the visibility duration for a widget given the current
  * live payload's test flag. Production widgets keep their natural
  * duration; test fires cap everything (including `null` widgets)

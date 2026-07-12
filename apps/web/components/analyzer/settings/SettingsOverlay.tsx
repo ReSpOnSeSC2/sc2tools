@@ -643,8 +643,8 @@ function WidgetList({
           const hint =
             w.id === "ghost-build"
               ? ghostTarget
-                ? `Armed: ${ghostTarget.name} (${ghostTarget.steps.length} steps) — copy the URL again after re-arming`
-                : "Nothing armed yet — arm a build from a game page's build log, then copy this URL"
+                ? `Dedicated Browser Source · Armed: ${ghostTarget.name} (${ghostTarget.steps.length} steps) — copy the URL again after re-arming`
+                : "Dedicated Browser Source (not part of All-in-one) — arm a build from a game page's build log, then copy this URL"
               : w.hint;
           return (
             <li

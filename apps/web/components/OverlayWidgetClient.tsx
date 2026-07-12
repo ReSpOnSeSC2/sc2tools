@@ -15,6 +15,7 @@ import type {
 } from "@/components/overlay/types";
 import { clientTimezone } from "@/lib/timeseries";
 import {
+  payloadTargetsWidget,
   resolveWidgetDurationMs,
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
@@ -355,6 +356,10 @@ function useOverlayWidgetSocket(
       reconnectionDelayMax: 5000,
     });
     socket.on("overlay:live", (msg: LiveGamePayload) => {
+      // A token's Browser Sources all share this room. Per-widget Test
+      // events carry their destination so neighbouring sources do not
+      // light up (Ghost Build used to trigger the full layout here).
+      if (!payloadTargetsWidget(msg, widget as WidgetId)) return;
       setLive(msg);
       if (msg && typeof msg.gameKey === "string") {
         gameKeyRef.current = msg.gameKey;

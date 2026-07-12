@@ -204,6 +204,11 @@ const PER_WIDGET_KEYS = {
   // payload). SHARED_KEYS already plumb matchup + races, which is all
   // the widget needs to spin during a Test fire.
   "randomizer": [],
+  // Ghost Build reads its target from the dedicated Browser Source's
+  // ?ghost= URL param. Registering the id is still essential: an unknown
+  // id intentionally falls back to FULL, which made its per-widget Test
+  // button fire every other overlay instead of the coach placement card.
+  "ghost-build": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

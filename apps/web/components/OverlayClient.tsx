@@ -17,6 +17,7 @@ import type {
 import { clientTimezone } from "@/lib/timeseries";
 import {
   ALL_WIDGETS,
+  payloadTargetsWidget,
   resolveWidgetDurationMs,
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
@@ -182,6 +183,11 @@ export function OverlayClient({
 
   function shouldShow(id: WidgetId): boolean {
     if (singleWidget && singleWidget !== id) return false;
+    // The all-in-one source shares the same token room as every
+    // dedicated source. A per-widget Test must render only its target;
+    // Ghost Build is dedicated-only, so its probe leaves this composite
+    // source transparent instead of firing generic neighbouring cards.
+    if (!payloadTargetsWidget(live, id)) return false;
     if (!enabled.has(id)) return false;
     if (id === "session") return sessionVisible;
     return visibleLive.has(id);

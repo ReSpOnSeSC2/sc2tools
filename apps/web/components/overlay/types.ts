@@ -28,6 +28,13 @@ export type LiveGamePayload = {
    */
   isTest?: boolean;
   /**
+   * Widget id selected by a per-widget Settings test. All Browser
+   * Sources for one token share a socket room, so non-target sources
+   * use this discriminator to ignore the synthetic event. Omitted for
+   * Test all and every real-game payload.
+   */
+  testWidget?: string;
+  /**
    * Stable per-game identifier — same value the agent's pre-game
    * envelope carries on ``LiveGameEnvelope.gameKey``. The cloud
    * stamps it on every post-game payload it derives so the overlay

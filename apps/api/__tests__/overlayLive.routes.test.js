@@ -168,6 +168,28 @@ describe("POST /v1/overlay-events/test", () => {
     expect(captured.sessionEmits).toHaveLength(0);
   });
 
+  test("ghost-build probe does not fire the full widget payload", async () => {
+    const token = await mintToken();
+    const res = await request(app)
+      .post("/v1/overlay-events/test")
+      .set("authorization", "Bearer user-overlay-live")
+      .send({ token, widget: "ghost-build" })
+      .set("content-type", "application/json");
+    expect(res.status).toBe(202);
+    expect(res.body.widget).toBe("ghost-build");
+    expect(captured.liveEmits).toHaveLength(1);
+    const p = captured.liveEmits[0].payload;
+    // The dedicated Ghost source uses isTest to show its placement hint
+    // (or its URL-armed build); no other widget's sample may bleed in.
+    expect(p.isTest).toBe(true);
+    expect(p.testWidget).toBe("ghost-build");
+    expect(p.matchup).toBe("PvZ");
+    expect(p.session).toBeUndefined();
+    expect(p.streak).toBeUndefined();
+    expect(p.topBuilds).toBeUndefined();
+    expect(captured.sessionEmits).toHaveLength(0);
+  });
+
   test("session-widget probe also fires the dedicated overlay:session event", async () => {
     const token = await mintToken();
     const res = await request(app)
