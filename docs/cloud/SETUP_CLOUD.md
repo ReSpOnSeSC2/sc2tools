@@ -195,6 +195,39 @@ Render hosts the Express + MongoDB API.
    | `SC2TOOLS_PULSE_BACKFILL_USERS_PER_TICK`   | `25`    | Max distinct users a single cycle walks.                                |
    | `SC2TOOLS_API_PULSE_TIMEOUT_SEC`           | `8`     | Hard per-call timeout for the cloud-side SC2Pulse resolver (per HTTP request). |
 
+   #### Recent opponent-MMR enrichment knobs (optional)
+
+   Replays do not reliably contain the opponent's MMR. The API therefore
+   enriches recent ladder games that have a `pulseCharacterId` but no
+   `opponent.mmr` with SC2Pulse's **current** per-race 1v1 rating. The
+   worker matches the race played in the replay (`Protoss`, `Terran`, or
+   `Zerg`) to SC2Pulse's title-case per-race result, case-insensitively,
+   and never substitutes another race's rating. Current MMR is only an approximation
+   of MMR at game time; the short window and downstream 500-point bands
+   make that trade-off explicit and tolerate small rating drift.
+
+   | Name                                       | Default | Purpose                                                                 |
+   | ------------------------------------------ | ------- | ----------------------------------------------------------------------- |
+   | `SC2TOOLS_OPP_MMR_ENRICH_DISABLED`         | unset   | Set to `1` to stop future enrichment writes without deleting stored values. |
+   | `SC2TOOLS_OPP_MMR_ENRICH_INTERVAL_SEC`     | `900`   | Cycle interval (15 minutes).                                            |
+   | `SC2TOOLS_OPP_MMR_ENRICH_WINDOW_DAYS`      | `14`    | Inclusive `createdAt` recency window; values above 30 are clamped to the hard 30-day maximum. |
+   | `SC2TOOLS_OPP_MMR_ENRICH_GAMES_PER_TICK`   | `25`    | Maximum games attempted by one cycle across the deployment.             |
+
+   The worker sets `opponent.mmrLookupAttempted` on every attempt,
+   including Pulse misses and race mismatches, so an unresolved game is
+   not retried forever. A Mongo `jobLocks` advisory lock prevents replicas
+   from running the same cycle, and the per-process single-flight guard,
+   per-tick cap, and `PulseMmrService` cache bound SC2Pulse load. Games
+   outside the bounded window are intentionally never swept: this is not
+   a historical MMR backfill. Rows that already have `opponent.mmr` are
+   excluded and their stored values are never changed.
+
+   Expect the MMR-banded Ladder Meta Radar to be sparse immediately after
+   deployment. It fills itself as newly ingested games are enriched; do not
+   widen the window to manufacture historical coverage. For rollback, set
+   `SC2TOOLS_OPP_MMR_ENRICH_DISABLED=1`. Disabling the worker leaves any
+   values it already wrote in place.
+
    The desktop **agent** also exposes a few SC2Pulse knobs that
    matter for the same "stuck on TOON id" failure mode but live in
    the agent's process (they don't ship to Render). Document them

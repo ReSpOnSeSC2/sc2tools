@@ -145,7 +145,7 @@ describe("OpponentsService.retryPulseResolution", () => {
     expect(await opponents.retryPulseResolution("u1", "nope")).toBeNull();
   });
 
-  test("resolves a character id, fetches MMR, and back-stamps games", async () => {
+  test("resolves an id and fetches row MMR without back-stamping game MMR", async () => {
     const pulseResolver = {
       resolve: jest.fn(async () => "452727"),
     };
@@ -178,7 +178,7 @@ describe("OpponentsService.retryPulseResolution", () => {
     expect(res.resolvedPulseCharacterId).toBe(true);
     expect(res.pulseCharacterId).toBe("452727");
     expect(res.mmr).toBe(4800);
-    expect(res.gamesRestamped).toBe(1); // only the game missing mmr
+    expect(res.gamesRestamped).toBe(1); // metadata updated on the missing-MMR game
 
     const row = await db.opponents.findOne({ userId: "u1", pulseId: "1-S2-1-4" });
     expect(row.pulseCharacterId).toBe("452727");
@@ -187,7 +187,9 @@ describe("OpponentsService.retryPulseResolution", () => {
 
     const g1 = await db.games.findOne({ userId: "u1", gameId: "g1" });
     const g2 = await db.games.findOne({ userId: "u1", gameId: "g2" });
-    expect(g1.opponent.mmr).toBe(4800); // back-stamped
+    expect(g1.opponent.mmr).toBeUndefined(); // enrichment job owns this write
+    expect(g1.opponent.pulseCharacterId).toBe("452727");
+    expect(g1.opponent.region).toBe("NA");
     expect(g2.opponent.mmr).toBe(4000); // in-replay value preserved
   });
 

@@ -6,13 +6,7 @@ const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
-const {
-  isStampableDate,
-  stampFloor,
-  canonicalRaceName,
-  canonicalRaceLetter,
-  pickRaceMmr,
-} = require("./oppMmrStamp");
+const { canonicalRaceLetter } = require("./oppMmrStamp");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
 const { computeCompositions } = require("./buildCompositions");
@@ -145,13 +139,10 @@ class OpponentsService {
     // Optional SC2Pulse MMR client (the same one GamesService and the
     // session widget already share). When supplied, recordGame /
     // refreshMetadata attempt one rate-limited fetch per ingest to
-    // populate ``mmr`` and ``region`` on the opponents row AND return
-    // them so the games-route caller can stamp them onto the
-    // ``game.opponent.mmr`` / ``game.opponent.region`` sub-document
-    // (the bingo MMR predicates and any other game-level consumer
-    // read from there). sc2reader almost never carries an opponent's
-    // MMR for ranked 1v1 ladder replays, so SC2Pulse is the only
-    // viable source. Best-effort: a Pulse failure leaves the prior
+    // populate ``mmr`` and ``region`` on the opponents row. Stable
+    // region metadata may also be copied to a game; current Pulse MMR
+    // reaches game rows only through the bounded forward-enrichment
+    // job. Best-effort: a Pulse failure leaves the prior opponent-row
     // value untouched and the next encounter retries.
     this.pulseMmr = opts.pulseMmr || null;
     // Global, cross-user SC2Pulse cache. When supplied, opponent MMR /
@@ -563,10 +554,9 @@ class OpponentsService {
    *   1. RECOGNISE the race — find the opponent's race in the most
    *      recent game you have on record against them.
    *   2. PICK the MMR for THAT race — the most recent game of that race
-   *      that carries an ``opponent.mmr`` (stamped race-correct at
-   *      ingest by ``_stampGameOpponentMmr`` via the SC2Pulse per-race
-   *      breakdown). A Protoss game's rating is therefore never lent to
-   *      a row whose last game was Terran.
+   *      that carries an ``opponent.mmr`` (from replay data or the
+   *      race-correct forward enrichment job). A Protoss game's rating
+   *      is therefore never lent to a row whose last game was Terran.
    *
    * This is preferred over the opponents-row stored ``mmr``, which is
    * SC2Pulse's *current* rating collapsed across races —
@@ -575,10 +565,10 @@ class OpponentsService {
    * opponent that's the wrong number.
    *
    * Fallback to the opponents-row stored ``mmr`` only when no game of
-   * the latest race carries one (every such game pre-dates the stamp
-   * trust window, or sc2reader never carried it and the stamp couldn't
-   * resolve a team). That's the AngryBird case: ranked-1v1 replays are
-   * mmr-less, so the row holds the only number we have. The unfiltered
+   * the latest race carries one (the replay omitted it and recent
+   * enrichment had no matching Pulse team). That's the AngryBird case:
+   * ranked-1v1 replays are mmr-less, so the row holds the only number we
+   * have. The unfiltered
    * path already carries the stored mmr on the row; the filtered path
    * looks it up (its aggregation rows don't carry it).
    *
@@ -1076,15 +1066,15 @@ class OpponentsService {
     // in your most recent game against them". ``rawGames`` is sorted
     // date desc, so rawGames[0] is the most recent game; we take its
     // opponent race, then surface the MMR from the most recent game OF
-    // THAT RACE that carries one (stamped race-correct at ingest by
-    // ``_stampGameOpponentMmr``). It WINS over the opponents-row
+    // THAT RACE that carries one (from replay data or the race-correct
+    // forward enrichment job). It WINS over the opponents-row
     // ``doc.mmr`` — SC2Pulse's race-AGNOSTIC current rating
     // (``_fetchTeams`` collapses all races to the most-recently-played
     // team), which would surface the wrong race for a multi-race
     // opponent (their Protoss 6360 on a row whose last game was Terran
     // 5400). Falls back to ``doc.mmr`` when no same-race game carries
-    // one (every such game pre-dates the stamp window, or sc2reader
-    // never had it). Pure database read — no Pulse traffic.
+    // one (the replay omitted it and recent enrichment missed). Pure
+    // database read — no Pulse traffic.
     /** @type {{mmr: number, region: string|null}|null} */
     let mmrOverlay = null;
     const latestOppRace =
@@ -1326,17 +1316,13 @@ class OpponentsService {
         "opponent_pulse_character_id_upgraded",
       );
     }
-    await this._stampGameOpponentMmr(userId, game.gameId, game, set);
+    await this._stampGameRegion(userId, game.gameId, game, set);
     return {
       upgraded: Boolean(pulseCharIdChange),
       from: pulseCharIdChange ? pulseCharIdChange.from : null,
       to: pulseCharIdChange ? pulseCharIdChange.to : null,
-      // Surfaced so the games-route can stamp ``opponent.mmr`` /
-      // ``opponent.region`` onto the just-upserted games row. The
-      // bingo MMR predicates (``win_vs_higher_mmr`` /
-      // ``win_close_mmr``) and any other game-level consumer read
-      // from ``g.opponent.mmr`` — without this hop the predicates
-      // never tick because sc2reader doesn't carry it.
+      // Surface opponent-row values to callers. Game-level Pulse MMR
+      // is owned by opponentMmrEnrichmentJob and its one-shot marker.
       mmr: typeof set.mmr === "number" ? set.mmr : null,
       region: typeof set.region === "string" ? set.region : null,
     };
@@ -1475,33 +1461,22 @@ class OpponentsService {
         "opponent_pulse_character_id_upgraded",
       );
     }
-    await this._stampGameOpponentMmr(userId, game.gameId, game, set);
+    await this._stampGameRegion(userId, game.gameId, game, set);
     return {
       matched: res.matchedCount || 0,
       modified: res.modifiedCount || 0,
       upgraded: Boolean(pulseCharIdChange),
-      // Same contract as recordGame: surface the resolved MMR /
-      // region so the games-route can stamp them onto the just-
-      // upserted games row (the bingo MMR predicates read from
-      // ``g.opponent.mmr``).
+      // Same opponent-row-only contract as recordGame.
       mmr: typeof set.mmr === "number" ? set.mmr : null,
       region: typeof set.region === "string" ? set.region : null,
     };
   }
 
   /**
-   * Stamp the just-resolved opponent MMR / region back onto the
-   * specific game's ``opponent.mmr`` / ``opponent.region`` sub-doc
-   * in the games collection. The bingo MMR predicates
-   * (``win_vs_higher_mmr`` / ``win_close_mmr`` in
-   * ``arcadePredicates.js``) read from games — without this hop they
-   * never tick because sc2reader doesn't carry an opponent's MMR for
-   * ranked ladder replays.
-   *
-   * Only stamps fields the agent didn't supply (``incomingGame.mmr``
-   * / ``incomingGame.region``) so an explicit agent-provided value
-   * always wins. No-op when ``gameId`` is missing (defensive — the
-   * route always passes it but pre-route callers may not).
+   * Stamp stable region metadata onto the just-ingested game. Current
+   * SC2Pulse MMR deliberately does not flow through this path: the
+   * bounded enrichment job is the sole server-side writer of game-level
+   * Pulse MMR and owns the one-shot attempt marker.
    *
    * @private
    * @param {string} userId
@@ -1510,216 +1485,61 @@ class OpponentsService {
    * @param {Record<string, any>} set The opponents-row $set we just wrote.
    * @returns {Promise<void>}
    */
-  async _stampGameOpponentMmr(userId, gameId, incomingGame, set) {
+  async _stampGameRegion(userId, gameId, incomingGame, set) {
     if (typeof gameId !== "string" || !gameId) return;
-    // RECENCY GUARD. A current/last-known MMR is only a fair proxy for
-    // game-time MMR on recent games — never back-stamp it onto a game
-    // older than the trust window (that's how 2018 games ended up
-    // wearing a 2026 rating). Old games stay "missing MMR", which the
-    // Win-rate-by-opponent-MMR chart already handles honestly.
-    if (!isStampableDate(incomingGame && incomingGame.playedAt)) return;
-    /** @type {Record<string, any>} */
-    const update = {};
-    // Only fill MMR the agent didn't supply (the in-replay value is the
-    // at-game-time truth and always wins). When we do fill it, use the
-    // RACE-CORRECT current MMR — the opponent's rating in the race they
-    // played THIS game — never their highest / most-recent across races
-    // (which tagged a Protoss game with the opponent's Terran rating).
-    if (typeof incomingGame.mmr !== "number") {
-      const raceMmr = await this._raceCorrectCurrentMmr(incomingGame);
-      if (raceMmr && typeof raceMmr.mmr === "number") {
-        update["opponent.mmr"] = raceMmr.mmr;
-        if (
-          typeof incomingGame.region !== "string"
-          && typeof raceMmr.region === "string"
-        ) {
-          update["opponent.region"] = raceMmr.region;
-        }
-      }
-    }
-    if (
-      update["opponent.region"] === undefined
-      && typeof incomingGame.region !== "string"
-      && typeof set.region === "string"
-    ) {
-      update["opponent.region"] = set.region;
-    }
-    if (Object.keys(update).length === 0) return;
+    if (typeof incomingGame.region === "string") return;
+    if (typeof set.region !== "string") return;
     try {
       await this.db.games.updateOne(
         { userId, gameId },
-        { $set: update },
+        { $set: { "opponent.region": set.region } },
       );
     } catch (err) {
-      // Stamp failures are advisory (the slim row is already in
-      // place; the bingo predicates just won't fire for THIS game
-      // until the next ingest re-attempts). Log and move on.
       this.logger.warn(
         { err, userId, gameId },
-        "opponent_game_mmr_stamp_failed",
+        "opponent_game_region_stamp_failed",
       );
     }
   }
 
   /**
-   * The opponent's *current* SC2Pulse MMR **for the race they played in
-   * this game** — or null when we don't have one. Uses the per-race
-   * breakdown (``getRaceBreakdown``) rather than the collapsed
-   * single-MMR pick, so a Protoss game never inherits the opponent's
-   * Terran rating. Returns null (→ stamp nothing) when:
-   *   - the game's race is unknown ("U" / missing) — we won't guess;
-   *   - we have no id/toon to query SC2Pulse with;
-   *   - SC2Pulse has no current-season team for that race.
-   *
-   * Cached at the SC2Pulse layer (``getRaceBreakdown`` memoises 5 min by
-   * id set), so a bulk re-upload against one opponent costs one fetch.
-   *
-   * @private
-   * @param {Record<string, any>} incomingGame
-   * @returns {Promise<{ mmr: number, region: string|null }|null>}
-   */
-  async _raceCorrectCurrentMmr(incomingGame) {
-    const race = canonicalRaceName(incomingGame && incomingGame.race);
-    if (!race) return null;
-    const charId =
-      typeof incomingGame.pulseCharacterId === "string" && incomingGame.pulseCharacterId
-        ? incomingGame.pulseCharacterId
-        : null;
-    const toon =
-      typeof incomingGame.toonHandle === "string" && incomingGame.toonHandle
-        ? incomingGame.toonHandle
-        : null;
-    if (!charId && !toon) return null;
-
-    // Shared cross-user cache first — reuse a per-race breakdown another
-    // user already pulled for this opponent (and that the profile path
-    // populates), so a bulk re-upload across many users costs SC2Pulse
-    // a single breakdown fetch overall.
-    if (this.pulseDirectory) {
-      const shared = await this._directoryGetMmr(charId, toon);
-      if (shared && Array.isArray(shared.races) && shared.races.length > 0) {
-        return pickRaceMmr(shared.races, race);
-      }
-    }
-
-    if (!this.pulseMmr || typeof this.pulseMmr.getRaceBreakdown !== "function") {
-      return null;
-    }
-    const ids = [charId || toon];
-    try {
-      const races = (await this.pulseMmr.getRaceBreakdown(ids)) || [];
-      if (this.pulseDirectory && races.length > 0) {
-        await this._directoryRecordMmr({
-          pulseCharacterId: charId,
-          toonHandle: toon,
-          mmr: races[0].mmr,
-          region: races[0].region,
-          races,
-        });
-      }
-      return pickRaceMmr(races, race);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Bulk back-stamp a newly-resolved opponent's current MMR onto their
-   * prior games — race-correct and recency-bounded. One ``getRaceBreakdown``
-   * call (cached), then one ``updateMany`` per race, each scoped to:
-   *   - games against this opponent with no in-replay MMR,
-   *   - of the matching race ("opponent.race" begins with the race's
-   *     first letter — tolerant of "Protoss"/"P" spellings),
-   *   - played within the trust window (``stampFloor``).
-   * So a barcode's 2018 games are never touched, and a Protoss game
-   * only ever receives the opponent's Protoss rating.
+   * Copy stable identity metadata from a newly-resolved opponent row to
+   * its games. This intentionally excludes MMR: historical Pulse MMR
+   * restamps are forbidden, and recent rows are handled by the bounded
+   * enrichment job only when their own subdocument carries the id.
    *
    * @private
    * @param {string} userId
    * @param {string} pulseId
    * @param {Record<string, any>} set The opponents-row $set just written.
-   * @returns {Promise<void>}
+   * @returns {Promise<number>}
    */
-  async _backfillRestampGamesByRace(userId, pulseId, set) {
-    // Region first, and broadly: it's derived from the stable toon
-    // handle (it doesn't drift with time or race), so stamp it onto
-    // every game against this opponent that lacks an in-replay MMR —
-    // independent of SC2Pulse availability — so the per-region filter
-    // works even before any MMR lands.
-    const region = set && typeof set.region === "string" ? set.region : null;
-    if (region) {
-      try {
-        await this.db.games.updateMany(
-          {
-            userId,
-            "opponent.pulseId": pulseId,
-            "opponent.mmr": { $not: { $type: "number" } },
-          },
-          { $set: { "opponent.region": region } },
-        );
-      } catch (err) {
-        this.logger.warn(
-          { err, userId, pulseId },
-          "opponent_pulse_backfill_games_region_failed",
-        );
-      }
+  async _backfillGameIdentity(userId, pulseId, set) {
+    /** @type {Record<string, string>} */
+    const update = {};
+    if (typeof set.region === "string") {
+      update["opponent.region"] = set.region;
     }
-    // MMR is the part that must be race-correct + recency-bounded.
-    const charId =
-      set && typeof set.pulseCharacterId === "string" && set.pulseCharacterId
-        ? set.pulseCharacterId
-        : null;
-    if (!charId) return;
-    if (!this.pulseMmr || typeof this.pulseMmr.getRaceBreakdown !== "function") {
-      return;
+    if (typeof set.pulseCharacterId === "string") {
+      update["opponent.pulseCharacterId"] = set.pulseCharacterId;
     }
-    let races = [];
+    if (Object.keys(update).length === 0) return 0;
     try {
-      races = await this.pulseMmr.getRaceBreakdown([charId]);
+      const res = await this.db.games.updateMany(
+        {
+          userId,
+          "opponent.pulseId": pulseId,
+          "opponent.mmr": { $not: { $type: "number" } },
+        },
+        { $set: update },
+      );
+      return res.modifiedCount || 0;
     } catch (err) {
       this.logger.warn(
         { err, userId, pulseId },
-        "opponent_pulse_backfill_race_breakdown_failed",
+        "opponent_pulse_backfill_game_identity_failed",
       );
-      return;
-    }
-    if (!Array.isArray(races) || races.length === 0) return;
-    const floor = stampFloor();
-    const fallbackRegion =
-      set && typeof set.region === "string" ? set.region : null;
-    let restamped = 0;
-    for (const r of races) {
-      const letter = canonicalRaceLetter(r && r.race);
-      const mmr = Number(r && r.mmr);
-      if (!letter || !Number.isFinite(mmr) || mmr <= 0) continue;
-      const region = typeof r.region === "string" ? r.region : fallbackRegion;
-      /** @type {Record<string, any>} */
-      const gameUpdate = { "opponent.mmr": Math.round(mmr) };
-      if (typeof region === "string") gameUpdate["opponent.region"] = region;
-      try {
-        const gres = await this.db.games.updateMany(
-          {
-            userId,
-            "opponent.pulseId": pulseId,
-            "opponent.mmr": { $not: { $type: "number" } },
-            "opponent.race": { $regex: `^${letter}`, $options: "i" },
-            date: { $gte: floor },
-          },
-          { $set: gameUpdate },
-        );
-        restamped += gres.modifiedCount || 0;
-      } catch (err) {
-        this.logger.warn(
-          { err, userId, pulseId, race: r.race },
-          "opponent_pulse_backfill_games_restamp_failed",
-        );
-      }
-    }
-    if (restamped > 0) {
-      this.logger.info(
-        { userId, pulseId, gameCount: restamped },
-        "opponent_pulse_backfill_games_restamped",
-      );
+      return 0;
     }
   }
 
@@ -2067,21 +1887,10 @@ class OpponentsService {
           },
           "opponent_pulse_character_id_upgraded",
         );
-        // Back-stamp games against this opponent that DON'T already
-        // carry an in-replay MMR. Two priority guards:
-        //   * ``opponent.mmr: { $not: { $type: "number" } }`` — the
-        //     agent's in-replay value is the at-game-time truth and is
-        //     never overwritten by pulse's current ladder MMR.
-        //   * ``date >= stampFloor`` — current MMR is only a fair proxy
-        //     for game-time MMR on recent games; we never back-stamp it
-        //     onto years-old games (that's how a barcode's 2018 games
-        //     ended up tagged with its 2026 rating).
-        // And it's RACE-CORRECT: one updateMany per race, each scoped to
-        // games where the opponent actually played that race, stamping
-        // the opponent's MMR for THAT race — so a Protoss game can't
-        // inherit their Terran rating. The per-race breakdown is one
-        // cached SC2Pulse call regardless of how many games match.
-        await this._backfillRestampGamesByRace(userId, row.pulseId, set);
+        // Heal stable identity metadata only. Current Pulse MMR never
+        // back-stamps prior games; the recent-row enrichment job owns
+        // that bounded, race-correct write from this deploy forward.
+        await this._backfillGameIdentity(userId, row.pulseId, set);
       }
     }
     return { scanned: rows.length, resolved, updated, skipped };
@@ -2512,32 +2321,14 @@ class OpponentsService {
 
     await this.db.opponents.updateOne({ userId, pulseId }, { $set: set });
 
-    // Step 3 — back-stamp games that lack an in-replay MMR, mirroring
-    // the backfill cron (the agent's in-replay value always wins).
-    let gamesRestamped = 0;
-    /** @type {Record<string, any>} */
-    const gameUpdate = {};
-    if (typeof set.mmr === "number") gameUpdate["opponent.mmr"] = set.mmr;
-    if (typeof set.region === "string") gameUpdate["opponent.region"] = set.region;
-    if (charId) gameUpdate["opponent.pulseCharacterId"] = charId;
-    if (Object.keys(gameUpdate).length > 0) {
-      try {
-        const gres = await this.db.games.updateMany(
-          {
-            userId,
-            "opponent.pulseId": pulseId,
-            "opponent.mmr": { $not: { $type: "number" } },
-          },
-          { $set: gameUpdate },
-        );
-        gamesRestamped = gres.modifiedCount || 0;
-      } catch (err) {
-        this.logger.warn(
-          { err, userId, pulseId },
-          "opponent_pulse_retry_games_restamp_failed",
-        );
-      }
-    }
+    // Step 3 — heal stable game identity metadata only. A manual admin
+    // retry may refresh the opponent profile's current MMR, but it must
+    // not turn into an unbounded historical game-MMR backfill.
+    const gamesRestamped = await this._backfillGameIdentity(
+      userId,
+      pulseId,
+      { region: set.region, pulseCharacterId: charId },
+    );
 
     this.logger.info(
       { userId, pulseId, resolvedNow, pulseCharacterId: charId, mmr: set.mmr ?? null },
