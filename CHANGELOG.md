@@ -149,6 +149,12 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Replay rows now identify the Ghost Build workspace** — the icon-only
+  arrow into a game's full analysis page is now a visible “Open game
+  analysis” action. Desktop tables label the destination column, while
+  mobile cards explain that the page contains the timeline, mechanics,
+  build orders, and Ghost Build arming tools.
+
 - **Genuinely distinct overlay frames** — overlay settings add five
   structural styles: Command Grid, Neon Arcade, Arena Broadcast, Void
   Nebula, and Terran Foundry. Each has its own geometry, accent-rail layout,
