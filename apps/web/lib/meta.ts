@@ -83,11 +83,19 @@ export function parseLeagueId(raw: unknown): number {
   return LEAGUES.some((l) => l.id === n) ? n : DEFAULT_LEAGUE_ID;
 }
 
-/** Coerce a raw query param into a valid matchup, defaulting to PvZ. */
+/** Coerce a raw query param into a valid matchup, defaulting to PvZ.
+ *
+ *  Canonicalizes to the "<X>v<Y>" form MATCHUPS + isValidMatchup use:
+ *  upper-case race letters joined by a lower-case "v". A naive
+ *  ``toUpperCase()`` would fold the join into "V" ("PvT" -> "PVT"), which
+ *  fails ``isValidMatchup``'s lower-case-"v" pattern — so *every* selection
+ *  silently collapsed back to the PvZ default and the matchup picker
+ *  appeared frozen. */
 export function parseMatchup(raw: unknown): string {
   if (typeof raw !== "string") return DEFAULT_MATCHUP;
-  const up = raw.trim().toUpperCase();
-  return isValidMatchup(up) ? up : DEFAULT_MATCHUP;
+  const m = raw.trim().toUpperCase().match(/^([PTZ])V([PTZ])$/);
+  const canonical = m ? `${m[1]}v${m[2]}` : "";
+  return isValidMatchup(canonical) ? canonical : DEFAULT_MATCHUP;
 }
 
 /** Strip the redundant "<X>v<Y> - " matchup prefix the agent bakes into
