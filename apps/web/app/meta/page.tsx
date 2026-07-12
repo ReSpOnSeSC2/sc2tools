@@ -11,8 +11,10 @@ import {
   parseAxis,
   parseBand,
   parseMatchup,
+  parsePatchEra,
   type BandAxis,
   type MetaRow,
+  type PatchEra,
 } from "@/lib/meta";
 
 /**
@@ -37,6 +39,7 @@ function selectionFrom(sp: Record<string, string | string[] | undefined>): {
   axis: BandAxis;
   band: number;
   matchup: string;
+  era: PatchEra;
 } {
   const axis = parseAxis(sp.axis);
   const legacyLeague = axis === "league" ? sp.league : undefined;
@@ -44,6 +47,7 @@ function selectionFrom(sp: Record<string, string | string[] | undefined>): {
     axis,
     band: parseBand(axis, sp.band ?? legacyLeague),
     matchup: parseMatchup(sp.matchup),
+    era: parsePatchEra(sp.era),
   };
 }
 
@@ -53,13 +57,14 @@ export async function generateMetadata({
   searchParams: SearchParams;
 }): Promise<Metadata> {
   const sp = await searchParams;
-  const { axis, band, matchup } = selectionFrom(sp);
+  const { axis, band, matchup, era } = selectionFrom(sp);
   const label = bandLabel(axis, band);
-  const title = `${matchup} openers vs ${label} opponents — Ladder Meta Radar · SC2 Tools`;
+  const eraLabel = era === "after" ? "after 5.0.16" : "before 5.0.16";
+  const title = `${matchup} openers vs ${label} opponents ${eraLabel} — Ladder Meta Radar · SC2 Tools`;
   const description =
     `Which ${matchup} openers actually win against ${label} opponents on the StarCraft II ` +
-    "ladder — win rates, prevalence, and week-over-week movement from real games.";
-  const canonical = metaHref(axis, band, matchup);
+    `ladder ${eraLabel} — win rates, prevalence, and week-over-week movement from real games.`;
+  const canonical = metaHref(axis, band, matchup, era);
   return {
     title,
     description,
@@ -79,14 +84,14 @@ export default async function MetaPage({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
-  const { axis, band, matchup } = selectionFrom(sp);
+  const { axis, band, matchup, era } = selectionFrom(sp);
   const label = bandLabel(axis, band);
 
   // Public endpoint — fetched server-side (no auth) so the report ships as
   // crawlable HTML. Cached briefly; the underlying table only moves once a
   // day when the recompute job runs.
   const data = await getJson<{ row: MetaRow }>(
-    `/v1/meta/ladder?axis=${axis}&band=${band}&matchup=${encodeURIComponent(matchup)}`,
+    `/v1/meta/ladder?axis=${axis}&band=${band}&matchup=${encodeURIComponent(matchup)}&era=${era}`,
     { revalidateSec: 3600 },
   );
   const row = data?.row ?? null;
@@ -99,7 +104,7 @@ export default async function MetaPage({
         description="Pro tier lists show what's popular. This shows what wins — the effectiveness-weighted opener meta by opponent league or 500-point MMR band and matchup, straight from real SC2 Tools ladder games, with week-over-week movement."
       />
 
-      <MetaControls axis={axis} band={band} matchup={matchup} />
+      <MetaControls axis={axis} band={band} matchup={matchup} era={era} />
 
       {row ? (
         <LadderMetaReport row={row} axis={axis} band={band} />

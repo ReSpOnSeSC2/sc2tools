@@ -81,7 +81,13 @@ function initialFilters(): AnalyzerFilters {
   // disconnects + insta-quits. The user can flip it off via the
   // FilterBar toggle, which writes ``exclude_too_short: false`` to
   // localStorage so their choice persists on subsequent visits.
-  return { preset: DEFAULT_PRESET, exclude_too_short: true };
+  const range = resolvePreset(DEFAULT_PRESET);
+  return {
+    preset: DEFAULT_PRESET,
+    since: range.since?.toISOString(),
+    until: range.until?.toISOString(),
+    exclude_too_short: true,
+  };
 }
 
 /**
@@ -90,7 +96,8 @@ function initialFilters(): AnalyzerFilters {
  * they re-fetch when the user clicks Refresh.
  *
  * The chosen date preset is persisted to localStorage so it survives
- * page reloads. A non-custom preset is re-resolved against "now" (and
+ * page reloads. New users default to the post-5.0.16 8-worker era. A
+ * non-custom preset is re-resolved against "now" (and
  * against the latest SC2Pulse season catalog) on every mount, so a
  * saved "Last 7 days" reflects today's window and "Current season"
  * tracks whichever season is current right now.

@@ -63,23 +63,26 @@ function buildLadderMetaRouter(deps) {
  * rather than silently falling back to a different league row.
  *
  * @param {Record<string, unknown>} query
- * @returns {{bandType: "league" | "mmr", band: number, matchup: string} | null}
+ * @returns {{bandType: "league" | "mmr", band: number, matchup: string, era: "after" | "before"} | null}
  */
 function parseLadderMetaQuery(query) {
   const matchup = scalarString(query.matchup);
   if (!matchup || !/^[PTZ]v[PTZ]$/i.test(matchup)) return null;
+  const rawEra = scalarString(query.era);
+  const era = rawEra === null || rawEra === "after" ? "after" : rawEra === "before" ? "before" : null;
+  if (!era) return null;
 
   const canonical = query.axis !== undefined || query.band !== undefined;
   if (!canonical) {
     const band = strictInteger(query.leagueId);
-    return band === null ? null : { bandType: "league", band, matchup };
+    return band === null ? null : { bandType: "league", band, matchup, era };
   }
 
   const axis = scalarString(query.axis);
   const band = strictInteger(query.band);
   if ((axis !== "league" && axis !== "mmr") || band === null) return null;
   if (axis === "mmr" && !isLadderMetaMmrBand(band)) return null;
-  return { bandType: axis, band, matchup };
+  return { bandType: axis, band, matchup, era };
 }
 
 /** @param {unknown} raw @returns {string | null} */

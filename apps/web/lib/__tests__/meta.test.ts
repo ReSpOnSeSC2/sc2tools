@@ -9,6 +9,7 @@ import {
   parseBand,
   parseLeagueId,
   parseMatchup,
+  parsePatchEra,
 } from "../meta";
 
 describe("parseMatchup", () => {
@@ -59,6 +60,12 @@ describe("parseLeagueId", () => {
 });
 
 describe("opponent band helpers", () => {
+  it("defaults the patch era to the current 8-worker game", () => {
+    expect(parsePatchEra(undefined)).toBe("after");
+    expect(parsePatchEra("after")).toBe("after");
+    expect(parsePatchEra("before")).toBe("before");
+  });
+
   it("publishes the exact 11 opponent-MMR bands", () => {
     expect(MMR_BANDS).toEqual([
       { key: 1000, label: "<2000" },
@@ -98,11 +105,12 @@ describe("opponent band helpers", () => {
     expect(bandLabel("mmr", 6500)).toBe("6500+");
 
     const href = metaHref("mmr", 4500, "tVz");
-    expect(href).toBe("/meta?axis=mmr&band=4500&matchup=TvZ");
+    expect(href).toBe("/meta?axis=mmr&band=4500&matchup=TvZ&era=after");
     const params = new URL(href, "https://sc2tools.com").searchParams;
     const axis = parseAxis(params.get("axis"));
     expect(axis).toBe("mmr");
     expect(parseBand(axis, params.get("band"))).toBe(4500);
     expect(parseMatchup(params.get("matchup"))).toBe("TvZ");
+    expect(parsePatchEra(params.get("era"))).toBe("after");
   });
 });

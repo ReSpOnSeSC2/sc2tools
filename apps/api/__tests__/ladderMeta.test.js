@@ -95,7 +95,7 @@ describe("ladder meta radar", () => {
       out.push({
         userId: `seed-user-${idSeq % 12}`,
         gameId: `g-${idSeq}`,
-        date: new Date(Date.UTC(2026, 5, 1 + (idSeq % 27))),
+        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
         result: i < wins ? "Victory" : "Defeat",
         myRace,
         map: "Meta Map",
@@ -197,6 +197,28 @@ describe("ladder meta radar", () => {
     expect(await svc.lookup({ leagueId: 2, matchup: "PvZ" })).toBeNull();
   });
 
+  test("before and after 5.0.16 are isolated at the exact release instant", async () => {
+    idSeq = 20000;
+    const release = new Date("2026-06-22T19:15:00.000Z");
+    await db.games.insertMany([
+      ...bucket({
+        build: A,
+        count: 60,
+        wins: 45,
+        extra: { date: new Date(release.getTime() - 1) },
+      }),
+      ...bucket({ build: B, count: 60, wins: 15, extra: { date: release } }),
+    ]);
+    await svc.recompute();
+
+    const before = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "before" });
+    const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
+    expect(before).toMatchObject({ era: "before", n: 60 });
+    expect(after).toMatchObject({ era: "after", n: 60 });
+    expect(before.openers[0].build).toBe(A);
+    expect(after.openers[0].build).toBe(B);
+  });
+
   test("week-over-week deltas appear after a second, shifted recompute", async () => {
     await seedCorpus();
     await svc.recompute(); // run 1: opener A winrate .70
@@ -257,6 +279,7 @@ describe("ladder meta radar", () => {
           "band",
           "bandLabel",
           "bandType",
+          "era",
           "league",
           "leagueBand",
           "matchup",
@@ -339,6 +362,7 @@ describe("GET /v1/meta/ladder", () => {
     expect((await get("?axis=mmr&band=4250&matchup=PvZ")).status).toBe(400);
     expect((await get("?axis=rating&band=4000&matchup=PvZ")).status).toBe(400);
     expect((await get("?axis=league&band=4junk&matchup=PvZ")).status).toBe(400);
+    expect((await get("?axis=league&band=4&matchup=PvZ&era=all")).status).toBe(400);
   });
 
   test("404s when the band has no table yet", async () => {
@@ -355,7 +379,7 @@ describe("GET /v1/meta/ladder", () => {
       docs.push({
         userId: `u_${idSeq % 10}`,
         gameId: `meta_g_${idSeq}`,
-        date: new Date(Date.UTC(2026, 5, 1 + (idSeq % 27))),
+        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
         result: i % 2 === 0 ? "Victory" : "Defeat",
         myRace: "Protoss",
         map: "Meta Map",
@@ -369,7 +393,7 @@ describe("GET /v1/meta/ladder", () => {
       docs.push({
         userId: `u_${idSeq % 10}`,
         gameId: `meta_g_${idSeq}`,
-        date: new Date(Date.UTC(2026, 5, 1 + (idSeq % 27))),
+        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
         result: i < 5 ? "Victory" : "Defeat",
         myRace: "Protoss",
         map: "Meta Map",
@@ -386,6 +410,7 @@ describe("GET /v1/meta/ladder", () => {
     expect(res.body.row).toBeTruthy();
     expect(res.body.row.matchup).toBe("PvZ");
     expect(res.body.row.leagueBand).toBe(4);
+    expect(res.body.row.era).toBe("after");
     expect(res.body.row.openers[0].build).toBe(A);
 
     const canonicalLeague = await get("?axis=league&band=4&matchup=PvZ");
@@ -397,5 +422,8 @@ describe("GET /v1/meta/ladder", () => {
     expect(mmr.body.row.bandType).toBe("mmr");
     expect(mmr.body.row.band).toBe(4000);
     expect(mmr.body.row.bandLabel).toBe("4000–4500");
+
+    const before = await get("?axis=league&band=4&matchup=PvZ&era=before");
+    expect(before.status).toBe(404);
   });
 });

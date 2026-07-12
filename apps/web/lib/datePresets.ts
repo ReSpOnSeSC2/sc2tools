@@ -11,6 +11,8 @@ import type { LogicalSeason } from "@/lib/useSeasons";
 
 export type PresetId =
   | "all"
+  | "after_5_0_16"
+  | "before_5_0_16"
   | "today"
   | "yesterday"
   | "last_week"
@@ -37,6 +39,13 @@ export type Preset = {
   /** Resolve the preset to a concrete date range. */
   resolve: () => DateRange;
 };
+
+/**
+ * Patch 5.0.16 went live on 22 June 2026 and reduced the starting worker
+ * count from 12 to 8. Keep this as an instant (rather than a calendar-day
+ * calculation) so every browser and API request splits the same games.
+ */
+export const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
 
 function startOfDay(d: Date): Date {
   const out = new Date(d);
@@ -72,6 +81,20 @@ function startOfWeek(d: Date): Date {
 }
 
 export const PRESETS: ReadonlyArray<Preset> = [
+  {
+    id: "after_5_0_16",
+    label: "After 5.0.16 · 8 workers",
+    shortLabel: "8-worker patch",
+    resolve: () => ({ since: new Date(PATCH_5_0_16_RELEASE) }),
+  },
+  {
+    id: "before_5_0_16",
+    label: "Before 5.0.16 · 12 workers",
+    shortLabel: "12-worker era",
+    resolve: () => ({
+      until: new Date(PATCH_5_0_16_RELEASE.getTime() - 1),
+    }),
+  },
   {
     id: "all",
     label: "All time",
@@ -240,12 +263,11 @@ export function longLabelFor(
 }
 
 /**
- * The picker's default selection. "current_season" is a virtual id
- * resolved against the SC2Pulse catalog at hydration time; if the
- * catalog hasn't loaded yet we treat it like "all time" so nothing
- * filters out unexpectedly during the first paint.
+ * The picker's default selection. Patch 5.0.16 is the live 8-worker game;
+ * keeping it as a fixed preset prevents pre-patch replays from distorting
+ * current build and matchup analysis.
  */
-export const DEFAULT_PRESET: PresetId = "current_season" as PresetId;
+export const DEFAULT_PRESET: PresetId = "after_5_0_16";
 
 /** Helper for KPI consumers — best-effort current-season label. */
 export function currentSeasonPresetId(): PresetId {

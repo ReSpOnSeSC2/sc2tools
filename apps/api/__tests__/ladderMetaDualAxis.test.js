@@ -158,7 +158,7 @@ const START = Date.UTC(2026, 6, 12, 12);
     expect(await out.countDocuments({ bandType: "mmr" })).toBe(0);
   });
 
-  test("legacy index migration promotes rows and is safe to repeat", async () => {
+  test("legacy index migration discards unsplittable rows and is safe to repeat", async () => {
     await out.insertMany([
       legacyRow(4, "PvZ"),
       legacyRow(5, "PvZ"),
@@ -168,11 +168,8 @@ const START = Date.UTC(2026, 6, 12, 12);
     await migrateBandIndex(out);
     await migrateBandIndex(out);
 
-    const rows = await out.find({}).sort({ band: 1 }).toArray();
-    expect(rows.map((row) => [row.bandType, row.band])).toEqual([
-      ["league", 4],
-      ["league", 5],
-    ]);
+    const rows = await out.find({}).toArray();
+    expect(rows).toEqual([]);
     const indexes = await out.listIndexes().toArray();
     expect(indexes.some((index) => sameKey(index.key, BAND_INDEX_KEY))).toBe(true);
     expect(indexes.some((index) => sameKey(index.key, { leagueBand: 1, matchup: 1 })))

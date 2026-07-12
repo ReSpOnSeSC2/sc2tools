@@ -19,25 +19,51 @@ import {
   metaHref,
   parseBand,
   type BandAxis,
+  type PatchEra,
 } from "@/lib/meta";
 
 export function MetaControls({
   axis,
   band,
   matchup,
+  era,
 }: {
   axis: BandAxis;
   band: number;
   matchup: string;
+  era: PatchEra;
 }) {
   const router = useRouter();
 
-  function go(nextAxis: BandAxis, nextBand: number, nextMatchup: string) {
-    router.push(metaHref(nextAxis, nextBand, nextMatchup));
+  function go(
+    nextAxis: BandAxis,
+    nextBand: number,
+    nextMatchup: string,
+    nextEra: PatchEra = era,
+  ) {
+    router.push(metaHref(nextAxis, nextBand, nextMatchup, nextEra));
   }
 
   return (
     <div className="flex flex-wrap items-end gap-3">
+      <label className="flex flex-col gap-1">
+        <span className="text-micro uppercase tracking-wider text-text-dim">
+          Game version
+        </span>
+        <span className="w-56">
+          <Select
+            aria-label="Game version"
+            value={era}
+            onChange={(event) =>
+              go(axis, band, matchup, event.target.value as PatchEra)
+            }
+          >
+            <option value="after">After 5.0.16 · 8 workers</option>
+            <option value="before">Before 5.0.16 · 12 workers</option>
+          </Select>
+        </span>
+      </label>
+
       <label className="flex flex-col gap-1">
         <span className="text-micro uppercase tracking-wider text-text-dim">
           Filter by

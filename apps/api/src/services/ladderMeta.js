@@ -96,11 +96,18 @@ const OPENER_MIN_SAMPLE = 10;
 const TOP_N = 12;
 
 /** ``_schemaVersion`` stamped on every output row. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const BAND_TYPE_LEAGUE = "league";
 const BAND_TYPE_MMR = "mmr";
-const BAND_INDEX_KEY = Object.freeze({ bandType: 1, band: 1, matchup: 1 });
+const PATCH_ERA_AFTER = "after";
+const PATCH_ERA_BEFORE = "before";
+/** @type {ReadonlyArray<"after" | "before">} */
+const PATCH_ERAS = Object.freeze([PATCH_ERA_AFTER, PATCH_ERA_BEFORE]);
+// Official 5.0.16 release publication. The instant is shared with the web
+// preset so a replay can never appear in both eras or fall between them.
+const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
+const BAND_INDEX_KEY = Object.freeze({ era: 1, bandType: 1, band: 1, matchup: 1 });
 
 /** Race initials accepted on either side of the matchup. */
 const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
@@ -175,12 +182,18 @@ class LadderMetaService {
     const updatedAt = new Date(this.now());
     await migrateBandIndex(this.coll);
     const priorByKey = await readPriorRows(this.coll);
-    const [leagueRows, mmrRows] = await Promise.all([
-      aggregateRows(this.games, BAND_TYPE_LEAGUE),
-      aggregateRows(this.games, BAND_TYPE_MMR),
-    ]);
-    const leagueDocs = shapeRows(leagueRows, BAND_TYPE_LEAGUE, updatedAt, priorByKey);
-    const mmrDocs = shapeRows(mmrRows, BAND_TYPE_MMR, updatedAt, priorByKey);
+    const aggregates = await Promise.all(
+      PATCH_ERAS.flatMap((era) => [
+        aggregateRows(this.games, BAND_TYPE_LEAGUE, era),
+        aggregateRows(this.games, BAND_TYPE_MMR, era),
+      ]),
+    );
+    const leagueDocs = PATCH_ERAS.flatMap((era, index) =>
+      shapeRows(aggregates[index * 2], BAND_TYPE_LEAGUE, era, updatedAt, priorByKey),
+    );
+    const mmrDocs = PATCH_ERAS.flatMap((era, index) =>
+      shapeRows(aggregates[index * 2 + 1], BAND_TYPE_MMR, era, updatedAt, priorByKey),
+    );
     const docs = [...leagueDocs, ...mmrDocs];
     await writeRows(this.coll, docs);
     await this.coll.deleteMany({ updatedAt: { $lt: updatedAt } });
@@ -211,51 +224,41 @@ class LadderMetaService {
    *
    * @param {{
    *   bandType?: "league" | "mmr", band?: number,
-   *   leagueId?: number, matchup: string
+   *   leagueId?: number, matchup: string, era?: "after" | "before"
    * }} args
    * @returns {Promise<Record<string, any> | null>}
    */
   async lookup(args) {
     const requested = normalizeBandRequest(args);
     const matchup = normalizeMatchup(args.matchup);
-    if (!requested || !matchup) return null;
+    const era = normalizePatchEra(args.era);
+    if (!requested || !matchup || !era) return null;
     let row = await this.coll.findOne(
-      { bandType: requested.bandType, band: requested.band, matchup },
+      { era, bandType: requested.bandType, band: requested.band, matchup },
       { projection: { _id: 0 } },
     );
-    // A deploy can briefly serve before the run-on-start recompute has
-    // promoted legacy league-only rows to the generic key.
-    if (!row && requested.bandType === BAND_TYPE_LEAGUE) {
-      row = await this.coll.findOne(
-        { leagueBand: requested.band, matchup },
-        { projection: { _id: 0 } },
-      );
-    }
     if (!row || typeof row.n !== "number" || row.n < MIN_SAMPLE) return null;
     return shapeServedRow(row, requested);
   }
 }
 
 /**
- * Promote the legacy league-only index and rows to the generic key.
- * Invalid rows are safe to discard because this is a derived cache that
- * is rebuilt immediately after migration.
+ * Replace legacy indexes and discard rows without an era. The old rows span
+ * both game versions and cannot be assigned safely; this derived cache is
+ * rebuilt immediately after migration.
  *
  * @param {import('mongodb').Collection} coll
  */
 async function migrateBandIndex(coll) {
   const indexes = await readIndexes(coll);
   for (const index of indexes) {
-    if (isLegacyIndex(index) && typeof index.name === "string") {
+    if (isObsoleteBandIndex(index) && typeof index.name === "string") {
       await dropIndexIfPresent(coll, index.name);
     }
   }
-  await coll.updateMany(
-    { bandType: { $exists: false }, leagueBand: { $type: "number" } },
-    [{ $set: { bandType: BAND_TYPE_LEAGUE, band: "$leagueBand" } }],
-  );
   await coll.deleteMany({
     $or: [
+      { era: { $nin: [...PATCH_ERAS] } },
       { bandType: { $exists: false } },
       { band: { $exists: false } },
       { matchup: { $exists: false } },
@@ -287,11 +290,14 @@ async function readIndexes(coll) {
 }
 
 /** @param {Record<string, any>} index */
-function isLegacyIndex(index) {
+function isObsoleteBandIndex(index) {
   const key = index && index.key;
   if (!key || typeof key !== "object") return false;
   const fields = Object.keys(key);
-  return fields.length === 2 && key.leagueBand === 1 && key.matchup === 1;
+  return (
+    (fields.length === 2 && key.leagueBand === 1 && key.matchup === 1) ||
+    (fields.length === 3 && key.bandType === 1 && key.band === 1 && key.matchup === 1)
+  );
 }
 
 /**
@@ -304,6 +310,7 @@ async function readPriorRows(coll) {
       projection: {
         _id: 0,
         bandType: 1,
+        era: 1,
         band: 1,
         leagueBand: 1,
         matchup: 1,
@@ -316,8 +323,9 @@ async function readPriorRows(coll) {
   for (const doc of docs) {
     const type = doc.bandType === BAND_TYPE_MMR ? BAND_TYPE_MMR : BAND_TYPE_LEAGUE;
     const band = Number.isFinite(doc.band) ? doc.band : doc.leagueBand;
-    if (!Number.isFinite(band) || typeof doc.matchup !== "string") continue;
-    prior.set(bandKey(type, band, doc.matchup), {
+    const era = normalizePatchEra(doc.era);
+    if (!era || !Number.isFinite(band) || typeof doc.matchup !== "string") continue;
+    prior.set(bandKey(era, type, band, doc.matchup), {
       openers: Array.isArray(doc.openers) ? doc.openers : [],
       updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt : null,
     });
@@ -328,10 +336,11 @@ async function readPriorRows(coll) {
 /**
  * @param {import('mongodb').Collection} games
  * @param {"league" | "mmr"} bandType
+ * @param {"after" | "before"} era
  */
-async function aggregateRows(games, bandType) {
+async function aggregateRows(games, bandType, era) {
   return /** @type {Promise<any[]>} */ (
-    games.aggregate(buildRecomputePipeline(bandType), { allowDiskUse: true }).toArray()
+    games.aggregate(buildRecomputePipeline(bandType, era), { allowDiskUse: true }).toArray()
   );
 }
 
@@ -344,7 +353,7 @@ async function writeRows(coll, docs) {
   await coll.bulkWrite(
     docs.map((doc) => ({
       replaceOne: {
-        filter: { bandType: doc.bandType, band: doc.band, matchup: doc.matchup },
+        filter: { era: doc.era, bandType: doc.bandType, band: doc.band, matchup: doc.matchup },
         replacement: doc,
         upsert: true,
       },
@@ -356,11 +365,12 @@ async function writeRows(coll, docs) {
 /**
  * @param {any[]} rows
  * @param {"league" | "mmr"} bandType
+ * @param {"after" | "before"} era
  * @param {Date} updatedAt
  * @param {Map<string, { openers: StoredOpener[], updatedAt: Date | null }>} prior
  */
-function shapeRows(rows, bandType, updatedAt, prior) {
-  return rows.map((row) => shapeBandRow(row, bandType, updatedAt, prior));
+function shapeRows(rows, bandType, era, updatedAt, prior) {
+  return rows.map((row) => shapeBandRow(row, bandType, era, updatedAt, prior));
 }
 
 // ---------------- pipeline ----------------
@@ -376,11 +386,12 @@ function shapeRows(rows, bandType, updatedAt, prior) {
  *      the band total.
  *
  * @param {"league" | "mmr"} bandType
+ * @param {"after" | "before"} era
  * @returns {Array<Record<string, any>>}
  */
-function buildRecomputePipeline(bandType = BAND_TYPE_LEAGUE) {
+function buildRecomputePipeline(bandType = BAND_TYPE_LEAGUE, era = PATCH_ERA_AFTER) {
   return [
-    { $match: buildGamesMatch(bandType) },
+    { $match: buildGamesMatch(bandType, era) },
     {
       $addFields: {
         _band: buildBandExpression(bandType),
@@ -423,13 +434,16 @@ function buildRecomputePipeline(bandType = BAND_TYPE_LEAGUE) {
   ];
 }
 
-/** @param {"league" | "mmr"} bandType */
-function buildGamesMatch(bandType) {
+/** @param {"league" | "mmr"} bandType @param {"after" | "before"} era */
+function buildGamesMatch(bandType, era) {
   const bandMatch = bandType === BAND_TYPE_MMR
     ? { "opponent.mmr": { $type: "number", $gte: MMR_FLOOR, $lt: MMR_CEILING } }
     : { "opponent.leagueId": { $type: "number" } };
   return {
     ...bandMatch,
+    date: era === PATCH_ERA_BEFORE
+      ? { $lt: PATCH_5_0_16_RELEASE }
+      : { $gte: PATCH_5_0_16_RELEASE },
     myRace: { $type: "string" },
     "opponent.race": { $type: "string" },
     myBuild: { $type: "string", $ne: "", $not: /Game Too Short$/ },
@@ -467,11 +481,12 @@ function buildBandExpression(bandType) {
  *
  * @param {any} row raw $group output
  * @param {"league" | "mmr"} bandType axis discriminator
+ * @param {"after" | "before"} era patch-era discriminator
  * @param {Date} updatedAt shared recompute stamp
  * @param {Map<string, { openers: StoredOpener[], updatedAt: Date | null }>} priorByKey
  * @returns {Record<string, any>}
  */
-function shapeBandRow(row, bandType, updatedAt, priorByKey) {
+function shapeBandRow(row, bandType, era, updatedAt, priorByKey) {
   const band = num(row._id.band);
   const matchup = String(row._id.matchup);
   const n = num(row.n);
@@ -484,9 +499,10 @@ function shapeBandRow(row, bandType, updatedAt, priorByKey) {
     .sort(compareOpeners)
     .slice(0, TOP_N);
 
-  const prior = priorByKey.get(bandKey(bandType, band, matchup));
+  const prior = priorByKey.get(bandKey(era, bandType, band, matchup));
   const bandLabel = labelForBand(bandType, band);
   const doc = {
+    era,
     bandType,
     band,
     bandLabel,
@@ -568,6 +584,7 @@ function shapeServedRow(row, requested) {
     ? row.bandLabel
     : labelForBand(bandType, band);
   const served = {
+    era: normalizePatchEra(row.era) || PATCH_ERA_AFTER,
     bandType,
     band,
     bandLabel,
@@ -619,9 +636,19 @@ function labelForBand(bandType, band) {
   return leagueLabel(band);
 }
 
-/** @param {"league" | "mmr"} bandType @param {number} band @param {string} matchup */
-function bandKey(bandType, band, matchup) {
-  return `${bandType}::${band}::${matchup}`;
+/** @param {"after" | "before"} era @param {"league" | "mmr"} bandType @param {number} band @param {string} matchup */
+function bandKey(era, bandType, band, matchup) {
+  return `${era}::${bandType}::${band}::${matchup}`;
+}
+
+/**
+ * Missing era remains backwards compatible and defaults to the live patch.
+ * @param {unknown} raw
+ * @returns {"after" | "before" | null}
+ */
+function normalizePatchEra(raw) {
+  if (raw === undefined) return PATCH_ERA_AFTER;
+  return raw === PATCH_ERA_AFTER || raw === PATCH_ERA_BEFORE ? raw : null;
 }
 
 /** @param {number} leagueBand */
@@ -667,6 +694,9 @@ module.exports = {
   BAND_TYPE_LEAGUE,
   BAND_TYPE_MMR,
   BAND_INDEX_KEY,
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_5_0_16_RELEASE,
   buildRecomputePipeline,
   migrateBandIndex,
   normalizeMatchup,

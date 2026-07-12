@@ -17,6 +17,7 @@ class ResizeObserverStub {
 afterEach(cleanup);
 
 const ROW: MetaRow = {
+  era: "after",
   bandType: "league",
   band: 4,
   bandLabel: "Diamond",

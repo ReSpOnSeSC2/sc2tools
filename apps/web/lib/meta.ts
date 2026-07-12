@@ -21,10 +21,12 @@ export interface MetaOpener {
 }
 
 export type BandAxis = "league" | "mmr";
+export type PatchEra = "after" | "before";
 
 /** One served (opponent band, matchup) row. League fields remain optional
  *  because they only exist on league rows for API backwards compatibility. */
 export interface MetaRow {
+  era: PatchEra;
   bandType: BandAxis;
   band: number;
   bandLabel: string;
@@ -92,6 +94,14 @@ export const MATCHUPS: readonly string[] = [
 const DEFAULT_LEAGUE_ID = 4; // Diamond — the densest ladder band
 const DEFAULT_MMR_BAND = 4000;
 const DEFAULT_MATCHUP = "PvZ";
+export const DEFAULT_PATCH_ERA: PatchEra = "after";
+
+/** Invalid or missing values deliberately land on the current 8-worker era. */
+export function parsePatchEra(raw: unknown): PatchEra {
+  return typeof raw === "string" && raw.trim().toLowerCase() === "before"
+    ? "before"
+    : DEFAULT_PATCH_ERA;
+}
 
 /** Coerce a raw query param into a supported banding axis. */
 export function parseAxis(raw: unknown): BandAxis {
@@ -164,13 +174,15 @@ export function metaHref(
   axis: BandAxis,
   band: number,
   matchup: string,
+  era: PatchEra = DEFAULT_PATCH_ERA,
 ): string {
   const canonicalAxis = parseAxis(axis);
   const canonicalBand = parseBand(canonicalAxis, band);
   const canonicalMatchup = parseMatchup(matchup);
+  const canonicalEra = parsePatchEra(era);
   return (
     `/meta?axis=${canonicalAxis}&band=${canonicalBand}` +
-    `&matchup=${encodeURIComponent(canonicalMatchup)}`
+    `&matchup=${encodeURIComponent(canonicalMatchup)}&era=${canonicalEra}`
   );
 }
 

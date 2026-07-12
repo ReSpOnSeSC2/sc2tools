@@ -17,6 +17,7 @@ import {
 } from "@/lib/timeseries";
 import {
   PRESETS,
+  DEFAULT_PRESET,
   resolvePreset,
   shortLabelFor,
   type PresetId,
@@ -29,6 +30,8 @@ interface DashboardKpiStripProps {
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
 const WIN_RATE_PRESET_OPTIONS: PresetId[] = [
+  "after_5_0_16",
+  "before_5_0_16",
   "current_season",
   "today",
   "last_week",
@@ -71,9 +74,9 @@ function writeStoredPreset(value: PresetId): void {
 export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
   const { filters, seasons } = useFilters();
 
-  // The Win Rate card has its own preset, defaulting to "current_season"
-  // so it answers "how am I doing right now?" out of the box.
-  const [wrPreset, setWrPreset] = useState<PresetId>("current_season");
+  // Keep this independent picker aligned with the global default so every
+  // first-visit page view starts on the live 8-worker game version.
+  const [wrPreset, setWrPreset] = useState<PresetId>(DEFAULT_PRESET);
   useEffect(() => {
     const stored = readStoredPreset();
     if (stored) setWrPreset(stored);
