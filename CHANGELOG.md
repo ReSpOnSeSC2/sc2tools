@@ -4,9 +4,10 @@ All notable changes to SC2 Tools are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Releases are tagged `vMAJOR.MINOR.PATCH`; the GitHub Actions release
-workflow builds the Windows installer on each tag push and attaches the
-`.exe` and `.sha256` to the corresponding GitHub Release.
+Windows Agent releases are tagged `agent-vMAJOR.MINOR.PATCH`. The
+`agent installer` GitHub Actions workflow builds the Windows installer
+from those tags and attaches the `.exe` and `.sha256` to the
+corresponding GitHub Release.
 
 ## [Unreleased]
 

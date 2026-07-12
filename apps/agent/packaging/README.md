@@ -15,10 +15,11 @@ This folder builds the Windows installer for the agent.
 
 ```powershell
 cd apps/agent
-pwsh packaging/build-installer.ps1 -Version 0.2.0 -Installer
+pwsh packaging/build-installer.ps1 -Installer
 ```
 
-Outputs `dist/SC2ToolsAgent-Setup-0.2.0.exe`.
+The version defaults to the canonical `sc2tools_agent.__version__` and
+the output is `dist/SC2ToolsAgent-Setup-<version>.exe`.
 
 ## Signed release build
 
@@ -26,43 +27,31 @@ Outputs `dist/SC2ToolsAgent-Setup-0.2.0.exe`.
 $env:SC2TOOLS_SIGNING_PASSWORD = '<your pfx password>'
 pwsh packaging/build-installer.ps1 `
     -Clean `
-    -Version 0.2.0 `
     -Installer `
     -SigningCert C:\codesign\sc2tools.pfx
 ```
 
-The script signs both the inner `sc2tools-agent.exe` (by re-running
-`signtool` after PyInstaller emits it) and the final NSIS setup .exe
-with a SHA-256 timestamp from `http://timestamp.sectigo.com`.
+The script signs the final NSIS setup `.exe` with a SHA-256 timestamp
+from `http://timestamp.sectigo.com`.
 
-## Publishing the release feed
+## Publishing a release
 
-After the signed installer is uploaded to a CDN, publish it to the
-cloud's release feed so existing agents auto-update:
+The canonical version in `sc2tools_agent/__init__.py` and the newest
+section in `apps/agent/CHANGELOG.md` must match. After that commit is
+merged, tag that exact commit and push the single agent tag:
 
-```bash
-SHA=$(sha256sum SC2ToolsAgent-Setup-0.2.0.exe | cut -d' ' -f1)
-curl -X POST https://api.sc2tools.app/v1/agent/releases \
-  -H "x-admin-token: $AGENT_RELEASE_ADMIN_TOKEN" \
-  -H "content-type: application/json" \
-  -d @- <<JSON
-{
-  "channel": "stable",
-  "version": "0.2.0",
-  "releaseNotes": "Pause syncing, log folder, re-sync, folder picker.",
-  "artifacts": [
-    {
-      "platform": "windows",
-      "downloadUrl": "https://downloads.sc2tools.app/SC2ToolsAgent-Setup-0.2.0.exe",
-      "sha256": "$SHA",
-      "sizeBytes": $(stat -c %s SC2ToolsAgent-Setup-0.2.0.exe)
-    }
-  ]
-}
-JSON
+```powershell
+$version = "0.14.0" # must match sc2tools_agent.__version__
+git tag "agent-v$version"
+git push origin "agent-v$version"
 ```
 
-The agent's startup poll picks this up within minutes.
+The `agent installer` GitHub Actions workflow verifies the tag against
+the package version, builds the installer, creates its `.sha256`
+sidecar, and attaches both files to a public GitHub Release. The website
+download card and the installed agent's `/v1/agent/version` feed both
+resolve that release automatically; no separate CDN upload or manual
+release-feed POST is required.
 
 ## Layout
 

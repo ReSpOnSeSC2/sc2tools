@@ -210,6 +210,9 @@ describe("GhostMatchupManager", () => {
     for (const select of screen.getAllByRole("combobox")) {
       expect((select as HTMLSelectElement).disabled).toBe(true);
     }
+    for (const fieldset of screen.getAllByRole("group")) {
+      expect((fieldset as HTMLFieldSetElement).disabled).toBe(true);
+    }
     expect(
       (screen.getByRole("button", { name: "Clear TvT build" }) as HTMLButtonElement)
         .disabled,

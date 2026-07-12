@@ -229,11 +229,13 @@ tests against a live API are out of scope here - see
 
 ```powershell
 cd apps\agent
-pwsh packaging\build-installer.ps1 -Version 0.3.0 -Installer
+pwsh packaging\build-installer.ps1 -Installer
 ```
 
-Outputs `dist\SC2ToolsAgent-Setup-0.3.0.exe` (signed when
-`-SigningCert` is supplied). The installer drops a Start Menu
+The script reads the canonical version from
+`sc2tools_agent\__init__.py` and outputs
+`dist\SC2ToolsAgent-Setup-<version>.exe` (signed when `-SigningCert` is
+supplied). The installer drops a Start Menu
 shortcut, a desktop shortcut, and a per-user startup-folder shortcut
 (launched with `--start-minimized` so logging in does not pop a
 window). See [packaging/README.md](packaging/README.md) for the full
