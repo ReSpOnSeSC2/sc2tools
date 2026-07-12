@@ -241,6 +241,18 @@ def test_to_payload_omits_macro_breakdown_when_unset():
     assert "apmCurve" not in payload
 
 
+def test_to_payload_marks_replay_authored_mmr():
+    payload = _bare_cloud_game(my_mmr=5378).to_payload()
+    assert payload["myMmr"] == 5378
+    assert payload["myMmrSource"] == "replay"
+
+
+def test_to_payload_marks_mmr_as_explicitly_unavailable():
+    payload = _bare_cloud_game(my_mmr=None).to_payload()
+    assert "myMmr" not in payload
+    assert payload["myMmrSource"] == "unavailable"
+
+
 def test_to_payload_emits_my_toon_handle_when_set():
     """The cloud session-widget Tier-3 MMR fallback resolves the
     streamer's current 1v1 ladder rating from SC2Pulse using whatever

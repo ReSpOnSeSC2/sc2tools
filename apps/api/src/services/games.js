@@ -89,6 +89,19 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
+    // A numeric MMR from a pre-0.13.8 agent can only have come from
+    // its replay. Canonicalising it protects that value if a later,
+    // transient low-level parse cannot read the same replay's MMR.
+    if (doc.myMmrSource === undefined && Number.isFinite(doc.myMmr)) {
+      doc.myMmrSource = "replay";
+    }
+    // Agent 0.13.8+ explicitly reports when a replay carries no
+    // game-time MMR. Older APIs filled that gap from current Pulse,
+    // flattening historical charts after a resync. The conditional
+    // update below clears unverified legacy values but preserves a
+    // value already proven to be replay-authored.
+    const clearUnavailableMyMmr = doc.myMmrSource === "unavailable";
+    if (clearUnavailableMyMmr) delete doc.myMmr;
     // Capture heavy fields BEFORE the slim doc is finalised so we
     // can hand them to GameDetailsService. The slim row that lands
     // in ``games`` is then stripped of every heavy field plus the
@@ -122,17 +135,21 @@ class GamesService {
     /** @type {Record<string, string>} */
     const unset = { earlyBuildLog: "", oppEarlyBuildLog: "" };
     for (const k of HEAVY_FIELDS) unset[k] = "";
+    // Patch opponent fields individually. Server-owned enrichment
+    // fields (notably mmrLookupAttempted) are absent from agent
+    // re-uploads and must survive them; $setting the whole parent
+    // object would erase the marker and retry Pulse misses forever.
+    const slimSet = buildSlimSet(doc);
+    const update = clearUnavailableMyMmr
+      ? buildUnavailableMmrUpdate(slimSet, unset)
+      : {
+        $setOnInsert: { createdAt: new Date() },
+        $set: slimSet,
+        $unset: unset,
+      };
     const res = await this.db.games.updateOne(
       { userId, gameId: game.gameId },
-      {
-        $setOnInsert: { createdAt: new Date() },
-        // Patch opponent fields individually. Server-owned enrichment
-        // fields (notably mmrLookupAttempted) are absent from agent
-        // re-uploads and must survive them; $setting the whole parent
-        // object would erase the marker and retry Pulse misses forever.
-        $set: buildSlimSet(doc),
-        $unset: unset,
-      },
+      update,
       { upsert: true },
     );
     if (this.gameDetails && Object.keys(heavy).length > 0) {
@@ -866,6 +883,39 @@ function sanitizeTopLeaks(breakdown) {
     if (Object.keys(leak).length > 0) out.push(leak);
   }
   return out.length > 0 ? out : null;
+}
+
+/**
+ * Build an atomic update that removes an unverified historical MMR
+ * while retaining a value already marked as replay-authored. Update
+ * pipelines are required here because a classic ``$unset`` cannot
+ * inspect the existing row before deciding whether to remove a field.
+ *
+ * @param {Record<string, any>} slimSet
+ * @param {Record<string, string>} unset
+ * @returns {Record<string, any>[]}
+ */
+function buildUnavailableMmrUpdate(slimSet, unset) {
+  /** @type {Record<string, any>} */
+  const set = {};
+  for (const [field, value] of Object.entries(slimSet)) {
+    if (field !== "myMmrSource") set[field] = { $literal: value };
+  }
+  const keepReplayMmr = {
+    $and: [
+      { $eq: ["$myMmrSource", "replay"] },
+      { $isNumber: "$myMmr" },
+    ],
+  };
+  set.createdAt = { $ifNull: ["$createdAt", new Date()] };
+  set.myMmr = { $cond: [keepReplayMmr, "$myMmr", "$$REMOVE"] };
+  set.myMmrSource = {
+    $cond: [keepReplayMmr, "replay", "unavailable"],
+  };
+  return [
+    { $set: set },
+    { $unset: Object.keys(unset) },
+  ];
 }
 
 /**

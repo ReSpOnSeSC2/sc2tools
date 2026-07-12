@@ -23,12 +23,12 @@ const express = require("express");
 const request = require("supertest");
 const { buildGamesRouter } = require("../src/routes/games");
 
-function buildTestApp() {
+function buildTestApp({ created = true } = {}) {
   const emitted = [];
   const builtFrom = [];
   const cachedPayloads = [];
   const games = {
-    upsert: jest.fn(async () => true),
+    upsert: jest.fn(async () => created),
   };
   const opponents = { refreshMetadata: jest.fn(async () => ({})) };
   const overlayLive = {
@@ -153,5 +153,24 @@ describe("POST /games — overlay:live freshness gate", () => {
     expect(res.status).toBe(202);
     await settle();
     expect(overlayLiveEvents(emitted)).toHaveLength(0);
+  });
+});
+
+describe("POST /games — duplicate live-event defense", () => {
+  test("a fresh re-upload does not re-fire widgets or overwrite cache", async () => {
+    const { app, emitted, builtFrom, cachedPayloads } = buildTestApp({
+      created: false,
+    });
+    const res = await request(app)
+      .post("/games")
+      .send(gameAt("fresh-retry", new Date().toISOString()));
+    expect(res.status).toBe(202);
+    expect(res.body.accepted).toEqual([
+      { gameId: "fresh-retry", created: false },
+    ]);
+    await settle();
+    expect(builtFrom).toHaveLength(0);
+    expect(overlayLiveEvents(emitted)).toHaveLength(0);
+    expect(cachedPayloads).toHaveLength(0);
   });
 });

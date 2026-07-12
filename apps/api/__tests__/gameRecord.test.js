@@ -46,6 +46,50 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(false);
   });
 
+  test.each([
+    ["replay", 5378],
+    ["unavailable", undefined],
+  ])("accepts myMmrSource=%s", (myMmrSource, myMmr) => {
+    const raw = /** @type {any} */ ({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      myMmrSource,
+    });
+    if (myMmr !== undefined) raw.myMmr = myMmr;
+    const r = validateGameRecord(raw);
+    expect(r.valid).toBe(true);
+  });
+
+  test("rejects an unknown myMmrSource", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      myMmrSource: "pulse_current",
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  test.each([
+    { myMmrSource: "replay" },
+    { myMmrSource: "unavailable", myMmr: 5378 },
+  ])("rejects contradictory MMR provenance: %j", (mmrFields) => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      ...mmrFields,
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test("accepts opponent block when present", () => {
     const r = validateGameRecord({
       gameId: "abc-123",

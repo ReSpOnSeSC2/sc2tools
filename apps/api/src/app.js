@@ -711,7 +711,6 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       games: services.games,
       opponents: services.opponents,
       users: services.users,
-      pulseMmr: services.pulseMmr,
       customBuilds: services.customBuilds,
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,

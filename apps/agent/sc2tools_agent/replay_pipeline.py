@@ -413,6 +413,11 @@ class CloudGame:
             out["spq"] = round(float(self.spq), 2)
         if self.my_mmr is not None:
             out["myMmr"] = int(self.my_mmr)
+            out["myMmrSource"] = "replay"
+        else:
+            # Explicit absence lets a resync repair legacy cloud rows
+            # that were incorrectly filled with SC2Pulse's current MMR.
+            out["myMmrSource"] = "unavailable"
         if self.my_toon_handle:
             out["myToonHandle"] = str(self.my_toon_handle)
         if self.player_count is not None:

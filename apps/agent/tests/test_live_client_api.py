@@ -93,6 +93,25 @@ def _make_poller(
     return poller, seen
 
 
+def _live_game(
+    opponent: str,
+    *,
+    display_time: float,
+    opponent_race: str = "Protoss",
+    is_replay: bool = False,
+) -> dict[str, Any]:
+    return {
+        "isReplay": is_replay,
+        "displayTime": display_time,
+        "players": [
+            {"id": 1, "name": "Streamer#1", "type": "user",
+             "race": "Zerg", "result": "Undecided"},
+            {"id": 2, "name": opponent, "type": "user",
+             "race": opponent_race, "result": "Undecided"},
+        ],
+    }
+
+
 # ---------------------------------------------------------------- happy path
 
 
@@ -536,3 +555,131 @@ def test_fast_back_to_back_match_synthesises_fresh_game_key() -> None:
     # the cloud's ``pickGameKey`` opp-name match path can correlate
     # the broker envelope with the post-game ingest.
     assert "OppPlayerB" in seen[2].game_key
+
+
+def test_transient_game_failure_during_match_preserves_identity() -> None:
+    """A one-poll ``/game`` outage must not clear live widgets.
+
+    ``/ui`` remains authoritative enough to tell us gameplay is still
+    visible. Preserve both the active phase and game key so recovery is
+    emitted as the same match instead of a second MATCH_STARTED event.
+    """
+    session = _StubSession()
+    game = _live_game(
+        "OppPlayer",
+        display_time=2.0,
+        opponent_race="Terran",
+    )
+
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue("http://localhost:6119/game", _ok(game))
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue(
+        "http://localhost:6119/game",
+        requests.Timeout("transient timeout"),
+    )
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue(
+        "http://localhost:6119/game",
+        _ok({**game, "displayTime": 5.0}),
+    )
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    first_phase, _ = poller._tick_once()
+    first_key = seen[0].game_key
+    assert first_key is not None
+    poller._last_phase = first_phase
+
+    outage_phase, _ = poller._tick_once()
+    assert outage_phase == LiveLifecyclePhase.MATCH_STARTED
+    assert poller._current_game_key == first_key
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    poller._last_phase = outage_phase
+
+    recovery_phase, _ = poller._tick_once()
+    assert recovery_phase == LiveLifecyclePhase.MATCH_IN_PROGRESS
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_IN_PROGRESS,
+    ]
+    assert seen[-1].game_key == first_key
+    assert LiveLifecyclePhase.MENU not in [event.phase for event in seen]
+
+
+@pytest.mark.parametrize("menu_screen", ["ScreenScore", "ScreenMenu"])
+def test_missing_game_on_definite_menu_clears_match_identity(
+    menu_screen: str,
+) -> None:
+    """A definite non-game UI can safely clear a stale match identity."""
+    session = _StubSession()
+    first_game = _live_game("OppPlayerA", display_time=4.0)
+    next_game = _live_game(
+        "OppPlayerB",
+        display_time=3.0,
+        opponent_race="Terran",
+    )
+
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue("http://localhost:6119/game", _ok(first_game))
+    session.queue(
+        "http://localhost:6119/ui",
+        _ok({"activeScreens": [menu_screen]}),
+    )
+    session.queue("http://localhost:6119/game", _bad_status(503))
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue("http://localhost:6119/game", _ok(next_game))
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    first_phase, _ = poller._tick_once()
+    first_key = seen[0].game_key
+    assert first_key is not None
+    poller._last_phase = first_phase
+
+    menu_phase, _ = poller._tick_once()
+    assert menu_phase == LiveLifecyclePhase.MENU
+    assert seen[-1].phase == LiveLifecyclePhase.MENU
+    assert poller._current_game_key is None
+    assert poller._match_started_at_ms is None
+    poller._last_phase = menu_phase
+
+    next_phase, _ = poller._tick_once()
+    assert next_phase == LiveLifecyclePhase.MATCH_STARTED
+    assert seen[-1].game_key is not None
+    assert seen[-1].game_key != first_key
+    assert "OppPlayerB" in seen[-1].game_key
+
+
+def test_replay_menu_transition_clears_match_identity() -> None:
+    """Opening a replay after a match must retire the live match key."""
+    session = _StubSession()
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue(
+        "http://localhost:6119/game",
+        _ok(_live_game("OppPlayer", display_time=2.0)),
+    )
+    session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+    session.queue(
+        "http://localhost:6119/game",
+        _ok(_live_game(
+            "ReplayPlayer",
+            display_time=100.0,
+            is_replay=True,
+        )),
+    )
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    first_phase, _ = poller._tick_once()
+    assert poller._current_game_key is not None
+    poller._last_phase = first_phase
+
+    replay_phase, _ = poller._tick_once()
+    assert replay_phase == LiveLifecyclePhase.MENU
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MENU,
+    ]
+    assert poller._current_game_key is None
+    assert poller._match_started_at_ms is None
+    assert poller._last_in_progress_display_time == -1.0

@@ -68,6 +68,16 @@ DEFAULT_IDLE_BACKOFF_SEC = 5.0
 # healthy; 2 s leaves headroom for a hung client without blocking the
 # poll loop indefinitely.
 REQUEST_TIMEOUT_SEC = 2.0
+# One lost localhost poll must not look like a second game start. Heavy
+# replay imports can briefly starve SC2 or the polling thread; preserve
+# an active match through two consecutive misses before clearing it.
+ACTIVE_POLL_MISS_GRACE = 2
+
+_ACTIVE_PHASES = frozenset({
+    LiveLifecyclePhase.MATCH_LOADING,
+    LiveLifecyclePhase.MATCH_STARTED,
+    LiveLifecyclePhase.MATCH_IN_PROGRESS,
+})
 
 
 @dataclass(frozen=True)
@@ -132,6 +142,7 @@ class LiveClientPoller:
         # de-duplicate identical ticks (the client API sometimes
         # repeats the same value within sub-second polls).
         self._last_in_progress_display_time: float = -1.0
+        self._active_poll_misses = 0
 
     # ------------------------------------------------------------ control
     def start(self) -> None:
@@ -186,29 +197,40 @@ class LiveClientPoller:
         """Single poll iteration. Returns (observed phase, sleep duration)."""
         ui = self._fetch_ui()
         if ui is None:
+            preserved = self._preserve_active_on_transient_miss()
+            if preserved is not None:
+                return preserved
             # Client unreachable. Emit IDLE only on the transition
             # away from a previously-active phase so the bus doesn't
             # see a heartbeat-style flood while SC2 is closed.
             if self._last_phase != LiveLifecyclePhase.IDLE:
                 self._emit_simple(LiveLifecyclePhase.IDLE)
                 # Also clear per-game state so a relaunch starts clean.
-                self._current_game_key = None
-                self._match_started_at_ms = None
-                self._last_in_progress_display_time = -1.0
+                self._reset_match_state()
             return LiveLifecyclePhase.IDLE, self._cfg.idle_backoff_sec
 
         game = self._fetch_game()
         if game is None:
-            # /ui worked but /game didn't — extremely rare, treat as
-            # menu so widgets clear and we keep polling at the slow
-            # cadence (no "fast" mode — there's no transition in flight).
+            if ui.is_loading or ui.is_in_match:
+                preserved = self._preserve_active_on_transient_miss()
+                if preserved is not None:
+                    return preserved
+                if self._last_phase not in _ACTIVE_PHASES:
+                    phase = self._last_phase or LiveLifecyclePhase.MENU
+                    return phase, self._cfg.fast_interval_sec
+            # Either the UI is definitely outside a match, or the
+            # active-miss grace was exhausted. Clear the widgets and
+            # retire this match identity before polling again.
             if self._last_phase != LiveLifecyclePhase.MENU:
                 self._emit(
                     LiveLifecyclePhase.MENU,
                     ui_state=ui,
                     game_state=None,
                 )
+            self._reset_match_state()
             return LiveLifecyclePhase.MENU, self._cfg.interval_sec
+
+        self._active_poll_misses = 0
 
         # Replay sessions: explicitly do NOT push to the bridge. The
         # streamer reviewing a vod doesn't want fake "scouting" widgets
@@ -220,6 +242,7 @@ class LiveClientPoller:
                     ui_state=ui,
                     game_state=game,
                 )
+            self._reset_match_state()
             return LiveLifecyclePhase.MENU, self._cfg.interval_sec
 
         # Match end takes priority over loading / in-progress: if any
@@ -255,9 +278,7 @@ class LiveClientPoller:
                 # synthesises on transition-in; MATCH_STARTED /
                 # MATCH_IN_PROGRESS take the ``is None`` branch which
                 # now flips back into "true" the moment a match ends.
-                self._current_game_key = None
-                self._match_started_at_ms = None
-                self._last_in_progress_display_time = -1.0
+                self._reset_match_state()
             return LiveLifecyclePhase.MATCH_ENDED, self._cfg.interval_sec
 
         if ui.is_loading:
@@ -330,10 +351,27 @@ class LiveClientPoller:
                 game_state=game,
             )
             # Clear per-game state so the next match starts fresh.
-            self._current_game_key = None
-            self._match_started_at_ms = None
-            self._last_in_progress_display_time = -1.0
+            self._reset_match_state()
         return LiveLifecyclePhase.MENU, self._cfg.interval_sec
+
+    def _preserve_active_on_transient_miss(
+        self,
+    ) -> Optional[tuple[LiveLifecyclePhase, float]]:
+        phase = self._last_phase
+        if phase not in _ACTIVE_PHASES:
+            return None
+        self._active_poll_misses += 1
+        if self._active_poll_misses > ACTIVE_POLL_MISS_GRACE:
+            METRICS.incr("client_api.active_poll_miss_exhausted")
+            return None
+        METRICS.incr("client_api.active_poll_miss_preserved")
+        return phase, self._cfg.interval_sec
+
+    def _reset_match_state(self) -> None:
+        self._current_game_key = None
+        self._match_started_at_ms = None
+        self._last_in_progress_display_time = -1.0
+        self._active_poll_misses = 0
 
     # ------------------------------------------------------------ helpers
     def _fetch_ui(self) -> Optional[LiveUIState]:

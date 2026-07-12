@@ -45,6 +45,7 @@ from .crash_reporter import (
     shutdown as shutdown_crash_reporter,
 )
 from .heartbeat import Heartbeat
+from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
@@ -99,8 +100,32 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
     # The state file may carry an API base override the user set in
     # the GUI Settings tab. Apply it BEFORE load_config() runs so
     # AgentConfig sees the right base URL on startup.
-    cfg, log_dir = _bootstrap(args)
+    # Acquire the process-wide guard before configuring the rotating log
+    # or starting any watcher/live services. A manual launch racing the
+    # autostart entry must become a cheap no-op, not a second uploader
+    # and Live Game Bridge pointed at the same account.
+    cfg, _ = _bootstrap(args, configure_logging=False)
+    instance_lock = AgentInstanceLock(cfg.state_dir)
+    if not instance_lock.acquire():
+        print(
+            "SC2 Tools Agent is already running. Check the system tray.",
+            file=sys.stderr,
+        )
+        return 0
 
+    try:
+        return _run_locked_agent(cfg, args, argv)
+    finally:
+        instance_lock.release()
+
+
+def _run_locked_agent(
+    cfg: AgentConfig,
+    args: argparse.Namespace,
+    argv: Optional[List[str]],
+) -> int:
+    """Start agent services after the caller owns the instance lock."""
+    log_dir = _configure_logging(cfg)
     init_crash_reporter(release=f"sc2tools-agent@{__version__}")
     log = logging.getLogger("sc2tools_agent")
     log.info(
@@ -109,19 +134,12 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
         cfg.api_base,
         argv if argv is not None else sys.argv[1:],
     )
-    # One-line marker so the cloud-side runbook can confirm the
-    # sc2reader 22.4 fps fix landed on this build when a streamer
-    # reports a replay (issue #308 / PR #309). The fps figure here is
-    # the assumed fallback when ``replay.length`` is missing — the
-    # per-replay timebase still re-infers from ``frames / length``.
     log.info("timebase: real-seconds (fps=22.4)")
-
     use_gui = (not args.no_gui) and can_use_gui()
     if args.no_gui:
         log.info("gui_disabled_via_flag")
     elif not can_use_gui():
         log.info("gui_unavailable_falling_back_to_tray_console")
-
     try:
         if use_gui:
             return _run_with_gui(
@@ -183,7 +201,11 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _bootstrap(args: argparse.Namespace) -> tuple:
+def _bootstrap(
+    args: argparse.Namespace,
+    *,
+    configure_logging: bool = True,
+) -> tuple:
     """Apply state-stored env overrides, then load config + logging."""
     cfg = load_config()
     state = load_state(cfg.state_dir)
@@ -278,7 +300,11 @@ def _bootstrap(args: argparse.Namespace) -> tuple:
     if state.start_minimized:
         args.start_minimized = True
 
-    log_dir = _configure_logging(cfg)
+    log_dir = (
+        _configure_logging(cfg)
+        if configure_logging
+        else cfg.state_dir / "logs"
+    )
     return cfg, log_dir
 
 

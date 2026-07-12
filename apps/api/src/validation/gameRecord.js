@@ -14,6 +14,22 @@ const GAME_SCHEMA = {
   type: "object",
   required: ["gameId", "date", "result", "myRace", "map"],
   additionalProperties: true,
+  allOf: [
+    {
+      if: {
+        required: ["myMmrSource"],
+        properties: { myMmrSource: { const: "replay" } },
+      },
+      then: { required: ["myMmr"] },
+    },
+    {
+      if: {
+        required: ["myMmrSource"],
+        properties: { myMmrSource: { const: "unavailable" } },
+      },
+      then: { not: { required: ["myMmr"] } },
+    },
+  ],
   properties: {
     gameId: { type: "string", minLength: 1, maxLength: 200 },
     date: { type: "string", format: "date-time" },
@@ -40,6 +56,12 @@ const GAME_SCHEMA = {
     // surfaces this for ranked replays where sc2reader exposes it. The
     // overlay's session widget reads this to derive an MMR delta.
     myMmr: { type: "integer", minimum: 0, maximum: 9999 },
+    // Agent-authored provenance for ``myMmr``. ``replay`` means the
+    // rating came from this replay's player record; ``unavailable`` is
+    // an explicit instruction that no game-time rating exists. The
+    // latter lets a resync remove legacy rows polluted by the retired
+    // current-SC2Pulse fallback without guessing from a flat chart.
+    myMmrSource: { type: "string", enum: ["replay", "unavailable"] },
     // Streamer's own raw sc2reader toon_handle (e.g. "2-S2-1-267727").
     // Optional — earlier agent versions don't ship it. Used by the
     // session widget's Tier-3 MMR fallback so the cloud can resolve the
