@@ -651,7 +651,7 @@ function WidgetList({
               key={w.id}
               className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
             >
-              <div className="flex items-start gap-3 sm:min-w-[14rem] sm:flex-shrink-0">
+              <div className="flex items-start gap-3 sm:w-56 sm:flex-none">
                 {w.urlArmed ? (
                   <Badge variant="cyan" size="sm">
                     URL
@@ -668,7 +668,7 @@ function WidgetList({
                   <div className="text-body font-medium text-text">
                     {w.label}
                   </div>
-                  <div className="text-caption text-text-dim">{hint}</div>
+                  <div className="break-words text-caption text-text-dim">{hint}</div>
                 </div>
               </div>
               <div className="min-w-0 flex-1">
@@ -698,7 +698,7 @@ function WidgetList({
   );
 }
 
-function UrlRow({
+export function UrlRow({
   url,
   compact,
   onTest,
@@ -724,48 +724,51 @@ function UrlRow({
   return (
     <div className="flex flex-wrap items-stretch gap-2">
       <code
+        title={url}
         className={[
-          "min-w-0 flex-1 break-all rounded bg-bg-elevated p-2 font-mono",
+          "min-w-0 grow basis-full truncate rounded bg-bg-elevated p-2 font-mono sm:basis-48",
           compact ? "text-micro" : "text-caption",
         ].join(" ")}
       >
         {url}
       </code>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => void onCopy()}
-        iconLeft={
-          copied ? (
-            <Check className="h-4 w-4" aria-hidden />
-          ) : (
-            <Copy className="h-4 w-4" aria-hidden />
-          )
-        }
-      >
-        {copied ? "Copied" : "Copy"}
-      </Button>
-      {onTest ? (
+      <div className="flex flex-none gap-2">
         <Button
           variant="secondary"
           size="sm"
-          onClick={onTest}
-          // No loading spinner once testing starts — the Stop label
-          // already conveys "in flight". The button stays enabled
-          // so a second click triggers the cancel path.
-          disabled={testDisabled}
-          title={testTitle}
+          onClick={() => void onCopy()}
           iconLeft={
-            testing ? (
-              <Square className="h-4 w-4" aria-hidden />
+            copied ? (
+              <Check className="h-4 w-4" aria-hidden />
             ) : (
-              <Play className="h-4 w-4" aria-hidden />
+              <Copy className="h-4 w-4" aria-hidden />
             )
           }
         >
-          {testing ? "Stop" : "Test"}
+          {copied ? "Copied" : "Copy"}
         </Button>
-      ) : null}
+        {onTest ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onTest}
+            // No loading spinner once testing starts — the Stop label
+            // already conveys "in flight". The button stays enabled
+            // so a second click triggers the cancel path.
+            disabled={testDisabled}
+            title={testTitle}
+            iconLeft={
+              testing ? (
+                <Square className="h-4 w-4" aria-hidden />
+              ) : (
+                <Play className="h-4 w-4" aria-hidden />
+              )
+            }
+          >
+            {testing ? "Stop" : "Test"}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
