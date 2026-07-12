@@ -43,7 +43,36 @@ log = logging.getLogger(__name__)
 _BACKPRESSURE_TIMEOUT_SEC = 15.0
 
 
-class _ServerRejectedError(Exception):
+class TerminalUploadError(Exception):
+    """Base for a FINAL, per-file upload outcome.
+
+    A file reported through ``_on_failure`` with a ``TerminalUploadError``
+    is done — it will NOT be retried. ``ImportController`` accounts for it
+    immediately (never waiting for a retry) using the two class attributes
+    below. The concrete cases are a server-side per-game rejection
+    (``_ServerRejectedError`` — a real error) and a sync-window filter drop
+    (``_FilteredOutError`` — a benign, intentional exclusion).
+
+    Transient whole-batch failures (read timeout, 5xx, connection reset)
+    deliberately do NOT subclass this: the worker re-enqueues those jobs,
+    so the same file comes back around and eventually reports success (or
+    a real terminal error). If a transient hit were counted, the import
+    card would fill with read-timeout retry noise ("N files couldn't be
+    imported") AND the file would be double-counted — once as an error
+    now, once as a completed upload when the retry lands. The
+    transient/terminal split is exactly this ``isinstance`` boundary; see
+    ``ImportController.on_upload_failure``.
+    """
+
+    #: ``errorBreakdown`` bucket this outcome contributes to.
+    import_error_code = "rejected_by_server"
+    #: True → counts as an import error (with a sample the user can act
+    #: on); False → a benign completion (processed as intended, kept out
+    #: of the "couldn't be imported" tally, same as a vs-AI skip).
+    counts_as_error = True
+
+
+class _ServerRejectedError(TerminalUploadError):
     """Server validated the payload and returned ``rejected: [...]``.
 
     Distinct from a transient transport error so the worker can skip
@@ -57,7 +86,7 @@ class _ServerRejectedError(Exception):
     """
 
 
-class _FilteredOutError(Exception):
+class _FilteredOutError(TerminalUploadError):
     """Job dropped at upload time because the active sync filter
     excludes it. Distinct from a transport failure or a server-side
     rejection — the user changed their date-range filter and we caught
@@ -65,6 +94,13 @@ class _FilteredOutError(Exception):
     via ``_on_failure`` so the GUI's Recent uploads feed shows the
     drop instead of silently swallowing it.
     """
+
+    # A filter drop is an INTENTIONAL exclusion, not a failure — the user
+    # narrowed their date range and we honoured it. Count it as a benign
+    # completion under its own bucket so it neither inflates the import
+    # card's error tally nor borrows the misleading "server rejected" copy.
+    import_error_code = "filtered"
+    counts_as_error = False
 
 
 @dataclass(frozen=True)
@@ -512,6 +548,15 @@ class UploadQueue:
                     len(batch), exc,
                 )
                 self._shrink_batch_size_after_failure(len(batch))
+                # ``exc`` here is a TRANSIENT transport error (read
+                # timeout, 5xx, connection reset) — a bare exception, not
+                # a ``TerminalUploadError``. We still fire ``_on_failure``
+                # so the GUI's Recent-uploads feed reflects the hiccup,
+                # but because it isn't terminal ``ImportController`` skips
+                # counting it: the jobs below get re-enqueued and will
+                # report a real outcome (success or a terminal error) on
+                # the retry. Counting here would double-count the file and
+                # spam the import card with retry noise.
                 for job in batch:
                     self._on_failure(job.file_path, exc)
                 # Park briefly then retry the whole batch by

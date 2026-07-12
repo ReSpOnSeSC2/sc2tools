@@ -2,6 +2,45 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.7
+
+### Fixed — import progress stops counting upload-retry noise as errors
+- **What.** During a large history import the progress card counted a
+  file as "couldn't be imported" every time a whole batch hit a
+  *transient* upload error (read timeout, 5xx, connection reset) — even
+  though the agent re-enqueues and retries those files. The same replay
+  then also counted as completed once the retry landed, so one file
+  could tally as both an error and a success, and read-timeout noise
+  surfaced as "N files couldn't be imported".
+- **Effect.** The import controller now counts only TERMINAL outcomes.
+  The two final cases — a server-side per-game rejection (a real error)
+  and a sync-window filter drop — carry a `TerminalUploadError` marker;
+  transient batch failures (bare exceptions that get retried) no longer
+  touch the tally. A replay counts exactly once, when it actually
+  finishes. (Distinct from the 0.13.6 count-guard: that stopped the
+  total seesawing after a restart; this stops retry noise inflating it.)
+
+### Fixed — replays outside the sync window count as skips, not failures
+- **What.** When the user narrowed their date-range filter mid-import,
+  already-queued replays that fell outside the new window were dropped
+  and counted as `rejected_by_server` errors — borrowing the misleading
+  "the server rejected the upload" copy for files the user had
+  intentionally excluded.
+- **Effect.** A filter drop now counts as a benign completion under its
+  own `filtered` bucket (same treatment as a vs-AI skip), so it no
+  longer inflates the error tally or shows a rejection message.
+
+### Fixed — import "time left" no longer reads hundreds of hours
+- **What.** The dashboard card divided games-processed by
+  elapsed-since-job-start. When the agent restarted mid-import the
+  in-memory processed count reset toward zero while the job's start time
+  stayed put, so a tiny numerator over a huge elapsed span produced
+  absurd estimates (~339h observed).
+- **Effect.** The web card derives the ETA from a rolling
+  recent-throughput rate (the last ~minute of reports) and drops its
+  window when the counter resets — immune to the restart the 0.13.6
+  count-guard already addressed for the numbers themselves.
+
 ## 0.13.6
 
 ### Fixed — backfill progress counter no longer seesaws after a restart

@@ -39,6 +39,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from .uploader.queue import TerminalUploadError
+
 log = logging.getLogger(__name__)
 
 # Reasons that are "the pipeline worked as intended", not failures.
@@ -109,11 +111,33 @@ class ImportController:
             self._dirty = True
 
     def on_upload_failure(self, path: Path, exc: Exception) -> None:
+        # Only FINAL outcomes are accounted here. The queue fires this
+        # hook for a transient whole-batch failure (read timeout, 5xx,
+        # connection reset) too, but it re-enqueues those jobs — so the
+        # same file comes back through ``on_upload_success`` (or a real
+        # terminal error) later. Counting the transient hit would fill the
+        # card with "N files couldn't be imported" retry noise AND
+        # double-count the file once its retry lands. Terminal outcomes
+        # subclass ``TerminalUploadError``; everything else is transient
+        # and must not touch the tally.
+        if not isinstance(exc, TerminalUploadError):
+            return
+        code = getattr(exc, "import_error_code", "rejected_by_server")
+        is_error = getattr(exc, "counts_as_error", True)
         with self._lock:
             if self._job_id is None:
                 return
-            self._errors += 1
-            self._bump("rejected_by_server", path, str(exc))
+            if is_error:
+                self._errors += 1
+                self._bump(code, path, str(exc))
+            else:
+                # Benign terminal outcome (e.g. a file outside the user's
+                # sync window): the pipeline did exactly what the filter
+                # asked, so it's a completion, not a failure. Its own
+                # breakdown bucket keeps it out of the error tally — same
+                # treatment as a vs-AI skip in ``on_replay_skipped``.
+                self._completed += 1
+                self._breakdown[code] = self._breakdown.get(code, 0) + 1
             self._dirty = True
 
     def on_replay_skipped(self, path: Path, reason: Optional[str]) -> None:
