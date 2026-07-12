@@ -24,11 +24,13 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Card";
 import { useToast } from "@/components/ui/Toast";
+import { useFilters } from "@/lib/filterContext";
 import { useArcadeData } from "./hooks/useArcadeData";
 import {
   computeSeasonRecap,
   MIN_RECAP_GAMES,
   resolveRecapWindow,
+  type RecapMmrJourney,
   type RecapWindow,
   type SeasonRecapResult,
 } from "@/lib/seasonRecap";
@@ -45,11 +47,50 @@ import {
 } from "./ShareCard";
 import { buildRecapSlides, type RecapSlide } from "./seasonRecapSlides";
 
+function signedMmr(delta: number): string {
+  return `${delta >= 0 ? "+" : ""}${delta}`;
+}
+
+function inlineMmrSummary(journeys: RecapMmrJourney[]): string {
+  if (journeys.length === 0) return "";
+  if (journeys.length === 1) {
+    const journey = journeys[0];
+    return `, ${signedMmr(journey.delta)} MMR on ${journey.accountLabel}`;
+  }
+  return `, MMR tracked across ${journeys.length} Battle.net accounts`;
+}
+
+function cardMmrSummary(journeys: RecapMmrJourney[]): string {
+  if (journeys.length === 0) return "—";
+  if (journeys.length === 1) {
+    const journey = journeys[0];
+    return `${journey.accountLabel}: ${signedMmr(journey.delta)}`;
+  }
+  return `${journeys.length} Battle.net accounts`;
+}
+
+export function formatMmrStory(journeys: RecapMmrJourney[]): string | null {
+  if (journeys.length === 0) return null;
+  const accounts = journeys
+    .slice(0, 2)
+    .map((journey) => `${journey.accountLabel} ${signedMmr(journey.delta)}`);
+  const remaining = journeys.length - accounts.length;
+  const more =
+    remaining > 0
+      ? ` · +${remaining} more account${remaining === 1 ? "" : "s"}`
+      : "";
+  return `MMR: ${accounts.join(" · ")}${more}.`;
+}
+
 export function SeasonRecap() {
   const { data, loading } = useArcadeData();
+  const { seasons } = useFilters();
   const games = useMemo(() => data?.games ?? [], [data?.games]);
 
-  const window = useMemo<RecapWindow>(() => resolveRecapWindow(games), [games]);
+  const window = useMemo<RecapWindow>(
+    () => resolveRecapWindow(games, new Date(), seasons),
+    [games, seasons],
+  );
   const recap = useMemo<SeasonRecapResult | null>(() => {
     if (games.length === 0) return null;
     return computeSeasonRecap(games, { since: window.since });
@@ -85,9 +126,7 @@ export function SeasonRecap() {
               {recap.totals.winrate !== null
                 ? `, ${Math.round(recap.totals.winrate * 100)}% win rate`
                 : ""}
-              {recap.mmrJourney
-                ? `, ${recap.mmrJourney.delta >= 0 ? "+" : ""}${recap.mmrJourney.delta} MMR`
-                : ""}
+              {inlineMmrSummary(recap.mmrJourneys)}
               .
             </p>
             <p className="text-caption text-text-muted">
@@ -267,11 +306,7 @@ function ShareRecapButton({
       const text = [
         `My SC2 ${recapWindow.label} recap: ${recap.totals.games} games${
           wr ? `, ${wr}` : ""
-        }${
-          recap.mmrJourney
-            ? `, ${recap.mmrJourney.delta >= 0 ? "+" : ""}${recap.mmrJourney.delta} MMR`
-            : ""
-        }.`,
+        }${inlineMmrSummary(recap.mmrJourneys)}.`,
         "",
         SHARE_LINK_URL,
       ].join("\n");
@@ -335,12 +370,7 @@ export async function renderSeasonRecapPng(
     ["Games", String(recap.totals.games)],
     ["Record", `${recap.totals.wins}-${recap.totals.losses}`],
     ["Win rate", wr],
-    [
-      "MMR",
-      recap.mmrJourney
-        ? `${recap.mmrJourney.delta >= 0 ? "+" : ""}${recap.mmrJourney.delta} (peak ${recap.mmrJourney.peak})`
-        : "—",
-    ],
+    ["MMR", cardMmrSummary(recap.mmrJourneys)],
   ];
   let y = 190;
   for (const [label, value] of lines) {
@@ -353,8 +383,10 @@ export async function renderSeasonRecapPng(
     y += 64;
   }
 
-  // Story line: nemesis / signature opener.
+  // Story lines: per-account MMR first, then the season highlights.
   const story: string[] = [];
+  const mmrStory = formatMmrStory(recap.mmrJourneys);
+  if (mmrStory) story.push(mmrStory);
   if (recap.topOpener) {
     story.push(
       `Signature opener: ${recap.topOpener.name} (${recap.topOpener.games} games).`,

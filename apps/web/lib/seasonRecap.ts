@@ -23,6 +23,7 @@ import {
   outcome,
 } from "@/components/analyzer/arcade/ArcadeEngine";
 import { currentSeason, seasonRange } from "./seasonCatalog";
+import type { LogicalSeason } from "./useSeasons";
 
 /** Recap unlocks at this many games inside the chosen window. */
 export const MIN_RECAP_GAMES = 10;
@@ -47,6 +48,12 @@ export interface SeasonRecapTotals {
 }
 
 export interface RecapMmrJourney {
+  /** Exact replay-authored Battle.net character identity. */
+  toonHandle: string;
+  /** Blizzard ladder region derived from the toon-handle prefix. */
+  region: string | null;
+  /** Compact display label, e.g. "NA 267727". */
+  accountLabel: string;
   start: number;
   end: number;
   peak: number;
@@ -103,7 +110,8 @@ export interface RecapMatchupSplit {
 
 export interface SeasonRecapResult {
   totals: SeasonRecapTotals;
-  mmrJourney: RecapMmrJourney | null;
+  /** One independent journey per Battle.net character. Never combined. */
+  mmrJourneys: RecapMmrJourney[];
   topOpener: RecapOpener | null;
   nemesis: RecapOpponent | null;
   bestVictim: RecapOpponent | null;
@@ -132,9 +140,9 @@ export interface RecapWindow {
 export function resolveRecapWindow(
   games: ReadonlyArray<Pick<ArcadeGame, "date">>,
   now: Date = new Date(),
+  seasons: ReadonlyArray<LogicalSeason> = [],
 ): RecapWindow {
-  const season = currentSeason();
-  const { start } = seasonRange(season);
+  const { season, start } = recapSeasonStart(seasons, now);
   let inSeason = 0;
   for (const g of games) {
     const t = Date.parse(g.date);
@@ -155,6 +163,22 @@ export function resolveRecapWindow(
 
 /* ──────────────── computation ──────────────── */
 
+function recapSeasonStart(
+  seasons: ReadonlyArray<LogicalSeason>,
+  now: Date,
+): { season: number; start: Date } {
+  const authoritative =
+    seasons.find((season) => season.isCurrent) ?? seasons[0];
+  if (authoritative?.start) {
+    const start = new Date(authoritative.start);
+    if (!Number.isNaN(start.getTime()) && start <= now) {
+      return { season: authoritative.number, start };
+    }
+  }
+  const season = currentSeason(now);
+  return { season, start: seasonRange(season, now).start };
+}
+
 export function computeSeasonRecap(
   games: ReadonlyArray<ArcadeGame>,
   opts: { since: Date; until?: Date },
@@ -173,7 +197,7 @@ export function computeSeasonRecap(
 
   return {
     totals: computeTotals(rows),
-    mmrJourney: computeMmrJourney(rows),
+    mmrJourneys: computeMmrJourneys(rows),
     topOpener: computeTopOpener(rows),
     ...computeRivals(rows),
     longestWinStreak: longestWinStreak(rows),
@@ -214,19 +238,77 @@ function computeTotals(rows: ArcadeGame[]): SeasonRecapTotals {
   };
 }
 
-function computeMmrJourney(rows: ArcadeGame[]): RecapMmrJourney | null {
-  const series: number[] = [];
+function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
+  const byAccount = new Map<string, number[]>();
   for (const g of rows) {
-    if (typeof g.myMmr === "number" && Number.isFinite(g.myMmr)) {
-      series.push(g.myMmr);
+    const toonHandle = cleanToonHandle(g.myToonHandle);
+    // Handle-less rows cannot be assigned safely to a region/account;
+    // omitting them is more honest than recreating a cross-ladder line.
+    if (
+      !toonHandle ||
+      typeof g.myMmr !== "number" ||
+      !Number.isFinite(g.myMmr)
+    ) {
+      continue;
     }
+    const series = byAccount.get(toonHandle) ?? [];
+    series.push(g.myMmr);
+    byAccount.set(toonHandle, series);
   }
   // A single data point isn't a journey — require two so start/end/
-  // delta all mean something.
-  if (series.length < 2) return null;
-  const start = series[0];
-  const end = series[series.length - 1];
-  return { start, end, peak: Math.max(...series), delta: end - start };
+  // delta all mean something within that account. Applying this floor
+  // per handle prevents one NA point and one EU point becoming a pair.
+  const journeys: RecapMmrJourney[] = [];
+  for (const [toonHandle, series] of byAccount) {
+    if (series.length < 2) continue;
+    const region = regionFromToonHandle(toonHandle);
+    const start = series[0];
+    const end = series[series.length - 1];
+    journeys.push({
+      toonHandle,
+      region,
+      accountLabel: accountLabel(toonHandle, region),
+      start,
+      end,
+      peak: Math.max(...series),
+      delta: end - start,
+    });
+  }
+  return journeys.sort(compareMmrJourneys);
+}
+
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA"] as const;
+
+function cleanToonHandle(raw: string | null | undefined): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = raw.trim();
+  return clean || null;
+}
+
+function regionFromToonHandle(toonHandle: string): string | null {
+  const region = toonHandle.split("-")[0];
+  if (region === "1") return "NA";
+  if (region === "2") return "EU";
+  if (region === "3") return "KR";
+  if (region === "5") return "CN";
+  if (region === "6") return "SEA";
+  return null;
+}
+
+function accountLabel(toonHandle: string, region: string | null): string {
+  const accountId = toonHandle.split("-").at(-1) || toonHandle;
+  return `${region ?? "??"} ${accountId}`;
+}
+
+function compareMmrJourneys(a: RecapMmrJourney, b: RecapMmrJourney): number {
+  const aIndex = regionRank(a.region);
+  const bIndex = regionRank(b.region);
+  return aIndex - bIndex || a.accountLabel.localeCompare(b.accountLabel);
+}
+
+function regionRank(region: string | null): number {
+  const index = REGION_PRIORITY.findIndex((candidate) => candidate === region);
+  return index < 0 ? REGION_PRIORITY.length : index;
 }
 
 function computeTopOpener(rows: ArcadeGame[]): RecapOpener | null {

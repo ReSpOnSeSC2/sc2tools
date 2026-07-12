@@ -47,13 +47,13 @@ export function buildRecapSlides(
       .join(" · ") || undefined,
   });
 
-  // 3. MMR journey.
-  if (recap.mmrJourney) {
-    const j = recap.mmrJourney;
+  // 3. One MMR journey per Battle.net account. Deltas must never be
+  // sequenced or summed across independent regional ladders.
+  for (const j of recap.mmrJourneys) {
     const climbed = j.delta >= 0;
     slides.push({
-      key: "mmr",
-      eyebrow: "MMR journey",
+      key: `mmr:${j.toonHandle}`,
+      eyebrow: `MMR journey · ${j.accountLabel}`,
       big: `${climbed ? "+" : ""}${j.delta}`,
       headline: climbed ? "MMR gained" : "MMR this season",
       sub: `From ${j.start} to ${j.end}, peaking at ${j.peak}.`,

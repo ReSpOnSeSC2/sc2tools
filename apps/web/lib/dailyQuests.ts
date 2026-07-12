@@ -7,9 +7,10 @@
 //   - No I/O and no React. Everything is deterministic over the inputs so
 //     the vitest fixtures fully specify behavior.
 //   - Every quest verifies ONLY from fields that exist on the slim
-//     ArcadeGame list rows (result, date, myBuild, oppRace, myMmr, oppMmr,
-//     duration, map, macro_score). There is no detailed macroBreakdown on
-//     the client-side list rows, so nothing here may assume one.
+//     ArcadeGame list rows (result, date, myBuild, oppRace, myMmr,
+//     myToonHandle, oppMmr, duration, map, macro_score). There is no
+//     detailed macroBreakdown on the client-side list rows, so nothing
+//     here may assume one.
 //   - Null-safe by design: rows routinely miss myMmr, duration, map or
 //     macro_score (older agent versions, partial ingests). Every quest
 //     documents its data requirement and self-excludes from selection
@@ -171,7 +172,7 @@ export interface QuestContext {
   medianWinMinutes: number | null;
   /** Rows carrying BOTH finite myMmr and opponent MMR. */
   mmrPairGames: number;
-  /** Rows carrying a finite myMmr. */
+  /** Rows carrying a finite myMmr and an exact Battle.net account identity. */
   ratedGames: number;
 }
 
@@ -199,6 +200,29 @@ function oppMmrOf(g: ArcadeGame): number | null {
   if (isFinite_(g.oppMmr)) return g.oppMmr;
   const nested = g.opponent?.mmr;
   return isFinite_(nested) ? nested : null;
+}
+
+/** Exact Battle.net character identity; its prefix also identifies region. */
+function mmrAccountOf(g: ArcadeGame): string | null {
+  if (typeof g.myToonHandle !== "string") return null;
+  const account = g.myToonHandle.trim();
+  return account || null;
+}
+
+/** True when any one regional account finishes above its own first MMR. */
+function climbedOnOneAccount(games: ReadonlyArray<ArcadeGame>): boolean {
+  const byAccount = new Map<string, number[]>();
+  for (const g of games) {
+    const account = mmrAccountOf(g);
+    if (!account || !isFinite_(g.myMmr)) continue;
+    const series = byAccount.get(account) ?? [];
+    series.push(g.myMmr);
+    byAccount.set(account, series);
+  }
+  for (const series of byAccount.values()) {
+    if (series.length >= 2 && series[series.length - 1] > series[0]) return true;
+  }
+  return false;
 }
 
 function raceLetter(v: unknown): "P" | "T" | "Z" | null {
@@ -379,7 +403,7 @@ export function buildQuestContext(
   let ratedGames = 0;
   for (const g of games) {
     const mine = isFinite_(g.myMmr);
-    if (mine) ratedGames += 1;
+    if (mine && mmrAccountOf(g)) ratedGames += 1;
     if (mine && oppMmrOf(g) !== null) mmrPairGames += 1;
   }
 
@@ -620,7 +644,7 @@ export const QUEST_POOL: QuestSpec[] = [
       id: "giant-slayer",
       category: "mmr",
       title: "Giant slayer",
-      description: "Beat an opponent rated above your own MMR today.",
+      description: "Beat an opponent rated above your game-time MMR on that regional ladder.",
       target: 1,
       xp: 40,
       verify: (today) =>
@@ -689,25 +713,22 @@ export const QUEST_POOL: QuestSpec[] = [
   {
     id: "mmr-climb",
     category: "climb",
-    requires: `≥${MMR_MIN_GAMES} games carrying myMmr.`,
+    requires: `≥${MMR_MIN_GAMES} games carrying myMmr and myToonHandle.`,
     eligible: (ctx) => ctx.ratedGames >= MMR_MIN_GAMES,
     build: () => ({
       id: "mmr-climb",
       category: "climb",
       title: "End the day up",
       description:
-        "Finish today with a higher MMR than your first game (needs 2+ rated games).",
+        "Finish today higher on one Battle.net account than its first rated game (needs 2+ games on that account).",
       target: 1,
       xp: 35,
-      // myMmr is the rating recorded on each game row; last-vs-first
-      // approximates the session delta. Needs ≥2 rated games today.
-      verify: (today) => {
-        const rated = today.filter((g) => isFinite_(g.myMmr));
-        if (rated.length < 2) return { progress: 0, done: false };
-        const first = rated[0].myMmr as number;
-        const last = rated[rated.length - 1].myMmr as number;
-        return last > first ? { progress: 1, done: true } : { progress: 0, done: false };
-      },
+      // Each myToonHandle is an independent regional ladder. Never let
+      // an NA starting point and EU ending point manufacture a climb.
+      verify: (today) =>
+        climbedOnOneAccount(today)
+          ? { progress: 1, done: true }
+          : { progress: 0, done: false },
     }),
   },
 ];

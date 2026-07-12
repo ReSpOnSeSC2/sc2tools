@@ -42,6 +42,7 @@ function richCorpus(): ArcadeGame[] {
         result: win ? "Win" : "Loss",
         oppRace: (["P", "T", "Z"] as const)[i % 3],
         myRace: "P",
+        myToonHandle: "1-S2-1-267727",
         myMmr: 3500 + i,
         oppMmr: 3500 + i + (i % 5 === 0 ? 50 : -20),
         duration: 600 + (i % 10) * 60,
@@ -244,7 +245,7 @@ describe("eligibility", () => {
 
   it("MMR quests gate on rated / paired game counts", () => {
     const rated = Array.from({ length: 5 }, (_, i) =>
-      mkGame({ myMmr: 3500 + i }),
+      mkGame({ myToonHandle: "1-S2-1-267727", myMmr: 3500 + i }),
     );
     const ratedCtx = buildQuestContext(rated, DAY);
     expect(specFor("mmr-climb").eligible(ratedCtx)).toBe(true);
@@ -252,11 +253,22 @@ describe("eligibility", () => {
     expect(specFor("giant-slayer").eligible(ratedCtx)).toBe(false);
 
     const paired = Array.from({ length: 5 }, (_, i) =>
-      mkGame({ myMmr: 3500 + i, opponent: { mmr: 3600 } }),
+      mkGame({
+        myToonHandle: "1-S2-1-267727",
+        myMmr: 3500 + i,
+        opponent: { mmr: 3600 },
+      }),
     );
     const pairedCtx = buildQuestContext(paired, DAY);
     expect(pairedCtx.mmrPairGames).toBe(5);
     expect(specFor("giant-slayer").eligible(pairedCtx)).toBe(true);
+
+    const handlelessCtx = buildQuestContext(
+      Array.from({ length: 5 }, (_, i) => mkGame({ myMmr: 3500 + i })),
+      DAY,
+    );
+    expect(handlelessCtx.ratedGames).toBe(0);
+    expect(specFor("mmr-climb").eligible(handlelessCtx)).toBe(false);
   });
 
   it("macro thresholds derive from the recent average (+5, clamped)", () => {
@@ -411,6 +423,56 @@ describe("verifiers", () => {
     expect(def.verify([mkGame({ result: "Win", myMmr: 3500 })], ctx).done).toBe(false);
   });
 
+  it("giant-slayer compares the opponent with that game's regional-account MMR", () => {
+    const def = defFor("giant-slayer", ctx);
+    const naHandle = "1-S2-1-267727";
+    const euHandle = "2-S2-1-8780508";
+
+    // The EU win is an upset relative to the EU account's 5,200 MMR even
+    // though the player's separate NA account is rated above that opponent.
+    expect(
+      def.verify(
+        [
+          mkGame({
+            result: "Loss",
+            myToonHandle: naHandle,
+            myMmr: 5400,
+            oppMmr: 5500,
+          }),
+          mkGame({
+            result: "Win",
+            myToonHandle: euHandle,
+            myMmr: 5200,
+            oppMmr: 5250,
+          }),
+        ],
+        ctx,
+      ).done,
+    ).toBe(true);
+
+    // Conversely, a normal NA win must not borrow the lower EU rating and
+    // become a false upset merely because both regions were played today.
+    expect(
+      def.verify(
+        [
+          mkGame({
+            result: "Win",
+            myToonHandle: naHandle,
+            myMmr: 5400,
+            oppMmr: 5300,
+          }),
+          mkGame({
+            result: "Loss",
+            myToonHandle: euHandle,
+            myMmr: 5200,
+            oppMmr: 5250,
+          }),
+        ],
+        ctx,
+      ).done,
+    ).toBe(false);
+  });
+
   it("long-game-win requires a win at/above the personalized duration", () => {
     const durCtx = buildQuestContext(
       Array.from({ length: 5 }, () => mkGame({ result: "Win", duration: 600 })),
@@ -438,18 +500,84 @@ describe("verifiers", () => {
 
   it("mmr-climb compares first vs last rated game of the day", () => {
     const def = defFor("mmr-climb", ctx);
+    const account = "1-S2-1-267727";
     const up = [
-      mkGame({ myMmr: 3500 }),
-      mkGame({ myMmr: 3480 }),
-      mkGame({ myMmr: 3520 }),
+      mkGame({ myToonHandle: account, myMmr: 3500 }),
+      mkGame({ myToonHandle: account, myMmr: 3480 }),
+      mkGame({ myToonHandle: account, myMmr: 3520 }),
     ];
     expect(def.verify(up, ctx)).toEqual({ progress: 1, done: true });
-    const down = [mkGame({ myMmr: 3520 }), mkGame({ myMmr: 3500 })];
+    const down = [
+      mkGame({ myToonHandle: account, myMmr: 3520 }),
+      mkGame({ myToonHandle: account, myMmr: 3500 }),
+    ];
     expect(def.verify(down, ctx)).toEqual({ progress: 0, done: false });
-    expect(def.verify([mkGame({ myMmr: 3500 })], ctx)).toEqual({
-      progress: 0,
-      done: false,
-    });
+    expect(
+      def.verify([mkGame({ myToonHandle: account, myMmr: 3500 })], ctx),
+    ).toEqual({ progress: 0, done: false });
+  });
+
+  it("mmr-climb cannot combine a one-game NA start with a one-game EU finish", () => {
+    const def = defFor("mmr-climb", ctx);
+    const today = [
+      mkGame({
+        date: `${DAY}T09:00:00Z`,
+        myToonHandle: "1-S2-1-267727",
+        myMmr: 5100,
+      }),
+      mkGame({
+        date: `${DAY}T10:00:00Z`,
+        myToonHandle: "2-S2-1-8780508",
+        myMmr: 5200,
+      }),
+    ];
+
+    expect(def.verify(today, ctx)).toEqual({ progress: 0, done: false });
+  });
+
+  it("mmr-climb cannot combine separate accounts from the same region", () => {
+    const def = defFor("mmr-climb", ctx);
+    const today = [
+      mkGame({ myToonHandle: "1-S2-1-267727", myMmr: 5100 }),
+      mkGame({ myToonHandle: "1-S2-1-13835879", myMmr: 5200 }),
+    ];
+
+    expect(def.verify(today, ctx)).toEqual({ progress: 0, done: false });
+  });
+
+  it("mmr-climb does not infer one account from handle-less MMR points", () => {
+    const def = defFor("mmr-climb", ctx);
+    const today = [mkGame({ myMmr: 5100 }), mkGame({ myMmr: 5200 })];
+
+    expect(def.verify(today, ctx)).toEqual({ progress: 0, done: false });
+  });
+
+  it("mmr-climb completes when one regional account ends above its own start", () => {
+    const def = defFor("mmr-climb", ctx);
+    const today = [
+      mkGame({
+        date: `${DAY}T09:00:00Z`,
+        myToonHandle: "1-S2-1-267727",
+        myMmr: 5400,
+      }),
+      mkGame({
+        date: `${DAY}T10:00:00Z`,
+        myToonHandle: "2-S2-1-8780508",
+        myMmr: 5200,
+      }),
+      mkGame({
+        date: `${DAY}T11:00:00Z`,
+        myToonHandle: "1-S2-1-267727",
+        myMmr: 5420,
+      }),
+      mkGame({
+        date: `${DAY}T12:00:00Z`,
+        myToonHandle: "2-S2-1-8780508",
+        myMmr: 5190,
+      }),
+    ];
+
+    expect(def.verify(today, ctx)).toEqual({ progress: 1, done: true });
   });
 });
 
@@ -496,12 +624,13 @@ describe("day boundaries (arcade local-day convention)", () => {
 
   it("evaluateQuests sorts the day's games chronologically before verifying", () => {
     // mmr-climb depends on first-vs-last ordering; feed the array reversed.
+    const account = "1-S2-1-267727";
     const corpus = [
-      mkGame({ date: "2026-07-11T18:00:00Z", myMmr: 3550 }),
-      mkGame({ date: "2026-07-11T09:00:00Z", myMmr: 3500 }),
-      mkGame({ date: "2026-06-01T09:00:00Z", myMmr: 3400 }),
-      mkGame({ date: "2026-06-02T09:00:00Z", myMmr: 3410 }),
-      mkGame({ date: "2026-06-03T09:00:00Z", myMmr: 3420 }),
+      mkGame({ date: "2026-07-11T18:00:00Z", myToonHandle: account, myMmr: 3550 }),
+      mkGame({ date: "2026-07-11T09:00:00Z", myToonHandle: account, myMmr: 3500 }),
+      mkGame({ date: "2026-06-01T09:00:00Z", myToonHandle: account, myMmr: 3400 }),
+      mkGame({ date: "2026-06-02T09:00:00Z", myToonHandle: account, myMmr: 3410 }),
+      mkGame({ date: "2026-06-03T09:00:00Z", myToonHandle: account, myMmr: 3420 }),
     ];
     const ctx = buildQuestContext(corpus, DAY);
     const def = defFor("mmr-climb", ctx);
