@@ -12,6 +12,22 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Fixed
 
+- **Skill fingerprint now explains what it measures** — the Trends card
+  shows plain-language definitions, raw values, unavailable-signal coverage,
+  the exact reason for the current playstyle, and a collapsible reference for
+  every label rule. The former “Ladder” spoke is now separate competitive
+  context: MMR is spelled out as Matchmaking Rating, no longer distorts the
+  profile shape, and no longer participates in playstyle classification. The
+  radar now labels its 0-at-centre / 100-at-edge scale and explains that a
+  three-signal profile forms a triangle rather than an overall grade.
+
+- **Game analysis returns to the opponent you came from** — links opened
+  from an opponent dossier carry the encoded opponent id through the replay
+  route. The analysis page now says “Back to <opponent>,” and the dashboard
+  restores that dossier after navigation or refresh instead of dropping the
+  user at the top-level dashboard. Direct game URLs without source context
+  retain the safe dashboard fallback.
+
 - **Import progress · the "games uploaded" counter no longer runs
   backwards** — during a history backfill the dashboard's progress
   card visibly bounced up and down. Root cause was a counter

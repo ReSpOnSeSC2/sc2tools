@@ -28,10 +28,18 @@ type Me = ChecklistMe & {
   games: { total: number; latest: string | null };
 };
 
-export function DashboardLayout({ me }: { me: Me }) {
+export function DashboardLayout({
+  me,
+  initialOpponentId,
+}: {
+  me: Me;
+  initialOpponentId?: string | null;
+}) {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>("opponents");
-  const tabTouched = useRef(false);
+  // A dossier backlink is explicit navigation and must win over a
+  // later-arriving default-tab preference.
+  const tabTouched = useRef(!!initialOpponentId);
 
   // Honour Settings → "Default tab". The preference loads async, so
   // apply it exactly once when it arrives — and never after the user
@@ -146,6 +154,7 @@ export function DashboardLayout({ me }: { me: Me }) {
           totalGames={me.games.total}
           tab={tab}
           onTabChange={onTabChange}
+          initialOpponentId={initialOpponentId}
         />
       )}
     </div>

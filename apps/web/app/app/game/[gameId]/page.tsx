@@ -1,18 +1,25 @@
-"use client";
-
-import { useParams } from "next/navigation";
 import { GameDetailPage } from "@/components/analyzer/game/GameDetailPage";
+import { opponentContextFromQuery } from "@/lib/opponentNavigation";
 
 /**
- * /app/game/[gameId] — per-replay deep dive. Client-fetch pattern like
- * the rest of the authed app (the /app segment is Clerk-protected in
- * middleware.ts); all data loads via useApi inside GameDetailPage.
+ * /app/game/[gameId] — per-replay deep dive. Opponent-profile entry points
+ * carry their source in the query so refreshes and copied URLs retain the
+ * correct backlink; ordinary game URLs keep the dashboard fallback.
  */
-export default function GameDetailRoute() {
-  const params = useParams<{ gameId: string }>();
-  const raw = params?.gameId;
-  const segment = Array.isArray(raw) ? raw[0] : raw || "";
-  return <GameDetailPage gameId={safeDecode(segment)} />;
+export default async function GameDetailRoute({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ gameId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [route, query] = await Promise.all([params, searchParams]);
+  return (
+    <GameDetailPage
+      gameId={safeDecode(route.gameId || "")}
+      opponentContext={opponentContextFromQuery(query)}
+    />
+  );
 }
 
 /** Row links encode the id; decode defensively (older links may not). */

@@ -252,6 +252,7 @@ describe("skill fingerprint", () => {
     expect(ax.aggression.value).toBe(100);
     // myMmr 3900 vs uniform 3000..3990 → ≈ p90.
     expect(ax.ladder.percentile).toBeGreaterThanOrEqual(80);
+    expect(ax.ladder.label).toBe("MMR context");
 
     // All axes ≥ 65 with ≥ 4 present → decision-table rule 1.
     expect(fp.playstyle).toBe("Complete Player");
@@ -306,7 +307,7 @@ describe("skill fingerprint", () => {
       ladder: null,
     };
 
-    test("rule 1: complete player needs ≥4 present axes all ≥65", () => {
+    test("rule 1: complete player needs ≥4 style axes all ≥65; MMR is context only", () => {
       expect(
         derivePlaystyle({
           macro: 70,
@@ -322,6 +323,31 @@ describe("skill fingerprint", () => {
       expect(
         derivePlaystyle({ ...base, macro: 70, mechanics: 70, aggression: 70 }),
       ).toBe("Tempo Attacker");
+
+      // A low MMR percentile cannot block an otherwise complete style,
+      // because rating describes competitive level rather than playstyle.
+      expect(
+        derivePlaystyle({
+          ...base,
+          macro: 70,
+          mechanics: 70,
+          spending: 70,
+          consistency: 70,
+          aggression: 70,
+          ladder: 10,
+        }),
+      ).toBe("Complete Player");
+
+      // Conversely, MMR cannot act as the fourth style signal.
+      expect(
+        derivePlaystyle({
+          ...base,
+          macro: 70,
+          mechanics: 70,
+          consistency: 70,
+          ladder: 90,
+        }),
+      ).toBe("Jack of All Trades");
     });
 
     test("rules 2/3: the aggression–macro identity split", () => {

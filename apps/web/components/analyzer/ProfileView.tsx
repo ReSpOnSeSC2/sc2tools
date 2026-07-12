@@ -344,6 +344,10 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           targetGameId={pendingGameId}
           targetGameSeq={pendingGameSeq}
           myName={myName}
+          opponentContext={{
+            pulseId,
+            displayName: data.name || data.displayNameSample || null,
+          }}
         />
       </Card>
     </div>
