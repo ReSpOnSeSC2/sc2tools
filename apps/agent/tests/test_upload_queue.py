@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import queue
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.replay_pipeline import CloudGame
 from sc2tools_agent.state import AgentState
-from sc2tools_agent.uploader.queue import UploadJob, UploadQueue
+from sc2tools_agent.uploader.queue import (
+    TerminalUploadError,
+    UploadJob,
+    UploadQueue,
+)
 
 
 class _StubApi:
@@ -311,6 +317,309 @@ def test_transient_failure_still_retries(tmp_path: Path) -> None:
 
 
 # -------------------------------------------------------------------------
+# Pending-path dedupe + live-upload priority. These protect the watcher
+# against re-enqueueing the same replay on every sweep while an upload is
+# queued/retrying, and keep a newly completed game ahead of a large backfill.
+# -------------------------------------------------------------------------
+
+
+def test_submit_dedupes_same_path_while_pending(tmp_path: Path) -> None:
+    state = AgentState(device_token="t")
+    pending_updates: list[int] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=state,
+        api=_StubApi(),
+        on_pending_changed=pending_updates.append,
+    )
+    job = _game(tmp_path, "pending.SC2Replay")
+
+    assert q.submit(job) is True
+    assert q.is_pending(job.file_path) is True
+    assert pending_updates == [1]
+    assert q.submit(job) is False
+    assert q.pending_count() == 1
+    # A dedupe rejection does not change the number of reserved paths.
+    assert pending_updates == [1]
+    assert str(job.file_path) not in state.uploaded
+
+    q.start()
+    try:
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(lambda: pending_updates[-1:] == [0])
+    finally:
+        q.stop()
+
+    assert pending_updates == [1, 0]
+
+
+def test_pending_reservation_survives_retry_then_releases_on_success(
+    tmp_path: Path,
+) -> None:
+    first_attempt = threading.Event()
+    retry_succeeded = threading.Event()
+
+    class _CoordinatedFlakyApi:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def upload_games_batch(
+            self, games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            self.calls += 1
+            if self.calls == 1:
+                first_attempt.set()
+                raise RuntimeError("simulated_transient_failure")
+            retry_succeeded.set()
+            return {
+                "accepted": [
+                    {"gameId": game["gameId"], "created": True}
+                    for game in games
+                ],
+                "rejected": [],
+            }
+
+        def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+            return {"ok": True, "wrote": False}
+
+    state = AgentState(device_token="t")
+    api = _CoordinatedFlakyApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(tmp_path, "retry-reserved.SC2Replay")
+    assert q.submit(job) is True
+    q.start()
+    try:
+        assert first_attempt.wait(timeout=2.0)
+        # The worker is now in the transient-failure retry path. The path
+        # must remain reserved even though it is temporarily outside _q.
+        assert q.is_pending(job.file_path) is True
+        assert q.submit(job) is False
+
+        assert retry_succeeded.wait(timeout=4.0)
+        assert _wait_for(
+            lambda: str(job.file_path) in state.uploaded,
+            timeout=2.0,
+        )
+        assert q.is_pending(job.file_path) is False
+    finally:
+        q.stop()
+
+    assert api.calls == 2
+
+
+def test_transient_retry_survives_saturated_primary_queue(
+    tmp_path: Path,
+) -> None:
+    first_failure = threading.Event()
+
+    class _FailFirstApi:
+        def __init__(self) -> None:
+            self.game_ids: list[str] = []
+
+        def upload_games_batch(
+            self, games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            self.game_ids.extend(game["gameId"] for game in games)
+            if len(self.game_ids) == 1:
+                raise RuntimeError("simulated_transient_failure")
+            return {
+                "accepted": [
+                    {"gameId": game["gameId"], "created": True}
+                    for game in games
+                ],
+                "rejected": [],
+            }
+
+        def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+            return {"ok": True, "wrote": False}
+
+    state = AgentState(device_token="t")
+    api = _FailFirstApi()
+    retried = _game(tmp_path, "retry-through-saturation.SC2Replay")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state,
+        api=api,
+        on_failure=lambda path, _exc: (
+            first_failure.set() if path == retried.file_path else None
+        ),
+    )
+    # A tiny primary lane makes the saturation boundary deterministic.
+    # The retry lane remains the production unbounded PriorityQueue.
+    q._q = queue.PriorityQueue(maxsize=2)
+
+    assert q.submit(retried) is True
+    q.start()
+    try:
+        assert first_failure.wait(timeout=2.0)
+        backlog = [
+            _game(tmp_path, f"saturating-{i}.SC2Replay")
+            for i in range(2)
+        ]
+        for job in backlog:
+            assert q.submit(job) is True
+        assert q._q.full()
+        assert q.is_pending(retried.file_path) is True
+        assert q.submit(retried) is False
+
+        assert _wait_for(
+            lambda: str(retried.file_path) in state.uploaded,
+            timeout=6.0,
+        )
+    finally:
+        q.stop()
+
+    assert api.game_ids.count(retried.game.game_id) == 2
+    assert q.is_pending(retried.file_path) is False
+
+
+def test_mixed_terminal_job_is_not_resurrected_by_valid_job_retry(
+    tmp_path: Path,
+) -> None:
+    class _FailFirstValidPostApi:
+        def __init__(self) -> None:
+            self.payload_game_ids: list[list[str]] = []
+
+        def upload_games_batch(
+            self, games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            game_ids = [game["gameId"] for game in games]
+            self.payload_game_ids.append(game_ids)
+            if len(self.payload_game_ids) == 1:
+                raise RuntimeError("simulated_valid_post_failure")
+            return {
+                "accepted": [
+                    {"gameId": game_id, "created": True}
+                    for game_id in game_ids
+                ],
+                "rejected": [],
+            }
+
+        def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+            return {"ok": True, "wrote": False}
+
+    state = AgentState(device_token="t")
+    api = _FailFirstValidPostApi()
+    failures: list[tuple[Path, Exception]] = []
+    successes: list[Path] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=2),
+        state=state,
+        api=api,
+        on_failure=lambda path, exc: failures.append((path, exc)),
+        on_success=successes.append,
+    )
+    invalid_base = _game(tmp_path, "missing-game-id.SC2Replay")
+    invalid = UploadJob(
+        file_path=invalid_base.file_path,
+        game=replace(invalid_base.game, game_id=""),
+    )
+    valid = _game(tmp_path, "valid-after-terminal.SC2Replay")
+
+    assert q.submit(invalid) is True
+    assert q.submit(valid) is True
+    q.start()
+    try:
+        assert _wait_for(
+            lambda: str(valid.file_path) in state.uploaded,
+            timeout=6.0,
+        )
+    finally:
+        q.stop()
+
+    invalid_failures = [
+        exc for path, exc in failures if path == invalid.file_path
+    ]
+    valid_failures = [
+        exc for path, exc in failures if path == valid.file_path
+    ]
+
+    assert api.payload_game_ids == [
+        [valid.game.game_id],
+        [valid.game.game_id],
+    ]
+    assert state.uploaded[str(invalid.file_path)] == "rejected"
+    assert len(invalid_failures) == 1
+    assert isinstance(invalid_failures[0], TerminalUploadError)
+    assert len(valid_failures) == 1
+    assert not isinstance(valid_failures[0], TerminalUploadError)
+    assert successes == [valid.file_path]
+    assert q.is_pending(invalid.file_path) is False
+    assert q.is_pending(valid.file_path) is False
+
+
+def test_live_priority_uploads_ahead_of_normal_backlog(tmp_path: Path) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
+        state=state,
+        api=api,
+    )
+    normal_jobs = [
+        _game(tmp_path, f"backlog-{i}.SC2Replay") for i in range(3)
+    ]
+    for job in normal_jobs:
+        assert q.submit(job) is True
+
+    live_base = _game(tmp_path, "just-finished.SC2Replay")
+    live_job = UploadJob(
+        file_path=live_base.file_path,
+        game=live_base.game,
+        priority=True,
+    )
+    assert q.submit(live_job) is True
+
+    q.start()
+    try:
+        assert _wait_for(lambda: len(api.calls) == 4, timeout=3.0)
+    finally:
+        q.stop()
+
+    assert [payload["gameId"] for payload in api.calls] == [
+        live_job.game.game_id,
+        *(job.game.game_id for job in normal_jobs),
+    ]
+
+
+def test_same_game_id_sends_one_payload_and_records_both_paths(
+    tmp_path: Path,
+) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    succeeded: list[Path] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=2),
+        state=state,
+        api=api,
+        on_success=succeeded.append,
+    )
+    first = _game(tmp_path, "alias-one.SC2Replay")
+    second_base = _game(tmp_path, "alias-two.SC2Replay")
+    second = UploadJob(
+        file_path=second_base.file_path,
+        game=replace(second_base.game, game_id=first.game.game_id),
+    )
+
+    assert q.submit(first) is True
+    assert q.submit(second) is True
+    q.start()
+    try:
+        assert _wait_for(lambda: len(state.uploaded) == 2, timeout=3.0)
+    finally:
+        q.stop()
+
+    # Both aliases are coalesced into one game payload in one request,
+    # while each local path still reaches its own terminal outcome.
+    assert api.batch_calls == [1]
+    assert len(api.calls) == 1
+    assert set(state.uploaded) == {str(first.file_path), str(second.file_path)}
+    assert set(succeeded) == {first.file_path, second.file_path}
+    assert q.is_pending(first.file_path) is False
+    assert q.is_pending(second.file_path) is False
+
+
+# -------------------------------------------------------------------------
 # Sticky-MMR ping. The session widget falls back to the cloud profile's
 # ``lastKnownMmr`` whenever no game in the user's history carries
 # ``myMmr`` — so the upload queue must ping it on each successful
@@ -396,6 +705,124 @@ def test_older_replay_does_not_overwrite_newer_sticky_mmr(tmp_path: Path) -> Non
     assert api.mmr_calls == []
     # State still reflects the newer value.
     assert state.last_known_mmr == 5000
+
+
+def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
+    tmp_path: Path,
+) -> None:
+    """An older slow MMR patch must serialize ahead of a newer push.
+
+    The older worker deliberately holds its cloud call open until the
+    newer game's upload has completed and its worker is attempting the
+    MMR push. The newer worker must stop at ``_mmr_push_lock``; after the
+    older call is released, it patches second and leaves both cursors at
+    the newer game.
+    """
+
+    old_date = "2026-05-07T10:00:00Z"
+    new_date = "2026-05-07T11:00:00Z"
+    old_mmr = 4700
+    new_mmr = 4750
+    old_patch_started = threading.Event()
+    newer_push_attempted = threading.Event()
+    newer_patch_started = threading.Event()
+    release_old_patch = threading.Event()
+
+    old = _game(
+        tmp_path,
+        "mmr-race-old.SC2Replay",
+        my_mmr=old_mmr,
+        my_toon_handle="1-S2-1-267727",
+        date_iso=old_date,
+    )
+    newer = _game(
+        tmp_path,
+        "mmr-race-new.SC2Replay",
+        my_mmr=new_mmr,
+        my_toon_handle="1-S2-1-267727",
+        date_iso=new_date,
+    )
+
+    class _MmrRaceApi:
+        def __init__(self) -> None:
+            self.upload_game_ids: list[str] = []
+            self.mmr_calls: list[Dict[str, Any]] = []
+            self.cloud_last_mmr: int | None = None
+            self.cloud_last_date: str | None = None
+            self._lock = threading.Lock()
+
+        def upload_games_batch(
+            self, games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            assert len(games) == 1
+            game_id = games[0]["gameId"]
+            if game_id == newer.game.game_id:
+                assert old_patch_started.wait(timeout=2.0)
+            with self._lock:
+                self.upload_game_ids.append(game_id)
+            return {
+                "accepted": [{"gameId": game_id, "created": True}],
+                "rejected": [],
+            }
+
+        def patch_last_mmr(
+            self, *, mmr: int, captured_at=None, region=None,
+        ) -> Dict[str, Any]:
+            if captured_at == old_date:
+                old_patch_started.set()
+                assert release_old_patch.wait(timeout=3.0)
+            elif captured_at == new_date:
+                newer_patch_started.set()
+            with self._lock:
+                self.mmr_calls.append({
+                    "mmr": mmr,
+                    "captured_at": captured_at,
+                    "region": region,
+                })
+                self.cloud_last_mmr = mmr
+                self.cloud_last_date = captured_at
+            return {"ok": True, "wrote": True}
+
+    class _SignalingUploadQueue(UploadQueue):
+        def _maybe_push_last_mmr(self, job: UploadJob) -> None:
+            if job.file_path == newer.file_path:
+                newer_push_attempted.set()
+            super()._maybe_push_last_mmr(job)
+
+    state = AgentState(device_token="t")
+    api = _MmrRaceApi()
+    q = _SignalingUploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=2, upload_batch_size=1),
+        state=state,
+        api=api,
+    )
+    assert q.submit(old) is True
+    assert q.submit(newer) is True
+    q.start()
+    try:
+        assert old_patch_started.wait(timeout=2.0)
+        assert newer_push_attempted.wait(timeout=2.0)
+        # The newer worker has reached the MMR push but cannot enter the
+        # API while the older worker owns the serialization lock.
+        assert not newer_patch_started.wait(timeout=0.2)
+        release_old_patch.set()
+        assert _wait_for(lambda: len(api.mmr_calls) == 2, timeout=3.0)
+    finally:
+        # Always unblock the old worker so a failed assertion cannot leak
+        # a daemon worker into the rest of the suite.
+        release_old_patch.set()
+        q.stop()
+
+    assert api.upload_game_ids == [old.game.game_id, newer.game.game_id]
+    assert [call["captured_at"] for call in api.mmr_calls] == [
+        old_date,
+        new_date,
+    ]
+    assert api.cloud_last_mmr == new_mmr
+    assert api.cloud_last_date == new_date
+    assert state.last_known_mmr == new_mmr
+    assert state.last_known_mmr_date_iso == new_date
+    assert state.last_known_mmr_region == "NA"
 
 
 def test_mmr_push_failure_does_not_break_upload(tmp_path: Path) -> None:
@@ -879,18 +1306,19 @@ def test_set_batch_size_takes_effect_on_next_drain(tmp_path: Path) -> None:
         # Verify size-1 baseline: each game is its own request.
         for i in range(3):
             q.submit(_game(tmp_path, f"pre-{i}.SC2Replay"))
-        time.sleep(0.5)
+        assert _wait_for(lambda: len(api.calls) == 3)
         pre_swap_batches = list(api.batch_calls)
         assert all(s == 1 for s in pre_swap_batches)
-        # Bump batch size and re-feed.
+        # Pause while feeding the post-swap backlog so the instantaneous
+        # stub cannot drain each sequential submit before the next one is
+        # queued. This makes the batching assertion deterministic while
+        # still exercising the same already-running worker thread.
+        q.set_paused(True)
         q.set_batch_size(5)
-        # Wait long enough for the worker to finish its current
-        # iteration (which includes the 1-sec ``q.get(timeout=1.0)``
-        # so the next iteration sees the new batch size).
-        time.sleep(1.2)
         for i in range(5):
             q.submit(_game(tmp_path, f"post-{i}.SC2Replay"))
-        time.sleep(0.5)
+        q.set_paused(False)
+        assert _wait_for(lambda: len(api.calls) == 8, timeout=3.0)
         # Find the request after the swap that carried >1 game.
         post_swap_batches = api.batch_calls[len(pre_swap_batches):]
         assert any(s > 1 for s in post_swap_batches), (
@@ -1095,7 +1523,8 @@ def test_drain_outside_filter_drops_only_matching(tmp_path: Path) -> None:
     # Order preserved: drain the queue manually and check the survivors.
     survivors = []
     while not q._q.empty():
-        survivors.append(q._q.get_nowait().file_path.name)
+        _rank, _sequence, job = q._q.get_nowait()
+        survivors.append(job.file_path.name)
         q._q.task_done()
     assert survivors == [
         "a-in.SC2Replay", "c-in.SC2Replay", "e-in.SC2Replay",

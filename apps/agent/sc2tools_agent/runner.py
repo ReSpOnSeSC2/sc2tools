@@ -407,6 +407,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
             ui.on_upload_failed(p.name, str(exc)),
             import_ctl.on_upload_failure(p, exc) if import_ctl else None,
         ),
+        on_pending_changed=ui.on_pending,
     )
     upload.set_paused(state.paused)
     watcher = ReplayWatcher(
@@ -768,6 +769,7 @@ def _gui_boot_worker(
                 ui.on_upload_failed(p.name, str(exc)),
                 import_ctl.on_upload_failure(p, exc) if import_ctl else None,
             ),
+            on_pending_changed=ui.on_pending,
         )
         upload.set_paused(state.paused)
         watcher = ReplayWatcher(
@@ -1762,6 +1764,10 @@ class _Multiplexer:
     def on_upload_failed(self, name: str, reason: str) -> None:
         for s in self._sinks:
             s.on_upload_failed(name, reason)
+
+    def on_pending(self, count: int) -> None:
+        for s in self._sinks:
+            s.on_pending(count)
 
 
 __all__ = ["run_agent"]

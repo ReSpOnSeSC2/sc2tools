@@ -81,7 +81,7 @@ export function Tabs({
       <div
         className={[
           orientation === "vertical"
-            ? "grid grid-cols-1 gap-6 lg:grid-cols-[220px_1fr]"
+            ? "grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]"
             : "space-y-4",
           className,
         ]
@@ -238,7 +238,7 @@ Tabs.Content = function TabsContent({
       hidden={!selected}
       tabIndex={0}
       className={[
-        "focus-visible:outline-none",
+        "min-w-0 focus-visible:outline-none",
         selected ? "" : "hidden",
         className,
       ]

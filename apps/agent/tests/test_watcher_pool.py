@@ -52,6 +52,8 @@ class _FakeUploadQueue:
     def __init__(self) -> None:
         self.submitted: List[UploadJob] = []
         self._resync = False
+        self.pending_depth = 0
+        self.pending_paths: set[str] = set()
 
     def submit(self, job: UploadJob) -> bool:
         self.submitted.append(job)
@@ -63,7 +65,10 @@ class _FakeUploadQueue:
         # drains, but reporting the real depth would trip the gate in
         # tests that submit hundreds of jobs; report 0 so sweeps are
         # never throttled under test unless a test overrides this.
-        return 0
+        return self.pending_depth
+
+    def is_pending(self, path: Path) -> bool:
+        return str(path) in self.pending_paths
 
     def is_resync_requested(self) -> bool:
         return self._resync
@@ -427,7 +432,7 @@ def test_paused_state_skips_sweep_and_watchdog_submission(
     # only that pause is the contract gate.
     submit_calls: List[Path] = []
 
-    def _record(path: Path) -> None:
+    def _record(path: Path, *, live: bool = False) -> None:
         submit_calls.append(path)
 
     watcher._submit_parse = _record  # type: ignore[assignment]
@@ -462,6 +467,153 @@ def test_paused_state_skips_sweep_and_watchdog_submission(
     assert len(submit_calls) >= 1, (
         "after un-pause, sweep must resume submitting parse work"
     )
+
+
+def test_watchdog_created_replay_uses_live_parse_lane(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A watchdog event must bypass the historical parse backlog."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    replay = watcher._cfg.state_dir / "Watchdog Live.SC2Replay"
+
+    submit_calls: List[Tuple[Path, bool]] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        submit_calls.append((path, live))
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+
+    watcher.on_replay_created(replay)
+
+    assert submit_calls == [(replay, True)]
+
+
+def test_fresh_sweep_replay_uses_live_parse_lane(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A fresh replay found by a sweep gets the same low-latency lane."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Replays" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    replay = root / "Fresh Sweep.SC2Replay"
+    replay.write_bytes(b"fresh")
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+
+    submit_calls: List[Tuple[Path, bool]] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        submit_calls.append((path, live))
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+
+    watcher._sweep_once()
+
+    assert submit_calls == [(replay, True)]
+
+
+def test_pending_replay_is_skipped_by_sweep_and_watchdog(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A path reserved by the uploader must not be parsed a second time."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Replays" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    replay = root / "Already Pending.SC2Replay"
+    replay.write_bytes(b"pending")
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+    watcher._test_upload.pending_paths.add(str(replay))
+
+    submit_calls: List[Tuple[Path, bool]] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        submit_calls.append((path, live))
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+
+    watcher._sweep_once()
+    watcher.on_replay_created(replay)
+
+    assert submit_calls == []
+    assert str(replay) not in watcher._inflight
+
+
+def test_congested_historical_root_does_not_hide_fresh_later_root(
+    monkeypatch, watcher_factory,
+) -> None:
+    """Congestion in one account must not block another account's live game."""
+    from sc2tools_agent.watcher import _UPLOAD_QUEUE_SOFT_LIMIT
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    historical_root = watcher._cfg.state_dir / "Account One" / "Multiplayer"
+    live_root = watcher._cfg.state_dir / "Account Two" / "Multiplayer"
+    historical_root.mkdir(parents=True, exist_ok=True)
+    live_root.mkdir(parents=True, exist_ok=True)
+
+    historical = historical_root / "Historical.SC2Replay"
+    historical.write_bytes(b"historical")
+    old_timestamp = 1_600_000_000
+    os.utime(historical, (old_timestamp, old_timestamp))
+
+    fresh = live_root / "Just Finished.SC2Replay"
+    fresh.write_bytes(b"fresh")
+
+    watcher._roots = [historical_root, live_root]
+    watcher._test_state.sync_filter_preset = "all"
+    watcher._test_upload.pending_depth = _UPLOAD_QUEUE_SOFT_LIMIT
+
+    submit_calls: List[Tuple[Path, bool]] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        submit_calls.append((path, live))
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+
+    watcher._sweep_once()
+
+    assert submit_calls == [(fresh, True)]
+    assert str(historical) not in watcher._inflight
+    assert str(fresh) in watcher._inflight
+
+
+def test_historical_sweep_respects_parse_inflight_cap(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A filesystem backfill cannot fill the executor's unbounded FIFO."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Historical" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    old_timestamp = 1_600_000_000
+    replays = []
+    for index in range(5):
+        replay = root / f"Historical {index}.SC2Replay"
+        replay.write_bytes(b"historical")
+        os.utime(replay, (old_timestamp + index, old_timestamp + index))
+        replays.append(replay)
+
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+    watcher._parse_inflight_limit = 2
+
+    submit_calls: List[Tuple[Path, bool]] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        submit_calls.append((path, live))
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+
+    watcher._sweep_once()
+
+    assert len(submit_calls) == 2
+    assert all(live is False for _path, live in submit_calls)
+    assert len(watcher._inflight) == 2
+    assert {path for path, _live in submit_calls} == set(replays[-2:])
 
 
 def test_n_strikes_done_callback_failures_trigger_fallback(
