@@ -12,6 +12,17 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Ghost Build Coach · nine matchup loadouts** — Settings now provides a
+  responsive control center for all nine concrete race pairings (`PvP`
+  through `ZvZ`). Completed-game build logs are saved into an exact-matchup
+  local library, each slot can be assigned, replaced, or cleared independently,
+  and the dedicated OBS URL carries the compact selected loadout in a
+  client-only fragment so even nine full builds stay below hosting request
+  limits. Existing single-build Ghost setups get an explicit exact-matchup
+  migration instead of being discarded. The live coach selects only the current
+  pairing; Random opponents pause Ghost for the entire game with a clear
+  “No build order vs Random players” message.
+
 - **Ladder Meta Radar · opponent MMR bands** — `/meta` can now switch
   between opponent League and opponent MMR while keeping matchup as a
   separate filter. MMR uses eleven 500-point, half-open bands from `<2000`
@@ -22,6 +33,16 @@ workflow builds the Windows installer on each tag push and attaches the
   recently enriched games accumulate; League remains the default.
 
 ### Fixed
+
+- **Agent 0.14.0 · Ghost matchup selection survives Browser Source
+  reloads** — live envelopes now include the streamer's directly observed
+  race, and an explicit Random selection for either player is retained for
+  the full `gameKey` even if SC2 later reports the spawned concrete race.
+  Unknown and `?` race values remain unresolved instead of being mistaken
+  for Random, so later valid observations can still select the correct 3×3
+  matchup. Clan-tagged player names and SC2's truncated race forms are
+  normalized, and cloud enrichment trusts the direct race even on late
+  playerless snapshots.
 
 - **Agent 0.13.9 · fresh games no longer wait behind history syncs or
   upload repeatedly** — newly finished replays use dedicated priority

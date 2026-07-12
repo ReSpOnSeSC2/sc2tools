@@ -363,8 +363,45 @@ def test_user_name_hint_picks_correct_opponent() -> None:
                        result="Undecided"),
         ],
     )
+    user = state.user_for("Streamer")
     opp = state.opponent_for("Streamer")
+    assert user is not None and user.name == "Streamer"
+    assert user.race == "Protoss"
     assert opp is not None and opp.name == "OppPlayer"
+
+
+def test_user_name_hint_matches_clan_tagged_battletag_stem() -> None:
+    """Clan tag and #digits do not hide a uniquely named local row."""
+    from sc2tools_agent.live.types import LiveGameState, LivePlayer
+    state = LiveGameState(
+        players=[
+            LivePlayer(name="OppPlayer", type="user", race="Zerg",
+                       result="Undecided"),
+            LivePlayer(name="[Clan] Streamer#1234", type="user", race="Terran",
+                       result="Undecided"),
+        ],
+    )
+    user = state.user_for("streamer")
+    opp = state.opponent_for("streamer")
+    assert user is not None and user.name == "[Clan] Streamer#1234"
+    assert user.race == "Terran"
+    assert opp is not None and opp.name == "OppPlayer"
+
+
+def test_clan_tag_normalization_does_not_guess_ambiguous_team_player() -> None:
+    from sc2tools_agent.live.types import LiveGameState, LivePlayer
+    state = LiveGameState(
+        players=[
+            LivePlayer(name="[One] Streamer", type="user", race="Zerg",
+                       result="Undecided"),
+            LivePlayer(name="[Two] Streamer", type="user", race="Terran",
+                       result="Undecided"),
+            LivePlayer(name="Opponent", type="user", race="Protoss",
+                       result="Undecided"),
+        ],
+    )
+    assert state.user_for("Streamer") is None
+    assert state.opponent_for("Streamer") is None
 
 
 def test_match_end_takes_priority_over_loading() -> None:

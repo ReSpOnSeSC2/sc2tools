@@ -57,9 +57,10 @@ export default async function OverlayWidgetPage({
   const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
     ? (sp[OVERLAY_THEME_PARAM] as string)
     : null;
-  // Optional ``?ghost=`` armed practice target (see lib/ghostBuild.ts).
-  // Raw pass-through like the theme — the client strict-validates and
-  // treats any malformed value as "not armed".
+  // Legacy ``?ghost=`` compatibility path (see lib/ghostBuild.ts). New v2
+  // loadouts use ``#ghost=`` and are read entirely by the client because URL
+  // fragments are never sent to this server route. Query values still pass
+  // through raw for strict client validation.
   const ghostParam = typeof sp[GHOST_BUILD_PARAM] === "string"
     ? (sp[GHOST_BUILD_PARAM] as string)
     : null;

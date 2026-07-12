@@ -22,10 +22,13 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToastOptional } from "@/components/ui/Toast";
 import {
-  armGhostTarget,
-  disarmGhostTarget,
+  armGhostTargetForMatchup,
+  clearGhostTarget,
   fromBuildLog,
-  readArmedGhostTarget,
+  ghostMatchupKey,
+  readArmedGhostConfig,
+  selectGhostTarget,
+  writeArmedGhostConfig,
   type GhostTarget,
 } from "@/lib/ghostBuild";
 import {
@@ -60,20 +63,32 @@ const GRADE_HINT: Record<GhostGradeLetter, string> = {
 
 export function GhostGradeCard({
   buildLog,
+  myRace,
+  opponentRace,
 }: {
   /** Raw my-side ``[m:ss] Name`` lines for THIS game. */
   buildLog: ReadonlyArray<string> | null;
+  myRace?: string | null;
+  opponentRace?: string | null;
 }) {
   // localStorage is read after mount (SSR-safe) and re-read when an
   // arm affordance fires the local event.
   const [target, setTarget] = useState<GhostTarget | null>(null);
   const [showSteps, setShowSteps] = useState(false);
   useEffect(() => {
-    const read = () => setTarget(readArmedGhostTarget());
+    const read = () => {
+      setTarget(
+        selectGhostTarget(
+          readArmedGhostConfig(),
+          myRace,
+          opponentRace,
+        ),
+      );
+    };
     read();
     window.addEventListener(GHOST_ARMED_EVENT, read);
     return () => window.removeEventListener(GHOST_ARMED_EVENT, read);
-  }, []);
+  }, [myRace, opponentRace]);
 
   const grade = useMemo<GhostGradeResult | null>(() => {
     if (!target || !buildLog || buildLog.length === 0) return null;
@@ -81,9 +96,14 @@ export function GhostGradeCard({
   }, [target, buildLog]);
 
   const onDisarm = useCallback(() => {
-    disarmGhostTarget();
-    setTarget(null);
-  }, []);
+    const matchup = ghostMatchupKey(myRace, opponentRace);
+    const config = readArmedGhostConfig();
+    if (!matchup || !config) return;
+    if (writeArmedGhostConfig(clearGhostTarget(config, matchup))) {
+      setTarget(null);
+      window.dispatchEvent(new Event(GHOST_ARMED_EVENT));
+    }
+  }, [myRace, opponentRace]);
 
   if (!target || !grade) return null;
 
@@ -210,7 +230,7 @@ export function GhostGradeCard({
             onClick={onDisarm}
             className="rounded text-text-muted underline underline-offset-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            Disarm
+            Clear {ghostMatchupKey(myRace, opponentRace) ?? "matchup"}
           </button>
         </p>
       </div>
@@ -227,29 +247,41 @@ export function GhostGradeCard({
 export function ArmGhostFromLogButton({
   name,
   lines,
+  myRace,
+  opponentRace,
 }: {
   /** Display name for the target (my build label / map fallback). */
   name: string;
   /** Raw my-side ``[m:ss] Name`` lines. */
   lines: ReadonlyArray<string>;
+  myRace?: string | null;
+  opponentRace?: string | null;
 }) {
   const toastCtx = useToastOptional();
   const [armed, setArmed] = useState(false);
+  const matchup = ghostMatchupKey(myRace, opponentRace);
+  const opponentIsRandom =
+    typeof opponentRace === "string"
+    && ["r", "random"].includes(opponentRace.trim().toLowerCase());
 
   const onArm = () => {
     const target = fromBuildLog(name, lines);
-    if (!target || !armGhostTarget(target)) {
+    if (
+      !target
+      || !matchup
+      || !armGhostTargetForMatchup(myRace, opponentRace, target)
+    ) {
       toastCtx?.toast.error("Couldn't arm this build", {
         description:
-          "No timed steps were found in this build log (workers are excluded), or browser storage is unavailable.",
+          "A concrete matchup and timed build steps are required, and browser storage must be available.",
       });
       return;
     }
     window.dispatchEvent(new Event(GHOST_ARMED_EVENT));
     setArmed(true);
     window.setTimeout(() => setArmed(false), 1500);
-    toastCtx?.toast.success(`Armed "${target.name}"`, {
-      description: `${target.steps.length} timed steps. Copy the Ghost Build widget URL from Settings → Overlay — your next games get graded against it.`,
+    toastCtx?.toast.success(`Saved “${target.name}” for ${matchup}`, {
+      description: `${target.steps.length} timed steps were assigned only to ${matchup}. Copy the updated Ghost Build widget URL from Settings → Overlay.`,
     });
   };
 
@@ -258,10 +290,23 @@ export function ArmGhostFromLogButton({
       variant="ghost"
       size="sm"
       onClick={onArm}
+      disabled={!matchup}
       iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
-      title="Make this game's build the Ghost Build practice target"
+      title={
+        opponentIsRandom
+          ? "Ghost Build is disabled against Random opponents"
+          : matchup
+            ? `Save this game's build for ${matchup}`
+            : "Ghost Build requires two concrete races"
+      }
     >
-      {armed ? "Armed!" : "Arm this build"}
+      {armed
+        ? "Saved!"
+        : opponentIsRandom
+          ? "No build vs Random"
+          : matchup
+            ? `Save for ${matchup}`
+            : "Matchup unavailable"}
     </Button>
   );
 }

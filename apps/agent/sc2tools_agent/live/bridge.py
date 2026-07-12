@@ -36,15 +36,35 @@ from .metrics import METRICS
 from .pulse_lookup import PulseClient
 from .region import region_from_toon_handle
 from .types import (
+    LiveGameState,
     LiveLifecycleEvent,
     LiveLifecyclePhase,
     LiveUIState,
     OpponentProfile,
     envelope_for,
+    normalise_live_race,
     to_jsonable,
 )
 
 _log = logging.getLogger("sc2tools_agent.live.bridge")
+
+
+def _merge_latched_race(
+    current: Optional[str],
+    observed: Optional[str],
+) -> Optional[str]:
+    """Merge one race observation while preserving selected Random.
+
+    The SC2 client can reveal the concrete spawned race after initially
+    reporting Random. Ghost needs the selected race, so once either side
+    reports explicit Random it is immutable until a new game context.
+    Unknown values (including ``?``) never create or clear a latch.
+    """
+    current_race = normalise_live_race(current)
+    observed_race = normalise_live_race(observed)
+    if current_race == "Random" or observed_race == "Random":
+        return "Random"
+    return observed_race or current_race
 
 
 @dataclasses.dataclass
@@ -289,10 +309,32 @@ class LiveBridge:
         loading_payload["synthetic"] = True
         self._publish(loading_payload)
 
+    def _update_context_players(
+        self,
+        ctx: _GameContext,
+        game_state: LiveGameState,
+    ) -> None:
+        """Fold the latest direct player data into one game context."""
+        user = game_state.user_for(self._user_name_hint)
+        opponent = game_state.opponent_for(self._user_name_hint)
+
+        if self._user_name_hint:
+            ctx.user_name = self._user_name_hint
+        elif user is not None and user.name:
+            ctx.user_name = user.name
+        if user is not None:
+            ctx.user_race = _merge_latched_race(ctx.user_race, user.race)
+
+        if opponent is not None:
+            ctx.opponent_name = opponent.name or ctx.opponent_name
+            ctx.opponent_race = _merge_latched_race(
+                ctx.opponent_race,
+                opponent.race,
+            )
+
     def _on_match_active(self, event: LiveLifecycleEvent) -> None:
         if event.game_state is None or not event.game_key:
             return
-        opp = event.game_state.opponent_for(self._user_name_hint)
         with self._lock:
             ctx = self._current
             if ctx is None or ctx.game_key != event.game_key:
@@ -303,13 +345,11 @@ class LiveBridge:
                 ctx = _GameContext(
                     game_key=event.game_key,
                     started_at_ms=int(event.captured_at * 1000),
-                    opponent_name=opp.name if opp else None,
-                    opponent_race=opp.race if opp else None,
-                    user_name=self._user_name_hint,
                     last_lifecycle_phase=event.phase,
                 )
+                self._update_context_players(ctx, event.game_state)
                 self._current = ctx
-                if opp and opp.name:
+                if ctx.opponent_name:
                     # Region hint: in 1v1 the opponent shares the
                     # streamer's server, so the streamer's own region
                     # (derived from their toon handle) disambiguates
@@ -319,16 +359,14 @@ class LiveBridge:
                     # region signal available at game start.
                     self._dispatch_pulse_lookup(
                         game_key=event.game_key,
-                        name=opp.name,
-                        race=opp.race,
+                        name=ctx.opponent_name,
+                        race=ctx.opponent_race,
                         region=self._user_region,
                     )
             else:
                 # Same match — just refresh per-event fields.
                 ctx.last_lifecycle_phase = event.phase
-                if opp:
-                    ctx.opponent_name = opp.name or ctx.opponent_name
-                    ctx.opponent_race = opp.race or ctx.opponent_race
+                self._update_context_players(ctx, event.game_state)
             ctx.last_emitted_at = time.time()
             payload = self._envelope_with_profile(event, ctx)
         self._publish(payload)
@@ -336,11 +374,16 @@ class LiveBridge:
     def _on_match_ended(self, event: LiveLifecycleEvent) -> None:
         with self._lock:
             ctx = self._current
-            if ctx is not None and event.game_state is not None:
+            if (
+                ctx is not None
+                and event.game_state is not None
+                and event.game_key == ctx.game_key
+            ):
                 # Stamp the result for transports so the post-game
                 # widget knows whether to render Victory / Defeat
                 # without waiting for the replay parse.
                 ctx.last_lifecycle_phase = event.phase
+                self._update_context_players(ctx, event.game_state)
             payload = self._envelope_with_profile(event, ctx)
         # Don't clear `_current` here — we may still need to fold in a
         # late Pulse response (e.g. if the lookup's still in flight at
@@ -415,8 +458,11 @@ class LiveBridge:
         }
         if ctx.profile is not None:
             env["opponent"]["profile"] = to_jsonable(ctx.profile)
-        if ctx.user_name:
-            env["user"] = {"name": ctx.user_name}
+        if ctx.user_name or ctx.user_race:
+            env["user"] = {
+                "name": ctx.user_name,
+                "race": ctx.user_race,
+            }
         return env
 
     def _publish(self, payload: Dict[str, Any]) -> None:

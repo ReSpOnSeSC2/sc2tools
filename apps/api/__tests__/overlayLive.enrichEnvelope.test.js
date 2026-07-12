@@ -95,6 +95,38 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     expect(out).toBe(env);
   });
 
+  test("prefers authoritative user.race over a conflicting raw player row", async () => {
+    const out = await svc.enrichEnvelope("u1", envelope({
+      user: { name: "ReSpOnSe", race: "Zerg" },
+    }));
+    expect(out.streamerHistory.matchup).toBe("ZvT");
+  });
+
+  test("uses direct user.race on a playerless late/synthetic envelope", async () => {
+    const spy = jest.spyOn(svc, "buildFromOpponentName");
+    const out = await svc.enrichEnvelope("u1", envelope({
+      players: undefined,
+      user: { name: "ReSpOnSe", race: "pRoT" },
+    }));
+    expect(out.streamerHistory.matchup).toBe("PvT");
+    expect(spy).toHaveBeenCalledWith(
+      "u1",
+      "Future",
+      "Terran",
+      null,
+      "Protoss",
+      null,
+    );
+    spy.mockRestore();
+  });
+
+  test("rejects an invalid direct race and falls back to players", async () => {
+    const out = await svc.enrichEnvelope("u1", envelope({
+      user: { name: "ReSpOnSe", race: "Robot" },
+    }));
+    expect(out.streamerHistory.matchup).toBe("PvT");
+  });
+
   test("attaches a 0-0 headToHead under streamerHistory when the opponent is unknown", async () => {
     // No opponents row inserted — ``buildFromOpponentName`` now stamps
     // ``headToHead: { wins: 0, losses: 0 }`` as the "confirmed first

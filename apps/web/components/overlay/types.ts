@@ -447,9 +447,9 @@ export interface LiveGameEnvelopeProfile {
  * ``LiveGameEnvelope`` shape, just with fewer fields populated.
  *
  * **Privacy note (per spec):** the ``user`` block carries only the
- * streamer's display name (no Pulse handle, no MMR). Opponent data
- * lives under ``opponent`` and is the only Pulse-resolved field set
- * on the envelope.
+ * streamer's display name and directly observed race (no Pulse handle,
+ * no MMR). Opponent data lives under ``opponent`` and is the only
+ * Pulse-resolved field set on the envelope.
  */
 export interface LiveGameEnvelope {
   type: "liveGameState";
@@ -495,8 +495,12 @@ export interface LiveGameEnvelope {
     revealedName?: string | null;
     profile?: LiveGameEnvelopeProfile;
   };
-  /** Streamer's own name — purely cosmetic, never used for auth. */
-  user?: { name?: string | null };
+  /** Streamer's own direct identity/race; never used for auth. */
+  user?: {
+    name?: string | null;
+    /** Directly observed race selected for this game, or Random/unknown. */
+    race?: string | null;
+  };
   /**
    * Cloud-side enrichment: the streamer's history with this opponent,
    * pulled from the cloud's games + opponents collections by the

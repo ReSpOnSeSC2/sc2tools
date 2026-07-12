@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import { WidgetShell, WidgetHeader, Dim } from "../WidgetShell";
 import {
+  decodeGhostBuildConfig,
   decodeGhostTarget,
+  ghostMatchupKey,
+  selectGhostTarget,
   type GhostStep,
   type GhostTarget,
 } from "@/lib/ghostBuild";
+import { resolveGhostLiveRaces } from "@/lib/ghostLiveMatchup";
 
 /**
  * GhostBuildWidget — the Ghost Build practice coach, a persistent HUD.
  *
- * The target build travels in this Browser Source's own URL as the
+ * The nine-matchup build config travels in this Browser Source's own URL as the
  * ``?ghost=`` param (versioned base64url, hostile-input safe — see
  * lib/ghostBuild.ts). Zero server state: the widget decodes the param
  * once and everything else derives from the live envelope.
@@ -53,10 +57,58 @@ export function GhostBuildWidget({
    *  strict validation — malformed values act like "not armed". */
   ghostParam?: string | null;
 }) {
-  const target = useMemo(() => decodeGhostTarget(ghostParam), [ghostParam]);
+  const config = useMemo(() => decodeGhostBuildConfig(ghostParam), [ghostParam]);
+  // Keep old v1 URLs recognizable, but never fan their one build across all
+  // matchups. The user gets a migration prompt instead of incorrect coaching.
+  const legacyTarget = useMemo(
+    () => (config ? null : decodeGhostTarget(ghostParam)),
+    [config, ghostParam],
+  );
+  const races = useMemo(() => resolveGhostLiveRaces(liveGame), [liveGame]);
   const clockSec = useLiveGameClock(liveGame);
+  const phase = liveGame?.phase ?? null;
+  const matchActive =
+    phase === "match_loading"
+    || phase === "match_started"
+    || phase === "match_in_progress";
+  const activeIdentity = matchActive
+    ? liveGame?.gameKey ?? "__ghost_unkeyed_game__"
+    : null;
+  const [randomBlockedKey, setRandomBlockedKey] = useState<string | null>(null);
 
-  if (!target) {
+  // Once the loading screen says Random, keep the coach blocked for this
+  // gameKey even if SC2 later replaces the race with the revealed faction.
+  // Agent 0.14.0 also latches this server-side, so a Browser Source refresh
+  // preserves the same guarantee; this client latch protects older agents.
+  useEffect(() => {
+    if (!activeIdentity) {
+      setRandomBlockedKey(null);
+      return;
+    }
+    if (races.opponentIsRandom) {
+      setRandomBlockedKey(activeIdentity);
+      return;
+    }
+    if (randomBlockedKey && randomBlockedKey !== activeIdentity) {
+      setRandomBlockedKey(null);
+    }
+  }, [activeIdentity, races.opponentIsRandom, randomBlockedKey]);
+
+  const randomBlocked = Boolean(
+    matchActive
+    && activeIdentity
+    && (races.opponentIsRandom || randomBlockedKey === activeIdentity),
+  );
+
+  if (!config) {
+    if (legacyTarget) {
+      return (
+        <GhostStatusCard status="update URL" title="Matchup setup required">
+          This source still has one legacy build. Choose builds for the nine
+          matchups in Settings → Overlay, then copy the Ghost URL again.
+        </GhostStatusCard>
+      );
+    }
     // Test fires get a hint card so "Test" in Settings shows WHERE the
     // widget will sit; a real scene without a target stays transparent.
     if (live?.isTest) {
@@ -76,35 +128,88 @@ export function GhostBuildWidget({
     return null;
   }
 
-  if (clockSec === null) {
-    // Between games — compact idle card: tonight's homework is loaded.
+  const configuredCount = Object.keys(config.slots).length;
+
+  if (!matchActive || clockSec === null) {
+    // Between games — compact idle card summarises the full loadout.
     return (
       <WidgetShell slot="bottom-left" accent="cyan" visible width={320}>
         <WidgetHeader>
           <span>Ghost Build</span>
           <Dim>armed</Dim>
         </WidgetHeader>
-        <p
-          style={{
-            margin: "6px 0 0",
-            fontSize: 14,
-            fontWeight: 600,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={target.name}
-        >
-          {target.name}
+        <p style={{ margin: "6px 0 0", fontSize: 14, fontWeight: 700 }}>
+          {configuredCount} of 9 matchups ready
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 12, opacity: 0.6 }}>
-          {target.steps.length} timed steps · waiting for game
+          Waiting for the loading-screen races
         </p>
       </WidgetShell>
     );
   }
 
-  return <GhostCoach target={target} clockSec={clockSec} />;
+  if (randomBlocked) {
+    return (
+      <GhostStatusCard status="paused" title="No build order vs Random players">
+        Ghost stays off for this entire game, even after the opponent&apos;s race
+        is revealed.
+      </GhostStatusCard>
+    );
+  }
+
+  if (races.ownRaceIsRandom) {
+    return (
+      <GhostStatusCard status="paused" title="No matchup build while playing Random">
+        Choose Terran, Protoss, or Zerg to use one of the nine configured slots.
+      </GhostStatusCard>
+    );
+  }
+
+  const matchup = ghostMatchupKey(races.ownRace, races.opponentRace);
+  if (!matchup) {
+    return (
+      <GhostStatusCard status="waiting" title="Waiting for matchup">
+        Ghost will select a build after both concrete races are available.
+      </GhostStatusCard>
+    );
+  }
+
+  const target = selectGhostTarget(config, races.ownRace, races.opponentRace);
+  if (!target) {
+    return (
+      <GhostStatusCard status={matchup} title={`No build order configured for ${matchup}`}>
+        Save a completed-game build for this matchup, assign it in Settings →
+        Overlay, and copy the Ghost URL again.
+      </GhostStatusCard>
+    );
+  }
+
+  return <GhostCoach target={target} clockSec={clockSec} matchup={matchup} />;
+}
+
+function GhostStatusCard({
+  status,
+  title,
+  children,
+}: {
+  status: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <WidgetShell slot="bottom-left" accent="cyan" visible width={340}>
+      <WidgetHeader>
+        <span>Ghost Build</span>
+        <Dim>{status}</Dim>
+      </WidgetHeader>
+      <p style={{ margin: "7px 0 0", fontSize: 14, fontWeight: 700 }}>
+        {title}
+      </p>
+      <p style={{ margin: "3px 0 0", fontSize: 12, opacity: 0.68 }}>
+        {children}
+      </p>
+    </WidgetShell>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -117,9 +222,11 @@ const DRIFT_AMBER_MAX_SEC = 15;
 function GhostCoach({
   target,
   clockSec,
+  matchup,
 }: {
   target: GhostTarget;
   clockSec: number;
+  matchup: string;
 }) {
   const steps = target.steps;
   // Number of steps whose target time has passed. The step whose time
@@ -178,7 +285,7 @@ function GhostCoach({
             flexShrink: 0,
           }}
         >
-          {formatClock(clockSec)}
+          {matchup} · {formatClock(clockSec)}
         </span>
       </WidgetHeader>
 

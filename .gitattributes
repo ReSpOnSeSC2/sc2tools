@@ -1,0 +1,4 @@
+# TypeScript is source text. Force readable diffs even when a test fixture
+# intentionally exercises escaped control characters.
+*.ts diff
+*.tsx diff

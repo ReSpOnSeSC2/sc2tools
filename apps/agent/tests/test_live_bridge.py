@@ -62,6 +62,8 @@ def _build_loading_event(
     opp_name: str = "OppPlayer",
     user_name: str = "Streamer",
     game_key: str = "OppPlayer|Streamer|1717000000000",
+    user_race: str = "Zerg",
+    opp_race: str = "Protoss",
 ) -> LiveLifecycleEvent:
     return LiveLifecycleEvent(
         phase=LiveLifecyclePhase.MATCH_LOADING,
@@ -69,9 +71,9 @@ def _build_loading_event(
         game_state=LiveGameState(
             display_time=0.0,
             players=[
-                LivePlayer(name=user_name, type="user", race="Zerg",
+                LivePlayer(name=user_name, type="user", race=user_race,
                            result="Undecided"),
-                LivePlayer(name=opp_name, type="user", race="Protoss",
+                LivePlayer(name=opp_name, type="user", race=opp_race,
                            result="Undecided"),
             ],
         ),
@@ -85,6 +87,8 @@ def _build_in_progress_event(
     user_name: str = "Streamer",
     game_key: str = "OppPlayer|Streamer|1717000000000",
     display_time: float = 30.0,
+    user_race: str = "Zerg",
+    opp_race: str = "Protoss",
 ) -> LiveLifecycleEvent:
     return LiveLifecycleEvent(
         phase=LiveLifecyclePhase.MATCH_IN_PROGRESS,
@@ -92,9 +96,9 @@ def _build_in_progress_event(
         game_state=LiveGameState(
             display_time=display_time,
             players=[
-                LivePlayer(name=user_name, type="user", race="Zerg",
+                LivePlayer(name=user_name, type="user", race=user_race,
                            result="Undecided"),
-                LivePlayer(name=opp_name, type="user", race="Protoss",
+                LivePlayer(name=opp_name, type="user", race=opp_race,
                            result="Undecided"),
             ],
         ),
@@ -155,12 +159,158 @@ def test_match_loading_emits_partial_payload_immediately() -> None:
         assert first["phase"] == "match_loading"
         assert first["opponent"]["name"] == "OppPlayer"
         assert first["opponent"]["race"] == "Protoss"
+        assert first["user"] == {"name": "Streamer", "race": "Zerg"}
         # The Pulse lookup was dispatched async — wait for the
         # second envelope to arrive.
         assert _wait_for(lambda: len(seen) >= 2)
         enriched = next((e for e in seen if "profile" in e.get("opponent", {})), None)
         assert enriched is not None
         assert enriched["opponent"]["profile"]["mmr"] == 4000
+    finally:
+        bridge.stop()
+
+
+def test_random_races_survive_later_concrete_values_for_same_game() -> None:
+    """Selected Random must survive the API revealing spawned races."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="game-random",
+            user_race="Rand",
+            opp_race="rAnD",
+        ))
+        assert seen[-1]["user"]["race"] == "Random"
+        assert seen[-1]["opponent"]["race"] == "Random"
+
+        lifecycle.publish(_build_in_progress_event(
+            game_key="game-random",
+            user_race="Terran",
+            opp_race="Zerg",
+        ))
+        assert seen[-1]["user"]["race"] == "Random"
+        assert seen[-1]["opponent"]["race"] == "Random"
+    finally:
+        bridge.stop()
+
+
+def test_truncated_concrete_races_are_canonicalized() -> None:
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="game-truncated",
+            user_race="Prot",
+            opp_race="tErR",
+        ))
+        assert seen[-1]["user"]["race"] == "Protoss"
+        assert seen[-1]["opponent"]["race"] == "Terran"
+    finally:
+        bridge.stop()
+
+
+def test_late_random_observation_latches_for_remainder_of_same_game() -> None:
+    """A concrete-to-Random correction upgrades both race latches."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="game-corrected-random",
+            user_race="Protoss",
+            opp_race="Terran",
+        ))
+        lifecycle.publish(_build_in_progress_event(
+            game_key="game-corrected-random",
+            user_race="Random",
+            opp_race="random",
+        ))
+        lifecycle.publish(_build_in_progress_event(
+            game_key="game-corrected-random",
+            display_time=60.0,
+            user_race="?",
+            opp_race="",
+        ))
+        assert seen[-1]["user"]["race"] == "Random"
+        assert seen[-1]["opponent"]["race"] == "Random"
+    finally:
+        bridge.stop()
+
+
+def test_new_game_key_resets_random_race_latches() -> None:
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="game-one",
+            user_race="Random",
+            opp_race="Random",
+        ))
+        lifecycle.publish(_build_loading_event(
+            game_key="game-two",
+            user_race="Terran",
+            opp_race="Zerg",
+        ))
+        assert seen[-1]["gameKey"] == "game-two"
+        assert seen[-1]["user"]["race"] == "Terran"
+        assert seen[-1]["opponent"]["race"] == "Zerg"
+    finally:
+        bridge.stop()
+
+
+def test_unknown_races_do_not_create_random_latches() -> None:
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="game-unknown",
+            user_race="?",
+            opp_race="",
+        ))
+        assert seen[-1]["user"]["race"] is None
+        assert seen[-1]["opponent"]["race"] is None
+
+        lifecycle.publish(_build_in_progress_event(
+            game_key="game-unknown",
+            user_race="Protoss",
+            opp_race="Terran",
+        ))
+        assert seen[-1]["user"]["race"] == "Protoss"
+        assert seen[-1]["opponent"]["race"] == "Terran"
     finally:
         bridge.stop()
 

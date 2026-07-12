@@ -28,6 +28,81 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 
+_CANONICAL_LIVE_RACES = {
+    "p": "Protoss",
+    "prot": "Protoss",
+    "protoss": "Protoss",
+    "t": "Terran",
+    "terr": "Terran",
+    "terran": "Terran",
+    "z": "Zerg",
+    "zerg": "Zerg",
+    "r": "Random",
+    "rand": "Random",
+    "random": "Random",
+}
+
+
+def normalise_live_race(value: Optional[str]) -> Optional[str]:
+    """Return a canonical race only when the local API supplied one.
+
+    Blizzard uses ``?`` while a race is unavailable, varies the casing
+    of ``random``, and reports truncated forms such as ``Rand`` in some
+    locales. Unknown or missing values remain ``None`` so they cannot
+    create a false per-game Random latch.
+    """
+    if not isinstance(value, str):
+        return None
+    return _CANONICAL_LIVE_RACES.get(value.strip().casefold())
+
+
+def _normalise_player_name(value: str) -> str:
+    """Normalize case/spacing and one leading SC2 clan-tag prefix."""
+    normalised = value.strip()
+    if normalised.startswith("[") and "]" in normalised:
+        without_clan_tag = normalised.split("]", 1)[1].strip()
+        if without_clan_tag:
+            normalised = without_clan_tag
+    return normalised.casefold()
+
+
+def _battle_tag_stem(value: str) -> str:
+    """Strip a numeric BattleTag suffix without doing fuzzy matching."""
+    normalised = _normalise_player_name(value)
+    stem, separator, suffix = normalised.rpartition("#")
+    if separator and stem and suffix.isdigit():
+        return stem
+    return normalised
+
+
+def _unique_player_name_match(
+    players: List["LivePlayer"],
+    name: Optional[str],
+) -> Optional["LivePlayer"]:
+    if not name or not name.strip():
+        return None
+
+    normalised = _normalise_player_name(name)
+    exact = [
+        player for player in players
+        if player.name and _normalise_player_name(player.name) == normalised
+    ]
+    if len(exact) == 1:
+        return exact[0]
+
+    # The configured handle and /game player name do not always both
+    # include the ``#1234`` suffix. Accept a stem match only when it is
+    # unique so two same-name players can never be silently swapped.
+    stem = _battle_tag_stem(name)
+    stem_matches = [
+        player for player in players
+        if player.name and _battle_tag_stem(player.name) == stem
+    ]
+    if len(stem_matches) == 1:
+        return stem_matches[0]
+    return None
+
+
 class LiveLifecyclePhase(str, enum.Enum):
     """Coalesced lifecycle phases the bridge consumes.
 
@@ -141,34 +216,34 @@ class LiveGameState:
     players: List[LivePlayer] = field(default_factory=list)
     captured_at: float = field(default_factory=time.time)
 
-    def opponent_for(self, user_name: Optional[str]) -> Optional[LivePlayer]:
-        """Pick the human opponent (the first non-streamer ``user``).
+    def user_for(self, user_name: Optional[str]) -> Optional[LivePlayer]:
+        """Pick the local human player without guessing in team games.
 
-        ``user_name`` lets us prefer the explicit "you" when the
-        client reports both players as ``user`` (e.g. couch co-op or
-        when both names are visible — common in 1v1 ladder). When
-        ``user_name`` is unset we just pick the first non-computer
-        ``user`` other than the index-0 player (Blizzard's convention
-        is that the local player is at index 0 in a 1v1 game, but we
-        don't rely on that — index-0 fallback is only used if no name
-        match is possible).
+        Prefer a unique display-name or BattleTag-stem match. Blizzard
+        lists the local player first in 1v1 ``/game`` responses, so index
+        zero is a safe last resort only when at most two humans exist.
         """
-        if not self.players:
-            return None
+        humans = [player for player in self.players if player.is_user]
+        matched = _unique_player_name_match(humans, user_name)
+        if matched is not None:
+            return matched
+        if 1 <= len(humans) <= 2:
+            return humans[0]
+        return None
+
+    def opponent_for(self, user_name: Optional[str]) -> Optional[LivePlayer]:
+        """Pick the other human player in a 1v1 game.
+
+        Reuse :meth:`user_for` so local-player and opponent selection
+        cannot disagree when Blizzard reverses player order. Ambiguous
+        team games remain unresolved instead of choosing a random rival.
+        """
         humans = [p for p in self.players if p.is_user]
-        if not humans:
+        if len(humans) != 2:
             return None
-        if user_name:
-            normalised = user_name.casefold()
-            others = [
-                p for p in humans
-                if p.name and p.name.casefold() != normalised
-            ]
-            if others:
-                return others[0]
-        # Fallback: drop the first ``user`` and take the next.
-        if len(humans) >= 2:
-            return humans[1]
+        user = self.user_for(user_name)
+        if user is not None:
+            return humans[1] if humans[0] is user else humans[0]
         return None
 
     @property
