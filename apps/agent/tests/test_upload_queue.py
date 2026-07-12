@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.replay_pipeline import CloudGame
@@ -111,6 +111,21 @@ def _game(
         my_toon_handle=my_toon_handle,
     )
     return UploadJob(file_path=fp, game=cloud)
+
+
+def _wait_for(
+    predicate: Callable[[], bool],
+    *,
+    timeout: float = 3.0,
+    interval: float = 0.02,
+) -> bool:
+    """Poll a background-thread condition without assuming runner speed."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return predicate()
 
 
 def test_set_paused_persists_state_and_skips_uploads(tmp_path: Path) -> None:
@@ -775,9 +790,11 @@ def test_set_concurrency_grows_worker_count_at_runtime(
         assert len([t for t in q._threads if t.is_alive()]) == 1
         # Hot-swap up to 2 workers.
         q.set_concurrency(2)
-        # Two workers should be running now (small grace for thread
-        # spin-up — Windows thread create is ~1 ms but we leave room).
-        time.sleep(0.1)
+        # Worker creation is asynchronous; hosted Windows runners can
+        # briefly stall while other jobs consume CPU and disk.
+        assert _wait_for(
+            lambda: len([t for t in q._threads if t.is_alive()]) == 2,
+        )
         alive = [t for t in q._threads if t.is_alive()]
         assert len(alive) == 2, (
             f"expected 2 workers after set_concurrency(2), got {len(alive)}"
@@ -785,8 +802,7 @@ def test_set_concurrency_grows_worker_count_at_runtime(
         # And the queue still drains correctly post-swap.
         for i in range(3):
             q.submit(_game(tmp_path, f"hotswap-{i}.SC2Replay"))
-        time.sleep(0.6)
-        assert len(api.calls) == 3
+        assert _wait_for(lambda: len(api.calls) == 3)
     finally:
         q.stop()
 
@@ -807,7 +823,9 @@ def test_set_concurrency_shrinks_worker_count_at_runtime(
     try:
         assert len([t for t in q._threads if t.is_alive()]) == 2
         q.set_concurrency(1)
-        time.sleep(0.1)
+        assert _wait_for(
+            lambda: len([t for t in q._threads if t.is_alive()]) == 1,
+        )
         alive = [t for t in q._threads if t.is_alive()]
         assert len(alive) == 1, (
             f"expected 1 worker after set_concurrency(1), got {len(alive)}"
@@ -815,8 +833,7 @@ def test_set_concurrency_shrinks_worker_count_at_runtime(
         # And the surviving worker still drains the queue.
         for i in range(3):
             q.submit(_game(tmp_path, f"shrink-{i}.SC2Replay"))
-        time.sleep(0.6)
-        assert len(api.calls) == 3
+        assert _wait_for(lambda: len(api.calls) == 3)
     finally:
         q.stop()
 
