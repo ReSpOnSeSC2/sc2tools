@@ -149,6 +149,12 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ### Added
 
+- **Replay rows now identify the Ghost Build workspace** — the icon-only
+  arrow into a game's full analysis page is now a visible “Open game
+  analysis” action. Desktop tables label the destination column, while
+  mobile cards explain that the page contains the timeline, mechanics,
+  build orders, and Ghost Build arming tools.
+
 - **Win rate by map by matchup** — the Maps tab gains a new section that
   cross-tabs each map against opponent race, so you can see (for example)
   that a map is strong PvZ but weak PvT rather than just its overall win

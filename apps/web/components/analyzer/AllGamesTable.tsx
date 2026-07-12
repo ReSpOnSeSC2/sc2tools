@@ -163,7 +163,9 @@ export function AllGamesTable({
               <SortableTh col={SORT_COLS.macro} label="Macro" {...sort} align="right" />
               <SortableTh col={SORT_COLS.length} label="Length" {...sort} align="right" />
               <SortableTh col={SORT_COLS.result} label="Result" {...sort} align="right" />
-              <th className="w-8 px-2 py-1" aria-hidden></th>
+              <th className="px-2 py-1 text-right font-medium">
+                Game analysis
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -323,30 +325,37 @@ function PlayersCell({
 
 
 /**
- * Unobtrusive per-row "open" affordance → the game's deep-dive page
- * (/app/game/:id). stopPropagation keeps the existing row-click
- * (build-order expand) behaviour intact.
+ * Clearly labelled route to the game's analysis workspace. stopPropagation
+ * keeps the existing row-click (build-order expand) behaviour intact.
  */
 function GameDeepDiveLink({
   gameId,
-  large,
+  mobile,
 }: {
   gameId?: string | null;
-  large?: boolean;
+  mobile?: boolean;
 }) {
   if (!gameId) return null;
   return (
     <Link
       href={`/app/game/${encodeURIComponent(gameId)}`}
       onClick={(e) => e.stopPropagation()}
-      aria-label="Open game deep dive"
-      title="Open game deep dive"
+      aria-label="Open game analysis: timeline, mechanics, build orders, and Ghost Build"
+      title="Open game analysis"
       className={[
-        "inline-flex items-center justify-center rounded text-text-dim transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        large ? "min-h-[44px] min-w-[44px]" : "h-7 w-7",
+        "inline-flex items-center gap-2 rounded-md border border-border-strong bg-bg-elevated/60 px-3 py-1.5 text-left text-caption font-semibold text-text transition-colors hover:border-accent hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        mobile ? "min-h-[44px] w-full justify-between py-2" : "whitespace-nowrap",
       ].join(" ")}
     >
-      <ArrowUpRight className="h-4 w-4" aria-hidden />
+      <span className="min-w-0">
+        <span className="block">Open game analysis</span>
+        {mobile ? (
+          <span className="mt-0.5 block text-micro font-normal text-text-muted">
+            Timeline · mechanics · build orders · Ghost Build
+          </span>
+        ) : null}
+      </span>
+      <ArrowUpRight className="h-4 w-4 flex-none" aria-hidden />
     </Link>
   );
 }
@@ -494,7 +503,7 @@ function GameMobileCard({
             </span>
           ) : null}
         </button>
-        <div className="flex flex-shrink-0 flex-col items-end justify-between gap-1 pl-1">
+        <div className="flex flex-shrink-0 flex-col items-end gap-1 pl-1">
           <span className="text-micro uppercase tracking-wider text-text-dim">
             macro
           </span>
@@ -506,9 +515,13 @@ function GameMobileCard({
             onOpen={() => setMacroOpen(true)}
             onClose={() => setMacroOpen(false)}
           />
-          <GameDeepDiveLink gameId={game.id} large />
         </div>
       </div>
+      {game.id ? (
+        <div className="border-t border-border px-3 py-2">
+          <GameDeepDiveLink gameId={game.id} mobile />
+        </div>
+      ) : null}
       {expanded && game.id ? (
         <div className="border-t border-border px-3 py-3">
           <BuildOrderRow gameId={game.id} game={game} />
