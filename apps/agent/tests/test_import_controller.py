@@ -119,6 +119,91 @@ def test_start_tracks_counters_and_reports_done(monkeypatch):
     ctl.stop()
 
 
+def test_transient_upload_failure_is_not_counted(monkeypatch):
+    """A transient batch failure (bare exception → job will be retried)
+    must NOT count as an error. Otherwise read-timeout retry noise fills
+    the card with "files couldn't be imported", and the file is
+    double-counted when its retry later succeeds (once as an error, once
+    as a completion)."""
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.05,
+    )
+    ctl, api, _w = make_controller(pending=1)
+    ctl.handle_start_request({"jobId": "jt"})
+
+    # Same file: a transient failure, then the eventual retry-success.
+    ctl.on_upload_failure(Path("a.SC2Replay"), TimeoutError("read timed out"))
+    ctl.on_upload_success(Path("a.SC2Replay"))
+
+    assert wait_for(
+        lambda: any(c.get("done") for c in api.progress_calls if c["jobId"] == "jt"),
+    ), f"reporter never finished: {api.progress_calls!r}"
+    final = [c for c in api.progress_calls if c.get("done") and c["jobId"] == "jt"][-1]
+    assert final["completed"] == 1  # counted once, as a success
+    assert final["errors"] == 0     # the transient hit never tallied
+    assert not final.get("errorBreakdown")
+    assert not final.get("errorSamples")
+    ctl.stop()
+
+
+def test_terminal_upload_rejection_counts_as_error(monkeypatch):
+    """A server rejection is a ``TerminalUploadError`` — the file is done
+    and won't be retried, so it must count as an error and surface a
+    sample the user can act on."""
+    from sc2tools_agent.uploader.queue import _ServerRejectedError
+
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.05,
+    )
+    ctl, api, _w = make_controller(pending=1)
+    ctl.handle_start_request({"jobId": "jr"})
+
+    ctl.on_upload_failure(
+        Path("bad.SC2Replay"),
+        _ServerRejectedError("oppBuildLog must NOT have more than 5000 items"),
+    )
+
+    assert wait_for(
+        lambda: any(c.get("done") for c in api.progress_calls if c["jobId"] == "jr"),
+    ), f"reporter never finished: {api.progress_calls!r}"
+    final = [c for c in api.progress_calls if c.get("done") and c["jobId"] == "jr"][-1]
+    assert final["errors"] == 1
+    assert final["completed"] == 0
+    assert final["errorBreakdown"] == {"rejected_by_server": 1}
+    assert final["errorSamples"][0]["file"] == "bad.SC2Replay"
+    ctl.stop()
+
+
+def test_filtered_upload_counts_as_benign_completion(monkeypatch):
+    """A sync-window filter drop is a ``TerminalUploadError`` but an
+    INTENTIONAL exclusion, not a failure. It must count as a completion
+    under its own ``filtered`` bucket — never as an error and never with
+    the misleading ``rejected_by_server`` code or an error sample."""
+    from sc2tools_agent.uploader.queue import _FilteredOutError
+
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.05,
+    )
+    ctl, api, _w = make_controller(pending=1)
+    ctl.handle_start_request({"jobId": "jff"})
+
+    ctl.on_upload_failure(
+        Path("outofrange.SC2Replay"),
+        _FilteredOutError("Outside sync window 2026"),
+    )
+
+    assert wait_for(
+        lambda: any(c.get("done") for c in api.progress_calls if c["jobId"] == "jff"),
+    ), f"reporter never finished: {api.progress_calls!r}"
+    final = [c for c in api.progress_calls if c.get("done") and c["jobId"] == "jff"][-1]
+    assert final["completed"] == 1  # processed, as the filter intended
+    assert final["errors"] == 0
+    assert final["errorBreakdown"] == {"filtered": 1}
+    # Benign outcomes never produce an actionable error sample.
+    assert not final.get("errorSamples")
+    ctl.stop()
+
+
 def test_force_start_runs_full_resync():
     calls = []
     ctl, _api, _w = make_controller(
@@ -141,9 +226,12 @@ def test_cancel_stops_tracking():
 
 
 def test_hooks_are_noops_without_active_job():
+    from sc2tools_agent.uploader.queue import _ServerRejectedError
+
     ctl, api, _w = make_controller()
     ctl.on_upload_success(Path("a.SC2Replay"))
-    ctl.on_upload_failure(Path("b.SC2Replay"), RuntimeError("x"))
+    # Even a TERMINAL failure is a no-op when no job is active.
+    ctl.on_upload_failure(Path("b.SC2Replay"), _ServerRejectedError("x"))
     ctl.on_replay_skipped(Path("c.SC2Replay"), "parse_failed")
     assert api.progress_calls == []
 

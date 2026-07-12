@@ -41,6 +41,7 @@ export const ERROR_CODE_COPY: Record<string, string> = {
     "Couldn't tell which player is you — set your BattleTag in Settings → Profile, then re-import.",
   no_result: "The replay has no recorded result (left during loading?).",
   ai_game: "Skipped — game vs the AI.",
+  filtered: "Skipped — outside your import date range.",
   rejected_by_server: "The server rejected the upload.",
   file_unstable: "The file never finished writing (cloud-sync lag?).",
   analyzer_unavailable: "The agent's parser couldn't load — restart the agent.",
@@ -165,16 +166,31 @@ export function useImportStatus(): ImportStatusState {
     return Math.max(0, Math.min(100, Math.round((processed / job.total) * 100)));
   }, [job]);
 
-  const etaSeconds = useMemo(() => {
-    if (!job || !active || !job.startedAt || !job.total) return null;
+  // Rolling recent-rate ETA. We deliberately do NOT divide processed by
+  // (now - startedAt): the agent's in-memory counters reset toward 0
+  // whenever the import job re-registers (agent restart / re-activation)
+  // while the server keeps the original startedAt. That combination
+  // divides a tiny post-reset `processed` by a huge elapsed span,
+  // producing near-zero rates and absurd ETAs (~339h observed). Measuring
+  // throughput over the last few reports instead is immune to the reset —
+  // see `foldEtaSample`. (The 0.13.6 count-guard keeps the numbers
+  // monotonic; this keeps the estimate sane.)
+  const etaSamplesRef = useRef<ProgressSample[]>([]);
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    if (!job || !active || !job.total) {
+      etaSamplesRef.current = [];
+      setEtaSeconds(null);
+      return;
+    }
     const processed = (job.completed || 0) + (job.errors || 0);
-    if (processed < 20) return null; // rate too noisy to promise an ETA
-    const elapsedSec = (Date.now() - new Date(job.startedAt).getTime()) / 1000;
-    if (elapsedSec <= 0) return null;
-    const rate = processed / elapsedSec;
-    if (rate <= 0) return null;
-    const remaining = Math.max(0, job.total - processed);
-    return Math.round(remaining / rate);
+    const { samples, etaSeconds: next } = foldEtaSample(etaSamplesRef.current, {
+      t: Date.now(),
+      processed,
+      total: job.total,
+    });
+    etaSamplesRef.current = samples;
+    setEtaSeconds(next);
   }, [job, active]);
 
   return {
@@ -185,6 +201,81 @@ export function useImportStatus(): ImportStatusState {
     isLoading,
     refresh: () => void mutate(),
   };
+}
+
+/** One (wall-clock ms, cumulative processed-count) reading for the
+ * rolling-rate ETA window. */
+export type ProgressSample = { t: number; processed: number };
+
+const ETA_WINDOW_MS = 60_000; // measure the rate over the last ~minute
+const ETA_MAX_SAMPLES = 8;
+
+/**
+ * Fold a fresh progress reading into the rolling ETA window and derive
+ * "seconds remaining" from RECENT throughput rather than from the job's
+ * startedAt.
+ *
+ * Why not startedAt: the agent's in-memory counters reset toward 0
+ * whenever the import job re-registers (agent restart, or a fresh
+ * import:start_request re-activation), while the server keeps the
+ * original startedAt. `processed / elapsed-since-startedAt` then divides
+ * a tiny post-reset `processed` by a huge elapsed span, yielding a
+ * near-zero rate and absurd ETAs (~339h observed in the field). A
+ * rolling window over the last few reports measures the rate the user is
+ * actually seeing right now and is immune to the reset.
+ *
+ * Reset handling: a reading whose `processed` is LOWER than the newest
+ * sample means the counter reset — we discard the stale window and start
+ * measuring afresh, returning null until the new window shows movement.
+ *
+ * Pure and deterministic (no clock access of its own) so it can be unit
+ * tested; the hook feeds it `Date.now()` and stores the returned window.
+ */
+export function foldEtaSample(
+  prev: ProgressSample[],
+  reading: { t: number; processed: number; total: number },
+  opts: { windowMs?: number; maxSamples?: number } = {},
+): { samples: ProgressSample[]; etaSeconds: number | null } {
+  const windowMs = opts.windowMs ?? ETA_WINDOW_MS;
+  const maxSamples = opts.maxSamples ?? ETA_MAX_SAMPLES;
+  const samples = prev.slice();
+
+  const newest = samples[samples.length - 1];
+  if (newest && reading.processed < newest.processed) {
+    // Counter reset (agent restart / re-activation): the old window no
+    // longer describes the current run. Drop it and remeasure.
+    samples.length = 0;
+  }
+  const tail = samples[samples.length - 1];
+  if (!tail || reading.processed !== tail.processed) {
+    samples.push({ t: reading.t, processed: reading.processed });
+  }
+  // Age out samples older than the window, but always keep the two most
+  // recent so a rate is still measurable, then cap the count.
+  while (samples.length > 2 && reading.t - samples[0].t > windowMs) {
+    samples.shift();
+  }
+  while (samples.length > maxSamples) samples.shift();
+
+  return { samples, etaSeconds: rollingEtaSeconds(samples, reading.total) };
+}
+
+/** Seconds remaining from the rolling window, or null when the rate
+ * can't be trusted yet: fewer than two points, no forward movement, or a
+ * zero-length time span. */
+function rollingEtaSeconds(
+  samples: ProgressSample[],
+  total: number,
+): number | null {
+  if (!total || samples.length < 2) return null;
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  const dProcessed = last.processed - first.processed;
+  const dSec = (last.t - first.t) / 1000;
+  if (dProcessed <= 0 || dSec <= 0) return null;
+  const rate = dProcessed / dSec; // files/sec, measured over the window
+  const remaining = Math.max(0, total - last.processed);
+  return Math.round(remaining / rate);
 }
 
 /** "~6 min left" style formatting for the ETA. */
