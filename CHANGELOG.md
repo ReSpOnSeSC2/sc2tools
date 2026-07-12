@@ -10,6 +10,17 @@ workflow builds the Windows installer on each tag push and attaches the
 
 ## [Unreleased]
 
+### Added
+
+- **Ladder Meta Radar · opponent MMR bands** — `/meta` can now switch
+  between opponent League and opponent MMR while keeping matchup as a
+  separate filter. MMR uses eleven 500-point, half-open bands from `<2000`
+  through `6500+`; every League/MMR/matchup view has a canonical,
+  server-rendered URL. Both axes use the same opener rankings,
+  k-anonymity floors, prevalence, win rate, and week-over-week movement.
+  MMR coverage is intentionally forward-only and may be sparse until enough
+  recently enriched games accumulate; League remains the default.
+
 ### Fixed
 
 - **Skill fingerprint now explains what it measures** — the Trends card
@@ -27,6 +38,67 @@ workflow builds the Windows installer on each tag push and attaches the
   restores that dossier after navigation or refresh instead of dropping the
   user at the top-level dashboard. Direct game URLs without source context
   retain the safe dashboard fallback.
+
+- **Ghost Build Coach · Test targets only its dedicated overlay** — the
+  per-widget sample registry did not recognize `ghost-build`, so clicking its
+  Test button fell back to the full sample payload and lit every other widget
+  while the coach source appeared absent. Ghost Build now receives a scoped
+  placement probe, and Settings explicitly identifies it as a dedicated OBS
+  Browser Source that must be copied again after arming a build.
+
+- **Overlay widgets fire once per real match start** - the Windows
+  autostart entry and a manual launch could run two full agents at the
+  same time. Their independent live pollers assigned different keys to
+  one SC2 match, repeatedly re-arming Build Randomizer and Scouting
+  Tells while also duplicating backlog work. Agent 0.13.8 now enforces
+  one main process per state directory and preserves an active match
+  through brief SC2 localhost-API misses. The API also suppresses live
+  fan-out when a second agent or network retry re-uploads the same
+  freshly-created replay.
+
+- **Daily Quests - MMR progress stays on one regional ladder account** -
+  `End the day up` previously compared the day's first and last MMR
+  across every replay, so an NA starting point and EU ending point (or
+  two accounts in the same region) could falsely complete or block the
+  quest. It now groups by the exact replay-authored `myToonHandle`,
+  requires two rated games on one account, and completes when any one
+  account ends above its own start. Handle-less ratings are excluded
+  because their ladder cannot be identified safely; `Giant slayer`
+  remains a same-replay player-versus-opponent MMR comparison.
+
+- **Season Recap · live Season 67 boundaries replace a fabricated
+  Season 68 rollover** — the local fallback advanced seasons every
+  fixed 91 days, which invented a July 1 Season 68 boundary while
+  Battle.net was still in Season 67. That mislabeled the recap and
+  incorrectly excluded April–June games from every recap statistic.
+  The recap now consumes the existing SC2Pulse-backed season catalog
+  from `FiltersContext`; its offline/pre-fetch fallback stays on the
+  last verified Season 67 until a real new boundary is known.
+
+- **Season Recap · MMR journeys stay on their own ladder account** —
+  the recap previously date-sorted every numeric `myMmr` into one
+  global series, so an NA game at 5,400 followed by an EU game at
+  5,220 rendered a fictitious `-180` season. It now groups by the
+  replay-authored `myToonHandle`, renders one labeled journey per
+  account (`NA 267727`, `EU 8780508`, and separate same-region
+  smurfs), and applies its two-point floor independently per account.
+  Summary and sharing copy report separate Battle.net accounts instead
+  of adding or sequencing their deltas. Rows without an own-account
+  handle are omitted because their MMR cannot be attributed safely.
+
+- **MMR progression · historical resyncs no longer flatten every game
+  to today's rating** — the game-ingest route used SC2Pulse's current
+  regional MMR whenever a replay omitted `myMmr`. During a bulk resync
+  that cached fallback stamped one identical value onto every old game
+  in the region, so the chart faithfully drew flat 5,400/5,220 lines
+  and could assign the same rating to multiple accounts. Ingest now
+  accepts only game-time MMR extracted from the replay. Agent 0.13.8
+  sends explicit `replay` / `unavailable` provenance, and an
+  `unavailable` re-upload atomically removes a legacy synthetic value;
+  resyncing once after the agent update repairs affected history
+  without guessing which unmarked database rows were contaminated.
+  SC2Pulse remains the current-MMR fallback for live/session widgets,
+  where a current value is semantically correct.
 
 - **Import progress · the "games uploaded" counter no longer runs
   backwards** — during a history backfill the dashboard's progress

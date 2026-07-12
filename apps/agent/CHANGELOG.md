@@ -2,6 +2,43 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.13.8
+
+### Fixed — one agent owns uploads and live-game widget events
+- **What.** A manual launch could race the Windows autostart entry and
+  leave two complete agents running. Each spawned its own replay-parser
+  pool, uploaded the same backlog, and generated a different live
+  `gameKey` for the same SC2 match. The overlay therefore treated one
+  match as multiple starts and repeatedly fired Build Randomizer and
+  Scouting Tells.
+- **Effect.** The agent now takes a crash-safe, state-directory-scoped
+  Windows mutex before configuring logs or starting any service. A
+  second launch exits cleanly; development instances using separate
+  state directories remain independent.
+
+### Fixed — transient SC2 API misses do not restart live widgets
+- **What.** One brief failure from SC2's localhost `/ui` or `/game`
+  endpoint emitted `idle`/`menu`, unmounted start-of-game widgets, and
+  let the recovery poll mount them again. Missing `/game` data on a
+  definite score/menu screen also retained the previous match key.
+- **Effect.** Active matches survive two transient poll misses without
+  changing phase or identity. Definite menu, score, replay, and ended
+  transitions atomically retire the old key so the next real match gets
+  exactly one fresh start.
+
+### Fixed — MMR history keeps game-time ratings instead of today's rating
+- **What.** When a replay did not expose its at-game MMR, the cloud
+  ingest route filled the gap from SC2Pulse's current regional rating.
+  A history resync therefore stamped the same current value onto months
+  of old games, producing flat 5,400/5,220 progression lines.
+- **Effect.** Every upload now identifies its own-MMR provenance as
+  either `replay` or `unavailable`. The API no longer invents a
+  historical value from current SC2Pulse data, and a 0.13.8 resync
+  clears legacy synthetic values on replays whose real game-time MMR
+  is unavailable. Real replay ratings remain untouched. Current MMR
+  still reaches the session overlay through its separate live/profile
+  fallback.
+
 ## 0.13.7
 
 ### Fixed — import progress stops counting upload-retry noise as errors
