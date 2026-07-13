@@ -35,6 +35,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Session widget MMR refreshes after each game** — replay `myMmr` remains
+  the historical session-start anchor, while SC2Pulse's current rating now
+  drives the displayed MMR even when a stored game value exists. Fresh game
+  ingestion bypasses the five-minute Pulse cache once, shared across all
+  connected overlay sockets, so the post-game event cannot reuse a pre-game
+  rating; Pulse failures still fall back to the stored value.
+
 - **Agent 0.14.0 · Ghost matchup selection survives Browser Source
   reloads** — live envelopes now include the streamer's directly observed
   race, and an explicit Random selection for either player is retained for

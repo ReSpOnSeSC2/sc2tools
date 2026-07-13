@@ -159,6 +159,7 @@ export interface GamesService {
   todaySession(
     userId: string,
     timezone?: string,
+    opts?: { refreshCurrentMmr?: boolean },
   ): Promise<{
     wins: number;
     losses: number;

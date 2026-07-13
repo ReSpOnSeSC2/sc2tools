@@ -466,9 +466,10 @@ describe("services/games.todaySession", () => {
     expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledTimes(1);
   });
 
-  test("Tier-3 multi-pulse is skipped when a stored myMmr is found", async () => {
-    // Cheaper tier still wins: a fresh game-row myMmr must short-circuit
-    // before the SC2Pulse round-trip, even with three saved chips.
+  test("current Pulse MMR overrides stored game-time MMR after a match", async () => {
+    // The replay value anchors the session start, but it is historical.
+    // The session widget must display Pulse's current post-match rating
+    // rather than lagging one game behind forever.
     await db.games.insertOne({
       userId: "u1",
       gameId: "g-fresh",
@@ -478,9 +479,10 @@ describe("services/games.todaySession", () => {
       myToonHandle: "1-S2-1-267727",
     });
     const pulseMmr = {
-      getCurrentMmrForAny: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
+      getCurrentMmrForAny: jest.fn(async () => ({
+        mmr: 4821,
+        region: "NA",
+      })),
     };
     const svc2 = new GamesService(db, {
       users: {
@@ -490,9 +492,39 @@ describe("services/games.todaySession", () => {
       },
       pulseMmr,
     });
-    const out = await svc2.todaySession("u1", "UTC");
+    const out = await svc2.todaySession("u1", "UTC", {
+      refreshCurrentMmr: true,
+    });
+    expect(out.mmrStart).toBe(4800);
+    expect(out.mmrCurrent).toBe(4821);
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledWith(
+      ["1-S2-1-267727", "994428"],
+      { preferredRegion: "NA", forceRefresh: true },
+    );
+  });
+
+  test("stored game-time MMR remains when the current Pulse lookup fails", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "g-pulse-miss",
+      result: "Defeat",
+      date: new Date(),
+      myMmr: 4800,
+      myToonHandle: "1-S2-1-267727",
+    });
+    const svc2 = new GamesService(db, {
+      users: { getProfile: async () => ({ pulseIds: ["994428"] }) },
+      pulseMmr: {
+        getCurrentMmrForAny: async () => {
+          throw new Error("simulated Pulse outage");
+        },
+      },
+    });
+    const out = await svc2.todaySession("u1", "UTC", {
+      refreshCurrentMmr: true,
+    });
+    expect(out.mmrStart).toBe(4800);
     expect(out.mmrCurrent).toBe(4800);
-    expect(pulseMmr.getCurrentMmrForAny).not.toHaveBeenCalled();
   });
 
   test("Tier-3 multi-pulse survives a thrown SC2Pulse error", async () => {
@@ -544,7 +576,7 @@ describe("services/games.todaySession", () => {
     expect(pulseMmr.getCurrentMmr).toHaveBeenCalledTimes(1);
   });
 
-  test("Tier-3 SC2Pulse fallback is skipped when a stored myMmr is found", async () => {
+  test("legacy Pulse current MMR overrides stored game-time MMR", async () => {
     await db.games.insertOne({
       userId: "u1",
       gameId: "g1",
@@ -553,19 +585,16 @@ describe("services/games.todaySession", () => {
       myMmr: 4800,
     });
     const pulseMmr = {
-      // If this is hit, the test fails — we want the cheaper stored-MMR
-      // path to short-circuit before the network call.
-      getCurrentMmr: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
+      getCurrentMmr: jest.fn(async () => ({ mmr: 4819, region: "NA" })),
     };
     const svcWithPulse = new GamesService(db, {
       users: { getProfile: async () => ({ pulseId: "994428" }) },
       pulseMmr,
     });
     const out = await svcWithPulse.todaySession("u1", "UTC");
-    expect(out.mmrCurrent).toBe(4800);
-    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+    expect(out.mmrStart).toBe(4800);
+    expect(out.mmrCurrent).toBe(4819);
+    expect(pulseMmr.getCurrentMmr).toHaveBeenCalledTimes(1);
   });
 
   test("SC2Pulse-derived region wins over a stale profile.region", async () => {
@@ -740,9 +769,7 @@ describe("services/games.todaySession", () => {
     expect(pulseMmr.getCurrentMmrByToon).toHaveBeenCalledTimes(1);
   });
 
-  test("Tier-3 toon-handle fallback is skipped when stored myMmr is found", async () => {
-    // We must short-circuit at the cheapest tier — no SC2Pulse calls of
-    // any kind when the games already carry MMR.
+  test("toon-handle Pulse current MMR overrides stored game-time MMR", async () => {
     await db.games.insertOne({
       userId: "u1",
       gameId: "g1",
@@ -752,21 +779,18 @@ describe("services/games.todaySession", () => {
       myToonHandle: "2-S2-1-12345",
     });
     const pulseMmr = {
-      getCurrentMmr: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
-      getCurrentMmrByToon: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
+      getCurrentMmr: jest.fn(async () => null),
+      getCurrentMmrByToon: jest.fn(async () => ({ mmr: 4822, region: "EU" })),
     };
     const svc2 = new GamesService(db, {
       users: { getProfile: async () => ({}) },
       pulseMmr,
     });
     const out = await svc2.todaySession("u1", "UTC");
-    expect(out.mmrCurrent).toBe(4800);
+    expect(out.mmrStart).toBe(4800);
+    expect(out.mmrCurrent).toBe(4822);
     expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
-    expect(pulseMmr.getCurrentMmrByToon).not.toHaveBeenCalled();
+    expect(pulseMmr.getCurrentMmrByToon).toHaveBeenCalledTimes(1);
   });
 
   test("Tier-3 toon-handle fallback survives a thrown error", async () => {
@@ -925,10 +949,7 @@ describe("services/games.todaySession", () => {
     expect(out.region).toBe("NA");
   });
 
-  test("sticky-MMR tier short-circuits before the SC2Pulse round-trips", async () => {
-    // Cheaper tier wins: a profile lastKnownMmr must skip both pulse
-    // calls. Otherwise every overlay refresh costs two SC2Pulse hits
-    // even when the cached value is good.
+  test("current Pulse MMR overrides the sticky historical fallback", async () => {
     await db.games.insertOne({
       userId: "u1",
       gameId: "g-no-mmr",
@@ -937,12 +958,8 @@ describe("services/games.todaySession", () => {
       myToonHandle: "1-S2-1-267727",
     });
     const pulseMmr = {
-      getCurrentMmr: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
-      getCurrentMmrByToon: jest.fn(async () => {
-        throw new Error("should_not_be_called");
-      }),
+      getCurrentMmr: jest.fn(async () => ({ mmr: 4755, region: "NA" })),
+      getCurrentMmrByToon: jest.fn(async () => null),
     };
     const svc2 = new GamesService(db, {
       users: {
@@ -954,8 +971,8 @@ describe("services/games.todaySession", () => {
       pulseMmr,
     });
     const out = await svc2.todaySession("u1", "UTC");
-    expect(out.mmrCurrent).toBe(4730);
-    expect(pulseMmr.getCurrentMmr).not.toHaveBeenCalled();
+    expect(out.mmrCurrent).toBe(4755);
+    expect(pulseMmr.getCurrentMmr).toHaveBeenCalledTimes(1);
     expect(pulseMmr.getCurrentMmrByToon).not.toHaveBeenCalled();
   });
 
@@ -1270,6 +1287,7 @@ describe("POST /v1/games re-emits overlay:session", () => {
   let mongo;
   let db;
   let app;
+  let services;
   let captured;
   let fakeIo;
 
@@ -1364,11 +1382,13 @@ describe("POST /v1/games re-emits overlay:session", () => {
       io: fakeIo,
     });
     app = built.app;
+    services = built.services;
     // Warm /me so the user row exists.
     await request(app).get("/v1/me").set("authorization", "Bearer test-clerk-token");
   });
 
   afterEach(async () => {
+    jest.restoreAllMocks();
     // Drain any in-flight per-overlay emits triggered by the test
     // before we clear the buffer — without this, a stale push from
     // test N can land after we reset the array and contaminate
@@ -1387,6 +1407,7 @@ describe("POST /v1/games re-emits overlay:session", () => {
   });
 
   test("each connected overlay socket gets a fresh session aggregate after ingest", async () => {
+    const sessionSpy = jest.spyOn(services.games, "todaySession");
     const game = makeGame("g-session-1", "Victory");
     const post = await request(app)
       .post("/v1/games")
@@ -1410,6 +1431,12 @@ describe("POST /v1/games re-emits overlay:session", () => {
     expect(seen.has("America/Los_Angeles")).toBe(true);
     expect(seen.has("UTC")).toBe(true);
     expect(seen.has("WEB")).toBe(false);
+
+    // A genuinely fresh insert bypasses the pre-game Pulse cache once;
+    // the second overlay reuses the process-wide value repopulated by
+    // the first resolve instead of causing another external fetch.
+    expect(sessionSpy.mock.calls[0][2]).toEqual({ refreshCurrentMmr: true });
+    expect(sessionSpy.mock.calls[1][2]).toEqual({ refreshCurrentMmr: false });
 
     for (const emit of captured.sessionEmits) {
       expect(emit.payload.games).toBe(1);

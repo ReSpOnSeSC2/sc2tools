@@ -785,6 +785,36 @@ describe("services/pulseMmr", () => {
     expect(teamCalls).toBe(1);
   });
 
+  test("getCurrentMmrForAny forceRefresh bypasses a live cache entry", async () => {
+    let teamCalls = 0;
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        teamCalls += 1;
+        return jsonResponse([
+          {
+            rating: teamCalls === 1 ? 4800 : 4821,
+            lastPlayed: "2026-05-01T00:00:00Z",
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl, cacheTtlMs: 60_000 });
+    const before = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "NA",
+    });
+    const after = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "NA",
+      forceRefresh: true,
+    });
+    expect(before?.mmr).toBe(4800);
+    expect(after?.mmr).toBe(4821);
+    expect(teamCalls).toBe(2);
+  });
+
   test("extractCharacterId falls back to character.battlenetId when id is absent", async () => {
     // Older Pulse responses occasionally omit the internal `id`
     // and only ship the Blizzard-side `battlenetId`; that still

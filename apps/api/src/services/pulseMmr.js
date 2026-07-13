@@ -1,17 +1,15 @@
 "use strict";
 
-// SC2Pulse-backed MMR fallback for the session widget.
+// SC2Pulse-backed current MMR for the session widget.
 //
 // The agent populates `myMmr` on each game record when sc2reader
 // exposes a real rating, but a sizable cohort of replays (older Battle.net
 // builds, mods, custom games) ship with no rating at all. The session
-// widget's Tier-1/Tier-2 fallbacks already reach back through 14 days
-// and then any-time-ever for a stored myMmr; this service is the
-// Tier-3 fallback that resolves the streamer's CURRENT 1v1 ladder
-// rating directly from sc2pulse.nephest.com using their saved
-// `pulseId`. It exists so streamers whose ranked replays were
-// uploaded before MMR extraction landed still see "EU 5343" on the
-// overlay instead of "EU —".
+// widget's stored tiers reach back through 14 days and then any-time-ever
+// for a game-time myMmr, but those values cannot describe the rating after
+// the just-finished match. This service resolves the streamer's CURRENT 1v1
+// ladder rating directly from sc2pulse.nephest.com using their saved
+// `pulseId`. Stored MMR remains the fail-soft fallback on a Pulse miss.
 //
 // The endpoint we hit (`/group/team`) returns every team carrying any
 // of the supplied character ids in the active season. We pick the most
@@ -318,8 +316,14 @@ class PulseMmrService {
    *   - SC2Pulse returned no teams in any region for any id.
    *   - The remote request failed and there's no usable cache entry.
    *
+   * ``opts.forceRefresh`` bypasses a still-live MMR cache entry. The
+   * post-game session fan-out uses it once after a newly-finished replay
+   * lands; otherwise the widget can keep showing the pre-game rating for
+   * the full five-minute cache TTL. A failed forced fetch still falls
+   * back to the cached value (stale-while-error).
+   *
    * @param {Array<string|null|undefined>|null|undefined} ids
-   * @param {{preferredRegion?: string}} [opts]
+   * @param {{preferredRegion?: string, forceRefresh?: boolean}} [opts]
    * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
    */
   async getCurrentMmrForAny(ids, opts = {}) {
@@ -344,7 +348,11 @@ class PulseMmrService {
       (preferredRegion ? `:pref=${preferredRegion}` : "");
     const now = this.now();
     const cached = this._cache.get(cacheKey);
-    if (cached && now - cached.fetchedAt < this.cacheTtlMs) {
+    if (
+      !opts.forceRefresh &&
+      cached &&
+      now - cached.fetchedAt < this.cacheTtlMs
+    ) {
       return {
         mmr: cached.mmr,
         region: cached.region,

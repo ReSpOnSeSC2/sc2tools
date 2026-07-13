@@ -32,7 +32,7 @@ class GamesService {
    *     } | null>,
    *     getCurrentMmrForAny?(
    *       ids: string[],
-   *       opts?: { preferredRegion?: string },
+   *       opts?: { preferredRegion?: string, forceRefresh?: boolean },
    *     ): Promise<{
    *       mmr: number,
    *       region: string | null,
@@ -52,10 +52,10 @@ class GamesService {
     // session widget). When unavailable, the region field stays unset
     // and the widget falls back to MMR-only.
     this.users = opts.users || null;
-    // Optional PulseMmrService — Tier-3 fallback that hits sc2pulse
-    // for the user's current 1v1 ladder rating when no game in the
-    // entire history carries a usable myMmr. Unavailable in unit tests
-    // where the network is mocked; falls through silently.
+    // Optional PulseMmrService. Stored ``myMmr`` values are historical
+    // game-time anchors; Pulse supplies the current 1v1 rating displayed
+    // by the session widget and falls through to those anchors on a miss.
+    // Unavailable in slim unit tests; every call remains fail-soft.
     this.pulseMmr = opts.pulseMmr || null;
     // Optional pino-style logger so todaySession can emit a single
     // structured trace line per resolution attempt. The session
@@ -283,6 +283,7 @@ class GamesService {
    *
    * @param {string} userId
    * @param {string} [timezone] IANA tz, defaults to UTC
+   * @param {{refreshCurrentMmr?: boolean}} [opts]
    * @returns {Promise<{
    *   wins: number,
    *   losses: number,
@@ -294,7 +295,7 @@ class GamesService {
    *   streak?: { kind: 'win'|'loss', count: number },
    * }>}
    */
-  async todaySession(userId, timezone) {
+  async todaySession(userId, timezone, opts = {}) {
     const tz = pickTimezone(timezone);
     // 14-day window covers the typical W-L horizon. The today-key
     // filter below still pins wins/losses/games/streak to the current
@@ -452,7 +453,9 @@ class GamesService {
      *                         array + the legacy single-string ``pulseId``
      *                         + the most recent game's ``myToonHandle``)
      *                         in one batched call; the most-recently-
-     *                         played team across the union wins.
+     *                         played team across the union wins. This
+     *                         current rating overrides stored game-time
+     *                         MMR when it resolves.
      *   ``pulse_pulseid`` / ``pulse_toon`` — single-id legacy paths.
      *                         Only fire when the injected pulseMmr
      *                         service hasn't been upgraded to
@@ -588,25 +591,33 @@ class GamesService {
         }
       }
     }
-    // Tier-3 fallback: still no MMR after walking every game we have.
-    // Hit SC2Pulse for the user's current 1v1 ladder rating with the
-    // FULL union of saved + auto-detected pulse ids in a single batched
+    // Current-rating tier. Query SC2Pulse with the FULL union of saved
+    // + auto-detected pulse ids in a single batched
     // call. The service picks whichever team SC2Pulse says was played
     // most recently across the entire union, biased to the streamer's
     // last-played region — so a multi-region streamer who pasted a NA
     // toon plus two stale numeric chips still sees "NA 5377" when their
     // most recent replay was on NA, instead of "KR 5377" because some
     // other Pulse account on KR was touched yesterday.
+    //
+    // This deliberately runs even when a stored ``myMmr`` was found.
+    // Replay MMR is a historical game-time anchor; treating it as the
+    // current value made the widget lag one game and permanently skipped
+    // the only post-match source of truth. When Pulse misses, the stored
+    // value remains as the fail-soft fallback.
     if (
-      mmrCurrent === undefined &&
       this.pulseMmr &&
       typeof this.pulseMmr.getCurrentMmrForAny === "function" &&
       pulseIdsUnion.length > 0
     ) {
       try {
+        const pulseOpts = {
+          ...(preferredRegion ? { preferredRegion } : {}),
+          ...(opts.refreshCurrentMmr ? { forceRefresh: true } : {}),
+        };
         const pulse = await this.pulseMmr.getCurrentMmrForAny(
           pulseIdsUnion,
-          preferredRegion ? { preferredRegion } : undefined,
+          Object.keys(pulseOpts).length > 0 ? pulseOpts : undefined,
         );
         if (pulse && Number.isFinite(pulse.mmr)) {
           mmrCurrent = pulse.mmr;
@@ -622,13 +633,12 @@ class GamesService {
         // bubbling out of an unfamiliar fetch implementation.
       }
     }
-    // Legacy single-id fallback: only fires when the injected pulseMmr
-    // service is a slim test stub that doesn't expose the new
+    // Legacy single-id current-rating path: only fires when the injected
+    // pulseMmr service is a slim test stub that doesn't expose the new
     // ``getCurrentMmrForAny`` API. Production always takes the multi-id
     // branch above; this preserves the contract for older tests that
     // mock just the single-id methods.
     if (
-      mmrCurrent === undefined &&
       this.pulseMmr &&
       typeof this.pulseMmr.getCurrentMmrForAny !== "function" &&
       profile &&
@@ -649,8 +659,8 @@ class GamesService {
       }
     }
     if (
-      mmrCurrent === undefined &&
       this.pulseMmr &&
+      mmrSource !== "pulse_pulseid" &&
       typeof this.pulseMmr.getCurrentMmrForAny !== "function" &&
       typeof this.pulseMmr.getCurrentMmrByToon === "function" &&
       lastKnownMyToonHandle

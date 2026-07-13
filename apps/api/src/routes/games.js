@@ -347,6 +347,11 @@ function buildGamesRouter(deps) {
       }
       // Realtime nudge so an open SPA tab refreshes without polling.
       if (deps.io && accepted.length > 0) {
+        // Reuse the same freshness gate for the session MMR refresh and
+        // the post-game overlay fan-out. Historical resync batches must
+        // not bypass the Pulse cache, while a genuinely new match must
+        // not inherit the pre-game rating for another five minutes.
+        const freshGame = pickFreshOverlayGame(incoming, accepted);
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
         });
@@ -356,7 +361,9 @@ function buildGamesRouter(deps) {
         // ``socket.data.timezone`` — "today" depends on the streamer's
         // wall clock, not on UTC. Best-effort: a transient resolveSocket
         // failure for one overlay must not block the ingest response.
-        emitSessionUpdate(deps.io, deps.games, userId).catch((err) => {
+        emitSessionUpdate(deps.io, deps.games, userId, {
+          refreshCurrentMmr: !!freshGame,
+        }).catch((err) => {
           if (req.log) {
             req.log.warn(
               { err, userId },
@@ -381,7 +388,6 @@ function buildGamesRouter(deps) {
         // game of the batch (not the last array element) so a real
         // game finishing mid-backfill still reaches the stream.
         if (deps.overlayLive && deps.overlayTokens) {
-          const freshGame = pickFreshOverlayGame(incoming, accepted);
           if (freshGame) {
             emitOverlayLive(
               deps.io,
@@ -477,21 +483,42 @@ function buildGamesRouter(deps) {
  * @param {import('socket.io').Server} io
  * @param {import('../services/types').GamesService} games
  * @param {string} userId
+ * @param {{refreshCurrentMmr?: boolean}} [opts]
  */
-async function emitSessionUpdate(io, games, userId) {
+async function emitSessionUpdate(io, games, userId, opts = {}) {
   if (!io || !games || !userId) return;
   /** @type {any[]} */
   const sockets = await io.in(`user:${userId}`).fetchSockets();
+  let refreshCurrentMmr = !!opts.refreshCurrentMmr;
   for (const socket of sockets) {
     if (socket?.data?.kind !== "overlay") continue;
     /** @type {string|undefined} */
     const tz = socket.data.timezone;
     try {
-      const session = await games.todaySession(userId, tz);
+      const session = await games.todaySession(userId, tz, {
+        refreshCurrentMmr,
+      });
+      // The first successful resolve bypasses and repopulates the
+      // process-wide Pulse cache. Remaining overlay sockets can reuse
+      // that fresh value instead of issuing one network request each.
+      refreshCurrentMmr = false;
       if (session) socket.emit("overlay:session", session);
     } catch {
       // Per-overlay failure is non-fatal — keep walking the list so
       // one bad socket doesn't starve the others of their update.
+    }
+  }
+  // A Browser Source can be disconnected while the match finishes
+  // (scene unloaded, OBS restart). Still repopulate the Pulse cache for
+  // a fresh game so reconnecting seconds later cannot resurrect the
+  // pre-game rating. This remains fire-and-forget with the ingest route.
+  if (refreshCurrentMmr) {
+    try {
+      await games.todaySession(userId, undefined, {
+        refreshCurrentMmr: true,
+      });
+    } catch {
+      // Best-effort cache warm; the next connect/refresher retries.
     }
   }
 }
