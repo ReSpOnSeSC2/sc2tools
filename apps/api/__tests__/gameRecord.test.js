@@ -46,6 +46,41 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(false);
   });
 
+  test("accepts and preserves replay game version/build provenance", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-07-01T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      gameVersion: "5.0.16.97425",
+      gameBuild: 97425,
+    });
+    expect(r.valid).toBe(true);
+    if (r.valid) {
+      const value = /** @type {any} */ (r.value);
+      expect(value.gameVersion).toBe("5.0.16.97425");
+      expect(value.gameBuild).toBe(97425);
+    }
+  });
+
+  test.each([
+    { gameVersion: "5.0.16" },
+    { gameVersion: "5.0.16-beta.97425" },
+    { gameBuild: "97425" },
+    { gameBuild: 0 },
+  ])("rejects malformed replay version/build provenance: %j", (fields) => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-07-01T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      ...fields,
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test.each([
     ["replay", 5378],
     ["unavailable", undefined],

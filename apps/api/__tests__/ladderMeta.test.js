@@ -219,6 +219,119 @@ describe("ladder meta radar", () => {
     expect(after.openers[0].build).toBe(B);
   });
 
+  test("replay build and version override a contradictory replay date", async () => {
+    idSeq = 30000;
+    const beforeDate = new Date("2026-06-20T12:00:00.000Z");
+    const afterDate = new Date("2026-06-25T12:00:00.000Z");
+    await db.games.insertMany([
+      ...bucket({
+        build: A,
+        count: 60,
+        wins: 45,
+        extra: {
+          date: beforeDate,
+          gameVersion: "5.0.16.97425",
+          gameBuild: 97425,
+        },
+      }),
+      ...bucket({
+        build: B,
+        count: 60,
+        wins: 15,
+        extra: {
+          date: afterDate,
+          gameVersion: "5.0.15.95299",
+          gameBuild: 95299,
+        },
+      }),
+    ]);
+
+    await svc.recompute();
+
+    const before = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "before" });
+    const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
+    expect(before).toMatchObject({ era: "before", n: 60 });
+    expect(after).toMatchObject({ era: "after", n: 60 });
+    expect(before.openers[0].build).toBe(B);
+    expect(after.openers[0].build).toBe(A);
+  });
+
+  test("release string is used when build metadata is unavailable", async () => {
+    idSeq = 40000;
+    await db.games.insertMany([
+      ...bucket({
+        build: A,
+        count: 60,
+        wins: 45,
+        extra: {
+          date: new Date("2026-06-20T12:00:00.000Z"),
+          gameVersion: "5.0.16.97364",
+        },
+      }),
+      ...bucket({
+        build: B,
+        count: 60,
+        wins: 15,
+        extra: {
+          date: new Date("2026-06-25T12:00:00.000Z"),
+          gameVersion: "5.0.15.95299",
+        },
+      }),
+      ...bucket({
+        build: C,
+        count: 60,
+        wins: 30,
+        oppRace: "Terran",
+        extra: {
+          date: new Date("2026-06-20T12:00:00.000Z"),
+          gameVersion: "5.0.17.100001",
+        },
+      }),
+    ]);
+
+    await svc.recompute();
+
+    const before = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "before" });
+    const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
+    expect(before).toMatchObject({ era: "before", n: 60 });
+    expect(after).toMatchObject({ era: "after", n: 60 });
+    expect(before.openers[0].build).toBe(B);
+    expect(after.openers[0].build).toBe(A);
+    await expect(svc.lookup({ leagueId: DIAMOND, matchup: "PvT", era: "after" }))
+      .resolves.toMatchObject({ era: "after", n: 60 });
+  });
+
+  test("overlapping recompute triggers queue one fresh serialized pass", async () => {
+    const isolated = new LadderMetaService(db, { logger: null });
+    let releaseFirst;
+    const firstGate = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    let calls = 0;
+    isolated._recomputeOnce = jest.fn(async () => {
+      calls += 1;
+      if (calls === 1) await firstGate;
+      return {
+        bands: calls,
+        leagueBands: calls,
+        mmrBands: 0,
+        updatedAt: new Date(calls),
+      };
+    });
+
+    const scheduled = isolated.recompute();
+    const repairTriggered = isolated.recompute();
+    releaseFirst();
+
+    const [firstResult, secondResult] = await Promise.all([
+      scheduled,
+      repairTriggered,
+    ]);
+    expect(isolated._recomputeOnce).toHaveBeenCalledTimes(2);
+    expect(firstResult.bands).toBe(2);
+    expect(secondResult.bands).toBe(2);
+  });
+
   test("week-over-week deltas appear after a second, shifted recompute", async () => {
     await seedCorpus();
     await svc.recompute(); // run 1: opener A winrate .70

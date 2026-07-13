@@ -104,8 +104,11 @@ const PATCH_ERA_AFTER = "after";
 const PATCH_ERA_BEFORE = "before";
 /** @type {ReadonlyArray<"after" | "before">} */
 const PATCH_ERAS = Object.freeze([PATCH_ERA_AFTER, PATCH_ERA_BEFORE]);
-// Official 5.0.16 release publication. The instant is shared with the web
-// preset so a replay can never appear in both eras or fall between them.
+// First live 5.0.16 build. New agent uploads carry the replay's exact build
+// and release string, so the meta split follows the game version even when a
+// replay's timestamp is skewed. The release instant remains the compatibility
+// fallback for rows uploaded before version metadata existed.
+const PATCH_5_0_16_BUILD = 97364;
 const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
 const BAND_INDEX_KEY = Object.freeze({ era: 1, bandType: 1, band: 1, matchup: 1 });
 
@@ -167,6 +170,12 @@ class LadderMetaService {
     this.coll = db.db.collection(COLLECTION_NAME);
     this.logger = opts.logger || null;
     this.now = opts.now || (() => Date.now());
+    /** @type {Promise<{
+     *   bands: number, leagueBands: number, mmrBands: number, updatedAt: Date
+     * }>|null} */
+    this.recomputeInFlight = null;
+    this.recomputeQueued = false;
+    this.lastRecomputeAt = 0;
   }
 
   /**
@@ -179,7 +188,43 @@ class LadderMetaService {
    * }>}
    */
   async recompute() {
-    const updatedAt = new Date(this.now());
+    if (this.recomputeInFlight) {
+      // A repair may finish while the scheduled startup rebuild is still
+      // running. Coalesce callers, but queue one fresh pass so the older
+      // snapshot can never be the last writer.
+      this.recomputeQueued = true;
+      return this.recomputeInFlight;
+    }
+    this.recomputeInFlight = (async () => {
+      let result;
+      do {
+        this.recomputeQueued = false;
+        result = await this._recomputeOnce();
+      } while (this.recomputeQueued);
+      return result;
+    })();
+    try {
+      return await this.recomputeInFlight;
+    } finally {
+      this.recomputeInFlight = null;
+    }
+  }
+
+  /**
+   * One serialized aggregate pass. Public callers use ``recompute`` so
+   * scheduled and enrichment-triggered rebuilds share the same queue.
+   *
+   * @returns {Promise<{
+   *   bands: number, leagueBands: number, mmrBands: number, updatedAt: Date
+   * }>}
+   */
+  async _recomputeOnce() {
+    // Queued passes can begin in the same wall-clock millisecond. Keep the
+    // derived-cache stamp strictly increasing so stale cleanup can still
+    // distinguish and remove rows that vanished between those passes.
+    const stamp = Math.max(this.now(), this.lastRecomputeAt + 1);
+    this.lastRecomputeAt = stamp;
+    const updatedAt = new Date(stamp);
     await migrateBandIndex(this.coll);
     const priorByKey = await readPriorRows(this.coll);
     const aggregates = await Promise.all(
@@ -441,13 +486,75 @@ function buildGamesMatch(bandType, era) {
     : { "opponent.leagueId": { $type: "number" } };
   return {
     ...bandMatch,
-    date: era === PATCH_ERA_BEFORE
-      ? { $lt: PATCH_5_0_16_RELEASE }
-      : { $gte: PATCH_5_0_16_RELEASE },
     myRace: { $type: "string" },
     "opponent.race": { $type: "string" },
     myBuild: { $type: "string", $ne: "", $not: /Game Too Short$/ },
-    $or: [{ playerCount: { $exists: false } }, { playerCount: 2 }],
+    $and: [
+      buildEraMatch(era),
+      { $or: [{ playerCount: { $exists: false } }, { playerCount: 2 }] },
+    ],
+  };
+}
+
+/**
+ * Prefer replay-authored version metadata over wall-clock time. ``gameBuild``
+ * is monotonic and therefore authoritative. ``gameVersion`` covers partially
+ * upgraded producers, while ``date`` keeps the historical corpus queryable.
+ * The branches are mutually exclusive so a row cannot land in both eras.
+ *
+ * @param {"after" | "before"} era
+ * @returns {Record<string, any>}
+ */
+function buildEraMatch(era) {
+  const missingBuild = { gameBuild: { $not: { $type: "number" } } };
+  const missingVersion = { gameVersion: { $not: { $type: "string" } } };
+  const versionBuild = {
+    $convert: {
+      input: { $arrayElemAt: [{ $split: ["$gameVersion", "."] }, -1] },
+      to: "int",
+      onError: -1,
+      onNull: -1,
+    },
+  };
+  if (era === PATCH_ERA_BEFORE) {
+    return {
+      $or: [
+        { gameBuild: { $type: "number", $lt: PATCH_5_0_16_BUILD } },
+        {
+          $and: [
+            missingBuild,
+            { gameVersion: { $type: "string" } },
+            { $expr: { $lt: [versionBuild, PATCH_5_0_16_BUILD] } },
+          ],
+        },
+        {
+          $and: [
+            missingBuild,
+            missingVersion,
+            { date: { $lt: PATCH_5_0_16_RELEASE } },
+          ],
+        },
+      ],
+    };
+  }
+  return {
+    $or: [
+      { gameBuild: { $type: "number", $gte: PATCH_5_0_16_BUILD } },
+      {
+        $and: [
+          missingBuild,
+          { gameVersion: { $type: "string" } },
+          { $expr: { $gte: [versionBuild, PATCH_5_0_16_BUILD] } },
+        ],
+      },
+      {
+        $and: [
+          missingBuild,
+          missingVersion,
+          { date: { $gte: PATCH_5_0_16_RELEASE } },
+        ],
+      },
+    ],
   };
 }
 
@@ -696,6 +803,7 @@ module.exports = {
   BAND_INDEX_KEY,
   PATCH_ERA_AFTER,
   PATCH_ERA_BEFORE,
+  PATCH_5_0_16_BUILD,
   PATCH_5_0_16_RELEASE,
   buildRecomputePipeline,
   migrateBandIndex,

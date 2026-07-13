@@ -48,6 +48,16 @@ const GAME_SCHEMA = {
     // Optional — games from agents predating this field fall back to
     // the proxy.
     isLadderGame: { type: "boolean" },
+    // Exact client provenance from the replay header. ``gameVersion``
+    // preserves sc2reader's four-part release string (for example
+    // 5.0.16.97425); ``gameBuild`` is the numeric client build. Both
+    // remain optional for records uploaded by pre-cutover agents.
+    gameVersion: {
+      type: "string",
+      pattern: "^[0-9]+(?:\\.[0-9]+){3}$",
+      maxLength: 40,
+    },
+    gameBuild: { type: "integer", minimum: 1, maximum: 2147483647 },
     durationSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
     macroScore: { type: "number", minimum: 0, maximum: 100 },
     apm: { type: "number", minimum: 0, maximum: 5000 },
@@ -98,6 +108,10 @@ const GAME_SCHEMA = {
         // when Pulse had no matching-race rating, so misses do not
         // re-enter the queue forever.
         mmrLookupAttempted: { type: "boolean" },
+        // Independent server-owned one-shot marker for league repair.
+        // Separate from MMR because older rows may already have a rating
+        // while still lacking the leagueId required by league-band meta.
+        leagueLookupAttempted: { type: "boolean" },
         displayName: { type: "string", maxLength: 80 },
         race: { type: "string", maxLength: 24 },
         mmr: { type: "integer", minimum: 0, maximum: 9999 },

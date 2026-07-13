@@ -21,6 +21,7 @@ classes via the supplied helpers.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -59,6 +60,12 @@ class ReplayContext:
     date_iso: str = "unknown"
     length_seconds: int = 0
     is_ai_game: bool = False
+    # Exact client provenance from the replay header. ``game_version``
+    # keeps sc2reader's full release string (for example
+    # ``5.0.16.97425``); ``game_build`` keeps the numeric client build.
+    # Both are optional so corrupt/legacy replays still parse cleanly.
+    game_version: Optional[str] = None
+    game_build: Optional[int] = None
 
     me: Optional[PlayerInfo] = None
     opponent: Optional[PlayerInfo] = None
@@ -88,6 +95,34 @@ class ReplayContext:
 # =========================================================
 # Identity helpers
 # =========================================================
+_GAME_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)\.(\d+)$")
+
+
+def _normalise_game_version(value: Any) -> Optional[str]:
+    """Return a canonical four-part SC2 release string.
+
+    ``sc2reader.Replay.release_string`` is built from the replay header
+    as ``major.minor.patch.build``. Treat the value as untrusted replay
+    input: whitespace and leading zeroes are normalised, while malformed
+    or non-string values are omitted instead of leaking arbitrary text to
+    the cloud record.
+    """
+    if not isinstance(value, str):
+        return None
+    match = _GAME_VERSION_RE.fullmatch(value.strip())
+    if not match:
+        return None
+    return ".".join(str(int(part)) for part in match.groups())
+
+
+def _normalise_game_build(value: Any) -> Optional[int]:
+    """Return a positive replay client build, or ``None`` when absent."""
+    # bool is an int subclass, but never a valid SC2 client build.
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
 def is_me(player_name: str, my_handle: str) -> bool:
     """
     Substring-match the configured player handle against a replay
@@ -278,6 +313,10 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     ctx = ReplayContext(file_path=os.path.abspath(file_path), depth=depth, raw=replay)
     ctx.map_name = getattr(replay, "map_name", "") or ""
     ctx.date_iso = replay.date.isoformat() if getattr(replay, "date", None) else "unknown"
+    ctx.game_version = _normalise_game_version(
+        getattr(replay, "release_string", None)
+    )
+    ctx.game_build = _normalise_game_build(getattr(replay, "build", None))
     gl = getattr(replay, "game_length", None)
     ctx.length_seconds = gl.seconds if gl else 0
 

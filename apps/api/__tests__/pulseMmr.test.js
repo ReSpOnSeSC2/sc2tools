@@ -957,6 +957,19 @@ describe("services/pulseMmr", () => {
       });
       const svc = new PulseMmrService({ fetchImpl });
       expect(await svc.getRaceBreakdown(["994428"])).toEqual([]);
+      await expect(svc.getRaceBreakdown(["994428"], { throwOnError: true }))
+        .resolves.toEqual([]);
+    });
+
+    test("strict lookups distinguish a transport failure from an empty team list", async () => {
+      const fetchImpl = jest.fn(async () => {
+        throw new Error("Pulse unavailable");
+      });
+      const svc = new PulseMmrService({ fetchImpl });
+
+      await expect(svc.getRaceBreakdown(["994428"])).resolves.toEqual([]);
+      await expect(svc.getRaceBreakdown(["994428"], { throwOnError: true }))
+        .rejects.toThrow("Pulse unavailable");
     });
 
     test("with a region hint, queries only that region's season (one call)", async () => {

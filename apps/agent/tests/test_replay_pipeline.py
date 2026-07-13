@@ -298,6 +298,23 @@ def test_to_payload_omits_is_ladder_game_when_unset():
     assert "isLadderGame" not in _bare_cloud_game().to_payload()
 
 
+def test_to_payload_emits_exact_game_version_and_build():
+    """The cloud must receive replay-header provenance verbatim enough
+    to classify patch eras without guessing from the replay date."""
+    payload = _bare_cloud_game(
+        game_version="5.0.16.97425",
+        game_build=97425,
+    ).to_payload()
+    assert payload["gameVersion"] == "5.0.16.97425"
+    assert payload["gameBuild"] == 97425
+
+
+def test_to_payload_omits_game_version_and_build_when_unset():
+    payload = _bare_cloud_game().to_payload()
+    assert "gameVersion" not in payload
+    assert "gameBuild" not in payload
+
+
 def test_is_ladder_game_reads_replay_category():
     """``_is_ladder_game`` trusts sc2reader's category, with an amm
     boolean fallback, and returns None when neither is present."""
@@ -689,6 +706,8 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     fake_ctx = SimpleNamespace(
         game_id="2026-05-06T17:48:32|Opp|Goldenaura|600",
         date_iso="2026-05-06T17:48:32",
+        game_version="5.0.16.97425",
+        game_build=97425,
         map_name="Goldenaura",
         length_seconds=600,
         is_ai_game=False,
@@ -885,6 +904,8 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # forever. ``raw`` here is a bare object() → ladder-ness unknown →
     # the field is trusted and shipped.
     assert payload["opponent"]["leagueId"] == 5
+    assert payload["gameVersion"] == "5.0.16.97425"
+    assert payload["gameBuild"] == 97425
 
 
 def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(

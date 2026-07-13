@@ -174,15 +174,22 @@ async function main() {
   });
   pulseBackfill.start();
 
-  // Forward-only game-level opponent MMR enrichment. Pulse exposes a
-  // current per-race rating, so this worker only considers recently
-  // inserted ladder games and marks every lookup once. It shares the
-  // process-wide PulseMmrService cache and coordinates replicas via a
-  // Mongo advisory lock.
+  // Forward-only game-level opponent MMR + league enrichment. Pulse exposes
+  // current per-race ladder metadata, so this worker only considers recently
+  // inserted ladder games and marks each lookup once. When it repairs league
+  // rows, refresh the public aggregate immediately instead of leaving the
+  // recovered sample invisible until the next nightly rebuild.
   const opponentMmrEnrichment = buildOpponentMmrEnrichmentJob({
     db,
     pulseMmr: /** @type {any} */ (services).pulseMmr,
     logger,
+    onLeagueEnriched: async (summary) => {
+      const result = await /** @type {any} */ (services).ladderMeta.recompute();
+      logger.info(
+        { leagueEnriched: summary.leagueEnriched, bands: result.bands },
+        "ladder_meta_refreshed_after_league_enrichment",
+      );
+    },
   });
   opponentMmrEnrichment.start();
 

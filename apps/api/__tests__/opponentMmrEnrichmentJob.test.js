@@ -92,18 +92,20 @@ function pulseFake(responses = {}) {
     ]);
     const pulse = pulseFake({
       101: [
-        { race: "ZERG", mmr: 6100, games: 20 },
-        { race: "PROTOSS", mmr: 4210.6, games: 10 },
+        { race: "ZERG", mmr: 6100, games: 20, league: "Grandmaster" },
+        { race: "PROTOSS", mmr: 4210.6, games: 10, league: "Diamond" },
       ],
-      102: [{ race: "TERRAN", mmr: 4321, games: 10 }],
-      103: [{ race: "ZERG", mmr: 4432.4, games: 10 }],
+      102: [{ race: "TERRAN", mmr: 4321, games: 10, league: "Master" }],
+      103: [{ race: "ZERG", mmr: 4432.4, games: 10, league: 4 }],
     });
 
     await build(pulse).runOnce();
 
     const rows = await db.games.find({}).sort({ gameId: 1 }).toArray();
     expect(rows.map((row) => row.opponent.mmr)).toEqual([4211, 4321, 4432]);
+    expect(rows.map((row) => row.opponent.leagueId)).toEqual([4, 5, 4]);
     expect(rows.every((row) => row.opponent.mmrLookupAttempted === true)).toBe(true);
+    expect(rows.every((row) => row.opponent.leagueLookupAttempted === true)).toBe(true);
   });
 
   test.each([
@@ -178,6 +180,7 @@ function pulseFake(responses = {}) {
       game("attempted-501", {
         pulseCharacterId: "501",
         mmrLookupAttempted: true,
+        leagueLookupAttempted: true,
       }),
     );
     const pulse = pulseFake({
@@ -191,7 +194,7 @@ function pulseFake(responses = {}) {
     expect(row.opponent).not.toHaveProperty("mmr");
   });
 
-  test("server-owned MMR fields survive an agent re-upload", async () => {
+  test("server-owned MMR and league fields survive an agent re-upload", async () => {
     const games = new GamesService(db);
     await games.upsert("user-1", {
       gameId: "reupload-551",
@@ -210,6 +213,8 @@ function pulseFake(responses = {}) {
         $set: {
           "opponent.mmr": 4551,
           "opponent.mmrLookupAttempted": true,
+          "opponent.leagueId": 5,
+          "opponent.leagueLookupAttempted": true,
         },
       },
     );
@@ -229,6 +234,8 @@ function pulseFake(responses = {}) {
     const row = await db.games.findOne({ gameId: "reupload-551" });
     expect(row.opponent.mmr).toBe(4551);
     expect(row.opponent.mmrLookupAttempted).toBe(true);
+    expect(row.opponent.leagueId).toBe(5);
+    expect(row.opponent.leagueLookupAttempted).toBe(true);
   });
 
   test("honors the per-tick cap and processes the remainder next cycle", async () => {
@@ -272,7 +279,7 @@ function pulseFake(responses = {}) {
     expect(await db.db.collection("jobLocks").findOne({ key: lockKey })).not.toBeNull();
   });
 
-  test("Pulse empty and error responses leave MMR null but mark every attempt", async () => {
+  test("Pulse misses are one-shot while transport errors remain retryable", async () => {
     await db.games.insertMany([
       game("pulse-801", { pulseCharacterId: "801" }),
       game("pulse-802", { pulseCharacterId: "802" }),
@@ -284,10 +291,18 @@ function pulseFake(responses = {}) {
 
     await build(pulse).runOnce();
 
-    const rows = await db.games.find({}).toArray();
-    expect(rows.every((row) => row.opponent.mmrLookupAttempted === true)).toBe(true);
-    expect(rows.every((row) => row.opponent.mmr === undefined)).toBe(true);
+    const miss = await db.games.findOne({ gameId: "pulse-801" });
+    const failed = await db.games.findOne({ gameId: "pulse-802" });
+    expect(miss.opponent.mmrLookupAttempted).toBe(true);
+    expect(miss.opponent.leagueLookupAttempted).toBe(true);
+    expect(miss.opponent).not.toHaveProperty("mmr");
+    expect(failed.opponent).not.toHaveProperty("mmrLookupAttempted");
+    expect(failed.opponent).not.toHaveProperty("leagueLookupAttempted");
     expect(pulse.calls.sort()).toEqual(["801", "802"]);
+
+    await build(pulse).runOnce();
+    expect(pulse.calls.filter((id) => id === "801")).toHaveLength(1);
+    expect(pulse.calls.filter((id) => id === "802")).toHaveLength(2);
   });
 
   test("selects ladder=true or league-present rows and excludes ineligible rows", async () => {
@@ -301,22 +316,59 @@ function pulseFake(responses = {}) {
       game("select-903", { pulseCharacterId: "903" }, { isLadderGame: false }),
       game("select-904", { pulseCharacterId: "" }),
       game("select-905", { pulseCharacterId: "905", race: "Random" }),
-      game("select-906", { pulseCharacterId: "906", mmr: 4900 }),
+      game("select-906", {
+        pulseCharacterId: "906",
+        mmr: 4900,
+        mmrLookupAttempted: true,
+      }),
     ]);
     const pulse = pulseFake({
-      901: [{ race: "PROTOSS", mmr: 4901 }],
-      902: [{ race: "PROTOSS", mmr: 4902 }],
+      901: [{ race: "PROTOSS", mmr: 4901, league: "Diamond" }],
+      902: [{ race: "PROTOSS", mmr: 4902, league: "Master" }],
       903: [{ race: "PROTOSS", mmr: 4903 }],
       905: [{ race: "RANDOM", mmr: 4905 }],
-      906: [{ race: "PROTOSS", mmr: 4906 }],
+      906: [{ race: "PROTOSS", mmr: 4906, league: "Master" }],
     });
 
     await build(pulse).runOnce();
 
-    expect(pulse.calls.sort()).toEqual(["901", "902"]);
-    expect(await db.games.countDocuments({ "opponent.mmrLookupAttempted": true })).toBe(2);
+    expect(pulse.calls.sort()).toEqual(["901", "902", "906"]);
+    expect(await db.games.countDocuments({ "opponent.mmrLookupAttempted": true })).toBe(3);
     const eligible = await db.games.find({ gameId: { $in: ["select-901", "select-902"] } }).toArray();
     expect(eligible.map((row) => row.opponent.mmr).sort()).toEqual([4901, 4902]);
+    const leagueOnly = await db.games.findOne({ gameId: "select-906" });
+    expect(leagueOnly.opponent.mmr).toBe(4900);
+    expect(leagueOnly.opponent.mmrLookupAttempted).toBe(true);
+    expect(leagueOnly.opponent.leagueId).toBe(5);
+    expect(leagueOnly.opponent.leagueLookupAttempted).toBe(true);
+  });
+
+  test("normalizes Pulse league shapes and rejects missing or invalid values", () => {
+    expect(__internal.normalizeLeagueId("Grandmaster")).toBe(6);
+    expect(__internal.normalizeLeagueId({ type: 3 })).toBe(3);
+    expect(__internal.normalizeLeagueId("0")).toBe(0);
+    expect(__internal.normalizeLeagueId(null)).toBeNull();
+    expect(__internal.normalizeLeagueId("Unknown")).toBeNull();
+    expect(__internal.normalizeLeagueId(7)).toBeNull();
+  });
+
+  test("notifies aggregate refresh after a league is repaired", async () => {
+    await db.games.insertOne(
+      game("refresh-951", {
+        pulseCharacterId: "951",
+        mmr: 4951,
+      }),
+    );
+    const pulse = pulseFake({
+      951: [{ race: "PROTOSS", mmr: 4951, league: "Master" }],
+    });
+    const onLeagueEnriched = jest.fn(async () => {});
+
+    const summary = await build(pulse, { onLeagueEnriched }).runOnce();
+
+    expect(summary.leagueEnriched).toBe(1);
+    expect(onLeagueEnriched).toHaveBeenCalledTimes(1);
+    expect(onLeagueEnriched).toHaveBeenCalledWith(summary);
   });
 
   test("concurrent runOnce calls coalesce onto one Pulse request", async () => {

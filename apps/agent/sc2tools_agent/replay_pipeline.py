@@ -372,6 +372,12 @@ class CloudGame:
     # map) classifies correctly. ``None`` when the replay doesn't expose
     # the field — the cloud then falls back to the map-name proxy.
     is_ladder_game: Optional[bool] = None
+    # Exact SC2 client provenance read from the replay header by the
+    # shared replay engine. ``game_version`` is the full sc2reader
+    # release string (for example ``5.0.16.97425``); ``game_build`` is
+    # the numeric client build. Optional for legacy/corrupt replays.
+    game_version: Optional[str] = None
+    game_build: Optional[int] = None
     # Optional structured outputs the cloud uses to render the Activity
     # tab's per-game charts and the macro-breakdown drilldown. Computing
     # these requires a deep parse + extra event walks; we attach them
@@ -424,6 +430,10 @@ class CloudGame:
             out["playerCount"] = int(self.player_count)
         if self.is_ladder_game is not None:
             out["isLadderGame"] = bool(self.is_ladder_game)
+        if self.game_version:
+            out["gameVersion"] = str(self.game_version)
+        if self.game_build is not None:
+            out["gameBuild"] = int(self.game_build)
         if self.opponent:
             out["opponent"] = self.opponent
         if self.macro_breakdown is not None:
@@ -776,6 +786,8 @@ def parse_replay_for_cloud_ex(
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
         is_ladder_game=is_ladder,
+        game_version=getattr(ctx, "game_version", None),
+        game_build=getattr(ctx, "game_build", None),
         opponent=opponent,
         build_log=my_build_log,
         early_build_log=early_build_log,

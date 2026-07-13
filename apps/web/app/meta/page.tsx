@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, CloudOff } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { MetaControls } from "@/components/meta/MetaControls";
 import { LadderMetaReport } from "@/components/meta/LadderMetaReport";
 import {
@@ -88,9 +88,9 @@ export default async function MetaPage({
   const label = bandLabel(axis, band);
 
   // Public endpoint — fetched server-side (no auth) so the report ships as
-  // crawlable HTML. Cached briefly; the underlying table only moves once a
-  // day when the recompute job runs.
-  const data = await getJson<{ row: MetaRow }>(
+  // crawlable HTML. Cached briefly; the aggregate is rebuilt periodically and
+  // immediately after the metadata repair worker recovers league samples.
+  const { data, status } = await getJsonWithStatus<{ row: MetaRow }>(
     `/v1/meta/ladder?axis=${axis}&band=${band}&matchup=${encodeURIComponent(matchup)}&era=${era}`,
     { revalidateSec: 3600 },
   );
@@ -108,7 +108,7 @@ export default async function MetaPage({
 
       {row ? (
         <LadderMetaReport row={row} axis={axis} band={band} />
-      ) : (
+      ) : status === 404 ? (
         <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
           <EmptyStatePanel
             size="lg"
@@ -119,6 +119,15 @@ export default async function MetaPage({
                 ? "We only publish a band once it clears a k-anonymity floor of real ladder games. Try League, another MMR band, or another matchup — or check back as the recent-game sample grows."
                 : "We only publish a band once it clears a k-anonymity floor of real ladder games. Try another league, switch to MMR, or choose another matchup."
             }
+          />
+        </div>
+      ) : (
+        <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
+          <EmptyStatePanel
+            size="lg"
+            icon={<CloudOff className="h-5 w-5" aria-hidden />}
+            title="Ladder meta temporarily unavailable"
+            description="We couldn't load the community stats service just now. This is usually a brief blip — try refreshing in a minute."
           />
         </div>
       )}

@@ -463,7 +463,7 @@ class PulseMmrService {
    *
    * @private
    * @param {string[]} ids numeric SC2Pulse character ids
-   * @param {{onlyRegion?: string|null}} [opts] when ``onlyRegion`` maps
+   * @param {{onlyRegion?: string|null, throwOnError?: boolean}} [opts] when ``onlyRegion`` maps
    *   to a known SC2Pulse region, query ONLY that region's current
    *   season. A characterId belongs to exactly one region, so when the
    *   caller knows the opponent's region this is one HTTP call instead
@@ -476,13 +476,18 @@ class PulseMmrService {
    * }>>}
    */
   async _collectTeamCandidates(ids, opts = {}) {
-    if (!this.fetchImpl) return [];
+    if (!this.fetchImpl) {
+      if (opts.throwOnError) throw new Error("SC2Pulse fetch unavailable");
+      return [];
+    }
     if (!Array.isArray(ids) || ids.length === 0) return [];
     // Probe per-region — SC2Pulse's /group/team returns nothing without
     // a season id, and seasons are scoped per region. The legacy SPA
     // walked every region's current season; we do the same so the
     // session widget tracks whichever region the streamer is on now.
-    const seasons = await this._currentSeasonsByRegion();
+    const seasons = await this._currentSeasonsByRegion({
+      throwOnError: opts.throwOnError === true,
+    });
     if (seasons.size === 0) return [];
     /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, revealedName: string|null}>} */
     const candidates = [];
@@ -528,8 +533,13 @@ class PulseMmrService {
         `?season=${seasonId}` +
         `&queue=${PULSE_QUEUE}` +
         `&${idsParam}`;
-      const teams = await this._getJson(url);
-      if (!Array.isArray(teams)) continue;
+      const teams = await this._getJson(url, {
+        throwOnError: opts.throwOnError === true,
+      });
+      if (!Array.isArray(teams)) {
+        if (opts.throwOnError) throw new Error("SC2Pulse team response malformed");
+        continue;
+      }
       for (const team of teams) {
         const rating = Number(team && team.rating);
         if (!Number.isFinite(rating) || rating <= 0) continue;
@@ -602,7 +612,7 @@ class PulseMmrService {
    * than a streamer's own rating changes.
    *
    * @param {string[]} ids
-   * @param {{preferredRegion?: string|null}} [opts] when set, query only
+   * @param {{preferredRegion?: string|null, throwOnError?: boolean}} [opts] when set, query only
    *   that region's current season (the opponent's characterId lives in
    *   exactly one region) — one SC2Pulse call instead of one per region.
    * @returns {Promise<Array<{
@@ -628,6 +638,7 @@ class PulseMmrService {
     }
     const candidates = await this._collectTeamCandidates(numericIds, {
       onlyRegion: preferredRegion,
+      throwOnError: opts.throwOnError === true,
     });
     if (candidates.length === 0) {
       // Stale-while-error: keep the last good breakdown on a miss.
@@ -836,9 +847,10 @@ class PulseMmrService {
    * minutes after a season change.
    *
    * @private
+   * @param {{throwOnError?: boolean}} [opts]
    * @returns {Promise<Map<number, number>>}
    */
-  async _currentSeasonsByRegion() {
+  async _currentSeasonsByRegion(opts = {}) {
     const now = this.now();
     const cached = this._seasonCache.get("__fetchedAt__");
     if (cached && now - cached < this.cacheTtlMs && this._seasonCache.size > 1) {
@@ -848,7 +860,7 @@ class PulseMmrService {
       }
       if (out.size > 0) return out;
     }
-    const list = await this._getJson(`${PULSE_API_ROOT}/season/list/all`);
+    const list = await this._getJson(`${PULSE_API_ROOT}/season/list/all`, opts);
     /** @type {Map<number, number>} */
     const byRegion = new Map();
     if (Array.isArray(list)) {
@@ -867,6 +879,8 @@ class PulseMmrService {
       this._seasonCache.clear();
       this._seasonCache.set("__fetchedAt__", now);
       for (const [k, v] of byRegion) this._seasonCache.set(k, v);
+    } else if (opts.throwOnError) {
+      throw new Error("SC2Pulse season response unavailable");
     }
     return byRegion;
   }
@@ -874,10 +888,14 @@ class PulseMmrService {
   /**
    * @private
    * @param {string} url
+   * @param {{throwOnError?: boolean}} [opts]
    * @returns {Promise<any|null>}
    */
-  async _getJson(url) {
-    if (!this.fetchImpl) return null;
+  async _getJson(url, opts = {}) {
+    if (!this.fetchImpl) {
+      if (opts.throwOnError) throw new Error("SC2Pulse fetch unavailable");
+      return null;
+    }
     const controller =
       typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller
@@ -888,9 +906,16 @@ class PulseMmrService {
         signal: controller ? controller.signal : undefined,
         headers: { accept: "application/json" },
       });
-      if (!res || !res.ok) return null;
+      if (!res || !res.ok) {
+        if (opts.throwOnError) {
+          const status = res && typeof res.status === "number" ? res.status : "unknown";
+          throw new Error(`SC2Pulse request failed (${status})`);
+        }
+        return null;
+      }
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (opts.throwOnError) throw err;
       return null;
     } finally {
       if (timer) clearTimeout(timer);
