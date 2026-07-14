@@ -19,6 +19,7 @@ type MatchupRow = {
   race: "P" | "T" | "Z" | "R" | "U";
   netMmr: number;
   avgDelta: number;
+  pairs?: number;
   games: number;
   wins: number;
   losses: number;
@@ -28,9 +29,18 @@ type MatchupRow = {
 type Response = {
   matchups: MatchupRow[];
   totalGames?: number;
+  eligibleGames?: number;
   dropped?: {
-    outlierSwing: number;
+    outlierSwing?: number;
     missingMyMmr?: number;
+    untrustedMyMmr?: number;
+    missingIdentity?: number;
+    excludedNonRanked1v1?: number;
+    terminalGame?: number;
+    nextMissingMyMmr?: number;
+    nextUntrustedMyMmr?: number;
+    signMismatch?: number;
+    unsupportedResult?: number;
   };
 };
 
@@ -47,19 +57,17 @@ const COLOR_DANGER = "#ff6b6b";
 const COLOR_GRID = "#1f2533";
 const COLOR_TEXT_DIM = "#6b7280";
 
+function untrustedMmrMessage(count: number): string {
+  const noun = count === 1 ? "value is" : "values are";
+  return `${count} historical numeric MMR ${noun} not verified as replay-authored, so excluded. Update the agent, then use Re-sync from scratch.`;
+}
+
 /**
  * Net MMR per matchup.
  *
- * Sums the (next-game MMR − this-game MMR) for every consecutive
- * game pair in the filtered set and attributes the delta to the
- * opponent race of the FIRST game. The API drops pairs where the
- * gap or the delta look bigger than a single ladder game, so the
- * total never picks up MMR drift from games the agent didn't tag
- * with myMmr (the bug that briefly let "100% WR vs Protoss" read
- * as a net-negative). Surfaces matchups that are net-positive vs
- * net-negative for your ladder rating — sometimes a >50% WR
- * bleeds MMR because the matchmaker keeps queueing you into
- * lower-rated opponents.
+ * Attributes each verified next-MMR delta to the opponent race of the
+ * anchor game. Pairing is account-, selected-race-, and queue-aware and
+ * happens before display filters so hidden rows cannot be bridged.
  *
  * Diverging bar layout: zero is the centre, green to the right,
  * red to the left. A footer card per matchup shows games, WR, and
@@ -72,7 +80,9 @@ export function NetMmrByMatchupChart() {
   );
 
   const rows = useMemo(() => {
-    const matchups = (data?.matchups || []).filter((m) => m.games > 0);
+    const matchups = (data?.matchups || [])
+      .map((m) => ({ ...m, pairs: m.pairs ?? m.games }))
+      .filter((m) => m.pairs > 0);
     return matchups
       .map((m) => ({
         ...m,
@@ -103,11 +113,29 @@ export function NetMmrByMatchupChart() {
   }
 
   if (!rows.length) {
+    const untrusted = data?.dropped?.untrustedMyMmr ?? 0;
+    const hasFilteredGames = (data?.totalGames ?? 0) > 0;
     return (
       <Card title="Net MMR by matchup">
         <EmptyState
-          title="Not enough MMR-tagged games"
-          sub="Once your replays carry MMR, this chart attributes every climb / drop to the matchup that drove it."
+          title={
+            untrusted > 0
+              ? "Historical MMR needs a replay re-sync"
+              : hasFilteredGames
+                ? "No verified ranked 1v1 pairs"
+                : "Not enough MMR-tagged games"
+          }
+          sub={
+            untrusted > 0
+              ? untrustedMmrMessage(untrusted)
+              : "This chart needs consecutive ranked 1v1 replays with game-time MMR from both games."
+          }
+        />
+        <PairCoverageSummary
+          rows={rows}
+          totalGames={data?.totalGames}
+          eligibleGames={data?.eligibleGames}
+          dropped={data?.dropped}
         />
       </Card>
     );
@@ -116,12 +144,11 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        MMR gained (▶) or lost (◀) per opponent race, summed within
-        each region from consecutive ranked games. Each pair needs
-        your own MMR on both sides, so games the agent didn't tag
-        with MMR (older versions) sit out — the line under the
-        cards spells out how many. Single-game swings past ±150 MMR
-        (race switches, season resets) are dropped as outliers.
+        Game-time MMR gained (▶) or lost (◀) per opponent race. Only
+        consecutive, replay-verified ranked 1v1 games on the same account
+        and selected ladder race are paired. Missing or unverified MMR
+        breaks a pair; impossible result/delta signs and swings past ±150
+        are excluded and reported below.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -184,9 +211,9 @@ export function NetMmrByMatchupChart() {
               </span>
             </div>
             <div className="mt-0.5 text-micro tabular-nums text-text-dim">
-              {r.games} games · {pct1(r.winRate)} WR · avg{" "}
+              {r.pairs} pairs · {pct1(r.winRate)} WR · avg{" "}
               {r.avgDelta > 0 ? "+" : ""}
-              {r.avgDelta}/game
+              {r.avgDelta}/pair
             </div>
           </div>
         ))}
@@ -194,6 +221,7 @@ export function NetMmrByMatchupChart() {
       <PairCoverageSummary
         rows={rows}
         totalGames={data?.totalGames}
+        eligibleGames={data?.eligibleGames}
         dropped={data?.dropped}
       />
     </Card>
@@ -201,30 +229,32 @@ export function NetMmrByMatchupChart() {
 }
 
 /**
- * Reconciles the chart's pair count against the user's filtered
- * game count so the disparity isn't mysterious. The Win-Rate-by-MMR
- * chart uses an opponents-collection fallback for opp.mmr, which
- * picks up games where the agent never logged myMmr — those same
- * games can't form Net-MMR pairs (we need myMmr on both sides), so
- * Net-MMR will always read lower. Without surfacing the breakdown
- * the user assumes the chart is broken.
- *
- * Shape: "N pairs from M games · K missing MMR · L long gaps · O outlier swings".
- * Only renders non-zero categories.
+ * Reconciles pair count against eligible and filtered games, then names
+ * every material exclusion instead of silently presenting partial data.
  */
 function PairCoverageSummary({
   rows,
   totalGames,
+  eligibleGames,
   dropped,
 }: {
-  rows: { games: number }[];
+  rows: { pairs: number }[];
   totalGames: number | undefined;
-  dropped: { outlierSwing: number; missingMyMmr?: number } | undefined;
+  eligibleGames: number | undefined;
+  dropped: Response["dropped"];
 }) {
-  const pairCount = rows.reduce((sum, r) => sum + r.games, 0);
+  const pairCount = rows.reduce((sum, r) => sum + r.pairs, 0);
   const outlierSwing = dropped?.outlierSwing ?? 0;
   const missingMyMmr = dropped?.missingMyMmr ?? 0;
-  if (!totalGames && !outlierSwing && !missingMyMmr) {
+  const untrustedMyMmr = dropped?.untrustedMyMmr ?? 0;
+  const missingIdentity = dropped?.missingIdentity ?? 0;
+  const excludedNonRanked1v1 = dropped?.excludedNonRanked1v1 ?? 0;
+  const brokenBoundaries =
+    (dropped?.nextMissingMyMmr ?? 0) +
+    (dropped?.nextUntrustedMyMmr ?? 0);
+  const signMismatch = dropped?.signMismatch ?? 0;
+  const unsupportedResult = dropped?.unsupportedResult ?? 0;
+  if (!totalGames && !outlierSwing && !missingMyMmr && !untrustedMyMmr) {
     return null;
   }
   const reasons: string[] = [];
@@ -236,10 +266,41 @@ function PairCoverageSummary({
       `${outlierSwing} outlier swing${outlierSwing === 1 ? "" : "s"} (>±150)`,
     );
   }
-  const head =
-    typeof totalGames === "number" && totalGames > 0
-      ? `${pairCount} pair${pairCount === 1 ? "" : "s"} from ${totalGames} game${totalGames === 1 ? "" : "s"}`
-      : `${pairCount} pair${pairCount === 1 ? "" : "s"}`;
+  if (untrustedMyMmr > 0) {
+    reasons.push(
+      `${untrustedMyMmr} unverified MMR value${untrustedMyMmr === 1 ? "" : "s"}`,
+    );
+  }
+  if (brokenBoundaries > 0) {
+    reasons.push(
+      `${brokenBoundaries} pair boundar${brokenBoundaries === 1 ? "y" : "ies"} broken by MMR gaps`,
+    );
+  }
+  if (signMismatch > 0) {
+    reasons.push(
+      `${signMismatch} result/MMR mismatch${signMismatch === 1 ? "" : "es"}`,
+    );
+  }
+  if (unsupportedResult > 0) {
+    reasons.push(`${unsupportedResult} undecided result${unsupportedResult === 1 ? "" : "s"}`);
+  }
+  if (missingIdentity > 0) {
+    reasons.push(`${missingIdentity} missing account or ladder race`);
+  }
+  if (excludedNonRanked1v1 > 0) {
+    reasons.push(`${excludedNonRanked1v1} non-ranked-1v1 excluded`);
+  }
+  const pairLabel = `${pairCount} pair${pairCount === 1 ? "" : "s"}`;
+  let head = pairLabel;
+  if (typeof eligibleGames === "number" && eligibleGames > 0) {
+    const filteredSuffix =
+      typeof totalGames === "number" && totalGames !== eligibleGames
+        ? ` (${totalGames} filtered)`
+        : "";
+    head = `${pairLabel} from ${eligibleGames} eligible ranked 1v1 game${eligibleGames === 1 ? "" : "s"}${filteredSuffix}`;
+  } else if (typeof totalGames === "number" && totalGames > 0) {
+    head = `${pairLabel} from ${totalGames} filtered game${totalGames === 1 ? "" : "s"}`;
+  }
   return (
     <p className="mt-2 text-micro text-text-dim">
       {head}

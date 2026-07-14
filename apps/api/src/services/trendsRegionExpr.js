@@ -42,26 +42,49 @@ function regionFromToonHandleExpr(field) {
   };
 }
 
-/** Opponent race → single-letter bucket (P/T/Z/R/U) for grouping. */
-function oppRaceSwitch() {
+/**
+ * Race field → single-letter bucket (P/T/Z/R/U) for grouping.
+ *
+ * @param {string|Record<string, any>} field MongoDB field expression.
+ */
+function raceLetterExpr(field) {
   return {
     $switch: {
       branches: [
-        { case: oppRaceFirstChar("P"), then: "P" },
-        { case: oppRaceFirstChar("T"), then: "T" },
-        { case: oppRaceFirstChar("Z"), then: "Z" },
-        { case: oppRaceFirstChar("R"), then: "R" },
+        { case: raceFirstChar(field, "P"), then: "P" },
+        { case: raceFirstChar(field, "T"), then: "T" },
+        { case: raceFirstChar(field, "Z"), then: "Z" },
+        { case: raceFirstChar(field, "R"), then: "R" },
       ],
       default: "U",
     },
   };
 }
 
+/** Opponent race → single-letter bucket (P/T/Z/R/U) for grouping. */
+function oppRaceSwitch() {
+  return raceLetterExpr("$opponent.race");
+}
+
+/**
+ * Prefer the replay-authored selected ladder race. ``myRace`` is the
+ * race actually spawned in the replay, which differs on Random queue.
+ * Older rows predate ``myLadderRace`` and safely fall back to it.
+ */
+function myLadderRaceExpr() {
+  return raceLetterExpr({ $ifNull: ["$myLadderRace", "$myRace"] });
+}
+
 /** @param {string} letter Upper-case race initial the $expr tests for. */
 function oppRaceFirstChar(letter) {
+  return raceFirstChar("$opponent.race", letter);
+}
+
+/** @param {string|Record<string, any>} field @param {string} letter */
+function raceFirstChar(field, letter) {
   return {
     $eq: [
-      { $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } },
+      { $toUpper: { $substrCP: [{ $ifNull: [field, ""] }, 0, 1] } },
       letter,
     ],
   };
@@ -69,6 +92,8 @@ function oppRaceFirstChar(letter) {
 
 module.exports = {
   regionFromToonHandleExpr,
+  raceLetterExpr,
+  myLadderRaceExpr,
   oppRaceSwitch,
   oppRaceFirstChar,
 };

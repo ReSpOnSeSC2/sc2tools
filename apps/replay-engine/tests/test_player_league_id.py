@@ -94,6 +94,44 @@ def test_player_to_info_carries_league_id():
     assert info.mmr == 5187
 
 
+def test_player_to_info_reads_sc2reader_1_8_init_data_mmr():
+    """Pinned sc2reader keeps scaled_rating inside ``init_data``.
+
+    Its Participant does not expose a top-level ``scaled_rating``
+    attribute, so a top-level-only fixture gives false confidence while
+    every real replay upload loses both players' MMR.
+    """
+    raw = SimpleNamespace(
+        pid=1,
+        name="Me",
+        play_race="Protoss",
+        result="Win",
+        toon_handle="1-S2-1-267727",
+        init_data={"scaled_rating": 5326},
+        highest_league=6,
+        is_human=True,
+        is_observer=False,
+    )
+
+    assert _player_to_info(raw).mmr == 5326
+
+
+@pytest.mark.parametrize("scaled_rating", [True, 499, 10000, "5326"])
+def test_player_to_info_rejects_invalid_nested_mmr(scaled_rating):
+    raw = SimpleNamespace(
+        pid=1,
+        name="Me",
+        play_race="Protoss",
+        result="Win",
+        toon_handle="1-S2-1-267727",
+        init_data={"scaled_rating": scaled_rating},
+        is_human=True,
+        is_observer=False,
+    )
+
+    assert _player_to_info(raw).mmr is None
+
+
 def test_player_to_info_league_id_defaults_to_none():
     raw = SimpleNamespace(
         pid=1,

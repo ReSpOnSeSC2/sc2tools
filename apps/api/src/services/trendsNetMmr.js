@@ -1,11 +1,25 @@
 "use strict";
 
 /**
- * Net-MMR-by-matchup aggregation for the Trends tab. Carved out of
- * ``trendsInsights.js`` to keep that file within the per-file size
- * budget. Same ``deps`` contract as its siblings — ``{ games,
- * gamesMatchStage, bucketSwitch }``.
+ * Net-MMR-by-matchup aggregation for the Trends tab.
  *
+ * A delta belongs to the first game in a truly consecutive pair:
+ * "next pre-game MMR - current pre-game MMR". Pairing therefore has
+ * to happen before display filters are applied and must stay inside one
+ * account, selected ladder race, and queue. Missing/unverified MMR rows
+ * intentionally remain in the window so they break adjacency rather
+ * than allowing the chart to jump over an unobserved game.
+ */
+
+const {
+  myLadderRaceExpr,
+  oppRaceSwitch,
+} = require("./trendsRegionExpr");
+
+/** A single ranked 1v1 result cannot credibly move more than this. */
+const NET_MMR_MAX_DELTA = 150;
+
+/**
  * @typedef {{
  *   games: import('mongodb').Collection,
  *   gamesMatchStage: (userId: string, filters: object) => object,
@@ -13,101 +27,148 @@
  * }} Deps
  */
 
-const {
-  regionFromToonHandleExpr,
-  oppRaceSwitch,
-} = require("./trendsRegionExpr");
+/** @param {string} field */
+function hasNonEmptyString(field) {
+  return {
+    $and: [
+      { $eq: [{ $type: field }, "string"] },
+      { $ne: [{ $trim: { input: field } }, ""] },
+    ],
+  };
+}
 
-/**
- * Hard cap on the per-game pre-match → pre-match delta we trust as
- * attributable to ONE matchup. A real SC2 1v1 swing tops out around
- * ±60 MMR; anything past ±150 is almost certainly a race switch into
- * a different ladder (Protoss main dipping into Random),
- * a season soft-reset, or a stretch of unrecorded games inflating
- * the diff. Region partitioning + this cap together are now the
- * only outlier guards — the older 24 h "session" cap was dropped
- * once we had region partitioning + the dashboard's SC2Pulse-backed
- * current-MMR card reconciling the totals, since pair gaps within a
- * region almost always reflect a real ladder break rather than
- * unrecorded games.
- */
-const NET_MMR_MAX_DELTA = 150;
+/** @param {string} valueField @param {string} sourceField */
+function isTrustedMmr(valueField, sourceField) {
+  return {
+    $and: [
+      { $isNumber: valueField },
+      { $eq: [sourceField, "replay"] },
+    ],
+  };
+}
 
-/**
- * Net MMR change per opponent race. The simple model:
- *   "running tally of MMR won or lost per matchup, per region."
- *
- * For every consecutive pair of MMR-tagged games on the SAME REGION,
- * attribute the delta (next.myMmr − this.myMmr) to the opponent race
- * of the FIRST game. The region partition is the important part —
- * a streamer who plays both NA (4900 MMR) and EU (3500 MMR) would
- * otherwise see a phantom −1400 attributed to whichever matchup
- * happened to bridge the region switch.
- *
- * Region is derived from ``myToonHandle``'s leading byte
- * (1=NA, 2=EU, 3=KR, 5=CN, 6=SEA — see ``regionFromToonHandle``).
- * Games without a ``myToonHandle`` (older agent versions) land in a
- * shared "Unknown" partition where the ``NET_MMR_MAX_DELTA`` cap
- * still drops the worst cross-region noise.
- *
- * One guard keeps the chart honest:
- *
- *   |delta| ≤ ``NET_MMR_MAX_DELTA``. Single-game ladder swings
- *   max out near ±60. Anything past 150 is a race-pool switch, a
- *   season reset, or a recording gap — never a single match.
- *
- * The older 24 h gap cap is gone: with region partitioning in
- * place and the dashboard's SC2Pulse-backed current-MMR card
- * reconciling the running totals, pair gaps within a region almost
- * always reflect a real ladder break rather than unrecorded games —
- * the user explicitly asked for those pairs to count.
- *
- * The summary carries ``totalGames`` (size of the filtered set)
- * plus ``dropped.missingMyMmr`` (games in the filter that don't
- * carry myMmr at all — older agent versions, missing
- * scaled_rating) and ``dropped.outlierSwing`` (pairs nuked by the
- * delta cap). Without those, users compare the pair count to the
- * Win-Rate-by-MMR game count and assume the chart is broken.
- *
- * @param {Deps} deps
- * @param {string} userId
- * @param {object} filters
- */
+/** @param {Deps} deps @param {string} userId @param {object} filters */
 async function netMmrByMatchup(deps, userId, filters) {
-  const match = deps.gamesMatchStage(userId, filters);
-  // Shared pairing prefix used by the keptPairs + droppedPairs
-  // facet branches. Inlined here (rather than nested $facet) because
-  // MongoDB disallows $facet inside $facet — the duplication is the
-  // price of getting summary + kept + dropped from one aggregate.
-  const pairingPrefix = [
-    { $match: { _hasMyMmr: true } },
-    {
-      $addFields: {
-        _bucket: deps.bucketSwitch(),
-        _myRegion: regionFromToonHandleExpr("$myToonHandle"),
-      },
-    },
-    {
-      $setWindowFields: {
-        partitionBy: "$_myRegion",
-        sortBy: { date: 1 },
-        output: {
-          _nextMyMmr: { $shift: { output: "$myMmr", by: 1, default: null } },
+  const displayMatch = deps.gamesMatchStage(userId, filters);
+
+  const [root = {}] = await deps.games
+    .aggregate([
+      // Window over complete per-user history. Applying opponent, map,
+      // build, or date filters here would make non-consecutive rows look
+      // consecutive and attribute their combined drift to one game.
+      { $match: { userId } },
+      {
+        $addFields: {
+          _bucket: deps.bucketSwitch(),
+          _myLadderRace: myLadderRaceExpr(),
+          _oppRace: oppRaceSwitch(),
+          _hasMyAccount: hasNonEmptyString("$myToonHandle"),
+          _hasMyMmr: { $isNumber: "$myMmr" },
+          _trustedMyMmr: isTrustedMmr("$myMmr", "$myMmrSource"),
+          _ranked1v1: {
+            $and: [
+              { $eq: ["$isLadderGame", true] },
+              { $eq: ["$playerCount", 2] },
+            ],
+          },
         },
       },
-    },
-    { $match: { _nextMyMmr: { $type: "number" } } },
-    {
-      $addFields: {
-        _delta: { $subtract: ["$_nextMyMmr", "$myMmr"] },
-        _oppRace: oppRaceSwitch(),
+      {
+        $addFields: {
+          // Queue fields remain in the partition even though only ranked
+          // 1v1 is displayed, preventing custom/team replays from becoming
+          // the next observation for a ladder game.
+          _partitionKey: {
+            account: { $ifNull: ["$myToonHandle", "__missing_account__"] },
+            ladderRace: "$_myLadderRace",
+            isLadder: { $ifNull: ["$isLadderGame", null] },
+            playerCount: { $ifNull: ["$playerCount", null] },
+          },
+        },
       },
-    },
-  ];
-  const facet = await deps.games
-    .aggregate([
-      { $match: match },
-      { $addFields: { _hasMyMmr: { $isNumber: "$myMmr" } } },
+      {
+        $setWindowFields: {
+          partitionBy: "$_partitionKey",
+          sortBy: { date: 1, gameId: 1 },
+          output: {
+            _nextGameId: {
+              $shift: { output: "$gameId", by: 1, default: null },
+            },
+            _nextMyMmr: {
+              $shift: { output: "$myMmr", by: 1, default: null },
+            },
+            _nextMyMmrSource: {
+              $shift: { output: "$myMmrSource", by: 1, default: null },
+            },
+          },
+        },
+      },
+      // Filters select CURRENT games. The next observation may sit outside
+      // a date/opponent/map filter and still supplies the correct result of
+      // the selected anchor game.
+      { $match: displayMatch },
+      {
+        $addFields: {
+          _hasNextMyMmr: { $isNumber: "$_nextMyMmr" },
+          _trustedNextMyMmr: isTrustedMmr(
+            "$_nextMyMmr",
+            "$_nextMyMmrSource",
+          ),
+          _hasIdentity: {
+            $and: [
+              "$_hasMyAccount",
+              { $in: ["$_myLadderRace", ["P", "T", "Z", "R"]] },
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          _eligible: { $and: ["$_ranked1v1", "$_hasIdentity"] },
+          _delta: {
+            $cond: [
+              { $and: ["$_trustedMyMmr", "$_trustedNextMyMmr"] },
+              { $subtract: ["$_nextMyMmr", "$myMmr"] },
+              null,
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          _pairCandidate: {
+            $and: [
+              "$_eligible",
+              "$_trustedMyMmr",
+              "$_trustedNextMyMmr",
+            ],
+          },
+          _withinDeltaCap: {
+            $and: [
+              { $gte: ["$_delta", -NET_MMR_MAX_DELTA] },
+              { $lte: ["$_delta", NET_MMR_MAX_DELTA] },
+            ],
+          },
+          // A win cannot lower, and a loss cannot raise, the MMR read from
+          // the next consecutive replay. Violations signal missing/stale
+          // data or ordering trouble, so do not misattribute them.
+          _resultSignMatches: {
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: ["$_bucket", "win"] },
+                  then: { $gte: ["$_delta", 0] },
+                },
+                {
+                  case: { $eq: ["$_bucket", "loss"] },
+                  then: { $lte: ["$_delta", 0] },
+                },
+              ],
+              default: false,
+            },
+          },
+        },
+      },
       {
         $facet: {
           summary: [
@@ -115,43 +176,123 @@ async function netMmrByMatchup(deps, userId, filters) {
               $group: {
                 _id: null,
                 totalGames: { $sum: 1 },
-                missingMyMmr: { $sum: { $cond: ["$_hasMyMmr", 0, 1] } },
-              },
-            },
-          ],
-          keptPairs: [
-            ...pairingPrefix,
-            {
-              $match: {
-                _delta: { $gte: -NET_MMR_MAX_DELTA, $lte: NET_MMR_MAX_DELTA },
-              },
-            },
-            {
-              $group: {
-                _id: "$_oppRace",
-                netMmr: { $sum: "$_delta" },
-                games: { $sum: 1 },
-                wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-                losses: {
-                  $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
+                eligibleGames: { $sum: { $cond: ["$_eligible", 1, 0] } },
+                excludedNonRanked1v1: {
+                  $sum: { $cond: ["$_ranked1v1", 0, 1] },
                 },
-                avgDelta: { $avg: "$_delta" },
-              },
-            },
-            { $sort: { netMmr: -1 } },
-          ],
-          droppedPairs: [
-            ...pairingPrefix,
-            {
-              $group: {
-                _id: null,
+                missingIdentity: {
+                  $sum: {
+                    $cond: [
+                      { $and: ["$_ranked1v1", { $not: ["$_hasIdentity"] }] },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                missingMyMmr: {
+                  $sum: {
+                    $cond: [{ $not: ["$_hasMyMmr"] }, 1, 0],
+                  },
+                },
+                untrustedMyMmr: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_hasMyMmr",
+                          { $not: ["$_trustedMyMmr"] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                terminalGame: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_eligible",
+                          "$_trustedMyMmr",
+                          { $eq: ["$_nextGameId", null] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                nextMissingMyMmr: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_eligible",
+                          "$_trustedMyMmr",
+                          { $ne: ["$_nextGameId", null] },
+                          { $not: ["$_hasNextMyMmr"] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                nextUntrustedMyMmr: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_eligible",
+                          "$_trustedMyMmr",
+                          "$_hasNextMyMmr",
+                          { $not: ["$_trustedNextMyMmr"] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
                 outlierSwing: {
                   $sum: {
                     $cond: [
                       {
-                        $or: [
-                          { $lt: ["$_delta", -NET_MMR_MAX_DELTA] },
-                          { $gt: ["$_delta", NET_MMR_MAX_DELTA] },
+                        $and: [
+                          "$_pairCandidate",
+                          { $not: ["$_withinDeltaCap"] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                signMismatch: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_pairCandidate",
+                          "$_withinDeltaCap",
+                          { $in: ["$_bucket", ["win", "loss"]] },
+                          { $not: ["$_resultSignMatches"] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                unsupportedResult: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_pairCandidate",
+                          "$_withinDeltaCap",
+                          { $not: [{ $in: ["$_bucket", ["win", "loss"]] }] },
                         ],
                       },
                       1,
@@ -162,29 +303,69 @@ async function netMmrByMatchup(deps, userId, filters) {
               },
             },
           ],
+          keptPairs: [
+            {
+              $match: {
+                _pairCandidate: true,
+                _withinDeltaCap: true,
+                _resultSignMatches: true,
+              },
+            },
+            {
+              $group: {
+                _id: "$_oppRace",
+                netMmr: { $sum: "$_delta" },
+                pairs: { $sum: 1 },
+                wins: {
+                  $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] },
+                },
+                losses: {
+                  $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
+                },
+                avgDelta: { $avg: "$_delta" },
+              },
+            },
+            { $sort: { netMmr: -1 } },
+          ],
         },
       },
     ])
     .toArray();
-  const root = facet[0] || {};
-  const summaryRow = (root.summary && root.summary[0]) || null;
-  /** @type {Array<{_id: string, netMmr: number, avgDelta: number, games: number, wins: number, losses: number}>} */
-  const keptRows = root.keptPairs || [];
-  const droppedRow = (root.droppedPairs && root.droppedPairs[0]) || null;
+
+  const summary = root.summary?.[0] || {};
+  const keptPairs = /** @type {Array<Record<string, any>>} */ (
+    root.keptPairs || []
+  );
+  const matchups = keptPairs.map((row) => {
+    const pairs = row.pairs ?? row.games ?? 0;
+    return {
+      race: row._id,
+      netMmr: Math.round(row.netMmr),
+      avgDelta: Math.round(row.avgDelta * 10) / 10,
+      pairs,
+      // Keep the old wire key while clients roll forward.
+      games: pairs,
+      wins: row.wins,
+      losses: row.losses,
+      winRate: pairs ? row.wins / pairs : 0,
+    };
+  });
+
   return {
-    matchups: keptRows.map((r) => ({
-      race: r._id,
-      netMmr: Math.round(r.netMmr),
-      avgDelta: Math.round(r.avgDelta * 10) / 10,
-      games: r.games,
-      wins: r.wins,
-      losses: r.losses,
-      winRate: r.games ? r.wins / r.games : 0,
-    })),
-    totalGames: summaryRow ? summaryRow.totalGames : 0,
+    matchups,
+    totalGames: summary.totalGames || 0,
+    eligibleGames: summary.eligibleGames || 0,
     dropped: {
-      outlierSwing: droppedRow ? droppedRow.outlierSwing : 0,
-      missingMyMmr: summaryRow ? summaryRow.missingMyMmr : 0,
+      excludedNonRanked1v1: summary.excludedNonRanked1v1 || 0,
+      missingIdentity: summary.missingIdentity || 0,
+      missingMyMmr: summary.missingMyMmr || 0,
+      untrustedMyMmr: summary.untrustedMyMmr || 0,
+      terminalGame: summary.terminalGame || 0,
+      nextMissingMyMmr: summary.nextMissingMyMmr || 0,
+      nextUntrustedMyMmr: summary.nextUntrustedMyMmr || 0,
+      outlierSwing: summary.outlierSwing || 0,
+      signMismatch: summary.signMismatch || 0,
+      unsupportedResult: summary.unsupportedResult || 0,
     },
   };
 }

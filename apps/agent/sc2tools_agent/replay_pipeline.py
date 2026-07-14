@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -390,6 +391,12 @@ class CloudGame:
     # each list is normalized {x, y, weight?, time?} and the cloud
     # rasterises them across N games per map.
     spatial: Optional[Dict[str, Any]] = None
+    # Race selected in the ladder queue. This differs from ``my_race``
+    # when the player queues Random: ``my_race`` remains the concrete
+    # spawned race used for replay analysis, while this remains Random
+    # for ladder-MMR series bucketing. Kept last for positional-call
+    # compatibility with older CloudGame constructors.
+    my_ladder_race: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -411,6 +418,8 @@ class CloudGame:
         }
         if self.my_build:
             out["myBuild"] = self.my_build
+        if self.my_ladder_race:
+            out["myLadderRace"] = str(self.my_ladder_race)
         if self.macro_score is not None:
             out["macroScore"] = round(float(self.macro_score), 2)
         if self.apm is not None:
@@ -771,11 +780,22 @@ def parse_replay_for_cloud_ex(
         else None
     )
 
+    # ``race`` is the concrete spawned race. Keep the queue selection
+    # separately so Random's own ladder/MMR series is not attributed to
+    # whichever race the replay happened to spawn.
+    my_ladder_race_raw = (
+        getattr(me, "selected_race", None)
+        or getattr(me, "race", None)
+    )
+
     return CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
         result=result,
         my_race=str(me.race),
+        my_ladder_race=(
+            str(my_ladder_race_raw) if my_ladder_race_raw else None
+        ),
         my_build=getattr(ctx, "my_build", None),
         map_name=str(ctx.map_name),
         duration_sec=int(ctx.length_seconds or 0),
@@ -1707,10 +1727,20 @@ def _resolve_by_toon(
     return me, opp
 
 
-# Floor used to reject league enums (Bronze=0..Grandmaster=7) and
-# obviously-bad reads. Real ladder ratings sit in the 1k–7k band, so
-# 500 is a safe lower bound that still admits the lowest Bronze MMRs.
+# Bounds used to reject league enums (Bronze=0..Grandmaster=7) and
+# obviously-bad reads. The upper limit matches the API game schema so
+# a corrupt replay cannot leave an otherwise valid upload retrying a
+# permanently rejected payload.
 _MIN_PLAUSIBLE_MMR = 500
+_MAX_PLAUSIBLE_MMR = 9999
+
+
+def _coerce_plausible_mmr(value: Any) -> Optional[int]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not (_MIN_PLAUSIBLE_MMR <= value <= _MAX_PLAUSIBLE_MMR):
+        return None
+    return int(value)
 
 
 def _resolve_my_mmr(
@@ -1725,7 +1755,11 @@ def _resolve_my_mmr(
          ``mmr`` via ``core.sc2_replay_parser._get_player_mmr``. Cleanest
          path; fires for every replay sc2reader parsed at load_level=4
          where the local player carries the tracker-event MMR.
-      2. Raw sc2reader player object on ``ctx.raw.players``. The
+      2. Raw sc2reader player object on ``ctx.raw.players``. Pinned
+         sc2reader 1.8.0 stores the decoded value at
+         ``player.init_data["scaled_rating"]`` without promoting it to
+         ``player.scaled_rating``; patched/newer builds may expose a
+         top-level attribute, so both shapes are supported. The
          analyzer's ``_load_replay`` falls back from level 4 → 3 → 2
          when the higher load throws (some replays trip a sc2reader
          bug at level 4); a level-3 parse leaves ``scaled_rating``
@@ -1739,12 +1773,13 @@ def _resolve_my_mmr(
     """
     # Layer 1: PlayerInfo wrapper.
     cached = getattr(me, "mmr", None)
-    if isinstance(cached, (int, float)) and cached >= _MIN_PLAUSIBLE_MMR:
+    cached_mmr = _coerce_plausible_mmr(cached)
+    if cached_mmr is not None:
         log.info(
             "my_mmr_resolved file=%s source=PlayerInfo value=%d",
-            file_path.name, int(cached),
+            file_path.name, cached_mmr,
         )
-        return int(cached)
+        return cached_mmr
 
     # Layer 2: raw sc2reader player. Match by toon_handle (worldwide
     # unique) first, falling back to pid (unique within a single replay)
@@ -1772,20 +1807,30 @@ def _resolve_my_mmr(
             cached,
         )
         return None
-    for attr in ("scaled_rating", "mmr"):
-        val = getattr(raw_match, attr, None)
-        if isinstance(val, (int, float)) and val >= _MIN_PLAUSIBLE_MMR:
+    init_data = getattr(raw_match, "init_data", None)
+    nested = init_data if isinstance(init_data, Mapping) else {}
+    for source, val in (
+        ("raw_player.scaled_rating", getattr(raw_match, "scaled_rating", None)),
+        ("raw_player.init_data.scaled_rating", nested.get("scaled_rating")),
+        ("raw_player.mmr", getattr(raw_match, "mmr", None)),
+        ("raw_player.init_data.mmr", nested.get("mmr")),
+    ):
+        mmr = _coerce_plausible_mmr(val)
+        if mmr is not None:
             log.info(
-                "my_mmr_resolved file=%s source=raw_player.%s value=%d",
-                file_path.name, attr, int(val),
+                "my_mmr_resolved file=%s source=%s value=%d",
+                file_path.name, source, mmr,
             )
-            return int(val)
+            return mmr
     log.info(
         "my_mmr_unresolved file=%s reason=raw_attrs_unset "
-        "scaled_rating=%r raw_mmr=%r playerinfo_mmr=%r",
+        "scaled_rating=%r init_scaled_rating=%r raw_mmr=%r "
+        "init_mmr=%r playerinfo_mmr=%r",
         file_path.name,
         getattr(raw_match, "scaled_rating", None),
+        nested.get("scaled_rating"),
         getattr(raw_match, "mmr", None),
+        nested.get("mmr"),
         cached,
     )
     return None

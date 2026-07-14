@@ -14,6 +14,33 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  test("accepts and preserves an optional selected ladder race", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      myLadderRace: "Random",
+      map: "Goldenaura",
+    });
+    expect(r.valid).toBe(true);
+    if (r.valid) {
+      expect(/** @type {any} */ (r.value).myLadderRace).toBe("Random");
+    }
+  });
+
+  test("rejects a non-string selected ladder race", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      myLadderRace: true,
+      map: "Goldenaura",
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test("rejects bad result enum", () => {
     const r = validateGameRecord({
       gameId: "abc-123",

@@ -20,7 +20,10 @@
 const { LIMITS } = require("../config/constants");
 const oppMmr = require("./trendsOppMmr");
 const netMmr = require("./trendsNetMmr");
-const { regionFromToonHandleExpr } = require("./trendsRegionExpr");
+const {
+  regionFromToonHandleExpr,
+  myLadderRaceExpr,
+} = require("./trendsRegionExpr");
 
 const RESULT_VICTORY = ["victory", "win"];
 const RESULT_DEFEAT = ["defeat", "loss"];
@@ -78,17 +81,6 @@ async function mmrProgression(deps, userId, opts, filters) {
   const truncBucket = {
     $dateTrunc: { date: "$date", unit: interval, timezone },
   };
-  const projectPoint = {
-    _id: 0,
-    bucket: "$_id",
-    openMmr: 1,
-    closeMmr: 1,
-    minMmr: 1,
-    maxMmr: 1,
-    wins: 1,
-    losses: 1,
-    total: 1,
-  };
   const groupAccumulators = {
     // $last after $sort:asc gives the most recent MMR in the bucket.
     closeMmr: { $last: "$myMmr" },
@@ -101,19 +93,59 @@ async function mmrProgression(deps, userId, opts, filters) {
   };
   const facet = await deps.games
     .aggregate([
-      { $match: { ...match, myMmr: { $type: "number" } } },
+      { $match: match },
       {
         $addFields: {
           _bucket: deps.bucketSwitch(),
           _myRegion: regionFromToonHandleExpr("$myToonHandle"),
-          // Normalise a missing / blank toon handle to the sentinel
-          // "U" so it groups with the other Unknown rows instead of
-          // creating a dozen ``null``-keyed series.
-          _myAccount: {
-            $cond: [
-              { $and: [{ $ne: ["$myToonHandle", null] }, { $ne: ["$myToonHandle", ""] }] },
-              "$myToonHandle",
-              "U",
+          _ladderRace: myLadderRaceExpr(),
+          _hasNumericMmr: { $isNumber: "$myMmr" },
+          _hasReplayMmrSource: { $eq: ["$myMmrSource", "replay"] },
+          _isRanked1v1: {
+            $and: [
+              { $eq: ["$isLadderGame", true] },
+              { $eq: ["$playerCount", 2] },
+            ],
+          },
+          _hasMyAccount: {
+            $and: [
+              { $eq: [{ $type: "$myToonHandle" }, "string"] },
+              {
+                $ne: [
+                  {
+                    $trim: {
+                      input: {
+                        $convert: {
+                          input: "$myToonHandle",
+                          to: "string",
+                          onError: "",
+                          onNull: "",
+                        },
+                      },
+                    },
+                  },
+                  "",
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          _trustedReplayMmr: {
+            $and: ["$_hasNumericMmr", "$_hasReplayMmrSource"],
+          },
+          _hasLadderRace: {
+            $in: ["$_ladderRace", ["P", "T", "Z", "R"]],
+          },
+          _eligibleMmr: {
+            $and: [
+              "$_hasNumericMmr",
+              "$_hasReplayMmrSource",
+              "$_isRanked1v1",
+              "$_hasMyAccount",
+              { $in: ["$_ladderRace", ["P", "T", "Z", "R"]] },
             ],
           },
         },
@@ -121,17 +153,99 @@ async function mmrProgression(deps, userId, opts, filters) {
       // Sort once before $facet so every sub-pipeline sees the same
       // chronological order and $first / $last resolve to the
       // bucket's opening / closing MMR.
-      { $sort: { date: 1 } },
+      { $sort: { date: 1, gameId: 1 } },
       {
         $facet: {
-          overall: [
-            { $group: { _id: truncBucket, ...groupAccumulators } },
-            { $sort: { _id: -1 } },
-            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS },
-            { $sort: { _id: 1 } },
-            { $project: projectPoint },
+          coverage: [
+            {
+              $group: {
+                _id: null,
+                filteredGames: { $sum: 1 },
+                numericMmrGames: {
+                  $sum: { $cond: ["$_hasNumericMmr", 1, 0] },
+                },
+                verifiedReplayMmrGames: {
+                  $sum: { $cond: ["$_trustedReplayMmr", 1, 0] },
+                },
+                untrustedNumericMmrGames: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_hasNumericMmr",
+                          { $eq: ["$_hasReplayMmrSource", false] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                unavailableMmrGames: {
+                  $sum: {
+                    $cond: [{ $eq: ["$myMmrSource", "unavailable"] }, 1, 0],
+                  },
+                },
+                missingMmrGames: {
+                  $sum: {
+                    $cond: [{ $eq: ["$_hasNumericMmr", false] }, 1, 0],
+                  },
+                },
+                excludedNonRanked1v1Games: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_trustedReplayMmr",
+                          "$_hasMyAccount",
+                          { $eq: ["$_isRanked1v1", false] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                missingAccountGames: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_trustedReplayMmr",
+                          "$_isRanked1v1",
+                          { $eq: ["$_hasMyAccount", false] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                missingLadderRaceGames: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $and: [
+                          "$_trustedReplayMmr",
+                          "$_isRanked1v1",
+                          "$_hasMyAccount",
+                          { $eq: ["$_hasLadderRace", false] },
+                        ],
+                      },
+                      1,
+                      0,
+                    ],
+                  },
+                },
+                eligibleGames: {
+                  $sum: { $cond: ["$_eligibleMmr", 1, 0] },
+                },
+              },
+            },
+            { $project: { _id: 0 } },
           ],
           byRegion: [
+            { $match: { _eligibleMmr: true } },
             {
               $group: {
                 _id: { bucket: truncBucket, region: "$_myRegion" },
@@ -141,8 +255,14 @@ async function mmrProgression(deps, userId, opts, filters) {
             // Cap with the same single-region budget × the five real
             // regions + one "U" bin; for a single-region account this
             // is identical to the overall cap.
-            { $sort: { "_id.bucket": -1 } },
-            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 6 },
+            {
+              $setWindowFields: {
+                partitionBy: "$_id.region",
+                sortBy: { "_id.bucket": -1 },
+                output: { _seriesRank: { $documentNumber: {} } },
+              },
+            },
+            { $match: { _seriesRank: { $lte: LIMITS.TIMESERIES_MAX_BUCKETS } } },
             { $sort: { "_id.region": 1, "_id.bucket": 1 } },
             {
               $project: {
@@ -159,13 +279,18 @@ async function mmrProgression(deps, userId, opts, filters) {
               },
             },
           ],
-          byAccount: [
+          bySeries: [
+            { $match: { _eligibleMmr: true } },
             {
               $group: {
                 _id: {
                   bucket: truncBucket,
-                  toonHandle: "$_myAccount",
+                  seriesKey: {
+                    $concat: ["$myToonHandle", "|", "$_ladderRace"],
+                  },
+                  toonHandle: "$myToonHandle",
                   region: "$_myRegion",
+                  ladderRace: "$_ladderRace",
                 },
                 ...groupAccumulators,
               },
@@ -173,15 +298,23 @@ async function mmrProgression(deps, userId, opts, filters) {
             // Per-toon-handle cap. A realistic ceiling is "a few
             // accounts" — 20 is generous and still well inside Mongo
             // pipeline memory.
-            { $sort: { "_id.bucket": -1 } },
-            { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 20 },
-            { $sort: { "_id.toonHandle": 1, "_id.bucket": 1 } },
+            {
+              $setWindowFields: {
+                partitionBy: "$_id.seriesKey",
+                sortBy: { "_id.bucket": -1 },
+                output: { _seriesRank: { $documentNumber: {} } },
+              },
+            },
+            { $match: { _seriesRank: { $lte: LIMITS.TIMESERIES_MAX_BUCKETS } } },
+            { $sort: { "_id.seriesKey": 1, "_id.bucket": 1 } },
             {
               $project: {
                 _id: 0,
                 bucket: "$_id.bucket",
+                seriesKey: "$_id.seriesKey",
                 toonHandle: "$_id.toonHandle",
                 region: "$_id.region",
+                ladderRace: "$_id.ladderRace",
                 openMmr: 1,
                 closeMmr: 1,
                 minMmr: 1,
@@ -196,21 +329,56 @@ async function mmrProgression(deps, userId, opts, filters) {
       },
     ])
     .toArray();
-  const root = facet[0] || { overall: [], byRegion: [], byAccount: [] };
-  const overall = Array.isArray(root.overall) ? root.overall : [];
+  const root = facet[0] || { coverage: [], byRegion: [], bySeries: [] };
   const regions = groupRegionSeries(
     Array.isArray(root.byRegion) ? root.byRegion : [],
   );
-  const accounts = groupAccountSeries(
-    Array.isArray(root.byAccount) ? root.byAccount : [],
+  const series = groupAccountSeries(
+    Array.isArray(root.bySeries) ? root.bySeries : [],
+  );
+  const points = series.length === 1 ? series[0].points : [];
+  const coverage = normalizeMmrCoverage(
+    Array.isArray(root.coverage) ? root.coverage[0] : null,
   );
   return {
     interval,
-    points: overall,
+    points,
     regions,
-    accounts,
-    ...summarize(overall),
+    series,
+    // Deprecated alias retained for clients with a cached response schema.
+    accounts: series,
+    coverage,
+    mixedSeries: series.length > 1,
+    ...summarize(points),
   };
+}
+
+const MMR_COVERAGE_KEYS = [
+  "filteredGames",
+  "numericMmrGames",
+  "verifiedReplayMmrGames",
+  "untrustedNumericMmrGames",
+  "unavailableMmrGames",
+  "missingMmrGames",
+  "excludedNonRanked1v1Games",
+  "missingAccountGames",
+  "missingLadderRaceGames",
+  "eligibleGames",
+];
+
+/**
+ * Keep an empty filtered result just as explicit as a populated one.
+ * @param {Record<string, unknown> | null | undefined} row
+ * @returns {Record<string, number>}
+ */
+function normalizeMmrCoverage(row) {
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const key of MMR_COVERAGE_KEYS) {
+    const value = Number(row ? row[key] : 0);
+    out[key] = Number.isFinite(value) && value > 0 ? value : 0;
+  }
+  return out;
 }
 
 /**
@@ -270,17 +438,38 @@ function groupRegionSeries(rows) {
  * descending within a region — so the main account on each ladder
  * lands above its smurfs in the legend.
  *
- * @param {Array<{bucket: Date, toonHandle: string, region: string} & Record<string, number>>} rows
+ * @param {Array<{
+ *   bucket: Date,
+ *   seriesKey: string,
+ *   toonHandle: string,
+ *   region: string,
+ *   ladderRace: string,
+ *   openMmr: number,
+ *   closeMmr: number,
+ *   minMmr: number,
+ *   maxMmr: number,
+ *   wins: number,
+ *   losses: number,
+ *   total: number,
+ * }>} rows
  */
 function groupAccountSeries(rows) {
-  /** @type {Map<string, {region: string, points: any[], totalGames: number}>} */
+  /** @type {Map<string, {toonHandle: string, region: string, ladderRace: string, points: any[], totalGames: number}>} */
   const byKey = new Map();
   for (const r of rows) {
-    const handle = r.toonHandle || "U";
-    let bucket = byKey.get(handle);
+    const handle = r.toonHandle;
+    const ladderRace = r.ladderRace || "U";
+    const seriesKey = r.seriesKey || `${handle}|${ladderRace}`;
+    let bucket = byKey.get(seriesKey);
     if (!bucket) {
-      bucket = { region: r.region || "U", points: [], totalGames: 0 };
-      byKey.set(handle, bucket);
+      bucket = {
+        toonHandle: handle,
+        region: r.region || "U",
+        ladderRace,
+        points: [],
+        totalGames: 0,
+      };
+      byKey.set(seriesKey, bucket);
     }
     bucket.points.push({
       bucket: r.bucket,
@@ -294,10 +483,12 @@ function groupAccountSeries(rows) {
     });
     bucket.totalGames += r.total || 0;
   }
-  const entries = Array.from(byKey.entries()).map(([handle, v]) => ({
-    toonHandle: handle,
+  const entries = Array.from(byKey.entries()).map(([seriesKey, v]) => ({
+    seriesKey,
+    toonHandle: v.toonHandle,
     region: v.region,
-    label: shortAccountLabel(handle, v.region),
+    ladderRace: v.ladderRace,
+    label: `${shortAccountLabel(v.toonHandle, v.region)} · ${raceLabel(v.ladderRace)}`,
     points: v.points,
     totalGames: v.totalGames,
     ...summarize(v.points),
@@ -310,9 +501,22 @@ function groupAccountSeries(rows) {
     if (wa !== wb) return wa - wb;
     // Main account (most games) first within a region.
     if (a.totalGames !== b.totalGames) return b.totalGames - a.totalGames;
-    return a.toonHandle.localeCompare(b.toonHandle);
+    const byHandle = a.toonHandle.localeCompare(b.toonHandle);
+    if (byHandle !== 0) return byHandle;
+    return racePriority(a.ladderRace) - racePriority(b.ladderRace);
   });
   return entries.map(({ totalGames: _totalGames, ...rest }) => rest);
+}
+
+/** @param {string} race */
+function raceLabel(race) {
+  return ({ P: "Protoss", T: "Terran", Z: "Zerg", R: "Random" })[race] || "Unknown race";
+}
+
+/** @param {string} race */
+function racePriority(race) {
+  const i = ["P", "T", "Z", "R", "U"].indexOf(race);
+  return i === -1 ? 5 : i;
 }
 
 /**

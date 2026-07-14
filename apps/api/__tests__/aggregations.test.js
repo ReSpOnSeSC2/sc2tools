@@ -459,6 +459,19 @@ describe("services/aggregations", () => {
     const games = buildGames([
       () => [
         {
+          coverage: [
+            {
+              filteredGames: 20,
+              numericMmrGames: 12,
+              verifiedReplayMmrGames: 10,
+              untrustedNumericMmrGames: 2,
+              unavailableMmrGames: 8,
+              missingMmrGames: 8,
+              excludedNonRanked1v1Games: 1,
+              missingAccountGames: 1,
+              eligibleGames: 8,
+            },
+          ],
           overall: [
             {
               bucket: new Date("2026-04-01"),
@@ -516,12 +529,14 @@ describe("services/aggregations", () => {
               total: 4,
             },
           ],
-          byAccount: [
+          bySeries: [
             // Main account on NA — 5 games, lands first in NA group.
             {
               bucket: new Date("2026-04-01"),
+              seriesKey: "1-S2-1-12345|Z",
               toonHandle: "1-S2-1-12345",
               region: "NA",
+              ladderRace: "Z",
               openMmr: 4000,
               closeMmr: 4050,
               minMmr: 3990,
@@ -532,8 +547,10 @@ describe("services/aggregations", () => {
             },
             {
               bucket: new Date("2026-04-08"),
+              seriesKey: "1-S2-1-12345|Z",
               toonHandle: "1-S2-1-12345",
               region: "NA",
+              ladderRace: "Z",
               openMmr: 4055,
               closeMmr: 4080,
               minMmr: 4055,
@@ -545,8 +562,10 @@ describe("services/aggregations", () => {
             // NA smurf — fewer games, must sort below the main.
             {
               bucket: new Date("2026-04-08"),
+              seriesKey: "1-S2-1-99999|P",
               toonHandle: "1-S2-1-99999",
               region: "NA",
+              ladderRace: "P",
               openMmr: 3500,
               closeMmr: 3520,
               minMmr: 3490,
@@ -558,8 +577,10 @@ describe("services/aggregations", () => {
             // EU account.
             {
               bucket: new Date("2026-04-08"),
+              seriesKey: "2-S2-1-267727|T",
               toonHandle: "2-S2-1-267727",
               region: "EU",
+              ladderRace: "T",
               openMmr: 4100,
               closeMmr: 4120,
               minMmr: 4040,
@@ -577,10 +598,11 @@ describe("services/aggregations", () => {
       await svc.mmrProgression("u1", { interval: "week" }, {})
     );
     expect(out.interval).toBe("week");
-    expect(out.points).toHaveLength(2);
-    expect(out.peak.mmr).toBe(4140);
-    expect(out.trough.mmr).toBe(3990);
-    expect(out.latest.mmr).toBe(4120);
+    // Multiple account/race ladders must never be blended into one line.
+    expect(out.points).toHaveLength(0);
+    expect(out.peak).toBeNull();
+    expect(out.trough).toBeNull();
+    expect(out.latest).toBeNull();
     expect(out.regions).toHaveLength(2);
     const [na, eu] = out.regions;
     expect(na.region).toBe("NA");
@@ -590,19 +612,65 @@ describe("services/aggregations", () => {
     expect(eu.region).toBe("EU");
     expect(eu.points).toHaveLength(1);
     expect(eu.latest.mmr).toBe(4120);
-    // Per-account series: NA main first (most games), then NA smurf,
-    // then EU. Labels render as "<region> <bnid>".
+    // Canonical series split by account + selected ladder race. The old
+    // accounts key aliases the same race-aware response for compatibility.
+    expect(out.series).toHaveLength(3);
     expect(out.accounts).toHaveLength(3);
-    expect(out.accounts.map((a) => a.label)).toEqual([
-      "NA 12345",
-      "NA 99999",
-      "EU 267727",
+    expect(out.series.map((a) => a.label)).toEqual([
+      "NA 12345 · Zerg",
+      "NA 99999 · Protoss",
+      "EU 267727 · Terran",
     ]);
-    expect(out.accounts[0].region).toBe("NA");
-    expect(out.accounts[0].points).toHaveLength(2);
-    expect(out.accounts[0].latest.mmr).toBe(4080);
-    expect(out.accounts[1].latest.mmr).toBe(3520);
-    expect(out.accounts[2].latest.mmr).toBe(4120);
+    expect(out.series[0].seriesKey).toBe("1-S2-1-12345|Z");
+    expect(out.series[0].region).toBe("NA");
+    expect(out.series[0].points).toHaveLength(2);
+    expect(out.series[0].latest.mmr).toBe(4080);
+    expect(out.series[1].latest.mmr).toBe(3520);
+    expect(out.series[2].latest.mmr).toBe(4120);
+    expect(out.coverage).toMatchObject({
+      filteredGames: 20,
+      eligibleGames: 8,
+      untrustedNumericMmrGames: 2,
+    });
+  });
+
+  test("mmrProgression pipeline enforces verified ranked 1v1 and per-series caps", async () => {
+    let pipeline;
+    const games = buildGames([
+      (seen) => {
+        pipeline = seen;
+        return [{ coverage: [], byRegion: [], bySeries: [] }];
+      },
+    ]);
+    const svc = new AggregationsService({ games });
+
+    const out = /** @type {any} */ (
+      await svc.mmrProgression("u1", { interval: "day" }, {})
+    );
+    expect(out.coverage.eligibleGames).toBe(0);
+
+    const eligibilityStage = pipeline.find(
+      (stage) => stage.$addFields && stage.$addFields._isRanked1v1,
+    );
+    expect(eligibilityStage.$addFields._isRanked1v1).toEqual({
+      $and: [
+        { $eq: ["$isLadderGame", true] },
+        { $eq: ["$playerCount", 2] },
+      ],
+    });
+    expect(eligibilityStage.$addFields._hasReplayMmrSource).toEqual({
+      $eq: ["$myMmrSource", "replay"],
+    });
+    expect(eligibilityStage.$addFields._hasMyAccount).toBeDefined();
+    expect(eligibilityStage.$addFields._ladderRace).toBeDefined();
+
+    const facet = pipeline.find((stage) => stage.$facet).$facet;
+    expect(facet.bySeries[0]).toEqual({ $match: { _eligibleMmr: true } });
+    const seriesWindow = facet.bySeries.find((stage) => stage.$setWindowFields);
+    expect(seriesWindow.$setWindowFields.partitionBy).toBe("$_id.seriesKey");
+    expect(facet.bySeries.some((stage) => stage.$limit)).toBe(false);
+    const regionWindow = facet.byRegion.find((stage) => stage.$setWindowFields);
+    expect(regionWindow.$setWindowFields.partitionBy).toBe("$_id.region");
   });
 
   test("momentum shapes post-win / post-loss splits + session positions", async () => {
@@ -887,12 +955,17 @@ describe("services/aggregations", () => {
     const games = buildGames([
       () => [
         {
-          summary: [{ _id: null, totalGames: 28, missingMyMmr: 13 }],
+          summary: [{
+            _id: null,
+            totalGames: 28,
+            eligibleGames: 15,
+            missingMyMmr: 13,
+            outlierSwing: 1,
+          }],
           keptPairs: [
             { _id: "P", netMmr: 84.4, avgDelta: 14.06, games: 6, wins: 4, losses: 2 },
             { _id: "Z", netMmr: -45.7, avgDelta: -9.14, games: 5, wins: 2, losses: 3 },
           ],
-          droppedPairs: [{ _id: null, outlierSwing: 1 }],
         },
       ],
     ]);
@@ -912,13 +985,7 @@ describe("services/aggregations", () => {
     expect(out.dropped.missingMyMmr).toBe(13);
   });
 
-  test("netMmrByMatchup partitions by region so a region switch doesn't fake a phantom loss", async () => {
-    // Region partitioning is the headline of the v0.7.x rewrite — a
-    // streamer playing NA 4900 and EU 3500 should not see a −1400
-    // attributed to whichever matchup happened to bridge the regions.
-    // Inspecting the pipeline guarantees the $setWindowFields stage
-    // uses ``partitionBy: "$_myRegion"`` and that ``_myRegion`` is
-    // derived from ``myToonHandle``'s leading byte.
+  test("netMmrByMatchup partitions by account, ladder race, and queue", async () => {
     let captured = null;
     const games = {
       aggregate(pipeline) {
@@ -934,16 +1001,14 @@ describe("services/aggregations", () => {
     const svc = new AggregationsService({ games });
     await svc.netMmrByMatchup("u1", {});
     const json = JSON.stringify(captured);
-    expect(json).toContain('"partitionBy":"$_myRegion"');
+    expect(json).toContain('"partitionBy":"$_partitionKey"');
+    expect(json).toContain('"ladderRace":"$_myLadderRace"');
+    expect(json).toContain('"isLadder"');
+    expect(json).toContain('"playerCount"');
     expect(json).toContain('"$myToonHandle"');
-    // The region switch is the only branches we explicitly call out,
-    // since they drive every regional partition.
-    expect(json).toContain('"NA"');
-    expect(json).toContain('"EU"');
-    // Summary branch must run BEFORE the $match that drops
-    // !myMmr games — otherwise the missingMyMmr counter is
-    // always zero and the chart can't explain the disparity.
+    // Unverified and missing values must remain visible to diagnostics.
     expect(json).toContain('"missingMyMmr"');
+    expect(json).toContain('"untrustedMyMmr"');
     expect(json).toContain('"totalGames"');
   });
 
@@ -955,7 +1020,9 @@ describe("services/aggregations", () => {
     const out = /** @type {any} */ (await svc.netMmrByMatchup("u1", {}));
     expect(out.matchups).toEqual([]);
     expect(out.totalGames).toBe(0);
+    expect(out.eligibleGames).toBe(0);
     expect(out.dropped.outlierSwing).toBe(0);
     expect(out.dropped.missingMyMmr).toBe(0);
+    expect(out.dropped.untrustedMyMmr).toBe(0);
   });
 });

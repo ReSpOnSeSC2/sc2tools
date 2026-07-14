@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,6 +49,11 @@ class PlayerInfo:
     league_id: Optional[int] = None  # 0=Bronze .. 6=Grandmaster
     is_human: bool = True
     is_observer: bool = False
+    # Race selected in the ladder queue. For Random players this remains
+    # ``"Random"`` while ``race`` is the concrete race that spawned.
+    # Kept last so positional callers using the legacy PlayerInfo field
+    # order remain compatible.
+    selected_race: Optional[str] = None
 
 
 @dataclass
@@ -141,13 +147,35 @@ def _safe_int(value, default: int = 0) -> int:
         return default
 
 
+_MIN_PLAUSIBLE_MMR = 500
+_MAX_PLAUSIBLE_MMR = 9999
+
+
+def _coerce_player_mmr(value: Any) -> Optional[int]:
+    """Return a schema-safe ladder rating, or ``None``.
+
+    Replay fields are untrusted input. In particular, ``bool`` is an
+    ``int`` subclass and the old lower-bound-only check allowed values
+    above the cloud schema's 9999 ceiling to reach the upload queue.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not (_MIN_PLAUSIBLE_MMR <= value <= _MAX_PLAUSIBLE_MMR):
+        return None
+    return int(value)
+
+
 def _get_player_mmr(p) -> Optional[int]:
     """
     Return real MMR if sc2reader exposes it on the player, else None.
 
     SC2 replays do not reliably carry MMR for modern Battle.net. We
     only trust ``scaled_rating`` and ``mmr`` (both real ratings on the
-    1000-7000 range when present). ``highest_league`` is a small enum
+    1000-7000 range when present). In pinned sc2reader 1.8.0,
+    ``scaled_rating`` is decoded into ``Participant.init_data`` but is
+    not copied onto the Participant as a top-level attribute. Probe
+    that native shape as well as the top-level attributes used by
+    patched/newer builds. ``highest_league`` is a small enum
     (Bronze..Grandmaster, plus a sentinel for Unranked) and was
     previously used as a fallback - that produced bogus values like
     7 in the live payload. When sc2reader has no rating, return None
@@ -158,13 +186,20 @@ def _get_player_mmr(p) -> Optional[int]:
         >>> _get_player_mmr(P())
         5187
     """
-    # MMRs in modern SC2 are 4-digit ratings; reject anything below
-    # this floor as a misread enum/league value.
-    MIN_PLAUSIBLE_MMR = 500
-    for attr in ("scaled_rating", "mmr"):
-        val = getattr(p, attr, None)
-        if isinstance(val, (int, float)) and val >= MIN_PLAUSIBLE_MMR:
-            return int(val)
+    init_data = getattr(p, "init_data", None)
+    nested = init_data if isinstance(init_data, Mapping) else {}
+    # Prefer scaled_rating over the less-specific mmr key regardless
+    # of whether a particular sc2reader build exposes it at the top
+    # level or only inside init_data.
+    for val in (
+        getattr(p, "scaled_rating", None),
+        nested.get("scaled_rating"),
+        getattr(p, "mmr", None),
+        nested.get("mmr"),
+    ):
+        mmr = _coerce_player_mmr(val)
+        if mmr is not None:
+            return mmr
     return None
 
 
@@ -195,11 +230,13 @@ def _get_player_league_id(p) -> Optional[int]:
 
 
 def _player_to_info(p) -> PlayerInfo:
+    play_race = getattr(p, "play_race", "") or ""
     return PlayerInfo(
         pid=getattr(p, "pid", 0) or 0,
         name=getattr(p, "name", "") or "",
-        race=getattr(p, "play_race", "") or "",
+        race=play_race,
         result=getattr(p, "result", "Unknown") or "Unknown",
+        selected_race=getattr(p, "pick_race", None) or play_race or None,
         handle=getattr(p, "toon_handle", None),
         mmr=_get_player_mmr(p),
         league_id=_get_player_league_id(p),

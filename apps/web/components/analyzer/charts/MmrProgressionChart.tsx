@@ -39,9 +39,11 @@ type RegionSeries = {
   latest: { bucket: string; mmr: number } | null;
 };
 
-type AccountSeries = {
+type LadderSeries = {
+  seriesKey: string;
   toonHandle: string;
   region: string;
+  ladderRace: string;
   label: string;
   points: MmrPoint[];
   peak: { bucket: string; mmr: number } | null;
@@ -49,11 +51,28 @@ type AccountSeries = {
   latest: { bucket: string; mmr: number } | null;
 };
 
+export type MmrCoverage = {
+  filteredGames: number;
+  numericMmrGames: number;
+  verifiedReplayMmrGames: number;
+  untrustedNumericMmrGames: number;
+  unavailableMmrGames: number;
+  missingMmrGames: number;
+  excludedNonRanked1v1Games: number;
+  missingAccountGames: number;
+  missingLadderRaceGames: number;
+  eligibleGames: number;
+};
+
 type MmrResponse = {
   interval: "day" | "week" | "month";
   points: MmrPoint[];
   regions?: RegionSeries[];
-  accounts?: AccountSeries[];
+  series?: LadderSeries[];
+  /** Deprecated API alias retained while old SWR entries expire. */
+  accounts?: Array<Partial<LadderSeries> & Omit<LadderSeries, "seriesKey" | "ladderRace">>;
+  coverage?: MmrCoverage;
+  mixedSeries?: boolean;
   peak: { bucket: string; mmr: number } | null;
   trough: { bucket: string; mmr: number } | null;
   latest: { bucket: string; mmr: number } | null;
@@ -98,18 +117,68 @@ function regionLabel(region: string): string {
  * cycle through shades of the base hue so the legend still groups
  * visually by ladder.
  */
-function buildAccountColors(
-  accounts: AccountSeries[],
+function buildSeriesColors(
+  series: LadderSeries[],
 ): Record<string, string> {
   const seen: Record<string, number> = {};
   const out: Record<string, string> = {};
-  for (const a of accounts) {
+  for (const a of series) {
     const idx = (seen[a.region] = (seen[a.region] || 0));
     seen[a.region] = idx + 1;
     const palette = REGION_COLORS[a.region] || [COLOR_TEXT_DIM];
-    out[a.toonHandle] = palette[idx % palette.length];
+    out[a.seriesKey] = palette[idx % palette.length];
   }
   return out;
+}
+
+export type MmrCoverageNotice = { title: string; sub: string };
+
+/** Explain quarantined legacy values instead of silently drawing them. */
+export function mmrCoverageNotice(
+  coverage?: Partial<MmrCoverage> | null,
+): MmrCoverageNotice | null {
+  const count = Number(coverage?.untrustedNumericMmrGames || 0);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const noun = count === 1 ? "record was" : "records were";
+  return {
+    title: "MMR history needs a resync",
+    sub: `${count.toLocaleString()} older numeric MMR ${noun} excluded because the replay source cannot be verified. Resync with the latest agent to rebuild this chart from ranked 1v1 replay ratings.`,
+  };
+}
+
+function emptyMmrCopy(
+  coverage?: Partial<MmrCoverage> | null,
+): MmrCoverageNotice {
+  const resync = mmrCoverageNotice(coverage);
+  if (resync) return resync;
+  if (Number(coverage?.verifiedReplayMmrGames || 0) > 0) {
+    return {
+      title: "No verified ranked 1v1 MMR in this view",
+      sub: "This chart only includes two-player ladder replays with a verified replay rating and Battle.net account.",
+    };
+  }
+  return {
+    title: "No verified MMR data yet",
+    sub: "Once the latest agent syncs a ranked 1v1 replay rating, this chart will trace that account and race ladder.",
+  };
+}
+
+/** Normalize the previous account-only response while cached clients expire. */
+function responseSeries(data?: MmrResponse): LadderSeries[] {
+  if (!data) return [];
+  const raw = Array.isArray(data.series)
+    ? data.series
+    : Array.isArray(data.accounts)
+      ? data.accounts
+      : [];
+  return raw.map((item) => {
+    const ladderRace = item.ladderRace || "U";
+    return {
+      ...item,
+      seriesKey: item.seriesKey || `${item.toonHandle}|${ladderRace}`,
+      ladderRace,
+    } as LadderSeries;
+  });
 }
 
 /**
@@ -153,8 +222,8 @@ export function MmrProgressionChart({
   // Either way the multi-line view only kicks in when the series
   // count is >= 2 — a single-account / single-region user keeps the
   // original look.
-  const accounts = useMemo<AccountSeries[]>(
-    () => (Array.isArray(data?.accounts) ? data!.accounts! : []),
+  const series = useMemo<LadderSeries[]>(
+    () => responseSeries(data),
     [data],
   );
   const regions = useMemo<RegionSeries[]>(
@@ -162,20 +231,20 @@ export function MmrProgressionChart({
     [data],
   );
   const multiSeries: MultiSeries[] = useMemo(() => {
-    if (accounts.length >= 2) {
-      const colors = buildAccountColors(accounts);
-      return accounts.map((a) => ({
-        key: a.toonHandle,
+    if (series.length) {
+      const colors = buildSeriesColors(series);
+      return series.map((a) => ({
+        key: a.seriesKey,
         label: a.label,
         region: a.region,
-        color: colors[a.toonHandle] || COLOR_TEXT_DIM,
+        color: colors[a.seriesKey] || COLOR_TEXT_DIM,
         points: a.points,
         peak: a.peak,
         trough: a.trough,
         latest: a.latest,
       }));
     }
-    if (regions.length >= 2) {
+    if (regions.length) {
       return regions.map((r) => ({
         key: r.region,
         label: regionLabel(r.region),
@@ -188,12 +257,24 @@ export function MmrProgressionChart({
       }));
     }
     return [];
-  }, [accounts, regions]);
+  }, [series, regions]);
   const multi = multiSeries.length > 1;
 
+  const displayData = useMemo<MmrResponse | undefined>(() => {
+    if (!data || multiSeries.length !== 1) return data;
+    const only = multiSeries[0];
+    return {
+      ...data,
+      points: only.points,
+      peak: only.peak,
+      trough: only.trough,
+      latest: only.latest,
+    };
+  }, [data, multiSeries]);
+
   const overallRows = useMemo(() => {
-    if (!data || !Array.isArray(data.points)) return [];
-    return data.points.map((p) => ({
+    if (!displayData || !Array.isArray(displayData.points)) return [];
+    return displayData.points.map((p) => ({
       date: localDateKey(p.bucket, tz),
       close: p.closeMmr,
       min: p.minMmr,
@@ -203,7 +284,7 @@ export function MmrProgressionChart({
       wins: p.wins,
       losses: p.losses,
     }));
-  }, [data, tz]);
+  }, [displayData, tz]);
 
   // Multi-series rows: one row per bucket, one column per series.
   // Missing buckets stay as ``null`` so Recharts skips them rather
@@ -235,6 +316,8 @@ export function MmrProgressionChart({
         : computeYDomain(overallRows),
     [multi, multiSeries, overallRows],
   );
+  const hasChartRows = multi ? multiRows.length > 0 : overallRows.length > 0;
+  const coverageNotice = mmrCoverageNotice(data?.coverage);
 
   if (isLoading) {
     return (
@@ -244,13 +327,11 @@ export function MmrProgressionChart({
     );
   }
 
-  if (!overallRows.length) {
+  if (!hasChartRows) {
+    const copy = emptyMmrCopy(data?.coverage);
     return (
       <Card title="MMR progression">
-        <EmptyState
-          title="No MMR data yet"
-          sub="Once your replays carry MMR (most ladder games do), this chart will trace your climb."
-        />
+        <EmptyState title={copy.title} sub={copy.sub} />
       </Card>
     );
   }
@@ -258,12 +339,25 @@ export function MmrProgressionChart({
   return (
     <Card title="MMR progression">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Closing MMR per {bucket} ·{" "}
+        Last recorded verified ranked 1v1 MMR per {bucket} ·{" "}
         {multi
-          ? "one line per Battle.net account — peak / trough / current per account below."
-          : "shaded band = min/max within the bucket · markers highlight peak, trough, and most recent."}
+          ? "one line per Battle.net account and selected ladder race; peak / trough / last recorded per series below."
+          : "shaded band = min/max recorded within the bucket; markers highlight peak, trough, and last recorded."}
       </p>
-      <MmrHeadline data={data} multiSeries={multiSeries} multi={multi} />
+      {coverageNotice ? (
+        <div
+          role="status"
+          className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2"
+        >
+          <div className="text-xs font-semibold text-warning">
+            {coverageNotice.title}
+          </div>
+          <p className="mt-0.5 text-micro text-text-dim">
+            {coverageNotice.sub}
+          </p>
+        </div>
+      ) : null}
+      <MmrHeadline data={displayData} multiSeries={multiSeries} multi={multi} />
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           {multi ? (
@@ -340,7 +434,7 @@ export function MmrProgressionChart({
             <SingleSeriesChart
               rows={overallRows}
               yDomain={yDomain}
-              data={data}
+              data={displayData}
               tz={tz}
             />
           )}
@@ -436,7 +530,7 @@ function SingleSeriesChart({
               rows={[
                 {
                   key: "close",
-                  label: "Closing MMR",
+                  label: "Last recorded MMR",
                   value: row.close.toLocaleString(),
                 },
               ]}
@@ -565,7 +659,7 @@ function MmrHeadline({
   }> = [];
   if (data.latest) {
     items.push({
-      label: "Current",
+      label: "Last recorded",
       value: data.latest.mmr.toLocaleString(),
       color: COLOR_ACCENT,
     });
@@ -575,7 +669,7 @@ function MmrHeadline({
     items.push({
       label: "Peak",
       value: data.peak.mmr.toLocaleString(),
-      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs now` : undefined,
+      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs last` : undefined,
       color: COLOR_SUCCESS,
     });
   }
@@ -584,7 +678,7 @@ function MmrHeadline({
     items.push({
       label: "Trough",
       value: data.trough.mmr.toLocaleString(),
-      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs now` : undefined,
+      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs last` : undefined,
       color: COLOR_DANGER,
     });
   }

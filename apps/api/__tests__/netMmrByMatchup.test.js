@@ -49,8 +49,13 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       date: new Date("2026-05-09T12:00:00Z"),
       result: "Victory",
       myRace: "Protoss",
+      myLadderRace: "Protoss",
       myBuild: "Protoss - Robo Opener",
       myMmr: 4500,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
+      isLadderGame: true,
+      playerCount: 2,
       map: "Hard Lead LE",
       durationSec: 620,
       opponent: {
@@ -119,9 +124,7 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
   });
 
   test(
-    "long gaps within the same region still count: the dashboard's " +
-      "current-MMR card reconciles the totals so unrecorded games " +
-      "don't get filtered behind the user's back",
+    "MMR moves whose sign contradicts the result are quarantined",
     async () => {
       // v0.5.x used to drop pairs spaced beyond a session cap so a
       // 100%-WR matchup could never read net-negative. The user
@@ -171,13 +174,8 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       ]);
 
       const out = await svc.netMmrByMatchup("u1", {});
-      const p = findRow(out.matchups, "P");
-      expect(p).toBeDefined();
-      expect(p.games).toBe(3);
-      expect(p.wins).toBe(3);
-      expect(p.winRate).toBeCloseTo(1);
-      expect(p.netMmr).toBe(-300);
-      // No gap dropper anymore — only the ±150 delta cap.
+      expect(findRow(out.matchups, "P")).toBeUndefined();
+      expect(out.dropped.signMismatch).toBe(3);
       expect(out.dropped.outlierSwing).toBe(0);
     },
   );
@@ -273,24 +271,27 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       const { matchups, dropped } = await svc.netMmrByMatchup("u1", {});
       const z = findRow(matchups, "Z");
       expect(z).toBeDefined();
-      // Both z1→z2 (+25) and z2→z3 (−80) survive.
-      expect(z.games).toBe(2);
-      expect(z.netMmr).toBe(-55);
+      // z1→z2 (+25) survives. z2 is recorded as a win, so its −80
+      // next-rating delta is inconsistent and is quarantined.
+      expect(z.games).toBe(1);
+      expect(z.netMmr).toBe(25);
+      expect(dropped.signMismatch).toBe(1);
       expect(dropped.outlierSwing).toBe(0);
     },
   );
 
-  test("oversized swings (race-pool switch, season reset) are dropped", async () => {
+  test("selected ladder race prevents cross-pool swings", async () => {
     // Two same-session Terran games on a 4500 ladder, then a switch
     // into a Random ladder rated 3000 — the next pair would land a
     // delta of -1500 on the second Terran game's matchup if we let
-    // it through. The magnitude guard drops it.
+    // it through. Exact ladder-race partitioning prevents the pair.
     const t0 = new Date("2026-05-09T12:00:00Z").getTime();
     await db.games.insertMany([
       makeGame({
         gameId: "t1",
         date: new Date(t0),
         myRace: "Terran",
+        myLadderRace: "Terran",
         myMmr: 4500,
         result: "Victory",
         opponent: { race: "Terran", mmr: 4500 },
@@ -299,15 +300,17 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
         gameId: "t2",
         date: new Date(t0 + 5 * MIN_AGO),
         myRace: "Terran",
+        myLadderRace: "Terran",
         myMmr: 4525,
         result: "Victory",
         opponent: { race: "Terran", mmr: 4525 },
       }),
-      // Race switch into Random with a sub-NET_MMR_MAX_GAP_MS gap.
+      // Race switch into the separately-rated Random ladder.
       makeGame({
         gameId: "r1",
         date: new Date(t0 + 10 * MIN_AGO),
         myRace: "Random",
+        myLadderRace: "Random",
         myMmr: 3000,
         result: "Victory",
         opponent: { race: "Zerg", mmr: 3000 },
@@ -316,12 +319,33 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     const { matchups } = await svc.netMmrByMatchup("u1", {});
     const t = findRow(matchups, "T");
     expect(t).toBeDefined();
-    // t1→t2 is +25 and attributed to Terran. t2→r1 is -1525,
-    // exceeds NET_MMR_MAX_DELTA, and must NOT show up on the
-    // Terran bar.
+    // t1→t2 is +25 and attributed to Terran. t2 and r1 never pair.
     expect(t.games).toBe(1);
     expect(t.netMmr).toBe(25);
     expect(NET_MMR_MAX_DELTA).toBeGreaterThan(60);
+  });
+
+  test("oversized swings inside one ladder are counted as outliers", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "g1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "g2",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myMmr: 4700,
+      }),
+      makeGame({
+        gameId: "g3",
+        date: new Date(t0 + 10 * MIN_AGO),
+        myMmr: 4725,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {});
+    const z = findRow(out.matchups, "Z");
+    expect(z.games).toBe(1);
+    expect(z.netMmr).toBe(25);
+    expect(out.dropped.outlierSwing).toBe(1);
   });
 
   test("displayed WR comes from the same cohort that produced netMmr", async () => {
@@ -449,4 +473,193 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
       expect(z.games).toBe(2);
     },
   );
+
+  test("a missing-MMR replay breaks adjacency instead of being skipped", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "g1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "g2_missing",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myMmr: null,
+        myMmrSource: "unavailable",
+      }),
+      makeGame({
+        gameId: "g3",
+        date: new Date(t0 + 10 * MIN_AGO),
+        myMmr: 4550,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {});
+    expect(out.matchups).toEqual([]);
+    expect(out.dropped.missingMyMmr).toBe(1);
+    expect(out.dropped.nextMissingMyMmr).toBe(1);
+  });
+
+  test("numeric MMR without replay provenance is quarantined", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    const first = makeGame({ gameId: "legacy1", date: new Date(t0) });
+    const second = makeGame({
+      gameId: "legacy2",
+      date: new Date(t0 + 5 * MIN_AGO),
+      myMmr: 4525,
+    });
+    delete first.myMmrSource;
+    delete second.myMmrSource;
+    await db.games.insertMany([first, second]);
+
+    const out = await svc.netMmrByMatchup("u1", {});
+    expect(out.matchups).toEqual([]);
+    expect(out.dropped.untrustedMyMmr).toBe(2);
+  });
+
+  test("opponent filters apply to anchors after adjacency is computed", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "z1",
+        date: new Date(t0),
+        myMmr: 4500,
+        opponent: { race: "Zerg" },
+      }),
+      makeGame({
+        gameId: "p1",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myMmr: 4525,
+        opponent: { race: "Protoss" },
+      }),
+      makeGame({
+        gameId: "z2",
+        date: new Date(t0 + 10 * MIN_AGO),
+        myMmr: 4550,
+        opponent: { race: "Zerg" },
+      }),
+      makeGame({
+        gameId: "t1",
+        date: new Date(t0 + 15 * MIN_AGO),
+        myMmr: 4575,
+        opponent: { race: "Terran" },
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", { oppRace: "Z" });
+    const z = findRow(out.matchups, "Z");
+    expect(z.games).toBe(2);
+    expect(z.netMmr).toBe(50);
+    expect(z.avgDelta).toBe(25);
+  });
+
+  test("the last game inside a date filter can use the next replay", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "inside", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "outside",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myMmr: 4525,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {
+      until: new Date(t0 + MIN_AGO),
+    });
+    expect(out.totalGames).toBe(1);
+    expect(findRow(out.matchups, "Z").netMmr).toBe(25);
+  });
+
+  test("same-region accounts never pair with each other", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "a1",
+        date: new Date(t0),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4500,
+      }),
+      makeGame({
+        gameId: "b1",
+        date: new Date(t0 + MIN_AGO),
+        myToonHandle: "1-S2-1-200",
+        myMmr: 4520,
+      }),
+      makeGame({
+        gameId: "a2",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4525,
+      }),
+      makeGame({
+        gameId: "b2",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myToonHandle: "1-S2-1-200",
+        myMmr: 4540,
+      }),
+    ]);
+
+    const z = findRow((await svc.netMmrByMatchup("u1", {})).matchups, "Z");
+    expect(z.games).toBe(2);
+    expect(z.netMmr).toBe(45);
+  });
+
+  test("custom and team games neither count nor contaminate 1v1 pairs", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "ladder1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "custom",
+        date: new Date(t0 + MIN_AGO),
+        myMmr: 5000,
+        isLadderGame: false,
+      }),
+      makeGame({
+        gameId: "team",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myMmr: 4000,
+        playerCount: 4,
+      }),
+      makeGame({
+        gameId: "ladder2",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myMmr: 4525,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {});
+    expect(out.totalGames).toBe(4);
+    expect(out.eligibleGames).toBe(2);
+    expect(out.dropped.excludedNonRanked1v1).toBe(2);
+    expect(findRow(out.matchups, "Z").netMmr).toBe(25);
+  });
+
+  test("Random queue pairs by selected race, not spawned race", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "random_p",
+        date: new Date(t0),
+        myRace: "Protoss",
+        myLadderRace: "Random",
+        myMmr: 3000,
+      }),
+      makeGame({
+        gameId: "random_z",
+        date: new Date(t0 + MIN_AGO),
+        myRace: "Zerg",
+        myLadderRace: "Random",
+        myMmr: 3020,
+      }),
+      makeGame({
+        gameId: "protoss",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myRace: "Protoss",
+        myLadderRace: "Protoss",
+        myMmr: 4500,
+      }),
+    ]);
+
+    const z = findRow((await svc.netMmrByMatchup("u1", {})).matchups, "Z");
+    expect(z.games).toBe(1);
+    expect(z.netMmr).toBe(20);
+  });
 });

@@ -35,6 +35,10 @@ const GAME_SCHEMA = {
     date: { type: "string", format: "date-time" },
     result: { type: "string", enum: ["Victory", "Defeat", "Tie"] },
     myRace: { type: "string", minLength: 1, maxLength: 24 },
+    // Race selected when queueing for ladder. This can be "Random"
+    // even though ``myRace`` records the race actually spawned in the
+    // replay. Optional for payloads from agents predating this field.
+    myLadderRace: { type: "string", minLength: 1, maxLength: 24 },
     myBuild: { type: "string", maxLength: 200 },
     map: { type: "string", minLength: 1, maxLength: 200 },
     // Total players in the replay (2 for 1v1, >2 for team games).

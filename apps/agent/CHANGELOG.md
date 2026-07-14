@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.14.1
+
+### Fixed — replay MMR and selected ladder race reach history charts
+- **What.** Pinned sc2reader 1.8 stores each player's game-time rating in
+  `init_data.scaled_rating`, while the replay adapters only inspected
+  top-level attributes. Replays were therefore marked MMR-unavailable.
+  Random games also exposed only the concrete spawned race to the cloud.
+- **Effect.** Both replay adapters read the native nested rating with schema
+  bounds, and uploads preserve the selected ladder race separately from the
+  spawned race. A re-sync can now rebuild verified per-account, per-race MMR
+  progression and matchup deltas.
+
 ## 0.14.0
 
 ### Added — reload-safe Ghost matchup races

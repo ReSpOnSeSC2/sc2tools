@@ -89,11 +89,14 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
-    // A numeric MMR from a pre-0.13.8 agent can only have come from
-    // its replay. Canonicalising it protects that value if a later,
-    // transient low-level parse cannot read the same replay's MMR.
+    // Older agents did not report provenance and could substitute the
+    // account's *current* Pulse rating for every historical replay. A
+    // bare numeric value is therefore unverified, not replay-authored.
+    // Treat it as unavailable: this clears legacy pollution while the
+    // conditional update still preserves an existing proven replay value.
     if (doc.myMmrSource === undefined && Number.isFinite(doc.myMmr)) {
-      doc.myMmrSource = "replay";
+      doc.myMmrSource = "unavailable";
+      delete doc.myMmr;
     }
     // Agent 0.13.8+ explicitly reports when a replay carries no
     // game-time MMR. Older APIs filled that gap from current Pulse,

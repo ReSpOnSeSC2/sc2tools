@@ -270,6 +270,17 @@ def test_to_payload_omits_my_toon_handle_when_unset():
     assert "myToonHandle" not in payload
 
 
+def test_to_payload_keeps_random_ladder_race_separate_from_play_race():
+    payload = _bare_cloud_game(my_ladder_race="Random").to_payload()
+
+    assert payload["myRace"] == "Protoss"
+    assert payload["myLadderRace"] == "Random"
+
+
+def test_to_payload_omits_my_ladder_race_when_unset():
+    assert "myLadderRace" not in _bare_cloud_game().to_payload()
+
+
 def test_to_payload_emits_player_count_when_set():
     """Drives the cloud FilterBar's 1v1 / team game-size filter — the
     server $matches on ``playerCount`` (2 for 1v1, >2 for team)."""
@@ -372,6 +383,27 @@ def test_resolve_my_mmr_layer_2_reads_raw_player_scaled_rating(tmp_path):
     assert out == 4321
 
 
+def test_resolve_my_mmr_layer_2_reads_sc2reader_1_8_init_data(tmp_path):
+    """Match the real pinned sc2reader Participant shape.
+
+    v1.8.0 decodes the rating but leaves it under ``init_data`` instead
+    of creating a top-level ``scaled_rating`` attribute.
+    """
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    me = _make_pi(mmr=None)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727",
+        pid=1,
+        init_data={"scaled_rating": 5326},
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+
+    out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
+
+    assert out == 5326
+
+
 def test_resolve_my_mmr_layer_2_falls_back_to_raw_player_mmr(tmp_path):
     from sc2tools_agent.replay_pipeline import _resolve_my_mmr
 
@@ -427,6 +459,22 @@ def test_resolve_my_mmr_rejects_implausibly_low_values(tmp_path):
     ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
     out = _resolve_my_mmr(ctx, me, file_path=tmp_path / "x.SC2Replay")
     assert out is None
+
+
+def test_resolve_my_mmr_rejects_value_above_api_schema_ceiling(tmp_path):
+    from sc2tools_agent.replay_pipeline import _resolve_my_mmr
+
+    me = _make_pi(mmr=None)
+    raw_match = SimpleNamespace(
+        toon_handle="1-S2-1-267727",
+        pid=1,
+        init_data={"scaled_rating": 10000},
+    )
+    ctx = SimpleNamespace(raw=SimpleNamespace(players=[raw_match]))
+
+    assert _resolve_my_mmr(
+        ctx, me, file_path=tmp_path / "x.SC2Replay",
+    ) is None
 
 
 def test_resolve_my_mmr_returns_none_when_raw_replay_missing(tmp_path):
@@ -679,6 +727,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # ---- Mock parse_deep so we don't need a real .SC2Replay file. ----
     me = SimpleNamespace(
         pid=1, name="Me", race="Protoss", result="Win",
+        selected_race="Random",
         handle="1-S2-1-267727", mmr=4500, apm=180.0, spq=82.0,
     )
     opp = SimpleNamespace(
@@ -895,6 +944,11 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # all_players had two entries (me + opp) → a 1v1; the cloud's
     # game-size filter keys off this.
     assert payload["playerCount"] == 2
+
+    # Random queue keeps its selected ladder pool even though this
+    # particular replay spawned Protoss for build/matchup analysis.
+    assert payload["myRace"] == "Protoss"
+    assert payload["myLadderRace"] == "Random"
 
     # The opponent's league reaches the wire. The cloud's Ladder Meta
     # Radar and league-percentile benchmarks band the whole corpus on
