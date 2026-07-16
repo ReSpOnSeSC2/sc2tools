@@ -23,4 +23,12 @@ describe("MapArtwork", () => {
     expect(screen.getByText("Unknown Test Map")).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
   });
+
+  it("uses only the custom artwork preview without a native black tooltip", () => {
+    const { container } = render(<MapLabel name="Ruby Rock" preview />);
+    const wrapper = container.firstElementChild;
+
+    expect(wrapper?.getAttribute("title")).toBeNull();
+    expect(wrapper?.querySelector("[data-map-preview]")).toBeTruthy();
+  });
 });

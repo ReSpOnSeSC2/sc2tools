@@ -76,6 +76,9 @@ describe("AllGamesTable game analysis entry point", () => {
 
     const desktopRow = screen.getAllByText("Ancient Cistern")[0].closest("tr");
     expect(desktopRow).toBeTruthy();
+    const desktopMapLabel = screen.getAllByText("Ancient Cistern")[0].parentElement;
+    expect(desktopMapLabel?.querySelector("[data-map-preview]")).toBeNull();
+    expect(desktopMapLabel?.getAttribute("title")).toBeNull();
     fireEvent.click(desktopRow!);
     expect(useApiMock).toHaveBeenCalledWith("/v1/games/game%2F42/build-order");
   });

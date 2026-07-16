@@ -267,7 +267,7 @@ function GameRow({
             <MapLabel
               name={game.map}
               size="xs"
-              preview
+              showNativeTitle={false}
               className="max-w-[13rem]"
               textClassName="text-text"
             />

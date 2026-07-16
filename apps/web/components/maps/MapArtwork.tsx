@@ -74,12 +74,14 @@ export function MapLabel({
   className = "",
   textClassName = "",
   preview = false,
+  showNativeTitle = true,
 }: {
   name: string | null | undefined;
   size?: "xs" | "sm" | "md";
   className?: string;
   textClassName?: string;
   preview?: boolean;
+  showNativeTitle?: boolean;
 }) {
   const label = name?.trim() || "Unknown map";
   const hasArtwork = Boolean(resolveMapImage(name));
@@ -87,19 +89,20 @@ export function MapLabel({
   return (
     <span
       className={`group/map relative inline-flex min-w-0 items-center gap-2 ${className}`}
-      title={label}
+      title={preview || !showNativeTitle ? undefined : label}
     >
       <MapArtwork mapName={name} size={size} />
       <span className={`min-w-0 truncate ${textClassName}`}>{label}</span>
       {preview && hasArtwork ? (
         <span
           aria-hidden
+          data-map-preview
           className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-50 hidden w-56 translate-y-1 overflow-hidden rounded-lg border border-border-strong bg-bg-elevated opacity-0 shadow-xl motion-safe:transition-all motion-safe:duration-200 sm:block sm:group-hover/map:translate-y-0 sm:group-hover/map:opacity-100 sm:group-focus-within/map:translate-y-0 sm:group-focus-within/map:opacity-100"
         >
           <span className="relative block aspect-video overflow-hidden">
             <MapArtwork mapName={name} size="card" className="border-0" />
-            <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-            <span className="absolute inset-x-0 bottom-0 block truncate px-3 py-2 text-left text-caption font-semibold text-white">
+            <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
+            <span className="absolute inset-x-0 bottom-0 block truncate px-3 py-2 text-left text-caption font-semibold text-white drop-shadow-md">
               {label}
             </span>
           </span>
