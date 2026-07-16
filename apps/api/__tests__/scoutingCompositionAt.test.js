@@ -159,6 +159,32 @@ describe("countBuildingsAt", () => {
     });
   });
 
+  test("keeps the Gateway identity until a Warp Gate morph completes", () => {
+    const events = [
+      { time: 0, name: "Gateway", is_building: true },
+      {
+        time: 206,
+        complete_time: 210,
+        name: "WarpGate",
+        is_building: true,
+      },
+    ];
+    expect(countBuildingsAt(events, 208)).toEqual({ Gateway: 1 });
+    expect(countBuildingsAt(events, 210)).toEqual({ WarpGate: 1 });
+  });
+
+  test("keeps start-time visibility for ordinary in-progress buildings", () => {
+    const events = [
+      {
+        time: 100,
+        complete_time: 146,
+        name: "Gateway",
+        is_building: true,
+      },
+    ];
+    expect(countBuildingsAt(events, 120)).toEqual({ Gateway: 1 });
+  });
+
   test("OrbitalCommand / PlanetaryFortress consume a CommandCenter", () => {
     const events = [
       { time: 0, name: "CommandCenter", is_building: true },
@@ -172,13 +198,7 @@ describe("countBuildingsAt", () => {
     });
   });
 
-  test("residual Gateways fold into WarpGate once WarpGate research is complete", () => {
-    // In SC2 every Gateway auto-morphs into a Warp Gate once the
-    // WarpGate research finishes (≈7 s per building). Residual
-    // Gateway entries — from an in-flight construction at the
-    // hovered time, or from a morph entry trimmed out of a slim
-    // payload — must collapse onto the WarpGate chip so the roster
-    // doesn't split the same in-game building type across two icons.
+  test("keeps unmorphed Gateways separate after Warp Gate research", () => {
     const events = [
       { time: 30, name: "Gateway", is_building: true },
       { time: 60, name: "Gateway", is_building: true },
@@ -186,7 +206,10 @@ describe("countBuildingsAt", () => {
       { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
       { time: 210, name: "WarpGate", is_building: true },
     ];
-    expect(countBuildingsAt(events, 9999)).toEqual({ WarpGate: 3 });
+    expect(countBuildingsAt(events, 9999)).toEqual({
+      Gateway: 2,
+      WarpGate: 1,
+    });
   });
 
   test("Gateways stay separate while WarpGate research is in progress", () => {
@@ -333,11 +356,12 @@ describe("deriveBuildingComposition — parity with compositionAt.ts", () => {
     expect(out.source).toBe("build_order");
   });
 
-  test("subtracts a Gateway death folded into WarpGate at game end", () => {
+  test("subtracts a Gateway death without converting unmorphed Gateways", () => {
     const buildEvents = [
       { time: 60, name: "Gateway", is_building: true },
       { time: 120, name: "Gateway", is_building: true },
       { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
+      { time: 210, name: "WarpGate", is_building: true },
     ];
     const productionBuildings = [
       { name: "Gateway", born_time: 60, died_time: 90 },

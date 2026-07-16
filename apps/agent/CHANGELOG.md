@@ -2,6 +2,15 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.14.2
+
+### Changed — StarCraft II 5.0.16b replay timings
+- **What.** The bundled replay engine still reconstructed Warp Gate morphs and
+  several unit starts with pre-hotfix durations after StarCraft II 5.0.16b.
+- **Effect.** Replay timelines now use the four-second Gateway-to-Warp Gate
+  morph plus the current Adept, High Templar, Dark Templar, and Reaper build
+  times. This keeps uploaded build-order timing aligned with the live patch.
+
 ## 0.14.1
 
 ### Fixed — replay MMR and selected ladder race reach history charts

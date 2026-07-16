@@ -16,6 +16,18 @@ export type SimRace = "Protoss" | "Terran" | "Zerg";
 export interface CombatStats {
   hp: number;
   shields?: number;
+  /**
+   * Exact weapon values used to preserve balance changes that a single
+   * sustained-DPS number cannot express (bonuses and upgrade scaling).
+   * The safety sim still consumes the aggregate DPS fields below.
+   */
+  weapon?: {
+    damage: number;
+    attacks?: number;
+    bonusVsLight?: number;
+    damagePerUpgrade?: number;
+    bonusVsLightPerUpgrade?: number;
+  };
   /** Sustained DPS vs ground targets (Liquipedia values). */
   dpsGround?: number;
   /** Sustained DPS vs air targets. */
@@ -92,7 +104,7 @@ export interface UpgradeDef {
   /**
    * Research runs without occupying the structure's production queue.
    * (Kept for research that lives on a unit-producing structure; 5.0.16
-   * PTR2 reverted warpgate research to the Cybernetics Core, which
+   * 5.0.16 moved warpgate research to the Cybernetics Core, which
    * trains nothing, so it no longer needs this.)
    */
   nonBlocking?: boolean;
@@ -127,20 +139,25 @@ export interface MechanicsConfig {
   maxEnergy: number;
   warpgate: {
     /**
-     * Fallback gateway production speed multiplier once research
-     * completes (5.0.16 PTR2: 1.40 — gateways produce ~40% faster).
-     * Used only when `boostedBuildTimes` has no entry for a unit; also
-     * drives the "X% faster" adaptation note.
+     * Fraction removed from Gateway train times after Warp Gate research.
+     * When present, this is the authoritative percentage; explicit rounded
+     * per-unit times still take precedence when a patch publishes them.
+     */
+    gatewayTrainTimeReduction?: number;
+    /**
+     * Legacy fallback gateway production speed multiplier once research
+     * completes. Used only when the profile has neither a rounded per-unit
+     * time nor an exact train-time reduction.
      */
     gatewaySpeedMultiplier: number;
     /**
      * Per-unit gateway production time AFTER warpgate research finishes.
-     * PTR2's boost is per-unit (Stalker 27→16 ≈1.69×, HT 39→26 =1.5×),
-     * so it can't be expressed as a single multiplier. When present for
-     * a unit it overrides `gatewaySpeedMultiplier`.
+     * The initial 5.0.16 release published rounded values per unit. When
+     * present for a unit, this overrides both percentage and multiplier.
      */
     boostedBuildTimes?: Record<string, number>;
     transformCost: { minerals: number; gas: number };
+    /** Shared duration for Gateway ↔ Warp Gate transformations. */
     transformTime: number;
     warpInSec: number;
     /** Per-unit warpgate cooldowns. */
@@ -205,7 +222,8 @@ export type BuildActionKind =
   | "research" // upgrade
   | "morph" // unit/structure morph (Lair, Baneling, Overseer, Orbital…)
   | "chrono" // spend nexus energy on a producer/structure name
-  | "transform-warpgate"; // convert one gateway to a warpgate
+  | "transform-warpgate" // convert one Gateway to a Warp Gate
+  | "transform-gateway"; // convert one Warp Gate back to a Gateway
 
 export interface BuildAction {
   kind: BuildActionKind;
@@ -217,7 +235,7 @@ export interface BuildAction {
    * Meta gate for research that occupies a production structure:
    * wait until `count` completed `unit`s stand, so the research never
    * takes the only one offline. Ignored on profiles where the research
-   * doesn't occupy that structure type — including 5.0.16 PTR2, which
+   * doesn't occupy that structure type — including 5.0.16, which
    * researches warpgate at the Cybernetics Core (set only for the
    * legacy on-the-Gateway PTR1 layout).
    */

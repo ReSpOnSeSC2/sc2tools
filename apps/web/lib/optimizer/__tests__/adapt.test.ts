@@ -347,6 +347,16 @@ describe("adaptBuild — 12-worker builds re-timed for 5.0.16", () => {
     }
   });
 
+  it("parses the reverse Warp Gate transformation token", () => {
+    const { actions, unknownNames } = actionsFromSteps(target, [
+      "TransformGateway",
+    ]);
+    expect(unknownNames).toEqual([]);
+    expect(actions).toEqual([
+      { kind: "transform-gateway", name: "WarpGate" },
+    ]);
+  });
+
   it("gas-heavy rules builds get collectors injected and run to their milestones", () => {
     // The user's "PvZ — DT into 3 Stargate Void Ray" shape: pure
     // milestones, heavy gas, latest rule at 10:00. Without injected

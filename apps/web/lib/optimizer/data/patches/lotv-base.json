@@ -82,7 +82,7 @@
   "units": {
     "Probe": {"race":"Protoss","minerals":50,"gas":0,"supply":1,"buildTime":12,"builtFrom":["Nexus"],"isWorker":true,"combat":{"hp":20,"shields":20,"dpsGround":4.7}},
     "Zealot": {"race":"Protoss","minerals":100,"gas":0,"supply":2,"buildTime":27,"builtFrom":["Gateway"],"combat":{"hp":100,"shields":50,"dpsGround":18.6}},
-    "Adept": {"race":"Protoss","minerals":100,"gas":25,"supply":2,"buildTime":30,"builtFrom":["Gateway"],"requires":["CyberneticsCore"],"combat":{"hp":70,"shields":70,"dpsGround":8.05}},
+    "Adept": {"race":"Protoss","minerals":100,"gas":25,"supply":2,"buildTime":30,"builtFrom":["Gateway"],"requires":["CyberneticsCore"],"combat":{"hp":70,"shields":70,"dpsGround":8.05,"weapon":{"damage":10,"bonusVsLight":12,"damagePerUpgrade":1,"bonusVsLightPerUpgrade":1}}},
     "Stalker": {"race":"Protoss","minerals":125,"gas":50,"supply":2,"buildTime":27,"builtFrom":["Gateway"],"requires":["CyberneticsCore"],"combat":{"hp":80,"shields":80,"dpsGround":9.7,"dpsAir":9.7}},
     "Sentry": {"race":"Protoss","minerals":50,"gas":100,"supply":2,"buildTime":23,"builtFrom":["Gateway"],"requires":["CyberneticsCore"],"combat":{"hp":40,"shields":40,"dpsGround":8.4,"dpsAir":8.4}},
     "HighTemplar": {"race":"Protoss","minerals":50,"gas":150,"supply":2,"buildTime":39,"builtFrom":["Gateway"],"requires":["TemplarArchives"],"combat":{"hp":40,"shields":40,"dpsGround":3.2}},
@@ -90,7 +90,7 @@
     "Observer": {"race":"Protoss","minerals":25,"gas":75,"supply":1,"buildTime":21,"builtFrom":["RoboticsFacility"],"combat":{"hp":40,"shields":20,"isFlying":true}},
     "WarpPrism": {"race":"Protoss","minerals":250,"gas":0,"supply":2,"buildTime":36,"builtFrom":["RoboticsFacility"],"combat":{"hp":80,"shields":100,"isFlying":true}},
     "Immortal": {"race":"Protoss","minerals":275,"gas":100,"supply":4,"buildTime":39,"builtFrom":["RoboticsFacility"],"combat":{"hp":200,"shields":100,"dpsGround":19.2}},
-    "Colossus": {"race":"Protoss","minerals":300,"gas":200,"supply":6,"buildTime":54,"builtFrom":["RoboticsFacility"],"requires":["RoboticsBay"],"combat":{"hp":200,"shields":150,"dpsGround":18.7}},
+    "Colossus": {"race":"Protoss","minerals":300,"gas":200,"supply":6,"buildTime":54,"builtFrom":["RoboticsFacility"],"requires":["RoboticsBay"],"combat":{"hp":200,"shields":150,"dpsGround":18.7,"weapon":{"damage":10,"attacks":2,"bonusVsLight":5}}},
     "Disruptor": {"race":"Protoss","minerals":150,"gas":150,"supply":3,"buildTime":36,"builtFrom":["RoboticsFacility"],"requires":["RoboticsBay"],"combat":{"hp":100,"shields":100,"dpsGround":10}},
     "Phoenix": {"race":"Protoss","minerals":150,"gas":100,"supply":2,"buildTime":25,"builtFrom":["Stargate"],"combat":{"hp":120,"shields":60,"dpsAir":12.7,"isFlying":true}},
     "Oracle": {"race":"Protoss","minerals":150,"gas":150,"supply":3,"buildTime":37,"builtFrom":["Stargate"],"combat":{"hp":100,"shields":60,"dpsGround":24.4,"isFlying":true}},

@@ -25,14 +25,20 @@ describe("services/buildDurations", () => {
       expect(toStartSeconds("Hive", 600, { isBuilding: true })).toBe(529);
     });
 
-    test("Terran add-on / surfacing morphs subtract their duration", () => {
+    test("structure morphs subtract their current duration", () => {
       expect(toStartSeconds("OrbitalCommand", 200)).toBe(175);
       expect(toStartSeconds("PlanetaryFortress", 400)).toBe(364);
+      expect(toStartSeconds("WarpGate", 104)).toBe(100);
+      expect(buildSecondsFor("WarpGate")).toBe(4);
     });
 
     test("units rewind by their train/morph duration", () => {
       // Stalker is a 30s build out of a Gateway.
       expect(toStartSeconds("Stalker", 134)).toBe(104);
+      expect(buildSecondsFor("Adept")).toBe(33);
+      expect(buildSecondsFor("HighTemplar")).toBe(40);
+      expect(buildSecondsFor("DarkTemplar")).toBe(40);
+      expect(buildSecondsFor("Reaper")).toBe(34);
       // Zergling is a 17s larva-morph.
       expect(toStartSeconds("Zergling", 50)).toBe(33);
     });

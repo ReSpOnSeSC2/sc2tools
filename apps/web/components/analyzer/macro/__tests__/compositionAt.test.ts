@@ -209,7 +209,7 @@ describe("canonicalizeName — sc2reader variant collapsing", () => {
 });
 
 describe("countBuildingsAt — Buildings row parity", () => {
-  it("counts buildings cumulatively and applies the WarpGate→Gateway morph", () => {
+  it("counts buildings cumulatively and applies the Gateway→Warp Gate morph", () => {
     const events: BuildEvent[] = [
       { time: 30, name: "Gateway", is_building: true },
       { time: 60, name: "Gateway", is_building: true },
@@ -219,6 +219,32 @@ describe("countBuildingsAt — Buildings row parity", () => {
     const out = countBuildingsAt(events, 9999);
     expect(out.Gateway).toBe(1);
     expect(out.WarpGate).toBe(1);
+  });
+
+  it("keeps the Gateway identity until a Warp Gate morph completes", () => {
+    const events: BuildEvent[] = [
+      { time: 30, name: "Gateway", is_building: true },
+      {
+        time: 206,
+        complete_time: 210,
+        name: "WarpGate",
+        is_building: true,
+      },
+    ];
+    expect(countBuildingsAt(events, 208)).toEqual({ Gateway: 1 });
+    expect(countBuildingsAt(events, 210)).toEqual({ WarpGate: 1 });
+  });
+
+  it("keeps start-time visibility for ordinary in-progress buildings", () => {
+    const events: BuildEvent[] = [
+      {
+        time: 100,
+        complete_time: 146,
+        name: "Gateway",
+        is_building: true,
+      },
+    ];
+    expect(countBuildingsAt(events, 120)).toEqual({ Gateway: 1 });
   });
 
   it("ignores non-building events", () => {
@@ -233,30 +259,19 @@ describe("countBuildingsAt — Buildings row parity", () => {
     expect(out.Probe).toBeUndefined();
   });
 
-  it("folds residual Gateways into WarpGate once WarpGate research is complete", () => {
-    // In SC2 every Gateway auto-morphs into a Warp Gate once the
-    // WarpGate research finishes (≈7 s per building). The build log
-    // usually emits a UnitTypeChange ‘WarpGate’ entry for each morph
-    // so the loop consumes a Gateway per WarpGate it sees — but
-    // residual Gateways can still leak through when (a) a Gateway is
-    // mid-construction at the hovered time so no morph event has
-    // fired yet, or (b) the payload was trimmed and the morph event
-    // for an already-finished Gateway was dropped. The roster must
-    // surface a single "WarpGate × N" chip in both cases rather than
-    // splitting the same in-game building type across two chips.
+  it("keeps unmorphed Gateways separate after Warp Gate research", () => {
     const events: BuildEvent[] = [
       { time: 30, name: "Gateway", is_building: true },
       { time: 60, name: "Gateway", is_building: true },
       { time: 90, name: "Gateway", is_building: true },
       // WarpGateResearch finishes at t=200 (start=100, duration=100s).
       { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
-      // Only one of the three Gateways got a morph entry in the
-      // payload — the other two are still tagged as Gateway.
+      // The player manually transforms only one of the three Gateways.
       { time: 210, name: "WarpGate", is_building: true },
     ];
     const out = countBuildingsAt(events, 9999);
-    expect(out.Gateway).toBeUndefined();
-    expect(out.WarpGate).toBe(3);
+    expect(out.Gateway).toBe(2);
+    expect(out.WarpGate).toBe(1);
   });
 
   it("keeps Gateway separate while WarpGate research is still in progress", () => {
@@ -413,11 +428,7 @@ describe("deriveBuildingComposition — death-aware Buildings roster", () => {
     expect(out.source).toBe("build_order");
   });
 
-  it("subtracts a Gateway death folded into WarpGate at game end", () => {
-    // A Gateway destroyed before WarpGate research finishes is recorded
-    // as a Gateway death, but countBuildingsAt folds residual Gateways
-    // into WarpGate once research completes. The fallback must still
-    // find the WarpGate bucket so the dead Gateway is removed.
+  it("subtracts a Gateway death without converting unmorphed Gateways", () => {
     const buildEvents: BuildEvent[] = [
       { time: 60, name: "Gateway", is_building: true },
       { time: 120, name: "Gateway", is_building: true },
@@ -428,6 +439,7 @@ describe("deriveBuildingComposition — death-aware Buildings roster", () => {
         is_building: false,
         category: "upgrade",
       },
+      { time: 210, name: "WarpGate", is_building: true },
     ];
     const productionBuildings: ProductionBuildingRecord[] = [
       // Gateway killed at 0:90 — before research, so recorded as Gateway.
@@ -439,8 +451,7 @@ describe("deriveBuildingComposition — death-aware Buildings roster", () => {
       productionBuildings,
       t: 1500,
     });
-    // Two Gateways built, both fold to WarpGate at game end (=2), minus
-    // the one destroyed Gateway → 1 WarpGate.
+    // One Gateway dies and the other has an explicit WarpGate morph.
     expect(out.buildings.Gateway).toBeUndefined();
     expect(out.buildings.WarpGate).toBe(1);
   });

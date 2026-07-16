@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Agent 0.14.2 · StarCraft II 5.0.16b balance data** — the optimizer now
+  defaults to the July 16 hotfix, including the Protoss weapon and Gateway
+  changes, Terran Command Center/Planetary Fortress costs, Ghost supply, and
+  the corrected four-second transformations in the optimizer plus the
+  recorded Gateway-to-Warp Gate morph timing in replay analysis. Composition
+  views now keep paid/manual Gateways and Warp Gates distinct until a recorded
+  transformation occurs.
+
 ### Added
 
 - **Ghost Build Coach · nine matchup loadouts** — Settings now provides a

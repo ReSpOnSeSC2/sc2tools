@@ -13,6 +13,8 @@
  */
 import lotvBase from "../data/patches/lotv-base.json";
 import patch5016 from "../data/patches/patch-5-0-16.json";
+import patch5016a from "../data/patches/patch-5-0-16a.json";
+import patch5016b from "../data/patches/patch-5-0-16b.json";
 import type {
   PatchProfile,
   PatchProfileFile,
@@ -23,10 +25,12 @@ import type {
 const REGISTRY: Record<string, PatchProfileFile> = {
   [lotvBase.id]: lotvBase as PatchProfileFile,
   [patch5016.id]: patch5016 as PatchProfileFile,
+  [patch5016a.id]: patch5016a as PatchProfileFile,
+  [patch5016b.id]: patch5016b as PatchProfileFile,
 };
 
 /** Profile the UI selects by default — the live balance patch. */
-export const DEFAULT_PROFILE_ID = "5.0.16";
+export const DEFAULT_PROFILE_ID = "5.0.16b";
 
 export interface ProfileSummary {
   id: string;
@@ -164,6 +168,19 @@ export function validateProfile(profile: PatchProfile): void {
     if (!units[wgUnit]) {
       problems.push(`warpgate cooldown references unknown "${wgUnit}"`);
     }
+  }
+  const trainTimeReduction =
+    profile.mechanics.warpgate.gatewayTrainTimeReduction;
+  if (
+    trainTimeReduction !== undefined &&
+    (trainTimeReduction < 0 || trainTimeReduction >= 1)
+  ) {
+    problems.push(
+      "warpgate.gatewayTrainTimeReduction must be at least 0 and less than 1",
+    );
+  }
+  if (profile.mechanics.warpgate.transformTime <= 0) {
+    problems.push("warpgate.transformTime must be positive");
   }
   if (problems.length > 0) {
     throw new Error(

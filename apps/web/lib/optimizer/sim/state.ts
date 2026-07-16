@@ -162,6 +162,7 @@ export function makeState(
     reactorBusyUntil: 0,
     addon: null,
     isWarpgate: false,
+    warpgateTransformPaid: false,
     chronoUntil: 0,
     baseId: 0,
   };

@@ -1,0 +1,17 @@
+{
+  "id": "5.0.16a",
+  "label": "Patch 5.0.16 first hotfix",
+  "extends": "5.0.16",
+  "economy": {
+    "geyserCapacity": 2000
+  },
+  "mechanics": {
+    "larva": { "intervalSec": 9.9 }
+  },
+  "units": {
+    "Reaper": { "buildTime": 34 },
+    "Adept": { "buildTime": 33 },
+    "HighTemplar": { "buildTime": 40 },
+    "DarkTemplar": { "buildTime": 40 }
+  }
+}

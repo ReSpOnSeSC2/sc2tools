@@ -148,18 +148,18 @@ STRUCTURE_MORPH_SECONDS: Dict[str, int] = {
     "OrbitalCommand": 25,
     "PlanetaryFortress": 36,
     # Protoss
-    "WarpGate": 7,
+    "WarpGate": 4,
 }
 
 UNIT_BUILD_SECONDS: Dict[str, int] = {
     # Protoss
-    "Probe": 12, "Zealot": 27, "Stalker": 30, "Sentry": 26, "Adept": 27,
-    "HighTemplar": 39, "DarkTemplar": 39, "Archon": 9, "Observer": 21,
+    "Probe": 12, "Zealot": 27, "Stalker": 30, "Sentry": 26, "Adept": 33,
+    "HighTemplar": 40, "DarkTemplar": 40, "Archon": 9, "Observer": 21,
     "Immortal": 39, "WarpPrism": 36, "Colossus": 54, "Disruptor": 36,
     "Phoenix": 25, "VoidRay": 43, "Oracle": 37, "Tempest": 43,
     "Carrier": 64, "Mothership": 71,
     # Terran
-    "SCV": 12, "Marine": 18, "Marauder": 21, "Reaper": 32, "Ghost": 29,
+    "SCV": 12, "Marine": 18, "Marauder": 21, "Reaper": 34, "Ghost": 29,
     "Hellion": 21, "Hellbat": 21, "WidowMine": 21, "Cyclone": 32,
     "SiegeTank": 32, "Thor": 43, "Viking": 30, "Medivac": 30,
     "Liberator": 43, "Banshee": 43, "Raven": 34, "Battlecruiser": 64,

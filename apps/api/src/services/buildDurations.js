@@ -56,7 +56,7 @@ const STRUCTURE_MORPHS = Object.freeze({
   OrbitalCommand: 25,
   PlanetaryFortress: 36,
   // Protoss
-  WarpGate: 7,
+  WarpGate: 4,
   // Some replays surface alt-name forms; map them too.
   WarpGateResearch: 100,
 });
@@ -134,9 +134,9 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Zealot: 27,
   Stalker: 30,
   Sentry: 26,
-  Adept: 27,
-  HighTemplar: 39,
-  DarkTemplar: 39,
+  Adept: 33,
+  HighTemplar: 40,
+  DarkTemplar: 40,
   Archon: 9,
   Observer: 21,
   Immortal: 39,
@@ -153,7 +153,7 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   SCV: 12,
   Marine: 18,
   Marauder: 21,
-  Reaper: 32,
+  Reaper: 34,
   Ghost: 29,
   Hellion: 21,
   Hellbat: 21,

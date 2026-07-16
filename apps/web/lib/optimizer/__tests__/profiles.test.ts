@@ -7,22 +7,23 @@ import {
 } from "../patch/profiles";
 
 describe("patch profile layering", () => {
-  it("resolves the 5.0.16 profile with every patch-note change applied", () => {
+  it("preserves the initial 5.0.16 live release", () => {
     const p = resolveProfile("5.0.16");
     // Economy overhaul
     expect(p.starting.workers).toBe(8);
-    expect(p.economy.patchCapacity).toEqual({ large: 1600, small: 1200 });
+    expect(p.economy.patchCapacity).toEqual({ large: 1600, small: 1100 });
     expect(p.economy.geyserCapacity).toBe(2500);
     expect(p.economy.richGasMultiplier).toBe(1.5);
     // Town hall supply cuts
     expect(p.units.Nexus.providesSupply).toBe(13);
     expect(p.units.CommandCenter.providesSupply).toBe(13);
     expect(p.units.Hatchery.providesSupply).toBe(4);
-    // Warpgate rework (PTR2: research reverted to the cybernetics core)
+    // Warpgate rework
     expect(p.upgrades.WarpGateResearch.researchedAt).toEqual([
       "CyberneticsCore",
     ]);
     expect(p.mechanics.warpgate.gatewaySpeedMultiplier).toBe(1.4);
+    expect(p.mechanics.warpgate.gatewayTrainTimeReduction).toBe(0.4);
     expect(p.mechanics.warpgate.transformCost).toEqual({
       minerals: 25,
       gas: 25,
@@ -37,17 +38,58 @@ describe("patch profile layering", () => {
     expect(p.units.Zealot.buildTime).toBe(27);
     expect(p.units.Adept.buildTime).toBe(30);
     expect(p.units.Sentry.buildTime).toBe(23);
-    expect(p.units.HighTemplar.buildTime).toBe(39);
+    expect(p.units.HighTemplar.buildTime).toBe(43);
     // Larva spawn speed-up
-    expect(p.mechanics.larva.intervalSec).toBe(9);
+    expect(p.mechanics.larva.intervalSec).toBe(9.5);
     // Queen cost cut
     expect(p.units.Queen.minerals).toBe(150);
     // Ghost nerfs
     expect(p.units.Ghost.supply).toBe(3);
     expect(p.units.Ghost.combat?.hp).toBe(100);
+    expect(p.units.Disruptor.combat?.range).toBe(11.35);
     // Carapace cost cuts
     expect(p.upgrades.ZergGroundCarapaceLevel1.minerals).toBe(100);
     expect(p.upgrades.ZergGroundCarapaceLevel3.gas).toBe(200);
+  });
+
+  it("layers the first 5.0.16 hotfix before 5.0.16b", () => {
+    const p = resolveProfile("5.0.16a");
+    expect(p.economy.geyserCapacity).toBe(2000);
+    expect(p.mechanics.larva.intervalSec).toBe(9.9);
+    expect(p.units.Reaper.buildTime).toBe(34);
+    expect(p.units.Adept.buildTime).toBe(33);
+    expect(p.units.HighTemplar.buildTime).toBe(40);
+    expect(p.units.DarkTemplar.buildTime).toBe(40);
+    expect(p.units.Ghost.supply).toBe(3);
+  });
+
+  it("applies every modeled 5.0.16b gameplay change", () => {
+    const p = resolveProfile("5.0.16b");
+
+    expect(DEFAULT_PROFILE_ID).toBe("5.0.16b");
+    expect(p.mechanics.warpgate.gatewayTrainTimeReduction).toBe(0.5);
+    expect(p.mechanics.warpgate.gatewaySpeedMultiplier).toBe(2);
+    expect(p.mechanics.warpgate.boostedBuildTimes).toBeUndefined();
+    expect(p.mechanics.warpgate.transformTime).toBe(4);
+
+    expect(p.units.Adept.combat?.weapon).toMatchObject({
+      damage: 10,
+      bonusVsLight: 12,
+      damagePerUpgrade: 2,
+      bonusVsLightPerUpgrade: 2,
+    });
+    expect(p.units.Colossus.combat?.weapon).toMatchObject({
+      damage: 12,
+      attacks: 2,
+      bonusVsLight: 3,
+    });
+    expect(p.units.Colossus.combat?.dpsGround).toBe(22.4);
+    expect(p.units.Disruptor.combat?.range).toBe(7);
+
+    expect(p.units.CommandCenter.minerals).toBe(300);
+    expect(p.units.PlanetaryFortress.minerals).toBe(250);
+    expect(p.units.PlanetaryFortress.gas).toBe(150);
+    expect(p.units.Ghost.supply).toBe(2);
   });
 
   it("keeps base-profile values where the delta is silent", () => {
@@ -76,7 +118,7 @@ describe("patch profile layering", () => {
     });
     expect(p.starting.workers).toBe(10);
     expect(p.units.Zealot.minerals).toBe(125);
-    // untouched siblings survive the merge (PTR2 inherits the live time)
+    // untouched siblings survive the merge
     expect(p.units.Zealot.buildTime).toBe(27);
   });
 
@@ -107,6 +149,8 @@ describe("patch profile layering", () => {
   it("lists registered profiles with the live patch as default", () => {
     const ids = listProfiles().map((p) => p.id);
     expect(ids).toContain("lotv-base");
+    expect(ids).toContain("5.0.16");
+    expect(ids).toContain("5.0.16a");
     expect(ids).toContain(DEFAULT_PROFILE_ID);
   });
 });

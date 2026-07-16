@@ -111,6 +111,10 @@ export interface ResolvedActions {
 
 /** Step tokens with special meaning beyond unit/upgrade names. */
 const TRANSFORM_TOKENS = new Set(["transformwarpgate", "warpgatetransform"]);
+const REVERSE_TRANSFORM_TOKENS = new Set([
+  "transformgateway",
+  "gatewaytransform",
+]);
 
 /**
  * Chrono step token: `"Chrono:Stargate"` spends 50 nexus energy on the
@@ -133,6 +137,10 @@ export function actionsFromSteps(
     const lowered = raw.trim().toLowerCase();
     if (TRANSFORM_TOKENS.has(lowered)) {
       actions.push({ kind: "transform-warpgate", name: "Gateway" });
+      continue;
+    }
+    if (REVERSE_TRANSFORM_TOKENS.has(lowered)) {
+      actions.push({ kind: "transform-gateway", name: "WarpGate" });
       continue;
     }
     if (lowered.startsWith(CHRONO_PREFIX)) {
@@ -165,7 +173,7 @@ export function actionsFromSteps(
       // PTR1-only meta: when the research runs AT a gateway it occupies
       // one, so it must wait for every gateway listed before it to
       // finish — "you cannot start warpgate until you get your second
-      // gateway up". PTR2 reverted the research to the Cybernetics Core,
+      // gateway up". 5.0.16 moved the research to the Cybernetics Core,
       // which trains no units, so gateways keep producing throughout and
       // this gate no longer applies (the check above keeps it dormant on
       // cybercore profiles). Rush builds with one listed gateway keep
@@ -264,7 +272,11 @@ export function injectPrerequisites(
     }
   };
   for (const action of actions) {
-    if (action.kind !== "chrono" && action.kind !== "transform-warpgate") {
+    if (
+      action.kind !== "chrono" &&
+      action.kind !== "transform-warpgate" &&
+      action.kind !== "transform-gateway"
+    ) {
       ensure(action.name, 0);
     }
     out.push(action);
@@ -382,7 +394,7 @@ function buildComparison(
  * Patch-specific guidance from the adapted sim. The generic check below
  * fires when a blocking research occupies the only structure of a type
  * that also trains units (e.g. PTR1's warpgate-on-the-Gateway). 5.0.16
- * PTR2 reverted warpgate research to the Cybernetics Core, which trains
+ * 5.0.16 moved warpgate research to the Cybernetics Core, which trains
  * no units, so it no longer trips that note — but the per-gateway
  * transform economics note below still applies.
  */
@@ -419,12 +431,14 @@ function buildAdaptationNotes(
     profile.mechanics.warpgate.transformCost.minerals > 0
   ) {
     const cost = profile.mechanics.warpgate.transformCost;
-    const speedPct = Math.round(
-      (profile.mechanics.warpgate.gatewaySpeedMultiplier - 1) * 100,
+    const reductionPct = Math.round(
+      (profile.mechanics.warpgate.gatewayTrainTimeReduction ??
+        1 - 1 / profile.mechanics.warpgate.gatewaySpeedMultiplier) *
+        100,
     );
-    if (speedPct > 0) {
+    if (reductionPct > 0) {
       notes.push(
-        `On this patch, finished warpgate research makes gateways produce ${speedPct}% faster, and transforming to a warpgate costs ${cost.minerals}/${cost.gas} per gateway — transforming everything is no longer automatic. Keep gateways producing; transform when you want to get aggressive or quickly need an extra round of units, then change them to warpgates.`,
+        `On this patch, finished warpgate research reduces gateway train times by ${reductionPct}%, and transforming to a warpgate costs ${cost.minerals}/${cost.gas} per gateway — transforming everything is no longer automatic. Keep gateways producing; transform when you want to get aggressive or quickly need an extra round of units, then change them to warpgates.`,
       );
     }
   }

@@ -1,0 +1,38 @@
+{
+  "id": "5.0.16b",
+  "label": "Patch 5.0.16b hotfix — July 16, 2026",
+  "extends": "5.0.16a",
+  "mechanics": {
+    "warpgate": {
+      "gatewayTrainTimeReduction": 0.5,
+      "gatewaySpeedMultiplier": 2,
+      "boostedBuildTimes": null,
+      "transformTime": 4
+    }
+  },
+  "units": {
+    "Adept": {
+      "combat": {
+        "weapon": {
+          "damagePerUpgrade": 2,
+          "bonusVsLightPerUpgrade": 2
+        }
+      }
+    },
+    "Colossus": {
+      "combat": {
+        "dpsGround": 22.4,
+        "weapon": {
+          "damage": 12,
+          "bonusVsLight": 3
+        }
+      }
+    },
+    "Disruptor": {
+      "combat": { "range": 7 }
+    },
+    "CommandCenter": { "minerals": 300 },
+    "PlanetaryFortress": { "minerals": 250, "gas": 150 },
+    "Ghost": { "supply": 2 }
+  }
+}

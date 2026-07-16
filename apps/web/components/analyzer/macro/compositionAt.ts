@@ -486,10 +486,9 @@ export function deriveUnitComposition(opts: {
  * consumed one of the mapped building. Mirrors the agent's
  * UnitTypeChangeEvent handling for structures: a Hatchery that became
  * a Lair, then a Hive, should appear as "1 Hive" rather than
- * "1 Hatchery + 1 Lair + 1 Hive". Bidirectional WarpGate ↔ Gateway
- * is normalised by mapping WarpGate→Gateway here AND emitting the
- * Gateway count when a WarpGate is built (i.e., WarpGate consumes a
- * Gateway). Lurker Den name variants (LurkerDen / LurkerDenMP) are
+ * "1 Hatchery + 1 Lair + 1 Hive". A recorded Gateway→Warp Gate
+ * transformation is represented by making WarpGate consume one
+ * Gateway. Lurker Den name variants (LurkerDen / LurkerDenMP) are
  * each independently the morphed form of HydraliskDen — sc2reader
  * emits one or the other depending on data version.
  */
@@ -515,10 +514,10 @@ const UPGRADE_CATEGORY = "upgrade";
 
 /**
  * Reduce a build-order timeline into ``{name: count}`` for buildings
- * built up to and including ``t``. The agent's buildLog only records
- * starts (no death events), but for the composition snapshot showing
- * total-built-by-T is the right answer — sc2replaystats's overview
- * shows the same cumulative summary.
+ * built up to and including ``t``. The build log has construction starts
+ * plus completion timestamps for finish-time morphs, but no death events;
+ * for the composition snapshot, showing total-built-by-T is the right
+ * answer — sc2replaystats's overview shows the same cumulative summary.
  *
  * Names are canonicalised via ``canonicalizeName`` so stance suffixes
  * (Flying / Lowered / Burrowed / Uprooted) collapse onto the base
@@ -531,19 +530,6 @@ export function countBuildingsAt(
 ): Record<string, number> {
   if (!Array.isArray(events) || events.length === 0) return {};
   const counts: Record<string, number> = {};
-  // Once WarpGate research completes, every existing Gateway auto-morphs
-  // into a Warp Gate (≈7 s transition per building) and any Gateway built
-  // afterwards morphs immediately on completion. The build log's
-  // UnitTypeChangeEvent stream emits a WarpGate entry for each morph and
-  // the loop below consumes a Gateway per WarpGate it sees — but residual
-  // Gateways can still leak through: a Gateway whose construction hadn't
-  // finished at the hovered time has no morph event yet, and on slim/
-  // truncated payloads the morph event for an already-finished Gateway
-  // may have been dropped. Fold the residual Gateway count into WarpGate
-  // once the research has completed so the roster shows a single
-  // "WarpGate × N" chip rather than splitting the same in-game building
-  // type across two chips.
-  let warpGateResearchComplete = false;
   for (const ev of events) {
     if (!ev) continue;
     const startTime = Number(ev.time) || 0;
@@ -554,22 +540,16 @@ export function countBuildingsAt(
       const canonical = canonicalizeName(raw);
       if (!canonical) continue;
       const prev = BUILDING_MORPH_PARENT[canonical];
+      const visibleTime = prev
+        ? Number(ev.complete_time ?? startTime) || startTime
+        : startTime;
+      if (visibleTime > t) continue;
       if (prev && (counts[prev] || 0) > 0) {
         counts[prev] = (counts[prev] || 0) - 1;
         if (counts[prev] === 0) delete counts[prev];
       }
       counts[canonical] = (counts[canonical] || 0) + 1;
-    } else if ((ev.category || "").toLowerCase() === UPGRADE_CATEGORY) {
-      const name = ev.name || ev.display || "";
-      if (name === "WarpGateResearch") {
-        const completeTime = Number(ev.complete_time ?? ev.time) || 0;
-        if (completeTime <= t) warpGateResearchComplete = true;
-      }
     }
-  }
-  if (warpGateResearchComplete && (counts.Gateway || 0) > 0) {
-    counts.WarpGate = (counts.WarpGate || 0) + counts.Gateway;
-    delete counts.Gateway;
   }
   return counts;
 }
@@ -632,13 +612,9 @@ export function derivedBuildingDeaths(
 /**
  * Decrement one structure death from the cumulative ``counts`` map.
  *
- * Prefers the exact canonical bucket. When that bucket is empty,
- * Gateway ↔ WarpGate are tried as each other's fallback: at game end
- * ``countBuildingsAt`` folds every residual Gateway into WarpGate once
- * WarpGate research has completed, so a Gateway destroyed BEFORE the
- * research (recorded under the name ``Gateway``) would otherwise have
- * no matching bucket to subtract from. Returns true when a unit was
- * removed.
+ * Prefers the exact canonical bucket. Gateway ↔ WarpGate are fallback
+ * buckets for older/truncated payloads whose build log omitted a
+ * type-change event. Returns true when a unit was removed.
  */
 function subtractBuildingDeath(
   counts: Record<string, number>,
@@ -663,7 +639,7 @@ function subtractBuildingDeath(
  * Death-aware Buildings roster at time ``t``.
  *
  * Starts from the cumulative build-order count (``countBuildingsAt``,
- * which fixes the building SET and the morph/WarpGate folding) and
+ * which fixes the building set and applies recorded morphs) and
  * subtracts every structure that was destroyed at or before ``t``,
  * read from ``production_buildings``. This mirrors the death-aware
  * hybrid path the unit roster already uses (build-order births minus

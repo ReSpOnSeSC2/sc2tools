@@ -76,8 +76,8 @@ function completeTask(
   }
   if (task.kind === "transform") {
     const producer = state.producers.find((p) => p.id === task.producerId);
-    if (producer) producer.isWarpgate = true;
-    log(state, "complete", "WarpGate");
+    if (producer) producer.isWarpgate = task.name === "WarpGate";
+    log(state, "complete", task.name);
     return;
   }
   if (task.kind === "morph") {
@@ -137,6 +137,7 @@ function completeStructure(
       reactorBusyUntil: 0,
       addon: null,
       isWarpgate: false,
+      warpgateTransformPaid: false,
       chronoUntil: 0,
       baseId: null,
     });
@@ -442,12 +443,26 @@ function autoSupply(
 const LOOKAHEAD_STEPS = 4;
 
 /** Bank cost of an action (for the lookahead's resource reservation). */
-function actionCost(
+export function actionCost(
+  state: SimState,
   profile: PatchProfile,
   action: BuildAction,
 ): { minerals: number; gas: number } {
-  if (action.kind === "chrono") return { minerals: 0, gas: 0 };
+  if (action.kind === "chrono" || action.kind === "transform-gateway") {
+    return { minerals: 0, gas: 0 };
+  }
   if (action.kind === "transform-warpgate") {
+    const paidGatewayAvailable = state.producers.some(
+      (p) =>
+        p.name === "Gateway" &&
+        !p.isWarpgate &&
+        p.warpgateTransformPaid &&
+        p.readyAt <= state.time + EPSILON &&
+        p.busyUntil <= state.time + EPSILON,
+    );
+    if (paidGatewayAvailable) {
+      return { minerals: 0, gas: 0 };
+    }
     return { ...profile.mechanics.warpgate.transformCost };
   }
   if (action.kind === "research") {
@@ -566,7 +581,7 @@ export function simulate(
       // paid for, the scan stops — cheaper later steps (a 50/50
       // research, say) must save up for it, not queue-jump it.
       if (outcome.blockedOn && outcome.blockedOn !== "resources") {
-        const reserve = actionCost(profile, actions[firstPending]);
+        const reserve = actionCost(state, profile, actions[firstPending]);
         let scanned = 0;
         for (
           let i = firstPending + 1;
@@ -575,7 +590,7 @@ export function simulate(
         ) {
           if (done[i]) continue;
           scanned += 1;
-          const cost = actionCost(profile, actions[i]);
+          const cost = actionCost(state, profile, actions[i]);
           if (
             state.eco.minerals - cost.minerals < reserve.minerals ||
             state.eco.gas - cost.gas < reserve.gas
@@ -602,7 +617,7 @@ export function simulate(
     // 2. Macro policies (exact-time wakes come from events/ticks).
     const headReserve =
       firstPending < actions.length
-        ? actionCost(profile, actions[firstPending])
+        ? actionCost(state, profile, actions[firstPending])
         : null;
     runPolicies(state, profile, race, policies, headReserve);
     sample(state, profile);

@@ -1,18 +1,19 @@
 {
   "id": "5.0.16",
-  "label": "Patch 5.0.16 PTR2 — 8-worker economy, warpgate research on the Cybernetics Core",
+  "label": "Patch 5.0.16 — initial live release",
   "extends": "lotv-base",
   "starting": {
     "workers": 8
   },
   "economy": {
-    "patchCapacity": { "large": 1600, "small": 1200 },
+    "patchCapacity": { "large": 1600, "small": 1100 },
     "geyserCapacity": 2500,
     "richGasMultiplier": 1.5
   },
   "mechanics": {
-    "larva": { "intervalSec": 9 },
+    "larva": { "intervalSec": 9.5 },
     "warpgate": {
+      "gatewayTrainTimeReduction": 0.4,
       "gatewaySpeedMultiplier": 1.4,
       "boostedBuildTimes": {
         "Zealot": 16,
@@ -51,8 +52,10 @@
       "combat": { "speed": 0.85 }
     },
     "Disruptor": {
-      "combat": { "range": 12.35 }
+      "combat": { "range": 11.35 }
     },
+    "HighTemplar": { "buildTime": 43 },
+    "DarkTemplar": { "buildTime": 43 },
     "ShieldBattery": {
       "energy": 75
     }

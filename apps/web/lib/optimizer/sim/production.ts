@@ -19,6 +19,8 @@ export interface Producer {
   reactorBusyUntil: number;
   addon: AddonKind;
   isWarpgate: boolean;
+  /** This Gateway has paid its one-time Warp Gate transformation fee. */
+  warpgateTransformPaid: boolean;
   /** Chrono boost window end (0 when never boosted). */
   chronoUntil: number;
   /** Base this producer mines/injects for (town halls only). */

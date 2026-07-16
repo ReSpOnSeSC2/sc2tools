@@ -77,7 +77,9 @@ export function tryDispatch(
     case "chrono":
       return dispatchChrono(state, profile, action.target ?? action.name);
     case "transform-warpgate":
-      return dispatchTransform(state, profile);
+      return dispatchTransform(state, profile, true);
+    case "transform-gateway":
+      return dispatchTransform(state, profile, false);
   }
 }
 
@@ -204,6 +206,7 @@ export function dispatchStructure(
     reactorBusyUntil: 0,
     addon: null,
     isWarpgate: false,
+    warpgateTransformPaid: false,
     chronoUntil: 0,
     baseId: baseId ?? null,
   };
@@ -351,11 +354,14 @@ export function dispatchTrain(
   } else {
     let duration = def.buildTime;
     if (pick.producer.name === "Gateway" && state.warpgateDone) {
-      // PTR2's post-research gateway boost is per-unit (Stalker 27→16,
-      // HT 39→26), so prefer the explicit boosted time; fall back to the
-      // uniform multiplier for profiles that don't list one.
+      // Prefer patch-published rounded per-unit times. Newer profiles can
+      // instead publish the exact train-time reduction; the multiplier is
+      // retained as a fallback for older/custom profiles.
       duration =
-        wg.boostedBuildTimes?.[name] ?? def.buildTime / wg.gatewaySpeedMultiplier;
+        wg.boostedBuildTimes?.[name] ??
+        (wg.gatewayTrainTimeReduction !== undefined
+          ? def.buildTime * (1 - wg.gatewayTrainTimeReduction)
+          : def.buildTime / wg.gatewaySpeedMultiplier);
     }
     doneAt = applyChronoToTask(
       state.time,
@@ -596,6 +602,7 @@ export function applyChrono(
 function dispatchTransform(
   state: SimState,
   profile: PatchProfile,
+  toWarpgate: boolean,
 ): DispatchOutcome {
   if (!state.warpgateDone) {
     return state.upgradesInProgress.has("WarpGateResearch")
@@ -603,35 +610,46 @@ function dispatchTransform(
       : { status: "impossible", reason: "warpgate not researched" };
   }
   const wg = profile.mechanics.warpgate;
-  const gateway = state.producers.find(
+  const eligibleGateways = state.producers.filter(
     (p) =>
       p.name === "Gateway" &&
-      !p.isWarpgate &&
+      p.isWarpgate !== toWarpgate &&
       p.readyAt <= state.time + EPSILON &&
       p.busyUntil <= state.time + EPSILON,
   );
+  const gateway = toWarpgate
+    ? eligibleGateways.find((p) => p.warpgateTransformPaid) ??
+      eligibleGateways[0]
+    : eligibleGateways[0];
   if (!gateway) {
     const any = state.producers.some((p) => p.name === "Gateway");
     return any
       ? { status: "wait", blockedOn: "producer" }
       : { status: "impossible", reason: "no gateway" };
   }
-  const afford = affordOutcome(
-    state,
-    profile,
-    wg.transformCost.minerals,
-    wg.transformCost.gas,
-  );
-  if (afford) return afford;
-  spend(state, wg.transformCost.minerals, wg.transformCost.gas);
+  if (toWarpgate && !gateway.warpgateTransformPaid) {
+    const afford = affordOutcome(
+      state,
+      profile,
+      wg.transformCost.minerals,
+      wg.transformCost.gas,
+    );
+    if (afford) return afford;
+    spend(state, wg.transformCost.minerals, wg.transformCost.gas);
+    gateway.warpgateTransformPaid = true;
+  }
   const doneAt = state.time + wg.transformTime;
+  const targetName = toWarpgate ? "WarpGate" : "Gateway";
+  const actionKind = toWarpgate
+    ? "transform-warpgate"
+    : "transform-gateway";
   gateway.busyUntil = doneAt;
-  recordStep(state, "transform-warpgate", "WarpGate", doneAt);
-  log(state, "start", "WarpGate");
+  recordStep(state, actionKind, targetName, doneAt);
+  log(state, "start", targetName);
   scheduleTask(state, {
     completeAt: doneAt,
     kind: "transform",
-    name: "WarpGate",
+    name: targetName,
     producerId: gateway.id,
     count: 1,
     startedAt: state.time,

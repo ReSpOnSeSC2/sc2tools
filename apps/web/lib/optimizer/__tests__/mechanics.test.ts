@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { resolveProfile } from "../patch/profiles";
-import { defaultPolicies, simulate } from "../sim/engine";
+import { tryDispatch } from "../sim/dispatch";
+import { actionCost, defaultPolicies, simulate } from "../sim/engine";
 import {
   applyChronoToTask,
   completionWithChrono,
 } from "../sim/production";
+import { makeState } from "../sim/state";
 import type { BuildAction, SimOptions } from "../types";
 
 const profile = resolveProfile("5.0.16");
@@ -148,7 +150,7 @@ describe("terran orbital mechanics", () => {
   });
 });
 
-describe("5.0.16 PTR2 warpgate rework", () => {
+describe("initial 5.0.16 warpgate rework", () => {
   it("research runs at the cybernetics core; the gateway keeps producing", () => {
     const actions: BuildAction[] = [
       act("build", "Pylon"),
@@ -163,9 +165,9 @@ describe("5.0.16 PTR2 warpgate rework", () => {
     const research = result.steps.find(
       (s) => s.name === "WarpGateResearch",
     )!;
-    // PTR research time is 100s (5.0.16 delta over the 114s baseline)
+    // 5.0.16 research time is 100s (down from the 114s baseline)
     expect(research.doneSec - research.startSec).toBeCloseTo(100, 1);
-    // PTR2: research is on the core, so the lone gateway keeps making
+    // Research is on the core, so the lone gateway keeps making
     // zealots THROUGHOUT the research window.
     const zealots = result.steps.filter((s) => s.name === "Zealot");
     const inside = zealots.filter(
@@ -233,6 +235,141 @@ describe("5.0.16 PTR2 warpgate rework", () => {
     expect(warped[1].startSec - warped[0].startSec).toBeGreaterThanOrEqual(
       profile.mechanics.warpgate.cooldowns.Zealot - 0.01,
     );
+  });
+});
+
+describe("5.0.16b warpgate hotfix", () => {
+  const liveProfile = resolveProfile("5.0.16b");
+
+  it("reduces post-research Gateway train times by exactly 50%", () => {
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
+      act("research", "WarpGateResearch"),
+      ...Array.from({ length: 12 }, () => act("train", "Zealot")),
+    ];
+    const result = simulate(
+      actions,
+      liveProfile,
+      "Protoss",
+      opts({ horizonSec: 600 }),
+    );
+    const research = result.steps.find(
+      (step) => step.name === "WarpGateResearch",
+    )!;
+    const postResearch = result.steps.find(
+      (step) =>
+        step.name === "Zealot" && step.startSec >= research.doneSec - 0.01,
+    )!;
+
+    expect(postResearch).toBeDefined();
+    expect(postResearch.doneSec - postResearch.startSec).toBeCloseTo(
+      liveProfile.units.Zealot.buildTime * 0.5,
+      2,
+    );
+  });
+
+  it("uses four seconds in both transformation directions", () => {
+    const actions: BuildAction[] = [
+      act("build", "Pylon"),
+      act("build", "Gateway"),
+      act("build", "Assimilator"),
+      act("build", "CyberneticsCore"),
+      act("research", "WarpGateResearch"),
+      act("transform-warpgate", "Gateway"),
+      act("transform-gateway", "WarpGate"),
+    ];
+    const result = simulate(
+      actions,
+      liveProfile,
+      "Protoss",
+      opts({ horizonSec: 600 }),
+    );
+    const toWarpgate = result.steps.find(
+      (step) => step.kind === "transform-warpgate",
+    )!;
+    const toGateway = result.steps.find(
+      (step) => step.kind === "transform-gateway",
+    )!;
+
+    expect(toWarpgate.doneSec - toWarpgate.startSec).toBeCloseTo(4, 2);
+    expect(toGateway.doneSec - toGateway.startSec).toBeCloseTo(4, 2);
+  });
+
+  it("charges the transformation fee only once per Gateway", () => {
+    const state = makeState(liveProfile, "Protoss", defaultPolicies());
+    state.warpgateDone = true;
+    const gateway = {
+      id: state.nextId++,
+      name: "Gateway",
+      readyAt: 0,
+      busyUntil: 0,
+      reactorBusyUntil: 0,
+      addon: null,
+      isWarpgate: false,
+      warpgateTransformPaid: false,
+      chronoUntil: 0,
+      baseId: null,
+    };
+    state.producers.push(gateway);
+    state.eco.minerals = 25;
+    state.eco.gas = 25;
+
+    expect(
+      tryDispatch(
+        state,
+        liveProfile,
+        "Protoss",
+        act("transform-warpgate", "Gateway"),
+      ).status,
+    ).toBe("done");
+    expect(gateway.warpgateTransformPaid).toBe(true);
+    expect(state.eco.minerals).toBe(0);
+    expect(state.eco.gas).toBe(0);
+
+    // Model the completed round-trip; a second forward transform must
+    // succeed with an empty bank because this Gateway already paid.
+    gateway.isWarpgate = false;
+    gateway.busyUntil = 0;
+    expect(
+      tryDispatch(
+        state,
+        liveProfile,
+        "Protoss",
+        act("transform-warpgate", "Gateway"),
+      ).status,
+    ).toBe("done");
+    expect(state.eco.minerals).toBe(0);
+    expect(state.eco.gas).toBe(0);
+
+    // A paid structure that is still a Warp Gate cannot waive the fee
+    // for a different, unpaid Gateway in lookahead bank reservations.
+    gateway.isWarpgate = true;
+    gateway.busyUntil = 0;
+    state.producers.push({
+      ...gateway,
+      id: state.nextId++,
+      isWarpgate: false,
+      warpgateTransformPaid: false,
+    });
+    expect(
+      actionCost(
+        state,
+        liveProfile,
+        act("transform-warpgate", "Gateway"),
+      ),
+    ).toEqual({ minerals: 25, gas: 25 });
+
+    gateway.isWarpgate = false;
+    expect(
+      actionCost(
+        state,
+        liveProfile,
+        act("transform-warpgate", "Gateway"),
+      ),
+    ).toEqual({ minerals: 0, gas: 0 });
   });
 });
 
@@ -312,8 +449,8 @@ describe("build-order lookahead", () => {
     );
   });
 
-  it("warpgate research is moot-gated on the cybernetics-core profile (PTR2)", () => {
-    // On PTR2 the research runs at the cybernetics core, so the
+  it("warpgate research is moot-gated on the cybernetics-core profile", () => {
+    // The research runs at the cybernetics core, so the
     // gateway-occupancy gate is skipped even when an afterCompleted hint
     // is present: research starts once the CORE is up, without waiting
     // for the second gateway listed ahead of it.

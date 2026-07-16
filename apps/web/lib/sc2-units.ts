@@ -4,7 +4,7 @@
  * Used by the macro-breakdown chart to compute army-value (Σ minerals+gas
  * across all alive non-worker, non-building units) and by the unit
  * composition snapshot below the chart. Costs match the live LotV
- * balance patch as of 5.0.x — they're game constants, no per-replay
+ * balance patch as of 5.0.16b — they're game constants, no per-replay
  * variation, so the table is hand-maintained against Liquipedia.
  *
  * Names use the canonical sc2reader form (PascalCase, no spaces). Aliases
@@ -175,9 +175,9 @@ const UNIT_COSTS: Record<string, UnitCost> = {
   ShieldBattery: { m: 100, g: 0, s: 0, isBuilding: true, race: P },
 
   // Buildings — Terran
-  CommandCenter: { m: 400, g: 0, s: 0, isBuilding: true, race: T },
+  CommandCenter: { m: 300, g: 0, s: 0, isBuilding: true, race: T },
   OrbitalCommand: { m: 150, g: 0, s: 0, isBuilding: true, race: T },
-  PlanetaryFortress: { m: 150, g: 150, s: 0, isBuilding: true, race: T },
+  PlanetaryFortress: { m: 250, g: 150, s: 0, isBuilding: true, race: T },
   CommandCenterFlying: { m: 0, g: 0, s: 0, isBuilding: true, race: T },
   OrbitalCommandFlying: { m: 0, g: 0, s: 0, isBuilding: true, race: T },
   SupplyDepot: { m: 100, g: 0, s: 0, isBuilding: true, race: T },
