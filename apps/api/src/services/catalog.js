@@ -27,6 +27,7 @@ class CatalogService {
     this._catalogCache = null;
     this._definitionsCache = null;
     this._mapImageDirs = this._resolveMapImageDirs();
+    this._mapImageManifest = loadMapImageManifest(this._mapImageDirs);
   }
 
   /**
@@ -184,10 +185,25 @@ class CatalogService {
    * installed.
    *
    * @param {string} mapName
-   * @returns {{ path: string, contentType: string } | null}
+   * @returns {{ path: string, contentType: string, etag?: string } | null}
    */
   mapImagePath(mapName) {
     if (!this._mapImageDirs.length || !mapName) return null;
+    const manifestHit = this._mapImageManifest.get(normalizeMapAssetKey(mapName));
+    if (manifestHit) {
+      try {
+        const stat = fs.statSync(manifestHit.path);
+        if (stat.isFile()) {
+          return {
+            path: manifestHit.path,
+            contentType: contentTypeFor(manifestHit.path),
+            etag: manifestHit.etag,
+          };
+        }
+      } catch {
+        // A stale manifest must not prevent the legacy resolver fallback.
+      }
+    }
     const variants = filenameVariants(mapName);
     if (variants.length === 0) return null;
     const extensions = [".jpg", ".png", ".webp"];
@@ -303,7 +319,15 @@ class CatalogService {
 function filenameVariants(mapName) {
   const safe = sanitiseFilename(mapName);
   if (!safe) return [];
-  const variants = [safe, safe.toLowerCase()];
+  const base = safe.replace(/_(?:ladder_edition|le|te|ce|re)$/i, "");
+  const variants = [
+    safe,
+    safe.toLowerCase(),
+    base,
+    base.toLowerCase(),
+    `${base}_LE`,
+    `${base.toLowerCase()}_le`,
+  ];
   /** @type {string[]} */
   const out = [];
   for (const v of variants) {
@@ -332,9 +356,79 @@ function toIso(value) {
 /** @param {string} name */
 function sanitiseFilename(name) {
   return String(name)
-    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[,'\u2019]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 200);
+}
+
+/**
+ * Canonical identity used only for artwork lookup. Raw replay map names stay
+ * untouched everywhere else because they participate in game IDs and exact
+ * analytics filters.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function normalizeMapAssetKey(name) {
+  const tokens = String(name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['\u2019]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length >= 2) {
+    const tail = tokens[tokens.length - 1];
+    if (["le", "te", "ce", "re"].includes(tail)) tokens.pop();
+  }
+  if (tokens.length >= 2 && tokens.slice(-2).join(" ") === "ladder edition") {
+    tokens.splice(-2);
+  }
+  return tokens.join("");
+}
+
+/**
+ * Load the generated alias/provenance manifest once at service construction.
+ * Invalid entries are ignored individually so an operator can still use the
+ * legacy filename resolver while repairing a bad manifest.
+ *
+ * @param {string[]} dirs
+ * @returns {Map<string, {path: string, etag?: string}>}
+ */
+function loadMapImageManifest(dirs) {
+  const index = new Map();
+  for (const dir of dirs) {
+    const manifestPath = path.join(dir, "manifest.json");
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    } catch {
+      continue;
+    }
+    const maps = Array.isArray(manifest?.maps) ? manifest.maps : [];
+    for (const entry of maps) {
+      const rawFilename = String(entry?.image?.filename || "");
+      const filename = path.basename(rawFilename);
+      if (!filename || filename !== rawFilename) continue;
+      const candidate = path.join(dir, filename);
+      const sha256 = String(entry?.image?.sha256 || "");
+      const etag = /^[a-f0-9]{64}$/i.test(sha256) ? `"${sha256}"` : undefined;
+      const names = [entry?.id, entry?.displayName].concat(
+        Array.isArray(entry?.aliases) ? entry.aliases : [],
+      );
+      for (const name of names) {
+        const key = normalizeMapAssetKey(String(name || ""));
+        if (key && !index.has(key)) index.set(key, { path: candidate, etag });
+      }
+    }
+  }
+  return index;
 }
 
 /** @param {string} filePath */

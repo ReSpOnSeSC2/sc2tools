@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
+import { MapArtwork } from "@/components/maps/MapArtwork";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
@@ -52,55 +53,74 @@ export function GameDetailShell({
           {backLabel}
         </Link>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <ResultBadge result={game.result} />
-          <h1 className="font-display text-h2 font-bold text-text">
-            {matchup ? `${matchup} ` : ""}
-            {game.map ? (
-              <>
-                on <span className="text-accent-cyan">{game.map}</span>
-              </>
-            ) : (
-              "Game details"
-            )}
-          </h1>
-          <ShareGameButton game={game} className="ml-auto" />
-        </div>
+        <div className="group/map relative overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-lg">
+          <MapArtwork
+            mapName={game.map}
+            size="hero"
+            eager
+            className="pointer-events-none absolute inset-0 border-0 opacity-45"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-bg-elevated via-bg-elevated/90 to-bg-elevated/55"
+          />
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-t from-bg-elevated/80 via-transparent to-bg-elevated/20"
+          />
 
-        <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
-          <MetaItem label="Played">{fmtDate(game.date)}</MetaItem>
-          <MetaItem label="Length">
-            {game.durationSec ? fmtMinutes(game.durationSec) : "—"}
-          </MetaItem>
-          <MetaItem label="MMR">
-            <span className="tabular-nums">
-              {fmtMmr(game.myMmr)}{" "}
-              <span className="text-text-dim">vs</span>{" "}
-              {fmtMmr(game.opponent?.mmr)}
-            </span>
-          </MetaItem>
-          <MetaItem label="Opponent">
-            <span className="inline-flex items-center gap-1">
-              {game.opponent?.race ? (
-                <RaceChip race={game.opponent.race} />
-              ) : null}
-              <span className="max-w-[18ch] truncate" title={oppName}>
-                {oppName}
-              </span>
-            </span>
-          </MetaItem>
-        </dl>
+          <div className="relative space-y-3 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <ResultBadge result={game.result} />
+              <h1 className="font-display text-h2 font-bold text-text">
+                {matchup ? `${matchup} ` : ""}
+                {game.map ? (
+                  <>
+                    on <span className="text-accent-cyan">{game.map}</span>
+                  </>
+                ) : (
+                  "Game details"
+                )}
+              </h1>
+              <ShareGameButton game={game} className="ml-auto" />
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-caption">
-          <span className="text-text-dim">My build</span>
-          <Badge size="sm" variant="accent">
-            {game.myBuild || "Unclassified"}
-          </Badge>
-          <span className="text-text-dim">·</span>
-          <span className="text-text-dim">Opponent strategy</span>
-          <Badge size="sm" variant="neutral">
-            {game.opponent?.strategy || "Unknown"}
-          </Badge>
+            <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
+              <MetaItem label="Played">{fmtDate(game.date)}</MetaItem>
+              <MetaItem label="Length">
+                {game.durationSec ? fmtMinutes(game.durationSec) : "—"}
+              </MetaItem>
+              <MetaItem label="MMR">
+                <span className="tabular-nums">
+                  {fmtMmr(game.myMmr)}{" "}
+                  <span className="text-text-dim">vs</span>{" "}
+                  {fmtMmr(game.opponent?.mmr)}
+                </span>
+              </MetaItem>
+              <MetaItem label="Opponent">
+                <span className="inline-flex items-center gap-1">
+                  {game.opponent?.race ? (
+                    <RaceChip race={game.opponent.race} />
+                  ) : null}
+                  <span className="max-w-[18ch] truncate" title={oppName}>
+                    {oppName}
+                  </span>
+                </span>
+              </MetaItem>
+            </dl>
+
+            <div className="flex flex-wrap items-center gap-2 text-caption">
+              <span className="text-text-dim">My build</span>
+              <Badge size="sm" variant="accent">
+                {game.myBuild || "Unclassified"}
+              </Badge>
+              <span className="text-text-dim">·</span>
+              <span className="text-text-dim">Opponent strategy</span>
+              <Badge size="sm" variant="neutral">
+                {game.opponent?.strategy || "Unknown"}
+              </Badge>
+            </div>
+          </div>
         </div>
       </header>
 

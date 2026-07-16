@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
+import { MapLabel } from "@/components/maps/MapArtwork";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 import type { BuildOrderEvent } from "@/lib/build-events";
@@ -181,7 +182,19 @@ function GameRow({
         <td className="px-2 py-1.5 font-mono text-text-muted">
           {fmtDate(game.date)}
         </td>
-        <td className="px-2 py-1.5 text-text">{game.map || "—"}</td>
+        <td className="px-2 py-1.5 text-text">
+          {game.map ? (
+            <MapLabel
+              name={game.map}
+              size="xs"
+              preview
+              className="max-w-[13rem]"
+              textClassName="text-text"
+            />
+          ) : (
+            "—"
+          )}
+        </td>
         <td className="px-2 py-1.5 text-text-muted">
           {game.opponent || "—"}
           {game.opp_race ? (
@@ -246,7 +259,16 @@ function GameMobile({
             <span className="font-mono text-text-dim">{fmtDate(game.date)}</span>
             <MacroCell value={game.macroScore ?? null} />
           </div>
-          <div className="text-caption text-text">{game.map || "—"}</div>
+          {game.map ? (
+            <MapLabel
+              name={game.map}
+              size="sm"
+              className="max-w-full"
+              textClassName="text-caption text-text"
+            />
+          ) : (
+            <div className="text-caption text-text">—</div>
+          )}
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
             <span className="truncate">opp: {game.opponent || "—"}</span>
             <span className="truncate">strat: {game.opp_strategy || "—"}</span>

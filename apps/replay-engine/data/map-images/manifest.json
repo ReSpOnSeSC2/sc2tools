@@ -1,0 +1,2957 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-16T13:53:36.939Z",
+  "source": {
+    "provider": "Sc2ReplayStats",
+    "page": "https://sc2replaystats.com/account/maps/30690/0/1991244/1v1/AutoMM/67/",
+    "robots": "https://sc2replaystats.com/robots.txt",
+    "requestPolicy": {
+      "concurrency": 1,
+      "minimumDelayMs": 2000,
+      "cached": true,
+      "retries": "429 and 5xx only; Retry-After honoured"
+    },
+    "copyrightOwner": "Blizzard Entertainment"
+  },
+  "seasonRange": {
+    "min": 36,
+    "max": 67,
+    "publishedSeasonIds": [
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      63,
+      64,
+      65,
+      66,
+      67
+    ],
+    "emptySeasonIds": [
+      61
+    ]
+  },
+  "skippedArtwork": [
+    {
+      "displayName": "Blueshift LE (Test)",
+      "seasons": [
+        37
+      ],
+      "sourceUrl": "https://sc2replaystats.com/images/maps/large/missing_image.jpg",
+      "reason": "Source archive exposes only its generic missing-image placeholder"
+    },
+    {
+      "displayName": "Fracture LE (Test)",
+      "seasons": [
+        37
+      ],
+      "sourceUrl": "https://sc2replaystats.com/images/maps/large/missing_image.jpg",
+      "reason": "Source archive exposes only its generic missing-image placeholder"
+    },
+    {
+      "displayName": "Para Site LE (Test)",
+      "seasons": [
+        37
+      ],
+      "sourceUrl": "https://sc2replaystats.com/images/maps/large/missing_image.jpg",
+      "reason": "Source archive exposes only its generic missing-image placeholder"
+    }
+  ],
+  "maps": [
+    {
+      "id": "10000feet",
+      "displayName": "10000 Feet LE",
+      "aliases": [
+        "10000 Feet",
+        "10000 Feet LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "10000_feet_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45630,
+        "sha256": "56e3c62544c2d188a52cecdf5530dae8476f63b7fb2993f4c6bfe18b3d6370b2",
+        "sourceWidth": 500,
+        "sourceHeight": 548
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/10000_Feet_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "16bit",
+      "displayName": "16-Bit LE",
+      "aliases": [
+        "16-Bit",
+        "16-Bit LE"
+      ],
+      "seasons": [
+        36
+      ],
+      "image": {
+        "filename": "16_bit_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 31184,
+        "sha256": "4ccf60a33dbfa4a8b0d00bf62c88ff93c4e712aad4d70a9994608063d5852eca",
+        "sourceWidth": 512,
+        "sourceHeight": 570
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/16-Bit-LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "2000atmospheres",
+      "displayName": "2000 Atmospheres LE",
+      "aliases": [
+        "2000 Atmospheres",
+        "2000 Atmospheres LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "image": {
+        "filename": "2000_atmospheres_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41050,
+        "sha256": "0e22821d7a60449dc71333e2b83751358bd13b5fcfd4420c7cff3f3b39f424bf",
+        "sourceWidth": 500,
+        "sourceHeight": 465
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/2000_Atmospheres_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "acidplant",
+      "displayName": "Acid Plant LE",
+      "aliases": [
+        "Acid Plant",
+        "Acid Plant LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ],
+      "image": {
+        "filename": "acid_plant_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 33866,
+        "sha256": "ecc1e26980b2ab4464c9dca8342a845bc0981745c0fda4e977956805a4b0bc65",
+        "sourceWidth": 500,
+        "sourceHeight": 459
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Acid_Plant_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "acropolis",
+      "displayName": "Acropolis LE",
+      "aliases": [
+        "Acropolis",
+        "Acropolis LE"
+      ],
+      "seasons": [
+        40,
+        41
+      ],
+      "image": {
+        "filename": "acropolis_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 50350,
+        "sha256": "01581b1d756033288bbb884819c77ebe0a165afbd1aec8f95cf75da1b1bcbfcc",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Acropolis_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "alcyone",
+      "displayName": "Alcyone LE",
+      "aliases": [
+        "Alcyone",
+        "Alcyone LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59,
+        60
+      ],
+      "image": {
+        "filename": "alcyone_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 44558,
+        "sha256": "eec73e40ffb44867a3026f9c555bebd2dc942256723a5126f7ca1fa7feef9d51",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Alcyone_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "altitude",
+      "displayName": "Altitude LE",
+      "aliases": [
+        "Altitude",
+        "Altitude LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "altitude_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 29460,
+        "sha256": "2fe998a6d3316526ada486aa21b357873e3e9095af9a00133fa52c56e0375a44",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Altitude_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "amphion",
+      "displayName": "Amphion LE",
+      "aliases": [
+        "Amphion",
+        "Amphion LE"
+      ],
+      "seasons": [
+        58,
+        59,
+        60
+      ],
+      "image": {
+        "filename": "amphion_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 33594,
+        "sha256": "ddd9e6c2e23833086d7d402dd0affd1c0c12d88cd16de9104796fcbea4c428e9",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Amphion_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ancientcistern",
+      "displayName": "Ancient Cistern LE",
+      "aliases": [
+        "Ancient Cistern",
+        "Ancient Cistern LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "ancient_cistern_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 44168,
+        "sha256": "f953b086b0cca358717d2617b31ce228395bf7a50e38f0c5946be6a7c78925f8",
+        "sourceWidth": 500,
+        "sourceHeight": 544
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ancient_Cistern_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ateternitysedge",
+      "displayName": "At Eternity's Edge LE",
+      "aliases": [
+        "At Eternity's Edge",
+        "At Eternity's Edge LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "at_eternitys_edge_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 52890,
+        "sha256": "6efc0095a1380e951534e8cd912f9c39e63861187b9120505aa37c9ee309a2d3",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/At_Eternity's_Edge_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "automaton",
+      "displayName": "Automaton LE",
+      "aliases": [
+        "Automaton",
+        "Automaton LE"
+      ],
+      "seasons": [
+        38,
+        39
+      ],
+      "image": {
+        "filename": "automaton_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 32406,
+        "sha256": "bbce593527518f57a89b9894bc2ee83f805f557f42c86fd1ccfb174b80f07901",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Automaton_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "babylon",
+      "displayName": "Babylon LE",
+      "aliases": [
+        "Babylon",
+        "Babylon LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "babylon_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 46600,
+        "sha256": "c7f8a91b30044ed46b635dd675d33dba51a73f0a754a8c57f82df45e456caed9",
+        "sourceWidth": 500,
+        "sourceHeight": 470
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Babylon_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "beckettindustries",
+      "displayName": "Beckett Industries LE",
+      "aliases": [
+        "Beckett Industries",
+        "Beckett Industries LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49
+      ],
+      "image": {
+        "filename": "beckett_industries_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 42216,
+        "sha256": "14c8293ae02d6846f871131c7c1cf6ce52b8676fbe8f93e3f47397a26b9d9f80",
+        "sourceWidth": 500,
+        "sourceHeight": 648
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Beckett_Industries_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "berlingrad",
+      "displayName": "Berlingrad LE",
+      "aliases": [
+        "Berlingrad",
+        "Berlingrad LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "image": {
+        "filename": "berlingrad_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 50294,
+        "sha256": "e2426fc94153cc97334a8434cf9bac4cb3775f13223b8c1ce9d6ddde574b4b46",
+        "sourceWidth": 500,
+        "sourceHeight": 546
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Berlingrad_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "blackburn",
+      "displayName": "Blackburn LE",
+      "aliases": [
+        "Blackburn",
+        "Blackburn LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49
+      ],
+      "image": {
+        "filename": "blackburn_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41162,
+        "sha256": "eb9dfe101a3d16c4431b3ba95ea387d85f8adad70dddb0c0d12f7a56ab532042",
+        "sourceWidth": 500,
+        "sourceHeight": 406
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Blackburn%20LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "blackrock",
+      "displayName": "Blackrock LE",
+      "aliases": [
+        "Blackrock",
+        "Blackrock LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "blackrock_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 64372,
+        "sha256": "ccaa11891923012a7dd086c948ee95a3778f747f4a708d9d0cbf359af0f147aa",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Blackrock_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "blueshift",
+      "displayName": "Blueshift LE",
+      "aliases": [
+        "Blueshift",
+        "Blueshift LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ],
+      "image": {
+        "filename": "blueshift_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 36420,
+        "sha256": "2ff07a76932cc0d7b771413f4a8a3c911aaf282003db27d29761db20be46cfa4",
+        "sourceWidth": 512,
+        "sourceHeight": 512
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Blueshift_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "catalyst",
+      "displayName": "Catalyst LE",
+      "aliases": [
+        "Catalyst",
+        "Catalyst LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ],
+      "image": {
+        "filename": "catalyst_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 29738,
+        "sha256": "184705453f7f72c7e7a5098db19b9d1c6737c455e079d45b4e7c28e0d7342d46",
+        "sourceWidth": 500,
+        "sourceHeight": 529
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Catalyst_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "celestialenclave",
+      "displayName": "Celestial Enclave LE",
+      "aliases": [
+        "Celestial Enclave",
+        "Celestial Enclave LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "celestial_enclave_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47138,
+        "sha256": "4324bfc5b2e25c2fa5f540441e1dcaf2b082dbc392efa4e374ad25521ab691df",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Celestial_Enclave_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ceruleanfall",
+      "displayName": "Cerulean Fall LE",
+      "aliases": [
+        "Cerulean Fall",
+        "Cerulean Fall LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ],
+      "image": {
+        "filename": "cerulean_fall_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40168,
+        "sha256": "92f79a201963ff4038b75d3bfc6783cd98a82d849c872f590cf9d6a1850c133e",
+        "sourceWidth": 512,
+        "sourceHeight": 471
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Cerulean_Fall_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "cosmicsapphire",
+      "displayName": "Cosmic Sapphire",
+      "aliases": [
+        "Cosmic Sapphire"
+      ],
+      "seasons": [
+        52,
+        53
+      ],
+      "image": {
+        "filename": "cosmic_sapphire.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45536,
+        "sha256": "bbe8f5b95fca55188d83ead65f1b084162962096a8012fcdf1ecdf19ba0d8dc6",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Cosmic-Sapphire.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "crimsoncourt",
+      "displayName": "Crimson Court LE",
+      "aliases": [
+        "Crimson Court",
+        "Crimson Court LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ],
+      "image": {
+        "filename": "crimson_court_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40638,
+        "sha256": "5b13fc0e40ae09d5f63a37fe98a15655ec007fc0f3265da8152a12d3a23f2d66",
+        "sourceWidth": 500,
+        "sourceHeight": 596
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Crimson_Court_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "curiousminds",
+      "displayName": "Curious Minds LE",
+      "aliases": [
+        "Curious Minds",
+        "Curious Minds LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "image": {
+        "filename": "curious_minds_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38736,
+        "sha256": "c5f6324389277b270062fffc27f9b63de9754937bbe6b37858d6ace2ddd938ec",
+        "sourceWidth": 500,
+        "sourceHeight": 469
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Curious_Minds_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "cyberforest",
+      "displayName": "Cyber Forest LE",
+      "aliases": [
+        "Cyber Forest",
+        "Cyber Forest LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ],
+      "image": {
+        "filename": "cyber_forest_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47256,
+        "sha256": "d0ee7b97d3bcf75b58eeae5c1b10150fe2f9bdd6544147e945f64cd4603a4806",
+        "sourceWidth": 500,
+        "sourceHeight": 578
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Cyber_Forest_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "darknesssanctuary",
+      "displayName": "Darkness Sanctuary LE",
+      "aliases": [
+        "Darkness Sanctuary",
+        "Darkness Sanctuary LE"
+      ],
+      "seasons": [
+        36
+      ],
+      "image": {
+        "filename": "darkness_sanctuary_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 29546,
+        "sha256": "02493987ad2a20252dfec06e9db99e65c558a0dd4d66fae28095783fb8ac818e",
+        "sourceWidth": 512,
+        "sourceHeight": 512
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Darkness-Sanctuary-LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "datac",
+      "displayName": "Data-C",
+      "aliases": [
+        "Data-C"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "data_c.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 44780,
+        "sha256": "4dffafe523679131d2cef7a80568824c9c14dcb6f7bf5c062a11978b644d2984",
+        "sourceWidth": 500,
+        "sourceHeight": 407
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Data-C.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "deathaura",
+      "displayName": "Deathaura LE",
+      "aliases": [
+        "Deathaura",
+        "Deathaura LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ],
+      "image": {
+        "filename": "deathaura_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38542,
+        "sha256": "611d1d530567bcb7eadb7c67ed025428c47bc09efcdb7dc2fdf5e9a0e01f9228",
+        "sourceWidth": 500,
+        "sourceHeight": 486
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Deathaura_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "discobloodbath",
+      "displayName": "Disco Bloodbath LE",
+      "aliases": [
+        "Disco Bloodbath",
+        "Disco Bloodbath LE"
+      ],
+      "seasons": [
+        41
+      ],
+      "image": {
+        "filename": "disco_bloodbath_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40816,
+        "sha256": "a8eb5996c44a0697cc4d17e4046e2041207b92e923c82411794c42dfb61e00d4",
+        "sourceWidth": 500,
+        "sourceHeight": 445
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Disco_Bloodbath_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "dragonscales",
+      "displayName": "Dragon Scales LE",
+      "aliases": [
+        "Dragon Scales",
+        "Dragon Scales LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "dragon_scales_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 29770,
+        "sha256": "98b8bab4b17eec326c50cc133cf273188c62ab6432030af8776d3fc3597c582b",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Dragon_Scales_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "dreamcatcher",
+      "displayName": "Dreamcatcher LE",
+      "aliases": [
+        "Dreamcatcher",
+        "Dreamcatcher LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ],
+      "image": {
+        "filename": "dreamcatcher_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41196,
+        "sha256": "d3ed83a8e9db69275536019077d8fed058ea06d0b328b3a3a95de94fc9fca786",
+        "sourceWidth": 512,
+        "sourceHeight": 512
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Dreamcatcher-LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "dynasty",
+      "displayName": "Dynasty LE",
+      "aliases": [
+        "Dynasty",
+        "Dynasty LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ],
+      "image": {
+        "filename": "dynasty_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 52328,
+        "sha256": "32724fa9e69dca867d39cd95111e8627b52b92c116a22d7b190da5bfd47dd073",
+        "sourceWidth": 500,
+        "sourceHeight": 381
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Dynasty_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ephemeron",
+      "displayName": "Ephemeron LE",
+      "aliases": [
+        "Ephemeron",
+        "Ephemeron LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ],
+      "image": {
+        "filename": "ephemeron_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 37934,
+        "sha256": "c3d649c8620759efc0246fa4d49710ad54a6b2ddba995c2d4551cbc683da49e3",
+        "sourceWidth": 500,
+        "sourceHeight": 560
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ephemeron_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "equilibrium",
+      "displayName": "Equilibrium LE",
+      "aliases": [
+        "Equilibrium",
+        "Equilibrium LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ],
+      "image": {
+        "filename": "equilibrium_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 39340,
+        "sha256": "0245b8757821d63793fa81961232afceaab739ca6a5b087ce1551c6702da40ec",
+        "sourceWidth": 500,
+        "sourceHeight": 337
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Equilibrium_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "eternalempire",
+      "displayName": "Eternal Empire LE",
+      "aliases": [
+        "Eternal Empire",
+        "Eternal Empire LE"
+      ],
+      "seasons": [
+        42,
+        43,
+        44
+      ],
+      "image": {
+        "filename": "eternal_empire_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 58992,
+        "sha256": "f6edb07d3eeac70818610a0c513eefc170084bb063f0e1528c85958ef19611d4",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Eternal_Empire_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "everdream",
+      "displayName": "Ever Dream LE",
+      "aliases": [
+        "Ever Dream",
+        "Ever Dream LE"
+      ],
+      "seasons": [
+        43,
+        44
+      ],
+      "image": {
+        "filename": "ever_dream_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40042,
+        "sha256": "58cc319ab306d1089c5b70d0ce2dee705a9697fa167e57f560b0542a1b3f1095",
+        "sourceWidth": 500,
+        "sourceHeight": 510
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ever_Dream_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "fearandfaith",
+      "displayName": "Fear and Faith LE",
+      "aliases": [
+        "Fear and Faith",
+        "Fear and Faith LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "fear_and_faith_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 53768,
+        "sha256": "73894bd0cd8a35441496272b1c195ed9182d70171b4fff9ece91635454124186",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Fear_and_Faith_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "fracture",
+      "displayName": "Fracture LE",
+      "aliases": [
+        "Fracture",
+        "Fracture LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ],
+      "image": {
+        "filename": "fracture_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 49792,
+        "sha256": "7009f6ca154c6b185c7bcc213f09ab8febc18f0b5b9260bb376a13c4566ad195",
+        "sourceWidth": 512,
+        "sourceHeight": 440
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Fracture_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ghostriver",
+      "displayName": "Ghost River LE",
+      "aliases": [
+        "Ghost River",
+        "Ghost River LE"
+      ],
+      "seasons": [
+        58,
+        59,
+        60
+      ],
+      "image": {
+        "filename": "ghost_river_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 53586,
+        "sha256": "7dcba936996b49bb1d5685d06d05ab5dd99b0dfcde000c58548b158ef733b2bc",
+        "sourceWidth": 500,
+        "sourceHeight": 432
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ghost_River_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "glitteringashes",
+      "displayName": "Glittering Ashes LE",
+      "aliases": [
+        "Glittering Ashes",
+        "Glittering Ashes LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "image": {
+        "filename": "glittering_ashes_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 42872,
+        "sha256": "c5b03d8a826c597a323a303b966048f729ba9a200d287c05ba56a777b9688eef",
+        "sourceWidth": 500,
+        "sourceHeight": 441
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Glittering_Ashes_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "goldenwall",
+      "displayName": "Golden Wall LE",
+      "aliases": [
+        "Golden Wall",
+        "Golden Wall LE"
+      ],
+      "seasons": [
+        43,
+        44
+      ],
+      "image": {
+        "filename": "golden_wall_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 43366,
+        "sha256": "e7929b050f877984d27f602a75fd946e48c83db209420f39503550d5526a683c",
+        "sourceWidth": 500,
+        "sourceHeight": 416
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Golden_Wall_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "goldenaura",
+      "displayName": "Goldenaura LE",
+      "aliases": [
+        "Goldenaura",
+        "Goldenaura LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59,
+        60
+      ],
+      "image": {
+        "filename": "goldenaura_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 63654,
+        "sha256": "fe797ff040c656b022b72197a18f1ddfa0936f0aac2729aab63a4860caa3a6a8",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Goldenaura_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "gresvan",
+      "displayName": "Gresvan LE",
+      "aliases": [
+        "Gresvan",
+        "Gresvan LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "gresvan_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 43100,
+        "sha256": "e29ea62c82831ddea5f0fb3d921c1d3d45928d267a3cb61cc073ac7da0c7f2f5",
+        "sourceWidth": 500,
+        "sourceHeight": 362
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Gresvan_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "hardlead",
+      "displayName": "Hard Lead LE",
+      "aliases": [
+        "Hard Lead",
+        "Hard Lead LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ],
+      "image": {
+        "filename": "hard_lead_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38850,
+        "sha256": "81c73ba36455c8acc5f0b91c01fcc8931ff8efb1b37e3c140be4ff5ba96dc071",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Hard_Lead_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "hardwire",
+      "displayName": "Hardwire LE",
+      "aliases": [
+        "Hardwire",
+        "Hardwire LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "image": {
+        "filename": "hardwire_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 35972,
+        "sha256": "68ccbf8fc60487601c207af2c2254719b5ee955c3277c40e690624af952afa7f",
+        "sourceWidth": 500,
+        "sourceHeight": 576
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Hardwire_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "hecate",
+      "displayName": "Hecate LE",
+      "aliases": [
+        "Hecate",
+        "Hecate LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ],
+      "image": {
+        "filename": "hecate_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 52640,
+        "sha256": "ac618ee6ee20a123d0b1f28e065cdec9b899d30887b49cff481fdeace04322fb",
+        "sourceWidth": 500,
+        "sourceHeight": 451
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Hecate_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "iceandchrome",
+      "displayName": "Ice and Chrome LE",
+      "aliases": [
+        "Ice and Chrome",
+        "Ice and Chrome LE"
+      ],
+      "seasons": [
+        44
+      ],
+      "image": {
+        "filename": "ice_and_chrome_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 42292,
+        "sha256": "177f0a9177431a8694c9814ab41e4cd3c080c4c478ffbc33b3f116f65501e5e8",
+        "sourceWidth": 500,
+        "sourceHeight": 486
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ice_and_Chrome_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "incorporeal",
+      "displayName": "Incorporeal LE",
+      "aliases": [
+        "Incorporeal",
+        "Incorporeal LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ],
+      "image": {
+        "filename": "incorporeal_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41130,
+        "sha256": "a4e737ce1807545110c67f37579efd066a98801869f066293d72cc560a1bb2a6",
+        "sourceWidth": 500,
+        "sourceHeight": 563
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Incorporeal_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "insideandout",
+      "displayName": "Inside and Out",
+      "aliases": [
+        "Inside and Out"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "inside_and_out.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47356,
+        "sha256": "b1aaadcc1633f87d48b7774544482efd46374034911b743c885abaa4cc109a13",
+        "sourceWidth": 500,
+        "sourceHeight": 532
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Inside-and-out.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "jagannatha",
+      "displayName": "Jagannatha LE",
+      "aliases": [
+        "Jagannatha",
+        "Jagannatha LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ],
+      "image": {
+        "filename": "jagannatha_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 56684,
+        "sha256": "4a2d0d183b8154c59f576f5d97cffc320c8306d53b10ddce74e0e558ae49adf5",
+        "sourceWidth": 500,
+        "sourceHeight": 608
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Jagannatha_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "kairosjunction",
+      "displayName": "Kairos Junction LE",
+      "aliases": [
+        "Kairos Junction",
+        "Kairos Junction LE"
+      ],
+      "seasons": [
+        38,
+        39,
+        40
+      ],
+      "image": {
+        "filename": "kairos_junction_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45256,
+        "sha256": "f99306cbcd6ebd45882ed737d4966f525d30de0431fe0b613b0ec04b2719fde0",
+        "sourceWidth": 500,
+        "sourceHeight": 583
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Kairos_Junction_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "kingscove",
+      "displayName": "King's Cove LE",
+      "aliases": [
+        "King's Cove",
+        "King's Cove LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ],
+      "image": {
+        "filename": "kings_cove_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 49292,
+        "sha256": "548f624f13410f6ffab06957eff1597128d67914084da641a73603235f983955",
+        "sourceWidth": 500,
+        "sourceHeight": 483
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Kings_Cove_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "lastfantasy",
+      "displayName": "Last Fantasy LE",
+      "aliases": [
+        "Last Fantasy",
+        "Last Fantasy LE"
+      ],
+      "seasons": [
+        65
+      ],
+      "image": {
+        "filename": "last_fantasy_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 46830,
+        "sha256": "16cb63ef6b620697bcb71c40fddef45bc76257478613f7439a039287c6eb9b7b",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Last_Fantasy_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "leylines",
+      "displayName": "Ley Lines",
+      "aliases": [
+        "Ley Lines"
+      ],
+      "seasons": [
+        63,
+        64,
+        65
+      ],
+      "image": {
+        "filename": "ley_lines.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41974,
+        "sha256": "645a76d04d489248fd283cfaf1f0d106d8635b5fd66d37dcc11ca437f020be65",
+        "sourceWidth": 500,
+        "sourceHeight": 431
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ley_Lines.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "lightshade",
+      "displayName": "Lightshade LE",
+      "aliases": [
+        "Lightshade",
+        "Lightshade LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ],
+      "image": {
+        "filename": "lightshade_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 37294,
+        "sha256": "fb915a77db0280ca13d73f280c392eb29f998eb65a0cdff96df81ebdb6e3b7c5",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Lightshade_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "lockdown",
+      "displayName": "Lockdown LE",
+      "aliases": [
+        "Lockdown",
+        "Lockdown LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "lockdown_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 48680,
+        "sha256": "6bfaeb2a79147dada5e89f9dfcc0fbd57b018c2423a554812599f12881b6ef81",
+        "sourceWidth": 500,
+        "sourceHeight": 472
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Lockdown_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "lostandfound",
+      "displayName": "Lost and Found LE",
+      "aliases": [
+        "Lost and Found",
+        "Lost and Found LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ],
+      "image": {
+        "filename": "lost_and_found_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 49430,
+        "sha256": "20840eef3dcd373c48afd636c744efb219098268c03a5ba2853c4e32fc27aef4",
+        "sourceWidth": 512,
+        "sourceHeight": 462
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Lost-and-Found-LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "magannatha",
+      "displayName": "Magannatha LE",
+      "aliases": [
+        "Magannatha",
+        "Magannatha LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ],
+      "image": {
+        "filename": "magannatha_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 55946,
+        "sha256": "4b7af196e84bc1a6a272993e6856c5b00c03ced9491140e4b74d3fe52da08532",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Magannatha_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "moondance",
+      "displayName": "Moondance",
+      "aliases": [
+        "Moondance"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "moondance.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40250,
+        "sha256": "54dcff9a4b832632c4228ea26222bbc0a0025024e95b6dccb0c7d46d1e5321c0",
+        "sourceWidth": 500,
+        "sourceHeight": 546
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Moondance.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "mothership",
+      "displayName": "Mothership LE",
+      "aliases": [
+        "Mothership",
+        "Mothership LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "mothership_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 51634,
+        "sha256": "23766bc9e8d430d6b00f44c42062de4e4074da2a10cc75cd6a85f0e90032619b",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Mothership_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "neohumanity",
+      "displayName": "NeoHumanity LE",
+      "aliases": [
+        "NeoHumanity",
+        "NeoHumanity LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "neohumanity_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 46020,
+        "sha256": "0cef9eaf78f442219f00c55b8ce0a3648418ab103ab0d347acca8cfc3e50ad87",
+        "sourceWidth": 500,
+        "sourceHeight": 523
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/NeoHumanity_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "newrepugnancy",
+      "displayName": "New Repugnancy LE",
+      "aliases": [
+        "New Repugnancy",
+        "New Repugnancy LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ],
+      "image": {
+        "filename": "new_repugnancy_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38238,
+        "sha256": "64a06a798b676dfe53d2dcf1bc62ddfafc0c4750e546d5828f6b7fc1c0f4df4b",
+        "sourceWidth": 500,
+        "sourceHeight": 394
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/New_Repugnancy_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "nightshade",
+      "displayName": "Nightshade LE",
+      "aliases": [
+        "Nightshade",
+        "Nightshade LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ],
+      "image": {
+        "filename": "nightshade_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38014,
+        "sha256": "efbb093a3f4b3bfff131c854ea989087188d971fac2d6faa031856df125457a0",
+        "sourceWidth": 500,
+        "sourceHeight": 492
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Nightshade_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "oceanborn",
+      "displayName": "Oceanborn LE",
+      "aliases": [
+        "Oceanborn",
+        "Oceanborn LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59
+      ],
+      "image": {
+        "filename": "oceanborn_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 51668,
+        "sha256": "b3c4e41f2c3bfa7c7e0684459f0f087c1b55d97197d1a71b13b274bf865f29b0",
+        "sourceWidth": 500,
+        "sourceHeight": 471
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Oceanborn_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "oldrepublic",
+      "displayName": "Old Republic LE",
+      "aliases": [
+        "Old Republic",
+        "Old Republic LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "old_republic_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 52532,
+        "sha256": "2b2e73556a26a256ce9d1e51bf0bb15b3c936997b8f011af64122074c24b0271",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Old_Republic_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "oldsuntemple",
+      "displayName": "Old Sun Temple LE",
+      "aliases": [
+        "Old Sun Temple",
+        "Old Sun Temple LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "old_sun_temple_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 73808,
+        "sha256": "ee9e337b8311961d88e63cbff8f34a3069ada5a41ad76623152fbb4355c3b2c2",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Old_Sun_Temple_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "oxide",
+      "displayName": "Oxide LE",
+      "aliases": [
+        "Oxide",
+        "Oxide LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ],
+      "image": {
+        "filename": "oxide_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45976,
+        "sha256": "5435a7decad2ce13b71d44767af67f4184f2462a8c50bb6882ffb5e81dffa0b5",
+        "sourceWidth": 500,
+        "sourceHeight": 463
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Oxide_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "parasite",
+      "displayName": "Para Site LE",
+      "aliases": [
+        "Para Site",
+        "Para Site LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ],
+      "image": {
+        "filename": "para_site_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 34932,
+        "sha256": "36d4dcab872c6d851fedff5c97697e0b49ddc1ff9401b95cb9c807e3f1549b3b",
+        "sourceWidth": 512,
+        "sourceHeight": 555
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Para_Site_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "persephone",
+      "displayName": "Persephone LE",
+      "aliases": [
+        "Persephone",
+        "Persephone LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ],
+      "image": {
+        "filename": "persephone_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 33332,
+        "sha256": "a16c52c56e03a1bf1a380a470297cf5c8d9912d2e3f28ce67be26201fa41e34b",
+        "sourceWidth": 500,
+        "sourceHeight": 588
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Persephone_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "pillarsofgold",
+      "displayName": "Pillars of Gold LE",
+      "aliases": [
+        "Pillars of Gold",
+        "Pillars of Gold LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ],
+      "image": {
+        "filename": "pillars_of_gold_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47692,
+        "sha256": "ff849e3f7f4a95a826bc4a4d34da9539f22f16a547d1a069c113eeb96a58ed8c",
+        "sourceWidth": 500,
+        "sourceHeight": 507
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Pillars_of_Gold_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "portaleksander",
+      "displayName": "Port Aleksander LE",
+      "aliases": [
+        "Port Aleksander",
+        "Port Aleksander LE"
+      ],
+      "seasons": [
+        38,
+        39
+      ],
+      "image": {
+        "filename": "port_aleksander_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45924,
+        "sha256": "31844e624b3b678c9a8e39e0767a72b7689d5bb482948c14f2d1b1693b37ed16",
+        "sourceWidth": 500,
+        "sourceHeight": 443
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Port_Aleksander_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "postyouth",
+      "displayName": "Post-Youth LE",
+      "aliases": [
+        "Post-Youth",
+        "Post-Youth LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ],
+      "image": {
+        "filename": "post_youth_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 42606,
+        "sha256": "1a25d7071681162967b56970665ce9982bad7e9fcd7c7c402b26bc5d56efac33",
+        "sourceWidth": 500,
+        "sourceHeight": 620
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Post-Youth_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "prideofaltaris",
+      "displayName": "Pride of Altaris LE",
+      "aliases": [
+        "Pride of Altaris",
+        "Pride of Altaris LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51
+      ],
+      "image": {
+        "filename": "pride_of_altaris_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45054,
+        "sha256": "0fe36d38757c1fccbc62401b505e61b29a8624885600c0c0fe87fc77f0015da5",
+        "sourceWidth": 500,
+        "sourceHeight": 597
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Pride_of_Altaris_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "purityandindustry",
+      "displayName": "Purity and Industry LE",
+      "aliases": [
+        "Purity and Industry",
+        "Purity and Industry LE"
+      ],
+      "seasons": [
+        43
+      ],
+      "image": {
+        "filename": "purity_and_industry_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 43724,
+        "sha256": "940e88f7135abe841b2e344088fbfad07ea6a4d872874a081a2cef49add8db5d",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Purity_and_Industry_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "pylon",
+      "displayName": "Pylon LE",
+      "aliases": [
+        "Pylon",
+        "Pylon LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ],
+      "image": {
+        "filename": "pylon_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41234,
+        "sha256": "bf15b26c17d9a05657aeec9b97b87e4537a5ffc9aea261f6a17d41e75db8771d",
+        "sourceWidth": 500,
+        "sourceHeight": 515
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Pylon_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "radhusetstation",
+      "displayName": "Radhuset Station LE",
+      "aliases": [
+        "Radhuset Station",
+        "Radhuset Station LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ],
+      "image": {
+        "filename": "radhuset_station_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47510,
+        "sha256": "d9ebfdb8b49d50548d00aeaff89f5665833f41f2a6e58266a89fb2a2f831a3a1",
+        "sourceWidth": 500,
+        "sourceHeight": 444
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Radhuset_Station_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "rainfall",
+      "displayName": "Rainfall LE",
+      "aliases": [
+        "Rainfall",
+        "Rainfall LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "rainfall_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41850,
+        "sha256": "4f96773dd5bcc7fddda245262ac0f262182c0b626bdbf482496415fe47000f9c",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Rainfall_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "redshift",
+      "displayName": "Redshift LE",
+      "aliases": [
+        "Redshift",
+        "Redshift LE"
+      ],
+      "seasons": [
+        36
+      ],
+      "image": {
+        "filename": "redshift_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 29958,
+        "sha256": "11abd5a6d46bf0509ceabef0029687ec2e2ba040ea2262b2b9859d58d6a2232e",
+        "sourceWidth": 512,
+        "sourceHeight": 627
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Redshift-LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "romanticide",
+      "displayName": "Romanticide LE",
+      "aliases": [
+        "Romanticide",
+        "Romanticide LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ],
+      "image": {
+        "filename": "romanticide_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 49674,
+        "sha256": "62fbd4512f14e87df301a58124e3357fdbf6fbf80e1b20008664e95bf47dc818",
+        "sourceWidth": 500,
+        "sourceHeight": 440
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Romanticide%20LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "rorschach",
+      "displayName": "Rorschach LE",
+      "aliases": [
+        "Rorschach",
+        "Rorschach LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "rorschach_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 56910,
+        "sha256": "4fa00e811d05bfebedbf4ac42d2a53f9da2420ee263ba95d4c5ee9f22493e140",
+        "sourceWidth": 500,
+        "sourceHeight": 401
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Rorschach_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "royalblood",
+      "displayName": "Royal Blood LE",
+      "aliases": [
+        "Royal Blood",
+        "Royal Blood LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ],
+      "image": {
+        "filename": "royal_blood_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38490,
+        "sha256": "6acd3096a76a449050ba1bb0638948f255721daa99430051205e63ceb5c4afaa",
+        "sourceWidth": 500,
+        "sourceHeight": 438
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Royal_Blood_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "rubyrock",
+      "displayName": "Ruby Rock LE",
+      "aliases": [
+        "Ruby Rock",
+        "Ruby Rock LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "ruby_rock_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 34368,
+        "sha256": "406578158a53fc15aee58fa96bfca72c10d9646729588b37410fc7f2c80110ed",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ruby_Rock_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "sanctuaryiii",
+      "displayName": "Sanctuary III LE",
+      "aliases": [
+        "Sanctuary III",
+        "Sanctuary III LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "sanctuary_iii_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 56414,
+        "sha256": "564c4bda514e3d5ad61fa4dbfdd758450d6a7f7f9f70d8aef197bec0c1afa069",
+        "sourceWidth": 500,
+        "sourceHeight": 529
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Sanctuary_III_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "simulacrum",
+      "displayName": "Simulacrum LE",
+      "aliases": [
+        "Simulacrum",
+        "Simulacrum LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ],
+      "image": {
+        "filename": "simulacrum_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 35124,
+        "sha256": "178dc06bcdd60d33215cf730337267f1acc5da4fda483ac804b0f7a43d5c7c27",
+        "sourceWidth": 500,
+        "sourceHeight": 430
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Simulacrum_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "sitedelta",
+      "displayName": "Site Delta LE",
+      "aliases": [
+        "Site Delta",
+        "Site Delta LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59
+      ],
+      "image": {
+        "filename": "site_delta_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 52620,
+        "sha256": "5777f5f4960fb7d1222372a2a1e9ce2aeff43256846cbae6574600972f2b2a36",
+        "sourceWidth": 500,
+        "sourceHeight": 544
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Site_Delta_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "solaris",
+      "displayName": "Solaris LE",
+      "aliases": [
+        "Solaris",
+        "Solaris LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ],
+      "image": {
+        "filename": "solaris_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 59318,
+        "sha256": "061a50a7513d712c61f83e123674528af06fa5714de3837913d7aeb31ee00263",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Solaris_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "stargazers",
+      "displayName": "Stargazers",
+      "aliases": [
+        "Stargazers"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "stargazers.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 44380,
+        "sha256": "80a98b40a562e244cc9b22b08e19f5c1a2bee741f261a6e35b43a7f468e00e0e",
+        "sourceWidth": 500,
+        "sourceHeight": 391
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Stargazers.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "stasis",
+      "displayName": "Stasis LE",
+      "aliases": [
+        "Stasis",
+        "Stasis LE"
+      ],
+      "seasons": [
+        38
+      ],
+      "image": {
+        "filename": "stasis_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 55528,
+        "sha256": "e311a78dc8dc590748e52203e8dcb503412392474f9d29d2a652ec5cbff119cd",
+        "sourceWidth": 500,
+        "sourceHeight": 421
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Stasis_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "submarine",
+      "displayName": "Submarine LE",
+      "aliases": [
+        "Submarine",
+        "Submarine LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ],
+      "image": {
+        "filename": "submarine_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 56768,
+        "sha256": "7d7129edee2b5eb749bb30aa4cc09a7ba1fad1d25e52dea3ab4b5bfcbc37acd5",
+        "sourceWidth": 500,
+        "sourceHeight": 455
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Submarine_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "taitocitadel",
+      "displayName": "Taito Citadel LE",
+      "aliases": [
+        "Taito Citadel",
+        "Taito Citadel LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "taito_citadel_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45582,
+        "sha256": "c198a931426ad2adbb2303510672a4d6461c89f6fc1a3c8758c1baa65c34dda7",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Taito_Citadel_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "thunderbird",
+      "displayName": "Thunderbird LE",
+      "aliases": [
+        "Thunderbird",
+        "Thunderbird LE"
+      ],
+      "seasons": [
+        40,
+        41
+      ],
+      "image": {
+        "filename": "thunderbird_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 38902,
+        "sha256": "c790a02f80b2d52f3adbfce61a14e4d2133c30a21bfc1ec290528b8a5e9065bd",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Thunderbird_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "tokamak",
+      "displayName": "Tokamak LE",
+      "aliases": [
+        "Tokamak",
+        "Tokamak LE"
+      ],
+      "seasons": [
+        63,
+        64,
+        65
+      ],
+      "image": {
+        "filename": "tokamak_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 45628,
+        "sha256": "b717b8dbff6a65d08946c32524c99f7428377789cb65b44116b90285aeb8c8fa",
+        "sourceWidth": 500,
+        "sourceHeight": 439
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Tokamak_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "torches",
+      "displayName": "Torches LE",
+      "aliases": [
+        "Torches",
+        "Torches LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ],
+      "image": {
+        "filename": "torches_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 39400,
+        "sha256": "88f5f2f43851c8128c14a2371fe4b92e9b77b6752c598d878b153918e0318a45",
+        "sourceWidth": 500,
+        "sourceHeight": 562
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Torches_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "tourmaline",
+      "displayName": "Tourmaline LE",
+      "aliases": [
+        "Tourmaline",
+        "Tourmaline LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "tourmaline_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 48852,
+        "sha256": "19c4a6acda27fe6172fb163e62b8ac8c796ca908fbf6660b823fda7d742fa85f",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Tourmaline_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "triton",
+      "displayName": "Triton LE",
+      "aliases": [
+        "Triton",
+        "Triton LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ],
+      "image": {
+        "filename": "triton_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 58868,
+        "sha256": "294a8be5d79ec52f15778797db39cdd6298682274523fb67d758741e9d228cce",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Triton_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "tropicalsacrifice",
+      "displayName": "Tropical Sacrifice",
+      "aliases": [
+        "Tropical Sacrifice"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "tropical_sacrifice.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 42562,
+        "sha256": "277db51dc220908d90917628bc8c0e0a11db429e75a3371cb50a9efedd6117f3",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Tropical-Sacrifice.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "turbocruise84",
+      "displayName": "Turbo Cruise '84 LE",
+      "aliases": [
+        "Turbo Cruise '84",
+        "Turbo Cruise '84 LE"
+      ],
+      "seasons": [
+        40
+      ],
+      "image": {
+        "filename": "turbo_cruise_84_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 36258,
+        "sha256": "75bd274163400377d9ff969ecd1cd318f00c178d950f748da45796bc39f1158d",
+        "sourceWidth": 500,
+        "sourceHeight": 414
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Turbo_Cruise_84.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "ultralove",
+      "displayName": "Ultralove",
+      "aliases": [
+        "Ultralove"
+      ],
+      "seasons": [
+        64
+      ],
+      "image": {
+        "filename": "ultralove.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 44312,
+        "sha256": "9f1e856eb6cbde8d79837c7018d1db30f2c17bef094ff35e1fce709c53e50a4e",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Ultralove.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "washout",
+      "displayName": "Washout LE",
+      "aliases": [
+        "Washout",
+        "Washout LE"
+      ],
+      "seasons": [
+        67
+      ],
+      "image": {
+        "filename": "washout_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 46454,
+        "sha256": "1d9dc858679b1283541e98a7045b13f0bed2f92060624e629df26d097943a55d",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Washout_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "waterfall",
+      "displayName": "Waterfall",
+      "aliases": [
+        "Waterfall"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ],
+      "image": {
+        "filename": "waterfall.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 35448,
+        "sha256": "87c9aef50373b1ca2358f802b5b33508d56b92f7c8e17c0ac9b4aa54efe8c99b",
+        "sourceWidth": 500,
+        "sourceHeight": 611
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Waterfall.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "whiterabbit",
+      "displayName": "White Rabbit LE",
+      "aliases": [
+        "White Rabbit",
+        "White Rabbit LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "white_rabbit_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 30092,
+        "sha256": "e8a3af35f50156b930de00b0656afcf8cb9bd3998073bddd2468d86c5c0565f6",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/White_Rabbit_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "wintermadness",
+      "displayName": "Winter Madness LE",
+      "aliases": [
+        "Winter Madness",
+        "Winter Madness LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ],
+      "image": {
+        "filename": "winter_madness_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 47416,
+        "sha256": "1ed6b565e1089292d3b355d06d7df22cef848ac457541b7e5fe4813367516fbe",
+        "sourceWidth": 500,
+        "sourceHeight": 485
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Winter_Madness_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "wintersgate",
+      "displayName": "Winter's Gate LE",
+      "aliases": [
+        "Winter's Gate",
+        "Winter's Gate LE"
+      ],
+      "seasons": [
+        41
+      ],
+      "image": {
+        "filename": "winters_gate_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 41462,
+        "sha256": "1fd709061628b60d08f29fcd3204198759c98e426aabf9fbbec4e0919aab44eb",
+        "sourceWidth": 500,
+        "sourceHeight": 515
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Winters_Gate_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "worldofsleepers",
+      "displayName": "World of Sleepers LE",
+      "aliases": [
+        "World of Sleepers",
+        "World of Sleepers LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ],
+      "image": {
+        "filename": "world_of_sleepers_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 40150,
+        "sha256": "972f4af30644bceab52ac0dc40fdd5c33c8a52f0b1718540715a56068b7a1166",
+        "sourceWidth": 500,
+        "sourceHeight": 500
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/World_of_Sleepers_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "yearzero",
+      "displayName": "Year Zero LE",
+      "aliases": [
+        "Year Zero",
+        "Year Zero LE"
+      ],
+      "seasons": [
+        39
+      ],
+      "image": {
+        "filename": "year_zero_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 24644,
+        "sha256": "30e75540bca6c9d78ca472ee72dcaf333ced3e9ac9b87dcd5ddef0d69cedadf3",
+        "sourceWidth": 500,
+        "sourceHeight": 385
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Year_Zero_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    },
+    {
+      "id": "zen",
+      "displayName": "Zen LE",
+      "aliases": [
+        "Zen",
+        "Zen LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ],
+      "image": {
+        "filename": "zen_le.webp",
+        "width": 640,
+        "height": 360,
+        "bytes": 56346,
+        "sha256": "e5502ef0e76d8dedb2be9787a62318ecf4975e44ec38bdf9f6a07401e920741d",
+        "sourceWidth": 500,
+        "sourceHeight": 560
+      },
+      "source": {
+        "provider": "Sc2ReplayStats",
+        "url": "https://sc2replaystats.com/images/maps/large/Zen_LE.jpg",
+        "alternateUrls": [],
+        "copyrightOwner": "Blizzard Entertainment"
+      }
+    }
+  ]
+}

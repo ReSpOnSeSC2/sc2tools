@@ -24,7 +24,7 @@ afterEach(() => {
 describe("AllGamesTable game analysis entry point", () => {
   it("labels the destination and keeps its link separate from row expansion", () => {
     useApiMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
-    render(
+    const { container } = render(
       <AllGamesTable
         games={[
           {
@@ -41,6 +41,16 @@ describe("AllGamesTable game analysis entry point", () => {
         ]}
       />,
     );
+
+    const mapImages = Array.from(
+      container.querySelectorAll('[data-map-artwork="image"] img'),
+    );
+    expect(mapImages.length).toBeGreaterThanOrEqual(2);
+    mapImages.forEach((image) => {
+      expect(image.getAttribute("src")).toContain(
+        "Ancient%20Cistern%20LE",
+      );
+    });
 
     expect(
       screen.getByRole("columnheader", { name: "Game analysis" }),

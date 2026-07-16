@@ -8,6 +8,7 @@ import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { MapLabel } from "@/components/maps/MapArtwork";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
@@ -261,7 +262,19 @@ function GameRow({
             <PlayersCell myName={myName} opponent={game.opponent} />
           </td>
         ) : null}
-        <td className="px-2 py-1 text-text">{game.map || "—"}</td>
+        <td className="px-2 py-1 text-text">
+          {game.map ? (
+            <MapLabel
+              name={game.map}
+              size="xs"
+              preview
+              className="max-w-[13rem]"
+              textClassName="text-text"
+            />
+          ) : (
+            "—"
+          )}
+        </td>
         <td className="px-2 py-1">
           <RaceTag race={game.opp_race} strategy={game.opp_strategy} />
         </td>
@@ -493,7 +506,16 @@ function GameMobileCard({
                 <PlayersCell myName={myName} opponent={game.opponent} />
               </div>
             ) : null}
-            <div className="text-caption text-text">{game.map || "—"}</div>
+            {game.map ? (
+              <MapLabel
+                name={game.map}
+                size="sm"
+                className="max-w-full"
+                textClassName="text-caption text-text"
+              />
+            ) : (
+              <div className="text-caption text-text">—</div>
+            )}
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
               <span>
                 opp: <span className="text-text">{game.opp_strategy || "—"}</span>

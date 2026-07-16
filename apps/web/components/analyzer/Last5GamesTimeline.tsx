@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/components/ui/Card";
+import { MapLabel } from "@/components/maps/MapArtwork";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 
 export type ProfileGame = {
@@ -56,12 +57,17 @@ export function Last5GamesTimeline({ games }: { games?: ProfileGame[] }) {
                 {fmtDate(g.date)} · {result || "—"}
                 {lenStr}
               </span>
-              <span
-                className="ml-3 max-w-[40%] truncate text-xs text-text-dim"
-                title={g.map || ""}
-              >
-                {g.map || "—"}
-              </span>
+              {g.map ? (
+                <MapLabel
+                  name={g.map}
+                  size="xs"
+                  preview
+                  className="ml-3 max-w-[48%]"
+                  textClassName="text-xs text-text-dim"
+                />
+              ) : (
+                <span className="ml-3 text-xs text-text-dim">—</span>
+              )}
             </div>
             <div className="mt-0.5 text-xs text-text-muted">
               opp:{" "}

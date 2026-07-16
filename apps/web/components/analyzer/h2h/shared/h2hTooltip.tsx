@@ -1,5 +1,6 @@
 "use client";
 
+import { MapLabel } from "@/components/maps/MapArtwork";
 import type { CumulativePoint, PeriodPoint } from "@/lib/h2hSeries";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 
@@ -48,7 +49,16 @@ export function CumulativeTooltip({
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
         <span className="text-text-dim">Map</span>
-        <span className="truncate text-text">{game.map || "—"}</span>
+        {game.map ? (
+          <MapLabel
+            name={game.map}
+            size="xs"
+            className="max-w-[13rem]"
+            textClassName="text-text"
+          />
+        ) : (
+          <span className="text-text">—</span>
+        )}
         <span className="text-text-dim">My build</span>
         <span className="truncate text-text">{game.my_build || "—"}</span>
         <span className="text-text-dim">Opp strategy</span>

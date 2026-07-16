@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { MapLabel } from "@/components/maps/MapArtwork";
 import { EmptyState } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
 import {
@@ -261,12 +262,27 @@ export function MatchByMatchTimeline({
       />
 
       {activePoint ? (
-        <p className="text-micro text-text-dim">
-          Selected #{activePoint.index} ({activePoint.game.map || "—"}) ·{" "}
-          {activePoint.cumulativeWrPct}% lifetime ·{" "}
-          {activePoint.rollingWrPct == null
-            ? `${rollingLabel} not yet available`
-            : `${activePoint.rollingWrPct}% rolling`}
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro text-text-dim">
+          <span>Selected #{activePoint.index}</span>
+          {activePoint.game.map ? (
+            <MapLabel
+              name={activePoint.game.map}
+              size="xs"
+              preview
+              className="max-w-[16rem]"
+              textClassName="text-text"
+            />
+          ) : (
+            <span>(—)</span>
+          )}
+          <span aria-hidden>·</span>
+          <span>{activePoint.cumulativeWrPct}% lifetime</span>
+          <span aria-hidden>·</span>
+          <span>
+            {activePoint.rollingWrPct == null
+              ? `${rollingLabel} not yet available`
+              : `${activePoint.rollingWrPct}% rolling`}
+          </span>
         </p>
       ) : (
         <p className="text-micro text-text-dim">

@@ -1,5 +1,6 @@
 "use client";
 
+import { MapArtwork } from "@/components/maps/MapArtwork";
 import type { LiveGamePayload } from "../types";
 import { Dim, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
 
@@ -38,7 +39,32 @@ export function PostGameWidget({ live }: { live: LiveGamePayload | null }) {
       </ul>
       <WidgetFooter>
         <Dim>vs {live.oppRace || "?"}</Dim>
-        <Dim>{live.map || ""}</Dim>
+        {live.map ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 7,
+              minWidth: 0,
+              maxWidth: 260,
+            }}
+          >
+            <MapArtwork mapName={live.map} size="xs" eager />
+            <Dim>
+              <span
+                style={{
+                  display: "block",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {live.map}
+              </span>
+            </Dim>
+          </span>
+        ) : null}
       </WidgetFooter>
     </WidgetShell>
   );

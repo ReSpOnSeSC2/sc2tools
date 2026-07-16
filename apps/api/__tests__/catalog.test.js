@@ -137,6 +137,63 @@ describe("services/catalog", () => {
     }
   });
 
+  test("mapImagePath treats ladder suffixes and punctuation as artwork aliases", () => {
+    const dir = tempDir();
+    try {
+      const images = path.join(dir, "data", "map-images");
+      fs.mkdirSync(images, { recursive: true });
+      fs.writeFileSync(path.join(images, "goldenaura_le.jpg"), Buffer.from("GOLD"));
+      fs.writeFileSync(path.join(images, "16_bit_le.jpg"), Buffer.from("BITS"));
+      fs.writeFileSync(path.join(images, "10000_feet_le.jpg"), Buffer.from("FEET"));
+      const svc = new CatalogService({}, { projectDir: dir });
+
+      expect(svc.mapImagePath("Goldenaura")?.path.toLowerCase()).toContain(
+        "goldenaura_le.jpg",
+      );
+      expect(svc.mapImagePath("16-Bit LE")?.path.toLowerCase()).toContain(
+        "16_bit_le.jpg",
+      );
+      expect(svc.mapImagePath("10,000 Feet LE")?.path.toLowerCase()).toContain(
+        "10000_feet_le.jpg",
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("mapImagePath resolves generated manifest aliases to optimized artwork", () => {
+    const dir = tempDir();
+    try {
+      const images = path.join(dir, "data", "map-images");
+      fs.mkdirSync(images, { recursive: true });
+      fs.writeFileSync(path.join(images, "at_eternitys_edge_le.webp"), Buffer.from("WEBP"));
+      fs.writeFileSync(
+        path.join(images, "manifest.json"),
+        JSON.stringify({
+          maps: [
+            {
+              id: "ateternitysedge",
+              displayName: "At Eternity's Edge LE",
+              aliases: ["At Eternity’s Edge", "At Eternitys Edge"],
+              image: {
+                filename: "at_eternitys_edge_le.webp",
+                sha256: "a".repeat(64),
+              },
+            },
+          ],
+        }),
+      );
+      const svc = new CatalogService({}, { projectDir: dir });
+
+      const found = svc.mapImagePath("At Eternity’s Edge");
+      expect(found?.path).toContain("at_eternitys_edge_le.webp");
+      expect(found?.contentType).toBe("image/webp");
+      expect(found?.etag).toBe(`"${"a".repeat(64)}"`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("mapImagePath prefers data/map_assets PascalCase when present", () => {
     const dir = tempDir();
     try {

@@ -1,0 +1,1304 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-16T13:53:36.939Z",
+  "maps": [
+    {
+      "id": "10000feet",
+      "displayName": "10000 Feet LE",
+      "aliases": [
+        "10000 Feet",
+        "10000 Feet LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "16bit",
+      "displayName": "16-Bit LE",
+      "aliases": [
+        "16-Bit",
+        "16-Bit LE"
+      ],
+      "seasons": [
+        36
+      ]
+    },
+    {
+      "id": "2000atmospheres",
+      "displayName": "2000 Atmospheres LE",
+      "aliases": [
+        "2000 Atmospheres",
+        "2000 Atmospheres LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "id": "acidplant",
+      "displayName": "Acid Plant LE",
+      "aliases": [
+        "Acid Plant",
+        "Acid Plant LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ]
+    },
+    {
+      "id": "acropolis",
+      "displayName": "Acropolis LE",
+      "aliases": [
+        "Acropolis",
+        "Acropolis LE"
+      ],
+      "seasons": [
+        40,
+        41
+      ]
+    },
+    {
+      "id": "alcyone",
+      "displayName": "Alcyone LE",
+      "aliases": [
+        "Alcyone",
+        "Alcyone LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "id": "altitude",
+      "displayName": "Altitude LE",
+      "aliases": [
+        "Altitude",
+        "Altitude LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "amphion",
+      "displayName": "Amphion LE",
+      "aliases": [
+        "Amphion",
+        "Amphion LE"
+      ],
+      "seasons": [
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "id": "ancientcistern",
+      "displayName": "Ancient Cistern LE",
+      "aliases": [
+        "Ancient Cistern",
+        "Ancient Cistern LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "ateternitysedge",
+      "displayName": "At Eternity's Edge LE",
+      "aliases": [
+        "At Eternity's Edge",
+        "At Eternity's Edge LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "automaton",
+      "displayName": "Automaton LE",
+      "aliases": [
+        "Automaton",
+        "Automaton LE"
+      ],
+      "seasons": [
+        38,
+        39
+      ]
+    },
+    {
+      "id": "babylon",
+      "displayName": "Babylon LE",
+      "aliases": [
+        "Babylon",
+        "Babylon LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "beckettindustries",
+      "displayName": "Beckett Industries LE",
+      "aliases": [
+        "Beckett Industries",
+        "Beckett Industries LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49
+      ]
+    },
+    {
+      "id": "berlingrad",
+      "displayName": "Berlingrad LE",
+      "aliases": [
+        "Berlingrad",
+        "Berlingrad LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "id": "blackburn",
+      "displayName": "Blackburn LE",
+      "aliases": [
+        "Blackburn",
+        "Blackburn LE"
+      ],
+      "seasons": [
+        47,
+        48,
+        49
+      ]
+    },
+    {
+      "id": "blackrock",
+      "displayName": "Blackrock LE",
+      "aliases": [
+        "Blackrock",
+        "Blackrock LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "blueshift",
+      "displayName": "Blueshift LE",
+      "aliases": [
+        "Blueshift",
+        "Blueshift LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ]
+    },
+    {
+      "id": "catalyst",
+      "displayName": "Catalyst LE",
+      "aliases": [
+        "Catalyst",
+        "Catalyst LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ]
+    },
+    {
+      "id": "celestialenclave",
+      "displayName": "Celestial Enclave LE",
+      "aliases": [
+        "Celestial Enclave",
+        "Celestial Enclave LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "ceruleanfall",
+      "displayName": "Cerulean Fall LE",
+      "aliases": [
+        "Cerulean Fall",
+        "Cerulean Fall LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ]
+    },
+    {
+      "id": "cosmicsapphire",
+      "displayName": "Cosmic Sapphire",
+      "aliases": [
+        "Cosmic Sapphire"
+      ],
+      "seasons": [
+        52,
+        53
+      ]
+    },
+    {
+      "id": "crimsoncourt",
+      "displayName": "Crimson Court LE",
+      "aliases": [
+        "Crimson Court",
+        "Crimson Court LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ]
+    },
+    {
+      "id": "curiousminds",
+      "displayName": "Curious Minds LE",
+      "aliases": [
+        "Curious Minds",
+        "Curious Minds LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "id": "cyberforest",
+      "displayName": "Cyber Forest LE",
+      "aliases": [
+        "Cyber Forest",
+        "Cyber Forest LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ]
+    },
+    {
+      "id": "darknesssanctuary",
+      "displayName": "Darkness Sanctuary LE",
+      "aliases": [
+        "Darkness Sanctuary",
+        "Darkness Sanctuary LE"
+      ],
+      "seasons": [
+        36
+      ]
+    },
+    {
+      "id": "datac",
+      "displayName": "Data-C",
+      "aliases": [
+        "Data-C"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "deathaura",
+      "displayName": "Deathaura LE",
+      "aliases": [
+        "Deathaura",
+        "Deathaura LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ]
+    },
+    {
+      "id": "discobloodbath",
+      "displayName": "Disco Bloodbath LE",
+      "aliases": [
+        "Disco Bloodbath",
+        "Disco Bloodbath LE"
+      ],
+      "seasons": [
+        41
+      ]
+    },
+    {
+      "id": "dragonscales",
+      "displayName": "Dragon Scales LE",
+      "aliases": [
+        "Dragon Scales",
+        "Dragon Scales LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "dreamcatcher",
+      "displayName": "Dreamcatcher LE",
+      "aliases": [
+        "Dreamcatcher",
+        "Dreamcatcher LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ]
+    },
+    {
+      "id": "dynasty",
+      "displayName": "Dynasty LE",
+      "aliases": [
+        "Dynasty",
+        "Dynasty LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ]
+    },
+    {
+      "id": "ephemeron",
+      "displayName": "Ephemeron LE",
+      "aliases": [
+        "Ephemeron",
+        "Ephemeron LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ]
+    },
+    {
+      "id": "equilibrium",
+      "displayName": "Equilibrium LE",
+      "aliases": [
+        "Equilibrium",
+        "Equilibrium LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ]
+    },
+    {
+      "id": "eternalempire",
+      "displayName": "Eternal Empire LE",
+      "aliases": [
+        "Eternal Empire",
+        "Eternal Empire LE"
+      ],
+      "seasons": [
+        42,
+        43,
+        44
+      ]
+    },
+    {
+      "id": "everdream",
+      "displayName": "Ever Dream LE",
+      "aliases": [
+        "Ever Dream",
+        "Ever Dream LE"
+      ],
+      "seasons": [
+        43,
+        44
+      ]
+    },
+    {
+      "id": "fearandfaith",
+      "displayName": "Fear and Faith LE",
+      "aliases": [
+        "Fear and Faith",
+        "Fear and Faith LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "fracture",
+      "displayName": "Fracture LE",
+      "aliases": [
+        "Fracture",
+        "Fracture LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ]
+    },
+    {
+      "id": "ghostriver",
+      "displayName": "Ghost River LE",
+      "aliases": [
+        "Ghost River",
+        "Ghost River LE"
+      ],
+      "seasons": [
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "id": "glitteringashes",
+      "displayName": "Glittering Ashes LE",
+      "aliases": [
+        "Glittering Ashes",
+        "Glittering Ashes LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "id": "goldenwall",
+      "displayName": "Golden Wall LE",
+      "aliases": [
+        "Golden Wall",
+        "Golden Wall LE"
+      ],
+      "seasons": [
+        43,
+        44
+      ]
+    },
+    {
+      "id": "goldenaura",
+      "displayName": "Goldenaura LE",
+      "aliases": [
+        "Goldenaura",
+        "Goldenaura LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59,
+        60
+      ]
+    },
+    {
+      "id": "gresvan",
+      "displayName": "Gresvan LE",
+      "aliases": [
+        "Gresvan",
+        "Gresvan LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "hardlead",
+      "displayName": "Hard Lead LE",
+      "aliases": [
+        "Hard Lead",
+        "Hard Lead LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ]
+    },
+    {
+      "id": "hardwire",
+      "displayName": "Hardwire LE",
+      "aliases": [
+        "Hardwire",
+        "Hardwire LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51,
+        52
+      ]
+    },
+    {
+      "id": "hecate",
+      "displayName": "Hecate LE",
+      "aliases": [
+        "Hecate",
+        "Hecate LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ]
+    },
+    {
+      "id": "iceandchrome",
+      "displayName": "Ice and Chrome LE",
+      "aliases": [
+        "Ice and Chrome",
+        "Ice and Chrome LE"
+      ],
+      "seasons": [
+        44
+      ]
+    },
+    {
+      "id": "incorporeal",
+      "displayName": "Incorporeal LE",
+      "aliases": [
+        "Incorporeal",
+        "Incorporeal LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ]
+    },
+    {
+      "id": "insideandout",
+      "displayName": "Inside and Out",
+      "aliases": [
+        "Inside and Out"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "jagannatha",
+      "displayName": "Jagannatha LE",
+      "aliases": [
+        "Jagannatha",
+        "Jagannatha LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ]
+    },
+    {
+      "id": "kairosjunction",
+      "displayName": "Kairos Junction LE",
+      "aliases": [
+        "Kairos Junction",
+        "Kairos Junction LE"
+      ],
+      "seasons": [
+        38,
+        39,
+        40
+      ]
+    },
+    {
+      "id": "kingscove",
+      "displayName": "King's Cove LE",
+      "aliases": [
+        "King's Cove",
+        "King's Cove LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ]
+    },
+    {
+      "id": "lastfantasy",
+      "displayName": "Last Fantasy LE",
+      "aliases": [
+        "Last Fantasy",
+        "Last Fantasy LE"
+      ],
+      "seasons": [
+        65
+      ]
+    },
+    {
+      "id": "leylines",
+      "displayName": "Ley Lines",
+      "aliases": [
+        "Ley Lines"
+      ],
+      "seasons": [
+        63,
+        64,
+        65
+      ]
+    },
+    {
+      "id": "lightshade",
+      "displayName": "Lightshade LE",
+      "aliases": [
+        "Lightshade",
+        "Lightshade LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ]
+    },
+    {
+      "id": "lockdown",
+      "displayName": "Lockdown LE",
+      "aliases": [
+        "Lockdown",
+        "Lockdown LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "lostandfound",
+      "displayName": "Lost and Found LE",
+      "aliases": [
+        "Lost and Found",
+        "Lost and Found LE"
+      ],
+      "seasons": [
+        36,
+        37
+      ]
+    },
+    {
+      "id": "magannatha",
+      "displayName": "Magannatha LE",
+      "aliases": [
+        "Magannatha",
+        "Magannatha LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ]
+    },
+    {
+      "id": "moondance",
+      "displayName": "Moondance",
+      "aliases": [
+        "Moondance"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "mothership",
+      "displayName": "Mothership LE",
+      "aliases": [
+        "Mothership",
+        "Mothership LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "neohumanity",
+      "displayName": "NeoHumanity LE",
+      "aliases": [
+        "NeoHumanity",
+        "NeoHumanity LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "newrepugnancy",
+      "displayName": "New Repugnancy LE",
+      "aliases": [
+        "New Repugnancy",
+        "New Repugnancy LE"
+      ],
+      "seasons": [
+        39,
+        40
+      ]
+    },
+    {
+      "id": "nightshade",
+      "displayName": "Nightshade LE",
+      "aliases": [
+        "Nightshade",
+        "Nightshade LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ]
+    },
+    {
+      "id": "oceanborn",
+      "displayName": "Oceanborn LE",
+      "aliases": [
+        "Oceanborn",
+        "Oceanborn LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59
+      ]
+    },
+    {
+      "id": "oldrepublic",
+      "displayName": "Old Republic LE",
+      "aliases": [
+        "Old Republic",
+        "Old Republic LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "oldsuntemple",
+      "displayName": "Old Sun Temple LE",
+      "aliases": [
+        "Old Sun Temple",
+        "Old Sun Temple LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "oxide",
+      "displayName": "Oxide LE",
+      "aliases": [
+        "Oxide",
+        "Oxide LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ]
+    },
+    {
+      "id": "parasite",
+      "displayName": "Para Site LE",
+      "aliases": [
+        "Para Site",
+        "Para Site LE"
+      ],
+      "seasons": [
+        36,
+        37,
+        38
+      ]
+    },
+    {
+      "id": "persephone",
+      "displayName": "Persephone LE",
+      "aliases": [
+        "Persephone",
+        "Persephone LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ]
+    },
+    {
+      "id": "pillarsofgold",
+      "displayName": "Pillars of Gold LE",
+      "aliases": [
+        "Pillars of Gold",
+        "Pillars of Gold LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ]
+    },
+    {
+      "id": "portaleksander",
+      "displayName": "Port Aleksander LE",
+      "aliases": [
+        "Port Aleksander",
+        "Port Aleksander LE"
+      ],
+      "seasons": [
+        38,
+        39
+      ]
+    },
+    {
+      "id": "postyouth",
+      "displayName": "Post-Youth LE",
+      "aliases": [
+        "Post-Youth",
+        "Post-Youth LE"
+      ],
+      "seasons": [
+        58,
+        59
+      ]
+    },
+    {
+      "id": "prideofaltaris",
+      "displayName": "Pride of Altaris LE",
+      "aliases": [
+        "Pride of Altaris",
+        "Pride of Altaris LE"
+      ],
+      "seasons": [
+        48,
+        49,
+        50,
+        51
+      ]
+    },
+    {
+      "id": "purityandindustry",
+      "displayName": "Purity and Industry LE",
+      "aliases": [
+        "Purity and Industry",
+        "Purity and Industry LE"
+      ],
+      "seasons": [
+        43
+      ]
+    },
+    {
+      "id": "pylon",
+      "displayName": "Pylon LE",
+      "aliases": [
+        "Pylon",
+        "Pylon LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ]
+    },
+    {
+      "id": "radhusetstation",
+      "displayName": "Radhuset Station LE",
+      "aliases": [
+        "Radhuset Station",
+        "Radhuset Station LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ]
+    },
+    {
+      "id": "rainfall",
+      "displayName": "Rainfall LE",
+      "aliases": [
+        "Rainfall",
+        "Rainfall LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "redshift",
+      "displayName": "Redshift LE",
+      "aliases": [
+        "Redshift",
+        "Redshift LE"
+      ],
+      "seasons": [
+        36
+      ]
+    },
+    {
+      "id": "romanticide",
+      "displayName": "Romanticide LE",
+      "aliases": [
+        "Romanticide",
+        "Romanticide LE"
+      ],
+      "seasons": [
+        45,
+        46,
+        47,
+        48
+      ]
+    },
+    {
+      "id": "rorschach",
+      "displayName": "Rorschach LE",
+      "aliases": [
+        "Rorschach",
+        "Rorschach LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "royalblood",
+      "displayName": "Royal Blood LE",
+      "aliases": [
+        "Royal Blood",
+        "Royal Blood LE"
+      ],
+      "seasons": [
+        54,
+        55,
+        56
+      ]
+    },
+    {
+      "id": "rubyrock",
+      "displayName": "Ruby Rock LE",
+      "aliases": [
+        "Ruby Rock",
+        "Ruby Rock LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "sanctuaryiii",
+      "displayName": "Sanctuary III LE",
+      "aliases": [
+        "Sanctuary III",
+        "Sanctuary III LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "simulacrum",
+      "displayName": "Simulacrum LE",
+      "aliases": [
+        "Simulacrum",
+        "Simulacrum LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ]
+    },
+    {
+      "id": "sitedelta",
+      "displayName": "Site Delta LE",
+      "aliases": [
+        "Site Delta",
+        "Site Delta LE"
+      ],
+      "seasons": [
+        57,
+        58,
+        59
+      ]
+    },
+    {
+      "id": "solaris",
+      "displayName": "Solaris LE",
+      "aliases": [
+        "Solaris",
+        "Solaris LE"
+      ],
+      "seasons": [
+        57,
+        58
+      ]
+    },
+    {
+      "id": "stargazers",
+      "displayName": "Stargazers",
+      "aliases": [
+        "Stargazers"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "stasis",
+      "displayName": "Stasis LE",
+      "aliases": [
+        "Stasis",
+        "Stasis LE"
+      ],
+      "seasons": [
+        38
+      ]
+    },
+    {
+      "id": "submarine",
+      "displayName": "Submarine LE",
+      "aliases": [
+        "Submarine",
+        "Submarine LE"
+      ],
+      "seasons": [
+        44,
+        45,
+        46
+      ]
+    },
+    {
+      "id": "taitocitadel",
+      "displayName": "Taito Citadel LE",
+      "aliases": [
+        "Taito Citadel",
+        "Taito Citadel LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "thunderbird",
+      "displayName": "Thunderbird LE",
+      "aliases": [
+        "Thunderbird",
+        "Thunderbird LE"
+      ],
+      "seasons": [
+        40,
+        41
+      ]
+    },
+    {
+      "id": "tokamak",
+      "displayName": "Tokamak LE",
+      "aliases": [
+        "Tokamak",
+        "Tokamak LE"
+      ],
+      "seasons": [
+        63,
+        64,
+        65
+      ]
+    },
+    {
+      "id": "torches",
+      "displayName": "Torches LE",
+      "aliases": [
+        "Torches",
+        "Torches LE"
+      ],
+      "seasons": [
+        64,
+        65
+      ]
+    },
+    {
+      "id": "tourmaline",
+      "displayName": "Tourmaline LE",
+      "aliases": [
+        "Tourmaline",
+        "Tourmaline LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "triton",
+      "displayName": "Triton LE",
+      "aliases": [
+        "Triton",
+        "Triton LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ]
+    },
+    {
+      "id": "tropicalsacrifice",
+      "displayName": "Tropical Sacrifice",
+      "aliases": [
+        "Tropical Sacrifice"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "turbocruise84",
+      "displayName": "Turbo Cruise '84 LE",
+      "aliases": [
+        "Turbo Cruise '84",
+        "Turbo Cruise '84 LE"
+      ],
+      "seasons": [
+        40
+      ]
+    },
+    {
+      "id": "ultralove",
+      "displayName": "Ultralove",
+      "aliases": [
+        "Ultralove"
+      ],
+      "seasons": [
+        64
+      ]
+    },
+    {
+      "id": "washout",
+      "displayName": "Washout LE",
+      "aliases": [
+        "Washout",
+        "Washout LE"
+      ],
+      "seasons": [
+        67
+      ]
+    },
+    {
+      "id": "waterfall",
+      "displayName": "Waterfall",
+      "aliases": [
+        "Waterfall"
+      ],
+      "seasons": [
+        52,
+        53,
+        54
+      ]
+    },
+    {
+      "id": "whiterabbit",
+      "displayName": "White Rabbit LE",
+      "aliases": [
+        "White Rabbit",
+        "White Rabbit LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "wintermadness",
+      "displayName": "Winter Madness LE",
+      "aliases": [
+        "Winter Madness",
+        "Winter Madness LE"
+      ],
+      "seasons": [
+        65,
+        66,
+        67
+      ]
+    },
+    {
+      "id": "wintersgate",
+      "displayName": "Winter's Gate LE",
+      "aliases": [
+        "Winter's Gate",
+        "Winter's Gate LE"
+      ],
+      "seasons": [
+        41
+      ]
+    },
+    {
+      "id": "worldofsleepers",
+      "displayName": "World of Sleepers LE",
+      "aliases": [
+        "World of Sleepers",
+        "World of Sleepers LE"
+      ],
+      "seasons": [
+        41,
+        42
+      ]
+    },
+    {
+      "id": "yearzero",
+      "displayName": "Year Zero LE",
+      "aliases": [
+        "Year Zero",
+        "Year Zero LE"
+      ],
+      "seasons": [
+        39
+      ]
+    },
+    {
+      "id": "zen",
+      "displayName": "Zen LE",
+      "aliases": [
+        "Zen",
+        "Zen LE"
+      ],
+      "seasons": [
+        42,
+        43
+      ]
+    }
+  ]
+}

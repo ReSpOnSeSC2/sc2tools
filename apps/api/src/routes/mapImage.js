@@ -24,6 +24,10 @@ function buildMapImageRouter(deps) {
   const router = express.Router();
 
   router.get("/map-image", (req, res, next) => {
+    // The SPA and API are deployed on different origins. Helmet defaults
+    // Cross-Origin-Resource-Policy to same-origin, which would make browsers
+    // reject these public <img> responses even though CORS allows the request.
+    res.setHeader("cross-origin-resource-policy", "cross-origin");
     try {
       const name = String(req.query.map || "").trim();
       if (!name) {
@@ -36,7 +40,17 @@ function buildMapImageRouter(deps) {
         return;
       }
       res.setHeader("content-type", found.contentType);
-      res.setHeader("cache-control", "public, max-age=86400");
+      res.setHeader(
+        "cache-control",
+        "public, max-age=604800, stale-while-revalidate=2592000",
+      );
+      if (found.etag) {
+        res.setHeader("etag", found.etag);
+        if (req.headers["if-none-match"] === found.etag) {
+          res.status(304).end();
+          return;
+        }
+      }
       fs.createReadStream(found.path)
         .on("error", (e) => next(e))
         .pipe(res);

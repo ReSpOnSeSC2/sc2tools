@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { normaliseGame } from "../hooks/useArcadeData";
+import { normaliseGame, normaliseMap } from "../hooks/useArcadeData";
 
 describe("useArcadeData — normaliseGame", () => {
   test("aliases API camelCase durationSec onto duration", () => {
@@ -133,5 +133,25 @@ describe("useArcadeData — normaliseGame", () => {
       result: "Victory",
     });
     expect(g.opp_strategy).toBeNull();
+  });
+});
+
+describe("useArcadeData — normaliseMap", () => {
+  test("maps the /v1/maps name field to the Arcade map field", () => {
+    expect(
+      normaliseMap({
+        name: "Goldenaura LE",
+        wins: 8,
+        losses: 5,
+        total: 13,
+        winRate: 8 / 13,
+      }),
+    ).toEqual({
+      map: "Goldenaura LE",
+      wins: 8,
+      losses: 5,
+      total: 13,
+      winRate: 8 / 13,
+    });
   });
 });

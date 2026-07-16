@@ -155,11 +155,16 @@ function mockEndpoints({
 describe("GameDetailPage", () => {
   it("renders header, timeline, mechanics and the loss autopsy on a defeat", () => {
     mockEndpoints();
-    render(<GameDetailPage gameId="g1" />);
+    const { container } = render(<GameDetailPage gameId="g1" />);
 
     // Header facts.
     expect(screen.getByText("Defeat")).toBeTruthy();
     expect(screen.getByText("Ephemeron")).toBeTruthy();
+    const heroArtwork = container.querySelector(
+      'header [data-map-artwork="image"] img',
+    );
+    expect(heroArtwork?.getAttribute("src")).toContain("Ephemeron%20LE");
+    expect(heroArtwork?.getAttribute("loading")).toBe("eager");
     expect(screen.getByText("Roach Allin")).toBeTruthy();
     expect(screen.getByText("Terran - 2 Rax")).toBeTruthy();
 

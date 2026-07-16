@@ -678,6 +678,7 @@ describe("HTTP integration", () => {
       const res = await request(app).get("/v1/map-image?map=test");
       expect(res.status).not.toBe(401);
       expect([400, 404]).toContain(res.status);
+      expect(res.headers["cross-origin-resource-policy"]).toBe("cross-origin");
     });
 
     test("returns 400 when the ?map param is missing", async () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { MapArtwork } from "@/components/maps/MapArtwork";
 import type {
   LiveGameEnvelope,
   LiveGameEnvelopeProfile,
@@ -279,15 +280,26 @@ function RecentGameRow({
           <span
             style={{
               marginLeft: "auto",
-              opacity: 0.7,
-              fontSize: 12,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
               minWidth: 0,
+              maxWidth: 250,
             }}
           >
-            {game.map}
+            <MapArtwork mapName={game.map} size="xs" eager />
+            <span
+              style={{
+                opacity: 0.75,
+                fontSize: 12,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
+            >
+              {game.map}
+            </span>
           </span>
         ) : null}
       </div>

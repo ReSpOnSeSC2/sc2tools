@@ -119,6 +119,25 @@ interface ApiSeasons {
   mapPool?: string[];
 }
 
+interface ApiMap {
+  name: string;
+  wins: number;
+  losses: number;
+  total: number;
+  winRate: number;
+}
+
+/** /v1/maps groups by map under `name`; Arcade modes consume `map`. */
+export function normaliseMap(row: ApiMap): ArcadeDataset["maps"][number] {
+  return {
+    map: row.name,
+    wins: row.wins,
+    losses: row.losses,
+    total: row.total,
+    winRate: row.winRate,
+  };
+}
+
 /**
  * useArcadeData — fans out the bundle of GETs every Arcade surface
  * needs and folds them into a single ArcadeDataset. SWR keeps each
@@ -152,9 +171,7 @@ export function useArcadeData(): {
   const matchups = useApi<
     Array<{ name: string; wins: number; losses: number; total: number; winRate?: number }>
   >("/v1/matchups");
-  const maps = useApi<
-    Array<{ map: string; wins: number; losses: number; total: number; winRate: number }>
-  >("/v1/maps");
+  const maps = useApi<ApiMap[]>("/v1/maps");
   // /v1/summary returns { totals: { wins, losses, total, winRate }, ... }.
   const summary = useApi<ApiSummary>("/v1/summary");
   const custom = useApi<ApiCustomBuilds>("/v1/custom-builds");
@@ -285,7 +302,7 @@ export function useArcadeData(): {
             };
           })
         : [],
-      maps: Array.isArray(maps.data) ? maps.data : [],
+      maps: Array.isArray(maps.data) ? maps.data.map(normaliseMap) : [],
       summary: summaryOut,
       mapPool: Array.isArray(seasons.data?.mapPool) ? seasons.data!.mapPool : [],
       unitStats:

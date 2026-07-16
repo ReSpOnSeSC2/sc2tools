@@ -62,8 +62,8 @@ export function Footer() {
         <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-caption text-text-dim sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} SC2 Tools. All rights reserved.</p>
           <p>
-            Not affiliated with Blizzard Entertainment. StarCraft II is a
-            trademark of its respective owners.
+            StarCraft II and map artwork © Blizzard Entertainment. SC2 Tools
+            is not affiliated with or endorsed by Blizzard Entertainment.
           </p>
         </div>
       </div>

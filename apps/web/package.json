@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "depth-lint": "node scripts/depthLint.mjs"
+    "depth-lint": "node scripts/depthLint.mjs",
+    "maps:sync": "node scripts/sync-map-images.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "6.9.5",
@@ -39,6 +40,7 @@
     "eslint-config-next": "^15.5.15",
     "jsdom": "^25.0.1",
     "postcss": "8.5.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "3.4.17",
     "typescript": "5.7.3",
     "vitest": "^2.1.8"

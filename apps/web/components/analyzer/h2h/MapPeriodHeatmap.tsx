@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MapLabel } from "@/components/maps/MapArtwork";
 import { EmptyState } from "@/components/ui/Card";
 import { wrColor, wrRamp } from "@/lib/format";
 import {
@@ -99,7 +100,12 @@ export function MapPeriodHeatmap({
               className="inline-flex min-h-[44px] items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-accent hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <span aria-hidden>×</span>
-              {selectedMap}
+              <MapLabel
+                name={selectedMap}
+                size="xs"
+                className="max-w-[16rem]"
+                textClassName="font-medium"
+              />
             </button>
           ) : null}
         </div>
@@ -176,7 +182,12 @@ function HeatmapRow({
               : `Filter games table to ${row.map}`
           }
         >
-          <span className="truncate font-medium">{row.map}</span>
+          <MapLabel
+            name={row.map}
+            size="xs"
+            className="min-w-0 flex-1"
+            textClassName="font-medium"
+          />
           {isLowN ? (
             <span
               className="ml-auto rounded-full border border-border px-1.5 text-micro uppercase tracking-wider text-text-dim"

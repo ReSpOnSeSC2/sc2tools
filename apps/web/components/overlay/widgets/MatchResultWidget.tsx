@@ -1,5 +1,6 @@
 "use client";
 
+import { MapArtwork } from "@/components/maps/MapArtwork";
 import type { LiveGamePayload } from "../types";
 import { Dim, RaceIcon, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
 
@@ -59,7 +60,26 @@ export function MatchResultWidget({ live }: { live: LiveGamePayload | null }) {
         </span>
       </WidgetHeader>
       <WidgetFooter>
-        <span>{live.map || "—"}</span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            maxWidth: 340,
+          }}
+        >
+          {live.map ? <MapArtwork mapName={live.map} size="xs" eager /> : null}
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {live.map || "—"}
+          </span>
+        </span>
         <Dim>{fmtDur(live.durationSec)}</Dim>
       </WidgetFooter>
     </WidgetShell>

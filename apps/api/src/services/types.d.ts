@@ -717,7 +717,11 @@ export interface CatalogService {
   catalogLookup(): { lookup: (rawName: string) => object | null };
   definitions(): Promise<object>;
   exportCsv(userId: string, filters: object): AsyncGenerator<string, void, void>;
-  mapImagePath(name: string): { path: string; contentType: string } | null;
+  mapImagePath(name: string): {
+    path: string;
+    contentType: string;
+    etag?: string;
+  } | null;
   playbackInfo(): object;
 }
 
