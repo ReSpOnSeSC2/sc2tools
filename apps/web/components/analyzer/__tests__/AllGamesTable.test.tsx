@@ -76,9 +76,31 @@ describe("AllGamesTable game analysis entry point", () => {
 
     const desktopRow = screen.getAllByText("Ancient Cistern")[0].closest("tr");
     expect(desktopRow).toBeTruthy();
-    const desktopMapLabel = screen.getAllByText("Ancient Cistern")[0].parentElement;
-    expect(desktopMapLabel?.querySelector("[data-map-preview]")).toBeNull();
-    expect(desktopMapLabel?.getAttribute("title")).toBeNull();
+    const desktopMapLabel = screen.getAllByText("Ancient Cistern")[0]
+      .parentElement as HTMLElement;
+    const scrollRegion = desktopMapLabel.closest(".overflow-x-auto");
+    vi.spyOn(desktopMapLabel, "getBoundingClientRect").mockReturnValue({
+      left: 400,
+      top: 300,
+      width: 160,
+      height: 24,
+      x: 400,
+      y: 300,
+      right: 560,
+      bottom: 324,
+      toJSON: () => ({}),
+    } as DOMRect);
+    expect(scrollRegion).toBeTruthy();
+    expect(desktopMapLabel.getAttribute("title")).toBeNull();
+
+    fireEvent.mouseEnter(desktopMapLabel);
+    const preview = document.body.querySelector("[data-map-preview]");
+    expect(preview).toBeTruthy();
+    expect(container.contains(preview)).toBe(false);
+    expect(scrollRegion?.contains(preview)).toBe(false);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.body.querySelector("[data-map-preview]")).toBeNull();
     fireEvent.click(desktopRow!);
     expect(useApiMock).toHaveBeenCalledWith("/v1/games/game%2F42/build-order");
   });
