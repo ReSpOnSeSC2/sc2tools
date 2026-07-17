@@ -181,8 +181,35 @@ jobs:
           }
           Set-Content -Path RELEASE_NOTES.generated.md -Value $notes -Encoding utf8
 
+      # The GitHub API occasionally serves a transient 5xx ("Unicorn!")
+      # page; one such blip failed the agent-v0.14.2 release after a
+      # successful 7-minute build. Attempt the attach twice with a pause
+      # in between so only a sustained outage can fail the job.
       - name: Attach to GitHub Release
+        id: release
         if: startsWith(github.ref, 'refs/tags/agent-v')
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe
+            apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe.sha256
+          fail_on_unmatched_files: true
+          body_path: apps/agent/RELEASE_NOTES.generated.md
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+
+      - name: Wait before release retry
+        if: startsWith(github.ref, 'refs/tags/agent-v') && steps.release.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Write-Warning "First release attach failed; retrying in 60 s."
+          Start-Sleep -Seconds 60
+
+      - name: Attach to GitHub Release (retry)
+        if: startsWith(github.ref, 'refs/tags/agent-v') && steps.release.outcome == 'failure'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
