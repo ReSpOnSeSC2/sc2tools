@@ -22,9 +22,9 @@
  *
  * Parsing is defensive throughout: YouTube renderers are sprawling
  * union types and absent fields are the norm, not the exception. Only
- * ``liveChatTextMessageRenderer`` items become messages — join/
- * membership/superchat banners are skipped (a chat overlay wants
- * conversation, not receipts).
+ * ``liveChatTextMessageRenderer`` items become messages; membership
+ * and Super Chat renderers become slim `events` for the events layer,
+ * and everything else (join banners, tickers) is skipped.
  */
 
 const DEFAULT_CLIENT_VERSION = "2.20260715.04.00";
@@ -273,13 +273,21 @@ function badgeTags(badges) {
 }
 
 /**
- * Parse one raw get_live_chat response into slim messages + the next
- * continuation. Pure — unit-tested against a captured real response.
+ * Parse one raw get_live_chat response into slim messages + platform
+ * events + the next continuation. Pure — unit-tested against a
+ * captured real response.
+ *
+ * Events cover the two receipt renderers a chat overlay cares about:
+ * ``liveChatMembershipItemRenderer`` (new/renewed members) and
+ * ``liveChatPaidMessageRenderer`` (Super Chats). Everything else
+ * (stickers, banners, tickers) stays skipped.
  *
  * @param {Record<string, any>} json
  * @returns {{ messages: Array<{ id: string, user: string, text: string,
- *   badges: string[], atMs: number }>, continuation: string | null,
- *   timeoutMs: number, done: boolean }}
+ *   badges: string[], atMs: number }>, events: Array<{ id: string,
+ *   kind: string, user: string, detail: string, amount?: string,
+ *   atMs: number }>, continuation: string | null, timeoutMs: number,
+ *   done: boolean }}
  */
 function parseLiveChatResponse(json) {
   const root = json?.continuationContents?.liveChatContinuation;
@@ -288,6 +296,7 @@ function parseLiveChatResponse(json) {
     // re-resolve rather than hammering a dead token.
     return {
       messages: [],
+      events: [],
       continuation: null,
       timeoutMs: DEFAULT_TIMEOUT_MS,
       done: true,
@@ -296,8 +305,42 @@ function parseLiveChatResponse(json) {
 
   /** @type {Array<{id: string, user: string, text: string, badges: string[], atMs: number}>} */
   const messages = [];
+  /** @type {Array<{id: string, kind: string, user: string, detail: string, amount?: string, atMs: number}>} */
+  const events = [];
   for (const action of Array.isArray(root.actions) ? root.actions : []) {
     const item = action?.addChatItemAction?.item;
+
+    const member = item?.liveChatMembershipItemRenderer;
+    if (member) {
+      const usec = Number(member.timestampUsec);
+      events.push({
+        id: String(member.id || `${member.timestampUsec}-${events.length}`),
+        kind: "member",
+        user: String(member.authorName?.simpleText || "viewer"),
+        detail:
+          runsToText(member.headerSubtext?.runs).trim() ||
+          runsToText(member.headerPrimaryText?.runs).trim() ||
+          "became a member",
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
+    const paid = item?.liveChatPaidMessageRenderer;
+    if (paid) {
+      const usec = Number(paid.timestampUsec);
+      const amount = String(paid.purchaseAmountText?.simpleText || "").trim();
+      events.push({
+        id: String(paid.id || `${paid.timestampUsec}-${events.length}`),
+        kind: "superchat",
+        user: String(paid.authorName?.simpleText || "viewer"),
+        detail: runsToText(paid.message?.runs).trim() || "sent a Super Chat",
+        ...(amount ? { amount } : {}),
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
     const r = item?.liveChatTextMessageRenderer;
     if (!r) continue;
     const text = runsToText(r.message?.runs).trim();
@@ -329,6 +372,7 @@ function parseLiveChatResponse(json) {
   }
   return {
     messages,
+    events,
     continuation,
     timeoutMs: Math.max(MIN_TIMEOUT_MS, Math.min(MAX_TIMEOUT_MS, timeoutMs)),
     done: continuation === null,

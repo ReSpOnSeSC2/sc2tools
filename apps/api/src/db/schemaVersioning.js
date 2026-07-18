@@ -122,6 +122,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.MULTICHAT_STUDIO]: {
+    collection: COLLECTIONS.MULTICHAT_STUDIO,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   // Operational + ancillary collections. None of these have a
   // multi-version migration history yet — they all started life on
   // v1 and stay there until a future shape change. Listing them here

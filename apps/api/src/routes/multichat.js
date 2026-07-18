@@ -47,6 +47,7 @@ const {
  *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null> },
  *   users: { getPreferences: (userId: string, type: string) => Promise<Record<string, any>> },
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
+ *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   fetchImpl?: typeof fetch,
  * }} deps
  */
@@ -175,6 +176,97 @@ function buildMultichatRouter(deps) {
     },
   );
 
+  // ── Stream Studio: shared dock/widget state ──
+  // Highlight pin, chat poll, goals, studio blocklist, recap trigger.
+  // Reads boot the widgets; writes come from the dock and broadcast
+  // over the token's socket room (see MultichatStudioService).
+
+  router.get(
+    "/multichat/:token/studio",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        res.json(await deps.studio.get(String(req.params.token)));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.post(
+    "/multichat/:token/studio",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        const body =
+          req.body && typeof req.body === "object" ? req.body : {};
+        res.json(await deps.studio.update(String(req.params.token), body));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Translation relay ──
+  // The provider endpoint + key live server-side in the streamer's
+  // preferences (translate: {enabled, endpoint, apiKey, targetLang});
+  // the widget only ever sends text. LibreTranslate-compatible wire
+  // shape ({q, source:"auto", target, api_key} → {translatedText}).
+  router.post(
+    "/multichat/:token/translate",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        const prefs = await deps.users.getPreferences(userId, "multichat");
+        const cfg = prefs?.translate;
+        const endpoint = typeof cfg?.endpoint === "string" ? cfg.endpoint.trim() : "";
+        if (cfg?.enabled !== true || !/^https:\/\//.test(endpoint)) {
+          res.status(400).json({ error: { code: "translate_unconfigured" } });
+          return;
+        }
+        const texts = (Array.isArray(req.body?.texts) ? req.body.texts : [])
+          .map((/** @type {unknown} */ t) => String(t ?? "").slice(0, 500))
+          .filter(Boolean)
+          .slice(0, 10);
+        if (texts.length === 0) {
+          res.json({ translations: [] });
+          return;
+        }
+        const upstream = await fetchImpl(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            q: texts,
+            source: "auto",
+            target:
+              typeof cfg.targetLang === "string" && /^[a-z-]{2,8}$/i.test(cfg.targetLang)
+                ? cfg.targetLang
+                : "en",
+            format: "text",
+            api_key: typeof cfg.apiKey === "string" ? cfg.apiKey.slice(0, 200) : "",
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!upstream.ok) {
+          res.status(502).json({ error: { code: "translate_upstream", status: upstream.status } });
+          return;
+        }
+        const data = await upstream.json();
+        // LibreTranslate returns {translatedText: string | string[]}.
+        const t = data?.translatedText;
+        const translations = Array.isArray(t) ? t.map(String) : [String(t ?? "")];
+        res.json({ translations });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   // SSE stream of TikTok chat. Long-lived — exempt from the poll
   // limiter budget beyond its initial handshake (one request).
   router.get(
@@ -271,6 +363,22 @@ function sanitizeMultichatConfig(prefs) {
   }
   if (prefs?.sound && typeof prefs.sound === "object") {
     out.sound = sanitizeChatSound(prefs.sound);
+  }
+  // Translation: the widget only learns THAT translation is on and the
+  // target language — the provider endpoint and API key never leave
+  // the server (the relay reads them per request).
+  if (prefs?.translate && typeof prefs.translate === "object") {
+    const t = prefs.translate;
+    out.translate = {
+      enabled:
+        t.enabled === true &&
+        typeof t.endpoint === "string" &&
+        /^https:\/\//.test(t.endpoint),
+      targetLang:
+        typeof t.targetLang === "string" && /^[a-z-]{2,8}$/i.test(t.targetLang)
+          ? t.targetLang
+          : "en",
+    };
   }
   return out;
 }

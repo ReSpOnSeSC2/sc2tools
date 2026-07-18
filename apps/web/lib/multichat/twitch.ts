@@ -9,6 +9,7 @@
 // socket lifecycle: PING/PONG keepalive and auto-reconnect with
 // exponential backoff so an OBS scene left open all day self-heals.
 
+import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
 export const TWITCH_IRC_URL = "wss://irc-ws.chat.twitch.tv:443";
@@ -90,6 +91,80 @@ export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
   };
 }
 
+/**
+ * Parse one raw USERNOTICE line into a platform event, or null for
+ * msg-ids we don't surface (announcements, rituals, …). USERNOTICEs
+ * carry the acting user in tags (`login`/`display-name`), not the IRC
+ * prefix (that's always tmi.twitch.tv), and may append a user-written
+ * message after the trailing colon — deliberately ignored here, the
+ * events feed wants the happening, not the caption.
+ */
+export function parseTwitchUserNotice(line: string): ChatEvent | null {
+  if (!line.includes(" USERNOTICE #")) return null;
+  let tags: Record<string, string> = {};
+  let rest = line;
+  if (rest.startsWith("@")) {
+    const space = rest.indexOf(" ");
+    if (space === -1) return null;
+    tags = parseIrcTags(rest.slice(1, space));
+    rest = rest.slice(space + 1);
+  }
+  if (!/^:\S+\s+USERNOTICE\s+#\S+/.test(rest)) return null;
+
+  const login = tags.login || "";
+  const user = tags["display-name"] || login;
+  if (!user) return null;
+
+  let kind: ChatEvent["kind"];
+  let detail: string;
+  let amount: string | undefined;
+  let eventUser = user;
+  switch (tags["msg-id"]) {
+    case "sub":
+      kind = "sub";
+      detail = "subscribed";
+      break;
+    case "resub": {
+      kind = "resub";
+      const months = Number(tags["msg-param-cumulative-months"]);
+      detail =
+        Number.isFinite(months) && months > 0
+          ? `subscribed for ${months} months`
+          : "resubscribed";
+      break;
+    }
+    case "subgift":
+    case "submysterygift": {
+      kind = "giftsub";
+      const count = Number(tags["msg-param-mass-gift-count"]) || 1;
+      amount = String(count);
+      detail = `gifted ${count} ${count === 1 ? "sub" : "subs"}`;
+      break;
+    }
+    case "raid": {
+      kind = "raid";
+      const viewers = Number(tags["msg-param-viewerCount"]) || 0;
+      amount = String(viewers);
+      detail = `raiding with ${viewers} viewers`;
+      eventUser = tags["msg-param-displayName"] || tags["msg-param-login"] || user;
+      break;
+    }
+    default:
+      return null;
+  }
+
+  const ts = Number(tags["tmi-sent-ts"]);
+  return {
+    platform: "twitch",
+    id: tags.id || `${tags["tmi-sent-ts"] || Date.now()}-${login || eventUser}`,
+    kind,
+    user: eventUser,
+    detail,
+    amount,
+    atMs: Number.isFinite(ts) ? ts : Date.now(),
+  };
+}
+
 /** Normalise a pasted channel value ("#Name", twitch.tv URL) to lowercase login. */
 export function normalizeTwitchChannel(raw: string): string | null {
   let input = String(raw || "").trim().toLowerCase();
@@ -139,6 +214,11 @@ export function createTwitchChat(
         const parsed = parseTwitchMessage(line);
         if (parsed) {
           callbacks.onMessage({ platform: "twitch", ...parsed });
+          continue;
+        }
+        if (line.includes(" USERNOTICE #")) {
+          const event = parseTwitchUserNotice(line);
+          if (event) callbacks.onEvent?.(event);
         }
       }
     };

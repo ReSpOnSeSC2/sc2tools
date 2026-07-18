@@ -8,6 +8,7 @@
 // in Settings (auto via the API relay, or the guided manual flow when
 // Cloudflare blocks the lookup).
 
+import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
 // Kick's production Pusher app key + cluster — public constants baked
@@ -80,6 +81,71 @@ export function parseKickChatEvent(
   };
 }
 
+/**
+ * Parse one non-chat Pusher event from the chatroom channel into a
+ * platform event, or null for events we don't surface. Payload shapes
+ * follow what the public channel delivers (observed live), but every
+ * field is treated as optional — Kick renames things without notice.
+ */
+export function parseKickEvent(
+  eventName: string,
+  data: Record<string, unknown>,
+): ChatEvent | null {
+  const short = eventName.startsWith("App\\Events\\")
+    ? eventName.slice("App\\Events\\".length)
+    : eventName;
+
+  let kind: ChatEvent["kind"];
+  let user: string;
+  let detail: string;
+  let amount: string | undefined;
+  switch (short) {
+    case "SubscriptionEvent": {
+      user = String(data?.username || "").trim();
+      const months = Number(data?.months);
+      if (Number.isFinite(months) && months > 1) {
+        kind = "resub";
+        detail = `subscribed for ${months} months`;
+      } else {
+        kind = "sub";
+        detail = "subscribed";
+      }
+      break;
+    }
+    case "GiftedSubscriptionsEvent": {
+      kind = "giftsub";
+      user = String(data?.gifter_username || "").trim();
+      const gifted = data?.gifted_usernames;
+      const count = Array.isArray(gifted) ? gifted.length || 1 : 1;
+      amount = String(count);
+      detail = `gifted ${count} ${count === 1 ? "sub" : "subs"}`;
+      break;
+    }
+    case "StreamHostEvent": {
+      kind = "raid";
+      user = String(data?.host_username || "").trim();
+      const viewers = Number(data?.number_viewers) || 0;
+      amount = String(viewers);
+      detail = `raiding with ${viewers} viewers`;
+      break;
+    }
+    default:
+      return null;
+  }
+  if (!user) return null;
+
+  const created = Date.parse(String(data?.created_at ?? ""));
+  return {
+    platform: "kick",
+    id: String(data?.id || `${eventName}-${Date.now()}-${user}`),
+    kind,
+    user,
+    detail,
+    amount,
+    atMs: Number.isFinite(created) ? created : Date.now(),
+  };
+}
+
 export function createKickChat(
   opts: { chatroomId: number; callbacks: EngineCallbacks; url?: string },
 ): ChatEngine {
@@ -132,8 +198,20 @@ export function createKickChat(
           if (parsed) callbacks.onMessage({ platform: "kick", ...parsed });
           break;
         }
-        default:
+        default: {
+          // Any other App\Events\* frame is a candidate platform event
+          // (subs, gifted subs, hosts) — parse defensively, drop the rest.
+          if (!String(frame.event || "").startsWith("App\\Events\\")) break;
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(String(frame.data || "{}"));
+          } catch {
+            return;
+          }
+          const event = parseKickEvent(String(frame.event), payload);
+          if (event) callbacks.onEvent?.(event);
           break;
+        }
       }
     };
     ws.onclose = () => {

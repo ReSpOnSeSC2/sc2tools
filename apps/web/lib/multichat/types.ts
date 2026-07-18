@@ -4,6 +4,10 @@
 // the tests never branch on platform-specific payloads. Engines
 // normalise at the edge; everything downstream is platform-agnostic.
 
+// Type-only import — erased at compile time, so the events ⇄ types
+// reference cycle never exists at runtime.
+import type { ChatEvent } from "./events";
+
 export type ChatPlatform = "twitch" | "kick" | "youtube" | "tiktok";
 
 export const CHAT_PLATFORMS: readonly ChatPlatform[] = [
@@ -51,6 +55,8 @@ export interface PlatformStatus {
 export interface EngineCallbacks {
   onMessage(message: ChatMessage): void;
   onStatus(state: PlatformState, detail?: string): void;
+  /** Platform events (subs, raids, gifts…) — optional, events-aware hosts only. */
+  onEvent?(event: ChatEvent): void;
 }
 
 /** Every engine exposes exactly one lifecycle affordance. */

@@ -67,11 +67,14 @@ export function MultiChatMessageList({
   messages,
   appearance,
   emptyText,
+  translations,
 }: {
   /** Oldest → newest; `newestAt` decides which end renders "new". */
   messages: ReadonlyArray<ChatMessage>;
   appearance: ChatAppearance;
   emptyText?: string;
+  /** Optional (platform:id) → translated text overlay (useTranslation). */
+  translations?: Record<string, string>;
 }) {
   const s = useMemo(() => appearanceStyles(appearance), [appearance]);
   const ordered = useMemo(
@@ -125,6 +128,7 @@ export function MultiChatMessageList({
             appearance={appearance}
             textShadow={s.textShadow}
             fontWeight={s.fontWeight}
+            translated={translations?.[`${m.platform}:${m.id}`]}
           />
         ))
       )}
@@ -137,11 +141,14 @@ function MessageRow({
   appearance,
   textShadow,
   fontWeight,
+  translated,
 }: {
   message: ChatMessage;
   appearance: ChatAppearance;
   textShadow: string | undefined;
   fontWeight: number;
+  /** Translated text — rendered in place of the original, marked 🌐. */
+  translated?: string;
 }) {
   const meta = PLATFORM_META[message.platform];
   const nameColor =
@@ -220,8 +227,16 @@ function MessageRow({
         fontWeight,
         textShadow,
       }}
+      title={translated ? message.text : undefined}
     >
-      {message.text}
+      {translated ? (
+        <>
+          <span aria-hidden style={{ opacity: 0.6, marginRight: 3 }}>🌐</span>
+          {translated}
+        </>
+      ) : (
+        message.text
+      )}
     </span>
   );
 

@@ -6,6 +6,7 @@
 // re-resolves on a slow timer so the widget picks the next stream up
 // automatically.
 
+import { isChatEventKind } from "./events";
 import type { ChatEngine, EngineCallbacks } from "./types";
 
 /** Re-resolve cadence while the channel is offline / stream ended. */
@@ -21,8 +22,19 @@ interface WireMessage {
   atMs: number;
 }
 
+interface WireEvent {
+  id: string;
+  kind: string;
+  user: string;
+  detail: string;
+  amount?: string;
+  atMs: number;
+}
+
 interface PollResponse {
   messages: WireMessage[];
+  /** Absent on older API builds — treat as empty. */
+  events?: WireEvent[];
   continuation: string | null;
   timeoutMs: number;
   done: boolean;
@@ -119,6 +131,18 @@ export function createYoutubeChat(
                 ["owner", "moderator", "member", "verified"].includes(b),
             ),
             atMs: m.atMs,
+          });
+        }
+        for (const e of data.events || []) {
+          if (!isChatEventKind(e.kind)) continue;
+          callbacks.onEvent?.({
+            platform: "youtube",
+            id: e.id,
+            kind: e.kind,
+            user: e.user,
+            detail: e.detail,
+            amount: e.amount,
+            atMs: e.atMs,
           });
         }
       }

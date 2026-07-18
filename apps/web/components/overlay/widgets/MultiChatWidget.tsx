@@ -50,6 +50,8 @@ import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { useChatSound } from "@/lib/multichat/useChatSound";
 import { useChatTts } from "@/lib/multichat/useChatTts";
+import { useCommandAnswers } from "@/lib/multichat/useCommandAnswers";
+import { useTranslation } from "@/lib/multichat/useTranslation";
 import { MultiChatMessageList, PLATFORM_META } from "./MultiChatMessageList";
 import type {
   ChatMessage,
@@ -264,6 +266,30 @@ export function MultiChatWidget({
   const voice = useChatTts(visible, tts);
   useChatSound(visible, sound);
 
+  // BRB scene mode (?mode=brb on the Browser Source URL): centered,
+  // larger-type layout for "be right back" scenes — same feed, same
+  // appearance, just presented as the main attraction.
+  const brbMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("mode") === "brb";
+  }, []);
+
+  // !opponent / !mmr / !build asked in ANY connected chat get answered
+  // on stream via the token-keyed chatbot lines (Nightbot's source).
+  const answer = useCommandAnswers(visible, {
+    apiBase: API_BASE,
+    token,
+    enabled: true,
+  });
+
+  // Inline translation — active only when the streamer configured a
+  // provider in Settings (the widget only ever learns the on/off flag).
+  const translations = useTranslation(visible, {
+    apiBase: API_BASE,
+    token,
+    enabled: platforms !== null && (platforms as MultichatConfig & { translate?: { enabled?: boolean } }).translate?.enabled === true,
+  });
+
   const configuredPlatforms = useMemo(() => {
     if (!platforms) return [] as ChatPlatform[];
     const out: ChatPlatform[] = [];
@@ -278,7 +304,21 @@ export function MultiChatWidget({
     configuredPlatforms.length > 0 &&
     configuredPlatforms.every((p) => statuses[p]?.state === "connected");
 
-  const styles = useMemo(() => appearanceStyles(appearance), [appearance]);
+  const effectiveAppearance = useMemo(
+    () =>
+      brbMode
+        ? {
+            ...appearance,
+            fontSize: Math.min(40, Math.round(appearance.fontSize * 1.5)),
+            align: "left" as const,
+          }
+        : appearance,
+    [appearance, brbMode],
+  );
+  const styles = useMemo(
+    () => appearanceStyles(effectiveAppearance),
+    [effectiveAppearance],
+  );
   const shell: CSSProperties = {
     width: "100%",
     minWidth: 240,
@@ -323,8 +363,14 @@ export function MultiChatWidget({
   }
 
   return (
-    <div style={frameStyle}>
-      <div style={shell}>
+    <div
+      style={
+        brbMode
+          ? { ...frameStyle, justifyContent: "center", padding: "4vh 6vw" }
+          : frameStyle
+      }
+    >
+      <div style={brbMode ? { ...shell, maxWidth: 900, margin: "0 auto" } : shell}>
         {testActive || (!allConnected && active) ? (
           <div style={statusRowStyle}>
             {testActive ? (
@@ -367,9 +413,20 @@ export function MultiChatWidget({
               : null}
           </div>
         ) : null}
+        {answer ? (
+          <div style={answerCardStyle}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: "var(--ov-accent, #3ec0c7)" }}>
+              !{answer.command} · asked by {answer.user}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.92)" }}>
+              {answer.text}
+            </div>
+          </div>
+        ) : null}
         <MultiChatMessageList
           messages={visible}
-          appearance={appearance}
+          appearance={effectiveAppearance}
+          translations={translations}
           emptyText={
             configuredPlatforms.length > 0
               ? "Connected — waiting for chat…"
@@ -425,6 +482,16 @@ const statusRowStyle: CSSProperties = {
   borderBottom: "1px solid rgba(255,255,255,0.08)",
   fontSize: 11,
   color: "rgba(255,255,255,0.85)",
+  flexShrink: 0,
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+};
+
+const answerCardStyle: CSSProperties = {
+  margin: "8px 10px 0",
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "rgba(62,192,199,0.12)",
+  border: "1px solid rgba(62,192,199,0.35)",
   flexShrink: 0,
   fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
 };

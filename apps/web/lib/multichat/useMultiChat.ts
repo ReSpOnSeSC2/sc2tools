@@ -8,6 +8,7 @@
 // they're low-frequency and the setup screen wants them live.
 
 import { useEffect, useRef, useState } from "react";
+import { EVENT_CAP, type ChatEvent } from "./events";
 import { appendMessages, FEED_CAP } from "./feed";
 import { createKickChat } from "./kick";
 import { createTikTokChat } from "./tiktok";
@@ -25,6 +26,8 @@ const FLUSH_INTERVAL_MS = 250;
 
 export interface MultiChatState {
   messages: ChatMessage[];
+  /** Platform events (subs, raids, gifts…) — capped, deduped, in arrival order. */
+  events: ChatEvent[];
   statuses: Partial<Record<ChatPlatform, { state: PlatformState; detail?: string }>>;
   /** True when at least one platform is enabled + configured. */
   active: boolean;
@@ -37,15 +40,20 @@ export function useMultiChat(args: {
 }): MultiChatState {
   const { apiBase, token, config } = args;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [events, setEvents] = useState<ChatEvent[]>([]);
   const [statuses, setStatuses] = useState<MultiChatState["statuses"]>({});
   const [active, setActive] = useState(false);
   const bufferRef = useRef<ChatMessage[]>([]);
+  const eventBufferRef = useRef<ChatEvent[]>([]);
 
   useEffect(() => {
     if (!config) return;
     const engines: ChatEngine[] = [];
     const onMessage = (m: ChatMessage) => {
       bufferRef.current.push(m);
+    };
+    const onEvent = (e: ChatEvent) => {
+      eventBufferRef.current.push(e);
     };
     const statusFor =
       (platform: ChatPlatform) => (state: PlatformState, detail?: string) => {
@@ -56,7 +64,7 @@ export function useMultiChat(args: {
       engines.push(
         createTwitchChat({
           channel: config.twitch.channel,
-          callbacks: { onMessage, onStatus: statusFor("twitch") },
+          callbacks: { onMessage, onEvent, onStatus: statusFor("twitch") },
         }),
       );
     }
@@ -64,7 +72,7 @@ export function useMultiChat(args: {
       engines.push(
         createKickChat({
           chatroomId: config.kick.chatroomId,
-          callbacks: { onMessage, onStatus: statusFor("kick") },
+          callbacks: { onMessage, onEvent, onStatus: statusFor("kick") },
         }),
       );
     }
@@ -74,7 +82,7 @@ export function useMultiChat(args: {
           apiBase,
           token,
           channel: config.youtube.channel,
-          callbacks: { onMessage, onStatus: statusFor("youtube") },
+          callbacks: { onMessage, onEvent, onStatus: statusFor("youtube") },
         }),
       );
     }
@@ -84,26 +92,33 @@ export function useMultiChat(args: {
           apiBase,
           token,
           username: config.tiktok.username,
-          callbacks: { onMessage, onStatus: statusFor("tiktok") },
+          callbacks: { onMessage, onEvent, onStatus: statusFor("tiktok") },
         }),
       );
     }
     setActive(engines.length > 0);
 
     const flush = setInterval(() => {
-      if (bufferRef.current.length === 0) return;
-      const batch = bufferRef.current;
-      bufferRef.current = [];
-      setMessages((prev) => appendMessages(prev, batch, FEED_CAP));
+      if (bufferRef.current.length > 0) {
+        const batch = bufferRef.current;
+        bufferRef.current = [];
+        setMessages((prev) => appendMessages(prev, batch, FEED_CAP));
+      }
+      if (eventBufferRef.current.length > 0) {
+        const batch = eventBufferRef.current;
+        eventBufferRef.current = [];
+        setEvents((prev) => appendMessages(prev, batch, EVENT_CAP));
+      }
     }, FLUSH_INTERVAL_MS);
 
     return () => {
       clearInterval(flush);
       for (const engine of engines) engine.close();
       bufferRef.current = [];
+      eventBufferRef.current = [];
       setStatuses({});
     };
   }, [apiBase, token, config]);
 
-  return { messages, statuses, active };
+  return { messages, events, statuses, active };
 }

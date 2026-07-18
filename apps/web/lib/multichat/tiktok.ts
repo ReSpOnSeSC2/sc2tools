@@ -7,6 +7,7 @@
 // so the widget can sit in an OBS scene all day and light up when the
 // TikTok stream starts. EventSource reconnects automatically.
 
+import { isChatEventKind } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks, PlatformState } from "./types";
 
 const RELAY_STATES: readonly PlatformState[] = [
@@ -18,7 +19,7 @@ const RELAY_STATES: readonly PlatformState[] = [
 ];
 
 interface RelayEvent {
-  type: "status" | "chat";
+  type: "status" | "chat" | "event";
   state?: string;
   detail?: string;
   message?: {
@@ -26,6 +27,14 @@ interface RelayEvent {
     user: string;
     text: string;
     badges?: string[];
+    atMs: number;
+  };
+  event?: {
+    id: string;
+    kind: string;
+    user: string;
+    detail: string;
+    amount?: string;
     atMs: number;
   };
 }
@@ -70,6 +79,21 @@ export function createTikTokChat(
           ["owner", "moderator", "member", "verified", "vip"].includes(b),
         ),
         atMs: m.atMs,
+      });
+      return;
+    }
+    if (data.type === "event" && data.event) {
+      const e = data.event;
+      // Unknown kinds (a newer relay) are skipped, not guessed at.
+      if (!isChatEventKind(e.kind)) return;
+      callbacks.onEvent?.({
+        platform: "tiktok",
+        id: String(e.id),
+        kind: e.kind,
+        user: String(e.user || "viewer"),
+        detail: String(e.detail || ""),
+        amount: e.amount != null ? String(e.amount) : undefined,
+        atMs: Number.isFinite(e.atMs) ? e.atMs : Date.now(),
       });
     }
   };
