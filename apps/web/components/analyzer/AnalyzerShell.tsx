@@ -12,6 +12,7 @@ import { DailyPulse } from "./DailyPulse";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
+import { LadderPulse } from "./LadderPulse";
 import { MacroTab } from "./MacroTab";
 import { OpponentsTab } from "./OpponentsTab";
 import { ProfileView } from "./ProfileView";
@@ -46,6 +47,10 @@ export function AnalyzerShell({
         <DoctorBanner />
 
         <DashboardKpiStrip totalGames={totalGames} />
+
+        <ErrorBoundary label="Ladder Pulse">
+          <LadderPulse />
+        </ErrorBoundary>
 
         <ErrorBoundary label="the Daily Pulse strip">
           <DailyPulse onNavigate={onTabChange} />

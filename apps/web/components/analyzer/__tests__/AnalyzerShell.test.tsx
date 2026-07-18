@@ -24,6 +24,9 @@ vi.mock("../DailyPulse", () => ({ DailyPulse: () => null }));
 vi.mock("../DashboardKpiStrip", () => ({ DashboardKpiStrip: () => null }));
 vi.mock("../DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("../FilterBar", () => ({ FilterBar: () => null }));
+vi.mock("../LadderPulse", () => ({
+  LadderPulse: () => <div>Ladder pulse</div>,
+}));
 vi.mock("../MacroTab", () => ({ MacroTab: () => null }));
 vi.mock("../StrategiesTab", () => ({ StrategiesTab: () => null }));
 vi.mock("../TrendsTab", () => ({ TrendsTab: () => null }));
@@ -42,6 +45,7 @@ describe("AnalyzerShell opponent hydration", () => {
     );
 
     expect(screen.getByText("Hydrated opponent 1-S2-1-99")).toBeTruthy();
+    expect(screen.getByText("Ladder pulse")).toBeTruthy();
     expect(screen.queryByText("Opponent list")).toBeNull();
   });
 });
