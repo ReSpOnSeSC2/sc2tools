@@ -55,6 +55,13 @@ const PALETTE = [
 const TOP_N_OPTIONS = [4, 6, 8] as const;
 const DEFAULT_TOP_N = 6;
 
+export type MixOpponentRace = "" | "P" | "T" | "Z";
+
+type MixMatchupFilter = {
+  opponentRace: MixOpponentRace;
+  onChange: (race: MixOpponentRace) => void;
+};
+
 type MixOverTimeChartProps = {
   /** Endpoint suffix under /v1/ — e.g. "timeseries/my-builds". */
   endpoint: string;
@@ -68,6 +75,8 @@ type MixOverTimeChartProps = {
   emptyTitle?: string;
   /** Sub-copy for the empty state. */
   emptySub?: string;
+  /** Optional card-local opponent-race scope shared by the mix cards. */
+  matchupFilter?: MixMatchupFilter;
 };
 
 /**
@@ -92,12 +101,25 @@ export function MixOverTimeChart({
   bucket,
   emptyTitle = "Not enough data to plot a mix yet",
   emptySub,
+  matchupFilter,
 }: MixOverTimeChartProps) {
   const { filters, dbRev } = useFilters();
   const tz = useMemo(() => clientTimezone(), []);
+  const hasMatchupFilter = matchupFilter !== undefined;
+  const opponentRace = matchupFilter?.opponentRace;
   const params = useMemo(
-    () => ({ ...filters, interval: bucket, tz }),
-    [filters, bucket, tz],
+    () => ({
+      ...filters,
+      // When the local selector is present it owns this card's matchup
+      // scope. An empty value deliberately removes any global opp_race
+      // constraint so "All matchups" means exactly that for these cards.
+      opp_race: hasMatchupFilter
+        ? opponentRace || undefined
+        : filters.opp_race,
+      interval: bucket,
+      tz,
+    }),
+    [filters, bucket, tz, hasMatchupFilter, opponentRace],
   );
   const { data, isLoading } = useApi<MixResponse>(
     `/v1/${endpoint}${filtersToQuery(params)}#${dbRev}`,
@@ -137,9 +159,25 @@ export function MixOverTimeChart({
   );
   const onChartMouseLeave = useCallback(() => setActiveDate(null), []);
 
+  const matchupControl = matchupFilter ? (
+    <MatchupSelect
+      title={title}
+      myRace={filters.race}
+      value={matchupFilter.opponentRace}
+      onChange={matchupFilter.onChange}
+    />
+  ) : null;
+
+  const headerControls = (
+    <TopNToggle value={topN} onChange={setTopN} />
+  );
+
   if (isLoading) {
     return (
-      <Card title={title}>
+      <Card title={title} right={headerControls}>
+        {matchupControl ? (
+          <div className="-mt-1 mb-3 flex justify-end">{matchupControl}</div>
+        ) : null}
         <Skeleton rows={3} />
       </Card>
     );
@@ -147,7 +185,10 @@ export function MixOverTimeChart({
 
   if (rows.length === 0 || totalGames === 0) {
     return (
-      <Card title={title}>
+      <Card title={title} right={headerControls}>
+        {matchupControl ? (
+          <div className="-mt-1 flex justify-end">{matchupControl}</div>
+        ) : null}
         <EmptyState title={emptyTitle} sub={emptySub} />
       </Card>
     );
@@ -156,11 +197,12 @@ export function MixOverTimeChart({
   return (
     <Card
       title={title}
-      right={
-        <TopNToggle value={topN} onChange={setTopN} />
-      }
+      right={headerControls}
     >
-      <p className="-mt-1 mb-3 text-caption text-text-dim">{caption}</p>
+      <div className="-mt-1 mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-caption text-text-dim">{caption}</p>
+        {matchupControl}
+      </div>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -223,6 +265,54 @@ export function MixOverTimeChart({
       />
       <Legend series={series} />
     </Card>
+  );
+}
+
+const RACE_NAMES: Record<Exclude<MixOpponentRace, "">, string> = {
+  P: "Protoss",
+  T: "Terran",
+  Z: "Zerg",
+};
+
+const MIX_RACES: ReadonlyArray<Exclude<MixOpponentRace, "">> = [
+  "P",
+  "T",
+  "Z",
+];
+
+function MatchupSelect({
+  title,
+  myRace,
+  value,
+  onChange,
+}: {
+  title: string;
+  myRace?: string;
+  value: MixOpponentRace;
+  onChange: (race: MixOpponentRace) => void;
+}) {
+  const mine = String(myRace || "").trim().charAt(0).toUpperCase();
+  const hasConcreteMyRace = mine === "P" || mine === "T" || mine === "Z";
+
+  return (
+    <label className="flex items-center gap-1.5 text-micro text-text-dim">
+      <span>Matchup</span>
+      <select
+        aria-label={`${title} matchup`}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value as MixOpponentRace)
+        }
+        className="h-8 max-w-[9rem] rounded-md border border-border bg-bg-elevated px-2 text-caption text-text transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      >
+        <option value="">All matchups</option>
+        {MIX_RACES.map((race) => (
+          <option key={race} value={race}>
+            {hasConcreteMyRace ? `${mine}v${race}` : `vs ${RACE_NAMES[race]}`}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

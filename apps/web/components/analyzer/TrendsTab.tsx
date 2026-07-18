@@ -33,7 +33,10 @@ import { MacroTrendChart } from "./charts/MacroTrendChart";
 import { MmrProgressionChart } from "./charts/MmrProgressionChart";
 import { MomentumChart } from "./charts/MomentumChart";
 import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
-import { MixOverTimeChart } from "./charts/MixOverTimeChart";
+import {
+  MixOverTimeChart,
+  type MixOpponentRace,
+} from "./charts/MixOverTimeChart";
 import { MapTrendChart } from "./charts/MapTrendChart";
 import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
 import { ChartTooltip } from "./charts/ChartTooltip";
@@ -42,6 +45,11 @@ const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
 const ROLL_N = 4;
 const MIN_PERIOD = 3;
+
+function mixOpponentRace(raw: string | undefined): MixOpponentRace {
+  const letter = String(raw || "").trim().charAt(0).toUpperCase();
+  return letter === "P" || letter === "T" || letter === "Z" ? letter : "";
+}
 
 /**
  * Resolved colour tokens for chart fills/strokes.
@@ -138,8 +146,17 @@ export function TrendsTab() {
   const { filters, dbRev } = useFilters();
   const [bucket, setBucket] = useState<string>(() => readLs(LS_BUCKET, "week"));
   const [rolling, setRolling] = useState<boolean>(() => readLs(LS_ROLL, true));
+  const [mixVsRace, setMixVsRace] = useState<MixOpponentRace>(() =>
+    mixOpponentRace(filters.opp_race),
+  );
   useEffect(() => writeLs(LS_BUCKET, bucket), [bucket]);
   useEffect(() => writeLs(LS_ROLL, rolling), [rolling]);
+  // The card-local selector starts from the global opponent-race scope,
+  // and follows it if another analyzer view changes that global filter.
+  useEffect(
+    () => setMixVsRace(mixOpponentRace(filters.opp_race)),
+    [filters.opp_race],
+  );
 
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
@@ -475,6 +492,10 @@ export function TrendsTab() {
               bucket={bucket as "day" | "week" | "month"}
               emptyTitle="No build mix yet"
               emptySub="Build mix fills in once your replays carry classified myBuild values."
+              matchupFilter={{
+                opponentRace: mixVsRace,
+                onChange: setMixVsRace,
+              }}
             />
           </div>
           <div className="md:col-span-2">
@@ -485,6 +506,10 @@ export function TrendsTab() {
               bucket={bucket as "day" | "week" | "month"}
               emptyTitle="No opponent strategy data yet"
               emptySub="Strategy mix fills in once your replays carry classified opponent.strategy values."
+              matchupFilter={{
+                opponentRace: mixVsRace,
+                onChange: setMixVsRace,
+              }}
             />
           </div>
           <div className="md:col-span-2">

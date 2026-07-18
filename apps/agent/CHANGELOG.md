@@ -2,6 +2,17 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.14.3
+
+### Changed — 8-worker Zerg pool labels
+- **What.** The bundled replay engine still called the earliest Zerg pool
+  openers `12 Pool`, including the ZvP rush and ZvZ speedling/baneling
+  variants, after the starting economy moved to eight workers.
+- **Effect.** New and reprocessed replays now use `8 Pool` consistently in
+  detector output, matchup labels, build catalogs, and overlay samples.
+  Existing uploaded games keep their stored `12 Pool` label until they are
+  re-synced or reclassified with agent 0.14.3.
+
 ## 0.14.2
 
 ### Changed — StarCraft II 5.0.16b replay timings
@@ -398,7 +409,7 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ### Added — full ZvP and TvP build coverage (engine)
 - **What.** The bundled engine's per-matchup trees now cover ZvP with
-  10 builds (8 Pool Rush, Ling Bane Bust, Roach/Ravager All-in,
+  10 builds (12 Pool Rush, Ling Bane Bust, Roach/Ravager All-in,
   Nydus, Hydra Timing, Lurker Contain, Ling Bane Muta, Muta Harass,
   Speedling Flood, Hatch First Macro) and TvP with 11 (proxy rax /
   Marauder, Cyclone, 1-1-1 Banshee, 3 Rax, BC Rush, Tank/Thor Mech,
