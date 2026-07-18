@@ -64,4 +64,19 @@ export interface MultichatConfig {
   kick?: { enabled: boolean; channel?: string; chatroomId?: number };
   youtube?: { enabled: boolean; channel?: string };
   tiktok?: { enabled: boolean; username?: string };
+  /**
+   * Widget styling — untyped on the wire; always pass through
+   * lib/multichat/appearance.sanitizeAppearance before use.
+   */
+  appearance?: Record<string, unknown>;
+  /**
+   * Text-to-speech settings — untyped on the wire; always pass
+   * through lib/multichat/tts.sanitizeTtsConfig before use.
+   */
+  tts?: Record<string, unknown>;
+  /**
+   * Message-ding settings — untyped on the wire; always pass through
+   * lib/multichat/sound.sanitizeSoundConfig before use.
+   */
+  sound?: Record<string, unknown>;
 }

@@ -121,8 +121,7 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   {
     id: "multichat",
     label: "Multi-platform chat",
-    hint: "Twitch + Kick + YouTube + TikTok chat in one feed — set your channels in the Multi-platform chat section below",
-    noTest: true,
+    hint: "Twitch + Kick + YouTube + TikTok chat in one feed — set your channels and styling in the Multi-platform chat section below. Test plays a demo chat stream.",
   },
 ];
 

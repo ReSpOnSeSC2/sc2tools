@@ -209,6 +209,12 @@ const PER_WIDGET_KEYS = {
   // id intentionally falls back to FULL, which made its per-widget Test
   // button fire every other overlay instead of the coach placement card.
   "ghost-build": [],
+  // Multichat generates its own demo chat stream client-side when the
+  // test-stamped payload lands — the payload only needs to exist and
+  // carry ``isTest`` + ``testWidget``. Registering the id keeps the
+  // per-widget Test from falling back to FULL and lighting up every
+  // neighbouring panel.
+  "multichat": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

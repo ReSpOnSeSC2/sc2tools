@@ -404,4 +404,60 @@ describe("sanitizeMultichatConfig", () => {
     expect(out.twitch.channel.length).toBe(120);
     expect(out.kick.chatroomId).toBeUndefined();
   });
+
+  test("appearance passes through strict-sanitized", () => {
+    const out = sanitizeMultichatConfig({
+      appearance: {
+        fontSize: 999,
+        layout: "bubbles",
+        entryAnimation: "explode",
+        bgColor: "#ABCDEF",
+        bgOpacity: -20,
+        blockedUsers: 42,
+        evil: "<script>",
+      },
+    });
+    expect(out.appearance.fontSize).toBe(32);
+    expect(out.appearance.layout).toBe("bubbles");
+    expect(out.appearance.entryAnimation).toBe("fade");
+    expect(out.appearance.bgColor).toBe("#abcdef");
+    expect(out.appearance.bgOpacity).toBe(0);
+    expect(out.appearance.blockedUsers).toBe("");
+    expect(out.appearance.evil).toBeUndefined();
+    // A complete render-safe object always comes back.
+    expect(typeof out.appearance.maxVisible).toBe("number");
+  });
+
+  test("tts passes through strict-sanitized", () => {
+    const out = sanitizeMultichatConfig({
+      tts: {
+        enabled: true,
+        rate: 99,
+        volume: 250,
+        platforms: ["twitch", "myspace"],
+        voiceName: 42,
+        evil: true,
+      },
+    });
+    expect(out.tts.enabled).toBe(true);
+    expect(out.tts.rate).toBe(2);
+    expect(out.tts.volume).toBe(100);
+    expect(out.tts.platforms).toEqual(["twitch"]);
+    expect(out.tts.voiceName).toBe("");
+    expect(out.tts.evil).toBeUndefined();
+  });
+
+  test("sound passes through strict-sanitized", () => {
+    const out = sanitizeMultichatConfig({
+      sound: { enabled: true, volume: 900, evil: 1 },
+    });
+    expect(out.sound).toEqual({ enabled: true, volume: 100 });
+  });
+
+  test("appearance/tts/sound omitted stays omitted (no default bloat)", () => {
+    const out = sanitizeMultichatConfig({ twitch: { enabled: true } });
+    expect(out.appearance).toBeUndefined();
+    expect(out.tts).toBeUndefined();
+    expect(out.sound).toBeUndefined();
+  });
 });

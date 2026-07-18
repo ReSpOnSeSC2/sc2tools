@@ -15,6 +15,11 @@ const {
   KickResolveError,
   resolveKickChatroom,
 } = require("../services/kickChannel");
+const {
+  sanitizeChatAppearance,
+  sanitizeChatTts,
+  sanitizeChatSound,
+} = require("../services/multichatAppearance");
 
 /**
  * /v1/multichat/:token/* — relays for the multi-platform chat overlay
@@ -231,10 +236,11 @@ const MULTICHAT_PLATFORMS = Object.freeze([
  * Whitelist-shape the stored preferences blob before it leaves the API
  * on a token-authed route. The settings page may store anything the
  * 5 MiB body limit allows; the overlay only ever sees the four known
- * platform entries with their known fields.
+ * platform entries with their known fields, plus the strict-sanitized
+ * ``appearance`` styling blob (multichatAppearance service).
  *
  * @param {Record<string, any>} prefs
- * @returns {Record<string, {enabled: boolean, channel?: string, chatroomId?: number, username?: string}>}
+ * @returns {Record<string, any>}
  */
 function sanitizeMultichatConfig(prefs) {
   /** @type {Record<string, any>} */
@@ -254,6 +260,17 @@ function sanitizeMultichatConfig(prefs) {
       clean.username = entry.username.trim().slice(0, 60);
     }
     out[platform] = clean;
+  }
+  // Appearance + TTS ride along whenever the streamer has customised
+  // them — the sanitizers guarantee complete, render-safe objects.
+  if (prefs?.appearance && typeof prefs.appearance === "object") {
+    out.appearance = sanitizeChatAppearance(prefs.appearance);
+  }
+  if (prefs?.tts && typeof prefs.tts === "object") {
+    out.tts = sanitizeChatTts(prefs.tts);
+  }
+  if (prefs?.sound && typeof prefs.sound === "object") {
+    out.sound = sanitizeChatSound(prefs.sound);
   }
   return out;
 }

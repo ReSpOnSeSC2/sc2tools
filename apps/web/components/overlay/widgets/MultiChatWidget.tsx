@@ -17,51 +17,50 @@
  *     offline TikTok simply idles with a status dot until it goes
  *     live; the other platforms are never affected.
  *
- * The widget is fully self-driven: no agent, no game payloads. Config
- * comes from Settings → Overlay (stored server-side) and is re-read
- * every minute so settings changes land without touching OBS.
+ * The widget is self-driven for data (no game payloads), but it DOES
+ * read the shared ``overlay:live`` socket payload for one thing: the
+ * Settings Test button. A test-stamped payload targeting "multichat"
+ * plays a scripted demo chat stream (lib/multichat/testMessages) for
+ * the standard test window so the streamer can place and style the
+ * source without waiting for real chat.
  *
- * Rendering rules for a clean stream look: bottom-anchored feed,
- * hidden overflow (no scrollbars in OBS), platform chip + colored
- * author + message, role glyphs for owner/mod/member. When every
- * configured platform is connected the status row hides itself.
+ * Appearance (font, layout, animation, background, filters …) comes
+ * from the same server-stored config blob as the channels and is
+ * re-read every minute — Settings changes land in OBS untouched.
+ * Rendering itself lives in MultiChatMessageList, shared with the
+ * Settings live preview so the preview is pixel-honest.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
-import { fallbackColor } from "@/lib/multichat/feed";
+import {
+  DEFAULT_APPEARANCE,
+  appearanceStyles,
+  sanitizeAppearance,
+  visibleMessages,
+  type ChatAppearance,
+} from "@/lib/multichat/appearance";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import {
+  TEST_MESSAGE_INTERVAL_MS,
+  TEST_SEQUENCE_LENGTH,
+  testChatMessage,
+} from "@/lib/multichat/testMessages";
+import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
+import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import { useChatSound } from "@/lib/multichat/useChatSound";
+import { useChatTts } from "@/lib/multichat/useChatTts";
+import { MultiChatMessageList, PLATFORM_META } from "./MultiChatMessageList";
 import type {
-  ChatBadge,
   ChatMessage,
   ChatPlatform,
   MultichatConfig,
   PlatformState,
 } from "@/lib/multichat/types";
+import type { LiveGamePayload } from "@/components/overlay/types";
 
-/** Re-read the streamer's platform config on this cadence. */
+/** Re-read the streamer's platform + appearance config on this cadence. */
 const CONFIG_REFRESH_MS = 60_000;
-
-/** Show at most this many rows — older lines clip away silently. */
-const VISIBLE_ROWS = 30;
-
-const PLATFORM_META: Record<
-  ChatPlatform,
-  { label: string; short: string; color: string; fg: string }
-> = {
-  twitch: { label: "Twitch", short: "TW", color: "#9146FF", fg: "#fff" },
-  kick: { label: "Kick", short: "KK", color: "#53FC18", fg: "#06230a" },
-  youtube: { label: "YouTube", short: "YT", color: "#FF0000", fg: "#fff" },
-  tiktok: { label: "TikTok", short: "TT", color: "#25F4EE", fg: "#062a2e" },
-};
-
-const BADGE_GLYPH: Record<ChatBadge, { glyph: string; title: string }> = {
-  owner: { glyph: "♛", title: "Broadcaster" },
-  moderator: { glyph: "⚔", title: "Moderator" },
-  member: { glyph: "♥", title: "Member / Sub" },
-  verified: { glyph: "✓", title: "Verified" },
-  vip: { glyph: "◆", title: "VIP" },
-};
 
 const STATE_DOT: Record<PlatformState, string> = {
   off: "#6b7280",
@@ -72,16 +71,35 @@ const STATE_DOT: Record<PlatformState, string> = {
   error: "#ff6b6b",
 };
 
-function useMultichatConfig(token: string): {
-  config: MultichatConfig | null;
+interface LoadedConfig {
+  /** Platform entries ONLY — identity changes reconnect chat engines. */
+  platforms: MultichatConfig | null;
+  appearance: ChatAppearance;
+  /** Raw TTS blob — stable identity; sanitized inside useChatTts. */
+  tts: Record<string, unknown> | null;
+  /** Raw ding blob — stable identity; sanitized inside useChatSound. */
+  sound: Record<string, unknown> | null;
   loaded: boolean;
-} {
-  const [config, setConfig] = useState<MultichatConfig | null>(null);
+}
+
+function useMultichatConfig(token: string): LoadedConfig {
+  const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
+  const [appearance, setAppearance] = useState<ChatAppearance>(DEFAULT_APPEARANCE);
+  const [tts, setTts] = useState<Record<string, unknown> | null>(null);
+  const [sound, setSound] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    let lastJson = "";
+    // Identity is tracked PER SECTION: useMultiChat tears down and
+    // reconnects every chat engine when its config object changes, so
+    // a styling or TTS tweak must never mint a new platforms object —
+    // pre-split, a font-size nudge disconnected Twitch/Kick/TikTok on
+    // stream and re-burned the YouTube resolve budget.
+    let lastPlatformsJson = "";
+    let lastAppearanceJson = "";
+    let lastTtsJson = "";
+    let lastSoundJson = "";
     const load = async () => {
       try {
         const res = await fetch(
@@ -90,13 +108,35 @@ function useMultichatConfig(token: string): {
         );
         if (!res.ok) return;
         const body = (await res.json()) as { config?: MultichatConfig };
+        if (cancelled) return;
         const next = body?.config ?? {};
-        const json = JSON.stringify(next);
-        if (cancelled || json === lastJson) return;
-        lastJson = json;
-        // New object identity only on real change — useMultiChat
-        // tears down / reconnects engines when config changes.
-        setConfig(next);
+        const {
+          appearance: nextAppearance,
+          tts: nextTts,
+          sound: nextSound,
+          ...nextPlatforms
+        } = next;
+
+        const platformsJson = JSON.stringify(nextPlatforms);
+        if (platformsJson !== lastPlatformsJson) {
+          lastPlatformsJson = platformsJson;
+          setPlatforms(nextPlatforms);
+        }
+        const appearanceJson = JSON.stringify(nextAppearance ?? null);
+        if (appearanceJson !== lastAppearanceJson) {
+          lastAppearanceJson = appearanceJson;
+          setAppearance(sanitizeAppearance(nextAppearance));
+        }
+        const ttsJson = JSON.stringify(nextTts ?? null);
+        if (ttsJson !== lastTtsJson) {
+          lastTtsJson = ttsJson;
+          setTts(nextTts ?? null);
+        }
+        const soundJson = JSON.stringify(nextSound ?? null);
+        if (soundJson !== lastSoundJson) {
+          lastSoundJson = soundJson;
+          setSound(nextSound ?? null);
+        }
       } catch {
         /* transient — next tick retries */
       } finally {
@@ -111,45 +151,167 @@ function useMultichatConfig(token: string): {
     };
   }, [token]);
 
-  return { config, loaded };
+  return { platforms, appearance, tts, sound, loaded };
 }
 
-export function MultiChatWidget({ token }: { token: string }) {
-  const { config, loaded } = useMultichatConfig(token);
+/**
+ * Test-fire demo stream. Each test-stamped ``overlay:live`` payload
+ * targeting this widget (re)starts the scripted sequence — first
+ * message immediately, the rest on a cadence — self-capped at the
+ * standard test window (the widget bypasses the payload visibility
+ * timer, so it caps itself).
+ *
+ * Latch semantics: a running demo survives NON-test payload
+ * deliveries (socket resync replays the latest REAL snapshot; a game
+ * can end mid-test) — only ``overlay:clear`` (live → null, the
+ * Settings Stop button) or the window expiring stops it early.
+ */
+function useTestFire(live: LiveGamePayload | null | undefined): ChatMessage[] {
+  const [testMessages, setTestMessages] = useState<ChatMessage[]>([]);
+  const timersRef = useRef<{
+    feed: ReturnType<typeof setInterval> | null;
+    stop: ReturnType<typeof setTimeout> | null;
+  }>({ feed: null, stop: null });
+
+  const clearTimers = () => {
+    if (timersRef.current.feed) clearInterval(timersRef.current.feed);
+    if (timersRef.current.stop) clearTimeout(timersRef.current.stop);
+    timersRef.current.feed = null;
+    timersRef.current.stop = null;
+  };
+
+  useEffect(() => {
+    if (live === null) {
+      // overlay:clear — the Stop button. End the demo immediately.
+      clearTimers();
+      setTestMessages([]);
+      return;
+    }
+    const isTestPayload = Boolean(
+      live?.isTest && (!live.testWidget || live.testWidget === "multichat"),
+    );
+    // Real payloads mid-demo (resync replay, an actual game ending)
+    // must NOT abort the run — leave the timers alone.
+    if (!isTestPayload) return;
+
+    clearTimers();
+    const first = testChatMessage(0, Date.now());
+    setTestMessages(first ? [first] : []);
+    let index = 1;
+    timersRef.current.feed = setInterval(() => {
+      const message = testChatMessage(index, Date.now());
+      index += 1;
+      if (message) setTestMessages((prev) => [...prev, message]);
+      if (!message || index >= TEST_SEQUENCE_LENGTH) {
+        // Sequence done — stop feeding, but leave the stop timer to
+        // clear the demo at the standard test window.
+        if (timersRef.current.feed) clearInterval(timersRef.current.feed);
+        timersRef.current.feed = null;
+      }
+    }, TEST_MESSAGE_INTERVAL_MS);
+    timersRef.current.stop = setTimeout(() => {
+      clearTimers();
+      setTestMessages([]);
+    }, TEST_DURATION_MS);
+  }, [live]);
+
+  // Unmount-only cleanup — per-dep cleanup would defeat the latch.
+  useEffect(() => clearTimers, []);
+
+  return testMessages;
+}
+
+export function MultiChatWidget({
+  token,
+  live,
+}: {
+  token: string;
+  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  live?: LiveGamePayload | null;
+}) {
+  const { platforms, appearance, tts, sound, loaded } = useMultichatConfig(token);
   const { messages, statuses, active } = useMultiChat({
     apiBase: API_BASE,
     token,
-    config,
+    config: platforms,
   });
+  const testMessages = useTestFire(live);
+  const testActive = testMessages.length > 0;
 
+  // TTL needs a clock: tick once a second only while a TTL is set,
+  // so expired lines actually leave the screen between messages. The
+  // immediate set covers TTL flipping on mid-session — without it the
+  // first filter pass would run against the mount-era clock.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (appearance.messageTtlSec <= 0) return;
+    setNowMs(Date.now());
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [appearance.messageTtlSec]);
+
+  // nowMs only advances while a TTL is set; visibleMessages ignores it
+  // otherwise, so the stale value is harmless with TTL off.
   const visible = useMemo(
-    () => messages.slice(-VISIBLE_ROWS),
-    [messages],
+    () => visibleMessages(testActive ? testMessages : messages, appearance, nowMs),
+    [testActive, testMessages, messages, appearance, nowMs],
   );
 
+  // TTS + the message ding read the same filtered stream the panel
+  // shows (blocklists and command-hiding apply to both). Test fires
+  // trigger them too — the streamer can verify audio from the
+  // Settings Test button.
+  const voice = useChatTts(visible, tts);
+  useChatSound(visible, sound);
+
   const configuredPlatforms = useMemo(() => {
-    if (!config) return [] as ChatPlatform[];
+    if (!platforms) return [] as ChatPlatform[];
     const out: ChatPlatform[] = [];
-    if (config.twitch?.enabled && config.twitch.channel) out.push("twitch");
-    if (config.kick?.enabled && config.kick.chatroomId) out.push("kick");
-    if (config.youtube?.enabled && config.youtube.channel) out.push("youtube");
-    if (config.tiktok?.enabled && config.tiktok.username) out.push("tiktok");
+    if (platforms.twitch?.enabled && platforms.twitch.channel) out.push("twitch");
+    if (platforms.kick?.enabled && platforms.kick.chatroomId) out.push("kick");
+    if (platforms.youtube?.enabled && platforms.youtube.channel) out.push("youtube");
+    if (platforms.tiktok?.enabled && platforms.tiktok.username) out.push("tiktok");
     return out;
-  }, [config]);
+  }, [platforms]);
 
   const allConnected =
     configuredPlatforms.length > 0 &&
     configuredPlatforms.every((p) => statuses[p]?.state === "connected");
 
+  const styles = useMemo(() => appearanceStyles(appearance), [appearance]);
+  const shell: CSSProperties = {
+    width: "100%",
+    minWidth: 240,
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    background: styles.panelBackground,
+    border: appearance.panelBorder
+      ? "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))"
+      : "none",
+    borderRadius: appearance.cornerRadius,
+    boxShadow:
+      appearance.bgOpacity > 5 ? "0 6px 20px rgba(0,0,0,0.45)" : "none",
+    overflow: "hidden",
+  };
+
   if (!loaded) return <div style={{ background: "transparent" }} />;
 
-  if (loaded && config && configuredPlatforms.length === 0) {
+  if (platforms && configuredPlatforms.length === 0 && !testActive) {
     return (
       <div style={frameStyle}>
-        <div style={shellStyle}>
+        <div style={{ ...shell, height: "auto" }}>
           <div style={{ padding: "14px 16px" }}>
             <div style={titleStyle}>MULTI-CHAT</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 6, lineHeight: 1.5 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.85)",
+                marginTop: 6,
+                lineHeight: 1.5,
+                fontFamily: styles.fontFamily,
+              }}
+            >
               No chat platforms configured yet. Open{" "}
               <b>Settings → Overlay → Multi-platform chat</b> on sc2tools.com,
               add your channels, and this source lights up automatically.
@@ -162,39 +324,62 @@ export function MultiChatWidget({ token }: { token: string }) {
 
   return (
     <div style={frameStyle}>
-      <div style={{ ...shellStyle, display: "flex", flexDirection: "column", height: "100%" }}>
-        {!allConnected && active ? (
+      <div style={shell}>
+        {testActive || (!allConnected && active) ? (
           <div style={statusRowStyle}>
-            {configuredPlatforms.map((p) => {
-              const st = statuses[p]?.state ?? "connecting";
-              return (
-                <span key={p} style={statusChipStyle} title={statuses[p]?.detail}>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      width: 7,
-                      height: 7,
-                      borderRadius: 99,
-                      background: STATE_DOT[st],
-                    }}
-                  />
-                  <span style={{ opacity: 0.9 }}>{PLATFORM_META[p].label}</span>
-                  <span style={{ opacity: 0.55 }}>{statusLabel(st)}</span>
-                </span>
-              );
-            })}
+            {testActive ? (
+              <span
+                style={{
+                  ...statusChipStyle,
+                  color: "#f5b942",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                }}
+              >
+                TEST
+              </span>
+            ) : null}
+            {!testActive
+              ? configuredPlatforms.map((p) => {
+                  const st = statuses[p]?.state ?? "connecting";
+                  return (
+                    <span
+                      key={p}
+                      style={statusChipStyle}
+                      title={statuses[p]?.detail}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 7,
+                          height: 7,
+                          borderRadius: 99,
+                          background: STATE_DOT[st],
+                        }}
+                      />
+                      <span style={{ opacity: 0.9 }}>
+                        {PLATFORM_META[p].label}
+                      </span>
+                      <span style={{ opacity: 0.55 }}>{statusLabel(st)}</span>
+                    </span>
+                  );
+                })
+              : null}
           </div>
         ) : null}
-        <div style={feedStyle}>
-          {visible.length === 0 ? (
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", padding: "6px 2px" }}>
-              Connected — waiting for chat…
-            </div>
-          ) : (
-            visible.map((m) => <MessageRow key={`${m.platform}:${m.id}`} message={m} />)
-          )}
-        </div>
+        <MultiChatMessageList
+          messages={visible}
+          appearance={appearance}
+          emptyText={
+            configuredPlatforms.length > 0
+              ? "Connected — waiting for chat…"
+              : undefined
+          }
+        />
       </div>
+      {voice.needsGesture ? (
+        <VoiceGestureBanner onClick={voice.onUserGesture} />
+      ) : null}
     </div>
   );
 }
@@ -216,52 +401,6 @@ function statusLabel(state: PlatformState): string {
   }
 }
 
-function MessageRow({ message }: { message: ChatMessage }) {
-  const meta = PLATFORM_META[message.platform];
-  const color = message.color || fallbackColor(message.user);
-  return (
-    <div style={rowStyle} className="mc-row">
-      <span
-        style={{
-          ...chipStyle,
-          background: meta.color,
-          color: meta.fg,
-        }}
-        title={meta.label}
-        aria-label={meta.label}
-      >
-        {meta.short}
-      </span>
-      {message.badges.map((b, i) => (
-        <span
-          key={`${b}${i}`}
-          title={BADGE_GLYPH[b]?.title}
-          style={{ color: "rgba(255,255,255,0.75)", fontSize: 11, flexShrink: 0 }}
-        >
-          {BADGE_GLYPH[b]?.glyph}
-        </span>
-      ))}
-      <span style={{ color, fontWeight: 700, flexShrink: 0 }}>
-        {message.user}
-      </span>
-      <span style={{ color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>:</span>
-      <span style={{ color: "var(--ov-text, rgba(255,255,255,0.92))", overflowWrap: "anywhere" }}>
-        {message.text}
-      </span>
-      <style>{`
-        .mc-row { animation: mcFadeIn 160ms ease-out; }
-        @keyframes mcFadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: none; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .mc-row { animation: none; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 /* ──────────────── styles ──────────────── */
 
 const frameStyle: CSSProperties = {
@@ -269,18 +408,6 @@ const frameStyle: CSSProperties = {
   inset: 0,
   display: "flex",
   alignItems: "stretch",
-  fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
-};
-
-const shellStyle: CSSProperties = {
-  width: "100%",
-  minWidth: 260,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.88) 0%, rgba(22,26,35,0.88) 100%))",
-  border: "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))",
-  borderRadius: "var(--ov-radius, 12px)",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  overflow: "hidden",
 };
 
 const titleStyle: CSSProperties = {
@@ -299,44 +426,11 @@ const statusRowStyle: CSSProperties = {
   fontSize: 11,
   color: "rgba(255,255,255,0.85)",
   flexShrink: 0,
+  fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
 };
 
 const statusChipStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 5,
-};
-
-const feedStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 0,
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "flex-end",
-  gap: 6,
-  padding: "10px 12px",
-  overflow: "hidden",
-};
-
-const rowStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 6,
-  fontSize: "var(--ov-chat-font-size, 14px)",
-  lineHeight: 1.35,
-  flexWrap: "wrap",
-};
-
-const chipStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minWidth: 22,
-  height: 15,
-  borderRadius: 4,
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: "0.04em",
-  flexShrink: 0,
-  transform: "translateY(-1px)",
 };

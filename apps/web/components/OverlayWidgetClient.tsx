@@ -339,8 +339,9 @@ function WidgetRenderer({
       );
     case "multichat":
       // Unified Twitch/Kick/YouTube/TikTok chat — self-driven; the
-      // token is its auth for the cloud chat relays.
-      return <MultiChatWidget token={token} />;
+      // token is its auth for the cloud chat relays. ``live`` is read
+      // only for the Settings Test-fire flag.
+      return <MultiChatWidget token={token} live={live} />;
     default:
       return null;
   }

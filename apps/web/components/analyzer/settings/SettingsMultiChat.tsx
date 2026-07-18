@@ -39,7 +39,24 @@ import {
   normalizeTwitchChannel,
   parseKickChatroomInput,
 } from "@/lib/multichat/config";
+import {
+  DEFAULT_APPEARANCE,
+  sanitizeAppearance,
+  type ChatAppearance,
+} from "@/lib/multichat/appearance";
+import {
+  DEFAULT_SOUND,
+  sanitizeSoundConfig,
+  type ChatSoundConfig,
+} from "@/lib/multichat/sound";
+import {
+  DEFAULT_TTS,
+  sanitizeTtsConfig,
+  type ChatTtsConfig,
+} from "@/lib/multichat/tts";
 import type { MultichatConfig } from "@/lib/multichat/types";
+import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
+import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 
 type Draft = {
   twitchEnabled: boolean;
@@ -51,6 +68,9 @@ type Draft = {
   youtubeChannel: string;
   tiktokEnabled: boolean;
   tiktokUsername: string;
+  appearance: ChatAppearance;
+  tts: ChatTtsConfig;
+  sound: ChatSoundConfig;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -63,6 +83,9 @@ const EMPTY_DRAFT: Draft = {
   youtubeChannel: "",
   tiktokEnabled: false,
   tiktokUsername: "",
+  appearance: DEFAULT_APPEARANCE,
+  tts: DEFAULT_TTS,
+  sound: DEFAULT_SOUND,
 };
 
 function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
@@ -79,6 +102,9 @@ function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
     youtubeChannel: config?.youtube?.channel ?? "",
     tiktokEnabled: config?.tiktok?.enabled === true,
     tiktokUsername: config?.tiktok?.username ?? "",
+    appearance: sanitizeAppearance(config?.appearance),
+    tts: sanitizeTtsConfig(config?.tts),
+    sound: sanitizeSoundConfig(config?.sound),
   };
 }
 
@@ -101,13 +127,16 @@ function configFromDraft(d: Draft): MultichatConfig {
       enabled: d.tiktokEnabled,
       username: d.tiktokUsername.trim() || undefined,
     },
+    appearance: d.appearance as unknown as Record<string, unknown>,
+    tts: d.tts as unknown as Record<string, unknown>,
+    sound: d.sound as unknown as Record<string, unknown>,
   };
 }
 
 export function SettingsMultiChat({ token }: { token: string | null }) {
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const { data, isLoading, mutate } = useApi<MultichatConfig>(
+  const { data, isLoading, error, mutate } = useApi<MultichatConfig>(
     "/v1/me/preferences/multichat",
   );
 
@@ -168,8 +197,13 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
         body: JSON.stringify(body),
       });
       setDraft(clean);
-      setDirty(false);
+      // Refetch BEFORE clearing dirty: the hydrate effect re-fills the
+      // draft from SWR `data` the moment dirty flips false, and until
+      // the refetch resolves that cache still holds the PRE-save blob —
+      // clearing first briefly reverted the form and could silently
+      // undo the save if the user kept editing in that window.
       await mutate();
+      setDirty(false);
       toast.success("Chat settings saved", {
         description: "The overlay picks changes up within a minute.",
       });
@@ -238,6 +272,17 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
       <Card>
         {isLoading ? (
           <div className="text-caption text-text-muted">Loading chat settings…</div>
+        ) : error && !data ? (
+          // Never render an empty editable form over a failed load — a
+          // "fix and save" from that state would wipe the stored config.
+          <div className="space-y-2">
+            <div className="text-caption text-danger">
+              Couldn't load your chat settings ({error.message}).
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => void mutate()}>
+              Retry
+            </Button>
+          </div>
         ) : (
           <div className="space-y-5">
             <PlatformRow
@@ -346,6 +391,22 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 disabled={!draft.tiktokEnabled}
               />
             </PlatformRow>
+
+            <div className="border-t border-border pt-5">
+              <SettingsMultiChatAppearance
+                value={draft.appearance}
+                onChange={(appearance) => set({ appearance })}
+              />
+            </div>
+
+            <div className="border-t border-border pt-5">
+              <SettingsMultiChatTts
+                value={draft.tts}
+                onChange={(tts) => set({ tts })}
+                sound={draft.sound}
+                onSoundChange={(sound) => set({ sound })}
+              />
+            </div>
 
             {problems.length > 0 ? (
               <ul className="space-y-1 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-caption text-text-dim">

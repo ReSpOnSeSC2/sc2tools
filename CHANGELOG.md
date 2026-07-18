@@ -13,6 +13,29 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Multi-platform chat · appearance studio, Test fire, and TTS** —
+  the multichat widget is now fully stylable from Settings with a
+  pixel-honest live preview rendered by the same component OBS uses:
+  font family/size/weight, text shadow, row density, three layouts
+  (single line, name-above-message, bubbles), entry animations,
+  newest-at-top or bottom, left/right alignment, username colour
+  modes, platform chips / role badges / timestamp toggles, message
+  count and auto-hide timers, background colour + transparency slider
+  (checkerboard preview), corner radius and border, plus content
+  filters (!command hiding, a known-bot list, and a custom user
+  blocklist). The widget's Test button joins the standard overlay
+  test system — it plays a clearly-labelled demo chat stream so the
+  source can be placed and styled without live chat. New
+  text-to-speech reads incoming chat aloud from the Browser Source:
+  per-platform selection, voice picker with in-Settings preview,
+  speed/volume/length controls, username reading, command skipping,
+  URL/emote scrubbing, and a bounded queue that skips backlog instead
+  of falling behind — with the same gesture-unlock persistence the
+  scouting voice readout uses. An optional message ding (synthesized
+  in the Browser Source, volume slider, burst-collapsed, preview
+  button) chimes on new chat. Everything is stored server-side and
+  reaches OBS within a minute, no Browser Source changes needed.
+
 - **Multi-platform chat overlay · Twitch + Kick + YouTube + TikTok in
   one OBS source** — a new `multichat` overlay widget merges all four
   live chats into a single broadcast-ready feed with platform chips,
