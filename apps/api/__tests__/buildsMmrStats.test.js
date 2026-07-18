@@ -48,6 +48,7 @@ describe("services/buildsMmrStats", () => {
       myRace: "Protoss",
       myBuild: "Protoss - Robo Opener",
       myMmr: 4500,
+      myMmrSource: "replay",
       map: "Hard Lead LE",
       durationSec: 620,
       opponent: {
@@ -411,6 +412,64 @@ describe("services/buildsMmrStats", () => {
       const series = await svc.mmrProgressionByBuild("u1", {});
       const names = series.map((s) => s.build).sort();
       expect(names).toEqual(["Protoss - Robo Opener", "Terran - Cyclone Rush"]);
+    });
+
+    test("quarantines rows whose myMmr is not replay-verified", async () => {
+      await insertGames([
+        makeGame({ gameId: "g_ok", myMmr: 4400 }),
+        // Legacy row: numeric myMmr but no provenance — the main MMR
+        // chart quarantines it; this chart must too.
+        makeGame({ gameId: "g_legacy", myMmr: 5400, myMmrSource: undefined }),
+      ]);
+      const series = await svc.mmrProgressionByBuild("u1", {});
+      expect(series).toHaveLength(1);
+      expect(series[0].points).toHaveLength(1);
+      expect(series[0].points[0].mmr).toBe(4400);
+    });
+
+    test("keeps the NEWEST points when a build exceeds the cap", async () => {
+      await insertGames([
+        makeGame({
+          gameId: "g_old",
+          date: new Date("2026-05-01T00:00:00Z"),
+          myMmr: 4100,
+        }),
+        makeGame({
+          gameId: "g_mid",
+          date: new Date("2026-05-02T00:00:00Z"),
+          myMmr: 4200,
+        }),
+        makeGame({
+          gameId: "g_new",
+          date: new Date("2026-05-03T00:00:00Z"),
+          myMmr: 4300,
+        }),
+      ]);
+      const series = await svc.mmrProgressionByBuild("u1", {}, {
+        maxPointsPerBuild: 2,
+      });
+      expect(series[0].points.map((p) => p.mmr)).toEqual([4200, 4300]);
+    });
+
+    test("honours the user's opponent-MMR range filter", async () => {
+      await insertGames([
+        makeGame({
+          gameId: "g_low",
+          myMmr: 4400,
+          opponent: { ...makeGame({}).opponent, mmr: 4200 },
+        }),
+        makeGame({
+          gameId: "g_high",
+          myMmr: 4600,
+          opponent: { ...makeGame({}).opponent, mmr: 5000 },
+        }),
+      ]);
+      // The mmr_min/mmr_max drill-down used to be clobbered by the
+      // plausibility window — both games came back regardless.
+      const series = await svc.mmrProgressionByBuild("u1", { mmrMin: 4600 });
+      expect(series).toHaveLength(1);
+      expect(series[0].points).toHaveLength(1);
+      expect(series[0].points[0].mmr).toBe(4600);
     });
   });
 });

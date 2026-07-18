@@ -11,6 +11,47 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Daily Pulse · fresh dashboard intel every day** — the analyzer
+  dashboard now opens with a rotating strip of insight cards derived
+  entirely from your own replay corpus: yesterday's session recap with
+  net MMR, live win-streak / bounce-back prompts, distance to your
+  90-day MMR peak, weekly climb recaps, builds heating up or gathering
+  dust, nemesis and rival ledgers, map edges, matchup momentum,
+  career-milestone countdowns, on-this-day throwbacks, and macro
+  trends. The mix is deterministic per (account, day) — the same strip
+  on every device — and rotates on the local-day rollover without a
+  refresh. Cards deep-link into the tab that owns the full story, the
+  strip collapses persistently, and a brand-new account sees nothing
+  rather than filler: no card is ever synthesised.
+
+### Fixed
+
+- **MMR progression · long histories no longer truncated** — the
+  Trends chart now widens its bucket interval (day → week → month)
+  when the matched range would overflow the response cap, the same
+  guard the W-L timeseries uses. Previously a 365+-day history on the
+  "day" bucket silently dropped its oldest buckets and under-reported
+  the all-time peak/trough. The chart header now labels the interval
+  the server actually used, and the peak/trough tiles read
+  unambiguously ("last −37 vs peak").
+- **MMR progression by build · trust + recency** — the per-build MMR
+  chart now applies the same replay-provenance gate as the main MMR
+  chart (quarantined legacy ratings can no longer reappear as
+  flat-line artifacts), keeps the *newest* points when a build
+  overflows the per-build cap instead of the oldest, and honours the
+  opponent-MMR range drill-down filter that was previously clobbered
+  by the plausibility window. Its x-axis also derives day keys and
+  labels from the same timezone, fixing duplicate-label splits for
+  non-UTC players.
+- **Overlay MMR delta · no more cross-ladder swings** — the on-stream
+  MMR delta widget only chains games on the same Battle.net account
+  and ladder race with replay-verified ratings, matching the trends
+  pipeline. Finishing a main-account game and then queueing on a
+  lower-MMR smurf (or switching ladder race) no longer flashes a fake
+  ±1000 swing on stream.
+
 ### Changed
 
 - **Agent 0.14.2 · StarCraft II 5.0.16b balance data** — the optimizer now

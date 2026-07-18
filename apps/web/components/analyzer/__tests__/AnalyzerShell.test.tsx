@@ -20,6 +20,7 @@ vi.mock("../OpponentsTab", () => ({
 vi.mock("../ArcadeTab", () => ({ ArcadeTab: () => null }));
 vi.mock("../BattlefieldTab", () => ({ BattlefieldTab: () => null }));
 vi.mock("../BuildsTab", () => ({ BuildsTab: () => null }));
+vi.mock("../DailyPulse", () => ({ DailyPulse: () => null }));
 vi.mock("../DashboardKpiStrip", () => ({ DashboardKpiStrip: () => null }));
 vi.mock("../DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("../FilterBar", () => ({ FilterBar: () => null }));

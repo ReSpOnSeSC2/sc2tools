@@ -8,6 +8,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { ArcadeTab } from "./ArcadeTab";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
+import { DailyPulse } from "./DailyPulse";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { DoctorBanner } from "./DoctorBanner";
 import { FilterBar } from "./FilterBar";
@@ -45,6 +46,10 @@ export function AnalyzerShell({
         <DoctorBanner />
 
         <DashboardKpiStrip totalGames={totalGames} />
+
+        <ErrorBoundary label="the Daily Pulse strip">
+          <DailyPulse onNavigate={onTabChange} />
+        </ErrorBoundary>
 
         <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
           <FilterBar />

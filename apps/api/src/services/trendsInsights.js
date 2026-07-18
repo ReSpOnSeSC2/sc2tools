@@ -40,6 +40,8 @@ const MAX_SESSION_POSITIONS = 12;
  *   bucketSwitch: () => object,
  *   pickInterval: (raw: unknown) => 'day' | 'week' | 'month',
  *   pickTimezone: (raw: unknown) => string,
+ *   fitInterval?: (match: object, requested: 'day' | 'week' | 'month') =>
+ *     Promise<'day' | 'week' | 'month'>,
  * }} Deps
  */
 
@@ -58,7 +60,8 @@ const MAX_SESSION_POSITIONS = 12;
  *     ladder account — a streamer with a main + smurf on the same
  *     region gets two NA lines instead of a misleading single line
  *     averaged between them. Pre-myToonHandle games (older agent
- *     versions) collapse into a single "Unknown" series.
+ *     versions) are excluded from the chart and surfaced through
+ *     ``coverage.missingAccountGames`` instead.
  *
  *   - ``regions``: legacy roll-up of the above, one entry per
  *     Battle.net region. Kept for the previous chart iteration and
@@ -75,9 +78,18 @@ const MAX_SESSION_POSITIONS = 12;
  * @param {object} filters
  */
 async function mmrProgression(deps, userId, opts, filters) {
-  const interval = deps.pickInterval(opts && opts.interval);
+  const requestedInterval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
   const match = deps.gamesMatchStage(userId, filters);
+  // Escalate day → week → month when the matched range would overflow
+  // the per-series bucket cap — the same guard the W-L timeseries uses
+  // (see AggregationsService._fitInterval). Without it, a long history
+  // on "day" silently loses its oldest buckets to the cap AND reports
+  // peak / trough over the truncated window only.
+  const interval =
+    typeof deps.fitInterval === "function"
+      ? await deps.fitInterval(match, requestedInterval)
+      : requestedInterval;
   const truncBucket = {
     $dateTrunc: { date: "$date", unit: interval, timezone },
   };

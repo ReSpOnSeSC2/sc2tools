@@ -17,6 +17,7 @@ import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { fmtMmr } from "@/lib/format";
+import { clientTimezone, localDateKey } from "@/lib/timeseries";
 
 interface ProgressionPoint {
   date: string;
@@ -54,14 +55,15 @@ export function MmrProgressionByBuild() {
   const { filters, dbRev } = useFilters();
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_GAMES, 10);
   const [topN, setTopN] = useLocalStoragePositiveInt(LS_TOP_N, 5);
+  const tz = useMemo(() => clientTimezone(), []);
 
   const { data, isLoading } = useApi<BuildSeries[]>(
     `/v1/mmr-stats/progression${filtersToQuery(filters)}#${dbRev}`,
   );
 
   const { chartData, seriesList, totalPoints, mmrDomain } = useMemo(
-    () => shapeProgressionForChart(data || [], minGames, topN),
-    [data, minGames, topN],
+    () => shapeProgressionForChart(data || [], minGames, topN, tz),
+    [data, minGames, topN, tz],
   );
 
   return (
@@ -230,6 +232,7 @@ function shapeProgressionForChart(
   series: BuildSeries[],
   minPlays: number,
   topN: number,
+  tz: string,
 ): {
   chartData: ChartRow[];
   seriesList: Array<{ name: string; color: string }>;
@@ -251,7 +254,9 @@ function shapeProgressionForChart(
   // Build a date-keyed row index: each row holds the latest MMR
   // for each build on that day (one game per build per day is
   // typical; multi-day chunks collapse to the last point so the
-  // line plots cleanly).
+  // line plots cleanly). Key AND label both use the viewer's
+  // timezone — a UTC key with a local label would split one local
+  // evening across two x-axis categories with identical labels.
   const rowByKey = new Map<string, ChartRow>();
   let minMmr = Infinity;
   let maxMmr = -Infinity;
@@ -259,7 +264,8 @@ function shapeProgressionForChart(
     for (const pt of s.points) {
       const d = new Date(pt.date);
       if (Number.isNaN(d.getTime())) continue;
-      const dateKey = d.toISOString().slice(0, 10);
+      const dateKey = localDateKey(d, tz);
+      if (!dateKey) continue;
       let row = rowByKey.get(dateKey);
       if (!row) {
         row = {
@@ -267,6 +273,7 @@ function shapeProgressionForChart(
           dateLabel: d.toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
+            timeZone: tz,
           }),
         };
         rowByKey.set(dateKey, row);
