@@ -48,6 +48,7 @@ import {
   type GhostTarget,
 } from "@/lib/ghostBuild";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
+import { SettingsMultiChat } from "./SettingsMultiChat";
 import { UrlRow } from "./OverlayUrlRow";
 import { GhostLegacyMigration } from "./GhostLegacyMigration";
 import { GhostMatchupManager } from "./GhostMatchupManager";
@@ -86,6 +87,12 @@ interface WidgetMeta {
    * place of the server toggle; Test still works.
    */
   urlArmed?: boolean;
+  /**
+   * The widget is fully self-driven (opens its own data connections)
+   * — a synthetic game payload can't exercise it, so the row hides
+   * the Test button. Live status is visible in the widget itself.
+   */
+  noTest?: boolean;
 }
 
 const WIDGETS: ReadonlyArray<WidgetMeta> = [
@@ -110,6 +117,12 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     label: "Ghost Build coach",
     hint: "Tonight's homework — the armed build's next steps synced to the live game, with a drift chip",
     urlArmed: true,
+  },
+  {
+    id: "multichat",
+    label: "Multi-platform chat",
+    hint: "Twitch + Kick + YouTube + TikTok chat in one feed — set your channels in the Multi-platform chat section below",
+    noTest: true,
   },
 ];
 
@@ -506,6 +519,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         <StuckWidgetHelp />
       </Section>
 
+      <SettingsMultiChat token={activeToken.token} />
+
       <Section
         title="Ghost Build coach"
         description="Choose the timed build Ghost should coach for each of the nine concrete race matchups. Assignments stay on this device and are embedded into the dedicated OBS URL."
@@ -783,23 +798,27 @@ function WidgetList({
                 </div>
               </div>
               <div className="min-w-0 flex-1">
-                <UrlRow
-                  url={url}
-                  compact
-                  onTest={() => onTestWidget(w.id)}
-                  testing={isTesting}
-                  // Other widgets stay locked while a different widget
-                  // is testing — only the testing widget's own button
-                  // remains clickable, where it acts as Stop.
-                  testDisabled={(anyTesting && !isTesting) || !isOn}
-                  testTitle={
-                    isTesting
-                      ? "Click to dismiss the test fire early"
-                      : isOn
-                        ? "Fire sample data at this widget"
-                        : "Enable this widget first to test it"
-                  }
-                />
+                {w.noTest ? (
+                  <UrlRow url={url} compact />
+                ) : (
+                  <UrlRow
+                    url={url}
+                    compact
+                    onTest={() => onTestWidget(w.id)}
+                    testing={isTesting}
+                    // Other widgets stay locked while a different widget
+                    // is testing — only the testing widget's own button
+                    // remains clickable, where it acts as Stop.
+                    testDisabled={(anyTesting && !isTesting) || !isOn}
+                    testTitle={
+                      isTesting
+                        ? "Click to dismiss the test fire early"
+                        : isOn
+                          ? "Fire sample data at this widget"
+                          : "Enable this widget first to test it"
+                    }
+                  />
+                )}
               </div>
             </li>
           );

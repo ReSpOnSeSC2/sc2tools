@@ -48,6 +48,7 @@ import {
   SessionWidget,
   RandomizerWidget,
   GhostBuildWidget,
+  MultiChatWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -190,6 +191,13 @@ export function OverlayWidgetClient({
   );
   const effectiveEnabled = widget === "ghost-build" ? true : enabled;
 
+  // Multichat is a persistent, fully self-driven HUD: it opens its own
+  // chat connections (Twitch IRC / Kick Pusher / cloud relays) and
+  // never consumes game payloads, so the payload-driven visibility
+  // timer must not gate it. The server's enabledWidgets toggle still
+  // applies via ``effectiveEnabled``.
+  const alwaysVisible = widget === "multichat";
+
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would
   // race to speak the same payload and the streamer would hear the
@@ -207,7 +215,7 @@ export function OverlayWidgetClient({
     enableVoiceHere ? liveGame : null,
   );
 
-  if (!effectiveEnabled || (!visible && !ghostArmed)) {
+  if (!effectiveEnabled || (!visible && !ghostArmed && !alwaysVisible)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
@@ -246,6 +254,7 @@ export function OverlayWidgetClient({
       `}</style>
       <WidgetRenderer
         widget={widget as WidgetId}
+        token={token}
         live={live}
         liveGame={liveGame}
         session={session}
@@ -265,6 +274,7 @@ export function OverlayWidgetClient({
 
 function WidgetRenderer({
   widget,
+  token,
   live,
   liveGame,
   session,
@@ -272,6 +282,7 @@ function WidgetRenderer({
   ghostParam,
 }: {
   widget: WidgetId;
+  token: string;
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
@@ -326,6 +337,10 @@ function WidgetRenderer({
       return (
         <GhostBuildWidget live={live} liveGame={liveGame} ghostParam={ghostParam} />
       );
+    case "multichat":
+      // Unified Twitch/Kick/YouTube/TikTok chat — self-driven; the
+      // token is its auth for the cloud chat relays.
+      return <MultiChatWidget token={token} />;
     default:
       return null;
   }

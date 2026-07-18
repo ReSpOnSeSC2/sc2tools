@@ -143,4 +143,37 @@ describe("services/trendsInsights.mmrProgression", () => {
     expect(out.trough.mmr).toBe(4100);
     expect(out.coverage.untrustedNumericMmrGames).toBe(1);
   });
+
+  test("widens the interval instead of truncating long histories", async () => {
+    // 400 daily games — more day-buckets than TIMESERIES_MAX_BUCKETS
+    // (365). MMR *descends* over time so the all-time peak sits in the
+    // oldest games: under the old truncate-to-newest behaviour the
+    // peak fell off the chart and the headline under-reported it.
+    const start = Date.parse("2025-04-01T12:00:00Z");
+    const docs = [];
+    for (let i = 0; i < 400; i++) {
+      docs.push(
+        makeGame(`d${i}`, {
+          date: new Date(start + i * 24 * 60 * 60 * 1000),
+          myMmr: 4400 - i,
+        }),
+      );
+    }
+    await db.games.insertMany(docs);
+
+    const out = await svc.mmrProgression(
+      "u1",
+      { interval: "day", tz: "UTC" },
+      {},
+    );
+
+    // Escalated day → week, same as the W-L timeseries.
+    expect(out.interval).toBe("week");
+    // Nothing truncated: the true (oldest) peak and the newest close
+    // both survive.
+    expect(out.series).toHaveLength(1);
+    expect(out.peak.mmr).toBe(4400);
+    expect(out.latest.mmr).toBe(4400 - 399);
+    expect(out.coverage.eligibleGames).toBe(400);
+  });
 });

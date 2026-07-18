@@ -120,25 +120,63 @@ async function computeStreak(games, userId) {
 
 /**
  * Find the most recently dated game (other than ``excludeGameId``)
- * for this user that carries a numeric ``myMmr``. Used to compute the
- * MMR delta for the just-uploaded game.
+ * for this user that carries a comparable ``myMmr``. Used to compute
+ * the MMR delta for the just-uploaded game.
+ *
+ * "Comparable" means the pair would chain in the trends net-MMR
+ * pipeline too (see trendsRegionExpr): replay-verified rating, same
+ * Battle.net account, same ladder race. Without those gates a
+ * streamer finishing an EU-main game and then playing one game on a
+ * lower-MMR NA smurf — or switching from Zerg ladder to Random —
+ * would flash a giant fake "−1500" on stream.
  *
  * @param {import('mongodb').Collection} games
  * @param {string} userId
  * @param {string} [excludeGameId]
  * @param {Date|string} [beforeDate]
+ * @param {{ myToonHandle?: unknown, ladderRace?: unknown }} [context]
+ *   Identity of the just-uploaded game. When the handle / race are
+ *   present, the previous game must match them; a missing handle
+ *   (very old agent) keeps the legacy same-user-only behaviour.
  * @returns {Promise<number|null>}
  */
-async function previousGameMmr(games, userId, excludeGameId, beforeDate) {
+async function previousGameMmr(games, userId, excludeGameId, beforeDate, context = {}) {
   /** @type {Record<string, any>} */
   const filter = {
     userId,
     myMmr: { $type: "number" },
+    // Only replay-verified ratings may anchor a delta — quarantined
+    // legacy numerics (retired current-Pulse pollution) are excluded
+    // here exactly as they are in the analyzer's MMR charts.
+    myMmrSource: "replay",
   };
   if (excludeGameId) filter.gameId = { $ne: excludeGameId };
   if (beforeDate) {
     const d = beforeDate instanceof Date ? beforeDate : new Date(beforeDate);
     if (!Number.isNaN(d.getTime())) filter.date = { $lte: d };
+  }
+  const handle =
+    typeof context.myToonHandle === "string" ? context.myToonHandle.trim() : "";
+  if (handle) filter.myToonHandle = handle;
+  const raceHead = String(context.ladderRace || "").trim().charAt(0).toUpperCase();
+  if (["P", "T", "Z", "R"].includes(raceHead)) {
+    // Compare ladder races by their leading letter, falling back to
+    // the spawned race for rows that pre-date myLadderRace — the same
+    // derivation the trends pipeline uses (myLadderRaceExpr).
+    filter.$expr = {
+      $eq: [
+        {
+          $toUpper: {
+            $substrCP: [
+              { $ifNull: ["$myLadderRace", { $ifNull: ["$myRace", ""] }] },
+              0,
+              1,
+            ],
+          },
+        },
+        raceHead,
+      ],
+    };
   }
   const prev = await games
     .find(filter, { projection: { _id: 0, myMmr: 1, date: 1 } })

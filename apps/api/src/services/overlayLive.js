@@ -349,8 +349,14 @@ class OverlayLiveService {
 
     // MMR delta — compare against the previous game's myMmr if both
     // are populated. Otherwise leave undefined so the widget hides.
+    // The previous game must be comparable: same account, same ladder
+    // race, replay-verified — a region/account switch may not fake a
+    // thousand-MMR swing on stream.
     if (Number.isFinite(Number(game.myMmr))) {
-      const prev = await this._previousGameMmr(userId, game.gameId, game.date);
+      const prev = await this._previousGameMmr(userId, game.gameId, game.date, {
+        myToonHandle: game.myToonHandle,
+        ladderRace: game.myLadderRace || game.myRace,
+      });
       if (prev !== null) {
         payload.mmrDelta = Number(game.myMmr) - prev;
       }
@@ -819,14 +825,16 @@ class OverlayLiveService {
    * @param {string} userId
    * @param {string} [excludeGameId]
    * @param {Date|string} [beforeDate]
+   * @param {{ myToonHandle?: unknown, ladderRace?: unknown }} [context]
    * @returns {Promise<number|null>}
    */
-  _previousGameMmr(userId, excludeGameId, beforeDate) {
+  _previousGameMmr(userId, excludeGameId, beforeDate, context) {
     return aggregations.previousGameMmr(
       this.db.games,
       userId,
       excludeGameId,
       beforeDate,
+      context,
     );
   }
 

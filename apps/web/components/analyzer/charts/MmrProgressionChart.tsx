@@ -336,10 +336,15 @@ export function MmrProgressionChart({
     );
   }
 
+  // The server may widen the interval (day → week → month) when the
+  // matched range would overflow the bucket cap; label whatever it
+  // actually used so the copy never lies about the granularity.
+  const effectiveBucket = data?.interval ?? bucket;
+
   return (
     <Card title="MMR progression">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Last recorded verified ranked 1v1 MMR per {bucket} ·{" "}
+        Last recorded verified ranked 1v1 MMR per {effectiveBucket} ·{" "}
         {multi
           ? "one line per Battle.net account and selected ladder race; peak / trough / last recorded per series below."
           : "shaded band = min/max recorded within the bucket; markers highlight peak, trough, and last recorded."}
@@ -664,12 +669,17 @@ function MmrHeadline({
       color: COLOR_ACCENT,
     });
   }
+  // Deltas describe LAST RECORDED relative to the card's value — a
+  // "last −37 vs peak" reads unambiguously; the previous "−37 vs
+  // last" under the Peak tile had the direction backwards.
   if (data.peak) {
     const delta = data.latest ? data.latest.mmr - data.peak.mmr : 0;
     items.push({
       label: "Peak",
       value: data.peak.mmr.toLocaleString(),
-      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs last` : undefined,
+      sub: data.latest
+        ? `last ${delta >= 0 ? "+" : ""}${delta} vs peak`
+        : undefined,
       color: COLOR_SUCCESS,
     });
   }
@@ -678,7 +688,9 @@ function MmrHeadline({
     items.push({
       label: "Trough",
       value: data.trough.mmr.toLocaleString(),
-      sub: data.latest ? `${delta >= 0 ? "+" : ""}${delta} vs last` : undefined,
+      sub: data.latest
+        ? `last ${delta >= 0 ? "+" : ""}${delta} vs trough`
+        : undefined,
       color: COLOR_DANGER,
     });
   }

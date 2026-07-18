@@ -1,0 +1,88 @@
+// TikTok chat engine — consumes the API's SSE relay.
+//
+// The server holds the actual TikTok connection (the webcast socket
+// needs signed URLs a browser can't produce). Reading chat requires
+// only the streamer's @username — no stream key, no TikTok login —
+// and when the streamer isn't live the relay keeps retrying quietly,
+// so the widget can sit in an OBS scene all day and light up when the
+// TikTok stream starts. EventSource reconnects automatically.
+
+import type { ChatBadge, ChatEngine, EngineCallbacks, PlatformState } from "./types";
+
+const RELAY_STATES: readonly PlatformState[] = [
+  "connecting",
+  "connected",
+  "offline",
+  "ended",
+  "error",
+];
+
+interface RelayEvent {
+  type: "status" | "chat";
+  state?: string;
+  detail?: string;
+  message?: {
+    id: string;
+    user: string;
+    text: string;
+    badges?: string[];
+    atMs: number;
+  };
+}
+
+export function createTikTokChat(
+  opts: {
+    apiBase: string;
+    token: string;
+    username: string;
+    callbacks: EngineCallbacks;
+  },
+): ChatEngine {
+  const { apiBase, token, username, callbacks } = opts;
+  callbacks.onStatus("connecting");
+  const url =
+    `${apiBase}/v1/multichat/${encodeURIComponent(token)}` +
+    `/tiktok/stream?username=${encodeURIComponent(username)}`;
+  const source = new EventSource(url);
+
+  source.onmessage = (event) => {
+    let data: RelayEvent;
+    try {
+      data = JSON.parse(String(event.data));
+    } catch {
+      return;
+    }
+    if (data.type === "status") {
+      const state = RELAY_STATES.includes(data.state as PlatformState)
+        ? (data.state as PlatformState)
+        : "error";
+      callbacks.onStatus(state, data.detail);
+      return;
+    }
+    if (data.type === "chat" && data.message) {
+      const m = data.message;
+      callbacks.onMessage({
+        platform: "tiktok",
+        id: m.id,
+        user: m.user,
+        text: m.text,
+        badges: (m.badges || []).filter((b): b is ChatBadge =>
+          ["owner", "moderator", "member", "verified", "vip"].includes(b),
+        ),
+        atMs: m.atMs,
+      });
+    }
+  };
+
+  // EventSource retries on its own; report the gap so the status dot
+  // is honest while it does.
+  source.onerror = () => {
+    callbacks.onStatus("connecting", "relay reconnecting");
+  };
+
+  return {
+    close: () => {
+      source.close();
+    },
+  };
+}

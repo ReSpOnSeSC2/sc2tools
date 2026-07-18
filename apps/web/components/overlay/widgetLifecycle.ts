@@ -39,7 +39,8 @@ export type WidgetId =
   | "scouting"
   | "session"
   | "randomizer"
-  | "ghost-build";
+  | "ghost-build"
+  | "multichat";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -59,6 +60,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "session",
   "randomizer",
   "ghost-build",
+  "multichat",
 ];
 
 /**
@@ -113,6 +115,9 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // fighter brawl / sumo styles) and shows the winner card for the
   // remaining window before clearing the scene.
   "randomizer": 26 * 1000,
+  // Multi-platform chat feed — a persistent, fully self-driven HUD.
+  // It never consumes game payloads, so no timer applies.
+  "multichat": null,
 };
 
 /**

@@ -694,6 +694,10 @@ class AggregationsService {
       bucketSwitch,
       pickInterval,
       pickTimezone,
+      fitInterval: (
+        /** @type {Record<string, any>} */ match,
+        /** @type {'day' | 'week' | 'month'} */ requested,
+      ) => this._fitInterval(match, requested),
     };
   }
 

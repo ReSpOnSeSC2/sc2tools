@@ -384,6 +384,12 @@ class BuildsMmrStatsService {
     const mmrDelta = parseMmrDelta(opts.mmrDelta);
     const maxPoints = clampPositiveInt(opts.maxPointsPerBuild, 500, 2000);
     const matchStage = this._mmrAwareMatch(userId, filters, mmrDelta);
+    // This chart plots myMmr over time, so it must apply the same
+    // provenance gate as the main MMR progression chart: only
+    // replay-verified ratings. Un-resynced legacy rows (retired
+    // current-Pulse pollution) are quarantined there and may not
+    // reappear here as flat-line artifacts.
+    matchStage.myMmrSource = "replay";
     const rows = await this.db.games
       .aggregate([
         { $match: matchStage },
@@ -408,7 +414,9 @@ class BuildsMmrStatsService {
       .toArray();
     return rows.map((row) => ({
       build: row.build,
-      points: row.points.slice(0, maxPoints),
+      // Keep the NEWEST points when a build overflows the cap — the
+      // recent end of a progression is the part the user reads.
+      points: row.points.slice(-maxPoints),
     }));
   }
 
@@ -440,11 +448,22 @@ class BuildsMmrStatsService {
       $gte: MMR_FLOOR,
       $lte: MMR_CEILING,
     };
+    // gamesMatchStage may already carry the user's opp-MMR range
+    // filter (mmr_min / mmr_max drill-down). Intersect it with the
+    // plausibility window instead of overwriting it — clobbering the
+    // key silently ignored the active filter.
+    const userOppMmr = match["opponent.mmr"];
     match["opponent.mmr"] = {
       $exists: true,
       $type: "number",
-      $gte: MMR_FLOOR,
-      $lte: MMR_CEILING,
+      $gte:
+        typeof userOppMmr?.$gte === "number"
+          ? Math.max(MMR_FLOOR, userOppMmr.$gte)
+          : MMR_FLOOR,
+      $lte:
+        typeof userOppMmr?.$lte === "number"
+          ? Math.min(MMR_CEILING, userOppMmr.$lte)
+          : MMR_CEILING,
     };
     if (typeof mmrDelta === "number" && Number.isFinite(mmrDelta)) {
       match.$expr = {

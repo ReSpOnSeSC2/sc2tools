@@ -169,6 +169,8 @@ describe("services/overlayLive.buildFromGame", () => {
       map: "Goldenaura",
       durationSec: 700,
       myMmr: 4310,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
       opponent: {
         displayName: "Foe",
         race: "Zerg",
@@ -292,12 +294,15 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.streak).toBeUndefined();
   });
 
-  test("computes mmrDelta from the previous game's myMmr", async () => {
+  test("computes mmrDelta from the previous comparable game's myMmr", async () => {
     await db.games.insertOne({
       userId: "u1",
       gameId: "earlier",
       result: "Victory",
       myMmr: 4280,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
+      myRace: "Protoss",
       date: new Date(Date.now() - 10 * 60 * 1000),
     });
     const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
@@ -305,6 +310,57 @@ describe("services/overlayLive.buildFromGame", () => {
   });
 
   test("omits mmrDelta when no prior game carries myMmr", async () => {
+    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
+    expect(p.mmrDelta).toBeUndefined();
+  });
+
+  test("never chains mmrDelta across Battle.net accounts", async () => {
+    // A 3000-MMR NA-smurf game right before a 4310 main game must NOT
+    // paint a fake "+1310" (or "−1310") swing on stream.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "smurf",
+      result: "Victory",
+      myMmr: 3000,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-999",
+      myRace: "Protoss",
+      date: new Date(Date.now() - 10 * 60 * 1000),
+    });
+    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
+    expect(p.mmrDelta).toBeUndefined();
+  });
+
+  test("never chains mmrDelta across ladder races on one account", async () => {
+    // Zerg-ladder 3600 followed by a Protoss-ladder 4310 is two
+    // different ratings, not a +710 session.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "zerg-ladder",
+      result: "Victory",
+      myMmr: 3600,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
+      myRace: "Zerg",
+      myLadderRace: "Zerg",
+      date: new Date(Date.now() - 10 * 60 * 1000),
+    });
+    const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
+    expect(p.mmrDelta).toBeUndefined();
+  });
+
+  test("ignores unverified legacy myMmr rows when anchoring mmrDelta", async () => {
+    // Quarantined legacy numerics (no replay provenance) may not
+    // anchor a delta — same trust bar as the analyzer's MMR charts.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "legacy",
+      result: "Victory",
+      myMmr: 5400,
+      myToonHandle: "1-S2-1-100",
+      myRace: "Protoss",
+      date: new Date(Date.now() - 10 * 60 * 1000),
+    });
     const p = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
     expect(p.mmrDelta).toBeUndefined();
   });

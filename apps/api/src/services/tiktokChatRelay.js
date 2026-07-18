@@ -1,0 +1,322 @@
+"use strict";
+
+/**
+ * TikTok live-chat relay for the multichat overlay widget.
+ *
+ * TikTok Live has no public chat API and its webcast WebSocket needs
+ * signed URLs, so the browser can't connect directly. This relay owns
+ * one upstream TikTok connection per (streamer username) — via
+ * `tiktok-live-connector`, which reads chat with NOTHING but the
+ * @username: no stream key, no login, no TikTok API credentials — and
+ * fans the messages out to however many overlay subscribers (OBS
+ * scenes, preview tabs) are attached.
+ *
+ * Lifecycle contract:
+ *   - `subscribe(username, listener)` returns an unsubscribe fn. The
+ *     first subscriber spins the upstream connection up; the last one
+ *     leaving tears it down. Listeners immediately receive the current
+ *     status so a late-joining Browser Source renders honestly.
+ *   - While at least one subscriber is attached and the streamer is
+ *     NOT live, the relay retries on a slow timer — the widget can sit
+ *     in an OBS scene all day and light up when the stream starts.
+ *   - Global + per-user caps bound the fan-in so a leaked token can't
+ *     turn the API into a TikTok-scraping botnet.
+ *
+ * Events pushed to listeners (also the SSE wire shape):
+ *   { type: "status", state: "connecting"|"connected"|"offline"|
+ *     "ended"|"error", detail? }
+ *   { type: "chat", message: { id, user, text, badges, atMs } }
+ *
+ * The connector library is loaded lazily via dynamic import (it is
+ * ESM-only) and injected in tests — unit tests never touch TikTok.
+ */
+
+/** Retry cadence while the streamer is offline / after an error. */
+const OFFLINE_RETRY_MS = 60 * 1000;
+/** Retry cadence after an unexpected disconnect mid-stream. */
+const DISCONNECT_RETRY_MS = 10 * 1000;
+
+const DEFAULT_MAX_CHANNELS = 16;
+
+/** @typedef {(event: Record<string, any>) => void} RelayListener */
+
+class TikTokChatRelay {
+  /**
+   * @param {{
+   *   maxChannels?: number,
+   *   connectionFactory?: (username: string) => Promise<any>,
+   *   log?: { info: Function, warn: Function },
+   * }} [opts]
+   */
+  constructor(opts = {}) {
+    this.maxChannels = opts.maxChannels || DEFAULT_MAX_CHANNELS;
+    this.connectionFactory =
+      opts.connectionFactory || defaultConnectionFactory;
+    this.log = opts.log || null;
+    /** @type {Map<string, Channel>} */
+    this.channels = new Map();
+  }
+
+  /**
+   * Attach a listener to a username's chat. Throws
+   * `relay_at_capacity` when the global cap is hit.
+   *
+   * @param {string} rawUsername
+   * @param {RelayListener} listener
+   * @returns {() => void} unsubscribe
+   */
+  subscribe(rawUsername, listener) {
+    const username = normalizeTikTokUsername(rawUsername);
+    let channel = this.channels.get(username);
+    if (!channel) {
+      if (this.channels.size >= this.maxChannels) {
+        const err = new Error("tiktok relay at capacity");
+        // @ts-ignore structured code for the route layer
+        err.code = "relay_at_capacity";
+        throw err;
+      }
+      channel = new Channel(username, this.connectionFactory, this.log);
+      this.channels.set(username, channel);
+      channel.start();
+    }
+    channel.listeners.add(listener);
+    // Late joiners see the current state immediately.
+    listener({ type: "status", state: channel.state });
+    return () => {
+      channel.listeners.delete(listener);
+      if (channel.listeners.size === 0) {
+        channel.stop();
+        this.channels.delete(username);
+      }
+    };
+  }
+
+  /** Total upstream connections currently held (for /metrics-ish introspection). */
+  get size() {
+    return this.channels.size;
+  }
+}
+
+/**
+ * One upstream TikTok connection + its fan-out set.
+ * @private
+ */
+class Channel {
+  /**
+   * @param {string} username
+   * @param {(username: string) => Promise<any>} connectionFactory
+   * @param {{ info: Function, warn: Function } | null} log
+   */
+  constructor(username, connectionFactory, log) {
+    this.username = username;
+    this.connectionFactory = connectionFactory;
+    this.log = log;
+    /** @type {Set<RelayListener>} */
+    this.listeners = new Set();
+    /** @type {"connecting"|"connected"|"offline"|"ended"|"error"} */
+    this.state = "connecting";
+    this.stopped = false;
+    /** @type {any} */
+    this.connection = null;
+    /** @type {NodeJS.Timeout | null} */
+    this.retryTimer = null;
+  }
+
+  /** @param {Record<string, any>} event */
+  emit(event) {
+    if (event.type === "status") {
+      this.state = event.state;
+    }
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch {
+        /* one bad SSE pipe must not break the fan-out */
+      }
+    }
+  }
+
+  start() {
+    void this.connectOnce();
+  }
+
+  /** @param {number} delayMs */
+  scheduleRetry(delayMs) {
+    if (this.stopped) return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.connectOnce();
+    }, delayMs);
+    // Never hold the process open just for a retry timer.
+    if (typeof this.retryTimer.unref === "function") this.retryTimer.unref();
+  }
+
+  async connectOnce() {
+    if (this.stopped) return;
+    this.emit({ type: "status", state: "connecting" });
+    let connection;
+    try {
+      connection = await this.connectionFactory(this.username);
+    } catch (err) {
+      this.emit({
+        type: "status",
+        state: "error",
+        detail: "tiktok connector unavailable",
+      });
+      this.log?.warn?.(
+        { err: String(err), username: this.username },
+        "tiktok connector load failed",
+      );
+      this.scheduleRetry(OFFLINE_RETRY_MS);
+      return;
+    }
+    if (this.stopped) {
+      safeDisconnect(connection);
+      return;
+    }
+    this.connection = connection;
+
+    connection.on("chat", (/** @type {Record<string, any>} */ data) => {
+      const message = mapChatEvent(data);
+      if (message) this.emit({ type: "chat", message });
+    });
+    connection.on("streamEnd", () => {
+      this.emit({ type: "status", state: "ended" });
+      this.scheduleRetry(OFFLINE_RETRY_MS);
+    });
+    connection.on("disconnected", () => {
+      if (this.stopped || this.state === "ended") return;
+      this.emit({ type: "status", state: "connecting" });
+      this.scheduleRetry(DISCONNECT_RETRY_MS);
+    });
+    connection.on("error", () => {
+      /* handled by disconnected/retry — swallow to avoid unhandled 'error' crashes */
+    });
+
+    try {
+      await connection.connect();
+      if (this.stopped) {
+        safeDisconnect(connection);
+        return;
+      }
+      this.emit({ type: "status", state: "connected" });
+    } catch (err) {
+      const offline = /isn'?t online|offline|not.*live/i.test(
+        String(/** @type {any} */ (err)?.message || err),
+      );
+      this.emit({
+        type: "status",
+        state: offline ? "offline" : "error",
+        detail: offline ? undefined : trimDetail(err),
+      });
+      this.scheduleRetry(OFFLINE_RETRY_MS);
+    }
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    safeDisconnect(this.connection);
+    this.connection = null;
+    this.listeners.clear();
+  }
+}
+
+/** @param {any} connection */
+function safeDisconnect(connection) {
+  try {
+    connection?.disconnect?.();
+  } catch {
+    /* already down */
+  }
+}
+
+/** @param {unknown} err @returns {string} */
+function trimDetail(err) {
+  return String(/** @type {any} */ (err)?.message || err).slice(0, 160);
+}
+
+/**
+ * Normalize "@name", "tiktok.com/@name", full profile URLs → bare name.
+ *
+ * @param {string} raw
+ * @returns {string}
+ */
+function normalizeTikTokUsername(raw) {
+  let input = String(raw || "").trim().toLowerCase();
+  if (!input) {
+    const err = new Error("username required");
+    // @ts-ignore
+    err.code = "bad_input";
+    throw err;
+  }
+  input = input.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  if (input.startsWith("tiktok.com/")) input = input.slice("tiktok.com/".length);
+  input = input.split(/[/?#]/)[0];
+  if (input.startsWith("@")) input = input.slice(1);
+  if (!/^[a-z0-9._]{2,32}$/.test(input)) {
+    const err = new Error("unrecognized TikTok username");
+    // @ts-ignore
+    err.code = "bad_input";
+    throw err;
+  }
+  return input;
+}
+
+/**
+ * Map a connector `chat` event to the slim relay message. Field names
+ * follow tiktok-live-connector v2 (`comment`, `user.uniqueId`), with
+ * v1 fallbacks (`uniqueId` at the top level) so a pinned downgrade
+ * doesn't silently drop every message.
+ *
+ * @param {Record<string, any>} data
+ */
+function mapChatEvent(data) {
+  const text = String(data?.comment || "").trim();
+  if (!text) return null;
+  const user =
+    data?.user?.uniqueId ||
+    data?.user?.nickname ||
+    data?.uniqueId ||
+    data?.nickname ||
+    "viewer";
+  /** @type {string[]} */
+  const badges = [];
+  if (data?.user?.isModerator || data?.isModerator) badges.push("moderator");
+  if (data?.user?.isSubscriber || data?.isSubscriber) badges.push("member");
+  const msgId = data?.msgId || data?.common?.msgId;
+  return {
+    id: msgId ? String(msgId) : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    user: String(user),
+    text: text.slice(0, 500),
+    badges,
+    atMs: Date.now(),
+  };
+}
+
+/**
+ * Production connection factory — lazy dynamic import because
+ * tiktok-live-connector is ESM-only and this codebase is CJS.
+ *
+ * @param {string} username
+ */
+async function defaultConnectionFactory(username) {
+  const mod = await import("tiktok-live-connector");
+  const { TikTokLiveConnection } = /** @type {any} */ (mod);
+  return new TikTokLiveConnection(username, {
+    processInitialData: false,
+    enableExtendedGiftInfo: false,
+  });
+}
+
+module.exports = {
+  TikTokChatRelay,
+  normalizeTikTokUsername,
+  mapChatEvent,
+  OFFLINE_RETRY_MS,
+  DISCONNECT_RETRY_MS,
+};
