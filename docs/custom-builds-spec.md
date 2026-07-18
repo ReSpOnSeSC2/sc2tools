@@ -147,11 +147,11 @@ as of this audit:
     "instructions": "Add custom Spawning Tool build orders here. 'target' can be 'Opponent' or 'Self'. 'race' is Zerg, Protoss, or Terran. 'matchup' can be 'vs Zerg', 'vs Protoss', 'vs Terran', or 'vs Any'. Rules types: 'building', 'unit', 'unit_max', 'upgrade', 'proxy'.",
     "builds": [
         {
-            "name": "Zerg - 12 Pool (Custom Engine Example)",
+            "name": "Zerg - 8 Pool (Custom Engine Example)",
             "target": "Opponent",
             "race": "Zerg",
             "matchup": "vs Any",
-            "description": "Custom JSON definition of a 12 pool.",
+            "description": "Custom JSON definition of an 8 pool.",
             "rules": [
                 {"type": "building", "name": "SpawningPool", "time_lt": 55},
                 {"type": "unit_max", "name": "Drone", "count": 13, "time_lt": 60}
@@ -266,7 +266,7 @@ table above (`detectors/base.py:34-69`).
 `Custom builds → Hardcoded race tree → Composition-based fallback name`
 
 Custom builds **always win** if they match. Returning a name that
-collides with an existing hardcoded label (e.g. `"Zerg - 12 Pool"`)
+collides with an existing hardcoded label (e.g. `"Zerg - 8 Pool"`)
 silently overrides the hardcoded classification — **even for past
 games on the next reclassify**.
 
@@ -279,7 +279,7 @@ production `reveal-sc2-opponent-main/data/meta_database.json`:
 * opponent: `JuteMonster` (Zerg) on Acid Plant LE
 * result: Loss
 * SpawningPool first-event time: **26 s**
-* `opp_strategy` value already in the DB: `"Zerg - 12 Pool"` (set by
+* `opp_strategy` value already in the DB: `"Zerg - 8 Pool"` (set by
   the hardcoded tree at `detectors/opponent.py:107-110`)
 
 I then reconstructed an event list from the stored
@@ -290,19 +290,19 @@ detector:
 
 ```
 Opponent custom builds: 1
-  - 'Zerg - 12 Pool (Custom Engine Example)' (race=Zerg, matchup=vs Any,
+  - 'Zerg - 8 Pool (Custom Engine Example)' (race=Zerg, matchup=vs Any,
      rules=[{'type':'building','name':'SpawningPool','time_lt':55},
             {'type':'unit_max','name':'Drone','count':13,'time_lt':60}])
 
-OpponentStrategyDetector returned: 'Zerg - 12 Pool (Custom Engine Example)'
-DB-stored opp_strategy was:        'Zerg - 12 Pool'
+OpponentStrategyDetector returned: 'Zerg - 8 Pool (Custom Engine Example)'
+DB-stored opp_strategy was:        'Zerg - 8 Pool'
 match? False
 ```
 
 Findings from this run:
 
 1. The custom rule **did fire** — confirming that custom builds take
-   absolute precedence over the hardcoded `"Zerg - 12 Pool"` label.
+   absolute precedence over the hardcoded `"Zerg - 8 Pool"` label.
 2. The classifier name returned **differs** from what is currently in
    `meta_database.json`. That is exactly the silent-override risk: any
    user adding a custom rule will start producing labels that conflict
@@ -487,7 +487,7 @@ server-issued pepper). Rate limits: 30 writes/hour per client_id,
 ### Inventory at audit time
 
 * `SC2Replay-Analyzer/custom_builds.json` — 915 bytes, 1 default build
-  (`Zerg - 12 Pool (Custom Engine Example)`), v1 shape.
+  (`Zerg - 8 Pool (Custom Engine Example)`), v1 shape.
 * `reveal-sc2-opponent-main/data/custom_builds.json` — 915 bytes,
   identical content to the legacy file.
 

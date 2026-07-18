@@ -80,7 +80,7 @@ describe("dnaTimings.resolveMyRace", () => {
   test("falls through Matchup, my_build, build", () => {
     expect(Dna.resolveMyRace([{ myRace: "Protoss" }])).toBe("P");
     expect(Dna.resolveMyRace([{ Matchup: "PvT" }])).toBe("P");
-    expect(Dna.resolveMyRace([{ myBuild: "Zerg - 12 Pool" }])).toBe("Z");
+    expect(Dna.resolveMyRace([{ myBuild: "Zerg - 8 Pool" }])).toBe("Z");
     expect(Dna.resolveMyRace([])).toBe("");
   });
 });

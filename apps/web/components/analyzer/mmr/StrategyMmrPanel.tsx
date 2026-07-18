@@ -6,7 +6,7 @@ import { MmrStatsPanel } from "./MmrStatsPanel";
  * Strategies tab — "Win rate by MMR" chart. Plots one line per
  * detected opponent strategy, X-axis is the opponent's MMR at the
  * time of the match. Surfaces which opponent openings are scariest
- * at a given league: a 12-pool that wins 70% at 4000 MMR but
+ * at a given league: an 8-pool that wins 70% at 4000 MMR but
  * collapses to 40% at 5000 MMR tells you the same opening reads
  * differently as you climb.
  *

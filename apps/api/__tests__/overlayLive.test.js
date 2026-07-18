@@ -359,7 +359,7 @@ describe("services/overlayLive.buildFromGame", () => {
         map: "Map A",
         durationSec: 421,
         date: new Date(now - 4000),
-        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "12 Pool" },
+        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "8 Pool" },
       },
       {
         userId: "u1",

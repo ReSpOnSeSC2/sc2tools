@@ -89,7 +89,7 @@ The mapping is defined in `SC2-Overlay/icon-registry.js`. It works in
 two stages:
 
 1. An **explicit table** for the most common named strategies
-   (e.g. `"Zerg - 12 Pool"` -> `["buildings/spawningpool.png", "units/zergling.png"]`).
+   (e.g. `"Zerg - 8 Pool"` -> `["buildings/spawningpool.png", "units/zergling.png"]`).
 2. A **keyword fallback** -- if a strategy isn't in the table, the
    registry scans the strategy's name for known unit/building keywords
    and assembles icons from whatever it finds. This means your custom

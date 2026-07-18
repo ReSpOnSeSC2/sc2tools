@@ -493,14 +493,14 @@ def detect_zvp(ctx: DetectionContext) -> Optional[str]:
     """
     pool = ctx.building_time("SpawningPool")
 
-    # 1. 12 Pool Rush: a sub-55s Pool into a wall of Zerglings on one
+    # 1. 8 Pool Rush: a sub-55s Pool into a wall of Zerglings on one
     # base -- the cheese rush.
     if (
         pool < 55
         and ctx.count_units("Zergling", 240) >= 6
         and base_count_at(ctx.buildings, "Hatchery", 240) <= 1
     ):
-        return "ZvP - 12 Pool Rush"
+        return "ZvP - 8 Pool Rush"
 
     # 2. Ling Bane Bust: an early Pool + Baneling Nest flooding
     # Banelings and Zerglings off <=2 bases -- the all-in bust through
@@ -596,23 +596,23 @@ def detect_zvz(ctx: DetectionContext) -> Optional[str]:
     """
     pool = ctx.building_time("SpawningPool")
 
-    # 1. 12 Pool into Baneling: a sub-55s Pool straight into a Baneling
+    # 1. 8 Pool into Baneling: a sub-55s Pool straight into a Baneling
     # Nest and Banelings -- the early ZvZ baneling all-in.
     if (
         pool < 55
         and ctx.has_building("BanelingNest", 240)
         and ctx.count_units("Baneling", 330) >= 2
     ):
-        return "ZvZ - 12 Pool into Baneling"
+        return "ZvZ - 8 Pool into Baneling"
 
-    # 2. 12 Pool Speedling: a sub-55s Pool into a wall of Zerglings on
+    # 2. 8 Pool Speedling: a sub-55s Pool into a wall of Zerglings on
     # one base.
     if (
         pool < 55
         and ctx.count_units("Zergling", 240) >= 6
         and base_count_at(ctx.buildings, "Hatchery", 240) <= 1
     ):
-        return "ZvZ - 12 Pool Speedling"
+        return "ZvZ - 8 Pool Speedling"
 
     # 3. Ling Bane All-in: a Baneling Nest flooding Banelings + Zerglings
     # off <=2 bases.

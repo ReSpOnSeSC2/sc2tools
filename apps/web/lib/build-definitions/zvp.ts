@@ -10,7 +10,7 @@ export const ZVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Zerg",
     matchup: "ZvP",
-    name: "ZvP - 12 Pool Rush",
+    name: "ZvP - 8 Pool Rush",
     description:
       "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
   },

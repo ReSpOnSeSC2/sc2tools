@@ -551,7 +551,7 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
     order: [["SpawningPool", 0, "Hatchery", 0]],
     units: [["Queen", 2]],
   },
-  "zerg-12-pool": { startBy: [["SpawningPool", 0, 50]] },
+  "zerg-8-pool": { startBy: [["SpawningPool", 0, 50]] },
   "zerg-early-pool-14-14-or-15-pool": {
     startBy: [["SpawningPool", 0, 70]],
     order: [["SpawningPool", 0, "Hatchery", 0]],
@@ -596,7 +596,7 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
     units: [["Hydralisk", 5]],
   },
   // ---- ZvP ---------------------------------------------------------
-  "zvp-12-pool-rush": {
+  "zvp-8-pool-rush": {
     startBy: [["SpawningPool", 0, 55]],
     units: [["Zergling", 10]],
   },
@@ -665,11 +665,11 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
     workersAtLeast: 40,
   },
   // ---- ZvZ ---------------------------------------------------------
-  "zvz-12-pool-into-baneling": {
+  "zvz-8-pool-into-baneling": {
     startBy: [["SpawningPool", 0, 55]],
     units: [["BanelingNest", 1], ["Baneling", 4]],
   },
-  "zvz-12-pool-speedling": {
+  "zvz-8-pool-speedling": {
     startBy: [["SpawningPool", 0, 55]],
     units: [["Zergling", 12]],
   },
@@ -791,4 +791,3 @@ describe("each build satisfies its definition's detection rule", () => {
     });
   }
 });
-

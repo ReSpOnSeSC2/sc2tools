@@ -10,8 +10,8 @@ const profile = resolveProfile("5.0.16");
 
 describe("threats derived from catalog openers", () => {
   it("derives waves from the attacker's simulated army production", () => {
-    const twelvePool = referenceBuilds().find((b) => b.id === "zerg-12-pool")!;
-    const threat = deriveThreatFromBuild(profile, twelvePool, "Protoss")!;
+    const eightPool = referenceBuilds().find((b) => b.id === "zerg-12-pool")!;
+    const threat = deriveThreatFromBuild(profile, eightPool, "Protoss")!;
     expect(threat).not.toBeNull();
     expect(threat.id).toBe("ref:zerg-12-pool");
     expect(threat.waves.length).toBeGreaterThan(0);

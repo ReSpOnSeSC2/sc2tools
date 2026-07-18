@@ -87,7 +87,7 @@ export function DefinitionsCatalog() {
                 id="def-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. Glaive, Proxy Robo, 12 Pool…"
+                placeholder="e.g. Glaive, Proxy Robo, 8 Pool…"
                 className="pl-9"
                 autoComplete="off"
               />

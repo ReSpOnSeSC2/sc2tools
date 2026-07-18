@@ -40,12 +40,12 @@
     },
     {
       "id": "zerg-12-pool",
-      "name": "12 Pool",
+      "name": "8 Pool",
       "race": "Zerg",
       "matchups": ["ZvZ", "ZvP", "ZvT"],
       "description": "Pool started immediately (before 0:50) with the first six lings applying pressure while the natural follows.",
       "steps": ["SpawningPool", "Overlord", "Zergling", "Zergling", "Zergling", "Hatchery", "Queen", "Extractor", "Overlord", "Zergling", "MetabolicBoost", "Queen", "Overlord"],
-      "definitionIds": ["zerg-12-pool"]
+      "definitionIds": ["zerg-8-pool"]
     },
     {
       "id": "zerg-early-pool-14-14-or-15-pool",
@@ -166,12 +166,12 @@
     },
     {
       "id": "zvp-12-pool-rush",
-      "name": "12 Pool Rush",
+      "name": "8 Pool Rush",
       "race": "Zerg",
       "matchups": ["ZvP"],
       "description": "Pool before 0:55 into a wall of zerglings on one base - the cheese rush vs protoss; the hatchery only follows once the lings are out.",
       "steps": ["SpawningPool", "Overlord", "Zergling", "Zergling", "Zergling", "Zergling", "Zergling", "Hatchery", "Queen", "Overlord", "Zergling", "Zergling"],
-      "definitionIds": ["zvp-12-pool-rush"]
+      "definitionIds": ["zvp-8-pool-rush"]
     },
     {
       "id": "zvp-ling-bane-bust",
@@ -346,21 +346,21 @@
     },
     {
       "id": "zvz-12-pool-into-baneling",
-      "name": "12 Pool into Baneling",
+      "name": "8 Pool into Baneling",
       "race": "Zerg",
       "matchups": ["ZvZ"],
       "description": "Pool before 0:55 straight into a baneling nest - the early ZvZ baneling all-in on the opponent's drone line.",
       "steps": ["SpawningPool", "Overlord", "Extractor", "Zergling", "Zergling", "Zergling", "BanelingNest", "MetabolicBoost", "Overlord", "Zergling", "Zergling", "Baneling", "Baneling", "Hatchery", "Overlord", "Baneling", "Baneling", "Zergling"],
-      "definitionIds": ["zvz-12-pool-into-baneling"]
+      "definitionIds": ["zvz-8-pool-into-baneling"]
     },
     {
       "id": "zvz-12-pool-speedling",
-      "name": "12 Pool Speedling",
+      "name": "8 Pool Speedling",
       "race": "Zerg",
       "matchups": ["ZvZ"],
       "description": "Pool before 0:55 into a wall of zerglings on one base - the aggressive ZvZ speedling opener.",
       "steps": ["SpawningPool", "Overlord", "Extractor", "Zergling", "Zergling", "Zergling", "MetabolicBoost", "Zergling", "Zergling", "Overlord", "Zergling", "Zergling", "Hatchery", "Overlord", "Zergling", "Zergling"],
-      "definitionIds": ["zvz-12-pool-speedling"]
+      "definitionIds": ["zvz-8-pool-speedling"]
     },
     {
       "id": "zvz-ling-bane-all-in",

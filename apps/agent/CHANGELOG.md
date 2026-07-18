@@ -398,7 +398,7 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ### Added — full ZvP and TvP build coverage (engine)
 - **What.** The bundled engine's per-matchup trees now cover ZvP with
-  10 builds (12 Pool Rush, Ling Bane Bust, Roach/Ravager All-in,
+  10 builds (8 Pool Rush, Ling Bane Bust, Roach/Ravager All-in,
   Nydus, Hydra Timing, Lurker Contain, Ling Bane Muta, Muta Harass,
   Speedling Flood, Hatch First Macro) and TvP with 11 (proxy rax /
   Marauder, Cyclone, 1-1-1 Banshee, 3 Rax, BC Rush, Tank/Thor Mech,

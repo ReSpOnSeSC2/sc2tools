@@ -11,9 +11,9 @@ export const ZERG_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Zerg",
     matchup: null,
-    name: "Zerg - 12 Pool",
+    name: "Zerg - 8 Pool",
     description:
-      "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 12 Supply).",
+      "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 8 Supply).",
   },
   {
     race: "Zerg",

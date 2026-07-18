@@ -288,12 +288,12 @@ def test_zvp_ling_bane_muta():
     assert _classify("Zerg", "Protoss", events) == "ZvP - Ling Bane Muta"
 
 
-def test_zvp_12_pool_rush():
+def test_zvp_8_pool_rush():
     events = [
         _b("Hatchery", 0), _b("SpawningPool", 40),
         *_n("Zergling", 200, 6),
     ]
-    assert _classify("Zerg", "Protoss", events) == "ZvP - 12 Pool Rush"
+    assert _classify("Zerg", "Protoss", events) == "ZvP - 8 Pool Rush"
 
 
 def test_zvp_ling_bane_bust():
@@ -374,12 +374,12 @@ def test_zvp_hatch_first_macro():
     assert _classify("Zerg", "Protoss", events) == "ZvP - Hatch First Macro"
 
 
-def test_zvz_12_pool_speedling():
+def test_zvz_8_pool_speedling():
     events = [
         _b("Hatchery", 0), _b("SpawningPool", 40),
         *_n("Zergling", 200, 6),
     ]
-    assert _classify("Zerg", "Zerg", events) == "ZvZ - 12 Pool Speedling"
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - 8 Pool Speedling"
 
 
 def test_zvz_roach_aggression():
@@ -559,12 +559,12 @@ def test_zvt_hatch_first_macro():
 # --------------------------------------------------------------------------
 # ZvZ
 # --------------------------------------------------------------------------
-def test_zvz_12_pool_into_baneling():
+def test_zvz_8_pool_into_baneling():
     events = [
         _b("Hatchery", 0), _b("SpawningPool", 40), _b("BanelingNest", 200),
         *_n("Baneling", 300, 2),
     ]
-    assert _classify("Zerg", "Zerg", events) == "ZvZ - 12 Pool into Baneling"
+    assert _classify("Zerg", "Zerg", events) == "ZvZ - 8 Pool into Baneling"
 
 
 def test_zvz_ling_bane_all_in():

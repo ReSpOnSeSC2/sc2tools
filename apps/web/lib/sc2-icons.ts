@@ -416,7 +416,7 @@ export function resolveLeagueIcon(input: string): string | null {
  * ============================================================ */
 
 const STRATEGY_OVERRIDES: Record<string, string[]> = {
-  "Zerg - 12 Pool": ["buildings/spawningpool.png", "units/zergling.png"],
+  "Zerg - 8 Pool": ["buildings/spawningpool.png", "units/zergling.png"],
   "Zerg - 13/12 Baneling Bust": ["buildings/banelingnest.png", "units/baneling.png"],
   "Zerg - 13/12 Speedling Aggression": ["units/zergling.png", "upgrades/speed.png"],
   "Zerg - 17 Hatch 18 Gas 17 Pool": ["buildings/hatchery.png", "buildings/spawningpool.png"],

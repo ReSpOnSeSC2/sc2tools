@@ -19,7 +19,7 @@ from core.paths import CUSTOM_BUILDS_FILE
 
 BUILD_DEFINITIONS = {
     # --- ZERG OPPONENT STRATEGIES ---
-    "Zerg - 12 Pool": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 12 Supply).",
+    "Zerg - 8 Pool": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 8 Supply).",
     "Zerg - 13/12 Baneling Bust": "Early pool and early gas (<70s) leading into Baneling Nest before 3:20.",
     "Zerg - 13/12 Speedling Aggression": "Early pool and early gas (<70s) for aggressive speedlings.",
     "Zerg - Early Pool (14/14 or 15 Pool)": "Detected if Spawning Pool starts < 1:10 but drones were built.",
@@ -146,11 +146,11 @@ def initialize_custom_builds():
             ),
             "builds": [
                 {
-                    "name": "Zerg - 12 Pool (Custom Engine Example)",
+                    "name": "Zerg - 8 Pool (Custom Engine Example)",
                     "target": "Opponent",
                     "race": "Zerg",
                     "matchup": "vs Any",
-                    "description": "Custom JSON definition of a 12 pool.",
+                    "description": "Custom JSON definition of an 8 pool.",
                     "rules": [
                         {"type": "building", "name": "SpawningPool", "time_lt": 55},
                         {"type": "unit_max", "name": "Drone", "count": 13, "time_lt": 60},

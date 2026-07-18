@@ -16,7 +16,7 @@ from typing import Dict, List, Set
 # BUILD DEFINITIONS  (50+ named strategies)
 # =========================================================
 BUILD_DEFINITIONS = {
-    "Zerg - 12 Pool": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 12 Supply).",
+    "Zerg - 8 Pool": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 8 Supply).",
     "Zerg - 13/12 Baneling Bust": "Early pool and early gas (<70s) leading into Baneling Nest before 3:20.",
     "Zerg - 13/12 Speedling Aggression": "Early pool and early gas (<70s) for aggressive speedlings.",
     "Zerg - Early Pool (14/14 or 15 Pool)": "Detected if Spawning Pool starts < 1:10 but drones were built.",
@@ -171,7 +171,7 @@ BUILD_DEFINITIONS = {
     "ZvT - 3 Base Ling Flood": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvT ling-flood timing.",
     "ZvT - Hatch First Macro": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Terran.",
     # --- ZvP ---
-    "ZvP - 12 Pool Rush": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
+    "ZvP - 8 Pool Rush": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
     "ZvP - Ling Bane Bust": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the bust through the Protoss wall.",
     "ZvP - 2 Base Roach Ravager All-in": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvP roach/ravager all-in.",
     "ZvP - 2 Base Nydus": "Detected when a Nydus Network goes down off two bases for a worm into the Protoss main -- the ZvP Nydus all-in.",
@@ -182,8 +182,8 @@ BUILD_DEFINITIONS = {
     "ZvP - Speedling Flood": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvP ling-flood timing against a greedy third.",
     "ZvP - Hatch First Macro": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Protoss.",
     # --- ZvZ ---
-    "ZvZ - 12 Pool into Baneling": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
-    "ZvZ - 12 Pool Speedling": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
+    "ZvZ - 8 Pool into Baneling": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
+    "ZvZ - 8 Pool Speedling": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
     "ZvZ - Ling Bane All-in": "Detected when a Baneling Nest floods Banelings and Zerglings off two or fewer bases -- the ZvZ ling/bane all-in.",
     "ZvZ - Roach Ravager": "Detected when a Roach Warren fields Roaches and Ravagers -- the ZvZ roach/ravager style.",
     "ZvZ - Roach Aggression": "Detected when a Roach Warren produces a wall of Roaches off two bases -- the standard ZvZ roach pressure / all-in.",
@@ -240,7 +240,7 @@ BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
         ("TvP - Fast 3 CC Bio", "Terran", "Protoss"),
         ("ZvT - 3 Hatch Ling Bane Muta", "Zerg", "Terran"),
         ("ZvT - 2 Base Roach Ravager Timing", "Zerg", "Terran"),
-        ("ZvP - 12 Pool Rush", "Zerg", "Protoss"),
+        ("ZvP - 8 Pool Rush", "Zerg", "Protoss"),
         ("ZvP - Ling Bane Bust", "Zerg", "Protoss"),
         ("ZvP - 2 Base Roach Ravager All-in", "Zerg", "Protoss"),
         ("ZvP - 2 Base Nydus", "Zerg", "Protoss"),
@@ -250,7 +250,7 @@ BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
         ("ZvP - Mutalisk Harass", "Zerg", "Protoss"),
         ("ZvP - Speedling Flood", "Zerg", "Protoss"),
         ("ZvP - Hatch First Macro", "Zerg", "Protoss"),
-        ("ZvZ - 12 Pool Speedling", "Zerg", "Zerg"),
+        ("ZvZ - 8 Pool Speedling", "Zerg", "Zerg"),
         ("ZvZ - Roach Aggression", "Zerg", "Zerg"),
     )
 }

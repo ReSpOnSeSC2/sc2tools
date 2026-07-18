@@ -118,7 +118,7 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
             return "Zerg - Proxy Hatch"
         if pool_time < 50:
             if count_units("Drone", pool_time) <= 13:
-                return "Zerg - 12 Pool"
+                return "Zerg - 8 Pool"
 
         # Early Pool
         if pool_time < 70:

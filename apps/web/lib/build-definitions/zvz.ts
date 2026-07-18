@@ -13,11 +13,11 @@ const zvz = (name: string, description: string): Omit<BuildDefinition, "id"> => 
 
 export const ZVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   zvz(
-    "ZvZ - 12 Pool into Baneling",
+    "ZvZ - 8 Pool into Baneling",
     "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
   ),
   zvz(
-    "ZvZ - 12 Pool Speedling",
+    "ZvZ - 8 Pool Speedling",
     "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
   ),
   zvz(
