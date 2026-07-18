@@ -40,6 +40,7 @@ const VALID_WIDGETS = new Set([
   "session",
   "randomizer",
   "ghost-build",
+  "multichat",
 ]);
 
 export default async function OverlayWidgetPage({

@@ -1,0 +1,67 @@
+// Multichat — shared contracts for the unified chat overlay widget.
+//
+// One message shape across four platforms so the feed, the widget and
+// the tests never branch on platform-specific payloads. Engines
+// normalise at the edge; everything downstream is platform-agnostic.
+
+export type ChatPlatform = "twitch" | "kick" | "youtube" | "tiktok";
+
+export const CHAT_PLATFORMS: readonly ChatPlatform[] = [
+  "twitch",
+  "kick",
+  "youtube",
+  "tiktok",
+] as const;
+
+/** Normalised badge tags rendered as tiny glyphs by the widget. */
+export type ChatBadge =
+  | "owner"
+  | "moderator"
+  | "member"
+  | "verified"
+  | "vip";
+
+export interface ChatMessage {
+  platform: ChatPlatform;
+  /** Platform-scoped id — deduped on (platform, id). */
+  id: string;
+  user: string;
+  text: string;
+  /** Author colour when the platform provides one (Twitch/Kick). */
+  color?: string;
+  badges: ChatBadge[];
+  atMs: number;
+}
+
+export type PlatformState =
+  | "off"
+  | "connecting"
+  | "connected"
+  | "offline"
+  | "ended"
+  | "error";
+
+export interface PlatformStatus {
+  platform: ChatPlatform;
+  state: PlatformState;
+  detail?: string;
+}
+
+/** Callbacks every engine reports through. */
+export interface EngineCallbacks {
+  onMessage(message: ChatMessage): void;
+  onStatus(state: PlatformState, detail?: string): void;
+}
+
+/** Every engine exposes exactly one lifecycle affordance. */
+export interface ChatEngine {
+  close(): void;
+}
+
+/** The per-platform config blob stored at /v1/me/preferences/multichat. */
+export interface MultichatConfig {
+  twitch?: { enabled: boolean; channel?: string };
+  kick?: { enabled: boolean; channel?: string; chatroomId?: number };
+  youtube?: { enabled: boolean; channel?: string };
+  tiktok?: { enabled: boolean; username?: string };
+}

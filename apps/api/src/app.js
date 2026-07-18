@@ -25,6 +25,8 @@ const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
+const { TikTokChatRelay } = require("./services/tiktokChatRelay");
+const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
@@ -267,6 +269,11 @@ function makeServices(deps) {
   });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
+  // TikTok chat relay for the multichat overlay widget — one upstream
+  // TikTok connection per streamer username, fanned out to every OBS
+  // Browser Source over SSE. Constructed once so the connection pool
+  // and its caps are process-global.
+  const tiktokChatRelay = new TikTokChatRelay({ log: deps.logger });
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
@@ -407,6 +414,7 @@ function makeServices(deps) {
     overlayTokens,
     overlayLive,
     liveGameBroker,
+    tiktokChatRelay,
     aggregations,
     macroReport,
     streak,
@@ -632,6 +640,16 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildPublicProfileRouter({ publicProfile: services.publicProfile }),
+  );
+  // Multichat overlay relays — overlay-token auth (path segment), no
+  // Clerk session, so it mounts with the public bundle.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildMultichatRouter({
+      overlayTokens: services.overlayTokens,
+      users: services.users,
+      tiktokRelay: services.tiktokChatRelay,
+    }),
   );
   // Operational admin router — gated on isAdmin(req) inside the
   // router. Mounted alongside the rest of the v1 prefix so

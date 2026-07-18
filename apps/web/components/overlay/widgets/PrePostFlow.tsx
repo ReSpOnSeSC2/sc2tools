@@ -20,3 +20,4 @@ export { ScoutingWidget } from "./ScoutingWidget";
 export { SessionWidget, type SessionSummary } from "./SessionWidget";
 export { RandomizerWidget } from "./RandomizerWidget";
 export { GhostBuildWidget } from "./GhostBuildWidget";
+export { MultiChatWidget } from "./MultiChatWidget";

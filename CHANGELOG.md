@@ -13,6 +13,23 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Multi-platform chat overlay · Twitch + Kick + YouTube + TikTok in
+  one OBS source** — a new `multichat` overlay widget merges all four
+  live chats into a single broadcast-ready feed with platform chips,
+  author colours, and role glyphs. Setup is one Settings section:
+  Twitch needs only the channel name (anonymous read-only IRC, no
+  OAuth), Kick reads its public chatroom directly after a one-time
+  chatroom-id detection (with a guided manual fallback when Kick's bot
+  protection blocks the automatic lookup), YouTube needs just a handle
+  — each stream's live chat is discovered automatically through a
+  key-free cloud relay — and TikTok needs only the @username: **no
+  stream key required**, and an offline TikTok simply idles with a
+  status dot until the LIVE starts, never affecting the other
+  platforms. Every connection self-heals with backoff, config changes
+  land in OBS within a minute without touching the Browser Source, and
+  per-platform status dots show exactly what's connected while setting
+  up.
+
 - **Daily Pulse · fresh dashboard intel every day** — the analyzer
   dashboard now opens with a rotating strip of insight cards derived
   entirely from your own replay corpus: yesterday's session recap with

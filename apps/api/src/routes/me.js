@@ -346,6 +346,7 @@ function buildMeRouter(deps) {
     "arcade",
     "randomizer",
     "onboarding",
+    "multichat",
   ]);
 
   router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {

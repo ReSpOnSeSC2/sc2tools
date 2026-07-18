@@ -28,7 +28,11 @@ const DEFAULT_WIDGETS = Object.freeze([
  * like the build randomizer are togglable without being on by default
  * for every streamer.
  */
-const KNOWN_WIDGETS = Object.freeze([...DEFAULT_WIDGETS, "randomizer"]);
+const KNOWN_WIDGETS = Object.freeze([
+  ...DEFAULT_WIDGETS,
+  "randomizer",
+  "multichat",
+]);
 
 /**
  * Overlay tokens are bearer tokens for the public OBS overlay route.
