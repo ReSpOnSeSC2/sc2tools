@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { DockClient } from "../DockClient";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
@@ -52,7 +52,15 @@ beforeEach(() => {
   mockChat = { messages: [], events: [], statuses: {}, active: false };
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Drain the dock's startup fetch continuations (config GET, studio
+  // GET) before tearing down — a test that never awaits fetch-driven
+  // DOM can otherwise leak resolved-promise callbacks into the next
+  // test's act() window, where they break React's synchronous update
+  // flush (observed as the next test's first click getting "lost").
+  await act(async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -166,6 +174,42 @@ describe("DockClient", () => {
         { poll: { question: "Next matchup?", options: ["PvT", "PvZ"], status: "open" } },
       ]);
     });
+  });
+
+  it("removing a saved goal POSTs the reduced list immediately (no Save tap)", async () => {
+    // Regression: ✕ used to edit only the local draft — the row
+    // vanished from the dock while the stream kept showing the goal
+    // until "Save goals" was ALSO pressed.
+    studioState = {
+      ...EMPTY_STUDIO,
+      goals: [
+        { label: "Followers", current: 5, target: 10 },
+        { label: "Subs", current: 1, target: 5 },
+      ],
+    };
+    render(<DockClient token="tok_test" />);
+    expect(await screen.findByDisplayValue("Subs")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove goal 2" }));
+    await waitFor(() => {
+      expect(studioPosts()).toEqual([
+        { goals: [{ label: "Followers", current: 5, target: 10 }] },
+      ]);
+    });
+    // The POST response re-hydrates the draft — the row is really gone.
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue("Subs")).toBeNull();
+    });
+    expect(screen.getByDisplayValue("Followers")).toBeTruthy();
+  });
+
+  it("removing a blank in-progress row never POSTs", async () => {
+    render(<DockClient token="tok_test" />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add goal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove goal 1" }));
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText("Goal label")).toBeNull();
+    });
+    expect(studioPosts()).toEqual([]);
   });
 
   it("renders the goals editor", async () => {

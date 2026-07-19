@@ -613,6 +613,32 @@ describe("routes/multichat studio", () => {
     expect(again.body.poll.question).toBe("Next matchup?");
   });
 
+  test("deleting goals persists the shrunk list, down to empty", async () => {
+    // Regression for the Stream Dock delete flow: a POST with fewer
+    // (or zero) goals must replace the stored list wholesale — the
+    // overlay renders exactly what comes back, so a kept-around stale
+    // goal here is a goal stuck on stream.
+    await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [
+        { label: "Followers", current: 5, target: 10 },
+        { label: "Subs", current: 1, target: 5 },
+      ] });
+    const shrunk = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [{ label: "Followers", current: 5, target: 10 }] });
+    expect(shrunk.body.goals).toEqual([
+      { label: "Followers", current: 5, target: 10 },
+    ]);
+    const emptied = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [] });
+    expect(emptied.body.goals).toEqual([]);
+    // Persisted — the widget's fallback refetch sees the deletion too.
+    const again = await request(app2).get(`/v1/multichat/${token2}/studio`);
+    expect(again.body.goals).toEqual([]);
+  });
+
   test("recap trigger increments a sequence; clears work", async () => {
     const r1 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true });
     const r2 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true, highlight: null, poll: null });
@@ -692,7 +718,44 @@ describe("sanitizeMultichatConfig", () => {
     const out = sanitizeMultichatConfig({
       sound: { enabled: true, volume: 900, evil: 1 },
     });
-    expect(out.sound).toEqual({ enabled: true, volume: 100 });
+    // New effect fields materialize with defaults; unknown keys drop.
+    expect(out.sound).toEqual({
+      enabled: true,
+      volume: 100,
+      messageSound: "ding",
+      eventSoundsEnabled: false,
+      eventVolume: 70,
+      eventSounds: {
+        sub: "victory",
+        resub: "victory",
+        giftsub: "airhorn",
+        raid: "airhorn",
+        member: "sparkle",
+        superchat: "coin",
+        gift: "coin",
+        follow: "pop",
+      },
+    });
+  });
+
+  test("sound effect picks round-trip; junk ids fall back per-kind", () => {
+    const out = sanitizeMultichatConfig({
+      sound: {
+        enabled: true,
+        messageSound: "coin",
+        eventSoundsEnabled: true,
+        eventVolume: -5,
+        eventSounds: { raid: "bass-drop", sub: "none", follow: "vuvuzela" },
+      },
+    });
+    expect(out.sound.messageSound).toBe("coin");
+    expect(out.sound.eventSoundsEnabled).toBe(true);
+    expect(out.sound.eventVolume).toBe(0);
+    expect(out.sound.eventSounds.raid).toBe("bass-drop");
+    expect(out.sound.eventSounds.sub).toBe("none");
+    // Unknown effect id → that kind's default, not silence.
+    expect(out.sound.eventSounds.follow).toBe("pop");
+    expect(out.sound.messageSound).not.toBe("vuvuzela");
   });
 
   test("appearance/tts/sound omitted stays omitted (no default bloat)", () => {

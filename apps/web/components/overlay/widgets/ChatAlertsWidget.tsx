@@ -21,6 +21,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { EVENT_KIND_LABEL, type ChatEvent } from "@/lib/multichat/events";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import { useEventSounds } from "@/lib/multichat/useEventSounds";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import {
   TEST_EVENT_INTERVAL_MS,
@@ -47,7 +48,7 @@ export function ChatAlertsWidget({
   live?: LiveGamePayload | null;
 }) {
   void studioEvent;
-  const { platforms } = useMultichatConfig(token);
+  const { platforms, sound } = useMultichatConfig(token);
   const { events: feedEvents } = useMultiChat({
     apiBase: API_BASE,
     token,
@@ -80,6 +81,11 @@ export function ChatAlertsWidget({
   }, [testActive]);
 
   const events = testActive ? demoEvents : feedEvents;
+
+  // Alert sounds — per-event-kind synthesized effects, configured in
+  // Settings. Test-fire demo events ride the same path, so the Test
+  // button auditions the sounds exactly as a real raid would.
+  useEventSounds(events, sound);
 
   const newest = events.length > 0 ? events[events.length - 1] : null;
   const newestKey = newest ? `${newest.platform}:${newest.id}` : null;

@@ -49,6 +49,7 @@ describe("sanitizeSoundConfig", () => {
   test("garbage → defaults; clamps volume", () => {
     expect(sanitizeSoundConfig(null)).toEqual(DEFAULT_SOUND);
     expect(sanitizeSoundConfig({ enabled: true, volume: 900 })).toEqual({
+      ...DEFAULT_SOUND,
       enabled: true,
       volume: 100,
     });
