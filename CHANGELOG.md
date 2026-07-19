@@ -58,6 +58,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Crystal Ball hands off instantly between games** — the 12-second
+  settle reveal ("chat was RIGHT" / "nobody called it") no longer
+  blocks the next game's CALL IT window: a new prediction opening
+  clears the reveal immediately, and a live open window always
+  outranks a leftover reveal even if the Browser Source re-mounted
+  between games.
 - **"Game Too Short" can no longer headline a build fact** — the
   classifier's sub-45-second catch-all bucket is excluded from the
   ticker's signature/hottest build stats (same exclusion the ladder

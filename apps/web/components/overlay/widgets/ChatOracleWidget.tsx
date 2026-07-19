@@ -67,7 +67,15 @@ export function ChatOracleWidget({
 
   const [settle, setSettle] = useState<Settle | null>(null);
   useEffect(() => {
-    if (!lastEvent || lastEvent.type !== "prediction-settled") return;
+    if (!lastEvent) return;
+    // The next game starting kills the reveal instantly — a leftover
+    // "chat was RIGHT / nobody called it" card must never sit over
+    // the new game's CALL IT window.
+    if (lastEvent.type === "prediction-open") {
+      setSettle(null);
+      return;
+    }
+    if (lastEvent.type !== "prediction-settled") return;
     const tally = sanitizeTally(lastEvent.tally);
     setSettle({
       result: lastEvent.result === "win" ? "win" : "loss",
@@ -120,13 +128,11 @@ export function ChatOracleWidget({
     );
   }
 
-  if (settle) {
-    return (
-      <Frame>
-        <RevealCard settle={settle} />
-      </Frame>
-    );
-  }
+  // A live open window ALWAYS outranks a leftover reveal: the summary
+  // only carries an open prediction once the next game has started
+  // (settling nulls it), so this is the "new game began mid-reveal"
+  // transfer — belt-and-braces for the event-driven clear above (e.g.
+  // a Browser Source that re-mounted between the two events).
   if (summary.prediction && !votingLocked) {
     return (
       <Frame>
@@ -134,6 +140,13 @@ export function ChatOracleWidget({
           opponent={summary.prediction.opponent}
           tally={summary.prediction.tally}
         />
+      </Frame>
+    );
+  }
+  if (settle) {
+    return (
+      <Frame>
+        <RevealCard settle={settle} />
       </Frame>
     );
   }
