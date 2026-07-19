@@ -469,7 +469,16 @@ class TickerFactsService {
 
     // ── Builds ──
     {
-      const withBuild = games.filter((g) => g.myBuild && (g.win || g.loss));
+      // The classifier's "<X>v<Y> - Game Too Short" catch-all (sub-45s
+      // replays) is not a build — without this filter it wins the
+      // signature/hottest slots on any account with a cheese-y ladder
+      // history. Same exclusion regex the ladder-meta service uses.
+      const withBuild = games.filter(
+        (g) =>
+          g.myBuild &&
+          !/Game Too Short$/i.test(g.myBuild) &&
+          (g.win || g.loss),
+      );
       const byBuild = groupBy(withBuild, (g) => g.myBuild);
       let signature = null;
       for (const [build, list] of byBuild) {

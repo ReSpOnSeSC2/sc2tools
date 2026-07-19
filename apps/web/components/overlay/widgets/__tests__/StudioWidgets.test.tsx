@@ -20,6 +20,7 @@ import { SessionRecapWidget } from "../SessionRecapWidget";
 import { StreamSceneWidget, formatCountdown } from "../StreamSceneWidget";
 import { StatsTickerWidget } from "../StatsTickerWidget";
 import { CountdownTimerWidget } from "../CountdownTimerWidget";
+import { ChatOracleWidget } from "../ChatOracleWidget";
 import {
   EMPTY_ENGAGEMENT,
   type EngagementSummary,
@@ -39,12 +40,16 @@ vi.mock("@/lib/multichat/useMultiChat", () => ({
 }));
 
 let mockEngagement: EngagementSummary;
+let mockEngagementEvent: Record<string, unknown> | null;
 vi.mock("@/lib/multichat/useEngagementState", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/multichat/useEngagementState")>();
   return {
     ...actual,
-    useEngagementState: () => ({ summary: mockEngagement, lastEvent: null }),
+    useEngagementState: () => ({
+      summary: mockEngagement,
+      lastEvent: mockEngagementEvent,
+    }),
   };
 });
 
@@ -83,6 +88,7 @@ beforeEach(() => {
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
   mockEngagement = { ...EMPTY_ENGAGEMENT };
+  mockEngagementEvent = null;
   mockFacts = [];
 });
 
@@ -486,6 +492,47 @@ describe("StatsTickerWidget", () => {
     );
     expect(screen.getAllByText(/CAREER: 100 W – 80 L/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/PEAK MMR: 4,712/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("ChatOracleWidget game-to-game transfer", () => {
+  it("shows the reveal after a settle event", () => {
+    mockEngagementEvent = {
+      type: "prediction-settled",
+      result: "win",
+      tally: { win: 0, loss: 0, total: 0 },
+      correctCount: 0,
+      pointsEach: 10,
+      topOracles: [],
+    };
+    render(<ChatOracleWidget token="tok" />);
+    expect(screen.getByText(/Nobody called it — result: WIN/)).toBeTruthy();
+  });
+
+  it("a new open window instantly outranks a leftover reveal", () => {
+    // The settle event from game N is still the last event, but game
+    // N+1's window is already open in the summary (streamer requeued
+    // fast) — the CALL IT card must take over, not the stale reveal.
+    mockEngagementEvent = {
+      type: "prediction-settled",
+      result: "win",
+      tally: { win: 0, loss: 0, total: 0 },
+      correctCount: 0,
+      pointsEach: 10,
+      topOracles: [],
+    };
+    mockEngagement = {
+      ...EMPTY_ENGAGEMENT,
+      prediction: {
+        gameKey: "g-next",
+        opponent: "NextOpp",
+        tally: { win: 0, loss: 0, total: 0 },
+        locksAtMs: Date.now() + 90_000,
+      },
+    };
+    render(<ChatOracleWidget token="tok" />);
+    expect(screen.queryByText(/Nobody called it/)).toBeNull();
+    expect(screen.getByText(/Call it vs NextOpp/)).toBeTruthy();
   });
 });
 

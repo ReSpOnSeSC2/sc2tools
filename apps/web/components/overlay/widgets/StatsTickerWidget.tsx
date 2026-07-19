@@ -28,7 +28,7 @@
  * change the reading speed. Reduced-motion renders it statically.
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useStudioState } from "@/lib/multichat/useStudioState";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { useTickerFacts } from "@/lib/multichat/useTickerFacts";
@@ -36,7 +36,18 @@ import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import type { SessionSummary } from "./SessionWidget";
 
-const SECONDS_PER_SEGMENT = 4;
+/**
+ * Constant scroll speed in CSS px per second. The animation duration
+ * derives from the strip's MEASURED width at this speed, so wordy
+ * segments (career facts are long) read at exactly the same pace as
+ * terse ones — pacing by segment count made a facts-heavy strip
+ * visibly race. ~55 px/s ≈ 7–8 characters/second at the bar's 12.5px
+ * font: comfortable broadcast-ticker reading speed.
+ */
+const PX_PER_SEC = 55;
+/** Fallback pacing when the strip can't be measured (first paint,
+ *  non-layout test environments). */
+const SECONDS_PER_SEGMENT = 5;
 /** Fun facts shown per marquee loop; the pool rotates page by page. */
 const FACTS_PER_LOOP = 10;
 /** Clock granularity for the voting-lock check. */
@@ -169,7 +180,23 @@ export function StatsTickerWidget({
     () => [...baseSegments, ...factChunk],
     [baseSegments, factChunk],
   );
-  const durationSec = Math.max(20, segments.length * SECONDS_PER_SEGMENT);
+
+  // Constant-speed pacing: measure the (single-copy) strip width and
+  // derive the loop duration at PX_PER_SEC. scrollWidth is 0 in
+  // non-layout environments — fall back to per-segment pacing there.
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const [stripHalfPx, setStripHalfPx] = useState(0);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    setStripHalfPx(el.scrollWidth / 2);
+  }, [segments]);
+  const durationSec = Math.max(
+    20,
+    stripHalfPx > 0
+      ? stripHalfPx / PX_PER_SEC
+      : segments.length * SECONDS_PER_SEGMENT,
+  );
 
   useEffect(() => {
     if (totalPages <= 1) return;
@@ -202,7 +229,7 @@ export function StatsTickerWidget({
       <div style={barStyle}>
         <div style={badgeStyle}>LIVE</div>
         <div style={windowStyle}>
-          <div className="ticker-strip">
+          <div className="ticker-strip" ref={stripRef}>
             {strip}
             {strip.map((el, i) => (
               <span key={`dup-${i}`} aria-hidden style={segmentStyle}>
