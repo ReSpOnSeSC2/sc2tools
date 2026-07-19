@@ -39,6 +39,7 @@ const KNOWN_WIDGETS = Object.freeze([
   "chat-alerts",
   "stream-goals",
   "session-recap",
+  "stream-scene",
 ]);
 
 /**

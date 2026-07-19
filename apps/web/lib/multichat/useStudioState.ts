@@ -39,12 +39,22 @@ export interface StudioGoal {
   target: number;
 }
 
+export interface StudioScene {
+  mode: "brb" | "starting";
+  message: string;
+  /** Epoch ms the countdown targets, or null for no countdown. */
+  countdownEndsAt: number | null;
+  /** Epoch ms the scene was set — lets widgets show elapsed time. */
+  setAtMs: number;
+}
+
 export interface StudioState {
   highlight: StudioHighlight | null;
   poll: StudioPoll | null;
   goals: StudioGoal[];
   blockedUsers: string[];
   recapSeq: number;
+  scene: StudioScene | null;
   updatedAt: string | null;
 }
 
@@ -54,6 +64,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   goals: [],
   blockedUsers: [],
   recapSeq: 0,
+  scene: null,
   updatedAt: null,
 };
 
@@ -110,6 +121,19 @@ function sanitizeGoals(raw: unknown): StudioGoal[] {
   return out;
 }
 
+function sanitizeScene(raw: unknown): StudioScene | null {
+  if (!raw || typeof raw !== "object") return null;
+  const s = raw as Record<string, unknown>;
+  if (s.mode !== "brb" && s.mode !== "starting") return null;
+  const ends = Number(s.countdownEndsAt);
+  return {
+    mode: s.mode,
+    message: typeof s.message === "string" ? s.message.slice(0, 80) : "",
+    countdownEndsAt: Number.isFinite(ends) && ends > 0 ? ends : null,
+    setAtMs: Number.isFinite(Number(s.setAtMs)) ? Number(s.setAtMs) : 0,
+  };
+}
+
 /**
  * Narrow an untrusted wire value (GET body or socket payload) to a
  * fully-defaulted StudioState. Never throws.
@@ -121,6 +145,7 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     highlight: sanitizeHighlight(s.highlight),
     poll: sanitizePoll(s.poll),
     goals: sanitizeGoals(s.goals),
+    scene: sanitizeScene(s.scene),
     blockedUsers: (Array.isArray(s.blockedUsers) ? s.blockedUsers : []).filter(
       (u): u is string => typeof u === "string" && u.length > 0,
     ),

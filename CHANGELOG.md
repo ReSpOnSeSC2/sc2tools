@@ -13,6 +13,35 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Multichat · real-recording sound pack, custom sounds, and voice
+  lines** — the alert/ding sound picker grows from 16 synthesized
+  effects to 50+ options. A bundled pack of 35 real recordings
+  (airhorn, metal pipe clang, sad trombone, record scratch, crickets,
+  cha-ching, fart, goat, crowd applause/boo/laugh, screams, drum
+  roll, buzzers, fanfares, thunder…) ships with the app — every clip
+  sourced from free-commercial-use libraries (Mixkit, SoundBible
+  CC BY), trimmed, mono-mixed and loudness-normalized; provenance in
+  `public/sounds/multichat/CREDITS.md`. On top of that, add your own
+  sounds three ways: paste a direct MP3 link (e.g. MyInstants),
+  upload a small file (MP3/OGG/WAV ≤ 300 KB, served to OBS on your
+  overlay token), or type a **voice line** spoken by the browser's
+  speech engine. Custom sounds appear in every picker under "Your
+  sounds" and can be mapped per event type.
+
+- **BRB / Starting Soon scene widget + Stream Dock Scenes panel** — a
+  full-screen animated scene source for OBS (drifting accent glows,
+  floating embers, big letterspaced headline, huge ticking countdown
+  that flips to a pulsing "STARTING NOW" at zero, optional custom
+  message). Switch between Live / Starting Soon / BRB from the new
+  Scenes panel in the Stream Dock, with quick 5/10/15-minute
+  countdown chips — no OBS scene fiddling mid-stream. Has a Settings
+  Test button like every widget.
+
+- **Stream Dock · read highlights aloud** — a 🔊 Read-aloud button on
+  the pinned highlight plus an "Auto-read new highlights" toggle:
+  each newly pinned message is spoken on the dock's device, so you
+  can hear the highlight while focused in-game.
+
 - **Multichat · sound-effect library for alerts and the chat ding** —
   16 synthesized effects across four moods (Classic: ding, pop,
   doorbell · Cool: sparkle, laser, power-up, riser, boom · Arcade &

@@ -17,6 +17,7 @@ import { ChatPollWidget } from "../ChatPollWidget";
 import { ChatAlertsWidget } from "../ChatAlertsWidget";
 import { StreamGoalsWidget } from "../StreamGoalsWidget";
 import { SessionRecapWidget } from "../SessionRecapWidget";
+import { StreamSceneWidget, formatCountdown } from "../StreamSceneWidget";
 
 let mockStudio: StudioState & { loaded: boolean };
 let mockChat: MultiChatState;
@@ -49,6 +50,7 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
   goals: [],
   blockedUsers: [],
   recapSeq: 0,
+  scene: null,
   updatedAt: null,
   loaded: true,
 };
@@ -236,6 +238,65 @@ describe("SessionRecapWidget", () => {
  * payloads addressed to a different widget.
  * ------------------------------------------------------------------ */
 
+describe("StreamSceneWidget", () => {
+  it("renders transparent while no scene is active", () => {
+    const { container } = render(<StreamSceneWidget token="tok" />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("renders BRB with the streamer's message", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      scene: {
+        mode: "brb",
+        message: "Grabbing water, back in 5",
+        countdownEndsAt: null,
+        setAtMs: 1,
+      },
+    };
+    render(<StreamSceneWidget token="tok" />);
+    expect(screen.getByText("BE RIGHT BACK")).toBeTruthy();
+    expect(screen.getByText("Grabbing water, back in 5")).toBeTruthy();
+  });
+
+  it("renders Starting Soon with a ticking countdown", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      scene: {
+        mode: "starting",
+        message: "",
+        countdownEndsAt: Date.now() + 5 * 60_000,
+        setAtMs: Date.now(),
+      },
+    };
+    render(<StreamSceneWidget token="tok" />);
+    expect(screen.getByText("STARTING SOON")).toBeTruthy();
+    // 5:00 minus render latency — either boundary formats fine.
+    expect(screen.getByText(/^0?5:00$|^0?4:5\d$/)).toBeTruthy();
+  });
+
+  it("shows STARTING NOW once the countdown hits zero", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      scene: {
+        mode: "starting",
+        message: "",
+        countdownEndsAt: Date.now() - 1000,
+        setAtMs: Date.now() - 10_000,
+      },
+    };
+    render(<StreamSceneWidget token="tok" />);
+    expect(screen.getByText("STARTING NOW")).toBeTruthy();
+  });
+
+  it("formatCountdown pads and rolls into hours", () => {
+    expect(formatCountdown(5 * 60_000)).toBe("05:00");
+    expect(formatCountdown(61_000)).toBe("01:01");
+    expect(formatCountdown(3_600_000 + 61_000)).toBe("1:01:01");
+    expect(formatCountdown(500)).toBe("00:01");
+  });
+});
+
 const testFire = (widget: string): LiveGamePayload => ({
   isTest: true,
   testWidget: widget,
@@ -265,6 +326,20 @@ describe("Stream Studio Test fire", () => {
   it("ChatHighlightWidget ignores a test targeting a different widget", () => {
     const { container } = render(
       <ChatHighlightWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("StreamSceneWidget shows the Starting Soon demo with a TEST tag", () => {
+    render(<StreamSceneWidget token="tok" live={testFire("stream-scene")} />);
+    expect(screen.getByText("STARTING SOON")).toBeTruthy();
+    expect(screen.getByText(/Test: ranked ladder grind/)).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+  });
+
+  it("StreamSceneWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <StreamSceneWidget token="tok" live={foreignTestFire} />,
     );
     expect(container.textContent).toBe("");
   });

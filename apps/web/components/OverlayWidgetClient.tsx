@@ -54,6 +54,7 @@ import {
   ChatAlertsWidget,
   StreamGoalsWidget,
   SessionRecapWidget,
+  StreamSceneWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -295,6 +296,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "chat-alerts",
   "stream-goals",
   "session-recap",
+  "stream-scene",
 ]);
 
 function WidgetRenderer({
@@ -395,6 +397,12 @@ function WidgetRenderer({
           session={session}
           live={live}
         />
+      );
+    case "stream-scene":
+      // Full-screen BRB / Starting Soon scene — driven entirely by
+      // the Stream Dock's Scenes panel via the studio state.
+      return (
+        <StreamSceneWidget token={token} studioEvent={studioEvent} live={live} />
       );
     default:
       return null;

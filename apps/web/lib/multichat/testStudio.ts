@@ -12,7 +12,12 @@
 // apps/api/src/services/overlayLiveSamples).
 
 import type { ChatEvent } from "./events";
-import type { StudioGoal, StudioHighlight, StudioPoll } from "./useStudioState";
+import type {
+  StudioGoal,
+  StudioHighlight,
+  StudioPoll,
+  StudioScene,
+} from "./useStudioState";
 import type { SessionSummary } from "@/components/overlay/widgets/SessionWidget";
 
 /**
@@ -111,6 +116,20 @@ export const TEST_GOALS: ReadonlyArray<StudioGoal> = [
   { label: "Test: Follower goal", current: 1168, target: 1200 },
   { label: "Test: Sub goal", current: 1, target: 10 },
 ];
+
+/**
+ * Demo scene for the stream-scene Test fire — Starting Soon with a
+ * short live countdown so placement/typography can be judged for
+ * real.
+ */
+export function testScene(nowMs: number): StudioScene {
+  return {
+    mode: "starting",
+    message: "Test: ranked ladder grind — 1v1 vs the world",
+    countdownEndsAt: nowMs + 4 * 60 * 1000 + 59 * 1000,
+    setAtMs: nowMs,
+  };
+}
 
 /**
  * Fallback session block for the session-recap Test fire. ONLY used

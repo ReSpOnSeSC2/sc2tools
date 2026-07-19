@@ -7,6 +7,7 @@
 // after mount ring.
 
 import { useEffect, useMemo, useRef } from "react";
+import { API_BASE } from "@/lib/clientApi";
 import {
   createDinger,
   sanitizeSoundConfig,
@@ -35,7 +36,7 @@ export function useChatSound(
       dingerRef.current = null;
       return;
     }
-    const dinger = createDinger(config);
+    const dinger = createDinger(config, API_BASE);
     dingerRef.current = dinger;
     return () => {
       dinger.close();

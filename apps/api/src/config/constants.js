@@ -39,6 +39,7 @@ const COLLECTIONS = Object.freeze({
   DEVICE_TOKENS: "device_tokens",
   OVERLAY_TOKENS: "overlay_tokens",
   MULTICHAT_STUDIO: "multichat_studio",
+  MULTICHAT_SOUNDS: "multichat_sounds",
   ML_MODELS: "ml_models",
   ML_JOBS: "ml_jobs",
   IMPORT_JOBS: "import_jobs",

@@ -212,6 +212,34 @@ describe("DockClient", () => {
     expect(studioPosts()).toEqual([]);
   });
 
+  it("Scenes: Starting soon POSTs the scene with a countdown", async () => {
+    render(<DockClient token="tok_test" />);
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Optional message/),
+      { target: { value: "grabbing water" } },
+    );
+    const before = Date.now();
+    fireEvent.click(screen.getByRole("button", { name: "▶ Starting soon" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(1);
+    });
+    const scene = (studioPosts()[0] as { scene: Record<string, unknown> })
+      .scene;
+    expect(scene.mode).toBe("starting");
+    expect(scene.message).toBe("grabbing water");
+    // Default 5-minute countdown lands in a sane window around now+5m.
+    const ends = Number(scene.countdownEndsAt);
+    expect(ends).toBeGreaterThanOrEqual(before + 5 * 60_000 - 50);
+    expect(ends).toBeLessThan(before + 5 * 60_000 + 10_000);
+    // The POST response becomes state — the status row + Go live show.
+    expect(await screen.findByText("Starting Soon on stream")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Go live" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(2);
+    });
+    expect(studioPosts()[1]).toEqual({ scene: null });
+  });
+
   it("renders the goals editor", async () => {
     render(<DockClient token="tok_test" />);
     fireEvent.click(await screen.findByRole("button", { name: "+ Add goal" }));
