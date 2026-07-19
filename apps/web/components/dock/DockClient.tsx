@@ -24,18 +24,20 @@
  * two-column with chat on the left and controls on the right.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import {
   DEFAULT_STUDIO_STATE,
   sanitizeStudioState,
+  type StudioHighlight,
   type StudioState,
 } from "@/lib/multichat/useStudioState";
 import type { ChatMessage, MultichatConfig } from "@/lib/multichat/types";
 import { DockChat } from "./DockChat";
 import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
+import { DockScenes } from "./DockScenes";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
@@ -96,6 +98,7 @@ function usePlatformConfig(token: string): {
 const SECTIONS = [
   { id: "dock-chat", label: "Chat" },
   { id: "dock-highlight", label: "Highlight" },
+  { id: "dock-scenes", label: "Scenes" },
   { id: "dock-poll", label: "Poll" },
   { id: "dock-goals", label: "Goals" },
   { id: "dock-actions", label: "Actions" },
@@ -166,6 +169,47 @@ export function DockClient({ token }: { token: string }) {
       }),
     [postStudio],
   );
+
+  // ── Read highlights aloud (TTS on THIS device — the dock is what
+  // the streamer is touching, so the tap doubles as the autoplay
+  // gesture). "Auto-read" speaks each newly pinned message; the pin
+  // that's already on screen when the dock opens stays silent.
+  const speakHighlight = useCallback((h: StudioHighlight) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(`${h.user} says: ${h.text}`);
+      window.speechSynthesis.speak(u);
+    } catch {
+      /* speech backend hiccup — stay silent */
+    }
+  }, []);
+
+  const [autoRead, setAutoRead] = useState(false);
+  useEffect(() => {
+    setAutoRead(window.localStorage.getItem("dock:autoReadHighlights") === "1");
+  }, []);
+  const toggleAutoRead = (on: boolean) => {
+    setAutoRead(on);
+    try {
+      window.localStorage.setItem("dock:autoReadHighlights", on ? "1" : "0");
+    } catch {
+      /* storage unavailable — session-only toggle */
+    }
+  };
+
+  const lastHighlightKeyRef = useRef<string | null | undefined>(undefined);
+  const autoReadRef = useRef(autoRead);
+  autoReadRef.current = autoRead;
+  useEffect(() => {
+    const h = studio.highlight;
+    const key = h ? `${h.platform}:${h.user}:${h.atMs}:${h.text}` : null;
+    const prev = lastHighlightKeyRef.current;
+    lastHighlightKeyRef.current = key;
+    // undefined = first render — adopt without speaking.
+    if (prev === undefined || key === prev || !h) return;
+    if (autoReadRef.current) speakHighlight(h);
+  }, [studio.highlight, speakHighlight]);
 
   const blockUser = useCallback(
     (user: string) =>
@@ -238,12 +282,21 @@ export function DockClient({ token }: { token: string }) {
                       {studio.highlight.text}
                     </div>
                   </div>
-                  <DockButton
-                    disabled={busy}
-                    onClick={() => void postStudio({ highlight: null })}
-                  >
-                    Clear highlight
-                  </DockButton>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DockButton
+                      onClick={() =>
+                        studio.highlight && speakHighlight(studio.highlight)
+                      }
+                    >
+                      🔊 Read aloud
+                    </DockButton>
+                    <DockButton
+                      disabled={busy}
+                      onClick={() => void postStudio({ highlight: null })}
+                    >
+                      Clear highlight
+                    </DockButton>
+                  </div>
                 </div>
               ) : (
                 <p className="text-caption text-text-dim">
@@ -251,6 +304,25 @@ export function DockClient({ token }: { token: string }) {
                   pin it on stream.
                 </p>
               )}
+              <label className="mt-2 flex items-center gap-1.5 text-caption text-text-muted">
+                <input
+                  type="checkbox"
+                  checked={autoRead}
+                  onChange={(e) => toggleAutoRead(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[var(--accent,#3ec0c7)]"
+                />
+                Auto-read new highlights (spoken on this device)
+              </label>
+            </SectionCard>
+          </section>
+
+          <section id="dock-scenes" className="scroll-mt-12">
+            <SectionCard title="Scenes">
+              <DockScenes
+                scene={studio.scene}
+                busy={busy}
+                onPost={postStudio}
+              />
             </SectionCard>
           </section>
 

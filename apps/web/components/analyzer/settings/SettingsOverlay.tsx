@@ -148,6 +148,11 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     label: "Session recap card",
     hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",
   },
+  {
+    id: "stream-scene",
+    label: "BRB / Starting Soon scene",
+    hint: "Full-screen scene with countdown — switch between Live, BRB, and Starting Soon from the Stream Dock. Test shows a Starting Soon demo.",
+  },
 ];
 
 export function SettingsOverlay({ origin }: { origin?: string }) {

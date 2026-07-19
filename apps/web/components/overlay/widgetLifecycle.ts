@@ -45,7 +45,8 @@ export type WidgetId =
   | "chat-poll"
   | "chat-alerts"
   | "stream-goals"
-  | "session-recap";
+  | "session-recap"
+  | "stream-scene";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -71,6 +72,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "chat-alerts",
   "stream-goals",
   "session-recap",
+  "stream-scene",
 ];
 
 /**
@@ -137,6 +139,7 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   "chat-alerts": null,
   "stream-goals": null,
   "session-recap": null,
+  "stream-scene": null,
 };
 
 /**

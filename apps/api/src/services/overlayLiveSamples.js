@@ -231,6 +231,7 @@ const PER_WIDGET_KEYS = {
   // the widget treats a test fire like a real recap trigger and only
   // falls back to its client-side demo block when the block is absent.
   "session-recap": ["session"],
+  "stream-scene": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

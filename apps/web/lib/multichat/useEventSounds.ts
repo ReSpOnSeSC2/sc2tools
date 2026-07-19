@@ -8,6 +8,7 @@
 // effect mapping lives in the sound config (sanitizeSoundConfig).
 
 import { useEffect, useMemo, useRef } from "react";
+import { API_BASE } from "@/lib/clientApi";
 import {
   createEventSounder,
   sanitizeSoundConfig,
@@ -36,7 +37,7 @@ export function useEventSounds(
       sounderRef.current = null;
       return;
     }
-    const sounder = createEventSounder(config);
+    const sounder = createEventSounder(config, API_BASE);
     sounderRef.current = sounder;
     return () => {
       sounder.close();

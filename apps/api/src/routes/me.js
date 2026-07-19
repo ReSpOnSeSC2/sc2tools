@@ -34,6 +34,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   gdpr: import('../services/gdpr').GdprService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   imports?: import('../services/import').ImportService,
+ *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   clerk?: import('../services/clerkClient').ClerkClient,
  *   pulseMmr?: {
  *     getCurrentMmr(pulseId: string): Promise<{
@@ -384,6 +385,93 @@ function buildMeRouter(deps) {
       next(err);
     }
   });
+
+  // ── Uploaded multichat alert sounds ──
+  // Small audio files for the multichat sound system. Bytes arrive
+  // base64 in JSON (well under the global body limit at the 300 KB
+  // cap); the OBS widget fetches them back on the token route
+  // (/v1/multichat/:token/sound/:id). Wire shape errors map to the
+  // service's coded throws.
+
+  router.get("/me/multichat-sounds", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.multichatSounds) {
+        res.json({ sounds: [] });
+        return;
+      }
+      res.json({ sounds: await deps.multichatSounds.list(auth.userId) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/me/multichat-sounds", deps.auth, async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.multichatSounds) {
+        res.status(503).json({ error: { code: "uploads_unavailable" } });
+        return;
+      }
+      const label = String(req.body?.label ?? "");
+      const b64 = String(req.body?.dataBase64 ?? "");
+      let bytes;
+      try {
+        bytes = Buffer.from(b64, "base64");
+      } catch {
+        bytes = Buffer.alloc(0);
+      }
+      const created = await deps.multichatSounds.create(
+        auth.userId,
+        label,
+        bytes,
+      );
+      res.status(201).json(created);
+    } catch (err) {
+      const coded = /** @type {{code?: string, message?: string}} */ (err);
+      if (
+        coded.code === "bad_label" ||
+        coded.code === "bad_file" ||
+        coded.code === "bad_format" ||
+        coded.code === "too_large" ||
+        coded.code === "too_many"
+      ) {
+        res
+          .status(400)
+          .json({ error: { code: coded.code, message: coded.message } });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  router.delete(
+    "/me/multichat-sounds/:soundId",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        if (!deps.multichatSounds) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        const ok = await deps.multichatSounds.remove(
+          auth.userId,
+          String(req.params.soundId),
+        );
+        if (!ok) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        res.json({ deleted: true });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.get("/me/doctor", deps.auth, async (req, res, next) => {
     try {

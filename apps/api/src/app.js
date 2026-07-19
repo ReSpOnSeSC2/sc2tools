@@ -27,6 +27,7 @@ const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
+const { MultichatSoundsService } = require("./services/multichatSounds");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
@@ -278,6 +279,7 @@ function makeServices(deps) {
   // Stream-studio state (highlight / poll / goals / recap) shared by
   // the dock and the multichat widget family, broadcast per token.
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
+  const multichatSounds = new MultichatSoundsService(deps.db);
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
@@ -420,6 +422,7 @@ function makeServices(deps) {
     liveGameBroker,
     tiktokChatRelay,
     multichatStudio,
+    multichatSounds,
     aggregations,
     macroReport,
     streak,
@@ -607,6 +610,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       gdpr: services.gdpr,
       pairings: services.pairings,
       imports: services.imports,
+      multichatSounds: services.multichatSounds,
       clerk,
       pulseMmr: services.pulseMmr,
       auth,
@@ -655,6 +659,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       users: services.users,
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
+      sounds: services.multichatSounds,
     }),
   );
   // Operational admin router — gated on isAdmin(req) inside the

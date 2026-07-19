@@ -52,6 +52,7 @@ class MultichatStudioService {
       goals: Array.isArray(doc?.goals) ? doc.goals : [],
       blockedUsers: Array.isArray(doc?.blockedUsers) ? doc.blockedUsers : [],
       recapSeq: Number(doc?.recapSeq) || 0,
+      scene: doc?.scene ?? null,
       updatedAt: doc?.updatedAt ?? null,
     };
   }
@@ -79,6 +80,9 @@ class MultichatStudioService {
     }
     if ("blockedUsers" in patch) {
       set.blockedUsers = sanitizeBlockedUsers(patch.blockedUsers);
+    }
+    if ("scene" in patch) {
+      set.scene = sanitizeScene(patch.scene);
     }
     if (patch.recap === true) {
       inc.recapSeq = 1;
@@ -145,6 +149,33 @@ function sanitizeGoals(raw) {
   return out;
 }
 
+const SCENE_MODES = ["brb", "starting"];
+const SCENE_MESSAGE_MAX = 80;
+/** Countdown targets clamp to now+24h — a fat-fingered year-long
+ * countdown shouldn't persist. */
+const SCENE_COUNTDOWN_MAX_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Scene state for the full-screen BRB / Starting Soon widget.
+ * ``null`` (mode "none" or junk) means live — the widget renders
+ * transparent.
+ *
+ * @param {unknown} raw
+ */
+function sanitizeScene(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const s = /** @type {Record<string, any>} */ (raw);
+  if (!SCENE_MODES.includes(s.mode)) return null;
+  const message = String(s.message ?? "").trim().slice(0, SCENE_MESSAGE_MAX);
+  const ends = Number(s.countdownEndsAt);
+  const now = Date.now();
+  const countdownEndsAt =
+    Number.isFinite(ends) && ends > now
+      ? Math.min(ends, now + SCENE_COUNTDOWN_MAX_MS)
+      : null;
+  return { mode: s.mode, message, countdownEndsAt, setAtMs: now };
+}
+
 /** @param {unknown} raw */
 function sanitizeBlockedUsers(raw) {
   if (!Array.isArray(raw)) return [];
@@ -164,4 +195,5 @@ module.exports = {
   sanitizePoll,
   sanitizeGoals,
   sanitizeBlockedUsers,
+  sanitizeScene,
 };

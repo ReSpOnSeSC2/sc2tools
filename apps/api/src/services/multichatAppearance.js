@@ -209,6 +209,48 @@ const SOUND_EFFECT_IDS = [
   "drumroll",
 ];
 
+/**
+ * Bundled real-recording pack ids — mirror of
+ * apps/web/lib/multichat/soundPack.ts PACK_SOUND_IDS.
+ */
+const PACK_SOUND_IDS = [
+  "real-airhorn",
+  "cha-ching",
+  "cricket-chirp",
+  "falling-scream",
+  "cartoon-fart",
+  "game-over-trombone",
+  "goat-baa",
+  "metal-pipe",
+  "record-scratch",
+  "real-trombone",
+  "applause-big",
+  "applause-small",
+  "crowd-boo",
+  "crowd-laugh",
+  "party-cheer",
+  "boing-spring",
+  "cartoon-punch",
+  "clown-horn",
+  "evil-laugh",
+  "fail-drum",
+  "falling-whistle",
+  "magic-sparkle",
+  "police-whistle",
+  "duck-squeak",
+  "sad-party-horn",
+  "whip-crack",
+  "achievement-bell",
+  "arena-buzzer",
+  "real-drum-roll",
+  "fanfare-horns",
+  "wrong-buzzer",
+  "dramatic-sting",
+  "short-explosion",
+  "monster-roar",
+  "cinematic-thunder",
+];
+
 /** Event kinds — mirror of apps/web/lib/multichat/events.ts. */
 const CHAT_EVENT_KINDS = [
   "sub",
@@ -252,6 +294,89 @@ function clampVolume(raw, fallback) {
     : fallback;
 }
 
+const CUSTOM_SOUNDS_MAX = 12;
+const CUSTOM_LABEL_MAX = 40;
+const CUSTOM_URL_MAX = 400;
+const CUSTOM_TTS_TEXT_MAX = 200;
+/** Custom ids are namespaced ``c-…`` — can't collide with synth/pack. */
+const CUSTOM_ID_RE = /^c-[a-z0-9-]{1,24}$/;
+
+/**
+ * Mirror of apps/web/lib/multichat/sound.ts sanitizeCustomSounds.
+ *
+ * @param {unknown} raw
+ * @returns {Array<Record<string, unknown>>}
+ */
+function sanitizeCustomSounds(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (out.length >= CUSTOM_SOUNDS_MAX) break;
+    if (!item || typeof item !== "object") continue;
+    const c = /** @type {Record<string, unknown>} */ (item);
+    const id = typeof c.id === "string" ? c.id : "";
+    const label =
+      typeof c.label === "string"
+        ? c.label.trim().slice(0, CUSTOM_LABEL_MAX)
+        : "";
+    if (!CUSTOM_ID_RE.test(id) || !label || seen.has(id)) continue;
+    if (c.kind === "url") {
+      const url = typeof c.url === "string" ? c.url.trim() : "";
+      if (!/^https:\/\//.test(url) || url.length > CUSTOM_URL_MAX) continue;
+      out.push({ id, label, kind: "url", url });
+    } else if (c.kind === "upload") {
+      const uploadId =
+        typeof c.uploadId === "string" ? c.uploadId.trim() : "";
+      const url = typeof c.url === "string" ? c.url.trim() : "";
+      const okUpload = /^[a-f0-9-]{8,40}$/.test(uploadId);
+      const okUrl =
+        url.startsWith("/v1/multichat/") && url.length <= CUSTOM_URL_MAX;
+      if (!okUpload && !okUrl) continue;
+      /** @type {Record<string, unknown>} */
+      const entry = { id, label, kind: "upload" };
+      if (okUpload) entry.uploadId = uploadId;
+      if (okUrl) entry.url = url;
+      out.push(entry);
+    } else if (c.kind === "tts") {
+      const text =
+        typeof c.text === "string"
+          ? c.text.trim().slice(0, CUSTOM_TTS_TEXT_MAX)
+          : "";
+      if (!text) continue;
+      const rate = Number(c.rate);
+      out.push({
+        id,
+        label,
+        kind: "tts",
+        text,
+        voiceName:
+          typeof c.voiceName === "string" ? c.voiceName.slice(0, 120) : "",
+        rate: Number.isFinite(rate) ? Math.min(2, Math.max(0.5, rate)) : 1,
+      });
+    } else {
+      continue;
+    }
+    seen.add(id);
+  }
+  return out;
+}
+
+/**
+ * True when ``id`` names a playable sound (synth | pack | custom).
+ *
+ * @param {unknown} id
+ * @param {Array<Record<string, unknown>>} customs
+ */
+function isKnownSoundId(id, customs) {
+  return (
+    SOUND_EFFECT_IDS.includes(/** @type {string} */ (id)) ||
+    PACK_SOUND_IDS.includes(/** @type {string} */ (id)) ||
+    (typeof id === "string" && customs.some((c) => c.id === id))
+  );
+}
+
 /**
  * Mirror of apps/web/lib/multichat/sound.ts sanitizeSoundConfig.
  * Always emits every event kind ("none" silences one) so the widget's
@@ -263,6 +388,7 @@ function sanitizeChatSound(raw) {
   const s = /** @type {Record<string, unknown>} */ (
     raw && typeof raw === "object" ? raw : {}
   );
+  const customSounds = sanitizeCustomSounds(s.customSounds);
   const rawEvents = /** @type {Record<string, unknown>} */ (
     s.eventSounds && typeof s.eventSounds === "object" ? s.eventSounds : {}
   );
@@ -271,14 +397,14 @@ function sanitizeChatSound(raw) {
   for (const kind of CHAT_EVENT_KINDS) {
     const v = rawEvents[kind];
     eventSounds[kind] =
-      v === "none" || SOUND_EFFECT_IDS.includes(/** @type {string} */ (v))
+      v === "none" || isKnownSoundId(v, customSounds)
         ? /** @type {string} */ (v)
         : DEFAULT_EVENT_SOUNDS[/** @type {keyof typeof DEFAULT_EVENT_SOUNDS} */ (kind)];
   }
   return {
     enabled: typeof s.enabled === "boolean" ? s.enabled : DEFAULT_SOUND.enabled,
     volume: clampVolume(s.volume, DEFAULT_SOUND.volume),
-    messageSound: SOUND_EFFECT_IDS.includes(/** @type {string} */ (s.messageSound))
+    messageSound: isKnownSoundId(s.messageSound, customSounds)
       ? /** @type {string} */ (s.messageSound)
       : DEFAULT_SOUND.messageSound,
     eventSoundsEnabled:
@@ -287,6 +413,7 @@ function sanitizeChatSound(raw) {
         : DEFAULT_SOUND.eventSoundsEnabled,
     eventVolume: clampVolume(s.eventVolume, DEFAULT_SOUND.eventVolume),
     eventSounds,
+    customSounds,
   };
 }
 
@@ -298,5 +425,6 @@ module.exports = {
   DEFAULT_TTS,
   DEFAULT_SOUND,
   SOUND_EFFECT_IDS,
+  PACK_SOUND_IDS,
   DEFAULT_EVENT_SOUNDS,
 };

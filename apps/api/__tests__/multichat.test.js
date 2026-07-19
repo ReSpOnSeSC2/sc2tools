@@ -32,6 +32,10 @@ const {
   mapChatEvent,
   mapTikTokEvent,
 } = require("../src/services/tiktokChatRelay");
+const {
+  MultichatSoundsService,
+  sniffMime,
+} = require("../src/services/multichatSounds");
 
 const FIXTURE = JSON.parse(
   fs.readFileSync(
@@ -558,6 +562,8 @@ describe("routes/multichat studio", () => {
   let db2;
   let app2;
   let token2;
+  let uid2;
+  let sounds2;
 
   beforeAll(async () => {
     mongo2 = await MongoMemoryServer.create();
@@ -565,8 +571,10 @@ describe("routes/multichat studio", () => {
     const users2 = new UsersService(db2, {});
     const overlayTokens2 = new OverlayTokensService(db2);
     const uid = (await users2.ensureFromClerk("user_studio")).userId;
+    uid2 = uid;
     token2 = (await overlayTokens2.create(uid, "t")).token;
     const studio = new MultichatStudioService(db2, {});
+    sounds2 = new MultichatSoundsService(db2);
     app2 = express();
     app2.use(express.json());
     app2.use(
@@ -576,6 +584,7 @@ describe("routes/multichat studio", () => {
         users: users2,
         tiktokRelay: new TikTokChatRelay({ connectionFactory: async () => ({ on() {}, connect: async () => ({}), disconnect() {} }) }),
         studio,
+        sounds: sounds2,
         fetchImpl: async () => ({ ok: false, status: 500 }),
       }),
     );
@@ -645,6 +654,111 @@ describe("routes/multichat studio", () => {
     expect(r2.body.recapSeq).toBe(r1.body.recapSeq + 1);
     expect(r2.body.highlight).toBeNull();
     expect(r2.body.poll).toBeNull();
+  });
+
+  test("scene round-trips sanitized; Go live clears it", async () => {
+    const future = Date.now() + 5 * 60_000;
+    const set = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({
+        scene: {
+          mode: "starting",
+          message: "x".repeat(200),
+          countdownEndsAt: future,
+          evil: true,
+        },
+      });
+    expect(set.status).toBe(200);
+    expect(set.body.scene.mode).toBe("starting");
+    expect(set.body.scene.message.length).toBe(80);
+    expect(set.body.scene.countdownEndsAt).toBe(future);
+    expect(set.body.scene.evil).toBeUndefined();
+    // A countdown in the past sanitizes to no countdown.
+    const stale = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ scene: { mode: "brb", countdownEndsAt: 1000 } });
+    expect(stale.body.scene.mode).toBe("brb");
+    expect(stale.body.scene.countdownEndsAt).toBeNull();
+    // Junk mode = go live.
+    const live = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ scene: { mode: "party" } });
+    expect(live.body.scene).toBeNull();
+    const cleared = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ scene: null });
+    expect(cleared.body.scene).toBeNull();
+  });
+
+  test("uploaded sounds: caps, magic bytes, list/serve/delete", async () => {
+    // Not audio → rejected.
+    await expect(
+      sounds2.create(uid2, "junk", Buffer.from("not audio at all")),
+    ).rejects.toMatchObject({ code: "bad_format" });
+    // A minimal MP3 (ID3 header) passes the sniff.
+    const mp3 = Buffer.concat([
+      Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]),
+      Buffer.alloc(64, 1),
+    ]);
+    expect(sniffMime(mp3)).toBe("audio/mpeg");
+    const created = await sounds2.create(uid2, "  My clip  ", mp3);
+    expect(created.label).toBe("My clip");
+    expect(created.mime).toBe("audio/mpeg");
+    const listed = await sounds2.list(uid2);
+    expect(listed.map((s) => s.soundId)).toContain(created.soundId);
+    expect(listed[0].data).toBeUndefined();
+    // Token route serves the bytes with the sniffed content type.
+    const served = await request(app2).get(
+      `/v1/multichat/${token2}/sound/${created.soundId}`,
+    );
+    expect(served.status).toBe(200);
+    expect(served.headers["content-type"]).toMatch(/audio\/mpeg/);
+    expect(served.body.length).toBe(mp3.length);
+    // Unknown id → 404.
+    const missing = await request(app2).get(
+      `/v1/multichat/${token2}/sound/ffffffff-0000`,
+    );
+    expect(missing.status).toBe(404);
+    // Size cap.
+    await expect(
+      sounds2.create(uid2, "big", Buffer.concat([mp3, Buffer.alloc(400 * 1024)])),
+    ).rejects.toMatchObject({ code: "too_large" });
+    // Delete → gone.
+    expect(await sounds2.remove(uid2, created.soundId)).toBe(true);
+    expect(
+      (await request(app2).get(`/v1/multichat/${token2}/sound/${created.soundId}`))
+        .status,
+    ).toBe(404);
+  });
+
+  test("config route rewrites upload entries to token-served URLs", async () => {
+    const mp3 = Buffer.concat([
+      Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]),
+      Buffer.alloc(64, 1),
+    ]);
+    const created = await sounds2.create(uid2, "Boom", mp3);
+    const users2b = new UsersService(db2, {});
+    await users2b.updatePreferences(uid2, "multichat", {
+      sound: {
+        enabled: true,
+        customSounds: [
+          { id: "c-boom", label: "Boom", kind: "upload", uploadId: created.soundId },
+          { id: "c-link", label: "Link", kind: "url", url: "https://x.example/a.mp3" },
+        ],
+      },
+    });
+    const res = await request(app2).get(`/v1/multichat/${token2}/config`);
+    expect(res.status).toBe(200);
+    const customs = res.body.config.sound.customSounds;
+    expect(customs).toHaveLength(2);
+    expect(customs[0]).toEqual({
+      id: "c-boom",
+      label: "Boom",
+      kind: "upload",
+      url: `/v1/multichat/${token2}/sound/${created.soundId}`,
+    });
+    expect(customs[1].url).toBe("https://x.example/a.mp3");
+    await sounds2.remove(uid2, created.soundId);
   });
 
   test("translate without configuration is a structured 400", async () => {
@@ -735,7 +849,31 @@ describe("sanitizeMultichatConfig", () => {
         gift: "coin",
         follow: "pop",
       },
+      customSounds: [],
     });
+  });
+
+  test("pack ids and custom sounds pass the unified whitelist", () => {
+    const out = sanitizeMultichatConfig({
+      sound: {
+        messageSound: "metal-pipe",
+        eventSounds: { raid: "real-airhorn", sub: "c-mine", gift: "c-ghost" },
+        customSounds: [
+          { id: "c-mine", label: "Mine", kind: "url", url: "https://x.example/a.mp3" },
+          { id: "c-up", label: "Up", kind: "upload", uploadId: "abcdef12-3456" },
+          { id: "c-say", label: "Say", kind: "tts", text: "hello chat", rate: 0.1 },
+          { id: "nope", label: "bad id", kind: "url", url: "https://x/a.mp3" },
+          { id: "c-http", label: "insecure", kind: "url", url: "http://x/a.mp3" },
+        ],
+      },
+    });
+    expect(out.sound.messageSound).toBe("metal-pipe");
+    expect(out.sound.eventSounds.raid).toBe("real-airhorn");
+    expect(out.sound.eventSounds.sub).toBe("c-mine");
+    // Reference to a custom id that doesn't survive sanitize → default.
+    expect(out.sound.eventSounds.gift).toBe("coin");
+    expect(out.sound.customSounds.map((c) => c.id)).toEqual(["c-mine", "c-up", "c-say"]);
+    expect(out.sound.customSounds[2].rate).toBe(0.5);
   });
 
   test("sound effect picks round-trip; junk ids fall back per-kind", () => {

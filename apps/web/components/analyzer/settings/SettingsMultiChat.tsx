@@ -495,6 +495,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 onChange={(tts) => set({ tts })}
                 sound={draft.sound}
                 onSoundChange={(sound) => set({ sound })}
+                overlayToken={token}
               />
             </div>
 

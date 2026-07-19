@@ -17,13 +17,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Play, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
-import { previewEffect, type ChatSoundConfig } from "@/lib/multichat/sound";
+import {
+  previewSound,
+  type ChatSoundConfig,
+  type CustomSound,
+} from "@/lib/multichat/sound";
 import {
   SOUND_CATEGORY_LABEL,
   SOUND_EFFECTS,
   type SoundEffectCategory,
-  type SoundEffectId,
 } from "@/lib/multichat/soundEffects";
+import {
+  PACK_CATEGORIES,
+  PACK_CATEGORY_LABEL,
+  PACK_SOUNDS,
+} from "@/lib/multichat/soundPack";
+import { API_BASE } from "@/lib/clientApi";
+import {
+  SettingsMultiChatSounds,
+  previewableSound,
+} from "./SettingsMultiChatSounds";
 import {
   CHAT_EVENT_KINDS,
   EVENT_KIND_LABEL,
@@ -54,30 +67,51 @@ const SOUND_CATEGORIES: readonly SoundEffectCategory[] = [
 ];
 
 /**
- * Grouped picker over the synthesized effect library. Every effect is
- * generated with WebAudio in the Browser Source — no audio files.
+ * Grouped picker over the WHOLE sound namespace: the bundled
+ * real-recording pack, the synthesized effects, and the streamer's
+ * custom sounds ("Your sounds").
  */
 function EffectSelect({
   value,
   onChange,
   allowNone,
   ariaLabel,
+  customSounds,
 }: {
-  value: SoundEffectId | "none";
-  onChange: (next: SoundEffectId | "none") => void;
+  value: string;
+  onChange: (next: string) => void;
   allowNone?: boolean;
   ariaLabel: string;
+  customSounds: ReadonlyArray<CustomSound>;
 }) {
   return (
     <select
       value={value}
       aria-label={ariaLabel}
-      onChange={(e) => onChange(e.target.value as SoundEffectId | "none")}
+      onChange={(e) => onChange(e.target.value)}
       className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
     >
       {allowNone ? <option value="none">None (silent)</option> : null}
+      {customSounds.length > 0 ? (
+        <optgroup label="Your sounds">
+          {customSounds.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {PACK_CATEGORIES.map((cat) => (
+        <optgroup key={cat} label={PACK_CATEGORY_LABEL[cat]}>
+          {PACK_SOUNDS.filter((s) => s.category === cat).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
       {SOUND_CATEGORIES.map((cat) => (
-        <optgroup key={cat} label={SOUND_CATEGORY_LABEL[cat]}>
+        <optgroup key={cat} label={`Synth · ${SOUND_CATEGORY_LABEL[cat]}`}>
           {SOUND_EFFECTS.filter((e) => e.category === cat).map((e) => (
             <option key={e.id} value={e.id} title={e.description}>
               {e.label}
@@ -128,11 +162,14 @@ export function SettingsMultiChatTts({
   onChange,
   sound,
   onSoundChange,
+  overlayToken = null,
 }: {
   value: ChatTtsConfig;
   onChange: (next: ChatTtsConfig) => void;
   sound: ChatSoundConfig;
   onSoundChange: (next: ChatSoundConfig) => void;
+  /** Overlay token — lets previews reach uploaded-sound bytes. */
+  overlayToken?: string | null;
 }) {
   const voices = useBrowserVoices();
   const previewRef = useRef<ReturnType<typeof createChatSpeaker> | null>(null);
@@ -165,6 +202,11 @@ export function SettingsMultiChatTts({
   const setSound = (patch: Partial<ChatSoundConfig>) =>
     onSoundChange({ ...sound, ...patch });
 
+  // Preview any id from the unified namespace — upload entries get a
+  // token-route URL injected so their bytes are reachable from here.
+  const auditionSound = (id: string, volume: number) =>
+    previewSound(id, volume, previewableSound(sound, overlayToken), API_BASE);
+
   return (
     <div className="min-w-0 space-y-3">
       <div className="space-y-2">
@@ -180,8 +222,8 @@ export function SettingsMultiChatTts({
         </div>
         <p className="text-caption text-text-dim">
           A short sound whenever new chat arrives (bursts collapse into
-          one). Every effect is synthesized in the Browser Source — no
-          audio files.
+          one). Pick from real recordings (memes, crowd, cartoon),
+          synthesized effects, or your own sounds below.
         </p>
         {sound.enabled ? (
           <div className="flex flex-wrap items-end gap-4">
@@ -190,9 +232,8 @@ export function SettingsMultiChatTts({
               <EffectSelect
                 ariaLabel="Message sound effect"
                 value={sound.messageSound}
-                onChange={(messageSound) =>
-                  setSound({ messageSound: messageSound as SoundEffectId })
-                }
+                customSounds={sound.customSounds}
+                onChange={(messageSound) => setSound({ messageSound })}
               />
             </label>
             <label className="block w-56 min-w-0">
@@ -212,7 +253,7 @@ export function SettingsMultiChatTts({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => previewEffect(sound.messageSound, sound.volume)}
+              onClick={() => auditionSound(sound.messageSound, sound.volume)}
             >
               <Bell className="mr-1 h-3.5 w-3.5" aria-hidden />
               Preview
@@ -266,6 +307,7 @@ export function SettingsMultiChatTts({
                     <EffectSelect
                       ariaLabel={`${EVENT_KIND_LABEL[kind]} sound effect`}
                       allowNone
+                      customSounds={sound.customSounds}
                       value={sound.eventSounds[kind]}
                       onChange={(next) =>
                         setSound({
@@ -280,7 +322,7 @@ export function SettingsMultiChatTts({
                     aria-label={`Preview ${EVENT_KIND_LABEL[kind]} sound`}
                     disabled={sound.eventSounds[kind] === "none"}
                     onClick={() =>
-                      previewEffect(sound.eventSounds[kind], sound.eventVolume)
+                      auditionSound(sound.eventSounds[kind], sound.eventVolume)
                     }
                   >
                     <Play className="h-3.5 w-3.5" aria-hidden />
@@ -290,6 +332,23 @@ export function SettingsMultiChatTts({
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-3">
+        <span className="text-body font-medium text-text">
+          Your sounds &amp; voice lines
+        </span>
+        <SettingsMultiChatSounds
+          sound={sound}
+          onSoundChange={onSoundChange}
+          overlayToken={overlayToken}
+        />
+        <p className="text-micro text-text-dim">
+          Bundled sounds: Mixkit (Mixkit Sound Effects Free License) and
+          SoundBible — Airhorn &amp; Metal pipe by Mike Koenig, Cha-ching
+          by Muska666 (CC BY 3.0). Full list in the app repo under
+          public/sounds/multichat/CREDITS.md.
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">

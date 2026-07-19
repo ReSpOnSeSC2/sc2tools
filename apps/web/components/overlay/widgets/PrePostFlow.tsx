@@ -26,3 +26,4 @@ export { ChatPollWidget } from "./ChatPollWidget";
 export { ChatAlertsWidget } from "./ChatAlertsWidget";
 export { StreamGoalsWidget } from "./StreamGoalsWidget";
 export { SessionRecapWidget } from "./SessionRecapWidget";
+export { StreamSceneWidget } from "./StreamSceneWidget";

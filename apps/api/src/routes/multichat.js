@@ -48,6 +48,7 @@ const {
  *   users: { getPreferences: (userId: string, type: string) => Promise<Record<string, any>> },
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
+ *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   fetchImpl?: typeof fetch,
  * }} deps
  */
@@ -93,7 +94,62 @@ function buildMultichatRouter(deps) {
         // @ts-ignore stamped by tokenAuth
         const userId = String(req.overlayUserId);
         const prefs = await deps.users.getPreferences(userId, "multichat");
-        res.json({ config: sanitizeMultichatConfig(prefs) });
+        const config = sanitizeMultichatConfig(prefs);
+        // Uploaded custom sounds: the prefs store an ``uploadId``; the
+        // widget needs a fetchable URL. Rewrite to this token's serve
+        // route so the Browser Source's only credential stays the
+        // token. Entries whose upload was deleted are dropped.
+        const sound = /** @type {Record<string, any> | undefined} */ (
+          config.sound
+        );
+        if (sound && Array.isArray(sound.customSounds)) {
+          const token = encodeURIComponent(String(req.params.token));
+          sound.customSounds = sound.customSounds.map((c) =>
+            c.kind === "upload" && typeof c.uploadId === "string"
+              ? {
+                  id: c.id,
+                  label: c.label,
+                  kind: "upload",
+                  url: `/v1/multichat/${token}/sound/${c.uploadId}`,
+                }
+              : c,
+          );
+        }
+        res.json({ config });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Uploaded custom sound bytes ──
+  // Token-authed like every overlay surface; cacheable because the
+  // bytes for a soundId never change (delete + re-upload mints a new
+  // id). Metadata rides the config route — audio bytes only here.
+  router.get(
+    "/multichat/:token/sound/:soundId",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        if (!deps.sounds) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        const file = await deps.sounds.getForServe(
+          userId,
+          String(req.params.soundId),
+        );
+        if (!file) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        res.setHeader("Content-Type", file.mime);
+        res.setHeader("Content-Length", String(file.size));
+        res.setHeader("Cache-Control", "private, max-age=86400, immutable");
+        res.end(file.data);
       } catch (err) {
         next(err);
       }
