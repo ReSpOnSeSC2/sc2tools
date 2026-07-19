@@ -13,6 +13,18 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Multichat · sound-effect library for alerts and the chat ding** —
+  16 synthesized effects across four moods (Classic: ding, pop,
+  doorbell · Cool: sparkle, laser, power-up, riser, boom · Arcade &
+  meme: coin, victory fanfare, airhorn, bass drop · Funny: sad
+  trombone, boing, slide whistle, drumroll). Everything is generated
+  with WebAudio at play time — no audio files, works fully offline in
+  the OBS Browser Source. Pick a sound for the chat message ding, and
+  per-event alert sounds for the Event alerts widget (subs → victory
+  fanfare, raids → airhorn, Super Chats → coin by default; every
+  event type remappable or silenced), each with its own volume and
+  preview buttons in Settings.
+
 - **Settings → Overlay · Test buttons for the Stream Studio widgets**
   — Chat highlight, Chat poll, Event alerts, Stream goals and Session
   recap now have the standard Test button. Each fire renders
@@ -103,6 +115,14 @@ corresponding GitHub Release.
   rather than filler: no card is ever synthesised.
 
 ### Fixed
+
+- **Stream Dock · deleting a goal now removes it from the stream
+  immediately** — the ✕ button previously only removed the row from
+  the dock's local form; the overlay kept showing the goal until
+  "Save goals" was also tapped, and reopening the dock brought the
+  goal back. ✕ now saves the deletion instantly. Also hardened the
+  goals editor against a rare race where the dock's initial load
+  landing at the same moment as the first edit could wipe that edit.
 
 - **MMR progression · long histories no longer truncated** — the
   Trends chart now widens its bucket interval (day → week → month)
