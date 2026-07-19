@@ -37,6 +37,7 @@ const {
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
+ *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   ladderMapPool?: { get(): Promise<{ maps: string[], teamMaps?: string[] }> },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
@@ -396,6 +397,7 @@ function buildGamesRouter(deps) {
               userId,
               freshGame,
               deps.liveGameBroker || null,
+              deps.engagement || null,
             ).catch((err) => {
               if (req.log) {
                 req.log.warn(
@@ -603,6 +605,7 @@ function pickFreshOverlayGame(incoming, accepted) {
  * @param {string} userId
  * @param {Record<string, any>} game
  * @param {import('../services/liveGameBroker').LiveGameBroker|null} broker
+ * @param {import('../services/multichatEngagement').MultichatEngagementService|null} [engagement]
  */
 async function emitOverlayLive(
   io,
@@ -611,6 +614,7 @@ async function emitOverlayLive(
   userId,
   game,
   broker,
+  engagement = null,
 ) {
   if (!io || !overlayLive || !overlayTokens || !userId || !game) return;
   // ``buildFromGame`` is declared ``Promise<object|null>`` on the
@@ -635,10 +639,47 @@ async function emitOverlayLive(
   // Filter the revoked ones out so a leaked-then-revoked token can't
   // still receive live data after revocation.
   const items = await overlayTokens.list(userId);
+  const activeTokens = [];
   for (const t of items) {
     if (!t || !t.token) continue;
     if (t.revokedAt) continue;
+    activeTokens.push(t.token);
     io.to(`overlay:${t.token}`).emit("overlay:live", payload);
+  }
+  // Engagement hooks — settle Crystal Ball predictions against the
+  // replay-verified result, and flag clip-worthy game moments. Both
+  // best-effort: engagement must never break the live fan-out.
+  if (engagement && activeTokens.length > 0) {
+    const eng = engagement;
+    try {
+      await eng.settlePrediction(activeTokens, {
+        gameKey: payload.gameKey,
+        result: payload.result,
+      });
+      const delta = Number(payload.mmrDelta);
+      const streak = payload.streak;
+      const reasons = [];
+      if (Number.isFinite(delta) && Math.abs(delta) >= 30) {
+        reasons.push(`${delta > 0 ? "+" : ""}${delta} MMR swing`);
+      }
+      if (streak && streak.kind === "win" && Number(streak.count) >= 3) {
+        reasons.push(`${streak.count}-game win streak`);
+      }
+      if (Number(payload.durationSec) >= 1200) {
+        reasons.push("marathon game");
+      }
+      if (reasons.length > 0) {
+        for (const token of activeTokens) {
+          await eng.recordMoment(token, {
+            kind: "game-event",
+            reason: `${payload.result === "win" ? "Victory" : "Defeat"} vs ${payload.oppName ?? "opponent"} — ${reasons.join(", ")}`,
+            gameKey: payload.gameKey,
+          });
+        }
+      }
+    } catch {
+      /* engagement is advisory */
+    }
   }
 }
 

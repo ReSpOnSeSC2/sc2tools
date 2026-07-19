@@ -28,6 +28,7 @@ const { OverlayTokensService } = require("./services/overlayTokens");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
+const { MultichatEngagementService } = require("./services/multichatEngagement");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
@@ -280,6 +281,9 @@ function makeServices(deps) {
   // the dock and the multichat widget family, broadcast per token.
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   const multichatSounds = new MultichatSoundsService(deps.db);
+  const multichatEngagement = new MultichatEngagementService(deps.db, {
+    io: deps.io,
+  });
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
@@ -423,6 +427,7 @@ function makeServices(deps) {
     tiktokChatRelay,
     multichatStudio,
     multichatSounds,
+    multichatEngagement,
     aggregations,
     macroReport,
     streak,
@@ -660,6 +665,9 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
       sounds: services.multichatSounds,
+      engagement: services.multichatEngagement,
+      customBuilds: services.customBuilds,
+      buildsList: (userId) => services.builds.list(userId, {}),
     }),
   );
   // Operational admin router — gated on isAdmin(req) inside the
@@ -744,6 +752,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,
       liveGameBroker: services.liveGameBroker,
+      engagement: services.multichatEngagement,
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       io: deps.io,
       auth,
@@ -832,6 +841,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     buildAgentLiveRouter({
       broker: services.liveGameBroker,
       auth,
+      engagement: services.multichatEngagement,
+      overlayTokens: services.overlayTokens,
       logger: deps.logger,
     }),
   );

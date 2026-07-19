@@ -18,6 +18,10 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   overlayTokens: import('mongodb').Collection,
  *   multichatStudio: import('mongodb').Collection,
  *   multichatSounds: import('mongodb').Collection,
+ *   multichatEngagementEvents: import('mongodb').Collection,
+ *   multichatViewers: import('mongodb').Collection,
+ *   multichatPredictions: import('mongodb').Collection,
+ *   multichatClipMoments: import('mongodb').Collection,
  *   mlModels: import('mongodb').Collection,
  *   mlJobs: import('mongodb').Collection,
  *   importJobs: import('mongodb').Collection,
@@ -75,6 +79,10 @@ async function connect({ uri, dbName }, observability = {}) {
     overlayTokens: db.collection(COLLECTIONS.OVERLAY_TOKENS),
     multichatStudio: db.collection(COLLECTIONS.MULTICHAT_STUDIO),
     multichatSounds: db.collection(COLLECTIONS.MULTICHAT_SOUNDS),
+    multichatEngagementEvents: db.collection(COLLECTIONS.MULTICHAT_ENGAGEMENT_EVENTS),
+    multichatViewers: db.collection(COLLECTIONS.MULTICHAT_VIEWERS),
+    multichatPredictions: db.collection(COLLECTIONS.MULTICHAT_PREDICTIONS),
+    multichatClipMoments: db.collection(COLLECTIONS.MULTICHAT_CLIP_MOMENTS),
     mlModels: db.collection(COLLECTIONS.ML_MODELS),
     mlJobs: db.collection(COLLECTIONS.ML_JOBS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
@@ -286,6 +294,32 @@ async function ensureIndexes(ctx) {
   await ctx.devicePairings.createIndex(
     { expiresAt: 1 },
     { expireAfterSeconds: 0 },
+  );
+
+  // Engagement: raw event refs are dedupe keys with a 48 h TTL; the
+  // aggregates (viewers/predictions/clip moments) are what persist.
+  await ctx.multichatEngagementEvents.createIndex(
+    { token: 1, platform: 1, msgId: 1 },
+    { unique: true },
+  );
+  await ctx.multichatEngagementEvents.createIndex(
+    { atDate: 1 },
+    { expireAfterSeconds: 48 * 60 * 60 },
+  );
+  await ctx.multichatViewers.createIndex(
+    { token: 1, userKey: 1 },
+    { unique: true },
+  );
+  await ctx.multichatViewers.createIndex({ token: 1, xp: -1 });
+  await ctx.multichatPredictions.createIndex(
+    { token: 1, gameKey: 1 },
+    { unique: true },
+  );
+  await ctx.multichatPredictions.createIndex({ token: 1, openedAt: -1 });
+  await ctx.multichatClipMoments.createIndex({ token: 1, atMs: -1 });
+  await ctx.multichatClipMoments.createIndex(
+    { atDate: 1 },
+    { expireAfterSeconds: 7 * 24 * 60 * 60 },
   );
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });

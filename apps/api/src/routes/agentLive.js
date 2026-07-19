@@ -27,6 +27,8 @@ const express = require("express");
  * @param {{
  *   broker: import('../services/liveGameBroker').LiveGameBroker,
  *   auth: import('express').RequestHandler,
+ *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -57,6 +59,35 @@ function buildAgentLiveRouter(deps) {
         receivedAt: Date.now(),
       };
       deps.broker.publish(auth.userId, enriched);
+      // Crystal Ball: a loading/starting match opens a prediction
+      // window on every active overlay token. Idempotent per gameKey
+      // (the agent posts ~1 Hz), best-effort, never blocks the ack.
+      if (
+        deps.engagement &&
+        deps.overlayTokens &&
+        (enriched.phase === "match_loading" ||
+          enriched.phase === "match_started") &&
+        typeof enriched.gameKey === "string" &&
+        enriched.gameKey &&
+        !enriched.isReplay
+      ) {
+        const engagement = deps.engagement;
+        const overlayTokens = deps.overlayTokens;
+        void (async () => {
+          try {
+            const items = await overlayTokens.list(auth.userId);
+            const tokens = items
+              .filter((t) => t && t.token && !t.revokedAt)
+              .map((t) => t.token);
+            await engagement.openPrediction(tokens, {
+              gameKey: enriched.gameKey,
+              opponent: enriched.opponent?.name,
+            });
+          } catch {
+            /* engagement is advisory */
+          }
+        })();
+      }
       if (log && typeof log.debug === "function") {
         log.debug(
           { userId: auth.userId, phase: enriched.phase },

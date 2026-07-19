@@ -40,6 +40,7 @@ import {
   visibleMessages,
   type ChatAppearance,
 } from "@/lib/multichat/appearance";
+import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import {
   TEST_MESSAGE_INTERVAL_MS,
@@ -238,11 +239,12 @@ export function MultiChatWidget({
   live?: LiveGamePayload | null;
 }) {
   const { platforms, appearance, tts, sound, loaded } = useMultichatConfig(token);
-  const { messages, statuses, active } = useMultiChat({
+  const { messages, events: feedEvents, statuses, active } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
+  useEngagementReporter(token, messages, feedEvents);
   const testMessages = useTestFire(live);
   const testActive = testMessages.length > 0;
 

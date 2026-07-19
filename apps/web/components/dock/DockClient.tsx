@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import {
   DEFAULT_STUDIO_STATE,
@@ -106,11 +107,12 @@ const SECTIONS = [
 
 export function DockClient({ token }: { token: string }) {
   const { platforms, loaded } = usePlatformConfig(token);
-  const { messages, statuses } = useMultiChat({
+  const { messages, events, statuses } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
+  useEngagementReporter(token, messages, events);
 
   const [studio, setStudio] = useState<StudioState>(DEFAULT_STUDIO_STATE);
   const [busy, setBusy] = useState(false);
