@@ -115,6 +115,14 @@ export type LocalTranslatorStatus = "idle" | "loading" | "ready" | "error";
 export interface LocalTranslator {
   /** Resolves the translation, or null (skip: dropped/identical/error). */
   translate(text: string): Promise<string | null>;
+  /**
+   * Start the model download/load NOW instead of on the first
+   * translated line. Called at widget boot when translation is
+   * enabled, so the stream's first foreign-language message doesn't
+   * eat the multi-second model download as latency. No-op when
+   * already loading/ready/errored.
+   */
+  warmUp(): void;
   status(): LocalTranslatorStatus;
   close(): void;
 }
@@ -198,7 +206,8 @@ export function createLocalTranslator(
         // Take the job SYNCHRONOUSLY — the in-flight line must never
         // be a drop-oldest candidate while the model loads/runs.
         const job = queue.shift()!;
-        // Lazy model load on the FIRST translation only.
+        // Model load — normally already in flight via warmUp(); this
+        // lazy path covers direct translate() calls (tests, previews).
         if (!pipelinePromise) {
           status = "loading";
           pipelinePromise = factory();
@@ -237,7 +246,22 @@ export function createLocalTranslator(
     }
   };
 
+  const warmUp = () => {
+    if (closed || status === "error" || pipelinePromise) return;
+    status = "loading";
+    pipelinePromise = factory();
+    pipelinePromise.then(
+      () => {
+        if (!closed && status === "loading") status = "ready";
+      },
+      () => {
+        if (!closed) fail();
+      },
+    );
+  };
+
   return {
+    warmUp,
     translate(text: string): Promise<string | null> {
       if (closed || status === "error") return Promise.resolve(null);
       const cached = cache.get(text);

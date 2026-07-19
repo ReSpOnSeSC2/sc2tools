@@ -50,6 +50,14 @@ export function useTranslation(
   const pendingRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Preload the model the moment local translation is enabled — the
+  // download (~80 MB, once, then browser-cached) happens while the
+  // stream is quiet instead of stealing latency from the first
+  // foreign-language message.
+  useEffect(() => {
+    if (enabled && mode === "local") getSharedLocalTranslator().warmUp();
+  }, [enabled, mode]);
+
   // ── local mode: on-device, per message, no API calls ──
   useEffect(() => {
     if (!enabled || mode !== "local") return;

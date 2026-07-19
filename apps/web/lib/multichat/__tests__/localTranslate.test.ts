@@ -231,3 +231,43 @@ describe("createLocalTranslator", () => {
     await expect(t.translate("otra")).resolves.toBeNull();
   });
 });
+
+describe("warmUp", () => {
+  test("starts the model load once, before any translation", async () => {
+    let factoryCalls = 0;
+    const { createLocalTranslator } = await import("@/lib/multichat/localTranslate");
+    const translator = createLocalTranslator({
+      pipelineFactory: async () => {
+        factoryCalls += 1;
+        return async (text: string) => `T:${text}`;
+      },
+    });
+    expect(translator.status()).toBe("idle");
+    translator.warmUp();
+    expect(translator.status()).toBe("loading");
+    translator.warmUp(); // idempotent
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(factoryCalls).toBe(1);
+    expect(translator.status()).toBe("ready");
+    // A translation after warm-up reuses the same pipeline.
+    await expect(translator.translate("привет")).resolves.toBe("T:привет");
+    expect(factoryCalls).toBe(1);
+    translator.close();
+  });
+
+  test("a failed warm-up degrades to error without throwing", async () => {
+    const { createLocalTranslator } = await import("@/lib/multichat/localTranslate");
+    const translator = createLocalTranslator({
+      pipelineFactory: async () => {
+        throw new Error("cdn down");
+      },
+    });
+    translator.warmUp();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(translator.status()).toBe("error");
+    await expect(translator.translate("привет")).resolves.toBeNull();
+    translator.close();
+  });
+});

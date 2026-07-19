@@ -541,10 +541,11 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                         <span className="block text-caption text-text-dim">
                           Runs on the OBS computer itself — no accounts, no
                           API keys, and chat text never leaves your machine.
-                          First use downloads a ~80 MB open-source model
-                          (Helsinki-NLP OPUS-MT via Hugging Face), which is
-                          then cached. Translates other languages to
-                          English. Slightly slower on old CPUs.
+                          The first time your overlay loads with this on, it
+                          downloads a ~80 MB open-source model (Helsinki-NLP
+                          OPUS-MT via Hugging Face) in the background, then
+                          caches it. Translates other languages to English.
+                          Slightly slower on old CPUs.
                         </span>
                       </span>
                     </label>
