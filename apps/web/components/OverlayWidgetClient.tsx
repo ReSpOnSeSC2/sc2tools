@@ -56,6 +56,7 @@ import {
   ChatOracleWidget,
   ClipFlagWidget,
   LowerThirdWidget,
+  StatsTickerWidget,
   SessionRecapWidget,
   StreamSceneWidget,
   SupporterWallWidget,
@@ -309,6 +310,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "chat-oracle",
   "supporter-wall",
   "clip-flag",
+  "stats-ticker",
 ]);
 
 function WidgetRenderer({
@@ -436,6 +438,18 @@ function WidgetRenderer({
       // Broadcast-style post-game bar — payload-driven, standard
       // visibility timer slides it away between games.
       return <LowerThirdWidget live={live} />;
+    case "stats-ticker":
+      // Persistent scrolling bottom line — self-driven, composes
+      // session/result/goals/engagement into an endless marquee.
+      return (
+        <StatsTickerWidget
+          token={token}
+          studioEvent={studioEvent}
+          engagementEvent={engagementEvent}
+          live={live}
+          session={session}
+        />
+      );
     default:
       return null;
   }

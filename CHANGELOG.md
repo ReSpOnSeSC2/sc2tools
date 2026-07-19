@@ -13,6 +13,15 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stats ticker widget** — an always-on, continuously scrolling
+  bottom line (ESPN style), distinct from the stationary post-game
+  lower third: session record + net MMR, latest result, rank, stream
+  goals, an open Crystal Ball call with the live chat split, top
+  supporter and top oracle, looping seamlessly with a LIVE badge.
+  Only real, currently-available data is shown; the source stays
+  transparent otherwise. Reduced-motion renders it statically. Comes
+  with the standard Settings Test button.
+
 - **Settings · Help tab** — a full new-user guide: getting started in
   four steps, the analyzer, OBS overlay setup, multi-platform chat,
   the Stream Dock, viewer engagement (XP rules, predictions), and a

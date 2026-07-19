@@ -18,6 +18,11 @@ import { ChatAlertsWidget } from "../ChatAlertsWidget";
 import { StreamGoalsWidget } from "../StreamGoalsWidget";
 import { SessionRecapWidget } from "../SessionRecapWidget";
 import { StreamSceneWidget, formatCountdown } from "../StreamSceneWidget";
+import { StatsTickerWidget } from "../StatsTickerWidget";
+import {
+  EMPTY_ENGAGEMENT,
+  type EngagementSummary,
+} from "@/lib/multichat/useEngagementState";
 
 let mockStudio: StudioState & { loaded: boolean };
 let mockChat: MultiChatState;
@@ -31,6 +36,16 @@ vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: () => mockChat,
 }));
+
+let mockEngagement: EngagementSummary;
+vi.mock("@/lib/multichat/useEngagementState", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/multichat/useEngagementState")>();
+  return {
+    ...actual,
+    useEngagementState: () => ({ summary: mockEngagement, lastEvent: null }),
+  };
+});
 
 // The config loader inside MultiChatWidget fetches the token-authed
 // relay — stub the hook so the poll/alerts widgets skip the network.
@@ -58,6 +73,7 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
 beforeEach(() => {
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
+  mockEngagement = { ...EMPTY_ENGAGEMENT };
 });
 
 afterEach(() => {
@@ -297,6 +313,49 @@ describe("StreamSceneWidget", () => {
   });
 });
 
+describe("StatsTickerWidget", () => {
+  it("stays transparent with nothing to show", () => {
+    const { container } = render(<StatsTickerWidget token="tok" />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("composes segments from session, goals and engagement", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      goals: [{ label: "Follower goal", current: 1168, target: 1200 }],
+    };
+    mockEngagement = {
+      ...EMPTY_ENGAGEMENT,
+      wall: [
+        { user: "Grinder", platform: "twitch", xp: 900, level: 3, rank: "Stalker" },
+      ],
+      prediction: {
+        gameKey: "g1",
+        opponent: "X",
+        tally: { win: 3, loss: 1, total: 4 },
+      },
+    };
+    render(
+      <StatsTickerWidget
+        token="tok"
+        session={{
+          wins: 4,
+          losses: 2,
+          games: 6,
+          mmrStart: 4280,
+          mmrCurrent: 4314,
+        }}
+      />,
+    );
+    // Segments render twice (seamless marquee) — assert via getAllBy.
+    expect(screen.getAllByText(/SESSION 4–2 · \+34 MMR/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/FOLLOWER GOAL 1168 \/ 1200/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/chat is 75% WIN/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/TOP SUPPORTER: Grinder \(Stalker\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText("LIVE")).toBeTruthy();
+  });
+});
+
 const testFire = (widget: string): LiveGamePayload => ({
   isTest: true,
   testWidget: widget,
@@ -342,6 +401,12 @@ describe("Stream Studio Test fire", () => {
       <StreamSceneWidget token="tok" live={foreignTestFire} />,
     );
     expect(container.textContent).toBe("");
+  });
+
+  it("StatsTickerWidget shows the demo strip with a TEST segment", () => {
+    render(<StatsTickerWidget token="tok" live={testFire("stats-ticker")} />);
+    expect(screen.getAllByText(/TEST · this is your stats ticker/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CALL IT: !win \/ !loss/).length).toBeGreaterThan(0);
   });
 
   it("ChatPollWidget runs the sample poll and steps the scripted tally", () => {
