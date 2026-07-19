@@ -372,14 +372,21 @@ function WidgetRenderer({
     case "chat-highlight":
       // Stream Studio family — all gated on the studio state pushed
       // as ``overlay:multichat`` (and fetched at boot); each renders
-      // transparent until the Stream Dock gives it content.
-      return <ChatHighlightWidget token={token} studioEvent={studioEvent} />;
+      // transparent until the Stream Dock gives it content. ``live``
+      // is read only for the Settings Test-fire flag.
+      return (
+        <ChatHighlightWidget token={token} studioEvent={studioEvent} live={live} />
+      );
     case "chat-poll":
-      return <ChatPollWidget token={token} studioEvent={studioEvent} />;
+      return <ChatPollWidget token={token} studioEvent={studioEvent} live={live} />;
     case "chat-alerts":
-      return <ChatAlertsWidget token={token} studioEvent={studioEvent} />;
+      return (
+        <ChatAlertsWidget token={token} studioEvent={studioEvent} live={live} />
+      );
     case "stream-goals":
-      return <StreamGoalsWidget token={token} studioEvent={studioEvent} />;
+      return (
+        <StreamGoalsWidget token={token} studioEvent={studioEvent} live={live} />
+      );
     case "session-recap":
       return (
         <SessionRecapWidget

@@ -7,10 +7,18 @@
  * observed by this source shows the recap card for a fixed window,
  * built from the same cloud session aggregate the session HUD renders
  * (W-L, net MMR, streak). Transparent otherwise.
+ *
+ * The Settings Test button behaves exactly like a recap trigger: a
+ * test fire targeting this widget shows the card for the standard
+ * test window, built from the test payload's sample ``session`` block
+ * (falling back to a client-side demo block, see
+ * lib/multichat/testStudio).
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useStudioState } from "@/lib/multichat/useStudioState";
+import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { testSession } from "@/lib/multichat/testStudio";
 import type { LiveGamePayload } from "../types";
 import type { SessionSummary } from "./SessionWidget";
 
@@ -62,8 +70,18 @@ export function SessionRecapWidget({
     [],
   );
 
-  const s = session ?? live?.session ?? null;
-  if (!visible || !s) return <div style={{ background: "transparent" }} />;
+  // Settings Test fire — behaves exactly like a recap trigger for the
+  // standard test window. The test payload carries the sample session
+  // block; the client-side demo block is a fallback for payloads
+  // without one.
+  const testActive = useTestFireFlag(live, "session-recap");
+
+  const s = testActive
+    ? live?.session ?? testSession()
+    : session ?? live?.session ?? null;
+  if ((!visible && !testActive) || !s) {
+    return <div style={{ background: "transparent" }} />;
+  }
 
   const hasMmrDelta =
     typeof s.mmrStart === "number" && typeof s.mmrCurrent === "number";
@@ -83,7 +101,10 @@ export function SessionRecapWidget({
         }
       `}</style>
       <div className="session-recap-card" style={cardStyle}>
-        <div style={titleStyle}>SESSION RECAP</div>
+        <div style={titleStyle}>
+          SESSION RECAP
+          {testActive ? <span style={testTagStyle}>TEST</span> : null}
+        </div>
         <div style={recordStyle}>
           {s.wins}W <span style={{ opacity: 0.4 }}>&mdash;</span> {s.losses}L
         </div>
@@ -152,6 +173,15 @@ const titleStyle: CSSProperties = {
   fontWeight: 800,
   letterSpacing: "0.18em",
   color: "#e6b450",
+};
+
+// Matches the multichat status-row TEST chip.
+const testTagStyle: CSSProperties = {
+  marginLeft: 8,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#f5b942",
 };
 
 const recordStyle: CSSProperties = {

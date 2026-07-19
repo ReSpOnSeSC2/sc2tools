@@ -19,6 +19,11 @@ if (!existsSync(iconsDir)) {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // transformers.js (on-device chat translation) is browser-only for
+  // us — loaded via dynamic import inside client code. Keep it out of
+  // the server bundle so webpack never tries to compile its Node-side
+  // sharp/onnxruntime-node requires.
+  serverExternalPackages: ["@xenova/transformers"],
   // Tighten the cache for the analyzer page so it always reflects the
   // user's latest data, but let the marketing routes use Vercel's edge.
   async headers() {

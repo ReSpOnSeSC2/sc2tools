@@ -61,12 +61,18 @@ import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
- * SAME preferences blob. The endpoint + API key stay server-side: the
- * token-authed config route only ever ships {enabled, targetLang} to
- * OBS, and the widget sends message text to our own relay.
+ * SAME preferences blob. Two modes:
+ *
+ *   - "local" (default, free): on-device ML translation inside the
+ *     OBS Browser Source itself — no endpoint, no key, no accounts.
+ *   - "provider" (advanced): any LibreTranslate-compatible API. The
+ *     endpoint + API key stay server-side: the token-authed config
+ *     route only ever ships {enabled, mode, targetLang} to OBS, and
+ *     the widget sends message text to our own relay.
  */
 type TranslateDraft = {
   enabled: boolean;
+  mode: "local" | "provider";
   endpoint: string;
   apiKey: string;
   targetLang: string;
@@ -74,6 +80,7 @@ type TranslateDraft = {
 
 const DEFAULT_TRANSLATE: TranslateDraft = {
   enabled: false,
+  mode: "local",
   endpoint: "",
   apiKey: "",
   targetLang: "en",
@@ -141,6 +148,7 @@ function translateFromConfig(
   const d = DEFAULT_TRANSLATE;
   return {
     enabled: t?.enabled === true,
+    mode: t?.mode === "provider" ? "provider" : "local",
     endpoint: typeof t?.endpoint === "string" ? t.endpoint : d.endpoint,
     apiKey: typeof t?.apiKey === "string" ? t.apiKey : d.apiKey,
     targetLang:
@@ -176,6 +184,7 @@ function configFromDraft(
     sound: d.sound as unknown as Record<string, unknown>,
     translate: {
       enabled: d.translate.enabled,
+      mode: d.translate.mode,
       endpoint: d.translate.endpoint.trim(),
       apiKey: d.translate.apiKey.trim(),
       targetLang: d.translate.targetLang.trim().toLowerCase() || "en",
@@ -237,6 +246,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
     }
     if (
       draft.translate.enabled &&
+      draft.translate.mode === "provider" &&
       !/^https:\/\//.test(draft.translate.endpoint.trim())
     ) {
       out.push("Translation: enter an https:// endpoint URL.");
@@ -512,13 +522,64 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                       Translate incoming chat
                     </span>
                   </div>
-                  <p className="text-caption text-text-dim">
-                    Works with any LibreTranslate-compatible API (self-hosted
-                    or hosted). Messages are translated through our relay —
-                    the endpoint and API key stay on the server and never
-                    reach OBS.
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="radio"
+                        name="translate-mode"
+                        checked={draft.translate.mode === "local"}
+                        onChange={() =>
+                          set({ translate: { ...draft.translate, mode: "local" } })
+                        }
+                        disabled={!draft.translate.enabled}
+                        className="mt-1 h-4 w-4 accent-accent-cyan"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-body font-medium text-text">
+                          Built-in (free)
+                        </span>
+                        <span className="block text-caption text-text-dim">
+                          Runs on the OBS computer itself — no accounts, no
+                          API keys, and chat text never leaves your machine.
+                          The first time your overlay loads with this on, it
+                          downloads a ~80 MB open-source model (Helsinki-NLP
+                          OPUS-MT via Hugging Face) in the background, then
+                          caches it. Translates other languages to English.
+                          Slightly slower on old CPUs.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="radio"
+                        name="translate-mode"
+                        checked={draft.translate.mode === "provider"}
+                        onChange={() =>
+                          set({
+                            translate: { ...draft.translate, mode: "provider" },
+                          })
+                        }
+                        disabled={!draft.translate.enabled}
+                        className="mt-1 h-4 w-4 accent-accent-cyan"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-body font-medium text-text">
+                          Custom provider (advanced)
+                        </span>
+                        <span className="block text-caption text-text-dim">
+                          Works with any LibreTranslate-compatible API
+                          (self-hosted or hosted). Messages are translated
+                          through our relay — the endpoint and API key stay
+                          on the server and never reach OBS.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                  <div
+                    className={`grid gap-3 sm:grid-cols-2 ${
+                      draft.translate.mode === "provider" ? "" : "hidden"
+                    }`}
+                  >
                     <label className="block min-w-0">
                       <div className="mb-1 text-caption text-text-dim">
                         Endpoint URL <span className="text-text-muted">(https:// required)</span>

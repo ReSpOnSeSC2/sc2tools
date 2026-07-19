@@ -7,9 +7,10 @@
  * genuine tally, not a mock echo.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
 import type { StudioState } from "@/lib/multichat/useStudioState";
+import type { LiveGamePayload } from "@/components/overlay/types";
 import type { SessionSummary } from "../SessionWidget";
 import { ChatHighlightWidget } from "../ChatHighlightWidget";
 import { ChatPollWidget } from "../ChatPollWidget";
@@ -226,5 +227,156 @@ describe("SessionRecapWidget", () => {
     expect(screen.getByText(/3L/)).toBeTruthy();
     expect(screen.getByText("+80")).toBeTruthy();
     expect(screen.getByText("W3")).toBeTruthy();
+  });
+});
+
+/* ------------------------------------------------------------------
+ * Settings Test fire — each widget renders its clearly-labelled demo
+ * content when a test-stamped payload targets it, and ignores test
+ * payloads addressed to a different widget.
+ * ------------------------------------------------------------------ */
+
+const testFire = (widget: string): LiveGamePayload => ({
+  isTest: true,
+  testWidget: widget,
+});
+/** A per-widget test aimed at a DIFFERENT source in the same room. */
+const foreignTestFire: LiveGamePayload = {
+  isTest: true,
+  testWidget: "multichat",
+};
+
+describe("Stream Studio Test fire", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("ChatHighlightWidget shows the sample highlight with a TEST tag", () => {
+    render(
+      <ChatHighlightWidget token="tok" live={testFire("chat-highlight")} />,
+    );
+    expect(
+      screen.getByText(/Pinned messages from the Stream Dock appear exactly/),
+    ).toBeTruthy();
+    expect(screen.getByText("TestViewer")).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+  });
+
+  it("ChatHighlightWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <ChatHighlightWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("ChatPollWidget runs the sample poll and steps the scripted tally", () => {
+    vi.useFakeTimers();
+    render(<ChatPollWidget token="tok" live={testFire("chat-poll")} />);
+    expect(screen.getByText("Test poll — which matchup next?")).toBeTruthy();
+    expect(screen.getByText(/1\. PvT/)).toBeTruthy();
+    expect(screen.getByText(/2\. PvZ/)).toBeTruthy();
+    expect(screen.getByText(/3\. PvP/)).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+    // First scripted snapshot: nobody has voted yet.
+    expect(screen.getByText("0 votes")).toBeTruthy();
+    // Walk to the final snapshot — 7/11/4 of 22.
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(screen.getByText("22 votes")).toBeTruthy();
+    expect(screen.getByText("11 · 50%")).toBeTruthy();
+    expect(screen.getByText("7 · 32%")).toBeTruthy();
+  });
+
+  it("ChatPollWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <ChatPollWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("ChatAlertsWidget feeds the sample events through the toaster", () => {
+    vi.useFakeTimers();
+    render(<ChatAlertsWidget token="tok" live={testFire("chat-alerts")} />);
+    // First event lands immediately — the Twitch sub alert.
+    expect(screen.getByText("TestSubscriber")).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+    expect(screen.queryByText("TestRaider")).toBeNull();
+    // Next event arrives on the demo cadence.
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.getByText("TestRaider")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.getByText("TestFan")).toBeTruthy();
+    expect(screen.getByText("$5.00")).toBeTruthy();
+  });
+
+  it("ChatAlertsWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <ChatAlertsWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("StreamGoalsWidget shows the sample goal bars", () => {
+    render(<StreamGoalsWidget token="tok" live={testFire("stream-goals")} />);
+    expect(screen.getByText("Test: Follower goal")).toBeTruthy();
+    expect(screen.getByText("1168")).toBeTruthy();
+    expect(screen.getByText("/ 1200")).toBeTruthy();
+    expect(screen.getByText("Test: Sub goal")).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+  });
+
+  it("StreamGoalsWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <StreamGoalsWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+
+  it("SessionRecapWidget treats a test fire like a recap trigger using the payload's session block", () => {
+    render(
+      <SessionRecapWidget
+        token="tok"
+        live={{
+          ...testFire("session-recap"),
+          session: {
+            wins: 4,
+            losses: 4,
+            games: 8,
+            mmrStart: 5320,
+            mmrCurrent: 5343,
+            streak: { kind: "win", count: 2 },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("SESSION RECAP")).toBeTruthy();
+    expect(screen.getByText("TEST")).toBeTruthy();
+    expect(screen.getByText(/4W/)).toBeTruthy();
+    expect(screen.getByText(/4L/)).toBeTruthy();
+    expect(screen.getByText("+23")).toBeTruthy();
+    expect(screen.getByText("W2")).toBeTruthy();
+  });
+
+  it("SessionRecapWidget falls back to the demo session block when the payload has none", () => {
+    render(
+      <SessionRecapWidget token="tok" live={testFire("session-recap")} />,
+    );
+    expect(screen.getByText("SESSION RECAP")).toBeTruthy();
+    expect(screen.getByText(/4W/)).toBeTruthy();
+    expect(screen.getByText(/2L/)).toBeTruthy();
+    expect(screen.getByText("+34")).toBeTruthy();
+    expect(screen.getByText("W2")).toBeTruthy();
+  });
+
+  it("SessionRecapWidget ignores a test targeting a different widget", () => {
+    const { container } = render(
+      <SessionRecapWidget token="tok" live={foreignTestFire} />,
+    );
+    expect(container.textContent).toBe("");
   });
 });

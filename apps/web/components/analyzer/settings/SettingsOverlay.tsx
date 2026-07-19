@@ -126,32 +126,27 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   {
     id: "chat-highlight",
     label: "Chat highlight",
-    hint: "Pins a chat message on stream — pick the message from the Stream Dock.",
-    noTest: true,
+    hint: "Pins a chat message on stream — pick the message from the Stream Dock. Test shows a sample highlight.",
   },
   {
     id: "chat-poll",
     label: "Chat poll",
-    hint: "Live viewer poll with !1 / !2 chat voting — start and close polls from the Stream Dock.",
-    noTest: true,
+    hint: "Live viewer poll with !1 / !2 chat voting — start and close polls from the Stream Dock. Test runs a sample poll.",
   },
   {
     id: "chat-alerts",
     label: "Event alerts",
-    hint: "Subs, raids, gifts and superchats as an alert toaster — feed and moderation run through the Stream Dock.",
-    noTest: true,
+    hint: "Subs, raids, gifts and superchats as an alert toaster — feed and moderation run through the Stream Dock. Test plays sample alerts.",
   },
   {
     id: "stream-goals",
     label: "Stream goals",
-    hint: "Animated goal progress bars — set and update goals from the Stream Dock.",
-    noTest: true,
+    hint: "Animated goal progress bars — set and update goals from the Stream Dock. Test shows sample goals.",
   },
   {
     id: "session-recap",
     label: "Session recap card",
-    hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock.",
-    noTest: true,
+    hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",
   },
 ];
 

@@ -8,10 +8,18 @@
  * Fully studio-driven: goals are edited in the Stream Dock, arrive via
  * the studio state (fetch + ``overlay:multichat`` pushes), and the
  * source stays perfectly transparent while no goals are set.
+ *
+ * The shared ``overlay:live`` payload is read for one thing: the
+ * Settings Test button. While a test fire targeting this widget is
+ * inside its window, clearly-labelled sample goal bars render instead
+ * of the studio state (see lib/multichat/testStudio).
  */
 
 import type { CSSProperties } from "react";
 import { useStudioState } from "@/lib/multichat/useStudioState";
+import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { TEST_GOALS } from "@/lib/multichat/testStudio";
+import type { LiveGamePayload } from "../types";
 
 /** Hard render cap — the dock enforces the same limit server-side. */
 const GOALS_MAX = 4;
@@ -19,18 +27,23 @@ const GOALS_MAX = 4;
 export function StreamGoalsWidget({
   token,
   studioEvent,
+  live,
 }: {
   token: string;
   /** Latest raw ``overlay:multichat`` socket payload from the host. */
   studioEvent?: unknown;
+  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  live?: LiveGamePayload | null;
 }) {
   const state = useStudioState(token, studioEvent ?? null);
-  const goals = state.goals.slice(0, GOALS_MAX);
+  const testActive = useTestFireFlag(live, "stream-goals");
+  const goals = (testActive ? TEST_GOALS : state.goals).slice(0, GOALS_MAX);
 
   if (goals.length === 0) return <div style={{ background: "transparent" }} />;
 
   return (
     <div style={frameStyle}>
+      {testActive ? <div style={testTagStyle}>TEST</div> : null}
       {goals.map((goal, i) => {
         const pct = Math.max(
           0,
@@ -75,6 +88,14 @@ const frameStyle: CSSProperties = {
   alignItems: "stretch",
   gap: 8,
   fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
+};
+
+// Matches the multichat status-row TEST chip.
+const testTagStyle: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#f5b942",
 };
 
 const cardStyle: CSSProperties = {

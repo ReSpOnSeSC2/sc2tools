@@ -9,12 +9,24 @@
  * event as a prominent card that auto-dismisses after a few seconds,
  * with a small low-opacity stack of the previous events below it.
  * Perfectly transparent while nothing has happened.
+ *
+ * The shared ``overlay:live`` payload is read for one thing: the
+ * Settings Test button. While a test fire targeting this widget is
+ * inside its window, a scripted sequence of clearly-labelled sample
+ * events feeds through the same toaster path, one every couple of
+ * seconds (see lib/multichat/testStudio).
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { EVENT_KIND_LABEL, type ChatEvent } from "@/lib/multichat/events";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import {
+  TEST_EVENT_INTERVAL_MS,
+  testEvents,
+} from "@/lib/multichat/testStudio";
+import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import { useMultichatConfig } from "./MultiChatWidget";
 
@@ -26,18 +38,48 @@ const STACK_SIZE = 3;
 export function ChatAlertsWidget({
   token,
   studioEvent,
+  live,
 }: {
   token: string;
   /** Accepted for renderer uniformity — alerts are feed-driven. */
   studioEvent?: unknown;
+  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  live?: LiveGamePayload | null;
 }) {
   void studioEvent;
   const { platforms } = useMultichatConfig(token);
-  const { events } = useMultiChat({
+  const { events: feedEvents } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
+
+  // Test-fire demo stream — feed the sample events in one at a time
+  // (first immediately) so each rides the normal prominent-card
+  // promotion below, exactly like real platform events.
+  const testActive = useTestFireFlag(live, "chat-alerts");
+  const [demoEvents, setDemoEvents] = useState<ChatEvent[]>([]);
+  useEffect(() => {
+    if (!testActive) {
+      setDemoEvents([]);
+      return;
+    }
+    const sequence = testEvents(Date.now());
+    setDemoEvents(sequence.slice(0, 1));
+    let index = 1;
+    const timer = setInterval(() => {
+      if (index >= sequence.length) {
+        clearInterval(timer);
+        return;
+      }
+      const next = sequence[index];
+      index += 1;
+      setDemoEvents((prev) => [...prev, next]);
+    }, TEST_EVENT_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [testActive]);
+
+  const events = testActive ? demoEvents : feedEvents;
 
   const newest = events.length > 0 ? events[events.length - 1] : null;
   const newestKey = newest ? `${newest.platform}:${newest.id}` : null;
@@ -79,6 +121,7 @@ export function ChatAlertsWidget({
           .chat-alert-card { animation: none; }
         }
       `}</style>
+      {testActive ? <div style={testTagStyle}>TEST</div> : null}
       {prominent ? (
         <AlertCard key={`${prominent.platform}:${prominent.id}`} event={prominent} />
       ) : null}
@@ -149,6 +192,14 @@ const cardStyle: CSSProperties = {
   boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
   padding: "12px 14px",
   color: "#e6e8ee",
+};
+
+// Matches the multichat status-row TEST chip.
+const testTagStyle: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#f5b942",
 };
 
 const kindStyle: CSSProperties = {
