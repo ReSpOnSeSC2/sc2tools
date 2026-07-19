@@ -321,6 +321,53 @@ describe("services/perGameCompute", () => {
     });
   });
 
+  describe("PerGameComputeService.mapPlayback", () => {
+    const PLAYBACK = {
+      v: 1,
+      mapName: "Alcyone LE",
+      gameLength: 700,
+      bounds: { minX: 10, minY: 20, maxX: 190, maxY: 160 },
+      spawns: [{ owner: "me", x: 30, y: 40 }],
+      battles: [],
+      buildings: [{ owner: "me", name: "Nexus", t: 0, x: 30, y: 40 }],
+      units: [
+        { owner: "me", name: "Stalker", born: 120, died: 300, wp: [120, 30, 40] },
+      ],
+      stats: { me: [[0, 0, 12, 12]], opp: [] },
+    };
+
+    test("returns the detail-store payload with ok:true", async () => {
+      const svc = new PerGameComputeService(
+        { games: { findOne: async () => ({ gameId: "g1" }) } },
+        {
+          gameDetails: {
+            findOne: async () => ({ mapPlayback: PLAYBACK }),
+          },
+        },
+      );
+      const out = await svc.mapPlayback("u1", "g1");
+      expect(out.ok).toBe(true);
+      expect(out.mapName).toBe("Alcyone LE");
+      expect(out.units).toHaveLength(1);
+    });
+
+    test("games without playback report not_computed; missing game null", async () => {
+      const svc = new PerGameComputeService(
+        { games: { findOne: async () => ({ gameId: "g1" }) } },
+        { gameDetails: { findOne: async () => ({}) } },
+      );
+      expect(await svc.mapPlayback("u1", "g1")).toEqual({
+        ok: false,
+        code: "not_computed",
+      });
+      const missing = new PerGameComputeService(
+        { games: { findOne: async () => null } },
+        { gameDetails: { findOne: async () => null } },
+      );
+      expect(await missing.mapPlayback("u1", "nope")).toBeNull();
+    });
+  });
+
   describe("PerGameComputeService.buildOrder", () => {
     function buildService(game) {
       const games = {

@@ -192,7 +192,11 @@ export function SettingsHelp() {
           <ChatCommandsCard rankRace="protoss" />
           <p className="text-caption text-text-dim">
             Tip: the same card in Overlay → Multi-platform chat copies the
-            bio text with YOUR saved rank race.
+            bio text with YOUR saved rank race. Enable the <b>Chat bot</b>{" "}
+            there too and the answers post right in Twitch chat — it also
+            counts <code>!win</code>/<code>!loss</code> calls and XP with
+            the dock closed, and announces Crystal Ball results and
+            level-ups.
           </p>
         </HelpSection>
 

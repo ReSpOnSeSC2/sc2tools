@@ -593,6 +593,7 @@ export interface StrategyPhasesService {
 export interface PerGameComputeService {
   buildOrder(userId: string, gameId: string): Promise<object | null>;
   macroBreakdown(userId: string, gameId: string): Promise<object | null>;
+  mapPlayback(userId: string, gameId: string): Promise<object | null>;
   apmCurve(userId: string, gameId: string): Promise<object | null>;
   writeMacroBreakdown(
     userId: string,

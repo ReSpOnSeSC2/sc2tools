@@ -31,6 +31,10 @@ import {
   type OverlayTheme,
 } from "@/lib/overlayTheme";
 import {
+  appendGhostVoiceToUrl,
+  GHOST_VOICE_STORAGE_KEY,
+} from "@/lib/ghostVoice";
+import {
   appendGhostToUrl,
   assignSavedGhostBuild,
   clearGhostTarget,
@@ -800,6 +804,25 @@ function WidgetList({
     () => new Set<string>(token.enabledWidgets ?? WIDGETS.map((w) => w.id)),
     [token.enabledWidgets],
   );
+  // Ghost voice coach opt-in: bakes ?voice=1 into the copied Ghost
+  // URL. Client-only preference (the loadout itself is URL-armed too)
+  // — persisted locally so the choice survives revisits.
+  const [ghostVoice, setGhostVoice] = useState(false);
+  useEffect(() => {
+    try {
+      setGhostVoice(localStorage.getItem(GHOST_VOICE_STORAGE_KEY) === "1");
+    } catch {
+      /* private mode — default off */
+    }
+  }, []);
+  const toggleGhostVoice = (on: boolean) => {
+    setGhostVoice(on);
+    try {
+      localStorage.setItem(GHOST_VOICE_STORAGE_KEY, on ? "1" : "0");
+    } catch {
+      /* non-persistent is fine */
+    }
+  };
   return (
     <div className="min-w-0 space-y-2 px-4 py-3">
       <p className="text-caption text-text-muted">
@@ -818,7 +841,10 @@ function WidgetList({
           // arming; the loadout never needs a server round-trip.
           const url =
             w.id === "ghost-build"
-              ? appendGhostToUrl(themedUrl, ghostConfig)
+              ? appendGhostToUrl(
+                  appendGhostVoiceToUrl(themedUrl, ghostVoice),
+                  ghostConfig,
+                )
               : themedUrl;
           // URL-armed widgets have no server toggle — the Ghost URL value is
           // the opt-in, so the row treats them as always on.
@@ -857,6 +883,17 @@ function WidgetList({
                 </div>
               </div>
               <div className="min-w-0 flex-1">
+                {w.id === "ghost-build" ? (
+                  <label className="mb-1.5 flex items-center gap-2 text-caption text-text-dim">
+                    <Toggle
+                      checked={ghostVoice}
+                      onChange={toggleGhostVoice}
+                      label="Voice coach"
+                    />
+                    Voice coach — speaks each step ~5 s before its target
+                    time (re-copy the URL after toggling)
+                  </label>
+                ) : null}
                 {w.noTest ? (
                   <UrlRow url={url} compact />
                 ) : (

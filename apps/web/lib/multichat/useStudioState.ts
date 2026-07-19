@@ -64,6 +64,10 @@ export interface StudioState {
   recapSeq: number;
   scene: StudioScene | null;
   timer: StudioTimer | null;
+  /** Epoch ms the streamer marked as go-live — clip-log VOD offsets. */
+  streamStartMs: number | null;
+  /** VOD URL for clickable clip-moment timestamps (https, validated). */
+  vodUrl: string | null;
   updatedAt: string | null;
 }
 
@@ -75,6 +79,8 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   recapSeq: 0,
   scene: null,
   timer: null,
+  streamStartMs: null,
+  vodUrl: null,
   updatedAt: null,
 };
 
@@ -171,6 +177,20 @@ function sanitizeTimer(raw: unknown): StudioTimer | null {
  * Narrow an untrusted wire value (GET body or socket payload) to a
  * fully-defaulted StudioState. Never throws.
  */
+/** Client mirror of the server's VOD-URL rule: https only, parseable. */
+function sanitizeVodUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim().slice(0, 300);
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function sanitizeStudioState(raw: unknown): StudioState {
   if (!raw || typeof raw !== "object") return DEFAULT_STUDIO_STATE;
   const s = raw as Record<string, unknown>;
@@ -180,6 +200,11 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     goals: sanitizeGoals(s.goals),
     scene: sanitizeScene(s.scene),
     timer: sanitizeTimer(s.timer),
+    streamStartMs:
+      Number.isFinite(Number(s.streamStartMs)) && Number(s.streamStartMs) > 0
+        ? Number(s.streamStartMs)
+        : null,
+    vodUrl: sanitizeVodUrl(s.vodUrl),
     blockedUsers: (Array.isArray(s.blockedUsers) ? s.blockedUsers : []).filter(
       (u): u is string => typeof u === "string" && u.length > 0,
     ),

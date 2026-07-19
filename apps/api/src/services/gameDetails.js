@@ -50,6 +50,7 @@ const HEAVY_FIELDS = Object.freeze([
   "oppBuildLog",
   "macroBreakdown",
   "apmCurve",
+  "mapPlayback",
 ]);
 
 class GameDetailsService {

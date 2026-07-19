@@ -695,6 +695,41 @@ describe("routes/multichat studio", () => {
     expect(cleared.body.timer).toBeNull();
   });
 
+  test("stream-start mark round-trips; garbage epochs clear", async () => {
+    const now = Date.now();
+    const set = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ streamStartMs: now });
+    expect(set.body.streamStartMs).toBe(now);
+    // Ancient / far-future epochs would produce nonsense VOD offsets.
+    const junk = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ streamStartMs: 12345 });
+    expect(junk.body.streamStartMs).toBeNull();
+    const cleared = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ streamStartMs: null });
+    expect(cleared.body.streamStartMs).toBeNull();
+  });
+
+  test("vod url keeps https only — nothing script-shaped survives", async () => {
+    const ok = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ vodUrl: "https://www.twitch.tv/videos/123456789" });
+    expect(ok.body.vodUrl).toBe("https://www.twitch.tv/videos/123456789");
+    for (const bad of [
+      "javascript:alert(1)",
+      "http://insecure.example/vod",
+      "not a url",
+      "x".repeat(400),
+    ]) {
+      const res = await request(app2)
+        .post(`/v1/multichat/${token2}/studio`)
+        .send({ vodUrl: bad });
+      expect(res.body.vodUrl).toBeNull();
+    }
+  });
+
   test("recap trigger increments a sequence; clears work", async () => {
     const r1 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true });
     const r2 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true, highlight: null, poll: null });

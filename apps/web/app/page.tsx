@@ -81,8 +81,11 @@ export default function LandingPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
       {/* Narrative arc: ethos hero → a real game read by the app →
-          what you get → try it yourself → how to start → install →
-          support → close. */}
+          the analysis toolset (A) → the streaming toolkit (B) → the
+          arcade (C) → try the replay reader yourself → how to start
+          (D) → install → support → close. Folios run A→D in reading
+          order — the interactive replay demo deliberately sits
+          un-lettered between C and D as a "hands-on interlude". */}
       <Masthead />
       <LeadFeature />
       <RealGameShowcase />
@@ -432,7 +435,7 @@ function HowItWorksSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="C"
+        folio="D"
         kicker="Getting started"
         title="Three steps, then it runs in the background."
       />
@@ -496,10 +499,10 @@ function StreamStudioSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="S"
+        folio="B"
         kicker="Stream Studio"
         title="A full streaming toolkit, built in."
-        standfirst="Merge Twitch, Kick, YouTube and TikTok chat into one overlay — no TikTok stream key needed. Alert sounds from a classy chime to the airhorn (or upload your own), text-to-speech, chat polls and build votes, stream goals, BRB and Starting Soon scenes with a countdown, viewer XP with SC2 ranks, !win/!loss predictions scored against your real results, and a Stream Dock to run it all from inside OBS."
+        standfirst="Merge Twitch, Kick, YouTube and TikTok chat into one overlay — no TikTok stream key needed. A chat bot answers !rank and !mmr right in chat, an always-on stats ticker scrolls your session, opponent intel and career trivia, chat calls !win/!loss before each game and the replay settles who was right. Plus alert sounds from a classy chime to the airhorn, text-to-speech, polls and build votes, stream goals, countdown timers, BRB and Starting Soon scenes, viewer XP with SC2 ranks — and a Stream Dock to run it all from inside OBS."
       />
       <div className="mt-10">
         <StreamStudioShowcase />
@@ -509,7 +512,8 @@ function StreamStudioSection() {
         URL, paste it into a Browser Source, and use the Test button to
         place it. The Stream Dock (an OBS custom dock) pins highlights,
         runs polls, switches scenes and logs clip-worthy moments while
-        you play.
+        you play — then turns the log into VOD timestamps and clickable
+        seek links for your highlight edit.
       </p>
     </section>
   );
@@ -519,7 +523,7 @@ function ArcadeSection() {
   return (
     <section className="mt-24 md:mt-32">
       <EditorialHead
-        folio="B"
+        folio="C"
         kicker="New · Arcade"
         title="Mini-games made from your own games."
         standfirst="Thirteen modes — quizzes, daily challenges, weekly bingo — all built from your real ladder games. Earn XP and share your score cards."

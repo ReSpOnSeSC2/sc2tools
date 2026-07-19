@@ -3,60 +3,260 @@
 /**
  * DockClips — the clip-moment log for the Stream Dock: every moment
  * the engagement service flagged (chat spikes, notable game events),
- * newest first, with wall-clock timestamps and the chat lines that
- * caused it — a ready-made highlight shortlist for post-stream
- * editing. Live via ``overlay:engagement`` with the summary as boot
- * state (the dock host passes both through).
+ * newest first, with the chat lines that caused it — a ready-made
+ * highlight shortlist for post-stream editing.
+ *
+ * The VOD toolkit turns the log from a list of wall-clock times into
+ * a content workflow:
+ *   * "Mark stream start" pins the go-live moment (also auto-set when
+ *     Go live clears a Starting Soon scene) — every moment then ALSO
+ *     shows its offset into the stream ("2:12:10 in").
+ *   * Pasting the VOD URL makes each moment a clickable link that
+ *     opens the VOD at that second (Twitch ``?t=2h12m10s``, YouTube
+ *     ``?t=7930s``; other https URLs link plain).
+ *   * "Copy timestamps" copies the whole list as ``H:MM:SS — reason``
+ *     lines — paste into YouTube chapters or an editor's marker list.
  */
 
+import { useMemo, useState } from "react";
 import type { ClipMoment } from "@/lib/multichat/useEngagementState";
+import { DockButton } from "./DockClient";
 
-export function DockClips({ moments }: { moments: ReadonlyArray<ClipMoment> }) {
-  if (moments.length === 0) {
-    return (
-      <p className="text-caption text-text-dim">
-        No clip moments yet — when chat spikes or a big game moment
-        lands, it's logged here with the time and what caused it.
-      </p>
-    );
-  }
-  return (
-    <ul className="space-y-1.5">
-      {moments.map((m) => (
-        <li
-          key={`${m.atMs}:${m.reason}`}
-          className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5"
-        >
-          <div className="flex items-baseline gap-2">
-            <span className="text-micro tabular-nums text-text-muted">
-              {new Date(m.atMs).toLocaleTimeString([], {
+export function DockClips({
+  moments,
+  streamStartMs,
+  vodUrl,
+  busy,
+  onPost,
+}: {
+  moments: ReadonlyArray<ClipMoment>;
+  streamStartMs: number | null;
+  vodUrl: string | null;
+  busy: boolean;
+  onPost: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [vodDraft, setVodDraft] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const copyList = () => {
+    const lines = [...moments]
+      .sort((a, b) => a.atMs - b.atMs)
+      .map((m) => {
+        const stamp =
+          streamStartMs && m.atMs >= streamStartMs
+            ? formatOffset(m.atMs - streamStartMs)
+            : new Date(m.atMs).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
-              })}
+              });
+        return `${stamp} — ${m.reason}`;
+      })
+      .join("\n");
+    void navigator.clipboard?.writeText(lines).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {streamStartMs ? (
+          <>
+            <span className="text-micro text-text-muted">
+              Stream start marked{" "}
+              <b className="tabular-nums text-text">
+                {new Date(streamStartMs).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </b>
             </span>
-            <span
-              className={`text-micro font-bold uppercase tracking-wider ${
-                m.kind === "game-event" ? "text-accent-cyan" : "text-warning"
-              }`}
+            <DockButton
+              disabled={busy}
+              onClick={() => void onPost({ streamStartMs: null })}
             >
-              {m.kind === "game-event" ? "Game" : "🔥 Chat"}
+              Clear mark
+            </DockButton>
+          </>
+        ) : (
+          <>
+            <DockButton
+              disabled={busy}
+              onClick={() => void onPost({ streamStartMs: Date.now() })}
+            >
+              ⏺ Mark stream start
+            </DockButton>
+            <span className="text-micro text-text-dim">
+              …or it auto-marks when you tap Go live on Starting Soon.
             </span>
-          </div>
-          <div className="mt-0.5 break-words text-caption text-text">
-            {m.reason}
-          </div>
-          {m.sampleLines.length > 0 ? (
-            <div className="mt-1 space-y-0.5">
-              {m.sampleLines.map((l, i) => (
-                <div key={i} className="truncate text-micro text-text-dim">
-                  {l}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+          </>
+        )}
+        {moments.length > 0 ? (
+          <DockButton disabled={busy} onClick={copyList}>
+            {copied ? "✓ Copied" : "Copy timestamps"}
+          </DockButton>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {vodUrl ? (
+          <>
+            <span className="max-w-[16rem] truncate text-micro text-text-muted">
+              VOD: <span className="text-text">{vodUrl}</span>
+            </span>
+            <DockButton
+              disabled={busy}
+              onClick={() => void onPost({ vodUrl: null })}
+            >
+              Clear
+            </DockButton>
+          </>
+        ) : (
+          <>
+            <input
+              type="url"
+              value={vodDraft}
+              onChange={(e) => setVodDraft(e.target.value)}
+              placeholder="Paste VOD URL after stream → clickable timestamps"
+              className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-caption text-text placeholder:text-text-dim"
+            />
+            <DockButton
+              disabled={busy || vodDraft.trim().length === 0}
+              onClick={() => {
+                void onPost({ vodUrl: vodDraft.trim() });
+                setVodDraft("");
+              }}
+            >
+              Save
+            </DockButton>
+          </>
+        )}
+      </div>
+
+      {moments.length === 0 ? (
+        <p className="text-caption text-text-dim">
+          No clip moments yet — when chat spikes or a big game moment
+          lands, it's logged here with the time and what caused it.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {moments.map((m) => (
+            <MomentRow
+              key={`${m.atMs}:${m.reason}`}
+              moment={m}
+              streamStartMs={streamStartMs}
+              vodUrl={vodUrl}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   );
+}
+
+function MomentRow({
+  moment: m,
+  streamStartMs,
+  vodUrl,
+}: {
+  moment: ClipMoment;
+  streamStartMs: number | null;
+  vodUrl: string | null;
+}) {
+  const offsetMs =
+    streamStartMs && m.atMs >= streamStartMs ? m.atMs - streamStartMs : null;
+  const link = useMemo(
+    () => (offsetMs !== null && vodUrl ? vodLinkAt(vodUrl, offsetMs) : null),
+    [offsetMs, vodUrl],
+  );
+  const offsetLabel = offsetMs !== null ? `${formatOffset(offsetMs)} in` : null;
+  return (
+    <li className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="text-micro tabular-nums text-text-muted">
+          {new Date(m.atMs).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </span>
+        {offsetLabel ? (
+          link ? (
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-micro font-semibold tabular-nums text-accent-cyan underline decoration-accent-cyan/50 underline-offset-2"
+            >
+              ▶ {offsetLabel}
+            </a>
+          ) : (
+            <span className="text-micro font-semibold tabular-nums text-text">
+              {offsetLabel}
+            </span>
+          )
+        ) : null}
+        <span
+          className={`text-micro font-bold uppercase tracking-wider ${
+            m.kind === "game-event" ? "text-accent-cyan" : "text-warning"
+          }`}
+        >
+          {m.kind === "game-event" ? "Game" : "🔥 Chat"}
+        </span>
+      </div>
+      <div className="mt-0.5 break-words text-caption text-text">
+        {m.reason}
+      </div>
+      {m.sampleLines.length > 0 ? (
+        <div className="mt-1 space-y-0.5">
+          {m.sampleLines.map((l, i) => (
+            <div key={i} className="truncate text-micro text-text-dim">
+              {l}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+/** ms → "H:MM:SS" (or "MM:SS" under an hour). */
+export function formatOffset(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const min = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return h > 0
+    ? `${h}:${String(min).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${min}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Deep-link a VOD at an offset. Twitch wants ``?t=1h2m3s``, YouTube
+ * ``?t=3723s`` — anything else gets the plain URL (still clickable,
+ * just without the seek).
+ */
+export function vodLinkAt(vodUrl: string, offsetMs: number): string {
+  let url: URL;
+  try {
+    url = new URL(vodUrl);
+  } catch {
+    return vodUrl;
+  }
+  const totalSec = Math.max(0, Math.floor(offsetMs / 1000));
+  const host = url.hostname.replace(/^www\./, "");
+  if (host === "twitch.tv" || host.endsWith(".twitch.tv")) {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    url.searchParams.set("t", `${h}h${m}m${s}s`);
+    return url.toString();
+  }
+  if (host === "youtube.com" || host === "youtu.be") {
+    url.searchParams.set("t", `${totalSec}s`);
+    return url.toString();
+  }
+  return url.toString();
 }

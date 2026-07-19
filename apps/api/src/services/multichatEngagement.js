@@ -114,6 +114,12 @@ class MultichatEngagementService {
    * }} [deps]
    */
   constructor(db, deps = {}) {
+    /**
+     * Out-of-band event listener (Twitch chat bot announcements) —
+     * assigned post-construction in app.js.
+     * @type {((token: string, msg: Record<string, any>) => void) | null}
+     */
+    this.onEvent = null;
     this.events = db.multichatEngagementEvents;
     this.viewers = db.multichatViewers;
     this.predictions = db.multichatPredictions;
@@ -132,6 +138,16 @@ class MultichatEngagementService {
   /** @param {string} token @param {Record<string, unknown>} msg */
   _emit(token, msg) {
     if (this.io) this.io.to(`overlay:${token}`).emit("overlay:engagement", msg);
+    // Out-of-band listener (the Twitch chat bot's announcements).
+    // Assigned post-construction in app.js; failures must never
+    // break the overlay broadcast path.
+    if (typeof this.onEvent === "function") {
+      try {
+        this.onEvent(token, msg);
+      } catch {
+        /* listener errors are its own problem */
+      }
+    }
   }
 
   /**

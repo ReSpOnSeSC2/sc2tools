@@ -155,6 +155,52 @@ def bootstrap_analyzer_path() -> None:
     _ensure_analyzer_on_path()
 
 
+def _load_sc2ra_package_module(submodule: str) -> Any:
+    """Load ``core.<submodule>`` from apps/replay-engine AS A PACKAGE.
+
+    ``_load_sc2ra_module`` loads single files in isolation, which
+    breaks modules that use package-relative imports
+    (``from .paths import APP_DIR``). This loader registers a private
+    ``_sc2ra_pkg_core`` package whose ``__path__`` points at
+    apps/replay-engine/core, then imports the submodule under it — so
+    its relative imports resolve to the ENGINE's sibling files, never
+    reveal's stale copies, without touching ``sys.path`` order.
+
+    Test stub support mirrors ``_load_sc2ra_module``: a pre-seeded
+    ``sys.modules['_sc2ra_pkg_core.<submodule>']`` entry wins.
+    """
+    import importlib
+    import importlib.util
+
+    pkg_name = "_sc2ra_pkg_core"
+    mod_name = f"{pkg_name}.{submodule}"
+    cached = sys.modules.get(mod_name)
+    if cached is not None:
+        return cached
+    for base in _candidate_bases():
+        core_dir = base / "apps" / "replay-engine" / "core"
+        init_py = core_dir / "__init__.py"
+        target = core_dir / f"{submodule}.py"
+        if not init_py.exists() or not target.exists():
+            continue
+        if pkg_name not in sys.modules:
+            pkg_spec = importlib.util.spec_from_file_location(
+                pkg_name,
+                str(init_py),
+                submodule_search_locations=[str(core_dir)],
+            )
+            if pkg_spec is None or pkg_spec.loader is None:
+                continue
+            pkg = importlib.util.module_from_spec(pkg_spec)
+            sys.modules[pkg_name] = pkg
+            pkg_spec.loader.exec_module(pkg)
+        mod = importlib.import_module(mod_name)
+        return mod
+    raise ImportError(
+        f"replay-engine package module not found on disk: core.{submodule}",
+    )
+
+
 def _load_sc2ra_module(dotted_name: str) -> Any:
     """Load a module by dotted name explicitly from ``apps/replay-engine/``.
 
@@ -397,6 +443,10 @@ class CloudGame:
     # for ladder-MMR series bucketing. Kept last for positional-call
     # compatibility with older CloudGame constructors.
     my_ladder_race: Optional[str] = None
+    # Compact vespene-style playback payload for the cloud's map
+    # replayer (unit tracks + buildings + battles over the map). Added
+    # AFTER my_ladder_race to preserve positional-call compatibility.
+    map_playback: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -451,6 +501,8 @@ class CloudGame:
             out["apmCurve"] = self.apm_curve
         if self.spatial is not None:
             out["spatial"] = self.spatial
+        if self.map_playback is not None:
+            out["mapPlayback"] = self.map_playback
         return out
 
 
@@ -642,6 +694,10 @@ def parse_replay_for_cloud_ex(
     # syncs. Best-effort — failures fall back to None and the heatmap
     # tiles surface their "no spatial data" empty state.
     spatial = _compute_spatial_extract(ctx)
+    # Compact map-playback payload for the cloud's vespene-style
+    # replayer (unit movement tracks + buildings + battle markers).
+    # Additive and best-effort like the spatial extract.
+    map_playback = _compute_map_playback(ctx)
 
     is_ladder = _is_ladder_game(ctx)
 
@@ -816,6 +872,7 @@ def parse_replay_for_cloud_ex(
         macro_breakdown=macro_breakdown,
         apm_curve=apm_curve,
         spatial=spatial,
+        map_playback=map_playback,
     ), None
 
 
@@ -1069,6 +1126,232 @@ def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
         return (dx * dx + dy * dy) ** 0.5
     except (KeyError, TypeError, ValueError):
         return float("inf")
+
+
+# ── Map playback (the cloud's vespene-style replayer) ────────────────
+#
+# ``core.map_playback_data.build_playback_data`` walks the replay once
+# and produces the full playback payload the offline map viewer uses:
+# per-unit movement tracks (flat [t, x, y, …] waypoints), building
+# events, per-side stats series, playable bounds, spawn locations and
+# battle markers. ``_compact_map_playback`` reduces that to a bounded
+# upload the cloud stores in the per-game detail blob and the web
+# replayer renders. Caps below keep a worst-case 60-minute game to
+# roughly a megabyte of JSON.
+
+_PLAYBACK_MAX_UNITS_PER_SIDE = 500
+_PLAYBACK_MAX_WAYPOINTS_PER_UNIT = 240
+_PLAYBACK_MIN_WAYPOINT_GAP_SEC = 2.0
+_PLAYBACK_MAX_BUILDINGS_PER_SIDE = 400
+_PLAYBACK_STATS_STEP_SEC = 10.0
+_PLAYBACK_MAX_BATTLES = 80
+
+
+def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Best-effort compact playback payload, or ``None``.
+
+    Loads the ENGINE's ``core.map_playback_data`` via the package
+    loader (its ``from .paths import …`` relative imports rule out the
+    single-file loader), calls it with the documented
+    ``(file_path, player_name)`` signature, and compacts the result.
+    Every failure degrades to ``None`` — playback is additive and must
+    never block an upload.
+    """
+    me = getattr(ctx, "me", None)
+    replay_path = getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)
+    player_name = getattr(me, "name", None) if me is not None else None
+    if not replay_path or not player_name:
+        return None
+    try:
+        mod = _load_sc2ra_package_module("map_playback_data")
+        build_playback = mod.build_playback_data
+    except Exception as exc:  # noqa: BLE001
+        log.warning("map_playback_imports_unavailable: %s", exc)
+        return None
+    try:
+        playback = build_playback(str(replay_path), str(player_name))
+    except Exception as exc:  # noqa: BLE001
+        log.debug("map_playback_build_failed: %s", exc)
+        return None
+    if not playback:
+        return None
+    try:
+        markers = []
+        try:
+            markers = mod.detect_battle_markers(
+                playback.get("my_stats") or [],
+                playback.get("opp_stats") or [],
+                playback.get("my_events") or [],
+                playback.get("opp_events") or [],
+                float(playback.get("game_length") or 0.0),
+            )
+        except Exception:  # noqa: BLE001
+            markers = []
+        return _compact_map_playback(playback, markers)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("map_playback_compact_failed: %s", exc)
+        return None
+
+
+def _compact_map_playback(
+    playback: Mapping[str, Any],
+    battle_markers: Optional[list] = None,
+) -> Optional[Dict[str, Any]]:
+    """Reduce a full playback dict to the bounded cloud upload shape.
+
+    Pure function (no replay/file access) so tests can feed synthetic
+    payloads. Output shape (camelCase, ready for the web replayer):
+
+      {
+        v: 1, mapName, gameLength,
+        bounds: {minX, minY, maxX, maxY},
+        spawns: [{owner: 'me'|'opp', x, y}],
+        battles: [{t, x, y}],
+        buildings: [{owner, name, t, x, y}],
+        units: [{owner, name, born, died|null, wp: [t,x,y,…]}],
+        stats: {me: [[t, army, workers, supply]…], opp: […]}
+      }
+    """
+    bounds_in = playback.get("bounds")
+    if not isinstance(bounds_in, Mapping):
+        return None
+    try:
+        bounds = {
+            "minX": float(bounds_in.get("x_min", 0.0)),
+            "minY": float(bounds_in.get("y_min", 0.0)),
+            "maxX": float(bounds_in.get("x_max", 200.0)),
+            "maxY": float(bounds_in.get("y_max", 200.0)),
+        }
+    except (TypeError, ValueError):
+        return None
+    if bounds["maxX"] <= bounds["minX"] or bounds["maxY"] <= bounds["minY"]:
+        return None
+
+    out: Dict[str, Any] = {
+        "v": 1,
+        "mapName": str(playback.get("map_name") or ""),
+        "gameLength": float(playback.get("game_length") or 0.0),
+        "bounds": bounds,
+    }
+
+    spawns = []
+    for s in playback.get("spawn_locations") or []:
+        if not isinstance(s, Mapping):
+            continue
+        owner = s.get("owner")
+        x, y = s.get("x"), s.get("y")
+        if owner in ("me", "opp") and isinstance(x, (int, float)) and isinstance(y, (int, float)):
+            spawns.append({"owner": owner, "x": round(float(x), 1), "y": round(float(y), 1)})
+    out["spawns"] = spawns[:8]
+
+    battles = []
+    for m in battle_markers or []:
+        if not isinstance(m, Mapping):
+            continue
+        t, x, y = m.get("time"), m.get("x"), m.get("y")
+        if all(isinstance(v, (int, float)) for v in (t, x, y)):
+            battles.append({
+                "t": round(float(t), 1),
+                "x": round(float(x), 1),
+                "y": round(float(y), 1),
+            })
+    out["battles"] = battles[:_PLAYBACK_MAX_BATTLES]
+
+    buildings: list = []
+    per_side_counts = {"me": 0, "opp": 0}
+    for owner, key in (("me", "my_events"), ("opp", "opp_events")):
+        for e in playback.get(key) or []:
+            if not isinstance(e, Mapping) or e.get("type") != "building":
+                continue
+            x, y = e.get("x"), e.get("y")
+            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                continue
+            if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
+                continue
+            per_side_counts[owner] += 1
+            buildings.append({
+                "owner": owner,
+                "name": str(e.get("name") or e.get("unit_type") or ""),
+                "t": round(float(e.get("time") or 0.0), 1),
+                "x": round(float(x), 1),
+                "y": round(float(y), 1),
+            })
+    out["buildings"] = buildings
+
+    units: list = []
+    for owner, key in (("me", "my_units"), ("opp", "opp_units")):
+        side = [u for u in (playback.get(key) or []) if isinstance(u, Mapping)]
+        # When over the cap, keep the longest-lived units — they carry
+        # the story; blips (canceled eggs, one-shot units) go first.
+        if len(side) > _PLAYBACK_MAX_UNITS_PER_SIDE:
+            def _lifespan(u: Mapping[str, Any]) -> float:
+                born = u.get("born") or 0.0
+                died = u.get("died")
+                end = died if isinstance(died, (int, float)) else float("inf")
+                try:
+                    return float(end) - float(born)
+                except (TypeError, ValueError):
+                    return 0.0
+            side = sorted(side, key=_lifespan, reverse=True)[:_PLAYBACK_MAX_UNITS_PER_SIDE]
+        for u in side:
+            wp_in = u.get("waypoints") or []
+            wp: list = []
+            last_t = None
+            # Waypoints arrive as [(t, x, y), …] tuples or a flat list.
+            triples = (
+                [wp_in[i : i + 3] for i in range(0, len(wp_in) - 2, 3)]
+                if wp_in and isinstance(wp_in[0], (int, float))
+                else wp_in
+            )
+            for tri in triples:
+                try:
+                    t, x, y = float(tri[0]), float(tri[1]), float(tri[2])
+                except (TypeError, ValueError, IndexError):
+                    continue
+                if last_t is not None and t - last_t < _PLAYBACK_MIN_WAYPOINT_GAP_SEC:
+                    continue
+                if len(wp) >= _PLAYBACK_MAX_WAYPOINTS_PER_UNIT * 3:
+                    break
+                last_t = t
+                wp.extend((round(t, 1), round(x, 1), round(y, 1)))
+            if not wp:
+                continue
+            born = u.get("born")
+            died = u.get("died")
+            units.append({
+                "owner": owner,
+                "name": str(u.get("name") or ""),
+                "born": round(float(born), 1) if isinstance(born, (int, float)) else round(wp[0], 1),
+                "died": round(float(died), 1) if isinstance(died, (int, float)) else None,
+                "wp": wp,
+            })
+    out["units"] = units
+
+    stats_out: Dict[str, list] = {}
+    for owner, key in (("me", "my_stats"), ("opp", "opp_stats")):
+        rows: list = []
+        last_t = -1e9
+        for s in playback.get(key) or []:
+            if not isinstance(s, Mapping):
+                continue
+            t = s.get("time")
+            if not isinstance(t, (int, float)):
+                continue
+            if float(t) - last_t < _PLAYBACK_STATS_STEP_SEC:
+                continue
+            last_t = float(t)
+            rows.append([
+                round(float(t), 1),
+                int(s.get("army_val") or 0),
+                int(s.get("workers") or 0),
+                int(s.get("food_used") or 0),
+            ])
+        stats_out[owner] = rows
+    out["stats"] = stats_out
+
+    if not units and not buildings:
+        return None
+    return out
 
 
 def _compute_macro_breakdown(
