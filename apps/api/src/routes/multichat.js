@@ -507,6 +507,15 @@ function sanitizeMultichatConfig(prefs) {
   // relay reads them per request). Mode "local" (the free on-device
   // default) needs nothing but the flag; "provider" is only actually
   // enabled once a valid https endpoint is stored.
+  // Loyalty-rank theme for the supporter wall — a single whitelisted
+  // enum; the widget maps viewer levels to unit names client-side.
+  if (prefs?.engagement && typeof prefs.engagement === "object") {
+    out.engagement = {
+      rankRace: ["protoss", "terran", "zerg"].includes(prefs.engagement.rankRace)
+        ? prefs.engagement.rankRace
+        : "protoss",
+    };
+  }
   if (prefs?.translate && typeof prefs.translate === "object") {
     const t = prefs.translate;
     const mode = t.mode === "provider" ? "provider" : "local";

@@ -27,6 +27,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { ExternalLink, Languages, LayoutPanelLeft, MessageSquare, Wand2 } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
+import {
+  RANK_RACES,
+  RANK_RACE_LABEL,
+  sanitizeRankRace,
+  type RankRace,
+} from "@/lib/multichat/rankLadders";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -100,6 +106,7 @@ type Draft = {
   tts: ChatTtsConfig;
   sound: ChatSoundConfig;
   translate: TranslateDraft;
+  rankRace: RankRace;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -116,6 +123,7 @@ const EMPTY_DRAFT: Draft = {
   tts: DEFAULT_TTS,
   sound: DEFAULT_SOUND,
   translate: DEFAULT_TRANSLATE,
+  rankRace: "protoss",
 };
 
 function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
@@ -136,6 +144,10 @@ function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
     tts: sanitizeTtsConfig(config?.tts),
     sound: sanitizeSoundConfig(config?.sound),
     translate: translateFromConfig(config),
+    rankRace: sanitizeRankRace(
+      (config as { engagement?: { rankRace?: string } } | null | undefined)
+        ?.engagement?.rankRace,
+    ),
   };
 }
 
@@ -160,7 +172,10 @@ function translateFromConfig(
 
 function configFromDraft(
   d: Draft,
-): MultichatConfig & { translate: Record<string, unknown> } {
+): MultichatConfig & {
+  translate: Record<string, unknown>;
+  engagement: Record<string, unknown>;
+} {
   return {
     twitch: {
       enabled: d.twitchEnabled,
@@ -189,6 +204,7 @@ function configFromDraft(
       apiKey: d.translate.apiKey.trim(),
       targetLang: d.translate.targetLang.trim().toLowerCase() || "en",
     },
+    engagement: { rankRace: d.rankRace },
   };
 }
 
@@ -374,6 +390,34 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 {origin ? <UrlRow url={`${origin}/dock/${token}`} compact /> : null}
               </div>
             ) : null}
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block w-72 min-w-0">
+                <div className="mb-1 text-caption text-text-dim">
+                  Loyalty rank theme{" "}
+                  <span className="text-text-muted">
+                    (supporter wall unit ladder)
+                  </span>
+                </div>
+                <select
+                  value={draft.rankRace}
+                  onChange={(e) =>
+                    set({ rankRace: sanitizeRankRace(e.target.value) })
+                  }
+                  className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+                >
+                  {RANK_RACES.map((r) => (
+                    <option key={r} value={r}>
+                      {RANK_RACE_LABEL[r]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="max-w-xs text-micro text-text-dim">
+                Viewers level up the ladder as they chat — switching race
+                re-themes everyone instantly, XP is kept.
+              </p>
+            </div>
 
             <PlatformRow
               label="Twitch"

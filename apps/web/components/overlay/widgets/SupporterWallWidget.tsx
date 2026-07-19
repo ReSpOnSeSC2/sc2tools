@@ -2,8 +2,9 @@
 
 /**
  * SupporterWallWidget — cross-platform loyalty: today's top
- * supporters with Protoss-themed ranks (Probe → Mothership) and XP bars,
- * plus a level-up toast whenever a viewer crosses a threshold.
+ * supporters with race-themed unit ranks (Settings picks Protoss /
+ * Terran / Zerg — see lib/multichat/rankLadders) and XP bars, plus a
+ * level-up toast whenever a viewer crosses a threshold.
  * Viewers from all four platforms share one progression — chatting
  * anywhere earns XP (see the engagement service). Transparent until
  * someone has chatted.
@@ -15,16 +16,18 @@ import {
   type WallEntry,
 } from "@/lib/multichat/useEngagementState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { rankNameFor, sanitizeRankRace } from "@/lib/multichat/rankLadders";
 import { PLATFORM_META } from "./MultiChatMessageList";
+import { useMultichatConfig } from "./MultiChatWidget";
 import type { LiveGamePayload } from "../types";
 
 const TOAST_MS = 8_000;
 
 const TEST_WALL: WallEntry[] = [
-  { user: "TestGrinder", platform: "twitch", xp: 1240, level: 4, rank: "Immortal" },
-  { user: "KickEnjoyer", platform: "kick", xp: 660, level: 3, rank: "Stalker" },
-  { user: "TubeWatcher", platform: "youtube", xp: 300, level: 2, rank: "Adept" },
-  { user: "TokFan", platform: "tiktok", xp: 120, level: 1, rank: "Zealot" },
+  { user: "TestGrinder", platform: "twitch", xp: 1240, level: 4, rank: "" },
+  { user: "KickEnjoyer", platform: "kick", xp: 660, level: 3, rank: "" },
+  { user: "TubeWatcher", platform: "youtube", xp: 300, level: 2, rank: "" },
+  { user: "TokFan", platform: "tiktok", xp: 120, level: 1, rank: "" },
 ];
 
 export function SupporterWallWidget({
@@ -42,13 +45,21 @@ export function SupporterWallWidget({
     engagementEvent ?? null,
   );
   const testActive = useTestFireFlag(live, "supporter-wall");
+  // Rank theme rides the token config (Settings → loyalty rank race);
+  // levels map to unit names HERE so a race switch re-themes every
+  // viewer instantly — nothing rank-related is persisted.
+  const { platforms } = useMultichatConfig(token);
+  const race = sanitizeRankRace(
+    (platforms as { engagement?: { rankRace?: string } } | null)?.engagement
+      ?.rankRace,
+  );
 
-  const [toast, setToast] = useState<{ user: string; rank: string } | null>(null);
+  const [toast, setToast] = useState<{ user: string; level: number } | null>(null);
   useEffect(() => {
     if (!lastEvent || lastEvent.type !== "level-up") return;
     setToast({
       user: String(lastEvent.user ?? ""),
-      rank: String(lastEvent.rank ?? ""),
+      level: Math.max(0, Math.round(Number(lastEvent.level) || 0)),
     });
     const t = setTimeout(() => setToast(null), TOAST_MS);
     return () => clearTimeout(t);
@@ -56,7 +67,7 @@ export function SupporterWallWidget({
 
   const wall = testActive ? TEST_WALL : summary.wall;
   const showToast = testActive
-    ? { user: "TestGrinder", rank: "Immortal" }
+    ? { user: "TestGrinder", level: 4 }
     : toast;
   if (wall.length === 0 && !showToast) {
     return <div style={{ background: "transparent" }} />;
@@ -75,7 +86,7 @@ export function SupporterWallWidget({
         <div className="sw-card" style={{ ...cardStyle, borderLeft: "4px solid #f5b942" }}>
           <div style={{ ...kickerStyle, color: "#f5b942" }}>LEVEL UP</div>
           <div style={{ marginTop: 4, fontSize: 15, fontWeight: 800, color: "#fff" }}>
-            {showToast.user} reached {showToast.rank}!
+            {showToast.user} reached {rankNameFor(race, showToast.level)}!
           </div>
         </div>
       ) : null}
@@ -92,7 +103,7 @@ export function SupporterWallWidget({
                       {meta.short}
                     </span>
                     <span style={nameStyle}>{w.user}</span>
-                    <span style={rankStyle}>{w.rank}</span>
+                    <span style={rankStyle}>{rankNameFor(race, w.level)}</span>
                     <span style={xpStyle}>{w.xp} XP</span>
                   </div>
                   <div style={trackStyle}>
