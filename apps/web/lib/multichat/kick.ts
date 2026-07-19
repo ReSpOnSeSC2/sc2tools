@@ -8,6 +8,8 @@
 // in Settings (auto via the API relay, or the guided manual flow when
 // Cloudflare blocks the lookup).
 
+import { kickEmoteUrl, type ChatEmote } from "./emotes";
+import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
 // Kick's production Pusher app key + cluster — public constants baked
@@ -25,6 +27,8 @@ export interface ParsedKickMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  /** Emotes present in `text` — only set when the message carries any. */
+  emotes?: ChatEmote[];
 }
 
 /** Map Kick identity badges to normalised tags. */
@@ -54,6 +58,25 @@ export function stripKickEmoteTags(content: string): string {
 }
 
 /**
+ * Collect the emotes referenced by `[emote:id:name]` markup. The code
+ * mirrors what stripKickEmoteTags leaves in the text (`:name:`) so the
+ * renderer can swap occurrences back to images; codes dedupe.
+ */
+export function collectKickEmotes(content: string): ChatEmote[] {
+  const out: ChatEmote[] = [];
+  const seen = new Set<string>();
+  for (const m of content.matchAll(/\[emote:(\d+):([^\]]*)\]/g)) {
+    const [, id, name] = m;
+    if (!name) continue;
+    const code = `:${name}:`;
+    if (seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, url: kickEmoteUrl(id) });
+  }
+  return out;
+}
+
+/**
  * Parse one Kick `ChatMessageEvent` payload (the `data` JSON of the
  * Pusher event) into a chat message. Pure, unit-tested.
  */
@@ -62,12 +85,14 @@ export function parseKickChatEvent(
 ): ParsedKickMessage | null {
   const sender = (data?.sender ?? {}) as Record<string, unknown>;
   const identity = (sender?.identity ?? {}) as Record<string, unknown>;
-  const text = stripKickEmoteTags(String(data?.content ?? ""));
+  const content = String(data?.content ?? "");
+  const text = stripKickEmoteTags(content);
   if (!text) return null;
   const user = String(sender?.username || sender?.slug || "").trim();
   if (!user) return null;
   const created = Date.parse(String(data?.created_at ?? ""));
   const color = String(identity?.color ?? "");
+  const emotes = collectKickEmotes(content);
   return {
     id: String(data?.id || `${Date.now()}-${user}`),
     user,
@@ -76,6 +101,74 @@ export function parseKickChatEvent(
     badges: kickBadgeTags(
       identity?.badges as Array<{ type?: string }> | undefined,
     ),
+    atMs: Number.isFinite(created) ? created : Date.now(),
+    // Omitted (not []) when absent — keeps emote-less parses toEqual
+    // their pre-emote shape.
+    ...(emotes.length > 0 ? { emotes } : {}),
+  };
+}
+
+/**
+ * Parse one non-chat Pusher event from the chatroom channel into a
+ * platform event, or null for events we don't surface. Payload shapes
+ * follow what the public channel delivers (observed live), but every
+ * field is treated as optional — Kick renames things without notice.
+ */
+export function parseKickEvent(
+  eventName: string,
+  data: Record<string, unknown>,
+): ChatEvent | null {
+  const short = eventName.startsWith("App\\Events\\")
+    ? eventName.slice("App\\Events\\".length)
+    : eventName;
+
+  let kind: ChatEvent["kind"];
+  let user: string;
+  let detail: string;
+  let amount: string | undefined;
+  switch (short) {
+    case "SubscriptionEvent": {
+      user = String(data?.username || "").trim();
+      const months = Number(data?.months);
+      if (Number.isFinite(months) && months > 1) {
+        kind = "resub";
+        detail = `subscribed for ${months} months`;
+      } else {
+        kind = "sub";
+        detail = "subscribed";
+      }
+      break;
+    }
+    case "GiftedSubscriptionsEvent": {
+      kind = "giftsub";
+      user = String(data?.gifter_username || "").trim();
+      const gifted = data?.gifted_usernames;
+      const count = Array.isArray(gifted) ? gifted.length || 1 : 1;
+      amount = String(count);
+      detail = `gifted ${count} ${count === 1 ? "sub" : "subs"}`;
+      break;
+    }
+    case "StreamHostEvent": {
+      kind = "raid";
+      user = String(data?.host_username || "").trim();
+      const viewers = Number(data?.number_viewers) || 0;
+      amount = String(viewers);
+      detail = `raiding with ${viewers} viewers`;
+      break;
+    }
+    default:
+      return null;
+  }
+  if (!user) return null;
+
+  const created = Date.parse(String(data?.created_at ?? ""));
+  return {
+    platform: "kick",
+    id: String(data?.id || `${eventName}-${Date.now()}-${user}`),
+    kind,
+    user,
+    detail,
+    amount,
     atMs: Number.isFinite(created) ? created : Date.now(),
   };
 }
@@ -132,8 +225,20 @@ export function createKickChat(
           if (parsed) callbacks.onMessage({ platform: "kick", ...parsed });
           break;
         }
-        default:
+        default: {
+          // Any other App\Events\* frame is a candidate platform event
+          // (subs, gifted subs, hosts) — parse defensively, drop the rest.
+          if (!String(frame.event || "").startsWith("App\\Events\\")) break;
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(String(frame.data || "{}"));
+          } catch {
+            return;
+          }
+          const event = parseKickEvent(String(frame.event), payload);
+          if (event) callbacks.onEvent?.(event);
           break;
+        }
       }
     };
     ws.onclose = () => {

@@ -13,6 +13,52 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stream Studio · dock, five new widgets, events, emotes, chat
+  commands, translation** — the multichat family grows into a full
+  streaming toolkit. A new **Stream Dock** (`/dock/<token>`, add it as
+  an OBS custom browser dock or open it on a second screen) shows the
+  merged live chat with one-tap **Highlight** (pins a message on
+  stream) and two-tap **Block**, runs **chat polls** (viewers vote
+  with `!1` / `!2` across all four platforms; live tallies, close and
+  clear), edits **stream goals**, and fires the **session recap**
+  card. Five new opt-in overlay widgets render it all: Chat highlight,
+  Chat poll, Event alerts (subs, resubs, gift subs, raids, YouTube
+  memberships and Super Chats, TikTok gifts/follows — parsed from the
+  same anonymous transports, no extra logins), Stream goals (animated
+  progress bars), and Session recap. The chat feed itself now renders
+  real **Twitch and Kick emote images** (toggleable), answers
+  `!opponent` / `!mmr` / `!build` from ANY platform's chat with an
+  on-stream card, supports optional **inline translation** through a
+  self-hosted LibreTranslate-compatible provider (key stays
+  server-side), and gains a **BRB scene mode** (`?mode=brb`).
+  Highlight/poll/goal changes reach every Browser Source instantly
+  over the overlay socket and survive restarts (Mongo-persisted per
+  token, strict-sanitized).
+
+
+- **Multi-platform chat · appearance studio, Test fire, and TTS** —
+  the multichat widget is now fully stylable from Settings with a
+  pixel-honest live preview rendered by the same component OBS uses:
+  font family/size/weight, text shadow, row density, three layouts
+  (single line, name-above-message, bubbles), entry animations,
+  newest-at-top or bottom, left/right alignment, username colour
+  modes, platform chips / role badges / timestamp toggles, message
+  count and auto-hide timers, background colour + transparency slider
+  (checkerboard preview), corner radius and border, plus content
+  filters (!command hiding, a known-bot list, and a custom user
+  blocklist). The widget's Test button joins the standard overlay
+  test system — it plays a clearly-labelled demo chat stream so the
+  source can be placed and styled without live chat. New
+  text-to-speech reads incoming chat aloud from the Browser Source:
+  per-platform selection, voice picker with in-Settings preview,
+  speed/volume/length controls, username reading, command skipping,
+  URL/emote scrubbing, and a bounded queue that skips backlog instead
+  of falling behind — with the same gesture-unlock persistence the
+  scouting voice readout uses. An optional message ding (synthesized
+  in the Browser Source, volume slider, burst-collapsed, preview
+  button) chimes on new chat. Everything is stored server-side and
+  reaches OBS within a minute, no Browser Source changes needed.
+
 - **Multi-platform chat overlay · Twitch + Kick + YouTube + TikTok in
   one OBS source** — a new `multichat` overlay widget merges all four
   live chats into a single broadcast-ready feed with platform chips,

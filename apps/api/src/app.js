@@ -26,6 +26,7 @@ const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
+const { MultichatStudioService } = require("./services/multichatStudio");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
@@ -274,6 +275,9 @@ function makeServices(deps) {
   // Browser Source over SSE. Constructed once so the connection pool
   // and its caps are process-global.
   const tiktokChatRelay = new TikTokChatRelay({ log: deps.logger });
+  // Stream-studio state (highlight / poll / goals / recap) shared by
+  // the dock and the multichat widget family, broadcast per token.
+  const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
   // ``opponents`` collections every other read service touches.
@@ -415,6 +419,7 @@ function makeServices(deps) {
     overlayLive,
     liveGameBroker,
     tiktokChatRelay,
+    multichatStudio,
     aggregations,
     macroReport,
     streak,
@@ -649,6 +654,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       overlayTokens: services.overlayTokens,
       users: services.users,
       tiktokRelay: services.tiktokChatRelay,
+      studio: services.multichatStudio,
     }),
   );
   // Operational admin router — gated on isAdmin(req) inside the

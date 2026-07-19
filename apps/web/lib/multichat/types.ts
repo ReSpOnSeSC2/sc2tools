@@ -4,6 +4,10 @@
 // the tests never branch on platform-specific payloads. Engines
 // normalise at the edge; everything downstream is platform-agnostic.
 
+// Type-only import — erased at compile time, so the events ⇄ types
+// reference cycle never exists at runtime.
+import type { ChatEvent } from "./events";
+
 export type ChatPlatform = "twitch" | "kick" | "youtube" | "tiktok";
 
 export const CHAT_PLATFORMS: readonly ChatPlatform[] = [
@@ -31,6 +35,7 @@ export interface ChatMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  emotes?: import("./emotes").ChatEmote[];
 }
 
 export type PlatformState =
@@ -51,6 +56,8 @@ export interface PlatformStatus {
 export interface EngineCallbacks {
   onMessage(message: ChatMessage): void;
   onStatus(state: PlatformState, detail?: string): void;
+  /** Platform events (subs, raids, gifts…) — optional, events-aware hosts only. */
+  onEvent?(event: ChatEvent): void;
 }
 
 /** Every engine exposes exactly one lifecycle affordance. */
@@ -64,4 +71,19 @@ export interface MultichatConfig {
   kick?: { enabled: boolean; channel?: string; chatroomId?: number };
   youtube?: { enabled: boolean; channel?: string };
   tiktok?: { enabled: boolean; username?: string };
+  /**
+   * Widget styling — untyped on the wire; always pass through
+   * lib/multichat/appearance.sanitizeAppearance before use.
+   */
+  appearance?: Record<string, unknown>;
+  /**
+   * Text-to-speech settings — untyped on the wire; always pass
+   * through lib/multichat/tts.sanitizeTtsConfig before use.
+   */
+  tts?: Record<string, unknown>;
+  /**
+   * Message-ding settings — untyped on the wire; always pass through
+   * lib/multichat/sound.sanitizeSoundConfig before use.
+   */
+  sound?: Record<string, unknown>;
 }

@@ -8,7 +8,12 @@ let mockConfig: { config: MultichatConfig | null; loaded: boolean } = {
   config: null,
   loaded: false,
 };
-let mockChat: MultiChatState = { messages: [], statuses: {}, active: false };
+let mockChat: MultiChatState = {
+  messages: [],
+  events: [],
+  statuses: {},
+  active: false,
+};
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: () => mockChat,
@@ -25,7 +30,7 @@ beforeEach(() => {
     json: async () => ({ config: mockConfig.config ?? {} }),
   });
   mockConfig = { config: null, loaded: false };
-  mockChat = { messages: [], statuses: {}, active: false };
+  mockChat = { messages: [], events: [], statuses: {}, active: false };
 });
 
 afterEach(() => {
@@ -54,6 +59,7 @@ describe("MultiChatWidget", () => {
     mockChat = {
       active: true,
       statuses: { twitch: { state: "connected" } },
+      events: [],
       messages: [
         {
           platform: "twitch",
@@ -95,6 +101,7 @@ describe("MultiChatWidget", () => {
         tiktok: { state: "offline" },
       },
       messages: [],
+      events: [],
     };
     await renderWidget();
     // TikTok offline → status row visible with the offline label; the

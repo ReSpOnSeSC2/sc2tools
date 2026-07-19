@@ -26,6 +26,7 @@
  *   { type: "status", state: "connecting"|"connected"|"offline"|
  *     "ended"|"error", detail? }
  *   { type: "chat", message: { id, user, text, badges, atMs } }
+ *   { type: "event", event: { id, kind, user, detail, amount?, atMs } }
  *
  * The connector library is loaded lazily via dynamic import (it is
  * ESM-only) and injected in tests — unit tests never touch TikTok.
@@ -181,6 +182,12 @@ class Channel {
       const message = mapChatEvent(data);
       if (message) this.emit({ type: "chat", message });
     });
+    for (const name of ["gift", "follow", "subscribe"]) {
+      connection.on(name, (/** @type {Record<string, any>} */ data) => {
+        const event = mapTikTokEvent(name, data);
+        if (event) this.emit({ type: "event", event });
+      });
+    }
     connection.on("streamEnd", () => {
       this.emit({ type: "status", state: "ended" });
       this.scheduleRetry(OFFLINE_RETRY_MS);
@@ -299,6 +306,54 @@ function mapChatEvent(data) {
 }
 
 /**
+ * Map a connector event (`gift`, `follow`, `subscribe`) to the slim
+ * relay event, or null for anything not worth surfacing. Streakable
+ * gifts (giftType 1) fire once per tap while a combo runs — only the
+ * `repeatEnd` frame carries the final count, so intermediate frames
+ * are dropped; when the connector omits those fields, emit rather than
+ * silently swallow every gift.
+ *
+ * @param {string} name
+ * @param {Record<string, any>} data
+ * @returns {{ id: string, kind: string, user: string, detail: string,
+ *   amount?: string, atMs: number } | null}
+ */
+function mapTikTokEvent(name, data) {
+  const user =
+    data?.user?.uniqueId ||
+    data?.user?.nickname ||
+    data?.uniqueId ||
+    data?.nickname ||
+    "viewer";
+  const msgId = data?.msgId || data?.common?.msgId;
+  const base = {
+    id: msgId
+      ? String(msgId)
+      : `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    user: String(user),
+    atMs: Date.now(),
+  };
+  if (name === "gift") {
+    if (data?.giftType === 1 && !data?.repeatEnd) return null;
+    const count = Number(data?.repeatCount) || 1;
+    return {
+      ...base,
+      kind: "gift",
+      detail:
+        `sent ${data?.giftName || "a gift"}` + (count > 1 ? ` x${count}` : ""),
+      amount: String(count),
+    };
+  }
+  if (name === "follow") {
+    return { ...base, kind: "follow", detail: "followed" };
+  }
+  if (name === "subscribe") {
+    return { ...base, kind: "sub", detail: "subscribed" };
+  }
+  return null;
+}
+
+/**
  * Production connection factory — lazy dynamic import because
  * tiktok-live-connector is ESM-only and this codebase is CJS.
  *
@@ -317,6 +372,7 @@ module.exports = {
   TikTokChatRelay,
   normalizeTikTokUsername,
   mapChatEvent,
+  mapTikTokEvent,
   OFFLINE_RETRY_MS,
   DISCONNECT_RETRY_MS,
 };

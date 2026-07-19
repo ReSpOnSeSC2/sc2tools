@@ -1,6 +1,6 @@
 // Multichat feed — pure merge/store helpers. No I/O, no React.
 
-import type { ChatMessage } from "./types";
+import type { ChatPlatform } from "./types";
 
 /** Hard cap on retained messages — OBS sources run for hours. */
 export const FEED_CAP = 200;
@@ -8,23 +8,24 @@ export const FEED_CAP = 200;
 /**
  * Append a batch to the feed: dedupe on (platform, id), keep arrival
  * order, trim from the front past `cap`. Returns the SAME array when
- * nothing changed so React state updates can bail cheaply.
+ * nothing changed so React state updates can bail cheaply. Generic
+ * over the item shape so messages and events share one store.
  */
-export function appendMessages(
-  feed: ReadonlyArray<ChatMessage>,
-  incoming: ReadonlyArray<ChatMessage>,
+export function appendMessages<T extends { platform: ChatPlatform; id: string }>(
+  feed: ReadonlyArray<T>,
+  incoming: ReadonlyArray<T>,
   cap: number = FEED_CAP,
-): ChatMessage[] {
-  if (incoming.length === 0) return feed as ChatMessage[];
+): T[] {
+  if (incoming.length === 0) return feed as T[];
   const seen = new Set(feed.map((m) => `${m.platform}:${m.id}`));
-  const fresh: ChatMessage[] = [];
+  const fresh: T[] = [];
   for (const m of incoming) {
     const key = `${m.platform}:${m.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     fresh.push(m);
   }
-  if (fresh.length === 0) return feed as ChatMessage[];
+  if (fresh.length === 0) return feed as T[];
   const merged = [...feed, ...fresh];
   return merged.length > cap ? merged.slice(merged.length - cap) : merged;
 }

@@ -121,7 +121,36 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   {
     id: "multichat",
     label: "Multi-platform chat",
-    hint: "Twitch + Kick + YouTube + TikTok chat in one feed — set your channels in the Multi-platform chat section below",
+    hint: "Twitch + Kick + YouTube + TikTok chat in one feed — set your channels and styling in the Multi-platform chat section below. Test plays a demo chat stream.",
+  },
+  {
+    id: "chat-highlight",
+    label: "Chat highlight",
+    hint: "Pins a chat message on stream — pick the message from the Stream Dock.",
+    noTest: true,
+  },
+  {
+    id: "chat-poll",
+    label: "Chat poll",
+    hint: "Live viewer poll with !1 / !2 chat voting — start and close polls from the Stream Dock.",
+    noTest: true,
+  },
+  {
+    id: "chat-alerts",
+    label: "Event alerts",
+    hint: "Subs, raids, gifts and superchats as an alert toaster — feed and moderation run through the Stream Dock.",
+    noTest: true,
+  },
+  {
+    id: "stream-goals",
+    label: "Stream goals",
+    hint: "Animated goal progress bars — set and update goals from the Stream Dock.",
+    noTest: true,
+  },
+  {
+    id: "session-recap",
+    label: "Session recap card",
+    hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock.",
     noTest: true,
   },
 ];

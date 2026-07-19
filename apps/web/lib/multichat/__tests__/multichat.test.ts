@@ -11,6 +11,13 @@ import {
   parseKickChatroomInput,
 } from "@/lib/multichat/config";
 import {
+  kickEmoteUrl,
+  renderTextWithEmotes,
+  twitchEmoteUrl,
+  type ChatEmote,
+} from "@/lib/multichat/emotes";
+import {
+  collectKickEmotes,
   kickBadgeTags,
   parseKickChatEvent,
   stripKickEmoteTags,
@@ -18,6 +25,7 @@ import {
 import {
   normalizeTwitchChannel,
   parseIrcTags,
+  parseTwitchEmotesTag,
   parseTwitchMessage,
   twitchBadgeTags,
 } from "@/lib/multichat/twitch";
@@ -85,6 +93,43 @@ describe("twitch IRC parsing", () => {
     expect(twitchBadgeTags(undefined)).toEqual([]);
   });
 
+  test("parses the emotes= tag into codes + CDN urls", () => {
+    // 25 = Kappa (0-4 and 12-16), 1902 = Keepo (6-10) against the
+    // matching text — exactly the wire format Twitch documents.
+    const line =
+      "@badges=;color=#FF69B4;display-name=EmoteFan;emotes=25:0-4,12-16/1902:6-10;id=e1;tmi-sent-ts=1768686000123 " +
+      ":emotefan!emotefan@emotefan.tmi.twitch.tv PRIVMSG #chan :Kappa Keepo Kappa";
+    const m = parseTwitchMessage(line);
+    expect(m!.text).toBe("Kappa Keepo Kappa");
+    expect(m!.emotes).toEqual([
+      { code: "Kappa", url: twitchEmoteUrl("25") },
+      { code: "Keepo", url: twitchEmoteUrl("1902") },
+    ]);
+  });
+
+  test("emote-less messages carry no emotes field", () => {
+    expect(parseTwitchMessage(RAW_PRIVMSG)!.emotes).toBeUndefined();
+  });
+
+  test("parseTwitchEmotesTag drops malformed and out-of-range entries", () => {
+    expect(parseTwitchEmotesTag(undefined, "Kappa")).toEqual([]);
+    expect(parseTwitchEmotesTag("", "Kappa")).toEqual([]);
+    expect(parseTwitchEmotesTag("25:0-99", "Kappa")).toEqual([]);
+    expect(parseTwitchEmotesTag("25:4-0", "Kappa")).toEqual([]);
+    expect(parseTwitchEmotesTag("25:junk", "Kappa")).toEqual([]);
+    // Duplicate code (same substring under two ids) keeps the first.
+    expect(parseTwitchEmotesTag("25:0-4/33:0-4", "Kappa")).toEqual([
+      { code: "Kappa", url: twitchEmoteUrl("25") },
+    ]);
+  });
+
+  test("emote ranges count code points, not UTF-16 units", () => {
+    // The emoji occupies ONE code-point slot (0); Kappa starts at 2.
+    expect(parseTwitchEmotesTag("25:2-6", "💜 Kappa")).toEqual([
+      { code: "Kappa", url: twitchEmoteUrl("25") },
+    ]);
+  });
+
   test("normalizeTwitchChannel accepts names, #names, and URLs", () => {
     expect(normalizeTwitchChannel("SomeChannel")).toBe("somechannel");
     expect(normalizeTwitchChannel("#SomeChannel")).toBe("somechannel");
@@ -150,6 +195,67 @@ describe("kick event parsing", () => {
         { type: "verified" },
       ]),
     ).toEqual(["owner", "member", "vip", "verified"]);
+  });
+
+  test("collects [emote:id:name] markup as renderable emotes", () => {
+    const m = parseKickChatEvent(KICK_EVENT);
+    expect(m!.emotes).toEqual([
+      { code: ":KEKW:", url: kickEmoteUrl("37226") },
+    ]);
+    // Codes dedupe; nameless markup contributes nothing.
+    expect(
+      collectKickEmotes("[emote:1:Pog] hi [emote:1:Pog] [emote:2:]"),
+    ).toEqual([{ code: ":Pog:", url: kickEmoteUrl("1") }]);
+    expect(collectKickEmotes("no emotes here")).toEqual([]);
+    // Plain-text messages carry no emotes field at all.
+    expect(
+      parseKickChatEvent({ ...KICK_EVENT, content: "plain text" })!.emotes,
+    ).toBeUndefined();
+  });
+});
+
+/* ──────────────── emotes ──────────────── */
+
+describe("renderTextWithEmotes", () => {
+  const kappa: ChatEmote = { code: "Kappa", url: twitchEmoteUrl("25") };
+  const kekw: ChatEmote = { code: ":KEKW:", url: kickEmoteUrl("37226") };
+
+  test("splits text into string/emote segments", () => {
+    expect(renderTextWithEmotes("gg Kappa wp", [kappa])).toEqual([
+      "gg ",
+      kappa,
+      " wp",
+    ]);
+    expect(renderTextWithEmotes("Kappa Kappa", [kappa])).toEqual([
+      kappa,
+      " ",
+      kappa,
+    ]);
+    expect(renderTextWithEmotes("nice opener :KEKW:", [kekw])).toEqual([
+      "nice opener ",
+      kekw,
+    ]);
+  });
+
+  test("no emotes (or no matches) → the original text, once", () => {
+    expect(renderTextWithEmotes("hello", [])).toEqual(["hello"]);
+    expect(renderTextWithEmotes("hello", [kappa])).toEqual(["hello"]);
+    expect(renderTextWithEmotes("", [kappa])).toEqual([]);
+  });
+
+  test("longer codes win over their prefixes", () => {
+    const short: ChatEmote = { code: "KEK", url: kickEmoteUrl("1") };
+    const long: ChatEmote = { code: "KEKW", url: kickEmoteUrl("2") };
+    expect(renderTextWithEmotes("KEKW KEK", [short, long])).toEqual([
+      long,
+      " ",
+      short,
+    ]);
+  });
+
+  test("regex metacharacters in codes are treated literally", () => {
+    const paren: ChatEmote = { code: ":-)", url: twitchEmoteUrl("1") };
+    expect(renderTextWithEmotes("hi :-)", [paren])).toEqual(["hi ", paren]);
   });
 });
 
