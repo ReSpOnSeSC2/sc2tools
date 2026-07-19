@@ -10,10 +10,110 @@
 
 import { useEffect, useState } from "react";
 import { formatCountdown } from "@/components/overlay/widgets/StreamSceneWidget";
-import type { StudioScene } from "@/lib/multichat/useStudioState";
+import type { StudioScene, StudioTimer } from "@/lib/multichat/useStudioState";
 import { DockButton } from "./DockClient";
 
 const QUICK_MINUTES = [5, 10, 15] as const;
+
+export function DockTimer({
+  timer,
+  busy,
+  onPost,
+}: {
+  timer: StudioTimer | null;
+  busy: boolean;
+  onPost: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [label, setLabel] = useState("");
+  const [minutes, setMinutes] = useState<number>(5);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!timer) return;
+    setNowMs(Date.now());
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [timer?.endsAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const remainMs = timer ? Math.max(0, timer.endsAt - nowMs) : null;
+
+  return (
+    <div className="space-y-2.5">
+      {timer ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
+          <span className="text-micro font-bold uppercase tracking-widest text-accent-cyan">
+            {timer.label || "Countdown"} on stream
+          </span>
+          <span className="text-caption tabular-nums text-text">
+            {remainMs !== null && remainMs > 0
+              ? formatCountdown(remainMs)
+              : "TIME!"}
+          </span>
+          <DockButton
+            disabled={busy}
+            danger
+            onClick={() => void onPost({ timer: null })}
+          >
+            Clear
+          </DockButton>
+        </div>
+      ) : (
+        <p className="text-caption text-text-dim">
+          No countdown showing. Set one below — it appears on the
+          Countdown timer widget instantly.
+        </p>
+      )}
+      <input
+        type="text"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="Optional label — e.g. next game in…"
+        maxLength={40}
+        className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          type="number"
+          min={1}
+          max={720}
+          value={minutes}
+          onChange={(e) =>
+            setMinutes(Math.max(1, Math.min(720, Number(e.target.value) || 1)))
+          }
+          aria-label="Timer minutes"
+          className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
+        />
+        <span className="text-caption text-text-dim">min</span>
+        {[1, 5, 10, 15].map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMinutes(m)}
+            className={`rounded border px-2 py-1 text-micro ${
+              minutes === m
+                ? "border-accent text-text"
+                : "border-border text-text-muted hover:text-text"
+            }`}
+          >
+            {m}m
+          </button>
+        ))}
+        <DockButton
+          disabled={busy}
+          onClick={() =>
+            void onPost({
+              timer: {
+                label: label.trim(),
+                endsAt: Date.now() + Math.round(minutes) * 60_000,
+              },
+            })
+          }
+        >
+          ⏱ Start timer
+        </DockButton>
+      </div>
+    </div>
+  );
+}
 
 export function DockScenes({
   scene,

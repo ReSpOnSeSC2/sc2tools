@@ -19,6 +19,7 @@ import { StreamGoalsWidget } from "../StreamGoalsWidget";
 import { SessionRecapWidget } from "../SessionRecapWidget";
 import { StreamSceneWidget, formatCountdown } from "../StreamSceneWidget";
 import { StatsTickerWidget } from "../StatsTickerWidget";
+import { CountdownTimerWidget } from "../CountdownTimerWidget";
 import {
   EMPTY_ENGAGEMENT,
   type EngagementSummary,
@@ -66,6 +67,7 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
   blockedUsers: [],
   recapSeq: 0,
   scene: null,
+  timer: null,
   updatedAt: null,
   loaded: true,
 };
@@ -310,6 +312,31 @@ describe("StreamSceneWidget", () => {
     expect(formatCountdown(61_000)).toBe("01:01");
     expect(formatCountdown(3_600_000 + 61_000)).toBe("1:01:01");
     expect(formatCountdown(500)).toBe("00:01");
+  });
+});
+
+describe("CountdownTimerWidget", () => {
+  it("stays transparent without a timer and ticks when one is set", () => {
+    const { container } = render(<CountdownTimerWidget token="tok" />);
+    expect(container.textContent).toBe("");
+    cleanup();
+
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      timer: { label: "Next game in", endsAt: Date.now() + 5 * 60_000, setAtMs: 1 },
+    };
+    render(<CountdownTimerWidget token="tok" />);
+    expect(screen.getByText("Next game in")).toBeTruthy();
+    expect(screen.getByText(/^0?[45]:\d\d$/)).toBeTruthy();
+  });
+
+  it("shows TIME! once expired", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      timer: { label: "", endsAt: Date.now() - 1000, setAtMs: 1 },
+    };
+    render(<CountdownTimerWidget token="tok" />);
+    expect(screen.getByText("TIME!")).toBeTruthy();
   });
 });
 

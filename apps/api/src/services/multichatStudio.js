@@ -53,6 +53,7 @@ class MultichatStudioService {
       blockedUsers: Array.isArray(doc?.blockedUsers) ? doc.blockedUsers : [],
       recapSeq: Number(doc?.recapSeq) || 0,
       scene: doc?.scene ?? null,
+      timer: doc?.timer ?? null,
       updatedAt: doc?.updatedAt ?? null,
     };
   }
@@ -83,6 +84,9 @@ class MultichatStudioService {
     }
     if ("scene" in patch) {
       set.scene = sanitizeScene(patch.scene);
+    }
+    if ("timer" in patch) {
+      set.timer = sanitizeTimer(patch.timer);
     }
     if (patch.recap === true) {
       inc.recapSeq = 1;
@@ -193,6 +197,29 @@ function sanitizeScene(raw) {
   return { mode: s.mode, message, countdownEndsAt, setAtMs: now };
 }
 
+const TIMER_LABEL_MAX = 40;
+
+/**
+ * Standalone on-stream countdown (the countdown-timer widget) —
+ * independent of the BRB/Starting Soon scene. ``null`` hides it.
+ * ``endsAt`` must be in the future (clamped to +24 h); a finished
+ * timer stays at 00:00 on stream until cleared from the dock.
+ *
+ * @param {unknown} raw
+ */
+function sanitizeTimer(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const t = /** @type {Record<string, any>} */ (raw);
+  const ends = Number(t.endsAt);
+  const now = Date.now();
+  if (!Number.isFinite(ends) || ends <= now) return null;
+  return {
+    label: String(t.label ?? "").trim().slice(0, TIMER_LABEL_MAX),
+    endsAt: Math.min(ends, now + SCENE_COUNTDOWN_MAX_MS),
+    setAtMs: now,
+  };
+}
+
 /** @param {unknown} raw */
 function sanitizeBlockedUsers(raw) {
   if (!Array.isArray(raw)) return [];
@@ -213,4 +240,5 @@ module.exports = {
   sanitizeGoals,
   sanitizeBlockedUsers,
   sanitizeScene,
+  sanitizeTimer,
 };

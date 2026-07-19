@@ -45,6 +45,7 @@ const KNOWN_WIDGETS = Object.freeze([
   "clip-flag",
   "lower-third",
   "stats-ticker",
+  "countdown-timer",
 ]);
 
 /**

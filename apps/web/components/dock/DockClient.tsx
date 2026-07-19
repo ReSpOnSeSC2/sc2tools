@@ -38,7 +38,7 @@ import type { ChatMessage, MultichatConfig } from "@/lib/multichat/types";
 import { DockChat } from "./DockChat";
 import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
-import { DockScenes } from "./DockScenes";
+import { DockScenes, DockTimer } from "./DockScenes";
 import { DockClips } from "./DockClips";
 import { DockBuildVote } from "./DockBuildVote";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
@@ -103,6 +103,7 @@ const SECTIONS = [
   { id: "dock-chat", label: "Chat" },
   { id: "dock-highlight", label: "Highlight" },
   { id: "dock-scenes", label: "Scenes" },
+  { id: "dock-timer", label: "Timer" },
   { id: "dock-poll", label: "Poll" },
   { id: "dock-build-vote", label: "Build vote" },
   { id: "dock-goals", label: "Goals" },
@@ -331,6 +332,16 @@ export function DockClient({ token }: { token: string }) {
             <SectionCard title="Scenes">
               <DockScenes
                 scene={studio.scene}
+                busy={busy}
+                onPost={postStudio}
+              />
+            </SectionCard>
+          </section>
+
+          <section id="dock-timer" className="scroll-mt-12">
+            <SectionCard title="Countdown timer">
+              <DockTimer
+                timer={studio.timer}
                 busy={busy}
                 onPost={postStudio}
               />

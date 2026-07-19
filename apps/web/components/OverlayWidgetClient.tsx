@@ -57,6 +57,7 @@ import {
   ClipFlagWidget,
   LowerThirdWidget,
   StatsTickerWidget,
+  CountdownTimerWidget,
   SessionRecapWidget,
   StreamSceneWidget,
   SupporterWallWidget,
@@ -311,6 +312,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "supporter-wall",
   "clip-flag",
   "stats-ticker",
+  "countdown-timer",
 ]);
 
 function WidgetRenderer({
@@ -438,6 +440,11 @@ function WidgetRenderer({
       // Broadcast-style post-game bar — payload-driven, standard
       // visibility timer slides it away between games.
       return <LowerThirdWidget live={live} />;
+    case "countdown-timer":
+      // Standalone dock-set countdown — studio-driven, show anytime.
+      return (
+        <CountdownTimerWidget token={token} studioEvent={studioEvent} live={live} />
+      );
     case "stats-ticker":
       // Persistent scrolling bottom line — self-driven, composes
       // session/result/goals/engagement into an endless marquee.

@@ -237,6 +237,7 @@ const PER_WIDGET_KEYS = {
   "clip-flag": [],
   "lower-third": ["result", "map", "matchup", "mmrDelta", "headToHead", "session", "oppName"],
   "stats-ticker": [],
+  "countdown-timer": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

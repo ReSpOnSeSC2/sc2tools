@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Countdown timer widget** — a standalone on-stream countdown you
+  can show at any time, set from the Stream Dock's new Timer panel:
+  optional label ("next game in…"), minutes with 1/5/10/15 quick
+  chips, live remaining time in the dock, and a pulsing "TIME!" at
+  zero that stays until you clear it. Independent of the BRB /
+  Starting Soon scenes. Includes a Settings Test button.
 - **Stats ticker widget** — an always-on, continuously scrolling
   bottom line (ESPN style), distinct from the stationary post-game
   lower third: session record + net MMR, latest result, rank, stream

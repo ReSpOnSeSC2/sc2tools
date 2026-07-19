@@ -50,6 +50,12 @@ export interface StudioScene {
   setAtMs: number;
 }
 
+export interface StudioTimer {
+  label: string;
+  endsAt: number;
+  setAtMs: number;
+}
+
 export interface StudioState {
   highlight: StudioHighlight | null;
   poll: StudioPoll | null;
@@ -57,6 +63,7 @@ export interface StudioState {
   blockedUsers: string[];
   recapSeq: number;
   scene: StudioScene | null;
+  timer: StudioTimer | null;
   updatedAt: string | null;
 }
 
@@ -67,6 +74,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   blockedUsers: [],
   recapSeq: 0,
   scene: null,
+  timer: null,
   updatedAt: null,
 };
 
@@ -147,6 +155,18 @@ function sanitizeScene(raw: unknown): StudioScene | null {
   };
 }
 
+function sanitizeTimer(raw: unknown): StudioTimer | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw as Record<string, unknown>;
+  const ends = Number(t.endsAt);
+  if (!Number.isFinite(ends) || ends <= 0) return null;
+  return {
+    label: typeof t.label === "string" ? t.label.slice(0, 40) : "",
+    endsAt: ends,
+    setAtMs: Number.isFinite(Number(t.setAtMs)) ? Number(t.setAtMs) : 0,
+  };
+}
+
 /**
  * Narrow an untrusted wire value (GET body or socket payload) to a
  * fully-defaulted StudioState. Never throws.
@@ -159,6 +179,7 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     poll: sanitizePoll(s.poll),
     goals: sanitizeGoals(s.goals),
     scene: sanitizeScene(s.scene),
+    timer: sanitizeTimer(s.timer),
     blockedUsers: (Array.isArray(s.blockedUsers) ? s.blockedUsers : []).filter(
       (u): u is string => typeof u === "string" && u.length > 0,
     ),

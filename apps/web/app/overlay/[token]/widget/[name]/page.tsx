@@ -52,6 +52,7 @@ const VALID_WIDGETS = new Set([
   "clip-flag",
   "lower-third",
   "stats-ticker",
+  "countdown-timer",
 ]);
 
 export default async function OverlayWidgetPage({
