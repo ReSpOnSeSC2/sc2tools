@@ -41,10 +41,11 @@ import type { SessionSummary } from "./SessionWidget";
  * derives from the strip's MEASURED width at this speed, so wordy
  * segments (career facts are long) read at exactly the same pace as
  * terse ones — pacing by segment count made a facts-heavy strip
- * visibly race. ~55 px/s ≈ 7–8 characters/second at the bar's 12.5px
- * font: comfortable broadcast-ticker reading speed.
+ * visibly race. 40 px/s ≈ 5–6 characters/second at the bar's 12.5px
+ * font — an unhurried broadcast-ticker pace a viewer can read while
+ * watching the game, tuned down from 55 on streamer feedback.
  */
-const PX_PER_SEC = 55;
+const PX_PER_SEC = 40;
 /** Fallback pacing when the strip can't be measured (first paint,
  *  non-layout test environments). */
 const SECONDS_PER_SEGMENT = 5;
