@@ -613,6 +613,32 @@ describe("routes/multichat studio", () => {
     expect(again.body.poll.question).toBe("Next matchup?");
   });
 
+  test("deleting goals persists the shrunk list, down to empty", async () => {
+    // Regression for the Stream Dock delete flow: a POST with fewer
+    // (or zero) goals must replace the stored list wholesale — the
+    // overlay renders exactly what comes back, so a kept-around stale
+    // goal here is a goal stuck on stream.
+    await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [
+        { label: "Followers", current: 5, target: 10 },
+        { label: "Subs", current: 1, target: 5 },
+      ] });
+    const shrunk = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [{ label: "Followers", current: 5, target: 10 }] });
+    expect(shrunk.body.goals).toEqual([
+      { label: "Followers", current: 5, target: 10 },
+    ]);
+    const emptied = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ goals: [] });
+    expect(emptied.body.goals).toEqual([]);
+    // Persisted — the widget's fallback refetch sees the deletion too.
+    const again = await request(app2).get(`/v1/multichat/${token2}/studio`);
+    expect(again.body.goals).toEqual([]);
+  });
+
   test("recap trigger increments a sequence; clears work", async () => {
     const r1 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true });
     const r2 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true, highlight: null, poll: null });
