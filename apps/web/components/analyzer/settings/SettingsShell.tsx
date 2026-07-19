@@ -9,6 +9,7 @@ import {
   Database,
   Settings2,
   Dices,
+  LifeBuoy,
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -33,6 +34,7 @@ const TABS: ReadonlyArray<TabDef> = [
   { id: "voice", label: "Voice", Icon: Volume2 },
   { id: "backups", label: "Backups", Icon: Database },
   { id: "misc", label: "Misc", Icon: Settings2 },
+  { id: "help", label: "Help", Icon: LifeBuoy },
 ];
 
 export type SettingsTabId =
@@ -42,7 +44,8 @@ export type SettingsTabId =
   | "randomizer"
   | "voice"
   | "backups"
-  | "misc";
+  | "misc"
+  | "help";
 
 export interface SettingsShellProps {
   initialTab?: SettingsTabId;

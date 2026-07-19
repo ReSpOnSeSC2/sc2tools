@@ -13,6 +13,17 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Settings · Help tab** — a full new-user guide: getting started in
+  four steps, the analyzer, OBS overlay setup, multi-platform chat,
+  the Stream Dock, viewer engagement (XP rules, predictions), and a
+  troubleshooting section with support contact
+  (responsecoaching@gmail.com).
+- **Chat-commands card + "Copy for your bio"** — Settings now
+  documents every viewer command (!win/!loss, !rank/!level/!xp,
+  !1/!2/!3, !opponent/!mmr/!build) with one-tap copy of a
+  bio-ready plain-text block, themed to the streamer's chosen
+  loyalty rank race.
+
 - **Stream Virality Pack** — five viewer-engagement features on a new
   cross-platform engagement layer (every chat surface reports what it
   sees; the server dedupes, so Twitch/Kick/YouTube/TikTok viewers

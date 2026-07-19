@@ -64,6 +64,7 @@ import type { MultichatConfig } from "@/lib/multichat/types";
 import { UrlRow } from "./OverlayUrlRow";
 import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
+import { ChatCommandsCard } from "./ChatCommandsCard";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
@@ -418,6 +419,8 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 re-themes everyone instantly, XP is kept.
               </p>
             </div>
+
+            <ChatCommandsCard rankRace={draft.rankRace} />
 
             <PlatformRow
               label="Twitch"
