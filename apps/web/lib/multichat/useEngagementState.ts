@@ -39,6 +39,28 @@ export interface OpenPrediction {
   gameKey: string;
   opponent: string;
   tally: PredictionTally;
+  /**
+   * Wall-clock ms when voting closes (~the first minute of the game).
+   * Absent on windows opened before the lock feature shipped —
+   * treated as never-locking by consumers.
+   */
+  locksAtMs?: number;
+}
+
+/** Last settled Crystal Ball call, for recap segments. */
+export interface OracleLastCall {
+  opponent: string;
+  result: "win" | "loss";
+  majority: "win" | "loss";
+  pct: number;
+  wasRight: boolean;
+}
+
+/** Chat's collective crystal-ball record over recent settled calls. */
+export interface OracleRecap {
+  calls: number;
+  majorityRight: number;
+  last: OracleLastCall | null;
 }
 
 export interface ClipMoment {
@@ -53,6 +75,7 @@ export interface EngagementSummary {
   wall: WallEntry[];
   oracles: OracleEntry[];
   prediction: OpenPrediction | null;
+  oracleRecap: OracleRecap;
   clipMoments: ClipMoment[];
 }
 
@@ -60,6 +83,7 @@ export const EMPTY_ENGAGEMENT: EngagementSummary = {
   wall: [],
   oracles: [],
   prediction: null,
+  oracleRecap: { calls: 0, majorityRight: 0, last: null },
   clipMoments: [],
 };
 
@@ -134,6 +158,28 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
     })
     .filter((m): m is ClipMoment => m !== null)
     .slice(0, 20);
+  const recapRaw = (s.oracleRecap && typeof s.oracleRecap === "object"
+    ? s.oracleRecap
+    : {}) as Record<string, unknown>;
+  const lastRaw = (recapRaw.last && typeof recapRaw.last === "object"
+    ? recapRaw.last
+    : null) as Record<string, unknown> | null;
+  const oracleRecap: OracleRecap = {
+    calls: Math.max(0, Math.round(num(recapRaw.calls))),
+    majorityRight: Math.max(0, Math.round(num(recapRaw.majorityRight))),
+    last:
+      lastRaw &&
+      (lastRaw.result === "win" || lastRaw.result === "loss") &&
+      (lastRaw.majority === "win" || lastRaw.majority === "loss")
+        ? {
+            opponent: str(lastRaw.opponent, 60),
+            result: lastRaw.result,
+            majority: lastRaw.majority,
+            pct: Math.min(100, Math.max(0, Math.round(num(lastRaw.pct)))),
+            wasRight: Boolean(lastRaw.wasRight),
+          }
+        : null,
+  };
   return {
     wall,
     oracles,
@@ -142,8 +188,12 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
           gameKey: str(p.gameKey),
           opponent: str(p.opponent, 60),
           tally: sanitizeTally(p.tally),
+          ...(Number.isFinite(Number(p.locksAtMs)) && Number(p.locksAtMs) > 0
+            ? { locksAtMs: Number(p.locksAtMs) }
+            : {}),
         }
       : null,
+    oracleRecap,
     clipMoments,
   };
 }
@@ -201,6 +251,9 @@ export function useEngagementState(
             gameKey: str(ev.gameKey),
             opponent: str(ev.opponent, 60),
             tally: { win: 0, loss: 0, total: 0 },
+            ...(Number.isFinite(Number(ev.locksAtMs)) && Number(ev.locksAtMs) > 0
+              ? { locksAtMs: Number(ev.locksAtMs) }
+              : {}),
           },
         };
       }

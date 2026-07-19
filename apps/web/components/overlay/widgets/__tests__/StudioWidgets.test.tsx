@@ -48,6 +48,13 @@ vi.mock("@/lib/multichat/useEngagementState", async (importOriginal) => {
   };
 });
 
+let mockFacts: Array<{ id: string; text: string }>;
+vi.mock("@/lib/multichat/useTickerFacts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/multichat/useTickerFacts")>();
+  return { ...actual, useTickerFacts: () => mockFacts };
+});
+
 // The config loader inside MultiChatWidget fetches the token-authed
 // relay — stub the hook so the poll/alerts widgets skip the network.
 vi.mock("../MultiChatWidget", () => ({
@@ -76,6 +83,7 @@ beforeEach(() => {
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
   mockEngagement = { ...EMPTY_ENGAGEMENT };
+  mockFacts = [];
 });
 
 afterEach(() => {
@@ -380,6 +388,104 @@ describe("StatsTickerWidget", () => {
     expect(screen.getAllByText(/chat is 75% WIN/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/TOP SUPPORTER: Grinder \(Stalker\)/).length).toBeGreaterThan(0);
     expect(screen.getByText("LIVE")).toBeTruthy();
+  });
+
+  it("adds opponent intel from the post-game payload", () => {
+    render(
+      <StatsTickerWidget
+        token="tok"
+        live={{
+          result: "win",
+          oppName: "Printf",
+          matchup: "PvZ",
+          oppRevealedName: "THERIDDLER",
+          headToHead: { wins: 14, losses: 9 },
+          rematch: { isRematch: true, lastResult: "loss" },
+          cheeseProbability: 0.62,
+          favOpening: { name: "Hatch First", share: 0.71, samples: 12 },
+          bestAnswer: { build: "3 Gate Blink", winRate: 0.64, total: 11 },
+          oppMmr: 4612,
+          myMmr: 4530,
+        }}
+      />,
+    );
+    expect(screen.getAllByText(/HEAD-TO-HEAD vs Printf: 14–9/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/BARCODE REVEALED: this is THERIDDLER/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/REMATCH: dropped the last one/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CHEESE WATCH: 62%/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/SCOUT: they open Hatch First 71%/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/BEST ANSWER: 3 Gate Blink — 64%/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/MMR GAP: opponent \+82 — upset material/).length).toBeGreaterThan(0);
+  });
+
+  it("reads live-opponent intel from the in-game envelope with NOW PLAYING", () => {
+    render(
+      <StatsTickerWidget
+        token="tok"
+        liveGame={{
+          type: "liveGameState",
+          phase: "match_in_progress",
+          capturedAt: 1,
+          streamerHistory: {
+            oppName: "Serral",
+            matchup: "PvZ",
+            oppMmr: 6800,
+            headToHead: { wins: 0, losses: 2 },
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.getAllByText(/NOW PLAYING: vs Serral \(PvZ\) · 6,800 MMR/).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/HEAD-TO-HEAD vs Serral: 0–2/).length).toBeGreaterThan(0);
+  });
+
+  it("drops the CALL IT prompt after the voting lock and shows the oracle recap", () => {
+    mockEngagement = {
+      ...EMPTY_ENGAGEMENT,
+      prediction: {
+        gameKey: "g1",
+        opponent: "X",
+        tally: { win: 3, loss: 1, total: 4 },
+        locksAtMs: Date.now() - 1_000, // already locked
+      },
+      oracleRecap: {
+        calls: 19,
+        majorityRight: 12,
+        last: {
+          opponent: "Printf",
+          result: "win",
+          majority: "win",
+          pct: 68,
+          wasRight: true,
+        },
+      },
+    };
+    render(
+      <StatsTickerWidget token="tok" session={{ wins: 1, losses: 0, games: 1 }} />,
+    );
+    expect(screen.queryByText(/CALL IT/)).toBeNull();
+    expect(
+      screen.getAllByText(/LAST CALL: chat said 68% WIN vs Printf — chat was RIGHT/)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/CHAT ORACLE RECORD: majority right in 12 of 19 calls/)
+        .length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("appends a page of server facts to the loop", () => {
+    mockFacts = [
+      { id: "career-record", text: "CAREER: 100 W – 80 L (56%) over 190 tracked games" },
+      { id: "peak-mmr", text: "PEAK MMR: 4,712 on NA (Aug 12) — 138 away right now" },
+    ];
+    render(
+      <StatsTickerWidget token="tok" session={{ wins: 1, losses: 0, games: 1 }} />,
+    );
+    expect(screen.getAllByText(/CAREER: 100 W – 80 L/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/PEAK MMR: 4,712/).length).toBeGreaterThan(0);
   });
 });
 

@@ -13,6 +13,42 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stats ticker · career facts, opponent intel, and oracle recaps**
+  — the scrolling bottom line now draws from the player's entire
+  history, not just the live session:
+  - *Fun-facts pool* (server-computed from real games, rotated a
+    page per loop so every pass reads differently): career record,
+    total in-game hours, tracking-since, region-aware peak MMR and
+    30-day MMR, longest win streak ever, career matchup split,
+    most-played and best maps, longest game / fastest win, average
+    game length, rush-defense and macro-game win rates, most-faced
+    opponent, nemesis and favorite victim, unique opponents,
+    barcodes faced, average opponent MMR, signature and hottest
+    builds, APM average/peak, macro score, career units
+    produced/killed/lost, structures flattened, time spent supply
+    blocked (race-themed: "build more pylons"), favorite unit, recent
+    form, this-week summary, best day of the week, milestone
+    watches (win #1,500 in sight), on-this-day history, skill-
+    fingerprint playstyle, ladder-season countdown, and first
+    tracked game. Every fact has a minimum sample size — a new
+    account gets fewer facts, never filler.
+  - *Current-opponent intel* (live, in-game via the agent envelope):
+    NOW PLAYING with opponent MMR, head-to-head, rival alert,
+    rematch revenge line, MMR gap (upset material / protect the
+    rating), cheese watch, scouted favorite opening, best-answer
+    build, revealed barcode identity, predicted strategy.
+  - *Crystal Ball on the ticker*: the open call with the live chat
+    split, the last settled call ("chat said 68% WIN — chat was
+    RIGHT"), and chat's collective oracle record.
+
+### Changed
+
+- **Crystal Ball voting now locks ~a minute into the game** — picks
+  arriving after the lock are ignored server-side (no calling it
+  after the game becomes readable), the on-stream CALL IT prompt
+  (oracle widget + ticker) comes down at the lock, and the reveal
+  still plays when the replay-verified result lands.
+
 - **Countdown timer widget** — a standalone on-stream countdown you
   can show at any time, set from the Stream Dock's new Timer panel:
   optional label ("next game in…"), minutes with 1/5/10/15 quick
@@ -196,6 +232,21 @@ corresponding GitHub Release.
   rather than filler: no card is ever synthesised.
 
 ### Fixed
+
+- **Session ±MMR no longer counts server switches** — the session
+  net-MMR (overlay session widget, recap, lower third, stats ticker,
+  `!mmr`) previously diffed the first and last rated game of the play
+  session regardless of ladder, so switching servers mid-session
+  (e.g. EU → NA) reported the difference between two independent
+  ratings as a huge fake gain ("+400 MMR"). Net MMR is now computed
+  within a single ladder: the region of the latest rated game (from
+  each replay's toon handle), with the anchor re-set to the first game
+  of the session on that region. Two guards back it up: games on a
+  known different region — or region-less legacy rows when the
+  current region is known — can never anchor the delta, and if the
+  live SC2Pulse rating resolves on a different region than the
+  anchor, the ± is suppressed rather than shown wrong. Win–loss and
+  streaks still count every game played, whatever the server.
 
 - **Stream Dock · deleting a goal now removes it from the stream
   immediately** — the ✕ button previously only removed the row from

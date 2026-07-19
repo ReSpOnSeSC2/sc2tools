@@ -208,6 +208,209 @@ describe("services/games.todaySession", () => {
     expect(out.losses).toBe(1);
   });
 
+  describe("cross-region MMR guard", () => {
+    // MMR is per-ladder. A streamer who plays EU in the morning and
+    // switches to NA mid-session has two independent ratings — diffing
+    // "first EU MMR → last NA MMR" once produced a bogus "+400" that
+    // was entirely a server switch. Net MMR must be computed within
+    // the region of the LATEST MMR-bearing game only.
+    test("server switch mid-session: net MMR comes from the latest region only", async () => {
+      const t0 = new Date();
+      const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
+      await db.games.insertMany([
+        // Morning on EU (toon-handle byte 2) around 3900.
+        {
+          userId: "u1",
+          gameId: "eu-1",
+          result: "Victory",
+          date: t0,
+          myMmr: 3900,
+          myToonHandle: "2-S2-1-111111",
+        },
+        {
+          userId: "u1",
+          gameId: "eu-2",
+          result: "Defeat",
+          date: mins(10),
+          myMmr: 3880,
+          myToonHandle: "2-S2-1-111111",
+        },
+        // Switches to NA (byte 1) where the account sits at ~4300.
+        {
+          userId: "u1",
+          gameId: "na-1",
+          result: "Victory",
+          date: mins(20),
+          myMmr: 4300,
+          myToonHandle: "1-S2-1-222222",
+        },
+        {
+          userId: "u1",
+          gameId: "na-2",
+          result: "Victory",
+          date: mins(30),
+          myMmr: 4320,
+          myToonHandle: "1-S2-1-222222",
+        },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      // W-L stays region-blind — all four games were played today.
+      expect(out.wins).toBe(3);
+      expect(out.losses).toBe(1);
+      expect(out.games).toBe(4);
+      // Net MMR anchors inside NA only: +20, not the +420 the
+      // region-blind diff (4320 - 3900) used to report.
+      expect(out.mmrStart).toBe(4300);
+      expect(out.mmrCurrent).toBe(4320);
+      // Region label matches the ladder the MMR pair belongs to.
+      expect(out.region).toBe("NA");
+    });
+
+    test("returning to the original region re-anchors to that region's first game", async () => {
+      const t0 = new Date();
+      const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
+      await db.games.insertMany([
+        {
+          userId: "u1",
+          gameId: "eu-1",
+          result: "Victory",
+          date: t0,
+          myMmr: 3900,
+          myToonHandle: "2-S2-1-111111",
+        },
+        // NA excursion in the middle — must not pollute the EU span.
+        {
+          userId: "u1",
+          gameId: "na-1",
+          result: "Defeat",
+          date: mins(10),
+          myMmr: 4300,
+          myToonHandle: "1-S2-1-222222",
+        },
+        {
+          userId: "u1",
+          gameId: "eu-2",
+          result: "Victory",
+          date: mins(20),
+          myMmr: 3920,
+          myToonHandle: "2-S2-1-111111",
+        },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      // Latest MMR-bearing game is EU → EU-to-EU span: +20.
+      expect(out.mmrStart).toBe(3900);
+      expect(out.mmrCurrent).toBe(3920);
+      expect(out.region).toBe("EU");
+    });
+
+    test("opponent toon handle serves as the region fallback per game", async () => {
+      // Rows without myToonHandle still region-tag via the opponent's
+      // handle — both players sit on the same regional ladder.
+      const t0 = new Date();
+      const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
+      await db.games.insertMany([
+        {
+          userId: "u1",
+          gameId: "eu-1",
+          result: "Defeat",
+          date: t0,
+          myMmr: 3900,
+          opponent: { toonHandle: "2-S2-1-999999" },
+        },
+        {
+          userId: "u1",
+          gameId: "na-1",
+          result: "Victory",
+          date: mins(10),
+          myMmr: 4300,
+          opponent: { toonHandle: "1-S2-1-888888" },
+        },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      expect(out.mmrStart).toBe(4300);
+      expect(out.mmrCurrent).toBe(4300);
+    });
+
+    test("region-less legacy rows cannot anchor when the current region is known", async () => {
+      // A row with no handles at all is ambiguous — when the latest
+      // MMR-bearing game IS region-tagged, a possibly-foreign baseline
+      // is worse than a conservative ±0.
+      const t0 = new Date();
+      const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
+      await db.games.insertMany([
+        { userId: "u1", gameId: "legacy", result: "Victory", date: t0, myMmr: 3900 },
+        {
+          userId: "u1",
+          gameId: "na-1",
+          result: "Victory",
+          date: mins(10),
+          myMmr: 4310,
+          myToonHandle: "1-S2-1-222222",
+        },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      expect(out.mmrStart).toBe(4310);
+      expect(out.mmrCurrent).toBe(4310);
+    });
+
+    test("pure-legacy rows (no handles anywhere) keep the region-blind behavior", async () => {
+      const t0 = new Date();
+      const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
+      await db.games.insertMany([
+        { userId: "u1", gameId: "l1", result: "Victory", date: t0, myMmr: 4000 },
+        { userId: "u1", gameId: "l2", result: "Victory", date: mins(10), myMmr: 4040 },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      expect(out.mmrStart).toBe(4000);
+      expect(out.mmrCurrent).toBe(4040);
+    });
+
+    test("Pulse rating from a different region drops the session anchor", async () => {
+      // Second guard layer: when SC2Pulse's current rating belongs to
+      // a different ladder than the games that anchored mmrStart, a
+      // delta across the pair would mix regions — the anchor is
+      // dropped so the widget shows the current MMR without a bogus ±.
+      await db.games.insertOne({
+        userId: "u1",
+        gameId: "na-1",
+        result: "Victory",
+        date: new Date(),
+        myMmr: 4300,
+        myToonHandle: "1-S2-1-222222",
+      });
+      const svc2 = new GamesService(db, {
+        users: { getProfile: async () => ({}) },
+        pulseMmr: {
+          getCurrentMmrForAny: async () => ({ mmr: 3905, region: "EU" }),
+        },
+      });
+      const out = await svc2.todaySession("u1", "UTC");
+      expect(out.mmrCurrent).toBe(3905);
+      expect(out.mmrStart).toBeUndefined();
+      expect(out.region).toBe("EU");
+    });
+
+    test("Pulse rating on the SAME region keeps the anchor", async () => {
+      await db.games.insertOne({
+        userId: "u1",
+        gameId: "na-1",
+        result: "Victory",
+        date: new Date(),
+        myMmr: 4300,
+        myToonHandle: "1-S2-1-222222",
+      });
+      const svc2 = new GamesService(db, {
+        users: { getProfile: async () => ({}) },
+        pulseMmr: {
+          getCurrentMmrForAny: async () => ({ mmr: 4321, region: "NA" }),
+        },
+      });
+      const out = await svc2.todaySession("u1", "UTC");
+      expect(out.mmrStart).toBe(4300);
+      expect(out.mmrCurrent).toBe(4321);
+    });
+  });
+
   test("omits mmrStart/mmrCurrent entirely when no game carries myMmr", async () => {
     await db.games.insertOne({
       userId: "u1",

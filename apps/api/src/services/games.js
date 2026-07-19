@@ -362,7 +362,13 @@ class GamesService {
      * itself stays — we just drop today's matches into ``todayGames``
      * instead of folding them into wins/losses immediately.
      *
-     * @type {Array<{ ts: Date, result: string, myMmr: number }>}
+     * ``region`` is the ladder the game was played on, inferred from the
+     * streamer's own toon handle (falling back to the opponent's — both
+     * players sit on the same regional ladder in matchmade games), or
+     * ``null`` for legacy rows that carry neither handle. It feeds the
+     * cross-region MMR guard below.
+     *
+     * @type {Array<{ ts: Date, result: string, myMmr: number, region: string|null }>}
      */
     const todayGames = [];
     for (const row of rows) {
@@ -391,7 +397,15 @@ class GamesService {
         lastKnownMyToonHandle = myToon;
       }
       if (formatDayKey(date, tz) !== todayKey) continue;
-      todayGames.push({ ts: date, result: String(row.result || ""), myMmr: my });
+      todayGames.push({
+        ts: date,
+        result: String(row.result || ""),
+        myMmr: my,
+        region:
+          (typeof myToon === "string" ? regionFromToonHandle(myToon) : null) ||
+          (typeof toon === "string" ? regionFromToonHandle(toon) : null) ||
+          null,
+      });
     }
     // 4-hour-inactivity reset. The active session is the most recent
     // contiguous run of today's games where no game-to-game gap exceeds
@@ -422,6 +436,32 @@ class GamesService {
         }
       }
     }
+    // Cross-region MMR guard. MMR is per-ladder: a streamer who plays
+    // EU in the morning and switches to NA in the afternoon has TWO
+    // independent ratings, and diffing "first EU MMR → last NA MMR"
+    // produced nonsense deltas (a real report: "+400 MMR" that was
+    // entirely a server switch). The session's net MMR must therefore
+    // be computed within a single ladder: the one the streamer is
+    // playing NOW, i.e. the region of the LATEST MMR-bearing game in
+    // the active session. mmrStart re-anchors to the first game of the
+    // active session ON THAT REGION, and games on any other known
+    // region can neither anchor nor update the pair. Unknown-region
+    // rows (legacy data with no toon handles) are excluded too when
+    // the current region IS known — a possibly-foreign baseline is
+    // worse than a conservative ±0. Only when the latest MMR-bearing
+    // game itself has no region info (pure-legacy data) does the old
+    // region-blind behavior apply, so pre-handle history keeps working.
+    // W-L/streak stay region-blind on purpose: the streamer did play
+    // those games today, whatever the server.
+    /** @type {string|null} */
+    let mmrRegion = null;
+    for (let i = todayGames.length - 1; i >= activeStart; i -= 1) {
+      const g = todayGames[i];
+      if (Number.isFinite(g.myMmr)) {
+        mmrRegion = g.region;
+        break;
+      }
+    }
     for (let i = activeStart; i < todayGames.length; i += 1) {
       const g = todayGames[i];
       games += 1;
@@ -434,7 +474,10 @@ class GamesService {
         losses += 1;
         todayResults.push("loss");
       }
-      if (Number.isFinite(g.myMmr)) {
+      if (
+        Number.isFinite(g.myMmr) &&
+        (mmrRegion === null || g.region === mmrRegion)
+      ) {
         if (mmrStart === undefined) mmrStart = g.myMmr;
         mmrCurrent = g.myMmr;
       }
@@ -687,6 +730,21 @@ class GamesService {
     }
     if (mmrCurrent === undefined && mmrSource === "none") {
       mmrSource = "unresolved";
+    }
+    // Second layer of the cross-region guard: the pulse_* tiers above
+    // can override ``mmrCurrent`` with the streamer's live ladder
+    // rating. When that rating belongs to a different region than the
+    // games that anchored ``mmrStart`` (preferred-region miss on a
+    // multi-region profile), a delta across the pair would mix ladders
+    // again — drop the anchor so consumers render the current MMR
+    // without a bogus ±.
+    if (
+      mmrStart !== undefined &&
+      mmrRegion !== null &&
+      pulseRegion &&
+      normaliseRegionLabel(pulseRegion) !== mmrRegion
+    ) {
+      mmrStart = undefined;
     }
     // One INFO line per todaySession resolve so an operator (or a
     // streamer who escalates) can grep the API log to see exactly why

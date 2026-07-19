@@ -52,6 +52,7 @@ const {
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   customBuilds?: { list: (userId: string) => Promise<Array<Record<string, any>>> },
  *   buildsList?: (userId: string) => Promise<Array<Record<string, any>>>,
+ *   tickerFacts?: import('../services/tickerFacts').TickerFactsService,
  *   fetchImpl?: typeof fetch,
  * }} deps
  */
@@ -183,6 +184,29 @@ function buildMultichatRouter(deps) {
             String(req.query.user ?? ""),
           ),
         );
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Stats-ticker facts: career stats + trivia pool ──
+  // Served per token so the overlay Browser Source's only credential
+  // stays the token; heavy computation is TTL-cached per user inside
+  // the service, so the widget's periodic refetch is cheap.
+  router.get(
+    "/multichat/:token/ticker-facts",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.tickerFacts) {
+          res.json({ facts: [] });
+          return;
+        }
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        res.json({ facts: await deps.tickerFacts.factsFor(userId) });
       } catch (err) {
         next(err);
       }

@@ -39,6 +39,12 @@ const EVENT_XP = {
 };
 const ORACLE_POINTS = 10;
 const TALLY_THROTTLE_MS = 2_000;
+// Voting stays open for ~the first minute of the game: the window
+// opens at match_loading, so 90s covers the loading screen plus
+// roughly a minute of play. After the lock, !win/!loss picks are
+// ignored (no cheating by voting once the game is readable) and the
+// widgets drop their CALL IT prompt.
+const PREDICTION_LOCK_MS = 90_000;
 /** Clip detection: 10 s buckets, spike vs trailing 2 min median. */
 const CLIP_BUCKET_MS = 10_000;
 const CLIP_WINDOW_BUCKETS = 12;
@@ -241,6 +247,9 @@ class MultichatEngagementService {
       { sort: { openedAt: -1 } },
     );
     if (!open) return;
+    // Voting lock: picks landing after the window closed are ignored
+    // (docs from before this field existed keep the old behavior).
+    if (Number.isFinite(open.locksAtMs) && this.now() > open.locksAtMs) return;
     /** @type {Record<string, any>} */
     const set = {};
     for (const { e, pick } of picks) {
@@ -329,6 +338,7 @@ class MultichatEngagementService {
   async openPrediction(tokens, game) {
     if (!game?.gameKey) return;
     for (const token of tokens) {
+      const locksAtMs = this.now() + PREDICTION_LOCK_MS;
       const res = await this.predictions.updateOne(
         { token, gameKey: game.gameKey },
         {
@@ -337,6 +347,7 @@ class MultichatEngagementService {
             gameKey: game.gameKey,
             opponent: String(game.opponent ?? "").slice(0, 60),
             openedAt: new Date(),
+            locksAtMs,
             settled: false,
             picks: {},
           },
@@ -348,6 +359,7 @@ class MultichatEngagementService {
           type: "prediction-open",
           gameKey: game.gameKey,
           opponent: String(game.opponent ?? "").slice(0, 60),
+          locksAtMs,
         });
       }
     }
@@ -469,7 +481,7 @@ class MultichatEngagementService {
    * @param {string} token
    */
   async summary(token) {
-    const [topViewers, topOracles, open, moments] = await Promise.all([
+    const [topViewers, topOracles, open, moments, settled] = await Promise.all([
       this.viewers
         .find(
           { token },
@@ -481,14 +493,45 @@ class MultichatEngagementService {
       this.topOracles(token, 5),
       this.predictions.findOne(
         { token, settled: false },
-        { sort: { openedAt: -1 }, projection: { _id: 0, gameKey: 1, opponent: 1, picks: 1, openedAt: 1 } },
+        { sort: { openedAt: -1 }, projection: { _id: 0, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },
       ),
       this.clips
         .find({ token }, { projection: { _id: 0, token: 0, atDate: 0 } })
         .sort({ atMs: -1 })
         .limit(20)
         .toArray(),
+      this.predictions
+        .find(
+          { token, settled: true },
+          { projection: { _id: 0, opponent: 1, result: 1, tally: 1, settledAt: 1 } },
+        )
+        .sort({ settledAt: -1 })
+        .limit(30)
+        .toArray(),
     ]);
+    // Chat's collective crystal-ball record: how often the majority
+    // call matched the verified result (ties and empty windows skip).
+    let calls = 0;
+    let majorityRight = 0;
+    /** @type {{opponent: string, result: string, pct: number, majority: 'win'|'loss', wasRight: boolean} | null} */
+    let lastCall = null;
+    for (const p of settled) {
+      const t = p.tally ?? { win: 0, loss: 0, total: 0 };
+      if (!t.total || t.win === t.loss) continue;
+      const majority = t.win > t.loss ? "win" : "loss";
+      const wasRight = majority === p.result;
+      calls += 1;
+      if (wasRight) majorityRight += 1;
+      if (!lastCall) {
+        lastCall = {
+          opponent: String(p.opponent ?? ""),
+          result: String(p.result ?? ""),
+          pct: Math.round((Math.max(t.win, t.loss) / t.total) * 100),
+          majority,
+          wasRight,
+        };
+      }
+    }
     return {
       wall: topViewers.map((v) => ({
         user: v.displayName,
@@ -499,8 +542,14 @@ class MultichatEngagementService {
       })),
       oracles: topOracles,
       prediction: open
-        ? { gameKey: open.gameKey, opponent: open.opponent, tally: tallyPicks(open.picks) }
+        ? {
+            gameKey: open.gameKey,
+            opponent: open.opponent,
+            tally: tallyPicks(open.picks),
+            ...(Number.isFinite(open.locksAtMs) ? { locksAtMs: open.locksAtMs } : {}),
+          }
         : null,
+      oracleRecap: { calls, majorityRight, last: lastCall },
       clipMoments: moments,
     };
   }
@@ -524,4 +573,5 @@ module.exports = {
   rankName,
   parsePick,
   RANK_NAMES,
+  PREDICTION_LOCK_MS,
 };
