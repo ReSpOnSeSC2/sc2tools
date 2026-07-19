@@ -49,7 +49,8 @@ export type WidgetId =
   | "stream-scene"
   | "chat-oracle"
   | "supporter-wall"
-  | "clip-flag";
+  | "clip-flag"
+  | "lower-third";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -79,6 +80,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "chat-oracle",
   "supporter-wall",
   "clip-flag",
+  "lower-third",
 ];
 
 /**
@@ -149,6 +151,7 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   "chat-oracle": null,
   "supporter-wall": null,
   "clip-flag": null,
+  "lower-third": 14 * 1000,
 };
 
 /**

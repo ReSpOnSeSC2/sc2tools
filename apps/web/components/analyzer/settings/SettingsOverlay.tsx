@@ -149,6 +149,11 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",
   },
   {
+    id: "lower-third",
+    label: "Broadcast lower third",
+    hint: "Esports-caster bar after each game: result, MMR delta, opponent head-to-head, session record. Test fires a sample game.",
+  },
+  {
     id: "chat-oracle",
     label: "Crystal Ball predictions",
     hint: "Chat calls !win / !loss before each game; the verified result scores oracle points and shows a reveal + leaderboard. Test plays a demo round.",

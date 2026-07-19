@@ -235,6 +235,7 @@ const PER_WIDGET_KEYS = {
   "chat-oracle": [],
   "supporter-wall": [],
   "clip-flag": [],
+  "lower-third": ["result", "map", "matchup", "mmrDelta", "headToHead", "session", "oppName"],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

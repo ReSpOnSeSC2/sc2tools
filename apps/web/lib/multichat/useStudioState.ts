@@ -31,6 +31,8 @@ export interface StudioPoll {
   options: string[];
   startedAtMs: number;
   status: "open" | "closed";
+  /** Build votes carry the candidates' real win-rates. */
+  meta?: { kind: "build"; winRates: Record<string, number> };
 }
 
 export interface StudioGoal {
@@ -94,7 +96,7 @@ function sanitizePoll(raw: unknown): StudioPoll | null {
     .filter((o): o is string => typeof o === "string" && o.trim().length > 0)
     .map((o) => o.trim());
   if (!question || options.length < 2) return null;
-  return {
+  const out: StudioPoll = {
     question,
     options,
     startedAtMs: Number.isFinite(Number(p.startedAtMs))
@@ -102,6 +104,17 @@ function sanitizePoll(raw: unknown): StudioPoll | null {
       : 0,
     status: p.status === "closed" ? "closed" : "open",
   };
+  const meta = p.meta as Record<string, unknown> | undefined;
+  if (meta && typeof meta === "object" && meta.kind === "build") {
+    const winRates: Record<string, number> = {};
+    const rawRates = (meta.winRates ?? {}) as Record<string, unknown>;
+    for (const name of options) {
+      const v = Number(rawRates[name]);
+      if (Number.isFinite(v)) winRates[name] = Math.min(100, Math.max(0, Math.round(v)));
+    }
+    out.meta = { kind: "build", winRates };
+  }
+  return out;
 }
 
 function sanitizeGoals(raw: unknown): StudioGoal[] {

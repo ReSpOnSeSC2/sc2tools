@@ -158,12 +158,36 @@ export function ChatPollWidget({
             </span>
           )}
         </div>
+        {/* Build votes: the winner's real win-rate seals the pick. */}
+        {closed && poll.meta?.kind === "build" && leader > 0
+          ? (() => {
+              const winIdx = tally.counts.indexOf(leader);
+              const winner = poll.options[winIdx];
+              const wr = winner ? poll.meta?.winRates[winner] : undefined;
+              return winner ? (
+                <div style={buildWinnerStyle}>
+                  Chat picked: <b>{winner}</b>
+                  {wr !== undefined ? (
+                    <span style={{ opacity: 0.75 }}> — {wr}% win rate</span>
+                  ) : null}
+                </div>
+              ) : null;
+            })()
+          : null}
       </div>
     </div>
   );
 }
 
 /* ──────────────── styles ──────────────── */
+
+const buildWinnerStyle: CSSProperties = {
+  marginTop: 8,
+  paddingTop: 8,
+  borderTop: "1px solid rgba(255,255,255,0.12)",
+  fontSize: 13,
+  color: "#3ec07a",
+};
 
 const frameStyle: CSSProperties = {
   position: "absolute",

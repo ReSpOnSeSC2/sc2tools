@@ -50,6 +50,7 @@ const VALID_WIDGETS = new Set([
   "chat-oracle",
   "supporter-wall",
   "clip-flag",
+  "lower-third",
 ]);
 
 export default async function OverlayWidgetPage({

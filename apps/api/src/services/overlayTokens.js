@@ -43,6 +43,7 @@ const KNOWN_WIDGETS = Object.freeze([
   "chat-oracle",
   "supporter-wall",
   "clip-flag",
+  "lower-third",
 ]);
 
 /**

@@ -55,6 +55,7 @@ import {
   StreamGoalsWidget,
   ChatOracleWidget,
   ClipFlagWidget,
+  LowerThirdWidget,
   SessionRecapWidget,
   StreamSceneWidget,
   SupporterWallWidget,
@@ -431,6 +432,10 @@ function WidgetRenderer({
       return (
         <ClipFlagWidget token={token} engagementEvent={engagementEvent} live={live} />
       );
+    case "lower-third":
+      // Broadcast-style post-game bar — payload-driven, standard
+      // visibility timer slides it away between games.
+      return <LowerThirdWidget live={live} />;
     default:
       return null;
   }

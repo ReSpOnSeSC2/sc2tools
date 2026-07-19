@@ -122,7 +122,8 @@ function sanitizePoll(raw) {
     .filter(Boolean)
     .slice(0, POLL_MAX_OPTIONS);
   if (!question || options.length < 2) return null;
-  return {
+  /** @type {Record<string, any>} */
+  const out = {
     question,
     options,
     startedAtMs: Number.isFinite(Number(p.startedAtMs))
@@ -131,6 +132,22 @@ function sanitizePoll(raw) {
     // "open" collects votes; "closed" shows final results until cleared.
     status: p.status === "closed" ? "closed" : "open",
   };
+  // Optional structured meta — currently only the build vote, which
+  // lets the widget show the winner's real win-rate on close.
+  if (p.meta && typeof p.meta === "object" && p.meta.kind === "build") {
+    /** @type {Record<string, number>} */
+    const winRates = {};
+    const rawRates =
+      p.meta.winRates && typeof p.meta.winRates === "object"
+        ? p.meta.winRates
+        : {};
+    for (const name of options) {
+      const v = Number(rawRates[name]);
+      if (Number.isFinite(v)) winRates[name] = Math.min(100, Math.max(0, Math.round(v)));
+    }
+    out.meta = { kind: "build", winRates };
+  }
+  return out;
 }
 
 /** @param {unknown} raw */
