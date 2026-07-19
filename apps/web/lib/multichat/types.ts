@@ -35,6 +35,7 @@ export interface ChatMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  emotes?: import("./emotes").ChatEmote[];
 }
 
 export type PlatformState =

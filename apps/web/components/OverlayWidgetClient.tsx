@@ -49,6 +49,11 @@ import {
   RandomizerWidget,
   GhostBuildWidget,
   MultiChatWidget,
+  ChatHighlightWidget,
+  ChatPollWidget,
+  ChatAlertsWidget,
+  StreamGoalsWidget,
+  SessionRecapWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -115,6 +120,9 @@ export function OverlayWidgetClient({
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
+  // Latest raw ``overlay:multichat`` studio payload — validated by the
+  // studio widgets themselves (useStudioState re-sanitizes it).
+  const [studioEvent, setStudioEvent] = useState<unknown>(null);
   const [fragmentGhostParam, setFragmentGhostParam] = useState<string | null>(
     null,
   );
@@ -130,6 +138,7 @@ export function OverlayWidgetClient({
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    setStudioEvent,
     setConnectionStatus,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
@@ -191,12 +200,14 @@ export function OverlayWidgetClient({
   );
   const effectiveEnabled = widget === "ghost-build" ? true : enabled;
 
-  // Multichat is a persistent, fully self-driven HUD: it opens its own
-  // chat connections (Twitch IRC / Kick Pusher / cloud relays) and
-  // never consumes game payloads, so the payload-driven visibility
-  // timer must not gate it. The server's enabledWidgets toggle still
+  // Multichat and the Stream Studio widgets are persistent, fully
+  // self-driven HUDs: multichat opens its own chat connections
+  // (Twitch IRC / Kick Pusher / cloud relays), and the studio widgets
+  // gate themselves on the ``overlay:multichat`` studio state — none
+  // consume game payloads, so the payload-driven visibility timer
+  // must not gate them. The server's enabledWidgets toggle still
   // applies via ``effectiveEnabled``.
-  const alwaysVisible = widget === "multichat";
+  const alwaysVisible = SELF_DRIVEN_WIDGETS.has(widget as WidgetId);
 
   // Voice readout is only run from the scouting widget when each
   // widget is its own Browser Source — otherwise every Source would
@@ -260,6 +271,7 @@ export function OverlayWidgetClient({
         session={session}
         randomizer={randomizer}
         ghostParam={effectiveGhostParam}
+        studioEvent={studioEvent}
       />
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
@@ -272,6 +284,19 @@ export function OverlayWidgetClient({
   );
 }
 
+/**
+ * Widgets that bypass the payload-driven visibility timer entirely —
+ * they render transparent on their own when there's nothing to show.
+ */
+const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
+  "multichat",
+  "chat-highlight",
+  "chat-poll",
+  "chat-alerts",
+  "stream-goals",
+  "session-recap",
+]);
+
 function WidgetRenderer({
   widget,
   token,
@@ -280,6 +305,7 @@ function WidgetRenderer({
   session,
   randomizer,
   ghostParam,
+  studioEvent,
 }: {
   widget: WidgetId;
   token: string;
@@ -288,6 +314,7 @@ function WidgetRenderer({
   session: SessionSummary | null;
   randomizer: RandomizerConfig | null;
   ghostParam: string | null;
+  studioEvent: unknown;
 }) {
   switch (widget) {
     case "opponent":
@@ -342,6 +369,26 @@ function WidgetRenderer({
       // token is its auth for the cloud chat relays. ``live`` is read
       // only for the Settings Test-fire flag.
       return <MultiChatWidget token={token} live={live} />;
+    case "chat-highlight":
+      // Stream Studio family — all gated on the studio state pushed
+      // as ``overlay:multichat`` (and fetched at boot); each renders
+      // transparent until the Stream Dock gives it content.
+      return <ChatHighlightWidget token={token} studioEvent={studioEvent} />;
+    case "chat-poll":
+      return <ChatPollWidget token={token} studioEvent={studioEvent} />;
+    case "chat-alerts":
+      return <ChatAlertsWidget token={token} studioEvent={studioEvent} />;
+    case "stream-goals":
+      return <StreamGoalsWidget token={token} studioEvent={studioEvent} />;
+    case "session-recap":
+      return (
+        <SessionRecapWidget
+          token={token}
+          studioEvent={studioEvent}
+          session={session}
+          live={live}
+        />
+      );
     default:
       return null;
   }
@@ -362,6 +409,7 @@ function useOverlayWidgetSocket(
   setEnabled: (on: boolean) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
+  setStudioEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
 ) {
   // The latest gameKey we've observed in either ``live`` or
@@ -504,6 +552,12 @@ function useOverlayWidgetSocket(
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);
     });
+    // Stream Studio state (highlight / poll / goals / recap trigger) —
+    // stored raw; the studio widgets defensively re-sanitize it via
+    // useStudioState before rendering anything.
+    socket.on("overlay:multichat", (msg: unknown) => {
+      if (msg && typeof msg === "object") setStudioEvent(msg);
+    });
     // Streamer cancelled the test fire — clear local state so the
     // widget vanishes immediately instead of waiting for the natural
     // visibility timer to expire. ``msg.widget`` narrows the clear to
@@ -548,6 +602,7 @@ function useOverlayWidgetSocket(
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    setStudioEvent,
     setConnectionStatus,
   ]);
 }

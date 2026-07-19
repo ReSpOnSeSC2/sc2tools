@@ -40,7 +40,12 @@ export type WidgetId =
   | "session"
   | "randomizer"
   | "ghost-build"
-  | "multichat";
+  | "multichat"
+  | "chat-highlight"
+  | "chat-poll"
+  | "chat-alerts"
+  | "stream-goals"
+  | "session-recap";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -61,6 +66,11 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "randomizer",
   "ghost-build",
   "multichat",
+  "chat-highlight",
+  "chat-poll",
+  "chat-alerts",
+  "stream-goals",
+  "session-recap",
 ];
 
 /**
@@ -118,6 +128,15 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // Multi-platform chat feed — a persistent, fully self-driven HUD.
   // It never consumes game payloads, so no timer applies.
   "multichat": null,
+  // Stream Studio widgets — persistent, self-driven sources gated by
+  // the studio state (Stream Dock) rather than game payloads. Each
+  // renders transparent until the dock gives it something to show, so
+  // no payload timer applies.
+  "chat-highlight": null,
+  "chat-poll": null,
+  "chat-alerts": null,
+  "stream-goals": null,
+  "session-recap": null,
 };
 
 /**

@@ -21,3 +21,8 @@ export { SessionWidget, type SessionSummary } from "./SessionWidget";
 export { RandomizerWidget } from "./RandomizerWidget";
 export { GhostBuildWidget } from "./GhostBuildWidget";
 export { MultiChatWidget } from "./MultiChatWidget";
+export { ChatHighlightWidget } from "./ChatHighlightWidget";
+export { ChatPollWidget } from "./ChatPollWidget";
+export { ChatAlertsWidget } from "./ChatAlertsWidget";
+export { StreamGoalsWidget } from "./StreamGoalsWidget";
+export { SessionRecapWidget } from "./SessionRecapWidget";

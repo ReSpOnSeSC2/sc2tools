@@ -25,7 +25,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { ExternalLink, MessageSquare, Wand2 } from "lucide-react";
+import { ExternalLink, Languages, LayoutPanelLeft, MessageSquare, Wand2 } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -55,8 +55,29 @@ import {
   type ChatTtsConfig,
 } from "@/lib/multichat/tts";
 import type { MultichatConfig } from "@/lib/multichat/types";
+import { UrlRow } from "./OverlayUrlRow";
 import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
+
+/**
+ * Inline chat-translation settings — stored under `translate` in the
+ * SAME preferences blob. The endpoint + API key stay server-side: the
+ * token-authed config route only ever ships {enabled, targetLang} to
+ * OBS, and the widget sends message text to our own relay.
+ */
+type TranslateDraft = {
+  enabled: boolean;
+  endpoint: string;
+  apiKey: string;
+  targetLang: string;
+};
+
+const DEFAULT_TRANSLATE: TranslateDraft = {
+  enabled: false,
+  endpoint: "",
+  apiKey: "",
+  targetLang: "en",
+};
 
 type Draft = {
   twitchEnabled: boolean;
@@ -71,6 +92,7 @@ type Draft = {
   appearance: ChatAppearance;
   tts: ChatTtsConfig;
   sound: ChatSoundConfig;
+  translate: TranslateDraft;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -86,6 +108,7 @@ const EMPTY_DRAFT: Draft = {
   appearance: DEFAULT_APPEARANCE,
   tts: DEFAULT_TTS,
   sound: DEFAULT_SOUND,
+  translate: DEFAULT_TRANSLATE,
 };
 
 function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
@@ -105,10 +128,31 @@ function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
     appearance: sanitizeAppearance(config?.appearance),
     tts: sanitizeTtsConfig(config?.tts),
     sound: sanitizeSoundConfig(config?.sound),
+    translate: translateFromConfig(config),
   };
 }
 
-function configFromDraft(d: Draft): MultichatConfig {
+/** Defensive read of the untyped `translate` blob — inline defaults. */
+function translateFromConfig(
+  config: MultichatConfig | undefined | null,
+): TranslateDraft {
+  const t = (config as { translate?: Record<string, unknown> } | undefined | null)
+    ?.translate;
+  const d = DEFAULT_TRANSLATE;
+  return {
+    enabled: t?.enabled === true,
+    endpoint: typeof t?.endpoint === "string" ? t.endpoint : d.endpoint,
+    apiKey: typeof t?.apiKey === "string" ? t.apiKey : d.apiKey,
+    targetLang:
+      typeof t?.targetLang === "string" && t.targetLang.trim()
+        ? t.targetLang.trim()
+        : d.targetLang,
+  };
+}
+
+function configFromDraft(
+  d: Draft,
+): MultichatConfig & { translate: Record<string, unknown> } {
   return {
     twitch: {
       enabled: d.twitchEnabled,
@@ -130,6 +174,12 @@ function configFromDraft(d: Draft): MultichatConfig {
     appearance: d.appearance as unknown as Record<string, unknown>,
     tts: d.tts as unknown as Record<string, unknown>,
     sound: d.sound as unknown as Record<string, unknown>,
+    translate: {
+      enabled: d.translate.enabled,
+      endpoint: d.translate.endpoint.trim(),
+      apiKey: d.translate.apiKey.trim(),
+      targetLang: d.translate.targetLang.trim().toLowerCase() || "en",
+    },
   };
 }
 
@@ -146,6 +196,13 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
   const [detecting, setDetecting] = useState(false);
   const [kickManualOpen, setKickManualOpen] = useState(false);
   const [kickPaste, setKickPaste] = useState("");
+
+  // window.origin is unavailable during SSR — resolve it post-mount so
+  // the dock URL renders without a hydration mismatch.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   // Hydrate the draft once per fetched config; user edits win after.
   useEffect(() => {
@@ -177,6 +234,12 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
       !normalizeTikTokUsernameInput(draft.tiktokUsername)
     ) {
       out.push("TikTok: enter your @username.");
+    }
+    if (
+      draft.translate.enabled &&
+      !/^https:\/\//.test(draft.translate.endpoint.trim())
+    ) {
+      out.push("Translation: enter an https:// endpoint URL.");
     }
     return out;
   }, [draft]);
@@ -285,6 +348,23 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
           </div>
         ) : (
           <div className="space-y-5">
+            {token ? (
+              <div className="space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-3">
+                <div className="flex items-center gap-2 text-body font-medium text-text">
+                  <LayoutPanelLeft className="h-4 w-4 text-accent-cyan" aria-hidden />
+                  Stream Dock
+                </div>
+                <p className="text-caption text-text-dim">
+                  Your second-screen control panel for this chat: pin
+                  highlights, run polls, track goals and block spammers
+                  mid-stream. In OBS, add it via{" "}
+                  <b>Docks → Custom Browser Docks</b> — or open it on a
+                  phone or second monitor.
+                </p>
+                {origin ? <UrlRow url={`${origin}/dock/${token}`} compact /> : null}
+              </div>
+            ) : null}
+
             <PlatformRow
               label="Twitch"
               enabled={draft.twitchEnabled}
@@ -406,6 +486,104 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 sound={draft.sound}
                 onSoundChange={(sound) => set({ sound })}
               />
+            </div>
+
+            <div className="border-t border-border pt-5">
+              <details className="group min-w-0" open={draft.translate.enabled}>
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-body font-medium text-text [&::-webkit-details-marker]:hidden">
+                  <Languages className="h-4 w-4 text-accent-cyan" aria-hidden />
+                  Translation
+                  <span className="text-caption font-normal text-text-muted">
+                    {draft.translate.enabled ? "on" : "off"} · click to{" "}
+                    <span className="group-open:hidden">expand</span>
+                    <span className="hidden group-open:inline">collapse</span>
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Toggle
+                      checked={draft.translate.enabled}
+                      onChange={(on) =>
+                        set({ translate: { ...draft.translate, enabled: on } })
+                      }
+                      label="Enable chat translation"
+                    />
+                    <span className="text-body font-medium text-text">
+                      Translate incoming chat
+                    </span>
+                  </div>
+                  <p className="text-caption text-text-dim">
+                    Works with any LibreTranslate-compatible API (self-hosted
+                    or hosted). Messages are translated through our relay —
+                    the endpoint and API key stay on the server and never
+                    reach OBS.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block min-w-0">
+                      <div className="mb-1 text-caption text-text-dim">
+                        Endpoint URL <span className="text-text-muted">(https:// required)</span>
+                      </div>
+                      <input
+                        type="url"
+                        value={draft.translate.endpoint}
+                        onChange={(e) =>
+                          set({
+                            translate: {
+                              ...draft.translate,
+                              endpoint: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="https://libretranslate.example.com/translate"
+                        disabled={!draft.translate.enabled}
+                        className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <div className="mb-1 text-caption text-text-dim">
+                        API key <span className="text-text-muted">(if your provider needs one)</span>
+                      </div>
+                      <input
+                        type="password"
+                        value={draft.translate.apiKey}
+                        onChange={(e) =>
+                          set({
+                            translate: {
+                              ...draft.translate,
+                              apiKey: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="optional"
+                        autoComplete="off"
+                        disabled={!draft.translate.enabled}
+                        className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <div className="mb-1 text-caption text-text-dim">
+                        Target language <span className="text-text-muted">(code, e.g. en, de, pt-br)</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={draft.translate.targetLang}
+                        onChange={(e) =>
+                          set({
+                            translate: {
+                              ...draft.translate,
+                              targetLang: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="en"
+                        maxLength={8}
+                        disabled={!draft.translate.enabled}
+                        className="w-24 min-w-0 rounded-lg border border-border bg-bg-elevated px-3 py-1.5 text-body text-text placeholder:text-text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </details>
             </div>
 
             {problems.length > 0 ? (

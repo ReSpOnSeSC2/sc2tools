@@ -9,6 +9,7 @@
 // socket lifecycle: PING/PONG keepalive and auto-reconnect with
 // exponential backoff so an OBS scene left open all day self-heals.
 
+import { twitchEmoteUrl, type ChatEmote } from "./emotes";
 import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
@@ -24,6 +25,8 @@ export interface ParsedTwitchMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  /** Emotes present in `text` — only set when the message carries any. */
+  emotes?: ChatEmote[];
 }
 
 /** Parse the IRCv3 tag prefix ("@a=1;b=2 ...") into a map. */
@@ -58,6 +61,39 @@ export function twitchBadgeTags(badgesTag: string | undefined): ChatBadge[] {
 }
 
 /**
+ * Parse the IRC `emotes=` tag ("id:start-end,start-end/id:start-end")
+ * against the message text into renderable emotes. Ranges are
+ * inclusive CODE-POINT offsets (Twitch counts characters, not UTF-16
+ * units — emoji before an emote would skew a .slice()). Only the
+ * first range per id is needed to learn the code; codes dedupe.
+ */
+export function parseTwitchEmotesTag(
+  emotesTag: string | undefined,
+  text: string,
+): ChatEmote[] {
+  if (!emotesTag) return [];
+  const chars = Array.from(text);
+  const out: ChatEmote[] = [];
+  const seen = new Set<string>();
+  for (const entry of emotesTag.split("/")) {
+    const colon = entry.indexOf(":");
+    if (colon <= 0) continue;
+    const id = entry.slice(0, colon);
+    const firstRange = entry.slice(colon + 1).split(",")[0];
+    const m = /^(\d+)-(\d+)$/.exec(firstRange || "");
+    if (!m) continue;
+    const start = Number(m[1]);
+    const end = Number(m[2]);
+    if (start > end || end >= chars.length) continue;
+    const code = chars.slice(start, end + 1).join("");
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, url: twitchEmoteUrl(id) });
+  }
+  return out;
+}
+
+/**
  * Parse one raw IRC line into a chat message, or null for anything
  * that isn't a user PRIVMSG (JOINs, NOTICEs, ROOMSTATE, …).
  */
@@ -78,6 +114,9 @@ export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
   // /me actions arrive as \x01ACTION <text>\x01.
   const action = text.match(/^ACTION (.*)$/);
   if (action) text = action[1];
+  // Emote indices are relative to the user-typed text (post-ACTION
+  // unwrap, pre-trim) — resolve codes before trimming shifts offsets.
+  const emotes = parseTwitchEmotesTag(tags.emotes, text);
   text = text.trim();
   if (!text) return null;
   const ts = Number(tags["tmi-sent-ts"]);
@@ -88,6 +127,9 @@ export function parseTwitchMessage(line: string): ParsedTwitchMessage | null {
     color: /^#[0-9A-Fa-f]{6}$/.test(tags.color || "") ? tags.color : undefined,
     badges: twitchBadgeTags(tags.badges),
     atMs: Number.isFinite(ts) ? ts : Date.now(),
+    // Omitted (not []) when absent — keeps emote-less parses toEqual
+    // their pre-emote shape.
+    ...(emotes.length > 0 ? { emotes } : {}),
   };
 }
 

@@ -32,6 +32,13 @@ const KNOWN_WIDGETS = Object.freeze([
   ...DEFAULT_WIDGETS,
   "randomizer",
   "multichat",
+  // Stream Studio family — opt-in, driven by the multichat studio
+  // state (Stream Dock) rather than game payloads.
+  "chat-highlight",
+  "chat-poll",
+  "chat-alerts",
+  "stream-goals",
+  "session-recap",
 ]);
 
 /**

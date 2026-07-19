@@ -73,7 +73,7 @@ const STATE_DOT: Record<PlatformState, string> = {
   error: "#ff6b6b",
 };
 
-interface LoadedConfig {
+export interface LoadedConfig {
   /** Platform entries ONLY — identity changes reconnect chat engines. */
   platforms: MultichatConfig | null;
   appearance: ChatAppearance;
@@ -84,7 +84,13 @@ interface LoadedConfig {
   loaded: boolean;
 }
 
-function useMultichatConfig(token: string): LoadedConfig {
+/**
+ * Shared config loader for the multichat widget family — exported so
+ * the studio widgets (chat-poll, chat-alerts) can run their own
+ * useMultiChat feed off the same platform config without duplicating
+ * the fetch/split/identity logic.
+ */
+export function useMultichatConfig(token: string): LoadedConfig {
   const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
   const [appearance, setAppearance] = useState<ChatAppearance>(DEFAULT_APPEARANCE);
   const [tts, setTts] = useState<Record<string, unknown> | null>(null);

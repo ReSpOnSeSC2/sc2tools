@@ -41,6 +41,11 @@ const VALID_WIDGETS = new Set([
   "randomizer",
   "ghost-build",
   "multichat",
+  "chat-highlight",
+  "chat-poll",
+  "chat-alerts",
+  "stream-goals",
+  "session-recap",
 ]);
 
 export default async function OverlayWidgetPage({

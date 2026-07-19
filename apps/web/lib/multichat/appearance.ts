@@ -83,6 +83,8 @@ export interface ChatAppearance {
   showPlatformChips: boolean;
   showBadges: boolean;
   showTimestamps: boolean;
+  /** Render platform emotes (Twitch/Kick) as inline images. */
+  emoteImages: boolean;
   /** Rows kept on screen. */
   maxVisible: number;
   /** Seconds a message stays before fading out. 0 = keep forever. */
@@ -114,6 +116,7 @@ export const DEFAULT_APPEARANCE: ChatAppearance = {
   showPlatformChips: true,
   showBadges: true,
   showTimestamps: false,
+  emoteImages: true,
   maxVisible: 30,
   messageTtlSec: 0,
   entryAnimation: "fade",
@@ -202,6 +205,7 @@ export function sanitizeAppearance(
     showPlatformChips: bool(a.showPlatformChips, d.showPlatformChips),
     showBadges: bool(a.showBadges, d.showBadges),
     showTimestamps: bool(a.showTimestamps, d.showTimestamps),
+    emoteImages: bool(a.emoteImages, d.emoteImages),
     maxVisible: clampInt(a.maxVisible, MAX_VISIBLE_MIN, MAX_VISIBLE_MAX, d.maxVisible),
     messageTtlSec: clampInt(a.messageTtlSec, 0, TTL_MAX_SEC, d.messageTtlSec),
     entryAnimation: pick(a.entryAnimation, ENTRY_ANIMATIONS, d.entryAnimation),

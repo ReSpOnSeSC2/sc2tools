@@ -274,6 +274,12 @@ export function SettingsMultiChatAppearance({
                 checked={value.showBadges}
                 onChange={(on) => set({ showBadges: on })}
               />
+              <ToggleField
+                label="Emote images"
+                hint="render Twitch / Kick emotes as images"
+                checked={value.emoteImages}
+                onChange={(on) => set({ emoteImages: on })}
+              />
             </div>
           </ControlGroup>
 

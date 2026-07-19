@@ -13,6 +13,29 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stream Studio · dock, five new widgets, events, emotes, chat
+  commands, translation** — the multichat family grows into a full
+  streaming toolkit. A new **Stream Dock** (`/dock/<token>`, add it as
+  an OBS custom browser dock or open it on a second screen) shows the
+  merged live chat with one-tap **Highlight** (pins a message on
+  stream) and two-tap **Block**, runs **chat polls** (viewers vote
+  with `!1` / `!2` across all four platforms; live tallies, close and
+  clear), edits **stream goals**, and fires the **session recap**
+  card. Five new opt-in overlay widgets render it all: Chat highlight,
+  Chat poll, Event alerts (subs, resubs, gift subs, raids, YouTube
+  memberships and Super Chats, TikTok gifts/follows — parsed from the
+  same anonymous transports, no extra logins), Stream goals (animated
+  progress bars), and Session recap. The chat feed itself now renders
+  real **Twitch and Kick emote images** (toggleable), answers
+  `!opponent` / `!mmr` / `!build` from ANY platform's chat with an
+  on-stream card, supports optional **inline translation** through a
+  self-hosted LibreTranslate-compatible provider (key stays
+  server-side), and gains a **BRB scene mode** (`?mode=brb`).
+  Highlight/poll/goal changes reach every Browser Source instantly
+  over the overlay socket and survive restarts (Mongo-persisted per
+  token, strict-sanitized).
+
+
 - **Multi-platform chat · appearance studio, Test fire, and TTS** —
   the multichat widget is now fully stylable from Settings with a
   pixel-honest live preview rendered by the same component OBS uses:

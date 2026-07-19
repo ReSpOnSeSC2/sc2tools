@@ -19,6 +19,7 @@
 
 import { useMemo, type CSSProperties } from "react";
 import { fallbackColor } from "@/lib/multichat/feed";
+import { renderTextWithEmotes } from "@/lib/multichat/emotes";
 import {
   appearanceStyles,
   type ChatAppearance,
@@ -219,6 +220,31 @@ function MessageRow({
     </span>
   );
 
+  // Emote images swap `code` occurrences for CDN <img>s — original
+  // text only: a translated line no longer contains the codes.
+  const plainBody =
+    !translated && appearance.emoteImages && message.emotes?.length
+      ? renderTextWithEmotes(message.text, message.emotes).map((seg, i) =>
+          typeof seg === "string" ? (
+            seg
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- emote CDN asset in an OBS source; next/image is unavailable/pointless here
+            <img
+              key={`${seg.code}-${i}`}
+              src={seg.url}
+              alt={seg.code}
+              title={seg.code}
+              loading="lazy"
+              style={{
+                height: "1.3em",
+                verticalAlign: "middle",
+                display: "inline-block",
+              }}
+            />
+          ),
+        )
+      : message.text;
+
   const text = (
     <span
       style={{
@@ -235,7 +261,7 @@ function MessageRow({
           {translated}
         </>
       ) : (
-        message.text
+        plainBody
       )}
     </span>
   );

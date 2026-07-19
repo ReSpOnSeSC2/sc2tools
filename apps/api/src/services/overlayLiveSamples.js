@@ -215,6 +215,14 @@ const PER_WIDGET_KEYS = {
   // per-widget Test from falling back to FULL and lighting up every
   // neighbouring panel.
   "multichat": [],
+  // Stream Studio widgets — fully self-driven off the multichat studio
+  // state (Stream Dock); a synthetic game payload carries nothing they
+  // render. Registered so an unknown id never falls back to FULL.
+  "chat-highlight": [],
+  "chat-poll": [],
+  "chat-alerts": [],
+  "stream-goals": [],
+  "session-recap": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

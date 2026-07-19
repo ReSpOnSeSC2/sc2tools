@@ -8,6 +8,7 @@
 // in Settings (auto via the API relay, or the guided manual flow when
 // Cloudflare blocks the lookup).
 
+import { kickEmoteUrl, type ChatEmote } from "./emotes";
 import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
@@ -26,6 +27,8 @@ export interface ParsedKickMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  /** Emotes present in `text` — only set when the message carries any. */
+  emotes?: ChatEmote[];
 }
 
 /** Map Kick identity badges to normalised tags. */
@@ -55,6 +58,25 @@ export function stripKickEmoteTags(content: string): string {
 }
 
 /**
+ * Collect the emotes referenced by `[emote:id:name]` markup. The code
+ * mirrors what stripKickEmoteTags leaves in the text (`:name:`) so the
+ * renderer can swap occurrences back to images; codes dedupe.
+ */
+export function collectKickEmotes(content: string): ChatEmote[] {
+  const out: ChatEmote[] = [];
+  const seen = new Set<string>();
+  for (const m of content.matchAll(/\[emote:(\d+):([^\]]*)\]/g)) {
+    const [, id, name] = m;
+    if (!name) continue;
+    const code = `:${name}:`;
+    if (seen.has(code)) continue;
+    seen.add(code);
+    out.push({ code, url: kickEmoteUrl(id) });
+  }
+  return out;
+}
+
+/**
  * Parse one Kick `ChatMessageEvent` payload (the `data` JSON of the
  * Pusher event) into a chat message. Pure, unit-tested.
  */
@@ -63,12 +85,14 @@ export function parseKickChatEvent(
 ): ParsedKickMessage | null {
   const sender = (data?.sender ?? {}) as Record<string, unknown>;
   const identity = (sender?.identity ?? {}) as Record<string, unknown>;
-  const text = stripKickEmoteTags(String(data?.content ?? ""));
+  const content = String(data?.content ?? "");
+  const text = stripKickEmoteTags(content);
   if (!text) return null;
   const user = String(sender?.username || sender?.slug || "").trim();
   if (!user) return null;
   const created = Date.parse(String(data?.created_at ?? ""));
   const color = String(identity?.color ?? "");
+  const emotes = collectKickEmotes(content);
   return {
     id: String(data?.id || `${Date.now()}-${user}`),
     user,
@@ -78,6 +102,9 @@ export function parseKickChatEvent(
       identity?.badges as Array<{ type?: string }> | undefined,
     ),
     atMs: Number.isFinite(created) ? created : Date.now(),
+    // Omitted (not []) when absent — keeps emote-less parses toEqual
+    // their pre-emote shape.
+    ...(emotes.length > 0 ? { emotes } : {}),
   };
 }
 
