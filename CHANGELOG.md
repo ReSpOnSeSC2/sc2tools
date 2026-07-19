@@ -13,6 +13,16 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Settings → Overlay · Test buttons for the Stream Studio widgets**
+  — Chat highlight, Chat poll, Event alerts, Stream goals and Session
+  recap now have the standard Test button. Each fire renders
+  clearly-labelled sample content in OBS for the usual ~20 s window
+  (the poll steps through an animated demo tally, the alerts toaster
+  plays a sub/raid/Super Chat/gift sequence, the recap card shows the
+  sample session numbers), so streamers can place and style the
+  sources without live Stream Dock state. Stop dismisses early, same
+  as every other widget.
+
 - **Stream Studio · dock, five new widgets, events, emotes, chat
   commands, translation** — the multichat family grows into a full
   streaming toolkit. A new **Stream Dock** (`/dock/<token>`, add it as

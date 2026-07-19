@@ -8,22 +8,40 @@
  * studio-driven: when no highlight is pinned the source is perfectly
  * transparent, and every pin swap re-plays the entry fade so the card
  * pops even when only the text changed.
+ *
+ * The shared ``overlay:live`` payload is read for one thing: the
+ * Settings Test button. While a test fire targeting this widget is
+ * inside its window, a clearly-labelled sample highlight renders
+ * instead of the studio state (see lib/multichat/testStudio).
  */
 
 import { useMemo, type CSSProperties } from "react";
 import { useStudioState } from "@/lib/multichat/useStudioState";
+import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { testHighlight } from "@/lib/multichat/testStudio";
+import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 
 export function ChatHighlightWidget({
   token,
   studioEvent,
+  live,
 }: {
   token: string;
   /** Latest raw ``overlay:multichat`` socket payload from the host. */
   studioEvent?: unknown;
+  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  live?: LiveGamePayload | null;
 }) {
   const state = useStudioState(token, studioEvent ?? null);
-  const highlight = state.highlight;
+  const testActive = useTestFireFlag(live, "chat-highlight");
+  // Built once per test window so the pin timestamp (and the card
+  // key below) stays stable across re-renders.
+  const demoHighlight = useMemo(
+    () => (testActive ? testHighlight(Date.now()) : null),
+    [testActive],
+  );
+  const highlight = testActive ? demoHighlight : state.highlight;
 
   // Key the card on the pin identity so replacing one highlight with
   // another remounts it and replays the fade-in.
@@ -51,7 +69,10 @@ export function ChatHighlightWidget({
       `}</style>
       <div key={cardKey} className="chat-highlight-card" style={cardStyle}>
         <div style={headerRowStyle}>
-          <span style={titleStyle}>CHAT HIGHLIGHT</span>
+          <span style={titleStyle}>
+            CHAT HIGHLIGHT
+            {testActive ? <span style={testTagStyle}>TEST</span> : null}
+          </span>
           <span
             style={{
               ...chipStyle,
@@ -117,6 +138,15 @@ const titleStyle: CSSProperties = {
   fontWeight: 800,
   letterSpacing: "0.14em",
   color: "var(--ov-accent, #3ec0c7)",
+};
+
+// Matches the multichat status-row TEST chip.
+const testTagStyle: CSSProperties = {
+  marginLeft: 8,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#f5b942",
 };
 
 const chipStyle: CSSProperties = {

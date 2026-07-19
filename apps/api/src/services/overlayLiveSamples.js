@@ -215,14 +215,22 @@ const PER_WIDGET_KEYS = {
   // per-widget Test from falling back to FULL and lighting up every
   // neighbouring panel.
   "multichat": [],
-  // Stream Studio widgets — fully self-driven off the multichat studio
-  // state (Stream Dock); a synthetic game payload carries nothing they
-  // render. Registered so an unknown id never falls back to FULL.
+  // Stream Studio widgets — driven off the multichat studio state
+  // (Stream Dock) in production. Each generates its own clearly-
+  // labelled demo content client-side when the test-stamped payload
+  // lands (see apps/web/lib/multichat/testStudio.ts), so the payload
+  // only needs to exist and carry ``isTest`` + ``testWidget``.
+  // Registered so an unknown id never falls back to FULL and lights
+  // up every neighbouring panel.
   "chat-highlight": [],
   "chat-poll": [],
   "chat-alerts": [],
   "stream-goals": [],
-  "session-recap": [],
+  // Session recap renders the same session aggregate as the session
+  // HUD, so its Test payload carries the sample ``session`` block —
+  // the widget treats a test fire like a real recap trigger and only
+  // falls back to its client-side demo block when the block is absent.
+  "session-recap": ["session"],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

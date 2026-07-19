@@ -9,22 +9,38 @@
  * any connected chat and the tally updates live. When the streamer
  * closes the poll the rendered numbers freeze (the dock shows the
  * same final tally); clearing the poll makes the source transparent.
+ *
+ * The shared ``overlay:live`` payload is read for one thing: the
+ * Settings Test button. While a test fire targeting this widget is
+ * inside its window, a clearly-labelled sample poll renders instead
+ * of the studio state, stepping through a scripted tally so the
+ * animated bars demo themselves (see lib/multichat/testStudio).
  */
 
-import { useMemo, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import { tallyPollVotes } from "@/lib/multichat/poll";
 import { useStudioState } from "@/lib/multichat/useStudioState";
+import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import {
+  TEST_POLL_STEP_MS,
+  TEST_POLL_TALLY_STEPS,
+  testPoll,
+} from "@/lib/multichat/testStudio";
+import type { LiveGamePayload } from "../types";
 import { useMultichatConfig } from "./MultiChatWidget";
 
 export function ChatPollWidget({
   token,
   studioEvent,
+  live,
 }: {
   token: string;
   /** Latest raw ``overlay:multichat`` socket payload from the host. */
   studioEvent?: unknown;
+  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  live?: LiveGamePayload | null;
 }) {
   const { platforms } = useMultichatConfig(token);
   const { messages } = useMultiChat({
@@ -33,11 +49,36 @@ export function ChatPollWidget({
     config: platforms,
   });
   const state = useStudioState(token, studioEvent ?? null);
-  const poll = state.poll;
+  const studioPoll = state.poll;
+
+  // Test-fire demo poll: swap in the sample question and walk the
+  // scripted tally one step per second so the bars animate.
+  const testActive = useTestFireFlag(live, "chat-poll");
+  const demoPoll = useMemo(
+    () => (testActive ? testPoll(Date.now()) : null),
+    [testActive],
+  );
+  const [testStep, setTestStep] = useState(0);
+  useEffect(() => {
+    if (!testActive) return;
+    setTestStep(0);
+    let step = 0;
+    const timer = setInterval(() => {
+      step += 1;
+      if (step >= TEST_POLL_TALLY_STEPS.length) {
+        clearInterval(timer);
+        return;
+      }
+      setTestStep(step);
+    }, TEST_POLL_STEP_MS);
+    return () => clearInterval(timer);
+  }, [testActive]);
+
+  const poll = testActive ? demoPoll : studioPoll;
 
   const liveTally = useMemo(
-    () => (poll ? tallyPollVotes(messages, poll) : null),
-    [messages, poll],
+    () => (studioPoll ? tallyPollVotes(messages, studioPoll) : null),
+    [messages, studioPoll],
   );
 
   // Freeze the tally when the poll closes: keep updating a ref while
@@ -47,12 +88,19 @@ export function ChatPollWidget({
     key: number;
     tally: { counts: number[]; total: number };
   } | null>(null);
-  if (poll && liveTally) {
-    if (poll.status === "open" || frozenRef.current?.key !== poll.startedAtMs) {
-      frozenRef.current = { key: poll.startedAtMs, tally: liveTally };
+  if (studioPoll && liveTally) {
+    if (
+      studioPoll.status === "open"
+      || frozenRef.current?.key !== studioPoll.startedAtMs
+    ) {
+      frozenRef.current = { key: studioPoll.startedAtMs, tally: liveTally };
     }
   }
-  const tally = poll ? frozenRef.current?.tally ?? liveTally : null;
+  const tally = testActive
+    ? TEST_POLL_TALLY_STEPS[Math.min(testStep, TEST_POLL_TALLY_STEPS.length - 1)]
+    : studioPoll
+      ? frozenRef.current?.tally ?? liveTally
+      : null;
 
   if (!poll || !tally) return <div style={{ background: "transparent" }} />;
 
@@ -63,7 +111,10 @@ export function ChatPollWidget({
     <div style={frameStyle}>
       <div style={cardStyle}>
         <div style={headerRowStyle}>
-          <span style={titleStyle}>CHAT POLL</span>
+          <span style={titleStyle}>
+            CHAT POLL
+            {testActive ? <span style={testTagStyle}>TEST</span> : null}
+          </span>
           {closed ? <span style={finalTagStyle}>FINAL</span> : null}
         </div>
         <div style={questionStyle}>{poll.question}</div>
@@ -147,6 +198,15 @@ const titleStyle: CSSProperties = {
   fontWeight: 800,
   letterSpacing: "0.14em",
   color: "var(--ov-accent, #3ec0c7)",
+};
+
+// Matches the multichat status-row TEST chip.
+const testTagStyle: CSSProperties = {
+  marginLeft: 8,
+  fontSize: 10,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#f5b942",
 };
 
 const finalTagStyle: CSSProperties = {
