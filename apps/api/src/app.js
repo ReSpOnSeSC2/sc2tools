@@ -30,6 +30,8 @@ const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
 const { MultichatEngagementService } = require("./services/multichatEngagement");
 const { TickerFactsService } = require("./services/tickerFacts");
+const { TwitchChatBotService } = require("./services/twitchChatBot");
+const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
@@ -324,6 +326,24 @@ function makeServices(deps) {
     games,
     logger: deps.logger,
   });
+  // The bot that talks back IN chat (Twitch IRC). Reuses the
+  // ChatbotService line composers for !mmr/!opponent/!build and the
+  // engagement service for !rank + vote/XP ingest. Engagement
+  // broadcasts flow back through the onEvent hook below so the bot
+  // can announce Crystal Ball opens/settles and level-ups.
+  const twitchChatBot = new TwitchChatBotService({
+    db: deps.db,
+    users,
+    overlayTokens,
+    engagement: multichatEngagement,
+    chatbot,
+    logger: deps.logger,
+  });
+  multichatEngagement.onEvent = (token, msg) => {
+    void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
+  };
+  // Reconnect every enabled bot on boot — best-effort, non-blocking.
+  void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db);
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
@@ -456,6 +476,7 @@ function makeServices(deps) {
     seasons,
     arcade,
     tickerFacts,
+    twitchChatBot,
     admin,
     adminGlobal,
     adminEvents,
@@ -569,6 +590,14 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildChatbotRouter({ chatbot: services.chatbot, logger: deps.logger }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildChatBotSettingsRouter({
+      auth,
+      users: services.users,
+      twitchChatBot: services.twitchChatBot,
+    }),
   );
   // Map minimaps (used by <img src> in the SPA). MUST sit with the
   // public routers — bearer tokens can't be attached to image

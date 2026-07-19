@@ -80,6 +80,8 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
   recapSeq: 0,
   scene: null,
   timer: null,
+  streamStartMs: null,
+  vodUrl: null,
   updatedAt: null,
   loaded: true,
 };

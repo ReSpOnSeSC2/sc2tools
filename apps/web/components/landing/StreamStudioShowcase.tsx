@@ -255,11 +255,175 @@ function SceneDemo() {
   );
 }
 
+/** Always-on stats ticker — endless marquee of live + career segments. */
+function TickerDemo() {
+  const segments = [
+    "SESSION 5–2 · +47 MMR",
+    "NEMESIS: DragonKing — 3–9 lifetime",
+    "PEAK MMR: 4,712 (Aug 12)",
+    "🔮 CALL IT: !win / !loss — chat is 68% WIN",
+    "TIME SUPPLY BLOCKED: 6.3 hrs — build more pylons",
+    "HEAD-TO-HEAD vs Printf: 14–9",
+  ];
+  const strip = segments.map((s, i) => (
+    <span
+      key={i}
+      className="inline-flex items-center gap-2 px-4"
+      style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em" }}
+    >
+      <span style={{ color: "#3ec0c7", fontSize: 7 }}>◆</span>
+      {s}
+    </span>
+  ));
+  return (
+    <div style={{ ...panel, display: "flex", alignItems: "stretch", height: 30, overflow: "hidden", borderRadius: 8, padding: 0 }}>
+      <style>{`
+        .land-ticker { display: inline-flex; align-items: center; animation: landTicker 26s linear infinite; }
+        @keyframes landTicker { to { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) { .land-ticker { animation: none; } }
+      `}</style>
+      <span
+        className="flex shrink-0 items-center px-2.5"
+        style={{ background: "#3ec0c7", color: "#06251f", fontSize: 10, fontWeight: 900, letterSpacing: "0.14em" }}
+      >
+        LIVE
+      </span>
+      <div className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+        <div className="land-ticker">
+          {strip}
+          <span aria-hidden className="inline-flex">{strip}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The chat bot answering !rank right in chat. */
+function ChatBotDemo() {
+  return (
+    <div style={{ ...panel, padding: "10px 12px" }}>
+      <div className="flex min-w-0 items-baseline gap-1.5 py-0.5" style={{ fontSize: 12 }}>
+        <Chip p="twitch" />
+        <span style={{ fontWeight: 700, color: "#c9b3ff" }}>ZergRusher</span>
+        <span style={{ color: "rgba(255,255,255,0.88)" }}>!rank</span>
+      </div>
+      <div className="flex min-w-0 items-baseline gap-1.5 py-0.5" style={{ fontSize: 12 }}>
+        <span
+          className="inline-flex shrink-0 items-center justify-center rounded"
+          style={{ background: "#3ec0c7", color: "#06251f", minWidth: 26, height: 14, fontSize: 8, fontWeight: 900, padding: "0 4px" }}
+        >
+          BOT
+        </span>
+        <span style={{ fontWeight: 700, color: "#7fd6db" }}>sc2toolsbot</span>
+        <span className="min-w-0" style={{ color: "rgba(255,255,255,0.88)" }}>
+          @ZergRusher Stalker (Lv 3) · 512 XP — 148 XP to Immortal · 🔮 20 oracle pts
+        </span>
+      </div>
+      <div className="flex min-w-0 items-baseline gap-1.5 py-0.5" style={{ fontSize: 12 }}>
+        <span
+          className="inline-flex shrink-0 items-center justify-center rounded"
+          style={{ background: "#3ec0c7", color: "#06251f", minWidth: 26, height: 14, fontSize: 8, fontWeight: 900, padding: "0 4px" }}
+        >
+          BOT
+        </span>
+        <span style={{ fontWeight: 700, color: "#7fd6db" }}>sc2toolsbot</span>
+        <span className="min-w-0 truncate" style={{ color: "rgba(255,255,255,0.88)" }}>
+          🔮 Result: WIN. Chat said 68% WIN — chat was RIGHT! 14 oracles +10 pts
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Clip log rows with VOD deep-link offsets. */
+function ClipsDemo() {
+  const rows = [
+    { t: "2:12:10", kind: "GAME", reason: "Victory vs GeNieS — 3-game win streak" },
+    { t: "1:47:03", kind: "🔥 CHAT", reason: "Chat spiked — 14 messages in 10s" },
+  ];
+  return (
+    <div style={{ ...panel, padding: "10px 12px" }} className="space-y-1.5">
+      {rows.map((r) => (
+        <div
+          key={r.t}
+          className="rounded-md px-2 py-1.5"
+          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <div className="flex items-baseline gap-2" style={{ fontSize: 10.5 }}>
+            <span
+              style={{ color: "#3ec0c7", fontWeight: 700, fontVariantNumeric: "tabular-nums", textDecoration: "underline", textUnderlineOffset: 2 }}
+            >
+              ▶ {r.t} in
+            </span>
+            <span style={{ fontWeight: 800, letterSpacing: "0.08em", color: r.kind === "GAME" ? "#3ec0c7" : "#e6b450" }}>
+              {r.kind}
+            </span>
+          </div>
+          <div style={{ marginTop: 2, fontSize: 12, color: "rgba(255,255,255,0.88)" }}>
+            {r.reason}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Crystal Ball voting window with a live tally bar. */
+function OracleDemo() {
+  const [winPct, setWinPct] = useState(62);
+  useEffect(() => {
+    const t = setInterval(
+      () => setWinPct((p) => 58 + Math.round(((p * 7) % 13) / 13 * 14)),
+      1800,
+    );
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div style={{ ...panel, borderLeft: "4px solid #9b6ef0", padding: "12px 14px" }}>
+      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "#b493f5" }}>
+        🔮 CRYSTAL BALL
+      </div>
+      <div style={{ marginTop: 5, fontSize: 13.5, fontWeight: 600 }}>
+        Call it vs Printf — type <b style={{ color: "#3ec07a" }}>!win</b> or{" "}
+        <b style={{ color: "#e05656" }}>!loss</b>
+      </div>
+      <div style={{ marginTop: 8, height: 9, borderRadius: 999, background: "rgba(224,86,86,0.45)", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${winPct}%`,
+            background: "linear-gradient(90deg, #2f9d63, #3ec07a)",
+            borderRadius: 999,
+            transition: "width 600ms ease",
+          }}
+        />
+      </div>
+      <div className="flex items-baseline justify-between" style={{ marginTop: 5, fontSize: 11.5 }}>
+        <span style={{ color: "#3ec07a", fontWeight: 800 }}>WIN {winPct}%</span>
+        <span style={{ opacity: 0.6 }}>voting locks a minute in</span>
+        <span style={{ color: "#e05656", fontWeight: 800 }}>{100 - winPct}%</span>
+      </div>
+    </div>
+  );
+}
+
 export function StreamStudioShowcase() {
   return (
     <div className="grid gap-5 sm:grid-cols-2">
       <Frame title="Four chats, one overlay — Twitch, Kick, YouTube & TikTok merged live.">
         <ChatDemo />
+      </Frame>
+      <Frame title="A chat bot that talks back — !rank, !mmr and Crystal Ball results answered right in chat.">
+        <ChatBotDemo />
+      </Frame>
+      <Frame title="Always-on stats ticker — session, opponent intel and career trivia from your real games.">
+        <TickerDemo />
+      </Frame>
+      <Frame title="Crystal Ball — chat calls the game before it starts, the replay settles who was right.">
+        <OracleDemo />
+      </Frame>
+      <Frame title="Clip moments with VOD timestamps — every highlight becomes a clickable seek link.">
+        <ClipsDemo />
       </Frame>
       <Frame title="Event alerts with 50+ sounds — from a classy chime to the airhorn.">
         <AlertDemo />

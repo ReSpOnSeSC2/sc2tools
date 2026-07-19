@@ -333,6 +333,7 @@ export function DockClient({ token }: { token: string }) {
               <DockScenes
                 scene={studio.scene}
                 busy={busy}
+                streamStartMs={studio.streamStartMs}
                 onPost={postStudio}
               />
             </SectionCard>
@@ -382,7 +383,13 @@ export function DockClient({ token }: { token: string }) {
 
           <section id="dock-clips" className="scroll-mt-12">
             <SectionCard title="Clip moments">
-              <DockClips moments={engagement.clipMoments} />
+              <DockClips
+                moments={engagement.clipMoments}
+                streamStartMs={studio.streamStartMs}
+                vodUrl={studio.vodUrl}
+                busy={busy}
+                onPost={postStudio}
+              />
             </SectionCard>
           </section>
 

@@ -12,6 +12,12 @@ import {
   type GhostTarget,
 } from "@/lib/ghostBuild";
 import { resolveGhostLiveRaces } from "@/lib/ghostLiveMatchup";
+import {
+  catchUpIndex,
+  ghostVoiceEnabledFromSearch,
+  ghostVoiceLine,
+  nextSpeakIndex,
+} from "@/lib/ghostVoice";
 
 /**
  * GhostBuildWidget — the Ghost Build practice coach, a persistent HUD.
@@ -77,6 +83,15 @@ export function GhostBuildWidget({
     : null;
   const [randomBlockedKey, setRandomBlockedKey] = useState<string | null>(null);
 
+  // Voice coach opt-in rides the widget URL (?voice=1, toggled next
+  // to the Ghost URL in Settings). Read once — the Browser Source URL
+  // never changes mid-session.
+  const [voiceEnabled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      ghostVoiceEnabledFromSearch(window.location.search),
+  );
+
   // Once the loading screen says Random, keep the coach blocked for this
   // gameKey even if SC2 later replaces the race with the revealed faction.
   // Agent 0.14.0 also latches this server-side, so a Browser Source refresh
@@ -100,6 +115,17 @@ export function GhostBuildWidget({
     && activeIdentity
     && (races.opponentIsRandom || randomBlockedKey === activeIdentity),
   );
+
+  // The steps the voice coach would speak — mirrors the render path's
+  // guards, computed unconditionally so the hook order stays stable.
+  const voiceSteps = useMemo(() => {
+    if (!voiceEnabled || !config || !matchActive || randomBlocked) return null;
+    if (races.ownRaceIsRandom) return null;
+    if (!ghostMatchupKey(races.ownRace, races.opponentRace)) return null;
+    const t = selectGhostTarget(config, races.ownRace, races.opponentRace);
+    return t ? t.steps : null;
+  }, [voiceEnabled, config, matchActive, randomBlocked, races]);
+  useGhostVoice(voiceSteps, clockSec);
 
   if (!config) {
     if (legacyTarget) {
@@ -400,6 +426,72 @@ function StepRow({
           : "—"}
       </span>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Voice coach                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Speak each armed step ~5 s before its target time ("16 — Gateway"),
+ * so the streamer can play heads-up instead of reading the HUD.
+ *
+ * ``steps === null`` means the voice is off for the current state (no
+ * target, opt-out, Random block, between games) — the spoken cursor
+ * resets so the next game starts clean. On a mid-game (re)join the
+ * cursor catches up past the stale backlog instead of narrating the
+ * whole opening at once.
+ */
+function useGhostVoice(
+  steps: readonly GhostStep[] | null,
+  clockSec: number | null,
+) {
+  const lastSpokenRef = useRef(-1);
+  const caughtUpRef = useRef(false);
+
+  useEffect(() => {
+    // New target (or voice turned off) — reset the cursor.
+    lastSpokenRef.current = -1;
+    caughtUpRef.current = false;
+  }, [steps]);
+
+  useEffect(() => {
+    if (!steps || steps.length === 0 || clockSec === null) return;
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    if (!caughtUpRef.current) {
+      caughtUpRef.current = true;
+      // Land on the last already-due step so a reconnect speaks "what
+      // now", not the backlog. -1 keeps the very first step speakable.
+      lastSpokenRef.current = Math.max(
+        -1,
+        catchUpIndex(steps, clockSec, -1) - 1,
+      );
+    }
+    const idx = nextSpeakIndex(steps, clockSec, lastSpokenRef.current);
+    if (idx === null) return;
+    lastSpokenRef.current = idx;
+    try {
+      const utterance = new SpeechSynthesisUtterance(ghostVoiceLine(steps[idx]));
+      utterance.rate = 1.05;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // A blocked/absent voice engine silently degrades to the HUD.
+    }
+  }, [steps, clockSec]);
+
+  // Never leave queued speech behind when the source unmounts.
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          /* already gone */
+        }
+      }
+    },
+    [],
   );
 }
 

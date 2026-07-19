@@ -25,6 +25,7 @@ import {
 } from "@/lib/macro";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
 import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
@@ -367,6 +368,10 @@ function BreakdownBody({
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {/* Vespene-style map replay of this game — silently absent for
+          uploads that pre-date the agent's playback support. */}
+      <MapReplaySection gameId={gameId} compact />
+
       <section
         aria-label="Active Army & Workers"
         className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"

@@ -229,6 +229,31 @@ class PerGameComputeService {
    * @param {string} userId
    * @param {string} gameId
    */
+  /**
+   * Map-playback payload for the vespene-style replayer. Lives in the
+   * per-game detail blob (uploaded by agents that compute it); games
+   * from older agents 404 with ``not_computed`` so the SPA can show a
+   * "re-sync with the latest agent" hint instead of an empty canvas.
+   *
+   * @param {string} userId
+   * @param {string} gameId
+   */
+  async mapPlayback(userId, gameId) {
+    const slim = await this.db.games.findOne(
+      { userId, gameId },
+      { projection: { _id: 0, gameId: 1, map: 1, durationSec: 1, myRace: 1 } },
+    );
+    if (!slim) return null;
+    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const playback = blob.mapPlayback || null;
+    if (!playback) return { ok: false, code: "not_computed" };
+    return { ok: true, ...playback };
+  }
+
+  /**
+   * @param {string} userId
+   * @param {string} gameId
+   */
   async macroBreakdown(userId, gameId) {
     // The slim row carries macroScore + race + durationSec; the
     // detail blob carries the macroBreakdown payload itself. Fetch

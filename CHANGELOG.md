@@ -13,6 +13,50 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Map replayer (vespene.gg-style)** — watch any game back on its
+  actual map: unit movements interpolated along their real replay
+  tracks, buildings appearing as they're placed, battle pulses,
+  spawn markers, a scrubbable timeline with 1×–16× playback, and a
+  live per-side HUD (army value · workers · supply). Stacked armies
+  render with deterministic sunflower cluster-spreading so a 20-unit
+  ball reads as a tidy blob of distinguishable dots instead of one
+  pixel. Lives on each game's analysis page and inside the macro
+  breakdown drilldown. The desktop agent now uploads a compact
+  playback payload with each replay (bounded unit tracks, ~1 MB
+  worst case, stored in the per-game detail store); games synced by
+  older agents show a one-line re-sync hint instead of an empty
+  canvas.
+- **Twitch chat bot — the commands answer IN chat now** — connect a
+  bot account (username + chat OAuth token, stored server-side and
+  never echoed back) in Settings → Overlay → Multi-platform chat and
+  it replies to !rank/!level/!xp (race-themed ranks), !mmr, !opponent
+  and !build right in Twitch chat, counts !win/!loss calls and chat
+  XP even when no dock or overlay chat source is open (deduped
+  against browser reporting), and announces Crystal Ball opens,
+  verdicts ("chat said 68% WIN — chat was RIGHT!") and level-ups,
+  each toggleable. Rate-limited, per-command cooldowns, auto-
+  reconnect with backoff, and a live status line in Settings.
+- **Clip pipeline: from log to highlight reel** — the dock's clip
+  moments now speak VOD: mark your stream start with one tap (or let
+  Go live off Starting Soon auto-mark it) and every moment also
+  shows its offset into the stream ("2:12:10 in"); paste the VOD URL
+  after stream and each moment becomes a clickable deep link that
+  opens Twitch (`?t=2h12m10s`) or YouTube (`?t=7930s`) at that
+  second; "Copy timestamps" exports the whole list as
+  `H:MM:SS — reason` lines ready for YouTube chapters or an editor's
+  marker import.
+- **Ghost Coach voice** — the Ghost Build widget can now SPEAK each
+  armed step ~5 seconds before its target time ("16 — Gateway"), so
+  you keep your eyes on the game instead of the HUD. Toggle "Voice
+  coach" next to the Ghost URL in Settings → Overlay (bakes
+  `voice=1` into the copied URL); a mid-game Browser Source
+  reconnect resumes at "what should I do now" instead of narrating
+  the backlog.
+- **Landing page: new-feature showcase** — live animated demo frames
+  for the chat bot conversation, the scrolling stats ticker, the
+  Crystal Ball voting window, and the clip log with VOD links, plus
+  refreshed copy; the editorial folios now run A→D in reading order.
+
 - **Stats ticker · career facts, opponent intel, and oracle recaps**
   — the scrolling bottom line now draws from the player's entire
   history, not just the live session:

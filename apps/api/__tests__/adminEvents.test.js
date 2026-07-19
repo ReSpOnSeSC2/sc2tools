@@ -68,8 +68,16 @@ describe("admin notification events", () => {
     services = built.services;
     // Bootstrap the admin's user row once so per-test asAdmin calls
     // don't keep firing a signup event for the harness admin and
-    // polluting feed-count assertions.
+    // polluting feed-count assertions. The signup event insert is
+    // fire-and-forget inside ensureFromClerk — WAIT for it to land
+    // before any beforeEach cleanup runs, or it can materialize after
+    // the wipe and pollute the first test's count (a race that app-
+    // boot scheduling changes can expose).
     await services.users.ensureFromClerk("clerk_admin");
+    for (let i = 0; i < 100; i += 1) {
+      if ((await db.adminEvents.countDocuments({})) > 0) break;
+      await sleep(10);
+    }
   });
 
   afterAll(async () => {

@@ -118,10 +118,13 @@ export function DockTimer({
 export function DockScenes({
   scene,
   busy,
+  streamStartMs = null,
   onPost,
 }: {
   scene: StudioScene | null;
   busy: boolean;
+  /** Existing go-live mark — when set, "Go live" won't overwrite it. */
+  streamStartMs?: number | null;
   onPost: (patch: Record<string, unknown>) => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
@@ -165,7 +168,17 @@ export function DockScenes({
           <DockButton
             disabled={busy}
             danger
-            onClick={() => void onPost({ scene: null })}
+            onClick={() =>
+              // Going live off "Starting Soon" is the natural stream
+              // start — auto-mark it for the clip log's VOD offsets,
+              // but never overwrite a mark the streamer set by hand.
+              void onPost({
+                scene: null,
+                ...(scene.mode === "starting" && !streamStartMs
+                  ? { streamStartMs: Date.now() }
+                  : {}),
+              })
+            }
           >
             Go live
           </DockButton>

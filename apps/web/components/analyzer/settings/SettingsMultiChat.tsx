@@ -65,6 +65,7 @@ import { UrlRow } from "./OverlayUrlRow";
 import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
+import { ChatBotCard } from "./ChatBotCard";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
@@ -421,6 +422,8 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
             </div>
 
             <ChatCommandsCard rankRace={draft.rankRace} />
+
+            <ChatBotCard twitchChannel={draft.twitchChannel.trim()} />
 
             <PlatformRow
               label="Twitch"

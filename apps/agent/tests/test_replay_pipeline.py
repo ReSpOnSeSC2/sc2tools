@@ -1314,3 +1314,112 @@ def test_downsample_stats_events_skips_malformed_time():
     ]
     out = _downsample_stats_events(events)
     assert [e["food_used"] for e in out] == [1, 4]
+
+
+# ── map playback compaction ──────────────────────────────────────────
+
+
+def _sample_playback():
+    return {
+        "map_name": "Alcyone LE",
+        "game_length": 700.0,
+        "bounds": {"x_min": 10.0, "x_max": 190.0, "y_min": 20.0, "y_max": 160.0},
+        "spawn_locations": [
+            {"owner": "me", "x": 30.0, "y": 40.0},
+            {"owner": "opp", "x": 170.0, "y": 140.0},
+        ],
+        "my_events": [
+            {"type": "building", "name": "Nexus", "time": 0.0, "x": 30.0, "y": 40.0},
+            {"type": "unit", "name": "Probe", "time": 1.0, "x": 30.0, "y": 41.0},
+        ],
+        "opp_events": [
+            {"type": "building", "name": "Hatchery", "time": 0.0, "x": 170.0, "y": 140.0},
+        ],
+        "my_stats": [
+            {"time": 0.0, "army_val": 0, "workers": 12, "food_used": 12},
+            {"time": 5.0, "army_val": 0, "workers": 13, "food_used": 13},
+            {"time": 20.0, "army_val": 100, "workers": 16, "food_used": 18},
+        ],
+        "opp_stats": [
+            {"time": 0.0, "army_val": 0, "workers": 12, "food_used": 12},
+        ],
+        "my_units": [
+            {
+                "name": "Stalker",
+                "born": 120.0,
+                "died": 300.0,
+                # Tuple-style waypoints, deliberately denser than the 2s gap.
+                "waypoints": [(120.0, 30.0, 40.0), (120.5, 31.0, 40.0), (125.0, 40.0, 50.0)],
+            },
+        ],
+        "opp_units": [
+            {
+                "name": "Zergling",
+                "born": 130.0,
+                "died": None,
+                # Flat-style waypoints must parse too.
+                "waypoints": [130.0, 170.0, 140.0, 140.0, 150.0, 120.0],
+            },
+        ],
+    }
+
+
+def test_compact_map_playback_produces_bounded_camelcase_payload():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    out = _compact_map_playback(
+        _sample_playback(),
+        [{"time": 200.0, "x": 100.0, "y": 90.0, "side": "me"}],
+    )
+    assert out is not None
+    assert out["v"] == 1
+    assert out["mapName"] == "Alcyone LE"
+    assert out["bounds"] == {"minX": 10.0, "minY": 20.0, "maxX": 190.0, "maxY": 160.0}
+    assert out["spawns"][0] == {"owner": "me", "x": 30.0, "y": 40.0}
+    assert out["battles"] == [{"t": 200.0, "x": 100.0, "y": 90.0}]
+    # Buildings only — the Probe unit event is not a building.
+    assert [b["name"] for b in out["buildings"]] == ["Nexus", "Hatchery"]
+    # Waypoint downsample: the 120.5s sample (< 2s gap) is dropped.
+    stalker = next(u for u in out["units"] if u["name"] == "Stalker")
+    assert stalker["wp"] == [120.0, 30.0, 40.0, 125.0, 40.0, 50.0]
+    assert stalker["died"] == 300.0
+    # Flat-style waypoints parse identically.
+    ling = next(u for u in out["units"] if u["name"] == "Zergling")
+    assert ling["owner"] == "opp"
+    assert ling["wp"] == [130.0, 170.0, 140.0, 140.0, 150.0, 120.0]
+    assert ling["died"] is None
+    # Stats downsampled to >= 10s spacing: 0s and 20s survive, 5s dropped.
+    assert [row[0] for row in out["stats"]["me"]] == [0.0, 20.0]
+
+
+def test_compact_map_playback_rejects_junk_bounds():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    bad = _sample_playback()
+    bad["bounds"] = {"x_min": 50.0, "x_max": 50.0, "y_min": 0.0, "y_max": 10.0}
+    assert _compact_map_playback(bad) is None
+    assert _compact_map_playback({"bounds": None}) is None
+
+
+def test_compact_map_playback_caps_unit_count_keeping_longest_lived():
+    from sc2tools_agent.replay_pipeline import (
+        _PLAYBACK_MAX_UNITS_PER_SIDE,
+        _compact_map_playback,
+    )
+
+    pb = _sample_playback()
+    pb["my_units"] = [
+        {
+            "name": f"U{i}",
+            "born": 0.0,
+            "died": float(i),  # lifespan == i seconds
+            "waypoints": [(0.0, 50.0, 50.0)],
+        }
+        for i in range(_PLAYBACK_MAX_UNITS_PER_SIDE + 50)
+    ]
+    out = _compact_map_playback(pb)
+    mine = [u for u in out["units"] if u["owner"] == "me"]
+    assert len(mine) == _PLAYBACK_MAX_UNITS_PER_SIDE
+    # The 50 shortest-lived blips are the ones dropped.
+    kept_died = sorted(u["died"] for u in mine)
+    assert kept_died[0] == 50.0

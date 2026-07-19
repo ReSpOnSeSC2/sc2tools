@@ -25,6 +25,8 @@ const EMPTY_STUDIO = {
   recapSeq: 0,
   scene: null,
   timer: null,
+  streamStartMs: null,
+  vodUrl: null,
   updatedAt: null,
 };
 
@@ -239,7 +241,10 @@ describe("DockClient", () => {
     await waitFor(() => {
       expect(studioPosts()).toHaveLength(2);
     });
-    expect(studioPosts()[1]).toEqual({ scene: null });
+    // Going live off Starting Soon also auto-marks the stream start
+    // for the clip log's VOD offsets.
+    expect(studioPosts()[1].scene).toBeNull();
+    expect(Number(studioPosts()[1].streamStartMs)).toBeGreaterThan(0);
   });
 
   it("Timer: Start posts endsAt; Clear posts null", async () => {
@@ -261,6 +266,61 @@ describe("DockClient", () => {
       expect(studioPosts()).toHaveLength(2);
     });
     expect(studioPosts()[1]).toEqual({ timer: null });
+  });
+
+  it("Mark stream start POSTs the go-live epoch; Clear posts null", async () => {
+    render(<DockClient token="tok_test" />);
+    const before = Date.now();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "⏺ Mark stream start" }),
+    );
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(1);
+    });
+    const mark = Number(studioPosts()[0].streamStartMs);
+    expect(mark).toBeGreaterThanOrEqual(before);
+    expect(mark).toBeLessThan(before + 10_000);
+    // POST response hydrates — the mark row with Clear appears.
+    fireEvent.click(await screen.findByRole("button", { name: "Clear mark" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(2);
+    });
+    expect(studioPosts()[1]).toEqual({ streamStartMs: null });
+  });
+
+  it("Go live off Starting Soon auto-marks the stream start", async () => {
+    studioState = {
+      ...EMPTY_STUDIO,
+      scene: {
+        mode: "starting",
+        message: "",
+        countdownEndsAt: null,
+        setAtMs: Date.now(),
+      },
+    };
+    render(<DockClient token="tok_test" />);
+    const before = Date.now();
+    fireEvent.click(await screen.findByRole("button", { name: "Go live" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(1);
+    });
+    const patch = studioPosts()[0];
+    expect(patch.scene).toBeNull();
+    expect(Number(patch.streamStartMs)).toBeGreaterThanOrEqual(before);
+  });
+
+  it("saving a VOD URL POSTs it", async () => {
+    render(<DockClient token="tok_test" />);
+    fireEvent.change(
+      await screen.findByPlaceholderText(/Paste VOD URL/),
+      { target: { value: "https://www.twitch.tv/videos/42" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(studioPosts()).toEqual([
+        { vodUrl: "https://www.twitch.tv/videos/42" },
+      ]);
+    });
   });
 
   it("renders the goals editor", async () => {

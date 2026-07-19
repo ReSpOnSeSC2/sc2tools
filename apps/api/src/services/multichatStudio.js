@@ -54,6 +54,10 @@ class MultichatStudioService {
       recapSeq: Number(doc?.recapSeq) || 0,
       scene: doc?.scene ?? null,
       timer: doc?.timer ?? null,
+      streamStartMs: Number.isFinite(doc?.streamStartMs)
+        ? Number(doc?.streamStartMs)
+        : null,
+      vodUrl: typeof doc?.vodUrl === "string" ? doc.vodUrl : null,
       updatedAt: doc?.updatedAt ?? null,
     };
   }
@@ -87,6 +91,12 @@ class MultichatStudioService {
     }
     if ("timer" in patch) {
       set.timer = sanitizeTimer(patch.timer);
+    }
+    if ("streamStartMs" in patch) {
+      set.streamStartMs = sanitizeStreamStartMs(patch.streamStartMs);
+    }
+    if ("vodUrl" in patch) {
+      set.vodUrl = sanitizeVodUrl(patch.vodUrl);
     }
     if (patch.recap === true) {
       inc.recapSeq = 1;
@@ -220,6 +230,44 @@ function sanitizeTimer(raw) {
   };
 }
 
+/**
+ * Stream-start marker (wall-clock ms) for the clip log's VOD-offset
+ * math. Bounded to [now − 48h, now + 5min] — a marathon stream fits,
+ * while garbage epochs (0, far-future) that would produce nonsense
+ * offsets sanitize to null. null clears the marker.
+ *
+ * @param {unknown} raw
+ * @returns {number | null}
+ */
+function sanitizeStreamStartMs(raw) {
+  const ms = Number(raw);
+  if (!Number.isFinite(ms)) return null;
+  const now = Date.now();
+  if (ms < now - 48 * 60 * 60 * 1000 || ms > now + 5 * 60 * 1000) return null;
+  return Math.round(ms);
+}
+
+/**
+ * VOD URL for clickable clip-moment links. https only, bounded, and
+ * must parse — the dock renders it as an anchor href, so nothing
+ * script-shaped may survive. null/junk clears.
+ *
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+function sanitizeVodUrl(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim().slice(0, 300);
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 /** @param {unknown} raw */
 function sanitizeBlockedUsers(raw) {
   if (!Array.isArray(raw)) return [];
@@ -241,4 +289,6 @@ module.exports = {
   sanitizeBlockedUsers,
   sanitizeScene,
   sanitizeTimer,
+  sanitizeStreamStartMs,
+  sanitizeVodUrl,
 };

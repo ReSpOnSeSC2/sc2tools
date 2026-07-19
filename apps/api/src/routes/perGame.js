@@ -71,6 +71,29 @@ function buildPerGameRouter(deps) {
     }
   });
 
+  // Map-playback payload for the vespene-style replayer. Read-only —
+  // the agent uploads it with the game record; there is no recompute
+  // path (older uploads simply don't have it).
+  router.get("/games/:gameId/map-playback", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const out = /** @type {any} */ (
+        await deps.perGame.mapPlayback(userId, String(req.params.gameId))
+      );
+      if (!out) {
+        res.status(404).json({ error: { code: "game_not_found" } });
+        return;
+      }
+      if (out.ok === false && out.code === "not_computed") {
+        res.status(404).json({ error: { code: "playback_not_computed" } });
+        return;
+      }
+      res.json(out);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/games/:gameId/macro-breakdown", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;

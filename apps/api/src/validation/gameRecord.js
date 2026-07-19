@@ -173,6 +173,26 @@ const GAME_SCHEMA = {
         players: { type: "array", maxItems: 8 },
       },
     },
+    // Compact vespene-style playback payload for the map replayer:
+    // per-unit waypoint tracks + buildings + battle markers + stats
+    // series in world coordinates. Agent-side compaction bounds every
+    // list; the caps here are a belt-and-braces backstop far above
+    // what a real 60-minute game compacts to.
+    mapPlayback: {
+      type: "object",
+      additionalProperties: true,
+      properties: {
+        v: { type: "integer", minimum: 1, maximum: 10 },
+        mapName: { type: "string", maxLength: 200 },
+        gameLength: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
+        bounds: { type: "object", additionalProperties: true },
+        spawns: { type: "array", maxItems: 16 },
+        battles: { type: "array", maxItems: 200 },
+        buildings: { type: "array", maxItems: 1000 },
+        units: { type: "array", maxItems: 1200 },
+        stats: { type: "object", additionalProperties: true },
+      },
+    },
   },
 };
 
