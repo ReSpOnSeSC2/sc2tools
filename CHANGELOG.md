@@ -197,6 +197,21 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Session ±MMR no longer counts server switches** — the session
+  net-MMR (overlay session widget, recap, lower third, stats ticker,
+  `!mmr`) previously diffed the first and last rated game of the play
+  session regardless of ladder, so switching servers mid-session
+  (e.g. EU → NA) reported the difference between two independent
+  ratings as a huge fake gain ("+400 MMR"). Net MMR is now computed
+  within a single ladder: the region of the latest rated game (from
+  each replay's toon handle), with the anchor re-set to the first game
+  of the session on that region. Two guards back it up: games on a
+  known different region — or region-less legacy rows when the
+  current region is known — can never anchor the delta, and if the
+  live SC2Pulse rating resolves on a different region than the
+  anchor, the ± is suppressed rather than shown wrong. Win–loss and
+  streaks still count every game played, whatever the server.
+
 - **Stream Dock · deleting a goal now removes it from the stream
   immediately** — the ✕ button previously only removed the row from
   the dock's local form; the overlay kept showing the goal until
