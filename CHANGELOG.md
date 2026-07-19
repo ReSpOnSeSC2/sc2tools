@@ -13,6 +13,42 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stats ticker · career facts, opponent intel, and oracle recaps**
+  — the scrolling bottom line now draws from the player's entire
+  history, not just the live session:
+  - *Fun-facts pool* (server-computed from real games, rotated a
+    page per loop so every pass reads differently): career record,
+    total in-game hours, tracking-since, region-aware peak MMR and
+    30-day MMR, longest win streak ever, career matchup split,
+    most-played and best maps, longest game / fastest win, average
+    game length, rush-defense and macro-game win rates, most-faced
+    opponent, nemesis and favorite victim, unique opponents,
+    barcodes faced, average opponent MMR, signature and hottest
+    builds, APM average/peak, macro score, career units
+    produced/killed/lost, structures flattened, time spent supply
+    blocked (race-themed: "build more pylons"), favorite unit, recent
+    form, this-week summary, best day of the week, milestone
+    watches (win #1,500 in sight), on-this-day history, skill-
+    fingerprint playstyle, ladder-season countdown, and first
+    tracked game. Every fact has a minimum sample size — a new
+    account gets fewer facts, never filler.
+  - *Current-opponent intel* (live, in-game via the agent envelope):
+    NOW PLAYING with opponent MMR, head-to-head, rival alert,
+    rematch revenge line, MMR gap (upset material / protect the
+    rating), cheese watch, scouted favorite opening, best-answer
+    build, revealed barcode identity, predicted strategy.
+  - *Crystal Ball on the ticker*: the open call with the live chat
+    split, the last settled call ("chat said 68% WIN — chat was
+    RIGHT"), and chat's collective oracle record.
+
+### Changed
+
+- **Crystal Ball voting now locks ~a minute into the game** — picks
+  arriving after the lock are ignored server-side (no calling it
+  after the game becomes readable), the on-stream CALL IT prompt
+  (oracle widget + ticker) comes down at the lock, and the reveal
+  still plays when the replay-verified result lands.
+
 - **Countdown timer widget** — a standalone on-stream countdown you
   can show at any time, set from the Stream Dock's new Timer panel:
   optional label ("next game in…"), minutes with 1/5/10/15 quick

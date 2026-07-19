@@ -16,6 +16,7 @@ const {
   xpForLevel,
   parsePick,
   RANK_NAMES,
+  PREDICTION_LOCK_MS,
 } = require("../src/services/multichatEngagement");
 
 let mongo;
@@ -147,6 +148,64 @@ describe("Crystal Ball predictions", () => {
     await svc.ingest(TOKEN, [msg("p5", "Late", "!win")]);
     const doc = await db.multichatPredictions.findOne({ token: TOKEN, gameKey: "g1" });
     expect(Object.keys(doc.picks)).toHaveLength(3);
+  });
+
+  test("voting locks ~90s after open: late picks are ignored", async () => {
+    await svc.openPrediction([TOKEN], { gameKey: "g-lock", opponent: "Serral" });
+    const open = emitted.find((e) => e.msg.type === "prediction-open");
+    expect(open.msg.locksAtMs).toBe(nowMs + PREDICTION_LOCK_MS);
+
+    // In-window pick lands.
+    await svc.ingest(TOKEN, [msg("l1", "Alice", "!win")]);
+    // Past the lock: a fresh pick must be dropped.
+    nowMs += PREDICTION_LOCK_MS + 1_000;
+    await svc.ingest(TOKEN, [msg("l2", "Late", "!loss")]);
+    const doc = await db.multichatPredictions.findOne({
+      token: TOKEN,
+      gameKey: "g-lock",
+    });
+    expect(Object.keys(doc.picks)).toEqual(["twitch:alice"]);
+
+    // Settlement still works after the lock — the locked window is
+    // closed to votes, not to scoring.
+    await svc.settlePrediction([TOKEN], { gameKey: "g-lock", result: "win" });
+    const alice = await db.multichatViewers.findOne({
+      token: TOKEN,
+      userKey: "twitch:alice",
+    });
+    expect(alice.oracle.score).toBe(10);
+  });
+
+  test("summary carries locksAtMs and the chat-majority oracle recap", async () => {
+    // Two settled calls: majority right once (win call → win), wrong
+    // once (win call → loss); a tie window is excluded from the recap.
+    await svc.openPrediction([TOKEN], { gameKey: "s1", opponent: "A" });
+    await svc.ingest(TOKEN, [msg("r1", "Ann", "!win"), msg("r2", "Ben", "!win")]);
+    await svc.settlePrediction([TOKEN], { gameKey: "s1", result: "win" });
+    nowMs += 1_000;
+    await svc.openPrediction([TOKEN], { gameKey: "s2", opponent: "B" });
+    await svc.ingest(TOKEN, [msg("r3", "Ann", "!win"), msg("r4", "Ben", "!loss")]);
+    await svc.settlePrediction([TOKEN], { gameKey: "s2", result: "loss" });
+    nowMs += 1_000;
+    await svc.openPrediction([TOKEN], { gameKey: "s3", opponent: "Cure" });
+    await svc.ingest(TOKEN, [msg("r5", "Ann", "!win")]);
+    await svc.settlePrediction([TOKEN], { gameKey: "s3", result: "loss" });
+    nowMs += 1_000;
+    await svc.openPrediction([TOKEN], { gameKey: "s4", opponent: "Open" });
+
+    const out = await svc.summary(TOKEN);
+    expect(out.prediction.gameKey).toBe("s4");
+    expect(out.prediction.locksAtMs).toBe(nowMs + PREDICTION_LOCK_MS);
+    // s2 was a tie → excluded; s1 right, s3 wrong → 1 of 2.
+    expect(out.oracleRecap.calls).toBe(2);
+    expect(out.oracleRecap.majorityRight).toBe(1);
+    expect(out.oracleRecap.last).toMatchObject({
+      opponent: "Cure",
+      result: "loss",
+      majority: "win",
+      wasRight: false,
+      pct: 100,
+    });
   });
 
   test("settle falls back to the newest open window on gameKey drift", async () => {

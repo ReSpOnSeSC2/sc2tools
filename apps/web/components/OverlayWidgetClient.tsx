@@ -447,13 +447,16 @@ function WidgetRenderer({
       );
     case "stats-ticker":
       // Persistent scrolling bottom line — self-driven, composes
-      // session/result/goals/engagement into an endless marquee.
+      // session/result/goals/engagement/opponent-intel/career-facts
+      // into an endless marquee. ``liveGame`` powers the in-game
+      // opponent segments (H2H, cheese watch, scouted opener).
       return (
         <StatsTickerWidget
           token={token}
           studioEvent={studioEvent}
           engagementEvent={engagementEvent}
           live={live}
+          liveGame={liveGame}
           session={session}
         />
       );

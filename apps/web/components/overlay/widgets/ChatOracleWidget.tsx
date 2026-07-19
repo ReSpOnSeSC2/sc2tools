@@ -52,6 +52,19 @@ export function ChatOracleWidget({
   );
   const testActive = useTestFireFlag(live, "chat-oracle");
 
+  // Voting locks ~a minute into the game (server-enforced). Once
+  // locked, the CALL IT card comes down so the prompt can't bait
+  // votes the server would ignore; the reveal still pops at settle.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!summary.prediction?.locksAtMs) return;
+    const t = setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => clearInterval(t);
+  }, [summary.prediction?.locksAtMs]);
+  const votingLocked =
+    typeof summary.prediction?.locksAtMs === "number" &&
+    nowMs > summary.prediction.locksAtMs;
+
   const [settle, setSettle] = useState<Settle | null>(null);
   useEffect(() => {
     if (!lastEvent || lastEvent.type !== "prediction-settled") return;
@@ -114,7 +127,7 @@ export function ChatOracleWidget({
       </Frame>
     );
   }
-  if (summary.prediction) {
+  if (summary.prediction && !votingLocked) {
     return (
       <Frame>
         <WindowCard

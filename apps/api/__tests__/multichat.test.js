@@ -540,6 +540,35 @@ describe("routes/multichat", () => {
     expect(res.body.error.code).toBe("kick_blocked");
   });
 
+  test("ticker-facts serves the per-user pool; absent service → empty", async () => {
+    // The boot app above has no tickerFacts dep — route degrades to [].
+    const empty = await request(app).get(`/v1/multichat/${token}/ticker-facts`);
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({ facts: [] });
+    // With the dep wired, the resolved token's userId reaches the service.
+    const seen = [];
+    const app2 = express();
+    app2.use(express.json());
+    app2.use(
+      "/v1",
+      buildMultichatRouter({
+        overlayTokens,
+        users,
+        tiktokRelay: relay,
+        tickerFacts: {
+          factsFor: async (uid) => {
+            seen.push(uid);
+            return [{ id: "career-record", text: "CAREER: 10 W – 5 L" }];
+          },
+        },
+      }),
+    );
+    const res = await request(app2).get(`/v1/multichat/${token}/ticker-facts`);
+    expect(res.status).toBe(200);
+    expect(res.body.facts).toHaveLength(1);
+    expect(seen).toEqual([userId]);
+  });
+
   test("tiktok stream rejects bad usernames inside the SSE body", async () => {
     const res = await request(app)
       .get(`/v1/multichat/${token}/tiktok/stream?username=bad name!`)

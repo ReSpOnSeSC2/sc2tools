@@ -29,6 +29,7 @@ const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
 const { MultichatEngagementService } = require("./services/multichatEngagement");
+const { TickerFactsService } = require("./services/tickerFacts");
 const { buildMultichatRouter } = require("./routes/multichat");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
@@ -391,6 +392,15 @@ function makeServices(deps) {
   });
   const seasons = new SeasonsService();
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
+  // Stats-ticker fun-facts pool — career stats, records, and trivia
+  // for the overlay's scrolling bottom line. Composes the fingerprint,
+  // arcade unit trivia, and season catalog as best-effort extras; the
+  // core pool only needs the games collection. TTL-cached per user.
+  const tickerFacts = new TickerFactsService(deps.db, {
+    skillFingerprint,
+    arcade,
+    seasons,
+  });
   // AdminService composes db + gdpr; deliberately near the bottom so
   // its dependencies are already constructed.
   const admin = new AdminService({ db: deps.db, gdpr });
@@ -445,6 +455,7 @@ function makeServices(deps) {
     community,
     seasons,
     arcade,
+    tickerFacts,
     admin,
     adminGlobal,
     adminEvents,
@@ -668,6 +679,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       engagement: services.multichatEngagement,
       customBuilds: services.customBuilds,
       buildsList: (userId) => services.builds.list(userId, {}),
+      tickerFacts: services.tickerFacts,
     }),
   );
   // Operational admin router — gated on isAdmin(req) inside the
