@@ -2,7 +2,7 @@
 
 /**
  * MultichatEngagementService — per-viewer engagement across all four
- * chat platforms: loyalty XP + levels, the Crystal Ball prediction
+ * chat platforms: loyalty XP + Protoss-themed levels, the Crystal Ball prediction
  * game (!win / !loss), and clip-moment detection.
  *
  * Architecture: chat connections live in the BROWSER (widgets/dock),
@@ -44,18 +44,19 @@ const CLIP_SPIKE_FACTOR = 3;
 const CLIP_COOLDOWN_MS = 90_000;
 const CLIP_SAMPLE_MAX = 5;
 
-/** SC2-themed level ladder. Level n needs xpForLevel(n). */
+/** Protoss level ladder (the streamer plays Protoss). Level n needs
+ * xpForLevel(n). */
 const RANK_NAMES = [
-  "Larva",
-  "Drone",
-  "Zergling",
-  "Roach",
-  "Hydralisk",
-  "Mutalisk",
-  "Lurker",
-  "Ultralisk",
-  "Brood Lord",
-  "Swarm Host",
+  "Probe",
+  "Zealot",
+  "Adept",
+  "Stalker",
+  "Immortal",
+  "High Templar",
+  "Archon",
+  "Colossus",
+  "Carrier",
+  "Mothership",
 ];
 
 /** @param {number} level */

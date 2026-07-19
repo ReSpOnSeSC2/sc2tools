@@ -104,7 +104,7 @@ describe("ingest", () => {
     const levelUp = emitted.find((e) => e.msg.type === "level-up");
     expect(levelUp).toBeTruthy();
     expect(levelUp.room).toBe(`overlay:${TOKEN}`);
-    expect(levelUp.msg.rank).toBe("Drone");
+    expect(levelUp.msg.rank).toBe("Zealot");
   });
 
   test("junk entries drop; caps apply", async () => {
@@ -219,8 +219,8 @@ describe("summary", () => {
       msg("s4", "Whale", "", { kind: "raid" }),
     ]);
     const out = await svc.summary(TOKEN);
-    expect(out.wall[0]).toMatchObject({ user: "Whale", xp: 100, rank: "Drone" });
-    expect(out.wall[1]).toMatchObject({ user: "Grinder", xp: 4, rank: "Larva" });
+    expect(out.wall[0]).toMatchObject({ user: "Whale", xp: 100, rank: "Zealot" });
+    expect(out.wall[1]).toMatchObject({ user: "Grinder", xp: 4, rank: "Probe" });
     expect(out.prediction).toBeNull();
   });
 });

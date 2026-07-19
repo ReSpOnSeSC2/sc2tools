@@ -22,7 +22,7 @@ corresponding GitHub Release.
     with an on-stream reveal ("Chat said 68% WIN — chat was RIGHT")
     and a season leaderboard.
   - **Loyalty XP + Supporter wall** — chatting anywhere earns XP
-    through SC2-themed ranks (Larva → Swarm Host); the wall widget
+    through Protoss-themed ranks (Probe → Mothership); the wall widget
     rotates today's top supporters and toasts level-ups.
   - **Clip-moment detector** — chat spikes and notable game moments
     (big MMR swings, win streaks, marathon games) flash a "🔥 CLIP

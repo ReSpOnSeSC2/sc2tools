@@ -95,7 +95,7 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
         platform: isPlatform(e.platform) ? e.platform : ("twitch" as const),
         xp: num(e.xp),
         level: num(e.level),
-        rank: str(e.rank, 30) || "Larva",
+        rank: str(e.rank, 30) || "Probe",
       };
     })
     .filter((e): e is WallEntry => e !== null)

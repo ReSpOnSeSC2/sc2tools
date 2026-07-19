@@ -2,7 +2,7 @@
 
 /**
  * SupporterWallWidget — cross-platform loyalty: today's top
- * supporters with SC2-themed ranks (Larva → Swarm Host) and XP bars,
+ * supporters with Protoss-themed ranks (Probe → Mothership) and XP bars,
  * plus a level-up toast whenever a viewer crosses a threshold.
  * Viewers from all four platforms share one progression — chatting
  * anywhere earns XP (see the engagement service). Transparent until
@@ -21,10 +21,10 @@ import type { LiveGamePayload } from "../types";
 const TOAST_MS = 8_000;
 
 const TEST_WALL: WallEntry[] = [
-  { user: "TestGrinder", platform: "twitch", xp: 1240, level: 4, rank: "Hydralisk" },
-  { user: "KickEnjoyer", platform: "kick", xp: 660, level: 3, rank: "Roach" },
-  { user: "TubeWatcher", platform: "youtube", xp: 300, level: 2, rank: "Zergling" },
-  { user: "TokFan", platform: "tiktok", xp: 120, level: 1, rank: "Drone" },
+  { user: "TestGrinder", platform: "twitch", xp: 1240, level: 4, rank: "Immortal" },
+  { user: "KickEnjoyer", platform: "kick", xp: 660, level: 3, rank: "Stalker" },
+  { user: "TubeWatcher", platform: "youtube", xp: 300, level: 2, rank: "Adept" },
+  { user: "TokFan", platform: "tiktok", xp: 120, level: 1, rank: "Zealot" },
 ];
 
 export function SupporterWallWidget({
@@ -56,7 +56,7 @@ export function SupporterWallWidget({
 
   const wall = testActive ? TEST_WALL : summary.wall;
   const showToast = testActive
-    ? { user: "TestGrinder", rank: "Hydralisk" }
+    ? { user: "TestGrinder", rank: "Immortal" }
     : toast;
   if (wall.length === 0 && !showToast) {
     return <div style={{ background: "transparent" }} />;

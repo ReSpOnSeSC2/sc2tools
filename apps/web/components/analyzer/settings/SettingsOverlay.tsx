@@ -161,7 +161,7 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
   {
     id: "supporter-wall",
     label: "Supporter wall",
-    hint: "Cross-platform loyalty XP: top supporters with SC2 ranks and level-up toasts. Test shows sample supporters.",
+    hint: "Cross-platform loyalty XP: top supporters with Protoss ranks (Probe → Mothership) and level-up toasts. Test shows sample supporters.",
   },
   {
     id: "clip-flag",
