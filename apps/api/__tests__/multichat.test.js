@@ -701,4 +701,56 @@ describe("sanitizeMultichatConfig", () => {
     expect(out.tts).toBeUndefined();
     expect(out.sound).toBeUndefined();
   });
+
+  test("translate local mode enables without an endpoint", () => {
+    const out = sanitizeMultichatConfig({
+      translate: { enabled: true, mode: "local" },
+    });
+    expect(out.translate).toEqual({
+      enabled: true,
+      mode: "local",
+      targetLang: "en",
+    });
+  });
+
+  test("translate provider mode without an https endpoint stays disabled", () => {
+    const out = sanitizeMultichatConfig({
+      translate: { enabled: true, mode: "provider", endpoint: "http://insecure" },
+    });
+    expect(out.translate).toEqual({
+      enabled: false,
+      mode: "provider",
+      targetLang: "en",
+    });
+  });
+
+  test("translate provider mode with an https endpoint enables — secrets never exposed", () => {
+    const out = sanitizeMultichatConfig({
+      translate: {
+        enabled: true,
+        mode: "provider",
+        endpoint: "https://libre.example/translate",
+        apiKey: "sekrit",
+        targetLang: "de",
+      },
+    });
+    expect(out.translate).toEqual({
+      enabled: true,
+      mode: "provider",
+      targetLang: "de",
+    });
+    expect(out.translate.endpoint).toBeUndefined();
+    expect(out.translate.apiKey).toBeUndefined();
+  });
+
+  test("translate mode defaults to local for legacy blobs without mode", () => {
+    const out = sanitizeMultichatConfig({
+      translate: { enabled: true, endpoint: "https://libre.example/translate" },
+    });
+    expect(out.translate).toEqual({
+      enabled: true,
+      mode: "local",
+      targetLang: "en",
+    });
+  });
 });

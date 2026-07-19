@@ -38,9 +38,12 @@ corresponding GitHub Release.
   progress bars), and Session recap. The chat feed itself now renders
   real **Twitch and Kick emote images** (toggleable), answers
   `!opponent` / `!mmr` / `!build` from ANY platform's chat with an
-  on-stream card, supports optional **inline translation** through a
-  self-hosted LibreTranslate-compatible provider (key stays
-  server-side), and gains a **BRB scene mode** (`?mode=brb`).
+  on-stream card, supports optional **inline translation** — free
+  built-in on-device mode by default (an open-source OPUS-MT model
+  runs inside the Browser Source, downloaded once and cached; chat
+  text never leaves the OBS machine), with a custom
+  LibreTranslate-compatible provider as an advanced option (key stays
+  server-side) — and gains a **BRB scene mode** (`?mode=brb`).
   Highlight/poll/goal changes reach every Browser Source instantly
   over the overlay socket and survive restarts (Mongo-persisted per
   token, strict-sanitized).

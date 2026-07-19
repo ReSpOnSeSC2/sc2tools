@@ -288,12 +288,29 @@ export function MultiChatWidget({
     enabled: true,
   });
 
-  // Inline translation — active only when the streamer configured a
-  // provider in Settings (the widget only ever learns the on/off flag).
+  // Inline translation — enabled from Settings. The translate blob
+  // rides on `platforms` (part of that JSON identity — existing
+  // behavior); the widget only ever learns {enabled, mode, targetLang}
+  // — provider endpoint/key never leave the server.
+  const translateConfig = useMemo(() => {
+    const t = (
+      platforms as
+        | (MultichatConfig & {
+            translate?: { enabled?: boolean; mode?: string; targetLang?: string };
+          })
+        | null
+    )?.translate;
+    if (!t || t.enabled !== true) return null;
+    return {
+      enabled: true,
+      mode: t.mode === "provider" ? ("provider" as const) : ("local" as const),
+      targetLang: typeof t.targetLang === "string" ? t.targetLang : "en",
+    };
+  }, [platforms]);
   const translations = useTranslation(visible, {
     apiBase: API_BASE,
     token,
-    enabled: platforms !== null && (platforms as MultichatConfig & { translate?: { enabled?: boolean } }).translate?.enabled === true,
+    config: translateConfig,
   });
 
   const configuredPlatforms = useMemo(() => {

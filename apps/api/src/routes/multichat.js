@@ -364,16 +364,20 @@ function sanitizeMultichatConfig(prefs) {
   if (prefs?.sound && typeof prefs.sound === "object") {
     out.sound = sanitizeChatSound(prefs.sound);
   }
-  // Translation: the widget only learns THAT translation is on and the
-  // target language — the provider endpoint and API key never leave
-  // the server (the relay reads them per request).
+  // Translation: the widget only learns {enabled, mode, targetLang} —
+  // the provider endpoint and API key never leave the server (the
+  // relay reads them per request). Mode "local" (the free on-device
+  // default) needs nothing but the flag; "provider" is only actually
+  // enabled once a valid https endpoint is stored.
   if (prefs?.translate && typeof prefs.translate === "object") {
     const t = prefs.translate;
+    const mode = t.mode === "provider" ? "provider" : "local";
     out.translate = {
       enabled:
         t.enabled === true &&
-        typeof t.endpoint === "string" &&
-        /^https:\/\//.test(t.endpoint),
+        (mode === "local" ||
+          (typeof t.endpoint === "string" && /^https:\/\//.test(t.endpoint))),
+      mode,
       targetLang:
         typeof t.targetLang === "string" && /^[a-z-]{2,8}$/i.test(t.targetLang)
           ? t.targetLang
