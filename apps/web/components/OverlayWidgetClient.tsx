@@ -53,8 +53,11 @@ import {
   ChatPollWidget,
   ChatAlertsWidget,
   StreamGoalsWidget,
+  ChatOracleWidget,
+  ClipFlagWidget,
   SessionRecapWidget,
   StreamSceneWidget,
+  SupporterWallWidget,
   type SessionSummary,
 } from "@/components/overlay/widgets/PrePostFlow";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
@@ -124,6 +127,9 @@ export function OverlayWidgetClient({
   // Latest raw ``overlay:multichat`` studio payload — validated by the
   // studio widgets themselves (useStudioState re-sanitizes it).
   const [studioEvent, setStudioEvent] = useState<unknown>(null);
+  // Latest raw ``overlay:engagement`` payload — re-sanitized by the
+  // engagement widgets themselves (useEngagementState).
+  const [engagementEvent, setEngagementEvent] = useState<unknown>(null);
   const [fragmentGhostParam, setFragmentGhostParam] = useState<string | null>(
     null,
   );
@@ -140,6 +146,7 @@ export function OverlayWidgetClient({
     setVoicePrefs,
     setRandomizer,
     setStudioEvent,
+    setEngagementEvent,
     setConnectionStatus,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
@@ -273,6 +280,7 @@ export function OverlayWidgetClient({
         randomizer={randomizer}
         ghostParam={effectiveGhostParam}
         studioEvent={studioEvent}
+        engagementEvent={engagementEvent}
       />
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
@@ -297,6 +305,9 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "stream-goals",
   "session-recap",
   "stream-scene",
+  "chat-oracle",
+  "supporter-wall",
+  "clip-flag",
 ]);
 
 function WidgetRenderer({
@@ -308,6 +319,7 @@ function WidgetRenderer({
   randomizer,
   ghostParam,
   studioEvent,
+  engagementEvent,
 }: {
   widget: WidgetId;
   token: string;
@@ -317,6 +329,7 @@ function WidgetRenderer({
   randomizer: RandomizerConfig | null;
   ghostParam: string | null;
   studioEvent: unknown;
+  engagementEvent: unknown;
 }) {
   switch (widget) {
     case "opponent":
@@ -404,6 +417,20 @@ function WidgetRenderer({
       return (
         <StreamSceneWidget token={token} studioEvent={studioEvent} live={live} />
       );
+    case "chat-oracle":
+      // Engagement family — gated on the ``overlay:engagement``
+      // stream (and the boot summary); ``live`` is Test-fire only.
+      return (
+        <ChatOracleWidget token={token} engagementEvent={engagementEvent} live={live} />
+      );
+    case "supporter-wall":
+      return (
+        <SupporterWallWidget token={token} engagementEvent={engagementEvent} live={live} />
+      );
+    case "clip-flag":
+      return (
+        <ClipFlagWidget token={token} engagementEvent={engagementEvent} live={live} />
+      );
     default:
       return null;
   }
@@ -425,6 +452,7 @@ function useOverlayWidgetSocket(
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
   setStudioEvent: (msg: unknown) => void,
+  setEngagementEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
 ) {
   // The latest gameKey we've observed in either ``live`` or
@@ -572,6 +600,9 @@ function useOverlayWidgetSocket(
     // useStudioState before rendering anything.
     socket.on("overlay:multichat", (msg: unknown) => {
       if (msg && typeof msg === "object") setStudioEvent(msg);
+    });
+    socket.on("overlay:engagement", (msg: unknown) => {
+      if (msg && typeof msg === "object") setEngagementEvent(msg);
     });
     // Streamer cancelled the test fire — clear local state so the
     // widget vanishes immediately instead of waiting for the natural

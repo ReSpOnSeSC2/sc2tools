@@ -40,6 +40,9 @@ const KNOWN_WIDGETS = Object.freeze([
   "stream-goals",
   "session-recap",
   "stream-scene",
+  "chat-oracle",
+  "supporter-wall",
+  "clip-flag",
 ]);
 
 /**

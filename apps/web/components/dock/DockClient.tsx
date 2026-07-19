@@ -39,6 +39,8 @@ import { DockChat } from "./DockChat";
 import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
 import { DockScenes } from "./DockScenes";
+import { DockClips } from "./DockClips";
+import { useEngagementState } from "@/lib/multichat/useEngagementState";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
@@ -102,6 +104,7 @@ const SECTIONS = [
   { id: "dock-scenes", label: "Scenes" },
   { id: "dock-poll", label: "Poll" },
   { id: "dock-goals", label: "Goals" },
+  { id: "dock-clips", label: "Clips" },
   { id: "dock-actions", label: "Actions" },
 ] as const;
 
@@ -113,6 +116,10 @@ export function DockClient({ token }: { token: string }) {
     config: platforms,
   });
   useEngagementReporter(token, messages, events);
+  // Clip-moment log — boot summary + the hook's 60s refetch (the
+  // dock has no overlay socket; a fresh spike shows on the next
+  // refetch, which is fine for a post-stream shortlist).
+  const { summary: engagement } = useEngagementState(token, null);
 
   const [studio, setStudio] = useState<StudioState>(DEFAULT_STUDIO_STATE);
   const [busy, setBusy] = useState(false);
@@ -346,6 +353,12 @@ export function DockClient({ token }: { token: string }) {
                 busy={busy}
                 onPost={postStudio}
               />
+            </SectionCard>
+          </section>
+
+          <section id="dock-clips" className="scroll-mt-12">
+            <SectionCard title="Clip moments">
+              <DockClips moments={engagement.clipMoments} />
             </SectionCard>
           </section>
 
