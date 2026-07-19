@@ -45,6 +45,10 @@ const TALLY_THROTTLE_MS = 2_000;
 // ignored (no cheating by voting once the game is readable) and the
 // widgets drop their CALL IT prompt.
 const PREDICTION_LOCK_MS = 90_000;
+// An open window whose result never arrived (abandoned game, agent
+// offline at game end) must not haunt the overlay forever — after
+// this long it stops being reported as the open prediction.
+const PREDICTION_STALE_MS = 3 * 60 * 60 * 1000;
 /** Clip detection: 10 s buckets, spike vs trailing 2 min median. */
 const CLIP_BUCKET_MS = 10_000;
 const CLIP_WINDOW_BUCKETS = 12;
@@ -247,9 +251,10 @@ class MultichatEngagementService {
       { sort: { openedAt: -1 } },
     );
     if (!open) return;
-    // Voting lock: picks landing after the window closed are ignored
-    // (docs from before this field existed keep the old behavior).
-    if (Number.isFinite(open.locksAtMs) && this.now() > open.locksAtMs) return;
+    // Voting lock: picks landing after the window closed are ignored.
+    // Docs from before ``locksAtMs`` existed lock off their open time
+    // so a legacy window can't accept votes forever either.
+    if (this.now() > effectiveLocksAtMs(open, this.now())) return;
     /** @type {Record<string, any>} */
     const set = {};
     for (const { e, pick } of picks) {
@@ -541,18 +546,59 @@ class MultichatEngagementService {
         rank: rankName(levelForXp(v.xp ?? 0)),
       })),
       oracles: topOracles,
-      prediction: open
+      prediction: open && !isStalePrediction(open, this.now())
         ? {
             gameKey: open.gameKey,
             opponent: open.opponent,
             tally: tallyPicks(open.picks),
-            ...(Number.isFinite(open.locksAtMs) ? { locksAtMs: open.locksAtMs } : {}),
+            // Always resolved — legacy docs without the field lock off
+            // their open time, so widgets can ALWAYS take the prompt
+            // down instead of treating "unknown" as "open forever".
+            locksAtMs: effectiveLocksAtMs(open, this.now()),
           }
         : null,
       oracleRecap: { calls, majorityRight, last: lastCall },
       clipMoments: moments,
     };
   }
+}
+
+/** @param {Record<string, any>} doc @returns {number|null} */
+function openedAtMs(doc) {
+  const d =
+    doc.openedAt instanceof Date
+      ? doc.openedAt.getTime()
+      : new Date(doc.openedAt).getTime();
+  return Number.isFinite(d) ? d : null;
+}
+
+/**
+ * When voting closes for a window. Docs written before ``locksAtMs``
+ * existed lock off their open time; a doc with no usable open time
+ * locks immediately — "unknown" must never mean "open forever".
+ *
+ * @param {Record<string, any>} doc
+ * @param {number} nowMs
+ * @returns {number}
+ */
+function effectiveLocksAtMs(doc, nowMs) {
+  if (Number.isFinite(doc.locksAtMs)) return Number(doc.locksAtMs);
+  const opened = openedAtMs(doc);
+  return opened !== null ? opened + PREDICTION_LOCK_MS : nowMs;
+}
+
+/**
+ * An open window whose game never produced a result (abandoned game,
+ * agent offline at the end) — old enough that it should no longer be
+ * surfaced as "the open prediction".
+ *
+ * @param {Record<string, any>} doc
+ * @param {number} nowMs
+ * @returns {boolean}
+ */
+function isStalePrediction(doc, nowMs) {
+  const opened = openedAtMs(doc);
+  return opened !== null && nowMs - opened > PREDICTION_STALE_MS;
 }
 
 /** @param {Record<string, {pick: string}> | undefined} picks */
@@ -574,4 +620,5 @@ module.exports = {
   parsePick,
   RANK_NAMES,
   PREDICTION_LOCK_MS,
+  PREDICTION_STALE_MS,
 };

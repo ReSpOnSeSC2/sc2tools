@@ -47,7 +47,21 @@ corresponding GitHub Release.
   arriving after the lock are ignored server-side (no calling it
   after the game becomes readable), the on-stream CALL IT prompt
   (oracle widget + ticker) comes down at the lock, and the reveal
-  still plays when the replay-verified result lands.
+  still plays when the replay-verified result lands. Windows opened
+  before this shipped lock off their open time, and an abandoned
+  window (game result never arrived) stops being shown after a few
+  hours — the prompt can never sit on stream forever.
+- **Stats ticker scrolls at a constant reading speed** — pacing now
+  derives from the measured strip width (~55 px/s) instead of the
+  segment count, so the long career-fact sentences read at the same
+  comfortable pace as the short live segments instead of racing.
+
+### Fixed
+
+- **"Game Too Short" can no longer headline a build fact** — the
+  classifier's sub-45-second catch-all bucket is excluded from the
+  ticker's signature/hottest build stats (same exclusion the ladder
+  meta uses), so cheese-heavy histories see their real builds.
 
 - **Countdown timer widget** — a standalone on-stream countdown you
   can show at any time, set from the Stream Dock's new Timer panel:

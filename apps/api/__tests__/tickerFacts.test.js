@@ -294,6 +294,36 @@ describe("services/tickerFacts", () => {
     expect(await s.factsFor("u1")).toEqual([]);
   });
 
+  test("the 'Game Too Short' classifier catch-all never wins a build fact", async () => {
+    const docs = [];
+    // 30 short games land in the catch-all with a great "win rate"…
+    for (let i = 0; i < 30; i += 1) {
+      docs.push(
+        game(i + 1, {
+          myBuild: "PvZ - Game Too Short",
+          durationSec: 40,
+        }),
+      );
+    }
+    // …versus a modest real build.
+    for (let i = 0; i < 16; i += 1) {
+      docs.push(
+        game(i + 1, {
+          result: i % 2 === 0 ? "Victory" : "Defeat",
+          myBuild: "PvZ - Stargate Opener",
+        }),
+      );
+    }
+    await db.games.insertMany(docs);
+    const facts = await svc().factsFor("u1");
+    const sig = facts.find((f) => f.id === "signature-build");
+    expect(sig).toBeTruthy();
+    expect(sig.text).toContain("Stargate Opener");
+    for (const f of facts) {
+      expect(f.text).not.toContain("Game Too Short");
+    }
+  });
+
   test("team games are excluded from every fact", async () => {
     const docs = [];
     for (let i = 0; i < 12; i += 1) {

@@ -17,6 +17,7 @@ const {
   parsePick,
   RANK_NAMES,
   PREDICTION_LOCK_MS,
+  PREDICTION_STALE_MS,
 } = require("../src/services/multichatEngagement");
 
 let mongo;
@@ -206,6 +207,38 @@ describe("Crystal Ball predictions", () => {
       wasRight: false,
       pct: 100,
     });
+  });
+
+  test("legacy windows without locksAtMs lock off their open time", async () => {
+    // A window written by a pre-lock deploy has no locksAtMs — it
+    // must still stop accepting votes and report a lock time, or the
+    // CALL IT prompt would sit on stream forever.
+    await db.multichatPredictions.insertOne({
+      token: TOKEN,
+      gameKey: "legacy",
+      opponent: "Old",
+      openedAt: new Date(nowMs - PREDICTION_LOCK_MS - 5_000),
+      settled: false,
+      picks: {},
+    });
+    await svc.ingest(TOKEN, [msg("z1", "Zoe", "!win")]);
+    const doc = await db.multichatPredictions.findOne({ token: TOKEN, gameKey: "legacy" });
+    expect(Object.keys(doc.picks)).toHaveLength(0);
+    const out = await svc.summary(TOKEN);
+    expect(out.prediction.locksAtMs).toBe(nowMs - 5_000);
+  });
+
+  test("an abandoned open window goes stale and leaves the summary", async () => {
+    await db.multichatPredictions.insertOne({
+      token: TOKEN,
+      gameKey: "ghost",
+      opponent: "NoShow",
+      openedAt: new Date(nowMs - PREDICTION_STALE_MS - 60_000),
+      settled: false,
+      picks: {},
+    });
+    const out = await svc.summary(TOKEN);
+    expect(out.prediction).toBeNull();
   });
 
   test("settle falls back to the newest open window on gameKey drift", async () => {
