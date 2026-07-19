@@ -49,6 +49,9 @@ const {
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
+ *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   customBuilds?: { list: (userId: string) => Promise<Array<Record<string, any>>> },
+ *   buildsList?: (userId: string) => Promise<Array<Record<string, any>>>,
  *   fetchImpl?: typeof fetch,
  * }} deps
  */
@@ -116,6 +119,108 @@ function buildMultichatRouter(deps) {
           );
         }
         res.json({ config });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Engagement: idempotent chat ingest + boot summary ──
+  // Every open surface (widget or dock) reports what it sees; the
+  // unique (token, platform, msgId) index dedupes across sources.
+  router.post(
+    "/multichat/:token/engage",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.engagement) {
+          res.json({ accepted: 0 });
+          return;
+        }
+        const out = await deps.engagement.ingest(
+          String(req.params.token),
+          req.body?.events,
+        );
+        res.json(out);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
+    "/multichat/:token/engagement",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.engagement) {
+          res.json({ wall: [], oracles: [], prediction: null, clipMoments: [] });
+          return;
+        }
+        res.json(await deps.engagement.summary(String(req.params.token)));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
+    "/multichat/:token/engagement/viewer",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.engagement) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        res.json(
+          await deps.engagement.viewerStats(
+            String(req.params.token),
+            String(req.query.platform ?? ""),
+            String(req.query.user ?? ""),
+          ),
+        );
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Saved builds (slim) for the dock's build vote ──
+  router.get(
+    "/multichat/:token/builds",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        if (!deps.customBuilds) {
+          res.json({ builds: [] });
+          return;
+        }
+        const [saved, played] = await Promise.all([
+          deps.customBuilds.list(userId),
+          deps.buildsList ? deps.buildsList(userId) : Promise.resolve([]),
+        ]);
+        /** @type {Map<string, {total: number, winRate: number}>} */
+        const stats = new Map();
+        for (const row of played) {
+          if (row?.name) stats.set(String(row.name), { total: row.total ?? 0, winRate: row.winRate ?? 0 });
+        }
+        res.json({
+          builds: saved.slice(0, 50).map((b) => ({
+            slug: b.slug,
+            name: b.name,
+            race: b.race,
+            vsRace: b.vsRace,
+            total: stats.get(b.name)?.total ?? 0,
+            winRate: stats.get(b.name)?.winRate ?? null,
+          })),
+        });
       } catch (err) {
         next(err);
       }
@@ -425,6 +530,15 @@ function sanitizeMultichatConfig(prefs) {
   // relay reads them per request). Mode "local" (the free on-device
   // default) needs nothing but the flag; "provider" is only actually
   // enabled once a valid https endpoint is stored.
+  // Loyalty-rank theme for the supporter wall — a single whitelisted
+  // enum; the widget maps viewer levels to unit names client-side.
+  if (prefs?.engagement && typeof prefs.engagement === "object") {
+    out.engagement = {
+      rankRace: ["protoss", "terran", "zerg"].includes(prefs.engagement.rankRace)
+        ? prefs.engagement.rankRace
+        : "protoss",
+    };
+  }
   if (prefs?.translate && typeof prefs.translate === "object") {
     const t = prefs.translate;
     const mode = t.mode === "provider" ? "provider" : "local";

@@ -21,6 +21,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { EVENT_KIND_LABEL, type ChatEvent } from "@/lib/multichat/events";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useEventSounds } from "@/lib/multichat/useEventSounds";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import {
@@ -49,11 +50,12 @@ export function ChatAlertsWidget({
 }) {
   void studioEvent;
   const { platforms, sound } = useMultichatConfig(token);
-  const { events: feedEvents } = useMultiChat({
+  const { events: feedEvents, messages: feedMessages } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
+  useEngagementReporter(token, feedMessages, feedEvents);
 
   // Test-fire demo stream — feed the sample events in one at a time
   // (first immediately) so each rides the normal prominent-card

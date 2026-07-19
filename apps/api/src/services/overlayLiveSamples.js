@@ -232,6 +232,10 @@ const PER_WIDGET_KEYS = {
   // falls back to its client-side demo block when the block is absent.
   "session-recap": ["session"],
   "stream-scene": [],
+  "chat-oracle": [],
+  "supporter-wall": [],
+  "clip-flag": [],
+  "lower-third": ["result", "map", "matchup", "mmrDelta", "headToHead", "session", "oppName"],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

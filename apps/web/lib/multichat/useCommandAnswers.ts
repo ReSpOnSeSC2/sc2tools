@@ -11,9 +11,10 @@
 // commands the cloud actually serves, and cleared automatically.
 
 import { useEffect, useRef, useState } from "react";
+import { rankNameFor, type RankRace } from "./rankLadders";
 import type { ChatMessage } from "./types";
 
-const COMMANDS = ["opponent", "mmr", "build"] as const;
+const COMMANDS = ["opponent", "mmr", "build", "rank"] as const;
 export type ChatCommand = (typeof COMMANDS)[number];
 
 /** Minimum gap between answers for the SAME command. */
@@ -31,9 +32,15 @@ export interface CommandAnswer {
 
 export function useCommandAnswers(
   messages: ReadonlyArray<ChatMessage>,
-  args: { apiBase: string; token: string; enabled: boolean },
+  args: {
+    apiBase: string;
+    token: string;
+    enabled: boolean;
+    /** Loyalty ladder theme for !rank answers. */
+    rankRace?: RankRace;
+  },
 ): CommandAnswer | null {
-  const { apiBase, token, enabled } = args;
+  const { apiBase, token, enabled, rankRace = "protoss" } = args;
   const [answer, setAnswer] = useState<CommandAnswer | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const lastFiredRef = useRef<Record<string, number>>({});
@@ -45,9 +52,14 @@ export function useCommandAnswers(
       if (seenRef.current.has(key)) continue;
       seenRef.current.add(key);
       if (!enabled || m.atMs < mountedAtRef.current - 2000) continue;
-      const match = m.text.trim().match(/^!(opponent|mmr|build)\b/i);
+      const match = m.text
+        .trim()
+        .match(/^!(opponent|mmr|build|rank|level|xp)\b/i);
       if (!match) continue;
-      const command = match[1].toLowerCase() as ChatCommand;
+      const alias = match[1].toLowerCase();
+      const command = (
+        alias === "level" || alias === "xp" ? "rank" : alias
+      ) as ChatCommand;
       const now = Date.now();
       if (now - (lastFiredRef.current[command] ?? 0) < COMMAND_THROTTLE_MS) {
         continue;
@@ -55,6 +67,35 @@ export function useCommandAnswers(
       lastFiredRef.current[command] = now;
       void (async () => {
         try {
+          if (command === "rank") {
+            // Viewer-specific: their own loyalty XP/level, answered
+            // on stream so every platform's chat can discover the
+            // system without a bot.
+            const res = await fetch(
+              `${apiBase}/v1/multichat/${encodeURIComponent(token)}/engagement/viewer?platform=${encodeURIComponent(m.platform)}&user=${encodeURIComponent(m.user)}`,
+              { cache: "no-store" },
+            );
+            if (!res.ok) return;
+            const stats = (await res.json()) as {
+              found: boolean;
+              xp: number;
+              level: number;
+              xpToNext: number | null;
+              oracleScore: number;
+            };
+            const rank = rankNameFor(rankRace, stats.level);
+            const nextRank =
+              stats.xpToNext !== null
+                ? rankNameFor(rankRace, stats.level + 1)
+                : null;
+            const text = stats.found
+              ? `${rank} (Lv ${stats.level}) · ${stats.xp} XP` +
+                (nextRank ? ` — ${stats.xpToNext} XP to ${nextRank}` : " — max rank!") +
+                (stats.oracleScore > 0 ? ` · 🔮 ${stats.oracleScore} oracle pts` : "")
+              : `no XP yet — chat to start earning! (2 XP per message)`;
+            setAnswer({ command, user: m.user, text, atMs: Date.now() });
+            return;
+          }
           const res = await fetch(
             `${apiBase}/v1/chatbot/${encodeURIComponent(token)}/${command}`,
             { cache: "no-store" },

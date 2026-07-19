@@ -40,6 +40,7 @@ import {
   visibleMessages,
   type ChatAppearance,
 } from "@/lib/multichat/appearance";
+import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import {
   TEST_MESSAGE_INTERVAL_MS,
@@ -51,6 +52,7 @@ import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { useChatSound } from "@/lib/multichat/useChatSound";
 import { useChatTts } from "@/lib/multichat/useChatTts";
 import { useCommandAnswers } from "@/lib/multichat/useCommandAnswers";
+import { sanitizeRankRace } from "@/lib/multichat/rankLadders";
 import { useTranslation } from "@/lib/multichat/useTranslation";
 import { MultiChatMessageList, PLATFORM_META } from "./MultiChatMessageList";
 import type {
@@ -238,11 +240,12 @@ export function MultiChatWidget({
   live?: LiveGamePayload | null;
 }) {
   const { platforms, appearance, tts, sound, loaded } = useMultichatConfig(token);
-  const { messages, statuses, active } = useMultiChat({
+  const { messages, events: feedEvents, statuses, active } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
+  useEngagementReporter(token, messages, feedEvents);
   const testMessages = useTestFire(live);
   const testActive = testMessages.length > 0;
 
@@ -280,12 +283,17 @@ export function MultiChatWidget({
     return new URLSearchParams(window.location.search).get("mode") === "brb";
   }, []);
 
-  // !opponent / !mmr / !build asked in ANY connected chat get answered
-  // on stream via the token-keyed chatbot lines (Nightbot's source).
+  // !opponent / !mmr / !build / !rank asked in ANY connected chat get
+  // answered on stream (chatbot lines; !rank = the asker's loyalty XP,
+  // themed by the Settings rank race riding the platforms blob).
   const answer = useCommandAnswers(visible, {
     apiBase: API_BASE,
     token,
     enabled: true,
+    rankRace: sanitizeRankRace(
+      (platforms as { engagement?: { rankRace?: string } } | null)?.engagement
+        ?.rankRace,
+    ),
   });
 
   // Inline translation — enabled from Settings. The translate blob

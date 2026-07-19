@@ -149,6 +149,26 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",
   },
   {
+    id: "lower-third",
+    label: "Broadcast lower third",
+    hint: "Esports-caster bar after each game: result, MMR delta, opponent head-to-head, session record. Test fires a sample game.",
+  },
+  {
+    id: "chat-oracle",
+    label: "Crystal Ball predictions",
+    hint: "Chat calls !win / !loss before each game; the verified result scores oracle points and shows a reveal + leaderboard. Test plays a demo round.",
+  },
+  {
+    id: "supporter-wall",
+    label: "Supporter wall",
+    hint: "Cross-platform loyalty XP: top supporters with Protoss ranks (Probe → Mothership) and level-up toasts. Test shows sample supporters.",
+  },
+  {
+    id: "clip-flag",
+    label: "Clip-moment flag",
+    hint: "A small CLIP THAT! pulse when chat spikes or a big game moment lands — the full log lives in the Stream Dock. Test shows the pulse.",
+  },
+  {
     id: "stream-scene",
     label: "BRB / Starting Soon scene",
     hint: "Full-screen scene with countdown — switch between Live, BRB, and Starting Soon from the Stream Dock. Test shows a Starting Soon demo.",

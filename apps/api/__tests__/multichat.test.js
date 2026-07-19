@@ -903,6 +903,16 @@ describe("sanitizeMultichatConfig", () => {
     expect(out.sound).toBeUndefined();
   });
 
+  test("engagement rank race passes through whitelisted", () => {
+    expect(
+      sanitizeMultichatConfig({ engagement: { rankRace: "terran" } }).engagement,
+    ).toEqual({ rankRace: "terran" });
+    expect(
+      sanitizeMultichatConfig({ engagement: { rankRace: "xelnaga" } }).engagement,
+    ).toEqual({ rankRace: "protoss" });
+    expect(sanitizeMultichatConfig({}).engagement).toBeUndefined();
+  });
+
   test("translate local mode enables without an endpoint", () => {
     const out = sanitizeMultichatConfig({
       translate: { enabled: true, mode: "local" },

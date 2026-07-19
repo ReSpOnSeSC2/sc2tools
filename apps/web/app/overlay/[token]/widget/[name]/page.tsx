@@ -47,6 +47,10 @@ const VALID_WIDGETS = new Set([
   "stream-goals",
   "session-recap",
   "stream-scene",
+  "chat-oracle",
+  "supporter-wall",
+  "clip-flag",
+  "lower-third",
 ]);
 
 export default async function OverlayWidgetPage({

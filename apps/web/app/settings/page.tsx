@@ -11,6 +11,7 @@ import { SettingsRandomizer } from "@/components/analyzer/settings/SettingsRando
 import { SettingsVoice } from "@/components/analyzer/settings/SettingsVoice";
 import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
 import { SettingsMisc } from "@/components/analyzer/settings/SettingsMisc";
+import { SettingsHelp } from "@/components/analyzer/settings/SettingsHelp";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function SettingsPage() {
@@ -39,6 +40,8 @@ export default function SettingsPage() {
                 return <SettingsBackups />;
               case "misc":
                 return <SettingsMisc />;
+              case "help":
+                return <SettingsHelp />;
               default:
                 return null;
             }
