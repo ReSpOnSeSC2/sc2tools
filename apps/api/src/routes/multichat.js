@@ -166,6 +166,29 @@ function buildMultichatRouter(deps) {
     },
   );
 
+  router.get(
+    "/multichat/:token/engagement/viewer",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.engagement) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        res.json(
+          await deps.engagement.viewerStats(
+            String(req.params.token),
+            String(req.query.platform ?? ""),
+            String(req.query.user ?? ""),
+          ),
+        );
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   // ── Saved builds (slim) for the dock's build vote ──
   router.get(
     "/multichat/:token/builds",

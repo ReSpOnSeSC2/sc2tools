@@ -2,8 +2,11 @@
 
 /**
  * MultichatEngagementService — per-viewer engagement across all four
- * chat platforms: loyalty XP + Protoss-themed levels, the Crystal Ball prediction
- * game (!win / !loss), and clip-moment detection.
+ * chat platforms: loyalty XP + levels, the Crystal Ball prediction
+ * game (!win / !loss), and clip-moment detection. Rank NAMES are a
+ * client concern (Settings picks a race ladder; widgets map levels
+ * via lib/multichat/rankLadders) — the ``rank`` strings emitted here
+ * are a Protoss-named fallback for consumers without config access.
  *
  * Architecture: chat connections live in the BROWSER (widgets/dock),
  * so every open surface reports the messages it sees in idempotent
@@ -44,8 +47,8 @@ const CLIP_SPIKE_FACTOR = 3;
 const CLIP_COOLDOWN_MS = 90_000;
 const CLIP_SAMPLE_MAX = 5;
 
-/** Protoss level ladder (the streamer plays Protoss). Level n needs
- * xpForLevel(n). */
+/** Fallback rank names (Protoss ladder). Level n needs xpForLevel(n);
+ * clients re-theme by the streamer's chosen race. */
 const RANK_NAMES = [
   "Probe",
   "Zealot",
@@ -427,6 +430,36 @@ class MultichatEngagementService {
       correct: d.oracle?.correct ?? 0,
       total: d.oracle?.total ?? 0,
     }));
+  }
+
+  /**
+   * One viewer's own stats — powers the ``!rank`` chat command. The
+   * curve stays server-side so clients never duplicate it; clients
+   * theme the numeric level into a unit name by the streamer's race.
+   *
+   * @param {string} token
+   * @param {string} platform
+   * @param {string} user
+   */
+  async viewerStats(token, platform, user) {
+    const userKey = `${String(platform)}:${String(user).trim().toLowerCase()}`;
+    const doc = await this.viewers.findOne(
+      { token, userKey },
+      { projection: { _id: 0, displayName: 1, xp: 1, messages: 1, oracle: 1 } },
+    );
+    const xp = Number(doc?.xp) || 0;
+    const level = levelForXp(xp);
+    const atTop = level >= RANK_NAMES.length - 1;
+    return {
+      user: doc?.displayName ?? String(user),
+      found: Boolean(doc),
+      xp,
+      level,
+      nextLevel: atTop ? null : level + 1,
+      xpToNext: atTop ? null : Math.max(0, xpForLevel(level + 1) - xp),
+      messages: Number(doc?.messages) || 0,
+      oracleScore: Number(doc?.oracle?.score) || 0,
+    };
   }
 
   /**

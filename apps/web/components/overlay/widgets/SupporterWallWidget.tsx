@@ -122,6 +122,7 @@ export function SupporterWallWidget({
               );
             })}
           </div>
+          <div style={hintStyle}>chat to earn XP · type !rank to see yours</div>
         </div>
       ) : null}
     </div>
@@ -214,4 +215,13 @@ const trackStyle: CSSProperties = {
   borderRadius: 999,
   background: "rgba(255,255,255,0.08)",
   overflow: "hidden",
+};
+
+const hintStyle: CSSProperties = {
+  marginTop: 8,
+  paddingTop: 6,
+  borderTop: "1px solid rgba(255,255,255,0.08)",
+  fontSize: 10,
+  letterSpacing: "0.04em",
+  color: "rgba(255,255,255,0.55)",
 };

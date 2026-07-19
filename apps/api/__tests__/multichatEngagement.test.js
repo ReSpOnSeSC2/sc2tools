@@ -210,6 +210,25 @@ describe("clip moments", () => {
   });
 });
 
+describe("viewerStats (!rank)", () => {
+  test("returns level math for a known viewer and a friendly zero state", async () => {
+    await svc.ingest(TOKEN, [
+      msg("v1", "Chatter", "hello"),
+      msg("v2", "Chatter", "", { kind: "raid" }),
+    ]);
+    const stats = await svc.viewerStats(TOKEN, "twitch", "CHATTER");
+    expect(stats.found).toBe(true);
+    expect(stats.xp).toBe(102);
+    expect(stats.level).toBe(1);
+    expect(stats.nextLevel).toBe(2);
+    expect(stats.xpToNext).toBe(xpForLevel(2) - 102);
+    const ghost = await svc.viewerStats(TOKEN, "twitch", "nobody");
+    expect(ghost.found).toBe(false);
+    expect(ghost.xp).toBe(0);
+    expect(ghost.level).toBe(0);
+  });
+});
+
 describe("summary", () => {
   test("wall ranks by XP with SC2 rank names", async () => {
     await svc.ingest(TOKEN, [
