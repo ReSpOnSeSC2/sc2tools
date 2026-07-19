@@ -58,6 +58,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **No more "Victory — -35 MMR swing"** — replay files store the
+  rating at game START, so the per-game MMR delta actually measured
+  the previous game's outcome and could contradict the verified
+  result on the lower third and the clip-moment log. A delta whose
+  sign disagrees with the result (a win can never lose rating) is
+  now suppressed everywhere instead of shown wrong.
 - **Crystal Ball hands off instantly between games** — the 12-second
   settle reveal ("chat was RIGHT" / "nobody called it") no longer
   blocks the next game's CALL IT window: a new prediction opening

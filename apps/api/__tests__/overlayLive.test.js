@@ -314,6 +314,44 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.mmrDelta).toBeUndefined();
   });
 
+  test("suppresses a delta whose sign contradicts the verified result", async () => {
+    // Replay myMmr is the game-START rating, so prev→this measures
+    // the PREVIOUS game's outcome. A win can never lose rating —
+    // "Victory — -35 MMR swing" must not reach the overlay/clip log.
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "earlier",
+      result: "Victory",
+      myMmr: 4345,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
+      myRace: "Protoss",
+      date: new Date(Date.now() - 10 * 60 * 1000),
+    });
+    const win = await svc.buildFromGame("u1", game({ myMmr: 4310 }));
+    expect(win.result).toBe("win");
+    expect(win.mmrDelta).toBeUndefined();
+  });
+
+  test("keeps a loss's negative delta (signs agree)", async () => {
+    await db.games.insertOne({
+      userId: "u1",
+      gameId: "earlier",
+      result: "Victory",
+      myMmr: 4345,
+      myMmrSource: "replay",
+      myToonHandle: "1-S2-1-100",
+      myRace: "Protoss",
+      date: new Date(Date.now() - 10 * 60 * 1000),
+    });
+    const loss = await svc.buildFromGame(
+      "u1",
+      game({ myMmr: 4310, result: "Defeat" }),
+    );
+    expect(loss.result).toBe("loss");
+    expect(loss.mmrDelta).toBe(-35);
+  });
+
   test("never chains mmrDelta across Battle.net accounts", async () => {
     // A 3000-MMR NA-smurf game right before a 4310 main game must NOT
     // paint a fake "+1310" (or "−1310") swing on stream.
