@@ -26,6 +26,7 @@ import {
 } from "@/components/landing/HeroCarousel";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
+import { StreamStudioShowcase } from "@/components/landing/StreamStudioShowcase";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 /* =============================================================== */
@@ -86,6 +87,7 @@ export default function LandingPage() {
       <LeadFeature />
       <RealGameShowcase />
       <PillarsSection />
+      <StreamStudioSection />
       <ArcadeSection />
       <ReplaySection />
       <HowItWorksSection />
@@ -320,7 +322,7 @@ const PILLARS: ReadonlyArray<Pillar> = [
   {
     icon: Tv,
     title: "Live OBS Overlay",
-    body: "Paste one link into an OBS Browser Source and your scouting info shows up on stream. 15 widgets, each with its own URL.",
+    body: "Paste one link into an OBS Browser Source and your scouting info shows up on stream. 25+ widgets, each with its own URL.",
   },
   {
     icon: Swords,
@@ -489,6 +491,29 @@ const ARCADE_TILES: ReadonlyArray<ArcadeTile> = [
     body: "Pick a portfolio of builds. Their win rate that week moves your spot on the leaderboard.",
   },
 ];
+
+function StreamStudioSection() {
+  return (
+    <section className="mt-24 md:mt-32">
+      <EditorialHead
+        folio="S"
+        kicker="Stream Studio"
+        title="A full streaming toolkit, built in."
+        standfirst="Merge Twitch, Kick, YouTube and TikTok chat into one overlay — no TikTok stream key needed. Alert sounds from a classy chime to the airhorn (or upload your own), text-to-speech, chat polls and build votes, stream goals, BRB and Starting Soon scenes with a countdown, viewer XP with SC2 ranks, !win/!loss predictions scored against your real results, and a Stream Dock to run it all from inside OBS."
+      />
+      <div className="mt-10">
+        <StreamStudioShowcase />
+      </div>
+      <p className="mt-6 max-w-2xl text-body text-text-muted">
+        Everything is configured from one Settings page — copy a widget
+        URL, paste it into a Browser Source, and use the Test button to
+        place it. The Stream Dock (an OBS custom dock) pins highlights,
+        runs polls, switches scenes and logs clip-worthy moments while
+        you play.
+      </p>
+    </section>
+  );
+}
 
 function ArcadeSection() {
   return (

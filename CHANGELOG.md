@@ -13,6 +13,32 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stream Virality Pack** — five viewer-engagement features on a new
+  cross-platform engagement layer (every chat surface reports what it
+  sees; the server dedupes, so Twitch/Kick/YouTube/TikTok viewers
+  share one system):
+  - **Crystal Ball predictions** — chat calls `!win` / `!loss` while
+    a game loads; the replay-verified result scores oracle points
+    with an on-stream reveal ("Chat said 68% WIN — chat was RIGHT")
+    and a season leaderboard.
+  - **Loyalty XP + Supporter wall** — chatting anywhere earns XP
+    through SC2-themed ranks (Larva → Swarm Host); the wall widget
+    rotates today's top supporters and toasts level-ups.
+  - **Clip-moment detector** — chat spikes and notable game moments
+    (big MMR swings, win streaks, marathon games) flash a "🔥 CLIP
+    THAT!" pulse on stream and log a timestamped shortlist (with the
+    chat lines that caused it) in the Stream Dock.
+  - **Broadcast lower third** — an esports-caster bar that slides in
+    after each game: result, MMR delta, opponent head-to-head,
+    session record.
+  - **Chat picks the build** — pick 2–3 saved builds in the dock
+    (real win-rates shown); chat votes `!1`/`!2`/`!3` through the
+    poll widget, and the close card shows the winner's win rate.
+- **Landing page · Stream Studio showcase** — a new section with live
+  animated previews of the merged chat, event alerts, stream goals,
+  and the Starting Soon countdown, plus updated copy covering the
+  full streaming toolkit.
+
 - **Multichat · real-recording sound pack, custom sounds, and voice
   lines** — the alert/ding sound picker grows from 16 synthesized
   effects to 50+ options. A bundled pack of 35 real recordings
