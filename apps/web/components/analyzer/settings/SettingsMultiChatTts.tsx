@@ -14,10 +14,21 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Volume2 } from "lucide-react";
+import { Bell, Play, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
-import { createDinger, type ChatSoundConfig } from "@/lib/multichat/sound";
+import { previewEffect, type ChatSoundConfig } from "@/lib/multichat/sound";
+import {
+  SOUND_CATEGORY_LABEL,
+  SOUND_EFFECTS,
+  type SoundEffectCategory,
+  type SoundEffectId,
+} from "@/lib/multichat/soundEffects";
+import {
+  CHAT_EVENT_KINDS,
+  EVENT_KIND_LABEL,
+  type ChatEventKind,
+} from "@/lib/multichat/events";
 import {
   TTS_MAX_CHARS_MAX,
   TTS_MAX_CHARS_MIN,
@@ -34,6 +45,49 @@ const PLATFORM_LABEL: Record<ChatPlatform, string> = {
   youtube: "YouTube",
   tiktok: "TikTok",
 };
+
+const SOUND_CATEGORIES: readonly SoundEffectCategory[] = [
+  "classic",
+  "cool",
+  "arcade",
+  "funny",
+];
+
+/**
+ * Grouped picker over the synthesized effect library. Every effect is
+ * generated with WebAudio in the Browser Source — no audio files.
+ */
+function EffectSelect({
+  value,
+  onChange,
+  allowNone,
+  ariaLabel,
+}: {
+  value: SoundEffectId | "none";
+  onChange: (next: SoundEffectId | "none") => void;
+  allowNone?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <select
+      value={value}
+      aria-label={ariaLabel}
+      onChange={(e) => onChange(e.target.value as SoundEffectId | "none")}
+      className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
+    >
+      {allowNone ? <option value="none">None (silent)</option> : null}
+      {SOUND_CATEGORIES.map((cat) => (
+        <optgroup key={cat} label={SOUND_CATEGORY_LABEL[cat]}>
+          {SOUND_EFFECTS.filter((e) => e.category === cat).map((e) => (
+            <option key={e.id} value={e.id} title={e.description}>
+              {e.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
 
 /** Empty platforms array means "all" — the UI shows all four checked. */
 function platformChecked(config: ChatTtsConfig, p: ChatPlatform): boolean {
@@ -108,12 +162,8 @@ export function SettingsMultiChatTts({
     [],
   );
 
-  const previewDing = () => {
-    const dinger = createDinger({ ...sound, enabled: true });
-    dinger.ping();
-    // Give the blip time to play before releasing the context.
-    setTimeout(() => dinger.close(), 600);
-  };
+  const setSound = (patch: Partial<ChatSoundConfig>) =>
+    onSoundChange({ ...sound, ...patch });
 
   return (
     <div className="min-w-0 space-y-3">
@@ -129,14 +179,25 @@ export function SettingsMultiChatTts({
           </span>
         </div>
         <p className="text-caption text-text-dim">
-          A short ding whenever new chat arrives (bursts collapse into one
-          ding). Synthesized in the Browser Source — no audio files.
+          A short sound whenever new chat arrives (bursts collapse into
+          one). Every effect is synthesized in the Browser Source — no
+          audio files.
         </p>
         {sound.enabled ? (
           <div className="flex flex-wrap items-end gap-4">
             <label className="block w-56 min-w-0">
+              <div className="mb-1 text-caption text-text-dim">Sound</div>
+              <EffectSelect
+                ariaLabel="Message sound effect"
+                value={sound.messageSound}
+                onChange={(messageSound) =>
+                  setSound({ messageSound: messageSound as SoundEffectId })
+                }
+              />
+            </label>
+            <label className="block w-56 min-w-0">
               <div className="mb-1 text-caption text-text-dim">
-                Ding volume{" "}
+                Volume{" "}
                 <span className="tabular-nums text-text">{sound.volume}%</span>
               </div>
               <input
@@ -144,16 +205,89 @@ export function SettingsMultiChatTts({
                 min={0}
                 max={100}
                 value={sound.volume}
+                onChange={(e) => setSound({ volume: Number(e.target.value) })}
+                className="w-full accent-[var(--accent,#3ec0c7)]"
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => previewEffect(sound.messageSound, sound.volume)}
+            >
+              <Bell className="mr-1 h-3.5 w-3.5" aria-hidden />
+              Preview
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Toggle
+            checked={sound.eventSoundsEnabled}
+            onChange={(on) => setSound({ eventSoundsEnabled: on })}
+            label="Enable alert sounds"
+          />
+          <span className="text-body font-medium text-text">Alert sounds</span>
+        </div>
+        <p className="text-caption text-text-dim">
+          Plays on the <b>Chat event alerts</b> widget when a sub, raid,
+          gift, or other platform event lands — pick a vibe per event, from
+          classy chimes to the airhorn. The widget&apos;s Test button
+          auditions them on stream.
+        </p>
+        {sound.eventSoundsEnabled ? (
+          <div className="space-y-3">
+            <label className="block w-56 min-w-0">
+              <div className="mb-1 text-caption text-text-dim">
+                Alert volume{" "}
+                <span className="tabular-nums text-text">
+                  {sound.eventVolume}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={sound.eventVolume}
                 onChange={(e) =>
-                  onSoundChange({ ...sound, volume: Number(e.target.value) })
+                  setSound({ eventVolume: Number(e.target.value) })
                 }
                 className="w-full accent-[var(--accent,#3ec0c7)]"
               />
             </label>
-            <Button size="sm" variant="secondary" onClick={previewDing}>
-              <Bell className="mr-1 h-3.5 w-3.5" aria-hidden />
-              Preview ding
-            </Button>
+            <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+              {CHAT_EVENT_KINDS.map((kind: ChatEventKind) => (
+                <div key={kind} className="flex min-w-0 items-end gap-1.5">
+                  <label className="block min-w-0 flex-1">
+                    <div className="mb-1 text-caption text-text-dim">
+                      {EVENT_KIND_LABEL[kind]}
+                    </div>
+                    <EffectSelect
+                      ariaLabel={`${EVENT_KIND_LABEL[kind]} sound effect`}
+                      allowNone
+                      value={sound.eventSounds[kind]}
+                      onChange={(next) =>
+                        setSound({
+                          eventSounds: { ...sound.eventSounds, [kind]: next },
+                        })
+                      }
+                    />
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    aria-label={`Preview ${EVENT_KIND_LABEL[kind]} sound`}
+                    disabled={sound.eventSounds[kind] === "none"}
+                    onClick={() =>
+                      previewEffect(sound.eventSounds[kind], sound.eventVolume)
+                    }
+                  >
+                    <Play className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>

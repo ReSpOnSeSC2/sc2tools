@@ -184,26 +184,109 @@ function sanitizeChatTts(raw) {
   };
 }
 
-/* ──────────────── message ding ──────────────── */
+/* ──────────────── sounds (message ding + event alerts) ──────────────── */
 
-const DEFAULT_SOUND = Object.freeze({ enabled: false, volume: 60 });
+/**
+ * Whitelisted synthesized-effect ids — mirror of
+ * apps/web/lib/multichat/soundEffects.ts SOUND_EFFECT_IDS.
+ */
+const SOUND_EFFECT_IDS = [
+  "ding",
+  "pop",
+  "doorbell",
+  "sparkle",
+  "laser",
+  "power-up",
+  "riser",
+  "boom",
+  "coin",
+  "victory",
+  "airhorn",
+  "bass-drop",
+  "sad-trombone",
+  "boing",
+  "slide-whistle",
+  "drumroll",
+];
+
+/** Event kinds — mirror of apps/web/lib/multichat/events.ts. */
+const CHAT_EVENT_KINDS = [
+  "sub",
+  "resub",
+  "giftsub",
+  "raid",
+  "member",
+  "superchat",
+  "gift",
+  "follow",
+];
+
+/** Per-kind defaults — mirror of sound.ts DEFAULT_EVENT_SOUNDS. */
+const DEFAULT_EVENT_SOUNDS = Object.freeze({
+  sub: "victory",
+  resub: "victory",
+  giftsub: "airhorn",
+  raid: "airhorn",
+  member: "sparkle",
+  superchat: "coin",
+  gift: "coin",
+  follow: "pop",
+});
+
+const DEFAULT_SOUND = Object.freeze({
+  enabled: false,
+  volume: 60,
+  messageSound: "ding",
+  eventSoundsEnabled: false,
+  eventVolume: 70,
+});
+
+/**
+ * @param {unknown} raw
+ * @param {number} fallback
+ */
+function clampVolume(raw, fallback) {
+  const v = Number(raw);
+  return Number.isFinite(v)
+    ? Math.min(100, Math.max(0, Math.round(v)))
+    : fallback;
+}
 
 /**
  * Mirror of apps/web/lib/multichat/sound.ts sanitizeSoundConfig.
+ * Always emits every event kind ("none" silences one) so the widget's
+ * config-section JSON diffing sees a stable shape.
  *
  * @param {unknown} raw
- * @returns {{ enabled: boolean, volume: number }}
  */
 function sanitizeChatSound(raw) {
   const s = /** @type {Record<string, unknown>} */ (
     raw && typeof raw === "object" ? raw : {}
   );
-  const volume = Number(s.volume);
+  const rawEvents = /** @type {Record<string, unknown>} */ (
+    s.eventSounds && typeof s.eventSounds === "object" ? s.eventSounds : {}
+  );
+  /** @type {Record<string, string>} */
+  const eventSounds = {};
+  for (const kind of CHAT_EVENT_KINDS) {
+    const v = rawEvents[kind];
+    eventSounds[kind] =
+      v === "none" || SOUND_EFFECT_IDS.includes(/** @type {string} */ (v))
+        ? /** @type {string} */ (v)
+        : DEFAULT_EVENT_SOUNDS[/** @type {keyof typeof DEFAULT_EVENT_SOUNDS} */ (kind)];
+  }
   return {
     enabled: typeof s.enabled === "boolean" ? s.enabled : DEFAULT_SOUND.enabled,
-    volume: Number.isFinite(volume)
-      ? Math.min(100, Math.max(0, Math.round(volume)))
-      : DEFAULT_SOUND.volume,
+    volume: clampVolume(s.volume, DEFAULT_SOUND.volume),
+    messageSound: SOUND_EFFECT_IDS.includes(/** @type {string} */ (s.messageSound))
+      ? /** @type {string} */ (s.messageSound)
+      : DEFAULT_SOUND.messageSound,
+    eventSoundsEnabled:
+      typeof s.eventSoundsEnabled === "boolean"
+        ? s.eventSoundsEnabled
+        : DEFAULT_SOUND.eventSoundsEnabled,
+    eventVolume: clampVolume(s.eventVolume, DEFAULT_SOUND.eventVolume),
+    eventSounds,
   };
 }
 
@@ -214,4 +297,6 @@ module.exports = {
   DEFAULT_APPEARANCE,
   DEFAULT_TTS,
   DEFAULT_SOUND,
+  SOUND_EFFECT_IDS,
+  DEFAULT_EVENT_SOUNDS,
 };
