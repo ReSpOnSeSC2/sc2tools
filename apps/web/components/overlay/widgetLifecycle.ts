@@ -50,7 +50,9 @@ export type WidgetId =
   | "chat-oracle"
   | "supporter-wall"
   | "clip-flag"
-  | "lower-third";
+  | "lower-third"
+  | "stats-ticker"
+  | "countdown-timer";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -81,6 +83,8 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "supporter-wall",
   "clip-flag",
   "lower-third",
+  "stats-ticker",
+  "countdown-timer",
 ];
 
 /**
@@ -152,6 +156,8 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   "supporter-wall": null,
   "clip-flag": null,
   "lower-third": 14 * 1000,
+  "stats-ticker": null,
+  "countdown-timer": null,
 };
 
 /**

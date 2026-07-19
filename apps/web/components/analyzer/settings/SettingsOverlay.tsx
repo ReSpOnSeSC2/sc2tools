@@ -149,6 +149,16 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     hint: "A W-L + net-MMR recap card you fire on demand from the Stream Dock. Test fires a sample recap.",
   },
   {
+    id: "countdown-timer",
+    label: "Countdown timer",
+    hint: "A standalone on-stream countdown you set from the Stream Dock (label + minutes) — pulses TIME! at zero until cleared. Test shows a demo timer.",
+  },
+  {
+    id: "stats-ticker",
+    label: "Stats ticker",
+    hint: "Always-on scrolling bottom line: session record, latest result, rank, goals, live prediction call, top supporters. Test shows a demo strip.",
+  },
+  {
     id: "lower-third",
     label: "Broadcast lower third",
     hint: "Esports-caster bar after each game: result, MMR delta, opponent head-to-head, session record. Test fires a sample game.",

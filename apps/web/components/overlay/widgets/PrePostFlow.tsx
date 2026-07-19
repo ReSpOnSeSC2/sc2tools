@@ -31,3 +31,5 @@ export { ChatOracleWidget } from "./ChatOracleWidget";
 export { SupporterWallWidget } from "./SupporterWallWidget";
 export { ClipFlagWidget } from "./ClipFlagWidget";
 export { LowerThirdWidget } from "./LowerThirdWidget";
+export { StatsTickerWidget } from "./StatsTickerWidget";
+export { CountdownTimerWidget } from "./CountdownTimerWidget";

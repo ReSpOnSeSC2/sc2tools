@@ -44,6 +44,8 @@ const KNOWN_WIDGETS = Object.freeze([
   "supporter-wall",
   "clip-flag",
   "lower-third",
+  "stats-ticker",
+  "countdown-timer",
 ]);
 
 /**

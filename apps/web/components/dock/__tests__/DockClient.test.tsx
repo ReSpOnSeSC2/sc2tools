@@ -23,6 +23,8 @@ const EMPTY_STUDIO = {
   goals: [],
   blockedUsers: [],
   recapSeq: 0,
+  scene: null,
+  timer: null,
   updatedAt: null,
 };
 
@@ -238,6 +240,27 @@ describe("DockClient", () => {
       expect(studioPosts()).toHaveLength(2);
     });
     expect(studioPosts()[1]).toEqual({ scene: null });
+  });
+
+  it("Timer: Start posts endsAt; Clear posts null", async () => {
+    render(<DockClient token="tok_test" />);
+    fireEvent.change(await screen.findByPlaceholderText(/Optional label/), {
+      target: { value: "Next game in" },
+    });
+    const before = Date.now();
+    fireEvent.click(screen.getByRole("button", { name: "⏱ Start timer" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(1);
+    });
+    const t = (studioPosts()[0] as { timer: Record<string, unknown> }).timer;
+    expect(t.label).toBe("Next game in");
+    expect(Number(t.endsAt)).toBeGreaterThanOrEqual(before + 5 * 60_000 - 50);
+    expect(await screen.findByText(/Next game in on stream/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    await waitFor(() => {
+      expect(studioPosts()).toHaveLength(2);
+    });
+    expect(studioPosts()[1]).toEqual({ timer: null });
   });
 
   it("renders the goals editor", async () => {

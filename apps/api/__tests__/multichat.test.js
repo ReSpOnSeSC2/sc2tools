@@ -648,6 +648,24 @@ describe("routes/multichat studio", () => {
     expect(again.body.goals).toEqual([]);
   });
 
+  test("timer round-trips; past/junk clears", async () => {
+    const future = Date.now() + 5 * 60_000;
+    const set = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ timer: { label: "x".repeat(100), endsAt: future, evil: 1 } });
+    expect(set.body.timer.endsAt).toBe(future);
+    expect(set.body.timer.label.length).toBe(40);
+    expect(set.body.timer.evil).toBeUndefined();
+    const past = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ timer: { endsAt: 1000 } });
+    expect(past.body.timer).toBeNull();
+    const cleared = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ timer: null });
+    expect(cleared.body.timer).toBeNull();
+  });
+
   test("recap trigger increments a sequence; clears work", async () => {
     const r1 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true });
     const r2 = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ recap: true, highlight: null, poll: null });
