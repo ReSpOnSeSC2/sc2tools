@@ -352,13 +352,25 @@ class OverlayLiveService {
     // The previous game must be comparable: same account, same ladder
     // race, replay-verified — a region/account switch may not fake a
     // thousand-MMR swing on stream.
+    //
+    // Sign guard: replay ``myMmr`` is the game-START rating, so
+    // prev→this actually measures the PREVIOUS game's outcome. Most
+    // of the time the two agree (streaks), but after a result flip
+    // the lagged value contradicts this game's verified result —
+    // streamers saw "Victory — -35 MMR swing" on the clip log. A
+    // ranked win never loses rating, so a sign-contradicting delta is
+    // provably not this game's swing: suppress it rather than lie.
     if (Number.isFinite(Number(game.myMmr))) {
       const prev = await this._previousGameMmr(userId, game.gameId, game.date, {
         myToonHandle: game.myToonHandle,
         ladderRace: game.myLadderRace || game.myRace,
       });
       if (prev !== null) {
-        payload.mmrDelta = Number(game.myMmr) - prev;
+        const delta = Number(game.myMmr) - prev;
+        const contradicts =
+          (payload.result === "win" && delta < 0) ||
+          (payload.result === "loss" && delta > 0);
+        if (!contradicts) payload.mmrDelta = delta;
       }
     }
 
