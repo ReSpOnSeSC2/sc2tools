@@ -194,6 +194,56 @@ describe("services/catalog", () => {
     }
   });
 
+  test("mapImagePath layout variant serves the jpg render, never the manifest webp", () => {
+    const dir = tempDir();
+    try {
+      const images = path.join(dir, "data", "map-images");
+      fs.mkdirSync(images, { recursive: true });
+      fs.writeFileSync(path.join(images, "alcyone_le.webp"), Buffer.from("WEBP"));
+      fs.writeFileSync(path.join(images, "alcyone_le.jpg"), Buffer.from("LAYOUT"));
+      fs.writeFileSync(
+        path.join(images, "manifest.json"),
+        JSON.stringify({
+          maps: [
+            {
+              id: "alcyone",
+              displayName: "Alcyone LE",
+              aliases: ["Alcyone"],
+              image: { filename: "alcyone_le.webp", sha256: "b".repeat(64) },
+            },
+          ],
+        }),
+      );
+      const svc = new CatalogService({}, { projectDir: dir });
+
+      // Default lookup keeps the optimized manifest thumbnail.
+      expect(svc.mapImagePath("Alcyone LE")?.path).toContain("alcyone_le.webp");
+      // Layout lookup returns the full top-down render instead.
+      const layout = svc.mapImagePath("Alcyone LE", { variant: "layout" });
+      expect(layout?.path).toContain("alcyone_le.jpg");
+      expect(layout?.contentType).toBe("image/jpeg");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("mapImagePath layout variant returns null when only a webp thumbnail exists", () => {
+    const dir = tempDir();
+    try {
+      const images = path.join(dir, "data", "map-images");
+      fs.mkdirSync(images, { recursive: true });
+      fs.writeFileSync(path.join(images, "post_youth_le.webp"), Buffer.from("WEBP"));
+      const svc = new CatalogService({}, { projectDir: dir });
+
+      // The 640×360 webp is a 16:9 crop — geometry can't align to world
+      // coordinates, so the layout variant must 404 rather than serve it.
+      expect(svc.mapImagePath("Post-Youth LE")).not.toBeNull();
+      expect(svc.mapImagePath("Post-Youth LE", { variant: "layout" })).toBeNull();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("mapImagePath prefers data/map_assets PascalCase when present", () => {
     const dir = tempDir();
     try {

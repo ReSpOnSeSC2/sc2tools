@@ -23,13 +23,19 @@ corresponding GitHub Release.
 ### Added
 
 - **Map replayer (vespene.gg-style)** — watch any game back on its
-  actual map: unit movements interpolated along their real replay
-  tracks, buildings appearing as they're placed, battle pulses,
+  actual map: the real top-down layout render draws under the action
+  (`/v1/map-image?variant=layout`, from the same artwork library the
+  map thumbnails ship from), unit movements interpolate along their
+  real replay tracks, buildings appear as they're placed with their
+  in-game icons framed in each side's color, units render with their
+  in-game icons too (workers dimmed and smaller), plus battle pulses,
   spawn markers, a scrubbable timeline with 1×–16× playback, and a
   live per-side HUD (army value · workers · supply). Stacked armies
   render with deterministic sunflower cluster-spreading so a 20-unit
-  ball reads as a tidy blob of distinguishable dots instead of one
-  pixel. Lives on each game's analysis page and inside the macro
+  ball reads as a tidy blob of distinguishable icons instead of one
+  pixel; maps without a layout render fall back to the flat
+  background, and names without a shipped icon fall back to the
+  original dot/square markers. Lives on each game's analysis page and inside the macro
   breakdown drilldown. The desktop agent now uploads a compact
   playback payload with each replay (bounded unit tracks, ~1 MB
   worst case, stored in the per-game detail store); games synced by

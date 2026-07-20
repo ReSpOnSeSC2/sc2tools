@@ -34,7 +34,11 @@ function buildMapImageRouter(deps) {
         res.status(400).json({ error: { code: "map_required" } });
         return;
       }
-      const found = deps.catalog.mapImagePath(name);
+      // variant=layout serves the full top-down layout render (the map
+      // replayer's background); anything else gets the default thumbnail.
+      const variant =
+        String(req.query.variant || "") === "layout" ? "layout" : undefined;
+      const found = deps.catalog.mapImagePath(name, { variant });
       if (!found) {
         res.status(404).json({ error: { code: "map_image_not_found" } });
         return;

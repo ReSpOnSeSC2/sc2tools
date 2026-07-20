@@ -3,6 +3,7 @@ import {
   availableMapImages,
   canonicalMapImageKey,
   getMapImageUrl,
+  getMapLayoutUrl,
   resolveMapImage,
 } from "../map-images";
 
@@ -29,5 +30,19 @@ describe("map image registry", () => {
   it("does not request unknown artwork", () => {
     expect(resolveMapImage("A Map That Does Not Exist")).toBeNull();
     expect(getMapImageUrl("A Map That Does Not Exist")).toBeNull();
+  });
+
+  it("builds layout URLs from the raw name without manifest gating", () => {
+    // The layout render set is resolved server-side and differs from
+    // the thumbnail manifest — a name the manifest doesn't know must
+    // still produce a URL (the API 404s and the replayer falls back).
+    expect(getMapLayoutUrl("Alcyone LE")).toContain(
+      "/v1/map-image?map=Alcyone%20LE&variant=layout",
+    );
+    expect(getMapLayoutUrl("A Map That Does Not Exist")).toContain(
+      "variant=layout",
+    );
+    expect(getMapLayoutUrl("")).toBeNull();
+    expect(getMapLayoutUrl(null)).toBeNull();
   });
 });

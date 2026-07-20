@@ -180,6 +180,19 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   orbital: { kind: "building", key: "orbitalcommand" },
   planetary: { kind: "building", key: "planetaryfortress" },
   nydus: { kind: "building", key: "nydusnetwork" },
+  // Lift-off / state morphs. The map-playback payload keeps the state
+  // name a structure had when the event fired (a lifted Barracks is a
+  // "BarracksFlying" in tracker events, a lowered depot a
+  // "SupplyDepotLowered"), but the in-game icon is the same structure.
+  barracksflying: { kind: "building", key: "barracks" },
+  commandcenterflying: { kind: "building", key: "commandcenter" },
+  factoryflying: { kind: "building", key: "factory" },
+  orbitalcommandflying: { kind: "building", key: "orbitalcommand" },
+  starportflying: { kind: "building", key: "starport" },
+  supplydepotlowered: { kind: "building", key: "supplydepot" },
+  // The canal is the worm exit of a Nydus Network — same icon.
+  nyduscanal: { kind: "building", key: "nydusnetwork" },
+  nydusworm: { kind: "building", key: "nydusnetwork" },
   // Terran add-ons. sc2reader / the build log name these per parent
   // structure (BarracksReactor, FactoryTechLab, StarportReactor, …).
   // They all share the same in-game add-on model, so every *Reactor

@@ -99,11 +99,17 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       wp.push(t, x, y);
     }
     if (!o || wp.length === 0) continue;
+    // ``num`` alone is a trap for born/died: the wire encodes "still
+    // alive" as ``died: null`` and ``Number(null)`` is 0, which would
+    // mark every surviving unit dead at t=0 and hide it for the whole
+    // playback. Treat null/undefined as absent BEFORE coercing.
+    const born = r.born === null || r.born === undefined ? NaN : num(r.born);
+    const died = r.died === null || r.died === undefined ? NaN : num(r.died);
     units.push({
       owner: o,
       name: typeof r.name === "string" ? r.name.slice(0, 40) : "",
-      born: Number.isFinite(num(r.born)) ? num(r.born) : wp[0],
-      died: Number.isFinite(num(r.died)) ? num(r.died) : null,
+      born: Number.isFinite(born) ? born : wp[0],
+      died: Number.isFinite(died) ? died : null,
       wp,
     });
   }
