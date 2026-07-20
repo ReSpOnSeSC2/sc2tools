@@ -8,6 +8,7 @@ import {
   spreadClusters,
   statsAt,
   unitAliveAt,
+  unitMaxSpeed,
   unitPositionAt,
   worldProjection,
 } from "../mapReplay";
@@ -96,6 +97,34 @@ describe("unit interpolation", () => {
   it("interpolates linearly between waypoints", () => {
     expect(unitPositionAt(wp, 125)).toEqual({ x: 35, y: 45 });
     expect(unitPositionAt(wp, 135)).toEqual({ x: 50, y: 60 });
+  });
+
+  it("speed cap holds the anchor then arrives on time (anti-float)", () => {
+    // 30-cell hop with a 5-minute gap: naive lerp drifts the whole
+    // window; capped at 5 cells/sec the unit sits still for 294 s and
+    // travels only during the final 6 s.
+    const sparse = [0, 10, 10, 300, 40, 10];
+    expect(unitPositionAt(sparse, 150, 5)).toEqual({ x: 10, y: 10 });
+    expect(unitPositionAt(sparse, 293, 5)).toEqual({ x: 10, y: 10 });
+    const mid = unitPositionAt(sparse, 297, 5)!;
+    expect(mid.x).toBeCloseTo(25, 5);
+    expect(mid.y).toBe(10);
+    expect(unitPositionAt(sparse, 300, 5)).toEqual({ x: 40, y: 10 });
+    // Without a cap the old drift behaviour is preserved.
+    expect(unitPositionAt(sparse, 150)).toEqual({ x: 25, y: 10 });
+  });
+
+  it("speed cap degrades to plain lerp inside tight gaps", () => {
+    // 30 cells in 5 s implies 6 cells/sec — faster than the cap, so
+    // depart clamps to the segment start and lerp takes over.
+    const tight = [0, 10, 10, 5, 40, 10];
+    expect(unitPositionAt(tight, 2.5, 5)).toEqual({ x: 25, y: 10 });
+  });
+
+  it("unitMaxSpeed distinguishes workers from army", () => {
+    expect(unitMaxSpeed("Probe")).toBeCloseTo(3.94);
+    expect(unitMaxSpeed("SCV")).toBeCloseTo(3.94);
+    expect(unitMaxSpeed("Stalker")).toBeGreaterThan(unitMaxSpeed("Drone"));
   });
 
   it("aliveAt respects born/died and immortal units", () => {

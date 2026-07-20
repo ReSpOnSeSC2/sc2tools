@@ -8,8 +8,10 @@
  * canvas with a scrubbable timeline: play/pause, 1×–16× speed, and a
  * live HUD (army value · workers · supply per side). The real map
  * layout render (``/v1/map-image?variant=layout``) draws under the
- * action, stretched to the playable bounds; buildings and units render
- * with their in-game icons (``/icons/sc2``) framed in the side color —
+ * action, stretched to the playable bounds; buildings render their
+ * in-game icons framed in the side color, units render as bare
+ * team-tinted icons (no ring, box, or backing — the unit art reads
+ * directly, washed toward the owner color) —
  * with deterministic cluster spreading so a stacked army reads as a
  * blob of distinguishable icons instead of one pixel (see
  * ``spreadClusters`` in lib/mapReplay.ts). Both layers degrade
@@ -38,6 +40,7 @@ import {
   spreadClusters,
   statsAt,
   unitAliveAt,
+  unitMaxSpeed,
   unitPositionAt,
   worldProjection,
   type MapPlayback,
@@ -57,13 +60,16 @@ const BATTLE_WINDOW_SEC = 12;
  * Spacing is sized to the army icon (units overlap about half an icon
  * inside a cluster: dense enough to read as one army, loose enough to
  * count heads). */
-const CLUSTER_CELL_PX = 10;
-const CLUSTER_SPACING_PX = 6.5;
+const CLUSTER_CELL_PX = 12;
+const CLUSTER_SPACING_PX = 8;
 /** Marker sizes in canvas px. */
-const ARMY_ICON_PX = 13;
-const WORKER_ICON_PX = 9;
-const BUILDING_ICON_PX = 14;
-const TOWNHALL_ICON_PX = 20;
+const ARMY_ICON_PX = 16;
+const WORKER_ICON_PX = 11;
+const BUILDING_ICON_PX = 16;
+const TOWNHALL_ICON_PX = 24;
+/** Canvas height ceiling — high enough that a square map fills the
+ * column width instead of letterboxing (the "zoom"). */
+const CANVAS_MAX_H_PX = 720;
 /** Dark veil over the layout render so the cyan/red overlay language
  * stays readable on busy map art. */
 const LAYOUT_VEIL = "rgba(6,9,14,0.42)";
@@ -81,6 +87,11 @@ const iconElementCache = new Map<string, HTMLImageElement | null>();
 /** Memoized ``getIconPath`` — name→path resolution does string
  * normalization, too hot to repeat per marker per rAF frame. */
 const iconPathCache = new Map<string, string | null>();
+/** Bumped whenever an icon or layout render finishes (or fails)
+ * loading. The draw loop uses it as a dirty flag so a PAUSED replay
+ * stops re-rendering every frame — a real battery cost on mobile —
+ * while still picking up late-decoding assets. */
+let assetsVersion = 0;
 
 function resolveIconPath(name: string, kind: IconKind): string | null {
   const key = `${kind}:${name}`;
@@ -100,11 +111,58 @@ function readyIcon(name: string, kind: IconKind): HTMLImageElement | null {
     if (typeof Image === "undefined") return null; // non-DOM test envs
     img = new Image();
     img.decoding = "async";
-    img.onerror = () => iconElementCache.set(path, null);
+    img.onload = () => {
+      assetsVersion += 1;
+    };
+    img.onerror = () => {
+      iconElementCache.set(path, null);
+      assetsVersion += 1;
+    };
     img.src = path;
     iconElementCache.set(path, img);
   }
   return img && img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/** Team-tinted unit icons — the bare unit art (the PNGs carry real
+ * transparency) washed toward the owner color via source-atop, with
+ * no ring, box, or backing shape around it. Pre-rendered once per
+ * (icon, tint, size, dpr) so the rAF loop draws one cached bitmap
+ * per unit. */
+const unitTokenCache = new Map<string, HTMLCanvasElement>();
+/** How strongly the owner color washes the icon art. High enough to
+ * read the side at a glance, low enough that the unit stays
+ * recognizable. */
+const TINT_ALPHA = 0.42;
+
+function unitToken(
+  name: string,
+  tint: string,
+  sizePx: number,
+  dpr: number,
+): HTMLCanvasElement | null {
+  const icon = readyIcon(name, "unit");
+  if (!icon) return null;
+  const path = resolveIconPath(name, "unit");
+  const key = `${path}|${tint}|${sizePx}|${dpr}`;
+  const cached = unitTokenCache.get(key);
+  if (cached) return cached;
+  if (typeof document === "undefined") return null;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(sizePx * dpr));
+  c.height = c.width;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.scale(dpr, dpr);
+  g.drawImage(icon, 0, 0, sizePx, sizePx);
+  // source-atop confines the fill to the icon's own alpha, so only
+  // the unit art itself takes the team color.
+  g.globalCompositeOperation = "source-atop";
+  g.globalAlpha = TINT_ALPHA;
+  g.fillStyle = tint;
+  g.fillRect(0, 0, sizePx, sizePx);
+  unitTokenCache.set(key, c);
+  return c;
 }
 
 export function MapReplayer({ playback }: { playback: MapPlayback }) {
@@ -136,7 +194,10 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
     const img = new Image();
     img.decoding = "async";
     img.onload = () => {
-      if (!cancelled) layoutImageRef.current = img;
+      if (!cancelled) {
+        layoutImageRef.current = img;
+        assetsVersion += 1;
+      }
     };
     img.src = url;
     return () => {
@@ -183,9 +244,27 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         }
       }
       lastTs = ts;
-      renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current);
+      // Dirty-check: a paused replay re-renders only when the scrub
+      // time, canvas size, or asset readiness actually changed —
+      // otherwise a static frame would burn battery at 60 fps.
+      const dirty =
+        playingRef.current ||
+        timeRef.current !== drawn.t ||
+        assetsVersion !== drawn.v ||
+        canvas.width !== drawn.cw ||
+        canvas.height !== drawn.ch;
+      if (dirty) {
+        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current);
+        drawn = {
+          t: timeRef.current,
+          v: assetsVersion,
+          cw: canvas.width,
+          ch: canvas.height,
+        };
+      }
     };
     let lastReactSync = -1;
+    let drawn = { t: -1, v: -1, cw: 0, ch: 0 };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [playback, gameLength]);
@@ -202,7 +281,7 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         (playback.bounds.maxY - playback.bounds.minY) /
         (playback.bounds.maxX - playback.bounds.minX);
       const w = Math.max(280, rect.width);
-      const h = Math.max(220, Math.min(560, w * aspect));
+      const h = Math.max(220, Math.min(CANVAS_MAX_H_PX, w * aspect));
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       canvas.width = Math.round(w * dpr);
@@ -223,32 +302,40 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
   return (
     <div className="space-y-2" data-testid="map-replayer">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Fixed width so ▶ Play / ❚❚ Pause toggling never shifts the
+            row; taller touch targets below the sm breakpoint. */}
         <button
           type="button"
           onClick={() => {
             if (!playing && timeRef.current >= gameLength) setTime(0);
             setPlaying((p) => !p);
           }}
-          className="rounded-md border border-border bg-bg-elevated px-3 py-1 text-caption font-semibold text-text hover:border-accent"
+          className="inline-flex min-w-[5.5rem] items-center justify-center rounded-md border border-border bg-bg-elevated px-3 py-2 text-caption font-semibold text-text hover:border-accent sm:py-1"
         >
           {playing ? "❚❚ Pause" : "▶ Play"}
         </button>
-        {SPEEDS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setSpeed(s)}
-            aria-pressed={speed === s}
-            className={`rounded-md border px-2 py-1 text-micro font-semibold ${
-              speed === s
-                ? "border-accent bg-accent/15 text-text"
-                : "border-border bg-bg-elevated text-text-muted hover:border-accent"
-            }`}
-          >
-            {s}×
-          </button>
-        ))}
-        <span className="ml-auto text-caption tabular-nums text-text-muted">
+        <div
+          role="group"
+          aria-label="Playback speed"
+          className="flex items-center gap-1"
+        >
+          {SPEEDS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSpeed(s)}
+              aria-pressed={speed === s}
+              className={`min-w-[2.5rem] rounded-md border px-2 py-2 text-micro font-semibold sm:min-w-0 sm:py-1 ${
+                speed === s
+                  ? "border-accent bg-accent/15 text-text"
+                  : "border-border bg-bg-elevated text-text-muted hover:border-accent"
+              }`}
+            >
+              {s}×
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto whitespace-nowrap text-caption tabular-nums text-text-muted">
           {formatTime(timeSec)} / {formatTime(gameLength)}
         </span>
       </div>
@@ -261,6 +348,7 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         />
       </div>
 
+      {/* h-6 keeps the native range comfortably draggable on touch. */}
       <input
         type="range"
         min={0}
@@ -269,18 +357,19 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         value={Math.round(timeSec)}
         onChange={(e) => setTime(Number(e.target.value))}
         aria-label="Playback position"
-        className="w-full accent-[#3ec0c7]"
+        aria-valuetext={`${formatTime(timeSec)} of ${formatTime(gameLength)}`}
+        className="h-6 w-full cursor-pointer accent-[#3ec0c7]"
       />
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-caption tabular-nums">
-        <span>
+        <span className="whitespace-nowrap">
           <b style={{ color: ME_ARMY }}>You</b>{" "}
           <span className="text-text-muted">
             army {Math.round(me.army)} · {Math.round(me.workers)} workers ·{" "}
             {Math.round(me.supply)} supply
           </span>
         </span>
-        <span>
+        <span className="whitespace-nowrap">
           <b style={{ color: OPP_ARMY }}>Opponent</b>{" "}
           <span className="text-text-muted">
             army {Math.round(opp.army)} · {Math.round(opp.workers)} workers ·{" "}
@@ -305,7 +394,8 @@ function renderFrame(
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
   const { bounds } = playback;
-  const proj = worldProjection(bounds, w, h);
+  // Tight padding: nearly every canvas pixel shows map.
+  const proj = worldProjection(bounds, w, h, 4);
 
   ctx.clearRect(0, 0, w, h);
 
@@ -359,7 +449,11 @@ function renderFrame(
   const alive: Array<{ idx: number; x: number; y: number }> = [];
   playback.units.forEach((u, idx) => {
     if (!unitAliveAt(u, t)) return;
-    const pos = unitPositionAt(u.wp, t);
+    // Speed-capped interpolation: a unit HOLDS its last known anchor
+    // (mining, building, sieged) and departs at the last moment that
+    // still arrives on time — instead of drifting across the map for
+    // the whole gap between sparse waypoints.
+    const pos = unitPositionAt(u.wp, t, unitMaxSpeed(u.name));
     if (!pos) return;
     alive.push({
       idx,
@@ -379,25 +473,13 @@ function renderFrame(
     const unit = playback.units[alive[i].idx];
     const worker = isWorkerUnit(unit.name);
     const mine = unit.owner === "me";
-    const icon = readyIcon(unit.name, "unit");
-    if (icon) {
-      const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
-      if (worker) ctx.globalAlpha = 0.72;
-      ctx.drawImage(icon, pos.x - size / 2, pos.y - size / 2, size, size);
-      ctx.strokeStyle = mine
-        ? worker
-          ? ME_WORKER
-          : ME_ARMY
-        : worker
-          ? OPP_WORKER
-          : OPP_ARMY;
-      ctx.lineWidth = 1.25;
-      ctx.strokeRect(
-        pos.x - size / 2 + 0.5,
-        pos.y - size / 2 + 0.5,
-        size - 1,
-        size - 1,
-      );
+    // Bare team-tinted icons — nothing drawn around the unit art, so
+    // the unit type reads directly; workers dim slightly.
+    const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
+    const token = unitToken(unit.name, mine ? ME_ARMY : OPP_ARMY, size, dpr);
+    if (token) {
+      if (worker) ctx.globalAlpha = 0.75;
+      ctx.drawImage(token, pos.x - size / 2, pos.y - size / 2, size, size);
       if (worker) ctx.globalAlpha = 1;
     } else {
       ctx.beginPath();
