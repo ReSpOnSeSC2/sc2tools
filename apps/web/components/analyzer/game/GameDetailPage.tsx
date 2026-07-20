@@ -10,7 +10,6 @@ import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakd
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameDetailShell } from "./GameDetailShell";
 import { InteractiveTimeline } from "./InteractiveTimeline";
-import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
 import { BuildOrderColumns } from "./BuildOrderColumns";
 import { LossAutopsyCard } from "./LossAutopsyCard";
@@ -146,10 +145,10 @@ export function GameDetailPage({
         oppName={oppName}
       />
 
-      {/* Vespene-style map replay — unit movements, buildings and
-          battles over the real map. Renders a one-line hint for games
-          synced before the agent computed playback data. */}
-      <MapReplaySection gameId={game.gameId} />
+      {/* Map replay is intentionally unmounted: the agent still
+          uploads playback payloads and /v1/games/:id/map-playback
+          still serves them, so re-enabling is just restoring
+          <MapReplaySection gameId={game.gameId} /> here. */}
 
       <div className="grid gap-6 md:grid-cols-2">
         <MechanicsPanel
