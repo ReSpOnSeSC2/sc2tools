@@ -62,6 +62,21 @@ export function getMapImageUrl(mapName: string | null | undefined): string | nul
   return `${apiBase}/v1/map-image?map=${encodeURIComponent(entry.displayName)}`;
 }
 
+/**
+ * URL of the full top-down layout render the map replayer draws under
+ * unit positions (``variant=layout`` serves the large ``.jpg``
+ * originals, never the 16:9-cropped thumbnails). Unlike
+ * ``getMapImageUrl`` this is NOT gated on the generated thumbnail
+ * manifest — the layout set is resolved server-side from the raw name
+ * and a 404 simply leaves the replayer on its flat background.
+ */
+export function getMapLayoutUrl(mapName: string | null | undefined): string | null {
+  const name = String(mapName || "").trim();
+  if (!name) return null;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
+  return `${apiBase}/v1/map-image?map=${encodeURIComponent(name)}&variant=layout`;
+}
+
 export function availableMapImages(): readonly MapImageEntry[] {
   return manifest.maps;
 }

@@ -56,3 +56,35 @@ describe("sc2-icons - Terran add-ons", () => {
     );
   });
 });
+
+describe("sc2-icons - lift-off and state-morph names", () => {
+  it("resolves flying Terran structures onto their grounded icon", () => {
+    expect(getIconPath("BarracksFlying", "building")).toBe(
+      "/icons/sc2/buildings/barracks.png",
+    );
+    expect(getIconPath("CommandCenterFlying", "building")).toBe(
+      "/icons/sc2/buildings/commandcenter.png",
+    );
+    expect(getIconPath("FactoryFlying", "building")).toBe(
+      "/icons/sc2/buildings/factory.png",
+    );
+    expect(getIconPath("OrbitalCommandFlying", "building")).toBe(
+      "/icons/sc2/buildings/orbitalcommand.png",
+    );
+    expect(getIconPath("StarportFlying", "building")).toBe(
+      "/icons/sc2/buildings/starport.png",
+    );
+  });
+
+  it("resolves lowered depots and Nydus exits", () => {
+    expect(getIconPath("SupplyDepotLowered", "building")).toBe(
+      "/icons/sc2/buildings/supplydepot.png",
+    );
+    expect(getIconPath("NydusCanal", "building")).toBe(
+      "/icons/sc2/buildings/nydusnetwork.png",
+    );
+    expect(getIconPath("NydusWorm", "building")).toBe(
+      "/icons/sc2/buildings/nydusnetwork.png",
+    );
+  });
+});

@@ -45,6 +45,32 @@ describe("public map image route", () => {
     expect(Buffer.from(res.body).toString()).toBe("REAL-WEBP-BYTES");
   });
 
+  test("forwards variant=layout to the catalog resolver and ignores junk variants", async () => {
+    const seen = [];
+    const app = express();
+    app.use(
+      "/v1",
+      buildMapImageRouter({
+        catalog: {
+          mapImagePath: (name, opts) => {
+            seen.push([name, opts]);
+            return { path: imagePath, contentType: "image/jpeg" };
+          },
+        },
+      }),
+    );
+
+    await request(app).get("/v1/map-image?map=Alcyone%20LE&variant=layout");
+    await request(app).get("/v1/map-image?map=Alcyone%20LE&variant=banner");
+    await request(app).get("/v1/map-image?map=Alcyone%20LE");
+
+    expect(seen).toEqual([
+      ["Alcyone LE", { variant: "layout" }],
+      ["Alcyone LE", { variant: undefined }],
+      ["Alcyone LE", { variant: undefined }],
+    ]);
+  });
+
   test("returns 304 without opening the image when the ETag matches", async () => {
     const etag = `"${"c".repeat(64)}"`;
     const res = await request(

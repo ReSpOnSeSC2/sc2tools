@@ -184,12 +184,23 @@ class CatalogService {
    * ``acid_plant_le.jpg`` even when only the lowercase bundle is
    * installed.
    *
+   * ``variant: "layout"`` requests the full top-down layout render the
+   * map replayer draws under unit positions. Those are the large
+   * roughly-square ``.jpg``/``.png`` originals; the manifest's 640×360
+   * WebP renditions are 16:9 crops whose geometry can't be aligned to
+   * world coordinates, so the layout variant skips the manifest and
+   * never falls back to ``.webp`` — a 404 beats a misaligned overlay.
+   *
    * @param {string} mapName
+   * @param {{ variant?: "layout" }} [opts]
    * @returns {{ path: string, contentType: string, etag?: string } | null}
    */
-  mapImagePath(mapName) {
+  mapImagePath(mapName, opts = {}) {
     if (!this._mapImageDirs.length || !mapName) return null;
-    const manifestHit = this._mapImageManifest.get(normalizeMapAssetKey(mapName));
+    const layout = opts.variant === "layout";
+    const manifestHit = layout
+      ? null
+      : this._mapImageManifest.get(normalizeMapAssetKey(mapName));
     if (manifestHit) {
       try {
         const stat = fs.statSync(manifestHit.path);
@@ -206,7 +217,7 @@ class CatalogService {
     }
     const variants = filenameVariants(mapName);
     if (variants.length === 0) return null;
-    const extensions = [".jpg", ".png", ".webp"];
+    const extensions = layout ? [".jpg", ".png"] : [".jpg", ".png", ".webp"];
     for (const dir of this._mapImageDirs) {
       for (const variant of variants) {
         for (const ext of extensions) {
