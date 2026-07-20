@@ -8,10 +8,10 @@
  * canvas with a scrubbable timeline: play/pause, 1×–16× speed, and a
  * live HUD (army value · workers · supply per side). The real map
  * layout render (``/v1/map-image?variant=layout``) draws under the
- * action, stretched to the playable bounds; buildings render their
- * in-game icons framed in the side color, units render as bare
- * team-tinted icons (no ring, box, or backing — the unit art reads
- * directly, washed toward the owner color) —
+ * action, stretched to the playable bounds; buildings and units both
+ * render as bare team-tinted icon art (no ring, box, or backing —
+ * the art reads directly, washed toward the owner color), workers
+ * presented on their hall's mineral-line arc while idle —
  * with deterministic cluster spreading so a stacked army reads as a
  * blob of distinguishable icons instead of one pixel (see
  * ``spreadClusters`` in lib/mapReplay.ts). Both layers degrade
@@ -35,6 +35,9 @@ import {
 import {
   isTownHall,
   isWorkerUnit,
+  MINING_SNAP_RADIUS,
+  miningArcPosition,
+  nearestTownHall,
   projectX,
   projectY,
   spreadClusters,
@@ -60,13 +63,13 @@ const BATTLE_WINDOW_SEC = 12;
  * Spacing is sized to the army icon (units overlap about half an icon
  * inside a cluster: dense enough to read as one army, loose enough to
  * count heads). */
-const CLUSTER_CELL_PX = 12;
-const CLUSTER_SPACING_PX = 8;
+const CLUSTER_CELL_PX = 10;
+const CLUSTER_SPACING_PX = 6.5;
 /** Marker sizes in canvas px. */
-const ARMY_ICON_PX = 16;
-const WORKER_ICON_PX = 11;
-const BUILDING_ICON_PX = 16;
-const TOWNHALL_ICON_PX = 24;
+const ARMY_ICON_PX = 13;
+const WORKER_ICON_PX = 9;
+const BUILDING_ICON_PX = 13;
+const TOWNHALL_ICON_PX = 19;
 /** Canvas height ceiling — high enough that a square map fills the
  * column width instead of letterboxing (the "zoom"). */
 const CANVAS_MAX_H_PX = 720;
@@ -135,15 +138,16 @@ const unitTokenCache = new Map<string, HTMLCanvasElement>();
  * recognizable. */
 const TINT_ALPHA = 0.42;
 
-function unitToken(
+function iconToken(
   name: string,
+  kind: IconKind,
   tint: string,
   sizePx: number,
   dpr: number,
 ): HTMLCanvasElement | null {
-  const icon = readyIcon(name, "unit");
+  const icon = readyIcon(name, kind);
   if (!icon) return null;
-  const path = resolveIconPath(name, "unit");
+  const path = resolveIconPath(name, kind);
   const key = `${path}|${tint}|${sizePx}|${dpr}`;
   const cached = unitTokenCache.get(key);
   if (cached) return cached;
@@ -420,33 +424,52 @@ function renderFrame(
     ctx.stroke();
   }
 
-  // Buildings placed by now — in-game icons on a dark backing tile,
-  // framed in the side color; town halls bigger. Squares only when no
-  // icon ships for the name (or it hasn't decoded yet).
+  // Buildings placed by now — bare team-tinted icon art, same
+  // treatment as units (no tile, frame, or backing); town halls
+  // bigger. Small squares only when no icon ships for the name (or it
+  // hasn't decoded yet).
   for (const b of playback.buildings) {
     if (b.t > t) continue;
     const x = projectX(bounds, proj, b.x);
     const y = projectY(bounds, proj, b.y);
     const townHall = isTownHall(b.name);
-    const icon = readyIcon(b.name, "building");
-    if (icon) {
-      const size = townHall ? TOWNHALL_ICON_PX : BUILDING_ICON_PX;
-      ctx.fillStyle = "rgba(8,11,17,0.85)";
-      ctx.fillRect(x - size / 2, y - size / 2, size, size);
-      ctx.drawImage(icon, x - size / 2, y - size / 2, size, size);
-      ctx.strokeStyle = b.owner === "me" ? ME_ARMY : OPP_ARMY;
-      ctx.lineWidth = townHall ? 1.75 : 1.25;
-      ctx.strokeRect(x - size / 2 + 0.5, y - size / 2 + 0.5, size - 1, size - 1);
+    const size = townHall ? TOWNHALL_ICON_PX : BUILDING_ICON_PX;
+    const token = iconToken(
+      b.name,
+      "building",
+      b.owner === "me" ? ME_ARMY : OPP_ARMY,
+      size,
+      dpr,
+    );
+    if (token) {
+      ctx.drawImage(token, x - size / 2, y - size / 2, size, size);
     } else {
-      const size = townHall ? 9 : 5;
+      const sq = townHall ? 9 : 5;
       ctx.fillStyle = b.owner === "me" ? "rgba(62,192,199,0.75)" : "rgba(224,86,86,0.75)";
-      ctx.fillRect(x - size / 2, y - size / 2, size, size);
+      ctx.fillRect(x - sq / 2, y - sq / 2, sq, sq);
+    }
+  }
+
+  // Friendly town halls standing at time t — the anchors the mining
+  // presentation snaps workers onto.
+  const halls: Record<"me" | "opp", Array<{ x: number; y: number }>> = {
+    me: [],
+    opp: [],
+  };
+  for (const b of playback.buildings) {
+    if (b.t <= t && isTownHall(b.name)) {
+      halls[b.owner].push({ x: b.x, y: b.y });
     }
   }
 
   // Units alive now — interpolate, then spread clusters so armies read
   // as blobs of distinguishable icons instead of a single pixel.
+  // Workers near a friendly hall are presented ON the mineral line
+  // (workers auto-mine when idle; the payload has no patch coords, so
+  // the arc faces away from map center — see lib/mapReplay.ts). They
+  // hold deterministic arc spots and skip cluster spreading.
   const alive: Array<{ idx: number; x: number; y: number }> = [];
+  const mining: Array<{ idx: number; x: number; y: number }> = [];
   playback.units.forEach((u, idx) => {
     if (!unitAliveAt(u, t)) return;
     // Speed-capped interpolation: a unit HOLDS its last known anchor
@@ -455,6 +478,18 @@ function renderFrame(
     // the whole gap between sparse waypoints.
     const pos = unitPositionAt(u.wp, t, unitMaxSpeed(u.name));
     if (!pos) return;
+    if (isWorkerUnit(u.name)) {
+      const hall = nearestTownHall(pos, halls[u.owner], MINING_SNAP_RADIUS);
+      if (hall) {
+        const spot = miningArcPosition(hall, bounds, idx);
+        mining.push({
+          idx,
+          x: projectX(bounds, proj, spot.x),
+          y: projectY(bounds, proj, spot.y),
+        });
+        return;
+      }
+    }
     alive.push({
       idx,
       x: projectX(bounds, proj, pos.x),
@@ -469,14 +504,14 @@ function renderFrame(
     CLUSTER_SPACING_PX,
     alive.map((a) => a.idx),
   );
-  spread.forEach((pos, i) => {
-    const unit = playback.units[alive[i].idx];
+  const drawUnit = (unitIdx: number, pos: { x: number; y: number }) => {
+    const unit = playback.units[unitIdx];
     const worker = isWorkerUnit(unit.name);
     const mine = unit.owner === "me";
     // Bare team-tinted icons — nothing drawn around the unit art, so
     // the unit type reads directly; workers dim slightly.
     const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
-    const token = unitToken(unit.name, mine ? ME_ARMY : OPP_ARMY, size, dpr);
+    const token = iconToken(unit.name, "unit", mine ? ME_ARMY : OPP_ARMY, size, dpr);
     if (token) {
       if (worker) ctx.globalAlpha = 0.75;
       ctx.drawImage(token, pos.x - size / 2, pos.y - size / 2, size, size);
@@ -493,7 +528,9 @@ function renderFrame(
           : OPP_ARMY;
       ctx.fill();
     }
-  });
+  };
+  spread.forEach((pos, i) => drawUnit(alive[i].idx, pos));
+  mining.forEach((m) => drawUnit(m.idx, m));
 
   // Battle pulses near their marker time — drawn last so the amber
   // ring reads over the unit icons it is calling attention to.

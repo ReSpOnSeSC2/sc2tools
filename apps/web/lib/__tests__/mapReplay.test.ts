@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   isTownHall,
   isWorkerUnit,
+  miningArcPosition,
+  nearestTownHall,
   projectX,
   projectY,
   sanitizeMapPlayback,
@@ -229,5 +231,46 @@ describe("unit classes", () => {
     expect(isWorkerUnit("Stalker")).toBe(false);
     expect(isTownHall("Hatchery")).toBe(true);
     expect(isTownHall("Gateway")).toBe(false);
+  });
+});
+
+describe("mining-line presentation", () => {
+  const bounds = { minX: 0, minY: 0, maxX: 160, maxY: 160 };
+
+  it("nearestTownHall picks the closest hall within range only", () => {
+    const halls = [
+      { x: 30, y: 30 },
+      { x: 120, y: 120 },
+    ];
+    expect(nearestTownHall({ x: 33, y: 31 }, halls, 9)).toEqual({ x: 30, y: 30 });
+    expect(nearestTownHall({ x: 80, y: 80 }, halls, 9)).toBeNull();
+    expect(nearestTownHall({ x: 33, y: 31 }, [], 9)).toBeNull();
+  });
+
+  it("miningArcPosition is deterministic and hugs the hall", () => {
+    const hall = { x: 30, y: 30 };
+    const a = miningArcPosition(hall, bounds, 7);
+    expect(miningArcPosition(hall, bounds, 7)).toEqual(a);
+    const d = Math.hypot(a.x - hall.x, a.y - hall.y);
+    expect(d).toBeGreaterThanOrEqual(4);
+    expect(d).toBeLessThanOrEqual(6);
+  });
+
+  it("arc faces away from map center and spreads distinct seeds", () => {
+    const hall = { x: 30, y: 30 }; // bottom-left of a 160x160 map
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const p = miningArcPosition(hall, bounds, seed);
+      // Away-from-center for a bottom-left hall means down-left:
+      // the offset must have a negative dot with the toward-center
+      // direction... i.e. positive projection on (hall - center).
+      const off = { x: p.x - hall.x, y: p.y - hall.y };
+      const away = { x: 30 - 80, y: 30 - 80 };
+      const dot = off.x * away.x + off.y * away.y;
+      expect(dot).toBeGreaterThan(0);
+      seen.add(`${p.x.toFixed(2)}:${p.y.toFixed(2)}`);
+    }
+    // Twelve workers land on twelve distinct spots along the line.
+    expect(seen.size).toBe(12);
   });
 });
