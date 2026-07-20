@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Removed
+
+- **Median key timings card dropped from the opponent profile** — the
+  long per-building timing grid took up a large amount of vertical
+  space (30 cards in some matchups) without being actionable, so the
+  section and its `MedianTimingsGrid` component were removed. The API
+  still returns the timing payloads for other consumers.
+
 ### Fixed
 
 - **Map replayer clock now runs on real game time** — the playback
