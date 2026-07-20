@@ -35,9 +35,11 @@ export function MapReplaySection({
 
   if (req.isLoading) {
     if (compact) return null;
+    // Roughly canvas-shaped so the page doesn't jump when the replay
+    // arrives (most ladder maps project close to square).
     return (
       <div
-        className="h-40 animate-pulse rounded-lg border border-border bg-bg-elevated/40"
+        className="aspect-[4/3] max-h-[720px] w-full animate-pulse rounded-lg border border-border bg-bg-elevated/40"
         aria-busy="true"
         aria-label="Loading map replay"
       />
