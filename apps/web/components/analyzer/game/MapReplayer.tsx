@@ -367,7 +367,14 @@ function renderFrame(
       y: projectY(bounds, proj, pos.y),
     });
   });
-  const spread = spreadClusters(alive, CLUSTER_CELL_PX, CLUSTER_SPACING_PX);
+  // Seed the spread with each unit's payload index — stable for the
+  // whole game — so a death doesn't reshuffle the survivors' spots.
+  const spread = spreadClusters(
+    alive,
+    CLUSTER_CELL_PX,
+    CLUSTER_SPACING_PX,
+    alive.map((a) => a.idx),
+  );
   spread.forEach((pos, i) => {
     const unit = playback.units[alive[i].idx];
     const worker = isWorkerUnit(unit.name);

@@ -148,6 +148,37 @@ describe("spreadClusters — the unit-spacing fix", () => {
     const pts = Array.from({ length: 20 }, () => ({ x: 50, y: 50 }));
     expect(spreadClusters(pts, 10, 4)).toEqual(spreadClusters(pts, 10, 4));
   });
+
+  it("keeps lower-seeded survivors in place when a unit dies", () => {
+    // Five stacked units seeded with stable payload indexes. When the
+    // one seeded 30 dies, units seeded below it must keep their exact
+    // offsets — no full-blob reshuffle mid-battle.
+    const pts = Array.from({ length: 5 }, () => ({ x: 80, y: 80 }));
+    const seeds = [10, 20, 30, 40, 50];
+    const before = spreadClusters(pts, 10, 4, seeds);
+    const after = spreadClusters(
+      pts.slice(0, 2).concat(pts.slice(3)),
+      10,
+      4,
+      [10, 20, 40, 50],
+    );
+    expect(after[0]).toEqual(before[0]);
+    expect(after[1]).toEqual(before[1]);
+  });
+
+  it("assigns slots by seed order, not input order", () => {
+    const pts = [
+      { x: 60, y: 60 },
+      { x: 60, y: 60 },
+      { x: 60, y: 60 },
+    ];
+    const forward = spreadClusters(pts, 10, 4, [1, 2, 3]);
+    const reversedSeeds = spreadClusters(pts, 10, 4, [3, 2, 1]);
+    // Same identities, same slots — just delivered in a different order.
+    expect(reversedSeeds[2]).toEqual(forward[0]);
+    expect(reversedSeeds[1]).toEqual(forward[1]);
+    expect(reversedSeeds[0]).toEqual(forward[2]);
+  });
 });
 
 describe("statsAt", () => {

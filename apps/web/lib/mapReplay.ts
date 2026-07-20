@@ -253,6 +253,14 @@ export function projectY(
  * on a deterministic sunflower (phyllotaxis) pattern around the
  * group's centroid, so a 20-stalker ball reads as a tidy 20-dot blob.
  *
+ * ``seeds`` (optional, parallel to ``points``) gives each point a
+ * stable identity: spiral slots are assigned in ascending-seed order,
+ * so when a unit dies mid-battle every unit with a LOWER seed keeps
+ * its exact spot instead of the whole blob reshuffling with the
+ * caller's iteration order. Callers pass a per-game-stable id (the
+ * unit's index in the playback payload); without seeds, input order
+ * seeds the slots as before.
+ *
  * Input/output orders match 1:1 (the caller keeps color/name per
  * index). Pure and deterministic: same input → same layout, no RNG.
  */
@@ -260,6 +268,7 @@ export function spreadClusters(
   points: ReadonlyArray<{ x: number; y: number }>,
   cellPx: number,
   spacingPx: number,
+  seeds?: ReadonlyArray<number>,
 ): Array<{ x: number; y: number }> {
   const GOLDEN_ANGLE = 2.399963229728653;
   const cells = new Map<string, number[]>();
@@ -280,6 +289,9 @@ export function spreadClusters(
     }
     cx /= bucket.length;
     cy /= bucket.length;
+    if (seeds) {
+      bucket.sort((a, b) => (seeds[a] ?? a) - (seeds[b] ?? b));
+    }
     bucket.forEach((pointIndex, j) => {
       // j = 0 sits on the centroid; the rest spiral outward.
       if (j === 0) {
