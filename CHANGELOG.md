@@ -21,6 +21,22 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Build mix and opponent-strategy cards redrawn as cadence matrices** —
+  the "Your build mix over time" and "Strategies you're facing" cards
+  replaced their 100% stacked area chart with a build × period matrix:
+  each cell shows the actual game count (darker = more games), rows
+  double as the legend with a recent-share shift chip, idle periods
+  stay visible as gaps, and a games-per-period strip anchors the
+  timeline. At the 1-8 games/day these feeds actually run at, the old
+  share-based areas interpolated single games into full-height spikes;
+  the matrix plots the counts themselves. The tap/hover breakdown
+  panel remains and now includes per-build W-L for the period.
+
+- **Map performance panels now lead with the map's artwork** — each
+  panel in "Map performance over time" shows the real map thumbnail
+  next to its name and record, with the existing initials tile as
+  fallback for maps without artwork.
+
 - **Daily Pulse no longer tracks unresolved barcode opponents** — the
   Nemesis Watch and Ladder Rival cards skip opponents whose display
   name is a barcode (IIlIlI…) unless a resolved SC2Pulse character id
@@ -28,6 +44,11 @@ corresponding GitHub Release.
   worth a headline card.
 
 ### Fixed
+
+- **Map trend panel Y-axis labels no longer clip** — the per-map
+  trend charts rendered "100%" and "50%" ticks truncated to "0%"
+  because the axis gutter was too narrow; the gutter is now wide
+  enough for the full labels.
 
 - **Daily Pulse opponent cards now open the player's dossier** — the
   Open link on the Nemesis Watch and Ladder Rival cards previously

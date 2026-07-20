@@ -488,7 +488,7 @@ export function TrendsTab() {
             <MixOverTimeChart
               endpoint="timeseries/my-builds"
               title="Your build mix over time"
-              caption="100% stacked share of your classified builds per period · spot stagnation or healthy experimentation at a glance."
+              caption="Each cell = games on that build in a period, darker = more · spot stagnation or healthy experimentation at a glance."
               bucket={bucket as "day" | "week" | "month"}
               emptyTitle="No build mix yet"
               emptySub="Build mix fills in once your replays carry classified myBuild values."
@@ -502,7 +502,7 @@ export function TrendsTab() {
             <MixOverTimeChart
               endpoint="timeseries/opp-strategies"
               title="Strategies you're facing"
-              caption="100% stacked share of detected opponent strategies per period · watch the ladder meta shift around you."
+              caption="Each cell = games against that strategy in a period, darker = more · watch the ladder meta shift around you."
               bucket={bucket as "day" | "week" | "month"}
               emptyTitle="No opponent strategy data yet"
               emptySub="Strategy mix fills in once your replays carry classified opponent.strategy values."

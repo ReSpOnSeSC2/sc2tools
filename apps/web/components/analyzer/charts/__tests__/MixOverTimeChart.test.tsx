@@ -150,3 +150,108 @@ describe("MixOverTimeChart matchup filter", () => {
     expect(request).not.toContain("opp_race=");
   });
 });
+
+function mixPoint(
+  bucket: string,
+  key: string,
+  wins: number,
+  losses: number,
+) {
+  return { bucket, key, wins, losses, total: wins + losses };
+}
+
+describe("MixOverTimeChart cadence matrix", () => {
+  it("renders a labelled row per build, folds extras into Other, and shows counts", () => {
+    useFiltersMock.mockReturnValue({ filters: {}, dbRev: 0 });
+    const week1 = "2026-07-05T00:00:00.000Z";
+    const week2 = "2026-07-12T00:00:00.000Z";
+    // 7 distinct keys with default topN=6 → the least-played key
+    // ("Build G") must fold into an "Other" row.
+    const points = [
+      mixPoint(week1, "Build A", 3, 1),
+      mixPoint(week1, "Build B", 2, 1),
+      mixPoint(week1, "Build C", 2, 0),
+      mixPoint(week2, "Build A", 1, 1),
+      mixPoint(week2, "Build D", 1, 1),
+      mixPoint(week2, "Build E", 1, 0),
+      mixPoint(week2, "Build F", 1, 0),
+      mixPoint(week2, "Build G", 0, 1),
+    ];
+    useApiMock.mockReturnValue({
+      data: { interval: "week", points },
+      isLoading: false,
+    });
+
+    render(<MixOverTimeChart {...BASE_PROPS} />);
+
+    for (const label of [
+      "Build A",
+      "Build B",
+      "Build C",
+      "Build D",
+      "Build E",
+      "Build F",
+      "Other",
+    ]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    // Cell titles carry the honest per-period record.
+    expect(
+      screen.getByTitle("Build A · 2026-07-05 · 4 games · 3W-1L"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTitle("Other · 2026-07-12 · 1 game · 0W-1L"),
+    ).toBeTruthy();
+  });
+
+  it("defaults the breakdown to the latest period and pins a clicked column", () => {
+    useFiltersMock.mockReturnValue({ filters: {}, dbRev: 0 });
+    useApiMock.mockReturnValue({
+      data: {
+        interval: "week",
+        points: [
+          mixPoint("2026-07-05T00:00:00.000Z", "Build A", 2, 1),
+          mixPoint("2026-07-12T00:00:00.000Z", "Build B", 1, 0),
+        ],
+      },
+      isLoading: false,
+    });
+
+    render(<MixOverTimeChart {...BASE_PROPS} />);
+
+    expect(screen.getByText("2026-07-12")).toBeTruthy();
+    expect(screen.getByText("Latest period")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show 2026-07-05 breakdown" }),
+    );
+    expect(screen.getByText("2026-07-05")).toBeTruthy();
+    expect(screen.getByText("Selected")).toBeTruthy();
+    expect(screen.getAllByText("3 games").length).toBeGreaterThan(0);
+  });
+
+  it("keeps calendar gaps visible as empty columns", () => {
+    useFiltersMock.mockReturnValue({ filters: {}, dbRev: 0 });
+    useApiMock.mockReturnValue({
+      data: {
+        interval: "day",
+        points: [
+          mixPoint("2026-07-01T00:00:00.000Z", "Build A", 1, 0),
+          mixPoint("2026-07-04T00:00:00.000Z", "Build A", 0, 1),
+        ],
+      },
+      isLoading: false,
+    });
+
+    render(<MixOverTimeChart {...BASE_PROPS} bucket="day" />);
+
+    // The two idle days between the played days become real columns.
+    expect(
+      screen.getByRole("button", { name: "Show 2026-07-02 breakdown" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Show 2026-07-03 breakdown" }),
+    ).toBeTruthy();
+    expect(screen.getByTitle("Build A · 2026-07-02 · no games")).toBeTruthy();
+  });
+});
