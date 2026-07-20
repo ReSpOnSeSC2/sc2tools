@@ -236,6 +236,64 @@ export function unitMaxSpeed(name: string): number {
   return isWorkerUnit(name) ? 3.94 : 5.5;
 }
 
+/* ──────────────── mining-line presentation ────────────────
+ *
+ * Workers auto-mine when given no orders, so a worker parked near a
+ * town hall should be SHOWN on the mineral line, the way vespene.gg
+ * presents its worker lines. The playback payload carries no mineral
+ * patch coordinates, but ladder mineral lines consistently back onto
+ * the map edge behind the base — so the presentation arc faces away
+ * from the map center. Deterministic per unit seed: the same worker
+ * holds the same spot on the line frame after frame.
+ */
+
+/** How close (world cells) a worker must be to a friendly town hall
+ * to be presented as mining at it. */
+export const MINING_SNAP_RADIUS = 9;
+
+/** Nearest hall within ``maxDist`` of ``pos``, or null. */
+export function nearestTownHall(
+  pos: { x: number; y: number },
+  halls: ReadonlyArray<{ x: number; y: number }>,
+  maxDist: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestD = maxDist;
+  for (const hall of halls) {
+    const d = Math.hypot(hall.x - pos.x, hall.y - pos.y);
+    if (d <= bestD) {
+      best = hall;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * A deterministic spot on the hall's mineral-line arc for ``seed``:
+ * ±55° around the away-from-center direction, 4–6 cells out (the
+ * distance of a real mineral line from the hall's center). Low-
+ * discrepancy fractions of the seed spread consecutive workers evenly
+ * along the arc without any shared state.
+ */
+export function miningArcPosition(
+  hall: { x: number; y: number },
+  bounds: PlaybackBounds,
+  seed: number,
+): { x: number; y: number } {
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const away = Math.atan2(hall.y - cy, hall.x - cx);
+  const fracA = (seed * 0.618033988749895) % 1;
+  const fracR = (seed * 0.754877666246693) % 1;
+  const angle = away + (fracA * 2 - 1) * ((55 * Math.PI) / 180);
+  const radius = 4 + fracR * 2;
+  return {
+    x: hall.x + radius * Math.cos(angle),
+    y: hall.y + radius * Math.sin(angle),
+  };
+}
+
 /**
  * World → canvas projection preserving aspect ratio, with the SC2
  * Y axis flipped (world Y grows upward, canvas Y grows downward).
