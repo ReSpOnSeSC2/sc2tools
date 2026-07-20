@@ -148,8 +148,7 @@ def test_set_paused_persists_state_and_skips_uploads(tmp_path: Path) -> None:
         assert api.calls == []
         # Resume + the job should drain.
         q.set_paused(False)
-        time.sleep(1.0)
-        assert len(api.calls) == 1
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
     finally:
         q.stop()
 
@@ -236,10 +235,13 @@ def test_server_rejection_marks_replay_done_and_skips_retry(
     q.start()
     try:
         q.submit(job)
-        # Allow plenty of wall clock for the worker to run and (in the
-        # broken old behaviour) retry — the 2 s retry window means a
-        # buggy implementation would call the API more than once here.
-        time.sleep(3.0)
+        # Wait for the terminal outcome to land, then sit out the 2 s
+        # retry window — in the broken old behaviour the re-enqueued
+        # job would call the API again inside it.
+        assert _wait_for(
+            lambda: str(job.file_path) in state.uploaded, timeout=6.0,
+        )
+        time.sleep(2.5)
     finally:
         q.stop()
 
@@ -303,9 +305,9 @@ def test_transient_failure_still_retries(tmp_path: Path) -> None:
     q.start()
     try:
         q.submit(_game(tmp_path, "flaky.SC2Replay"))
-        # The retry path sleeps 2 s before re-enqueueing, so wait
-        # comfortably past that window.
-        time.sleep(3.5)
+        # The retry path sleeps 2 s before re-enqueueing; poll for the
+        # eventual success rather than betting on a fixed window.
+        assert _wait_for(lambda: len(state.uploaded) == 1, timeout=10.0)
     finally:
         q.stop()
 
@@ -389,13 +391,13 @@ def test_pending_reservation_survives_retry_then_releases_on_success(
     assert q.submit(job) is True
     q.start()
     try:
-        assert first_attempt.wait(timeout=2.0)
+        assert first_attempt.wait(timeout=10.0)
         # The worker is now in the transient-failure retry path. The path
         # must remain reserved even though it is temporarily outside _q.
         assert q.is_pending(job.file_path) is True
         assert q.submit(job) is False
 
-        assert retry_succeeded.wait(timeout=4.0)
+        assert retry_succeeded.wait(timeout=10.0)
         assert _wait_for(
             lambda: str(job.file_path) in state.uploaded,
             timeout=2.0,
@@ -451,7 +453,7 @@ def test_transient_retry_survives_saturated_primary_queue(
     assert q.submit(retried) is True
     q.start()
     try:
-        assert first_failure.wait(timeout=2.0)
+        assert first_failure.wait(timeout=10.0)
         backlog = [
             _game(tmp_path, f"saturating-{i}.SC2Replay")
             for i in range(2)
@@ -644,7 +646,7 @@ def test_successful_upload_pushes_last_mmr(tmp_path: Path) -> None:
     q.start()
     try:
         q.submit(job)
-        time.sleep(1.0)
+        assert _wait_for(lambda: len(api.mmr_calls) == 1, timeout=6.0)
     finally:
         q.stop()
     assert len(api.mmr_calls) == 1
@@ -668,7 +670,10 @@ def test_upload_without_mmr_does_not_ping(tmp_path: Path) -> None:
         # The MMR ping must be a no-op for those — otherwise we'd
         # overwrite a real ranked value with garbage.
         q.submit(_game(tmp_path, "unranked.SC2Replay", my_mmr=None))
-        time.sleep(0.7)
+        # Wait for the upload itself, then a short grace period in
+        # which a buggy ping would have fired.
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
+        time.sleep(0.2)
     finally:
         q.stop()
     assert api.mmr_calls == []
@@ -697,7 +702,8 @@ def test_older_replay_does_not_overwrite_newer_sticky_mmr(tmp_path: Path) -> Non
                 date_iso="2025-12-01T10:00:00Z",
             ),
         )
-        time.sleep(0.7)
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
+        time.sleep(0.2)
     finally:
         q.stop()
     # Game upload itself goes through; the MMR push is what's gated.
@@ -757,7 +763,7 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
             assert len(games) == 1
             game_id = games[0]["gameId"]
             if game_id == newer.game.game_id:
-                assert old_patch_started.wait(timeout=2.0)
+                assert old_patch_started.wait(timeout=10.0)
             with self._lock:
                 self.upload_game_ids.append(game_id)
             return {
@@ -770,7 +776,7 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
         ) -> Dict[str, Any]:
             if captured_at == old_date:
                 old_patch_started.set()
-                assert release_old_patch.wait(timeout=3.0)
+                assert release_old_patch.wait(timeout=15.0)
             elif captured_at == new_date:
                 newer_patch_started.set()
             with self._lock:
@@ -800,8 +806,8 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
     assert q.submit(newer) is True
     q.start()
     try:
-        assert old_patch_started.wait(timeout=2.0)
-        assert newer_push_attempted.wait(timeout=2.0)
+        assert old_patch_started.wait(timeout=10.0)
+        assert newer_push_attempted.wait(timeout=10.0)
         # The newer worker has reached the MMR push but cannot enter the
         # API while the older worker owns the serialization lock.
         assert not newer_patch_started.wait(timeout=0.2)
@@ -844,7 +850,9 @@ def test_mmr_push_failure_does_not_break_upload(tmp_path: Path) -> None:
     q.start()
     try:
         q.submit(job)
-        time.sleep(0.7)
+        assert _wait_for(
+            lambda: str(job.file_path) in state.uploaded, timeout=6.0,
+        )
     finally:
         q.stop()
     # The game itself uploaded successfully — that's the contract.
@@ -915,32 +923,72 @@ class _SlowApi:
         return {"ok": True, "wrote": False}
 
 
+class _BarrierApi:
+    """Stub that BLOCKS every upload call until ``target`` overlap.
+
+    Proves worker concurrency by construction instead of sampling a
+    peak on a wall-clock schedule (the sampled version failed on a
+    hosted Windows runner that took >0.4 s just to start the worker
+    threads — the sample saw 2 of 4 in flight). Each call parks on an
+    event that only fires once ``target`` calls are inside the stub
+    simultaneously, so a slow runner merely takes longer to fill the
+    barrier. If fewer than ``target`` workers exist, the barrier can
+    never fill; the escape timeout releases the stalled calls so the
+    suite keeps moving, and the recorded peak stays below ``target``
+    which fails the assertion — the exact regression this guards.
+    """
+
+    def __init__(self, *, target: int, escape_after: float = 10.0) -> None:
+        self.target = target
+        self.escape_after = escape_after
+        self.calls: List[Dict[str, Any]] = []
+        self.in_flight_peak = 0
+        self._in_flight = 0
+        self._lock = threading.Lock()
+        self._all_in = threading.Event()
+
+    def upload_games_batch(
+        self, games: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        with self._lock:
+            self._in_flight += 1
+            self.in_flight_peak = max(self.in_flight_peak, self._in_flight)
+            if self._in_flight >= self.target:
+                self._all_in.set()
+        self._all_in.wait(timeout=self.escape_after)
+        accepted = []
+        with self._lock:
+            for g in games:
+                self.calls.append(g)
+                accepted.append({"gameId": g["gameId"], "created": True})
+            self._in_flight -= 1
+        return {"accepted": accepted, "rejected": []}
+
+    def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+        return {"ok": True, "wrote": False}
+
+
 def test_upload_workers_run_in_parallel(tmp_path: Path) -> None:
     """With ``upload_concurrency=4``, four jobs submitted at once must
-    run concurrently — peak in-flight count must reach 4."""
+    run concurrently — all four calls must overlap inside the stub."""
     state = AgentState(device_token="t")
-    api = _SlowApi(delay=0.4)
+    api = _BarrierApi(target=4)
     q = UploadQueue(cfg=_cfg(tmp_path, upload_concurrency=4), state=state, api=api)
+    # Queue all four before starting so no worker can finish one job
+    # and steal a second before its siblings have work to claim.
+    for i in range(4):
+        q.submit(_game(tmp_path, f"parallel-{i}.SC2Replay"))
     q.start()
     try:
-        for i in range(4):
-            q.submit(_game(tmp_path, f"parallel-{i}.SC2Replay"))
-        # All four uploads should be in flight near-simultaneously.
-        # Wait long enough for them to overlap (the API stub holds
-        # each call for 0.4 s) but not so long that we miss the peak.
-        time.sleep(0.25)
-        peak_during = api.in_flight_peak
-        # And eventually all four complete.
-        time.sleep(1.0)
+        assert _wait_for(lambda: len(api.calls) == 4, timeout=15.0), (
+            f"expected 4 uploads to finish, got {len(api.calls)}"
+        )
     finally:
         q.stop()
 
-    assert len(api.calls) == 4, (
-        f"expected 4 successful uploads, got {len(api.calls)}"
-    )
-    assert peak_during >= 4, (
+    assert api.in_flight_peak >= 4, (
         f"expected concurrent in-flight uploads to reach 4 with "
-        f"upload_concurrency=4, peak was {peak_during} — workers "
+        f"upload_concurrency=4, peak was {api.in_flight_peak} — workers "
         "are running serially despite the config setting"
     )
 
@@ -952,19 +1000,20 @@ def test_single_upload_worker_runs_serially(tmp_path: Path) -> None:
     state = AgentState(device_token="t")
     api = _SlowApi(delay=0.2)
     q = UploadQueue(cfg=_cfg(tmp_path, upload_concurrency=1), state=state, api=api)
+    for i in range(4):
+        q.submit(_game(tmp_path, f"serial-{i}.SC2Replay"))
     q.start()
     try:
-        for i in range(4):
-            q.submit(_game(tmp_path, f"serial-{i}.SC2Replay"))
-        time.sleep(0.1)
-        peak_during = api.in_flight_peak
-        time.sleep(1.5)  # give all four serial uploads time to drain
+        # The peak is monotonic, so sampling AFTER the drain is exact —
+        # a single worker holding each call 0.2 s cannot overlap itself,
+        # while a second worker would certainly overlap somewhere in
+        # four back-to-back 0.2 s holds.
+        assert _wait_for(lambda: len(api.calls) == 4, timeout=8.0)
     finally:
         q.stop()
 
-    assert len(api.calls) == 4
-    assert peak_during == 1, (
-        f"single-worker queue had peak in-flight {peak_during}, "
+    assert api.in_flight_peak == 1, (
+        f"single-worker queue had peak in-flight {api.in_flight_peak}, "
         "expected 1 — serial-upload guarantee broken"
     )
 
@@ -1001,7 +1050,7 @@ def test_batch_upload_packs_multiple_games_into_one_request(
     q.start()
     try:
         # Drain the queue.
-        time.sleep(1.0)
+        assert _wait_for(lambda: len(api.calls) == 10, timeout=6.0)
     finally:
         q.stop()
 
@@ -1112,7 +1161,7 @@ def test_batch_partial_success_marks_per_game_outcomes(
         q.submit(j)
     q.start()
     try:
-        time.sleep(1.0)
+        assert _wait_for(lambda: len(state.uploaded) == 8, timeout=6.0)
     finally:
         q.stop()
 
@@ -1172,8 +1221,8 @@ def test_batch_transient_failure_re_enqueues_whole_batch(
     q.start()
     try:
         # First batch fails (raises), worker sleeps 2 s, re-enqueues
-        # all 5, second batch succeeds. Allow plenty of wall clock.
-        time.sleep(3.5)
+        # all 5, second batch succeeds. Poll for the retried outcome.
+        assert _wait_for(lambda: len(state.uploaded) == 5, timeout=10.0)
     finally:
         q.stop()
 
@@ -1353,7 +1402,7 @@ def test_set_concurrency_preserves_pending_jobs(tmp_path: Path) -> None:
         time.sleep(0.05)
         q.set_concurrency(2)
         # Drain everything.
-        time.sleep(2.5)
+        assert _wait_for(lambda: len(api.calls) == 5, timeout=10.0)
     finally:
         q.stop()
     # All 5 jobs must have eventually uploaded — none lost in the
@@ -1430,7 +1479,9 @@ def test_upload_drops_job_outside_filter(tmp_path: Path) -> None:
     q.start()
     try:
         q.submit(job)
-        time.sleep(0.6)
+        assert _wait_for(
+            lambda: str(job.file_path) in state.uploaded, timeout=6.0,
+        )
     finally:
         q.stop()
     # API must not see the call — the filter dropped it before the
@@ -1470,7 +1521,7 @@ def test_upload_passes_job_inside_filter(tmp_path: Path) -> None:
     q.start()
     try:
         q.submit(inside)
-        time.sleep(0.6)
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
     finally:
         q.stop()
     assert len(api.calls) == 1
