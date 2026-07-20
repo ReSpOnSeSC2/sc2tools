@@ -2,6 +2,21 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.2
+
+### Added — map-playback carries the map's resource nodes (payload v2)
+- **What.** The playback payload now includes every neutral resource
+  node the replay records: mineral patches (regular + gold), vespene
+  geysers, destructible rocks, and Xel'Naga towers, each with its
+  exact position and — for patches that mine out and rocks that get
+  broken — the game-second it left play.
+- **Effect.** The cloud replayer draws real mineral lines, geysers,
+  rocks, and towers on the map, snaps mining workers to their actual
+  patches, and builds its fog-of-war reveals around true base
+  geometry. Applies at parse time — games synced by older versions
+  show the arc-based worker presentation until re-synced (Settings →
+  Full resync).
+
 ## 0.15.1
 
 ### Fixed — map-playback unit tracks pinned to real positions

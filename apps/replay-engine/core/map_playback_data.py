@@ -15,7 +15,12 @@ from typing import Dict, List, Optional, Tuple
 
 from .paths import APP_DIR
 from .replay_loader import load_replay_with_fallback
-from .event_extractor import PlayerStatsEvent, extract_events, extract_unit_tracks
+from .event_extractor import (
+    PlayerStatsEvent,
+    extract_events,
+    extract_resource_nodes,
+    extract_unit_tracks,
+)
 
 
 DEFAULT_BOUNDS = {
@@ -425,6 +430,14 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     if not game_length:
         game_length = 600.0
 
+    # Neutral terrain furniture (mineral lines, geysers, rocks,
+    # towers) — best-effort like the unit tracks.
+    try:
+        resources = extract_resource_nodes(replay)
+    except Exception as exc:
+        print(f"map_playback: extract_resource_nodes failed: {exc}")
+        resources = []
+
     return {
         "map_name": getattr(replay, "map_name", None),
         "game_length": game_length,
@@ -439,4 +452,5 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "my_units": tracks.get("my_units", []),
         "opp_units": tracks.get("opp_units", []),
         "spawn_locations": spawn_locations,
+        "resources": resources,
     }

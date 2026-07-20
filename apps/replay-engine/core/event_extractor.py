@@ -1941,6 +1941,68 @@ def extract_unit_tracks(replay, my_pid):
     return {"my_units": my_units, "opp_units": opp_units}
 
 
+def classify_resource_name(raw):
+    """Map a neutral unit_type_name to a playback resource kind.
+
+    The replay records every mineral patch, vespene geyser,
+    destructible rock, and Xel'Naga tower as a neutral unit with an
+    exact position — the terrain furniture the viewer needs to draw
+    bases and place mining workers on real patches. Names vary by
+    tileset (PurifierMineralField, ShakurasVespeneGeyser,
+    DestructibleCityDebris…) so classification is by substring.
+    """
+    if not raw:
+        return None
+    if "MineralField" in raw:
+        return "gold" if "Rich" in raw else "minerals"
+    if "Geyser" in raw:
+        return "gas"
+    if "Destructible" in raw or "Collapsible" in raw:
+        return "rocks"
+    if "XelNaga" in raw and "Tower" in raw:
+        return "tower"
+    return None
+
+
+def extract_resource_nodes(replay):
+    """Neutral resource/obstacle nodes: [{kind, x, y, died}].
+
+    ``died`` is the game-second the node left play (patch mined out,
+    rocks broken, tower never) or ``None`` while it lasted the whole
+    game — the viewer uses it to clear mined-out lines and opened
+    rock paths at the right moment. Resolution is by ``unit_id``
+    straight off the death event; no index bookkeeping needed.
+    """
+    nodes = {}
+    tracker = getattr(replay, "tracker_events", None) or []
+    for ev in tracker:
+        try:
+            if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
+                # Neutral units only — player-owned units never
+                # classify, but the pid gate keeps lookalikes out.
+                if getattr(ev, "control_pid", 0) or getattr(ev, "upkeep_pid", 0):
+                    continue
+                kind = classify_resource_name(_get_unit_type_name(ev))
+                if kind is None:
+                    continue
+                uid = getattr(ev, "unit_id", None)
+                if uid is None:
+                    continue
+                x = float(getattr(ev, "x", 0) or 0)
+                y = float(getattr(ev, "y", 0) or 0)
+                if not (x or y):
+                    continue
+                nodes[uid] = {"kind": kind, "x": x, "y": y, "died": None}
+            elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
+                uid = getattr(ev, "unit_id", None)
+                rec = nodes.get(uid)
+                if rec is not None:
+                    rec["died"] = float(event_seconds(ev, replay))
+        except Exception:
+            continue
+    return list(nodes.values())
+
+
 def build_log_lines(
     my_events: List[Dict],
     cutoff_seconds: Optional[int] = None,

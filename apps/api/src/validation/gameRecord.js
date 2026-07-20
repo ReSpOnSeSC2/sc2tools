@@ -190,6 +190,7 @@ const GAME_SCHEMA = {
         battles: { type: "array", maxItems: 200 },
         buildings: { type: "array", maxItems: 1000 },
         units: { type: "array", maxItems: 1200 },
+        resources: { type: "array", maxItems: 600 },
         stats: { type: "object", additionalProperties: true },
       },
     },

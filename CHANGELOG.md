@@ -41,6 +41,18 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Map replayer: fog of war, real mineral lines, and builders** —
+  the replayer now draws the map's actual resource nodes (mineral
+  patches, gold, geysers, destructible rocks, Xel'Naga towers)
+  extracted from each replay (**agent 0.15.2**, playback payload v2),
+  snaps mining workers to their real patches (3 workers per tapped
+  geyser), clears mined-out lines and broken rocks at the recorded
+  moment, shows the constructing worker at new building sites (SCVs
+  stay the whole build, probes warp and leave), and renders
+  fog of war — the union of both players' vision as soft reveals
+  around every unit and standing building, leaving unscouted map
+  dark. Older uploads keep the arc-based worker presentation until
+  re-synced.
 - **Map replayer (vespene.gg-style)** — watch any game back on its
   actual map: the real top-down layout render draws under the action
   (`/v1/map-image?variant=layout`, from the same artwork library the

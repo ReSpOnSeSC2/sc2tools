@@ -1372,7 +1372,7 @@ def test_compact_map_playback_produces_bounded_camelcase_payload():
         [{"time": 200.0, "x": 100.0, "y": 90.0, "side": "me"}],
     )
     assert out is not None
-    assert out["v"] == 1
+    assert out["v"] == 2
     assert out["mapName"] == "Alcyone LE"
     assert out["bounds"] == {"minX": 10.0, "minY": 20.0, "maxX": 190.0, "maxY": 160.0}
     assert out["spawns"][0] == {"owner": "me", "x": 30.0, "y": 40.0}
@@ -1423,3 +1423,34 @@ def test_compact_map_playback_caps_unit_count_keeping_longest_lived():
     # The 50 shortest-lived blips are the ones dropped.
     kept_died = sorted(u["died"] for u in mine)
     assert kept_died[0] == 50.0
+
+
+def test_compact_map_playback_passes_resources_through_with_caps():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    playback = _sample_playback()
+    playback["resources"] = [
+        {"kind": "minerals", "x": 26.04, "y": 34.06, "died": None},
+        {"kind": "gold", "x": 100.0, "y": 100.0, "died": 300.04},
+        {"kind": "gas", "x": 25.0, "y": 27.0},
+        {"kind": "rocks", "x": 80.0, "y": 80.0, "died": 250.0},
+        {"kind": "tower", "x": 88.0, "y": 88.0},
+        {"kind": "nuke", "x": 1.0, "y": 1.0},          # unknown kind dropped
+        {"kind": "minerals", "x": "junk", "y": 2.0},   # junk coords dropped
+    ]
+    out = _compact_map_playback(playback, [])
+    assert out is not None
+    res = out["resources"]
+    assert [r["kind"] for r in res] == ["minerals", "gold", "gas", "rocks", "tower"]
+    # Coordinates round to one decimal; died survives only when numeric.
+    assert res[0] == {"kind": "minerals", "x": 26.0, "y": 34.1}
+    assert res[1]["died"] == 300.0
+    assert "died" not in res[2]
+
+
+def test_compact_map_playback_omits_resources_key_when_absent():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    out = _compact_map_playback(_sample_playback(), [])
+    assert out is not None
+    assert "resources" not in out

@@ -1145,6 +1145,7 @@ _PLAYBACK_MIN_WAYPOINT_GAP_SEC = 2.0
 _PLAYBACK_MAX_BUILDINGS_PER_SIDE = 400
 _PLAYBACK_STATS_STEP_SEC = 10.0
 _PLAYBACK_MAX_BATTLES = 80
+_PLAYBACK_MAX_RESOURCES = 600
 
 
 def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
@@ -1203,12 +1204,13 @@ def _compact_map_playback(
     payloads. Output shape (camelCase, ready for the web replayer):
 
       {
-        v: 1, mapName, gameLength,
+        v: 2, mapName, gameLength,
         bounds: {minX, minY, maxX, maxY},
         spawns: [{owner: 'me'|'opp', x, y}],
         battles: [{t, x, y}],
         buildings: [{owner, name, t, x, y}],
         units: [{owner, name, born, died|null, wp: [t,x,y,…]}],
+        resources: [{kind, x, y, died?}],
         stats: {me: [[t, army, workers, supply]…], opp: […]}
       }
     """
@@ -1228,7 +1230,8 @@ def _compact_map_playback(
         return None
 
     out: Dict[str, Any] = {
-        "v": 1,
+        # v2: adds ``resources`` (neutral mineral/gas/rock/tower nodes).
+        "v": 2,
         "mapName": str(playback.get("map_name") or ""),
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
@@ -1256,6 +1259,30 @@ def _compact_map_playback(
                 "y": round(float(y), 1),
             })
     out["battles"] = battles[:_PLAYBACK_MAX_BATTLES]
+
+    resources: list = []
+    for r in playback.get("resources") or []:
+        if not isinstance(r, Mapping):
+            continue
+        kind = r.get("kind")
+        x, y = r.get("x"), r.get("y")
+        if kind not in ("minerals", "gold", "gas", "rocks", "tower"):
+            continue
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            continue
+        node: Dict[str, Any] = {
+            "kind": kind,
+            "x": round(float(x), 1),
+            "y": round(float(y), 1),
+        }
+        died = r.get("died")
+        if isinstance(died, (int, float)):
+            node["died"] = round(float(died), 1)
+        resources.append(node)
+        if len(resources) >= _PLAYBACK_MAX_RESOURCES:
+            break
+    if resources:
+        out["resources"] = resources
 
     buildings: list = []
     per_side_counts = {"me": 0, "opp": 0}

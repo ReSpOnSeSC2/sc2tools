@@ -4,6 +4,9 @@ import {
   isWorkerUnit,
   miningArcPosition,
   nearestTownHall,
+  patchesNearHall,
+  patchMiningPosition,
+  resourceAliveAt,
   projectX,
   projectY,
   sanitizeMapPlayback,
@@ -272,5 +275,68 @@ describe("mining-line presentation", () => {
     }
     // Twelve workers land on twelve distinct spots along the line.
     expect(seen.size).toBe(12);
+  });
+});
+
+describe("resources — sanitize and patch mining", () => {
+  const bounds = { minX: 0, minY: 0, maxX: 160, maxY: 160 };
+  const hall = { x: 30, y: 30 };
+
+  it("sanitizes resources: kinds whitelisted, died null-safe", () => {
+    const p = sanitizeMapPlayback({
+      ...RAW,
+      resources: [
+        { kind: "minerals", x: 26, y: 34, died: null },
+        { kind: "gold", x: 100, y: 100, died: 300 },
+        { kind: "gas", x: 25, y: 27 },
+        { kind: "rocks", x: 80, y: 80, died: 250 },
+        { kind: "tower", x: 88, y: 88 },
+        { kind: "nuke", x: 1, y: 1 }, // unknown kind dropped
+        { kind: "minerals", x: NaN, y: 2 }, // junk coords dropped
+      ],
+    });
+    expect(p!.resources).toHaveLength(5);
+    expect(p!.resources[0].died).toBeNull();
+    expect(p!.resources[1].died).toBe(300);
+    expect(p!.resources[2].died).toBeNull();
+  });
+
+  it("v1 payloads default to empty resources", () => {
+    expect(sanitizeMapPlayback(RAW)!.resources).toEqual([]);
+  });
+
+  it("resourceAliveAt clears mined-out nodes at their death time", () => {
+    const node = { kind: "minerals" as const, x: 1, y: 1, died: 300 };
+    expect(resourceAliveAt(node, 299)).toBe(true);
+    expect(resourceAliveAt(node, 300)).toBe(false);
+    expect(resourceAliveAt({ ...node, died: null }, 9999)).toBe(true);
+  });
+
+  it("patchesNearHall returns live nearby mineral patches sorted by distance", () => {
+    const resources = [
+      { kind: "minerals" as const, x: 26, y: 34, died: null },
+      { kind: "gold" as const, x: 24, y: 28, died: null },
+      { kind: "minerals" as const, x: 27, y: 31, died: 100 }, // mined out
+      { kind: "minerals" as const, x: 140, y: 140, died: null }, // other base
+      { kind: "gas" as const, x: 25, y: 27, died: null }, // not a patch
+    ];
+    const patches = patchesNearHall(resources, hall, 200);
+    expect(patches).toHaveLength(2);
+    // Sorted by distance: gold at ~6.3 cells, minerals at ~5.7.
+    const d = (r: { x: number; y: number }) => Math.hypot(r.x - hall.x, r.y - hall.y);
+    expect(d(patches[0])).toBeLessThanOrEqual(d(patches[1]));
+    // Before the third patch mined out it participates too.
+    expect(patchesNearHall(resources, hall, 50)).toHaveLength(3);
+  });
+
+  it("patchMiningPosition stands the worker between patch and hall", () => {
+    const patch = { x: 24, y: 30 };
+    const spot = patchMiningPosition(patch, hall, 3);
+    expect(patchMiningPosition(patch, hall, 3)).toEqual(spot);
+    // On the hall side of the patch, within ~1.6 cells.
+    expect(spot.x).toBeGreaterThan(patch.x);
+    const dist = Math.hypot(spot.x - patch.x, spot.y - patch.y);
+    expect(dist).toBeGreaterThanOrEqual(1.1);
+    expect(dist).toBeLessThanOrEqual(1.6);
   });
 });
