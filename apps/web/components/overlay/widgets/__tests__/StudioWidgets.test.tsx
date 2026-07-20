@@ -511,6 +511,40 @@ describe("ChatOracleWidget game-to-game transfer", () => {
     expect(screen.getByText(/Nobody called it — result: WIN/)).toBeTruthy();
   });
 
+  it("the reveal auto-dismisses even when other events land mid-reveal", () => {
+    // Regression: the 12s dismiss timer used to be keyed on lastEvent
+    // — a level-up arriving during the reveal cancelled it via the
+    // effect cleanup and "nobody called it" sat on stream forever.
+    vi.useFakeTimers();
+    try {
+      mockEngagementEvent = {
+        type: "prediction-settled",
+        result: "win",
+        tally: { win: 0, loss: 0, total: 0 },
+        correctCount: 0,
+        pointsEach: 10,
+        topOracles: [],
+      };
+      const { rerender } = render(<ChatOracleWidget token="tok" />);
+      expect(screen.getByText(/Nobody called it/)).toBeTruthy();
+      // 2s in, an unrelated engagement event lands (XP level-up from
+      // the same game) — the reveal must stay for now…
+      act(() => {
+        vi.advanceTimersByTime(2_000);
+      });
+      mockEngagementEvent = { type: "level-up", user: "A", level: 2 };
+      rerender(<ChatOracleWidget token="tok" />);
+      expect(screen.getByText(/Nobody called it/)).toBeTruthy();
+      // …and still auto-dismiss on schedule.
+      act(() => {
+        vi.advanceTimersByTime(13_000);
+      });
+      expect(screen.queryByText(/Nobody called it/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("a new open window instantly outranks a leftover reveal", () => {
     // The settle event from game N is still the last event, but game
     // N+1's window is already open in the summary (streamer requeued

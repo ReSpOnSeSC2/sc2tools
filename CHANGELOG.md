@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Nobody called it" can no longer get stuck on stream** — the
+  Crystal Ball settle reveal's 12-second auto-dismiss timer was
+  cancelled whenever another engagement event (a level-up from the
+  same game's XP, a clip moment) landed mid-reveal, leaving the card
+  up indefinitely until the next game. The timer is now keyed on the
+  reveal itself and always fires on schedule.
+
 ### Added
 
 - **Map replayer (vespene.gg-style)** — watch any game back on its
