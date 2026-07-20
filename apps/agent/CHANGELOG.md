@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.1
+
+### Fixed — map-playback unit tracks pinned to real positions
+- **What.** The bundled replay engine's track extractor dropped every
+  `UnitPositionsEvent` snapshot (rows carry the tracker unit INDEX,
+  not the full unit id it keyed records by) and divided coordinates
+  by 4 — a misreading of sc2reader's pre-2014 "4 point resolution"
+  note (those are rounded, not scaled, and sc2reader rescales them on
+  load). It also ignored the exact death coordinates every
+  `UnitDiedEvent` carries.
+- **Effect.** Playback tracks now anchor to the game's true position
+  data: the 15-second combat snapshots resolve through a
+  unit-index map (mirroring sc2reader's own engine), coordinates stay
+  at full scale, and each unit's final waypoint is where it actually
+  died. Armies stop drifting between spawn and command clicks and pin
+  to the fights. Applies at parse time — replays synced by older
+  versions keep their old tracks until re-synced (Settings → Full
+  resync).
+
 ## 0.15.0
 
 ### Added — map-playback upload for the cloud replayer
