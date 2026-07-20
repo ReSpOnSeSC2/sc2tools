@@ -8,8 +8,9 @@
  * canvas with a scrubbable timeline: play/pause, 1×–16× speed, and a
  * live HUD (army value · workers · supply per side). The real map
  * layout render (``/v1/map-image?variant=layout``) draws under the
- * action, stretched to the playable bounds; buildings and units render
- * with their in-game icons (``/icons/sc2``) framed in the side color —
+ * action, stretched to the playable bounds; buildings render their
+ * in-game icons framed in the side color, units render as circular
+ * tokens (portrait clipped to a disc + thin team ring, no boxes) —
  * with deterministic cluster spreading so a stacked army reads as a
  * blob of distinguishable icons instead of one pixel (see
  * ``spreadClusters`` in lib/mapReplay.ts). Both layers degrade
@@ -38,6 +39,7 @@ import {
   spreadClusters,
   statsAt,
   unitAliveAt,
+  unitMaxSpeed,
   unitPositionAt,
   worldProjection,
   type MapPlayback,
@@ -57,13 +59,16 @@ const BATTLE_WINDOW_SEC = 12;
  * Spacing is sized to the army icon (units overlap about half an icon
  * inside a cluster: dense enough to read as one army, loose enough to
  * count heads). */
-const CLUSTER_CELL_PX = 10;
-const CLUSTER_SPACING_PX = 6.5;
+const CLUSTER_CELL_PX = 12;
+const CLUSTER_SPACING_PX = 8;
 /** Marker sizes in canvas px. */
-const ARMY_ICON_PX = 13;
-const WORKER_ICON_PX = 9;
-const BUILDING_ICON_PX = 14;
-const TOWNHALL_ICON_PX = 20;
+const ARMY_ICON_PX = 16;
+const WORKER_ICON_PX = 11;
+const BUILDING_ICON_PX = 16;
+const TOWNHALL_ICON_PX = 24;
+/** Canvas height ceiling — high enough that a square map fills the
+ * column width instead of letterboxing (the "zoom"). */
+const CANVAS_MAX_H_PX = 720;
 /** Dark veil over the layout render so the cyan/red overlay language
  * stays readable on busy map art. */
 const LAYOUT_VEIL = "rgba(6,9,14,0.42)";
@@ -105,6 +110,47 @@ function readyIcon(name: string, kind: IconKind): HTMLImageElement | null {
     iconElementCache.set(path, img);
   }
   return img && img.complete && img.naturalWidth > 0 ? img : null;
+}
+
+/** Composed circular unit tokens — the square portrait clipped to a
+ * disc with a thin team-color ring, pre-rendered once per
+ * (icon, ring, size, dpr) so the rAF loop draws one cached bitmap per
+ * unit instead of re-clipping every frame. */
+const unitTokenCache = new Map<string, HTMLCanvasElement>();
+
+function unitToken(
+  name: string,
+  ring: string,
+  sizePx: number,
+  dpr: number,
+): HTMLCanvasElement | null {
+  const icon = readyIcon(name, "unit");
+  if (!icon) return null;
+  const path = resolveIconPath(name, "unit");
+  const key = `${path}|${ring}|${sizePx}|${dpr}`;
+  const cached = unitTokenCache.get(key);
+  if (cached) return cached;
+  if (typeof document === "undefined") return null;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(sizePx * dpr));
+  c.height = c.width;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.scale(dpr, dpr);
+  const r = sizePx / 2;
+  g.save();
+  g.beginPath();
+  g.arc(r, r, r - 1, 0, Math.PI * 2);
+  g.clip();
+  g.drawImage(icon, 0, 0, sizePx, sizePx);
+  g.restore();
+  g.beginPath();
+  g.arc(r, r, r - 0.75, 0, Math.PI * 2);
+  g.strokeStyle = ring;
+  g.lineWidth = 1.5;
+  g.stroke();
+  unitTokenCache.set(key, c);
+  return c;
 }
 
 export function MapReplayer({ playback }: { playback: MapPlayback }) {
@@ -202,7 +248,7 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         (playback.bounds.maxY - playback.bounds.minY) /
         (playback.bounds.maxX - playback.bounds.minX);
       const w = Math.max(280, rect.width);
-      const h = Math.max(220, Math.min(560, w * aspect));
+      const h = Math.max(220, Math.min(CANVAS_MAX_H_PX, w * aspect));
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       canvas.width = Math.round(w * dpr);
@@ -305,7 +351,8 @@ function renderFrame(
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
   const { bounds } = playback;
-  const proj = worldProjection(bounds, w, h);
+  // Tight padding: nearly every canvas pixel shows map.
+  const proj = worldProjection(bounds, w, h, 4);
 
   ctx.clearRect(0, 0, w, h);
 
@@ -359,7 +406,11 @@ function renderFrame(
   const alive: Array<{ idx: number; x: number; y: number }> = [];
   playback.units.forEach((u, idx) => {
     if (!unitAliveAt(u, t)) return;
-    const pos = unitPositionAt(u.wp, t);
+    // Speed-capped interpolation: a unit HOLDS its last known anchor
+    // (mining, building, sieged) and departs at the last moment that
+    // still arrives on time — instead of drifting across the map for
+    // the whole gap between sparse waypoints.
+    const pos = unitPositionAt(u.wp, t, unitMaxSpeed(u.name));
     if (!pos) return;
     alive.push({
       idx,
@@ -379,36 +430,25 @@ function renderFrame(
     const unit = playback.units[alive[i].idx];
     const worker = isWorkerUnit(unit.name);
     const mine = unit.owner === "me";
-    const icon = readyIcon(unit.name, "unit");
-    if (icon) {
-      const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
-      if (worker) ctx.globalAlpha = 0.72;
-      ctx.drawImage(icon, pos.x - size / 2, pos.y - size / 2, size, size);
-      ctx.strokeStyle = mine
-        ? worker
-          ? ME_WORKER
-          : ME_ARMY
-        : worker
-          ? OPP_WORKER
-          : OPP_ARMY;
-      ctx.lineWidth = 1.25;
-      ctx.strokeRect(
-        pos.x - size / 2 + 0.5,
-        pos.y - size / 2 + 0.5,
-        size - 1,
-        size - 1,
-      );
+    const ring = mine
+      ? worker
+        ? ME_WORKER
+        : ME_ARMY
+      : worker
+        ? OPP_WORKER
+        : OPP_ARMY;
+    // Circular tokens (portrait clipped to a disc + thin team ring) —
+    // no boxes around units.
+    const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
+    const token = unitToken(unit.name, ring, size, dpr);
+    if (token) {
+      if (worker) ctx.globalAlpha = 0.75;
+      ctx.drawImage(token, pos.x - size / 2, pos.y - size / 2, size, size);
       if (worker) ctx.globalAlpha = 1;
     } else {
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, worker ? 1.6 : 2.6, 0, Math.PI * 2);
-      ctx.fillStyle = mine
-        ? worker
-          ? ME_WORKER
-          : ME_ARMY
-        : worker
-          ? OPP_WORKER
-          : OPP_ARMY;
+      ctx.fillStyle = ring;
       ctx.fill();
     }
   });

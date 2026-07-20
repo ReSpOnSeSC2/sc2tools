@@ -184,10 +184,21 @@ export function unitAliveAt(unit: PlaybackUnit, t: number): boolean {
  * Interpolated world position at time t from a flat waypoint array.
  * Clamps before the first and after the last waypoint (a unit sitting
  * still simply has no further waypoints).
+ *
+ * ``maxSpeed`` (world cells/sec) switches long gaps from a slow
+ * constant drift to an arrive-on-time model: waypoints are sparse
+ * anchors (a worker's known spot at a mineral line, then its known
+ * spot at the next base minutes later), and naive lerp drags the unit
+ * across the map for the whole gap — the "floating probes" artifact.
+ * With a speed cap the unit HOLDS its last anchor (mining, building)
+ * and departs at the latest moment that still arrives on time at the
+ * unit's real movement speed. Gaps tighter than the cap degrade to
+ * plain lerp, so understating a fast unit's speed is harmless.
  */
 export function unitPositionAt(
   wp: readonly number[],
   t: number,
+  maxSpeed?: number,
 ): { x: number; y: number } | null {
   if (wp.length < 3) return null;
   if (t <= wp[0]) return { x: wp[1], y: wp[2] };
@@ -198,13 +209,31 @@ export function unitPositionAt(
     const t0 = wp[i];
     const t1 = wp[i + 3];
     if (t < t0 || t > t1 || t1 <= t0) continue;
-    const f = (t - t0) / (t1 - t0);
-    return {
-      x: wp[i + 1] + (wp[i + 4] - wp[i + 1]) * f,
-      y: wp[i + 2] + (wp[i + 5] - wp[i + 2]) * f,
-    };
+    const x0 = wp[i + 1];
+    const y0 = wp[i + 2];
+    const x1 = wp[i + 4];
+    const y1 = wp[i + 5];
+    let depart = t0;
+    if (maxSpeed !== undefined && Number.isFinite(maxSpeed) && maxSpeed > 0) {
+      const travel = Math.hypot(x1 - x0, y1 - y0) / maxSpeed;
+      depart = Math.max(t0, t1 - travel);
+    }
+    if (t <= depart) return { x: x0, y: y0 };
+    const f = (t - depart) / (t1 - depart);
+    return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f };
   }
   return { x: wp[last + 1], y: wp[last + 2] };
+}
+
+/**
+ * Per-unit movement-speed cap for the arrive-on-time interpolation,
+ * in world cells/sec. Workers use their real base speed; everything
+ * else gets a conservative army default — a genuinely faster unit
+ * (speedlings, mutas) just clamps back to plain lerp inside tight
+ * gaps, which is the old behaviour.
+ */
+export function unitMaxSpeed(name: string): number {
+  return isWorkerUnit(name) ? 3.94 : 5.5;
 }
 
 /**
