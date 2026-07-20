@@ -1723,10 +1723,11 @@ _WORKER_NAMES = {"Drone", "Probe", "SCV", "MULE"}
 def _downsample_waypoints_1hz(waypoints):
     """Keep at most one waypoint per integer game-second (the latest one).
 
-    sc2reader's ``UnitPositionsEvent`` fires every game tick (~14Hz at
-    Faster speed) and we accumulate every position. For the viewer we
-    only need second-resolution snapshots; this reduces a 11-minute
-    game's worker waypoint count by ~14x without visible quality loss.
+    Workers accumulate a destination waypoint for every rally/mineral
+    click while selected (plus 15-second ``UnitPositionsEvent``
+    snapshots when damaged). For the viewer we only need
+    second-resolution snapshots; collapsing to 1 Hz keeps a long game's
+    worker waypoint count bounded without visible quality loss.
     """
     if not waypoints:
         return waypoints
@@ -1768,12 +1769,29 @@ def extract_unit_tracks(replay, my_pid):
     """
     units = {}
     selections = {}
+    # Tracker unit_id_index -> uid, mirroring sc2reader's engine
+    # (``replay.active_units``). ``UnitPositionsEvent.positions`` rows
+    # carry the INDEX portion of the unit id, not the full unit_id —
+    # resolving them against unit_id-keyed records silently drops every
+    # snapshot. Indexes are recycled after death, so this map must track
+    # every born/died event (including unit types we don't record) or a
+    # stale entry would misattribute the next occupant's positions.
+    active_index = {}
 
     tracker = getattr(replay, "tracker_events", None) or []
     try:
         for ev in tracker:
             try:
                 if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
+                    uid = getattr(ev, "unit_id", None)
+                    if uid is None:
+                        u = getattr(ev, "unit", None)
+                        uid = getattr(u, "id", None) if u is not None else None
+                    if uid is None:
+                        continue
+                    idx = getattr(ev, "unit_id_index", None)
+                    if idx is not None:
+                        active_index[idx] = uid
                     pid = _get_owner_pid(ev)
                     raw = _get_unit_type_name(ev)
                     if pid is None or raw is None:
@@ -1782,12 +1800,6 @@ def extract_unit_tracks(replay, my_pid):
                     if name in KNOWN_BUILDINGS:
                         continue
                     if name in _SKIP_FOR_TRACKING:
-                        continue
-                    uid = getattr(ev, "unit_id", None)
-                    if uid is None:
-                        u = getattr(ev, "unit", None)
-                        uid = getattr(u, "id", None) if u is not None else None
-                    if uid is None:
                         continue
                     t = float(event_seconds(ev, replay))
                     x = float(getattr(ev, "x", 0) or 0)
@@ -1808,21 +1820,36 @@ def extract_unit_tracks(replay, my_pid):
 
                 elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
                     t = float(event_seconds(ev, replay))
-                    for (uid, (x, y)) in (getattr(ev, "positions", []) or []):
-                        rec = units.get(uid)
+                    for (unit_index, (x, y)) in (getattr(ev, "positions", []) or []):
+                        uid = active_index.get(unit_index)
+                        rec = units.get(uid) if uid is not None else None
                         if rec is None:
                             continue
-                        # sc2reader stores grid units / 4. Normalize to cells.
-                        rec["waypoints"].append((t, float(x) / 4.0, float(y) / 4.0))
+                        # Coordinates are map cells. (Pre-2014 builds have
+                        # 4-point RESOLUTION — rounded, not scaled — and
+                        # sc2reader already rescales those on load.)
+                        rec["waypoints"].append((t, float(x), float(y)))
 
                 elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
                     uid = getattr(ev, "unit_id", None)
                     if uid is None:
                         u = getattr(ev, "unit", None)
                         uid = getattr(u, "id", None) if u is not None else None
+                    idx = getattr(ev, "unit_id_index", None)
+                    if idx is not None:
+                        active_index.pop(idx, None)
                     rec = units.get(uid)
                     if rec is not None:
-                        rec["died"] = float(event_seconds(ev, replay))
+                        t = float(event_seconds(ev, replay))
+                        rec["died"] = t
+                        # The death event carries the exact position of the
+                        # dying unit — the one guaranteed-precise anchor a
+                        # replay gives us mid-game. Without it a unit dies
+                        # wherever interpolation happened to leave it.
+                        x = float(getattr(ev, "x", 0) or 0)
+                        y = float(getattr(ev, "y", 0) or 0)
+                        if x or y:
+                            rec["waypoints"].append((t, x, y))
 
                 elif isinstance(ev, UnitTypeChangeEvent):
                     uid = getattr(ev, "unit_id", None)
