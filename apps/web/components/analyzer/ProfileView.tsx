@@ -18,8 +18,6 @@ import {
   type PulseRaceBreakdown,
 } from "./OpponentRaceMmr";
 import type { ProfileGame } from "./Last5GamesTimeline";
-import { MedianTimingsGrid } from "./MedianTimingsGrid";
-import type { MatchupTimings, TimingInfo } from "./MedianTimingsGrid";
 import { PredictedStrategiesList } from "./PredictedStrategiesList";
 import type { Prediction } from "./PredictedStrategiesList";
 import { StrategyTendencyChart } from "./StrategyTendencyChart";
@@ -59,16 +57,9 @@ type OpponentProfileResp = {
   predictedStrategies?: Prediction[];
   myRace?: string;
   oppRaceModal?: string;
-  matchupLabel?: string;
-  matchupCounts?: Record<string, number>;
-  matchupTimings?: Record<string, MatchupTimings>;
-  matchupTimingsLegacy?: Record<string, MatchupTimings>;
-  medianTimings?: Record<string, TimingInfo>;
-  medianTimingsLegacy?: Record<string, TimingInfo>;
-  medianTimingsOrder?: string[];
   // Phase distribution for the "Where games end" outcome bar.
   // Computed server-side from the same date-filtered matched games
-  // that drive the by-map / by-strategy / median-timings panels.
+  // that drive the by-map / by-strategy panels.
   // Optional so old API builds that pre-date the wiring still render
   // the rest of the profile without a runtime error.
   phases?: BuildPhasePayload;
@@ -169,13 +160,6 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           winRate: v.wins + v.losses ? v.wins / (v.wins + v.losses) : 0,
         }))
         .sort((a, b) => b.total - a.total);
-  const medianTimings = data.medianTimingsLegacy || {};
-  const medianTimingsOrder =
-    data.medianTimingsOrder && data.medianTimingsOrder.length
-      ? data.medianTimingsOrder
-      : Object.keys(medianTimings);
-  const matchupTimings = data.matchupTimingsLegacy || {};
-  const matchupCounts = data.matchupCounts || {};
   const opponentName = data.name || data.pulseId || pulseId;
   const handleSelectGame = (id: string) => {
     setPendingGameId(id);
@@ -309,25 +293,6 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       <WhereGamesEndSection
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
       />
-
-      <Card
-        title={`Median key timings${data.matchupLabel ? ` — ${data.matchupLabel}` : ""}`}
-      >
-        <MedianTimingsGrid
-          timings={medianTimings}
-          order={medianTimingsOrder}
-          matchupLabel={data.matchupLabel || ""}
-          matchupCounts={matchupCounts}
-          matchupTimings={matchupTimings}
-          opponentName={opponentName}
-        />
-        <p className="mt-2 text-micro text-text-dim">
-          Opponent-tech cards come from the agent-uploaded opponent build
-          log; your-tech cards come from your build log. Click a card with
-          samples to see the contributing games. "-" means no samples in
-          this matchup.
-        </p>
-      </Card>
 
       <Card
         title={

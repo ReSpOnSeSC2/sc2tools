@@ -119,6 +119,12 @@ export interface PulseCard {
   statLabel?: string;
   /** Analyzer tab this card drills into. */
   targetTab?: PulseTargetTab;
+  /**
+   * Opponent dossier this card drills into (the storage pulseId).
+   * When set, clicking the card opens this profile directly instead
+   * of just landing on the Opponents list.
+   */
+  targetOpponentId?: string;
 }
 
 /** Pool entry: eligibility gate + card factory. */
@@ -364,7 +370,7 @@ export const PULSE_POOL: PulseSpec[] = [
   {
     id: "nemesis-watch",
     category: "opponent",
-    requires: `An opponent with ≥${NEMESIS_MIN_DECIDED} decided games, ≤${Math.round(NEMESIS_MAX_WINRATE * 100)}% WR, seen in ${NEMESIS_WINDOW_DAYS} days.`,
+    requires: `An opponent with ≥${NEMESIS_MIN_DECIDED} decided games, ≤${Math.round(NEMESIS_MAX_WINRATE * 100)}% WR, seen in ${NEMESIS_WINDOW_DAYS} days. Barcode names need a resolved SC2Pulse id.`,
     timely: false,
     weight: 55,
     eligible: (ctx) => ctx.nemesis !== null,
@@ -380,13 +386,14 @@ export const PULSE_POOL: PulseSpec[] = [
         stat: `${n.wins}–${n.losses}`,
         statLabel: "your head-to-head",
         targetTab: "opponents",
+        targetOpponentId: n.pulseId,
       };
     },
   },
   {
     id: "rival-ledger",
     category: "opponent",
-    requires: `An opponent faced ≥${RIVAL_MIN_DECIDED} times in ${RIVAL_WINDOW_DAYS} days.`,
+    requires: `An opponent faced ≥${RIVAL_MIN_DECIDED} times in ${RIVAL_WINDOW_DAYS} days. Barcode names need a resolved SC2Pulse id.`,
     timely: false,
     weight: 45,
     eligible: (ctx) => ctx.rival !== null,
@@ -403,6 +410,7 @@ export const PULSE_POOL: PulseSpec[] = [
         stat: `${r.wins}–${r.losses}`,
         statLabel: "head-to-head",
         targetTab: "opponents",
+        targetOpponentId: r.pulseId,
       };
     },
   },

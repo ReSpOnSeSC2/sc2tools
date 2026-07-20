@@ -67,7 +67,7 @@ export interface PersonalMedians {
   /**
    * The player's median NATURAL-EXPANSION start time in seconds, keyed
    * by townhall name. Compatible with the profile payload's
-   * `medianTimingsLegacy` (MedianTimingsGrid TimingInfo): pass
+   * `medianTimingsLegacy` timing entries: pass
    * `timings["Hatchery"].medianSeconds` etc. Absent → the
    * late-expansion rule is skipped entirely.
    */

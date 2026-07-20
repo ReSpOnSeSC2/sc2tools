@@ -33,6 +33,7 @@ import {
   outcome,
 } from "@/components/analyzer/arcade/ArcadeEngine";
 import { gamesOnDay } from "@/lib/dailyQuests";
+import { isBarcodeName } from "@/lib/sc2pulse";
 import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
 
 /* ──────────────── tuning constants ──────────────── */
@@ -536,6 +537,7 @@ function buildOpponentCards(
       losses: number;
       lastPlayedMs: number;
       rivalDecided: number;
+      hasPulseCharacterId: boolean;
     }
   >();
   for (const r of ordered) {
@@ -546,12 +548,21 @@ function buildOpponentCards(
     if (o === "U") continue;
     let rec = byOpp.get(id);
     if (!rec) {
-      rec = { name: null, wins: 0, losses: 0, lastPlayedMs: 0, rivalDecided: 0 };
+      rec = {
+        name: null,
+        wins: 0,
+        losses: 0,
+        lastPlayedMs: 0,
+        rivalDecided: 0,
+        hasPulseCharacterId: false,
+      };
       byOpp.set(id, rec);
     }
     if (o === "W") rec.wins += 1;
     else rec.losses += 1;
     if (r.t >= rivalCutoff) rec.rivalDecided += 1;
+    const cid = r.g.opponent?.pulseCharacterId;
+    if (typeof cid === "string" && cid.trim()) rec.hasPulseCharacterId = true;
     if (r.t >= rec.lastPlayedMs) {
       rec.lastPlayedMs = r.t;
       // Latest known display name wins — smurf barcodes get healed by
@@ -567,6 +578,11 @@ function buildOpponentCards(
     a[0].localeCompare(b[0]),
   )) {
     if (!rec.name) continue; // never show an unnamed card
+    // Barcode names only headline a card when a resolved SC2Pulse
+    // character id confirms who is behind the bars. Without it the
+    // card reads "IIIIIl owns the ledger" with no dossier to back it
+    // up — an unverifiable identity isn't worth a nemesis/rival slot.
+    if (isBarcodeName(rec.name) && !rec.hasPulseCharacterId) continue;
     const decided = rec.wins + rec.losses;
     const stat: PulseOpponentStat = {
       pulseId,
