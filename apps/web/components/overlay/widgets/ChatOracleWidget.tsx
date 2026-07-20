@@ -86,9 +86,18 @@ export function ChatOracleWidget({
         ? (lastEvent.topOracles as OracleEntry[]).slice(0, 3)
         : [],
     });
+  }, [lastEvent]);
+
+  // The auto-dismiss timer is keyed on the reveal itself, NOT on
+  // lastEvent — an unrelated engagement event landing mid-reveal
+  // (a level-up from the same game's XP, a clip moment) used to
+  // cancel the timer via this effect's cleanup and never re-arm it,
+  // leaving "nobody called it" on stream indefinitely.
+  useEffect(() => {
+    if (!settle) return;
     const timer = setTimeout(() => setSettle(null), REVEAL_MS);
     return () => clearTimeout(timer);
-  }, [lastEvent]);
+  }, [settle]);
 
   // Test fire: demo window with a lively tally, then a reveal.
   const [demoPhase, setDemoPhase] = useState<0 | 1 | 2>(0);
