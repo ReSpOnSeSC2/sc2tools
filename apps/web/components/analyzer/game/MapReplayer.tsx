@@ -33,6 +33,8 @@ import {
   useState,
 } from "react";
 import {
+  buildingAliveAt,
+  buildingPositionAt,
   isTownHall,
   isWorkerUnit,
   MINING_SNAP_RADIUS,
@@ -192,6 +194,29 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
   // canvas costs nothing here (this canvas is never exported). On any
   // load failure the ref stays null and the flat background shows.
   const layoutImageRef = useRef<HTMLImageElement | null>(null);
+  // Zoom/pan view transform (canvas CSS px). z=1 shows the whole map;
+  // wheel/pinch zooms toward the pointer, drag pans, buttons/dblclick
+  // reset. Held in a ref so the rAF loop reads it without re-binding.
+  const viewRef = useRef({ z: 1, ox: 0, oy: 0 });
+
+  const applyZoom = useCallback((cx: number, cy: number, factor: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const v = viewRef.current;
+    const z = Math.min(8, Math.max(1, v.z * factor));
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    // Keep the scene point under (cx, cy) fixed while scaling.
+    let ox = cx - ((cx - v.ox) / v.z) * z;
+    let oy = cy - ((cy - v.oy) / v.z) * z;
+    ox = Math.min(0, Math.max(w - w * z, ox));
+    oy = Math.min(0, Math.max(h - h * z, oy));
+    viewRef.current = { z, ox, oy };
+  }, []);
+
+  const resetView = useCallback(() => {
+    viewRef.current = { z: 1, ox: 0, oy: 0 };
+  }, []);
 
   useEffect(() => {
     layoutImageRef.current = null;
@@ -254,24 +279,31 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
       // Dirty-check: a paused replay re-renders only when the scrub
       // time, canvas size, or asset readiness actually changed —
       // otherwise a static frame would burn battery at 60 fps.
+      const view = viewRef.current;
       const dirty =
         playingRef.current ||
         timeRef.current !== drawn.t ||
         assetsVersion !== drawn.v ||
         canvas.width !== drawn.cw ||
-        canvas.height !== drawn.ch;
+        canvas.height !== drawn.ch ||
+        view.z !== drawn.z ||
+        view.ox !== drawn.ox ||
+        view.oy !== drawn.oy;
       if (dirty) {
-        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current);
+        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view);
         drawn = {
           t: timeRef.current,
           v: assetsVersion,
           cw: canvas.width,
           ch: canvas.height,
+          z: view.z,
+          ox: view.ox,
+          oy: view.oy,
         };
       }
     };
     let lastReactSync = -1;
-    let drawn = { t: -1, v: -1, cw: 0, ch: 0 };
+    let drawn = { t: -1, v: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0 };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [playback, gameLength]);
@@ -302,6 +334,78 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
     obs?.observe(wrap);
     return () => obs?.disconnect();
   }, [playback]);
+
+  // Wheel zoom, drag pan, and two-pointer pinch. Native listeners so
+  // wheel can preventDefault (React's is passive), pointer capture so
+  // drags keep tracking outside the canvas.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinchDist = 0;
+
+    const local = (e: { clientX: number; clientY: number }) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const pt = local(e);
+      applyZoom(pt.x, pt.y, Math.pow(1.0015, -e.deltaY));
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      pointers.set(e.pointerId, local(e));
+      canvas.setPointerCapture(e.pointerId);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      const now = local(e);
+      pointers.set(e.pointerId, now);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0) {
+          applyZoom((a.x + b.x) / 2, (a.y + b.y) / 2, dist / pinchDist);
+        }
+        pinchDist = dist;
+        return;
+      }
+      const v = viewRef.current;
+      if (v.z <= 1) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      viewRef.current = {
+        z: v.z,
+        ox: Math.min(0, Math.max(w - w * v.z, v.ox + (now.x - prev.x))),
+        oy: Math.min(0, Math.max(h - h * v.z, v.oy + (now.y - prev.y))),
+      };
+    };
+    const onPointerEnd = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      pinchDist = 0;
+    };
+    const onDblClick = () => resetView();
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerEnd);
+    canvas.addEventListener("pointercancel", onPointerEnd);
+    canvas.addEventListener("dblclick", onDblClick);
+    return () => {
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerEnd);
+      canvas.removeEventListener("pointercancel", onPointerEnd);
+      canvas.removeEventListener("dblclick", onDblClick);
+    };
+  }, [applyZoom, resetView]);
 
   const me = useMemo(() => statsAt(playback.stats.me, timeSec), [playback, timeSec]);
   const opp = useMemo(() => statsAt(playback.stats.opp, timeSec), [playback, timeSec]);
@@ -347,12 +451,44 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         </span>
       </div>
 
-      <div ref={wrapRef} className="min-w-0">
+      <div ref={wrapRef} className="relative min-w-0">
         <canvas
           ref={canvasRef}
-          className="block w-full rounded-lg border border-border bg-[#0a0d13]"
+          className="block w-full touch-none rounded-lg border border-border bg-[#0a0d13]"
           aria-label={`Map playback of ${playback.mapName || "this game"}`}
         />
+        <div className="absolute right-2 top-2 flex flex-col gap-1">
+          <button
+            type="button"
+            aria-label="Zoom in"
+            onClick={() => {
+              const c = canvasRef.current;
+              if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1.4);
+            }}
+            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-body font-semibold text-text hover:border-accent"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => {
+              const c = canvasRef.current;
+              if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1 / 1.4);
+            }}
+            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-body font-semibold text-text hover:border-accent"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            aria-label="Reset view"
+            onClick={resetView}
+            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-caption font-semibold text-text hover:border-accent"
+          >
+            ⤢
+          </button>
+        </div>
       </div>
 
       {/* h-6 keeps the native range comfortably draggable on touch. */}
@@ -522,14 +658,26 @@ const SIGHT_WORKER = 9;
 const SIGHT_HALL = 13;
 const SIGHT_BUILDING = 10;
 
+interface ViewTransform {
+  z: number;
+  ox: number;
+  oy: number;
+}
+
 function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
   playback: MapPlayback,
   t: number,
   layout: HTMLImageElement | null,
+  view: ViewTransform,
 ) {
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  // Icon/glyph bitmaps rasterize at a zoom-quantized density so they
+  // stay crisp under the view transform instead of magnifying a 1x
+  // raster. Power-of-two steps keep the token cache tiny (≤3 sizes).
+  const rasterDpr =
+    dpr * Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(1, view.z)))));
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
   const { bounds } = playback;
@@ -537,6 +685,10 @@ function renderFrame(
   const proj = worldProjection(bounds, w, h, 4);
 
   ctx.clearRect(0, 0, w, h);
+  // Zoom/pan: scale the whole scene (markers included — true zoom).
+  ctx.save();
+  ctx.translate(view.ox, view.oy);
+  ctx.scale(view.z, view.z);
 
   // Real map layout under everything, stretched to the projected
   // playable rect (the same rect all markers project into, so terrain
@@ -555,7 +707,7 @@ function renderFrame(
   // their recorded death time.
   for (const r of playback.resources) {
     if (!resourceAliveAt(r, t)) continue;
-    const glyph = resourceGlyph(r.kind, dpr);
+    const glyph = resourceGlyph(r.kind, rasterDpr);
     if (!glyph) continue;
     const size = r.kind === "rocks" ? 16 : 13;
     ctx.drawImage(
@@ -574,8 +726,11 @@ function renderFrame(
     Array<{ x: number; y: number; slots: Array<{ x: number; y: number }> }>
   > = { me: [], opp: [] };
   for (const b of playback.buildings) {
-    if (b.t <= t && isTownHall(b.name)) {
-      halls[b.owner].push({ x: b.x, y: b.y, slots: [] });
+    if (isTownHall(b.name) && buildingAliveAt(b, t)) {
+      // CURRENT position: a floated Command Center anchors mining at
+      // the expansion it landed on, not its construction site.
+      const pos = buildingPositionAt(b, t);
+      halls[b.owner].push({ x: pos.x, y: pos.y, slots: [] });
     }
   }
   // Mining slots per hall: real patches when the payload carries
@@ -592,7 +747,7 @@ function renderFrame(
           const tapped = playback.buildings.some(
             (b) =>
               b.owner === side &&
-              b.t <= t &&
+              buildingAliveAt(b, t) &&
               Math.hypot(b.x - r.x, b.y - r.y) <= 1.5,
           );
           if (tapped) slots.push(r, r, r);
@@ -679,10 +834,11 @@ function renderFrame(
         fg.fill();
       };
       for (const b of playback.buildings) {
-        if (b.t > t) continue;
+        if (!buildingAliveAt(b, t)) continue;
+        const pos = buildingPositionAt(b, t);
         reveal(
-          projectX(bounds, proj, b.x),
-          projectY(bounds, proj, b.y),
+          projectX(bounds, proj, pos.x),
+          projectY(bounds, proj, pos.y),
           isTownHall(b.name) ? SIGHT_HALL : SIGHT_BUILDING,
         );
       }
@@ -707,9 +863,10 @@ function renderFrame(
   // hasn't decoded yet).
   const derived = derivedOf(playback);
   for (const b of playback.buildings) {
-    if (b.t > t) continue;
-    const x = projectX(bounds, proj, b.x);
-    const y = projectY(bounds, proj, b.y);
+    if (!buildingAliveAt(b, t)) continue;
+    const pos = buildingPositionAt(b, t);
+    const x = projectX(bounds, proj, pos.x);
+    const y = projectY(bounds, proj, pos.y);
     const townHall = isTownHall(b.name);
     const size = townHall ? TOWNHALL_ICON_PX : BUILDING_ICON_PX;
     const token = iconToken(
@@ -717,7 +874,7 @@ function renderFrame(
       "building",
       b.owner === "me" ? ME_ARMY : OPP_ARMY,
       size,
-      dpr,
+      rasterDpr,
     );
     if (token) {
       ctx.drawImage(token, x - size / 2, y - size / 2, size, size);
@@ -738,7 +895,7 @@ function renderFrame(
           "unit",
           b.owner === "me" ? ME_ARMY : OPP_ARMY,
           WORKER_ICON_PX,
-          dpr,
+          rasterDpr,
         );
         if (wtoken) {
           ctx.globalAlpha = 0.9;
@@ -770,7 +927,7 @@ function renderFrame(
     // Bare team-tinted icons — nothing drawn around the unit art, so
     // the unit type reads directly; workers dim slightly.
     const size = worker ? WORKER_ICON_PX : ARMY_ICON_PX;
-    const token = iconToken(unit.name, "unit", mine ? ME_ARMY : OPP_ARMY, size, dpr);
+    const token = iconToken(unit.name, "unit", mine ? ME_ARMY : OPP_ARMY, size, rasterDpr);
     if (token) {
       if (worker) ctx.globalAlpha = 0.75;
       ctx.drawImage(token, pos.x - size / 2, pos.y - size / 2, size, size);
@@ -809,6 +966,8 @@ function renderFrame(
     ctx.lineWidth = 2;
     ctx.stroke();
   }
+
+  ctx.restore();
 }
 
 function formatTime(sec: number): string {

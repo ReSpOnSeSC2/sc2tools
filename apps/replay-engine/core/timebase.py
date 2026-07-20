@@ -63,3 +63,20 @@ def event_seconds(event, replay) -> int:
             return 0
         return int(round(sec * 16.0 / infer_fps(replay)))
     return int(round(frame / infer_fps(replay)))
+
+
+def real_game_length(replay) -> float:
+    """The game's length in REAL seconds — the same timebase
+    ``event_seconds`` puts on every event.
+
+    ``replay.game_length`` is Blizzard "game time" (frames / 16),
+    which runs 1.4x real time on Faster — mixing it with
+    ``event_seconds`` timestamps stretched the playback timeline 40%
+    past the actual game (a 16:04 game scrubbed to 22:29).
+    """
+    frames = getattr(replay, "frames", None)
+    if isinstance(frames, (int, float)) and frames > 0:
+        return float(frames) / infer_fps(replay)
+    gl = getattr(replay, "game_length", None)
+    seconds = getattr(gl, "seconds", None) if gl is not None else None
+    return float(seconds) if seconds else 0.0

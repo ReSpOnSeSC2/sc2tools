@@ -1372,7 +1372,7 @@ def test_compact_map_playback_produces_bounded_camelcase_payload():
         [{"time": 200.0, "x": 100.0, "y": 90.0, "side": "me"}],
     )
     assert out is not None
-    assert out["v"] == 2
+    assert out["v"] == 3
     assert out["mapName"] == "Alcyone LE"
     assert out["bounds"] == {"minX": 10.0, "minY": 20.0, "maxX": 190.0, "maxY": 160.0}
     assert out["spawns"][0] == {"owner": "me", "x": 30.0, "y": 40.0}
@@ -1454,3 +1454,28 @@ def test_compact_map_playback_omits_resources_key_when_absent():
     out = _compact_map_playback(_sample_playback(), [])
     assert out is not None
     assert "resources" not in out
+
+
+def test_compact_map_playback_prefers_lifecycle_buildings_with_moves():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    playback = _sample_playback()
+    playback["my_buildings"] = [
+        {"name": "CommandCenter", "born": 12.04, "x": 30.0, "y": 40.0,
+         "moves": [300.0, 90.0, 88.0], "died": None},
+    ]
+    playback["opp_buildings"] = [
+        {"name": "Hatchery", "born": 0.0, "x": 170.0, "y": 140.0,
+         "moves": [], "died": 512.06},
+    ]
+    out = _compact_map_playback(playback, [])
+    assert out is not None
+    cc = next(b for b in out["buildings"] if b["name"] == "CommandCenter")
+    hatch = next(b for b in out["buildings"] if b["name"] == "Hatchery")
+    assert cc["t"] == 12.0
+    assert cc["moves"] == [300.0, 90.0, 88.0]
+    assert "died" not in cc
+    assert hatch["died"] == 512.1
+    assert "moves" not in hatch
+    # Legacy event-scan buildings are NOT mixed in when lifecycle exists.
+    assert len(out["buildings"]) == 2

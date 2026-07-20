@@ -1941,6 +1941,132 @@ def extract_unit_tracks(replay, my_pid):
     return {"my_units": my_units, "opp_units": opp_units}
 
 
+_LIFTABLE_BUILDINGS = {
+    "CommandCenter", "OrbitalCommand", "Barracks", "Factory", "Starport",
+}
+
+
+def _is_land_ability(name):
+    """Terran lift-off Land commands ("Land", "LandCommandCenter",
+    "BarracksLand", …). Deliberately strict — rally points are also
+    TargetPointCommands issued with a hall selected and must never
+    read as a relocation."""
+    if not name:
+        return False
+    n = str(name).lower()
+    return n.startswith("land") or n.endswith("land")
+
+
+def extract_building_lifecycle(replay):
+    """Authoritative per-building lifecycle keyed off the tracker.
+
+    Returns ``{pid: [{name, born, x, y, moves, died}]}`` where
+    ``moves`` is a flat ``[t, x, y, …]`` of lift-off LANDING points.
+    Placement events alone put a flown Command Center at its
+    construction site forever — the viewer then shows no hall at the
+    expansion it actually sits on, and every SCV there loses its
+    mining anchor. The Land command's target point is the exact
+    landing spot, so tracking it (against the player's live
+    selection) pins relocated buildings where they really are.
+    ``died`` clears destroyed structures at the recorded second.
+    """
+    buildings = {}
+    tracker = getattr(replay, "tracker_events", None) or []
+    for ev in tracker:
+        try:
+            if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
+                pid = _get_owner_pid(ev)
+                raw = _get_unit_type_name(ev)
+                if pid is None or raw is None:
+                    continue
+                name = _clean_building_name(raw)
+                if name not in KNOWN_BUILDINGS:
+                    continue
+                uid = getattr(ev, "unit_id", None)
+                if uid is None:
+                    continue
+                x = float(getattr(ev, "x", 0) or 0)
+                y = float(getattr(ev, "y", 0) or 0)
+                if uid not in buildings:
+                    buildings[uid] = {
+                        "pid": pid, "name": name,
+                        "born": float(event_seconds(ev, replay)),
+                        "x": x, "y": y, "moves": [], "died": None,
+                    }
+            elif isinstance(ev, UnitTypeChangeEvent):
+                uid = getattr(ev, "unit_id", None)
+                rec = buildings.get(uid)
+                raw = _get_unit_type_name(ev)
+                if rec is None or not raw:
+                    continue
+                name = _clean_building_name(raw)
+                # Morph upgrades (CommandCenter -> OrbitalCommand,
+                # Hatchery -> Lair) rename the record; transient
+                # flying states do not.
+                if name in KNOWN_BUILDINGS and "Flying" not in raw:
+                    rec["name"] = name
+            elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
+                uid = getattr(ev, "unit_id", None)
+                rec = buildings.get(uid)
+                if rec is not None:
+                    rec["died"] = float(event_seconds(ev, replay))
+        except Exception:
+            continue
+
+    # Game-event pass: live selection per player -> Land target points.
+    if _TargetPointCommandEvent is not None and _SelectionEvent is not None:
+        selections = {}
+        for ev in (getattr(replay, "events", None) or []):
+            try:
+                if isinstance(ev, _SelectionEvent):
+                    if getattr(ev, "control_group", -1) != 10:
+                        continue
+                    pid = _resolve_command_pid_simple(ev)
+                    if not pid:
+                        continue
+                    new_ids = list(getattr(ev, "new_unit_ids", []) or [])
+                    if new_ids:
+                        selections[pid] = set(new_ids)
+                    continue
+                if isinstance(ev, _TargetPointCommandEvent):
+                    if not _is_land_ability(getattr(ev, "ability_name", None)):
+                        continue
+                    pid = _resolve_command_pid_simple(ev)
+                    sel = selections.get(pid)
+                    if not pid or not sel:
+                        continue
+                    t = float(event_seconds(ev, replay))
+                    x = float(getattr(ev, "x", 0) or 0)
+                    y = float(getattr(ev, "y", 0) or 0)
+                    if not (x or y):
+                        continue
+                    for uid in sel:
+                        rec = buildings.get(uid)
+                        if rec is None or rec["pid"] != pid:
+                            continue
+                        if rec["name"] not in _LIFTABLE_BUILDINGS:
+                            continue
+                        if rec["died"] is not None and t > rec["died"]:
+                            continue
+                        rec["moves"].extend(
+                            [round(t, 1), round(x, 1), round(y, 1)],
+                        )
+            except Exception:
+                continue
+
+    out = {}
+    for rec in buildings.values():
+        out.setdefault(rec["pid"], []).append({
+            "name": rec["name"],
+            "born": rec["born"],
+            "x": rec["x"],
+            "y": rec["y"],
+            "moves": rec["moves"],
+            "died": rec["died"],
+        })
+    return out
+
+
 def classify_resource_name(raw):
     """Map a neutral unit_type_name to a playback resource kind.
 

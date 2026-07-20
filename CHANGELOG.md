@@ -13,6 +13,39 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Map replayer clock now runs on real game time** — the playback
+  clock, HUD stats timing, and scrubber length were built from
+  Blizzard game-time seconds (16 frames/s) while every unit track
+  used real seconds (22.4 frames/s on Faster), so a 16:04 game
+  scrubbed to 22:29 and the final ~40% of the timeline was dead air.
+  The replay engine now derives `game_length` and stats timestamps
+  from the same real-seconds timebase as the tracks (**agent
+  0.15.3**), and the web sanitizer clamps stretched lengths from
+  older v1/v2 payloads so existing uploads read correctly without a
+  re-sync.
+
+- **Lifted Command Centers no longer vanish (and their workers no
+  longer float)** — buildings were only ever drawn at their
+  construction site, so a CC that lifted off and landed at an
+  expansion showed at the old base forever; the workers actually
+  mining at the new base had no town hall to snap to and drifted
+  as the long-standing "floating SCVs/probes" artifact. The replay
+  engine now tracks lift-off Land commands against the player's
+  live selection and records each landing point plus building death
+  times (playback payload v3); the replayer flies the structure to
+  its landing spot at flying-building speed, anchors mining, vision,
+  and gas logic at the building's *current* position, and removes
+  destroyed buildings at the recorded moment. The worker-to-hall
+  mining snap radius is also widened (9 → 12 cells) so outer-patch
+  workers present as mining instead of idling.
+
+### Added
+
+- **Map replayer zoom & pan** — scroll or pinch to zoom (1×–8×,
+  anchored at the cursor), drag to pan while zoomed, double-tap or
+  the ⤢ button to reset, with on-canvas +/− controls. Works with
+  mouse, trackpad, and touch.
+
 - **Unclassified builds no longer headline the trending/insight
   surfaces** — the detector's fallbacks ("Unclassified - Protoss",
   "PvP - Macro Transition (Unclassified)", "Terran - Standard Play

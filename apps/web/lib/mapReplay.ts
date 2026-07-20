@@ -36,6 +36,10 @@ export interface PlaybackBuilding {
   t: number;
   x: number;
   y: number;
+  /** Lift-off landing points, flat [t, x, y, …] (v3 payloads). */
+  moves: number[];
+  /** Game-second the structure died, or null if it survived. */
+  died: number | null;
 }
 
 export interface PlaybackUnit {
@@ -134,12 +138,24 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     const x = num(r.x);
     const y = num(r.y);
     if (!o || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const movesRaw = Array.isArray(r.moves) ? r.moves.slice(0, 60) : [];
+    const moves: number[] = [];
+    for (let i = 0; i + 2 < movesRaw.length; i += 3) {
+      const mt = num(movesRaw[i]);
+      const mx = num(movesRaw[i + 1]);
+      const my = num(movesRaw[i + 2]);
+      if (!Number.isFinite(mt) || !Number.isFinite(mx) || !Number.isFinite(my)) break;
+      moves.push(mt, mx, my);
+    }
+    const bDied = r.died === null || r.died === undefined ? NaN : num(r.died);
     buildings.push({
       owner: o,
       name: typeof r.name === "string" ? r.name.slice(0, 40) : "",
       t: Number.isFinite(num(r.t)) ? num(r.t) : 0,
       x,
       y,
+      moves,
+      died: Number.isFinite(bDied) ? bDied : null,
     });
   }
   const spawns: PlaybackSpawn[] = [];
@@ -187,11 +203,28 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       .filter((row): row is number[] => Array.isArray(row) && row.length >= 2)
       .map((row) => row.map((c) => num(c)))
       .filter((row) => row.every((c) => Number.isFinite(c)));
-  const gameLength = Math.max(
-    Number.isFinite(num(p.gameLength)) ? num(p.gameLength) : 0,
+  const statsMe = side(statsIn.me);
+  const statsOpp = side(statsIn.opp);
+  const lastActivity = Math.max(
+    0,
     ...units.map((u) => u.died ?? u.wp[u.wp.length - 3]),
+    ...battles.map((m) => m.t),
+    ...(statsMe.length ? [statsMe[statsMe.length - 1][0]] : []),
+    ...(statsOpp.length ? [statsOpp[statsOpp.length - 1][0]] : []),
+  );
+  let gameLength = Math.max(
+    Number.isFinite(num(p.gameLength)) ? num(p.gameLength) : 0,
+    lastActivity,
     1,
   );
+  // v<=2 payloads carried a Blizzard game-time length (1.4x real on
+  // Faster) while every event used real seconds — the scrubber ran
+  // ~40% past the game. When the declared length overshoots all
+  // recorded activity by >20%, trust the events: stats land every
+  // ~10s until the end, so their last row is a tight bound.
+  if (lastActivity > 60 && gameLength > lastActivity * 1.2) {
+    gameLength = Math.round(lastActivity * 1.02);
+  }
   if (units.length === 0 && buildings.length === 0) return null;
   return {
     v: Number.isFinite(num(p.v)) ? num(p.v) : 1,
@@ -203,7 +236,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     buildings,
     units,
     resources,
-    stats: { me: side(statsIn.me), opp: side(statsIn.opp) },
+    stats: { me: statsMe, opp: statsOpp },
   };
 }
 
@@ -281,8 +314,10 @@ export function unitMaxSpeed(name: string): number {
  */
 
 /** How close (world cells) a worker must be to a friendly town hall
- * to be presented as mining at it. */
-export const MINING_SNAP_RADIUS = 9;
+ * to be presented as mining at it. Wide enough to catch workers
+ * parked past the mineral line (patches sit 5-7 cells out) without
+ * grabbing genuine mid-map travellers. */
+export const MINING_SNAP_RADIUS = 12;
 
 /** Nearest hall within ``maxDist`` of ``pos``, or null. */
 export function nearestTownHall(
@@ -361,6 +396,32 @@ export function patchesNearHall(
  * on the hall side, with a whisker of per-seed jitter so two workers
  * on one patch don't perfectly overlap.
  */
+/** Is the building standing at time t (placed, not yet destroyed)? */
+export function buildingAliveAt(b: PlaybackBuilding, t: number): boolean {
+  if (b.t > t) return false;
+  return b.died === null || b.died > t;
+}
+
+/** Flying-building cruise speed for relocation interpolation. */
+const BUILDING_FLY_SPEED = 1.3;
+
+/**
+ * Where the building stands at time t: its construction site until
+ * the first lift-off landing, then each landing point in turn. The
+ * hop between spots is interpolated at flying-building speed with
+ * the same arrive-on-time model units use, so a floated Command
+ * Center is SHOWN at its old base, crawls across late, and sits at
+ * the expansion it actually landed on.
+ */
+export function buildingPositionAt(
+  b: PlaybackBuilding,
+  t: number,
+): { x: number; y: number } {
+  if (b.moves.length === 0) return { x: b.x, y: b.y };
+  const wp = [b.t, b.x, b.y, ...b.moves];
+  return unitPositionAt(wp, t, BUILDING_FLY_SPEED) ?? { x: b.x, y: b.y };
+}
+
 export function patchMiningPosition(
   patch: { x: number; y: number },
   hall: { x: number; y: number },
