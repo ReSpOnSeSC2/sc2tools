@@ -1,15 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from "recharts";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
@@ -28,13 +19,6 @@ type MixResponse = {
   points: MixPoint[];
 };
 
-type ChartRow = {
-  date: string;
-  total: number;
-} & Record<string, number | string>;
-
-const COLOR_GRID = "#1f2533";
-const COLOR_TEXT_DIM = "#6b7280";
 const OTHER_KEY = "__other";
 const OTHER_LABEL = "Other";
 const OTHER_COLOR = "#3a4252";
@@ -54,6 +38,39 @@ const PALETTE = [
 
 const TOP_N_OPTIONS = [4, 6, 8] as const;
 const DEFAULT_TOP_N = 6;
+
+// Beyond this many periods the gap in-fill would produce an unusable
+// wall of empty cells (e.g. a day bucket across years), so the
+// timeline falls back to only the periods that actually have games.
+const MAX_COLUMNS = 160;
+
+// Rows a matrix needs before the recent-share shift chip is shown,
+// and the minimum games in the recent window for it to mean anything.
+const SHIFT_MIN_GAMES = 5;
+const SHIFT_MIN_PTS = 8;
+
+type SeriesDef = {
+  key: string;
+  label: string;
+  color: string;
+  total: number;
+  /** Share of the recent third of the window minus overall share, in
+   *  percentage points. Null when the recent window is too thin. */
+  shiftPts: number | null;
+};
+
+type CellDatum = { count: number; wins: number; losses: number };
+
+type ColumnDatum = { date: string; total: number; wins: number; losses: number };
+
+type MixMatrix = {
+  series: SeriesDef[];
+  columns: ColumnDatum[];
+  cells: Map<string, CellDatum>;
+  maxCellCount: number;
+  maxColumnTotal: number;
+  totalGames: number;
+};
 
 export type MixOpponentRace = "" | "P" | "T" | "Z";
 
@@ -80,19 +97,26 @@ type MixOverTimeChartProps = {
 };
 
 /**
- * 100% stacked-area "mix" chart.
+ * Cadence-matrix "mix" chart: one row per category, one column per
+ * period, each cell the actual game count (colour intensity scales
+ * with volume).
  *
  * Generic on the categorical dimension — used by the "Your build
  * mix" and "Strategies you're facing" cards in the Trends tab.
  * Selects the top-N most-played categories over the visible window
  * (toggleable: 4/6/8) and rolls the remainder into a single
- * "Other" series so the chart never balloons past readable colour
- * palette size, even on accounts with hundreds of distinct values.
+ * "Other" row so the matrix never balloons past readable palette
+ * size, even on accounts with hundreds of distinct values.
  *
- * Per-period shares — never raw counts — because the question this
- * chart answers is "how is the *composition* shifting?". A raw-
- * volume answer is already covered by the games-per-period bars at
- * the top of the tab.
+ * Why a matrix and not the 100% stacked area it replaced: these
+ * feeds run at very low volume per period (often 1-8 games a day),
+ * and a share-based area chart interpolates a single game into a
+ * full-height spike — pure noise. The matrix plots the counts
+ * themselves, keeps calendar gaps visible as gaps, and lets the eye
+ * scan a row to see exactly when a build was in rotation. The
+ * composition question the old chart asked ("is my mix shifting?")
+ * is answered head-on by the per-row recent-share chip and the
+ * per-period breakdown panel below.
  */
 export function MixOverTimeChart({
   endpoint,
@@ -125,39 +149,40 @@ export function MixOverTimeChart({
     `/v1/${endpoint}${filtersToQuery(params)}#${dbRev}`,
   );
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
-  // Lifting the hovered/tapped bucket out of the floating tooltip
-  // and into a dedicated panel below the chart was the only way to
-  // make the breakdown legible on narrow mobile viewports — the
-  // default tooltip is wider than the plot region once build labels
-  // ("PvT - Phoenix into Robo") get involved and ends up covering
-  // the very chart it's annotating.
+  // The hovered/tapped period lives in a dedicated panel below the
+  // matrix instead of a floating tooltip — on narrow mobile viewports
+  // a tooltip wide enough for build labels ("PvT - Phoenix into
+  // Robo") would cover the very cells it's annotating.
   const [activeDate, setActiveDate] = useState<string | null>(null);
 
-  const { rows, series, totalGames } = useMemo(
-    () => shapeForChart(data?.points || [], tz, topN),
-    [data, tz, topN],
+  const matrix = useMemo(
+    () => shapeMatrix(data?.points || [], tz, topN, bucket),
+    [data, tz, topN, bucket],
   );
+  const { series, columns, cells, maxCellCount, maxColumnTotal, totalGames } =
+    matrix;
 
-  // Default selection = most recent period, so the panel always has
-  // something useful in it before the user interacts.
-  const selectedRow = useMemo(() => {
-    if (rows.length === 0) return null;
+  // Default selection = most recent period with games, so the panel
+  // always has something useful in it before the user interacts.
+  const selectedColumn = useMemo(() => {
+    if (columns.length === 0) return null;
     if (activeDate) {
-      const match = rows.find((r) => r.date === activeDate);
+      const match = columns.find((c) => c.date === activeDate);
       if (match) return match;
     }
-    return rows[rows.length - 1];
-  }, [rows, activeDate]);
+    for (let i = columns.length - 1; i >= 0; i--) {
+      if (columns[i].total > 0) return columns[i];
+    }
+    return columns[columns.length - 1];
+  }, [columns, activeDate]);
 
-  const onChartMouseMove = useCallback(
-    (state: { activeLabel?: string | number } | null) => {
-      if (state && typeof state.activeLabel === "string") {
-        setActiveDate(state.activeLabel);
-      }
-    },
-    [],
-  );
-  const onChartMouseLeave = useCallback(() => setActiveDate(null), []);
+  // Most recent periods are the interesting ones — start the matrix
+  // scrolled to the right edge whenever the window changes.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [columns.length, series.length]);
 
   const matchupControl = matchupFilter ? (
     <MatchupSelect
@@ -183,7 +208,7 @@ export function MixOverTimeChart({
     );
   }
 
-  if (rows.length === 0 || totalGames === 0) {
+  if (columns.length === 0 || totalGames === 0) {
     return (
       <Card title={title} right={headerControls}>
         {matchupControl ? (
@@ -194,76 +219,154 @@ export function MixOverTimeChart({
     );
   }
 
+  const showYear =
+    columns[0].date.slice(0, 4) !== columns[columns.length - 1].date.slice(0, 4);
+  const activeColDate = selectedColumn?.date ?? null;
+  const tickStep = Math.max(1, Math.ceil(columns.length / 7));
+
   return (
-    <Card
-      title={title}
-      right={headerControls}
-    >
+    <Card title={title} right={headerControls}>
       <div className="-mt-1 mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-caption text-text-dim">{caption}</p>
         {matchupControl}
       </div>
-      <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={rows}
-            margin={{ top: 4, right: 12, bottom: 4, left: -4 }}
-            stackOffset="expand"
-            onMouseMove={onChartMouseMove}
-            onMouseLeave={onChartMouseLeave}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
-            <XAxis
-              dataKey="date"
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              minTickGap={28}
-              tickMargin={6}
-            />
-            <YAxis
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-              domain={[0, 1]}
-              ticks={[0, 0.25, 0.5, 0.75, 1]}
-              tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-              width={42}
-            />
-            {/*
-             * Keep Recharts' cursor crosshair so hover position is
-             * visible, but suppress the floating tooltip body — the
-             * breakdown lives in <ActiveBreakdown> below the chart,
-             * never overlapping the plot.
-             */}
-            <Tooltip
-              cursor={{ stroke: "#7c8cff", strokeDasharray: "3 3" }}
-              content={() => null}
-              wrapperStyle={{ display: "none" }}
-              isAnimationActive={false}
-            />
-            {series.map((s, idx) => (
-              <Area
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                stackId="mix"
-                stroke={s.color}
-                strokeWidth={1}
-                fill={s.color}
-                fillOpacity={0.78}
-                isAnimationActive={false}
-                name={s.label}
-                style={{ filter: idx % 2 === 0 ? undefined : "saturate(1.05)" }}
-              />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto pb-1"
+        onMouseLeave={() => setActiveDate(null)}
+      >
+        <div className="w-max min-w-full">
+          {series.map((s) => (
+            <div key={s.key} className="flex w-full items-center">
+              <RowLabel series={s} />
+              <div className="flex min-w-0 flex-1 gap-[3px] py-[3px]">
+                {columns.map((c) => {
+                  const datum = cells.get(cellKey(c.date, s.key));
+                  const isActiveCol = c.date === activeColDate;
+                  return (
+                    <div
+                      key={c.date}
+                      onMouseEnter={() => setActiveDate(c.date)}
+                      onClick={() => setActiveDate(c.date)}
+                      title={
+                        datum
+                          ? `${s.label} · ${c.date} · ${datum.count} game${
+                              datum.count === 1 ? "" : "s"
+                            } · ${datum.wins}W-${datum.losses}L`
+                          : `${s.label} · ${c.date} · no games`
+                      }
+                      className={[
+                        "grid h-6 min-w-6 max-w-9 flex-1 basis-6 select-none place-items-center rounded-[5px] text-[10px] font-semibold tabular-nums text-white/90",
+                        datum ? "" : "bg-bg-elevated/40",
+                        isActiveCol ? "ring-1 ring-accent/60" : "",
+                      ].join(" ")}
+                      style={
+                        datum
+                          ? {
+                              backgroundColor: withAlpha(
+                                s.color,
+                                cellAlpha(datum.count, maxCellCount),
+                              ),
+                            }
+                          : undefined
+                      }
+                    >
+                      {datum
+                        ? datum.count > 99
+                          ? "99+"
+                          : datum.count
+                        : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Games-per-period volume strip — anchors the matrix in raw
+              activity so a quiet week reads as quiet, not as a data bug. */}
+          <div className="flex w-full items-center border-t border-border/60">
+            <div className="sticky left-0 z-10 w-28 shrink-0 bg-bg-surface py-1 pr-2 sm:w-44">
+              <span className="text-micro uppercase tracking-wider text-text-dim">
+                Games
+              </span>
+            </div>
+            <div className="flex min-w-0 flex-1 gap-[3px] py-1">
+              {columns.map((c) => {
+                const isActiveCol = c.date === activeColDate;
+                return (
+                  <div
+                    key={c.date}
+                    onMouseEnter={() => setActiveDate(c.date)}
+                    onClick={() => setActiveDate(c.date)}
+                    title={`${c.date} · ${c.total} game${c.total === 1 ? "" : "s"}`}
+                    className="flex h-6 min-w-6 max-w-9 flex-1 basis-6 items-end"
+                  >
+                    <div
+                      className={[
+                        "w-full rounded-t-[3px]",
+                        isActiveCol ? "bg-accent" : "bg-accent/45",
+                      ].join(" ")}
+                      style={{
+                        height:
+                          c.total > 0 && maxColumnTotal > 0
+                            ? `${Math.max(
+                                15,
+                                Math.round((c.total / maxColumnTotal) * 100),
+                              )}%`
+                            : "0%",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Date axis. Each column is a real button so keyboard and
+              touch users can pin a period's breakdown. */}
+          <div className="flex w-full items-center">
+            <div className="sticky left-0 z-10 w-28 shrink-0 bg-bg-surface pr-2 sm:w-44" />
+            <div className="flex min-w-0 flex-1 gap-[3px]">
+              {columns.map((c, i) => {
+                const isActiveCol = c.date === activeColDate;
+                const isLast = i === columns.length - 1;
+                const showTick =
+                  isLast ||
+                  (i % tickStep === 0 &&
+                    columns.length - 1 - i >= Math.ceil(tickStep / 2));
+                return (
+                  <button
+                    key={c.date}
+                    type="button"
+                    aria-label={`Show ${c.date} breakdown`}
+                    onMouseEnter={() => setActiveDate(c.date)}
+                    onClick={() => setActiveDate(c.date)}
+                    className="relative h-5 min-w-6 max-w-9 flex-1 basis-6"
+                  >
+                    {showTick ? (
+                      <span
+                        className={[
+                          "absolute left-1/2 top-0.5 -translate-x-1/2 whitespace-nowrap text-[10px] tabular-nums",
+                          isActiveCol ? "text-accent" : "text-text-dim",
+                        ].join(" ")}
+                      >
+                        {tickLabel(c.date, bucket, showYear)}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
       <ActiveBreakdown
-        row={selectedRow}
+        column={selectedColumn}
+        cells={cells}
         series={series}
-        isFollowingCursor={activeDate != null}
+        isPinned={activeDate != null}
       />
-      <Legend series={series} />
     </Card>
   );
 }
@@ -317,46 +420,87 @@ function MatchupSelect({
 }
 
 /**
- * Per-period breakdown rendered below the chart. Replaces the
- * floating Recharts tooltip — on a narrow mobile viewport the
- * tooltip's natural width exceeds the chart's plot region and
- * covers the very area it's annotating. Hosting the breakdown in
- * a dedicated row keeps the picture readable on any screen and
- * makes the value visible at all times instead of only on hover.
- *
- * Idle state: shows the most recent period (so the panel is never
- * blank). Hover/tap state: shows whichever period the cursor is
- * over. The "Latest" / "Hovering" pill makes the source explicit.
+ * Sticky row header — doubles as the legend (colour chip + label)
+ * and the per-series summary (games, share of window, and a shift
+ * chip when the recent third of the window differs meaningfully
+ * from the overall share).
+ */
+function RowLabel({ series }: { series: SeriesDef }) {
+  const shift =
+    series.shiftPts != null && Math.abs(series.shiftPts) >= SHIFT_MIN_PTS ? (
+      <span
+        className="text-text-muted"
+        title={`Share of recent games vs the whole window: ${
+          series.shiftPts > 0 ? "+" : ""
+        }${series.shiftPts} pts`}
+      >
+        {series.shiftPts > 0 ? "▲" : "▼"} {Math.abs(series.shiftPts)}
+      </span>
+    ) : null;
+  return (
+    <div className="sticky left-0 z-10 w-28 shrink-0 bg-bg-surface py-[3px] pr-2 sm:w-44">
+      <div className="flex items-center gap-1.5">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-sm"
+          style={{ background: series.color }}
+        />
+        <span
+          className="min-w-0 truncate text-caption text-text-muted"
+          title={series.label}
+        >
+          {series.label}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 pl-4 text-micro tabular-nums text-text-dim">
+        <span>{series.total} game{series.total === 1 ? "" : "s"}</span>
+        {shift}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Per-period breakdown rendered below the matrix. Idle state shows
+ * the most recent period with games (so the panel is never blank);
+ * hovering or tapping a column pins that period instead. The
+ * "Latest period" / "Selected" pill makes the source explicit.
  */
 function ActiveBreakdown({
-  row,
+  column,
+  cells,
   series,
-  isFollowingCursor,
+  isPinned,
 }: {
-  row: (ChartRow & Record<string, number | string>) | null;
-  series: Array<{ key: string; label: string; color: string }>;
-  isFollowingCursor: boolean;
+  column: ColumnDatum | null;
+  cells: Map<string, CellDatum>;
+  series: SeriesDef[];
+  isPinned: boolean;
 }) {
-  if (!row) return null;
-  const total = (row.total as number) || 0;
+  if (!column) return null;
+  const total = column.total;
   const entries = series
-    .map((s) => ({ ...s, count: (row[s.key] as number) || 0 }))
-    .filter((e) => e.count > 0)
-    .sort((a, b) => b.count - a.count);
+    .map((s) => ({ ...s, cell: cells.get(cellKey(column.date, s.key)) }))
+    .filter(
+      (e): e is SeriesDef & { cell: CellDatum } =>
+        e.cell !== undefined && e.cell.count > 0,
+    )
+    .sort((a, b) => b.cell.count - a.cell.count);
   return (
     <div className="mt-3 rounded-lg border border-border bg-bg-elevated/60 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-caption font-semibold text-text">{row.date}</span>
+          <span className="text-caption font-semibold text-text">
+            {column.date}
+          </span>
           <span
             className={[
               "rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wider",
-              isFollowingCursor
+              isPinned
                 ? "bg-accent/15 text-accent ring-1 ring-accent/30"
                 : "bg-bg-elevated text-text-dim ring-1 ring-border",
             ].join(" ")}
           >
-            {isFollowingCursor ? "Hovering" : "Latest period"}
+            {isPinned ? "Selected" : "Latest period"}
           </span>
         </div>
         <span className="text-micro tabular-nums text-text-dim">
@@ -368,7 +512,7 @@ function ActiveBreakdown({
       ) : (
         <ul className="space-y-1">
           {entries.map((e) => {
-            const share = total > 0 ? e.count / total : 0;
+            const share = total > 0 ? e.cell.count / total : 0;
             return (
               <li key={e.key} className="flex items-center gap-2 text-caption">
                 <span
@@ -385,7 +529,10 @@ function ActiveBreakdown({
                   {Math.round(share * 100)}%
                 </span>
                 <span className="flex-none text-micro tabular-nums text-text-dim">
-                  · {e.count}
+                  · {e.cell.count}
+                </span>
+                <span className="flex-none text-micro tabular-nums text-text-dim">
+                  · {e.cell.wins}W-{e.cell.losses}L
                 </span>
               </li>
             );
@@ -425,52 +572,115 @@ function TopNToggle({
   );
 }
 
-function Legend({
-  series,
-}: {
-  series: Array<{ key: string; label: string; color: string; total: number }>;
-}) {
-  if (series.length === 0) return null;
-  return (
-    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-micro">
-      {series.map((s) => (
-        <span
-          key={s.key}
-          className="inline-flex items-center gap-1.5 text-text-muted"
-          title={`${s.label} · ${s.total} games`}
-        >
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-sm"
-            style={{ background: s.color }}
-          />
-          <span className="max-w-[160px] truncate">{s.label}</span>
-          <span className="text-text-dim tabular-nums">· {s.total}</span>
-        </span>
-      ))}
-    </div>
-  );
+function cellKey(date: string, seriesKey: string): string {
+  return `${date}|${seriesKey}`;
 }
 
 /**
- * Collapse the raw (bucket, key, count) point cloud into a stacked-
- * area-friendly row set. Steps: collect totals per key, pick the
- * top N, fold the rest into "Other", emit one row per bucket with
- * counts on each series key.
- *
- * The output series colours come from a stable palette indexed by
- * the rank in the top-N list — same data always paints the same
- * colour across re-renders.
+ * Cell fill opacity. When every cell is a single game there's no
+ * volume gradient worth encoding, so paint at near-full strength;
+ * otherwise ramp from a clearly-visible floor to full.
  */
-function shapeForChart(
+function cellAlpha(count: number, maxCellCount: number): number {
+  if (maxCellCount <= 1) return 0.85;
+  return 0.35 + 0.55 * (count / maxCellCount);
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const r = Number.parseInt(hex.slice(1, 3), 16);
+  const g = Number.parseInt(hex.slice(3, 5), 16);
+  const b = Number.parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+}
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+function tickLabel(
+  date: string,
+  bucket: "day" | "week" | "month",
+  showYear: boolean,
+): string {
+  if (!date || date.length < 10) return date;
+  const [y, m, d] = date.split("-");
+  const monthIdx = Number.parseInt(m, 10) - 1;
+  if (Number.isNaN(monthIdx) || monthIdx < 0 || monthIdx > 11) return date;
+  const month = MONTHS[monthIdx];
+  if (bucket === "month") return `${month} '${y.slice(2)}`;
+  const dayN = Number.parseInt(d, 10);
+  return showYear ? `${month} ${dayN} '${y.slice(2)}` : `${month} ${dayN}`;
+}
+
+/**
+ * Expand the periods that actually carry games into a continuous
+ * timeline so a week off ladder reads as a visible gap instead of
+ * being silently spliced out. Falls back to only the played periods
+ * when the window is too wide to in-fill (MAX_COLUMNS), and unions
+ * in any real bucket keys the calendar walk missed so no data is
+ * ever dropped.
+ */
+function fillTimeline(
+  sortedDates: string[],
+  bucket: "day" | "week" | "month",
+): string[] {
+  if (sortedDates.length <= 1) return [...sortedDates];
+  const first = sortedDates[0];
+  const last = sortedDates[sortedDates.length - 1];
+  const end = new Date(`${last}T00:00:00Z`).getTime();
+  const cursor = new Date(`${first}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end)) {
+    return [...sortedDates];
+  }
+  const walked: string[] = [];
+  while (cursor.getTime() <= end) {
+    if (walked.length >= MAX_COLUMNS) return [...sortedDates];
+    walked.push(cursor.toISOString().slice(0, 10));
+    if (bucket === "day") cursor.setUTCDate(cursor.getUTCDate() + 1);
+    else if (bucket === "week") cursor.setUTCDate(cursor.getUTCDate() + 7);
+    else cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  const union = new Set(walked);
+  for (const d of sortedDates) union.add(d);
+  return [...union].sort();
+}
+
+/**
+ * Collapse the raw (bucket, key, count) point cloud into the matrix
+ * shape. Steps: collect totals per key, pick the top N, fold the
+ * rest into "Other", build the continuous column timeline, then
+ * index cells and column totals for O(1) render lookups.
+ *
+ * Series colours come from a stable palette indexed by rank in the
+ * top-N list — same data always paints the same colour.
+ */
+function shapeMatrix(
   points: MixPoint[],
   tz: string,
   topN: number,
-): {
-  rows: ChartRow[];
-  series: Array<{ key: string; label: string; color: string; total: number }>;
-  totalGames: number;
-} {
-  if (!points.length) return { rows: [], series: [], totalGames: 0 };
+  bucket: "day" | "week" | "month",
+): MixMatrix {
+  if (!points.length) {
+    return {
+      series: [],
+      columns: [],
+      cells: new Map(),
+      maxCellCount: 0,
+      maxColumnTotal: 0,
+      totalGames: 0,
+    };
+  }
   const totals = new Map<string, number>();
   let grandTotal = 0;
   for (const p of points) {
@@ -485,11 +695,66 @@ function shapeForChart(
   const otherTotal = hasOther
     ? sorted.slice(topN).reduce((acc, [, n]) => acc + n, 0)
     : 0;
-  const series = top.map(([key, total], idx) => ({
+
+  const playedDates = new Set<string>();
+  for (const p of points) {
+    const d = localDateKey(p.bucket, tz);
+    if (d) playedDates.add(d);
+  }
+  const columnDates = fillTimeline([...playedDates].sort(), bucket);
+
+  const cells = new Map<string, CellDatum>();
+  const columnTotals = new Map<string, ColumnDatum>();
+  for (const d of columnDates) {
+    columnTotals.set(d, { date: d, total: 0, wins: 0, losses: 0 });
+  }
+  let maxCellCount = 0;
+  for (const p of points) {
+    const date = localDateKey(p.bucket, tz);
+    if (!date) continue;
+    const seriesKey = topSet.has(p.key) ? p.key : OTHER_KEY;
+    const key = cellKey(date, seriesKey);
+    const cell = cells.get(key) || { count: 0, wins: 0, losses: 0 };
+    cell.count += p.total || 0;
+    cell.wins += p.wins || 0;
+    cell.losses += p.losses || 0;
+    if (cell.count > 0) cells.set(key, cell);
+    if (cell.count > maxCellCount) maxCellCount = cell.count;
+    const col =
+      columnTotals.get(date) || { date, total: 0, wins: 0, losses: 0 };
+    col.total += p.total || 0;
+    col.wins += p.wins || 0;
+    col.losses += p.losses || 0;
+    columnTotals.set(date, col);
+  }
+  const columns = [...columnTotals.values()].sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  );
+  const maxColumnTotal = columns.reduce((m, c) => Math.max(m, c.total), 0);
+
+  // Recent-share shift: how the last third of the window compares to
+  // the series' overall share, in points. Only shown when the recent
+  // window carries enough games to be more than coin-flip noise.
+  const recentSpan = Math.max(2, Math.ceil(columns.length / 3));
+  const recentCols = columns.slice(-recentSpan);
+  const recentTotal = recentCols.reduce((acc, c) => acc + c.total, 0);
+  const shiftFor = (seriesKey: string, overallTotal: number): number | null => {
+    if (recentTotal < SHIFT_MIN_GAMES || grandTotal === 0) return null;
+    let recentCount = 0;
+    for (const c of recentCols) {
+      recentCount += cells.get(cellKey(c.date, seriesKey))?.count || 0;
+    }
+    return Math.round(
+      (recentCount / recentTotal - overallTotal / grandTotal) * 100,
+    );
+  };
+
+  const series: SeriesDef[] = top.map(([key, total], idx) => ({
     key,
     label: key,
     color: PALETTE[idx % PALETTE.length],
     total,
+    shiftPts: shiftFor(key, total),
   }));
   if (hasOther) {
     series.push({
@@ -497,25 +762,16 @@ function shapeForChart(
       label: OTHER_LABEL,
       color: OTHER_COLOR,
       total: otherTotal,
+      shiftPts: shiftFor(OTHER_KEY, otherTotal),
     });
   }
-  const rowsByDate = new Map<string, ChartRow>();
-  for (const p of points) {
-    const date = localDateKey(p.bucket, tz);
-    if (!date) continue;
-    let row = rowsByDate.get(date);
-    if (!row) {
-      row = { date, total: 0 };
-      for (const s of series) row[s.key] = 0;
-      rowsByDate.set(date, row);
-    }
-    const seriesKey = topSet.has(p.key) ? p.key : OTHER_KEY;
-    if (row[seriesKey] === undefined) row[seriesKey] = 0;
-    row[seriesKey] = (row[seriesKey] as number) + (p.total || 0);
-    row.total = (row.total as number) + (p.total || 0);
-  }
-  const rows = [...rowsByDate.values()].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
-  );
-  return { rows, series, totalGames: grandTotal };
+
+  return {
+    series,
+    columns,
+    cells,
+    maxCellCount,
+    maxColumnTotal,
+    totalGames: grandTotal,
+  };
 }

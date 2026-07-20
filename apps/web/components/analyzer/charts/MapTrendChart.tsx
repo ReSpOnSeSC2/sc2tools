@@ -14,6 +14,7 @@ import {
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { MapArtwork } from "@/components/maps/MapArtwork";
 import { wrColor } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { ChartTooltip } from "./ChartTooltip";
@@ -183,16 +184,32 @@ function MapPanel({
     ) : null;
   return (
     <div className="rounded-lg border border-border bg-bg-elevated/50 p-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <span className="truncate text-caption font-semibold text-text" title={panel.label}>
-          {panel.label}
-        </span>
-        <div className="flex flex-wrap items-baseline gap-2 text-caption tabular-nums">
-          <span style={{ color: panel.color }}>{panel.overallWrPct}%</span>
-          <span className="text-text-dim">
-            {panel.totalGames} game{panel.totalGames === 1 ? "" : "s"}
-          </span>
-          {trendBadge}
+      {/* The map's real artwork thumbnail anchors the panel — the
+          MapArtwork resolver falls back to an initials tile when a
+          map has no image, so nothing here is ever placeholder data. */}
+      <div className="mb-2 flex items-center gap-2.5">
+        <MapArtwork
+          mapName={panel.label}
+          size="md"
+          alt={panel.label}
+          className="rounded-lg"
+        />
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate text-caption font-semibold text-text"
+            title={panel.label}
+          >
+            {panel.label}
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-caption tabular-nums">
+            <span className="font-semibold" style={{ color: panel.color }}>
+              {panel.overallWrPct}%
+            </span>
+            <span className="text-text-dim">
+              {panel.totalGames} game{panel.totalGames === 1 ? "" : "s"}
+            </span>
+            {trendBadge}
+          </div>
         </div>
       </div>
       <div className="h-36">
@@ -216,7 +233,7 @@ function MapPanel({
               domain={[0, 100]}
               ticks={[0, 50, 100]}
               tickFormatter={(v) => `${v}%`}
-              width={28}
+              width={36}
             />
             <ReferenceLine y={50} stroke={COLOR_BORDER_STRONG} strokeDasharray="2 4" />
             <ReferenceLine
