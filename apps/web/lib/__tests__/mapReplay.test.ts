@@ -67,6 +67,22 @@ describe("sanitizeMapPlayback", () => {
     });
     expect(p?.units).toHaveLength(2);
   });
+
+  it("keeps survivors alive: wire died:null must stay null, not become 0", () => {
+    // Number(null) is 0 — a naive coercion marks every unit that
+    // survived the game as dead at t=0 and hides the winner's whole
+    // army from the playback.
+    const p = sanitizeMapPlayback(RAW);
+    const survivor = p!.units.find((u) => u.name === "Drone")!;
+    expect(survivor.died).toBeNull();
+    expect(unitAliveAt(survivor, p!.gameLength - 1)).toBe(true);
+    // Explicit numeric deaths still coerce, including t=0 edge cases.
+    const dead = sanitizeMapPlayback({
+      ...RAW,
+      units: [{ owner: "me", name: "Probe", born: 0, died: 0, wp: [0, 1, 1] }],
+    });
+    expect(dead!.units[0].died).toBe(0);
+  });
 });
 
 describe("unit interpolation", () => {
