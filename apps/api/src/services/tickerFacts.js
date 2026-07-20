@@ -473,10 +473,15 @@ class TickerFactsService {
       // replays) is not a build — without this filter it wins the
       // signature/hottest slots on any account with a cheese-y ladder
       // history. Same exclusion regex the ladder-meta service uses.
+      // The unclassified fallbacks ("Unclassified - Protoss",
+      // "PvP - Macro Transition (Unclassified)") are equally not builds
+      // and must never headline the signature/hottest slots either.
       const withBuild = games.filter(
         (g) =>
           g.myBuild &&
           !/Game Too Short$/i.test(g.myBuild) &&
+          !/^Unclassified\s*-/i.test(g.myBuild) &&
+          !/\(Unclassified\)\s*$/i.test(g.myBuild) &&
           (g.win || g.loss),
       );
       const byBuild = groupBy(withBuild, (g) => g.myBuild);

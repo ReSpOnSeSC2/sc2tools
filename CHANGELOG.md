@@ -13,6 +13,25 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Unclassified builds no longer headline the trending/insight
+  surfaces** — the detector's fallbacks ("Unclassified - Protoss",
+  "PvP - Macro Transition (Unclassified)", "Terran - Standard Play
+  (Unclassified)") are catch-alls for games that matched no build
+  signature, not builds a player can choose to queue with, yet they
+  could be crowned by every form/trending highlight: the dashboard
+  Daily Pulse could serve "Build heating up — PvP - Macro Transition
+  (Unclassified) is on form" (and the "Dust it off" rusty-build card),
+  the Ladder Pulse recent-form pane could headline one, the ladder-meta
+  movement card could promote one as New/Rising/Meta, and the overlay
+  ticker could print it as SIGNATURE BUILD / HOTTEST BUILD. A shared
+  `isUnclassifiedBuild` predicate (`apps/web/lib/unclassifiedBuilds.ts`)
+  now gates all four surfaces; recent-form falls back to the matchup
+  record and the other cards pick the best real build instead.
+  Aggregation tables (Builds tab, Stock Market, meta radar
+  distributions) intentionally keep showing catch-all rows — their
+  share of games is a factual slice of the corpus; only surfaces that
+  *recommend* a build exclude them.
+
 - **"Nobody called it" can no longer get stuck on stream** — the
   Crystal Ball settle reveal's 12-second auto-dismiss timer was
   cancelled whenever another engagement event (a level-up from the

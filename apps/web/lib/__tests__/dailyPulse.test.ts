@@ -188,6 +188,30 @@ describe("buildPulseContext", () => {
     expect(RISING_BUILD_MIN_CAREER_DECIDED).toBeLessThanOrEqual(18);
   });
 
+  test("unclassified builds can never be crowned rising or rusty", () => {
+    // Same shape as the rising-build fixture above, but the "build" is a
+    // detector catch-all — it must not headline "Build heating up".
+    const career = spread(12, 30, (i) => ({
+      myBuild: "PvP - Macro Transition (Unclassified)",
+      result: i % 2 === 0 ? "Victory" : "Defeat",
+    }));
+    const recent = spread(6, 2, () => ({
+      myBuild: "PvP - Macro Transition (Unclassified)",
+    }));
+    expect(
+      buildPulseContext([...career, ...recent], DAY, TZ).risingBuild,
+    ).toBeNull();
+
+    // Bare sentinel + idle winning record — must not become "rusty" either.
+    const sentinel = spread(RUSTY_BUILD_MIN_DECIDED + 2, 20, (i) => ({
+      myBuild: "Unclassified - Protoss",
+      result: i % 4 === 0 ? "Defeat" : "Victory",
+    }));
+    const ctx = buildPulseContext(sentinel, DAY, TZ);
+    expect(ctx.risingBuild).toBeNull();
+    expect(ctx.rustyBuild).toBeNull();
+  });
+
   test("rusty build requires idle time and a winning record", () => {
     const rows = spread(RUSTY_BUILD_MIN_DECIDED + 2, 20, (i) => ({
       myBuild: "Colossus Push",
