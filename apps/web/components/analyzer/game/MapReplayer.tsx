@@ -38,6 +38,9 @@ import {
   MINING_SNAP_RADIUS,
   miningArcPosition,
   nearestTownHall,
+  patchesNearHall,
+  patchMiningPosition,
+  resourceAliveAt,
   projectX,
   projectY,
   spreadClusters,
@@ -387,6 +390,138 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
 
 /* ──────────────── canvas frame ──────────────── */
 
+/* ──────────────── resource glyphs + fog + derived data ──────────────── */
+
+/** Procedural resource glyphs (mineral crystals, geysers, rocks,
+ * towers) cached per (kind, dpr) — small enough to read at map scale,
+ * matching the classic minimap language: blue crystals, green gas,
+ * gray rocks. */
+const glyphCache = new Map<string, HTMLCanvasElement>();
+
+function resourceGlyph(kind: string, dpr: number): HTMLCanvasElement | null {
+  const key = `${kind}|${dpr}`;
+  const cached = glyphCache.get(key);
+  if (cached) return cached;
+  if (typeof document === "undefined") return null;
+  const S = 14;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(S * dpr));
+  c.height = c.width;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.scale(dpr, dpr);
+  const diamond = (cx: number, cy: number, w: number, h: number, fill: string, top: string) => {
+    g.beginPath();
+    g.moveTo(cx, cy - h / 2);
+    g.lineTo(cx + w / 2, cy);
+    g.lineTo(cx, cy + h / 2);
+    g.lineTo(cx - w / 2, cy);
+    g.closePath();
+    g.fillStyle = fill;
+    g.fill();
+    g.beginPath();
+    g.moveTo(cx, cy - h / 2);
+    g.lineTo(cx + w / 2, cy);
+    g.lineTo(cx - w / 2, cy);
+    g.closePath();
+    g.fillStyle = top;
+    g.fill();
+  };
+  if (kind === "minerals" || kind === "gold") {
+    const base = kind === "gold" ? "#c9992e" : "#3f7fd6";
+    const glint = kind === "gold" ? "#ffd97a" : "#9cc8ff";
+    diamond(4.4, 8.6, 6, 8, base, glint);
+    diamond(9.8, 8.2, 6.5, 9, base, glint);
+    diamond(7, 5.4, 5, 6.5, base, glint);
+  } else if (kind === "gas") {
+    g.beginPath();
+    g.ellipse(7, 8, 5.6, 4.2, 0, 0, Math.PI * 2);
+    g.fillStyle = "#3a4a41";
+    g.fill();
+    g.beginPath();
+    g.ellipse(7, 7.4, 3.1, 2.3, 0, 0, Math.PI * 2);
+    g.fillStyle = "#57c785";
+    g.fill();
+    g.beginPath();
+    g.ellipse(6.2, 6.8, 1.1, 0.8, 0, 0, Math.PI * 2);
+    g.fillStyle = "#b6f0cd";
+    g.fill();
+  } else if (kind === "rocks") {
+    g.beginPath();
+    g.moveTo(2.5, 9.5);
+    g.lineTo(4.5, 4.5);
+    g.lineTo(8, 3.4);
+    g.lineTo(11.6, 5.6);
+    g.lineTo(11.2, 10);
+    g.lineTo(6.5, 11.4);
+    g.closePath();
+    g.fillStyle = "#6e6a5e";
+    g.fill();
+    g.beginPath();
+    g.moveTo(4.5, 4.5);
+    g.lineTo(8, 3.4);
+    g.lineTo(9.4, 6.8);
+    g.lineTo(5.6, 7.6);
+    g.closePath();
+    g.fillStyle = "#8d887a";
+    g.fill();
+  } else {
+    // Xel'Naga tower: watch ring.
+    g.beginPath();
+    g.arc(7, 7, 4.4, 0, Math.PI * 2);
+    g.strokeStyle = "#cfcab2";
+    g.lineWidth = 1.4;
+    g.stroke();
+    g.beginPath();
+    g.arc(7, 7, 1.5, 0, Math.PI * 2);
+    g.fillStyle = "#cfcab2";
+    g.fill();
+  }
+  glyphCache.set(key, c);
+  return c;
+}
+
+/** Per-payload derived data (worker type per side), cached weakly so
+ * the rAF loop never rescans the unit list. */
+const derivedCache = new WeakMap<
+  MapPlayback,
+  { workerName: Record<"me" | "opp", string | null> }
+>();
+
+function derivedOf(playback: MapPlayback) {
+  let d = derivedCache.get(playback);
+  if (!d) {
+    const workerName: Record<"me" | "opp", string | null> = { me: null, opp: null };
+    for (const u of playback.units) {
+      if (!workerName[u.owner] && isWorkerUnit(u.name)) workerName[u.owner] = u.name;
+      if (workerName.me && workerName.opp) break;
+    }
+    d = { workerName };
+    derivedCache.set(playback, d);
+  }
+  return d;
+}
+
+/** How long after placement a builder worker is shown at the site.
+ * SCVs construct the whole build; probes warp and leave; drones morph
+ * INTO the building (no extra worker to show). */
+function builderWindowSec(workerName: string | null): number {
+  if (workerName === "SCV") return 17;
+  if (workerName === "Drone") return 0;
+  return 2.5;
+}
+
+/** Reusable offscreen fog canvas — resized on demand, redrawn each
+ * rendered frame (the draw loop is already dirty-checked). */
+let fogCanvas: HTMLCanvasElement | null = null;
+
+const FOG_ALPHA = 0.5;
+/** Sight radii in world cells, loosely matching in-game vision. */
+const SIGHT_UNIT = 11;
+const SIGHT_WORKER = 9;
+const SIGHT_HALL = 13;
+const SIGHT_BUILDING = 10;
+
 function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -415,6 +550,148 @@ function renderFrame(
     ctx.fillRect(proj.ox, proj.oy, rectW, rectH);
   }
 
+  // Neutral terrain furniture (v2 payloads): mineral lines, geysers,
+  // rocks, towers — mined-out patches and broken rocks disappear at
+  // their recorded death time.
+  for (const r of playback.resources) {
+    if (!resourceAliveAt(r, t)) continue;
+    const glyph = resourceGlyph(r.kind, dpr);
+    if (!glyph) continue;
+    const size = r.kind === "rocks" ? 16 : 13;
+    ctx.drawImage(
+      glyph,
+      projectX(bounds, proj, r.x) - size / 2,
+      projectY(bounds, proj, r.y) - size / 2,
+      size,
+      size,
+    );
+  }
+
+  // Friendly town halls standing at time t — the anchors the mining
+  // presentation snaps workers onto, with their live patch lists.
+  const halls: Record<
+    "me" | "opp",
+    Array<{ x: number; y: number; slots: Array<{ x: number; y: number }> }>
+  > = { me: [], opp: [] };
+  for (const b of playback.buildings) {
+    if (b.t <= t && isTownHall(b.name)) {
+      halls[b.owner].push({ x: b.x, y: b.y, slots: [] });
+    }
+  }
+  // Mining slots per hall: real patches when the payload carries
+  // resources, plus 3 gas slots per geyser a friendly gas building
+  // sits on. Older (v1) payloads leave slots empty → arc fallback.
+  if (playback.resources.length > 0) {
+    for (const side of ["me", "opp"] as const) {
+      for (const hall of halls[side]) {
+        const patches = patchesNearHall(playback.resources, hall, t);
+        const slots: Array<{ x: number; y: number }> = [...patches];
+        for (const r of playback.resources) {
+          if (r.kind !== "gas") continue;
+          if (Math.hypot(r.x - hall.x, r.y - hall.y) > 11) continue;
+          const tapped = playback.buildings.some(
+            (b) =>
+              b.owner === side &&
+              b.t <= t &&
+              Math.hypot(b.x - r.x, b.y - r.y) <= 1.5,
+          );
+          if (tapped) slots.push(r, r, r);
+        }
+        hall.slots = slots;
+      }
+    }
+  }
+
+  // Units alive now — interpolate, then spread clusters so armies read
+  // as blobs of distinguishable icons instead of a single pixel.
+  // Workers near a friendly hall are presented MINING: on their real
+  // patch/geyser slot when the payload has resources, else on the
+  // away-from-center arc. They hold deterministic spots and skip
+  // cluster spreading.
+  const alive: Array<{ idx: number; x: number; y: number; worker: boolean }> = [];
+  const mining: Array<{ idx: number; x: number; y: number }> = [];
+  playback.units.forEach((u, idx) => {
+    if (!unitAliveAt(u, t)) return;
+    // Speed-capped interpolation: a unit HOLDS its last known anchor
+    // (mining, building, sieged) and departs at the last moment that
+    // still arrives on time — instead of drifting across the map for
+    // the whole gap between sparse waypoints.
+    const pos = unitPositionAt(u.wp, t, unitMaxSpeed(u.name));
+    if (!pos) return;
+    if (isWorkerUnit(u.name)) {
+      const hall = nearestTownHall(pos, halls[u.owner], MINING_SNAP_RADIUS);
+      if (hall) {
+        const hallSlots = (hall as { slots?: Array<{ x: number; y: number }> })
+          .slots;
+        const spot =
+          hallSlots && hallSlots.length > 0
+            ? patchMiningPosition(hallSlots[idx % hallSlots.length], hall, idx)
+            : miningArcPosition(hall, bounds, idx);
+        mining.push({
+          idx,
+          x: projectX(bounds, proj, spot.x),
+          y: projectY(bounds, proj, spot.y),
+        });
+        return;
+      }
+    }
+    alive.push({
+      idx,
+      x: projectX(bounds, proj, pos.x),
+      y: projectY(bounds, proj, pos.y),
+      worker: isWorkerUnit(u.name),
+    });
+  });
+
+  // ── Fog of war: union of BOTH sides' vision (matching the replay
+  // viewer convention) — a dark layer with soft reveals punched out
+  // around every unit and standing building. Unscouted map stays dim.
+  if (typeof document !== "undefined") {
+    if (!fogCanvas) fogCanvas = document.createElement("canvas");
+    const fw = Math.max(1, Math.round(w));
+    const fh = Math.max(1, Math.round(h));
+    if (fogCanvas.width !== fw || fogCanvas.height !== fh) {
+      fogCanvas.width = fw;
+      fogCanvas.height = fh;
+    }
+    const fg = fogCanvas.getContext("2d");
+    if (fg) {
+      fg.setTransform(1, 0, 0, 1, 0, 0);
+      fg.clearRect(0, 0, fw, fh);
+      fg.globalCompositeOperation = "source-over";
+      fg.fillStyle = `rgba(3,6,11,${FOG_ALPHA})`;
+      fg.fillRect(0, 0, fw, fh);
+      fg.globalCompositeOperation = "destination-out";
+      // Dedupe sight sources on a coarse grid — a 3-cell cell per
+      // reveal keeps the gradient count low on 400-unit frames.
+      const seen = new Set<string>();
+      const reveal = (cx: number, cy: number, worldR: number) => {
+        const gridKey = `${Math.round(cx / 14)}:${Math.round(cy / 14)}:${worldR}`;
+        if (seen.has(gridKey)) return;
+        seen.add(gridKey);
+        const r = worldR * proj.k;
+        const grad = fg.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+        grad.addColorStop(0, "rgba(0,0,0,1)");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        fg.fillStyle = grad;
+        fg.beginPath();
+        fg.arc(cx, cy, r, 0, Math.PI * 2);
+        fg.fill();
+      };
+      for (const b of playback.buildings) {
+        if (b.t > t) continue;
+        reveal(
+          projectX(bounds, proj, b.x),
+          projectY(bounds, proj, b.y),
+          isTownHall(b.name) ? SIGHT_HALL : SIGHT_BUILDING,
+        );
+      }
+      for (const a of alive) reveal(a.x, a.y, a.worker ? SIGHT_WORKER : SIGHT_UNIT);
+      for (const m of mining) reveal(m.x, m.y, SIGHT_WORKER);
+      ctx.drawImage(fogCanvas, 0, 0, w, h);
+    }
+  }
+
   // Spawn anchors — subtle rings labeled by side color.
   for (const s of playback.spawns) {
     ctx.beginPath();
@@ -428,6 +705,7 @@ function renderFrame(
   // treatment as units (no tile, frame, or backing); town halls
   // bigger. Small squares only when no icon ships for the name (or it
   // hasn't decoded yet).
+  const derived = derivedOf(playback);
   for (const b of playback.buildings) {
     if (b.t > t) continue;
     const x = projectX(bounds, proj, b.x);
@@ -448,54 +726,35 @@ function renderFrame(
       ctx.fillStyle = b.owner === "me" ? "rgba(62,192,199,0.75)" : "rgba(224,86,86,0.75)";
       ctx.fillRect(x - sq / 2, y - sq / 2, sq, sq);
     }
-  }
-
-  // Friendly town halls standing at time t — the anchors the mining
-  // presentation snaps workers onto.
-  const halls: Record<"me" | "opp", Array<{ x: number; y: number }>> = {
-    me: [],
-    opp: [],
-  };
-  for (const b of playback.buildings) {
-    if (b.t <= t && isTownHall(b.name)) {
-      halls[b.owner].push({ x: b.x, y: b.y });
-    }
-  }
-
-  // Units alive now — interpolate, then spread clusters so armies read
-  // as blobs of distinguishable icons instead of a single pixel.
-  // Workers near a friendly hall are presented ON the mineral line
-  // (workers auto-mine when idle; the payload has no patch coords, so
-  // the arc faces away from map center — see lib/mapReplay.ts). They
-  // hold deterministic arc spots and skip cluster spreading.
-  const alive: Array<{ idx: number; x: number; y: number }> = [];
-  const mining: Array<{ idx: number; x: number; y: number }> = [];
-  playback.units.forEach((u, idx) => {
-    if (!unitAliveAt(u, t)) return;
-    // Speed-capped interpolation: a unit HOLDS its last known anchor
-    // (mining, building, sieged) and departs at the last moment that
-    // still arrives on time — instead of drifting across the map for
-    // the whole gap between sparse waypoints.
-    const pos = unitPositionAt(u.wp, t, unitMaxSpeed(u.name));
-    if (!pos) return;
-    if (isWorkerUnit(u.name)) {
-      const hall = nearestTownHall(pos, halls[u.owner], MINING_SNAP_RADIUS);
-      if (hall) {
-        const spot = miningArcPosition(hall, bounds, idx);
-        mining.push({
-          idx,
-          x: projectX(bounds, proj, spot.x),
-          y: projectY(bounds, proj, spot.y),
-        });
-        return;
+    // Builder-at-the-site presentation: an SCV stays for the whole
+    // construction, a probe warps and leaves, a drone becomes the
+    // building. Skip the opening town hall (t=0 has no builder).
+    if (b.t > 1) {
+      const workerName = derived.workerName[b.owner];
+      const windowSec = builderWindowSec(workerName);
+      if (workerName && windowSec > 0 && t >= b.t && t <= b.t + windowSec) {
+        const wtoken = iconToken(
+          workerName,
+          "unit",
+          b.owner === "me" ? ME_ARMY : OPP_ARMY,
+          WORKER_ICON_PX,
+          dpr,
+        );
+        if (wtoken) {
+          ctx.globalAlpha = 0.9;
+          ctx.drawImage(
+            wtoken,
+            x + size / 2 - 2,
+            y - size / 2 - 3,
+            WORKER_ICON_PX,
+            WORKER_ICON_PX,
+          );
+          ctx.globalAlpha = 1;
+        }
       }
     }
-    alive.push({
-      idx,
-      x: projectX(bounds, proj, pos.x),
-      y: projectY(bounds, proj, pos.y),
-    });
-  });
+  }
+
   // Seed the spread with each unit's payload index — stable for the
   // whole game — so a death doesn't reshuffle the survivors' spots.
   const spread = spreadClusters(

@@ -47,6 +47,17 @@ export interface PlaybackUnit {
   wp: number[];
 }
 
+export type ResourceKind = "minerals" | "gold" | "gas" | "rocks" | "tower";
+
+export interface PlaybackResource {
+  kind: ResourceKind;
+  x: number;
+  y: number;
+  /** Game-second the node left play (patch mined out, rocks broken),
+   * or null if it lasted the whole game. */
+  died: number | null;
+}
+
 export interface MapPlayback {
   v: number;
   mapName: string;
@@ -56,6 +67,8 @@ export interface MapPlayback {
   battles: PlaybackBattle[];
   buildings: PlaybackBuilding[];
   units: PlaybackUnit[];
+  /** Neutral terrain furniture (v2 payloads; empty for v1). */
+  resources: PlaybackResource[];
   /** Per-side [t, armyValue, workers, supplyUsed] rows, ascending t. */
   stats: { me: number[][]; opp: number[][] };
 }
@@ -149,6 +162,25 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       battles.push({ t, x, y });
     }
   }
+  const resources: PlaybackResource[] = [];
+  const kinds: ReadonlySet<string> = new Set([
+    "minerals", "gold", "gas", "rocks", "tower",
+  ]);
+  for (const rn of Array.isArray(p.resources) ? p.resources.slice(0, 600) : []) {
+    if (!rn || typeof rn !== "object") continue;
+    const r = rn as Record<string, unknown>;
+    const x = num(r.x);
+    const y = num(r.y);
+    if (typeof r.kind !== "string" || !kinds.has(r.kind)) continue;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const died = r.died === null || r.died === undefined ? NaN : num(r.died);
+    resources.push({
+      kind: r.kind as ResourceKind,
+      x,
+      y,
+      died: Number.isFinite(died) ? died : null,
+    });
+  }
   const statsIn = (p.stats ?? {}) as Record<string, unknown>;
   const side = (v: unknown): number[][] =>
     (Array.isArray(v) ? v.slice(0, 800) : [])
@@ -170,6 +202,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     battles,
     buildings,
     units,
+    resources,
     stats: { me: side(statsIn.me), opp: side(statsIn.opp) },
   };
 }
@@ -291,6 +324,55 @@ export function miningArcPosition(
   return {
     x: hall.x + radius * Math.cos(angle),
     y: hall.y + radius * Math.sin(angle),
+  };
+}
+
+/** Is the resource node still in play at time t? */
+export function resourceAliveAt(node: PlaybackResource, t: number): boolean {
+  return node.died === null || node.died > t;
+}
+
+/**
+ * The hall's live mineral patches (regular + gold) at time t, sorted
+ * by distance so slot assignment is stable.
+ */
+export function patchesNearHall(
+  resources: ReadonlyArray<PlaybackResource>,
+  hall: { x: number; y: number },
+  t: number,
+  radius = 11,
+): PlaybackResource[] {
+  return resources
+    .filter(
+      (r) =>
+        (r.kind === "minerals" || r.kind === "gold") &&
+        resourceAliveAt(r, t) &&
+        Math.hypot(r.x - hall.x, r.y - hall.y) <= radius,
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(a.x - hall.x, a.y - hall.y) -
+        Math.hypot(b.x - hall.x, b.y - hall.y),
+    );
+}
+
+/**
+ * Where a worker mining ``patch`` stands: just in front of the patch
+ * on the hall side, with a whisker of per-seed jitter so two workers
+ * on one patch don't perfectly overlap.
+ */
+export function patchMiningPosition(
+  patch: { x: number; y: number },
+  hall: { x: number; y: number },
+  seed: number,
+): { x: number; y: number } {
+  const dx = hall.x - patch.x;
+  const dy = hall.y - patch.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const stand = 1.1 + ((seed * 0.618033988749895) % 1) * 0.5;
+  return {
+    x: patch.x + (dx / d) * stand,
+    y: patch.y + (dy / d) * stand,
   };
 }
 

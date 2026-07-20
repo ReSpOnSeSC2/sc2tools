@@ -206,3 +206,64 @@ def test_death_position_is_final_waypoint():
     (zealot,) = out["my_units"]
     assert zealot["died"] == 90.0
     assert zealot["waypoints"][-3:] == [90.0, 101.0, 77.0]
+
+
+def test_resource_nodes_extracted_with_kinds_and_death_times():
+    ee, k = _import_extractor()
+
+    def _neutral(name, uid, index, x, y, second=0):
+        ev = k.UnitBornEvent()
+        ev.second = second
+        ev.frame = second * 16
+        ev.control_pid = 0
+        ev.upkeep_pid = 0
+        ev.unit_type_name = name
+        ev.unit_id = uid
+        ev.unit_id_index = index
+        ev.unit = None
+        ev.x = x
+        ev.y = y
+        return ev
+
+    events = [
+        _neutral("MineralField750", 1001, 50, 30.5, 40.5),
+        _neutral("RichMineralField", 1002, 51, 100, 100),
+        _neutral("PurifierVespeneGeyser", 1003, 52, 26, 44),
+        _neutral("DestructibleRockEx16x6", 1004, 53, 80, 80),
+        _neutral("XelNagaTower", 1005, 54, 88, 88),
+        _neutral("UnbuildableBricksDestructible", 1006, 55, 0, 0),  # zero pos: dropped
+        # Player-owned lookalike must not classify as neutral.
+        _born(k.UnitBornEvent, 5, pid=1, name="Probe", uid=(60 << 18) | 1, index=60, x=31, y=41),
+        # Patch mines out at 400 s; rocks broken at 250 s.
+        _died(k.UnitDiedEvent, 400, uid=1001, index=50, x=30.5, y=40.5),
+        _died(k.UnitDiedEvent, 250, uid=1004, index=53, x=80, y=80),
+    ]
+    nodes = ee.extract_resource_nodes(_make_replay(events))
+    by_kind = {}
+    for n in nodes:
+        by_kind.setdefault(n["kind"], []).append(n)
+
+    assert [n["died"] for n in by_kind["minerals"]] == [400.0]
+    assert by_kind["minerals"][0]["x"] == 30.5
+    assert by_kind["gold"][0]["died"] is None
+    assert by_kind["gas"][0] == {"kind": "gas", "x": 26.0, "y": 44.0, "died": None}
+    assert by_kind["rocks"][0]["died"] == 250.0
+    assert by_kind["tower"][0]["died"] is None
+    # 5 classified neutral nodes; the zero-position node and the probe
+    # never enter.
+    assert len(nodes) == 5
+
+
+def test_classify_resource_name_covers_tileset_variants():
+    ee, _k = _import_extractor()
+    c = ee.classify_resource_name
+    assert c("MineralField") == "minerals"
+    assert c("LabMineralField750") == "minerals"
+    assert c("RichMineralField750") == "gold"
+    assert c("SpacePlatformGeyser") == "gas"
+    assert c("ShakurasVespeneGeyser") == "gas"
+    assert c("DestructibleCityDebris6x6") == "rocks"
+    assert c("CollapsibleRockTowerDiagonal") == "rocks"
+    assert c("XelNagaTower") == "tower"
+    assert c("Zergling") is None
+    assert c(None) is None
