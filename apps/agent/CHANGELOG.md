@@ -2,6 +2,27 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.0
+
+### Added — map-playback upload for the cloud replayer
+- **What.** Each replay upload now includes a compact playback payload:
+  per-unit movement tracks (downsampled waypoints in world
+  coordinates), building placements, battle markers, spawn locations,
+  playable map bounds, and per-side army/worker/supply series —
+  extracted by the bundled replay engine's `map_playback_data` module
+  via a new package-aware loader that pins the engine's copy (its
+  package-relative imports were unreachable through the single-file
+  loader) and calls it with the documented two-argument signature.
+- **Effect.** Games synced with 0.15.0 gain a vespene.gg-style map
+  replay on sc2tools.com (game page and macro-breakdown drilldown):
+  scrubbable playback of unit movements, buildings, and battles on the
+  real map. Caps bound the payload (500 units/side, 240 waypoints/unit
+  at ≥2 s spacing, 400 buildings/side, 10 s stats cadence) so a
+  worst-case hour-long game stays around a megabyte. Older uploads are
+  unaffected and show a re-sync hint instead of a replay. Best-effort:
+  any extraction failure skips the payload without blocking the
+  upload.
+
 ## 0.14.3
 
 ### Changed — 8-worker Zerg pool labels

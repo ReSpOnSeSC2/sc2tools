@@ -34,7 +34,8 @@ corresponding GitHub Release.
   playback payload with each replay (bounded unit tracks, ~1 MB
   worst case, stored in the per-game detail store); games synced by
   older agents show a one-line re-sync hint instead of an empty
-  canvas.
+  canvas. Ships with **agent 0.15.0** (`agent-v0.15.0`) — see
+  `apps/agent/CHANGELOG.md` for the agent-side details.
 - **Twitch chat bot — the commands answer IN chat now** — connect a
   bot account (username + chat OAuth token, stored server-side and
   never echoed back) in Settings → Overlay → Multi-platform chat and
