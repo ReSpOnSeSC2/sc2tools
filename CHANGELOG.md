@@ -41,12 +41,7 @@ corresponding GitHub Release.
 
 ### Added
 
-- **Map replayer (vespene.gg-style; currently not shown in the UI)** —
-  the viewer is built and the whole data path stays live (agents
-  upload playback payloads, the API serves them and the map-layout
-  renders), but the component is intentionally unmounted from the
-  game page and macro drilldown pending a quality pass — re-enabling
-  is a two-line change. What it does when mounted: watch any game back on its
+- **Map replayer (vespene.gg-style)** — watch any game back on its
   actual map: the real top-down layout render draws under the action
   (`/v1/map-image?variant=layout`, from the same artwork library the
   map thumbnails ship from), unit movements interpolate along their
