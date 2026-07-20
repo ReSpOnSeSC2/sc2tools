@@ -6,6 +6,7 @@ import {
   type PatchEra,
 } from "@/lib/meta";
 import { PATCH_5_0_16_RELEASE } from "@/lib/datePresets";
+import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
 
 const DAY_MS = 86_400_000;
 export const FRESH_REPLAY_MAX_AGE_MS = 30 * 60 * 1000;
@@ -252,8 +253,11 @@ export function personalFormForLatest(
   if (!latest) return null;
   const windowGames = games.length;
 
+  // A detector catch-all ("PvP - Macro Transition (Unclassified)") is
+  // not a build worth headlining form for — fall through to the matchup
+  // record instead.
   const build = clean(latest.myBuild);
-  if (build) {
+  if (build && !isUnclassifiedBuild(build)) {
     const results = games
       .filter((game) => clean(game.myBuild) === build)
       .map((game) => pulseResult(game.result))
@@ -383,7 +387,9 @@ export function mmrBandFor(raw: unknown): number | null {
 /**
  * Prefer genuinely new openers, then positive prevalence movement, then the
  * highest-volume real opener. Negative-only movement is not described as
- * "rising".
+ * "rising". Detector catch-alls ("Macro Transition (Unclassified)") are
+ * excluded outright — a mover card crowns a build worth studying, and an
+ * unclassified label is by definition not one.
  */
 export function pickMetaMover(row: MetaRow | null | undefined): MetaMover | null {
   const openers = Array.isArray(row?.openers)
@@ -392,6 +398,7 @@ export function pickMetaMover(row: MetaRow | null | undefined): MetaMover | null
           !!opener &&
           typeof opener.build === "string" &&
           opener.build.trim().length > 0 &&
+          !isUnclassifiedBuild(opener.build) &&
           Number.isFinite(opener.games) &&
           opener.games > 0,
       )

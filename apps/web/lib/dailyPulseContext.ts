@@ -33,6 +33,7 @@ import {
   outcome,
 } from "@/components/analyzer/arcade/ArcadeEngine";
 import { gamesOnDay } from "@/lib/dailyQuests";
+import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
 
 /* ──────────────── tuning constants ──────────────── */
 
@@ -451,7 +452,10 @@ function buildBuildCards(
   >();
   for (const r of ordered) {
     const name = typeof r.g.myBuild === "string" ? r.g.myBuild.trim() : "";
-    if (!name || isGameTooShort(name)) continue;
+    // Detector catch-alls ("Unclassified - Protoss", "PvP - Macro
+    // Transition (Unclassified)") are not builds the player can choose
+    // to queue with — they must never be crowned rising or rusty.
+    if (!name || isGameTooShort(name) || isUnclassifiedBuild(name)) continue;
     const o = outcome(r.g);
     if (o === "U") continue;
     let rec = byBuild.get(name.toLowerCase());

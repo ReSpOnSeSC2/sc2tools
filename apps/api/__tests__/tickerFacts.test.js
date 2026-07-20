@@ -324,6 +324,39 @@ describe("services/tickerFacts", () => {
     }
   });
 
+  test("unclassified fallbacks never win a build fact", async () => {
+    const docs = [];
+    // The macro-phase catch-all dominates volume with a hot win rate…
+    for (let i = 0; i < 30; i += 1) {
+      docs.push(
+        game(i + 1, {
+          myBuild: "PvZ - Macro Transition (Unclassified)",
+        }),
+      );
+    }
+    // …and the bare sentinel piles on more wins…
+    for (let i = 0; i < 12; i += 1) {
+      docs.push(game(i + 1, { myBuild: "Unclassified - Protoss" }));
+    }
+    // …versus a modest real build.
+    for (let i = 0; i < 16; i += 1) {
+      docs.push(
+        game(i + 1, {
+          result: i % 2 === 0 ? "Victory" : "Defeat",
+          myBuild: "PvZ - Stargate Opener",
+        }),
+      );
+    }
+    await db.games.insertMany(docs);
+    const facts = await svc().factsFor("u1");
+    const sig = facts.find((f) => f.id === "signature-build");
+    expect(sig).toBeTruthy();
+    expect(sig.text).toContain("Stargate Opener");
+    for (const f of facts) {
+      expect(f.text).not.toContain("Unclassified");
+    }
+  });
+
   test("team games are excluded from every fact", async () => {
     const docs = [];
     for (let i = 0; i < 12; i += 1) {

@@ -176,6 +176,22 @@ describe("daily replay and personal form", () => {
       windowGames: 4,
     });
   });
+
+  it("never headlines an unclassified build — form falls back to the matchup", () => {
+    const unclassified = rows.map((row) => ({
+      ...row,
+      myBuild: "PvZ - Macro Transition (Unclassified)",
+    }));
+    expect(personalFormForLatest(unclassified)).toEqual({
+      kind: "matchup",
+      label: "PvZ",
+      wins: 2,
+      losses: 1,
+      ties: 1,
+      total: 4,
+      windowGames: 4,
+    });
+  });
 });
 
 describe("meta selection and movement", () => {
@@ -311,5 +327,49 @@ describe("meta selection and movement", () => {
       kind: "top",
       opener: { build: "PvZ - Stable" },
     });
+  });
+
+  it("never promotes an unclassified opener as new, rising, or top", () => {
+    const row: MetaRow = {
+      era: "after",
+      bandType: "league",
+      band: 4,
+      bandLabel: "Diamond",
+      matchup: "PvZ",
+      n: 200,
+      updatedAt: "2026-07-18T00:00:00.000Z",
+      prevUpdatedAt: "2026-07-11T00:00:00.000Z",
+      openers: [
+        {
+          build: "PvZ - Macro Transition (Unclassified)",
+          games: 120,
+          wins: 70,
+          losses: 50,
+          winRate: 7 / 12,
+          frequency: 0.6,
+          winRateDelta: 0.03,
+          freqDelta: 0.08,
+          isNew: true,
+        },
+        {
+          build: "PvZ - Stargate",
+          games: 40,
+          wins: 22,
+          losses: 18,
+          winRate: 0.55,
+          frequency: 0.2,
+          winRateDelta: 0,
+          freqDelta: 0,
+          isNew: false,
+        },
+      ],
+    };
+    // The catch-all dominates on every axis, yet the real opener wins.
+    expect(pickMetaMover(row)).toMatchObject({
+      kind: "top",
+      opener: { build: "PvZ - Stargate" },
+    });
+    row.openers[1] = { ...row.openers[1], build: "Unclassified - Protoss" };
+    expect(pickMetaMover(row)).toBeNull();
   });
 });

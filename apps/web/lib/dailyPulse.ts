@@ -320,7 +320,7 @@ export const PULSE_POOL: PulseSpec[] = [
   {
     id: "rising-build",
     category: "build",
-    requires: `A build with ≥${RISING_BUILD_MIN_RECENT_DECIDED} decided recent games beating its career WR by ≥${Math.round(RISING_BUILD_MIN_DELTA * 100)}pts.`,
+    requires: `A classified build with ≥${RISING_BUILD_MIN_RECENT_DECIDED} decided recent games beating its career WR by ≥${Math.round(RISING_BUILD_MIN_DELTA * 100)}pts.`,
     timely: false,
     weight: 60,
     eligible: (ctx) => ctx.risingBuild !== null,
@@ -342,7 +342,7 @@ export const PULSE_POOL: PulseSpec[] = [
   {
     id: "rusty-build",
     category: "build",
-    requires: `A ≥${Math.round(RUSTY_BUILD_MIN_WINRATE * 100)}% career build untouched for ${RUSTY_BUILD_IDLE_DAYS}+ days.`,
+    requires: `A classified ≥${Math.round(RUSTY_BUILD_MIN_WINRATE * 100)}% career build untouched for ${RUSTY_BUILD_IDLE_DAYS}+ days.`,
     timely: false,
     weight: 50,
     eligible: (ctx) => ctx.rustyBuild !== null,
