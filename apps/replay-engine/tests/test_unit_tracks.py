@@ -86,10 +86,16 @@ def _import_extractor():
         UnitPositionsEvent=_UnitPositionsEvent,
         UpgradeCompleteEvent=_UpgradeCompleteEvent,
     )
+    class _TargetPointCommandEvent:
+        pass
+
+    class _SelectionEvent:
+        pass
+
     game_mod = SimpleNamespace(
         CommandEvent=_CommandEvent,
-        TargetPointCommandEvent=None,
-        SelectionEvent=None,
+        TargetPointCommandEvent=_TargetPointCommandEvent,
+        SelectionEvent=_SelectionEvent,
     )
     sys.modules["sc2reader"] = MagicMock()
     sys.modules["sc2reader.events"] = MagicMock()
@@ -99,8 +105,12 @@ def _import_extractor():
     sys.modules.pop("core.event_extractor", None)
     return importlib.import_module("core.event_extractor"), SimpleNamespace(
         UnitBornEvent=_UnitBornEvent,
+        UnitInitEvent=_UnitInitEvent,
+        UnitTypeChangeEvent=_UnitTypeChangeEvent,
         UnitDiedEvent=_UnitDiedEvent,
         UnitPositionsEvent=_UnitPositionsEvent,
+        TargetPointCommandEvent=_TargetPointCommandEvent,
+        SelectionEvent=_SelectionEvent,
     )
 
 
@@ -267,3 +277,95 @@ def test_classify_resource_name_covers_tileset_variants():
     assert c("XelNagaTower") == "tower"
     assert c("Zergling") is None
     assert c(None) is None
+
+
+def _select(klass, second, *, pid, ids):
+    ev = klass()
+    ev.second = second
+    ev.frame = second * 16
+    ev.control_group = 10
+    ev.player = SimpleNamespace(pid=pid)
+    ev.new_unit_ids = list(ids)
+    return ev
+
+
+def _target_cmd(klass, second, *, pid, ability, x, y):
+    ev = klass()
+    ev.second = second
+    ev.frame = second * 16
+    ev.player = SimpleNamespace(pid=pid)
+    ev.ability_name = ability
+    ev.x = x
+    ev.y = y
+    return ev
+
+
+def _lifecycle_replay(tracker, game_events):
+    r = _make_replay(tracker)
+    r.events = game_events
+    return r
+
+
+def test_building_lifecycle_tracks_land_moves_and_ignores_rally():
+    ee, k = _import_extractor()
+    cc = (20 << 18) | 1
+    tracker = [
+        _born(k.UnitBornEvent, 0, pid=1, name="CommandCenter", uid=cc,
+              index=20, x=30, y=40),
+    ]
+    game = [
+        _select(k.SelectionEvent, 100, pid=1, ids=[cc]),
+        # Rally click with the CC selected must NOT read as a move.
+        _target_cmd(k.TargetPointCommandEvent, 110, pid=1,
+                    ability="Rally", x=50, y=50),
+        _target_cmd(k.TargetPointCommandEvent, 300, pid=1,
+                    ability="Land", x=90.04, y=88.02),
+    ]
+    out = ee.extract_building_lifecycle(_lifecycle_replay(tracker, game))
+    (rec,) = out[1]
+    assert rec["name"] == "CommandCenter"
+    assert rec["moves"] == [300.0, 90.0, 88.0]
+    assert rec["died"] is None
+
+
+def test_building_lifecycle_records_death_and_morph_rename():
+    ee, k = _import_extractor()
+    cc = (21 << 18) | 1
+    rax = (22 << 18) | 1
+    def _morph(second, uid, name):
+        ev = k.UnitTypeChangeEvent()
+        ev.second = second
+        ev.frame = second * 16
+        ev.unit_id = uid
+        ev.unit = None
+        ev.unit_type_name = name
+        return ev
+    tracker = [
+        _born(k.UnitBornEvent, 0, pid=1, name="CommandCenter", uid=cc,
+              index=21, x=30, y=40),
+        _born(k.UnitInitEvent, 50, pid=1, name="Barracks", uid=rax,
+              index=22, x=44, y=38),
+        # Flying state must not rename; the Orbital morph must.
+        _morph(200, cc, "CommandCenterFlying"),
+        _morph(240, cc, "OrbitalCommand"),
+        _died(k.UnitDiedEvent, 500, uid=rax, index=22, x=44, y=38),
+    ]
+    out = ee.extract_building_lifecycle(_lifecycle_replay(tracker, []))
+    by_name = {r["name"]: r for r in out[1]}
+    assert "OrbitalCommand" in by_name
+    assert by_name["Barracks"]["died"] == 500.0
+    assert by_name["OrbitalCommand"]["died"] is None
+
+
+def test_real_game_length_uses_event_timebase():
+    from core.timebase import real_game_length
+    # 16:04 real game at LotV Faster: frames = 964 * 22.4.
+    replay = SimpleNamespace(
+        frames=int(964 * 22.4),
+        length=SimpleNamespace(seconds=964),
+        game_length=SimpleNamespace(seconds=1349),  # frames/16 (game time)
+    )
+    assert abs(real_game_length(replay) - 964.0) < 1.0
+    # No frames -> falls back to the reported game_length.
+    bare = SimpleNamespace(frames=None, game_length=SimpleNamespace(seconds=600))
+    assert real_game_length(bare) == 600.0

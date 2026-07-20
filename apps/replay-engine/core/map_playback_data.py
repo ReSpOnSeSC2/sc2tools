@@ -14,9 +14,11 @@ import os
 from typing import Dict, List, Optional, Tuple
 
 from .paths import APP_DIR
+from .timebase import event_seconds, real_game_length
 from .replay_loader import load_replay_with_fallback
 from .event_extractor import (
     PlayerStatsEvent,
+    extract_building_lifecycle,
     extract_events,
     extract_resource_nodes,
     extract_unit_tracks,
@@ -350,7 +352,9 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
             killed_min = int(getattr(e, "minerals_killed_army", 0) or 0)
             killed_gas = int(getattr(e, "vespene_killed_army", 0) or 0)
             stats_by_pid[pid].append({
-                "time": float(e.second),
+                # Real seconds — e.second is game-time (frames/16) and
+                # would drift 1.4x ahead of the unit tracks on Faster.
+                "time": float(event_seconds(e, replay)),
                 "army_val": float(army_val),
                 "minerals": int(getattr(e, "minerals_current", 0) or 0),
                 "vespene": int(getattr(e, "vespene_current", 0) or 0),
@@ -407,8 +411,7 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     # timestamp, and the latest unit waypoint / death timestamp. This
     # catches units born after the surrender (e.g. a Carrier warp-in
     # finishing 30s after the GG click) so they're visible in the bar.
-    gl = getattr(replay, "game_length", None)
-    game_length = float(gl.seconds) if gl else 0.0
+    game_length = real_game_length(replay)
     last_ts = []
     for src in (my_events, opp_events,
                 stats_by_pid[me.pid], stats_by_pid[opp.pid]):
@@ -429,6 +432,14 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         game_length = max(game_length, max(last_ts))
     if not game_length:
         game_length = 600.0
+
+    # Authoritative building lifecycles (lift/land moves + deaths) —
+    # best-effort like the unit tracks.
+    try:
+        lifecycle = extract_building_lifecycle(replay)
+    except Exception as exc:
+        print(f"map_playback: extract_building_lifecycle failed: {exc}")
+        lifecycle = {}
 
     # Neutral terrain furniture (mineral lines, geysers, rocks,
     # towers) — best-effort like the unit tracks.
@@ -453,4 +464,6 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "opp_units": tracks.get("opp_units", []),
         "spawn_locations": spawn_locations,
         "resources": resources,
+        "my_buildings": lifecycle.get(me.pid, []),
+        "opp_buildings": lifecycle.get(opp.pid, []),
     }

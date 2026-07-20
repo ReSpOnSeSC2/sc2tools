@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.3
+
+### Fixed — playback timeline runs on real seconds
+- **What.** The playback payload's ``gameLength`` came from
+  sc2reader's ``game_length`` (Blizzard "game time", frames/16) and
+  the per-side stats rows from ``e.second`` (same game-time base),
+  while every unit/building/battle timestamp used real seconds — so
+  the viewer's timeline ran ~40% long on Faster (a 16:04 game
+  scrubbed to 22:29) and the HUD stats lagged the units.
+- **Effect.** Timeline length and stats now share the events'
+  real-second timebase; the scrubber's total matches the actual game.
+
+### Added — buildings carry lift/land moves and death times (payload v3)
+- **What.** Buildings in the playback payload are now tracker-derived
+  lifecycles: exact born time, lift-off LANDING points captured from
+  Land commands against the live selection (rally clicks never
+  qualify), morph renames (Command Center → Orbital), and the
+  game-second a structure died.
+- **Effect.** A floated Command Center shows up at the expansion it
+  actually landed on — and the workers there mine again instead of
+  floating — while destroyed buildings disappear at the recorded
+  moment. Applies at parse time; re-sync older games to pick it up.
+
 ## 0.15.2
 
 ### Added — map-playback carries the map's resource nodes (payload v2)

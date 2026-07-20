@@ -21,7 +21,15 @@ const PLAYBACK = {
   units: [
     { owner: "me", name: "Stalker", born: 120, died: 300, wp: [120, 30, 40] },
   ],
-  stats: { me: [[0, 0, 12, 12]], opp: [] },
+  // Real payloads carry stats rows to the end of the game — keep the
+  // fixture's last row near gameLength or sanitize clamps the length.
+  stats: {
+    me: [
+      [0, 0, 12, 12],
+      [690, 900, 40, 120],
+    ],
+    opp: [],
+  },
 };
 
 describe("MapReplaySection", () => {

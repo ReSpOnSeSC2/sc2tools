@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildingAliveAt,
+  buildingPositionAt,
   isTownHall,
   isWorkerUnit,
   miningArcPosition,
@@ -338,5 +340,154 @@ describe("resources — sanitize and patch mining", () => {
     const dist = Math.hypot(spot.x - patch.x, spot.y - patch.y);
     expect(dist).toBeGreaterThanOrEqual(1.1);
     expect(dist).toBeLessThanOrEqual(1.6);
+  });
+});
+
+describe("buildings — lift/land moves and death (v3)", () => {
+  it("sanitizes building moves and null-safe died", () => {
+    const p = sanitizeMapPlayback({
+      ...RAW,
+      buildings: [
+        {
+          owner: "me",
+          name: "CommandCenter",
+          t: 10,
+          x: 30,
+          y: 40,
+          moves: [400, 90, 90, 700, 150, 60],
+          died: null,
+        },
+        { owner: "opp", name: "Barracks", t: 60, x: 160, y: 130, died: 500 },
+        // Truncated triple: the trailing pair is dropped, prefix kept.
+        {
+          owner: "me",
+          name: "Factory",
+          t: 90,
+          x: 40,
+          y: 40,
+          moves: [300, 50, 50, 600, 70],
+        },
+      ],
+    });
+    expect(p!.buildings[0].moves).toEqual([400, 90, 90, 700, 150, 60]);
+    expect(p!.buildings[0].died).toBeNull();
+    expect(p!.buildings[1].moves).toEqual([]);
+    expect(p!.buildings[1].died).toBe(500);
+    expect(p!.buildings[2].moves).toEqual([300, 50, 50]);
+  });
+
+  it("v1/v2 buildings default to no moves and immortal", () => {
+    const p = sanitizeMapPlayback(RAW);
+    expect(p!.buildings[0].moves).toEqual([]);
+    expect(p!.buildings[0].died).toBeNull();
+  });
+
+  it("buildingAliveAt respects placement and death times", () => {
+    const b = {
+      owner: "me" as const,
+      name: "Barracks",
+      t: 60,
+      x: 1,
+      y: 1,
+      moves: [],
+      died: 500,
+    };
+    expect(buildingAliveAt(b, 59)).toBe(false);
+    expect(buildingAliveAt(b, 60)).toBe(true);
+    expect(buildingAliveAt(b, 499)).toBe(true);
+    expect(buildingAliveAt(b, 500)).toBe(false);
+    expect(buildingAliveAt({ ...b, died: null }, 9999)).toBe(true);
+  });
+
+  it("buildingPositionAt holds the site, flies late, lands on target", () => {
+    // CC built at (30,40), Land command at t=400 targeting (90,90):
+    // ~78 cells at 1.3 cells/s is a ~60 s flight, so the CC must hold
+    // its ORIGINAL base until ~t=340 — this is the "no CC anywhere"
+    // bug: the old renderer pinned it at (30,40) forever.
+    const cc = {
+      owner: "me" as const,
+      name: "CommandCenter",
+      t: 10,
+      x: 30,
+      y: 40,
+      moves: [400, 90, 90],
+      died: null,
+    };
+    expect(buildingPositionAt(cc, 0)).toEqual({ x: 30, y: 40 });
+    expect(buildingPositionAt(cc, 200)).toEqual({ x: 30, y: 40 });
+    // Mid-flight: strictly between the two anchor points.
+    const mid = buildingPositionAt(cc, 380);
+    expect(mid.x).toBeGreaterThan(30);
+    expect(mid.x).toBeLessThan(90);
+    // At and after the landing time it sits at the new base.
+    expect(buildingPositionAt(cc, 400)).toEqual({ x: 90, y: 90 });
+    expect(buildingPositionAt(cc, 9999)).toEqual({ x: 90, y: 90 });
+  });
+
+  it("buildingPositionAt without moves is the construction site forever", () => {
+    const pylon = {
+      owner: "me" as const,
+      name: "Pylon",
+      t: 20,
+      x: 55,
+      y: 66,
+      moves: [],
+      died: null,
+    };
+    expect(buildingPositionAt(pylon, 0)).toEqual({ x: 55, y: 66 });
+    expect(buildingPositionAt(pylon, 5000)).toEqual({ x: 55, y: 66 });
+  });
+});
+
+describe("gameLength clamp — the 1.4x Blizzard-time scrubber bug", () => {
+  // Legacy (v<=2) agents declared gameLength in Blizzard game-time
+  // (frames/16) while every event timestamp used real seconds
+  // (frames/22.4) — a 16:04 game scrubbed to 22:29.
+  it("clamps a declared length that overshoots all activity by >20%", () => {
+    const p = sanitizeMapPlayback({
+      ...RAW,
+      gameLength: 1349, // 22:29 declared…
+      stats: {
+        me: [
+          [0, 0, 12, 12],
+          [964, 3000, 60, 150], // …but the last stats row lands at 16:04.
+        ],
+        opp: [[0, 0, 12, 12]],
+      },
+      units: [
+        { owner: "me", name: "Probe", born: 0, died: null, wp: [0, 30, 40] },
+      ],
+    });
+    expect(p!.gameLength).toBe(Math.round(964 * 1.02));
+  });
+
+  it("keeps a plausible declared length (quiet tail is not a bug)", () => {
+    // Activity to t=650 with a declared 700: within 20%, trusted as-is.
+    expect(sanitizeMapPlayback({
+      ...RAW,
+      gameLength: 700,
+      stats: {
+        me: [
+          [0, 0, 12, 12],
+          [650, 500, 20, 40],
+        ],
+        opp: [[0, 0, 12, 12]],
+      },
+    })!.gameLength).toBe(700);
+  });
+
+  it("never clamps short games and always covers recorded activity", () => {
+    // Sub-minute activity: too little signal to second-guess the agent.
+    const short = sanitizeMapPlayback({
+      ...RAW,
+      gameLength: 50,
+      battles: [],
+      stats: { me: [], opp: [] },
+      units: [{ owner: "me", name: "Probe", born: 0, died: 30, wp: [0, 30, 40] }],
+    });
+    expect(short!.gameLength).toBe(50);
+    // Declared length below the last event: stretched up, never truncated.
+    const stretched = sanitizeMapPlayback({ ...RAW, gameLength: 100 });
+    expect(stretched!.gameLength).toBeGreaterThanOrEqual(300);
   });
 });

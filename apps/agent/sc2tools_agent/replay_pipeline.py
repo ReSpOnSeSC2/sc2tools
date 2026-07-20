@@ -1146,6 +1146,7 @@ _PLAYBACK_MAX_BUILDINGS_PER_SIDE = 400
 _PLAYBACK_STATS_STEP_SEC = 10.0
 _PLAYBACK_MAX_BATTLES = 80
 _PLAYBACK_MAX_RESOURCES = 600
+_PLAYBACK_MAX_BUILDING_MOVES = 20
 
 
 def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
@@ -1204,11 +1205,11 @@ def _compact_map_playback(
     payloads. Output shape (camelCase, ready for the web replayer):
 
       {
-        v: 2, mapName, gameLength,
+        v: 3, mapName, gameLength,
         bounds: {minX, minY, maxX, maxY},
         spawns: [{owner: 'me'|'opp', x, y}],
         battles: [{t, x, y}],
-        buildings: [{owner, name, t, x, y}],
+        buildings: [{owner, name, t, x, y, moves?, died?}],
         units: [{owner, name, born, died|null, wp: [t,x,y,…]}],
         resources: [{kind, x, y, died?}],
         stats: {me: [[t, army, workers, supply]…], opp: […]}
@@ -1230,8 +1231,9 @@ def _compact_map_playback(
         return None
 
     out: Dict[str, Any] = {
-        # v2: adds ``resources`` (neutral mineral/gas/rock/tower nodes).
-        "v": 2,
+        # v3: buildings carry lift/land ``moves`` + ``died``; v2 added
+        # ``resources`` (neutral mineral/gas/rock/tower nodes).
+        "v": 3,
         "mapName": str(playback.get("map_name") or ""),
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
@@ -1286,23 +1288,61 @@ def _compact_map_playback(
 
     buildings: list = []
     per_side_counts = {"me": 0, "opp": 0}
-    for owner, key in (("me", "my_events"), ("opp", "opp_events")):
-        for e in playback.get(key) or []:
-            if not isinstance(e, Mapping) or e.get("type") != "building":
-                continue
-            x, y = e.get("x"), e.get("y")
-            if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-                continue
-            if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
-                continue
-            per_side_counts[owner] += 1
-            buildings.append({
-                "owner": owner,
-                "name": str(e.get("name") or e.get("unit_type") or ""),
-                "t": round(float(e.get("time") or 0.0), 1),
-                "x": round(float(x), 1),
-                "y": round(float(y), 1),
-            })
+    # Prefer the tracker-derived lifecycle lists (exact born/died plus
+    # lift-off landing points); fall back to the legacy build-event
+    # scan for payloads produced by an older engine.
+    has_lifecycle = bool(
+        playback.get("my_buildings") or playback.get("opp_buildings"),
+    )
+    if has_lifecycle:
+        for owner, key in (("me", "my_buildings"), ("opp", "opp_buildings")):
+            for e in playback.get(key) or []:
+                if not isinstance(e, Mapping):
+                    continue
+                x, y = e.get("x"), e.get("y")
+                if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                    continue
+                if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
+                    continue
+                per_side_counts[owner] += 1
+                entry: Dict[str, Any] = {
+                    "owner": owner,
+                    "name": str(e.get("name") or ""),
+                    "t": round(float(e.get("born") or 0.0), 1),
+                    "x": round(float(x), 1),
+                    "y": round(float(y), 1),
+                }
+                moves = e.get("moves")
+                if isinstance(moves, (list, tuple)) and moves:
+                    flat = [
+                        round(float(v), 1)
+                        for v in moves[:_PLAYBACK_MAX_BUILDING_MOVES * 3]
+                        if isinstance(v, (int, float))
+                    ]
+                    if flat and len(flat) % 3 == 0:
+                        entry["moves"] = flat
+                died = e.get("died")
+                if isinstance(died, (int, float)):
+                    entry["died"] = round(float(died), 1)
+                buildings.append(entry)
+    else:
+        for owner, key in (("me", "my_events"), ("opp", "opp_events")):
+            for e in playback.get(key) or []:
+                if not isinstance(e, Mapping) or e.get("type") != "building":
+                    continue
+                x, y = e.get("x"), e.get("y")
+                if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+                    continue
+                if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
+                    continue
+                per_side_counts[owner] += 1
+                buildings.append({
+                    "owner": owner,
+                    "name": str(e.get("name") or e.get("unit_type") or ""),
+                    "t": round(float(e.get("time") or 0.0), 1),
+                    "x": round(float(x), 1),
+                    "y": round(float(y), 1),
+                })
     out["buildings"] = buildings
 
     units: list = []
