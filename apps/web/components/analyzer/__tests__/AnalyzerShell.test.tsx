@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { AnalyzerShell } from "../AnalyzerShell";
 
@@ -20,7 +20,17 @@ vi.mock("../OpponentsTab", () => ({
 vi.mock("../ArcadeTab", () => ({ ArcadeTab: () => null }));
 vi.mock("../BattlefieldTab", () => ({ BattlefieldTab: () => null }));
 vi.mock("../BuildsTab", () => ({ BuildsTab: () => null }));
-vi.mock("../DailyPulse", () => ({ DailyPulse: () => null }));
+vi.mock("../DailyPulse", () => ({
+  DailyPulse: ({
+    onOpenOpponent,
+  }: {
+    onOpenOpponent?: (pulseId: string) => void;
+  }) => (
+    <button type="button" onClick={() => onOpenOpponent?.("opp-nemesis")}>
+      Open nemesis
+    </button>
+  ),
+}));
 vi.mock("../DashboardKpiStrip", () => ({ DashboardKpiStrip: () => null }));
 vi.mock("../DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("../FilterBar", () => ({ FilterBar: () => null }));
@@ -47,5 +57,45 @@ describe("AnalyzerShell opponent hydration", () => {
     expect(screen.getByText("Hydrated opponent 1-S2-1-99")).toBeTruthy();
     expect(screen.getByText("Ladder pulse")).toBeTruthy();
     expect(screen.queryByText("Opponent list")).toBeNull();
+  });
+
+  it("a Daily Pulse opponent card opens the dossier from another tab", () => {
+    const onTabChange = vi.fn();
+    const { rerender } = render(
+      <AnalyzerShell
+        totalGames={50}
+        tab="trends"
+        onTabChange={onTabChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Open nemesis"));
+    expect(onTabChange).toHaveBeenCalledWith("opponents");
+
+    // The parent flips the tab prop; the pending dossier must survive
+    // the tab-sync effect instead of being reset to the opponents list.
+    rerender(
+      <AnalyzerShell
+        totalGames={50}
+        tab="opponents"
+        onTabChange={onTabChange}
+      />,
+    );
+    expect(screen.getByText("Hydrated opponent opp-nemesis")).toBeTruthy();
+    expect(screen.queryByText("Opponent list")).toBeNull();
+  });
+
+  it("a Daily Pulse opponent card opens the dossier while already on the opponents tab", () => {
+    render(
+      <AnalyzerShell
+        totalGames={50}
+        tab="opponents"
+        onTabChange={() => undefined}
+      />,
+    );
+    expect(screen.getByText("Opponent list")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Open nemesis"));
+    expect(screen.getByText("Hydrated opponent opp-nemesis")).toBeTruthy();
   });
 });

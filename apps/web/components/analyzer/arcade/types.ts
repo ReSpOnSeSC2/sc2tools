@@ -205,7 +205,13 @@ export interface ArcadeGame {
   myBuild?: string | null;
   opp_strategy?: string | null;
   oppPulseId?: string;
-  opponent?: { displayName?: string; mmr?: number; race?: string };
+  opponent?: {
+    displayName?: string;
+    mmr?: number;
+    race?: string;
+    /** Canonical numeric sc2pulse character id, when resolved at ingest. */
+    pulseCharacterId?: string | null;
+  };
   macro_score?: number | null;
 }
 

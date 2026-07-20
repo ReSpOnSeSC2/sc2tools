@@ -253,6 +253,33 @@ describe("buildPulseContext", () => {
     expect(buildPulseContext(stale, DAY, TZ).nemesis).toBeNull();
   });
 
+  test("barcode opponents need a resolved SC2Pulse id to be tracked", () => {
+    // Same losing record as the nemesis fixture, but the name is an
+    // unresolved barcode → no nemesis (and no rival) card.
+    const unresolved = spread(NEMESIS_MIN_DECIDED + 1, 3, (i) => ({
+      oppPulseId: "1-S2-1-111",
+      opponent: { displayName: "IIlIlIlIlI" },
+      result: i === 0 ? "Victory" : "Defeat",
+    }));
+    const ctx = buildPulseContext(unresolved, DAY, TZ);
+    expect(ctx.nemesis).toBeNull();
+    expect(ctx.rival).toBeNull();
+
+    // A resolved pulseCharacterId on any row confirms the identity —
+    // the same barcode is then fair game.
+    const resolved = spread(NEMESIS_MIN_DECIDED + 1, 3, (i) => ({
+      oppPulseId: "1-S2-1-111",
+      opponent: {
+        displayName: "IIlIlIlIlI",
+        pulseCharacterId: i === 0 ? "994428" : undefined,
+      },
+      result: i === 0 ? "Victory" : "Defeat",
+    }));
+    expect(buildPulseContext(resolved, DAY, TZ).nemesis?.name).toBe(
+      "IIlIlIlIlI",
+    );
+  });
+
   test("the same player never appears as both nemesis and rival", () => {
     const rows = spread(8, 2, (i) => ({
       oppPulseId: "opp-1",
@@ -262,6 +289,18 @@ describe("buildPulseContext", () => {
     const ctx = buildPulseContext(rows, DAY, TZ);
     expect(ctx.nemesis?.pulseId).toBe("opp-1");
     expect(ctx.rival).toBeNull();
+  });
+
+  test("opponent cards deep-link to the player's dossier", () => {
+    const rows = spread(8, 2, (i) => ({
+      oppPulseId: "opp-1",
+      opponent: { displayName: "Shadow" },
+      result: i === 0 ? "Victory" : "Defeat",
+    }));
+    const ctx = buildPulseContext(rows, DAY, TZ);
+    const nemesisSpec = PULSE_POOL.find((s) => s.id === "nemesis-watch")!;
+    expect(nemesisSpec.eligible(ctx)).toBe(true);
+    expect(nemesisSpec.build(ctx).targetOpponentId).toBe("opp-1");
   });
 
   test("best map prefers the live pool and honours thresholds", () => {

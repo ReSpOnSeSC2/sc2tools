@@ -92,8 +92,11 @@ const TONE_CLASSES: Record<
 
 export function DailyPulse({
   onNavigate,
+  onOpenOpponent,
 }: {
   onNavigate?: (tab: TabId) => void;
+  /** Opens one opponent dossier directly (nemesis / rival cards). */
+  onOpenOpponent?: (pulseId: string) => void;
 }) {
   const seed = useDailySeed();
 
@@ -178,6 +181,7 @@ export function DailyPulse({
                 key={card.id}
                 card={card}
                 onNavigate={onNavigate}
+                onOpenOpponent={onOpenOpponent}
               />
             ))}
           </div>
@@ -190,12 +194,25 @@ export function DailyPulse({
 function PulseCardView({
   card,
   onNavigate,
+  onOpenOpponent,
 }: {
   card: PulseCard;
   onNavigate?: (tab: TabId) => void;
+  onOpenOpponent?: (pulseId: string) => void;
 }) {
   const tone = TONE_CLASSES[card.tone];
-  const clickable = Boolean(card.targetTab && onNavigate);
+  // Opponent cards deep-link into the player's dossier; every other
+  // card lands on the analyzer tab that owns the full story.
+  const openOpponent =
+    card.targetOpponentId && onOpenOpponent
+      ? () => onOpenOpponent(card.targetOpponentId!)
+      : null;
+  const openTab =
+    card.targetTab && onNavigate
+      ? () => onNavigate(card.targetTab as TabId)
+      : null;
+  const onOpen = openOpponent ?? openTab;
+  const clickable = onOpen !== null;
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -235,11 +252,11 @@ function PulseCardView({
 
   const baseClass = `w-[280px] flex-shrink-0 snap-start rounded-lg border border-border border-l-4 ${tone.border} bg-bg-elevated/60 px-3.5 py-3 sm:w-[300px]`;
 
-  if (clickable) {
+  if (onOpen) {
     return (
       <button
         type="button"
-        onClick={() => onNavigate!(card.targetTab as TabId)}
+        onClick={onOpen}
         className={`${baseClass} text-left transition-colors hover:border-accent hover:bg-bg-elevated`}
       >
         {body}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Section } from "@/components/ui/Section";
@@ -34,10 +34,30 @@ export function AnalyzerShell({
   const [profileId, setProfileId] = useState<string | null>(
     initialOpponentId ?? null,
   );
+  // Dossier requested from outside the Opponents tab (e.g. a Daily
+  // Pulse nemesis card). The tab-sync effect below would otherwise
+  // reset profileId to the URL-provided initialOpponentId the moment
+  // the tab switches, so the pending id rides along and wins once.
+  const pendingProfileId = useRef<string | null>(null);
 
   useEffect(() => {
-    setProfileId(tab === "opponents" ? (initialOpponentId ?? null) : null);
+    if (tab === "opponents") {
+      setProfileId(pendingProfileId.current ?? initialOpponentId ?? null);
+      pendingProfileId.current = null;
+    } else {
+      pendingProfileId.current = null;
+      setProfileId(null);
+    }
   }, [tab, initialOpponentId]);
+
+  const openOpponentProfile = (pulseId: string) => {
+    if (tab === "opponents") {
+      setProfileId(pulseId);
+    } else {
+      pendingProfileId.current = pulseId;
+      onTabChange("opponents");
+    }
+  };
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 
@@ -53,7 +73,10 @@ export function AnalyzerShell({
         </ErrorBoundary>
 
         <ErrorBoundary label="the Daily Pulse strip">
-          <DailyPulse onNavigate={onTabChange} />
+          <DailyPulse
+            onNavigate={onTabChange}
+            onOpenOpponent={openOpponentProfile}
+          />
         </ErrorBoundary>
 
         <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">

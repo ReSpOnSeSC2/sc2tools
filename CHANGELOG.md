@@ -19,7 +19,21 @@ corresponding GitHub Release.
   section and its `MedianTimingsGrid` component were removed. The API
   still returns the timing payloads for other consumers.
 
+### Changed
+
+- **Daily Pulse no longer tracks unresolved barcode opponents** — the
+  Nemesis Watch and Ladder Rival cards skip opponents whose display
+  name is a barcode (IIlIlI…) unless a resolved SC2Pulse character id
+  confirms who is behind the bars; an unverifiable identity isn't
+  worth a headline card.
+
 ### Fixed
+
+- **Daily Pulse opponent cards now open the player's dossier** — the
+  Open link on the Nemesis Watch and Ladder Rival cards previously
+  just switched to the Opponents tab, landing on the list instead of
+  the opponent it named. Clicking now deep-links straight into that
+  opponent's profile.
 
 - **Map replayer clock now runs on real game time** — the playback
   clock, HUD stats timing, and scrubber length were built from
