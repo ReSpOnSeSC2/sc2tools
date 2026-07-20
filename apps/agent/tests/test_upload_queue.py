@@ -1379,7 +1379,11 @@ def test_size_one_batch_is_legacy_single_game_behaviour(
         q.submit(_game(tmp_path, f"single-{i}.SC2Replay"))
     q.start()
     try:
-        time.sleep(0.6)
+        # Poll rather than a fixed sleep: every successful batch
+        # persists state via write→fsync→rename, and five sequential
+        # fsync cycles can outlast any fixed budget on a slow CI
+        # runner (observed: 2 of 5 done after 0.6 s on hosted Windows).
+        _wait_for(lambda: len(api.batch_calls) >= 5, timeout=6.0)
     finally:
         q.stop()
 
