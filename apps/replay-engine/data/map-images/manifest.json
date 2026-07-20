@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-16T13:53:36.939Z",
+  "generatedAt": "2026-07-20T05:22:18.402Z",
   "source": {
     "provider": "Sc2ReplayStats",
     "page": "https://sc2replaystats.com/account/maps/30690/0/1991244/1v1/AutoMM/67/",
@@ -106,6 +106,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/10000_Feet_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "10000_feet_le.jpg",
+        "width": 1200,
+        "height": 1316,
+        "bytes": 639245,
+        "sha256": "cf98453086f9d7ae1e95b295f8aa9e73bf39e1ba560deff7e378584c1cb0e4e7",
+        "provenance": "curated"
       }
     },
     {
@@ -132,6 +140,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/16-Bit-LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "16_bit_le.jpg",
+        "width": 2048,
+        "height": 2282,
+        "bytes": 554785,
+        "sha256": "d7bdc3c1507ca6d8c96037fd093b8c1946deb8d70d5f84970d7d6603d9cd05cf",
+        "provenance": "curated"
       }
     },
     {
@@ -163,6 +179,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/2000_Atmospheres_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "2000_atmospheres_le.jpg",
+        "width": 500,
+        "height": 465,
+        "bytes": 291660,
+        "sha256": "e6bb93ec853b3987bb11bbc741dc4891fe990bfcb33bf4f56bd91235356119a2",
+        "provenance": "source-original"
       }
     },
     {
@@ -190,6 +214,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Acid_Plant_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "acid_plant_le.jpg",
+        "width": 2048,
+        "height": 1881,
+        "bytes": 642410,
+        "sha256": "a0822328f7c09b9acea58eaad563d0e71c03468caa6f55ec94e3915eebd9d682",
+        "provenance": "curated"
       }
     },
     {
@@ -217,6 +249,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Acropolis_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "acropolis_le.jpg",
+        "width": 500,
+        "height": 485,
+        "bytes": 144512,
+        "sha256": "410863f8214f0329c589246b278a1112cfdf0bc8c3ad338a06786217eb074372",
+        "provenance": "source-original"
       }
     },
     {
@@ -246,6 +286,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Alcyone_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "alcyone_le.jpg",
+        "width": 1400,
+        "height": 1400,
+        "bytes": 584983,
+        "sha256": "43f2cb0b2bed7506eb54673c578a0b0cc3b5bf2a8dd1806ff0d7d2db71ce4105",
+        "provenance": "curated"
       }
     },
     {
@@ -274,6 +322,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Altitude_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "altitude_le.jpg",
+        "width": 1400,
+        "height": 1400,
+        "bytes": 694484,
+        "sha256": "7bbd4e363d5084317733aa40bb42d3a4c589712d8eb95f28ff970a1946334190",
+        "provenance": "curated"
       }
     },
     {
@@ -302,6 +358,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Amphion_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "amphion_le.jpg",
+        "width": 2000,
+        "height": 2000,
+        "bytes": 834025,
+        "sha256": "1fae5619b73ee47ac4cad163a7b0406cd0790e7793805270692977be719509c6",
+        "provenance": "curated"
       }
     },
     {
@@ -330,6 +394,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ancient_Cistern_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ancient_cistern_le.jpg",
+        "width": 1000,
+        "height": 1089,
+        "bytes": 552147,
+        "sha256": "f07b7855612e7c37521ef993ac3f5b06404366e7e156046df3849f7236db85c6",
+        "provenance": "curated"
       }
     },
     {
@@ -356,6 +428,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/At_Eternity's_Edge_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "at_eternitys_edge_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 154975,
+        "sha256": "67ae3ad23e391e9fbe163eb73260fd3a00f51f6287f19063cec66ba49c1c65cb",
+        "provenance": "source-original"
       }
     },
     {
@@ -383,6 +463,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Automaton_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "automaton_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 114499,
+        "sha256": "149e064da7b79bb189967f83d695fa79c8f4c5cc002d3968e17da0d488ec683c",
+        "provenance": "source-original"
       }
     },
     {
@@ -411,6 +499,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Babylon_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "babylon_le.jpg",
+        "width": 1000,
+        "height": 941,
+        "bytes": 478274,
+        "sha256": "79f995c8fe66d208f8a64ae5d33d34218b1646bd73873a7afeaa475ceab4c71d",
+        "provenance": "curated"
       }
     },
     {
@@ -439,6 +535,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Beckett_Industries_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "beckett_industries_le.jpg",
+        "width": 500,
+        "height": 648,
+        "bytes": 389062,
+        "sha256": "9f86e171c7de59c9c126ad36cc07cfe8c83a55ffe0a3b7554584f9efe0f2ffe2",
+        "provenance": "source-original"
       }
     },
     {
@@ -469,6 +573,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Berlingrad_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "berlingrad_le.jpg",
+        "width": 500,
+        "height": 546,
+        "bytes": 79019,
+        "sha256": "af7f1d2c05e4f70ba02d2f1985a0f10e180d37800ddbfac4258f51b4b870bb91",
+        "provenance": "source-original"
       }
     },
     {
@@ -497,6 +609,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Blackburn%20LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "blackburn_le.jpg",
+        "width": 500,
+        "height": 406,
+        "bytes": 257878,
+        "sha256": "c3c530c069f81843f3a404f0d1603f74c385008b2ff949a66a6fbd3d79fc743e",
+        "provenance": "source-original"
       }
     },
     {
@@ -523,6 +643,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Blackrock_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "blackrock_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 180263,
+        "sha256": "c5f9716b10942a922581d8d438a53676bba35f2f459d39ec1a5135efa0ae3f57",
+        "provenance": "source-original"
       }
     },
     {
@@ -551,6 +679,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Blueshift_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "blueshift_le.jpg",
+        "width": 1920,
+        "height": 1920,
+        "bytes": 717524,
+        "sha256": "7440dc6a0cb5cd65b6d6d7bb8d96422d63b6240f2754f39eca3a11c5ac758073",
+        "provenance": "curated"
       }
     },
     {
@@ -578,6 +714,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Catalyst_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "catalyst_le.jpg",
+        "width": 1920,
+        "height": 2032,
+        "bytes": 570017,
+        "sha256": "10e2651a0f1d43876eeb3ccdda2a6693e9172ccb035f8ebe77ea41afe8aa9270",
+        "provenance": "curated"
       }
     },
     {
@@ -606,6 +750,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Celestial_Enclave_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "celestial_enclave_le.jpg",
+        "width": 1200,
+        "height": 1200,
+        "bytes": 625497,
+        "sha256": "30c6acced173a33107d57e83356f09fb94708d1f6ca961c3bed47ed8fde66eab",
+        "provenance": "curated"
       }
     },
     {
@@ -634,6 +786,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Cerulean_Fall_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "cerulean_fall_le.jpg",
+        "width": 2086,
+        "height": 1920,
+        "bytes": 896495,
+        "sha256": "6b754dd82c1f3cc16db288cae9d84598b9a7127d9060f652fafbc5ad869d9d9e",
+        "provenance": "curated"
       }
     },
     {
@@ -660,6 +820,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Cosmic-Sapphire.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "cosmic_sapphire.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 123836,
+        "sha256": "6cdcf8ddb1976a7e813961a5a6280107c035bd62f8617ab972b36982a409bb3e",
+        "provenance": "source-original"
       }
     },
     {
@@ -687,6 +855,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Crimson_Court_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "crimson_court_le.jpg",
+        "width": 2000,
+        "height": 2387,
+        "bytes": 710229,
+        "sha256": "ca955b1da2a89d449d5806c3bf7065849c3ba1fe18cbeff90e99d19a9d3a994c",
+        "provenance": "curated"
       }
     },
     {
@@ -717,6 +893,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Curious_Minds_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "curious_minds_le.jpg",
+        "width": 500,
+        "height": 469,
+        "bytes": 56000,
+        "sha256": "c9d1da338d82540f96a2efb7151c803031252a5d8d738454bd03ce1b5008749a",
+        "provenance": "source-original"
       }
     },
     {
@@ -744,6 +928,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Cyber_Forest_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "cyber_forest_le.jpg",
+        "width": 600,
+        "height": 694,
+        "bytes": 104169,
+        "sha256": "318358612a7ccd8ae82cf2abf3641f122ddcacf00a1b663ef7038c81ffcf1774",
+        "provenance": "curated"
       }
     },
     {
@@ -770,6 +962,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Darkness-Sanctuary-LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "darkness_sanctuary_le.jpg",
+        "width": 600,
+        "height": 600,
+        "bytes": 78628,
+        "sha256": "3d3c524b997da0b2e08c70a746be5d89bdf149fb92784fa4b5353e4ee3a059d4",
+        "provenance": "curated"
       }
     },
     {
@@ -797,6 +997,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Data-C.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "data_c.jpg",
+        "width": 500,
+        "height": 407,
+        "bytes": 100272,
+        "sha256": "a2ef879b6b26b786bf648a0b5afe19c908e9fd922e9049195968abbb4242b700",
+        "provenance": "source-original"
       }
     },
     {
@@ -825,6 +1033,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Deathaura_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "deathaura_le.jpg",
+        "width": 1200,
+        "height": 1166,
+        "bytes": 508241,
+        "sha256": "882033e7bf3c9267c167f45abd20d7898bd598f5262501a897b4fd16a655890b",
+        "provenance": "curated"
       }
     },
     {
@@ -851,6 +1067,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Disco_Bloodbath_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "disco_bloodbath_le.jpg",
+        "width": 500,
+        "height": 445,
+        "bytes": 129537,
+        "sha256": "0f979a208ddfdfa9030eb0a87e7e3d50d9073f1a7af67c832726dd62736b6c99",
+        "provenance": "source-original"
       }
     },
     {
@@ -879,6 +1103,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Dragon_Scales_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "dragon_scales_le.jpg",
+        "width": 1000,
+        "height": 1000,
+        "bytes": 417860,
+        "sha256": "d62c5141bb6001a76cebff5c064978635b3610335f9f2218be456d538b91b754",
+        "provenance": "curated"
       }
     },
     {
@@ -906,6 +1138,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Dreamcatcher-LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "dreamcatcher_le.jpg",
+        "width": 512,
+        "height": 512,
+        "bytes": 137486,
+        "sha256": "1cf27216c07789dfb69d8c403ba346572f3af64020f224680f5d092ccbbd63d5",
+        "provenance": "source-original"
       }
     },
     {
@@ -933,6 +1173,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Dynasty_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "dynasty_le.jpg",
+        "width": 500,
+        "height": 381,
+        "bytes": 134478,
+        "sha256": "77e3683e97cac3ff1792b778dbcb94cd11d12cffd0617a8544e43fe9d4a730d3",
+        "provenance": "source-original"
       }
     },
     {
@@ -960,6 +1208,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ephemeron_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ephemeron_le.jpg",
+        "width": 2000,
+        "height": 2242,
+        "bytes": 842773,
+        "sha256": "ef4c24d1da0ee51a65f494bac87e15b86d3e35da2c19ecf80a25079893198066",
+        "provenance": "curated"
       }
     },
     {
@@ -987,6 +1243,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Equilibrium_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "equilibrium_le.jpg",
+        "width": 2500,
+        "height": 1686,
+        "bytes": 651668,
+        "sha256": "78de034dba57e55a76341ca72fda97450ffd3bfc7778d46d5df52a7c16a55575",
+        "provenance": "curated"
       }
     },
     {
@@ -1015,6 +1279,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Eternal_Empire_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "eternal_empire_le.jpg",
+        "width": 2000,
+        "height": 2000,
+        "bytes": 953292,
+        "sha256": "41e93518dedaa26deaf4a7816914ca5697a3b6d3a043915be0c34b0477c18b30",
+        "provenance": "curated"
       }
     },
     {
@@ -1042,6 +1314,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ever_Dream_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ever_dream_le.jpg",
+        "width": 2000,
+        "height": 2043,
+        "bytes": 533146,
+        "sha256": "375ca399ab4d5792febd9bb14d06a4e2d4ab3a857404c3bfd1fc33c99d7fc692",
+        "provenance": "curated"
       }
     },
     {
@@ -1068,6 +1348,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Fear_and_Faith_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "fear_and_faith_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 161113,
+        "sha256": "d5381394874c03108dde92d05565c0d24516642c7f3c1cf4da30013480a5280c",
+        "provenance": "source-original"
       }
     },
     {
@@ -1095,6 +1383,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Fracture_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "fracture_le.jpg",
+        "width": 2000,
+        "height": 1722,
+        "bytes": 727013,
+        "sha256": "653e18f215ecc099011e524eb284e15d147268ba66bd62deadad5f1e3b7c1a10",
+        "provenance": "curated"
       }
     },
     {
@@ -1123,6 +1419,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ghost_River_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ghost_river_le.jpg",
+        "width": 1480,
+        "height": 1280,
+        "bytes": 425565,
+        "sha256": "1bd1e979e595ad2668eabf4deed4d72fcb211b65098b2ca8432035b9b84114b0",
+        "provenance": "curated"
       }
     },
     {
@@ -1153,6 +1457,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Glittering_Ashes_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "glittering_ashes_le.jpg",
+        "width": 500,
+        "height": 441,
+        "bytes": 60910,
+        "sha256": "b7f46928c0488c05962c400bb86755c0e3fc63443a00c5f659bcd73a9dbd2a71",
+        "provenance": "source-original"
       }
     },
     {
@@ -1180,6 +1492,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Golden_Wall_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "golden_wall_le.jpg",
+        "width": 2000,
+        "height": 1666,
+        "bytes": 658663,
+        "sha256": "327890fc0209f5439f7e4a194be9217693fdd979332a8f88026f059abd25766a",
+        "provenance": "curated"
       }
     },
     {
@@ -1209,6 +1529,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Goldenaura_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "goldenaura_le.jpg",
+        "width": 1000,
+        "height": 1000,
+        "bytes": 530990,
+        "sha256": "5f20ba1c5dc61b5a0d4a6afb2a6ba1fabbbf0afb2f39e6d662a2191e2bd21b1b",
+        "provenance": "curated"
       }
     },
     {
@@ -1237,6 +1565,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Gresvan_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "gresvan_le.jpg",
+        "width": 1000,
+        "height": 725,
+        "bytes": 390131,
+        "sha256": "13a09001d7695b981b2fff704a658ca4aa295e8e30eb4cbaaf45732475b62255",
+        "provenance": "curated"
       }
     },
     {
@@ -1264,6 +1600,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Hard_Lead_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "hard_lead_le.jpg",
+        "width": 1000,
+        "height": 1000,
+        "bytes": 432768,
+        "sha256": "c1b0f0acb2b38b6ccd138e1c4c1b0c92ad9522f74062cece63012ffe1c67d29d",
+        "provenance": "curated"
       }
     },
     {
@@ -1294,6 +1638,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Hardwire_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "hardwire_le.jpg",
+        "width": 500,
+        "height": 576,
+        "bytes": 67331,
+        "sha256": "79185cb42eaa32bc7da9959cf271800d2607b1a23b81dfd1fae0d41e8f759b65",
+        "provenance": "source-original"
       }
     },
     {
@@ -1321,6 +1673,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Hecate_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "hecate_le.jpg",
+        "width": 1000,
+        "height": 903,
+        "bytes": 425596,
+        "sha256": "d2a4e824186755d1bc0b642ed88e5a21b84448e956747cd274073bc002045b27",
+        "provenance": "curated"
       }
     },
     {
@@ -1347,6 +1707,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ice_and_Chrome_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ice_and_chrome_le.jpg",
+        "width": 1200,
+        "height": 1166,
+        "bytes": 522015,
+        "sha256": "09876968d16c6d7b29fa66222f24ab7e24bba4cab2dbaeebdb78f8477431fdc3",
+        "provenance": "curated"
       }
     },
     {
@@ -1374,6 +1742,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Incorporeal_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "incorporeal_le.jpg",
+        "width": 1775,
+        "height": 2000,
+        "bytes": 731108,
+        "sha256": "13d470c2b71d9f029ad5baea2f85e82e3108ee93523de62a056b8eb7cb6e7871",
+        "provenance": "curated"
       }
     },
     {
@@ -1401,6 +1777,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Inside-and-out.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "inside_and_out.jpg",
+        "width": 500,
+        "height": 532,
+        "bytes": 130768,
+        "sha256": "b10071488a6fa572ecafa46f7b0e2fe00329643d37e5c9521cc469eb6fbf3ba0",
+        "provenance": "source-original"
       }
     },
     {
@@ -1430,6 +1814,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Jagannatha_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "jagannatha_le.jpg",
+        "width": 1000,
+        "height": 1217,
+        "bytes": 534320,
+        "sha256": "6d2c9c95d3d45a0170ed7d3d7d80e210480c37857418e71064813e5f15c77424",
+        "provenance": "curated"
       }
     },
     {
@@ -1458,6 +1850,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Kairos_Junction_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "kairos_junction_le.jpg",
+        "width": 500,
+        "height": 583,
+        "bytes": 159369,
+        "sha256": "90555cfcdaa4fc4389a3ea10fc5d22ef143e7ede2590bafb6b2fad99499d3f09",
+        "provenance": "source-original"
       }
     },
     {
@@ -1485,6 +1885,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Kings_Cove_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "kings_cove_le.jpg",
+        "width": 500,
+        "height": 483,
+        "bytes": 147722,
+        "sha256": "ac8114274472054a7e615593ee52eccb343f63ae3f54ef7083f4fefe5da3bcf8",
+        "provenance": "source-original"
       }
     },
     {
@@ -1511,6 +1919,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Last_Fantasy_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "last_fantasy_le.jpg",
+        "width": 2000,
+        "height": 2000,
+        "bytes": 859427,
+        "sha256": "72c1f6b767a603c6c5d2d03ec87e81eaf2c1f434912166ae5570200c76f2e2da",
+        "provenance": "curated"
       }
     },
     {
@@ -1538,6 +1954,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ley_Lines.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ley_lines.jpg",
+        "width": 1611,
+        "height": 1440,
+        "bytes": 816552,
+        "sha256": "afda09aa87a6b812f45835a904833743b961ad1d3f8c6c7045e40046059aa761",
+        "provenance": "curated"
       }
     },
     {
@@ -1567,6 +1991,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Lightshade_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "lightshade_le.jpg",
+        "width": 1000,
+        "height": 971,
+        "bytes": 420482,
+        "sha256": "47fd4e705dda15deb0aecfeb0dd1161180582f9110474982b8b18a53e633226d",
+        "provenance": "curated"
       }
     },
     {
@@ -1593,6 +2025,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Lockdown_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "lockdown_le.jpg",
+        "width": 500,
+        "height": 472,
+        "bytes": 140190,
+        "sha256": "9c0be3b4537a822f96213b30ef660282dd14338cd993ef8d401db7228b106192",
+        "provenance": "source-original"
       }
     },
     {
@@ -1620,6 +2060,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Lost-and-Found-LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "lost_and_found_le.jpg",
+        "width": 600,
+        "height": 542,
+        "bytes": 85534,
+        "sha256": "f7dd7846ff7d3f42505e46eccc0c5db2c60e7e47f17c2d49f2dcb42d3757d211",
+        "provenance": "curated"
       }
     },
     {
@@ -1647,6 +2095,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Magannatha_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "magannatha_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 110987,
+        "sha256": "e7adcac58908dc51ad7d9e8a9d2f62b97a145134d63ef26272fdbc29cbc57b76",
+        "provenance": "source-original"
       }
     },
     {
@@ -1674,6 +2130,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Moondance.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "moondance.jpg",
+        "width": 500,
+        "height": 546,
+        "bytes": 122106,
+        "sha256": "c3126d0d33b12aa78d08ae155a5c47100773f9206b1ccd8258e13b1e94e74429",
+        "provenance": "source-original"
       }
     },
     {
@@ -1702,6 +2166,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Mothership_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "mothership_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 148032,
+        "sha256": "6336e92b5017e3c3e2e9fd0d602a4cc33b4fab389c143a6d94860d93059c9bd9",
+        "provenance": "source-original"
       }
     },
     {
@@ -1730,6 +2202,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/NeoHumanity_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "neohumanity_le.jpg",
+        "width": 500,
+        "height": 523,
+        "bytes": 67378,
+        "sha256": "adec3f3e279783a425b9f4bf550806db887ccda32347d5993c36c059d51228b3",
+        "provenance": "source-original"
       }
     },
     {
@@ -1757,6 +2237,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/New_Repugnancy_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "new_repugnancy_le.jpg",
+        "width": 500,
+        "height": 394,
+        "bytes": 101423,
+        "sha256": "a5e10030e9d061a87344d50d9f29bcb3861b784a273a2f367c904a8bd6c3784c",
+        "provenance": "source-original"
       }
     },
     {
@@ -1784,6 +2272,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Nightshade_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "nightshade_le.jpg",
+        "width": 500,
+        "height": 492,
+        "bytes": 166577,
+        "sha256": "f2dab024ac8983508c81552271bbfc35adfa99daf3d2ac00aa5dba1ad9384253",
+        "provenance": "source-original"
       }
     },
     {
@@ -1812,6 +2308,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Oceanborn_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "oceanborn_le.jpg",
+        "width": 500,
+        "height": 471,
+        "bytes": 167659,
+        "sha256": "50271c70007ce637b970ca822b2210084b4f6eb604497b9481acb75acded8286",
+        "provenance": "source-original"
       }
     },
     {
@@ -1840,6 +2344,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Old_Republic_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "old_republic_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 168825,
+        "sha256": "16df19101634935d5def122c2f21713aaac1d865eff740e49549eea311c99111",
+        "provenance": "source-original"
       }
     },
     {
@@ -1866,6 +2378,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Old_Sun_Temple_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "old_sun_temple_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 203407,
+        "sha256": "2cfcded619fee31cc83f67e097490c8f818d5a71b36cb455d994f87c16af5fa7",
+        "provenance": "source-original"
       }
     },
     {
@@ -1895,6 +2415,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Oxide_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "oxide_le.jpg",
+        "width": 500,
+        "height": 463,
+        "bytes": 115073,
+        "sha256": "bd75343d2bd08755af45c486a24034c5e630cdaa5784e9e2b7bcdaacbaa02c37",
+        "provenance": "source-original"
       }
     },
     {
@@ -1923,6 +2451,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Para_Site_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "para_site_le.jpg",
+        "width": 512,
+        "height": 555,
+        "bytes": 137640,
+        "sha256": "fa8f783791068161d42558c0b3d2b50d3a00374aca634b70219c751297d4371e",
+        "provenance": "source-original"
       }
     },
     {
@@ -1950,6 +2486,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Persephone_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "persephone_le.jpg",
+        "width": 500,
+        "height": 588,
+        "bytes": 92388,
+        "sha256": "3f853a46dc1170fe31639d9fb464823d5df957f985d9752c210539372af06510",
+        "provenance": "source-original"
       }
     },
     {
@@ -1978,6 +2522,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Pillars_of_Gold_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "pillars_of_gold_le.jpg",
+        "width": 500,
+        "height": 507,
+        "bytes": 129485,
+        "sha256": "6445c81c0f920da55c0426098dd869e93b4ad5c47b1d32c4f101f1963fed8da4",
+        "provenance": "source-original"
       }
     },
     {
@@ -2005,6 +2557,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Port_Aleksander_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "port_aleksander_le.jpg",
+        "width": 500,
+        "height": 443,
+        "bytes": 124454,
+        "sha256": "f2e9068293776cea814b22946fb08da1195ba1f4ec602f63cec66db5541723ab",
+        "provenance": "source-original"
       }
     },
     {
@@ -2032,6 +2592,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Post-Youth_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "post_youth_le.jpg",
+        "width": 500,
+        "height": 620,
+        "bytes": 174817,
+        "sha256": "7ee19b1204127bbb416a3361cb0b94d33acbb87656cbc1b99b880cacd8f3b9d2",
+        "provenance": "source-original"
       }
     },
     {
@@ -2061,6 +2629,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Pride_of_Altaris_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "pride_of_altaris_le.jpg",
+        "width": 500,
+        "height": 597,
+        "bytes": 88869,
+        "sha256": "64247211241eeab4640b16e61f7c15c5589608f8c5d2ed643b73f6ac41df40a4",
+        "provenance": "source-original"
       }
     },
     {
@@ -2087,6 +2663,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Purity_and_Industry_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "purity_and_industry_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 117993,
+        "sha256": "27b0c7b1317019f43c3db4dc8879c70fa6ec764f0403a1f996614a24616a7b35",
+        "provenance": "source-original"
       }
     },
     {
@@ -2114,6 +2698,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Pylon_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "pylon_le.jpg",
+        "width": 500,
+        "height": 515,
+        "bytes": 90155,
+        "sha256": "ea3a4964c7c1c42cdeecb9e0f17698d7ddbc5742a64dc1127367e16b8a0c6a46",
+        "provenance": "source-original"
       }
     },
     {
@@ -2141,6 +2733,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Radhuset_Station_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "radhuset_station_le.jpg",
+        "width": 500,
+        "height": 444,
+        "bytes": 134210,
+        "sha256": "3c746b9a8afdfc8773c7ce878c2119da66629528231d7de3bd01409dcd2c2e43",
+        "provenance": "source-original"
       }
     },
     {
@@ -2167,6 +2767,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Rainfall_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "rainfall_le.jpg",
+        "width": 500,
+        "height": 485,
+        "bytes": 133576,
+        "sha256": "1339a589dce567e9b6cce9188200f60c2a12a23a3fd5165ef3d7751f7067e2e3",
+        "provenance": "source-original"
       }
     },
     {
@@ -2193,6 +2801,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Redshift-LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "redshift_le.jpg",
+        "width": 512,
+        "height": 627,
+        "bytes": 138848,
+        "sha256": "b01b3c9e29d024a679ab9a6538d0077dc7749241b99c027b9a87a7ad6505107f",
+        "provenance": "source-original"
       }
     },
     {
@@ -2222,6 +2838,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Romanticide%20LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "romanticide_le.jpg",
+        "width": 500,
+        "height": 440,
+        "bytes": 116190,
+        "sha256": "8e82d3adfd62070f9884c0b26f4b95ee351ba890d040e8c9df43f225459b6fe3",
+        "provenance": "source-original"
       }
     },
     {
@@ -2248,6 +2872,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Rorschach_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "rorschach_le.jpg",
+        "width": 500,
+        "height": 401,
+        "bytes": 140221,
+        "sha256": "2e1a05fab29d14f874f3439d118b3d5a64566354c1e467c23487ffa8106fb196",
+        "provenance": "source-original"
       }
     },
     {
@@ -2276,6 +2908,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Royal_Blood_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "royal_blood_le.jpg",
+        "width": 500,
+        "height": 438,
+        "bytes": 52681,
+        "sha256": "1b0ca3bc80d5199a2df021f7446a173da34dce94641ce32370e6563073f1effc",
+        "provenance": "source-original"
       }
     },
     {
@@ -2304,6 +2944,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ruby_Rock_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ruby_rock_le.jpg",
+        "width": 1200,
+        "height": 1166,
+        "bytes": 538106,
+        "sha256": "dc7865a00bc0df305cbd6c8255082f86754f56c9734d4bfe67500674989643e1",
+        "provenance": "curated"
       }
     },
     {
@@ -2330,6 +2978,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Sanctuary_III_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "sanctuary_iii_le.jpg",
+        "width": 500,
+        "height": 529,
+        "bytes": 171478,
+        "sha256": "52c1a889d34bb412192370c199ee9b8b9c7c7ca80422101f46bdcde78dde38b2",
+        "provenance": "source-original"
       }
     },
     {
@@ -2357,6 +3013,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Simulacrum_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "simulacrum_le.jpg",
+        "width": 500,
+        "height": 430,
+        "bytes": 135758,
+        "sha256": "ca53c9a60fb3b660106f6a01b94b2e95e5a0843d9b6818611620e81b151e2925",
+        "provenance": "source-original"
       }
     },
     {
@@ -2385,6 +3049,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Site_Delta_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "site_delta_le.jpg",
+        "width": 1000,
+        "height": 1088,
+        "bytes": 371282,
+        "sha256": "fdac990507e7af2f5e1c09e06de284e23ddbacaa1bf610aabdfa4f760c1a5487",
+        "provenance": "curated"
       }
     },
     {
@@ -2412,6 +3084,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Solaris_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "solaris_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 171495,
+        "sha256": "235c885cdad5354d74ab3c163d52b60f085f70000ad0d93ef3f41b42c032492b",
+        "provenance": "source-original"
       }
     },
     {
@@ -2439,6 +3119,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Stargazers.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "stargazers.jpg",
+        "width": 500,
+        "height": 391,
+        "bytes": 100839,
+        "sha256": "6ce2194b9b1e2c224be4d0078bec927419f8de82079a7f5359f0f7e738755791",
+        "provenance": "source-original"
       }
     },
     {
@@ -2465,6 +3153,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Stasis_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "stasis_le.jpg",
+        "width": 500,
+        "height": 421,
+        "bytes": 144730,
+        "sha256": "ea5051df444a429d6e7ac3e460384979bcfb54944b31a35ce19d38fcb48084fd",
+        "provenance": "source-original"
       }
     },
     {
@@ -2493,6 +3189,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Submarine_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "submarine_le.jpg",
+        "width": 500,
+        "height": 455,
+        "bytes": 126687,
+        "sha256": "2301506c6e6d8dd9aadb7a930d3d9f3aa613ceb48569e8d9a0f1919824eca1dc",
+        "provenance": "source-original"
       }
     },
     {
@@ -2521,6 +3225,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Taito_Citadel_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "taito_citadel_le.jpg",
+        "width": 1200,
+        "height": 1200,
+        "bytes": 629801,
+        "sha256": "75e4d56aca22d3a32890bae6784df392adc410f41e1f8919fefb45382af379e9",
+        "provenance": "curated"
       }
     },
     {
@@ -2548,6 +3260,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Thunderbird_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "thunderbird_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 120777,
+        "sha256": "2796a20dc8af51f9c11033023c22b5b71bb9172aedf65342ebec463178b6cc00",
+        "provenance": "source-original"
       }
     },
     {
@@ -2576,6 +3296,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Tokamak_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "tokamak_le.jpg",
+        "width": 500,
+        "height": 439,
+        "bytes": 84715,
+        "sha256": "2b6b778e82a0215df14c1abf4f194b392409d1d5332900118bb4b3a93367fab1",
+        "provenance": "source-original"
       }
     },
     {
@@ -2603,6 +3331,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Torches_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "torches_le.jpg",
+        "width": 500,
+        "height": 562,
+        "bytes": 90535,
+        "sha256": "a56969b3875b131a6554ea639384db496560750f03656c2cb62f238183f84dcd",
+        "provenance": "source-original"
       }
     },
     {
@@ -2631,6 +3367,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Tourmaline_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "tourmaline_le.jpg",
+        "width": 1200,
+        "height": 1200,
+        "bytes": 619608,
+        "sha256": "f0abeff45873430eca412bf05c627ffce78f1f15e20218e2c367c3256573a219",
+        "provenance": "curated"
       }
     },
     {
@@ -2658,6 +3402,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Triton_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "triton_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 170983,
+        "sha256": "fa0ce4befd34ddfb2bfbf1741a257604773bf7e32c01fde955dea65d4ee3b2ea",
+        "provenance": "source-original"
       }
     },
     {
@@ -2685,6 +3437,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Tropical-Sacrifice.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "tropical_sacrifice.jpg",
+        "width": 500,
+        "height": 485,
+        "bytes": 115919,
+        "sha256": "8a15e67fd2626bf9b3f0a9a9cc202eb4e334c1207761b70e8306c7ae931ad6b2",
+        "provenance": "source-original"
       }
     },
     {
@@ -2711,6 +3471,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Turbo_Cruise_84.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "turbo_cruise_84_le.jpg",
+        "width": 500,
+        "height": 414,
+        "bytes": 108532,
+        "sha256": "7a3a20edf3d84637a4a481b4f21718542b56df7254c22375356366299f06289f",
+        "provenance": "source-original"
       }
     },
     {
@@ -2736,6 +3504,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Ultralove.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "ultralove.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 96819,
+        "sha256": "c3b7ef0054d4dfa147016e3fa07830a965a098459d34e4cd87623089f4830ba7",
+        "provenance": "source-original"
       }
     },
     {
@@ -2762,6 +3538,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Washout_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "washout_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 156890,
+        "sha256": "1363a35fe69fce0536248ad3167ee3e2f9df0f57a7c48250c032194d4c7c509f",
+        "provenance": "source-original"
       }
     },
     {
@@ -2789,6 +3573,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Waterfall.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "waterfall.jpg",
+        "width": 500,
+        "height": 611,
+        "bytes": 134954,
+        "sha256": "a29f28c6a55c8b59106dd89d5aa4f01166aab2fc0f9efaad12a7bf70f97cb324",
+        "provenance": "source-original"
       }
     },
     {
@@ -2817,6 +3609,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/White_Rabbit_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "white_rabbit_le.jpg",
+        "width": 1200,
+        "height": 1200,
+        "bytes": 525254,
+        "sha256": "c438912e221373686c39b7a40010053d62f64d68f2254d06be4210f0e17dafb0",
+        "provenance": "curated"
       }
     },
     {
@@ -2845,6 +3645,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Winter_Madness_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "winter_madness_le.jpg",
+        "width": 500,
+        "height": 485,
+        "bytes": 145289,
+        "sha256": "e38e80aef5eae6e0f07a9db61c0ecafc93b828a1c25650c57a537db07af2d8ef",
+        "provenance": "source-original"
       }
     },
     {
@@ -2871,6 +3679,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Winters_Gate_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "winters_gate_le.jpg",
+        "width": 500,
+        "height": 515,
+        "bytes": 146722,
+        "sha256": "bb2fd0847c17e591cabd054f666327eb159cd18c924777de361af1f87b1b4a57",
+        "provenance": "source-original"
       }
     },
     {
@@ -2898,6 +3714,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/World_of_Sleepers_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "world_of_sleepers_le.jpg",
+        "width": 500,
+        "height": 500,
+        "bytes": 124537,
+        "sha256": "cdc060c2fab3764157e8dfff012865c12aafcc6c393b8b5cce99b8abd8928871",
+        "provenance": "source-original"
       }
     },
     {
@@ -2924,6 +3748,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Year_Zero_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "year_zero_le.jpg",
+        "width": 500,
+        "height": 385,
+        "bytes": 75700,
+        "sha256": "c8bc8a65ea0d2f8c1ab5f70b9554093f72d581611401e8271b0545beca729ab4",
+        "provenance": "source-original"
       }
     },
     {
@@ -2951,6 +3783,14 @@
         "url": "https://sc2replaystats.com/images/maps/large/Zen_LE.jpg",
         "alternateUrls": [],
         "copyrightOwner": "Blizzard Entertainment"
+      },
+      "layout": {
+        "filename": "zen_le.jpg",
+        "width": 500,
+        "height": 560,
+        "bytes": 216249,
+        "sha256": "d5ee0044d9ead069a1be68a1db0779b8350bc9465cb91954453a036dfbb4dcf8",
+        "provenance": "source-original"
       }
     }
   ]

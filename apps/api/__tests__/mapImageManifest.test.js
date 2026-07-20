@@ -59,4 +59,25 @@ describe("generated map artwork manifest", () => {
       .filter((name) => name.endsWith(".webp"));
     expect(generatedFiles).toHaveLength(manifest.maps.length);
   });
+
+  test("every entry carries a verified full-layout rendition for the replayer", () => {
+    for (const entry of manifest.maps) {
+      expect(entry.layout).toBeTruthy();
+      expect(entry.layout.filename).toMatch(/^[a-z0-9_]+\.jpg$/);
+      // Layout stems mirror the webp stems so the /v1/map-image
+      // variant=layout filename scan resolves them without aliases.
+      expect(entry.layout.filename.replace(/\.jpg$/, "")).toBe(
+        entry.image.filename.replace(/\.webp$/, ""),
+      );
+      expect(["curated", "source-original"]).toContain(entry.layout.provenance);
+      const bytes = fs.readFileSync(path.join(imagesDir, entry.layout.filename));
+      expect(bytes.byteLength).toBe(entry.layout.bytes);
+      // JPEG SOI magic — a cached soft-404 HTML page must never ship.
+      expect(bytes[0]).toBe(0xff);
+      expect(bytes[1]).toBe(0xd8);
+      expect(crypto.createHash("sha256").update(bytes).digest("hex")).toBe(
+        entry.layout.sha256,
+      );
+    }
+  });
 });

@@ -12,12 +12,14 @@
  *
  * Output:
  *   - replay-engine/data/map-images/*.webp (640x360 UI renditions)
+ *   - replay-engine/data/map-images/*.jpg (full top-down layout renditions)
  *   - replay-engine/data/map-images/manifest.json (full provenance)
  *   - web/lib/map-images.generated.json (small browser lookup registry)
  *
  * Usage:
  *   npm run maps:sync
  *   npm run maps:sync -- --refresh-pages
+ *   npm run maps:sync -- --layouts   (fill in missing layout .jpg files only)
  */
 
 import { createHash } from "node:crypto";
@@ -51,10 +53,107 @@ const REQUEST_DELAY_MS = Math.max(
 const REQUEST_TIMEOUT_MS = 30_000;
 const ROBOTS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 const REFRESH_PAGES = process.argv.includes("--refresh-pages");
+const LAYOUTS_ONLY = process.argv.includes("--layouts");
 
 let lastNetworkRequestAt = 0;
 
-await main();
+if (LAYOUTS_ONLY) {
+  await syncLayouts();
+} else {
+  await main();
+}
+
+/**
+ * Layout-only mode: fill in the full top-down layout renditions
+ * (``<stem>.jpg`` next to each ``<stem>.webp``) that the public API's
+ * ``/v1/map-image?variant=layout`` serves under the map replayer.
+ *
+ * Reads the existing manifest — it never re-walks season pages or
+ * regenerates thumbnails — and fetches each missing map's recorded
+ * source original with the same robots/delay/backoff etiquette as the
+ * full sync. Source bytes are stored VERBATIM (the archive serves
+ * plain JPEGs and the no-recompression policy applies to layouts too),
+ * so ``layout.sha256`` is the hash of the exact upstream original.
+ * Curated high-resolution layouts already on disk are left untouched
+ * and recorded with ``provenance: "curated"``.
+ */
+async function syncLayouts() {
+  await Promise.all([
+    mkdir(OUTPUT_DIR, { recursive: true }),
+    mkdir(ORIGINAL_CACHE_DIR, { recursive: true }),
+  ]);
+  const manifest = JSON.parse(await readFile(API_MANIFEST_PATH, "utf8"));
+
+  const robotsCachePath = path.join(CACHE_DIR, "robots.txt");
+  const robots = await getText(new URL("/robots.txt", SOURCE_ORIGIN), {
+    cachePath: robotsCachePath,
+    refresh: !(await cacheIsFresh(robotsCachePath, ROBOTS_CACHE_MAX_AGE_MS)),
+  });
+
+  let fetched = 0;
+  let kept = 0;
+  const failures = [];
+  for (const entry of manifest.maps) {
+    const stem = entry.image.filename.replace(/\.webp$/, "");
+    const layoutFilename = `${stem}.jpg`;
+    const layoutPath = path.join(OUTPUT_DIR, layoutFilename);
+    let buffer = null;
+    let provenance = "curated";
+    try {
+      buffer = await readFile(layoutPath);
+      kept += 1;
+      // A file this mode wrote on an earlier run keeps its recorded
+      // provenance; anything else on disk predates the manifest and
+      // stays curated.
+      if (entry.layout?.provenance === "source-original") {
+        provenance = "source-original";
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (!buffer) {
+      const sourceUrl = new URL(entry.source.url);
+      try {
+        assertRobotsAllows(robots, sourceUrl.pathname);
+        const originalName = safeSourceFilename(entry.source.url, entry.id);
+        buffer = await getBuffer(sourceUrl, {
+          cachePath: path.join(ORIGINAL_CACHE_DIR, originalName),
+        });
+        // Sanity-decode before committing bytes: a soft-404 HTML page
+        // must not land on disk as a ".jpg" the API would then serve.
+        await sharp(buffer).metadata();
+        await atomicWrite(layoutPath, buffer);
+        provenance = "source-original";
+        fetched += 1;
+        console.log(
+          `[maps] layout ${entry.displayName} -> ${layoutFilename} (${Math.round(buffer.byteLength / 1024)} KiB)`,
+        );
+      } catch (error) {
+        failures.push({ displayName: entry.displayName, message: String(error?.message || error) });
+        delete entry.layout;
+        console.warn(`[maps] layout FAILED ${entry.displayName}: ${error?.message || error}`);
+        continue;
+      }
+    }
+    const meta = await sharp(buffer).metadata();
+    entry.layout = {
+      filename: layoutFilename,
+      width: meta.width || null,
+      height: meta.height || null,
+      bytes: buffer.byteLength,
+      sha256: createHash("sha256").update(buffer).digest("hex"),
+      provenance,
+    };
+  }
+  manifest.generatedAt = new Date().toISOString();
+  await atomicWrite(API_MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(
+    `[maps] Layouts complete: ${fetched} fetched, ${kept} already on disk, ${failures.length} failed, ${manifest.maps.length} maps.`,
+  );
+  if (failures.length > 0) {
+    console.warn(`[maps] Missing layouts: ${failures.map((f) => f.displayName).join(", ")}`);
+  }
+}
 
 async function main() {
   await Promise.all([

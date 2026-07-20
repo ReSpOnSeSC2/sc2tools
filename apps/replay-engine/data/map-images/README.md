@@ -1,7 +1,11 @@
 # StarCraft II map artwork
 
 The `*.webp` files in this directory are UI-sized renditions of StarCraft II
-ladder-map thumbnails. StarCraft II and the underlying map artwork are ©
+ladder-map thumbnails. The `*.jpg` files are the full top-down layout
+renditions the map replayer draws under unit playback (served by
+`/v1/map-image?variant=layout`) — verbatim source originals for maps
+imported by the sync script, higher-resolution curated renders where we
+already had them. StarCraft II and the underlying map artwork are ©
 Blizzard Entertainment. SC2 Tools is not affiliated with or endorsed by
 Blizzard Entertainment.
 
@@ -15,7 +19,8 @@ dimensions, byte size, and SHA-256 checksum for every optimized rendition.
 From `apps/web` run:
 
 ```text
-npm run maps:sync
+npm run maps:sync              # season pages + 640×360 thumbnails
+npm run maps:sync -- --layouts # fill in missing full-layout .jpg files
 ```
 
 The importer:

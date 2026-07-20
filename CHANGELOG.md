@@ -35,7 +35,14 @@ corresponding GitHub Release.
   ball reads as a tidy blob of distinguishable icons instead of one
   pixel; maps without a layout render fall back to the flat
   background, and names without a shipped icon fall back to the
-  original dot/square markers. Lives on each game's analysis page and inside the macro
+  original dot/square markers. Every ladder map since season 36 ships
+  a layout render (the sync script's `--layouts` mode imports the
+  uncropped originals recorded in the artwork manifest), so the real
+  map shows for the whole current pool. Unit tracks pin to the
+  replay's true position data — the 15-second combat snapshots and
+  exact death coordinates the old extractor dropped (**agent 0.15.1**;
+  games synced by older agents keep their old tracks until re-synced).
+  Lives on each game's analysis page and inside the macro
   breakdown drilldown. The desktop agent now uploads a compact
   playback payload with each replay (bounded unit tracks, ~1 MB
   worst case, stored in the per-game detail store); games synced by
