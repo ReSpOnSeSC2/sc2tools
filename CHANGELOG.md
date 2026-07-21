@@ -28,7 +28,7 @@ corresponding GitHub Release.
   real deaths in the replay's tracker stream) are recognized and
   excluded, so Zerg isn't charged a "lost drone" per building and
   the drone-loss count matches the workers-killed numbers other
-  replay sites report. Games re-synced with agent 0.15.4+ carry
+  replay sites report. Games re-synced with agent 0.15.5+ carry
   exact killer attribution (payload v4) for this; older payloads use
   same-tick pairing of drone deaths with building starts. Works on
   every already-synced game — no re-sync needed.

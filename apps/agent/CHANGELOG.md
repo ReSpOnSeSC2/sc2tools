@@ -2,20 +2,7 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## 0.15.4
-
-### Fixed — map-replay worker counts stop reading 0
-- **What.** The bundled replay engine's playback stats read the worker
-  count from ``food_workers`` on the raw sc2reader
-  ``PlayerStatsEvent`` — that name is only this project's downstream
-  JSON alias; the raw event calls it ``workers_active_count`` — so
-  every stats row uploaded ``workers: 0`` and the cloud replayer's HUD
-  showed "0 workers" for both players all game.
-- **Effect.** Playback stats now carry the real per-sample worker
-  count. Applies at parse time — re-sync older games (Settings → Full
-  resync) to repopulate their stats; until then the web replayer
-  falls back to counting the live worker units in the payload, so the
-  HUD reads correctly either way.
+## 0.15.5
 
 ### Added — unit deaths carry killer attribution (payload v4)
 - **What.** The engine now records each tracked unit death's
@@ -31,6 +18,21 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   numbers other replay sites report. Applies at parse time — re-sync
   older games to upgrade them; until then the web pairs deaths with
   building starts on the same tracker tick as a fallback.
+
+## 0.15.4
+
+### Fixed — map-replay worker counts stop reading 0
+- **What.** The bundled replay engine's playback stats read the worker
+  count from ``food_workers`` on the raw sc2reader
+  ``PlayerStatsEvent`` — that name is only this project's downstream
+  JSON alias; the raw event calls it ``workers_active_count`` — so
+  every stats row uploaded ``workers: 0`` and the cloud replayer's HUD
+  showed "0 workers" for both players all game.
+- **Effect.** Playback stats now carry the real per-sample worker
+  count. Applies at parse time — re-sync older games (Settings → Full
+  resync) to repopulate their stats; until then the web replayer
+  falls back to counting the live worker units in the payload, so the
+  HUD reads correctly either way.
 
 ## 0.15.3
 
