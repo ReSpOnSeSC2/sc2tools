@@ -11,6 +11,26 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agent updater no longer sticks on an old version after a release
+  ships** — the API's GitHub release feed could keep telling installed
+  agents "you're up to date" on a version the website had already
+  replaced (observed live: agents held at 0.15.5 while the site
+  offered 0.15.8). Two causes, both fixed: a release published before
+  the installer workflow attached its `.exe` was resolved past — and
+  the older release then cached for the full 10 minutes, now shortened
+  to 2 minutes while a newer release's assets are pending; and a
+  failing GitHub fetch (typically unauthenticated rate-limiting on a
+  shared-IP host) served the stale cached version forever, now capped
+  at 6 hours before falling back to the manually published feed. The
+  feed also reads the sha256 from GitHub's own asset digest (skipping
+  the sidecar download), revalidates with `If-None-Match` so unchanged
+  polls cost no rate-limit quota, and offers the newest *verifiable*
+  release instead of blanking when the very newest is missing its
+  checksum. Deploys should also set `GITHUB_TOKEN` on the API service
+  (see `docs/cloud/SETUP_CLOUD.md`).
+
 ### Added
 
 - **Creep tumor tracking for Zerg games** — the macro breakdown and

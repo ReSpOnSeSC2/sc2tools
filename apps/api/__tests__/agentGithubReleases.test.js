@@ -99,6 +99,114 @@ describe("services/agentGithubReleases", () => {
     expect(await feed.latest()).toBeNull();
   });
 
+  test("walks down to an older verifiable release when the newest lacks a sidecar", async () => {
+    const noSidecar = ghRelease("0.15.8");
+    noSidecar.assets = noSidecar.assets.filter((a) => !a.name.endsWith(".sha256"));
+    const feed = new GithubReleaseFeed({
+      owner: "o",
+      repo: "r",
+      fetchImpl: fakeFetch([noSidecar, ghRelease("0.15.5")]),
+    });
+    // Blanking the whole feed here would drop to Mongo, which may be
+    // staler than the still-verifiable previous GitHub release.
+    expect((await feed.latest()).version).toBe("0.15.5");
+  });
+
+  test("uses the asset's server-computed digest without fetching the sidecar", async () => {
+    const rel = ghRelease("0.13.3");
+    rel.assets[0].digest = `sha256:${SHA.toUpperCase()}`;
+    const impl = fakeFetch([rel]);
+    const feed = new GithubReleaseFeed({ owner: "o", repo: "r", fetchImpl: impl });
+    const out = await feed.latest();
+    expect(out.artifact.sha256).toBe(SHA);
+    // Only the releases-list fetch — no sidecar download.
+    expect(impl.calls).toHaveLength(1);
+    expect(String(impl.calls[0])).toContain("/releases?");
+  });
+
+  test("caches briefly while a newer published release awaits its installer", async () => {
+    // The publish→asset-upload window: agent-v0.15.8 exists but the
+    // workflow hasn't attached the .exe yet. Serving 0.15.5 is right,
+    // but it must not be cached for the full TTL — the assets land
+    // minutes later.
+    const pending = ghRelease("0.15.8", { assets: [] });
+    const impl = fakeFetch([pending, ghRelease("0.15.5")]);
+    const feed = new GithubReleaseFeed({
+      owner: "o",
+      repo: "r",
+      ttlMs: 60_000,
+      pendingTtlMs: 0, // pending entries expire immediately in this test
+      fetchImpl: impl,
+    });
+    expect((await feed.latest()).version).toBe("0.15.5");
+    const callsAfterFirst = impl.calls.length;
+    expect((await feed.latest()).version).toBe("0.15.5");
+    expect(impl.calls.length).toBeGreaterThan(callsAfterFirst); // re-resolved
+
+    // Control: no pending release → second call served from cache.
+    const impl2 = fakeFetch([ghRelease("0.15.5")]);
+    const settled = new GithubReleaseFeed({
+      owner: "o",
+      repo: "r",
+      ttlMs: 60_000,
+      pendingTtlMs: 0,
+      fetchImpl: impl2,
+    });
+    await settled.latest();
+    const calls2AfterFirst = impl2.calls.length;
+    await settled.latest();
+    expect(impl2.calls.length).toBe(calls2AfterFirst); // cache hit
+  });
+
+  test("stops serving stale past staleMaxMs and falls back to null", async () => {
+    const feed = new GithubReleaseFeed({
+      owner: "o",
+      repo: "r",
+      ttlMs: 0,
+      staleMaxMs: 0, // stale entries are immediately too old in this test
+      fetchImpl: (...args) => feed.fetchImpl2(...args),
+    });
+    feed.fetchImpl2 = fakeFetch([ghRelease("0.13.3")]);
+    expect((await feed.latest()).version).toBe("0.13.3");
+    feed.fetchImpl2 = fakeFetch([], { fail: true });
+    // A persistently failing refresh (e.g. unauthenticated rate
+    // limiting) must not pin an old snapshot forever — the caller
+    // falls back to Mongo alone.
+    expect(await feed.latest()).toBeNull();
+  });
+
+  test("revalidates with If-None-Match and reuses the body on 304", async () => {
+    const calls = [];
+    const releases = [ghRelease("0.13.3")];
+    const impl = async (url, opts = {}) => {
+      calls.push({ url: String(url), headers: opts.headers || {} });
+      if (String(url).includes("/releases?")) {
+        if (opts.headers && opts.headers["If-None-Match"] === '"etag-1"') {
+          return { ok: false, status: 304, headers: { get: () => null } };
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: (h) => (h === "etag" ? '"etag-1"' : null) },
+          json: async () => releases,
+        };
+      }
+      return { ok: true, status: 200, text: async () => `${SHA}  x.exe` };
+    };
+    const feed = new GithubReleaseFeed({
+      owner: "o",
+      repo: "r",
+      ttlMs: 0, // every latest() re-resolves
+      fetchImpl: impl,
+    });
+    expect((await feed.latest()).version).toBe("0.13.3");
+    expect((await feed.latest()).version).toBe("0.13.3"); // via 304 reuse
+    const listCalls = calls.filter((c) => c.url.includes("/releases?"));
+    expect(listCalls).toHaveLength(2);
+    expect(listCalls[0].headers["If-None-Match"]).toBeUndefined();
+    expect(listCalls[1].headers["If-None-Match"]).toBe('"etag-1"');
+  });
+
   test("ignores non-agent tags (legacy v* releases stay private)", async () => {
     const feed = new GithubReleaseFeed({
       owner: "o",
