@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.8
+
+### Changed — version re-cut, no code changes
+- Identical to 0.15.7. That version's release tag was created against
+  a commit that still declared 0.15.6 (its landing PR hadn't merged
+  yet), so the installer workflow's tag-vs-package guard refused the
+  build and the tag is burned. 0.15.8 is the shippable cut carrying
+  the 0.15.6 chrono/MULE expected-count fix and the 0.15.7 creep
+  tumor tracking (engine 1.5.6).
+
 ## 0.15.7
 
 ### Added — creep tumor tracking for Zerg (engine 1.5.6)
