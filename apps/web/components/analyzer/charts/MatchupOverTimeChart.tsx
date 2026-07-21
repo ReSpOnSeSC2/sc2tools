@@ -148,7 +148,11 @@ export function MatchupOverTimeChart({
 
   const showYearOnTicks = useMemo(() => {
     if (!dateRange.earliest || !dateRange.latest) return false;
-    return dateRange.earliest.slice(0, 4) !== dateRange.latest.slice(0, 4);
+    // Spanning years — or ending in a past one — both need the year.
+    if (dateRange.earliest.slice(0, 4) !== dateRange.latest.slice(0, 4)) {
+      return true;
+    }
+    return dateRange.latest.slice(0, 4) !== String(new Date().getFullYear());
   }, [dateRange]);
 
   if (isLoading) {

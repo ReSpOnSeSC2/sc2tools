@@ -219,8 +219,12 @@ export function MixOverTimeChart({
     );
   }
 
+  // Year on the ticks when the columns span years — or end in a past
+  // year, where a bare "Dec 29" can't say which December it was.
+  const lastYear = columns[columns.length - 1].date.slice(0, 4);
   const showYear =
-    columns[0].date.slice(0, 4) !== columns[columns.length - 1].date.slice(0, 4);
+    columns[0].date.slice(0, 4) !== lastYear ||
+    lastYear !== String(new Date().getFullYear());
   const activeColDate = selectedColumn?.date ?? null;
   const tickStep = Math.max(1, Math.ceil(columns.length / 7));
 

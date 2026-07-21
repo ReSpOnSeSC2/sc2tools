@@ -105,7 +105,7 @@ export function MatchByMatchTimeline({
   const overallWrPct = Math.round(totals.winRate * 100);
   const lastPoint = series[series.length - 1];
   const rollingLabel = `${rollingWindow}-game rolling`;
-  const showYearOnTicks = spansMultipleYears(series);
+  const showYearOnTicks = needsYearOnTicks(series);
   const figcaption = buildFigcaption({
     opponent: opponentName,
     presetLong,
@@ -488,7 +488,7 @@ function clickedIndex(state: unknown): number | null {
   return null;
 }
 
-function spansMultipleYears(series: CumulativePoint[]): boolean {
+function needsYearOnTicks(series: CumulativePoint[]): boolean {
   let earliest: string | null = null;
   let latest: string | null = null;
   for (const p of series) {
@@ -498,7 +498,11 @@ function spansMultipleYears(series: CumulativePoint[]): boolean {
     if (!latest || d > latest) latest = d;
   }
   if (!earliest || !latest) return false;
-  return earliest.slice(0, 4) !== latest.slice(0, 4);
+  // Multi-year data needs the year to disambiguate — and so does a
+  // rivalry that ended in a past year, where a bare "Dec 29" can't
+  // say which December it was.
+  if (earliest.slice(0, 4) !== latest.slice(0, 4)) return true;
+  return latest.slice(0, 4) !== String(new Date().getFullYear());
 }
 
 const MONTHS = [

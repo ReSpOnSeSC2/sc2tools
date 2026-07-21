@@ -343,7 +343,7 @@ const TEST_SEGMENTS = [
   "🔮 CHAT ORACLE RECORD: majority right in 12 of 19 calls",
   "TOP SUPPORTER: TestGrinder (Immortal)",
   "CAREER: 1,482 W – 1,301 L (53%) over 2,891 tracked games",
-  "PEAK MMR: 4,712 on NA (Aug 12) — 138 away right now",
+  "PEAK MMR: 4,712 on NA (Aug 12, 2025) — 138 away right now",
   "TIME SUPPLY BLOCKED (career): 6.3 hrs — build more pylons",
 ];
 

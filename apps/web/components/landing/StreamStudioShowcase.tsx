@@ -260,7 +260,7 @@ function TickerDemo() {
   const segments = [
     "SESSION 5–2 · +47 MMR",
     "NEMESIS: DragonKing — 3–9 lifetime",
-    "PEAK MMR: 4,712 (Aug 12)",
+    "PEAK MMR: 4,712 (Aug 12, 2025)",
     "🔮 CALL IT: !win / !loss — chat is 68% WIN",
     "TIME SUPPLY BLOCKED: 6.3 hrs — build more pylons",
     "HEAD-TO-HEAD vs Printf: 14–9",

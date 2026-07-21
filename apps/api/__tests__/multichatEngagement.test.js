@@ -334,4 +334,36 @@ describe("summary", () => {
     expect(out.wall[1]).toMatchObject({ user: "Grinder", xp: 4, rank: "Probe" });
     expect(out.prediction).toBeNull();
   });
+
+  test("the streamer never headlines their own wall or oracle board", async () => {
+    const withSelf = new MultichatEngagementService(db, {
+      now: () => nowMs,
+      overlayTokens: { resolve: async () => ({ userId: "streamer1" }) },
+      users: {
+        getPreferences: async () => ({
+          twitch: { enabled: true, channel: "ReSpOnSeSC2" },
+          tiktok: { enabled: true, username: "@responsesc2" },
+        }),
+      },
+    });
+    // The broadcaster chats the most in their own channel…
+    await withSelf.ingest(TOKEN, [
+      msg("w1", "ReSpOnSeSC2", "hi"),
+      msg("w2", "ReSpOnSeSC2", "gl"),
+      msg("w3", "ReSpOnSeSC2", "gg"),
+      msg("w4", "Fan", "hello"),
+    ]);
+    // …and even has oracle points on record.
+    await db.multichatViewers.updateOne(
+      { token: TOKEN, userKey: "twitch:responsesc2" },
+      { $set: { "oracle.score": 50, "oracle.correct": 5, "oracle.total": 5 } },
+    );
+    const out = await withSelf.summary(TOKEN);
+    expect(out.wall.map((v) => v.user)).toEqual(["Fan"]);
+    expect(out.oracles.map((o) => o.user)).not.toContain("ReSpOnSeSC2");
+    // Without the identity deps (or on lookup failure) the wall is
+    // unfiltered — exclusion is best-effort, never a broken summary.
+    const plain = await svc.summary(TOKEN);
+    expect(plain.wall.map((v) => v.user)).toContain("ReSpOnSeSC2");
+  });
 });

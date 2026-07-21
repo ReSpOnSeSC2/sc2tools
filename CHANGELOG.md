@@ -1642,6 +1642,28 @@ corresponding GitHub Release.
   spans are now `whitespace-nowrap` with `flex-wrap`, and the 8-column
   dense layout is gated on `2xl` (≥1536px) instead of `xl`, so each
   card has comfortable room on standard desktop widths.
+- **Stats ticker**: the all-time facts (peak MMR, biggest scalp,
+  longest win streak, first tracked game) now date-stamp with the
+  year — "PEAK MMR: 5,842 on NA (Dec 29, 2024)" instead of a bare
+  "(Dec 29)" that left viewers (and the streamer) guessing which
+  year a record from a previous year was set in.
+- **Historical dates carry their year everywhere**: the analyzer's
+  time charts (matchup/mix over time, map trends, H2H match-by-match
+  timeline, MMR progression by build) previously added `'YY` to axis
+  ticks only when the data spanned multiple years, so a window that
+  sat entirely in a past year showed bare "Dec 29"-style labels; the
+  year now also appears whenever the plotted data ends in a year
+  other than the current one. The H2H custom-range pill formats both
+  endpoints with their year for the same reason.
+- **Supporter wall / stats ticker**: the streamer no longer ranks on
+  their own engagement boards. The broadcaster chats in their own
+  channel and earned loyalty XP like any viewer, so an active
+  streamer could headline their own "TOP SUPPORTER" ticker segment
+  and supporter wall. The engagement service now resolves the
+  configured channel/username per platform and excludes those
+  identities from the wall and the oracle leaderboard (filtered at
+  read time, so existing walls fix themselves immediately; `!rank`
+  still answers the streamer's own stats).
 
 ## [agent-v0.5.13] - 2026-05-09
 

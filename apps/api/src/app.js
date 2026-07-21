@@ -305,8 +305,13 @@ function makeServices(deps) {
   // the dock and the multichat widget family, broadcast per token.
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   const multichatSounds = new MultichatSoundsService(deps.db);
+  // users + overlayTokens let the service resolve the streamer's own
+  // channel identities, so the broadcaster never headlines their own
+  // supporter wall or oracle board.
   const multichatEngagement = new MultichatEngagementService(deps.db, {
     io: deps.io,
+    users,
+    overlayTokens,
   });
   // OverlayLiveService has no per-user state; constructed once and
   // shared across requests. It pulls from the same ``games`` /
