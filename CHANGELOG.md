@@ -22,8 +22,12 @@ corresponding GitHub Release.
   you lost — above 1.00× means you traded up). Prices come from the
   build optimizer's balance-patch dataset, with morphed units
   (Banelings, Ravagers, Brood Lords…) valued at their full invested
-  cost including the consumed unit. Works on every already-synced
-  game — no re-sync needed.
+  cost including the consumed unit. Deaths that are really tech
+  spending never count as losses: the Drone consumed by each Zerg
+  structure and the Templar consumed by an Archon merge (both emit
+  real deaths in the replay's tracker stream) are recognized and
+  excluded, so Zerg isn't charged a "lost drone" per building. Works
+  on every already-synced game — no re-sync needed.
 
 - **Opponents tab groups all of a player's names into one row** — a
   new "Group same player" toggle (default on) merges opponent rows

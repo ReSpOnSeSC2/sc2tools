@@ -55,6 +55,7 @@ import {
 } from "@/lib/mapReplay";
 import {
   computeLosses,
+  morphConsumedIndices,
   statsHaveWorkers,
   tradeEfficiency,
   workerCountAt,
@@ -434,13 +435,19 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
     ? opp.workers
     : workerCountAt(playback.units, "opp", timeSec);
   // Units lost up to the scrub time, priced in real minerals/gas.
+  // Deaths that are actually tech spending — Drones morphed into
+  // structures, Templar merged into Archons — never count as losses.
+  const consumed = useMemo(
+    () => morphConsumedIndices(playback.units, playback.buildings),
+    [playback],
+  );
   const meLosses = useMemo(
-    () => computeLosses(playback.units, "me", timeSec),
-    [playback, timeSec],
+    () => computeLosses(playback.units, "me", timeSec, consumed),
+    [playback, timeSec, consumed],
   );
   const oppLosses = useMemo(
-    () => computeLosses(playback.units, "opp", timeSec),
-    [playback, timeSec],
+    () => computeLosses(playback.units, "opp", timeSec, consumed),
+    [playback, timeSec, consumed],
   );
 
   return (

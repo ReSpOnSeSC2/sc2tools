@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   computeLosses,
   lossValue,
+  morphConsumedIndices,
   statsHaveWorkers,
   tradeEfficiency,
   unitCost,
   workerCountAt,
 } from "../mapReplayLosses";
-import type { PlaybackUnit } from "../mapReplay";
+import type { PlaybackBuilding, PlaybackUnit } from "../mapReplay";
 
 const unit = (
   owner: "me" | "opp",
@@ -97,6 +98,71 @@ describe("tradeEfficiency", () => {
     expect(tradeEfficiency(empty, empty)).toBeNull();
     const oneSided = at([unit("opp", "Roach", 0, 50)], "opp", 100);
     expect(tradeEfficiency(empty, oneSided)).toBe(Infinity);
+  });
+});
+
+describe("morphConsumedIndices", () => {
+  const building = (
+    owner: "me" | "opp",
+    name: string,
+    t: number,
+    x: number,
+    y: number,
+  ): PlaybackBuilding => ({ owner, name, t, x, y, moves: [], died: null });
+
+  const at = (
+    owner: "me" | "opp",
+    name: string,
+    born: number,
+    died: number | null,
+    x: number,
+    y: number,
+  ): PlaybackUnit => ({ owner, name, born, died, wp: [born, x, y] });
+
+  it("excludes a Drone that morphed into a structure from losses", () => {
+    const units = [
+      // Dies at the Spawning Pool's init time and spot — that IS the pool.
+      at("me", "Drone", 0, 60, 50, 50),
+      // Dies mid-map with no building anywhere near — a real loss.
+      at("me", "Drone", 0, 90, 120, 120),
+    ];
+    const buildings = [building("me", "SpawningPool", 60, 51, 50)];
+    const consumed = morphConsumedIndices(units, buildings);
+    expect([...consumed]).toEqual([0]);
+    const losses = computeLosses(units, "me", 200, consumed);
+    expect(losses.count).toBe(1);
+    expect(losses.minerals).toBe(50);
+  });
+
+  it("requires the building to belong to the same owner", () => {
+    const units = [at("me", "Drone", 0, 60, 50, 50)];
+    const buildings = [building("opp", "SpawningPool", 60, 51, 50)];
+    expect(morphConsumedIndices(units, buildings).size).toBe(0);
+  });
+
+  it("keeps a Drone shot far from any construction as a loss", () => {
+    const units = [at("me", "Drone", 0, 60, 50, 50)];
+    // Same second but across the map — not that drone's building.
+    const buildings = [building("me", "Hatchery", 60, 150, 150)];
+    expect(morphConsumedIndices(units, buildings).size).toBe(0);
+  });
+
+  it("excludes Templar merged into an Archon, prices the Archon once", () => {
+    const units = [
+      at("me", "HighTemplar", 100, 300, 80, 80),
+      at("me", "HighTemplar", 100, 300, 81, 80),
+      // The Archon born where the templar died; it later dies too.
+      at("me", "Archon", 300, 500, 80.5, 80),
+      // A templar killed in a fight elsewhere stays a loss.
+      at("me", "HighTemplar", 100, 300, 20, 20),
+    ];
+    const consumed = morphConsumedIndices(units, []);
+    expect([...consumed].sort()).toEqual([0, 1]);
+    const losses = computeLosses(units, "me", 600, consumed);
+    // 1 real templar (50/150) + 1 archon (100/300) — merged pair free.
+    expect(losses.count).toBe(2);
+    expect(losses.minerals).toBe(150);
+    expect(losses.gas).toBe(450);
   });
 });
 

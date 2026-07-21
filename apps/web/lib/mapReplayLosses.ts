@@ -18,7 +18,12 @@ import {
   DEFAULT_PROFILE_ID,
   resolveProfile,
 } from "./optimizer/patch/profiles";
-import { unitAliveAt, type PlaybackUnit } from "./mapReplay";
+import {
+  unitAliveAt,
+  unitPositionAt,
+  type PlaybackBuilding,
+  type PlaybackUnit,
+} from "./mapReplay";
 
 export interface UnitCost {
   minerals: number;
@@ -96,22 +101,93 @@ export interface LossSummary {
   byUnit: LostUnitGroup[];
 }
 
+/* ──────────────── spent-not-lost exclusions ────────────────
+ *
+ * The SC2 tracker emits a REAL UnitDiedEvent for units consumed by
+ * their own tech: a Drone the moment it morphs into a structure, and
+ * both Templar when an Archon merge completes. Counting those as
+ * combat losses would charge Zerg a "lost drone" for every building
+ * and double-price every Archon (templar + the Archon's own cost),
+ * so deaths that coincide in time AND place with the thing they
+ * became are excluded from the loss ledger.
+ */
+
+/** How far apart (seconds) a consumption death and its product's
+ * birth may be recorded. Tracker stamps them on the same tick;
+ * payload rounding is 0.1s — the slack covers both. */
+const CONSUMED_TIME_TOL_SEC = 2.5;
+/** World-cell radius pairing a death with its product. The death
+ * event lands on the building/merge spot, but compaction may drop a
+ * final waypoint recorded < 2s after the previous one, leaving the
+ * interpolated death position a few cells short. */
+const CONSUMED_DIST_TOL = 6;
+
+const near = (
+  a: { x: number; y: number } | null,
+  bx: number,
+  by: number,
+): boolean => a !== null && Math.hypot(a.x - bx, a.y - by) <= CONSUMED_DIST_TOL;
+
+/**
+ * Indices (into ``units``) of deaths that are resource SPENDING, not
+ * losses: Drones consumed by the structure they morphed into, and
+ * High/Dark Templar consumed by an Archon merge. Pure and payload-
+ * stable — compute once per playback and pass to ``computeLosses``.
+ */
+export function morphConsumedIndices(
+  units: ReadonlyArray<PlaybackUnit>,
+  buildings: ReadonlyArray<PlaybackBuilding>,
+): Set<number> {
+  const out = new Set<number>();
+  const archons = units.filter((u) => u.name === "Archon");
+  units.forEach((u, idx) => {
+    if (u.died === null) return;
+    if (u.name === "Drone") {
+      const pos = unitPositionAt(u.wp, u.died);
+      const morphed = buildings.some(
+        (b) =>
+          b.owner === u.owner &&
+          Math.abs(b.t - (u.died as number)) <= CONSUMED_TIME_TOL_SEC &&
+          near(pos, b.x, b.y),
+      );
+      if (morphed) out.add(idx);
+    } else if (u.name === "HighTemplar" || u.name === "DarkTemplar") {
+      const pos = unitPositionAt(u.wp, u.died);
+      const merged = archons.some((a) => {
+        if (a.owner !== u.owner) return false;
+        if (Math.abs(a.born - (u.died as number)) > CONSUMED_TIME_TOL_SEC) {
+          return false;
+        }
+        const apos = unitPositionAt(a.wp, a.born);
+        return apos !== null && near(pos, apos.x, apos.y);
+      });
+      if (merged) out.add(idx);
+    }
+  });
+  return out;
+}
+
 /**
  * Everything ``owner`` has lost by time ``t``: priced unit deaths
  * grouped by type, most expensive group first. Free units never
- * count — a dead MULE isn't a loss.
+ * count — a dead MULE isn't a loss — and neither do units consumed
+ * by their own tech (pass ``consumed`` from
+ * {@link morphConsumedIndices}).
  */
 export function computeLosses(
   units: ReadonlyArray<PlaybackUnit>,
   owner: "me" | "opp",
   t: number,
+  consumed?: ReadonlySet<number>,
 ): LossSummary {
   const groups = new Map<string, LostUnitGroup>();
   let count = 0;
   let minerals = 0;
   let gas = 0;
-  for (const u of units) {
+  for (let idx = 0; idx < units.length; idx += 1) {
+    const u = units[idx];
     if (u.owner !== owner || u.died === null || u.died > t) continue;
+    if (consumed?.has(idx)) continue;
     const cost = unitCost(u.name);
     if (!cost) continue;
     count += 1;
