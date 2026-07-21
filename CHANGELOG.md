@@ -11,6 +11,26 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Opponents tab groups all of a player's names into one row** — a
+  new "Group same player" toggle (default on) merges opponent rows
+  that SC2Pulse links to the same human: characters on the same
+  Battle.net account (name changes, region alts) and community-
+  verified players across accounts (revealed barcodes). The grouped
+  row leads with the player's most-known name — the SC2Pulse
+  revealed/pro name when there is one, otherwise the readable name
+  they've played the most games under — with merged W/L/games/win
+  rate, the freshest MMR on record, and a "+N names" chip that
+  expands a per-name breakdown; each name stays clickable through to
+  its own deep dive, and search matches hidden aliases too. Powered
+  by a new `GET /v1/opponents/pulse-links` endpoint backed by a
+  shared, cross-user `pulse_character_links` cache over SC2Pulse's
+  batch `group/character/full` API (≤500 ids/request, bounded
+  upstream budget per call, week-long linkage TTL, day-long negative
+  TTL) so the linkage for any opponent is fetched once, ever, across
+  all platform users.
+
 ### Removed
 
 - **Median key timings card dropped from the opponent profile** — the

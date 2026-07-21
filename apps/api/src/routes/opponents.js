@@ -11,6 +11,8 @@ const { parseFilters } = require("../util/parseQuery");
  *   auth: import('express').RequestHandler,
  *   pulseIntel?: import('../services/pulseOpponentIntel').PulseOpponentIntelService,
  *   resolvePulseCharacterId?: (userId: string, pulseId: string) => Promise<string|null|undefined>,
+ *   pulseLinks?: import('../services/pulseCharacterLinks').PulseCharacterLinkService,
+ *   listPulseCharacterIds?: (userId: string) => Promise<string[]>,
  * }} deps
  */
 function buildOpponentsRouter(deps) {
@@ -128,6 +130,31 @@ function buildOpponentsRouter(deps) {
         ? await deps.pulseIntel.getIntel(characterId)
         : null;
       res.json({ intel });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // SC2Pulse "same player" linkage for ALL of the caller's resolved
+  // opponents in one call: character id → {accountId, proId,
+  // proNickname}. The Opponents tab uses it to merge rows that
+  // SC2Pulse says are the same human (same Battle.net account, or the
+  // same community-verified player across accounts) into one grouped
+  // row. Served from the shared linkage cache with a bounded upstream
+  // budget per call; ``partial: true`` means some ids are still
+  // unresolved and a later call will fill them. Registered before
+  // ``/:pulseId`` so the literal segment wins the match.
+  router.get("/opponents/pulse-links", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      if (!deps.pulseLinks || !deps.listPulseCharacterIds) {
+        res.json({ links: {}, partial: false });
+        return;
+      }
+      const ids = await deps.listPulseCharacterIds(auth.userId);
+      const { links, partial } = await deps.pulseLinks.getLinks(ids);
+      res.json({ links: Object.fromEntries(links), partial });
     } catch (err) {
       next(err);
     }

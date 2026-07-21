@@ -60,6 +60,9 @@ const {
   PulseOpponentIntelService,
 } = require("./services/pulseOpponentIntel");
 const {
+  PulseCharacterLinkService,
+} = require("./services/pulseCharacterLinks");
+const {
   LeaguePercentilesService,
 } = require("./services/leaguePercentiles");
 const { buildBenchmarksRouter } = require("./routes/benchmarks");
@@ -132,6 +135,7 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  *   io?: import('socket.io').Server,
  *   pulseMmr?: import('./services/pulseMmr').PulseMmrService,
  *   pulseIntel?: import('./services/pulseOpponentIntel').PulseOpponentIntelService,
+ *   pulseLinks?: import('./services/pulseCharacterLinks').PulseCharacterLinkService,
  * }} AppDeps
  */
 
@@ -235,6 +239,16 @@ function makeServices(deps) {
   const pulseIntel =
     deps.pulseIntel ||
     new PulseOpponentIntelService({ logger: deps.logger });
+  // SC2Pulse character → account/pro linkage cache. Powers the
+  // Opponents tab's "group by player" view (merging rows SC2Pulse
+  // says are the same human). Shared, cross-user collection; the
+  // batch fetch budget lives in the service. Injectable for tests so
+  // route suites never hit live SC2Pulse.
+  const pulseLinks =
+    deps.pulseLinks ||
+    new PulseCharacterLinkService(deps.db.pulseCharacterLinks, {
+      logger: deps.logger,
+    });
   // League-percentile benchmark tables — nightly aggregate over slim
   // game rows (jobs/leaguePercentilesRecomputeJob), served by
   // routes/benchmarks.js for the Macro tab's percentile framing.
@@ -483,6 +497,7 @@ function makeServices(deps) {
     analytics,
     pulseMmr,
     pulseIntel,
+    pulseLinks,
     leaguePercentiles,
     skillFingerprint,
     ladderMeta,
@@ -768,6 +783,16 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       opponents: services.opponents,
       auth,
       pulseIntel: services.pulseIntel,
+      pulseLinks: services.pulseLinks,
+      // Distinct resolved character ids across the caller's opponent
+      // rows — the id set the grouping endpoint asks SC2Pulse about.
+      listPulseCharacterIds: async (userId) => {
+        const ids = await deps.db.opponents.distinct("pulseCharacterId", {
+          userId,
+          pulseCharacterId: { $type: "string", $ne: "" },
+        });
+        return ids.filter((id) => typeof id === "string" && id.length > 0);
+      },
       // Lean ownership + identity lookup for the pulse-intel route:
       // undefined = not the caller's opponent (404), null = theirs but
       // the SC2Pulse character id hasn't resolved yet (card hidden).
