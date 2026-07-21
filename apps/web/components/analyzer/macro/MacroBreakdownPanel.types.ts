@@ -58,6 +58,14 @@ export interface BreakdownRaw {
   supply_block_windows?: SupplyBlockWindow[];
   opp_supply_block_windows?: SupplyBlockWindow[];
   chrono_targets?: ChronoTarget[];
+  /** Zerg creep tracking (engine 1.5.6+). Absent on older payloads —
+   *  a zero count means "tracked, none planted", absence means the
+   *  breakdown predates creep tracking. */
+  creep_tumors_queen?: number | null;
+  creep_tumors_spread?: number | null;
+  creep_tumors_total?: number | null;
+  creep_tumors_lost?: number | null;
+  first_tumor_sec?: number | null;
 }
 
 /**
