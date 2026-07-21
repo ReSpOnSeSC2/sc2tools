@@ -351,6 +351,14 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
             lost_gas = int(getattr(e, "vespene_lost_army", 0) or 0)
             killed_min = int(getattr(e, "minerals_killed_army", 0) or 0)
             killed_gas = int(getattr(e, "vespene_killed_army", 0) or 0)
+            # sc2reader names the worker-count field
+            # ``workers_active_count`` — ``food_workers`` is this
+            # project's JSON alias (see event_extractor), which never
+            # exists on the raw event, so reading it here pinned the
+            # viewer's worker HUD to 0 for the whole game.
+            workers = getattr(e, "workers_active_count", None)
+            if workers is None:
+                workers = getattr(e, "food_workers", 0)
             stats_by_pid[pid].append({
                 # Real seconds — e.second is game-time (frames/16) and
                 # would drift 1.4x ahead of the unit tracks on Faster.
@@ -360,7 +368,7 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
                 "vespene": int(getattr(e, "vespene_current", 0) or 0),
                 "food_used": int(getattr(e, "food_used", 0) or 0),
                 "food_made": int(getattr(e, "food_made", 0) or 0),
-                "workers": int(getattr(e, "food_workers", 0) or 0),
+                "workers": int(workers or 0),
                 "lost": lost_min + lost_gas,
                 "killed": killed_min + killed_gas,
             })

@@ -13,6 +13,22 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Map replay tracks units lost, their price tag, and trade
+  efficiency** — the map replayer now shows a live "units lost" panel
+  per player that follows the scrubber: how many units each side has
+  lost so far, the total minerals and gas those units were worth, a
+  breakdown of exactly what died (with unit icons and counts), and a
+  trade-efficiency ratio (resources the opponent lost per resource
+  you lost — above 1.00× means you traded up). Prices come from the
+  build optimizer's balance-patch dataset, with morphed units
+  (Banelings, Ravagers, Brood Lords…) valued at their full invested
+  cost including the consumed unit. Deaths that are really tech
+  spending never count as losses: the Drone consumed by each Zerg
+  structure and the Templar consumed by an Archon merge (both emit
+  real deaths in the replay's tracker stream) are recognized and
+  excluded, so Zerg isn't charged a "lost drone" per building. Works
+  on every already-synced game — no re-sync needed.
+
 - **Opponents tab groups all of a player's names into one row** — a
   new "Group same player" toggle (default on) merges opponent rows
   that SC2Pulse links to the same human: characters on the same
@@ -77,6 +93,15 @@ corresponding GitHub Release.
   worth a headline card.
 
 ### Fixed
+
+- **Map replay worker counts no longer stick at 0** — the replay
+  engine read the worker count from a field name that only exists in
+  this project's downstream JSON (`food_workers`) instead of the raw
+  sc2reader attribute (`workers_active_count`), so the replayer HUD
+  showed "0 workers" for both players all game. Fixed at parse time
+  (engine 1.5.3 / agent 0.15.4); for games synced before the fix the
+  web replayer now counts the live worker units in the payload
+  instead, so old replays read correctly without a re-sync.
 
 - **Map trend panel Y-axis labels no longer clip** — the per-map
   trend charts rendered "100%" and "50%" ticks truncated to "0%"

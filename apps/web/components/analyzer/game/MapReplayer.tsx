@@ -53,6 +53,14 @@ import {
   worldProjection,
   type MapPlayback,
 } from "@/lib/mapReplay";
+import {
+  computeLosses,
+  morphConsumedIndices,
+  statsHaveWorkers,
+  tradeEfficiency,
+  workerCountAt,
+  type LossSummary,
+} from "@/lib/mapReplayLosses";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import { getIconPath, type IconKind } from "@/lib/sc2-icons";
 
@@ -409,6 +417,38 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
 
   const me = useMemo(() => statsAt(playback.stats.me, timeSec), [playback, timeSec]);
   const opp = useMemo(() => statsAt(playback.stats.opp, timeSec), [playback, timeSec]);
+  // Payloads synced before engine 1.5.3 carry an all-zero workers
+  // column (the engine read a nonexistent attribute) — the worker
+  // units themselves were always in the payload, so count the live
+  // ones instead of showing 0 for the whole game.
+  const workersReliable = useMemo(
+    () => ({
+      me: statsHaveWorkers(playback.stats.me),
+      opp: statsHaveWorkers(playback.stats.opp),
+    }),
+    [playback],
+  );
+  const meWorkers = workersReliable.me
+    ? me.workers
+    : workerCountAt(playback.units, "me", timeSec);
+  const oppWorkers = workersReliable.opp
+    ? opp.workers
+    : workerCountAt(playback.units, "opp", timeSec);
+  // Units lost up to the scrub time, priced in real minerals/gas.
+  // Deaths that are actually tech spending — Drones morphed into
+  // structures, Templar merged into Archons — never count as losses.
+  const consumed = useMemo(
+    () => morphConsumedIndices(playback.units, playback.buildings),
+    [playback],
+  );
+  const meLosses = useMemo(
+    () => computeLosses(playback.units, "me", timeSec, consumed),
+    [playback, timeSec, consumed],
+  );
+  const oppLosses = useMemo(
+    () => computeLosses(playback.units, "opp", timeSec, consumed),
+    [playback, timeSec, consumed],
+  );
 
   return (
     <div className="space-y-2" data-testid="map-replayer">
@@ -508,20 +548,112 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
         <span className="whitespace-nowrap">
           <b style={{ color: ME_ARMY }}>You</b>{" "}
           <span className="text-text-muted">
-            army {Math.round(me.army)} · {Math.round(me.workers)} workers ·{" "}
+            army {Math.round(me.army)} · {Math.round(meWorkers)} workers ·{" "}
             {Math.round(me.supply)} supply
           </span>
         </span>
         <span className="whitespace-nowrap">
           <b style={{ color: OPP_ARMY }}>Opponent</b>{" "}
           <span className="text-text-muted">
-            army {Math.round(opp.army)} · {Math.round(opp.workers)} workers ·{" "}
+            army {Math.round(opp.army)} · {Math.round(oppWorkers)} workers ·{" "}
             {Math.round(opp.supply)} supply
           </span>
         </span>
       </div>
+
+      {/* Units lost — live with the scrubber. Efficiency is the value
+          the opponent lost per resource this side lost (>1 = traded
+          up); each side lists WHAT died, priced in minerals/gas. */}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <LossPanel
+          label="You"
+          color={ME_ARMY}
+          losses={meLosses}
+          efficiency={tradeEfficiency(meLosses, oppLosses)}
+        />
+        <LossPanel
+          label="Opponent"
+          color={OPP_ARMY}
+          losses={oppLosses}
+          efficiency={tradeEfficiency(oppLosses, meLosses)}
+        />
+      </div>
     </div>
   );
+}
+
+/** How many lost-unit rows a panel lists before folding into "+N". */
+const LOSS_ROWS_MAX = 8;
+
+function LossPanel({
+  label,
+  color,
+  losses,
+  efficiency,
+}: {
+  label: string;
+  color: string;
+  losses: LossSummary;
+  efficiency: number | null;
+}) {
+  const shown = losses.byUnit.slice(0, LOSS_ROWS_MAX);
+  const folded = losses.byUnit.length - shown.length;
+  return (
+    <div
+      className="rounded-md border border-border bg-bg-elevated/60 p-2"
+      data-testid={`loss-panel-${label.toLowerCase()}`}
+    >
+      <div className="flex items-baseline justify-between gap-2 text-caption">
+        <span className="whitespace-nowrap">
+          <b style={{ color }}>{label}</b>{" "}
+          <span className="text-text-muted">units lost</span>
+        </span>
+        <span
+          className="whitespace-nowrap tabular-nums text-text-muted"
+          title="Resources the opponent lost per resource this side lost — above 1.00× means this side traded up"
+        >
+          trade {formatEfficiency(efficiency)}
+        </span>
+      </div>
+      <div className="mt-1 text-caption tabular-nums text-text">
+        {losses.count} units · {losses.minerals.toLocaleString()} minerals ·{" "}
+        {losses.gas.toLocaleString()} gas
+      </div>
+      {shown.length > 0 && (
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {shown.map((g) => {
+            const icon = getIconPath(g.name, "unit");
+            return (
+              <li
+                key={g.name}
+                className="inline-flex items-center gap-1 rounded border border-border bg-bg-elevated px-1.5 py-0.5 text-micro tabular-nums text-text-muted"
+                title={`${g.count}× ${g.name} — ${g.minerals.toLocaleString()} minerals, ${g.gas.toLocaleString()} gas`}
+              >
+                {icon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={icon} alt="" aria-hidden className="h-3.5 w-3.5" />
+                ) : null}
+                <span>
+                  {g.count}× {g.name}
+                </span>
+              </li>
+            );
+          })}
+          {folded > 0 && (
+            <li className="inline-flex items-center rounded px-1 py-0.5 text-micro text-text-dim">
+              +{folded} more
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatEfficiency(eff: number | null): string {
+  if (eff === null) return "—";
+  if (!Number.isFinite(eff)) return "∞";
+  return `${eff.toFixed(2)}×`;
 }
 
 /* ──────────────── canvas frame ──────────────── */
