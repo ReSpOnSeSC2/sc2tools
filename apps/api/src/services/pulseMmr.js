@@ -195,7 +195,7 @@ class PulseMmrService {
    *   - The character has no team in the active season for any region.
    *
    * @param {string|null|undefined} toonHandle
-   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null, league: string|null, tier: number|null}|null>}
    */
   async getCurrentMmrByToon(toonHandle) {
     const handle = normaliseToonHandle(toonHandle);
