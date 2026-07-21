@@ -90,7 +90,10 @@ reveal-sc2-opponent-main/stream-overlay-backend/overlay.config.json.broken-*
 
 # Repo-root virtualenv used to run the replay-engine test suite (see the
 # engine test recipe: python -m venv .venv && .venv/bin/pip install ...).
+# The python-tests workflow creates the same venv inside
+# apps/replay-engine (its working-directory), so ignore both spots.
 /.venv/
+/apps/replay-engine/.venv/
 
 # Bootstrap downloads that build-installer.ps1 fetches into the
 # repo root if BUILD_DIR resolves there for any reason.
