@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.6
+
+### Fixed — expected chrono/MULE counts credit starting energy
+- **What.** The bundled engine computed expected chronos and MULEs as
+  Nexus/Orbital alive-time divided by the energy-regen cooldown,
+  ignoring that each Nexus and each Orbital Command finishes with 50
+  energy banked — exactly one cast available on spawn. Expected now
+  adds one free cast per Nexus (chrono) and per Orbital (MULE).
+- **Effect.** Chrono/MULE efficiency can no longer read over 100% on
+  normal play (e.g. "11 of ~8 expected (138%)"): a player spending
+  each caster's starting energy was casting more than the regen-only
+  estimate allowed for. Expected counts rise by the number of
+  casters (~2-4 in a typical game), so the efficiency thresholds get
+  slightly — and correctly — stricter. Applies on the next parse or
+  macro-breakdown recompute; no re-sync needed.
+
 ## 0.15.5
 
 ### Added — unit deaths carry killer attribution (payload v4)

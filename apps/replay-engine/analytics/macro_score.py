@@ -118,12 +118,23 @@ BASE_TYPES_TERRAN = {"OrbitalCommand"}
 # These are the seconds between back-to-back casts that one caster
 # (Queen / Nexus / Orbital Command) can physically sustain — NOT the
 # buff duration. Multiply alive-time across all casters by 1/period to
-# get the expected number of cycles for a game.
+# get the regen-sustained number of cycles for a game.
 #
 # Math (LotV+ values, all standard):
 #   * Inject Larva: 25 energy / 0.7875 regen ≈ 31.7s (29 = light pad)
 #   * Chrono Boost: 50 energy / 0.5625 regen ≈ 88.9s
 #   * Calldown MULE: 50 energy / 0.7875 regen ≈ 63.5s
+#
+# Starting energy: a Nexus and an Orbital Command each finish with 50
+# energy banked — exactly one cast available the moment they exist,
+# before any regen. Expected counts credit that free cast per caster
+# (the ``free_casts`` arg to ``_expected``); alive-time // period only
+# covers the regen-sustained cycles, so without the credit a player
+# who spends every Nexus's starting energy reads as >100% efficient.
+# Queens also spawn cast-ready (25 energy), but the inject branch
+# tracks hatchery uptime as a proxy — Queens aren't in ``bases`` — so
+# no per-caster credit is possible there; grace_cycles=4 absorbs it.
+# See docs/adr/0002-free-start-cast-credit.md.
 #
 # Historical bug: CHRONO_PERIOD_SEC used to be 20 because the
 # original author conflated buff-duration (20s) with cast-cooldown
@@ -486,9 +497,21 @@ def _alive_seconds(buildings: List[Dict], name_set: set, game_end_sec: int) -> i
     return total
 
 
-def _expected(alive_sec: int, period_sec: int) -> int:
-    """Expected number of (inject|chrono|MULE) cycles given uptime."""
-    return max(0, alive_sec // period_sec)
+def _caster_count(buildings: List[Dict], name_set: set) -> int:
+    """Number of casters (Nexus / Orbital) that ever existed for the player."""
+    return sum(1 for b in buildings if b.get("name") in name_set)
+
+
+def _expected(alive_sec: int, period_sec: int, free_casts: int = 0) -> int:
+    """Expected number of (inject|chrono|MULE) cycles given uptime.
+
+    ``free_casts`` credits the cast each caster has banked on spawn
+    (Nexus / Orbital finish with 50 energy — see the constants block);
+    ``alive_sec // period_sec`` covers only the regen-sustained cycles.
+    """
+    if alive_sec <= 0:
+        return 0
+    return max(0, alive_sec // period_sec + free_casts)
 
 
 def _efficiency_penalty(actual: int, expected: int, max_penalty: float,
@@ -650,7 +673,14 @@ def compute_macro_score(
             ))
     elif race == "Protoss":
         alive = _alive_seconds(bases, BASE_TYPES_PROTOSS, game_end)
-        expected = _expected(alive, CHRONO_PERIOD_SEC)
+        # Each Nexus finishes with 50 energy banked — one chrono castable
+        # immediately — so expected = regen cycles + one free cast per
+        # Nexus. Without the credit, actual routinely exceeds "expected"
+        # and the SPA shows >100% chrono efficiency.
+        expected = _expected(
+            alive, CHRONO_PERIOD_SEC,
+            free_casts=_caster_count(bases, BASE_TYPES_PROTOSS),
+        )
         actual = _count_category(abilities, "chrono")
         if actual == 0:
             actual = _count_ability(
@@ -682,7 +712,12 @@ def compute_macro_score(
             ))
     elif race == "Terran":
         alive = _alive_seconds(bases, BASE_TYPES_TERRAN, game_end)
-        expected = _expected(alive, MULE_PERIOD_SEC)
+        # Orbitals morph in with 50 energy — one MULE castable
+        # immediately — same free-cast credit as the Nexus branch.
+        expected = _expected(
+            alive, MULE_PERIOD_SEC,
+            free_casts=_caster_count(bases, BASE_TYPES_TERRAN),
+        )
         actual = _count_category(abilities, "mule")
         if actual == 0:
             actual = _count_ability(abilities, {"CalldownMULE"})

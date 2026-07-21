@@ -98,6 +98,20 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Chrono/MULE efficiency can no longer read over 100%** — the
+  expected chrono and MULE counts in the macro breakdown were
+  computed from Nexus/Orbital alive-time divided by the energy-regen
+  cooldown alone, ignoring that each Nexus and each Orbital Command
+  finishes with 50 energy banked — one cast available the moment it
+  exists. A player who spent that starting energy (as they should)
+  routinely cast more than the regen-only estimate, so the panel
+  showed things like "11 of ~8 expected (138% chronos)". Expected
+  now credits one free cast per Nexus/Orbital (engine 1.5.5 / agent
+  0.15.6), raising typical expected counts by the number of casters
+  and making the efficiency thresholds correspondingly — and
+  correctly — a touch stricter. Applies on the next parse or
+  macro-breakdown recompute.
+
 - **Map replay worker counts no longer stick at 0** — the replay
   engine read the worker count from a field name that only exists in
   this project's downstream JSON (`food_workers`) instead of the raw
