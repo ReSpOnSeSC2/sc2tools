@@ -174,6 +174,7 @@ Render hosts the Express + MongoDB API.
    | `CLERK_SECRET_KEY`       | The `sk_test_...` or `sk_live_...` from step 2 |
    | `SERVER_PEPPER_HEX`      | Run `openssl rand -hex 32` in a terminal and paste the result. **Save this** — losing it means losing the ability to verify cross-user opponent dedupe hashes. |
    | `CORS_ALLOWED_ORIGINS`   | Comma-separated. Include `http://localhost:3000` and whatever Vercel URL you'll use. Edit again after step 5 once you know the prod URL. |
+   | `GITHUB_TOKEN`           | A GitHub token with public-repo read access (fine-grained, no extra permissions needed). The agent auto-update feed resolves releases from `api.github.com`; unauthenticated calls share Render's egress-IP rate budget (60 req/h across ALL tenants on that IP) and get 403s, which can pin the update feed to a stale version. A token lifts the limit to 5000 req/h. |
 
    Other vars (`NODE_ENV`, `MONGODB_DB`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE`)
    already have sane defaults from `render.yaml`.
