@@ -18,6 +18,7 @@ import {
   computeEffectiveRace,
   computePenaltyRows,
   computeWins,
+  formatGameClock,
   getRaceDetail,
   isMissingChartSamples,
   scoreToneTextClass,
@@ -452,6 +453,19 @@ function BreakdownBody({
             unitPlural={detail.unitPlural}
           />
         ) : null}
+        {typeof raw.creep_tumors_total === "number" ? (
+          <CreepTumorCallout
+            total={raw.creep_tumors_total}
+            queen={Number(raw.creep_tumors_queen || 0)}
+            spread={Number(raw.creep_tumors_spread || 0)}
+            lost={Number(raw.creep_tumors_lost || 0)}
+            firstSec={
+              typeof raw.first_tumor_sec === "number"
+                ? raw.first_tumor_sec
+                : null
+            }
+          />
+        ) : null}
       </section>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -544,6 +558,45 @@ function RaceDisciplineCallout({
       </div>
       <div className="mt-1 text-caption text-accent">
         {actual} of ~{expected} expected ({pct}% {unitPlural})
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Zerg creep tracking summary. Rendered only when the breakdown carries
+ * the creep fields (engine 1.5.6+) — older payloads omit them and the
+ * box stays hidden rather than claiming "0 tumors" it never measured.
+ */
+function CreepTumorCallout({
+  total,
+  queen,
+  spread,
+  lost,
+  firstSec,
+}: {
+  total: number;
+  queen: number;
+  spread: number;
+  lost: number;
+  firstSec: number | null;
+}) {
+  return (
+    <div className="rounded-md bg-bg-subtle p-3">
+      <div className="text-micro uppercase tracking-wider text-text-dim">
+        Creep spread
+      </div>
+      <div className="mt-1 text-caption text-accent">
+        {total === 0 ? (
+          "No creep tumors planted"
+        ) : (
+          <>
+            {total} tumor{total === 1 ? "" : "s"} planted ({queen} queen /{" "}
+            {spread} spread)
+            {firstSec !== null ? ` · first at ${formatGameClock(firstSec)}` : ""}
+            {lost > 0 ? ` · ${lost} lost` : ""}
+          </>
+        )}
       </div>
     </div>
   );

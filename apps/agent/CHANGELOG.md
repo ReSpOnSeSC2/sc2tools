@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.7
+
+### Added — creep tumor tracking for Zerg (engine 1.5.6)
+- **What.** The bundled engine now records every creep tumor the
+  player starts: origin (Queen-cast vs self-spread, classified from
+  the init-time unit type before the burrow morph renames both forms
+  to ``CreepTumorBurrowed``), plant time, and whether it was killed.
+  The macro breakdown's raw payload carries the aggregates
+  (``creep_tumors_queen`` / ``_spread`` / ``_total`` / ``_lost``,
+  ``first_tumor_sec``) for Zerg games.
+- **Effect.** The web's Mechanics panel and macro breakdown show a
+  creep summary next to inject efficiency: tumors planted with the
+  queen/spread split, first-plant clock, and losses. Informational
+  only — the macro score is unchanged. Applies at parse time; older
+  breakdowns omit the fields (no fake zeros) until recomputed.
+
 ## 0.15.6
 
 ### Fixed — expected chrono/MULE counts credit starting energy

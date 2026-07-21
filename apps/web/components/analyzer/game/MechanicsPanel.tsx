@@ -96,6 +96,19 @@ export function MechanicsPanel({
       ? raw.mineral_float_spikes
       : null;
 
+  // Zerg creep tracking (engine 1.5.6+). Absent on older payloads —
+  // the row hides entirely rather than claiming an unmeasured zero.
+  const creepTotal =
+    typeof raw?.creep_tumors_total === "number" ? raw.creep_tumors_total : null;
+  const creepQueen =
+    typeof raw?.creep_tumors_queen === "number" ? raw.creep_tumors_queen : 0;
+  const creepSpread =
+    typeof raw?.creep_tumors_spread === "number" ? raw.creep_tumors_spread : 0;
+  const creepLost =
+    typeof raw?.creep_tumors_lost === "number" ? raw.creep_tumors_lost : 0;
+  const firstTumorSec =
+    typeof raw?.first_tumor_sec === "number" ? raw.first_tumor_sec : null;
+
   if (loading) {
     return (
       <Card title="Mechanics">
@@ -191,6 +204,32 @@ export function MechanicsPanel({
             actual={mechanicActual}
             expected={mechanicExpected}
           />
+        ) : null}
+
+        {creepTotal !== null ? (
+          <div data-testid="creep-tumor-stat">
+            <dt className="text-micro uppercase tracking-wider text-text-dim">
+              Creep tumors
+            </dt>
+            <dd className="mt-1">
+              <span className="text-lg font-semibold tabular-nums text-text">
+                {creepTotal}
+              </span>
+              <span className="ml-2 text-caption text-text-muted">
+                {creepTotal === 0 ? (
+                  "none planted"
+                ) : (
+                  <>
+                    {creepQueen} queen / {creepSpread} spread
+                    {firstTumorSec !== null
+                      ? ` · first at ${formatGameClock(firstTumorSec)}`
+                      : ""}
+                    {creepLost > 0 ? ` · ${creepLost} lost` : ""}
+                  </>
+                )}
+              </span>
+            </dd>
+          </div>
         ) : null}
 
         <div>

@@ -13,6 +13,17 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Creep tumor tracking for Zerg games** — the macro breakdown and
+  the game page's Mechanics panel now show how many creep tumors you
+  planted, split into Queen-cast vs self-spread (classified at
+  construction start, before the burrow morph makes the two forms
+  indistinguishable), when the first tumor went down, and how many
+  were killed. Sits next to inject efficiency as the second Zerg
+  macro mechanic; informational only, the macro score is unchanged
+  (engine 1.5.6 / agent 0.15.7). Shown once a game is parsed or
+  recomputed by the updated agent — older breakdowns hide the row
+  instead of showing a fake zero.
+
 - **Map replay tracks units lost, their price tag, and trade
   efficiency** — the map replayer now shows a live "units lost" panel
   per player that follows the scrubber: how many units each side has

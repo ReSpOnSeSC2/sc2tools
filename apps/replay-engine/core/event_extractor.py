@@ -121,6 +121,16 @@ SKIP_BUILDINGS: Set[str] = {
     "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
 }
 
+# Creep tumor unit types. The initial type at construction start is
+# the only place the origin is visible: a Queen's Build Creep Tumor
+# cast inits a "CreepTumorQueen", a tumor spreading itself inits a
+# "CreepTumor", and BOTH morph to "CreepTumorBurrowed" once burrowed
+# (a UnitTypeChangeEvent that erases the distinction). Burrowed is in
+# the set defensively in case a datapack ever inits it directly.
+CREEP_TUMOR_TYPES: Set[str] = {
+    "CreepTumor", "CreepTumorQueen", "CreepTumorBurrowed",
+}
+
 # Worker unit names — used to drive the cumulative ``workers_built``
 # counter on the player_stats summary. Mirrors the lowercased set in
 # ``apps/web/lib/sc2-units.ts``; MULEs are intentionally OUT because
@@ -1035,6 +1045,15 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                                building unit owned by ``my_pid``. Used for
                                idle-production heuristics.
 
+      ``creep_tumor_events``   List[{time, kind, unit_id, died_time}] of
+                               creep tumors ``my_pid`` started, in plant
+                               order. ``kind`` is "queen" (Queen cast) or
+                               "spread" (self-propagated from an existing
+                               tumor), classified from the init-time unit
+                               type before the burrow morph erases it.
+                               ``died_time`` is None while the tumor
+                               survived to game end. Empty for non-Zerg.
+
       ``game_length_sec``      Game length in seconds (for capping died_time).
 
     The function is wrapped in a broad try/except so corrupt tracker streams
@@ -1056,6 +1075,9 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
         "opp_production_buildings": [],
         "opp_bases": [],
         "unit_births": [],
+        # Creep tumors my_pid planted — see the docstring. Populated
+        # during the tracker walk via creep_tumors_by_uid.
+        "creep_tumor_events": [],
         # unit_timeline is populated after the tracker walk below. Each
         # entry: { time, my: {UnitName: count, ...}, opp: {...} }. Only
         # non-building, non-SKIP_UNITS army units are counted.
@@ -1135,6 +1157,10 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # structure is a common opener). Morphs (Lair, Hive, etc.) are
     # followed by overwriting on UnitTypeChangeEvent.
     building_name_by_uid: Dict[int, str] = {}
+    # Creep tumors my_pid planted, keyed by uid so the death branch can
+    # stamp died_time. Values are the same dicts appended to
+    # out["creep_tumor_events"] — mutation is visible in the output.
+    creep_tumors_by_uid: Dict[int, Dict] = {}
 
     tracker = getattr(replay, "tracker_events", None) or []
     try:
@@ -1244,6 +1270,26 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         }
                         if pid in player_counters:
                             player_counters[pid]["units_produced"] += 1
+
+                    # Creep tumors: record the plant at construction
+                    # start, when the unit type still encodes the origin
+                    # (CreepTumorQueen = Queen cast, CreepTumor =
+                    # self-spread). Born accepted defensively alongside
+                    # Init; the uid map dedups if both ever fire.
+                    if (pid == my_pid
+                            and clean in CREEP_TUMOR_TYPES
+                            and isinstance(event, (UnitInitEvent, UnitBornEvent))
+                            and uid is not None
+                            and uid not in creep_tumors_by_uid):
+                        tumor = {
+                            "time": t,
+                            "kind": ("queen" if clean == "CreepTumorQueen"
+                                     else "spread"),
+                            "unit_id": uid,
+                            "died_time": None,
+                        }
+                        creep_tumors_by_uid[uid] = tumor
+                        out["creep_tumor_events"].append(tumor)
 
                     # Remember construction STARTS for both sides so the
                     # death branch can emit a record for structures that
@@ -1440,6 +1486,8 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     )
                     if isinstance(killer_pid, int) and killer_pid == 0:
                         killer_pid = None
+                    if uid in creep_tumors_by_uid:
+                        creep_tumors_by_uid[uid]["died_time"] = int(died_t)
                     if uid in lifetimes:
                         lifetimes[uid]["died"] = died_t
                         # The victim is a my_pid building. Credit the
