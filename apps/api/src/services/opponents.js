@@ -112,6 +112,7 @@ class OpponentsService {
    *   pulseResolver?: any,
    *   pulseMmr?: any,
    *   pulseDirectory?: import('./pulseDirectory').PulseDirectoryService | null,
+   *   pulseLinks?: import('./pulseCharacterLinks').PulseCharacterLinkService | null,
    * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
@@ -153,6 +154,13 @@ class OpponentsService {
     // instantly. Optional: unit tests that don't exercise sharing pass
     // null and the live-fetch path is unchanged.
     this.pulseDirectory = opts.pulseDirectory || null;
+    // SC2Pulse character → account/pro linkage cache
+    // (services/pulseCharacterLinks.js). When supplied, ``get`` with
+    // ``mergeLinked: true`` folds every opponent row SC2Pulse links to
+    // the same player into ONE profile — merged games, totals, and
+    // timelines as if all their names were one account. Optional:
+    // without it merged profiles silently degrade to single-identity.
+    this.pulseLinks = opts.pulseLinks || null;
   }
 
   /**
@@ -841,6 +849,91 @@ class OpponentsService {
   }
 
   /**
+   * Resolve the SC2Pulse-linked identity group the given opponent row
+   * belongs to, scoped to THIS user's opponents. Two rows are the same
+   * player when SC2Pulse maps their character ids to the same
+   * community-verified player (``proId``, which spans accounts) or,
+   * failing that, the same Battle.net account (``accountId``).
+   *
+   * Returns ``null`` — meaning "profile stays single-identity" — when
+   * the links service isn't wired, this row has no resolved character
+   * id, the id has no known linkage, only one of the user's rows is in
+   * the group, or anything at all fails. A merged profile is an
+   * enhancement, never a availability risk.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Record<string, any>} doc opponents-collection row being opened
+   * @returns {Promise<{
+   *   identities: Array<ReturnType<typeof serializeLinkedIdentity>>,
+   *   pulseIds: string[],
+   *   characterIds: string[],
+   *   revealedName: string|null,
+   *   mainName: string|null,
+   * } | null>}
+   */
+  async _resolveLinkedIdentities(userId, doc) {
+    if (!this.pulseLinks) return null;
+    const selfCid =
+      typeof doc.pulseCharacterId === "string" && doc.pulseCharacterId
+        ? doc.pulseCharacterId
+        : null;
+    if (!selfCid) return null;
+    try {
+      /** @type {Array<any>} */
+      const rows = await this.db.opponents
+        .find(
+          { userId, pulseCharacterId: { $type: "string", $ne: "" } },
+          {
+            projection: {
+              _id: 0,
+              pulseId: 1, pulseCharacterId: 1, toonHandle: 1,
+              displayNameSample: 1, revealedName: 1,
+              wins: 1, losses: 1, gameCount: 1, lastSeen: 1,
+            },
+          },
+        )
+        .toArray();
+      const { links } = await this.pulseLinks.getLinks(
+        rows.map((r) => r.pulseCharacterId),
+      );
+      const selfLink = links.get(selfCid) || null;
+      const selfKey = linkGroupKey(selfLink);
+      if (!selfKey) return null;
+      const identities = rows.filter(
+        (r) => linkGroupKey(links.get(r.pulseCharacterId)) === selfKey,
+      );
+      if (identities.length <= 1) return null;
+      identities.sort((a, b) => lastSeenMs(b) - lastSeenMs(a));
+      // Same self-healing latest-name overlay the list uses, so each
+      // identity is labeled with the name it most recently played
+      // under rather than a stale stored sample.
+      await this._overlayLatestNameFromGames(userId, identities);
+      const revealedName =
+        identities
+          .map((r) =>
+            typeof r.revealedName === "string" ? r.revealedName.trim() : "",
+          )
+          .find((n) => n.length > 0)
+        || (selfLink ? selfLink.proNickname : null)
+        || null;
+      return {
+        identities: identities.map(serializeLinkedIdentity),
+        pulseIds: identities.map((r) => r.pulseId),
+        characterIds: [...new Set(identities.map((r) => r.pulseCharacterId))],
+        revealedName,
+        mainName: pickMergedMainName(identities, revealedName),
+      };
+    } catch (err) {
+      this.logger.warn(
+        { err, userId, pulseId: doc.pulseId },
+        "opponent_linked_merge_failed",
+      );
+      return null;
+    }
+  }
+
+  /**
    * Build the full opponent profile payload consumed by the SPA's
    * `OpponentProfile` view: totals, byMap, byStrategy, top strategies,
    * recency-weighted predictions, matchup-aware median timings (overall
@@ -855,9 +948,17 @@ class OpponentsService {
    * UI surfaces them as "what's likely next" and "most recent activity"
    * — both of which would be misleading if scoped to a stale window.
    *
+   * Linked-player merge: with ``opts.mergeLinked`` set (and the
+   * pulseLinks service wired), the profile spans EVERY opponent row
+   * SC2Pulse links to the same player — the games arrays, totals,
+   * per-map/strategy rollups, phase envelopes, and predictions all
+   * read as if the player's names were one account. The payload gains
+   * ``mergedIdentities`` (per-name breakdown, newest first) and the
+   * heading name prefers the SC2Pulse revealed/pro name.
+   *
    * @param {string} userId
    * @param {string} pulseId
-   * @param {{ since?: Date, until?: Date }} [opts]
+   * @param {{ since?: Date, until?: Date, mergeLinked?: boolean }} [opts]
    */
   async get(userId, pulseId, opts = {}) {
     const doc = await this.db.opponents.findOne(
@@ -877,9 +978,23 @@ class OpponentsService {
       pulseId,
       pulseCharacterId: doc.pulseCharacterId,
     });
-    const gamesFilter = idsFilter
-      ? { userId, ...idsFilter }
-      : { userId, "opponent.pulseId": pulseId };
+    // SC2Pulse-linked merge (see method jsdoc). ``null`` — no links
+    // service, unresolved character id, single-identity group, or any
+    // failure — falls through to the single-identity filter unchanged.
+    const linked = opts.mergeLinked
+      ? await this._resolveLinkedIdentities(userId, doc)
+      : null;
+    const gamesFilter = linked
+      ? {
+          userId,
+          $or: [
+            { "opponent.pulseId": { $in: linked.pulseIds } },
+            { "opponent.pulseCharacterId": { $in: linked.characterIds } },
+          ],
+        }
+      : idsFilter
+        ? { userId, ...idsFilter }
+        : { userId, "opponent.pulseId": pulseId };
     /** @type {Array<any>} */
     const rawGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
@@ -951,7 +1066,14 @@ class OpponentsService {
       && rawGames[0].opponent.displayName.length > 0
       ? rawGames[0].opponent.displayName
       : null;
-    const authoritativeName = latestGameName || doc.displayNameSample || "";
+    // Merged profiles lead with the player's MOST-KNOWN name — the
+    // SC2Pulse revealed/pro name when there is one, else the readable
+    // name they've played the most games under — so the heading
+    // matches what the grouped Opponents list shows. Single-identity
+    // profiles keep rule (i): the latest-game name.
+    const authoritativeName = linked
+      ? linked.mainName || latestGameName || doc.displayNameSample || ""
+      : latestGameName || doc.displayNameSample || "";
     // Cross-toon merge surfacing: if the rawGames span multiple toon
     // handles (the Battle.net rebind case), expose the merged set so
     // the SPA can render a "merged across N toons" disclosure chip
@@ -1106,6 +1228,15 @@ class OpponentsService {
       // field see the same value.
       displayNameSample: authoritativeName || doc.displayNameSample || "",
       name: authoritativeName,
+      // Merged extras: the per-name breakdown (newest first) and the
+      // group's revealed name — any identity's reveal (or the pro
+      // nickname from the linkage) labels the whole player.
+      ...(linked
+        ? {
+            mergedIdentities: linked.identities,
+            revealedName: linked.revealedName || doc.revealedName || null,
+          }
+        : {}),
       ...(mmrOverlay ? { mmr: mmrOverlay.mmr } : {}),
       ...(mmrOverlay && (doc.region == null || doc.region === "")
         ? { region: mmrOverlay.region }
@@ -2467,6 +2598,90 @@ function isBarcodeLikeName(name) {
   const trimmed = name.trim();
   if (trimmed.length === 0) return false;
   return /^[Il1i|ⅠΙＩｌｉ１｜]+$/u.test(trimmed);
+}
+
+/**
+ * Grouping key for a SC2Pulse character link. ``proId`` (community-
+ * verified player, spans accounts) wins over ``accountId`` (same
+ * Battle.net login); no linkage → null → the row never merges.
+ * Mirrors the web's ``groupKey`` in ``lib/opponentGroups.ts`` so the
+ * list's grouping and the merged profile agree on who is one player.
+ *
+ * @param {{ proId?: string|null, accountId?: string|null } | null | undefined} link
+ * @returns {string|null}
+ */
+function linkGroupKey(link) {
+  if (!link) return null;
+  if (link.proId) return `pro:${link.proId}`;
+  if (link.accountId) return `acct:${link.accountId}`;
+  return null;
+}
+
+/** @param {{ lastSeen?: unknown }} row @returns {number} */
+function lastSeenMs(row) {
+  return row && row.lastSeen instanceof Date ? row.lastSeen.getTime() : 0;
+}
+
+/**
+ * Public shape of one identity inside a merged profile's
+ * ``mergedIdentities`` array. Lifetime counters straight off the
+ * opponents row; ``name`` is the latest-game name (post-overlay).
+ *
+ * @param {Record<string, any>} r opponents-collection row
+ */
+function serializeLinkedIdentity(r) {
+  return {
+    pulseId: String(r.pulseId),
+    pulseCharacterId:
+      typeof r.pulseCharacterId === "string" ? r.pulseCharacterId : null,
+    toonHandle: typeof r.toonHandle === "string" ? r.toonHandle : null,
+    name: typeof r.displayNameSample === "string" ? r.displayNameSample : "",
+    revealedName:
+      typeof r.revealedName === "string" && r.revealedName
+        ? r.revealedName
+        : null,
+    wins: Number(r.wins) || 0,
+    losses: Number(r.losses) || 0,
+    games: Number(r.gameCount) || 0,
+    lastSeen: r.lastSeen instanceof Date ? r.lastSeen : null,
+  };
+}
+
+/**
+ * The merged profile's heading name — the player's "most known" name:
+ *   1. the SC2Pulse revealed/pro name when the group carries one;
+ *   2. else the readable (non-barcode) name with the most games;
+ *   3. else the most-played name even if it's a barcode.
+ * Ties go to the more recently seen identity (rows arrive newest
+ * first). Mirrors ``pickDisplayName`` in the web's opponentGroups so
+ * the list row and its deep dive lead with the same name.
+ *
+ * @param {Array<{ displayNameSample?: unknown, gameCount?: unknown }>} identities
+ *   opponent rows sorted by lastSeen desc
+ * @param {string|null} revealedName
+ * @returns {string|null}
+ */
+function pickMergedMainName(identities, revealedName) {
+  if (revealedName) return revealedName;
+  /** @type {{name: string, games: number}|null} */
+  let best = null;
+  /** @type {{name: string, games: number}|null} */
+  let bestBarcode = null;
+  for (const r of identities) {
+    const name =
+      typeof r.displayNameSample === "string" ? r.displayNameSample.trim() : "";
+    if (!name) continue;
+    const games = Number(r.gameCount) || 0;
+    if (isBarcodeLikeName(name)) {
+      if (!bestBarcode || games > bestBarcode.games) {
+        bestBarcode = { name, games };
+      }
+    } else if (!best || games > best.games) {
+      best = { name, games };
+    }
+  }
+  const picked = best || bestBarcode;
+  return picked ? picked.name : null;
 }
 
 const NOOP_LOGGER = {

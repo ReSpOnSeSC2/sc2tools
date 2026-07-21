@@ -14,6 +14,7 @@ import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import {
   groupMatchesSearch,
   groupOpponentsByPlayer,
+  LS_GROUP_BY_PLAYER,
   type OpponentGroup,
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
@@ -23,7 +24,6 @@ import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
-const LS_GROUP_BY_PLAYER = "analyzer.opponents.groupByPlayer";
 
 type Opp = {
   pulseId: string;

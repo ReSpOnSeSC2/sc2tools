@@ -167,11 +167,18 @@ function buildOpponentsRouter(deps) {
       // Date-range filter applies to every panel except "Likely
       // strategies next" and "Last 5 games", which always reflect the
       // most recent activity for the opponent regardless of the picker.
+      // ``mergeLinked=1`` folds every identity SC2Pulse links to the
+      // same player into this one profile (the deep dive behind the
+      // Opponents tab's grouped rows).
       const filters = parseFilters(req.query);
       const opp = await deps.opponents.get(
         auth.userId,
         String(req.params.pulseId),
-        { since: filters.since, until: filters.until },
+        {
+          since: filters.since,
+          until: filters.until,
+          mergeLinked: req.query.mergeLinked === "1",
+        },
       );
       if (!opp) {
         res.status(404).json({ error: { code: "not_found" } });

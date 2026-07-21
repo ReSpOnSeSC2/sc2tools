@@ -31,6 +31,19 @@ corresponding GitHub Release.
   TTL) so the linkage for any opponent is fetched once, ever, across
   all platform users.
 
+- **Opponent deep dives merge the whole player, not just one name** —
+  with "Group same player" on, opening any grouped opponent loads the
+  profile with `mergeLinked=1`: games, totals, by-map/by-strategy
+  rollups, phase envelopes, H2H timelines, predictions, and the
+  all-games table span EVERY name SC2Pulse links to that player, as
+  if all their games were played on one account. The header leads
+  with their most-known name, a "Plays as" line breaks down each
+  name's own W-L, and the all-games table's players column shows
+  which name each game was played under. Opening the profile from any
+  linked identity lands on the same merged page; turning the toggle
+  off (or any linkage failure) falls back to the classic
+  single-identity profile.
+
 ### Removed
 
 - **Median key timings card dropped from the opponent profile** — the

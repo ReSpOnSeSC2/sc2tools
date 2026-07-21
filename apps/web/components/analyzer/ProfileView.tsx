@@ -5,7 +5,12 @@ import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters } from "@/lib/filterContext";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
+import {
+  LS_GROUP_BY_PLAYER,
+  type MergedIdentity,
+} from "@/lib/opponentGroups";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
@@ -38,6 +43,11 @@ type OpponentProfileResp = {
   // whose Battle.net rotated. Length > 1 → render the disclosure
   // chip; absent / length ≤ 1 → render nothing extra.
   mergedToonHandles?: string[] | null;
+  // Per-name breakdown when the API merged every identity SC2Pulse
+  // links to the same player into this profile (mergeLinked=1).
+  // Newest activity first. Absent / length ≤ 1 → single-identity
+  // profile, nothing extra rendered.
+  mergedIdentities?: MergedIdentity[] | null;
   name?: string;
   displayNameSample?: string;
   // SC2Pulse "revealed" identity behind a barcode — the pro/main name
@@ -95,7 +105,20 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   // history regardless of since/until.
   const { filters } = useFilters();
   const myName = useMyDisplayName();
-  const profileQuery = buildProfileQuery(filters.since, filters.until);
+  // Same "Group same player" toggle the Opponents tab persists. When
+  // on, the API folds every identity SC2Pulse links to this player
+  // into ONE profile — merged games, totals, and timelines — and the
+  // header shows the per-name breakdown below.
+  const [groupByPlayer] = useLocalStorageState<boolean>(
+    LS_GROUP_BY_PLAYER,
+    true,
+    (raw): raw is boolean => typeof raw === "boolean",
+  );
+  const profileQuery = buildProfileQuery(
+    filters.since,
+    filters.until,
+    groupByPlayer,
+  );
   const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
@@ -172,14 +195,26 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
-            <RevealedChip name={data.revealedName} />
+            <RevealedChip
+              name={data.revealedName}
+              displayedName={data.name}
+            />
             <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} />
-            <MergedToonsChip handles={data.mergedToonHandles} />
+            {/* The identities breakdown below supersedes the toons
+                disclosure — showing both would say the same thing
+                twice. */}
+            {(data.mergedIdentities?.length ?? 0) > 1 ? null : (
+              <MergedToonsChip handles={data.mergedToonHandles} />
+            )}
           </div>
           <ProfilePulseLine
             pulseCharacterId={data.pulseCharacterId}
             toonHandle={data.toonHandle}
             pulseId={data.pulseId || pulseId}
+          />
+          <MergedIdentitiesLine
+            identities={data.mergedIdentities}
+            mainName={data.name}
           />
           <Link
             href={publicHref}
@@ -392,10 +427,15 @@ function totalsFromGames(games: ProfileGame[]): {
   return { wins, losses, total, winRate: total > 0 ? wins / total : 0 };
 }
 
-function buildProfileQuery(since: string | undefined, until: string | undefined): string {
+function buildProfileQuery(
+  since: string | undefined,
+  until: string | undefined,
+  mergeLinked?: boolean,
+): string {
   const usp = new URLSearchParams();
   if (since) usp.set("since", since);
   if (until) usp.set("until", until);
+  if (mergeLinked) usp.set("mergeLinked", "1");
   const q = usp.toString();
   return q ? `?${q}` : "";
 }
@@ -439,13 +479,68 @@ function MergedToonsChip({
 }
 
 /**
+ * Per-name breakdown for a merged player profile: every name SC2Pulse
+ * links to this player, with its own W-L, so "all their games on one
+ * page" stays auditable per name. The stats on this page already span
+ * all of them — this line is disclosure, not navigation. Renders
+ * nothing on single-identity profiles.
+ */
+function MergedIdentitiesLine({
+  identities,
+  mainName,
+}: {
+  identities?: MergedIdentity[] | null;
+  mainName?: string;
+}) {
+  if (!identities || identities.length <= 1) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span
+        className="text-micro uppercase tracking-wider text-text-dim"
+        title="SC2Pulse links these names to the same player — this page merges all of their games"
+      >
+        Plays as
+      </span>
+      {identities.map((identity) => {
+        const label = identity.name || "unnamed";
+        const isMain = !!mainName && identity.name === mainName;
+        return (
+          <span
+            key={identity.pulseId}
+            title={`${label} · ${identity.wins}-${identity.losses} vs you`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption ${
+              isMain
+                ? "border-accent/40 bg-accent/10 text-text"
+                : "border-border bg-bg-elevated text-text-muted"
+            }`}
+          >
+            <span className="max-w-[9rem] truncate">{label}</span>
+            <span className="tabular-nums text-micro text-text-dim">
+              {identity.wins}-{identity.losses}
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * SC2Pulse "revealed" identity pill for the profile heading. For a
  * barcode opponent the heading is unreadable bars; the revealed pro/main
- * name is the real identity. Renders nothing when not revealed.
+ * name is the real identity. Renders nothing when not revealed — or
+ * when the heading already IS the revealed name (a merged profile led
+ * by the pro name; repeating it is clutter).
  */
-function RevealedChip({ name }: { name?: string | null }) {
+function RevealedChip({
+  name,
+  displayedName,
+}: {
+  name?: string | null;
+  displayedName?: string;
+}) {
   const tag = typeof name === "string" ? name.trim() : "";
-  if (!tag) return null;
+  if (!tag || tag === (displayedName || "").trim()) return null;
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full bg-accent-cyan/15 px-2.5 py-0.5 text-caption font-semibold text-accent-cyan"

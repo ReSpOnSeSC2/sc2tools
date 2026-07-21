@@ -269,7 +269,14 @@ function makeServices(deps) {
   const opponents = new OpponentsService(
     deps.db,
     deps.config.serverPepper,
-    { gameDetails, logger: deps.logger, pulseResolver, pulseMmr, pulseDirectory },
+    {
+      gameDetails,
+      logger: deps.logger,
+      pulseResolver,
+      pulseMmr,
+      pulseDirectory,
+      pulseLinks,
+    },
   );
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
