@@ -7,7 +7,8 @@
  * Runs its own multichat feed (same engines as the chat widget — no
  * extra auth) and renders the normalized event stream: the newest
  * event as a prominent card that auto-dismisses after a few seconds,
- * with a small low-opacity stack of the previous events below it.
+ * with a small low-opacity stack of the previous events below it while
+ * that newest alert is active.
  * Perfectly transparent while nothing has happened.
  *
  * The shared ``overlay:live`` payload is read for one thing: the
@@ -32,7 +33,7 @@ import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import { useMultichatConfig } from "./MultiChatWidget";
 
-/** How long the newest event stays prominent before joining the stack. */
+/** How long the newest event (and its temporary history) stays visible. */
 const ALERT_VISIBLE_MS = 8_000;
 /** Faded history entries kept under the prominent card. */
 const STACK_SIZE = 3;
@@ -93,7 +94,9 @@ export function ChatAlertsWidget({
   const newestKey = newest ? `${newest.platform}:${newest.id}` : null;
 
   // Promote each newly-arrived event to the prominent slot for
-  // ALERT_VISIBLE_MS, then let it fall back into the faded stack.
+  // ALERT_VISIBLE_MS, then clear the whole toaster. The feed retains old
+  // events, so rendering the stack after this timer would leave alerts on
+  // stream indefinitely.
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -112,10 +115,11 @@ export function ChatAlertsWidget({
   if (events.length === 0) return <div style={{ background: "transparent" }} />;
 
   const prominent = activeKey === newestKey ? newest : null;
-  const stack = events
-    .slice(0, prominent ? events.length - 1 : events.length)
-    .slice(-STACK_SIZE)
-    .reverse();
+  const stack = prominent
+    ? events.slice(0, events.length - 1).slice(-STACK_SIZE).reverse()
+    : [];
+
+  if (!prominent) return <div style={{ background: "transparent" }} />;
 
   return (
     <div style={frameStyle}>

@@ -213,6 +213,40 @@ describe("ChatAlertsWidget", () => {
     const { container } = render(<ChatAlertsWidget token="tok" />);
     expect(container.textContent).toBe("");
   });
+
+  it("clears the alert and faded history after the visibility window", () => {
+    vi.useFakeTimers();
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "twitch",
+          id: "e1",
+          kind: "raid",
+          user: "OlderRaider",
+          atMs: 1000,
+        },
+        {
+          platform: "youtube",
+          id: "e2",
+          kind: "superchat",
+          user: "NewestFan",
+          atMs: 2000,
+        },
+      ],
+    };
+
+    const { container } = render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("NewestFan")).toBeTruthy();
+    expect(screen.getByText("OlderRaider")).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+
+    expect(container.textContent).toBe("");
+    vi.useRealTimers();
+  });
 });
 
 describe("StreamGoalsWidget", () => {
