@@ -286,20 +286,37 @@ def test_chrono_period_is_cooldown_not_buff_duration():
 
 
 def test_expected_chronos_for_single_nexus_full_game():
-    """600s of Nexus uptime should yield ~6 expected chronos, not 30."""
+    """600s of Nexus uptime sustains ~6 regen chronos, not 30."""
     assert _expected(600, CHRONO_PERIOD_SEC) == 6
 
 
 def test_expected_chronos_for_three_base_late_game():
-    """Three Nexuses averaging ~500s alive each = 1500s -> 16 expected."""
+    """Three Nexuses averaging ~500s alive each = 1500s -> 16 regen cycles."""
     assert _expected(1500, CHRONO_PERIOD_SEC) == 16
+
+
+def test_expected_credits_free_start_casts():
+    """Each Nexus banks 50 energy on finish — one cast before any regen.
+
+    600s single Nexus: 6 regen cycles + 1 free-start cast = 7. Without
+    the credit a player spending starting energy reads as >100%
+    efficient (the "11 of ~8 expected (138%)" display bug).
+    """
+    assert _expected(600, CHRONO_PERIOD_SEC, free_casts=1) == 7
+    assert _expected(1500, CHRONO_PERIOD_SEC, free_casts=3) == 19
+
+
+def test_expected_zero_uptime_ignores_free_casts():
+    """No alive-time -> no expected casts, banked energy or not."""
+    assert _expected(0, CHRONO_PERIOD_SEC, free_casts=3) == 0
 
 
 def test_protoss_macro_no_penalty_for_on_pace_chronos():
     """Player with chronos == expected - grace gets zero race_penalty.
 
-    Single Nexus alive 600s -> expected=6, grace=2 -> target=4.
-    Five chronos clears the bar; race_penalty must be 0.
+    Single Nexus alive 600s -> expected = 6 regen + 1 free-start = 7,
+    grace=2 -> target=5. Five chronos clears the bar; race_penalty
+    must be 0.
     """
     macro_events = {
         "stats_events": [],
@@ -312,8 +329,54 @@ def test_protoss_macro_no_penalty_for_on_pace_chronos():
     result = compute_macro_score(macro_events, my_race="Protoss",
                                  game_length_sec=600)
     assert result["raw"]["chronos_actual"] == 5
-    assert result["raw"]["chronos_expected"] == 6
+    assert result["raw"]["chronos_expected"] == 7
     assert result["raw"]["race_penalty"] == 0.0
+
+
+def test_protoss_expected_includes_one_free_chrono_per_nexus():
+    """Regression for the "11 of ~8 expected (138%)" display bug.
+
+    A player who spends each Nexus's 50 starting energy legitimately
+    casts more chronos than regen alone sustains; expected must include
+    those free casts so actual doesn't exceed it on normal play.
+    Two Nexuses, 600s + 290s alive = 890s -> 10 regen cycles + 2 free.
+    """
+    macro_events = {
+        "stats_events": [],
+        "ability_events": [_chrono(target_unit_id=10) for _ in range(12)],
+        "bases": [
+            {"unit_id": 1, "name": "Nexus", "born_time": 0,   "died_time": 600},
+            {"unit_id": 2, "name": "Nexus", "born_time": 310, "died_time": 600},
+        ],
+        "chrono_targets": [{"building_name": "Nexus", "count": 12}],
+        "game_length_sec": 600,
+    }
+    result = compute_macro_score(macro_events, my_race="Protoss",
+                                 game_length_sec=600)
+    assert result["raw"]["chronos_expected"] == 12
+    assert result["raw"]["chronos_actual"] <= result["raw"]["chronos_expected"]
+    assert result["raw"]["race_penalty"] == 0.0
+
+
+def test_terran_expected_includes_one_free_mule_per_orbital():
+    """Orbitals morph in with 50 energy — same free-cast credit.
+
+    Two Orbitals, 640s + 320s alive = 960s -> 15 regen cycles + 2 free.
+    """
+    macro_events = {
+        "stats_events": [],
+        "ability_events": [],
+        "bases": [
+            {"unit_id": 1, "name": "OrbitalCommand",
+             "born_time": 0, "died_time": 640},
+            {"unit_id": 2, "name": "OrbitalCommand",
+             "born_time": 320, "died_time": 640},
+        ],
+        "game_length_sec": 640,
+    }
+    result = compute_macro_score(macro_events, my_race="Terran",
+                                 game_length_sec=640)
+    assert result["raw"]["mules_expected"] == 17
 
 
 def test_protoss_macro_penalises_severe_chrono_neglect():
@@ -332,7 +395,7 @@ def test_protoss_macro_penalises_severe_chrono_neglect():
     result = compute_macro_score(macro_events, my_race="Protoss",
                                  game_length_sec=1200)
     assert result["raw"]["chronos_actual"] == 2
-    # 1200 + 1000 + 800 = 3000s alive, /89 -> 33 expected.
-    assert result["raw"]["chronos_expected"] == 33
-    # 2 / (33 - 2) = 6.5% efficiency -> capped at CHRONO_MAX_PENALTY
+    # 1200 + 1000 + 800 = 3000s alive, /89 -> 33 regen + 3 free-start.
+    assert result["raw"]["chronos_expected"] == 36
+    # 2 / (36 - 2) = 5.9% efficiency -> capped at CHRONO_MAX_PENALTY
     assert result["raw"]["race_penalty"] > 0.0
