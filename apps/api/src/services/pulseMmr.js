@@ -56,6 +56,8 @@ const REGION_CODE_TO_LABEL = {
  *   fetchedAt: number,
  *   characterId?: string,
  *   revealedName?: string | null,
+ *   league?: string | null,
+ *   tier?: number | null,
  * }} PulseMmrEntry
  */
 
@@ -120,7 +122,7 @@ class PulseMmrService {
    *     available.
    *
    * @param {string|null|undefined} pulseId
-   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null, league: string|null, tier: number|null}|null>}
    */
   async getCurrentMmr(pulseId) {
     const id = normalisePulseId(pulseId);
@@ -141,6 +143,8 @@ class PulseMmrService {
         region: cached.region,
         characterId: id,
         revealedName: cached.revealedName ?? null,
+        league: cached.league ?? null,
+        tier: cached.tier ?? null,
       };
     }
     const fetched = await this._fetchTeams(id);
@@ -152,6 +156,8 @@ class PulseMmrService {
         region: entry.region,
         characterId: id,
         revealedName: entry.revealedName ?? null,
+        league: entry.league ?? null,
+        tier: entry.tier ?? null,
       };
     }
     // Stale-while-error: a network blip shouldn't strip the streamer's
@@ -162,6 +168,8 @@ class PulseMmrService {
         region: cached.region,
         characterId: id,
         revealedName: cached.revealedName ?? null,
+        league: cached.league ?? null,
+        tier: cached.tier ?? null,
       };
     }
     return null;
@@ -187,7 +195,7 @@ class PulseMmrService {
    *   - The character has no team in the active season for any region.
    *
    * @param {string|null|undefined} toonHandle
-   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, characterId: string|null, revealedName: string|null, league: string|null, tier: number|null}|null>}
    */
   async getCurrentMmrByToon(toonHandle) {
     const handle = normaliseToonHandle(toonHandle);
@@ -324,7 +332,7 @@ class PulseMmrService {
    *
    * @param {Array<string|null|undefined>|null|undefined} ids
    * @param {{preferredRegion?: string, forceRefresh?: boolean}} [opts]
-   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null, league: string|null, tier: number|null}|null>}
    */
   async getCurrentMmrForAny(ids, opts = {}) {
     if (!Array.isArray(ids) || ids.length === 0) return null;
@@ -357,6 +365,8 @@ class PulseMmrService {
         mmr: cached.mmr,
         region: cached.region,
         revealedName: cached.revealedName ?? null,
+        league: cached.league ?? null,
+        tier: cached.tier ?? null,
       };
     }
     const fetched = await this._fetchTeams(numericIds, { preferredRegion });
@@ -371,6 +381,8 @@ class PulseMmrService {
         mmr: cached.mmr,
         region: cached.region,
         revealedName: cached.revealedName ?? null,
+        league: cached.league ?? null,
+        tier: cached.tier ?? null,
       };
     }
     return null;
@@ -407,7 +419,7 @@ class PulseMmrService {
    * @private
    * @param {string|string[]} pulseIdOrIds
    * @param {{preferredRegion?: string|null}} [opts]
-   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null}|null>}
+   * @returns {Promise<{mmr: number, region: string|null, revealedName: string|null, league: string|null, tier: number|null}|null>}
    */
   async _fetchTeams(pulseIdOrIds, opts = {}) {
     const ids = Array.isArray(pulseIdOrIds) ? pulseIdOrIds : [pulseIdOrIds];
@@ -436,6 +448,8 @@ class PulseMmrService {
           mmr: Math.round(best.rating),
           region: best.region,
           revealedName: pickRevealedName(preferred),
+          league: best.league ?? null,
+          tier: best.tier ?? null,
         };
       }
     }
@@ -450,6 +464,8 @@ class PulseMmrService {
       mmr: Math.round(best.rating),
       region: best.region,
       revealedName: pickRevealedName(candidates),
+      league: best.league ?? null,
+      tier: best.tier ?? null,
     };
   }
 
@@ -472,7 +488,7 @@ class PulseMmrService {
    * @returns {Promise<Array<{
    *   rating: number, lastPlayedMs: number, region: string|null,
    *   race: string|null, games: number, league: string|null,
-   *   revealedName: string|null,
+   *   tier: number|null, revealedName: string|null,
    * }>>}
    */
   async _collectTeamCandidates(ids, opts = {}) {
@@ -489,7 +505,7 @@ class PulseMmrService {
       throwOnError: opts.throwOnError === true,
     });
     if (seasons.size === 0) return [];
-    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, revealedName: string|null}>} */
+    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, tier: number|null, revealedName: string|null}>} */
     const candidates = [];
     // SC2Pulse's /group/team accepts repeated ``characterId`` query
     // params and returns the union — one HTTP call carries every id in
@@ -590,6 +606,7 @@ class PulseMmrService {
           race,
           games,
           league: teamLeagueLabel(team),
+          tier: teamTierNumber(team),
           revealedName: teamProNickname(team),
         });
       }
@@ -1193,6 +1210,30 @@ function teamLeagueLabel(team) {
   }
   if (n === null || n < 0 || n >= LEAGUE_LABELS.length) return null;
   return LEAGUE_LABELS[n];
+}
+
+/**
+ * 1-based ladder tier for a SC2Pulse team, or null when absent /
+ * out-of-range. SC2Pulse's ``tierType`` is 0-indexed (0..2) while
+ * players say "Master 1" — same +1 convention as pulseOpponentIntel.
+ * Grandmaster has no tiers on Blizzard's ladder (it's a single top-N
+ * bucket), so GM teams return null rather than a misleading
+ * "Grandmaster 1".
+ *
+ * @param {any} team
+ * @returns {number|null}
+ */
+function teamTierNumber(team) {
+  if (teamLeagueLabel(team) === "Grandmaster") return null;
+  const raw = team && team.tierType;
+  let n = null;
+  if (typeof raw === "number") n = raw;
+  else if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) n = parsed;
+  }
+  if (n === null || !Number.isInteger(n) || n < 0 || n > 2) return null;
+  return n + 1;
 }
 
 // 1v1 LotV teams are race-specific; the member carries per-race game

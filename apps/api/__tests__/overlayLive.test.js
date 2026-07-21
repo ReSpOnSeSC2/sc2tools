@@ -201,6 +201,89 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
   });
 
+  test("prefers the REAL SC2Pulse league + tier over the MMR-threshold guess", async () => {
+    // 5124 MMR falls in the guess table's "Master 2" band, but the
+    // ladder actually has this streamer in Master 1 (e.g. a former GM
+    // placed into M1 while the new season's GM ladder is still locked).
+    // The widget must show Blizzard's placement, not the estimate.
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async () => ({
+        mmr: 5130,
+        region: "EU",
+        revealedName: null,
+        league: "Master",
+        tier: 1,
+      })),
+    };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame(
+      "u1",
+      game({ myMmr: 5124, myToonHandle: "2-S2-1-267727" }),
+    );
+    expect(p.rank).toEqual({ league: "Master", tier: 1, mmr: 5124 });
+    // The lookup is pinned to the region of the account that just
+    // played so a multi-region profile can't leak another ladder's
+    // league onto the widget.
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledWith(
+      ["2-S2-1-267727"],
+      { preferredRegion: "EU" },
+    );
+  });
+
+  test("falls back to the MMR-threshold guess when SC2Pulse resolves nothing", async () => {
+    const pulseMmr = { getCurrentMmrForAny: jest.fn(async () => null) };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame("u1", game({ myMmr: 5124 }));
+    expect(p.rank).toEqual({ league: "Master", tier: 2, mmr: 5124 });
+  });
+
+  test("falls back to the MMR-threshold guess when the Pulse lookup throws", async () => {
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async () => {
+        throw new Error("pulse down");
+      }),
+    };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame("u1", game({ myMmr: 4310 }));
+    expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+  });
+
+  test("Grandmaster rank renders without a tier", async () => {
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async () => ({
+        mmr: 6412,
+        region: "EU",
+        revealedName: null,
+        league: "Grandmaster",
+        tier: null,
+      })),
+    };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame(
+      "u1",
+      game({ myMmr: 6400, myToonHandle: "2-S2-1-267727" }),
+    );
+    expect(p.rank).toEqual({ league: "Grandmaster", mmr: 6400 });
+  });
+
+  test("Pulse rank still lands when the replay carried no myMmr", async () => {
+    const pulseMmr = {
+      getCurrentMmrForAny: jest.fn(async () => ({
+        mmr: 5130,
+        region: "EU",
+        revealedName: null,
+        league: "Master",
+        tier: 1,
+      })),
+    };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame(
+      "u1",
+      game({ myMmr: undefined, myToonHandle: "2-S2-1-267727" }),
+    );
+    expect(p.rank).toEqual({ league: "Master", tier: 1, mmr: 5130 });
+  });
+
   test("triggers cheese alert when the opponent strategy is cheese-y", async () => {
     const p = await svc.buildFromGame("u1", game({ opponent: {
       ...game().opponent,
