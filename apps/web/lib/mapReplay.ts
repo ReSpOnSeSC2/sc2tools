@@ -47,6 +47,10 @@ export interface PlaybackUnit {
   name: string;
   born: number;
   died: number | null;
+  /** Spent death (v4): the death event had no killer — a Drone
+   * morphing into a structure, Templar merging into an Archon, a
+   * MULE expiring. Absent on older payloads and on killed units. */
+  sd?: boolean;
   /** Flat [t, x, y, t, x, y, …], ascending t. */
   wp: number[];
 }
@@ -127,6 +131,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       name: typeof r.name === "string" ? r.name.slice(0, 40) : "",
       born: Number.isFinite(born) ? born : wp[0],
       died: Number.isFinite(died) ? died : null,
+      ...(r.sd === true ? { sd: true } : {}),
       wp,
     });
   }

@@ -438,7 +438,7 @@ export function MapReplayer({ playback }: { playback: MapPlayback }) {
   // Deaths that are actually tech spending — Drones morphed into
   // structures, Templar merged into Archons — never count as losses.
   const consumed = useMemo(
-    () => morphConsumedIndices(playback.units, playback.buildings),
+    () => morphConsumedIndices(playback.units, playback.buildings, playback.v),
     [playback],
   );
   const meLosses = useMemo(

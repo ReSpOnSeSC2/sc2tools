@@ -112,58 +112,116 @@ export interface LossSummary {
  * became are excluded from the loss ledger.
  */
 
-/** How far apart (seconds) a consumption death and its product's
- * birth may be recorded. Tracker stamps them on the same tick;
- * payload rounding is 0.1s — the slack covers both. */
-const CONSUMED_TIME_TOL_SEC = 2.5;
-/** World-cell radius pairing a death with its product. The death
- * event lands on the building/merge spot, but compaction may drop a
- * final waypoint recorded < 2s after the previous one, leaving the
- * interpolated death position a few cells short. */
-const CONSUMED_DIST_TOL = 6;
+/** Unit names whose killer-less deaths are tech consumption. */
+const CONSUMABLE: ReadonlySet<string> = new Set([
+  "Drone",
+  "HighTemplar",
+  "DarkTemplar",
+]);
 
-const near = (
-  a: { x: number; y: number } | null,
-  bx: number,
-  by: number,
-): boolean => a !== null && Math.hypot(a.x - bx, a.y - by) <= CONSUMED_DIST_TOL;
+/** Legacy-payload pairing window (seconds). The tracker stamps a
+ * morph's drone death and the structure's init on the SAME tick, so
+ * a real match sits at ~0; the slack only covers 0.1s payload
+ * rounding and timebase jitter. */
+const CONSUMED_TIME_TOL_SEC = 1.25;
+/** Distance fallback for tie-breaks and sanity: interpolated death
+ * positions can sit several cells off the recorded spot when the
+ * exact death waypoint was dropped by the payload's 2s waypoint
+ * compaction, so this stays generous. */
+const CONSUMED_DIST_TOL = 12;
+
+interface ConsumptionCandidate {
+  productKey: number;
+  unitIdx: number;
+  dt: number;
+  dist: number;
+}
+
+/** Greedy 1:1 assignment: best (dt, dist) pairs first; every product
+ * consumes at most ``perProduct`` deaths, every death is consumed at
+ * most once. Returns the consumed unit indices. */
+function assignConsumption(
+  candidates: ConsumptionCandidate[],
+  perProduct: number,
+): Set<number> {
+  candidates.sort((a, b) => a.dt - b.dt || a.dist - b.dist);
+  const productUses = new Map<number, number>();
+  const consumed = new Set<number>();
+  for (const c of candidates) {
+    if (consumed.has(c.unitIdx)) continue;
+    const used = productUses.get(c.productKey) ?? 0;
+    if (used >= perProduct) continue;
+    productUses.set(c.productKey, used + 1);
+    consumed.add(c.unitIdx);
+  }
+  return consumed;
+}
 
 /**
  * Indices (into ``units``) of deaths that are resource SPENDING, not
  * losses: Drones consumed by the structure they morphed into, and
  * High/Dark Templar consumed by an Archon merge. Pure and payload-
  * stable — compute once per playback and pass to ``computeLosses``.
+ *
+ * v4+ payloads carry exact killer attribution: ``sd: true`` marks a
+ * death with no killer, which for these unit types IS the morph or
+ * merge — no pairing needed, and a drone genuinely shot next to its
+ * own morphing hatchery stays a loss. Older payloads fall back to
+ * 1:1 time-first matching against building starts / Archon births:
+ * the tracker records both halves of a consumption on the same tick,
+ * so each structure claims the closest-in-time (then closest-in-
+ * space) drone death and each Archon claims at most two templar —
+ * bounded, so a busy fight can't swallow extra deaths.
  */
 export function morphConsumedIndices(
   units: ReadonlyArray<PlaybackUnit>,
   buildings: ReadonlyArray<PlaybackBuilding>,
+  payloadVersion = 0,
 ): Set<number> {
-  const out = new Set<number>();
-  const archons = units.filter((u) => u.name === "Archon");
+  if (payloadVersion >= 4) {
+    const out = new Set<number>();
+    units.forEach((u, idx) => {
+      if (u.died !== null && u.sd === true && CONSUMABLE.has(u.name)) {
+        out.add(idx);
+      }
+    });
+    return out;
+  }
+
+  const droneCandidates: ConsumptionCandidate[] = [];
+  const templarCandidates: ConsumptionCandidate[] = [];
+  const archons = units
+    .map((u, idx) => ({ u, idx }))
+    .filter(({ u }) => u.name === "Archon");
   units.forEach((u, idx) => {
-    if (u.died === null) return;
+    if (u.died === null || !CONSUMABLE.has(u.name)) return;
+    const pos = unitPositionAt(u.wp, u.died);
     if (u.name === "Drone") {
-      const pos = unitPositionAt(u.wp, u.died);
-      const morphed = buildings.some(
-        (b) =>
-          b.owner === u.owner &&
-          Math.abs(b.t - (u.died as number)) <= CONSUMED_TIME_TOL_SEC &&
-          near(pos, b.x, b.y),
-      );
-      if (morphed) out.add(idx);
-    } else if (u.name === "HighTemplar" || u.name === "DarkTemplar") {
-      const pos = unitPositionAt(u.wp, u.died);
-      const merged = archons.some((a) => {
-        if (a.owner !== u.owner) return false;
-        if (Math.abs(a.born - (u.died as number)) > CONSUMED_TIME_TOL_SEC) {
-          return false;
-        }
-        const apos = unitPositionAt(a.wp, a.born);
-        return apos !== null && near(pos, apos.x, apos.y);
+      buildings.forEach((b, bIdx) => {
+        if (b.owner !== u.owner) return;
+        const dt = Math.abs(b.t - (u.died as number));
+        if (dt > CONSUMED_TIME_TOL_SEC) return;
+        const dist = pos === null ? 0 : Math.hypot(pos.x - b.x, pos.y - b.y);
+        if (dist > CONSUMED_DIST_TOL) return;
+        droneCandidates.push({ productKey: bIdx, unitIdx: idx, dt, dist });
       });
-      if (merged) out.add(idx);
+    } else {
+      for (const { u: a, idx: aIdx } of archons) {
+        if (a.owner !== u.owner) continue;
+        const dt = Math.abs(a.born - (u.died as number));
+        if (dt > CONSUMED_TIME_TOL_SEC) continue;
+        const apos = unitPositionAt(a.wp, a.born);
+        const dist =
+          pos === null || apos === null
+            ? 0
+            : Math.hypot(pos.x - apos.x, pos.y - apos.y);
+        if (dist > CONSUMED_DIST_TOL) continue;
+        templarCandidates.push({ productKey: aIdx, unitIdx: idx, dt, dist });
+      }
     }
   });
+  const out = assignConsumption(droneCandidates, 1);
+  for (const idx of assignConsumption(templarCandidates, 2)) out.add(idx);
   return out;
 }
 

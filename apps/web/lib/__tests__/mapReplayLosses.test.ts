@@ -164,6 +164,50 @@ describe("morphConsumedIndices", () => {
     expect(losses.minerals).toBe(150);
     expect(losses.gas).toBe(450);
   });
+
+  it("lets each building consume at most ONE drone death", () => {
+    // Two drones die on the same tick near one hatchery — only the
+    // closer one is the morph; the other was killed in the same
+    // harass and must stay a loss.
+    const units = [
+      at("me", "Drone", 0, 120, 60, 60),
+      at("me", "Drone", 0, 120, 63, 60),
+    ];
+    const buildings = [building("me", "Hatchery", 120, 60, 60)];
+    const consumed = morphConsumedIndices(units, buildings);
+    expect([...consumed]).toEqual([0]);
+  });
+
+  it("an Archon consumes at most two templar deaths", () => {
+    const units = [
+      at("me", "HighTemplar", 100, 300, 80, 80),
+      at("me", "HighTemplar", 100, 300, 80.5, 80),
+      // Third templar sniped in the same fight, right next to the
+      // merge — the merge only ate two.
+      at("me", "HighTemplar", 100, 300, 81, 80),
+      at("me", "Archon", 300, null, 80.2, 80),
+    ];
+    const consumed = morphConsumedIndices(units, []);
+    expect(consumed.size).toBe(2);
+  });
+
+  it("trusts exact killer attribution on v4 payloads", () => {
+    const spent: PlaybackUnit = { ...at("me", "Drone", 0, 60, 50, 50), sd: true };
+    const units = [
+      spent,
+      // Killed drone standing right where a building starts on the
+      // same tick — the heuristic would have paired it; attribution
+      // knows better.
+      at("me", "Drone", 0, 60, 51, 50),
+    ];
+    const buildings = [building("me", "SpawningPool", 60, 51, 50)];
+    const consumed = morphConsumedIndices(units, buildings, 4);
+    expect([...consumed]).toEqual([0]);
+    // sd on a free unit name never matters; sd on army names is
+    // ignored too — only Drone/Templar deaths can be tech spending.
+    const oddball: PlaybackUnit = { ...at("me", "Zealot", 0, 60, 50, 50), sd: true };
+    expect(morphConsumedIndices([oddball], [], 4).size).toBe(0);
+  });
 });
 
 describe("workerCountAt", () => {
