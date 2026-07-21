@@ -537,6 +537,39 @@ def _efficiency_penalty(actual: int, expected: int, max_penalty: float,
     return max_penalty * (1.0 - (eff - 0.5) / 0.5)
 
 
+def _creep_tumor_stats(tumors: List[Dict]) -> Dict[str, Any]:
+    """Aggregate the extractor's ``creep_tumor_events`` for raw.
+
+    Each event: {time, kind: "queen"|"spread", unit_id, died_time}.
+    Garbage rows (non-dict, unknown kind) are skipped rather than
+    crashing — same defensive stance as the chrono_targets plumbing.
+    """
+    queen = spread = lost = 0
+    first: Optional[int] = None
+    for tu in tumors:
+        if not isinstance(tu, dict):
+            continue
+        kind = tu.get("kind")
+        if kind == "queen":
+            queen += 1
+        elif kind == "spread":
+            spread += 1
+        else:
+            continue
+        t = tu.get("time")
+        if isinstance(t, (int, float)) and (first is None or t < first):
+            first = int(t)
+        if tu.get("died_time") is not None:
+            lost += 1
+    return {
+        "creep_tumors_queen": queen,
+        "creep_tumors_spread": spread,
+        "creep_tumors_total": queen + spread,
+        "creep_tumors_lost": lost,
+        "first_tumor_sec": first,
+    }
+
+
 def _count_ability(abilities: List[Dict], names: set) -> int:
     """Count ability events whose ``ability_name`` matches ``names``.
 
@@ -671,6 +704,15 @@ def compute_macro_score(
                 mineral_cost=int(missed * MISSED_INJECT_MIN),
                 penalty=race_penalty,
             ))
+        # Creep tumor stats — informational only, no penalty. The
+        # extractor classifies each tumor's origin at construction
+        # start (before the burrow morph renames everything to
+        # CreepTumorBurrowed); we just aggregate here. Keys are absent
+        # (not zero) when the extractor predates creep tracking, so
+        # the SPA can distinguish "no tumors" from "old payload".
+        tumors = macro_events.get("creep_tumor_events")
+        if isinstance(tumors, list):
+            raw.update(_creep_tumor_stats(tumors))
     elif race == "Protoss":
         alive = _alive_seconds(bases, BASE_TYPES_PROTOSS, game_end)
         # Each Nexus finishes with 50 energy banked — one chrono castable
