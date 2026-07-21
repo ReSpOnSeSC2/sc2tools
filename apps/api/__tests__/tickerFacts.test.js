@@ -249,6 +249,7 @@ describe("services/tickerFacts", () => {
         band: { leagueId: 5, label: "Master" },
         axes: [
           { key: "aggression", label: "Aggression", percentile: 82, value: 1 },
+          { key: "consistency", label: "Consistency", percentile: 91, value: 2 },
           { key: "ladder", label: "MMR context", percentile: 99, value: 1 },
         ],
       })),
@@ -273,10 +274,11 @@ describe("services/tickerFacts", () => {
     const facts = await svc({ skillFingerprint, arcade, seasons }).factsFor("u1");
     const play = facts.find((f) => f.id === "playstyle");
     expect(play).toBeTruthy();
-    expect(play.text).toContain("Tempo Attacker");
-    expect(play.text).toContain("PvZ");
-    // ladder axis excluded from "strongest axis" — aggression wins.
-    expect(play.text.toLowerCase()).toContain("aggression");
+    // Personal consistency and MMR are excluded from the comparable-game
+    // benchmark summary, so the lower game-tempo percentile is the right one.
+    expect(play.text).toBe(
+      "PLAYSTYLE (PvZ): Tempo Attacker — strongest benchmark: game tempo averaged at the 82nd percentile vs PvZ games against Master opponents",
+    );
     expect(skillFingerprint.compute).toHaveBeenCalledWith("u1", { matchup: "PvZ" });
     const unit = facts.find((f) => f.id === "favorite-unit");
     expect(unit.text).toContain("Stalker");
@@ -287,6 +289,56 @@ describe("services/tickerFacts", () => {
     expect(season.text).toContain("SEASON 64");
     expect(season.text).toContain("21 days");
   });
+
+  test.each([
+    {
+      playstyle: "Metronome",
+      score: 72,
+      explanation:
+        "steady macro across recent games, usually at a measured pace",
+    },
+    {
+      playstyle: "Coin-Flip Player",
+      score: 28,
+      explanation: "macro varied across recent games",
+    },
+  ])(
+    "playstyle fact presents $playstyle consistency as a personal score",
+    async ({ playstyle, score, explanation }) => {
+      await db.games.insertMany(
+        Array.from({ length: 25 }, (_, i) =>
+          game(i + 1, {
+            opponent: { displayName: `O${i}`, race: "Zerg" },
+          }),
+        ),
+      );
+      const skillFingerprint = {
+        compute: jest.fn(async (userId, { matchup }) => ({
+          matchup,
+          games: 25,
+          playstyle,
+          band: { leagueId: 6, label: "Grandmaster" },
+          axes: [
+            { key: "macro", label: "Macro", percentile: 68, value: 60 },
+            { key: "mechanics", label: "Mechanics", percentile: 63, value: 180 },
+            { key: "spending", label: "Spending", percentile: 60, value: 100 },
+            { key: "consistency", label: "Consistency", percentile: score, value: 7 },
+            { key: "aggression", label: "Aggression", percentile: 50, value: 20 },
+            { key: "ladder", label: "MMR context", percentile: 93, value: 5000 },
+          ],
+        })),
+      };
+
+      const facts = await svc({ skillFingerprint }).factsFor("u1");
+      const play = facts.find((fact) => fact.id === "playstyle");
+      expect(play).toBeTruthy();
+      expect(play.text).toBe(
+        `PLAYSTYLE (PvZ): ${playstyle} — ${explanation} (consistency score: ${score}/100)`,
+      );
+      expect(play.text).not.toMatch(/top \d+%/);
+      expect(play.text).not.toContain("Grandmaster");
+    },
+  );
 
   test("optional-dep failures only shrink the pool, never throw", async () => {
     const docs = [];

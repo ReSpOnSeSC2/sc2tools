@@ -32,29 +32,33 @@ import {
 } from "@/components/overlay/overlayResilience";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import { OpponentWidget } from "@/components/overlay/widgets/OpponentWidget";
+import { MatchResultWidget } from "@/components/overlay/widgets/MatchResultWidget";
+import { PostGameWidget } from "@/components/overlay/widgets/PostGameWidget";
+import { MmrDeltaWidget } from "@/components/overlay/widgets/MmrDeltaWidget";
+import { StreakWidget } from "@/components/overlay/widgets/StreakWidget";
+import { CheeseWidget } from "@/components/overlay/widgets/CheeseWidget";
+import { RematchWidget } from "@/components/overlay/widgets/RematchWidget";
+import { RivalWidget } from "@/components/overlay/widgets/RivalWidget";
+import { RankWidget } from "@/components/overlay/widgets/RankWidget";
+import { MetaWidget } from "@/components/overlay/widgets/MetaWidget";
+import { TopBuildsWidget } from "@/components/overlay/widgets/TopBuildsWidget";
+import { FavOpeningWidget } from "@/components/overlay/widgets/FavOpeningWidget";
+import { BestAnswerWidget } from "@/components/overlay/widgets/BestAnswerWidget";
+import { ScoutingWidget } from "@/components/overlay/widgets/ScoutingWidget";
 import {
-  OpponentWidget,
-  MatchResultWidget,
-  PostGameWidget,
-  MmrDeltaWidget,
-  StreakWidget,
-  CheeseWidget,
-  RematchWidget,
-  RivalWidget,
-  RankWidget,
-  MetaWidget,
-  TopBuildsWidget,
-  FavOpeningWidget,
-  BestAnswerWidget,
-  ScoutingWidget,
   SessionWidget,
-  RandomizerWidget,
   type SessionSummary,
-} from "@/components/overlay/widgets/PrePostFlow";
+} from "@/components/overlay/widgets/SessionWidget";
+import { RandomizerWidget } from "@/components/overlay/widgets/RandomizerWidget";
 import type { RandomizerConfig } from "@/lib/randomizer/types";
 import { sanitizeRandomizerConfig } from "@/lib/randomizer/config";
 import { useRevealAudioUnlock } from "@/components/randomizer/reveals/revealSound";
 import { decodeOverlayTheme, themeToCssVars } from "@/lib/overlayTheme";
+import {
+  mergeLiveGameStreamerHistory,
+  type StickyStreamerHistory,
+} from "@/components/overlay/mergeLiveGameStreamerHistory";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -265,16 +269,14 @@ function useOverlaySocket(
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
 ) {
   // Sticky cache of the latest enriched ``streamerHistory`` keyed by
-  // gameKey. The cloud's ``LiveGameBroker`` fans every 1 Hz envelope
+  // gameKey + normalized opponent name. The cloud's ``LiveGameBroker``
+  // fans every 1 Hz envelope
   // tick out twice — first as a partial (no ``streamerHistory``) and
   // then enriched (with ``streamerHistory``). Without preserving the
   // enriched block across the partial tick, the scouting + opponent
   // widgets flicker between the rich card and the thin pre-game
   // placeholder once per second of the match.
-  const stickyHistoryRef = useRef<{
-    gameKey: string;
-    streamerHistory: NonNullable<LiveGameEnvelope["streamerHistory"]>;
-  } | null>(null);
+  const stickyHistoryRef = useRef<StickyStreamerHistory | null>(null);
   // Latest gameKey observed from either channel — the heartbeat drift
   // check in ``attachOverlayResilience`` compares the cloud's view
   // against this to detect silently-dropped events.
@@ -310,34 +312,14 @@ function useOverlaySocket(
       if (typeof msg.gameKey === "string") {
         gameKeyRef.current = msg.gameKey;
       }
-      // Sticky ``streamerHistory`` merge — see ``stickyHistoryRef``
-      // above for the partial+enriched flicker context.
-      const incomingKey = typeof msg.gameKey === "string" ? msg.gameKey : null;
-      let next: LiveGameEnvelope = msg;
-      if (incomingKey) {
-        if (msg.streamerHistory) {
-          stickyHistoryRef.current = {
-            gameKey: incomingKey,
-            streamerHistory: msg.streamerHistory,
-          };
-        } else if (
-          stickyHistoryRef.current
-          && stickyHistoryRef.current.gameKey === incomingKey
-        ) {
-          next = {
-            ...msg,
-            streamerHistory: stickyHistoryRef.current.streamerHistory,
-          };
-        } else if (
-          stickyHistoryRef.current
-          && stickyHistoryRef.current.gameKey !== incomingKey
-        ) {
-          stickyHistoryRef.current = null;
-        }
-      } else if (!msg.streamerHistory) {
-        stickyHistoryRef.current = null;
-      }
-      setLiveGame(next);
+      // Preserve partial/enriched tick pairs only when the direct opponent
+      // identity also agrees. A gameKey alone is not safe on older agents.
+      const merged = mergeLiveGameStreamerHistory(
+        msg,
+        stickyHistoryRef.current,
+      );
+      stickyHistoryRef.current = merged.sticky;
+      setLiveGame(merged.envelope);
     });
     socket.on("overlay:session", (msg: SessionSummary) => {
       if (msg && typeof msg === "object") setSession(msg);

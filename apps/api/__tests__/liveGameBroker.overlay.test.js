@@ -170,6 +170,49 @@ describe("LiveGameBroker — overlay Socket.io fan-out", () => {
     expect(calls.find((c) => c.room === "overlay:bob_tok")).toBeUndefined();
   });
 
+  test("a superseded slow token lookup cannot emit an old match after menu", async () => {
+    let releaseFirstLookup;
+    const firstLookupGate = new Promise((resolve) => {
+      releaseFirstLookup = resolve;
+    });
+    let lookups = 0;
+    const overlayTokens = {
+      async list() {
+        lookups += 1;
+        if (lookups === 1) await firstLookupGate;
+        return [{ token: "tok_main", revokedAt: null }];
+      },
+    };
+    const { io, calls } = fakeIo();
+    const broker = new LiveGameBroker({
+      io,
+      overlayTokens,
+      logger: silentLogger(),
+    });
+
+    broker.publish("user-a", {
+      phase: "match_in_progress",
+      capturedAt: 100,
+      gameKey: "finished-game",
+      opponent: { name: "FinishedOpponent" },
+    });
+    broker.publish("user-a", {
+      phase: "menu",
+      capturedAt: 101,
+    });
+    await flushAsync();
+
+    expect(calls.map((call) => call.payload.phase)).toEqual(["menu"]);
+
+    releaseFirstLookup();
+    await flushAsync();
+    await flushAsync();
+
+    expect(calls.map((call) => call.payload.phase)).toEqual(["menu"]);
+    expect(broker.counters.overlay_emit_ok).toBe(1);
+    expect(broker.counters.overlay_stale_dropped).toBe(1);
+  });
+
   test("an overlayTokens.list() failure is logged and swallowed without throwing", async () => {
     const errors = [];
     const logger = {

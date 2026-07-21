@@ -97,6 +97,239 @@ describe("LiveGameBroker — gameKey-aware enrichment staleness guard", () => {
     expect(broker.counters.enrich_stale_dropped).toBe(1);
   });
 
+  test("idle/menu prevents a finished opponent's late enrichment from resurfacing", async () => {
+    let releaseEnded;
+    const endedGate = new Promise((resolve) => {
+      releaseEnded = resolve;
+    });
+    const enrich = async (userId, envelope) => {
+      if (envelope.gameKey === "finished-game") {
+        await endedGate;
+        return {
+          ...envelope,
+          streamerHistory: {
+            oppName: "FinishedOpponent",
+            headToHead: { wins: 2, losses: 3 },
+          },
+        };
+      }
+      return envelope;
+    };
+
+    const broker = new LiveGameBroker({ enrich });
+    const seen = [];
+    broker.subscribe("u1", (envelope) => seen.push(envelope));
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_ended",
+      gameKey: "finished-game",
+      opponent: { name: "FinishedOpponent" },
+    });
+    await flushAsync();
+    expect(seen).toHaveLength(1);
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "menu",
+    });
+    await flushAsync();
+    expect(seen).toHaveLength(2);
+    expect(broker.latest("u1").phase).toBe("menu");
+    expect(broker.currentGameKey("u1")).toBeNull();
+
+    releaseEnded();
+    await flushAsync();
+    await flushAsync();
+
+    expect(seen).toHaveLength(2);
+    expect(broker.latest("u1").phase).toBe("menu");
+    expect(
+      seen.filter((envelope) => envelope.streamerHistory),
+    ).toHaveLength(0);
+    expect(broker.counters.enrich_stale_dropped).toBe(1);
+  });
+
+  test("an older match envelope cannot arrive after menu and restore the finished game", () => {
+    const broker = new LiveGameBroker();
+    const seen = [];
+    broker.subscribe("u1", (envelope) => seen.push(envelope));
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_in_progress",
+      capturedAt: 100,
+      gameKey: "finished-game",
+      opponent: { name: "FinishedOpponent" },
+    });
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "menu",
+      capturedAt: 102,
+    });
+    // A slower HTTP worker finishes this older request last.
+    const staleAccepted = broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_ended",
+      capturedAt: 101,
+      gameKey: "finished-game",
+      opponent: { name: "FinishedOpponent" },
+    });
+
+    expect(seen.map((envelope) => envelope.phase)).toEqual([
+      "match_in_progress",
+      "menu",
+    ]);
+    expect(broker.latest("u1").phase).toBe("menu");
+    expect(broker.currentGameKey("u1")).toBeNull();
+    expect(broker.counters.published).toBe(3);
+    expect(broker.counters.envelope_stale_dropped).toBe(1);
+    expect(staleAccepted).toBe(false);
+  });
+
+  test("synthetic transition preludes do not poison the source-time watermark", () => {
+    const broker = new LiveGameBroker();
+    const seen = [];
+    broker.subscribe("u1", (envelope) => seen.push(envelope));
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_in_progress",
+      capturedAt: 50,
+      gameKey: "old-game",
+      opponent: { name: "OldOpponent" },
+    });
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "menu",
+      capturedAt: 101,
+      synthetic: true,
+    });
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 102,
+      gameKey: "new-game",
+      synthetic: true,
+    });
+    // The original event was captured before its synthetic prelude was
+    // constructed. It is still the logically newest real observation.
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_in_progress",
+      capturedAt: 100,
+      gameKey: "new-game",
+      opponent: { name: "NewOpponent" },
+    });
+
+    expect(seen.at(-1)?.phase).toBe("match_in_progress");
+    expect(seen.at(-1)?.opponent?.name).toBe("NewOpponent");
+    expect(broker.latest("u1").phase).toBe("match_in_progress");
+    expect(broker.currentGameKey("u1")).toBe("new-game");
+    expect(broker.counters.envelope_stale_dropped).toBe(0);
+  });
+
+  test("a reused gameKey cannot attach delayed history to a different opponent", async () => {
+    let releaseOpponentA;
+    const opponentAGate = new Promise((resolve) => {
+      releaseOpponentA = resolve;
+    });
+    const enrich = async (userId, envelope) => {
+      if (envelope.opponent?.name === "Opponent A") {
+        await opponentAGate;
+        return {
+          ...envelope,
+          streamerHistory: {
+            oppName: "Opponent A",
+            headToHead: { wins: 9, losses: 0 },
+          },
+        };
+      }
+      return envelope;
+    };
+    const broker = new LiveGameBroker({ enrich });
+    const seen = [];
+    broker.subscribe("u1", (envelope) => seen.push(envelope));
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 100,
+      gameKey: "reused-key",
+      opponent: { name: "Opponent A" },
+    });
+    await flushAsync();
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 100,
+      gameKey: "reused-key",
+      opponent: { name: "Opponent B" },
+    });
+    await flushAsync();
+    releaseOpponentA();
+    await flushAsync();
+    await flushAsync();
+
+    expect(seen.map((envelope) => envelope.opponent?.name)).toEqual([
+      "Opponent A",
+      "Opponent B",
+    ]);
+    expect(seen.some((envelope) => envelope.streamerHistory)).toBe(false);
+    expect(broker.latest("u1").opponent.name).toBe("Opponent B");
+    expect(broker.counters.enrich_stale_dropped).toBe(1);
+  });
+
+  test("older enrichment for the same match cannot regress a newer phase", async () => {
+    let releaseLoading;
+    const loadingGate = new Promise((resolve) => {
+      releaseLoading = resolve;
+    });
+    const enrich = async (userId, envelope) => {
+      if (envelope.phase === "match_loading") {
+        await loadingGate;
+        return {
+          ...envelope,
+          streamerHistory: {
+            oppName: "Opponent A",
+            headToHead: { wins: 2, losses: 1 },
+          },
+        };
+      }
+      return envelope;
+    };
+    const broker = new LiveGameBroker({ enrich });
+    const seen = [];
+    broker.subscribe("u1", (envelope) => seen.push(envelope));
+
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 100,
+      gameKey: "same-game",
+      opponent: { name: "Opponent A" },
+    });
+    await flushAsync();
+    broker.publish("u1", {
+      type: "liveGameState",
+      phase: "match_in_progress",
+      capturedAt: 101,
+      gameKey: "same-game",
+      opponent: { name: "Opponent A" },
+    });
+    await flushAsync();
+    releaseLoading();
+    await flushAsync();
+    await flushAsync();
+
+    expect(seen.map((envelope) => envelope.phase)).toEqual([
+      "match_loading",
+      "match_in_progress",
+    ]);
+    expect(broker.latest("u1").phase).toBe("match_in_progress");
+    expect(broker.counters.enrich_stale_dropped).toBe(1);
+  });
+
   test("an enriched payload for the SAME gameKey still broadcasts (no false positives)", async () => {
     const enrich = async (userId, envelope) => ({
       ...envelope,

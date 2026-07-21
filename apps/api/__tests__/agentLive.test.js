@@ -21,6 +21,7 @@ const pino = require("pino");
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { LiveGameBroker } = require("../src/services/liveGameBroker");
+const { buildAgentLiveRouter } = require("../src/routes/agentLive");
 
 const TEST_TOKEN = "user-live";
 const TEST_CLERK_USER_ID = "clerk_user_live";
@@ -34,6 +35,55 @@ jest.mock("@clerk/backend", () => ({
     throw new Error("invalid");
   }),
 }));
+
+describe("POST /v1/agent/live prediction lifecycle", () => {
+  test("an accepted loading event cannot open after menu wins during token lookup", async () => {
+    const express = require("express");
+    const broker = new LiveGameBroker();
+    let releaseTokenLookup;
+    const tokenLookupGate = new Promise((resolve) => {
+      releaseTokenLookup = resolve;
+    });
+    const overlayTokens = {
+      list: jest.fn(async () => {
+        await tokenLookupGate;
+        return [{ token: "tok", revokedAt: null }];
+      }),
+    };
+    const engagement = { openPrediction: jest.fn(async () => {}) };
+    const auth = (req, res, next) => {
+      req.auth = { userId: "u1" };
+      next();
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(
+      "/v1",
+      buildAgentLiveRouter({ broker, auth, overlayTokens, engagement }),
+    );
+
+    await request(app).post("/v1/agent/live").send({
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 100,
+      gameKey: "finished-game",
+      opponent: { name: "FinishedOpponent" },
+    });
+    expect(overlayTokens.list).toHaveBeenCalledTimes(1);
+
+    await request(app).post("/v1/agent/live").send({
+      type: "liveGameState",
+      phase: "menu",
+      capturedAt: 101,
+    });
+    releaseTokenLookup();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(broker.latest("u1").phase).toBe("menu");
+    expect(engagement.openPrediction).not.toHaveBeenCalled();
+  });
+});
 
 describe("LiveGameBroker (in-process pub/sub)", () => {
   test("publish fans out to every subscriber for the user", () => {
@@ -261,6 +311,7 @@ describe("POST /v1/agent/live + GET /v1/me/live", () => {
   let mongo;
   let db;
   let app;
+  let services;
 
   const config = {
     port: 0,
@@ -293,6 +344,7 @@ describe("POST /v1/agent/live + GET /v1/me/live", () => {
       config,
     });
     app = built.app;
+    services = built.services;
   });
 
   afterAll(async () => {
@@ -314,6 +366,48 @@ describe("POST /v1/agent/live + GET /v1/me/live", () => {
     );
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  test("a stale live envelope cannot reopen Crystal Ball", async () => {
+    // Drain any advisory prediction task started by the preceding request
+    // before installing the spy; those tasks intentionally outlive the HTTP
+    // acknowledgement.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const openPrediction = jest
+      .spyOn(services.multichatEngagement, "openPrediction")
+      .mockResolvedValue(undefined);
+    try {
+      await withAuth(
+        request(app).post("/v1/agent/live").send({
+          type: "liveGameState",
+          phase: "match_loading",
+          capturedAt: 200,
+          gameKey: "new-game",
+          opponent: { name: "CurrentOpponent" },
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(openPrediction.mock.calls.some(
+        (call) => call[1]?.gameKey === "new-game",
+      )).toBe(true);
+      openPrediction.mockClear();
+
+      await withAuth(
+        request(app).post("/v1/agent/live").send({
+          type: "liveGameState",
+          phase: "match_started",
+          capturedAt: 100,
+          gameKey: "finished-game",
+          opponent: { name: "FinishedOpponent" },
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(openPrediction).not.toHaveBeenCalled();
+    } finally {
+      openPrediction.mockRestore();
+    }
   });
 
   test("POST /v1/agent/live rejects non-object body", async () => {

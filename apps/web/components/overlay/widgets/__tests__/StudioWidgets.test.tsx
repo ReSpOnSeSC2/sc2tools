@@ -398,7 +398,7 @@ describe("StatsTickerWidget", () => {
     expect(screen.getByText("LIVE")).toBeTruthy();
   });
 
-  it("adds opponent intel from the post-game payload", () => {
+  it("keeps post-game results but does not reuse them as current-opponent intel", () => {
     render(
       <StatsTickerWidget
         token="tok"
@@ -417,23 +417,33 @@ describe("StatsTickerWidget", () => {
         }}
       />,
     );
-    expect(screen.getAllByText(/HEAD-TO-HEAD vs Printf: 14–9/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BARCODE REVEALED: this is THERIDDLER/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/REMATCH: dropped the last one/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/CHEESE WATCH: 62%/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/SCOUT: they open Hatch First 71%/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BEST ANSWER: 3 Gate Blink — 64%/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/MMR GAP: opponent \+82 — upset material/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/LAST GAME: WIN vs Printf \(PvZ\)/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/HEAD-TO-HEAD vs Printf/)).toHaveLength(0);
+    expect(screen.queryAllByText(/BARCODE REVEALED/)).toHaveLength(0);
+    expect(screen.queryAllByText(/REMATCH:/)).toHaveLength(0);
+    expect(screen.queryAllByText(/CHEESE WATCH/)).toHaveLength(0);
+    expect(screen.queryAllByText(/SCOUT:/)).toHaveLength(0);
+    expect(screen.queryAllByText(/BEST ANSWER:/)).toHaveLength(0);
+    expect(screen.queryAllByText(/MMR GAP:/)).toHaveLength(0);
   });
 
   it("reads live-opponent intel from the in-game envelope with NOW PLAYING", () => {
     render(
       <StatsTickerWidget
         token="tok"
+        live={{ myMmr: 1_000 }}
+        session={{
+          wins: 1,
+          losses: 0,
+          games: 1,
+          mmrCurrent: 6700,
+          region: "NA",
+        }}
         liveGame={{
           type: "liveGameState",
           phase: "match_in_progress",
           capturedAt: 1,
+          opponent: { name: "Serral", profile: { region: "US" } },
           streamerHistory: {
             oppName: "Serral",
             matchup: "PvZ",
@@ -447,6 +457,102 @@ describe("StatsTickerWidget", () => {
       screen.getAllByText(/NOW PLAYING: vs Serral \(PvZ\) · 6,800 MMR/).length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText(/HEAD-TO-HEAD vs Serral: 0–2/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/MMR GAP: opponent \+100/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/opponent \+5,800/)).toHaveLength(0);
+  });
+
+  it("suppresses the MMR gap when the session belongs to another region", () => {
+    render(
+      <StatsTickerWidget
+        token="tok"
+        session={{
+          wins: 1,
+          losses: 0,
+          games: 1,
+          mmrCurrent: 6700,
+          region: "NA",
+        }}
+        liveGame={{
+          type: "liveGameState",
+          phase: "match_in_progress",
+          capturedAt: 1,
+          gameKey: "eu-game",
+          opponent: { name: "Clem", profile: { region: "EU" } },
+          streamerHistory: { oppName: "Clem", oppMmr: 6800 },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText(/NOW PLAYING: vs Clem/).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText(/MMR GAP:/)).toHaveLength(0);
+  });
+
+  it("does not show the previous opponent while current enrichment is pending", () => {
+    render(
+      <StatsTickerWidget
+        token="tok"
+        live={{
+          result: "win",
+          oppName: "PreviousOpponent",
+          matchup: "PvT",
+          headToHead: { wins: 4, losses: 2 },
+          cheeseProbability: 0.8,
+        }}
+        liveGame={{
+          type: "liveGameState",
+          phase: "match_loading",
+          capturedAt: 2,
+          gameKey: "new-game",
+          opponent: { name: "CurrentOpponent", race: "Zerg" },
+        }}
+      />,
+    );
+
+    expect(screen.queryAllByText(/HEAD-TO-HEAD vs PreviousOpponent/)).toHaveLength(0);
+    expect(screen.queryAllByText(/CHEESE WATCH/)).toHaveLength(0);
+    expect(screen.queryAllByText(/NOW PLAYING: vs PreviousOpponent/)).toHaveLength(0);
+    expect(screen.getAllByText(/LAST GAME: WIN vs PreviousOpponent/).length).toBeGreaterThan(0);
+  });
+
+  it("removes opponent intel as soon as the live match ends", () => {
+    const live = {
+      result: "loss" as const,
+      oppName: "Serral",
+      matchup: "PvZ",
+      headToHead: { wins: 0, losses: 3 },
+      cheeseProbability: 0.55,
+    };
+    const active = {
+      type: "liveGameState" as const,
+      phase: "match_in_progress" as const,
+      capturedAt: 1,
+      gameKey: "game-1",
+      streamerHistory: {
+        oppName: "Serral",
+        matchup: "PvZ",
+        headToHead: { wins: 0, losses: 2 },
+        cheeseProbability: 0.55,
+      },
+    };
+    const { rerender } = render(
+      <StatsTickerWidget token="tok" live={live} liveGame={active} />,
+    );
+    expect(screen.getAllByText(/NOW PLAYING: vs Serral/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/HEAD-TO-HEAD vs Serral: 0–2/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CHEESE WATCH: 55%/).length).toBeGreaterThan(0);
+
+    rerender(
+      <StatsTickerWidget
+        token="tok"
+        live={live}
+        liveGame={{ ...active, phase: "match_ended" }}
+      />,
+    );
+
+    expect(screen.queryAllByText(/NOW PLAYING: vs Serral/)).toHaveLength(0);
+    expect(screen.queryAllByText(/HEAD-TO-HEAD vs Serral/)).toHaveLength(0);
+    expect(screen.queryAllByText(/CHEESE WATCH/)).toHaveLength(0);
+    expect(screen.getAllByText(/LAST GAME: LOSS vs Serral \(PvZ\)/).length).toBeGreaterThan(0);
   });
 
   it("drops the CALL IT prompt after the voting lock and shows the oracle recap", () => {

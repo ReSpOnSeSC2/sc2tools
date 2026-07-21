@@ -683,30 +683,16 @@ class TickerFactsService {
       }
     }
 
-    // ── Skill fingerprint playstyle (band-relative percentiles) ──
+    // ── Skill fingerprint playstyle ──
     if (this.skillFingerprint) {
       try {
         const mu = mostPlayedMatchup(games);
         if (mu) {
           const fp = await this.skillFingerprint.compute(userId, { matchup: mu });
           if (fp && typeof fp.playstyle === "string" && fp.playstyle) {
-            /** @type {Array<{key: string, label: string, percentile: number}>} */
-            const axes = Array.isArray(fp.axes) ? fp.axes : [];
-            const strongest = axes
-              .filter(
-                (a) =>
-                  a &&
-                  typeof a.percentile === "number" &&
-                  Number.isFinite(a.percentile) &&
-                  a.key !== "ladder",
-              )
-              .sort((a, b) => b.percentile - a.percentile)[0];
             add(
               "playstyle",
-              `PLAYSTYLE (${mu}): ${fp.playstyle}` +
-                (strongest
-                  ? ` — top ${Math.max(1, 100 - Math.round(strongest.percentile))}% ${String(strongest.label).toLowerCase()}${fp.band && fp.band.label ? ` for ${fp.band.label}` : ""}`
-                  : ""),
+              `PLAYSTYLE (${mu}): ${fp.playstyle}${playstyleDetail(fp, mu)}`,
             );
           }
         }
@@ -911,6 +897,77 @@ function mostPlayedMatchup(games) {
     if (!best || count > best.count) best = { mu, count };
   }
   return best && best.count >= 15 ? best.mu : null;
+}
+
+/**
+ * Explain the fingerprint without mixing unlike scales. Consistency is a
+ * personal 0–100 stability score derived from the player's own macro-score
+ * spread; it is not a league percentile. The remaining style axes are
+ * averages of per-game percentile placements against the matchup's league
+ * benchmark, so their copy names that comparison instead of implying an
+ * exact rank among players.
+ *
+ * @param {Record<string, any>} fp
+ * @param {string} matchup
+ * @returns {string}
+ */
+function playstyleDetail(fp, matchup) {
+  /** @type {Array<{key: string, label: string, percentile: number}>} */
+  const axes = Array.isArray(fp.axes) ? fp.axes : [];
+  const valid = axes.filter(
+    (axis) =>
+      axis &&
+      typeof axis.percentile === "number" &&
+      Number.isFinite(axis.percentile),
+  );
+  const consistency = valid.find((axis) => axis.key === "consistency");
+
+  if (
+    consistency &&
+    (fp.playstyle === "Metronome" || fp.playstyle === "Coin-Flip Player")
+  ) {
+    const score = Math.max(0, Math.min(100, Math.round(consistency.percentile)));
+    const description =
+      fp.playstyle === "Metronome"
+        ? "steady macro across recent games, usually at a measured pace"
+        : "macro varied across recent games";
+    return ` — ${description} (consistency score: ${score}/100)`;
+  }
+
+  const strongestBenchmark = valid
+    .filter((axis) => axis.key !== "consistency" && axis.key !== "ladder")
+    .sort((a, b) => b.percentile - a.percentile)[0];
+  if (!strongestBenchmark) return "";
+
+  const percentile = Math.max(
+    0,
+    Math.min(100, Math.round(strongestBenchmark.percentile)),
+  );
+  const benchmark =
+    fp.band && typeof fp.band.label === "string" && fp.band.label
+      ? `${matchup} games against ${fp.band.label} opponents`
+      : `comparable ${matchup} games`;
+  const label =
+    strongestBenchmark.key === "aggression"
+      ? "game tempo"
+      : String(strongestBenchmark.label).toLowerCase();
+  return ` — strongest benchmark: ${label} averaged at the ${ordinal(percentile)} percentile vs ${benchmark}`;
+}
+
+/** @param {number} n @returns {string} */
+function ordinal(n) {
+  const mod100 = n % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? "th"
+      : n % 10 === 1
+        ? "st"
+        : n % 10 === 2
+          ? "nd"
+          : n % 10 === 3
+            ? "rd"
+            : "th";
+  return `${n}${suffix}`;
 }
 
 /** @param {string|null} race @returns {string} */

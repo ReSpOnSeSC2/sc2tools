@@ -8,10 +8,10 @@
  *
  *   * Live core — session record + net MMR, latest result, rank,
  *     stream goals.
- *   * Opponent intel — who the streamer is playing RIGHT NOW (or
- *     just played): head-to-head, rival/rematch context, MMR gap,
- *     cheese watch, scouted favorite opening, best-answer build,
- *     revealed barcode identity.
+ *   * Opponent intel — who the streamer is playing RIGHT NOW:
+ *     head-to-head, rival/rematch context, MMR gap, cheese watch,
+ *     scouted favorite opening, best-answer build, revealed barcode
+ *     identity. These segments disappear as soon as the match ends.
  *   * Crystal Ball — the open call (only until voting locks ~a
  *     minute into the game), the last settled call, chat's
  *     collective record, top oracle, top supporter.
@@ -121,7 +121,19 @@ export function StatsTickerWidget({
           (live.rank.mmr ? ` · ${live.rank.mmr} MMR` : ""),
       );
     }
-    out.push(...opponentSegments(live ?? null, liveGame ?? null));
+    const sessionMmr = Number(s?.mmrCurrent);
+    const mmrIsForCurrentRegion = regionsMatchOrUnknown(
+      s?.region,
+      liveGame?.opponent?.profile?.region,
+    );
+    out.push(
+      ...opponentSegments(
+        liveGame ?? null,
+        mmrIsForCurrentRegion && Number.isFinite(sessionMmr) && sessionMmr > 0
+          ? sessionMmr
+          : null,
+      ),
+    );
     for (const g of studio.goals.slice(0, 3)) {
       out.push(`${g.label.toUpperCase()} ${g.current} / ${g.target}`);
     }
@@ -246,25 +258,29 @@ export function StatsTickerWidget({
 }
 
 /**
- * Current-opponent intel segments. During a game the agent envelope's
- * ``streamerHistory`` describes the live opponent; between games the
- * post-game payload carries the same fields for the one just played.
+ * Current-opponent intel segments. The agent envelope is the lifecycle
+ * source of truth: only an active, non-replay match may identify a current
+ * opponent. The retained post-game ``live`` payload is intentionally never
+ * used as an intel fallback, because doing so keeps the previous opponent's
+ * H2H/scouting segments scrolling after ``match_ended`` or back in the menu.
  */
 function opponentSegments(
-  live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
+  myMmr: number | null,
 ): string[] {
-  const inGame =
-    !!liveGame &&
-    !liveGame.isReplay &&
-    ACTIVE_PHASES.has(String(liveGame.phase)) &&
-    !!liveGame.streamerHistory;
-  const intel = inGame ? liveGame?.streamerHistory ?? null : live;
-  if (!intel) return [];
+  if (
+    !liveGame ||
+    liveGame.isReplay ||
+    !ACTIVE_PHASES.has(String(liveGame.phase)) ||
+    !liveGame.streamerHistory
+  ) {
+    return [];
+  }
+  const intel = liveGame.streamerHistory;
   const out: string[] = [];
   const name = intel.oppName || "";
 
-  if (inGame && name) {
+  if (name) {
     out.push(
       `NOW PLAYING: vs ${name}` +
         (intel.matchup ? ` (${intel.matchup})` : "") +
@@ -292,11 +308,7 @@ function opponentSegments(
     );
   }
   const oppMmr = Number(intel.oppMmr);
-  const myMmr = Number(
-    (live && Number.isFinite(Number(live.myMmr)) ? live.myMmr : undefined) ??
-      intel.rank?.mmr,
-  );
-  if (Number.isFinite(oppMmr) && Number.isFinite(myMmr) && myMmr > 0) {
+  if (Number.isFinite(oppMmr) && myMmr !== null) {
     const gap = Math.round(oppMmr - myMmr);
     if (Math.abs(gap) >= 25) {
       out.push(
@@ -330,6 +342,20 @@ function opponentSegments(
     );
   }
   return out;
+}
+
+function regionsMatchOrUnknown(a: unknown, b: unknown): boolean {
+  const left = normalizeRegion(a);
+  const right = normalizeRegion(b);
+  return !left || !right || left === right;
+}
+
+function normalizeRegion(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const region = value.trim().toUpperCase();
+  if (!region) return null;
+  if (region === "US" || region === "AMERICAS") return "NA";
+  return region;
 }
 
 const TEST_SEGMENTS = [

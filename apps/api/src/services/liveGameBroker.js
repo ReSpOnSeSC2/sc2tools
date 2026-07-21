@@ -54,6 +54,33 @@
  *     Idempotent: emitted at most once per resync.
  */
 
+/** @param {unknown} value @returns {string|null} */
+function normalizeOpponentName(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+/** @param {unknown} envelope @returns {string|null} */
+function directOpponentName(envelope) {
+  if (!envelope || typeof envelope !== "object") return null;
+  const record = /** @type {Record<string, unknown>} */ (envelope);
+  const opponent = record.opponent;
+  if (!opponent || typeof opponent !== "object") return null;
+  const opponentRecord = /** @type {Record<string, unknown>} */ (opponent);
+  return normalizeOpponentName(opponentRecord.name);
+}
+
+/** @param {unknown} envelope @returns {string|null} */
+function historyOpponentName(envelope) {
+  if (!envelope || typeof envelope !== "object") return null;
+  const record = /** @type {Record<string, unknown>} */ (envelope);
+  const history = record.streamerHistory;
+  if (!history || typeof history !== "object") return null;
+  const historyRecord = /** @type {Record<string, unknown>} */ (history);
+  return normalizeOpponentName(historyRecord.oppName);
+}
+
 class LiveGameBroker {
   /**
    * @param {{
@@ -88,6 +115,22 @@ class LiveGameBroker {
     // the last opponent.
     /** @type {Map<string, string>} */
     this._currentGameKey = new Map();
+    // Agent transports intentionally use more than one HTTP worker, so
+    // request completion order is not guaranteed. Keep the newest real
+    // source timestamp per user and reject an older envelope before it can
+    // restore a finished game after a newer MENU/IDLE update.
+    // Synthetic server-transition preludes are excluded: the bridge creates
+    // them immediately before publishing the original event, giving them a
+    // later wall-clock timestamp despite their intentionally earlier logical
+    // position.
+    /** @type {Map<string, {value: number, ts: number}>} */
+    this._capturedAtWatermarks = new Map();
+    // Monotonic per-user revision for asynchronous Socket.IO fan-out. Token
+    // lookup is a Mongo round trip; without a revision check an older active
+    // envelope's slow lookup can finish after a newer MENU lookup and emit in
+    // reverse order even though broker/SSE state is correct.
+    /** @type {Map<string, number>} */
+    this._publishRevision = new Map();
     // Keep latest envelopes for at most 30 minutes — beyond that a
     // user is plainly not in a live game and a stale envelope on
     // a fresh page-load would mislead the widget.
@@ -105,9 +148,11 @@ class LiveGameBroker {
       sse_emit_failed: 0,
       overlay_emit_ok: 0,
       overlay_emit_failed: 0,
+      overlay_stale_dropped: 0,
       enrich_ok: 0,
       enrich_failed: 0,
       enrich_stale_dropped: 0,
+      envelope_stale_dropped: 0,
       synthetic_prelude_emitted: 0,
     };
   }
@@ -177,10 +222,45 @@ class LiveGameBroker {
    *
    * @param {string} userId
    * @param {Record<string, unknown>} envelope
+   * @returns {boolean} true when accepted, false when invalid or stale
    */
   publish(userId, envelope) {
-    if (!userId || !envelope || typeof envelope !== "object") return;
+    if (!userId || !envelope || typeof envelope !== "object") return false;
     this.counters.published += 1;
+    const receivedAt = Date.now();
+    const capturedAt = envelope.synthetic !== true
+      && typeof envelope.capturedAt === "number"
+      && Number.isFinite(envelope.capturedAt)
+      ? envelope.capturedAt
+      : null;
+    if (capturedAt !== null) {
+      let watermark = this._capturedAtWatermarks.get(userId) || null;
+      if (watermark && receivedAt - watermark.ts > this._maxAgeMs) {
+        this._capturedAtWatermarks.delete(userId);
+        watermark = null;
+      }
+      if (watermark && capturedAt < watermark.value) {
+        this.counters.envelope_stale_dropped += 1;
+        if (this._logger && typeof this._logger.debug === "function") {
+          this._logger.debug(
+            {
+              userId,
+              capturedAt,
+              currentCapturedAt: watermark.value,
+              phase: envelope.phase,
+            },
+            "live_game_broker_envelope_stale_dropped",
+          );
+        }
+        return false;
+      }
+      this._capturedAtWatermarks.set(userId, {
+        value: capturedAt,
+        ts: receivedAt,
+      });
+    }
+    const publishRevision = (this._publishRevision.get(userId) || 0) + 1;
+    this._publishRevision.set(userId, publishRevision);
     // Stamp the publish-time gameKey BEFORE the partial broadcast so
     // the enrich callback (which fires on the same envelope) sees the
     // up-to-date "current" key. A new key implicitly invalidates any
@@ -205,7 +285,7 @@ class LiveGameBroker {
     // First fan-out: the partial envelope as-is. Streamers see the
     // basic opponent identity (name + race + Pulse MMR) within ms of
     // the agent's POST.
-    this._broadcast(userId, envelope);
+    this._broadcast(userId, envelope, publishRevision);
     // If an enricher is wired, run it asynchronously and fan out the
     // enriched envelope when ready. The first envelope of a new
     // opponent pays one Mongo aggregation (~50 ms cold); every
@@ -217,26 +297,71 @@ class LiveGameBroker {
     // partial-then-Pulse-enriched pattern.
     if (this._enrich) {
       const enrichmentForKey = incomingKey;
+      const enrichmentForCapturedAt = capturedAt;
+      const enrichmentForOpponent = directOpponentName(envelope);
       Promise.resolve(this._enrich(userId, envelope))
         .then((enriched) => {
           if (!enriched || enriched === envelope) return;
           if (typeof enriched !== "object") return;
           // GameKey staleness guard: if a NEW envelope landed for this
-          // user mid-flight (different gameKey), drop the enriched
-          // payload rather than fan out stale ``streamerHistory`` over
-          // the new opponent's already-broadcast partial envelope.
-          if (enrichmentForKey) {
-            const currentKey = this._currentGameKey.get(userId) || null;
-            if (currentKey && currentKey !== enrichmentForKey) {
-              this.counters.enrich_stale_dropped += 1;
-              if (this._logger && typeof this._logger.debug === "function") {
-                this._logger.debug(
-                  { userId, droppedKey: enrichmentForKey, currentKey },
-                  "live_game_broker_enrich_stale_dropped",
-                );
-              }
-              return;
+          // user mid-flight (different gameKey), or idle/menu cleared
+          // the current key, drop the enriched payload rather than fan
+          // stale ``streamerHistory`` back out after the match ended.
+          const currentKey = this._currentGameKey.get(userId) || null;
+          const currentEnvelope = this._latest.get(userId)?.envelope || null;
+          const currentCapturedAt = this._capturedAtWatermarks.get(userId)?.value;
+          const currentOpponent = directOpponentName(currentEnvelope);
+          const enrichedOpponent = directOpponentName(enriched);
+          const enrichedHistoryOpponent = historyOpponentName(enriched);
+          let staleReason = null;
+          if (this._publishRevision.get(userId) !== publishRevision) {
+            staleReason = "publish_revision";
+          } else if (enrichmentForKey && currentKey !== enrichmentForKey) {
+            staleReason = "game_key";
+          } else if (
+            enrichmentForCapturedAt !== null
+            && typeof currentCapturedAt === "number"
+            && enrichmentForCapturedAt < currentCapturedAt
+          ) {
+            staleReason = "captured_at";
+          } else if (
+            enrichmentForOpponent
+            && currentOpponent !== enrichmentForOpponent
+          ) {
+            // Key equality is insufficient for older agents that reused a
+            // gameKey. Require the latest directly observed opponent to still
+            // be the one this lookup was started for.
+            staleReason = "opponent";
+          } else if (
+            currentOpponent
+            && enrichedOpponent
+            && enrichedOpponent !== currentOpponent
+          ) {
+            staleReason = "enriched_opponent";
+          } else if (
+            enrichedHistoryOpponent
+            && enrichedHistoryOpponent !== currentOpponent
+          ) {
+            staleReason = "history_opponent";
+          }
+          if (staleReason) {
+            this.counters.enrich_stale_dropped += 1;
+            if (this._logger && typeof this._logger.debug === "function") {
+              this._logger.debug(
+                {
+                  userId,
+                  reason: staleReason,
+                  droppedKey: enrichmentForKey,
+                  currentKey,
+                  droppedCapturedAt: enrichmentForCapturedAt,
+                  currentCapturedAt,
+                  droppedOpponent: enrichmentForOpponent,
+                  currentOpponent,
+                },
+                "live_game_broker_enrich_stale_dropped",
+              );
             }
+            return;
           }
           this.counters.enrich_ok += 1;
           // The enrich hook's contract is intentionally opaque
@@ -246,6 +371,7 @@ class LiveGameBroker {
           this._broadcast(
             userId,
             /** @type {Record<string, unknown>} */ (enriched),
+            publishRevision,
           );
         })
         .catch((err) => {
@@ -258,6 +384,7 @@ class LiveGameBroker {
           }
         });
     }
+    return true;
   }
 
   /**
@@ -268,8 +395,9 @@ class LiveGameBroker {
    *
    * @param {string} userId
    * @param {Record<string, unknown>} envelope
+   * @param {number} publishRevision
    */
-  _broadcast(userId, envelope) {
+  _broadcast(userId, envelope, publishRevision) {
     this._latest.set(userId, { envelope, ts: Date.now() });
     const bucket = this._subs.get(userId);
     if (bucket) {
@@ -290,7 +418,11 @@ class LiveGameBroker {
     // gets its 200 immediately; per-token emit failures are logged
     // by ``_fanOutToOverlayTokens`` itself.
     if (this._io && this._overlayTokens) {
-      this._fanOutToOverlayTokens(userId, envelope).catch((err) => {
+      this._fanOutToOverlayTokens(
+        userId,
+        envelope,
+        publishRevision,
+      ).catch((err) => {
         if (this._logger && typeof this._logger.warn === "function") {
           this._logger.warn(
             { err, userId },
@@ -309,8 +441,9 @@ class LiveGameBroker {
    *
    * @param {string} userId
    * @param {object} envelope
+   * @param {number} publishRevision
    */
-  async _fanOutToOverlayTokens(userId, envelope) {
+  async _fanOutToOverlayTokens(userId, envelope, publishRevision) {
     if (!this._io || !this._overlayTokens || !userId) return;
     let tokens;
     try {
@@ -321,6 +454,16 @@ class LiveGameBroker {
         this._logger.warn(
           { err, userId },
           "live_game_broker_token_list_failed",
+        );
+      }
+      return;
+    }
+    if (this._publishRevision.get(userId) !== publishRevision) {
+      this.counters.overlay_stale_dropped += 1;
+      if (this._logger && typeof this._logger.debug === "function") {
+        this._logger.debug(
+          { userId, droppedRevision: publishRevision },
+          "live_game_broker_overlay_stale_dropped",
         );
       }
       return;
@@ -359,6 +502,8 @@ class LiveGameBroker {
     if (Date.now() - hit.ts > this._maxAgeMs) {
       this._latest.delete(userId);
       this._currentGameKey.delete(userId);
+      this._capturedAtWatermarks.delete(userId);
+      this._publishRevision.delete(userId);
       return null;
     }
     return hit.envelope;
@@ -467,6 +612,8 @@ class LiveGameBroker {
     this._latest.clear();
     this._latestOverlayLive.clear();
     this._currentGameKey.clear();
+    this._capturedAtWatermarks.clear();
+    this._publishRevision.clear();
   }
 }
 

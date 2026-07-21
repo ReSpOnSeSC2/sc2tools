@@ -61,6 +61,15 @@ vi.mock("@/lib/timeseries", () => ({
   clientTimezone: () => "UTC",
 }));
 
+// Opponent lifecycle does not exercise voice synthesis. Isolate it so this
+// suite does not load the optional browser-only local translation runtime.
+vi.mock("@/components/overlay/useVoiceReadout", () => ({
+  useVoiceReadout: () => ({
+    needsGesture: false,
+    onUserGesture: vi.fn(),
+  }),
+}));
+
 import { OverlayClient } from "../OverlayClient";
 
 function enableAllWidgets(socket: FakeSocket): void {
@@ -198,6 +207,45 @@ describe("OverlayClient — opponent widget across match boundaries", () => {
     expect(container.textContent).toContain("Serral");
     // Crucial regression assertion: the prior opponent must NOT linger.
     expect(container.textContent).not.toContain("Maru");
+  });
+
+  it("does not carry enriched history across a reused gameKey", () => {
+    const { container } = render(<OverlayClient token="tok-1" />);
+    const socket = activeSocket as FakeSocket;
+    act(() => enableAllWidgets(socket));
+
+    act(() => {
+      socket.fire("overlay:liveGame", {
+        type: "liveGameState",
+        phase: "match_in_progress",
+        capturedAt: 1,
+        gameKey: "reused-key",
+        opponent: { name: "Opponent A", race: "Terran" },
+        streamerHistory: {
+          oppName: "Opponent A",
+          oppMmr: 7000,
+          headToHead: { wins: 9, losses: 0 },
+        },
+      });
+    });
+    expect(container.textContent).toContain("Opponent A");
+    expect(container.textContent).toContain("7000 MMR");
+
+    // Older agents could leak the previous key into the first partial
+    // envelope for the next opponent. Identity must win over key equality.
+    act(() => {
+      socket.fire("overlay:liveGame", {
+        type: "liveGameState",
+        phase: "match_in_progress",
+        capturedAt: 2,
+        gameKey: "reused-key",
+        opponent: { name: "Opponent B", race: "Zerg" },
+      });
+    });
+
+    expect(container.textContent).toContain("Opponent B");
+    expect(container.textContent).not.toContain("Opponent A");
+    expect(container.textContent).not.toContain("7000 MMR");
   });
 
   it(

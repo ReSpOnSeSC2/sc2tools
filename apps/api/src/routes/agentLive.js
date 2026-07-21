@@ -2,6 +2,47 @@
 
 const express = require("express");
 
+const PREDICTION_ACTIVE_PHASES = new Set([
+  "match_loading",
+  "match_started",
+  "match_in_progress",
+]);
+
+/**
+ * Revalidate a prediction-opening task after its async token lookup. An
+ * envelope can be current when the request is accepted, then become obsolete
+ * before Mongo returns (menu, match end, or a new opponent).
+ *
+ * @param {import('../services/liveGameBroker').LiveGameBroker} broker
+ * @param {string} userId
+ * @param {Record<string, any>} candidate
+ * @returns {boolean}
+ */
+function predictionEnvelopeIsCurrent(broker, userId, candidate) {
+  const candidateKey =
+    typeof candidate.gameKey === "string" && candidate.gameKey
+      ? candidate.gameKey
+      : null;
+  if (!candidateKey || broker.currentGameKey(userId) !== candidateKey) {
+    return false;
+  }
+  const latest = broker.latest(userId);
+  if (!latest || !PREDICTION_ACTIVE_PHASES.has(String(latest.phase))) {
+    return false;
+  }
+  const latestRecord = /** @type {Record<string, any>} */ (latest);
+  const candidateOpponent = normalizeName(candidate.opponent?.name);
+  if (!candidateOpponent) return true;
+  return normalizeName(latestRecord.opponent?.name) === candidateOpponent;
+}
+
+/** @param {unknown} value @returns {string|null} */
+function normalizeName(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
 /**
  * /v1/agent/live + /v1/me/live — the cloud's role in the Live Game
  * Bridge.
@@ -58,11 +99,12 @@ function buildAgentLiveRouter(deps) {
         ...env,
         receivedAt: Date.now(),
       };
-      deps.broker.publish(auth.userId, enriched);
+      const accepted = deps.broker.publish(auth.userId, enriched);
       // Crystal Ball: a loading/starting match opens a prediction
       // window on every active overlay token. Idempotent per gameKey
       // (the agent posts ~1 Hz), best-effort, never blocks the ack.
       if (
+        accepted &&
         deps.engagement &&
         deps.overlayTokens &&
         (enriched.phase === "match_loading" ||
@@ -76,6 +118,13 @@ function buildAgentLiveRouter(deps) {
         void (async () => {
           try {
             const items = await overlayTokens.list(auth.userId);
+            if (!predictionEnvelopeIsCurrent(
+              deps.broker,
+              auth.userId,
+              enriched,
+            )) {
+              return;
+            }
             const tokens = items
               .filter((t) => t && t.token && !t.revokedAt)
               .map((t) => t.token);
