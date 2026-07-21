@@ -219,6 +219,111 @@ describe("services/pulseMmr", () => {
     expect(result?.revealedName).toBeNull();
   });
 
+  test("surfaces the team's REAL league + tier (tierType is 0-indexed)", async () => {
+    // 5124 MMR sits in the "Master 2" band of any MMR-threshold table,
+    // but Blizzard assigns tiers by ladder position — this player is
+    // Master TIER 1. The team row is the source of truth, not the
+    // rating; the rank widget must not re-guess from MMR.
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          {
+            id: 1,
+            rating: 5124,
+            region: "US",
+            league: 5,
+            tierType: 0,
+            lastPlayed: "2026-06-01T10:00:00Z",
+            members: [{ protossGamesPlayed: 200 }],
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.mmr).toBe(5124);
+    expect(result?.league).toBe("Master");
+    expect(result?.tier).toBe(1);
+  });
+
+  test("Grandmaster teams carry no tier (GM is a single top-N bucket)", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          {
+            id: 1,
+            rating: 6100,
+            region: "US",
+            league: 6,
+            tierType: 0,
+            lastPlayed: "2026-06-01T10:00:00Z",
+            members: [{ zergGamesPlayed: 900 }],
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.league).toBe("Grandmaster");
+    expect(result?.tier).toBeNull();
+  });
+
+  test("league + tier are null when the team row omits them", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          { id: 1, rating: 4800, region: "US", lastPlayed: "2026-05-01T10:00:00Z" },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const result = await svc.getCurrentMmr("994428");
+    expect(result?.mmr).toBe(4800);
+    expect(result?.league).toBeNull();
+    expect(result?.tier).toBeNull();
+  });
+
+  test("getCurrentMmrForAny carries league + tier from the winning team", async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "EU" }]);
+      }
+      if (url.includes("/group/team")) {
+        return jsonResponse([
+          {
+            id: 7,
+            rating: 5210,
+            region: "EU",
+            league: 5,
+            tierType: 0,
+            lastPlayed: "2026-06-02T10:00:00Z",
+            members: [{ terranGamesPlayed: 431 }],
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const out = await svc.getCurrentMmrForAny(["994428"], {
+      preferredRegion: "EU",
+    });
+    expect(out?.mmr).toBe(5210);
+    expect(out?.league).toBe("Master");
+    expect(out?.tier).toBe(1);
+  });
+
   test("uses team.region for the label so cross-region duplicates don't mis-tag (2026-05 fix)", async () => {
     // SC2Pulse's /group/team filters by ``battlenetId``, which is the
     // SAME number across regions for the same season (NA's S67, EU's

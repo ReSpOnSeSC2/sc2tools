@@ -319,7 +319,12 @@ function makeServices(deps) {
   // The ``gameDetails`` handle is what powers the scouting card's
   // phase forecast — the per-game ``macroBreakdown`` blob lives in
   // the detail store post-v0.4.3 cutover, not on the slim games row.
-  const overlayLive = new OverlayLiveService(deps.db, { gameDetails });
+  // ``pulseMmr`` gives the rank widget the streamer's REAL current
+  // league + tier from SC2Pulse instead of an MMR-threshold guess.
+  const overlayLive = new OverlayLiveService(deps.db, {
+    gameDetails,
+    pulseMmr,
+  });
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
   // Constructed once at app boot so every agent POST shares the

@@ -109,6 +109,21 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Overlay rank widget shows your real ladder league, not an
+  MMR guess** — the rank card derived its league and tier by bucketing
+  your MMR against a fixed threshold table (`leagueFromMmr`), so a
+  5,124-MMR player who Blizzard actually placed in Master 1 saw
+  "Master 2", and the estimate knew nothing about between-season
+  placements (a former Grandmaster sitting in Master 1 while the new
+  season's GM ladder is still locked would be mislabelled every game).
+  The widget now reads your true current-season league and tier
+  straight from your SC2Pulse ladder team — the same source the
+  opponent dossier already uses — pinned to the region of the account
+  that just played. The MMR-threshold table remains only as a
+  fail-soft fallback for games with no toon handle or when SC2Pulse is
+  unreachable. Grandmaster now renders with no tier (it's a single
+  top-N bucket, not a tiered league). Lands on the next game upload.
+
 - **Chrono/MULE efficiency can no longer read over 100%** — the
   expected chrono and MULE counts in the macro breakdown were
   computed from Nexus/Orbital alive-time divided by the energy-regen

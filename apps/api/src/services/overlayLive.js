@@ -6,6 +6,7 @@ const {
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const { bucketResult } = aggregations;
 
@@ -84,10 +85,12 @@ const CHEESE_KEYWORDS = [
 /**
  * Map a numeric MMR to a Blizzard ladder league name + tier guess.
  * Boundaries follow Blizzard's published season cutoffs (approximate —
- * tiers within a league shift by a few hundred MMR each season). When
- * an upstream rank-resolver feeds us a real league later we can swap
- * this for the canonical mapping; for now this keeps the rank widget
- * rendering something plausible the second a game lands.
+ * tiers within a league shift by a few hundred MMR each season, and
+ * the guess knows nothing about GM's top-N cutoff or between-season
+ * placements). LAST-RESORT FALLBACK ONLY: ``buildFromGame`` asks
+ * SC2Pulse for the streamer's real current-season league + tier first
+ * and only lands here when that lookup resolves nothing (agent offline
+ * games, Pulse outage, no toon handle on the game row).
  *
  * @param {unknown} mmr
  * @returns {{league: string, tier: number} | null}
@@ -155,6 +158,7 @@ class OverlayLiveService {
    * @param {{
    *   opponents?: any,
    *   gameDetails?: import('./gameDetails').GameDetailsService | null,
+   *   pulseMmr?: import('./pulseMmr').PulseMmrService | null,
    * }} [services]
    */
   constructor(db, services = {}) {
@@ -168,6 +172,15 @@ class OverlayLiveService {
      * @type {import('./gameDetails').GameDetailsService | null}
      */
     this.gameDetails = services.gameDetails || null;
+    /**
+     * SC2Pulse current-rating service. Optional — when present, the
+     * rank widget's league + tier come from the streamer's REAL
+     * current-season ladder team instead of the ``leagueFromMmr``
+     * threshold guess (which mislabels anyone near a tier boundary
+     * and knows nothing about between-season placements).
+     * @type {import('./pulseMmr').PulseMmrService | null}
+     */
+    this.pulseMmr = services.pulseMmr || null;
     /**
      * Per-(userId, oppName, oppRace) cache for live-envelope
      * enrichment. The agent fires envelopes at 1 Hz during a match;
@@ -374,12 +387,27 @@ class OverlayLiveService {
       }
     }
 
-    // Rank — derived from the just-played game's myMmr.
-    if (Number.isFinite(Number(game.myMmr))) {
-      const lg = leagueFromMmr(Number(game.myMmr));
+    // Rank — the streamer's REAL current-season league + tier from
+    // SC2Pulse (the ladder team behind the account that just played).
+    // Blizzard assigns tiers by ladder position, not fixed MMR bands,
+    // so only Pulse can know that a 5.1k player is Master 1 — or that
+    // a between-season placement dropped a GM back into Master. The
+    // ``leagueFromMmr`` threshold guess is the fail-soft fallback for
+    // when Pulse resolves nothing (no toon handle, Pulse outage).
+    const gameMmr = Number(game.myMmr);
+    const pulseRank = await this._pulseRankForGame(game);
+    if (pulseRank) {
       payload.rank = {
-        ...(lg || {}),
-        mmr: Number(game.myMmr),
+        league: pulseRank.league,
+        ...(typeof pulseRank.tier === "number"
+          ? { tier: pulseRank.tier }
+          : {}),
+        mmr: Number.isFinite(gameMmr) ? gameMmr : pulseRank.mmr,
+      };
+    } else if (Number.isFinite(gameMmr)) {
+      payload.rank = {
+        ...(leagueFromMmr(gameMmr) || {}),
+        mmr: gameMmr,
       };
     }
 
@@ -428,6 +456,54 @@ class OverlayLiveService {
     }
 
     return payload;
+  }
+
+  /**
+   * The streamer's real current ladder standing from SC2Pulse — the
+   * league + tier Blizzard actually placed them in — resolved via the
+   * toon handle of the account that just played, pinned to that
+   * handle's region. Rides ``PulseMmrService``'s 5-minute cache, so
+   * the per-game cost is at most one team scan.
+   *
+   * Returns null when the service wasn't injected, the game carries
+   * no toon handle, SC2Pulse has no current-season team for the
+   * account (fresh season before placement), or the lookup failed —
+   * the caller then falls back to the MMR-threshold estimate.
+   *
+   * @param {Record<string, any>} game
+   * @returns {Promise<{league: string, tier: number|null, mmr: number}|null>}
+   */
+  async _pulseRankForGame(game) {
+    if (
+      !this.pulseMmr ||
+      typeof this.pulseMmr.getCurrentMmrForAny !== "function"
+    ) {
+      return null;
+    }
+    const toon =
+      typeof game.myToonHandle === "string" && game.myToonHandle
+        ? game.myToonHandle
+        : null;
+    if (!toon) return null;
+    try {
+      const region = regionFromToonHandle(toon);
+      const pulse = await this.pulseMmr.getCurrentMmrForAny(
+        [toon],
+        region ? { preferredRegion: region } : undefined,
+      );
+      if (!pulse || typeof pulse.league !== "string" || !pulse.league) {
+        return null;
+      }
+      return {
+        league: pulse.league,
+        tier: typeof pulse.tier === "number" ? pulse.tier : null,
+        mmr: Number(pulse.mmr),
+      };
+    } catch {
+      // Fail-soft: a Pulse hiccup must never block the post-game
+      // broadcast — the threshold fallback still paints the widget.
+      return null;
+    }
   }
 
   /**
