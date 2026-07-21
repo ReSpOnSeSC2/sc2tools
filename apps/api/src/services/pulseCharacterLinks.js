@@ -128,32 +128,7 @@ class PulseCharacterLinkService {
     const ids = sanitizeIds(characterIds);
     if (ids.length === 0) return { links, partial: false };
 
-    /** @type {Map<string, any>} */
-    const cachedById = new Map();
-    try {
-      const cursor = this.col.find(
-        { pulseCharacterId: { $in: ids } },
-        {
-          projection: {
-            _id: 0,
-            pulseCharacterId: 1,
-            accountId: 1,
-            proId: 1,
-            proNickname: 1,
-            fetchedAt: 1,
-          },
-        },
-      );
-      for await (const doc of cursor) {
-        if (typeof doc.pulseCharacterId === "string") {
-          cachedById.set(doc.pulseCharacterId, doc);
-        }
-      }
-    } catch (err) {
-      this.logger.warn({ err }, "pulse_links_cache_read_failed");
-      // Treat as a full cache miss; the fetch below still runs.
-    }
-
+    const cachedById = await this._readCache(ids);
     /** @type {string[]} */
     const needFetch = [];
     for (const id of ids) {
@@ -184,51 +159,110 @@ class PulseCharacterLinkService {
         }
         continue;
       }
-      const writeAt = new Date(this.now());
-      /** @type {Array<{updateOne: object}>} */
-      const writes = [];
-      for (const id of batch) {
-        const entry = fetched.get(id) || null;
-        const doc = {
-          pulseCharacterId: id,
-          accountId: entry ? entry.accountId : null,
-          proId: entry ? entry.proId : null,
-          proNickname: entry ? entry.proNickname : null,
-          fetchedAt: writeAt,
-        };
+      for (const doc of await this._persistBatch(batch, fetched)) {
         appendLink(links, doc);
-        writes.push({
-          updateOne: {
-            filter: { pulseCharacterId: id },
-            update: {
-              $setOnInsert: stampVersion(
-                { pulseCharacterId: id },
-                COLLECTIONS.PULSE_CHARACTER_LINKS,
-              ),
-              $set: {
-                accountId: doc.accountId,
-                proId: doc.proId,
-                proNickname: doc.proNickname,
-                fetchedAt: writeAt,
-                updatedAt: writeAt,
-              },
-            },
-            upsert: true,
-          },
-        });
-      }
-      if (writes.length > 0) {
-        try {
-          await this.col.bulkWrite(writes, { ordered: false });
-        } catch (err) {
-          this.logger.warn(
-            { err, count: writes.length },
-            "pulse_links_cache_write_failed",
-          );
-        }
       }
     }
     return { links, partial };
+  }
+
+  /**
+   * Cached rows for a set of ids, keyed by character id. A read
+   * failure degrades to an empty map — indistinguishable from a full
+   * cache miss, so the live fetch still runs.
+   *
+   * @private
+   * @param {string[]} ids
+   * @returns {Promise<Map<string, any>>}
+   */
+  async _readCache(ids) {
+    /** @type {Map<string, any>} */
+    const cachedById = new Map();
+    try {
+      const cursor = this.col.find(
+        { pulseCharacterId: { $in: ids } },
+        {
+          projection: {
+            _id: 0,
+            pulseCharacterId: 1,
+            accountId: 1,
+            proId: 1,
+            proNickname: 1,
+            fetchedAt: 1,
+          },
+        },
+      );
+      for await (const doc of cursor) {
+        if (typeof doc.pulseCharacterId === "string") {
+          cachedById.set(doc.pulseCharacterId, doc);
+        }
+      }
+    } catch (err) {
+      this.logger.warn({ err }, "pulse_links_cache_read_failed");
+    }
+    return cachedById;
+  }
+
+  /**
+   * Write-through one fetched batch: every requested id gets a row —
+   * ids absent from the SC2Pulse response become negative rows (null
+   * linkage) so the miss TTL applies to them. Returns the docs (hit
+   * AND miss) for the caller's links map. A write failure is logged
+   * and swallowed; the data is still served this call and refetched
+   * next time.
+   *
+   * @private
+   * @param {string[]} batch
+   * @param {Map<string, CharacterLink>} fetched
+   * @returns {Promise<Array<CharacterLink & {pulseCharacterId: string, fetchedAt: Date}>>}
+   */
+  async _persistBatch(batch, fetched) {
+    const writeAt = new Date(this.now());
+    /** @type {Array<CharacterLink & {pulseCharacterId: string, fetchedAt: Date}>} */
+    const docs = [];
+    /** @type {import('mongodb').AnyBulkWriteOperation[]} */
+    const writes = [];
+    for (const id of batch) {
+      const entry = fetched.get(id) || null;
+      const doc = {
+        pulseCharacterId: id,
+        accountId: entry ? entry.accountId : null,
+        proId: entry ? entry.proId : null,
+        proNickname: entry ? entry.proNickname : null,
+        fetchedAt: writeAt,
+      };
+      docs.push(doc);
+      writes.push({
+        updateOne: {
+          filter: { pulseCharacterId: id },
+          update: {
+            $setOnInsert: stampVersion(
+              { pulseCharacterId: id },
+              COLLECTIONS.PULSE_CHARACTER_LINKS,
+            ),
+            $set: {
+              accountId: doc.accountId,
+              proId: doc.proId,
+              proNickname: doc.proNickname,
+              fetchedAt: writeAt,
+              updatedAt: writeAt,
+            },
+          },
+          upsert: true,
+        },
+      });
+    }
+    if (writes.length > 0) {
+      try {
+        await this.col.bulkWrite(writes, { ordered: false });
+      } catch (err) {
+        this.logger.warn(
+          { err, count: writes.length },
+          "pulse_links_cache_write_failed",
+        );
+      }
+    }
+    return docs;
   }
 
   /**
