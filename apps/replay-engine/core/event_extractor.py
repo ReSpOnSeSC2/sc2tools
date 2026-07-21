@@ -1763,6 +1763,7 @@ def extract_unit_tracks(replay, my_pid):
     Returns ``{"my_units": [...], "opp_units": [...]}``. Each entry::
 
         {"id": int, "name": str, "born": float, "died": float|None,
+         "killer_pid": int|None,   # None = death wasn't a kill (morph/merge)
          "waypoints": [t0, x0, y0, t1, x1, y1, ...]}   # flat for compactness
 
     Buildings and SKIP-listed units are filtered out.
@@ -1842,6 +1843,12 @@ def extract_unit_tracks(replay, my_pid):
                     if rec is not None:
                         t = float(event_seconds(ev, replay))
                         rec["died"] = t
+                        # Who killed it. ``None`` means the death was NOT
+                        # a kill: a Drone morphing into a structure, a
+                        # Templar pair merging into an Archon, a MULE
+                        # expiring. Downstream loss accounting needs this
+                        # to tell resources SPENT from resources LOST.
+                        rec["killer_pid"] = getattr(ev, "killer_pid", None)
                         # The death event carries the exact position of the
                         # dying unit — the one guaranteed-precise anchor a
                         # replay gives us mid-game. Without it a unit dies
@@ -1934,6 +1941,7 @@ def extract_unit_tracks(replay, my_pid):
             "is_worker": is_worker,
             "born": round(rec["born"], 2),
             "died": (round(rec["died"], 2) if rec["died"] is not None else None),
+            "killer_pid": rec.get("killer_pid"),
             "waypoints": flat,
         }
         (my_units if rec["owner_pid"] == my_pid else opp_units).append(out)

@@ -1392,6 +1392,30 @@ def test_compact_map_playback_produces_bounded_camelcase_payload():
     assert [row[0] for row in out["stats"]["me"]] == [0.0, 20.0]
 
 
+def test_compact_map_playback_marks_spent_deaths_and_claims_v4():
+    """Engines that attribute deaths (killer_pid key present) upgrade
+    the payload to v4 and mark killer-less deaths ``sd`` — the web's
+    loss ledger uses that to tell a morphed drone from a killed one.
+    Payloads without attribution must stay v3 (first test above)."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    pb = _sample_playback()
+    pb["my_units"] = [
+        {"name": "Drone", "born": 0.0, "died": 60.0, "killer_pid": None,
+         "waypoints": [(0.0, 50.0, 50.0)]},          # morphed into a building
+        {"name": "Drone", "born": 0.0, "died": 90.0, "killer_pid": 2,
+         "waypoints": [(0.0, 50.0, 50.0)]},          # killed by the opponent
+        {"name": "Drone", "born": 0.0, "died": None, "killer_pid": None,
+         "waypoints": [(0.0, 50.0, 50.0)]},          # survived
+    ]
+    out = _compact_map_playback(pb)
+    assert out["v"] == 4
+    drones = [u for u in out["units"] if u["owner"] == "me"]
+    assert drones[0].get("sd") is True
+    assert "sd" not in drones[1]
+    assert "sd" not in drones[2]
+
+
 def test_compact_map_playback_rejects_junk_bounds():
     from sc2tools_agent.replay_pipeline import _compact_map_playback
 

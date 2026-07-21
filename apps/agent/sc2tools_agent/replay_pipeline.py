@@ -1205,15 +1205,21 @@ def _compact_map_playback(
     payloads. Output shape (camelCase, ready for the web replayer):
 
       {
-        v: 3, mapName, gameLength,
+        v: 4, mapName, gameLength,
         bounds: {minX, minY, maxX, maxY},
         spawns: [{owner: 'me'|'opp', x, y}],
         battles: [{t, x, y}],
         buildings: [{owner, name, t, x, y, moves?, died?}],
-        units: [{owner, name, born, died|null, wp: [t,x,y,…]}],
+        units: [{owner, name, born, died|null, sd?, wp: [t,x,y,…]}],
         resources: [{kind, x, y, died?}],
         stats: {me: [[t, army, workers, supply]…], opp: […]}
       }
+
+    ``sd`` (spent death, v4) is True when the unit's death event had no
+    killer — a Drone morphing into a structure, Templar merging into an
+    Archon, a MULE expiring — so the web's loss ledger can tell
+    resources SPENT from resources LOST exactly instead of pairing
+    deaths with building starts heuristically.
     """
     bounds_in = playback.get("bounds")
     if not isinstance(bounds_in, Mapping):
@@ -1230,10 +1236,21 @@ def _compact_map_playback(
     if bounds["maxX"] <= bounds["minX"] or bounds["maxY"] <= bounds["minY"]:
         return None
 
+    # v4 promises killer attribution on unit deaths (the ``sd`` flag
+    # below). Only claim it when the engine actually provided the
+    # ``killer_pid`` key — the web trusts v4 payloads exactly and skips
+    # its heuristic morph detection, so a v4 payload WITHOUT attribution
+    # would count every morphed drone as a combat loss.
+    has_attribution = any(
+        isinstance(u, Mapping) and "killer_pid" in u
+        for key in ("my_units", "opp_units")
+        for u in (playback.get(key) or [])
+    )
     out: Dict[str, Any] = {
-        # v3: buildings carry lift/land ``moves`` + ``died``; v2 added
+        # v4: units carry ``sd`` (killer-less death = spent, not lost);
+        # v3 added building lift/land ``moves`` + ``died``; v2 added
         # ``resources`` (neutral mineral/gas/rock/tower nodes).
-        "v": 3,
+        "v": 4 if has_attribution else 3,
         "mapName": str(playback.get("map_name") or ""),
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
@@ -1385,13 +1402,21 @@ def _compact_map_playback(
                 continue
             born = u.get("born")
             died = u.get("died")
-            units.append({
+            entry: Dict[str, Any] = {
                 "owner": owner,
                 "name": str(u.get("name") or ""),
                 "born": round(float(born), 1) if isinstance(born, (int, float)) else round(wp[0], 1),
                 "died": round(float(died), 1) if isinstance(died, (int, float)) else None,
                 "wp": wp,
-            })
+            }
+            # Spent death: the engine attributed this death and found no
+            # killer (drone→structure morph, templar→archon merge, MULE
+            # timeout). Only emitted when the engine provided the key —
+            # older bundled engines can't tell, and absence must stay
+            # distinguishable from "killed by the opponent".
+            if entry["died"] is not None and "killer_pid" in u and u.get("killer_pid") is None:
+                entry["sd"] = True
+            units.append(entry)
     out["units"] = units
 
     stats_out: Dict[str, list] = {}

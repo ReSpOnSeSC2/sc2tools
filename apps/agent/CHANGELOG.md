@@ -17,6 +17,21 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   falls back to counting the live worker units in the payload, so the
   HUD reads correctly either way.
 
+### Added — unit deaths carry killer attribution (payload v4)
+- **What.** The engine now records each tracked unit death's
+  ``killer_pid`` from the tracker's death event, and the playback
+  payload marks killer-less deaths with ``sd: true`` (spent death) —
+  a Drone morphing into a structure, Templar merging into an Archon.
+  Payloads produced without attribution stay v3 so consumers know
+  the difference.
+- **Effect.** The cloud replayer's units-lost ledger becomes exact:
+  the ~1 phantom "lost drone" per Zerg structure (a real death event
+  the tracker emits at every morph) is excluded by attribution
+  instead of a time/place heuristic, matching the workers-killed
+  numbers other replay sites report. Applies at parse time — re-sync
+  older games to upgrade them; until then the web pairs deaths with
+  building starts on the same tracker tick as a fallback.
+
 ## 0.15.3
 
 ### Fixed — playback timeline runs on real seconds

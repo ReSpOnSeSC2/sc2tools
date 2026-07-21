@@ -60,6 +60,22 @@ describe("sanitizeMapPlayback", () => {
     expect(p?.stats.me).toHaveLength(2);
   });
 
+  it("keeps the v4 spent-death flag only when literally true", () => {
+    const raw = {
+      ...RAW,
+      v: 4,
+      units: [
+        { owner: "me", name: "Drone", born: 0, died: 60, sd: true, wp: [0, 30, 40] },
+        { owner: "me", name: "Drone", born: 0, died: 90, sd: "yes", wp: [0, 30, 40] },
+        { owner: "me", name: "Drone", born: 0, died: 95, wp: [0, 30, 40] },
+      ],
+    };
+    const p = sanitizeMapPlayback(raw);
+    expect(p?.units[0].sd).toBe(true);
+    expect(p?.units[1].sd).toBeUndefined();
+    expect(p?.units[2].sd).toBeUndefined();
+  });
+
   it("rejects junk bounds and empty payloads", () => {
     expect(sanitizeMapPlayback(null)).toBeNull();
     expect(
