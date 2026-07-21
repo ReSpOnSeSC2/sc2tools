@@ -17,6 +17,30 @@
 
 import { isBarcodeName } from "@/lib/sc2pulse";
 
+/**
+ * localStorage key for the "Group same player" toggle. Shared between
+ * the Opponents tab (which renders the toggle) and the profile view
+ * (which asks the API for a linked-merge profile when it's on), so
+ * the list and the deep dive always agree on grouping.
+ */
+export const LS_GROUP_BY_PLAYER = "analyzer.opponents.groupByPlayer";
+
+/**
+ * One identity inside a merged profile's `mergedIdentities` payload —
+ * the per-name breakdown of a player the API folded into one page.
+ */
+export type MergedIdentity = {
+  pulseId: string;
+  pulseCharacterId: string | null;
+  toonHandle: string | null;
+  name: string;
+  revealedName: string | null;
+  wins: number;
+  losses: number;
+  games: number;
+  lastSeen: string | null;
+};
+
 export type PulseLink = {
   accountId: string | null;
   proId: string | null;

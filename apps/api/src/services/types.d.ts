@@ -56,7 +56,7 @@ export interface OpponentsService {
   get(
     userId: string,
     pulseId: string,
-    opts?: { since?: Date; until?: Date },
+    opts?: { since?: Date; until?: Date; mergeLinked?: boolean },
   ): Promise<object | null>;
   recordGame(
     userId: string,
