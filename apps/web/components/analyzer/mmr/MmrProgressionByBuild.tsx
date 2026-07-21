@@ -286,6 +286,19 @@ function shapeProgressionForChart(
   const chartData = Array.from(rowByKey.values()).sort((a, b) =>
     a.dateKey.localeCompare(b.dateKey),
   );
+  // Year on the labels whenever the plotted days span years or end in
+  // a past year — a bare "Dec 29" can't say which December it was.
+  // dateKey is already the viewer-timezone "YYYY-MM-DD", so the year
+  // suffix stays consistent with the tz-formatted label.
+  if (chartData.length > 0) {
+    const firstYear = chartData[0].dateKey.slice(0, 4);
+    const lastYear = chartData[chartData.length - 1].dateKey.slice(0, 4);
+    if (firstYear !== lastYear || lastYear !== String(new Date().getFullYear())) {
+      for (const row of chartData) {
+        row.dateLabel = `${row.dateLabel} '${row.dateKey.slice(2, 4)}`;
+      }
+    }
+  }
   const colors = assignColors(qualified.map((s) => s.build));
   const seriesList = qualified.map((s) => ({
     name: s.build,

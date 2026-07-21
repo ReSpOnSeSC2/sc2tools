@@ -825,12 +825,16 @@ function fmtMonthYear(ts) {
   });
 }
 
-/** @param {number} ts @returns {string} */
+/** Date-stamp for the all-time facts (peak MMR, biggest scalp,
+ *  longest streak, first game). Those records are often years old,
+ *  so a bare "Dec 29" is ambiguous — the year always rides along.
+ *  @param {number} ts @returns {string} */
 function fmtShortDate(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
     timeZone: "UTC",
   });
 }

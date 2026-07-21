@@ -109,7 +109,8 @@ class MultichatEngagementService {
    * }} db
    * @param {{
    *   io?: import('socket.io').Server,
-   *   overlayTokens?: { listForUser?: (userId: string) => Promise<Array<{token: string, revokedAt?: Date | null}>> , listActiveTokens?: (userId: string) => Promise<string[]> },
+   *   overlayTokens?: { listForUser?: (userId: string) => Promise<Array<{token: string, revokedAt?: Date | null}>> , listActiveTokens?: (userId: string) => Promise<string[]>, resolve?: (token: string) => Promise<{userId: string} | null> },
+   *   users?: { getPreferences: (userId: string, type: string) => Promise<Record<string, any>> },
    *   now?: () => number,
    * }} [deps]
    */
@@ -126,6 +127,7 @@ class MultichatEngagementService {
     this.clips = db.multichatClipMoments;
     this.io = deps.io || null;
     this.overlayTokens = deps.overlayTokens || null;
+    this.users = deps.users || null;
     this.now = deps.now || (() => Date.now());
     /** @type {Map<string, number[]>} token → per-bucket message counts */
     this._buckets = new Map();
@@ -446,11 +448,56 @@ class MultichatEngagementService {
     }
   }
 
-  /** @param {string} token @param {number} limit */
-  async topOracles(token, limit) {
+  /**
+   * The streamer's own chat identities as ``platform:name`` userKeys.
+   * The broadcaster chats in their own channel and earns XP like any
+   * viewer, but must never headline their own supporter wall or
+   * oracle board — the configured channel/username per platform is
+   * who "myself" is. Best-effort: any resolution failure returns no
+   * exclusions rather than breaking a summary.
+   *
+   * @param {string} token
+   * @returns {Promise<string[]>}
+   */
+  async _selfKeys(token) {
+    if (!this.users || typeof this.overlayTokens?.resolve !== "function") {
+      return [];
+    }
+    try {
+      const owner = await this.overlayTokens.resolve(token);
+      if (!owner?.userId) return [];
+      const prefs = await this.users.getPreferences(owner.userId, "multichat");
+      const keys = [];
+      for (const platform of PLATFORMS) {
+        const entry = prefs?.[platform];
+        if (!entry || typeof entry !== "object") continue;
+        for (const field of ["channel", "username"]) {
+          const raw = /** @type {Record<string, any>} */ (entry)[field];
+          if (typeof raw !== "string") continue;
+          const name = raw.trim().replace(/^@/, "").toLowerCase();
+          if (name) keys.push(`${platform}:${name}`);
+        }
+      }
+      return keys;
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * @param {string} token
+   * @param {number} limit
+   * @param {string[]} [excludeKeys] streamer's own userKeys; resolved
+   *   via {@link _selfKeys} when not supplied by the caller.
+   */
+  async topOracles(token, limit, excludeKeys) {
+    const exclude = excludeKeys ?? (await this._selfKeys(token));
+    /** @type {Record<string, any>} */
+    const query = { token, "oracle.total": { $gt: 0 } };
+    if (exclude.length > 0) query.userKey = { $nin: exclude };
     const docs = await this.viewers
       .find(
-        { token, "oracle.total": { $gt: 0 } },
+        query,
         { projection: { _id: 0, displayName: 1, platform: 1, oracle: 1 } },
       )
       .sort({ "oracle.score": -1 })
@@ -502,16 +549,21 @@ class MultichatEngagementService {
    * @param {string} token
    */
   async summary(token) {
+    // The streamer never ranks on their own boards (wall + oracles).
+    const selfKeys = await this._selfKeys(token);
+    /** @type {Record<string, any>} */
+    const wallQuery = { token };
+    if (selfKeys.length > 0) wallQuery.userKey = { $nin: selfKeys };
     const [topViewers, topOracles, open, moments, settled] = await Promise.all([
       this.viewers
         .find(
-          { token },
+          wallQuery,
           { projection: { _id: 0, displayName: 1, platform: 1, xp: 1, messages: 1, events: 1 } },
         )
         .sort({ xp: -1 })
         .limit(5)
         .toArray(),
-      this.topOracles(token, 5),
+      this.topOracles(token, 5, selfKeys),
       this.predictions.findOne(
         { token, settled: false },
         { sort: { openedAt: -1 }, projection: { _id: 0, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },

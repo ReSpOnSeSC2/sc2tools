@@ -22,7 +22,7 @@ export type PresetLabels = {
   presetId: PresetId;
   short: string;
   long: string;
-  /** Set when preset === "custom" — the range as `Mar 4 – May 10`. */
+  /** Set when preset === "custom" — the range as `Mar 4, 2025 – May 10, 2025`. */
   customRange: string | null;
 };
 
@@ -48,7 +48,13 @@ function formatCustomRange(
 function compactDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return toDateInputValue(undefined);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // A custom range can sit entirely in a past year — the year is
+  // load-bearing, not decoration.
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**

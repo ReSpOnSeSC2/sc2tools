@@ -147,6 +147,36 @@ describe("services/tickerFacts", () => {
     expect(peak.text).not.toContain("5,214");
   });
 
+  test("all-time facts carry the year — an old peak is never a bare month-day", async () => {
+    const docs = [];
+    // Current NA grind, well below the record…
+    for (let i = 0; i < 14; i += 1) {
+      docs.push(
+        game(i + 1, {
+          myMmr: 5300 + i,
+          myToonHandle: "1-S2-1-222",
+          opponent: { displayName: `NA${i}`, race: "Zerg", toonHandle: "1-S2-1-6" },
+        }),
+      );
+    }
+    // …and the all-time peak from a prior year.
+    docs.push(
+      game(0, {
+        date: new Date(Date.UTC(2024, 11, 29, 3, 0, 0)),
+        myMmr: 5842,
+        myToonHandle: "1-S2-1-222",
+        opponent: { displayName: "OldFoe", race: "Zerg", toonHandle: "1-S2-1-6" },
+      }),
+    );
+    await db.games.insertMany(docs);
+    const facts = await svc().factsFor("u1");
+    const peak = facts.find((f) => f.id === "peak-mmr");
+    expect(peak).toBeTruthy();
+    expect(peak.text).toContain("5,842");
+    expect(peak.text).toContain("(Dec 29, 2024)");
+    expect(peak.text).toContain("542 away right now");
+  });
+
   test("barcode opponents are excluded from name facts but counted as trivia", async () => {
     const docs = [];
     for (let i = 0; i < 30; i += 1) {

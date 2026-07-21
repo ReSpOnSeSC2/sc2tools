@@ -487,7 +487,7 @@ describe("StatsTickerWidget", () => {
   it("appends a page of server facts to the loop", () => {
     mockFacts = [
       { id: "career-record", text: "CAREER: 100 W – 80 L (56%) over 190 tracked games" },
-      { id: "peak-mmr", text: "PEAK MMR: 4,712 on NA (Aug 12) — 138 away right now" },
+      { id: "peak-mmr", text: "PEAK MMR: 4,712 on NA (Aug 12, 2025) — 138 away right now" },
     ];
     render(
       <StatsTickerWidget token="tok" session={{ wins: 1, losses: 0, games: 1 }} />,
