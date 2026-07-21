@@ -33,6 +33,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
  *   pulseAccounts: import('mongodb').Collection,
+ *   pulseCharacterLinks: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -94,6 +95,7 @@ async function connect({ uri, dbName }, observability = {}) {
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
+    pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -397,6 +399,15 @@ async function ensureIndexes(ctx) {
     { sparse: true },
   );
   await ctx.pulseAccounts.createIndex({ updatedAt: -1 });
+
+  // Global SC2Pulse character → account/pro linkage cache
+  // (services/pulseCharacterLinks.js). One row per character id; the
+  // unique index makes the batch write-through upsert atomic.
+  await ctx.pulseCharacterLinks.createIndex(
+    { pulseCharacterId: 1 },
+    { unique: true },
+  );
+  await ctx.pulseCharacterLinks.createIndex({ updatedAt: -1 });
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

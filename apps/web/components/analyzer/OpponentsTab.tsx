@@ -1,17 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, CornerDownRight, ExternalLink } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useApi } from "@/lib/clientApi";
 import { useApiPaginated } from "@/lib/useApiPaginated";
-import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
+import {
+  useLocalStoragePositiveInt,
+  useLocalStorageState,
+} from "@/lib/useLocalStorageState";
 import { fmtAgo, fmtMmr, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
+import {
+  groupMatchesSearch,
+  groupOpponentsByPlayer,
+  type OpponentGroup,
+  type PulseLinksResponse,
+} from "@/lib/opponentGroups";
 import { Skeleton, EmptyState } from "@/components/ui/Card";
+import { Toggle } from "@/components/ui/Toggle";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
+const LS_GROUP_BY_PLAYER = "analyzer.opponents.groupByPlayer";
 
 type Opp = {
   pulseId: string;
@@ -42,6 +54,14 @@ type Opp = {
  * when the global date filter is set, so toggling between "All time"
  * and "Season N" updates wins/losses/games per opponent within the
  * window.
+ *
+ * "Group same player" (default on) folds rows that SC2Pulse links to
+ * the same human — same Battle.net account, or the same community-
+ * verified player across accounts — into one row per player: merged
+ * W/L/games, the most-known name up front, and every other name they
+ * play under one tap away on the "+N names" chip. Grouping degrades
+ * gracefully: while the linkage is loading (or if the endpoint is
+ * unavailable) every row simply stays its own group.
  */
 export function OpponentsTab({
   onOpen,
@@ -51,6 +71,14 @@ export function OpponentsTab({
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
+  const [groupByPlayer, setGroupByPlayer] = useLocalStorageState<boolean>(
+    LS_GROUP_BY_PLAYER,
+    true,
+    (raw): raw is boolean => typeof raw === "boolean",
+  );
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const sort = useSort("lastPlayed", "desc");
 
   // We don't pass `limit` here — the paginator owns page size and
@@ -66,6 +94,16 @@ export function OpponentsTab({
   const { items: rawItems, isLoading, error, pagesFetched, hitMaxPages } =
     useApiPaginated<Opp>(path, dbRev);
 
+  // SC2Pulse "same player" linkage — characterId → account/pro keys.
+  // Identity data, not a windowed stat, so it ignores the date filter
+  // and is only fetched while grouping is on. SWR-cached; `partial`
+  // means the server is still warming its linkage cache and a later
+  // visit will merge more rows.
+  const { data: pulseLinks } = useApi<PulseLinksResponse>(
+    groupByPlayer ? "/v1/opponents/pulse-links" : null,
+    { revalidateOnFocus: false },
+  );
+
   const normalised: Opp[] = useMemo(() => {
     return (rawItems || []).map((o) => ({
       ...o,
@@ -78,24 +116,27 @@ export function OpponentsTab({
     }));
   }, [rawItems]);
 
-  // Client-side search across name + ids. The backend `search` query
-  // param is a no-op for the legacy endpoint, so filter here.
+  // One entry per player. With grouping off (or links not loaded yet)
+  // every row is its own singleton group, so the render path below is
+  // uniform either way.
+  const groups = useMemo(
+    () =>
+      groupOpponentsByPlayer(
+        normalised,
+        groupByPlayer ? pulseLinks?.links : null,
+      ),
+    [normalised, groupByPlayer, pulseLinks],
+  );
+
+  // Client-side search across every identity in a group (names,
+  // aliases, revealed name, pulse ids, toon handles). The backend
+  // `search` query param is a no-op for the legacy endpoint, so
+  // filter here.
   const searchedItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return normalised;
-    return normalised.filter((o) => {
-      const name = (o.name || "").toLowerCase();
-      const pulse = (o.pulseId || "").toLowerCase();
-      const toon = (o.toonHandle || "").toLowerCase();
-      const cid = (o.pulseCharacterId || "").toString().toLowerCase();
-      return (
-        name.includes(q)
-        || pulse.includes(q)
-        || toon.includes(q)
-        || cid.includes(q)
-      );
-    });
-  }, [normalised, search]);
+    const q = search.trim();
+    if (!q) return groups;
+    return groups.filter((g) => groupMatchesSearch(g, q));
+  }, [groups, search]);
 
   const filteredItems = useMemo(
     () => searchedItems.filter((o) => (o.games || 0) >= minGames),
@@ -106,6 +147,17 @@ export function OpponentsTab({
     () => sort.sortRows(filteredItems, (row, col) => (row as any)[col]),
     [filteredItems, sort],
   );
+
+  const mergedNameCount = normalised.length - groups.length;
+
+  const toggleGroup = (pulseId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(pulseId)) next.delete(pulseId);
+      else next.add(pulseId);
+      return next;
+    });
+  };
 
   const showSkeleton = isLoading && rawItems.length === 0;
 
@@ -121,9 +173,26 @@ export function OpponentsTab({
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <label
+          className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
+          title="Merge names SC2Pulse links to the same player into one row"
+        >
+          <Toggle
+            checked={groupByPlayer}
+            onChange={setGroupByPlayer}
+            label="Group same player"
+          />
+          <span className="text-micro uppercase tracking-wider text-text-dim">
+            Group same player
+          </span>
+        </label>
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span className="text-xs text-text-dim">
-            {items.length.toLocaleString()} of {normalised.length.toLocaleString()} shown
+            {items.length.toLocaleString()} of {groups.length.toLocaleString()}
+            {groupByPlayer ? " players" : ""} shown
+            {groupByPlayer && mergedNameCount > 0
+              ? ` · ${normalised.length.toLocaleString()} names grouped`
+              : null}
             {pagesFetched > 1 ? ` · ${pagesFetched} pages` : null}
             {hitMaxPages ? " · narrow your filter for more" : null}
           </span>
@@ -181,61 +250,77 @@ export function OpponentsTab({
               </tr>
             ) : (
               items.map((o) => (
-                <tr
-                  key={o.pulseId}
-                  onClick={() => onOpen(o.pulseId)}
-                  className="group cursor-pointer border-t border-border hover:bg-accent/10"
-                >
-                  <td
-                    className="px-3 py-1.5 text-text group-hover:text-accent"
-                    title={
-                      o.revealedName
-                        ? `${o.name || "unnamed"} · revealed as ${o.revealedName}`
-                        : o.name || ""
-                    }
+                <Fragment key={o.pulseId}>
+                  <tr
+                    onClick={() => onOpen(o.pulseId)}
+                    className="group cursor-pointer border-t border-border hover:bg-accent/10"
                   >
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate">
-                        {o.name || (
-                          <span className="italic text-text-dim">unnamed</span>
-                        )}
+                    <td
+                      className="px-3 py-1.5 text-text group-hover:text-accent"
+                      title={groupRowTitle(o)}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate">
+                          {o.name || (
+                            <span className="italic text-text-dim">unnamed</span>
+                          )}
+                        </span>
+                        <RevealedChip
+                          name={o.revealedName}
+                          displayedName={o.name}
+                        />
+                        {o.groupSize > 1 ? (
+                          <AliasChip
+                            group={o}
+                            expanded={expandedGroups.has(o.pulseId)}
+                            onToggle={() => toggleGroup(o.pulseId)}
+                          />
+                        ) : null}
                       </span>
-                      <RevealedChip name={o.revealedName} />
-                    </span>
-                  </td>
-                  <PulseIdCell opp={o} />
-                  <td
-                    className="px-3 py-1.5 text-right tabular-nums text-text-muted"
-                    title={
-                      typeof o.mmr === "number"
-                        ? "MMR from the most recent game you played against this opponent"
-                        : "No MMR on record yet"
-                    }
-                  >
-                    {fmtMmr(o.mmr)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-success">
-                    {o.wins}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-danger">
-                    {o.losses}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
-                    {o.games}
-                  </td>
-                  <td
-                    className="px-3 py-1.5 text-right tabular-nums"
-                    style={{ color: wrColor(o.winRate, o.games) }}
-                  >
-                    {pct1(o.winRate)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-xs text-text-dim">
-                    {o.lastPlayed ? fmtAgo(o.lastPlayed) : "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
-                    →
-                  </td>
-                </tr>
+                    </td>
+                    <PulseIdCell opp={o} />
+                    <td
+                      className="px-3 py-1.5 text-right tabular-nums text-text-muted"
+                      title={
+                        typeof o.mmr === "number"
+                          ? "MMR from the most recent game you played against this opponent"
+                          : "No MMR on record yet"
+                      }
+                    >
+                      {fmtMmr(o.mmr)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-success">
+                      {o.wins}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-danger">
+                      {o.losses}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
+                      {o.games}
+                    </td>
+                    <td
+                      className="px-3 py-1.5 text-right tabular-nums"
+                      style={{ color: wrColor(o.winRate, o.games) }}
+                    >
+                      {pct1(o.winRate)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-xs text-text-dim">
+                      {o.lastPlayed ? fmtAgo(o.lastPlayed) : "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
+                      →
+                    </td>
+                  </tr>
+                  {o.groupSize > 1 && expandedGroups.has(o.pulseId)
+                    ? o.identities.map((identity) => (
+                        <IdentityRow
+                          key={identity.pulseId}
+                          identity={identity}
+                          onOpen={onOpen}
+                        />
+                      ))
+                    : null}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -245,23 +330,129 @@ export function OpponentsTab({
   );
 }
 
+/** Hover title for a (possibly grouped) opponent row. */
+function groupRowTitle(o: OpponentGroup<Opp>): string {
+  const base = o.revealedName
+    ? `${o.name || "unnamed"} · revealed as ${o.revealedName}`
+    : o.name || "";
+  if (o.aliasNames.length === 0) return base;
+  return `${base} · also plays as ${o.aliasNames.join(", ")}`;
+}
+
 /**
- * The "Pulse ID" cell. When the agent has resolved the opponent's
- * canonical SC2Pulse character id (e.g. "994428"), show it as a link
- * to sc2pulse.nephest.com. Otherwise, show the raw toon_handle in dim
- * mono with a "(toon)" hint so the user can tell at a glance that
- * resolution hasn't happened yet (e.g. SC2Pulse was down during
- * the first ingest, or the opponent isn't ranked yet).
+ * "+N names" disclosure chip on a grouped row. SC2Pulse says these
+ * names are the same player; the chip both announces that and expands
+ * the per-name breakdown underneath. stopPropagation so toggling
+ * never triggers the row's deep-dive navigation.
  */
+function AliasChip({
+  group,
+  expanded,
+  onToggle,
+}: {
+  group: OpponentGroup<Opp>;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const extra = group.groupSize - 1;
+  const Chevron = expanded ? ChevronDown : ChevronRight;
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-label={`${expanded ? "Hide" : "Show"} the ${group.groupSize} names this player uses`}
+      title={`Same player on SC2Pulse · also plays as ${group.aliasNames.join(", ")}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-bg"
+    >
+      +{extra} {extra === 1 ? "name" : "names"}
+      <Chevron className="h-3 w-3" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * One identity inside an expanded group — the per-name W/L/games
+ * breakdown. Clickable like a main row, opening THAT identity's deep
+ * dive (each name keeps its own game history and profile).
+ */
+function IdentityRow({
+  identity,
+  onOpen,
+}: {
+  identity: Opp;
+  onOpen: (pulseId: string) => void;
+}) {
+  return (
+    <tr
+      onClick={() => onOpen(identity.pulseId)}
+      className="group cursor-pointer border-t border-border/60 bg-bg-elevated/40 hover:bg-accent/10"
+    >
+      <td
+        className="py-1.5 pl-7 pr-3 text-text-muted group-hover:text-accent"
+        title={identity.name || ""}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <CornerDownRight
+            className="h-3 w-3 flex-shrink-0 text-text-dim"
+            aria-hidden
+          />
+          <span className="truncate">
+            {identity.name || (
+              <span className="italic text-text-dim">unnamed</span>
+            )}
+          </span>
+        </span>
+      </td>
+      <PulseIdCell opp={identity} />
+      <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
+        {fmtMmr(identity.mmr)}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-success">
+        {identity.wins}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-danger">
+        {identity.losses}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
+        {identity.games}
+      </td>
+      <td
+        className="px-3 py-1.5 text-right tabular-nums"
+        style={{ color: wrColor(identity.winRate, identity.games) }}
+      >
+        {pct1(identity.winRate)}
+      </td>
+      <td className="px-3 py-1.5 text-right text-xs text-text-dim">
+        {identity.lastPlayed ? fmtAgo(identity.lastPlayed) : "—"}
+      </td>
+      <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
+        →
+      </td>
+    </tr>
+  );
+}
+
 /**
  * SC2Pulse "revealed" identity pill. For a barcode opponent the
  * displayed name is unreadable bars, so the revealed pro/main name is
  * the only human-legible identity — surface it inline next to the name.
- * Renders nothing when the opponent isn't revealed.
+ * Renders nothing when the opponent isn't revealed, or when the row
+ * already displays the revealed name as its main name (a grouped row
+ * whose most-known name IS the reveal — repeating it is clutter).
  */
-function RevealedChip({ name }: { name?: string | null }) {
+function RevealedChip({
+  name,
+  displayedName,
+}: {
+  name?: string | null;
+  displayedName?: string;
+}) {
   const tag = typeof name === "string" ? name.trim() : "";
-  if (!tag) return null;
+  if (!tag || tag === (displayedName || "").trim()) return null;
   return (
     <span
       className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-accent-cyan/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
@@ -275,6 +466,14 @@ function RevealedChip({ name }: { name?: string | null }) {
   );
 }
 
+/**
+ * The "Pulse ID" cell. When the agent has resolved the opponent's
+ * canonical SC2Pulse character id (e.g. "994428"), show it as a link
+ * to sc2pulse.nephest.com. Otherwise, show the raw toon_handle in dim
+ * mono with a "(toon)" hint so the user can tell at a glance that
+ * resolution hasn't happened yet (e.g. SC2Pulse was down during
+ * the first ingest, or the opponent isn't ranked yet).
+ */
 function PulseIdCell({ opp }: { opp: Opp }) {
   const label = pickPulseLabel(opp);
   const stop = (e: React.MouseEvent) => e.stopPropagation();

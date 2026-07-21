@@ -64,6 +64,15 @@ const COLLECTIONS = Object.freeze({
   // userId — the per-user ``opponents`` rows stay private and read
   // their public Pulse fields from here. See ``services/pulseDirectory.js``.
   PULSE_ACCOUNTS: "pulse_accounts",
+  // Global, cross-user SC2Pulse character → account/pro linkage cache.
+  // One row per SC2Pulse character id, recording which Battle.net
+  // account (``accountId``) and community-verified player identity
+  // (``proId`` / ``proNickname``) SC2Pulse has unified it under. The
+  // Opponents tab's "group by player" view reads this to merge
+  // multiple opponent rows that are the same human. NOT keyed by
+  // userId — the linkage is public SC2Pulse data, fetched once and
+  // shared by everyone. See ``services/pulseCharacterLinks.js``.
+  PULSE_CHARACTER_LINKS: "pulse_character_links",
 });
 
 const LIMITS = Object.freeze({
