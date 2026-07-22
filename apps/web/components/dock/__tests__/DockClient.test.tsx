@@ -80,6 +80,13 @@ function studioPosts(): Array<Record<string, unknown>> {
 }
 
 describe("DockClient", () => {
+  it("does not render a standalone build-vote section", async () => {
+    render(<DockClient token="tok_test" />);
+    await screen.findByText("Live chat");
+    expect(screen.queryByText("Chat picks the build")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Build vote" })).toBeNull();
+  });
+
   it("renders the merged chat feed with platform status", async () => {
     mockChat = {
       active: true,
@@ -99,7 +106,7 @@ describe("DockClient", () => {
     render(<DockClient token="tok_test" />);
     expect(await screen.findByText("gg wp")).toBeTruthy();
     expect(screen.getByText("Viewer")).toBeTruthy();
-    expect(screen.getByText("Twitch")).toBeTruthy();
+    expect(await screen.findByText("Twitch")).toBeTruthy();
   });
 
   it("Highlight POSTs the message to the studio endpoint", async () => {

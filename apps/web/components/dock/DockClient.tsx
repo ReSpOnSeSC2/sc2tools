@@ -40,7 +40,6 @@ import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
 import { DockClips } from "./DockClips";
-import { DockBuildVote } from "./DockBuildVote";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 
 /** Platform config re-read cadence — same as the OBS widget. */
@@ -105,7 +104,6 @@ const SECTIONS = [
   { id: "dock-scenes", label: "Scenes" },
   { id: "dock-timer", label: "Timer" },
   { id: "dock-poll", label: "Poll" },
-  { id: "dock-build-vote", label: "Build vote" },
   { id: "dock-goals", label: "Goals" },
   { id: "dock-clips", label: "Clips" },
   { id: "dock-actions", label: "Actions" },
@@ -355,17 +353,6 @@ export function DockClient({ token }: { token: string }) {
                 poll={studio.poll}
                 messages={messages}
                 busy={busy}
-                onPost={postStudio}
-              />
-            </SectionCard>
-          </section>
-
-          <section id="dock-build-vote" className="scroll-mt-12">
-            <SectionCard title="Chat picks the build">
-              <DockBuildVote
-                token={token}
-                busy={busy}
-                pollActive={studio.poll !== null}
                 onPost={postStudio}
               />
             </SectionCard>
