@@ -5,8 +5,8 @@
  * is loading/running, chat calls ``!win`` / ``!loss``; when the
  * replay-verified result lands, the server scores every pick and
  * this widget plays the reveal: was chat right, who are the top
- * oracles. Idle state shows the oracle leaderboard; fully
- * transparent with no data.
+ * oracles. Between prediction windows and result reveals the widget
+ * is fully transparent.
  *
  * Data: boot summary + ``overlay:engagement`` broadcasts (window
  * open / live tally / settle). The shared ``overlay:live`` payload
@@ -24,8 +24,8 @@ import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import type { LiveGamePayload } from "../types";
 
-/** How long the settle reveal stays before falling back to idle. */
-const REVEAL_MS = 12_000;
+/** How long the post-game prediction result stays on stream. */
+const REVEAL_MS = 30_000;
 
 interface Settle {
   result: "win" | "loss";
@@ -159,13 +159,6 @@ export function ChatOracleWidget({
       </Frame>
     );
   }
-  if (summary.oracles.length > 0) {
-    return (
-      <Frame>
-        <LeaderboardCard oracles={summary.oracles} />
-      </Frame>
-    );
-  }
   return <div style={{ background: "transparent" }} />;
 }
 
@@ -257,19 +250,6 @@ function RevealCard({ settle }: { settle: Settle }) {
           ))}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function LeaderboardCard({ oracles }: { oracles: OracleEntry[] }) {
-  return (
-    <div className="oracle-card" style={{ ...cardStyle, opacity: 0.92 }}>
-      <div style={kickerStyle}>🔮 TOP ORACLES</div>
-      <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-        {oracles.map((o, i) => (
-          <OracleRow key={`${o.platform}:${o.user}`} rank={i + 1} entry={o} />
-        ))}
-      </div>
     </div>
   );
 }

@@ -638,6 +638,17 @@ describe("StatsTickerWidget", () => {
 });
 
 describe("ChatOracleWidget game-to-game transfer", () => {
+  it("does not show the all-time oracle leaderboard while idle", () => {
+    mockEngagement = {
+      ...EMPTY_ENGAGEMENT,
+      oracles: [
+        { user: "Fingo", platform: "twitch", score: 10, correct: 1, total: 1 },
+      ],
+    };
+    const { container } = render(<ChatOracleWidget token="tok" />);
+    expect(container.textContent).toBe("");
+  });
+
   it("shows the reveal after a settle event", () => {
     mockEngagementEvent = {
       type: "prediction-settled",
@@ -652,7 +663,7 @@ describe("ChatOracleWidget game-to-game transfer", () => {
   });
 
   it("the reveal auto-dismisses even when other events land mid-reveal", () => {
-    // Regression: the 12s dismiss timer used to be keyed on lastEvent
+    // Regression: the dismiss timer used to be keyed on lastEvent
     // — a level-up arriving during the reveal cancelled it via the
     // effect cleanup and "nobody called it" sat on stream forever.
     vi.useFakeTimers();
@@ -675,9 +686,13 @@ describe("ChatOracleWidget game-to-game transfer", () => {
       mockEngagementEvent = { type: "level-up", user: "A", level: 2 };
       rerender(<ChatOracleWidget token="tok" />);
       expect(screen.getByText(/Nobody called it/)).toBeTruthy();
-      // …and still auto-dismiss on schedule.
+      // …and remain visible for the full 30-second result window.
       act(() => {
-        vi.advanceTimersByTime(13_000);
+        vi.advanceTimersByTime(27_000);
+      });
+      expect(screen.getByText(/Nobody called it/)).toBeTruthy();
+      act(() => {
+        vi.advanceTimersByTime(1_000);
       });
       expect(screen.queryByText(/Nobody called it/)).toBeNull();
     } finally {
