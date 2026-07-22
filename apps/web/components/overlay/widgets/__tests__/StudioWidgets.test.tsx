@@ -224,6 +224,7 @@ describe("ChatAlertsWidget", () => {
           id: "e1",
           kind: "raid",
           user: "OlderRaider",
+          detail: "raided with a party",
           atMs: 1000,
         },
         {
@@ -231,6 +232,7 @@ describe("ChatAlertsWidget", () => {
           id: "e2",
           kind: "superchat",
           user: "NewestFan",
+          detail: "sent a Super Chat",
           atMs: 2000,
         },
       ],
