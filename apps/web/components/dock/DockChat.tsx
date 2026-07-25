@@ -178,10 +178,13 @@ export function DockChat({
                     {timeLabel(m.atMs)}
                   </span>
                   <span
-                    className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                    style={{ background: meta.color }}
-                    title={meta.label}
-                  />
+                    className="mr-1.5 inline-flex h-4 shrink-0 items-center justify-center rounded px-1.5 align-middle text-micro font-extrabold leading-none tracking-wide"
+                    style={{ background: meta.color, color: meta.fg }}
+                    title={`${meta.label} chat`}
+                    aria-label={`${meta.label} chat`}
+                  >
+                    {meta.short}
+                  </span>
                   <span
                     className="font-semibold"
                     style={{ color: m.color || fallbackColor(m.user) }}
