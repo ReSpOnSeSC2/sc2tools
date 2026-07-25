@@ -275,20 +275,25 @@ function normalizeTikTokUsername(raw) {
 }
 
 /**
- * Map a connector `chat` event to the slim relay message. Field names
- * follow tiktok-live-connector v2 (`comment`, `user.uniqueId`), with
- * v1 fallbacks (`uniqueId` at the top level) so a pinned downgrade
- * doesn't silently drop every message.
+ * Map a connector `chat` event to the slim relay message. Connector
+ * 2.4.x can expose the v3-schema fields as `content` and
+ * `user.displayId`, while other payload paths use `comment` and
+ * `user.uniqueId`. Accept both shapes so a schema-path change cannot
+ * silently drop an otherwise healthy chat stream.
  *
  * @param {Record<string, any>} data
  */
 function mapChatEvent(data) {
-  const text = String(data?.comment || "").trim();
+  const legacyText = String(data?.comment || "").trim();
+  const currentText = String(data?.content || "").trim();
+  const text = legacyText || currentText;
   if (!text) return null;
   const user =
     data?.user?.uniqueId ||
+    data?.user?.displayId ||
     data?.user?.nickname ||
     data?.uniqueId ||
+    data?.displayId ||
     data?.nickname ||
     "viewer";
   /** @type {string[]} */
@@ -321,8 +326,10 @@ function mapChatEvent(data) {
 function mapTikTokEvent(name, data) {
   const user =
     data?.user?.uniqueId ||
+    data?.user?.displayId ||
     data?.user?.nickname ||
     data?.uniqueId ||
+    data?.displayId ||
     data?.nickname ||
     "viewer";
   const msgId = data?.msgId || data?.common?.msgId;

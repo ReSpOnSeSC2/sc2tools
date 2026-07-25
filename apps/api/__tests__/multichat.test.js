@@ -323,9 +323,9 @@ describe("services/tiktokChatRelay", () => {
     expect(seenA.some((e) => e.type === "status" && e.state === "connected")).toBe(true);
 
     conn.emit("chat", {
-      comment: "hello from tiktok",
-      user: { uniqueId: "viewer1", isModerator: true },
-      msgId: "m1",
+      content: "hello from tiktok",
+      user: { displayId: "viewer1", isModerator: true },
+      common: { msgId: "m1" },
     });
     const chatA = seenA.find((e) => e.type === "chat");
     expect(chatA.message).toMatchObject({
@@ -369,8 +369,34 @@ describe("services/tiktokChatRelay", () => {
     off();
   });
 
-  test("mapChatEvent drops empty comments and caps length", () => {
-    expect(mapChatEvent({ comment: "   " })).toBeNull();
+  test("mapChatEvent accepts current and legacy connector fields", () => {
+    expect(
+      mapChatEvent({
+        comment: "   ",
+        content: "current payload",
+        user: { displayId: "current_user" },
+        common: { msgId: "current-1" },
+      }),
+    ).toMatchObject({
+      id: "current-1",
+      user: "current_user",
+      text: "current payload",
+    });
+    expect(
+      mapChatEvent({
+        comment: "legacy payload",
+        user: { uniqueId: "legacy_user" },
+        msgId: "legacy-1",
+      }),
+    ).toMatchObject({
+      id: "legacy-1",
+      user: "legacy_user",
+      text: "legacy payload",
+    });
+  });
+
+  test("mapChatEvent drops empty chat and caps length", () => {
+    expect(mapChatEvent({ content: "   " })).toBeNull();
     const long = mapChatEvent({ comment: "x".repeat(900), uniqueId: "u" });
     expect(long.text.length).toBe(500);
   });
@@ -419,6 +445,9 @@ describe("services/tiktokChatRelay", () => {
     expect(
       mapTikTokEvent("follow", { user: { uniqueId: "newfan" } }),
     ).toMatchObject({ kind: "follow", user: "newfan", detail: "followed" });
+    expect(
+      mapTikTokEvent("follow", { user: { displayId: "currentfan" } }),
+    ).toMatchObject({ kind: "follow", user: "currentfan", detail: "followed" });
     expect(
       mapTikTokEvent("subscribe", { uniqueId: "supporter" }),
     ).toMatchObject({ kind: "sub", user: "supporter", detail: "subscribed" });
