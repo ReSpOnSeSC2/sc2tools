@@ -308,54 +308,105 @@ export function OpponentsTab({
       ) : null}
 
       <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard overflow-x-auto">
-        <table className="w-full min-w-[1180px] text-sm">
+        <table
+          aria-label="Opponent history"
+          className="w-full min-w-[1020px] text-sm"
+        >
           <thead className="bg-bg-elevated">
             <tr>
-              <SortableTh col="name" label="Opponent" {...sort} />
+              <SortableTh
+                col="name"
+                label="Opponent"
+                {...sort}
+                compact
+                width="8.5rem"
+              />
               <SortableTh
                 col="pulseCharacterId"
                 label="Pulse ID"
                 {...sort}
-                width="9rem"
+                compact
+                width="7.5rem"
+              />
+              <SortableTh
+                col="wins"
+                label="W"
+                title="Wins"
+                {...sort}
+                compact
+                align="right"
+                width="3rem"
+              />
+              <SortableTh
+                col="losses"
+                label="L"
+                title="Losses"
+                {...sort}
+                compact
+                align="right"
+                width="3rem"
+              />
+              <SortableTh
+                col="winRate"
+                label="Win rate"
+                {...sort}
+                compact
+                align="right"
+                width="5rem"
+              />
+              <SortableTh
+                col="games"
+                label="Games"
+                {...sort}
+                compact
+                align="right"
+                width="4rem"
               />
               <SortableTh
                 col="mmr"
                 label="Last MMR"
                 title="MMR from the most recent game you played against this opponent"
                 {...sort}
+                compact
                 align="right"
-                width="6.5rem"
+                width="5.5rem"
               />
               <SortableTh
                 col="netMmr"
                 label="Net MMR"
                 title="Verified game-time MMR gained or lost across consecutive ranked 1v1 replay pairs"
                 {...sort}
+                compact
                 align="right"
-                width="7rem"
+                width="6rem"
               />
               <SortableTh
                 col="mmrWon"
                 label="MMR won"
                 title="Total positive MMR deltas earned against this opponent"
                 {...sort}
+                compact
                 align="right"
-                width="6.5rem"
+                width="5.5rem"
               />
               <SortableTh
                 col="mmrLost"
                 label="MMR lost"
                 title="Total MMR lost to this opponent, shown as a positive magnitude"
                 {...sort}
+                compact
+                align="right"
+                width="5.5rem"
+              />
+              <SortableTh
+                col="lastPlayed"
+                label="Last"
+                {...sort}
+                compact
                 align="right"
                 width="6.5rem"
               />
-              <SortableTh col="wins" label="W" {...sort} align="right" width="5rem" />
-              <SortableTh col="losses" label="L" {...sort} align="right" width="5rem" />
-              <SortableTh col="games" label="Games" {...sort} align="right" width="5rem" />
-              <SortableTh col="winRate" label="Win rate" {...sort} align="right" width="6rem" />
-              <SortableTh col="lastPlayed" label="Last" {...sort} align="right" width="8rem" />
-              <th className="w-10 px-3 py-2 text-right text-text-dim">→</th>
+              <th className="w-8 px-1 py-1.5 text-right text-text-dim">→</th>
             </tr>
           </thead>
           <tbody>
@@ -379,10 +430,10 @@ export function OpponentsTab({
                     className="group cursor-pointer border-t border-border hover:bg-accent/10"
                   >
                     <td
-                      className="px-3 py-1.5 text-text group-hover:text-accent"
+                      className="px-2 py-1 text-text group-hover:text-accent"
                       title={groupRowTitle(o)}
                     >
-                      <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1">
                         <span className="truncate">
                           {o.name || (
                             <span className="italic text-text-dim">unnamed</span>
@@ -402,8 +453,23 @@ export function OpponentsTab({
                       </span>
                     </td>
                     <PulseIdCell opp={o} />
+                    <td className="px-2 py-1 text-right tabular-nums text-success">
+                      {o.wins}
+                    </td>
+                    <td className="px-2 py-1 text-right tabular-nums text-danger">
+                      {o.losses}
+                    </td>
                     <td
-                      className="px-3 py-1.5 text-right tabular-nums text-text-muted"
+                      className="px-2 py-1 text-right tabular-nums"
+                      style={{ color: wrColor(o.winRate, o.games) }}
+                    >
+                      {pct1(o.winRate)}
+                    </td>
+                    <td className="px-2 py-1 text-right tabular-nums text-text-muted">
+                      {o.games}
+                    </td>
+                    <td
+                      className="px-2 py-1 text-right tabular-nums text-text-muted"
                       title={
                         typeof o.mmr === "number"
                           ? "MMR from the most recent game you played against this opponent"
@@ -413,25 +479,10 @@ export function OpponentsTab({
                       {fmtMmr(o.mmr)}
                     </td>
                     <MmrImpactCells opponent={o} />
-                    <td className="px-3 py-1.5 text-right tabular-nums text-success">
-                      {o.wins}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-danger">
-                      {o.losses}
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
-                      {o.games}
-                    </td>
-                    <td
-                      className="px-3 py-1.5 text-right tabular-nums"
-                      style={{ color: wrColor(o.winRate, o.games) }}
-                    >
-                      {pct1(o.winRate)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right text-xs text-text-dim">
+                    <td className="px-2 py-1 text-right text-xs text-text-dim">
                       {o.lastPlayed ? fmtAgo(o.lastPlayed) : "—"}
                     </td>
-                    <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
+                    <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
                       <OpponentOpenButton opponent={o} onOpen={onOpen} />
                     </td>
                   </tr>
@@ -592,9 +643,9 @@ function MmrImpactCells({ opponent }: { opponent: Opp }) {
   if (!tracked) {
     return (
       <>
-        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
-        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
-        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
+        <td className="px-2 py-1 text-right text-text-dim">{"\u2014"}</td>
+        <td className="px-2 py-1 text-right text-text-dim">{"\u2014"}</td>
+        <td className="px-2 py-1 text-right text-text-dim">{"\u2014"}</td>
       </>
     );
   }
@@ -602,20 +653,20 @@ function MmrImpactCells({ opponent }: { opponent: Opp }) {
   return (
     <>
       <td
-        className={`px-3 py-1.5 text-right tabular-nums ${
+        className={`px-2 py-1 text-right leading-tight tabular-nums ${
           net > 0 ? "text-success" : net < 0 ? "text-danger" : "text-text-muted"
         }`}
         title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair`}
       >
         <span className="font-semibold">{formatSignedMmr(net)}</span>
-        <span className="block text-micro font-normal text-text-dim">
+        <span className="block text-micro font-normal leading-tight text-text-dim">
           {pairs.toLocaleString()} {pairs === 1 ? "pair" : "pairs"}
         </span>
       </td>
-      <td className="px-3 py-1.5 text-right font-medium tabular-nums text-success">
+      <td className="px-2 py-1 text-right font-medium tabular-nums text-success">
         +{Math.round(opponent.mmrWon || 0).toLocaleString()}
       </td>
-      <td className="px-3 py-1.5 text-right font-medium tabular-nums text-danger">
+      <td className="px-2 py-1 text-right font-medium tabular-nums text-danger">
         -{Math.round(opponent.mmrLost || 0).toLocaleString()}
       </td>
     </>
@@ -706,10 +757,10 @@ function IdentityRow({
       className="group cursor-pointer border-t border-border/60 bg-bg-elevated/40 hover:bg-accent/10"
     >
       <td
-        className="py-1.5 pl-7 pr-3 text-text-muted group-hover:text-accent"
+        className="py-1 pl-5 pr-2 text-text-muted group-hover:text-accent"
         title={identity.name || ""}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
+        <span className="flex min-w-0 items-center gap-1">
           <CornerDownRight
             className="h-3 w-3 flex-shrink-0 text-text-dim"
             aria-hidden
@@ -722,29 +773,29 @@ function IdentityRow({
         </span>
       </td>
       <PulseIdCell opp={identity} />
-      <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
-        {fmtMmr(identity.mmr)}
-      </td>
-      <MmrImpactCells opponent={identity} />
-      <td className="px-3 py-1.5 text-right tabular-nums text-success">
+      <td className="px-2 py-1 text-right tabular-nums text-success">
         {identity.wins}
       </td>
-      <td className="px-3 py-1.5 text-right tabular-nums text-danger">
+      <td className="px-2 py-1 text-right tabular-nums text-danger">
         {identity.losses}
       </td>
-      <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
-        {identity.games}
-      </td>
       <td
-        className="px-3 py-1.5 text-right tabular-nums"
+        className="px-2 py-1 text-right tabular-nums"
         style={{ color: wrColor(identity.winRate, identity.games) }}
       >
         {pct1(identity.winRate)}
       </td>
-      <td className="px-3 py-1.5 text-right text-xs text-text-dim">
+      <td className="px-2 py-1 text-right tabular-nums text-text-muted">
+        {identity.games}
+      </td>
+      <td className="px-2 py-1 text-right tabular-nums text-text-muted">
+        {fmtMmr(identity.mmr)}
+      </td>
+      <MmrImpactCells opponent={identity} />
+      <td className="px-2 py-1 text-right text-xs text-text-dim">
         {identity.lastPlayed ? fmtAgo(identity.lastPlayed) : "—"}
       </td>
-      <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
+      <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
         <OpponentOpenButton opponent={identity} onOpen={onOpen} />
       </td>
     </tr>
@@ -817,13 +868,13 @@ function PulseIdCell({ opp }: { opp: Opp }) {
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   if (!label) {
     return (
-      <td className="px-3 py-1.5 text-xs text-text-dim">—</td>
+      <td className="px-2 py-1 text-xs text-text-dim">—</td>
     );
   }
   if (label.isPulseCharacterId) {
     return (
       <td
-        className="truncate px-3 py-1.5 font-mono text-xs"
+        className="truncate px-2 py-1 font-mono text-xs"
         title={opp.toonHandle || opp.pulseId}
       >
         <a
@@ -841,7 +892,7 @@ function PulseIdCell({ opp }: { opp: Opp }) {
   }
   return (
     <td
-      className="truncate px-3 py-1.5 font-mono text-xs text-text-dim"
+      className="truncate px-2 py-1 font-mono text-xs text-text-dim"
       title={`${label.value} · sc2pulse character id not resolved yet`}
     >
       {label.value}

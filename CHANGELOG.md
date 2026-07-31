@@ -41,7 +41,9 @@ corresponding GitHub Release.
   and gross-lost MMR columns. Every value comes from the same verified,
   consecutive ranked-1v1 replay-pair pipeline as the matchup totals, so
   opponent rows reconcile exactly to their race summary; no mock or
-  inferred W/L data is used.
+  inferred W/L data is used. Both opponent tables use a compact
+  mobile/desktop layout, with W/L and win rate ahead of the MMR columns
+  so the core record stays visible earlier while scrolling.
 
 - **Creep tumor tracking for Zerg games** — the macro breakdown and
   the game page's Mechanics panel now show how many creep tumors you

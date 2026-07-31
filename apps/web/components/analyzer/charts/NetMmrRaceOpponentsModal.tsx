@@ -331,15 +331,18 @@ function HighlightCard({
 function OpponentImpactTable({ items }: { items: NetMmrOpponentRow[] }) {
   return (
     <div className="mt-2 overflow-x-auto rounded-xl border border-border bg-bg-surface">
-      <table className="w-full min-w-[680px] text-sm">
+      <table
+        aria-label="MMR impact by opponent"
+        className="w-full min-w-[620px] text-sm"
+      >
         <thead className="bg-bg-elevated/80 text-micro uppercase tracking-wider text-text-dim">
           <tr>
-            <th scope="col" className="px-3 py-2.5 text-left font-semibold">Opponent</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-semibold">Record</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-semibold">Pairs</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-semibold" title="Gross MMR gained from wins">Taken</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-semibold" title="Gross MMR lost in defeats">Lost</th>
-            <th scope="col" className="px-3 py-2.5 text-right font-semibold">Net</th>
+            <th scope="col" className="px-2 py-2 text-left font-semibold">Opponent</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold">Record</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold">Pairs</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold" title="Gross MMR gained from wins">Taken</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold" title="Gross MMR lost in defeats">Lost</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold">Net</th>
           </tr>
         </thead>
         <tbody>
@@ -348,7 +351,7 @@ function OpponentImpactTable({ items }: { items: NetMmrOpponentRow[] }) {
               key={opponent.pulseId || opponent.toonHandle || `${opponentName(opponent)}-${index}`}
               className="border-t border-border transition-colors hover:bg-accent/5"
             >
-              <th scope="row" className="max-w-[15rem] px-3 py-2.5 text-left font-medium text-text">
+              <th scope="row" className="max-w-[12rem] px-2 py-2 text-left font-medium text-text">
                 <span className="block truncate" title={opponentName(opponent)}>{opponentName(opponent)}</span>
                 {opponent.pulseCharacterId || opponent.toonHandle ? (
                   <span className="block truncate text-micro font-normal text-text-dim">
@@ -356,16 +359,16 @@ function OpponentImpactTable({ items }: { items: NetMmrOpponentRow[] }) {
                   </span>
                 ) : null}
               </th>
-              <td className="px-3 py-2.5 text-right tabular-nums text-text-muted">
+              <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-text-muted">
                 <span className="text-success">{opponent.wins}W</span>
                 <span className="text-text-dim">–</span>
                 <span className="text-danger">{opponent.losses}L</span>
                 <span className="ml-1 text-micro text-text-dim">({pct1(opponent.winRate)})</span>
               </td>
-              <td className="px-3 py-2.5 text-right tabular-nums text-text-muted">{opponent.pairs.toLocaleString()}</td>
-              <td className="px-3 py-2.5 text-right font-medium tabular-nums text-success">+{opponent.mmrWon.toLocaleString()}</td>
-              <td className="px-3 py-2.5 text-right font-medium tabular-nums text-danger">−{opponent.mmrLost.toLocaleString()}</td>
-              <td className="px-3 py-2.5 text-right"><SignedMmr value={opponent.netMmr} className="font-semibold" /></td>
+              <td className="px-2 py-2 text-right tabular-nums text-text-muted">{opponent.pairs.toLocaleString()}</td>
+              <td className="px-2 py-2 text-right font-medium tabular-nums text-success">+{opponent.mmrWon.toLocaleString()}</td>
+              <td className="px-2 py-2 text-right font-medium tabular-nums text-danger">−{opponent.mmrLost.toLocaleString()}</td>
+              <td className="px-2 py-2 text-right"><SignedMmr value={opponent.netMmr} className="font-semibold" /></td>
             </tr>
           ))}
         </tbody>

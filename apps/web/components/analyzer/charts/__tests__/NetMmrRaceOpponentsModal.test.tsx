@@ -92,6 +92,10 @@ describe("NetMmrRaceOpponentsModal", () => {
     expect(screen.getAllByText("Maru").length).toBeGreaterThan(0);
 
     const table = screen.getByRole("table");
+    expect(table.className).toContain("min-w-[620px]");
+    expect(
+      within(table).getAllByRole("columnheader").map((header) => header.textContent),
+    ).toEqual(["Opponent", "Record", "Pairs", "Taken", "Lost", "Net"]);
     expect(within(table).getByText("+62")).toBeTruthy();
     expect(within(table).getByText("−71")).toBeTruthy();
     expect(within(table).getByText("75.0%", { exact: false })).toBeTruthy();

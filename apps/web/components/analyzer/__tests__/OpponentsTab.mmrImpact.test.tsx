@@ -141,6 +141,33 @@ describe("OpponentsTab MMR impact", () => {
     ).toBeTruthy();
 
     const table = screen.getByRole("table");
+    expect(table.className).toContain("min-w-[1020px]");
+    const headerLabels = within(table)
+      .getAllByRole("columnheader")
+      .map((header) => (header.textContent || "").replace(/[↑↓]/g, "").trim());
+    expect(headerLabels).toEqual([
+      "Opponent",
+      "Pulse ID",
+      "W",
+      "L",
+      "Win rate",
+      "Games",
+      "Last MMR",
+      "Net MMR",
+      "MMR won",
+      "MMR lost",
+      "Last",
+      "→",
+    ]);
+
+    const alphaRow = within(table).getByText("Alpha").closest("tr");
+    expect(alphaRow).not.toBeNull();
+    const alphaCells = within(alphaRow as HTMLTableRowElement).getAllByRole("cell");
+    expect(alphaCells[2].textContent).toBe("2");
+    expect(alphaCells[3].textContent).toBe("1");
+    expect(alphaCells[4].textContent).toBe("66.7%");
+    expect(alphaCells[5].textContent).toBe("3");
+    expect(alphaCells[6].textContent).toBe("4100");
     expect(within(table).getByText("+20")).toBeTruthy();
     expect(within(table).getByText("-30")).toBeTruthy();
     expect(within(table).getByText("+40")).toBeTruthy();
@@ -187,6 +214,41 @@ describe("OpponentsTab MMR impact", () => {
       screen.getByRole("button", { name: "Open Beta, most MMR lost" }),
     ).toBeTruthy();
     expect(screen.getByText(/Some MMR impact rows were omitted/i)).toBeTruthy();
+  });
+
+  it("keeps expanded identity rows aligned with the record-first columns", () => {
+    useApiMock.mockReturnValue({
+      data: {
+        links: {
+          101: { accountId: "shared", proId: null, proNickname: null },
+          202: { accountId: "shared", proId: null, proNickname: null },
+        },
+        partial: false,
+      },
+    });
+
+    render(<OpponentsTab onOpen={() => {}} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Show the 2 names this player uses/i }),
+    );
+
+    const table = screen.getByRole("table", { name: "Opponent history" });
+    const identityRows = within(table)
+      .getAllByRole("row")
+      .filter((row) => row.className.includes("bg-bg-elevated/40"));
+    expect(identityRows).toHaveLength(2);
+
+    const alphaIdentity = identityRows.find((row) =>
+      within(row).queryByText("Alpha"),
+    );
+    expect(alphaIdentity).toBeTruthy();
+    const cells = within(alphaIdentity as HTMLTableRowElement).getAllByRole("cell");
+    expect(cells).toHaveLength(12);
+    expect(cells[2].textContent).toBe("2");
+    expect(cells[3].textContent).toBe("1");
+    expect(cells[4].textContent).toBe("66.7%");
+    expect(cells[5].textContent).toBe("3");
+    expect(cells[6].textContent).toBe("4100");
   });
 
   it("does not mistake an impact request failure for an empty history", () => {

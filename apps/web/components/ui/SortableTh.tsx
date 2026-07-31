@@ -122,6 +122,7 @@ export function SortableTh({
   align = "left",
   width,
   title,
+  compact = false,
 }: {
   col: string;
   label: string;
@@ -132,6 +133,8 @@ export function SortableTh({
   width?: string;
   /** Optional hover tooltip clarifying what the column means. */
   title?: string;
+  /** Use tighter table-cell padding for dense, horizontally scrollable tables. */
+  compact?: boolean;
 }) {
   const active = sortBy === col;
   const arrow = active ? (sortDir === "asc" ? "↑" : "↓") : "";
@@ -145,7 +148,9 @@ export function SortableTh({
         type="button"
         onClick={() => setSort(col)}
         title={title}
-        className={`flex w-full items-center gap-1 px-3 py-2 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+        className={`flex w-full items-center gap-1 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+          compact ? "px-2 py-1.5" : "px-3 py-2"
+        } ${
           align === "right" ? "justify-end text-right" : "justify-start text-left"
         } ${active ? "text-text" : "text-text-muted"}`}
       >

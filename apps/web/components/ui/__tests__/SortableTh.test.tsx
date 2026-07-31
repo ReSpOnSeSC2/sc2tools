@@ -18,6 +18,7 @@ describe("SortableTh", () => {
               sortDir="desc"
               setSort={setSort}
               align="right"
+              compact
             />
           </tr>
         </thead>
@@ -27,7 +28,9 @@ describe("SortableTh", () => {
     const header = screen.getByRole("columnheader", { name: /Net MMR/i });
     expect(header.getAttribute("aria-sort")).toBe("descending");
 
-    fireEvent.click(screen.getByRole("button", { name: /Net MMR/i }));
+    const button = screen.getByRole("button", { name: /Net MMR/i });
+    expect(button.className).toContain("px-2 py-1.5");
+    fireEvent.click(button);
     expect(setSort).toHaveBeenCalledWith("netMmr");
   });
 });
