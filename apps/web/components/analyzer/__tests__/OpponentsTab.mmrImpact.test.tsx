@@ -133,12 +133,16 @@ describe("OpponentsTab MMR impact", () => {
     const onOpen = vi.fn();
     render(<OpponentsTab onOpen={onOpen} />);
 
-    expect(
-      screen.getByRole("button", { name: "Open Alpha, most MMR won" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Open Beta, most MMR lost" }),
-    ).toBeTruthy();
+    const mostWon = screen.getByRole("button", {
+      name: "Open Alpha, most net MMR won",
+    });
+    const mostLost = screen.getByRole("button", {
+      name: "Open Beta, most net MMR lost",
+    });
+    expect(within(mostWon).getByText("+20")).toBeTruthy();
+    expect(within(mostWon).queryByText("+40")).toBeNull();
+    expect(within(mostLost).getByText("-30")).toBeTruthy();
+    expect(within(mostLost).queryByText("-40")).toBeNull();
 
     const table = screen.getByRole("table");
     expect(table.className).toContain("min-w-[1020px]");
@@ -180,7 +184,7 @@ describe("OpponentsTab MMR impact", () => {
     expect(within(table).queryByText("Beta")).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Open Alpha, most MMR won" }),
+      screen.getByRole("button", { name: "Open Alpha, most net MMR won" }),
     );
     expect(onOpen).toHaveBeenCalledWith("alpha");
 
@@ -211,7 +215,7 @@ describe("OpponentsTab MMR impact", () => {
     render(<OpponentsTab onOpen={() => {}} />);
 
     expect(
-      screen.getByRole("button", { name: "Open Beta, most MMR lost" }),
+      screen.getByRole("button", { name: "Open Beta, most net MMR lost" }),
     ).toBeTruthy();
     expect(screen.getByText(/Some MMR impact rows were omitted/i)).toBeTruthy();
   });

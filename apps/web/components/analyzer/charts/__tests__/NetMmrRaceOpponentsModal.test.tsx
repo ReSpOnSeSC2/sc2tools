@@ -82,14 +82,22 @@ afterEach(() => {
 });
 
 describe("NetMmrRaceOpponentsModal", () => {
-  it("shows the verified opponent impact, gross leaders, and record columns", () => {
+  it("shows mutually exclusive net leaders alongside gross and record columns", () => {
     render(<NetMmrRaceOpponentsModal race="P" onClose={() => {}} />);
 
     expect(screen.getByRole("dialog", { name: "MMR by Protoss opponent" })).toBeTruthy();
-    expect(screen.getByText("You took the most from")).toBeTruthy();
-    expect(screen.getByText("Took the most from you")).toBeTruthy();
+    expect(screen.getByText("Most net MMR won from")).toBeTruthy();
+    expect(screen.getByText("Most net MMR lost to")).toBeTruthy();
     expect(screen.getAllByText("Rogue").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Maru").length).toBeGreaterThan(0);
+
+    const highlights = screen.getByRole("region", {
+      name: "Matchup opponent highlights",
+    });
+    expect(within(highlights).getByText("+38")).toBeTruthy();
+    expect(within(highlights).getByText("\u221251")).toBeTruthy();
+    expect(within(highlights).queryByText("+62")).toBeNull();
+    expect(within(highlights).queryByText("\u221271")).toBeNull();
 
     const table = screen.getByRole("table");
     expect(table.className).toContain("min-w-[620px]");

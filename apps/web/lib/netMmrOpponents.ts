@@ -51,7 +51,9 @@ export type NetMmrOpponentsSummary = {
   mmrLost: number;
   pairs: number;
   opponents: number;
+  /** Opponent with the greatest positive netMmr, or null when none qualify. */
   mostMmrGainedFrom: NetMmrOpponentRow | null;
+  /** Opponent with the most negative netMmr, or null when none qualify. */
   mostMmrLostTo: NetMmrOpponentRow | null;
 };
 

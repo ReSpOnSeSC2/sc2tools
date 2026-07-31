@@ -132,12 +132,73 @@ describe("net MMR by opponent", () => {
       opponents: 2,
     });
     expect(result.summary.mostMmrGainedFrom.name).toBe("Beta");
-    expect(result.summary.mostMmrLostTo.name).toBe("Alpha");
+    expect(result.summary.mostMmrLostTo).toBeNull();
 
     const matchup = await service.netMmrByMatchup("u1", { oppRace: "Z" });
     expect(matchup.matchups).toHaveLength(1);
     expect(matchup.matchups[0].netMmr).toBe(result.summary.netMmr);
     expect(matchup.matchups[0].pairs).toBe(result.summary.pairs);
+  });
+
+  test("ranks mutually exclusive positive and negative net MMR leaders", async () => {
+    await db.games.insertMany([
+      game("n1", 0, 4000, "Victory", {
+        pulseId: "1-S2-1-calyx",
+        displayName: "Calyx",
+        race: "Zerg",
+      }),
+      game("n2", 5, 4120, "Defeat", {
+        pulseId: "1-S2-1-calyx",
+        displayName: "Calyx",
+        race: "Zerg",
+      }),
+      game("n3", 10, 4020, "Victory", {
+        pulseId: "1-S2-1-calyx",
+        displayName: "Calyx",
+        race: "Zerg",
+      }),
+      game("n4", 15, 4140, "Defeat", {
+        pulseId: "1-S2-1-calyx",
+        displayName: "Calyx",
+        race: "Zerg",
+      }),
+      game("n5", 20, 4010, "Victory", {
+        pulseId: "1-S2-1-gain",
+        displayName: "Gain",
+        race: "Zerg",
+      }),
+      game("n6", 25, 4100, "Defeat", {
+        pulseId: "1-S2-1-loss",
+        displayName: "Loss",
+        race: "Zerg",
+      }),
+      // Terminal observation supplies n6's -90 without adding its own pair.
+      game("n7", 30, 4010, "Victory", {
+        pulseId: "1-S2-1-terminal",
+        displayName: "Terminal",
+        race: "Zerg",
+      }),
+    ]);
+
+    const result = await service.netMmrByOpponent("u1", {}, {
+      opponentRace: "Z",
+      sort: "name",
+    });
+    const calyx = result.items.find((row) => row.name === "Calyx");
+
+    // Calyx has the largest gross won and lost totals, but only +10 net.
+    expect(calyx).toMatchObject({ netMmr: 10, mmrWon: 240, mmrLost: 230 });
+    expect(result.summary.mostMmrGainedFrom).toMatchObject({
+      name: "Gain",
+      netMmr: 90,
+    });
+    expect(result.summary.mostMmrLostTo).toMatchObject({
+      name: "Loss",
+      netMmr: -90,
+    });
+    expect(result.summary.mostMmrGainedFrom.pulseId).not.toBe(
+      result.summary.mostMmrLostTo.pulseId,
+    );
   });
 
   test("search, minimum pairs, sorting, and pagination apply after grouping", async () => {
@@ -177,7 +238,8 @@ describe("net MMR by opponent", () => {
     expect(page.items).toHaveLength(1);
     expect(page.items[0].name).toBe("Beta");
     // Headline leaders are pre-pagination.
-    expect(page.summary.mostMmrLostTo.name).toBe("Alpha");
+    expect(page.summary.mostMmrGainedFrom.name).toBe("Beta");
+    expect(page.summary.mostMmrLostTo).toBeNull();
   });
 
   test("supports unknown race without treating display names as player identity", async () => {

@@ -582,12 +582,12 @@ function MmrLeaderCard({
   onOpen: (pulseId: string) => void;
 }) {
   const won = kind === "won";
-  const value = won ? opponent?.mmrWon || 0 : opponent?.mmrLost || 0;
+  const value = opponent?.netMmr || 0;
   const Icon = won ? TrendingUp : TrendingDown;
   if (!opponent) {
     return (
       <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-dim">
-        No {won ? "MMR gains" : "MMR losses"} in this range.
+        No net MMR {won ? "gains" : "losses"} in this range.
       </div>
     );
   }
@@ -604,21 +604,20 @@ function MmrLeaderCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-micro uppercase tracking-wider text-text-dim">
-          {won ? "Most MMR won from" : "Most MMR lost to"}
+          {won ? "Most net MMR won from" : "Most net MMR lost to"}
         </span>
         <span className="block truncate font-semibold text-text group-hover:text-accent">
           {name}
         </span>
         <span className="block text-xs tabular-nums text-text-dim">
-          {formatSignedMmr(opponent.netMmr)} net · {opponent.pairs} verified{" "}
+          {opponent.pairs} verified{" "}
           {opponent.pairs === 1 ? "pair" : "pairs"}
         </span>
       </span>
       <span
         className={`text-lg font-bold tabular-nums ${won ? "text-success" : "text-danger"}`}
       >
-        {won ? "+" : "-"}
-        {Math.round(value).toLocaleString()}
+        {formatSignedMmr(value)}
       </span>
     </>
   );
@@ -630,7 +629,7 @@ function MmrLeaderCard({
       type="button"
       onClick={() => onOpen(openId)}
       className={`${cardClass} transition hover:-translate-y-0.5 hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
-      aria-label={`Open ${name}, ${won ? "most MMR won" : "most MMR lost"}`}
+      aria-label={`Open ${name}, ${won ? "most net MMR won" : "most net MMR lost"}`}
     >
       {content}
     </button>

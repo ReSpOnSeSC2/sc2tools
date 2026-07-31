@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Opponent MMR leader cards now rank by net result** — the gain card
+  selects the largest positive net MMR and the loss card selects the most
+  negative net MMR. Gross MMR won/lost remains available in the tables, but
+  a high-volume opponent can no longer occupy both headline cards.
+
 - **Agent updater no longer sticks on an old version after a release
   ships** — the API's GitHub release feed could keep telling installed
   agents "you're up to date" on a version the website had already

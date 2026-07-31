@@ -256,16 +256,16 @@ function ImpactSummary({
     <section aria-label="Matchup opponent highlights" className="grid gap-2 sm:grid-cols-3">
       <HighlightCard
         icon={<ArrowUpRight aria-hidden className="h-4 w-4" />}
-        eyebrow="You took the most from"
+        eyebrow="Most net MMR won from"
         opponent={summary.mostMmrGainedFrom}
-        value={summary.mostMmrGainedFrom?.mmrWon ?? null}
+        value={summary.mostMmrGainedFrom?.netMmr ?? null}
         tone="gain"
       />
       <HighlightCard
         icon={<ArrowDownRight aria-hidden className="h-4 w-4" />}
-        eyebrow="Took the most from you"
+        eyebrow="Most net MMR lost to"
         opponent={summary.mostMmrLostTo}
-        value={summary.mostMmrLostTo?.mmrLost ?? null}
+        value={summary.mostMmrLostTo?.netMmr ?? null}
         tone="loss"
       />
       <div className="rounded-xl border border-border bg-bg-elevated/45 p-3">
@@ -317,12 +317,12 @@ function HighlightCard({
               {opponent.pairs.toLocaleString()} pair{opponent.pairs === 1 ? "" : "s"}
             </p>
           </div>
-          <span className={`whitespace-nowrap text-base font-semibold tabular-nums ${isGain ? "text-success" : "text-danger"}`}>
-            {isGain ? "+" : "−"}{Math.abs(value).toLocaleString()}
-          </span>
+          <SignedMmr value={value} className="text-base font-semibold" />
         </div>
       ) : (
-        <p className="mt-2 text-caption text-text-dim">No accepted pairs</p>
+        <p className="mt-2 text-caption text-text-dim">
+          No net MMR {isGain ? "gains" : "losses"}
+        </p>
       )}
     </div>
   );

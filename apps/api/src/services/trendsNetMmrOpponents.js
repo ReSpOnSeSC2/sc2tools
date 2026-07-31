@@ -263,14 +263,17 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
           },
         },
       ],
+      // Net-positive and net-negative cohorts are mutually exclusive. Gross
+      // won/lost totals remain available on each row, but must not choose the
+      // headline leaders because one high-volume opponent can lead both.
       mostMmrGainedFrom: [
-        { $match: { mmrWon: { $gt: 0 } } },
-        { $sort: { mmrWon: -1, netMmr: -1, name: 1, _identityKey: 1 } },
+        { $match: { netMmr: { $gt: 0 } } },
+        { $sort: { netMmr: -1, mmrWon: -1, name: 1, _identityKey: 1 } },
         { $limit: 1 },
       ],
       mostMmrLostTo: [
-        { $match: { mmrLost: { $gt: 0 } } },
-        { $sort: { mmrLost: -1, netMmr: 1, name: 1, _identityKey: 1 } },
+        { $match: { netMmr: { $lt: 0 } } },
+        { $sort: { netMmr: 1, mmrLost: -1, name: 1, _identityKey: 1 } },
         { $limit: 1 },
       ],
       items: [
