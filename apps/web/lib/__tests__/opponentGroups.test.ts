@@ -50,6 +50,10 @@ describe("groupOpponentsByPlayer", () => {
         games: 10,
         winRate: 0.6,
         mmr: 4000,
+        netMmr: 24,
+        mmrWon: 44,
+        mmrLost: 20,
+        mmrPairs: 3,
         lastPlayed: "2026-01-01T00:00:00Z",
       }),
       row({
@@ -61,6 +65,10 @@ describe("groupOpponentsByPlayer", () => {
         games: 2,
         winRate: 0.5,
         mmr: 4100,
+        netMmr: -7,
+        mmrWon: 11,
+        mmrLost: 18,
+        mmrPairs: 2,
         lastPlayed: "2026-06-01T00:00:00Z",
       }),
     ];
@@ -79,6 +87,11 @@ describe("groupOpponentsByPlayer", () => {
     expect(g.lastPlayed).toBe("2026-06-01T00:00:00Z");
     // Freshest mmr wins (identity "b" is newest and carries one).
     expect(g.mmr).toBe(4100);
+    expect(g.netMmr).toBe(17);
+    expect(g.mmrWon).toBe(55);
+    expect(g.mmrLost).toBe(38);
+    expect(g.mmrPairs).toBe(5);
+    expect(g.mmrAvgDelta).toBeCloseTo(17 / 5);
     // Most-played readable name is the main name; the other is an alias.
     expect(g.name).toBe("OldName");
     expect(g.aliasNames).toEqual(["NewName"]);

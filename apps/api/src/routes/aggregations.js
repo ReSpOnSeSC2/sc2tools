@@ -336,6 +336,39 @@ function buildAggregationsRouter(deps) {
     }
   });
 
+  // Opponent-level accepted MMR deltas behind each matchup race tile and
+  // the Opponents tab. Uses the exact same full-history pairing semantics
+  // as /mmr-by-matchup, with post-group search/sort/pagination controls.
+  router.get("/mmr-by-matchup/opponents", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const filters = parseFilters(req.query);
+      const raceRaw = req.query.opp_race ?? req.query.oppRace;
+      const opponentRace = parseNetMmrOpponentRace(raceRaw);
+      const search =
+        typeof req.query.search === "string" ? req.query.search : "";
+      const minPairs = parseFiniteInt(req.query.min_pairs);
+      const sort =
+        typeof req.query.sort === "string" ? req.query.sort : undefined;
+      const order = parseSortOrder(req.query.order);
+      const limit = parseFiniteInt(req.query.limit);
+      const offset = parseFiniteInt(req.query.offset);
+      res.json(
+        await deps.aggregations.netMmrByOpponent(userId, filters, {
+          opponentRace,
+          search,
+          minPairs,
+          sort,
+          order,
+          limit,
+          offset,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Macro-tab header: average macro score, coverage, and the most
   // expensive recurring leaks across the filtered game set. Reads the
   // slim games rows only (macroScore + top3Leaks), never the detail
@@ -418,6 +451,27 @@ function pickResultBucket(raw) {
   const s = String(raw || "").toLowerCase();
   if (s === "win" || s === "loss") return s;
   return undefined;
+}
+
+/** @param {unknown} raw @returns {'P'|'T'|'Z'|'R'|'U'|undefined} */
+function parseNetMmrOpponentRace(raw) {
+  const value = String(raw || "").trim().toUpperCase();
+  if (
+    value === "P"
+    || value === "T"
+    || value === "Z"
+    || value === "R"
+    || value === "U"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+/** @param {unknown} raw @returns {'asc'|'desc'|undefined} */
+function parseSortOrder(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  return value === "asc" || value === "desc" ? value : undefined;
 }
 
 /**

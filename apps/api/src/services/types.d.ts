@@ -493,6 +493,19 @@ export interface AggregationsService {
   ): Promise<object>;
   mapTrend(userId: string, opts: object, filters: object): Promise<object>;
   netMmrByMatchup(userId: string, filters: object): Promise<object>;
+  netMmrByOpponent(
+    userId: string,
+    filters: object,
+    opts?: {
+      opponentRace?: "P" | "T" | "Z" | "R" | "U";
+      search?: string;
+      minPairs?: number;
+      sort?: string;
+      order?: "asc" | "desc";
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<object>;
 }
 
 export interface StreakService {

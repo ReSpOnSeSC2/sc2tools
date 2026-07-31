@@ -685,6 +685,8 @@ class AggregationsService {
   async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
   /** @param {string} userId @param {object} filters */
   async netMmrByMatchup(userId, filters) { return trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters); }
+  /** @param {string} userId @param {object} filters @param {object} [opts] */
+  async netMmrByOpponent(userId, filters, opts) { return trendsInsights.netMmrByOpponent(this._trendsDeps(), userId, filters, opts); }
 
   /** @private */
   _trendsDeps() {

@@ -20,6 +20,7 @@
 const { LIMITS } = require("../config/constants");
 const oppMmr = require("./trendsOppMmr");
 const netMmr = require("./trendsNetMmr");
+const netMmrOpponents = require("./trendsNetMmrOpponents");
 const {
   regionFromToonHandleExpr,
   myLadderRaceExpr,
@@ -821,6 +822,7 @@ module.exports = {
   // existing ``trendsInsights.netMmrByMatchup`` / ``NET_MMR_MAX_DELTA``
   // call sites (incl. the netMmrByMatchup test) keep working.
   netMmrByMatchup: netMmr.netMmrByMatchup,
+  netMmrByOpponent: netMmrOpponents.netMmrByOpponent,
   SESSION_GAP_MINUTES,
   MAX_SESSION_POSITIONS,
   OPP_MMR_BUCKET_WIDTHS: oppMmr.OPP_MMR_BUCKET_WIDTHS,

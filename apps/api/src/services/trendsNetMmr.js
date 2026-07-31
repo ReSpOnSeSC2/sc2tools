@@ -47,128 +47,147 @@ function isTrustedMmr(valueField, sourceField) {
   };
 }
 
+/**
+ * Build the canonical accepted-pair input used by every net-MMR view.
+ *
+ * Keep this as the single source of truth for sequencing and rejection
+ * rules. Race totals and opponent drill-downs must never independently
+ * reimplement the window: even a small difference in where display
+ * filters are applied would make the child rows fail to reconcile with
+ * the clicked matchup bar.
+ *
+ * @param {Deps} deps
+ * @param {string} userId
+ * @param {object} filters
+ * @returns {Array<Record<string, any>>}
+ */
+function netMmrPairStages(deps, userId, filters) {
+  const displayMatch = deps.gamesMatchStage(userId, filters);
+  return [
+    // Window over complete per-user history. Applying opponent, map,
+    // build, or date filters here would make non-consecutive rows look
+    // consecutive and attribute their combined drift to one game.
+    { $match: { userId } },
+    {
+      $addFields: {
+        _bucket: deps.bucketSwitch(),
+        _myLadderRace: myLadderRaceExpr(),
+        _oppRace: oppRaceSwitch(),
+        _hasMyAccount: hasNonEmptyString("$myToonHandle"),
+        _hasMyMmr: { $isNumber: "$myMmr" },
+        _trustedMyMmr: isTrustedMmr("$myMmr", "$myMmrSource"),
+        _ranked1v1: {
+          $and: [
+            { $eq: ["$isLadderGame", true] },
+            { $eq: ["$playerCount", 2] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        // Queue fields remain in the partition even though only ranked
+        // 1v1 is displayed, preventing custom/team replays from becoming
+        // the next observation for a ladder game.
+        _partitionKey: {
+          account: { $ifNull: ["$myToonHandle", "__missing_account__"] },
+          ladderRace: "$_myLadderRace",
+          isLadder: { $ifNull: ["$isLadderGame", null] },
+          playerCount: { $ifNull: ["$playerCount", null] },
+        },
+      },
+    },
+    {
+      $setWindowFields: {
+        partitionBy: "$_partitionKey",
+        sortBy: { date: 1, gameId: 1 },
+        output: {
+          _nextGameId: {
+            $shift: { output: "$gameId", by: 1, default: null },
+          },
+          _nextMyMmr: {
+            $shift: { output: "$myMmr", by: 1, default: null },
+          },
+          _nextMyMmrSource: {
+            $shift: { output: "$myMmrSource", by: 1, default: null },
+          },
+        },
+      },
+    },
+    // Filters select CURRENT games. The next observation may sit outside
+    // a date/opponent/map filter and still supplies the correct result of
+    // the selected anchor game.
+    { $match: displayMatch },
+    {
+      $addFields: {
+        _hasNextMyMmr: { $isNumber: "$_nextMyMmr" },
+        _trustedNextMyMmr: isTrustedMmr(
+          "$_nextMyMmr",
+          "$_nextMyMmrSource",
+        ),
+        _hasIdentity: {
+          $and: [
+            "$_hasMyAccount",
+            { $in: ["$_myLadderRace", ["P", "T", "Z", "R"]] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        _eligible: { $and: ["$_ranked1v1", "$_hasIdentity"] },
+        _delta: {
+          $cond: [
+            { $and: ["$_trustedMyMmr", "$_trustedNextMyMmr"] },
+            { $subtract: ["$_nextMyMmr", "$myMmr"] },
+            null,
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        _pairCandidate: {
+          $and: [
+            "$_eligible",
+            "$_trustedMyMmr",
+            "$_trustedNextMyMmr",
+          ],
+        },
+        _withinDeltaCap: {
+          $and: [
+            { $gte: ["$_delta", -NET_MMR_MAX_DELTA] },
+            { $lte: ["$_delta", NET_MMR_MAX_DELTA] },
+          ],
+        },
+        // A win cannot lower, and a loss cannot raise, the MMR read from
+        // the next consecutive replay. Violations signal missing/stale
+        // data or ordering trouble, so do not misattribute them.
+        _resultSignMatches: {
+          $switch: {
+            branches: [
+              {
+                case: { $eq: ["$_bucket", "win"] },
+                then: { $gte: ["$_delta", 0] },
+              },
+              {
+                case: { $eq: ["$_bucket", "loss"] },
+                then: { $lte: ["$_delta", 0] },
+              },
+            ],
+            default: false,
+          },
+        },
+      },
+    },
+  ];
+}
+
 /** @param {Deps} deps @param {string} userId @param {object} filters */
 async function netMmrByMatchup(deps, userId, filters) {
-  const displayMatch = deps.gamesMatchStage(userId, filters);
-
   const [root = {}] = await deps.games
     .aggregate([
-      // Window over complete per-user history. Applying opponent, map,
-      // build, or date filters here would make non-consecutive rows look
-      // consecutive and attribute their combined drift to one game.
-      { $match: { userId } },
-      {
-        $addFields: {
-          _bucket: deps.bucketSwitch(),
-          _myLadderRace: myLadderRaceExpr(),
-          _oppRace: oppRaceSwitch(),
-          _hasMyAccount: hasNonEmptyString("$myToonHandle"),
-          _hasMyMmr: { $isNumber: "$myMmr" },
-          _trustedMyMmr: isTrustedMmr("$myMmr", "$myMmrSource"),
-          _ranked1v1: {
-            $and: [
-              { $eq: ["$isLadderGame", true] },
-              { $eq: ["$playerCount", 2] },
-            ],
-          },
-        },
-      },
-      {
-        $addFields: {
-          // Queue fields remain in the partition even though only ranked
-          // 1v1 is displayed, preventing custom/team replays from becoming
-          // the next observation for a ladder game.
-          _partitionKey: {
-            account: { $ifNull: ["$myToonHandle", "__missing_account__"] },
-            ladderRace: "$_myLadderRace",
-            isLadder: { $ifNull: ["$isLadderGame", null] },
-            playerCount: { $ifNull: ["$playerCount", null] },
-          },
-        },
-      },
-      {
-        $setWindowFields: {
-          partitionBy: "$_partitionKey",
-          sortBy: { date: 1, gameId: 1 },
-          output: {
-            _nextGameId: {
-              $shift: { output: "$gameId", by: 1, default: null },
-            },
-            _nextMyMmr: {
-              $shift: { output: "$myMmr", by: 1, default: null },
-            },
-            _nextMyMmrSource: {
-              $shift: { output: "$myMmrSource", by: 1, default: null },
-            },
-          },
-        },
-      },
-      // Filters select CURRENT games. The next observation may sit outside
-      // a date/opponent/map filter and still supplies the correct result of
-      // the selected anchor game.
-      { $match: displayMatch },
-      {
-        $addFields: {
-          _hasNextMyMmr: { $isNumber: "$_nextMyMmr" },
-          _trustedNextMyMmr: isTrustedMmr(
-            "$_nextMyMmr",
-            "$_nextMyMmrSource",
-          ),
-          _hasIdentity: {
-            $and: [
-              "$_hasMyAccount",
-              { $in: ["$_myLadderRace", ["P", "T", "Z", "R"]] },
-            ],
-          },
-        },
-      },
-      {
-        $addFields: {
-          _eligible: { $and: ["$_ranked1v1", "$_hasIdentity"] },
-          _delta: {
-            $cond: [
-              { $and: ["$_trustedMyMmr", "$_trustedNextMyMmr"] },
-              { $subtract: ["$_nextMyMmr", "$myMmr"] },
-              null,
-            ],
-          },
-        },
-      },
-      {
-        $addFields: {
-          _pairCandidate: {
-            $and: [
-              "$_eligible",
-              "$_trustedMyMmr",
-              "$_trustedNextMyMmr",
-            ],
-          },
-          _withinDeltaCap: {
-            $and: [
-              { $gte: ["$_delta", -NET_MMR_MAX_DELTA] },
-              { $lte: ["$_delta", NET_MMR_MAX_DELTA] },
-            ],
-          },
-          // A win cannot lower, and a loss cannot raise, the MMR read from
-          // the next consecutive replay. Violations signal missing/stale
-          // data or ordering trouble, so do not misattribute them.
-          _resultSignMatches: {
-            $switch: {
-              branches: [
-                {
-                  case: { $eq: ["$_bucket", "win"] },
-                  then: { $gte: ["$_delta", 0] },
-                },
-                {
-                  case: { $eq: ["$_bucket", "loss"] },
-                  then: { $lte: ["$_delta", 0] },
-                },
-              ],
-              default: false,
-            },
-          },
-        },
-      },
+      ...netMmrPairStages(deps, userId, filters),
       {
         $facet: {
           summary: [
@@ -372,5 +391,6 @@ async function netMmrByMatchup(deps, userId, filters) {
 
 module.exports = {
   netMmrByMatchup,
+  netMmrPairStages,
   NET_MMR_MAX_DELTA,
 };

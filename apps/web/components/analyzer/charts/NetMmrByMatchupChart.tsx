@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -14,6 +15,8 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1 } from "@/lib/format";
+import type { NetMmrRace } from "@/lib/netMmrOpponents";
+import { NetMmrRaceOpponentsModal } from "./NetMmrRaceOpponentsModal";
 
 type MatchupRow = {
   race: "P" | "T" | "Z" | "R" | "U";
@@ -75,6 +78,7 @@ function untrustedMmrMessage(count: number): string {
  */
 export function NetMmrByMatchupChart() {
   const { filters, dbRev } = useFilters();
+  const [selectedRace, setSelectedRace] = useState<NetMmrRace | null>(null);
   const { data, isLoading } = useApi<Response>(
     `/v1/mmr-by-matchup${filtersToQuery(filters)}#${dbRev}`,
   );
@@ -191,9 +195,14 @@ export function NetMmrByMatchupChart() {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {rows.map((r) => (
-          <div
+          <button
+            type="button"
             key={r.race}
-            className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
+            aria-haspopup="dialog"
+            aria-expanded={selectedRace === r.race}
+            aria-label={`View MMR impact by ${r.meta.label.replace(/^vs /, "")} opponent`}
+            onClick={() => setSelectedRace(r.race)}
+            className="group rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <div className="flex items-baseline justify-between gap-2">
               <span
@@ -215,7 +224,11 @@ export function NetMmrByMatchupChart() {
               {r.avgDelta > 0 ? "+" : ""}
               {r.avgDelta}/pair
             </div>
-          </div>
+            <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
+              View opponents
+              <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+            </div>
+          </button>
         ))}
       </div>
       <PairCoverageSummary
@@ -223,6 +236,10 @@ export function NetMmrByMatchupChart() {
         totalGames={data?.totalGames}
         eligibleGames={data?.eligibleGames}
         dropped={data?.dropped}
+      />
+      <NetMmrRaceOpponentsModal
+        race={selectedRace}
+        onClose={() => setSelectedRace(null)}
       />
     </Card>
   );

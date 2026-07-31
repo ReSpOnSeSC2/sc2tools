@@ -1,7 +1,14 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, CornerDownRight, ExternalLink } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  ExternalLink,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApi } from "@/lib/clientApi";
 import { useApiPaginated } from "@/lib/useApiPaginated";
@@ -22,8 +29,14 @@ import { Skeleton, EmptyState } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import {
+  useAllNetMmrOpponents,
+  type NetMmrOpponentRow,
+} from "@/lib/netMmrOpponents";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
+
+type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 
 type Opp = {
   pulseId: string;
@@ -41,6 +54,11 @@ type Opp = {
   gameCount?: number;
   winRate: number;
   mmr?: number | null;
+  netMmr?: number | null;
+  mmrWon?: number;
+  mmrLost?: number;
+  mmrPairs?: number;
+  mmrAvgDelta?: number | null;
   lastPlayed: string | null;
   lastSeen?: string | null;
 };
@@ -79,6 +97,8 @@ export function OpponentsTab({
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  const [mmrImpactFilter, setMmrImpactFilter] =
+    useState<MmrImpactFilter>("all");
   const sort = useSort("lastPlayed", "desc");
 
   // We don't pass `limit` here — the paginator owns page size and
@@ -94,6 +114,32 @@ export function OpponentsTab({
   const { items: rawItems, isLoading, error, pagesFetched, hitMaxPages } =
     useApiPaginated<Opp>(path, dbRev);
 
+  // The impact endpoint reuses the exact accepted consecutive-replay pairs
+  // behind the Net MMR by matchup chart. Fetch every offset page once, then
+  // join by pulse id so the Opponents table never invents or approximates a
+  // delta from lifetime W/L counters.
+  const {
+    items: mmrImpactItems,
+    summary: mmrImpactSummary,
+    isLoading: isMmrImpactLoading,
+    error: mmrImpactError,
+    hitMaxPages: hitMmrImpactMaxPages,
+  } = useAllNetMmrOpponents(filters, dbRev);
+
+  const mmrImpactLookup = useMemo(() => {
+    const byPulseId = new Map<string, (typeof mmrImpactItems)[number]>();
+    const byToonHandle = new Map<string, (typeof mmrImpactItems)[number]>();
+    const byCharacterId = new Map<string, (typeof mmrImpactItems)[number]>();
+    for (const row of mmrImpactItems) {
+      if (row.pulseId) byPulseId.set(row.pulseId.toLowerCase(), row);
+      if (row.toonHandle) byToonHandle.set(row.toonHandle.toLowerCase(), row);
+      if (row.pulseCharacterId) {
+        byCharacterId.set(String(row.pulseCharacterId), row);
+      }
+    }
+    return { byPulseId, byToonHandle, byCharacterId };
+  }, [mmrImpactItems]);
+
   // SC2Pulse "same player" linkage — characterId → account/pro keys.
   // Identity data, not a windowed stat, so it ignores the date filter
   // and is only fetched while grouping is on. SWR-cached; `partial`
@@ -105,16 +151,31 @@ export function OpponentsTab({
   );
 
   const normalised: Opp[] = useMemo(() => {
-    return (rawItems || []).map((o) => ({
-      ...o,
-      name: o.name || o.displayNameSample || "",
-      games: o.games ?? o.gameCount ?? o.wins + o.losses,
-      winRate:
-        o.winRate
-        ?? (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
-      lastPlayed: o.lastPlayed || o.lastSeen || null,
-    }));
-  }, [rawItems]);
+    return (rawItems || []).map((o) => {
+      const impact =
+        mmrImpactLookup.byPulseId.get(o.pulseId.toLowerCase())
+        ?? (o.toonHandle
+          ? mmrImpactLookup.byToonHandle.get(o.toonHandle.toLowerCase())
+          : undefined)
+        ?? (o.pulseCharacterId
+          ? mmrImpactLookup.byCharacterId.get(String(o.pulseCharacterId))
+          : undefined);
+      return {
+        ...o,
+        name: o.name || o.displayNameSample || "",
+        games: o.games ?? o.gameCount ?? o.wins + o.losses,
+        winRate:
+          o.winRate
+          ?? (o.wins + o.losses > 0 ? o.wins / (o.wins + o.losses) : 0),
+        netMmr: impact?.netMmr ?? null,
+        mmrWon: impact?.mmrWon ?? 0,
+        mmrLost: impact?.mmrLost ?? 0,
+        mmrPairs: impact?.pairs ?? 0,
+        mmrAvgDelta: impact?.avgDelta ?? null,
+        lastPlayed: o.lastPlayed || o.lastSeen || null,
+      };
+    });
+  }, [rawItems, mmrImpactLookup]);
 
   // One entry per player. With grouping off (or links not loaded yet)
   // every row is its own singleton group, so the render path below is
@@ -139,8 +200,13 @@ export function OpponentsTab({
   }, [groups, search]);
 
   const filteredItems = useMemo(
-    () => searchedItems.filter((o) => (o.games || 0) >= minGames),
-    [searchedItems, minGames],
+    () =>
+      searchedItems.filter(
+        (o) =>
+          (o.games || 0) >= minGames
+          && matchesMmrImpactFilter(o, mmrImpactFilter),
+      ),
+    [searchedItems, minGames, mmrImpactFilter],
   );
 
   const items = useMemo(
@@ -163,6 +229,14 @@ export function OpponentsTab({
 
   return (
     <div className="space-y-4">
+      <MmrImpactLeaders
+        mostWon={mmrImpactSummary?.mostMmrGainedFrom}
+        mostLost={mmrImpactSummary?.mostMmrLostTo}
+        loading={isMmrImpactLoading}
+        unavailable={!!mmrImpactError}
+        onOpen={onOpen}
+      />
+
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
@@ -173,6 +247,24 @@ export function OpponentsTab({
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <label className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-2.5">
+          <span className="whitespace-nowrap text-micro uppercase tracking-wider text-text-dim">
+            MMR impact
+          </span>
+          <select
+            value={mmrImpactFilter}
+            onChange={(event) =>
+              setMmrImpactFilter(event.target.value as MmrImpactFilter)
+            }
+            aria-label="Filter opponents by MMR impact"
+            className="min-h-[32px] bg-transparent text-xs text-text focus:outline-none"
+          >
+            <option value="all">All opponents</option>
+            <option value="tracked">Verified pairs only</option>
+            <option value="net-gain">You gained overall</option>
+            <option value="net-loss">They gained overall</option>
+          </select>
+        </label>
         <label
           className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
           title="Merge names SC2Pulse links to the same player into one row"
@@ -196,6 +288,13 @@ export function OpponentsTab({
             {pagesFetched > 1 ? ` · ${pagesFetched} pages` : null}
             {hitMaxPages ? " · narrow your filter for more" : null}
           </span>
+          {isMmrImpactLoading || hitMmrImpactMaxPages ? (
+            <span className="text-xs text-text-dim">
+              {isMmrImpactLoading
+                ? "Loading verified MMR impact..."
+                : "Some MMR impact rows were omitted; narrow the global filters."}
+            </span>
+          ) : null}
           <span className="hidden text-xs text-text-dim sm:inline">
             click any column to sort · click a row to open deep dive →
           </span>
@@ -209,7 +308,7 @@ export function OpponentsTab({
       ) : null}
 
       <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[1180px] text-sm">
           <thead className="bg-bg-elevated">
             <tr>
               <SortableTh col="name" label="Opponent" {...sort} />
@@ -227,6 +326,30 @@ export function OpponentsTab({
                 align="right"
                 width="6.5rem"
               />
+              <SortableTh
+                col="netMmr"
+                label="Net MMR"
+                title="Verified game-time MMR gained or lost across consecutive ranked 1v1 replay pairs"
+                {...sort}
+                align="right"
+                width="7rem"
+              />
+              <SortableTh
+                col="mmrWon"
+                label="MMR won"
+                title="Total positive MMR deltas earned against this opponent"
+                {...sort}
+                align="right"
+                width="6.5rem"
+              />
+              <SortableTh
+                col="mmrLost"
+                label="MMR lost"
+                title="Total MMR lost to this opponent, shown as a positive magnitude"
+                {...sort}
+                align="right"
+                width="6.5rem"
+              />
               <SortableTh col="wins" label="W" {...sort} align="right" width="5rem" />
               <SortableTh col="losses" label="L" {...sort} align="right" width="5rem" />
               <SortableTh col="games" label="Games" {...sort} align="right" width="5rem" />
@@ -238,13 +361,13 @@ export function OpponentsTab({
           <tbody>
             {showSkeleton ? (
               <tr>
-                <td colSpan={9} className="px-3 py-3">
+                <td colSpan={12} className="px-3 py-3">
                   <Skeleton rows={8} />
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={12}>
                   <EmptyState title="No opponents match these filters" />
                 </td>
               </tr>
@@ -289,6 +412,7 @@ export function OpponentsTab({
                     >
                       {fmtMmr(o.mmr)}
                     </td>
+                    <MmrImpactCells opponent={o} />
                     <td className="px-3 py-1.5 text-right tabular-nums text-success">
                       {o.wins}
                     </td>
@@ -308,7 +432,7 @@ export function OpponentsTab({
                       {o.lastPlayed ? fmtAgo(o.lastPlayed) : "—"}
                     </td>
                     <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
-                      →
+                      <OpponentOpenButton opponent={o} onOpen={onOpen} />
                     </td>
                   </tr>
                   {o.groupSize > 1 && expandedGroups.has(o.pulseId)
@@ -328,6 +452,196 @@ export function OpponentsTab({
       </div>
     </div>
   );
+}
+
+function MmrImpactLeaders({
+  mostWon,
+  mostLost,
+  loading,
+  unavailable,
+  onOpen,
+}: {
+  mostWon: NetMmrOpponentRow | null | undefined;
+  mostLost: NetMmrOpponentRow | null | undefined;
+  loading: boolean;
+  unavailable: boolean;
+  onOpen: (pulseId: string) => void;
+}) {
+  return (
+    <section aria-labelledby="opponent-mmr-impact-heading">
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3
+            id="opponent-mmr-impact-heading"
+            className="text-sm font-semibold text-text"
+          >
+            Opponent MMR impact
+          </h3>
+          <p className="text-xs text-text-dim">
+            Verified game-time MMR from consecutive ranked 1v1 replay pairs.
+          </p>
+        </div>
+        <span className="text-micro uppercase tracking-wider text-text-dim">
+          Respects global filters
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {loading ? (
+          <>
+            <div className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+            <div className="h-24 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
+          </>
+        ) : unavailable ? (
+          <div
+            role="alert"
+            className="rounded-xl border-2 border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning sm:col-span-2"
+          >
+            Opponent history loaded, but verified MMR impact is temporarily unavailable.
+          </div>
+        ) : mostWon || mostLost ? (
+          <>
+            <MmrLeaderCard
+              kind="won"
+              opponent={mostWon}
+              onOpen={onOpen}
+            />
+            <MmrLeaderCard
+              kind="lost"
+              opponent={mostLost}
+              onOpen={onOpen}
+            />
+          </>
+        ) : (
+          <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
+            No verified opponent MMR pairs match the current filters yet.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MmrLeaderCard({
+  kind,
+  opponent,
+  onOpen,
+}: {
+  kind: "won" | "lost";
+  opponent: NetMmrOpponentRow | null | undefined;
+  onOpen: (pulseId: string) => void;
+}) {
+  const won = kind === "won";
+  const value = won ? opponent?.mmrWon || 0 : opponent?.mmrLost || 0;
+  const Icon = won ? TrendingUp : TrendingDown;
+  if (!opponent) {
+    return (
+      <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-dim">
+        No {won ? "MMR gains" : "MMR losses"} in this range.
+      </div>
+    );
+  }
+  const name = opponent.name || opponent.displayName || "unnamed opponent";
+  const openId = opponent.pulseId || opponent.toonHandle || null;
+  const content = (
+    <>
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+          won ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
+        }`}
+      >
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-micro uppercase tracking-wider text-text-dim">
+          {won ? "Most MMR won from" : "Most MMR lost to"}
+        </span>
+        <span className="block truncate font-semibold text-text group-hover:text-accent">
+          {name}
+        </span>
+        <span className="block text-xs tabular-nums text-text-dim">
+          {formatSignedMmr(opponent.netMmr)} net · {opponent.pairs} verified{" "}
+          {opponent.pairs === 1 ? "pair" : "pairs"}
+        </span>
+      </span>
+      <span
+        className={`text-lg font-bold tabular-nums ${won ? "text-success" : "text-danger"}`}
+      >
+        {won ? "+" : "-"}
+        {Math.round(value).toLocaleString()}
+      </span>
+    </>
+  );
+  const cardClass =
+    "group flex min-h-[92px] items-center gap-3 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-left shadow-hard";
+  if (!openId) return <div className={cardClass}>{content}</div>;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(openId)}
+      className={`${cardClass} transition hover:-translate-y-0.5 hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
+      aria-label={`Open ${name}, ${won ? "most MMR won" : "most MMR lost"}`}
+    >
+      {content}
+    </button>
+  );
+}
+
+function MmrImpactCells({ opponent }: { opponent: Opp }) {
+  const pairs = opponent.mmrPairs || 0;
+  const tracked = pairs > 0 && typeof opponent.netMmr === "number";
+  if (!tracked) {
+    return (
+      <>
+        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
+        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
+        <td className="px-3 py-1.5 text-right text-text-dim">{"\u2014"}</td>
+      </>
+    );
+  }
+  const net = opponent.netMmr || 0;
+  return (
+    <>
+      <td
+        className={`px-3 py-1.5 text-right tabular-nums ${
+          net > 0 ? "text-success" : net < 0 ? "text-danger" : "text-text-muted"
+        }`}
+        title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair`}
+      >
+        <span className="font-semibold">{formatSignedMmr(net)}</span>
+        <span className="block text-micro font-normal text-text-dim">
+          {pairs.toLocaleString()} {pairs === 1 ? "pair" : "pairs"}
+        </span>
+      </td>
+      <td className="px-3 py-1.5 text-right font-medium tabular-nums text-success">
+        +{Math.round(opponent.mmrWon || 0).toLocaleString()}
+      </td>
+      <td className="px-3 py-1.5 text-right font-medium tabular-nums text-danger">
+        -{Math.round(opponent.mmrLost || 0).toLocaleString()}
+      </td>
+    </>
+  );
+}
+
+function matchesMmrImpactFilter(
+  opponent: OpponentGroup<Opp>,
+  filter: MmrImpactFilter,
+): boolean {
+  if (filter === "all") return true;
+  const pairs = opponent.mmrPairs || 0;
+  if (filter === "tracked") return pairs > 0;
+  if (pairs === 0 || typeof opponent.netMmr !== "number") return false;
+  return filter === "net-gain" ? opponent.netMmr > 0 : opponent.netMmr < 0;
+}
+
+function formatSignedMmr(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "\u2014";
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${rounded.toLocaleString()}`;
+}
+
+function formatSignedDecimal(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "\u2014";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
 /** Hover title for a (possibly grouped) opponent row. */
@@ -411,6 +725,7 @@ function IdentityRow({
       <td className="px-3 py-1.5 text-right tabular-nums text-text-muted">
         {fmtMmr(identity.mmr)}
       </td>
+      <MmrImpactCells opponent={identity} />
       <td className="px-3 py-1.5 text-right tabular-nums text-success">
         {identity.wins}
       </td>
@@ -430,9 +745,32 @@ function IdentityRow({
         {identity.lastPlayed ? fmtAgo(identity.lastPlayed) : "—"}
       </td>
       <td className="px-3 py-1.5 text-right text-text-dim group-hover:text-accent">
-        →
+        <OpponentOpenButton opponent={identity} onOpen={onOpen} />
       </td>
     </tr>
+  );
+}
+
+function OpponentOpenButton({
+  opponent,
+  onOpen,
+}: {
+  opponent: Pick<Opp, "pulseId" | "name">;
+  onOpen: (pulseId: string) => void;
+}) {
+  const name = opponent.name || "unnamed opponent";
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(opponent.pulseId);
+      }}
+      aria-label={`Open ${name} opponent details`}
+      className="inline-flex h-7 w-7 items-center justify-center rounded text-current hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span aria-hidden>→</span>
+    </button>
   );
 }
 

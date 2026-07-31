@@ -137,16 +137,21 @@ export function SortableTh({
   const arrow = active ? (sortDir === "asc" ? "↑" : "↓") : "";
   return (
     <th
-      onClick={() => setSort(col)}
-      title={title}
-      className={`cursor-pointer px-3 py-2 text-${align} text-micro uppercase tracking-wider hover:text-text ${
-        active ? "text-text" : "text-text-muted"
-      }`}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      className="p-0"
       style={width ? { width } : undefined}
     >
-      <span className="select-none">
-        {label} {arrow}
-      </span>
+      <button
+        type="button"
+        onClick={() => setSort(col)}
+        title={title}
+        className={`flex w-full items-center gap-1 px-3 py-2 text-micro uppercase tracking-wider hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent ${
+          align === "right" ? "justify-end text-right" : "justify-start text-left"
+        } ${active ? "text-text" : "text-text-muted"}`}
+      >
+        <span>{label}</span>
+        {arrow ? <span aria-hidden>{arrow}</span> : null}
+      </button>
     </th>
   );
 }

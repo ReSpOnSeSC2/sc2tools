@@ -33,6 +33,16 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Opponent MMR impact drill-downs** — each Net MMR matchup race card
+  now opens a live, filterable opponent table showing who took the most
+  MMR from you and who you took the most from, with search, minimum-pair
+  filtering, eight ranking modes, and pagination. The Opponents tab also
+  surfaces authoritative gain/loss leaders plus sortable net, gross-won,
+  and gross-lost MMR columns. Every value comes from the same verified,
+  consecutive ranked-1v1 replay-pair pipeline as the matchup totals, so
+  opponent rows reconcile exactly to their race summary; no mock or
+  inferred W/L data is used.
+
 - **Creep tumor tracking for Zerg games** — the macro breakdown and
   the game page's Mechanics panel now show how many creep tumors you
   planted, split into Queen-cast vs self-spread (classified at

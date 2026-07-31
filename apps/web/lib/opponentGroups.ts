@@ -65,6 +65,16 @@ export interface GroupableOpponent {
   games: number;
   winRate: number;
   mmr?: number | null;
+  /** Net verified game-time MMR across accepted consecutive pairs. */
+  netMmr?: number | null;
+  /** Gross positive MMR deltas earned from this opponent. */
+  mmrWon?: number;
+  /** Absolute magnitude of negative MMR deltas lost to this opponent. */
+  mmrLost?: number;
+  /** Number of verified consecutive replay pairs behind the MMR totals. */
+  mmrPairs?: number;
+  /** Average verified MMR delta per accepted pair. */
+  mmrAvgDelta?: number | null;
   lastPlayed: string | null;
 }
 
@@ -163,10 +173,22 @@ function mergeGroup<T extends GroupableOpponent>(
   let wins = 0;
   let losses = 0;
   let games = 0;
+  let netMmr = 0;
+  let mmrWon = 0;
+  let mmrLost = 0;
+  let mmrPairs = 0;
+  let hasMmrImpact = false;
   for (const identity of identities) {
     wins += identity.wins || 0;
     losses += identity.losses || 0;
     games += identity.games || 0;
+    if (typeof identity.netMmr === "number") {
+      hasMmrImpact = true;
+      netMmr += identity.netMmr;
+    }
+    mmrWon += identity.mmrWon || 0;
+    mmrLost += identity.mmrLost || 0;
+    mmrPairs += identity.mmrPairs || 0;
   }
   const displayName = pickDisplayName(identities);
   // The freshest rating we hold for this player, whichever identity
@@ -184,6 +206,11 @@ function mergeGroup<T extends GroupableOpponent>(
     games,
     winRate: wins + losses > 0 ? wins / (wins + losses) : 0,
     mmr: mmrCarrier ? mmrCarrier.mmr : null,
+    netMmr: hasMmrImpact ? netMmr : null,
+    mmrWon,
+    mmrLost,
+    mmrPairs,
+    mmrAvgDelta: mmrPairs > 0 ? netMmr / mmrPairs : null,
     lastPlayed: primary.lastPlayed,
     identities,
     aliasNames: collectAliases(identities, displayName),

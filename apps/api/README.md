@@ -49,6 +49,8 @@ All routes are mounted under `/v1`.
 | GET    | /v1/build-vs-strategy             | clerk/device | (myBuild × opp.strategy) cross-tab |
 | GET    | /v1/random-summary                | clerk/device | Random-race tracker           |
 | GET    | /v1/timeseries                    | clerk/device | Daily/weekly/monthly W-L      |
+| GET    | /v1/mmr-by-matchup                | clerk/device | Verified net MMR by opponent race |
+| GET    | /v1/mmr-by-matchup/opponents      | clerk/device | Filterable opponent MMR-impact drilldown |
 | GET    | /v1/games-list                    | clerk/device | Map Intel selector            |
 | GET    | /v1/builds                        | clerk/device | Builds ranked by frequency    |
 | GET    | /v1/builds/:name                  | clerk/device | Drilldown                     |
