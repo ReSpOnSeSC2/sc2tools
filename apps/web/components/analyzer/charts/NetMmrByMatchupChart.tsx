@@ -29,22 +29,33 @@ type MatchupRow = {
   winRate: number;
 };
 
+type DroppedCoverage = {
+  outlierSwing?: number;
+  missingMyMmr?: number;
+  untrustedMyMmr?: number;
+  missingIdentity?: number;
+  excludedNonRanked1v1?: number;
+  terminalGame?: number;
+  nextMissingMyMmr?: number;
+  nextUntrustedMyMmr?: number;
+  signMismatch?: number;
+  unsupportedResult?: number;
+};
+
+type MatchupCoverage = {
+  race: MatchupRow["race"];
+  totalGames: number;
+  eligibleGames: number;
+  measuredGames: number;
+  dropped: DroppedCoverage;
+};
+
 type Response = {
   matchups: MatchupRow[];
+  coverage?: MatchupCoverage[];
   totalGames?: number;
   eligibleGames?: number;
-  dropped?: {
-    outlierSwing?: number;
-    missingMyMmr?: number;
-    untrustedMyMmr?: number;
-    missingIdentity?: number;
-    excludedNonRanked1v1?: number;
-    terminalGame?: number;
-    nextMissingMyMmr?: number;
-    nextUntrustedMyMmr?: number;
-    signMismatch?: number;
-    unsupportedResult?: number;
-  };
+  dropped?: DroppedCoverage;
 };
 
 const RACE_META: Record<string, { label: string; color: string }> = {
@@ -65,6 +76,42 @@ function untrustedMmrMessage(count: number): string {
   return `${count} historical numeric MMR ${noun} not verified as replay-authored, so excluded. Update the agent, then use Re-sync from scratch.`;
 }
 
+function compactCoverageReasons(dropped: DroppedCoverage | undefined): string[] {
+  if (!dropped) return [];
+  const reasons: string[] = [];
+  const brokenNext =
+    (dropped.nextMissingMyMmr ?? 0) +
+    (dropped.nextUntrustedMyMmr ?? 0);
+  if (dropped.excludedNonRanked1v1) {
+    reasons.push(`${dropped.excludedNonRanked1v1} not ranked 1v1`);
+  }
+  if (dropped.missingIdentity) {
+    reasons.push(`${dropped.missingIdentity} missing account/race`);
+  }
+  if (dropped.missingMyMmr) {
+    reasons.push(`${dropped.missingMyMmr} missing start MMR`);
+  }
+  if (dropped.untrustedMyMmr) {
+    reasons.push(`${dropped.untrustedMyMmr} unverified start MMR`);
+  }
+  if (dropped.terminalGame) {
+    reasons.push(
+      `${dropped.terminalGame} sequence-ending (no later reading)`,
+    );
+  }
+  if (brokenNext) reasons.push(`${brokenNext} broken next reading`);
+  if (dropped.outlierSwing) {
+    reasons.push(`${dropped.outlierSwing} swing past ±150`);
+  }
+  if (dropped.signMismatch) {
+    reasons.push(`${dropped.signMismatch} result/MMR mismatch`);
+  }
+  if (dropped.unsupportedResult) {
+    reasons.push(`${dropped.unsupportedResult} undecided result`);
+  }
+  return reasons;
+}
+
 /**
  * Net MMR per matchup.
  *
@@ -74,7 +121,9 @@ function untrustedMmrMessage(count: number): string {
  *
  * Diverging bar layout: zero is the centre, green to the right,
  * red to the left. A footer card per matchup shows games, WR, and
- * average delta so the totals are never read in a vacuum.
+ * average delta so the totals are never read in a vacuum. One accepted
+ * replay-to-replay reading pair measures the MMR result of one anchor game;
+ * user-facing copy therefore calls these "measured games", not "pairs".
  */
 export function NetMmrByMatchupChart() {
   const { filters, dbRev } = useFilters();
@@ -84,6 +133,9 @@ export function NetMmrByMatchupChart() {
   );
 
   const rows = useMemo(() => {
+    const coverageByRace = new Map(
+      (data?.coverage || []).map((row) => [row.race, row]),
+    );
     const matchups = (data?.matchups || [])
       .map((m) => ({ ...m, pairs: m.pairs ?? m.games }))
       .filter((m) => m.pairs > 0);
@@ -91,6 +143,7 @@ export function NetMmrByMatchupChart() {
       .map((m) => ({
         ...m,
         meta: RACE_META[m.race] || RACE_META.U,
+        coverage: coverageByRace.get(m.race),
       }))
       .sort((a, b) => b.netMmr - a.netMmr);
   }, [data]);
@@ -126,13 +179,13 @@ export function NetMmrByMatchupChart() {
             untrusted > 0
               ? "Historical MMR needs a replay re-sync"
               : hasFilteredGames
-                ? "No verified ranked 1v1 pairs"
+                ? "No measured ranked 1v1 MMR changes"
                 : "Not enough MMR-tagged games"
           }
           sub={
             untrusted > 0
               ? untrustedMmrMessage(untrusted)
-              : "This chart needs consecutive ranked 1v1 replays with game-time MMR from both games."
+              : "This chart needs adjacent uploaded ranked 1v1 replays with verified game-time MMR readings."
           }
         />
         <PairCoverageSummary
@@ -148,11 +201,12 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Game-time MMR gained (▶) or lost (◀) per opponent race. Only
-        consecutive, replay-verified ranked 1v1 games on the same account
-        and selected ladder race are paired. Missing or unverified MMR
-        breaks a pair; impossible result/delta signs and swings past ±150
-        are excluded and reported below.
+        Your MMR gained (▶) or lost (◀) in games against each opponent race.
+        Each game&apos;s change is measured from its starting MMR and the next
+        uploaded replay&apos;s starting MMR on the same Battle.net account/server
+        and selected ladder race. Missing or unverified readings break the
+        sequence; impossible result/delta signs and swings past ±150 are
+        excluded and reported below.
       </p>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
@@ -194,42 +248,56 @@ export function NetMmrByMatchupChart() {
         </ResponsiveContainer>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {rows.map((r) => (
-          <button
-            type="button"
-            key={r.race}
-            aria-haspopup="dialog"
-            aria-expanded={selectedRace === r.race}
-            aria-label={`View MMR impact by ${r.meta.label.replace(/^vs /, "")} opponent`}
-            onClick={() => setSelectedRace(r.race)}
-            className="group rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <span
-                className="truncate text-micro font-semibold"
-                style={{ color: r.meta.color }}
-              >
-                {r.meta.label}
-              </span>
-              <span
-                className="whitespace-nowrap text-sm font-semibold tabular-nums"
-                style={{ color: r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER }}
-              >
-                {r.netMmr > 0 ? "+" : ""}
-                {r.netMmr}
-              </span>
-            </div>
-            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
-              {r.pairs} pairs · {pct1(r.winRate)} WR · avg{" "}
-              {r.avgDelta > 0 ? "+" : ""}
-              {r.avgDelta}/pair
-            </div>
-            <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
-              View opponents
-              <ChevronRight aria-hidden className="h-3.5 w-3.5" />
-            </div>
-          </button>
-        ))}
+        {rows.map((r) => {
+          const totalForRace = r.coverage?.totalGames;
+          const measuredLabel =
+            typeof totalForRace === "number" && totalForRace > r.pairs
+              ? `${r.pairs} of ${totalForRace} games measured`
+              : `${r.pairs} measured game${r.pairs === 1 ? "" : "s"}`;
+          const coverageReasons = compactCoverageReasons(r.coverage?.dropped);
+          return (
+            <button
+              type="button"
+              key={r.race}
+              aria-haspopup="dialog"
+              aria-expanded={selectedRace === r.race}
+              aria-label={`View MMR impact by ${r.meta.label.replace(/^vs /, "")} opponent`}
+              onClick={() => setSelectedRace(r.race)}
+              className="group rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span
+                  className="truncate text-micro font-semibold"
+                  style={{ color: r.meta.color }}
+                >
+                  {r.meta.label}
+                </span>
+                <span
+                  className="whitespace-nowrap text-sm font-semibold tabular-nums"
+                  style={{ color: r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER }}
+                >
+                  {r.netMmr > 0 ? "+" : ""}
+                  {r.netMmr}
+                </span>
+              </div>
+              <div className="mt-0.5 text-micro tabular-nums text-text-dim">
+                {measuredLabel} ·{" "}
+                {pct1(r.winRate)} WR · avg{" "}
+                {r.avgDelta > 0 ? "+" : ""}
+                {r.avgDelta}/game
+              </div>
+              {coverageReasons.length > 0 ? (
+                <div className="mt-1 text-micro leading-snug text-text-muted">
+                  Not measured: {coverageReasons.join(" · ")}
+                </div>
+              ) : null}
+              <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
+                View opponents
+                <ChevronRight aria-hidden className="h-3.5 w-3.5" />
+              </div>
+            </button>
+          );
+        })}
       </div>
       <PairCoverageSummary
         rows={rows}
@@ -260,18 +328,25 @@ function PairCoverageSummary({
   eligibleGames: number | undefined;
   dropped: Response["dropped"];
 }) {
-  const pairCount = rows.reduce((sum, r) => sum + r.pairs, 0);
+  const measuredGames = rows.reduce((sum, r) => sum + r.pairs, 0);
   const outlierSwing = dropped?.outlierSwing ?? 0;
   const missingMyMmr = dropped?.missingMyMmr ?? 0;
   const untrustedMyMmr = dropped?.untrustedMyMmr ?? 0;
   const missingIdentity = dropped?.missingIdentity ?? 0;
   const excludedNonRanked1v1 = dropped?.excludedNonRanked1v1 ?? 0;
+  const terminalGame = dropped?.terminalGame ?? 0;
   const brokenBoundaries =
     (dropped?.nextMissingMyMmr ?? 0) +
     (dropped?.nextUntrustedMyMmr ?? 0);
   const signMismatch = dropped?.signMismatch ?? 0;
   const unsupportedResult = dropped?.unsupportedResult ?? 0;
-  if (!totalGames && !outlierSwing && !missingMyMmr && !untrustedMyMmr) {
+  if (
+    !totalGames
+    && !outlierSwing
+    && !missingMyMmr
+    && !untrustedMyMmr
+    && !terminalGame
+  ) {
     return null;
   }
   const reasons: string[] = [];
@@ -290,7 +365,12 @@ function PairCoverageSummary({
   }
   if (brokenBoundaries > 0) {
     reasons.push(
-      `${brokenBoundaries} pair boundar${brokenBoundaries === 1 ? "y" : "ies"} broken by MMR gaps`,
+      `${brokenBoundaries} game${brokenBoundaries === 1 ? "" : "s"} blocked by a missing or unverified next MMR reading`,
+    );
+  }
+  if (terminalGame > 0) {
+    reasons.push(
+      `${terminalGame} sequence-ending game${terminalGame === 1 ? " has" : "s have"} no later MMR reading`,
     );
   }
   if (signMismatch > 0) {
@@ -307,16 +387,17 @@ function PairCoverageSummary({
   if (excludedNonRanked1v1 > 0) {
     reasons.push(`${excludedNonRanked1v1} non-ranked-1v1 excluded`);
   }
-  const pairLabel = `${pairCount} pair${pairCount === 1 ? "" : "s"}`;
-  let head = pairLabel;
+  const measuredLabel =
+    `${measuredGames} measured game${measuredGames === 1 ? "" : "s"}`;
+  let head = measuredLabel;
   if (typeof eligibleGames === "number" && eligibleGames > 0) {
     const filteredSuffix =
       typeof totalGames === "number" && totalGames !== eligibleGames
         ? ` (${totalGames} filtered)`
         : "";
-    head = `${pairLabel} from ${eligibleGames} eligible ranked 1v1 game${eligibleGames === 1 ? "" : "s"}${filteredSuffix}`;
+    head = `${measuredLabel} from ${eligibleGames} eligible ranked 1v1 game${eligibleGames === 1 ? "" : "s"}${filteredSuffix}`;
   } else if (typeof totalGames === "number" && totalGames > 0) {
-    head = `${pairLabel} from ${totalGames} filtered game${totalGames === 1 ? "" : "s"}`;
+    head = `${measuredLabel} from ${totalGames} filtered game${totalGames === 1 ? "" : "s"}`;
   }
   return (
     <p className="mt-2 text-micro text-text-dim">

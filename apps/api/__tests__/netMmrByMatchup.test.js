@@ -3,15 +3,11 @@
 
 /**
  * netMmrByMatchup — real-Mongo integration tests for the Net-MMR-by-
- * matchup chart on the Trends tab.
- *
- * Pins the regression where a player could see "100% WR vs Protoss"
- * sit on a -213 net-MMR bar (see Screenshot_20260516). The chart
- * runs over consecutive game pairs in the FILTERED set, and pairs
- * that skip across hours of unrecorded games used to absorb that
- * drift into one matchup. The guards in trendsInsights.js drop
- * those pairs so the displayed total can never disagree with the
- * win/loss column next to it.
+ * matchup chart on the Trends tab. Pairing is calculated over complete
+ * stored history before display filters, then guarded by replay provenance,
+ * account/ladder identity, result sign, and a delta cap. Database adjacency
+ * cannot prove that an entirely absent replay never existed; that limitation
+ * is documented in the chart copy rather than hidden behind a time-gap guess.
  */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -237,6 +233,171 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     },
   );
 
+  test("multiple selected servers sum independently paired per-server totals", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "na1",
+        date: new Date(t0),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4000,
+        result: "Victory",
+        opponent: {
+          race: "Zerg",
+          region: "NA",
+          toonHandle: "1-S2-1-101",
+        },
+      }),
+      // Chronologically interleaved EU game with a deliberately similar MMR.
+      // If servers shared one window, these rows could form plausible-looking
+      // (sub-150) but incorrect deltas instead of obvious outliers.
+      makeGame({
+        gameId: "eu1",
+        date: new Date(t0 + MIN_AGO),
+        myToonHandle: "2-S2-1-200",
+        myMmr: 4010,
+        result: "Defeat",
+        opponent: {
+          race: "Zerg",
+          region: "EU",
+          toonHandle: "2-S2-1-201",
+        },
+      }),
+      makeGame({
+        gameId: "na2",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4020,
+        result: "Victory",
+        opponent: {
+          race: "Zerg",
+          region: "NA",
+          toonHandle: "1-S2-1-102",
+        },
+      }),
+      makeGame({
+        gameId: "eu2",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myToonHandle: "2-S2-1-200",
+        myMmr: 3990,
+        result: "Victory",
+        opponent: {
+          race: "Zerg",
+          region: "EU",
+          toonHandle: "2-S2-1-202",
+        },
+      }),
+    ]);
+
+    const [combined, naOnly, euOnly] = await Promise.all([
+      svc.netMmrByMatchup("u1", { regions: ["NA", "EU"] }),
+      svc.netMmrByMatchup("u1", { regions: ["NA"] }),
+      svc.netMmrByMatchup("u1", { regions: ["EU"] }),
+    ]);
+    const combinedZ = findRow(combined.matchups, "Z");
+    const naZ = findRow(naOnly.matchups, "Z");
+    const euZ = findRow(euOnly.matchups, "Z");
+
+    expect(naZ).toMatchObject({ netMmr: 20, pairs: 1, wins: 1, losses: 0 });
+    expect(euZ).toMatchObject({ netMmr: -20, pairs: 1, wins: 0, losses: 1 });
+    expect(combinedZ.netMmr).toBe(naZ.netMmr + euZ.netMmr);
+    expect(combinedZ.pairs).toBe(naZ.pairs + euZ.pairs);
+    expect(combinedZ).toMatchObject({ netMmr: 0, pairs: 2 });
+    expect(combined.dropped.terminalGame).toBe(2);
+  });
+
+  test("75 filtered Zerg games reconcile to 66 measured across nine MMR sequences", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    const raceNames = ["Protoss", "Terran", "Zerg"];
+    const games = [];
+
+    for (let partition = 0; partition < 9; partition++) {
+      const size = partition < 3 ? 9 : 8;
+      const ladderRace = raceNames[partition % raceNames.length];
+      for (let game = 0; game < size; game++) {
+        games.push(makeGame({
+          gameId: `partition-${partition}-game-${game}`,
+          date: new Date(t0 + (game * 9 + partition) * MIN_AGO),
+          myRace: ladderRace,
+          myLadderRace: ladderRace,
+          myToonHandle: `${1 + (partition % 3)}-S2-1-${1000 + partition}`,
+          myMmr: 4000 + partition * 100 + game * 10,
+          result: "Victory",
+          opponent: { race: "Zerg" },
+        }));
+      }
+    }
+    await db.games.insertMany(games);
+
+    const [list, net] = await Promise.all([
+      svc.gamesList("u1", { oppRace: "Z" }, { limit: 5000 }),
+      svc.netMmrByMatchup("u1", { oppRace: "Z" }),
+    ]);
+    const zerg = findRow(net.matchups, "Z");
+    const zergCoverage = findRow(net.coverage, "Z");
+
+    expect(list.total).toBe(75);
+    expect(net.totalGames).toBe(75);
+    expect(net.eligibleGames).toBe(75);
+    expect(zerg).toMatchObject({ pairs: 66, wins: 66, losses: 0 });
+    expect(zergCoverage).toMatchObject({
+      totalGames: 75,
+      eligibleGames: 75,
+      measuredGames: 66,
+      dropped: { terminalGame: 9 },
+    });
+    expect(net.dropped).toEqual({
+      excludedNonRanked1v1: 0,
+      missingIdentity: 0,
+      missingMyMmr: 0,
+      untrustedMyMmr: 0,
+      terminalGame: 9,
+      nextMissingMyMmr: 0,
+      nextUntrustedMyMmr: 0,
+      outlierSwing: 0,
+      signMismatch: 0,
+      unsupportedResult: 0,
+    });
+  });
+
+  test("coverage reasons are mutually exclusive for ineligible missing-MMR games", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "ranked-1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "ranked-2",
+        date: new Date(t0 + MIN_AGO),
+        myMmr: 4510,
+      }),
+      makeGame({
+        gameId: "custom-missing",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myMmr: null,
+        myMmrSource: "unavailable",
+        isLadderGame: false,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", { oppRace: "Z" });
+    const zerg = findRow(out.matchups, "Z");
+    const coverage = findRow(out.coverage, "Z");
+
+    expect(zerg.pairs).toBe(1);
+    expect(coverage).toMatchObject({
+      totalGames: 3,
+      eligibleGames: 2,
+      measuredGames: 1,
+      dropped: {
+        excludedNonRanked1v1: 1,
+        missingMyMmr: 0,
+        terminalGame: 1,
+      },
+    });
+    expect(out.dropped.excludedNonRanked1v1).toBe(1);
+    expect(out.dropped.missingMyMmr).toBe(0);
+    expect(out.dropped.terminalGame).toBe(1);
+  });
+
   test(
     "long gaps inside the same race-pool now count — only the " +
       "±150 delta cap filters outliers",
@@ -258,24 +419,24 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
           result: "Victory",
           opponent: { race: "Zerg", mmr: 4525 },
         }),
-        // 2-day gap that the old session cap would have dropped.
-        // Now it survives — the −80 delta is well within ±150.
+        // 2-day gap that the old session cap would have dropped. It remains
+        // a valid adjacent stored-replay reading when the result sign and
+        // delta are credible; elapsed time alone cannot prove a replay gap.
         makeGame({
           gameId: "z3",
           date: new Date(t0 + 5 * MIN_AGO + 2 * ONE_DAY),
-          myMmr: 4525 - 80,
-          result: "Defeat",
+          myMmr: 4550,
+          result: "Victory",
           opponent: { race: "Zerg", mmr: 4525 },
         }),
       ]);
       const { matchups, dropped } = await svc.netMmrByMatchup("u1", {});
       const z = findRow(matchups, "Z");
       expect(z).toBeDefined();
-      // z1→z2 (+25) survives. z2 is recorded as a win, so its −80
-      // next-rating delta is inconsistent and is quarantined.
-      expect(z.games).toBe(1);
-      expect(z.netMmr).toBe(25);
-      expect(dropped.signMismatch).toBe(1);
+      // Both the short z1-to-z2 and two-day z2-to-z3 readings add +25.
+      expect(z.games).toBe(2);
+      expect(z.netMmr).toBe(50);
+      expect(dropped.signMismatch).toBe(0);
       expect(dropped.outlierSwing).toBe(0);
     },
   );

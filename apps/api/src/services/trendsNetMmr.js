@@ -3,12 +3,15 @@
 /**
  * Net-MMR-by-matchup aggregation for the Trends tab.
  *
- * A delta belongs to the first game in a truly consecutive pair:
+ * A delta belongs to the first game in an adjacent stored-replay pair:
  * "next pre-game MMR - current pre-game MMR". Pairing therefore has
  * to happen before display filters are applied and must stay inside one
- * account, selected ladder race, and queue. Missing/unverified MMR rows
+ * exact toon handle (account + server), selected ladder race, and queue.
+ * Missing/unverified MMR rows
  * intentionally remain in the window so they break adjacency rather
- * than allowing the chart to jump over an unobserved game.
+ * than allowing the chart to jump over an observed gap. A replay that is
+ * absent from storage cannot be detected here, so UI copy must not claim
+ * that database adjacency proves uninterrupted Battle.net match history.
  */
 
 const {
@@ -18,6 +21,19 @@ const {
 
 /** A single ranked 1v1 result cannot credibly move more than this. */
 const NET_MMR_MAX_DELTA = 150;
+
+const DROP_REASON_KEYS = [
+  "excludedNonRanked1v1",
+  "missingIdentity",
+  "missingMyMmr",
+  "untrustedMyMmr",
+  "terminalGame",
+  "nextMissingMyMmr",
+  "nextUntrustedMyMmr",
+  "outlierSwing",
+  "signMismatch",
+  "unsupportedResult",
+];
 
 /**
  * @typedef {{
@@ -180,7 +196,87 @@ function netMmrPairStages(deps, userId, filters) {
         },
       },
     },
+    {
+      $addFields: {
+        // Exactly one reason owns every filtered game that cannot produce
+        // a measured delta. This makes coverage add up exactly instead of
+        // double-counting an ineligible game in multiple diagnostics.
+        _dropReason: {
+          $switch: {
+            branches: [
+              {
+                case: { $not: ["$_ranked1v1"] },
+                then: "excludedNonRanked1v1",
+              },
+              {
+                case: { $not: ["$_hasIdentity"] },
+                then: "missingIdentity",
+              },
+              {
+                case: { $not: ["$_hasMyMmr"] },
+                then: "missingMyMmr",
+              },
+              {
+                case: { $not: ["$_trustedMyMmr"] },
+                then: "untrustedMyMmr",
+              },
+              {
+                case: { $eq: ["$_nextGameId", null] },
+                then: "terminalGame",
+              },
+              {
+                case: { $not: ["$_hasNextMyMmr"] },
+                then: "nextMissingMyMmr",
+              },
+              {
+                case: { $not: ["$_trustedNextMyMmr"] },
+                then: "nextUntrustedMyMmr",
+              },
+              {
+                case: { $not: ["$_withinDeltaCap"] },
+                then: "outlierSwing",
+              },
+              {
+                case: { $not: [{ $in: ["$_bucket", ["win", "loss"]] }] },
+                then: "unsupportedResult",
+              },
+              {
+                case: { $not: ["$_resultSignMatches"] },
+                then: "signMismatch",
+              },
+            ],
+            default: null,
+          },
+        },
+      },
+    },
   ];
+}
+
+/** @param {unknown} groupId */
+function coverageGroup(groupId) {
+  /** @type {Record<string, any>} */
+  const group = {
+    _id: groupId,
+    totalGames: { $sum: 1 },
+    eligibleGames: { $sum: { $cond: ["$_eligible", 1, 0] } },
+    measuredGames: {
+      $sum: { $cond: [{ $eq: ["$_dropReason", null] }, 1, 0] },
+    },
+  };
+  for (const reason of DROP_REASON_KEYS) {
+    group[reason] = {
+      $sum: { $cond: [{ $eq: ["$_dropReason", reason] }, 1, 0] },
+    };
+  }
+  return group;
+}
+
+/** @param {Record<string, any>} [row] */
+function droppedFromCoverage(row = {}) {
+  return Object.fromEntries(
+    DROP_REASON_KEYS.map((reason) => [reason, row[reason] || 0]),
+  );
 }
 
 /** @param {Deps} deps @param {string} userId @param {object} filters */
@@ -190,146 +286,13 @@ async function netMmrByMatchup(deps, userId, filters) {
       ...netMmrPairStages(deps, userId, filters),
       {
         $facet: {
-          summary: [
-            {
-              $group: {
-                _id: null,
-                totalGames: { $sum: 1 },
-                eligibleGames: { $sum: { $cond: ["$_eligible", 1, 0] } },
-                excludedNonRanked1v1: {
-                  $sum: { $cond: ["$_ranked1v1", 0, 1] },
-                },
-                missingIdentity: {
-                  $sum: {
-                    $cond: [
-                      { $and: ["$_ranked1v1", { $not: ["$_hasIdentity"] }] },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                missingMyMmr: {
-                  $sum: {
-                    $cond: [{ $not: ["$_hasMyMmr"] }, 1, 0],
-                  },
-                },
-                untrustedMyMmr: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_hasMyMmr",
-                          { $not: ["$_trustedMyMmr"] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                terminalGame: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_eligible",
-                          "$_trustedMyMmr",
-                          { $eq: ["$_nextGameId", null] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                nextMissingMyMmr: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_eligible",
-                          "$_trustedMyMmr",
-                          { $ne: ["$_nextGameId", null] },
-                          { $not: ["$_hasNextMyMmr"] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                nextUntrustedMyMmr: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_eligible",
-                          "$_trustedMyMmr",
-                          "$_hasNextMyMmr",
-                          { $not: ["$_trustedNextMyMmr"] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                outlierSwing: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_pairCandidate",
-                          { $not: ["$_withinDeltaCap"] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                signMismatch: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_pairCandidate",
-                          "$_withinDeltaCap",
-                          { $in: ["$_bucket", ["win", "loss"]] },
-                          { $not: ["$_resultSignMatches"] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-                unsupportedResult: {
-                  $sum: {
-                    $cond: [
-                      {
-                        $and: [
-                          "$_pairCandidate",
-                          "$_withinDeltaCap",
-                          { $not: [{ $in: ["$_bucket", ["win", "loss"]] }] },
-                        ],
-                      },
-                      1,
-                      0,
-                    ],
-                  },
-                },
-              },
-            },
+          summary: [{ $group: coverageGroup(null) }],
+          coverage: [
+            { $group: coverageGroup("$_oppRace") },
+            { $sort: { _id: 1 } },
           ],
           keptPairs: [
-            {
-              $match: {
-                _pairCandidate: true,
-                _withinDeltaCap: true,
-                _resultSignMatches: true,
-              },
-            },
+            { $match: { _dropReason: null } },
             {
               $group: {
                 _id: "$_oppRace",
@@ -355,6 +318,15 @@ async function netMmrByMatchup(deps, userId, filters) {
   const keptPairs = /** @type {Array<Record<string, any>>} */ (
     root.keptPairs || []
   );
+  const coverage = /** @type {Array<Record<string, any>>} */ (
+    root.coverage || []
+  ).map((row) => ({
+    race: row._id,
+    totalGames: row.totalGames || 0,
+    eligibleGames: row.eligibleGames || 0,
+    measuredGames: row.measuredGames || 0,
+    dropped: droppedFromCoverage(row),
+  }));
   const matchups = keptPairs.map((row) => {
     const pairs = row.pairs ?? row.games ?? 0;
     return {
@@ -372,20 +344,10 @@ async function netMmrByMatchup(deps, userId, filters) {
 
   return {
     matchups,
+    coverage,
     totalGames: summary.totalGames || 0,
     eligibleGames: summary.eligibleGames || 0,
-    dropped: {
-      excludedNonRanked1v1: summary.excludedNonRanked1v1 || 0,
-      missingIdentity: summary.missingIdentity || 0,
-      missingMyMmr: summary.missingMyMmr || 0,
-      untrustedMyMmr: summary.untrustedMyMmr || 0,
-      terminalGame: summary.terminalGame || 0,
-      nextMissingMyMmr: summary.nextMissingMyMmr || 0,
-      nextUntrustedMyMmr: summary.nextUntrustedMyMmr || 0,
-      outlierSwing: summary.outlierSwing || 0,
-      signMismatch: summary.signMismatch || 0,
-      unsupportedResult: summary.unsupportedResult || 0,
-    },
+    dropped: droppedFromCoverage(summary),
   };
 }
 

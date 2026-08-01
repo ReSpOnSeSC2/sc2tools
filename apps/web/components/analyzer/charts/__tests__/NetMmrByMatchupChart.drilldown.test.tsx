@@ -46,7 +46,7 @@ describe("NetMmrByMatchupChart opponent drill-down", () => {
         ],
         totalGames: 56,
         eligibleGames: 56,
-        dropped: {},
+        dropped: { terminalGame: 1 },
       },
       isLoading: false,
     });
@@ -61,5 +61,58 @@ describe("NetMmrByMatchupChart opponent drill-down", () => {
 
     fireEvent.click(protoss);
     expect(screen.getByTestId("race-drilldown").textContent).toBe("Drill-down P");
+    expect(
+      screen.getByText(/30 measured games.*60.0% WR.*avg \+4\/game/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/55 measured games from 56 eligible ranked 1v1 games/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/1 sequence-ending game has no later MMR reading/),
+    ).toBeTruthy();
+  });
+
+  it("explains a 75-game race cohort with 66 measurable MMR results", () => {
+    useApiMock.mockReturnValue({
+      data: {
+        matchups: [
+          {
+            race: "Z",
+            netMmr: -185,
+            avgDelta: -2.8,
+            pairs: 66,
+            games: 66,
+            wins: 38,
+            losses: 28,
+            winRate: 38 / 66,
+          },
+        ],
+        coverage: [
+          {
+            race: "Z",
+            totalGames: 75,
+            eligibleGames: 75,
+            measuredGames: 66,
+            dropped: { terminalGame: 9 },
+          },
+        ],
+        totalGames: 75,
+        eligibleGames: 75,
+        dropped: { terminalGame: 9 },
+      },
+      isLoading: false,
+    });
+
+    render(<NetMmrByMatchupChart />);
+
+    expect(
+      screen.getByText(/66 of 75 games measured.*57.6% WR.*avg -2.8\/game/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Not measured: 9 sequence-ending \(no later reading\)/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/9 sequence-ending games have no later MMR reading/),
+    ).toBeTruthy();
   });
 });

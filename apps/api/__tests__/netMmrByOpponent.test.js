@@ -140,6 +140,64 @@ describe("net MMR by opponent", () => {
     expect(matchup.matchups[0].pairs).toBe(result.summary.pairs);
   });
 
+  test("scopes one opponent's off-race games before rolling opponents into race totals", async () => {
+    const sharedOpponent = {
+      pulseId: "1-S2-1-offrace",
+      toonHandle: "1-S2-1-offrace",
+      pulseCharacterId: "303",
+      displayName: "OffRace",
+    };
+    await db.games.insertMany([
+      game("r1", 0, 4000, "Victory", {
+        ...sharedOpponent,
+        race: "Zerg",
+      }),
+      game("r2", 10, 4020, "Defeat", {
+        ...sharedOpponent,
+        race: "Protoss",
+      }),
+      game("r3", 20, 4005, "Victory", {
+        ...sharedOpponent,
+        race: "Zerg",
+      }),
+      // Supplies r3's +25; this terminal row contributes no delta.
+      game("r4", 30, 4030, "Defeat", {
+        pulseId: "1-S2-1-terminal",
+        displayName: "Terminal",
+        race: "Terran",
+      }),
+    ]);
+
+    const [zergOpponents, protossOpponents, matchup] = await Promise.all([
+      service.netMmrByOpponent("u1", {}, { opponentRace: "Z" }),
+      service.netMmrByOpponent("u1", {}, { opponentRace: "P" }),
+      service.netMmrByMatchup("u1", {}),
+    ]);
+    const byRace = Object.fromEntries(
+      matchup.matchups.map((row) => [row.race, row]),
+    );
+
+    expect(zergOpponents.items).toHaveLength(1);
+    expect(zergOpponents.items[0]).toMatchObject({
+      name: "OffRace",
+      opponentRace: "Z",
+      netMmr: 45,
+      pairs: 2,
+    });
+    expect(protossOpponents.items).toHaveLength(1);
+    expect(protossOpponents.items[0]).toMatchObject({
+      name: "OffRace",
+      opponentRace: "P",
+      netMmr: -15,
+      pairs: 1,
+    });
+    expect(zergOpponents.summary.netMmr).toBe(byRace.Z.netMmr);
+    expect(zergOpponents.summary.pairs).toBe(byRace.Z.pairs);
+    expect(protossOpponents.summary.netMmr).toBe(byRace.P.netMmr);
+    expect(protossOpponents.summary.pairs).toBe(byRace.P.pairs);
+    expect(matchup.dropped.terminalGame).toBe(1);
+  });
+
   test("ranks mutually exclusive positive and negative net MMR leaders", async () => {
     await db.games.insertMany([
       game("n1", 0, 4000, "Victory", {

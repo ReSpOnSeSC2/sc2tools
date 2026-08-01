@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Net MMR matchup coverage is now explicit** — race cards label each
+  accepted replay-to-replay result as one measured game and now reconcile it
+  against that race's complete filtered game count. Per-race and footer
+  diagnostics use mutually exclusive reasons, including sequence-ending games
+  with no later MMR reading, so gaps such as “66 of 75 games measured” explain
+  themselves without implying that game counts drive the signed race totals.
+
 - **Opponent MMR leader cards now rank by net result** — the gain card
   selects the largest positive net MMR and the loss card selects the most
   negative net MMR. Gross MMR won/lost remains available in the tables, but
