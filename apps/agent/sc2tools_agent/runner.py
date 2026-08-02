@@ -49,6 +49,8 @@ from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
+from .live.obs_client import ObsClient
+from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
 from .live.transport import (
     CloudTransport,
     FanOutTransport,
@@ -147,8 +149,11 @@ def _run_locked_agent(
                 log_dir,
                 start_minimized=args.start_minimized,
                 no_live=args.no_live,
+                no_obs=args.no_obs,
             )
-        return _run_headless(cfg, log_dir, no_live=args.no_live)
+        return _run_headless(
+            cfg, log_dir, no_live=args.no_live, no_obs=args.no_obs,
+        )
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_crashed_top_level")
         capture_exception(exc)
@@ -191,6 +196,16 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
             "talks to Blizzard's localhost SC2 client API). Off-switch "
             "for diagnostics; the rest of the agent (replay watcher, "
             "uploader, heartbeat, GUI) keeps working unchanged."
+        ),
+    )
+    parser.add_argument(
+        "--no-obs",
+        action="store_true",
+        help=(
+            "Disable automatic OBS scene switching for this run, "
+            "without clearing the saved Settings. Mirrors --no-live: "
+            "an off-switch for diagnostics that leaves the rest of "
+            "the agent untouched."
         ),
     )
     parser.add_argument(
@@ -311,7 +326,13 @@ def _bootstrap(
 # ---------------- Execution paths ----------------
 
 
-def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> int:
+def _run_headless(
+    cfg: AgentConfig,
+    log_dir: Path,
+    *,
+    no_live: bool = False,
+    no_obs: bool = False,
+) -> int:
     """Legacy path - console + tray. Identical to the 0.2.x runner."""
     log = logging.getLogger("sc2tools_agent")
     state = load_state(cfg.state_dir)
@@ -341,6 +362,8 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
     live_poller: Optional[LiveClientPoller] = None
     live_bus: Optional[EventBus[LiveLifecycleEvent]] = None
     live_bridge: Optional[LiveBridge] = None
+    obs_client: Optional[ObsClient] = None
+    obs_scene: Optional[ObsSceneController] = None
 
     if can_use_tray():
         tray = TrayUI(
@@ -480,6 +503,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
     else:
         log.info("live_bridge_disabled_via_flag")
 
+    obs_client, obs_scene = _build_obs_switcher(
+        state=state, bridge=live_bridge, log=log, no_obs=no_obs,
+    )
+
     try:
         upload.start()
         watcher.start()
@@ -504,6 +531,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
             log.info("live_poller_started base_url=http://localhost:6119")
         if live_metrics_logger is not None:
             live_metrics_logger.start()
+        if obs_client is not None:
+            obs_client.start()
+        if obs_scene is not None:
+            obs_scene.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -517,6 +548,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
         return 1
     finally:
         log.info("agent_stopping")
+        if obs_scene:
+            obs_scene.shutdown()
+        if obs_client:
+            obs_client.shutdown()
         if live_metrics_logger:
             live_metrics_logger.stop()
         if live_poller:
@@ -545,6 +580,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
 def _run_with_gui(
     cfg: AgentConfig, log_dir: Path, *, start_minimized: bool,
     no_live: bool = False,
+    no_obs: bool = False,
 ) -> int:
     """GUI path - Qt main loop on the main thread, agent on a worker."""
     log = logging.getLogger("sc2tools_agent")
@@ -670,6 +706,7 @@ def _run_with_gui(
             "stop_event": stop_event,
             "log": log,
             "no_live": no_live,
+            "no_obs": no_obs,
         },
         name="sc2tools-boot",
         daemon=True,
@@ -680,6 +717,10 @@ def _run_with_gui(
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
+    if getattr(cell, "obs_scene", None):
+        cell.obs_scene.shutdown()
+    if getattr(cell, "obs_client", None):
+        cell.obs_client.shutdown()
     if getattr(cell, "live_metrics_logger", None):
         cell.live_metrics_logger.stop()
     if getattr(cell, "live_poller", None):
@@ -715,6 +756,7 @@ def _gui_boot_worker(
     stop_event: threading.Event,
     log: logging.Logger,
     no_live: bool = False,
+    no_obs: bool = False,
 ) -> None:
     """Run the agent's startup sequence outside the Qt thread."""
     try:
@@ -860,6 +902,10 @@ def _gui_boot_worker(
             cell.live_transport = None
             cell.live_metrics_logger = None
 
+        cell.obs_client, cell.obs_scene = _build_obs_switcher(
+            state=state, bridge=cell.live_bridge, log=log, no_obs=no_obs,
+        )
+
         upload.start()
         watcher.start()
         # Register the startup sweep as a visible import job when the
@@ -881,6 +927,10 @@ def _gui_boot_worker(
             log.info("live_poller_started base_url=http://localhost:6119")
         if cell.live_metrics_logger is not None:
             cell.live_metrics_logger.start()
+        if cell.obs_client is not None:
+            cell.obs_client.start()
+        if cell.obs_scene is not None:
+            cell.obs_scene.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -1689,6 +1739,82 @@ def _build_live_bridge(
     return lifecycle_bus, poller, bridge, fanout, metrics_logger
 
 
+def _build_obs_switcher(
+    *,
+    state: AgentState,
+    bridge: Optional[LiveBridge],
+    log: logging.Logger,
+    no_obs: bool = False,
+) -> tuple[Optional[ObsClient], Optional[ObsSceneController]]:
+    """Construct the OBS auto-scene-switcher and hang it off the bridge.
+
+    Returns ``(None, None)`` whenever switching shouldn't run — the
+    feature is off, the Live Game Bridge is disabled (there'd be no
+    phase events to react to), or ``--no-obs`` was passed.
+
+    Why this is a separate builder rather than more returns from
+    ``_build_live_bridge``: OBS is the one subsystem here that talks to
+    a process on the user's desktop rather than to the cloud, and it is
+    opt-in. Keeping it out of the bridge's tuple means the bridge's
+    contract — and its five existing call-site unpackings — stay put.
+
+    Config precedence matches the rest of the agent: environment
+    variables win over the state file, so a power user can point a
+    single install at a different OBS without touching the GUI.
+    """
+    if no_obs:
+        log.info("obs_scene_switch_disabled_via_flag")
+        return None, None
+    if not state.obs_scene_switch_enabled:
+        return None, None
+    if bridge is None:
+        # Nothing publishes phases, so there is nothing to react to.
+        log.info("obs_scene_switch_skipped reason=live_bridge_disabled")
+        return None, None
+
+    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
+    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
+    try:
+        port = int(port_env) if port_env else int(state.obs_port)
+    except ValueError:
+        log.warning("obs_port_invalid value=%r falling_back=4455", port_env)
+        port = 4455
+    password = (
+        os.environ.get("SC2TOOLS_OBS_PASSWORD")
+        or state.obs_password
+        or None
+    )
+    scene_map = dict(state.obs_scene_map) or dict(DEFAULT_SCENE_MAP)
+
+    # Built in two steps: the controller needs the client to issue
+    # requests, and the client needs the controller's callback to
+    # report manual scene changes. Neither can be constructed first,
+    # so the controller goes up bare and takes the client after.
+    controller = ObsSceneController(
+        scene_map=scene_map,
+        debounce_sec=state.obs_switch_debounce_sec,
+        switch_on_replays=state.obs_switch_on_replays,
+        transition_name=state.obs_transition_name,
+        transition_duration_ms=state.obs_transition_duration_ms,
+    )
+    client = ObsClient(
+        host=host,
+        port=port,
+        password=password,
+        on_program_scene_changed=controller.on_program_scene_changed,
+    )
+    controller.attach_client(client)
+
+    bridge.bus.subscribe(controller.listener)
+    log.info(
+        "obs_scene_switch_configured host=%s port=%s debounce_sec=%.1f",
+        host,
+        port,
+        state.obs_switch_debounce_sec,
+    )
+    return client, controller
+
+
 class _RuntimeCell:
     """Mutable container shared between the GUI thread and the boot
     worker. Kept as a plain class (no dataclass) so it never tries to
@@ -1710,6 +1836,8 @@ class _RuntimeCell:
         "live_bridge",
         "live_transport",
         "live_metrics_logger",
+        "obs_client",
+        "obs_scene",
     )
 
     def __init__(self) -> None:
@@ -1728,6 +1856,8 @@ class _RuntimeCell:
         self.live_bridge = None
         self.live_transport = None
         self.live_metrics_logger = None
+        self.obs_client = None
+        self.obs_scene = None
 
 
 class _Multiplexer:

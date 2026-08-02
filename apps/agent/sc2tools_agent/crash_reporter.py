@@ -53,6 +53,12 @@ _PII_KEY_FRAGMENTS: Tuple[str, ...] = (
     "first_name",
     "last_name",
     "full_name",
+    # Credentials. ``password`` is deliberately broad so it catches
+    # ``obs_password`` (state.py) and anything a future subsystem
+    # names similarly without needing another entry here.
+    "password",
+    "passwd",
+    "secret",
 )
 
 _HOME_PATH_RE = re.compile(

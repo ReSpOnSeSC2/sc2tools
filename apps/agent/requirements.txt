@@ -21,3 +21,11 @@ sentry-sdk==2.18.0
 # Python build on the runner — strict ==6.8.0.1 has bitten us when the
 # matching wheel isn't published for a 3.12 sub-version yet.
 PySide6>=6.7,<7
+# obs-websocket v5 client, for automatic OBS scene switching
+# (sc2tools_agent.live.obs_client / obs_scene / obs_layout). Imported
+# lazily so an install without it degrades to "OBS features
+# unavailable" rather than failing at import. Taken as a dependency
+# rather than hand-rolled because the v5 handshake is an auth protocol
+# (SHA256 of password+salt, re-hashed against a server challenge) and
+# a subtle mistake there fails closed and silently.
+obsws-python==1.7.0
