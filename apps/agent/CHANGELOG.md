@@ -2,7 +2,7 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.15.9
 
 ### Added — automatic OBS scene switching
 - **What.** The agent can now switch OBS scenes by itself, driven by

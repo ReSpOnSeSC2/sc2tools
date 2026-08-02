@@ -28,7 +28,8 @@ corresponding GitHub Release.
   camera tucked in a corner. It never touches your existing scenes.
 
   Off by default. Works with OBS on the same PC or on a separate stream
-  PC over the LAN.
+  PC over the LAN. Ships with **agent 0.15.9** (`agent-v0.15.9`) — see
+  `apps/agent/CHANGELOG.md` for the agent-side details.
 
 - **StarCraft II backdrop scenes for OBS** — new full-canvas Browser
   Sources at `/overlay/<token>/scene/<name>` for Between Games,
