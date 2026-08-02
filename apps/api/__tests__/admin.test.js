@@ -331,7 +331,19 @@ describe("/v1/admin", () => {
       "GoMeZ",
       "Captain",
     ]);
-  });
+    // Explicit timeout: this is the heaviest test in the suite — six
+    // sequential full ingests through the HTTP + Mongo path, then nine
+    // admin aggregations over the result. Network is already out of the
+    // picture (see the pulseMmr stub in beforeAll; the resolver's own
+    // fetch runs only in the admin-triggered backfill routes, not on
+    // ingest), so what is left is genuinely compute-bound, and `npm
+    // test` runs it --runInBand under coverage instrumentation. That
+    // lands near enough to the 30 s default that a slower-than-usual CI
+    // runner tips it over and fails main on an unrelated commit. Raising
+    // it here rather than in jest.config.js keeps the 30 s ceiling
+    // enforced for the other 1,466 tests, where a 30 s test really would
+    // mean something hung.
+  }, 90_000);
 
   test("opponent drill-down lists games and serves per-game build order", async () => {
     const pulseId = "1-S2-1-265393";
