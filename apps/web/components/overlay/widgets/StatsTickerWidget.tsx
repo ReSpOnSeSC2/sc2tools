@@ -33,6 +33,7 @@ import { useStudioState } from "@/lib/multichat/useStudioState";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 import { useTickerFacts } from "@/lib/multichat/useTickerFacts";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { resolveLiveOpponentMmr } from "../liveGameOpponentMmr";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import type { SessionSummary } from "./SessionWidget";
 
@@ -279,13 +280,18 @@ function opponentSegments(
   const intel = liveGame.streamerHistory;
   const out: string[] = [];
   const name = intel.oppName || "";
+  // Same precedence the opponent card and the voice readout use — the
+  // ticker read ``streamerHistory.oppMmr`` alone, so it announced the
+  // MMR from the LAST time these two met while the card above it
+  // showed the opponent's current Pulse rating.
+  const oppMmr = resolveLiveOpponentMmr(liveGame);
 
   if (name) {
     out.push(
       `NOW PLAYING: vs ${name}` +
         (intel.matchup ? ` (${intel.matchup})` : "") +
-        (Number.isFinite(Number(intel.oppMmr))
-          ? ` · ${Number(intel.oppMmr).toLocaleString("en-US")} MMR`
+        (oppMmr !== null
+          ? ` · ${oppMmr.toLocaleString("en-US")} MMR`
           : ""),
     );
   }
@@ -307,8 +313,7 @@ function opponentSegments(
         : `REMATCH: dropped the last one — revenge arc`,
     );
   }
-  const oppMmr = Number(intel.oppMmr);
-  if (Number.isFinite(oppMmr) && myMmr !== null) {
+  if (oppMmr !== null && myMmr !== null) {
     const gap = Math.round(oppMmr - myMmr);
     if (Math.abs(gap) >= 25) {
       out.push(
