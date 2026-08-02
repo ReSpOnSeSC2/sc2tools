@@ -49,7 +49,7 @@ from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
-from .live.obs_client import ObsClient
+from .live.obs_client import ObsAuthFailed, ObsClient
 from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
 from .live.transport import (
     CloudTransport,
@@ -632,6 +632,13 @@ def _run_with_gui(
         sync_filter_since=state.sync_filter_since,
         sync_filter_until=state.sync_filter_until,
         auto_update_enabled=state.auto_update_enabled,
+        obs_scene_switch_enabled=state.obs_scene_switch_enabled,
+        obs_host=state.obs_host,
+        obs_port=state.obs_port,
+        obs_password=state.obs_password,
+        obs_scene_map=dict(state.obs_scene_map),
+        obs_switch_debounce_sec=state.obs_switch_debounce_sec,
+        obs_switch_on_replays=state.obs_switch_on_replays,
     )
 
     gui = GuiUI(
@@ -656,6 +663,12 @@ def _run_with_gui(
             cfg, state, picked, cell, log,
         ),
         on_check_updates=lambda: cell.updater.check_now() if cell.updater else None,
+        on_obs_probe=lambda host, port, password: _handle_obs_probe(
+            host=host, port=port, password=password, log=log,
+        ),
+        on_obs_build=lambda request: _handle_obs_build(
+            cfg=cfg, state=state, request=request, log=log,
+        ),
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),
@@ -1175,6 +1188,7 @@ def _handle_save_settings(
         # poll (``_handle_update_available``'s consent gate), so no
         # restart is needed for the opt-in/opt-out to take effect.
         state.auto_update_enabled = bool(payload.auto_update_enabled)
+    _apply_obs_settings(state, payload, cell, log)
     if payload.autostart_enabled is not None:
         ok = autostart.set_enabled(bool(payload.autostart_enabled))
         if ok:
@@ -1737,6 +1751,238 @@ def _build_live_bridge(
     )
     metrics_logger = PeriodicMetricsLogger()
     return lifecycle_bus, poller, bridge, fanout, metrics_logger
+
+
+def _apply_obs_settings(
+    state: AgentState,
+    payload: SettingsPayload,
+    cell,
+    log: logging.Logger,
+) -> None:
+    """Persist the Settings tab's OBS fields and hot-apply them.
+
+    Follows the ``upload.set_concurrency`` precedent: a Save click
+    takes effect on the running switcher rather than waiting for a
+    restart. Reconnecting is only done when the connection details
+    actually changed — a Save that only re-mapped a scene shouldn't
+    drop a healthy socket mid-stream.
+    """
+    if payload.obs_scene_switch_enabled is not None:
+        state.obs_scene_switch_enabled = bool(payload.obs_scene_switch_enabled)
+    conn_changed = False
+    if payload.obs_host is not None and payload.obs_host != state.obs_host:
+        state.obs_host = payload.obs_host
+        conn_changed = True
+    if payload.obs_port is not None and int(payload.obs_port) != state.obs_port:
+        state.obs_port = int(payload.obs_port)
+        conn_changed = True
+    if payload.obs_password is not None:
+        # Empty string clears a saved password rather than meaning
+        # "no change" — otherwise there'd be no way to remove one
+        # without hand-editing agent.json.
+        new_password = payload.obs_password or None
+        if new_password != state.obs_password:
+            state.obs_password = new_password
+            conn_changed = True
+    if payload.obs_scene_map is not None:
+        state.obs_scene_map = {
+            str(k): str(v) for k, v in dict(payload.obs_scene_map).items()
+        }
+    if payload.obs_switch_debounce_sec is not None:
+        state.obs_switch_debounce_sec = max(
+            0.0, float(payload.obs_switch_debounce_sec),
+        )
+    if payload.obs_switch_on_replays is not None:
+        state.obs_switch_on_replays = bool(payload.obs_switch_on_replays)
+
+    controller = getattr(cell, "obs_scene", None)
+    client = getattr(cell, "obs_client", None)
+    if controller is None:
+        # Nothing running yet — the feature was off at boot. The new
+        # settings are saved and take effect on next start.
+        if state.obs_scene_switch_enabled:
+            log.info("obs_settings_saved_restart_required=true")
+        return
+
+    try:
+        controller.set_config(
+            scene_map=dict(state.obs_scene_map) or None,
+            enabled=state.obs_scene_switch_enabled,
+            debounce_sec=state.obs_switch_debounce_sec,
+            switch_on_replays=state.obs_switch_on_replays,
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("obs_controller_reconfigure_failed")
+    if conn_changed and client is not None:
+        try:
+            client.reconfigure(
+                host=state.obs_host,
+                port=state.obs_port,
+                password=state.obs_password,
+            )
+            log.info(
+                "obs_reconnect_requested host=%s port=%s",
+                state.obs_host,
+                state.obs_port,
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("obs_client_reconfigure_failed")
+
+
+def _handle_obs_probe(
+    *,
+    host: str,
+    port: int,
+    password: str,
+    log: logging.Logger,
+) -> dict:
+    """GUI "Test connection": connect once and report what we found.
+
+    Deliberately synchronous and short-lived — it opens its own
+    throwaway client rather than borrowing the long-running one, so a
+    user typing a wrong password into the form can't knock the live
+    switcher off its connection.
+    """
+    from .live.obs_layout import discover_sources
+
+    client = ObsClient(
+        host=host,
+        port=port,
+        password=password or None,
+        subscribe_events=False,
+    )
+    try:
+        client.connect_now()
+    except ObsAuthFailed:
+        return {
+            "ok": False,
+            "message": (
+                "OBS rejected the password. Copy it from OBS → Tools → "
+                "WebSocket Server Settings → Show Connect Info."
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_probe_failed host=%s port=%s err=%s", host, port, exc)
+        return {
+            "ok": False,
+            "message": (
+                f"Could not reach OBS at {host}:{port}. Check that OBS is "
+                "running and the WebSocket server is enabled."
+            ),
+        }
+
+    try:
+        version = client.get_version()
+        scenes = client.refresh_scenes()
+        sources = discover_sources(client)
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_probe_partial err=%s", exc)
+        return {"ok": False, "message": f"Connected, but OBS errored: {exc}"}
+    finally:
+        client.shutdown()
+
+    log.info(
+        "obs_probe_ok host=%s port=%s scenes=%d", host, port, len(scenes),
+    )
+    return {
+        "ok": True,
+        "message": (
+            f"Connected to OBS {version.get('obs_version') or '?'} — "
+            f"{len(scenes)} scene(s) found."
+        ),
+        "scenes": scenes,
+        "webcams": sources.get("webcam", []),
+        "games": sources.get("game", []),
+    }
+
+
+def _handle_obs_build(
+    *,
+    cfg: AgentConfig,
+    state: AgentState,
+    request: dict,
+    log: logging.Logger,
+) -> dict:
+    """GUI "Build my scenes": create the two layouts in the user's OBS.
+
+    Needs a paired overlay token — the backdrop, chat and stats panels
+    are all Browser Sources pointed at the user's own overlay URLs, so
+    there is nothing meaningful to build without one.
+    """
+    from .live.obs_layout import SceneBuildError, build_scenes, plan_scenes
+
+    token = _overlay_token_for_build(cfg, state, log)
+    if not token:
+        return {
+            "ok": False,
+            "message": (
+                "No overlay token yet. Sign in and pair the agent first "
+                "— the backdrop and chat panels need your overlay URL."
+            ),
+        }
+
+    client = ObsClient(
+        host=str(request.get("host") or "127.0.0.1"),
+        port=int(request.get("port") or 4455),
+        password=(request.get("password") or None),
+        subscribe_events=False,
+    )
+    try:
+        client.connect_now()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": f"Could not reach OBS: {exc}"}
+
+    try:
+        plan = plan_scenes(
+            client,
+            overlay_base_url=_dashboard_url_from_api(cfg.api_base),
+            overlay_token=token,
+            webcam_source=request.get("webcam_source") or None,
+            game_source=request.get("game_source") or None,
+        )
+        created = build_scenes(
+            client, plan, rebuild=bool(request.get("rebuild")),
+        )
+    except SceneBuildError as exc:
+        return {"ok": False, "message": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("obs_scene_build_failed")
+        return {"ok": False, "message": f"Build failed: {exc}"}
+    finally:
+        client.shutdown()
+
+    log.info("obs_scene_build_ok created=%s", ",".join(created))
+    note = " ".join(plan.warnings) if plan.warnings else ""
+    return {
+        "ok": True,
+        "message": (
+            f"Created {len(created)} scene(s): {', '.join(created)}. "
+            "Pick them in the dropdowns below and Save. " + note
+        ).strip(),
+        "scenes": client.scene_names or created,
+    }
+
+
+def _overlay_token_for_build(
+    cfg: AgentConfig, state: AgentState, log: logging.Logger,
+) -> Optional[str]:
+    """Fetch the user's overlay token from the cloud.
+
+    The agent doesn't cache one today — the website owns overlay
+    tokens — so this is a live lookup, and it failing is a normal
+    "not paired yet" outcome rather than an error.
+    """
+    if not state.device_token:
+        return None
+    try:
+        api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
+        getter = getattr(api, "get_overlay_token", None)
+        if getter is None:
+            return None
+        return getter() or None
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_overlay_token_lookup_failed err=%s", exc)
+        return None
 
 
 def _build_obs_switcher(

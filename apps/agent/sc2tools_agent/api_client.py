@@ -126,6 +126,31 @@ class ApiClient:
             body={"token": token, "payload": payload},
         )
 
+    def get_overlay_token(self) -> Optional[str]:
+        """Return the user's active overlay token, or ``None``.
+
+        Used by the OBS scene builder: the backdrop, chat and session
+        panels it creates are Browser Sources pointed at
+        ``/overlay/<token>/…``, so there is nothing meaningful to build
+        without one.
+
+        ``GET /v1/overlay-tokens`` is served by the shared auth
+        middleware, which accepts a device-token Bearer as well as a
+        Clerk JWT — so the agent can call it directly. Revoked tokens
+        are filtered out; the first live one wins, matching how the
+        website presents "your overlay URL".
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        body = self._get("/v1/overlay-tokens", auth=True)
+        for item in body.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            token = item.get("token")
+            if token and not item.get("revokedAt"):
+                return str(token)
+        return None
+
     # ---------------- Sticky MMR ping ----------------
     def patch_last_mmr(
         self,

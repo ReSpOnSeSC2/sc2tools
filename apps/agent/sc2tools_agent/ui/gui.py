@@ -364,6 +364,13 @@ class SettingsPayload:
         "sync_filter_since",
         "sync_filter_until",
         "auto_update_enabled",
+        "obs_scene_switch_enabled",
+        "obs_host",
+        "obs_port",
+        "obs_password",
+        "obs_scene_map",
+        "obs_switch_debounce_sec",
+        "obs_switch_on_replays",
     )
 
     def __init__(
@@ -383,6 +390,13 @@ class SettingsPayload:
         sync_filter_since: Optional[str] = None,
         sync_filter_until: Optional[str] = None,
         auto_update_enabled: Optional[bool] = None,
+        obs_scene_switch_enabled: Optional[bool] = None,
+        obs_host: Optional[str] = None,
+        obs_port: Optional[int] = None,
+        obs_password: Optional[str] = None,
+        obs_scene_map: Optional[dict] = None,
+        obs_switch_debounce_sec: Optional[float] = None,
+        obs_switch_on_replays: Optional[bool] = None,
     ) -> None:
         self.api_base = api_base
         self.log_level = log_level
@@ -421,6 +435,19 @@ class SettingsPayload:
         # ``False`` turns the updater notify-only (the compatibility
         # floor in ``updater.update_is_mandatory`` still overrides).
         self.auto_update_enabled = auto_update_enabled
+        # OBS auto scene switching. ``None`` means "no change" for each
+        # field, same as everything above. ``obs_password`` uses the
+        # empty string to mean "clear it" so a user can remove a saved
+        # password without hand-editing agent.json.
+        self.obs_scene_switch_enabled = obs_scene_switch_enabled
+        self.obs_host = obs_host
+        self.obs_port = obs_port
+        self.obs_password = obs_password
+        # Phase -> scene name. An empty value means "don't switch for
+        # this phase"; the full dict replaces whatever was stored.
+        self.obs_scene_map = obs_scene_map
+        self.obs_switch_debounce_sec = obs_switch_debounce_sec
+        self.obs_switch_on_replays = obs_switch_on_replays
 
 
 # ---------------------------------------------------------------------
@@ -464,6 +491,8 @@ class GuiUI:
         on_check_updates: Callable[[], None],
         on_save_settings: Callable[[SettingsPayload], None],
         on_quit: Callable[[], None],
+        on_obs_probe: Optional[Callable[[str, int, str], dict]] = None,
+        on_obs_build: Optional[Callable[[dict], dict]] = None,
         start_minimized: bool = False,
     ) -> None:
         self._version = version
@@ -491,6 +520,13 @@ class GuiUI:
         self._on_check_updates = on_check_updates
         self._on_save_settings = on_save_settings
         self._on_quit = on_quit
+        # OBS helpers. Both block on a network round-trip, so the
+        # window calls them from a worker thread and delivers the
+        # result back over ``signals.obsProbeDone``. Optional: a build
+        # without the OBS dependency installed leaves them None and
+        # the panel degrades to "unavailable".
+        self._on_obs_probe = on_obs_probe
+        self._on_obs_build = on_obs_build
 
         # Lazily populated at start()
         self._app = None
@@ -645,6 +681,10 @@ def _make_signals():
         updateCheckDone = QtCore.Signal(str)
         foldersChanged = QtCore.Signal(list)
         settingsStatus = QtCore.Signal(str)
+        # Result of a Test-connection or Build-scenes round-trip. The
+        # payload dict carries ``kind`` plus whatever that operation
+        # discovered; see ``_on_obs_probe_done``.
+        obsProbeDone = QtCore.Signal(dict)
         quitRequested = QtCore.Signal()
         showRequested = QtCore.Signal()
 
@@ -653,6 +693,98 @@ def _make_signals():
 
 def _GuiSignals():  # noqa: N802 — class-style factory
     return _make_signals()
+
+
+def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
+    """Confirm-before-write dialog for the scene builder.
+
+    The builder is the only code in the agent that writes to a user's
+    OBS, so nothing is sent until they have seen which sources will be
+    used and what will be created. Source pickers rather than
+    auto-detection: guessing wrong puts the desktop on stream.
+    """
+
+    class Dialog(QtWidgets.QDialog):
+        def __init__(self) -> None:
+            super().__init__(parent)
+            self.setWindowTitle("Build SC2 Tools scenes")
+            self.setMinimumWidth(460)
+            v = QtWidgets.QVBoxLayout(self)
+            v.setContentsMargins(20, 18, 20, 18)
+            v.setSpacing(12)
+
+            intro = QtWidgets.QLabel(
+                "This creates two new scenes:\n\n"
+                "  • SC2 Tools — Between Games: big camera, chat "
+                "column, small game inset and the SC2 backdrop.\n"
+                "  • SC2 Tools — In Game: game full-screen with the "
+                "camera tucked in the corner.\n\n"
+                "Your existing scenes are not touched. Both use the "
+                "sources you pick below — the same capture, not a "
+                "second copy, so there is no extra CPU cost."
+            )
+            intro.setWordWrap(True)
+            v.addWidget(intro)
+
+            form = QtWidgets.QFormLayout()
+            form.setHorizontalSpacing(16)
+            form.setVerticalSpacing(10)
+
+            self._webcam = QtWidgets.QComboBox()
+            self._webcam.addItem("— none —", "")
+            for name in webcams:
+                self._webcam.addItem(name, name)
+            if webcams:
+                self._webcam.setCurrentIndex(1)
+            form.addRow("Webcam", self._webcam)
+
+            self._game = QtWidgets.QComboBox()
+            self._game.addItem("— none —", "")
+            for name in games:
+                self._game.addItem(name, name)
+            if games:
+                self._game.setCurrentIndex(1)
+            form.addRow("Game capture", self._game)
+            v.addLayout(form)
+
+            if not webcams or not games:
+                warn = QtWidgets.QLabel(
+                    "Some sources weren't found in OBS. The scenes will "
+                    "still be built — add anything missing afterwards, "
+                    "they're ordinary scenes you can edit by hand."
+                )
+                warn.setWordWrap(True)
+                warn.setObjectName("muted")
+                v.addWidget(warn)
+
+            self._rebuild = QtWidgets.QCheckBox(
+                "Replace them if they already exist",
+            )
+            self._rebuild.setToolTip(
+                "Only ever removes scenes named \u201cSC2 Tools — …\u201d. "
+                "Any customisation you made to those two is lost.",
+            )
+            v.addWidget(self._rebuild)
+
+            buttons = QtWidgets.QDialogButtonBox(
+                QtWidgets.QDialogButtonBox.Ok
+                | QtWidgets.QDialogButtonBox.Cancel,
+            )
+            buttons.button(QtWidgets.QDialogButtonBox.Ok).setText("Build")
+            buttons.accepted.connect(self.accept)
+            buttons.rejected.connect(self.reject)
+            v.addWidget(buttons)
+
+        def webcam(self) -> str:
+            return self._webcam.currentData() or ""
+
+        def game(self) -> str:
+            return self._game.currentData() or ""
+
+        def rebuild(self) -> bool:
+            return self._rebuild.isChecked()
+
+    return Dialog()
 
 
 def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
@@ -1594,6 +1726,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             form.addRow("", self._autoupdate_check)
 
             v.addWidget(form_card)
+            v.addWidget(self._build_obs_card())
 
             row = QtWidgets.QHBoxLayout()
             row.addStretch(1)
@@ -1610,6 +1743,321 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             scroller.setWidget(page)
             return scroller
 
+        def _populate_obs_settings(self, initial) -> None:
+            """Seed the OBS card from saved state.
+
+            Scene dropdowns start with only the saved values in them —
+            we have not talked to OBS yet at this point, and blocking
+            boot on a connect to a program that may not be running
+            would be a bad trade. "Test connection" fills in the real
+            list.
+            """
+            self._obs_sources = {"webcam": [], "game": []}
+            self._obs_enable_check.setChecked(
+                bool(initial.obs_scene_switch_enabled),
+            )
+            if initial.obs_host:
+                self._obs_host_input.setText(str(initial.obs_host))
+            if initial.obs_port:
+                self._obs_port_input.setValue(int(initial.obs_port))
+            if initial.obs_password:
+                self._obs_password_input.setText(str(initial.obs_password))
+            if initial.obs_switch_debounce_sec is not None:
+                self._obs_debounce_spin.setValue(
+                    float(initial.obs_switch_debounce_sec),
+                )
+            self._obs_replay_check.setChecked(
+                bool(initial.obs_switch_on_replays),
+            )
+            saved = dict(initial.obs_scene_map or {})
+            for phase, combo in self._obs_scene_combos.items():
+                name = saved.get(phase) or ""
+                if not name:
+                    combo.setCurrentIndex(0)
+                    continue
+                idx = combo.findData(name)
+                if idx < 0:
+                    combo.addItem(name, name)
+                    idx = combo.count() - 1
+                combo.setCurrentIndex(idx)
+
+        # ---- OBS scene switching ----
+
+        #: Phase ids the switcher understands, paired with the wording
+        #: a streamer actually thinks in. Order is the order a match
+        #: goes through, so the panel reads top-to-bottom like a game.
+        OBS_PHASE_ROWS = (
+            ("menu", "In the menu / queueing"),
+            ("match_loading", "Match loading"),
+            ("match_started", "Match started"),
+            ("match_in_progress", "Match in progress"),
+            ("match_ended", "Match ended (score screen)"),
+            ("idle", "StarCraft II closed"),
+        )
+
+        #: Placeholder for "leave the scene alone for this phase".
+        OBS_NO_SWITCH = "— don't switch —"
+
+        def _build_obs_card(self) -> "QtWidgets.QWidget":
+            """Settings card for automatic OBS scene switching.
+
+            Scene names come from a dropdown populated by a real
+            ``GetSceneList`` rather than a free-text field: a typo'd
+            scene name is the single most predictable way for this
+            feature to silently do nothing.
+            """
+            card = QtWidgets.QFrame()
+            card.setObjectName("card")
+            outer = QtWidgets.QVBoxLayout(card)
+            outer.setContentsMargins(20, 18, 20, 18)
+            outer.setSpacing(12)
+
+            heading = QtWidgets.QLabel("OBS scene switching")
+            heading.setObjectName("h2")
+            outer.addWidget(heading)
+
+            blurb = QtWidgets.QLabel(
+                "Switch OBS scenes automatically when a game starts and "
+                "ends. The agent only ever changes which scene is live — "
+                "it never edits your existing scenes."
+            )
+            blurb.setObjectName("muted")
+            blurb.setWordWrap(True)
+            outer.addWidget(blurb)
+
+            self._obs_enable_check = QtWidgets.QCheckBox(
+                "Switch scenes automatically while I play",
+            )
+            self._obs_enable_check.setToolTip(
+                "Requires obs-websocket, which ships with OBS 28 and "
+                "later: OBS → Tools → WebSocket Server Settings → "
+                "Enable WebSocket server.",
+            )
+            outer.addWidget(self._obs_enable_check)
+
+            conn = QtWidgets.QFormLayout()
+            conn.setHorizontalSpacing(20)
+            conn.setVerticalSpacing(10)
+            conn.setLabelAlignment(
+                QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
+            )
+
+            self._obs_host_input = QtWidgets.QLineEdit()
+            self._obs_host_input.setPlaceholderText("127.0.0.1")
+            self._obs_host_input.setToolTip(
+                "Leave as 127.0.0.1 when OBS runs on this PC. For a "
+                "two-PC setup, enter the stream PC's LAN address and "
+                "allow the port through its firewall.",
+            )
+            conn.addRow("OBS host", self._obs_host_input)
+
+            self._obs_port_input = QtWidgets.QSpinBox()
+            self._obs_port_input.setRange(1, 65535)
+            self._obs_port_input.setValue(4455)
+            self._obs_port_input.setToolTip(
+                "obs-websocket v5 listens on 4455 by default. The old "
+                "v4 plugin's 4444 is not supported.",
+            )
+            conn.addRow("Port", self._obs_port_input)
+
+            self._obs_password_input = QtWidgets.QLineEdit()
+            self._obs_password_input.setEchoMode(QtWidgets.QLineEdit.Password)
+            self._obs_password_input.setPlaceholderText(
+                "from OBS → Tools → WebSocket Server Settings",
+            )
+            conn.addRow("Password", self._obs_password_input)
+            outer.addLayout(conn)
+
+            btns = QtWidgets.QHBoxLayout()
+            btns.setSpacing(6)
+            self._obs_test_btn = QtWidgets.QPushButton("Test connection")
+            self._obs_test_btn.clicked.connect(self._click_obs_test)
+            btns.addWidget(self._obs_test_btn)
+            self._obs_build_btn = QtWidgets.QPushButton("Build my scenes…")
+            self._obs_build_btn.setToolTip(
+                "Create a Between Games scene (big camera, chat column, "
+                "small game inset, SC2 backdrop) and an In Game scene "
+                "from the sources you already have. Your existing "
+                "scenes are never modified.",
+            )
+            self._obs_build_btn.setEnabled(False)
+            self._obs_build_btn.clicked.connect(self._click_obs_build)
+            btns.addWidget(self._obs_build_btn)
+            btns.addStretch(1)
+            self._obs_status = QtWidgets.QLabel("")
+            self._obs_status.setObjectName("muted")
+            self._obs_status.setWordWrap(True)
+            btns.addWidget(self._obs_status)
+            outer.addLayout(btns)
+
+            scenes_form = QtWidgets.QFormLayout()
+            scenes_form.setHorizontalSpacing(20)
+            scenes_form.setVerticalSpacing(8)
+            scenes_form.setLabelAlignment(
+                QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
+            )
+            self._obs_scene_combos = {}
+            for phase, label in self.OBS_PHASE_ROWS:
+                combo = QtWidgets.QComboBox()
+                combo.setEditable(False)
+                combo.addItem(self.OBS_NO_SWITCH, "")
+                self._obs_scene_combos[phase] = combo
+                scenes_form.addRow(label, combo)
+            outer.addLayout(scenes_form)
+
+            hint = QtWidgets.QLabel(
+                "Every row is optional. Leaving one on "
+                f"\u201c{self.OBS_NO_SWITCH}\u201d means the scene stays "
+                "put for that phase — set just two if that's all you want. "
+                "\u201cMatch ended\u201d deliberately holds the gameplay "
+                "scene so viewers see the score screen."
+            )
+            hint.setObjectName("muted")
+            hint.setWordWrap(True)
+            outer.addWidget(hint)
+
+            self._obs_replay_check = QtWidgets.QCheckBox(
+                "Also switch when I watch a replay",
+            )
+            self._obs_replay_check.setToolTip(
+                "Off by default. Replay playback reports the same "
+                "phases a real match does, so leaving this off keeps "
+                "reviewing games from flipping your scenes.",
+            )
+            outer.addWidget(self._obs_replay_check)
+
+            delay_row = QtWidgets.QHBoxLayout()
+            delay_row.setSpacing(8)
+            delay_label = QtWidgets.QLabel("Wait before leaving a match")
+            delay_row.addWidget(delay_label)
+            self._obs_debounce_spin = QtWidgets.QDoubleSpinBox()
+            self._obs_debounce_spin.setRange(0.0, 30.0)
+            self._obs_debounce_spin.setSingleStep(0.5)
+            self._obs_debounce_spin.setSuffix(" s")
+            self._obs_debounce_spin.setValue(3.0)
+            self._obs_debounce_spin.setToolTip(
+                "How long the agent waits before switching away from "
+                "the gameplay scene. Stops a dropped poll or an "
+                "alt-tab from yanking your layout mid-game. Entering a "
+                "match is never delayed.",
+            )
+            delay_row.addWidget(self._obs_debounce_spin)
+            delay_row.addStretch(1)
+            outer.addLayout(delay_row)
+
+            return card
+
+        def _obs_conn_fields(self) -> tuple:
+            return (
+                self._obs_host_input.text().strip() or "127.0.0.1",
+                int(self._obs_port_input.value()),
+                self._obs_password_input.text(),
+            )
+
+        def _run_obs_job(self, kind: str, fn) -> None:
+            """Run a blocking OBS round-trip off the GUI thread.
+
+            A connect attempt can sit for several seconds; doing it
+            inline would freeze the window and look like a crash.
+            """
+            self._obs_test_btn.setEnabled(False)
+            self._obs_build_btn.setEnabled(False)
+
+            def _worker() -> None:
+                try:
+                    result = fn()
+                except Exception as exc:  # noqa: BLE001
+                    result = {"ok": False, "message": str(exc)}
+                result = dict(result or {})
+                result["kind"] = kind
+                signals.obsProbeDone.emit(result)
+
+            threading.Thread(
+                target=_worker, name=f"sc2tools-obs-{kind}", daemon=True,
+            ).start()
+
+        def _click_obs_test(self) -> None:
+            if ui._on_obs_probe is None:
+                self._obs_status.setText(
+                    "OBS support unavailable in this build.",
+                )
+                return
+            host, port, password = self._obs_conn_fields()
+            self._obs_status.setText("Connecting…")
+            self._run_obs_job(
+                "probe", lambda: ui._on_obs_probe(host, port, password),
+            )
+
+        def _click_obs_build(self) -> None:
+            if ui._on_obs_build is None:
+                return
+            webcam = self._obs_sources.get("webcam", [])
+            game = self._obs_sources.get("game", [])
+            host, port, password = self._obs_conn_fields()
+
+            confirm = _ObsBuildDialog(
+                parent=self,
+                QtWidgets=QtWidgets,
+                webcams=webcam,
+                games=game,
+            )
+            if not confirm.exec():
+                return
+            request = {
+                "host": host,
+                "port": port,
+                "password": password,
+                "webcam_source": confirm.webcam(),
+                "game_source": confirm.game(),
+                "rebuild": confirm.rebuild(),
+            }
+            self._obs_status.setText("Building scenes…")
+            self._run_obs_job("build", lambda: ui._on_obs_build(request))
+
+        def _on_obs_probe_done(self, result: dict) -> None:
+            self._obs_test_btn.setEnabled(True)
+            ok = bool(result.get("ok"))
+            self._obs_status.setText(str(result.get("message") or ""))
+            if not ok:
+                self._obs_build_btn.setEnabled(False)
+                return
+            self._obs_build_btn.setEnabled(ui._on_obs_build is not None)
+            self._obs_sources = {
+                "webcam": list(result.get("webcams") or []),
+                "game": list(result.get("games") or []),
+            }
+            scenes = [str(x) for x in (result.get("scenes") or [])]
+            if scenes:
+                self._repopulate_obs_scene_combos(scenes)
+
+        def _repopulate_obs_scene_combos(self, scenes: list) -> None:
+            """Refresh the dropdowns from the live scene list, keeping
+            whatever the user had selected if it still exists."""
+            for combo in self._obs_scene_combos.values():
+                previous = combo.currentData()
+                combo.blockSignals(True)
+                combo.clear()
+                combo.addItem(self.OBS_NO_SWITCH, "")
+                for name in scenes:
+                    combo.addItem(name, name)
+                if previous:
+                    idx = combo.findData(previous)
+                    # A scene that vanished from OBS keeps its saved
+                    # value rather than silently resetting to "don't
+                    # switch" — the user renamed something and should
+                    # see that, not lose their configuration.
+                    if idx < 0:
+                        combo.addItem(f"{previous} (missing)", previous)
+                        idx = combo.count() - 1
+                    combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
+
+        def _obs_scene_map_from_form(self) -> dict:
+            return {
+                phase: (combo.currentData() or "")
+                for phase, combo in self._obs_scene_combos.items()
+            }
+
         # ---- signal wiring ----
 
         def _wire_signals(self) -> None:
@@ -1624,6 +2072,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.updateCheckDone.connect(self._on_update_check_done)
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
+            signals.obsProbeDone.connect(self._on_obs_probe_done)
             signals.quitRequested.connect(self._on_quit_requested)
             signals.showRequested.connect(self._on_show_requested)
 
@@ -1864,6 +2313,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 sync_filter_preset=preset,
                 sync_filter_since=since_iso,
                 sync_filter_until=until_iso,
+                obs_scene_switch_enabled=self._obs_enable_check.isChecked(),
+                obs_host=self._obs_host_input.text().strip() or "127.0.0.1",
+                obs_port=int(self._obs_port_input.value()),
+                obs_password=self._obs_password_input.text(),
+                obs_scene_map=self._obs_scene_map_from_form(),
+                obs_switch_debounce_sec=float(
+                    self._obs_debounce_spin.value(),
+                ),
+                obs_switch_on_replays=self._obs_replay_check.isChecked(),
             )
             try:
                 ui._on_save_settings(payload)
@@ -2209,6 +2667,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _populate_settings(self) -> None:
             initial = ui._initial_settings
+            self._populate_obs_settings(initial)
             if initial.api_base:
                 self._api_input.setText(initial.api_base)
             if initial.player_handle:
