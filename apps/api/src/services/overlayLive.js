@@ -643,12 +643,12 @@ class OverlayLiveService {
       // Last-observed MMR from the opponents row. The post-game card
       // surfaces ``oppMmr`` from the just-uploaded game; pre-game we
       // fall back to the most recent value the agent stamped on this
-      // opponent during a prior encounter. Renderer prefers this over
-      // ``profile.mmr`` when both are present because the stored row
-      // is the value Battle.net itself reported in their last match,
-      // whereas SC2Pulse's profile MMR can lag (or be null entirely
-      // when the player hasn't logged enough season games for Pulse
-      // to publish one).
+      // opponent during a prior encounter. This is a FALLBACK for the
+      // renderers, not the preferred source: the overlay resolves the
+      // opponent's rating via ``resolveLiveOpponentMmr``, which takes
+      // SC2Pulse's ``profile.mmr`` first (it is the opponent's current
+      // season rating) and only reads this stored value when Pulse has
+      // none — a row stamped weeks ago can be hundreds of points off.
       if (Number.isFinite(Number(oppRow.mmr))) {
         payload.oppMmr = Number(oppRow.mmr);
       }

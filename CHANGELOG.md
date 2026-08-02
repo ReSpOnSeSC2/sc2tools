@@ -44,6 +44,22 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Stats ticker quoted a stale opponent MMR** — the ticker's
+  "NOW PLAYING" segment announced the rating from the *last* time you
+  played that opponent while the opponent card at the top of the same
+  scene showed their current one, so a returning opponent who had
+  climbed since your last meeting appeared twice on screen with two
+  different numbers (4,620 in the ticker, 5,407 on the card). The
+  ticker read only the cloud's saved last-observed MMR, skipping the
+  SC2Pulse profile rating every other surface prefers. That precedence
+  — Pulse's current-season rating first, the stored last-encounter
+  value only as a fallback — now lives in one helper the ticker, the
+  opponent card and the voice readout all share. The "MMR GAP" segment
+  reads the same resolved rating, so it no longer sizes the gap (or
+  picks "upset material" vs "protect the rating") off a months-old
+  number, and a `0`/`null` rating from either source now drops the MMR
+  clause instead of rendering "0 MMR".
+
 - **OBS auto scene switching actually switches now** — four fixes to
   the agent-side switcher shipped in 0.15.9. Enabling the feature
   without touching the scene dropdowns persisted six explicit "don't

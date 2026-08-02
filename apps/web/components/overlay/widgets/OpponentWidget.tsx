@@ -1,5 +1,6 @@
 "use client";
 
+import { resolveLiveOpponentMmr } from "../liveGameOpponentMmr";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import {
   Dim,
@@ -115,25 +116,11 @@ export function OpponentWidget({
     liveGame.opponent?.revealedName
     || liveGame.streamerHistory?.oppRevealedName
     || null;
-  // MMR precedence: SC2Pulse's live profile MMR is the authoritative
-  // "current season rating" → cloud-derived last-observed MMR from
-  // the opponents row (stamped at the end of the most recent encounter
-  // by the games-ingest path) → unknown. Pulse wins when it has a
-  // value because that reflects the player's actual current ladder
-  // rating; the saved last-game MMR fills in the gap when Pulse can't
-  // surface one (player hasn't logged enough season games, account
-  // migrated, off-ladder unranked match, etc.) so the widget shows
-  // SOME rating against a repeat opponent instead of "MMR unavailable".
-  const pulseMmr =
-    profile && typeof profile.mmr === "number" && profile.mmr > 0
-      ? profile.mmr
-      : null;
-  const storedMmr =
-    typeof liveGame.streamerHistory?.oppMmr === "number"
-    && liveGame.streamerHistory.oppMmr > 0
-      ? liveGame.streamerHistory.oppMmr
-      : null;
-  const mmr = pulseMmr !== null ? pulseMmr : storedMmr;
+  // MMR precedence (Pulse's current rating → the cloud's saved
+  // last-observed MMR → unknown) lives in one place so every surface
+  // that quotes the opponent's rating — this card, the stats ticker,
+  // the voice readout — quotes the same number.
+  const mmr = resolveLiveOpponentMmr(liveGame);
 
   // Empty / unknown opponent (e.g. agent reported MATCH_LOADING with no
   // game_state yet) — render the skeleton outline rather than blank so

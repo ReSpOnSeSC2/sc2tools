@@ -1,3 +1,4 @@
+import { resolveLiveOpponentMmr } from "./liveGameOpponentMmr";
 import type { LiveGameEnvelope, LiveGamePayload } from "./types";
 
 /**
@@ -47,9 +48,7 @@ export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
   return composeScoutingSentence({
     name: env.opponent?.name,
     race: env.opponent?.race,
-    mmr:
-      extractPositiveMmr(env.opponent?.profile?.mmr)
-      ?? extractPositiveMmr(env.streamerHistory?.oppMmr),
+    mmr: resolveLiveOpponentMmr(env),
     headToHead: env.streamerHistory?.headToHead,
   });
 }
@@ -84,10 +83,7 @@ export function buildCheeseLine(live: LiveGamePayload): string {
  * the cloud's enrichment.
  */
 export function isLiveGameMmrReady(env: LiveGameEnvelope): boolean {
-  return (
-    extractPositiveMmr(env.opponent?.profile?.mmr) !== null
-    || extractPositiveMmr(env.streamerHistory?.oppMmr) !== null
-  );
+  return resolveLiveOpponentMmr(env) !== null;
 }
 
 /* ============================================================
