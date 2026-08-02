@@ -11,6 +11,37 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Automatic OBS scene switching** — the desktop agent can now change
+  OBS scenes on its own, using the game state it already tracks from
+  StarCraft II's local client API. A match loading cuts to your
+  gameplay layout; returning to the menu cuts back to a downtime
+  layout. Every phase maps to a scene of your choosing, and every slot
+  is optional, so you can configure it as simply as two scenes.
+
+  A one-click builder in the agent's Settings tab creates those two
+  layouts from the sources you already have — a *Between Games* scene
+  with a big camera, a readable chat column, a small game-capture inset
+  so viewers can see when you're queueing, and the new full-screen
+  backdrop; plus an *In Game* scene with the game full-screen and the
+  camera tucked in a corner. It never touches your existing scenes.
+
+  Off by default. Works with OBS on the same PC or on a separate stream
+  PC over the LAN. Ships with **agent 0.15.9** (`agent-v0.15.9`) — see
+  `apps/agent/CHANGELOG.md` for the agent-side details.
+
+- **StarCraft II backdrop scenes for OBS** — new full-canvas Browser
+  Sources at `/overlay/<token>/scene/<name>` for Between Games,
+  Starting Soon, BRB and intermission. A hex console lattice over a
+  perspective ground plane with an accent horizon, tinting to your live
+  opponent's race. Entirely procedural — no Blizzard artwork — and
+  built to a strict performance budget so it can sit under a game
+  capture all night. Copy the URLs from Settings → Overlay →
+  Full-screen scenes, or export a still/looping MP4 with
+  `npm run scenes:render` if you'd rather not run a live Browser
+  Source.
+
 ### Fixed
 
 - **Net MMR matchup coverage is now explicit** — race cards label each

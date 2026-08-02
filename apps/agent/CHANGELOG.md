@@ -2,6 +2,42 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.9
+
+### Added — automatic OBS scene switching
+- **What.** The agent can now switch OBS scenes by itself, driven by
+  the Live Game Bridge phase it already tracks. Enable it in
+  Settings → OBS scene switching, point each phase at a scene, and the
+  stream cuts to your gameplay layout when a match loads and back to
+  your downtime layout when you return to the menu.
+- **One-click scene builder.** "Build my scenes…" creates a *Between
+  Games* scene (big camera, full-height chat column, small game-capture
+  inset so viewers can see you queueing, and the new SC2 backdrop) and
+  an *In Game* scene (game full-screen, camera in the corner) from the
+  sources you already have. Both reference the same webcam and game
+  capture — a scene item is a reference, not a copy, so there is no
+  extra capture cost. Your existing scenes are never modified: the
+  builder only creates names prefixed ``SC2 Tools — ``, refuses to
+  replace one without an explicit rebuild, and nothing is sent until
+  you confirm a dialog showing which sources it will use.
+- **Won't fight you.** Entering a match cuts immediately (before the
+  map appears); leaving one waits out a 3 s debounce, so a dropped
+  poll or an alt-tab can't yank your layout mid-game. ``match_ended``
+  deliberately holds the gameplay scene so viewers see the score
+  screen. Watching a replay doesn't trigger anything. Switching scenes
+  by hand parks auto-switching until the next phase change.
+- **Two-PC setups.** Host and port are configurable, so the agent on
+  your gaming PC can drive OBS on a separate stream PC over the LAN.
+- **Off by default**, and inert on every existing install. Requires
+  obs-websocket (ships with OBS 28+). ``--no-obs`` disables it for one
+  run without clearing your settings.
+- **Notes.** New dependency ``obsws-python`` (imported lazily, so a
+  source install without it degrades to "OBS features unavailable").
+  The obs-websocket password is stored in ``agent.json`` next to the
+  existing device token and redacted from crash reports — see
+  ``docs/adr/0021-obs-credential-storage.md`` for why, and
+  ``SC2TOOLS_OBS_PASSWORD`` to keep it in the environment instead.
+
 ## 0.15.8
 
 ### Changed — version re-cut, no code changes

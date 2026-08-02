@@ -49,6 +49,8 @@ from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
+from .live.obs_client import ObsAuthFailed, ObsClient
+from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
 from .live.transport import (
     CloudTransport,
     FanOutTransport,
@@ -147,8 +149,11 @@ def _run_locked_agent(
                 log_dir,
                 start_minimized=args.start_minimized,
                 no_live=args.no_live,
+                no_obs=args.no_obs,
             )
-        return _run_headless(cfg, log_dir, no_live=args.no_live)
+        return _run_headless(
+            cfg, log_dir, no_live=args.no_live, no_obs=args.no_obs,
+        )
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_crashed_top_level")
         capture_exception(exc)
@@ -191,6 +196,16 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
             "talks to Blizzard's localhost SC2 client API). Off-switch "
             "for diagnostics; the rest of the agent (replay watcher, "
             "uploader, heartbeat, GUI) keeps working unchanged."
+        ),
+    )
+    parser.add_argument(
+        "--no-obs",
+        action="store_true",
+        help=(
+            "Disable automatic OBS scene switching for this run, "
+            "without clearing the saved Settings. Mirrors --no-live: "
+            "an off-switch for diagnostics that leaves the rest of "
+            "the agent untouched."
         ),
     )
     parser.add_argument(
@@ -311,7 +326,13 @@ def _bootstrap(
 # ---------------- Execution paths ----------------
 
 
-def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> int:
+def _run_headless(
+    cfg: AgentConfig,
+    log_dir: Path,
+    *,
+    no_live: bool = False,
+    no_obs: bool = False,
+) -> int:
     """Legacy path - console + tray. Identical to the 0.2.x runner."""
     log = logging.getLogger("sc2tools_agent")
     state = load_state(cfg.state_dir)
@@ -341,6 +362,8 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
     live_poller: Optional[LiveClientPoller] = None
     live_bus: Optional[EventBus[LiveLifecycleEvent]] = None
     live_bridge: Optional[LiveBridge] = None
+    obs_client: Optional[ObsClient] = None
+    obs_scene: Optional[ObsSceneController] = None
 
     if can_use_tray():
         tray = TrayUI(
@@ -480,6 +503,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
     else:
         log.info("live_bridge_disabled_via_flag")
 
+    obs_client, obs_scene = _build_obs_switcher(
+        state=state, bridge=live_bridge, log=log, no_obs=no_obs,
+    )
+
     try:
         upload.start()
         watcher.start()
@@ -504,6 +531,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
             log.info("live_poller_started base_url=http://localhost:6119")
         if live_metrics_logger is not None:
             live_metrics_logger.start()
+        if obs_client is not None:
+            obs_client.start()
+        if obs_scene is not None:
+            obs_scene.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -517,6 +548,10 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
         return 1
     finally:
         log.info("agent_stopping")
+        if obs_scene:
+            obs_scene.shutdown()
+        if obs_client:
+            obs_client.shutdown()
         if live_metrics_logger:
             live_metrics_logger.stop()
         if live_poller:
@@ -545,6 +580,7 @@ def _run_headless(cfg: AgentConfig, log_dir: Path, *, no_live: bool = False) -> 
 def _run_with_gui(
     cfg: AgentConfig, log_dir: Path, *, start_minimized: bool,
     no_live: bool = False,
+    no_obs: bool = False,
 ) -> int:
     """GUI path - Qt main loop on the main thread, agent on a worker."""
     log = logging.getLogger("sc2tools_agent")
@@ -596,6 +632,13 @@ def _run_with_gui(
         sync_filter_since=state.sync_filter_since,
         sync_filter_until=state.sync_filter_until,
         auto_update_enabled=state.auto_update_enabled,
+        obs_scene_switch_enabled=state.obs_scene_switch_enabled,
+        obs_host=state.obs_host,
+        obs_port=state.obs_port,
+        obs_password=state.obs_password,
+        obs_scene_map=dict(state.obs_scene_map),
+        obs_switch_debounce_sec=state.obs_switch_debounce_sec,
+        obs_switch_on_replays=state.obs_switch_on_replays,
     )
 
     gui = GuiUI(
@@ -620,6 +663,12 @@ def _run_with_gui(
             cfg, state, picked, cell, log,
         ),
         on_check_updates=lambda: cell.updater.check_now() if cell.updater else None,
+        on_obs_probe=lambda host, port, password: _handle_obs_probe(
+            host=host, port=port, password=password, log=log,
+        ),
+        on_obs_build=lambda request: _handle_obs_build(
+            cfg=cfg, state=state, request=request, log=log,
+        ),
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),
@@ -670,6 +719,7 @@ def _run_with_gui(
             "stop_event": stop_event,
             "log": log,
             "no_live": no_live,
+            "no_obs": no_obs,
         },
         name="sc2tools-boot",
         daemon=True,
@@ -680,6 +730,10 @@ def _run_with_gui(
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
+    if getattr(cell, "obs_scene", None):
+        cell.obs_scene.shutdown()
+    if getattr(cell, "obs_client", None):
+        cell.obs_client.shutdown()
     if getattr(cell, "live_metrics_logger", None):
         cell.live_metrics_logger.stop()
     if getattr(cell, "live_poller", None):
@@ -715,6 +769,7 @@ def _gui_boot_worker(
     stop_event: threading.Event,
     log: logging.Logger,
     no_live: bool = False,
+    no_obs: bool = False,
 ) -> None:
     """Run the agent's startup sequence outside the Qt thread."""
     try:
@@ -860,6 +915,10 @@ def _gui_boot_worker(
             cell.live_transport = None
             cell.live_metrics_logger = None
 
+        cell.obs_client, cell.obs_scene = _build_obs_switcher(
+            state=state, bridge=cell.live_bridge, log=log, no_obs=no_obs,
+        )
+
         upload.start()
         watcher.start()
         # Register the startup sweep as a visible import job when the
@@ -881,6 +940,10 @@ def _gui_boot_worker(
             log.info("live_poller_started base_url=http://localhost:6119")
         if cell.live_metrics_logger is not None:
             cell.live_metrics_logger.start()
+        if cell.obs_client is not None:
+            cell.obs_client.start()
+        if cell.obs_scene is not None:
+            cell.obs_scene.start()
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
@@ -1125,6 +1188,7 @@ def _handle_save_settings(
         # poll (``_handle_update_available``'s consent gate), so no
         # restart is needed for the opt-in/opt-out to take effect.
         state.auto_update_enabled = bool(payload.auto_update_enabled)
+    _apply_obs_settings(state, payload, cell, log)
     if payload.autostart_enabled is not None:
         ok = autostart.set_enabled(bool(payload.autostart_enabled))
         if ok:
@@ -1689,6 +1753,314 @@ def _build_live_bridge(
     return lifecycle_bus, poller, bridge, fanout, metrics_logger
 
 
+def _apply_obs_settings(
+    state: AgentState,
+    payload: SettingsPayload,
+    cell,
+    log: logging.Logger,
+) -> None:
+    """Persist the Settings tab's OBS fields and hot-apply them.
+
+    Follows the ``upload.set_concurrency`` precedent: a Save click
+    takes effect on the running switcher rather than waiting for a
+    restart. Reconnecting is only done when the connection details
+    actually changed — a Save that only re-mapped a scene shouldn't
+    drop a healthy socket mid-stream.
+    """
+    if payload.obs_scene_switch_enabled is not None:
+        state.obs_scene_switch_enabled = bool(payload.obs_scene_switch_enabled)
+    conn_changed = False
+    if payload.obs_host is not None and payload.obs_host != state.obs_host:
+        state.obs_host = payload.obs_host
+        conn_changed = True
+    if payload.obs_port is not None and int(payload.obs_port) != state.obs_port:
+        state.obs_port = int(payload.obs_port)
+        conn_changed = True
+    if payload.obs_password is not None:
+        # Empty string clears a saved password rather than meaning
+        # "no change" — otherwise there'd be no way to remove one
+        # without hand-editing agent.json.
+        new_password = payload.obs_password or None
+        if new_password != state.obs_password:
+            state.obs_password = new_password
+            conn_changed = True
+    if payload.obs_scene_map is not None:
+        state.obs_scene_map = {
+            str(k): str(v) for k, v in dict(payload.obs_scene_map).items()
+        }
+    if payload.obs_switch_debounce_sec is not None:
+        state.obs_switch_debounce_sec = max(
+            0.0, float(payload.obs_switch_debounce_sec),
+        )
+    if payload.obs_switch_on_replays is not None:
+        state.obs_switch_on_replays = bool(payload.obs_switch_on_replays)
+
+    controller = getattr(cell, "obs_scene", None)
+    client = getattr(cell, "obs_client", None)
+    if controller is None:
+        # Nothing running yet — the feature was off at boot. The new
+        # settings are saved and take effect on next start.
+        if state.obs_scene_switch_enabled:
+            log.info("obs_settings_saved_restart_required=true")
+        return
+
+    try:
+        controller.set_config(
+            scene_map=dict(state.obs_scene_map) or None,
+            enabled=state.obs_scene_switch_enabled,
+            debounce_sec=state.obs_switch_debounce_sec,
+            switch_on_replays=state.obs_switch_on_replays,
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("obs_controller_reconfigure_failed")
+    if conn_changed and client is not None:
+        try:
+            client.reconfigure(
+                host=state.obs_host,
+                port=state.obs_port,
+                password=state.obs_password,
+            )
+            log.info(
+                "obs_reconnect_requested host=%s port=%s",
+                state.obs_host,
+                state.obs_port,
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("obs_client_reconfigure_failed")
+
+
+def _handle_obs_probe(
+    *,
+    host: str,
+    port: int,
+    password: str,
+    log: logging.Logger,
+) -> dict:
+    """GUI "Test connection": connect once and report what we found.
+
+    Deliberately synchronous and short-lived — it opens its own
+    throwaway client rather than borrowing the long-running one, so a
+    user typing a wrong password into the form can't knock the live
+    switcher off its connection.
+    """
+    from .live.obs_layout import discover_sources
+
+    client = ObsClient(
+        host=host,
+        port=port,
+        password=password or None,
+        subscribe_events=False,
+    )
+    try:
+        client.connect_now()
+    except ObsAuthFailed:
+        return {
+            "ok": False,
+            "message": (
+                "OBS rejected the password. Copy it from OBS → Tools → "
+                "WebSocket Server Settings → Show Connect Info."
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_probe_failed host=%s port=%s err=%s", host, port, exc)
+        return {
+            "ok": False,
+            "message": (
+                f"Could not reach OBS at {host}:{port}. Check that OBS is "
+                "running and the WebSocket server is enabled."
+            ),
+        }
+
+    try:
+        version = client.get_version()
+        scenes = client.refresh_scenes()
+        sources = discover_sources(client)
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_probe_partial err=%s", exc)
+        return {"ok": False, "message": f"Connected, but OBS errored: {exc}"}
+    finally:
+        client.shutdown()
+
+    log.info(
+        "obs_probe_ok host=%s port=%s scenes=%d", host, port, len(scenes),
+    )
+    return {
+        "ok": True,
+        "message": (
+            f"Connected to OBS {version.get('obs_version') or '?'} — "
+            f"{len(scenes)} scene(s) found."
+        ),
+        "scenes": scenes,
+        "webcams": sources.get("webcam", []),
+        "games": sources.get("game", []),
+    }
+
+
+def _handle_obs_build(
+    *,
+    cfg: AgentConfig,
+    state: AgentState,
+    request: dict,
+    log: logging.Logger,
+) -> dict:
+    """GUI "Build my scenes": create the two layouts in the user's OBS.
+
+    Needs a paired overlay token — the backdrop, chat and stats panels
+    are all Browser Sources pointed at the user's own overlay URLs, so
+    there is nothing meaningful to build without one.
+    """
+    from .live.obs_layout import SceneBuildError, build_scenes, plan_scenes
+
+    token = _overlay_token_for_build(cfg, state, log)
+    if not token:
+        return {
+            "ok": False,
+            "message": (
+                "No overlay token yet. Sign in and pair the agent first "
+                "— the backdrop and chat panels need your overlay URL."
+            ),
+        }
+
+    client = ObsClient(
+        host=str(request.get("host") or "127.0.0.1"),
+        port=int(request.get("port") or 4455),
+        password=(request.get("password") or None),
+        subscribe_events=False,
+    )
+    try:
+        client.connect_now()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": f"Could not reach OBS: {exc}"}
+
+    try:
+        plan = plan_scenes(
+            client,
+            overlay_base_url=_dashboard_url_from_api(cfg.api_base),
+            overlay_token=token,
+            webcam_source=request.get("webcam_source") or None,
+            game_source=request.get("game_source") or None,
+        )
+        created = build_scenes(
+            client, plan, rebuild=bool(request.get("rebuild")),
+        )
+    except SceneBuildError as exc:
+        return {"ok": False, "message": str(exc)}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("obs_scene_build_failed")
+        return {"ok": False, "message": f"Build failed: {exc}"}
+    finally:
+        client.shutdown()
+
+    log.info("obs_scene_build_ok created=%s", ",".join(created))
+    note = " ".join(plan.warnings) if plan.warnings else ""
+    return {
+        "ok": True,
+        "message": (
+            f"Created {len(created)} scene(s): {', '.join(created)}. "
+            "Pick them in the dropdowns below and Save. " + note
+        ).strip(),
+        "scenes": client.scene_names or created,
+    }
+
+
+def _overlay_token_for_build(
+    cfg: AgentConfig, state: AgentState, log: logging.Logger,
+) -> Optional[str]:
+    """Fetch the user's overlay token from the cloud.
+
+    The agent doesn't cache one today — the website owns overlay
+    tokens — so this is a live lookup, and it failing is a normal
+    "not paired yet" outcome rather than an error.
+    """
+    if not state.device_token:
+        return None
+    try:
+        api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
+        getter = getattr(api, "get_overlay_token", None)
+        if getter is None:
+            return None
+        return getter() or None
+    except Exception as exc:  # noqa: BLE001
+        log.info("obs_overlay_token_lookup_failed err=%s", exc)
+        return None
+
+
+def _build_obs_switcher(
+    *,
+    state: AgentState,
+    bridge: Optional[LiveBridge],
+    log: logging.Logger,
+    no_obs: bool = False,
+) -> tuple[Optional[ObsClient], Optional[ObsSceneController]]:
+    """Construct the OBS auto-scene-switcher and hang it off the bridge.
+
+    Returns ``(None, None)`` whenever switching shouldn't run — the
+    feature is off, the Live Game Bridge is disabled (there'd be no
+    phase events to react to), or ``--no-obs`` was passed.
+
+    Why this is a separate builder rather than more returns from
+    ``_build_live_bridge``: OBS is the one subsystem here that talks to
+    a process on the user's desktop rather than to the cloud, and it is
+    opt-in. Keeping it out of the bridge's tuple means the bridge's
+    contract — and its five existing call-site unpackings — stay put.
+
+    Config precedence matches the rest of the agent: environment
+    variables win over the state file, so a power user can point a
+    single install at a different OBS without touching the GUI.
+    """
+    if no_obs:
+        log.info("obs_scene_switch_disabled_via_flag")
+        return None, None
+    if not state.obs_scene_switch_enabled:
+        return None, None
+    if bridge is None:
+        # Nothing publishes phases, so there is nothing to react to.
+        log.info("obs_scene_switch_skipped reason=live_bridge_disabled")
+        return None, None
+
+    host = os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host
+    port_env = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
+    try:
+        port = int(port_env) if port_env else int(state.obs_port)
+    except ValueError:
+        log.warning("obs_port_invalid value=%r falling_back=4455", port_env)
+        port = 4455
+    password = (
+        os.environ.get("SC2TOOLS_OBS_PASSWORD")
+        or state.obs_password
+        or None
+    )
+    scene_map = dict(state.obs_scene_map) or dict(DEFAULT_SCENE_MAP)
+
+    # Built in two steps: the controller needs the client to issue
+    # requests, and the client needs the controller's callback to
+    # report manual scene changes. Neither can be constructed first,
+    # so the controller goes up bare and takes the client after.
+    controller = ObsSceneController(
+        scene_map=scene_map,
+        debounce_sec=state.obs_switch_debounce_sec,
+        switch_on_replays=state.obs_switch_on_replays,
+        transition_name=state.obs_transition_name,
+        transition_duration_ms=state.obs_transition_duration_ms,
+    )
+    client = ObsClient(
+        host=host,
+        port=port,
+        password=password,
+        on_program_scene_changed=controller.on_program_scene_changed,
+    )
+    controller.attach_client(client)
+
+    bridge.bus.subscribe(controller.listener)
+    log.info(
+        "obs_scene_switch_configured host=%s port=%s debounce_sec=%.1f",
+        host,
+        port,
+        state.obs_switch_debounce_sec,
+    )
+    return client, controller
+
+
 class _RuntimeCell:
     """Mutable container shared between the GUI thread and the boot
     worker. Kept as a plain class (no dataclass) so it never tries to
@@ -1710,6 +2082,8 @@ class _RuntimeCell:
         "live_bridge",
         "live_transport",
         "live_metrics_logger",
+        "obs_client",
+        "obs_scene",
     )
 
     def __init__(self) -> None:
@@ -1728,6 +2102,8 @@ class _RuntimeCell:
         self.live_bridge = None
         self.live_transport = None
         self.live_metrics_logger = None
+        self.obs_client = None
+        self.obs_scene = None
 
 
 class _Multiplexer:

@@ -176,6 +176,66 @@ class AgentState:
     when the running version is below the feed's minSupportedVersion —
     a build the cloud no longer supports must update to keep working."""
 
+    # ---- OBS scene switching (see live/obs_scene.py) ----
+
+    obs_scene_switch_enabled: bool = False
+    """Master gate for automatic OBS scene switching. Opt-in by
+    design — the agent must never start driving somebody's OBS
+    because they installed an update."""
+
+    obs_host: str = "127.0.0.1"
+    """Host running obs-websocket. Stays localhost for the common
+    single-PC setup; a two-PC streamer (SC2 on the gaming rig, OBS on
+    the stream rig) points this at the stream PC's LAN address."""
+
+    obs_port: int = 4455
+    """obs-websocket v5 port. v4's 4444 is not supported — that
+    protocol was removed from OBS in 28.0 and authenticates
+    differently."""
+
+    obs_password: Optional[str] = None
+    """obs-websocket server password.
+
+    Stored here rather than in ``.env`` because the agent is a GUI
+    app and its users do not hand-edit dotfiles. This follows the
+    precedent already set by ``device_token`` above — a live bearer
+    credential in the same file — rather than ADR 0013, which governs
+    the legacy product's config files. See
+    ``docs/adr/0021-obs-credential-storage.md``. The key is redacted
+    from Sentry by ``crash_reporter._is_pii_key``, and
+    ``SC2TOOLS_OBS_PASSWORD`` overrides it for anyone who would rather
+    keep it in the environment."""
+
+    obs_scene_map: Dict[str, str] = field(default_factory=dict)
+    """Live-bridge phase → OBS scene name.
+
+    Keys are ``LiveLifecyclePhase`` values (``idle``, ``menu``,
+    ``match_loading``, ``match_started``, ``match_in_progress``,
+    ``match_ended``). An absent key or an empty value means "leave the
+    scene alone for this phase", so a streamer who only wants an
+    in-game and a between-games scene simply leaves the rest blank.
+    Empty dict = use ``obs_scene.DEFAULT_SCENE_MAP``."""
+
+    obs_switch_debounce_sec: float = 3.0
+    """Seconds a leaving phase (``idle`` / ``menu``) must persist
+    before the scene actually changes. Guards against a dropped
+    localhost:6119 poll or an alt-tab yanking the layout mid-game.
+    Entering a match is never debounced."""
+
+    obs_switch_on_replays: bool = False
+    """When False (the default) watching a replay does not trigger the
+    in-game scene, even though replay playback reports the same
+    lifecycle phases a real match does."""
+
+    obs_transition_name: Optional[str] = None
+    """Optional OBS transition to select before each switch. ``None``
+    leaves whatever the streamer configured in OBS alone, which is
+    almost always what they want."""
+
+    obs_transition_duration_ms: Optional[int] = None
+    """Optional transition duration override, paired with
+    ``obs_transition_name``."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -292,6 +352,21 @@ def load_state(state_dir: Path) -> AgentState:
         sync_filter_until=_coerce_str(raw.get("sync_filter_until")),
         release_seen=release_seen,
         auto_update_enabled=raw.get("auto_update_enabled") is not False,
+        obs_scene_switch_enabled=bool(
+            raw.get("obs_scene_switch_enabled") or False,
+        ),
+        obs_host=_coerce_str(raw.get("obs_host")) or "127.0.0.1",
+        obs_port=_coerce_port(raw.get("obs_port")) or 4455,
+        obs_password=_coerce_str(raw.get("obs_password")),
+        obs_scene_map=_coerce_str_map(raw.get("obs_scene_map")),
+        obs_switch_debounce_sec=_coerce_non_negative_float(
+            raw.get("obs_switch_debounce_sec"), default=3.0,
+        ),
+        obs_switch_on_replays=bool(raw.get("obs_switch_on_replays") or False),
+        obs_transition_name=_coerce_str(raw.get("obs_transition_name")),
+        obs_transition_duration_ms=_coerce_int(
+            raw.get("obs_transition_duration_ms"),
+        ),
     )
 
 
@@ -338,6 +413,7 @@ def _snapshot(state: AgentState) -> dict:
         path_by_game_id=dict(state.path_by_game_id),
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
+        obs_scene_map=dict(state.obs_scene_map),
     )
     return asdict(stable)
 
@@ -390,6 +466,58 @@ def _coerce_str(value: object) -> Optional[str]:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
+
+
+def _coerce_port(value: object) -> Optional[int]:
+    """Return ``value`` as a valid TCP port, or ``None``.
+
+    Separate from ``_coerce_int`` because that one is for worker
+    counts and rejects nothing at the top end; a hand-edited port of
+    ``70000`` would sail through it and then fail deep inside the
+    socket layer with a confusing error.
+    """
+    if isinstance(value, bool):
+        return None
+    try:
+        n = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return n if 1 <= n <= 65535 else None
+
+
+def _coerce_non_negative_float(value: object, *, default: float) -> float:
+    """Return ``value`` as a float >= 0, falling back to ``default``.
+
+    A negative debounce would make the deadline already-expired and
+    silently defeat the guard it exists to provide, so it is treated
+    as malformed rather than clamped silently to zero.
+    """
+    if isinstance(value, bool):
+        return default
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    if f != f or f < 0:  # NaN or negative
+        return default
+    return f
+
+
+def _coerce_str_map(value: object) -> Dict[str, str]:
+    """Return ``value`` as a ``dict[str, str]``, dropping junk entries.
+
+    Used for ``obs_scene_map``. Empty string values are *kept*: in the
+    scene map they carry meaning ("don't switch for this phase") and
+    are distinct from an absent key only in that the GUI renders them
+    as an explicit choice.
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for key, val in value.items():
+        if isinstance(key, str) and key and isinstance(val, str):
+            out[key] = val.strip()
+    return out
 
 
 def _coerce_str_list(value: object) -> List[str]:

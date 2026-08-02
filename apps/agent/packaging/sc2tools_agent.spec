@@ -103,6 +103,13 @@ HIDDEN = [
     "tkinter.filedialog",
     "sentry_sdk",
     "sentry_sdk.integrations",
+    # obs-websocket v5 client. Imported lazily inside
+    # ``live/obs_client.py`` so PyInstaller's static analysis can't see
+    # it — without these entries the frozen .exe would raise
+    # ModuleNotFoundError the first time a user enables scene
+    # switching, while a source install worked fine.
+    "obsws_python",
+    "websocket",
 ]
 # Pull EVERY sc2reader submodule + its bundled CSV game-data files.
 # ``collect_submodules`` walks the package's __path__ and emits the
