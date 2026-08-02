@@ -2,7 +2,7 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.15.10
 
 ### Fixed — OBS auto scene switching not switching
 Four defects in 0.15.9's scene switcher, each of which could read as

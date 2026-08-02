@@ -55,7 +55,8 @@ corresponding GitHub Release.
   auto-fills the dropdowns); enabling from Settings needed a hidden
   agent restart (Save now starts the switcher immediately); and every
   auto-switch misclassified its own OBS echo as the streamer taking
-  manual control, logging bogus suppressions. Details in
+  manual control, logging bogus suppressions. Ships with
+  **agent 0.15.10** (`agent-v0.15.10`) — details in
   `apps/agent/CHANGELOG.md`.
 
 - **Backdrop scene preview in Settings showed "SC2 Tools hit a critical
