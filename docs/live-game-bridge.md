@@ -132,7 +132,22 @@ runner then constructs an `OverlayBackendTransport` alongside the
 default `CloudTransport` and fans every envelope to both. Cloud-only
 installs ship zero traffic to localhost:3000.
 
-Both transports are token-bucket rate limited to 4 msg/s and lossy by
+### Local OBS scene switcher (opt-in)
+
+A third subscriber on `bridge.bus` that never leaves the machine.
+[apps/agent/sc2tools_agent/live/obs_scene.py](../apps/agent/sc2tools_agent/live/obs_scene.py)
+maps the lifecycle phase onto an OBS scene name and calls
+`SetCurrentProgramScene` over obs-websocket v5. It is not a transport —
+it publishes nothing outward — but it consumes the same envelopes, so
+it belongs in this list.
+
+Off unless the user enables it. It only ever *switches* scenes; the
+one-click builder that creates them
+([obs_layout.py](../apps/agent/sc2tools_agent/live/obs_layout.py)) runs
+only on an explicit click. Full design in
+[docs/obs-auto-scene-switching.md](obs-auto-scene-switching.md).
+
+Both cloud transports are token-bucket rate limited to 4 msg/s and lossy by
 design — the bridge fires payloads at ~1 Hz; if a single POST fails,
 we drop it and rely on the next poll's fresh data.
 
@@ -200,6 +215,9 @@ increments counters + observes latency:
 | `pulse.resolve.{cache_hit,cache_miss,full,partial,unhandled_error}` | Pulse lookups |
 | `transport.{overlay,cloud}.{ok,error,bad_status,skipped_unpaired}` | Outbound transport |
 | `bridge.publish.<phase>` | Per-phase envelope counts |
+| `obs.connect.{ok,refused,auth_failed}` | OBS connection outcomes |
+| `obs.switch.{ok,error,scene_missing}` | Scene-switch outcomes |
+| `obs.switch.suppressed_{manual,debounce,replay}` | Deliberate non-switches |
 
 EWMA latency samples (`*_latency`) live alongside.
 
@@ -227,6 +245,7 @@ a fresh envelope arrived in the last 10 / 60 s.
 | Source B (Pulse) | Bridge emits opponent name + race from Source A. Scouting card shows "Looking up opponent…", then "Profile lookup unavailable" once Pulse responded without an MMR row. |
 | Cloud API | OBS overlays go quiet (expected — same as a network outage). When cloud recovers, the next 1 Hz tick repopulates. |
 | Agent crashed / not running | `AgentStatusIndicator` flips to grey "Agent offline". OBS widgets still show the most recent post-game `overlay:live` payload until it ages out. |
+| OBS closed / websocket off | Scene switching silently no-ops and reconnects with backoff. Everything else — widgets, uploads, the cloud path — is unaffected. |
 | Pulse timeout DURING the lookup | First emit (name + race) lands at T+50 ms; the Pulse-enriched re-emit never lands; widgets show "MMR unavailable" rather than spinning indefinitely. |
 
 ## 9. Manual smoke test

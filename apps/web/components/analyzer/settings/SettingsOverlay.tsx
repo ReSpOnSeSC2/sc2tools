@@ -57,6 +57,7 @@ import { UrlRow } from "./OverlayUrlRow";
 import { GhostLegacyMigration } from "./GhostLegacyMigration";
 import { GhostMatchupManager } from "./GhostMatchupManager";
 import { OverlayThemeSection } from "./OverlayThemeSection";
+import { OverlayScenesSection } from "./OverlayScenesSection";
 
 /**
  * Settings · Overlay tab.
@@ -581,6 +582,12 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         <ConnectionCheck token={activeToken.token} lastSeenAt={activeToken.lastSeenAt} />
         <StuckWidgetHelp />
       </Section>
+
+      <OverlayScenesSection
+        token={activeToken.token}
+        origin={origin}
+        theme={theme}
+      />
 
       <SettingsMultiChat token={activeToken.token} />
 

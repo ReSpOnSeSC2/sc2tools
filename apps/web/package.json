@@ -1,7 +1,7 @@
 {
   "name": "@sc2tools/web",
   "version": "0.1.0",
-  "description": "SC2 Tools cloud frontend — Next.js + Clerk + Tailwind, hosted on Vercel.",
+  "description": "SC2 Tools cloud frontend \u2014 Next.js + Clerk + Tailwind, hosted on Vercel.",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "depth-lint": "node scripts/depthLint.mjs",
-    "maps:sync": "node scripts/sync-map-images.mjs"
+    "maps:sync": "node scripts/sync-map-images.mjs",
+    "scenes:render": "node scripts/render-scene.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "6.9.5",
