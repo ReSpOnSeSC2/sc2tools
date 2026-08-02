@@ -44,6 +44,30 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Backdrop scene preview in Settings showed "SC2 Tools hit a critical
+  error"** — the preview framed the scene with `sandbox="allow-scripts"`,
+  which gives the framed document an opaque origin. Chrome makes
+  `navigator.serviceWorker` *throw* there rather than be absent, and the
+  usual `"serviceWorker" in navigator` guard still reports true, so the
+  service-worker registration in the root layout threw and took the
+  whole document down to the global error page. The preview now grants
+  `allow-same-origin` (it frames our own page; the sandbox still blocks
+  navigation, popups, forms and modals), and the registration survives
+  an unreadable `navigator.serviceWorker` anywhere it mounts. Overlay
+  routes now skip service-worker registration entirely — an OBS Browser
+  Source gains nothing from an app-shell cache and a stale shell is what
+  their no-store headers exist to prevent.
+
+- **Backdrop scenes no longer spin in `?demo=1`** — the sample countdown
+  was derived from `Date.now()` during render, so every render handed
+  the countdown effect a new deadline, which re-armed its timer and set
+  state again: ~50 timer re-arms a second, and a slow frame away from
+  React's "Maximum update depth exceeded". The demo countdown is now a
+  fixed sample value that arms no timer and polls no studio state,
+  which also keeps `scripts/render-scene.mjs` exports seamless — a
+  running clock would have differed between the loop's first and last
+  frame.
+
 - **Net MMR matchup coverage is now explicit** — race cards label each
   accepted replay-to-replay result as one measured game and now reconcile it
   against that race's complete filtered game count. Per-race and footer

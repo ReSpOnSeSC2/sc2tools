@@ -46,6 +46,21 @@ import {
 /** Countdown repaint cadence. 4 Hz is smooth enough for MM:SS. */
 const TICK_MS = 250;
 
+/**
+ * Sample countdown for ``?demo=1``. A frozen value, not a running
+ * clock, for two reasons:
+ *
+ *   - the Settings preview is captioned "sample values" — the real
+ *     number comes from the Stream Dock, and
+ *   - ``scripts/render-scene.mjs`` exports its seamless MP4 loop
+ *     through this same flag. A ticking clock would leave frame 0 and
+ *     frame N showing different digits and put a visible jump at the
+ *     loop seam.
+ *
+ * It also means demo mode arms no timer and schedules no repaints.
+ */
+const DEMO_COUNTDOWN_MS = 5 * 60_000;
+
 export function OverlaySceneClient({
   token,
   scene,
@@ -99,7 +114,9 @@ export function OverlaySceneClient({
     };
   }, [token, demo]);
 
-  const studio = useStudioState(token, studioEvent);
+  // Demo renders sample values and never consults the dock, so there
+  // is nothing for the studio poll to feed.
+  const studio = useStudioState(token, studioEvent, { enabled: !demo });
 
   // The dock's scene buttons win over the URL's variant: the streamer
   // pressed a button just now, and that is a more recent statement of
@@ -117,10 +134,15 @@ export function OverlaySceneClient({
     return race ? accentForRace(race) : DEFAULT_BACKDROP_ACCENT;
   }, [demo, liveGame?.opponent?.race, live?.oppRace]);
 
-  // Only tick while a countdown is actually on screen.
-  const countdownEndsAt = demo
-    ? Date.now() + 5 * 60_000
-    : (dockScene?.countdownEndsAt ?? null);
+  // Only a real dock countdown ticks, and only while it is on screen.
+  //
+  // Deriving this from ``Date.now()`` during a demo render would hand
+  // the effect below a brand-new deadline on every single render: it
+  // would tear down and re-arm the interval each time, call setState
+  // from the effect, and re-render — a self-feeding loop one slow
+  // frame away from React's "Maximum update depth exceeded". A
+  // constant is both correct for a sample value and cheap.
+  const countdownEndsAt = demo ? null : (dockScene?.countdownEndsAt ?? null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     if (countdownEndsAt == null) return;
@@ -129,8 +151,11 @@ export function OverlaySceneClient({
     return () => clearInterval(t);
   }, [countdownEndsAt]);
 
-  const countdownMs =
-    countdownEndsAt == null ? null : Math.max(0, countdownEndsAt - nowMs);
+  const countdownMs = demo
+    ? DEMO_COUNTDOWN_MS
+    : countdownEndsAt == null
+      ? null
+      : Math.max(0, countdownEndsAt - nowMs);
 
   return (
     <SC2BackdropScene

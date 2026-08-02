@@ -139,8 +139,21 @@ export function OverlayScenesSection({
               title="Scene preview"
               className="absolute inset-0 h-full w-full"
               /* Sample values only — the ?demo=1 flag. A real preview
-                 would need this tab to hold an overlay socket open. */
-              sandbox="allow-scripts"
+                 would need this tab to hold an overlay socket open.
+
+                 `allow-same-origin` is required, not optional. This
+                 frames our OWN page; without it the document gets an
+                 opaque origin, where reading localStorage, cookies or
+                 navigator.serviceWorker throws SecurityError. Any one
+                 of those throwing inside the root layout escalates to
+                 global-error and the preview renders as "SC2 Tools hit
+                 a critical error" instead of a backdrop.
+
+                 The sandbox still earns its place: with only these two
+                 flags the frame cannot navigate this tab away, open
+                 popups, submit forms, trigger downloads or pop modal
+                 dialogs over Settings. */
+              sandbox="allow-scripts allow-same-origin"
             />
           </div>
           <p className="text-caption text-text-muted">

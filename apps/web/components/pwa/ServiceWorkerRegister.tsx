@@ -7,6 +7,34 @@ import { RefreshCw } from "lucide-react";
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
+ * Read `navigator.serviceWorker` without trusting that reading it is
+ * safe — because it isn't.
+ *
+ * In a sandboxed iframe that lacks `allow-same-origin` the document
+ * has an opaque origin, and Chrome makes the *property access* throw
+ * `SecurityError: ... Service worker is disabled because the context
+ * is sandboxed`. The feature check everyone writes, `"serviceWorker"
+ * in navigator`, still returns true there — the property exists on
+ * Navigator.prototype, it's the getter that throws — so it does not
+ * protect the read that follows it.
+ *
+ * That matters far more than it looks: this component mounts in the
+ * ROOT layout, so a throw here escapes past app/error.tsx to
+ * global-error.tsx and replaces the entire document with "SC2 Tools
+ * hit a critical error". Settings embeds the overlay scene preview in
+ * exactly such an iframe, which is how that landed on a real page.
+ */
+function serviceWorkerContainer(): ServiceWorkerContainer | null {
+  if (typeof navigator === "undefined") return null;
+  try {
+    return navigator.serviceWorker ?? null;
+  } catch {
+    // Opaque origin, or storage/service workers disabled by policy.
+    return null;
+  }
+}
+
+/**
  * Registers /sw.js and surfaces an "Update available" prompt when a
  * new build's worker is parked in the `waiting` state (sw.js no longer
  * skipWaiting()s on its own — see the comment there). Accepting posts
@@ -14,9 +42,12 @@ const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
  * so a long-lived dashboard tab stops running week-old JavaScript
  * after deploys.
  *
- * The prompt NEVER renders on /overlay routes — those are OBS Browser
- * Sources composited onto a live stream; updates there apply silently
- * on the next scene load instead.
+ * /overlay routes opt out of the worker entirely — not just the
+ * prompt. Those are OBS Browser Sources composited onto a live stream:
+ * an app-shell cache buys them nothing, a stale shell is exactly what
+ * their `force-dynamic` / `no-store` headers exist to prevent, and an
+ * hourly update poll is pure overhead in a source that stays open for
+ * a whole broadcast.
  */
 export function ServiceWorkerRegister() {
   const pathname = usePathname();
@@ -29,28 +60,30 @@ export function ServiceWorkerRegister() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("serviceWorker" in navigator)) return;
+    if (isOverlay) return;
     if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
       return;
     }
+    const swc = serviceWorkerContainer();
+    if (!swc) return;
 
     let disposed = false;
     let interval: number | undefined;
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        void navigator.serviceWorker.getRegistration().then((r) => r?.update());
+        void swc.getRegistration().then((r) => r?.update());
       }
     };
     const onControllerChange = () => {
       if (applyRequested.current) window.location.reload();
     };
 
-    navigator.serviceWorker
+    swc
       .register("/sw.js", { scope: "/" })
       .then((reg) => {
         if (disposed) return;
         // A worker may already be parked from a previous visit.
-        if (reg.waiting && navigator.serviceWorker.controller) {
+        if (reg.waiting && swc.controller) {
           setWaiting(reg.waiting);
         }
         reg.addEventListener("updatefound", () => {
@@ -59,10 +92,7 @@ export function ServiceWorkerRegister() {
           installing.addEventListener("statechange", () => {
             // `installed` + an existing controller = an UPDATE (first
             // installs have no controller and need no prompt).
-            if (
-              installing.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
+            if (installing.state === "installed" && swc.controller) {
               setWaiting(reg.waiting ?? installing);
             }
           });
@@ -80,21 +110,15 @@ export function ServiceWorkerRegister() {
         // it just won't be installable on this device.
       });
 
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      onControllerChange,
-    );
+    swc.addEventListener("controllerchange", onControllerChange);
 
     return () => {
       disposed = true;
       if (interval) window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
-      navigator.serviceWorker.removeEventListener(
-        "controllerchange",
-        onControllerChange,
-      );
+      swc.removeEventListener("controllerchange", onControllerChange);
     };
-  }, []);
+  }, [isOverlay]);
 
   if (isOverlay || !waiting) return null;
 
