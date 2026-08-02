@@ -33,7 +33,7 @@ import sys
 import threading
 import urllib.parse
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from . import __version__
 from . import autostart
@@ -1753,6 +1753,26 @@ def _build_live_bridge(
     return lifecycle_bus, poller, bridge, fanout, metrics_logger
 
 
+def _effective_scene_map(state: AgentState) -> Dict[str, str]:
+    """The phase → scene map the switcher should actually run.
+
+    The GUI's Save always writes all six phase keys, so a user who
+    ticked the enable box without touching the dropdowns persists a
+    map of six empty strings. To the controller that is "configured:
+    never switch anything" — the whole feature silently does nothing
+    while the checkbox says on. A map with no real value in it is
+    indistinguishable from "never configured", so treat it the same
+    way ``AgentState.obs_scene_map`` documents the empty dict: use the
+    defaults. A map with at least one non-blank value is honoured
+    verbatim, blanks included — those are deliberate per-phase
+    "don't switch" choices.
+    """
+    stored = dict(state.obs_scene_map)
+    if any(v.strip() for v in stored.values()):
+        return stored
+    return dict(DEFAULT_SCENE_MAP)
+
+
 def _apply_obs_settings(
     state: AgentState,
     payload: SettingsPayload,
@@ -1798,15 +1818,39 @@ def _apply_obs_settings(
     controller = getattr(cell, "obs_scene", None)
     client = getattr(cell, "obs_client", None)
     if controller is None:
-        # Nothing running yet — the feature was off at boot. The new
-        # settings are saved and take effect on next start.
-        if state.obs_scene_switch_enabled:
+        # Nothing running yet — the feature was off at boot. If the
+        # user just switched it ON, build and start the switcher now:
+        # "Save, queue a game, nothing happened" was the old behaviour,
+        # because the enable used to silently require an agent restart.
+        if not state.obs_scene_switch_enabled:
+            return
+        bridge = getattr(cell, "live_bridge", None)
+        if bridge is None:
+            # --no-live, or the bridge failed to boot: no phase events
+            # exist to react to, so a restart (with live enabled) is
+            # genuinely required.
             log.info("obs_settings_saved_restart_required=true")
+            return
+        try:
+            client, controller = _build_obs_switcher(
+                state=state, bridge=bridge, log=log,
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("obs_switcher_late_build_failed")
+            return
+        if controller is None:
+            return
+        cell.obs_client = client
+        cell.obs_scene = controller
+        if client is not None:
+            client.start()
+        controller.start()
+        log.info("obs_scene_switch_started_from_settings")
         return
 
     try:
         controller.set_config(
-            scene_map=dict(state.obs_scene_map) or None,
+            scene_map=_effective_scene_map(state),
             enabled=state.obs_scene_switch_enabled,
             debounce_sec=state.obs_switch_debounce_sec,
             switch_on_replays=state.obs_switch_on_replays,
@@ -1957,7 +2001,8 @@ def _handle_obs_build(
         "ok": True,
         "message": (
             f"Created {len(created)} scene(s): {', '.join(created)}. "
-            "Pick them in the dropdowns below and Save. " + note
+            "They're selected in the dropdowns below — click Save to "
+            "turn on switching. " + note
         ).strip(),
         "scenes": client.scene_names or created,
     }
@@ -2030,7 +2075,7 @@ def _build_obs_switcher(
         or state.obs_password
         or None
     )
-    scene_map = dict(state.obs_scene_map) or dict(DEFAULT_SCENE_MAP)
+    scene_map = _effective_scene_map(state)
 
     # Built in two steps: the controller needs the client to issue
     # requests, and the client needs the controller's callback to

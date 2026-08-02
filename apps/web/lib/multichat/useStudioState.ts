@@ -219,11 +219,19 @@ export function sanitizeStudioState(raw: unknown): StudioState {
  * host client — applied whenever its identity changes. The periodic
  * refetch is a missed-event fallback only: a fetch result never
  * clobbers a socket payload that landed while it was in flight.
+ *
+ * ``options.enabled: false`` keeps the default state and skips the
+ * poll entirely, for callers that render sample values instead of
+ * live ones (``?demo=1``). Without it every open Settings tab would
+ * poll a token's studio state once a minute, forever, and throw the
+ * answer away.
  */
 export function useStudioState(
   token: string,
   studioEvent: unknown,
+  options?: { enabled?: boolean },
 ): StudioState & { loaded: boolean } {
+  const enabled = options?.enabled ?? true;
   const [state, setState] = useState<StudioState>(DEFAULT_STUDIO_STATE);
   const [loaded, setLoaded] = useState(false);
   // Wall-clock of the last applied socket payload — fetch results
@@ -231,6 +239,7 @@ export function useStudioState(
   const lastEventAtRef = useRef(0);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const load = async () => {
       const startedAt = Date.now();
@@ -255,7 +264,7 @@ export function useStudioState(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [token]);
+  }, [token, enabled]);
 
   useEffect(() => {
     if (!studioEvent || typeof studioEvent !== "object") return;
