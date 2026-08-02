@@ -44,6 +44,20 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **OBS auto scene switching actually switches now** — four fixes to
+  the agent-side switcher shipped in 0.15.9. Enabling the feature
+  without touching the scene dropdowns persisted six explicit "don't
+  switch" rows and silently disabled it (an all-blank map now falls
+  back to the default In Game / Between Games mapping, and the panel
+  shows that default instead of lying); scenes created by "Build my
+  scenes…" were invisible to the switcher's cached scene list until a
+  reconnect (it now re-reads the list before refusing, and the build
+  auto-fills the dropdowns); enabling from Settings needed a hidden
+  agent restart (Save now starts the switcher immediately); and every
+  auto-switch misclassified its own OBS echo as the streamer taking
+  manual control, logging bogus suppressions. Details in
+  `apps/agent/CHANGELOG.md`.
+
 - **Backdrop scene preview in Settings showed "SC2 Tools hit a critical
   error"** — the preview framed the scene with `sandbox="allow-scripts"`,
   which gives the framed document an opaque origin. Chrome makes

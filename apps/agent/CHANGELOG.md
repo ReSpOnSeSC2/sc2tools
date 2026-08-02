@@ -2,6 +2,44 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+### Fixed — OBS auto scene switching not switching
+Four defects in 0.15.9's scene switcher, each of which could read as
+"it just doesn't switch":
+
+- **Enabling the checkbox and saving without touching the dropdowns
+  disabled the feature.** The Settings form writes all six phase rows,
+  and every untouched row saves as "don't switch" — so the persisted
+  map was six blanks, which the switcher obeyed by never switching
+  anything. A map with no real value in it now means "unconfigured"
+  and falls back to the default In Game / Between Games mapping (the
+  behaviour the state file always documented for a missing map), both
+  live on Save and at the next boot for already-poisoned installs. The
+  Settings panel now shows that default mapping instead of a column of
+  "don't switch", so what the form displays is what actually runs.
+- **Scenes created by "Build my scenes…" were invisible to the
+  switcher until a reconnect.** The builder runs on its own throwaway
+  connection, and the long-running connection's scene-name cache is
+  filled once, at connect — so the switcher refused every switch with
+  ``obs_scene_missing`` for scenes that plainly existed. It now
+  re-reads the scene list once before refusing, which makes the cache
+  self-healing.
+- **Enabling from Settings silently required an agent restart.** With
+  the feature off at boot no switcher exists, and Save used to just
+  log ``restart_required``. Save now builds and starts the switcher on
+  the spot (when the Live Game Bridge is running).
+- **Every auto-switch counted itself as a manual override.** OBS
+  echoes ``CurrentProgramSceneChanged`` for our own switches on the
+  event socket, which routinely beats the request's response — so the
+  controller logged a bogus "manual hold" suppression per switch. The
+  target is now recorded before the request is issued (and rolled back
+  if it fails, so a failed switch is retried on the next tick).
+
+Also: after a successful "Build my scenes…", the still-blank dropdown
+rows are pointed at the scenes it just created, so the natural next
+click — Save — produces a working setup instead of six blanks.
+
 ## 0.15.9
 
 ### Added — automatic OBS scene switching

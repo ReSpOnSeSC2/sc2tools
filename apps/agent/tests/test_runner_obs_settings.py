@@ -143,6 +143,72 @@ def test_save_hot_applies_to_a_running_switcher() -> None:
     assert cfg["switch_on_replays"] is True
 
 
+def test_all_blank_scene_map_falls_back_to_the_defaults() -> None:
+    """The GUI's Save writes all six phase keys, so "enabled the
+    checkbox, never touched the dropdowns" used to persist six blanks
+    — which the controller read as "never switch anything". A map with
+    no real value in it means unconfigured, not opted out."""
+    from sc2tools_agent.live.obs_scene import DEFAULT_SCENE_MAP
+
+    controller = FakeController()
+    state = AgentState(obs_scene_switch_enabled=True)
+    _apply_obs_settings(
+        state,
+        SettingsPayload(
+            obs_scene_map={
+                "menu": "", "idle": "", "match_loading": "",
+                "match_started": "", "match_in_progress": "",
+                "match_ended": "",
+            },
+        ),
+        _cell(controller, FakeClient()),
+        _LOG,
+    )
+    assert controller.configs[0]["scene_map"] == DEFAULT_SCENE_MAP
+
+
+def test_partially_configured_map_keeps_explicit_blanks() -> None:
+    """One real value makes the map deliberate — its blanks are
+    per-phase "don't switch" choices and must survive verbatim."""
+    controller = FakeController()
+    state = AgentState(obs_scene_switch_enabled=True)
+    _apply_obs_settings(
+        state,
+        SettingsPayload(obs_scene_map={"menu": "Chill", "idle": ""}),
+        _cell(controller, FakeClient()),
+        _LOG,
+    )
+    assert controller.configs[0]["scene_map"] == {"menu": "Chill", "idle": ""}
+
+
+def test_boot_builder_treats_all_blank_map_as_unconfigured() -> None:
+    """Same rule at boot: an agent restarted with six persisted blanks
+    must come up running the default map, not a dead one."""
+    from sc2tools_agent.live.obs_scene import DEFAULT_SCENE_MAP
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    state = AgentState(
+        obs_scene_switch_enabled=True,
+        obs_scene_map={
+            "menu": "", "idle": "", "match_loading": "",
+            "match_started": "", "match_in_progress": "", "match_ended": "",
+        },
+    )
+    _, ctrl = _build_obs_switcher(
+        state=state, bridge=SimpleNamespace(bus=_Bus()), log=_LOG,
+    )
+    try:
+        assert ctrl is not None
+        assert ctrl._scene_map == DEFAULT_SCENE_MAP
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
 def test_scene_map_change_alone_does_not_drop_the_connection() -> None:
     """Reconnecting mid-stream because someone re-mapped a dropdown
     would be a needless blip."""
@@ -187,14 +253,53 @@ def test_changing_the_password_triggers_a_reconnect() -> None:
     assert len(client.reconfigures) == 1
 
 
-def test_save_without_a_running_controller_is_a_no_op() -> None:
-    """Turning the feature on for the first time saves and waits for a
-    restart rather than exploding on a missing controller."""
+def test_save_without_a_bridge_persists_and_waits_for_restart() -> None:
+    """With no live bridge in the cell (--no-live) there are no phase
+    events to react to — enabling saves and waits for a restart rather
+    than exploding on a missing controller."""
     state = AgentState()
+    cell = _cell()
     _apply_obs_settings(
-        state, SettingsPayload(obs_scene_switch_enabled=True), _cell(), _LOG,
+        state, SettingsPayload(obs_scene_switch_enabled=True), cell, _LOG,
     )
     assert state.obs_scene_switch_enabled is True
+    assert cell.obs_scene is None
+
+
+def test_enabling_from_settings_starts_the_switcher_live() -> None:
+    """Ticking the checkbox and clicking Save must produce a running
+    switcher, not a silent restart requirement — "save, queue a game,
+    nothing happens" was indistinguishable from the feature being
+    broken."""
+
+    class _Bus:
+        def __init__(self) -> None:
+            self.subscribed: List[Any] = []
+
+        def subscribe(self, cb: Any) -> None:
+            self.subscribed.append(cb)
+
+    bus = _Bus()
+    cell = SimpleNamespace(
+        obs_scene=None,
+        obs_client=None,
+        live_bridge=SimpleNamespace(bus=bus),
+    )
+    state = AgentState()
+    _apply_obs_settings(
+        state,
+        SettingsPayload(obs_scene_switch_enabled=True),
+        cell,
+        _LOG,
+    )
+    try:
+        assert cell.obs_scene is not None, "switcher must start on enable"
+        assert cell.obs_client is not None
+        assert cell.obs_client.started is True
+        assert bus.subscribed == [cell.obs_scene.listener]
+    finally:
+        if cell.obs_scene is not None:
+            cell.obs_scene.shutdown()
 
 
 def test_controller_failure_does_not_break_the_save() -> None:
@@ -230,7 +335,13 @@ class ProbeClient:
     def __init__(self, **kw: Any) -> None:
         self.kwargs = kw
         self.shutdown_called = False
+        self.started = False
         ProbeClient.instances.append(self)
+
+    def start(self) -> None:
+        # The late-build path in _apply_obs_settings starts the client
+        # it constructs; the probe/build handlers never call this.
+        self.started = True
 
     def connect_now(self) -> bool:
         if ProbeClient.connect_error:

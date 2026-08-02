@@ -58,23 +58,38 @@ class FakeClock:
 
 
 class FakeObs:
-    """Minimal stand-in for ``ObsClient``."""
+    """Minimal stand-in for ``ObsClient``.
+
+    ``scenes_after_refresh`` models the real client's stale cache:
+    ``scene_names`` is what connect-time caching saw, and a
+    ``refresh_scenes()`` call re-reads from OBS — which may know about
+    scenes created since (e.g. by the builder's separate connection).
+    """
 
     def __init__(
         self,
         *,
         scenes: Optional[List[str]] = None,
+        scenes_after_refresh: Optional[List[str]] = None,
         fail_with: Optional[BaseException] = None,
     ) -> None:
         self.scene_names = scenes if scenes is not None else [
             SCENE_IN_GAME,
             SCENE_BETWEEN_GAMES,
         ]
+        self._scenes_after_refresh = scenes_after_refresh
+        self.refresh_calls = 0
         self.calls: List[str] = []
         self.transitions: List[str] = []
         self.durations: List[int] = []
         self._fail_with = fail_with
         self._lock = threading.Lock()
+
+    def refresh_scenes(self) -> List[str]:
+        self.refresh_calls += 1
+        if self._scenes_after_refresh is not None:
+            self.scene_names = list(self._scenes_after_refresh)
+        return list(self.scene_names)
 
     def set_current_program_scene(self, name: str) -> None:
         if self._fail_with is not None:
@@ -353,6 +368,35 @@ def test_empty_scene_list_does_not_block_switching(controller_factory):
     assert _wait_for(lambda: obs.calls == [SCENE_IN_GAME])
 
 
+def test_scene_built_after_connect_is_found_via_refresh(controller_factory):
+    """"Build my scenes" runs on a separate throwaway connection, so
+    the long-running client's connect-time cache has never heard of
+    the scenes it created. The switcher must re-read the list before
+    refusing — otherwise it logs obs_scene_missing on every game until
+    OBS or the agent restarts."""
+    obs = FakeObs(
+        scenes=["Old Scene"],
+        scenes_after_refresh=["Old Scene", SCENE_IN_GAME, SCENE_BETWEEN_GAMES],
+    )
+    ctrl = controller_factory(client=obs, clock=FakeClock())
+
+    ctrl.listener(_envelope("match_loading"))
+    assert _wait_for(lambda: obs.calls == [SCENE_IN_GAME])
+    assert obs.refresh_calls == 1
+
+
+def test_genuinely_missing_scene_still_refuses_after_refresh(
+    controller_factory,
+):
+    obs = FakeObs(scenes=["Only Scene"], scenes_after_refresh=["Only Scene"])
+    ctrl = controller_factory(client=obs, clock=FakeClock())
+
+    ctrl.listener(_envelope("match_loading"))
+    time.sleep(0.15)
+    assert obs.calls == []
+    assert obs.refresh_calls >= 1
+
+
 # ---------------- manual override ----------------
 
 
@@ -394,6 +438,36 @@ def test_our_own_switch_does_not_trigger_the_manual_hold(controller_factory):
 
     ctrl.listener(_envelope("menu"))
     assert _wait_for(lambda: obs.calls[-1] == SCENE_BETWEEN_GAMES)
+    assert ctrl.suppressed == 0
+
+
+def test_echo_racing_the_request_is_not_manual(controller_factory):
+    """The echo arrives on the event socket and routinely lands BEFORE
+    the request's own response. Classifying that echo as the streamer
+    grabbing manual control armed a bogus hold and counted a
+    suppression on every single auto-switch."""
+
+    class RacingObs(FakeObs):
+        """Delivers the scene-changed event mid-request, the way the
+        real event thread can."""
+
+        controller: Any = None
+
+        def set_current_program_scene(self, name: str) -> None:
+            self.controller.on_program_scene_changed(name)
+            super().set_current_program_scene(name)
+
+    obs = RacingObs()
+    ctrl = controller_factory(client=obs, clock=FakeClock(), debounce_sec=0.0)
+    obs.controller = ctrl
+
+    ctrl.listener(_envelope("match_loading"))
+    assert _wait_for(lambda: obs.calls == [SCENE_IN_GAME])
+    assert ctrl.suppressed == 0, "own echo mistaken for a manual switch"
+
+    ctrl.listener(_envelope("menu"))
+    assert _wait_for(lambda: obs.calls[-1] == SCENE_BETWEEN_GAMES)
+    assert ctrl.suppressed == 0
 
 
 # ---------------- failure handling ----------------
@@ -422,6 +496,23 @@ def test_unexpected_request_error_does_not_kill_the_worker(
     ctrl.listener(_envelope("menu"))
     ctrl.listener(_envelope("match_loading"))
     assert _wait_for(lambda: ctrl.switches_ok >= 1)
+
+
+def test_failed_switch_is_retried_on_the_next_tick(controller_factory):
+    """A failed request must not leave the target recorded as applied
+    — edge-triggering compares against it, so a stale "applied" would
+    skip every retry and the scene would stay wrong all match."""
+    obs = FakeObs(fail_with=ObsUnavailable("not connected"))
+    ctrl = controller_factory(client=obs, clock=FakeClock())
+
+    ctrl.listener(_envelope("match_loading"))
+    assert _wait_for(lambda: ctrl.switches_failed == 1)
+    assert obs.calls == []
+
+    # OBS comes back; the next tick of the SAME phase must switch.
+    obs._fail_with = None
+    ctrl.listener(_envelope("match_in_progress"))
+    assert _wait_for(lambda: obs.calls == [SCENE_IN_GAME])
 
 
 def test_listener_never_raises_into_the_bridge():

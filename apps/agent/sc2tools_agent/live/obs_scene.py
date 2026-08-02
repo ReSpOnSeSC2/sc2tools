@@ -373,18 +373,19 @@ class ObsSceneController:
             self.switches_failed += 1
             return
 
-        known = client.scene_names
-        if known and scene not in known:
-            METRICS.incr("obs.switch.scene_missing")
-            if scene not in self._warned_missing:
-                self._warned_missing.add(scene)
-                _log.warning(
-                    "obs_scene_missing scene=%r phase=%s "
-                    "(configured scene does not exist in OBS)",
-                    scene,
-                    phase,
-                )
+        if not self._scene_exists(client, scene, phase=phase):
             return
+
+        # Record intent BEFORE issuing the request. obs-websocket
+        # delivers the CurrentProgramSceneChanged echo on a separate
+        # event socket, and it routinely lands before the request's
+        # response does — recording afterwards made
+        # ``on_program_scene_changed`` classify our own echo as the
+        # streamer grabbing manual control, so every auto-switch armed
+        # a manual hold and logged a bogus suppression.
+        with self._lock:
+            previous = self._last_applied_scene
+            self._last_applied_scene = scene
 
         started = time.monotonic()
         try:
@@ -394,6 +395,7 @@ class ObsSceneController:
             # OBS closed or the socket dropped. The client's connect
             # loop handles recovery; we just skip this transition
             # rather than queueing a stale one.
+            self._rollback_applied(scene, previous)
             METRICS.incr("obs.switch.error")
             self.switches_failed += 1
             _log.debug(
@@ -403,6 +405,7 @@ class ObsSceneController:
             )
             return
         except Exception:  # noqa: BLE001
+            self._rollback_applied(scene, previous)
             METRICS.incr("obs.switch.error")
             self.switches_failed += 1
             _log.warning(
@@ -417,8 +420,6 @@ class ObsSceneController:
         METRICS.observe_ms("obs.switch.latency", latency_ms)
         METRICS.incr("obs.switch.ok")
         self.switches_ok += 1
-        with self._lock:
-            self._last_applied_scene = scene
         _log.info(
             "obs_scene_switch phase=%s scene=%r reason=%s latency_ms=%.0f",
             phase,
@@ -426,6 +427,53 @@ class ObsSceneController:
             reason,
             latency_ms,
         )
+
+    def _scene_exists(self, client: Any, scene: str, *, phase: str) -> bool:
+        """Check the target against OBS's scene list, tolerating a
+        stale cache.
+
+        The client caches scene names once, at connect. "Build my
+        scenes" runs on a separate throwaway connection, so the scenes
+        it just created are invisible to the long-running client's
+        cache — and refusing on that stale answer meant the switcher
+        sat logging ``obs_scene_missing`` until the next reconnect.
+        One re-read before refusing makes the cache self-healing; the
+        cost is a single round-trip per transition in the (rare, and
+        already warned-about) genuinely-missing case.
+        """
+        known = client.scene_names
+        if not known or scene in known:
+            return True
+
+        refresh = getattr(client, "refresh_scenes", None)
+        if callable(refresh):
+            try:
+                known = refresh() or []
+            except Exception:  # noqa: BLE001
+                # Disconnected mid-check. Let the switch attempt run —
+                # it will land in the ObsUnavailable path, which is the
+                # accurate diagnosis.
+                return True
+            if not known or scene in known:
+                return True
+
+        METRICS.incr("obs.switch.scene_missing")
+        if scene not in self._warned_missing:
+            self._warned_missing.add(scene)
+            _log.warning(
+                "obs_scene_missing scene=%r phase=%s "
+                "(configured scene does not exist in OBS)",
+                scene,
+                phase,
+            )
+        return False
+
+    def _rollback_applied(self, scene: str, previous: Optional[str]) -> None:
+        """Undo the pre-request ``_last_applied_scene`` after a failed
+        switch — unless a manual change already moved it elsewhere."""
+        with self._lock:
+            if self._last_applied_scene == scene:
+                self._last_applied_scene = previous
 
     def _maybe_set_transition(self, client: Any) -> None:
         """Apply the configured transition, if the user set one.

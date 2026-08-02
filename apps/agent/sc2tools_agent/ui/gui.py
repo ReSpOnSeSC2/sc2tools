@@ -48,6 +48,14 @@ log = logging.getLogger(__name__)
 # ceiling — see the comment block there for why 12.
 from ..config import PARSE_CONCURRENCY_USEFUL_MAX as _PARSE_CONCURRENCY_USEFUL_MAX  # noqa: E402
 
+# The switcher's default phase → scene map. The settings panel shows it
+# whenever the user hasn't picked scenes themselves, so what the form
+# displays is what the running switcher will actually do (see
+# ``runner._effective_scene_map``) — and a Save round-trips it instead
+# of erasing it into six explicit "don't switch" rows. Import is safe
+# headless: ``live.obs_scene`` has no Qt dependency.
+from ..live.obs_scene import DEFAULT_SCENE_MAP as _OBS_DEFAULT_SCENE_MAP  # noqa: E402
+
 
 def can_use_gui() -> bool:
     """Whether PySide6 + a usable display are available.
@@ -1770,6 +1778,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 bool(initial.obs_switch_on_replays),
             )
             saved = dict(initial.obs_scene_map or {})
+            if not any(saved.values()):
+                # Nothing configured yet (fresh install, or a map of
+                # six blanks from an earlier Save). The switcher runs
+                # the default map in that case, so show the defaults —
+                # a panel full of "don't switch" here both lied about
+                # what would happen and, once saved, made it true by
+                # persisting the blanks over the defaults.
+                saved = dict(_OBS_DEFAULT_SCENE_MAP)
             for phase, combo in self._obs_scene_combos.items():
                 name = saved.get(phase) or ""
                 if not name:
@@ -2029,6 +2045,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             scenes = [str(x) for x in (result.get("scenes") or [])]
             if scenes:
                 self._repopulate_obs_scene_combos(scenes)
+            if result.get("kind") == "build":
+                # The user just built the two layouts; wire the still-
+                # blank rows to them so the natural next click — Save —
+                # produces a working switcher. Leaving this manual was
+                # a trap: Save with untouched dropdowns persisted six
+                # blanks, which disabled switching entirely.
+                self._autofill_obs_scene_combos()
+
+        def _autofill_obs_scene_combos(self) -> None:
+            """Point unset rows at the freshly built scenes.
+
+            Only rows still on "don't switch" are touched — a row the
+            user already mapped is their choice, build or no build —
+            and only when the target scene really exists in the
+            dropdown's just-refreshed list.
+            """
+            for phase, combo in self._obs_scene_combos.items():
+                if combo.currentData():
+                    continue
+                name = _OBS_DEFAULT_SCENE_MAP.get(phase) or ""
+                if not name:
+                    continue
+                idx = combo.findData(name)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
 
         def _repopulate_obs_scene_combos(self, scenes: list) -> None:
             """Refresh the dropdowns from the live scene list, keeping
