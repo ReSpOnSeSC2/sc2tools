@@ -6,6 +6,11 @@
  * dense: platform status dots up top, newest at the bottom with
  * auto-stick (scrolling up pauses the stick until you return).
  *
+ * The header doubles as the audience readout: each platform's live
+ * viewer count sits next to its status dot, and the combined total
+ * anchors the right edge. A count we can't read truthfully is simply
+ * absent — never a zero (see lib/multichat/useViewerCounts).
+ *
  * Per-message actions (hover on desktop, tap to reveal in the OBS
  * dock / on touch):
  *   - Highlight — pins the message on stream (studio state).
@@ -17,6 +22,11 @@
 import { useEffect, useRef, useState } from "react";
 import { fallbackColor } from "@/lib/multichat/feed";
 import { PLATFORM_META } from "@/components/overlay/widgets/MultiChatMessageList";
+import {
+  EMPTY_VIEWER_COUNTS,
+  formatViewers,
+  type ViewerCounts,
+} from "@/lib/multichat/useViewerCounts";
 import type {
   ChatMessage,
   ChatPlatform,
@@ -62,6 +72,7 @@ export function DockChat({
   statuses,
   blockedUsers,
   busy,
+  viewers = EMPTY_VIEWER_COUNTS,
   onHighlight,
   onBlock,
 }: {
@@ -73,10 +84,18 @@ export function DockChat({
   >;
   blockedUsers: ReadonlyArray<string>;
   busy: boolean;
+  /** Live audience per platform + combined; blank until it loads. */
+  viewers?: ViewerCounts;
   onHighlight: (message: ChatMessage) => void;
   onBlock: (user: string) => void;
 }) {
   const enabled = configuredPlatforms(platforms);
+  // Counts hang off the status row that's already there — no new
+  // chrome, no second strip to eat the dock's vertical budget.
+  const viewersByPlatform = new Map(
+    viewers.platforms.map((p) => [p.platform, p.viewers]),
+  );
+  const anyKnown = viewers.platforms.some((p) => p.viewers !== null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const stuckRef = useRef(true);
   // Tap-to-reveal actions (touch has no hover); keyed (platform:id).
@@ -119,7 +138,11 @@ export function DockChat({
 
   return (
     <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-surface">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border px-3 py-2">
+      {/* Status + audience share one wrapping row: tighter gaps keep
+          all four platforms plus the total inside two lines even at
+          OBS-dock width, and a wrapped line costs a hair of height
+          rather than a full row. */}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border px-3 py-2">
         <span className="text-micro font-bold uppercase tracking-widest text-accent-cyan">
           Live chat
         </span>
@@ -130,10 +153,11 @@ export function DockChat({
         ) : null}
         {enabled.map((p) => {
           const st = statuses[p]?.state ?? "connecting";
+          const count = viewersByPlatform.get(p) ?? null;
           return (
             <span
               key={p}
-              className="inline-flex items-center gap-1.5 text-micro text-text-muted"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-micro text-text-muted"
               title={statuses[p]?.detail || st}
             >
               <span
@@ -141,9 +165,38 @@ export function DockChat({
                 style={{ background: STATE_DOT[st] }}
               />
               {PLATFORM_META[p].label}
+              {/* Unknown counts render nothing at all — a placeholder
+                  dash in every row is the clutter this avoids. */}
+              {count !== null ? (
+                <span
+                  data-testid={`dock-viewers-${p}`}
+                  className="tabular-nums text-text"
+                  title={`${count.toLocaleString("en-US")} watching on ${PLATFORM_META[p].label}`}
+                >
+                  {formatViewers(count)}
+                </span>
+              ) : null}
             </span>
           );
         })}
+        {anyKnown ? (
+          <span
+            data-testid="dock-viewers-total"
+            className="ml-auto inline-flex items-baseline gap-1 whitespace-nowrap"
+            title={
+              viewers.partial
+                ? `${viewers.total.toLocaleString("en-US")} watching across the platforms we could reach — at least one didn't report`
+                : `${viewers.total.toLocaleString("en-US")} watching across all platforms`
+            }
+          >
+            <span className="tabular-nums text-caption font-semibold text-text">
+              {formatViewers(viewers.total)}
+            </span>
+            <span className="text-micro text-text-dim">
+              {viewers.partial ? "watching+" : "watching"}
+            </span>
+          </span>
+        ) : null}
       </div>
 
       <div

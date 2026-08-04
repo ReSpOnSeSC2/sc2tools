@@ -13,6 +13,22 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Live viewer counts in the Stream Dock** — the dock's chat header
+  now shows how many people each platform you're streaming to has
+  watching right now, next to the connection dot that's already there,
+  plus the combined audience across all of them on the right. Counts
+  come straight from the platforms — Twitch, Kick and YouTube are read
+  server-side (none of them allow a browser to ask directly), and
+  TikTok's number comes off the webcast connection the relay already
+  holds for chat.
+
+  A platform we can't get a truthful number from shows no number at
+  all rather than a misleading zero, and the total is marked
+  `watching+` when that happens, so "0 viewers" always means zero
+  viewers. Refreshes every 45 seconds, pauses while the dock is hidden,
+  and several open docks or Browser Sources share one lookup per
+  channel.
+
 - **Automatic OBS scene switching** — the desktop agent can now change
   OBS scenes on its own, using the game state it already tracks from
   StarCraft II's local client API. A match loading cuts to your
