@@ -28,6 +28,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import { useViewerCounts } from "@/lib/multichat/useViewerCounts";
 import {
   DEFAULT_STUDIO_STATE,
   sanitizeStudioState,
@@ -117,6 +118,9 @@ export function DockClient({ token }: { token: string }) {
     config: platforms,
   });
   useEngagementReporter(token, messages, events);
+  // Live audience size per platform + combined, read from the
+  // platforms server-side (they send no CORS headers).
+  const viewers = useViewerCounts(token);
   // Clip-moment log — boot summary + the hook's 60s refetch (the
   // dock has no overlay socket; a fresh spike shows on the next
   // refetch, which is fine for a post-stream shortlist).
@@ -274,6 +278,7 @@ export function DockClient({ token }: { token: string }) {
             statuses={statuses}
             blockedUsers={studio.blockedUsers}
             busy={busy}
+            viewers={viewers}
             onHighlight={(m) => void highlightMessage(m)}
             onBlock={(user) => void blockUser(user)}
           />

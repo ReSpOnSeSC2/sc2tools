@@ -29,6 +29,7 @@ const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
 const { MultichatEngagementService } = require("./services/multichatEngagement");
+const { MultichatViewersService } = require("./services/multichatViewers");
 const { TickerFactsService } = require("./services/tickerFacts");
 const { TwitchChatBotService } = require("./services/twitchChatBot");
 const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
@@ -303,6 +304,13 @@ function makeServices(deps) {
   const tiktokChatRelay = new TikTokChatRelay({ log: deps.logger });
   // Stream-studio state (highlight / poll / goals / recap) shared by
   // the dock and the multichat widget family, broadcast per token.
+  // Live viewer counts for the dock — TTL-cached per channel, and it
+  // reads TikTok's count off the relay connection above rather than
+  // opening a second one.
+  const multichatViewers = new MultichatViewersService({
+    tiktokRelay: tiktokChatRelay,
+    log: deps.logger,
+  });
   const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
   const multichatSounds = new MultichatSoundsService(deps.db);
   // users + overlayTokens let the service resolve the streamer's own
@@ -489,6 +497,7 @@ function makeServices(deps) {
     multichatStudio,
     multichatSounds,
     multichatEngagement,
+    multichatViewers,
     aggregations,
     macroReport,
     streak,
@@ -738,6 +747,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       studio: services.multichatStudio,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
+      viewers: services.multichatViewers,
       customBuilds: services.customBuilds,
       buildsList: (userId) => services.builds.list(userId, {}),
       tickerFacts: services.tickerFacts,

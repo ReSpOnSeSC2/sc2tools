@@ -42,6 +42,8 @@ const {
  *     (written by the Clerk-authed settings page via
  *     /v1/me/preferences/multichat).
  *   - kick/resolve: one-time slug → chatroom-id lookup at setup time.
+ *   - viewers: live per-platform viewer counts + the combined total,
+ *     read straight from the platforms (no CORS from the browser).
  *
  * @param {{
  *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null> },
@@ -50,6 +52,7 @@ const {
  *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   viewers?: import('../services/multichatViewers').MultichatViewersService,
  *   customBuilds?: { list: (userId: string) => Promise<Array<Record<string, any>>> },
  *   buildsList?: (userId: string) => Promise<Array<Record<string, any>>>,
  *   tickerFacts?: import('../services/tickerFacts').TickerFactsService,
@@ -184,6 +187,32 @@ function buildMultichatRouter(deps) {
             String(req.query.user ?? ""),
           ),
         );
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Live viewer counts: per platform + combined ──
+  // Reads the streamer's own platform config server-side, so the
+  // dock never has to hand channel names back over the wire. The
+  // service TTL-caches per channel, so several open surfaces polling
+  // together still cost the platforms one lookup per window.
+  router.get(
+    "/multichat/:token/viewers",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        if (!deps.viewers) {
+          res.json({ platforms: [], total: 0, partial: false, atMs: Date.now() });
+          return;
+        }
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        const prefs = await deps.users.getPreferences(userId, "multichat");
+        const config = sanitizeMultichatConfig(prefs);
+        res.json(await deps.viewers.forConfig(config));
       } catch (err) {
         next(err);
       }

@@ -96,6 +96,28 @@ class TikTokChatRelay {
   get size() {
     return this.channels.size;
   }
+
+  /**
+   * Latest live viewer count TikTok reported for a username, or null
+   * when this process holds no connected channel for it (nobody
+   * subscribed, or the stream is offline). Null means UNKNOWN — the
+   * caller must not render it as zero.
+   *
+   * @param {string} rawUsername
+   * @returns {number | null}
+   */
+  viewerCount(rawUsername) {
+    /** @type {string} */
+    let username;
+    try {
+      username = normalizeTikTokUsername(rawUsername);
+    } catch {
+      return null;
+    }
+    const channel = this.channels.get(username);
+    if (!channel || channel.state !== "connected") return null;
+    return channel.viewers;
+  }
 }
 
 /**
@@ -116,6 +138,13 @@ class Channel {
     this.listeners = new Set();
     /** @type {"connecting"|"connected"|"offline"|"ended"|"error"} */
     this.state = "connecting";
+    /**
+     * Latest viewer count from the webcast's `roomUser` frames, or
+     * null until TikTok sends the first one. Cleared on every
+     * (re)connect so a stale number can never outlive its stream.
+     * @type {number | null}
+     */
+    this.viewers = null;
     this.stopped = false;
     /** @type {any} */
     this.connection = null;
@@ -155,6 +184,9 @@ class Channel {
 
   async connectOnce() {
     if (this.stopped) return;
+    // A count from a previous connection describes a stream that is
+    // no longer on air — drop it before the new one reports.
+    this.viewers = null;
     this.emit({ type: "status", state: "connecting" });
     let connection;
     try {
@@ -188,11 +220,23 @@ class Channel {
         if (event) this.emit({ type: "event", event });
       });
     }
+    // `roomUser` is the webcast's viewer-count heartbeat — the live
+    // audience TikTok itself shows. Connector 2.x exposes it as
+    // `viewerCount`; the underlying protobuf field is `totalUser`.
+    // Accept both so a schema-path change can't silently freeze the
+    // number at whatever it last was.
+    connection.on("roomUser", (/** @type {Record<string, any>} */ data) => {
+      const raw = data?.viewerCount ?? data?.totalUser ?? data?.total;
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) this.viewers = Math.floor(n);
+    });
     connection.on("streamEnd", () => {
+      this.viewers = null;
       this.emit({ type: "status", state: "ended" });
       this.scheduleRetry(OFFLINE_RETRY_MS);
     });
     connection.on("disconnected", () => {
+      this.viewers = null;
       if (this.stopped || this.state === "ended") return;
       this.emit({ type: "status", state: "connecting" });
       this.scheduleRetry(DISCONNECT_RETRY_MS);
@@ -223,6 +267,7 @@ class Channel {
 
   stop() {
     this.stopped = true;
+    this.viewers = null;
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
