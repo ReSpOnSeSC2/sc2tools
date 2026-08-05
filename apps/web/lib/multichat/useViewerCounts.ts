@@ -32,7 +32,7 @@ export interface PlatformViewers {
 
 export interface ViewerCounts {
   platforms: PlatformViewers[];
-  /** Sum of the KNOWN per-platform counts. */
+  /** Sum of the KNOWN current per-platform counts; never lifetime views. */
   total: number;
   /** True when at least one configured platform reported unknown. */
   partial: boolean;
@@ -104,16 +104,24 @@ export function useViewerCounts(token: string): ViewerCounts {
 
   useEffect(() => {
     let cancelled = false;
+    let latestRequest = 0;
+    // Never carry one overlay token's audience into another token
+    // while the new request is loading.
+    setCounts(EMPTY_VIEWER_COUNTS);
     const load = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
+      const request = ++latestRequest;
       try {
         const res = await fetch(
           `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/viewers`,
           { cache: "no-store" },
         );
-        if (!res.ok || cancelled) return;
+        if (!res.ok || cancelled || request !== latestRequest) return;
         const body: unknown = await res.json();
-        if (cancelled) return;
+        // Visibility changes can start a fresh request before an older
+        // one finishes. Only the newest snapshot may reach the dock;
+        // otherwise a slow, larger response can replace a newer count.
+        if (cancelled || request !== latestRequest) return;
         setCounts(sanitizeViewerCounts(body));
       } catch {
         // Transient — keep showing the last good numbers and retry on
@@ -128,6 +136,7 @@ export function useViewerCounts(token: string): ViewerCounts {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      latestRequest += 1;
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };

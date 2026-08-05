@@ -5,10 +5,10 @@
  *
  * Distinct from the widget list above it: widgets are small
  * transparent panels the streamer positions individually, whereas
- * these fill the whole canvas and sit *behind* everything else. The
- * OBS setup advice is different enough (add at canvas size, pin to the
- * back, don't let it reload on activate) that mixing them into the
- * widget rows would bury it.
+ * these fill the whole canvas. Named backdrops sit behind the layout;
+ * the transparent-until-selected manual cover sits above it. The OBS
+ * setup advice is different enough that mixing them into the widget
+ * rows would bury it.
  */
 
 import { useState } from "react";
@@ -45,6 +45,11 @@ const SCENES: ReadonlyArray<SceneMeta> = [
     label: "Intermission",
     hint: "Neutral full-canvas card for breaks between series or segments.",
   },
+  {
+    id: "manual",
+    label: "Stream Dock manual override",
+    hint: "Transparent while Live; becomes Starting Soon or BRB when you press it in the Stream Dock. Put this at the very top of every scene your automatic switcher can select.",
+  },
 ];
 
 export function OverlayScenesSection({
@@ -63,7 +68,7 @@ export function OverlayScenesSection({
   return (
     <Section
       title="Full-screen scenes"
-      description="Animated StarCraft II backdrops for your Between Games, Starting Soon and BRB scenes. Add one as a full-canvas Browser Source and send it to the back."
+      description="Animated StarCraft II backdrops plus a transparent manual cover that keeps Stream Dock Starting Soon and BRB above automatic scene changes."
     >
       <Card>
         <div className="flex items-start gap-3 px-2 py-2 text-caption text-text-muted">
@@ -81,7 +86,10 @@ export function OverlayScenesSection({
             </a>{" "}
             can build the whole Between Games scene for you — big camera,
             chat column, game inset and this backdrop — and switch to it
-            automatically when a game ends. Look for{" "}
+            automatically when a game ends. It also puts the Stream Dock
+            manual cover above both generated layouts, so Starting Soon and
+            BRB stay on screen while the switcher changes scenes underneath.
+            Look for{" "}
             <strong className="text-text">OBS scene switching</strong> in
             the agent&apos;s Settings tab.
           </p>
@@ -192,9 +200,11 @@ export function OverlayScenesSection({
               your scene changes.
             </li>
             <li>
-              Right-click the source →{" "}
-              <strong className="text-text">Order → Send to Back</strong> so
-              your camera and chat sit on top of it.
+              For a named backdrop, choose{" "}
+              <strong className="text-text">Order → Send to Back</strong>.
+              For the <strong className="text-text">manual override</strong>,
+              add the same source to every automatically selected scene and
+              choose <strong className="text-text">Order → Bring to Front</strong>.
             </li>
           </ol>
           <p className="pt-1">

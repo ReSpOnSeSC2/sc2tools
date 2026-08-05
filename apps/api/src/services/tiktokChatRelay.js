@@ -221,14 +221,12 @@ class Channel {
       });
     }
     // `roomUser` is the webcast's viewer-count heartbeat — the live
-    // audience TikTok itself shows. Connector 2.x exposes it as
-    // `viewerCount`; the underlying protobuf field is `totalUser`.
-    // Accept both so a schema-path change can't silently freeze the
-    // number at whatever it last was.
+    // audience TikTok itself shows. Connector 2.x may expose that as
+    // normalized `viewerCount` or raw protobuf `total`. `totalUser` is
+    // cumulative unique viewers and must never appear as "watching
+    // now" in the dock.
     connection.on("roomUser", (/** @type {Record<string, any>} */ data) => {
-      const raw = data?.viewerCount ?? data?.totalUser ?? data?.total;
-      const n = Number(raw);
-      if (Number.isFinite(n) && n >= 0) this.viewers = Math.floor(n);
+      this.viewers = currentRoomViewerCount(data);
     });
     connection.on("streamEnd", () => {
       this.viewers = null;
@@ -276,6 +274,23 @@ class Channel {
     this.connection = null;
     this.listeners.clear();
   }
+}
+
+/**
+ * Read only fields known to mean the current concurrent audience.
+ * The normalized connector field takes precedence over its raw-proto
+ * equivalent, but an empty normalized field may fall through safely.
+ *
+ * @param {Record<string, any>} data
+ * @returns {number | null}
+ */
+function currentRoomViewerCount(data) {
+  for (const raw of [data?.viewerCount, data?.total]) {
+    if (raw === null || raw === undefined || raw === "") continue;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return null;
 }
 
 /** @param {any} connection */

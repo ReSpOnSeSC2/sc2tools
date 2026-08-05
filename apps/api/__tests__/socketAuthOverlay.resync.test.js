@@ -7,12 +7,12 @@
  *
  * The Browser Source's Socket.io client auto-reconnects after a
  * transient drop; on each (re-)connect the cloud must replay the
- * three current snapshots — ``overlay:liveGame`` (with synthetic
+ * four current snapshots — ``overlay:liveGame`` (with synthetic
  * prelude when the cached envelope is past the loading screen),
- * ``overlay:live``, and ``overlay:session`` — without an extra round
- * trip. The client also fires periodic ``overlay:heartbeat`` pings
- * the cloud answers with the current gameKey so the client can
- * detect a state drift.
+ * ``overlay:live``, ``overlay:session``, and the persisted Stream Dock
+ * ``overlay:multichat`` state — without an extra round trip. The client
+ * also fires periodic ``overlay:heartbeat`` pings the cloud answers
+ * with the current gameKey so the client can detect a state drift.
  */
 
 const {
@@ -143,7 +143,7 @@ describe("attachSocketAuth (overlay) — connect replay", () => {
 });
 
 describe("attachSocketAuth (overlay) — overlay:resync", () => {
-  test("re-emits all three current snapshots on demand", async () => {
+  test("re-emits all current snapshots on demand", async () => {
     const io = setupIo();
     const sessionCalls = [];
     let snap = {
@@ -152,6 +152,7 @@ describe("attachSocketAuth (overlay) — overlay:resync", () => {
       overlayLive: null,
       gameKey: "k1",
     };
+    let studio = { scene: null, updatedAt: "2026-08-04T12:00:00.000Z" };
     attachSocketAuth(io, {
       secretKey: "sk_test",
       resolveOverlayToken: async () => ({
@@ -164,6 +165,7 @@ describe("attachSocketAuth (overlay) — overlay:resync", () => {
         return { wins: 1, losses: 2, games: 3 };
       },
       resolveLiveSnapshot: () => snap,
+      resolveStudioState: async () => studio,
     });
     const socket = await io.runHandshake({
       auth: { overlayToken: "tok-1", timezone: "UTC" },
@@ -189,6 +191,15 @@ describe("attachSocketAuth (overlay) — overlay:resync", () => {
       overlayLive: { oppName: "Foe", gameKey: "k2" },
       gameKey: "k2",
     };
+    studio = {
+      scene: {
+        mode: "brb",
+        message: "Back soon",
+        countdownEndsAt: null,
+        setAtMs: 456,
+      },
+      updatedAt: "2026-08-04T12:01:00.000Z",
+    };
     socket.fire("overlay:resync");
     await new Promise((r) => setImmediate(r));
     expect(sessionCalls.length).toBe(initialSessionCalls + 1);
@@ -197,6 +208,11 @@ describe("attachSocketAuth (overlay) — overlay:resync", () => {
     expect(newEvents).toContain("overlay:liveGame");
     expect(newEvents).toContain("overlay:live");
     expect(newEvents).toContain("overlay:session");
+    expect(newEvents).toContain("overlay:multichat");
+    const studioEvent = newEmits.find(
+      (e) => e.event === "overlay:multichat",
+    );
+    expect(studioEvent.payload.scene.mode).toBe("brb");
     // Both prelude and envelope were emitted.
     const newLiveGameEmits = newEmits.filter(
       (e) => e.event === "overlay:liveGame",

@@ -21,6 +21,7 @@ import pytest
 from sc2tools_agent.live.obs_layout import (
     BETWEEN_GAMES_LAYOUT,
     IN_GAME_LAYOUT,
+    MANUAL_OVERRIDE_BROWSER_PATH,
     REF_HEIGHT,
     REF_WIDTH,
     SCENE_NAME_PREFIX,
@@ -29,7 +30,11 @@ from sc2tools_agent.live.obs_layout import (
     discover_sources,
     plan_scenes,
 )
-from sc2tools_agent.live.obs_scene import SCENE_BETWEEN_GAMES, SCENE_IN_GAME
+from sc2tools_agent.live.obs_scene import (
+    DEFAULT_SCENE_MAP,
+    SCENE_BETWEEN_GAMES,
+    SCENE_IN_GAME,
+)
 
 BASE_URL = "https://sc2tools.com"
 TOKEN = "tok123"
@@ -201,8 +206,40 @@ def test_plan_covers_both_scenes_with_the_expected_items() -> None:
         "Game inset",
         "Session stats",
         "Chat",
+        "Manual scene override",
     ]
-    assert [i.label for i in plan.scenes[1].items] == ["Game capture", "Webcam"]
+    assert [i.label for i in plan.scenes[1].items] == [
+        "Game capture",
+        "Webcam",
+        "Manual scene override",
+    ]
+
+
+def test_stream_dock_override_covers_every_auto_switch_target() -> None:
+    """Starting Soon / BRB is a manual broadcast choice, so every scene
+    the automatic switcher can select needs the transparent manual cover
+    above all of its normal content."""
+    plan = _plan(FakeObs())
+    planned_by_name = {scene.name: scene for scene in plan.scenes}
+
+    for target in set(DEFAULT_SCENE_MAP.values()):
+        scene = planned_by_name[target]
+        override = next(
+            item for item in scene.items
+            if item.label == "Manual scene override"
+        )
+        assert override.browser_path == (
+            f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+        )
+        assert override.rect.x == 0 and override.rect.y == 0
+        assert override.rect.w == plan.canvas_width
+        assert override.rect.h == plan.canvas_height
+        assert override.z == max(item.z for item in scene.items)
+        assert all(
+            override.z > item.z
+            for item in scene.items
+            if item is not override
+        )
 
 
 def test_between_games_puts_the_camera_above_the_game_inset() -> None:
@@ -243,7 +280,10 @@ def test_no_items_overlap_in_the_between_games_layout() -> None:
     """A camera clipped by the chat column would be shipped straight to
     someone's live stream."""
     between = _plan(FakeObs()).scenes[0]
-    boxes = [i for i in between.items if i.label != "SC2 backdrop"]
+    boxes = [
+        i for i in between.items
+        if i.label not in {"SC2 backdrop", "Manual scene override"}
+    ]
     for a in boxes:
         for b in boxes:
             if a is b:
@@ -296,13 +336,23 @@ def test_missing_sources_warn_rather_than_fail() -> None:
 
 def test_browser_urls_are_resolved_in_the_plan() -> None:
     """What the user confirms has to be literally what gets sent."""
-    between = _plan(FakeObs()).scenes[0]
+    plan = _plan(FakeObs())
+    between = plan.scenes[0]
     urls = {
         i.label: i.browser_path for i in between.items if i.browser_path
     }
     assert urls["SC2 backdrop"] == f"{BASE_URL}/overlay/{TOKEN}/scene/between-games"
     assert urls["Chat"] == f"{BASE_URL}/overlay/{TOKEN}/widget/multichat"
     assert urls["Session stats"] == f"{BASE_URL}/overlay/{TOKEN}/widget/session"
+    assert urls["Manual scene override"] == (
+        f"{BASE_URL}/overlay/{TOKEN}/scene/manual"
+    )
+
+    in_game = plan.scenes[1]
+    manual = next(
+        i for i in in_game.items if i.label == "Manual scene override"
+    )
+    assert manual.browser_path == f"{BASE_URL}/overlay/{TOKEN}/scene/manual"
 
 
 def test_plan_flags_existing_scenes_as_conflicts() -> None:
@@ -333,6 +383,50 @@ def test_build_reuses_existing_inputs_instead_of_duplicating_captures() -> None:
     # Nothing new was created for them.
     kinds = [i["kind"] for i in obs.created_inputs]
     assert set(kinds) == {"browser_source"}
+
+
+def test_manual_override_reuses_one_browser_input_in_both_scenes() -> None:
+    """The always-loaded cover must not double its CEF renderer, socket and
+    studio-state poll just because it is present in two layouts."""
+    obs = FakeObs()
+    build_scenes(obs, _plan(obs))
+
+    created = [
+        item for item in obs.created_inputs
+        if item["name"].startswith("SC2 Tools Manual Override")
+    ]
+    assert len(created) == 1
+    assert created[0]["scene"] == SCENE_BETWEEN_GAMES
+
+    reused = [
+        item for item in obs.created_items
+        if item["source"] == created[0]["name"]
+    ]
+    assert len(reused) == 1
+    assert reused[0]["scene"] == SCENE_IN_GAME
+    assert reused[0]["source"] == created[0]["name"]
+
+
+def test_shared_manual_override_uses_its_collision_safe_name() -> None:
+    obs = FakeObs(
+        inputs=[
+            {"name": "SC2 Tools Manual Override", "kind": "browser_source"},
+            {"name": "Logitech Brio", "kind": "dshow_input"},
+            {"name": "StarCraft II", "kind": "game_capture"},
+        ],
+    )
+    build_scenes(obs, _plan(obs))
+
+    created = next(
+        item for item in obs.created_inputs
+        if item["name"].startswith("SC2 Tools Manual Override")
+    )
+    assert created["name"] == "SC2 Tools Manual Override 2"
+    assert any(
+        item["scene"] == SCENE_IN_GAME
+        and item["source"] == "SC2 Tools Manual Override 2"
+        for item in obs.created_items
+    )
 
 
 def test_build_never_touches_pre_existing_scenes() -> None:
@@ -429,6 +523,20 @@ def test_z_order_is_applied_bottom_up() -> None:
     build_scenes(obs, _plan(obs))
     between = [i for i in obs.indexes if i["scene"] == SCENE_BETWEEN_GAMES]
     assert [i["index"] for i in between] == sorted(i["index"] for i in between)
+
+
+def test_missing_optional_sources_still_use_valid_contiguous_indexes() -> None:
+    obs = FakeObs()
+    plan = _plan(obs, webcam_source=None, game_source=None)
+    build_scenes(obs, plan)
+
+    for scene in plan.scenes:
+        indexes = [
+            item["index"]
+            for item in obs.indexes
+            if item["scene"] == scene.name
+        ]
+        assert indexes == list(range(len(indexes)))
 
 
 def test_build_without_the_in_game_scene() -> None:

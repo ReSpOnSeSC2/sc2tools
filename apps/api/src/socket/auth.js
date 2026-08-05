@@ -33,6 +33,8 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     (one-shot on connect / resync).
  *   * ``overlay:session`` — today's W-L aggregate (one-shot on
  *     connect / set_timezone / resync).
+ *   * ``overlay:multichat`` — persisted Stream Dock state (one-shot on
+ *     connect / resync, with live updates broadcast elsewhere).
  *   * ``overlay:liveGame`` — replayed once on overlay connect /
  *     resync from ``LiveGameBroker.replayLatestForOverlay``;
  *     prepended by a ``synthetic: true`` ``match_loading`` prelude
@@ -70,6 +72,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *   }>,
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
+ *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
  *     envelope?: object|null,
@@ -242,6 +245,13 @@ function attachSocketAuth(io, opts) {
           })
           .catch(() => {});
       }
+      // Stream Dock state normally arrives as a live socket broadcast. Replay
+      // its persisted snapshot on every Browser Source connection as well, so
+      // a source that was offline when Starting Soon / BRB (or Go live) was
+      // pressed cannot reveal stale content until the next safety poll.
+      if (t && opts.resolveStudioState) {
+        replayOverlayStudioState(socket, opts.resolveStudioState, t);
+      }
       // Replay the latest live state to the freshly-connected overlay.
       // Without this, a Browser Source that reconnects mid-match
       // (transient network blip; OBS scene swap; Streamlabs page
@@ -302,6 +312,9 @@ function attachSocketAuth(io, opts) {
         }
         if (opts.resolveLiveSnapshot) {
           replayOverlayLiveSnapshot(socket, opts.resolveLiveSnapshot, userId);
+        }
+        if (t && opts.resolveStudioState) {
+          replayOverlayStudioState(socket, opts.resolveStudioState, t);
         }
       });
       // 30-second heartbeat the client uses to detect when its cached
@@ -430,6 +443,29 @@ function replayOverlayLiveSnapshot(socket, resolveLiveSnapshot, userId) {
       /* defensive — see above */
     }
   }
+}
+
+/**
+ * Replay the current Stream Dock snapshot without blocking or failing the
+ * socket connection. The live broadcast remains the fast path; this closes
+ * the gap when a Browser Source reconnects after missing a manual scene
+ * change.
+ *
+ * @param {{emit: (event: string, payload: unknown) => unknown}} socket
+ * @param {(token: string) => Promise<Record<string, unknown> | null>} resolveStudioState
+ * @param {string} token
+ */
+function replayOverlayStudioState(socket, resolveStudioState, token) {
+  Promise.resolve()
+    .then(() => resolveStudioState(token))
+    .then((state) => {
+      if (!state || typeof state !== "object") return;
+      socket.emit("overlay:multichat", state);
+    })
+    .catch(() => {
+      // The client's GET + slow poll remain as a fallback. Studio state must
+      // never make an otherwise healthy overlay socket fail to connect.
+    });
 }
 
 module.exports = { attachSocketAuth, RESYNC_MIN_INTERVAL_MS };

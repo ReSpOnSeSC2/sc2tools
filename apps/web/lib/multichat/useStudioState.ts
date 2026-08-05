@@ -12,7 +12,7 @@
 // widgets must render safely even if a hostile payload reaches the
 // socket room.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { CHAT_PLATFORMS, type ChatPlatform } from "./types";
 
@@ -234,15 +234,59 @@ export function useStudioState(
   const enabled = options?.enabled ?? true;
   const [state, setState] = useState<StudioState>(DEFAULT_STUDIO_STATE);
   const [loaded, setLoaded] = useState(false);
-  // Wall-clock of the last applied socket payload — fetch results
-  // started before this stamp are stale and dropped.
-  const lastEventAtRef = useRef(0);
+  // Ordering guards for the three paths that can deliver the same snapshot:
+  // initial/periodic GET, live socket broadcast, and socket connect replay.
+  // Local sequences make same-millisecond fetch/event races deterministic;
+  // updatedAt stops a delayed replay overwriting a newer live Dock action.
+  const socketSequenceRef = useRef(0);
+  const fetchSequenceRef = useRef(0);
+  // ``applySnapshot`` changes identity when the token changes. Without a
+  // separate event-identity guard, React would rerun the socket effect and
+  // apply the previous token's last event to the new token. Do not reset this
+  // ref in the token effect: an unchanged event is, by definition, stale.
+  const lastStudioEventRef = useRef<unknown>(null);
+  const latestServerUpdateRef = useRef<{
+    token: string;
+    atMs: number;
+  } | null>(null);
+
+  const applySnapshot = useCallback((raw: unknown): boolean => {
+    const next = sanitizeStudioState(raw);
+    const parsedUpdate = next.updatedAt ? Date.parse(next.updatedAt) : NaN;
+    const serverUpdate = Number.isFinite(parsedUpdate) ? parsedUpdate : null;
+    const latest = latestServerUpdateRef.current?.token === token
+      ? latestServerUpdateRef.current.atMs
+      : null;
+    // Once a timestamped state is live, an unversioned snapshot cannot prove
+    // it is newer. This matters when a connect replay began before the first
+    // ever Dock write and returns the old, empty document afterwards.
+    if (latest !== null && (serverUpdate === null || serverUpdate <= latest)) {
+      return false;
+    }
+    if (serverUpdate !== null) {
+      latestServerUpdateRef.current = { token, atMs: serverUpdate };
+    }
+    setState(next);
+    return true;
+  }, [token]);
+
+  useEffect(() => {
+    // A route-level token normally never changes, but Settings previews and
+    // tests can reuse the hook instance. Never carry one streamer's scene or
+    // ordering watermark into another token while its first snapshot loads.
+    latestServerUpdateRef.current = null;
+    socketSequenceRef.current += 1;
+    fetchSequenceRef.current += 1;
+    setState(DEFAULT_STUDIO_STATE);
+    setLoaded(false);
+  }, [token]);
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     const load = async () => {
-      const startedAt = Date.now();
+      const fetchSequence = ++fetchSequenceRef.current;
+      const socketSequence = socketSequenceRef.current;
       try {
         const res = await fetch(
           `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/studio`,
@@ -250,12 +294,18 @@ export function useStudioState(
         );
         if (!res.ok) return;
         const body: unknown = await res.json();
-        if (cancelled || lastEventAtRef.current > startedAt) return;
-        setState(sanitizeStudioState(body));
+        if (
+          cancelled
+          || fetchSequence !== fetchSequenceRef.current
+          || socketSequence !== socketSequenceRef.current
+        ) return;
+        applySnapshot(body);
       } catch {
         /* transient — next tick retries */
       } finally {
-        if (!cancelled) setLoaded(true);
+        if (!cancelled && fetchSequence === fetchSequenceRef.current) {
+          setLoaded(true);
+        }
       }
     };
     void load();
@@ -264,14 +314,16 @@ export function useStudioState(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [token, enabled]);
+  }, [token, enabled, applySnapshot]);
 
   useEffect(() => {
+    if (Object.is(lastStudioEventRef.current, studioEvent)) return;
+    lastStudioEventRef.current = studioEvent;
     if (!studioEvent || typeof studioEvent !== "object") return;
-    lastEventAtRef.current = Date.now();
-    setState(sanitizeStudioState(studioEvent));
+    socketSequenceRef.current += 1;
+    applySnapshot(studioEvent);
     setLoaded(true);
-  }, [studioEvent]);
+  }, [studioEvent, applySnapshot]);
 
   return { ...state, loaded };
 }

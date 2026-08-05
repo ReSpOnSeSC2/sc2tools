@@ -727,6 +727,9 @@ def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
                 "column, small game inset and the SC2 backdrop.\n"
                 "  • SC2 Tools — In Game: game full-screen with the "
                 "camera tucked in the corner.\n\n"
+                "Both scenes include a topmost Stream Dock cover. It is "
+                "transparent during normal play, then displays Starting "
+                "Soon or BRB above either layout when you select one.\n\n"
                 "Your existing scenes are not touched. Both use the "
                 "sources you pick below — the same capture, not a "
                 "second copy, so there is no extra CPU cost."
@@ -1893,8 +1896,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._obs_build_btn.setToolTip(
                 "Create a Between Games scene (big camera, chat column, "
                 "small game inset, SC2 backdrop) and an In Game scene "
-                "from the sources you already have. Your existing "
-                "scenes are never modified.",
+                "from the sources you already have. Both get a topmost "
+                "Stream Dock cover so Starting Soon and BRB override "
+                "automatic switches. Your existing scenes are never "
+                "modified.",
             )
             self._obs_build_btn.setEnabled(False)
             self._obs_build_btn.clicked.connect(self._click_obs_build)

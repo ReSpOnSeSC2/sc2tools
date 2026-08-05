@@ -11,9 +11,9 @@
  *   - stash the timezone on ``socket.data.timezone`` so subsequent
  *     session-aggregate emits anchor "today" to the streamer's wall
  *     clock
- *   - on connect, push the per-token enabled-widgets config and the
- *     today's-session aggregate so the panel is populated before any
- *     ``overlay:live`` payload arrives
+ *   - on connect, push the per-token enabled-widgets config, today's
+ *     session aggregate, and persisted Stream Dock state so Browser
+ *     Sources are populated before another live payload arrives
  */
 
 const { attachSocketAuth } = require("../src/socket/auth");
@@ -169,6 +169,64 @@ describe("attachSocketAuth (overlay)", () => {
 
     expect(sessionCalls).toHaveLength(1);
     expect(sessionCalls[0]).toEqual(["u1", "America/Los_Angeles"]);
+  });
+
+  test("on connect, replays Stream Dock state for manual scene safety", async () => {
+    const io = setupIo();
+    const studio = {
+      scene: {
+        mode: "starting",
+        message: "Stream begins shortly",
+        countdownEndsAt: null,
+        setAtMs: 123,
+      },
+      updatedAt: "2026-08-04T12:00:00.000Z",
+    };
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({
+        userId: "u1",
+        label: "test",
+        enabledWidgets: [],
+      }),
+      resolveStudioState: async (token) => {
+        expect(token).toBe("tok-1");
+        return studio;
+      },
+    });
+    const socket = await io.runHandshake({
+      auth: { overlayToken: "tok-1" },
+    });
+    io.runConnect(socket);
+    await new Promise((r) => setImmediate(r));
+
+    const event = socket.emitted.find(
+      (entry) => entry.event === "overlay:multichat",
+    );
+    expect(event?.payload).toEqual(studio);
+  });
+
+  test("a studio snapshot failure never rejects the overlay connection", async () => {
+    const io = setupIo();
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({
+        userId: "u1",
+        label: "test",
+        enabledWidgets: [],
+      }),
+      resolveStudioState: async () => {
+        throw new Error("transient studio read failure");
+      },
+    });
+    const socket = await io.runHandshake({
+      auth: { overlayToken: "tok-1" },
+    });
+    expect(() => io.runConnect(socket)).not.toThrow();
+    await new Promise((r) => setImmediate(r));
+    expect(
+      socket.emitted.some((entry) => entry.event === "overlay:multichat"),
+    ).toBe(false);
   });
 
   test("overlay:set_timezone refreshes the cached tz and re-emits the session", async () => {

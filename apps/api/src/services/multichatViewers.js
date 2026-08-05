@@ -95,6 +95,61 @@ function toViewerCount(raw) {
 }
 
 /**
+ * Parse the JSON object beginning at `openBrace` without letting a
+ * neighbouring renderer's fields leak into the match. YouTube embeds
+ * these renderers as JSON inside the watch-page response.
+ *
+ * @param {string} source
+ * @param {number} openBrace
+ * @returns {Record<string, any> | null}
+ */
+function parseEmbeddedJsonObject(source, openBrace) {
+  if (source[openBrace] !== "{") return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = openBrace; i < source.length; i += 1) {
+    const char = source[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(source.slice(openBrace, i + 1));
+          return parsed && typeof parsed === "object" ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** @param {Record<string, any>} renderer @returns {string} */
+function youtubeViewCountLabel(renderer) {
+  const viewCount = renderer?.viewCount;
+  if (typeof viewCount?.simpleText === "string") return viewCount.simpleText;
+  if (!Array.isArray(viewCount?.runs)) return "";
+  return viewCount.runs
+    .map((/** @type {Record<string, any>} */ run) =>
+      typeof run?.text === "string" ? run.text : "",
+    )
+    .join("");
+}
+
+/**
  * Pull the concurrent-viewer figure out of a YouTube watch page.
  *
  * The live watch page embeds
@@ -103,8 +158,9 @@ function toViewerCount(raw) {
  *   "originalViewCount":"1200"}}`
  * — `originalViewCount` is the unformatted concurrent count. The
  * rendered runs are the locale-formatted fallback for when YouTube
- * omits it. A renderer without `"isLive":true` is a finished stream
- * (its number is lifetime views, not viewers) and reports null.
+ * omits it. Both `"isLive":true` and the same renderer's visible
+ * "watching now" label are required; otherwise its number may be
+ * lifetime views and reports null.
  *
  * @param {string} html
  * @returns {number | null}
@@ -116,19 +172,26 @@ function extractConcurrentViewers(html) {
   // string appears BEFORE the actual renderer in the document.
   const opens = html.matchAll(/"videoViewCountRenderer"\s*:\s*\{/g);
   for (const open of opens) {
-    // Bounded slice: the renderer is small, and scanning the whole
-    // ~1MB page would happily match another renderer's numbers.
-    const slice = html.slice(open.index, open.index + 600);
-    if (!/"isLive"\s*:\s*true/.test(slice)) continue;
-    const exact = slice.match(/"originalViewCount"\s*:\s*"?(\d+)"?/);
-    if (exact) return toViewerCount(exact[1]);
-    // Locale-formatted fallback: `"runs":[{"text":"1,200"},
-    // {"text":" watching now"}]`.
-    const runs = slice.match(
-      /"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"([\d,.\s ]+)"/,
-    );
-    if (runs) {
-      const n = toViewerCount(runs[1].replace(/[.\s ]/g, ""));
+    const brace = html.indexOf("{", open.index);
+    const renderer = parseEmbeddedJsonObject(html, brace);
+    if (!renderer || renderer.isLive !== true) continue;
+
+    // `isLive` only says the VIDEO is live. When a streamer hides the
+    // concurrent audience, YouTube can still put the video's lifetime
+    // views in this renderer. The visible label is the semantic guard:
+    // never accept `originalViewCount` unless this exact object says
+    // the figure is "watching now".
+    const label = youtubeViewCountLabel(renderer);
+    if (!/\bwatching now\b/i.test(label)) continue;
+
+    const exact = toViewerCount(renderer.originalViewCount);
+    if (exact !== null) return exact;
+
+    // Locale-formatted fallback, e.g. "1,200 watching now". Page
+    // headers request English, so requiring that label is deliberate.
+    const visible = label.match(/([\d][\d,.\s\u00a0]*)\s+watching now\b/i);
+    if (visible) {
+      const n = toViewerCount(visible[1].replace(/[.\s\u00a0]/g, ""));
       if (n !== null) return n;
     }
   }
@@ -163,9 +226,10 @@ class MultichatViewersService {
    * absent from the result entirely — the dock only shows what the
    * streamer actually runs.
    *
-   * `total` sums the KNOWN counts only, so a blocked Kick lookup
-   * understates the total rather than poisoning it with a guess;
-   * `partial` tells the UI that happened.
+   * `total` sums the KNOWN current snapshots only — it is the combined
+   * concurrent audience, never an accumulated/lifetime count. A
+   * blocked Kick lookup understates it rather than poisoning it with
+   * a guess; `partial` tells the UI that happened.
    *
    * @param {Record<string, any> | null | undefined} config
    * @returns {Promise<{ platforms: PlatformViewers[], total: number,
@@ -309,7 +373,9 @@ class MultichatViewersService {
     if (!live || live.is_live === false) {
       return { platform: "kick", viewers: 0, live: false };
     }
-    const viewers = toViewerCount(live.viewer_count ?? live.viewers);
+    // `viewer_count` is the endpoint's concurrent audience. Do not
+    // guess from other similarly named fields if it is absent.
+    const viewers = toViewerCount(live.viewer_count);
     return { platform: "kick", viewers, live: viewers !== null };
   }
 

@@ -96,6 +96,11 @@ describe("demo mode", () => {
     ).toBe("intermission");
     expect(screen.getByText("INTERMISSION")).toBeTruthy();
   });
+
+  it("previews the otherwise-transparent manual cover as Starting Soon", () => {
+    render(<OverlaySceneClient token="tok" scene="manual" demo />);
+    expect(screen.getByText("STARTING SOON")).toBeTruthy();
+  });
 });
 
 describe("live mode", () => {
@@ -110,4 +115,46 @@ describe("live mode", () => {
     expect(screen.getByText("BE RIGHT BACK")).toBeTruthy();
     expect(screen.queryByText(/^\d\d:\d\d$/)).toBeNull();
   });
+
+  it("keeps the manual cover fully transparent while the dock is Live", () => {
+    const { container } = render(
+      <OverlaySceneClient token="tok" scene="manual" />,
+    );
+    expect(container.querySelector(".sc2bd")).toBeNull();
+    expect(
+      container.querySelector('[data-variant="manual-inactive"]'),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    ["starting", "STARTING SOON"],
+    ["brb", "BE RIGHT BACK"],
+  ] as const)(
+    "makes the manual cover opaque when the dock selects %s",
+    async (mode, headline) => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          scene: {
+            mode,
+            message: "Manual break",
+            countdownEndsAt: null,
+            setAtMs: Date.now(),
+          },
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+
+      const { container } = render(
+        <OverlaySceneClient token="tok" scene="manual" />,
+      );
+
+      expect(await screen.findByText(headline)).toBeTruthy();
+      expect(screen.getByText("Manual break")).toBeTruthy();
+      expect(container.querySelector(".sc2bd")).toBeTruthy();
+      expect(
+        container.querySelector('[data-variant="manual-inactive"]'),
+      ).toBeNull();
+    },
+  );
 });

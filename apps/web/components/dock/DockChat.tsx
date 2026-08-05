@@ -171,7 +171,7 @@ export function DockChat({
                 <span
                   data-testid={`dock-viewers-${p}`}
                   className="tabular-nums text-text"
-                  title={`${count.toLocaleString("en-US")} watching on ${PLATFORM_META[p].label}`}
+                  title={`${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}`}
                 >
                   {formatViewers(count)}
                 </span>
@@ -185,15 +185,15 @@ export function DockChat({
             className="ml-auto inline-flex items-baseline gap-1 whitespace-nowrap"
             title={
               viewers.partial
-                ? `${viewers.total.toLocaleString("en-US")} watching across the platforms we could reach — at least one didn't report`
-                : `${viewers.total.toLocaleString("en-US")} watching across all platforms`
+                ? `${viewers.total.toLocaleString("en-US")} currently watching across the platforms we could reach — at least one didn't report`
+                : `${viewers.total.toLocaleString("en-US")} currently watching across all platforms`
             }
           >
             <span className="tabular-nums text-caption font-semibold text-text">
               {formatViewers(viewers.total)}
             </span>
             <span className="text-micro text-text-dim">
-              {viewers.partial ? "watching+" : "watching"}
+              {viewers.partial ? "watching now+" : "watching now"}
             </span>
           </span>
         ) : null}

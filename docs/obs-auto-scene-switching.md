@@ -109,6 +109,14 @@ phases a real match does. Off by default, toggleable.
 initiate parks auto-switching until the next *phase change* — not a
 timer, which would either fight the streamer or give up too early.
 
+**Stream Dock cards stay above automatic switches.** Starting Soon and
+BRB are visual overrides rather than program-scene changes. The builder
+places one shared, full-canvas Browser Source at the top of both generated
+scenes. It is completely transparent during Go Live, then paints the
+selected card above whichever layout the phase switcher selects underneath.
+That lets the switcher keep the underlying scene current without ever
+pulling a manually selected card off air.
+
 ## 5. The layouts
 
 Geometry is authored against a 1920×1080 reference and scaled by
@@ -125,19 +133,23 @@ fill their box without the builder knowing which is plugged in.
 | Game capture inset | 48 | 760 | 484 | 272 | 2 |
 | Session stats (browser) | 556 | 760 | 716 | 272 | 3 |
 | Chat (browser) | 1320 | 48 | 552 | 984 | 4 |
+| Stream Dock manual override (browser) | 0 | 0 | 1920 | 1080 | 5 |
 
 Big camera and a full-height chat column dominate. The game inset is
 small but stays legible enough to read a matchmaking screen — which is
 the entire reason it is on screen.
 
-The three browser panels point at the user's own overlay URLs:
+The browser panels point at the user's own overlay URLs:
 `/overlay/<token>/scene/between-games`, `/overlay/<token>/widget/session`
 and `/overlay/<token>/widget/multichat`. The latter two are existing
-widgets, reused.
+widgets, reused. The top cover points at
+`/overlay/<token>/scene/manual`; it is transparent unless Starting Soon
+or BRB is selected in the Stream Dock.
 
 ### SC2 Tools — In Game
 
-Game capture full canvas, webcam at 304×171 bottom-right.
+Game capture full canvas, webcam at 304×171 bottom-right, and the shared
+Stream Dock manual override full canvas at the very top.
 
 A streamer who already has a gameplay scene they like can skip this
 half entirely and point the phase map at their own scene.
@@ -164,6 +176,17 @@ chat text rasterises crisply instead of being scaled up), with
 `shutdown` and `restart_when_active` both **off**: a source that
 reloads when its scene activates would flash on air every time the
 switcher fires, which is many times a session.
+
+The builder creates the manual override Browser Source once and adds the
+same OBS input to both generated scenes. This keeps one connection and one
+piece of state behind both scene items. Existing generated scenes are never
+silently edited; after upgrading, run **Build my scenes…** with **Replace
+them if they already exist** checked to add the cover.
+
+For custom phase-mapped scenes, add
+`/overlay/<token>/scene/manual` as a 1920×1080 Browser Source (or your
+canvas size), reuse that same input in every mapped scene, and place it at
+the very top of each scene's source list.
 
 ## 7. Setup
 
@@ -273,14 +296,17 @@ Run before merging anything that touches this path.
 7. Alt-tab to the desktop mid-game → **no** switch.
 8. Game ends → holds on the score screen, then cuts to Between Games
    when you return to the menu.
-9. Queue again → the inset shows the matchmaking screen; session stats
+9. Select Starting Soon in the Stream Dock, then cross a match phase →
+   the card stays visible while OBS switches underneath. Repeat for BRB;
+   press Go Live and confirm the correctly switched layout is revealed.
+10. Queue again → the inset shows the matchmaking screen; session stats
    show real W/L and MMR.
-10. Play back a saved replay → **no** switch fires.
-11. Manually switch to a third scene mid-game → auto-switching holds
+11. Play back a saved replay → **no** switch fires.
+12. Manually switch to a third scene mid-game → auto-switching holds
     until the next phase change, with a `suppressed_manual` line.
-12. Force-quit OBS mid-stream → backoff logged, no crash, reconnects
+13. Force-quit OBS mid-stream → backoff logged, no crash, reconnects
     when OBS returns.
-13. Sit on Between Games for 10 minutes with OBS's Stats dock open:
+14. Sit on Between Games for 10 minutes with OBS's Stats dock open:
     CPU inside budget, render lag and skipped frames both 0.
 
 ## 12. Out of scope

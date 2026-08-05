@@ -124,6 +124,10 @@ class PlannedItem:
     source_name: Optional[str] = None
     browser_path: Optional[str] = None
     input_name: Optional[str] = None
+    # Browser items carrying the same explicit key share one OBS input and
+    # get separate scene-item references. No key means always create a
+    # distinct input, even if two labels happen to request the same name.
+    share_key: Optional[str] = None
 
 
 @dataclass
@@ -177,6 +181,13 @@ IN_GAME_LAYOUT: Dict[str, Rect] = {
     "game": Rect(0, 0, REF_WIDTH, REF_HEIGHT),
     "webcam": Rect(1568, 861, 304, 171),
 }
+
+# Transparent during normal Live operation; becomes an opaque Starting
+# Soon / BRB canvas when the streamer explicitly selects one in the Stream
+# Dock. The builder places this above every other item in both layouts, so an
+# automatic program-scene cut can never cover a manual dock selection.
+MANUAL_OVERRIDE_RECT = Rect(0, 0, REF_WIDTH, REF_HEIGHT)
+MANUAL_OVERRIDE_BROWSER_PATH = "scene/manual"
 
 
 def _overlay_url(base_url: str, token: str, path: str) -> str:
@@ -303,6 +314,19 @@ def plan_scenes(
             input_name="SC2 Tools Chat",
         ),
     )
+    between.items.append(
+        PlannedItem(
+            label="Manual scene override",
+            rect=MANUAL_OVERRIDE_RECT.scaled(sx, sy),
+            z=5,
+            browser_path=MANUAL_OVERRIDE_BROWSER_PATH,
+            # The identical name on both planned scenes is intentional:
+            # build_scenes creates this Browser Source once, then adds a
+            # reference to that same source in the second scene.
+            input_name="SC2 Tools Manual Override",
+            share_key="manual_scene_override",
+        ),
+    )
 
     scenes = [between]
 
@@ -328,6 +352,16 @@ def plan_scenes(
                     source_name=webcam_source,
                 ),
             )
+        in_game.items.append(
+            PlannedItem(
+                label="Manual scene override",
+                rect=MANUAL_OVERRIDE_RECT.scaled(sx, sy),
+                z=2,
+                browser_path=MANUAL_OVERRIDE_BROWSER_PATH,
+                input_name="SC2 Tools Manual Override",
+                share_key="manual_scene_override",
+            ),
+        )
         scenes.append(in_game)
 
     # Resolve browser URLs now so the plan the user confirms is
@@ -343,6 +377,7 @@ def plan_scenes(
                         overlay_base_url, overlay_token, item.browser_path,
                     ),
                     input_name=item.input_name,
+                    share_key=item.share_key,
                 )
 
     return BuildPlan(
@@ -383,6 +418,12 @@ def build_scenes(
         )
 
     created: List[str] = []
+    # Browser Sources carrying the same explicit ``share_key`` are shared
+    # between scenes. In particular, the full-canvas manual override sits in
+    # both generated layouts but should consume one CEF renderer/socket/poll
+    # loop, not two. Values are the collision-safe names actually created in
+    # OBS.
+    shared_browser_inputs: Dict[str, str] = {}
     for scene in plan.scenes:
         if scene.exists:
             _assert_ours(scene.name)
@@ -394,8 +435,17 @@ def build_scenes(
             "obs_scene_created name=%r items=%d", scene.name, len(scene.items),
         )
 
+        # OBS requires scene-item indices to be contiguous. Authored ``z``
+        # values can contain gaps when an optional webcam/game source was not
+        # selected, so compact them while preserving the intended order.
+        scene_index = 0
         for item in sorted(scene.items, key=lambda i: i.z):
-            item_id = _create_item(client, scene.name, item)
+            item_id = _create_item(
+                client,
+                scene.name,
+                item,
+                shared_browser_inputs=shared_browser_inputs,
+            )
             if item_id is None:
                 continue
             client.set_scene_item_transform(
@@ -404,7 +454,7 @@ def build_scenes(
                 transform=_transform_for(item.rect),
             )
             client.set_scene_item_index(
-                scene_name=scene.name, item_id=item_id, index=item.z,
+                scene_name=scene.name, item_id=item_id, index=scene_index,
             )
             _log.info(
                 "obs_scene_item_placed scene=%r item=%r x=%d y=%d w=%d h=%d z=%d",
@@ -414,8 +464,9 @@ def build_scenes(
                 item.rect.y,
                 item.rect.w,
                 item.rect.h,
-                item.z,
+                scene_index,
             )
+            scene_index += 1
 
     client.refresh_scenes()
     METRICS.incr("obs.build.ok")
@@ -437,7 +488,13 @@ def _assert_ours(name: str) -> None:
         )
 
 
-def _create_item(client: Any, scene_name: str, item: PlannedItem) -> Optional[int]:
+def _create_item(
+    client: Any,
+    scene_name: str,
+    item: PlannedItem,
+    *,
+    shared_browser_inputs: Dict[str, str],
+) -> Optional[int]:
     if item.source_name:
         # Reference the user's existing input. Not a copy — OBS shares
         # the capture between scenes at no extra cost.
@@ -445,12 +502,26 @@ def _create_item(client: Any, scene_name: str, item: PlannedItem) -> Optional[in
             scene_name=scene_name, source_name=item.source_name,
         )
     if item.browser_path and item.input_name:
-        return client.create_input(
+        existing_name = (
+            shared_browser_inputs.get(item.share_key)
+            if item.share_key
+            else None
+        )
+        if existing_name:
+            return client.create_scene_item(
+                scene_name=scene_name,
+                source_name=existing_name,
+            )
+        actual_name = _unique_input_name(client, item.input_name)
+        item_id = client.create_input(
             scene_name=scene_name,
-            input_name=_unique_input_name(client, item.input_name),
+            input_name=actual_name,
             input_kind=BROWSER_INPUT_KIND,
             settings=_browser_settings(item),
         )
+        if item.share_key:
+            shared_browser_inputs[item.share_key] = actual_name
+        return item_id
     return None
 
 
@@ -518,6 +589,8 @@ __all__ = [
     "BETWEEN_GAMES_LAYOUT",
     "BuildPlan",
     "IN_GAME_LAYOUT",
+    "MANUAL_OVERRIDE_BROWSER_PATH",
+    "MANUAL_OVERRIDE_RECT",
     "PlannedItem",
     "PlannedScene",
     "Rect",

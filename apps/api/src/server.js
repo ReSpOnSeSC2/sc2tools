@@ -125,6 +125,11 @@ async function main() {
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "randomizer"),
+    // Replayed to Browser Sources on connect/resync. Live Stream Dock pushes
+    // are still immediate; this persisted read closes the reconnect gap for
+    // the manual Starting Soon / BRB cover.
+    resolveStudioState: (token) =>
+      /** @type {any} */ (services).multichatStudio.get(token),
     // Synchronous broker-snapshot accessor used by the overlay
     // connect-replay path AND the ``overlay:resync`` /
     // ``overlay:heartbeat`` handlers. Returns the latest

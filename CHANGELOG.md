@@ -60,6 +60,21 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Stream Dock counts current viewers, not lifetime viewers** — TikTok
+  now reads the current `roomUser` audience and no longer substitutes its
+  cumulative unique-viewer field. YouTube only accepts a count when the
+  same live renderer explicitly identifies it as "watching now," so a live
+  stream with its concurrent audience hidden cannot leak lifetime views
+  into the dock. Slow, older browser responses also cannot overwrite a
+  newer current snapshot, and the dock labels the combined figure
+  "watching now" for clarity.
+
+- **Stream Dock Starting Soon and BRB now stay above automatic OBS scene
+  changes** — the scene builder adds one shared, transparent-until-selected
+  manual cover to the top of both generated layouts. The phase switcher can
+  keep the scene underneath current without replacing a card the streamer
+  selected manually. Rebuild existing generated scenes once to add it.
+
 - **Stats ticker quoted a stale opponent MMR** — the ticker's
   "NOW PLAYING" segment announced the rating from the *last* time you
   played that opponent while the opponent card at the top of the same

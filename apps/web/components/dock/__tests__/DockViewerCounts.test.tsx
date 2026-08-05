@@ -51,9 +51,9 @@ describe("dock viewer counts", () => {
 
     const total = screen.getByTestId("dock-viewers-total");
     expect(total.textContent).toContain("1,300");
-    expect(total.textContent).toContain("watching");
+    expect(total.textContent).toContain("watching now");
     expect(total.getAttribute("title")).toBe(
-      "1,300 watching across all platforms",
+      "1,300 currently watching across all platforms",
     );
   });
 
@@ -80,7 +80,7 @@ describe("dock viewer counts", () => {
     // The total says "at least this many" when a platform is missing.
     const total = screen.getByTestId("dock-viewers-total");
     expect(total.textContent).toContain("500");
-    expect(total.textContent).toContain("watching+");
+    expect(total.textContent).toContain("watching now+");
     expect(total.getAttribute("title")).toContain("at least one didn't report");
   });
 

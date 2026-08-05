@@ -43,6 +43,14 @@ import {
   type BackdropVariant,
 } from "./SC2BackdropScene";
 
+/**
+ * ``manual`` is the transparent-until-selected cover used by the OBS
+ * scene builder. Unlike the named backdrop variants, it renders no pixels
+ * while the Stream Dock is Live and becomes a full-canvas Starting Soon / BRB
+ * scene only after the streamer explicitly presses one of those buttons.
+ */
+export type OverlaySceneVariant = BackdropVariant | "manual";
+
 /** Countdown repaint cadence. 4 Hz is smooth enough for MM:SS. */
 const TICK_MS = 250;
 
@@ -68,7 +76,7 @@ export function OverlaySceneClient({
   demo = false,
 }: {
   token: string;
-  scene: BackdropVariant;
+  scene: OverlaySceneVariant;
   staticMode?: boolean;
   demo?: boolean;
 }) {
@@ -122,11 +130,13 @@ export function OverlaySceneClient({
   // pressed a button just now, and that is a more recent statement of
   // intent than whatever the Browser Source URL was set to weeks ago.
   const dockScene = demo ? null : studio.scene;
+  const fallbackVariant: BackdropVariant =
+    scene === "manual" ? "starting-soon" : scene;
   const variant: BackdropVariant = dockScene
     ? dockScene.mode === "brb"
       ? "brb"
       : "starting-soon"
-    : scene;
+    : fallbackVariant;
 
   const accent = useMemo(() => {
     if (demo) return accentForRace("zerg");
@@ -156,6 +166,21 @@ export function OverlaySceneClient({
     : countdownEndsAt == null
       ? null
       : Math.max(0, countdownEndsAt - nowMs);
+
+  // The builder places this source above every camera, capture and widget in
+  // each scene it creates. It therefore has to be genuinely transparent while
+  // Live: hiding just the headline would still leave an opaque backdrop over
+  // the broadcast. Demo mode intentionally shows Starting Soon so Settings can
+  // preview the otherwise-invisible source.
+  if (scene === "manual" && !demo && !dockScene) {
+    return (
+      <div
+        aria-hidden="true"
+        data-variant="manual-inactive"
+        style={{ width: "100vw", height: "100vh", background: "transparent" }}
+      />
+    );
+  }
 
   return (
     <SC2BackdropScene

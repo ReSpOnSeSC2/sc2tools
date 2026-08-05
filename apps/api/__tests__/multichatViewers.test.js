@@ -79,6 +79,41 @@ describe("services/multichatViewers — YouTube page extraction", () => {
     expect(extractConcurrentViewers(html)).toBe(12345);
   });
 
+  test("does not mistake lifetime views for current viewers on a live video", () => {
+    const html = JSON.stringify({
+      viewCount: {
+        videoViewCountRenderer: {
+          viewCount: { simpleText: "98,765 views" },
+          isLive: true,
+          originalViewCount: "98765",
+        },
+      },
+    });
+    expect(extractConcurrentViewers(html)).toBeNull();
+  });
+
+  test("keeps renderer fields isolated and finds a later watching-now count", () => {
+    const html = JSON.stringify({
+      first: {
+        videoViewCountRenderer: {
+          viewCount: { simpleText: "98,765 views" },
+          originalViewCount: "98765",
+        },
+      },
+      unrelated: { isLive: true },
+      second: {
+        videoViewCountRenderer: {
+          viewCount: {
+            runs: [{ text: "14" }, { text: " watching now" }],
+          },
+          isLive: true,
+          originalViewCount: "14",
+        },
+      },
+    });
+    expect(extractConcurrentViewers(html)).toBe(14);
+  });
+
   test("a page with no renderer at all is unknown, not zero", () => {
     expect(extractConcurrentViewers("<html>nope</html>")).toBeNull();
   });
@@ -188,6 +223,18 @@ describe("services/multichatViewers — per-platform lookups", () => {
     });
   });
 
+  test("kick: does not substitute an ambiguous views field", async () => {
+    const svc = new MultichatViewersService({
+      fetchImpl: async () =>
+        jsonRes({ livestream: { is_live: true, viewers: 99999 } }),
+    });
+    await expect(svc.fetchKick("somekick")).resolves.toEqual({
+      platform: "kick",
+      viewers: null,
+      live: false,
+    });
+  });
+
   test("youtube: resolves a handle's /live page, then the count", async () => {
     const urls = [];
     const svc = new MultichatViewersService({
@@ -211,6 +258,26 @@ describe("services/multichatViewers — per-platform lookups", () => {
     await expect(svc.fetchYoutube("@SomeChannel")).resolves.toEqual({
       platform: "youtube",
       viewers: 0,
+      live: false,
+    });
+  });
+
+  test("youtube: a live stream with its current count hidden stays unknown", async () => {
+    const page = JSON.stringify({
+      viewCount: {
+        videoViewCountRenderer: {
+          viewCount: { simpleText: "98,765 views" },
+          isLive: true,
+          originalViewCount: "98765",
+        },
+      },
+    });
+    const svc = new MultichatViewersService({
+      fetchImpl: async () => htmlRes(page),
+    });
+    await expect(svc.fetchYoutube("@SomeChannel")).resolves.toEqual({
+      platform: "youtube",
+      viewers: null,
       live: false,
     });
   });
@@ -272,6 +339,26 @@ describe("services/multichatViewers — caching and totals", () => {
     now += 20_001;
     await svc.lookup("twitch", "somechan");
     expect(fetches).toBe(2);
+  });
+
+  test("a refreshed current count can decrease", async () => {
+    let now = 1_000_000;
+    let current = 640;
+    const svc = new MultichatViewersService({
+      ttlMs: 20_000,
+      now: () => now,
+      fetchImpl: async () =>
+        jsonRes({ data: { user: { stream: { viewersCount: current } } } }),
+    });
+
+    await expect(svc.lookup("twitch", "somechan")).resolves.toMatchObject({
+      viewers: 640,
+    });
+    current = 12;
+    now += 20_001;
+    await expect(svc.lookup("twitch", "somechan")).resolves.toMatchObject({
+      viewers: 12,
+    });
   });
 
   test("forConfig totals the enabled platforms and skips the rest", async () => {
@@ -347,7 +434,7 @@ describe("services/tiktokChatRelay — viewer count", () => {
     };
   }
 
-  test("tracks roomUser frames while connected and forgets them after", async () => {
+  test("tracks only the current roomUser audience and forgets it after", async () => {
     let conn;
     const relay = new TikTokChatRelay({
       connectionFactory: async () => {
@@ -360,11 +447,21 @@ describe("services/tiktokChatRelay — viewer count", () => {
     await new Promise((r) => setImmediate(r));
 
     expect(relay.viewerCount("someone")).toBeNull();
-    conn.fire("roomUser", { viewerCount: 512 });
+    conn.fire("roomUser", { viewerCount: 512, total: 500, totalUser: 640 });
     expect(relay.viewerCount("someone")).toBe(512);
-    // Protobuf-shaped payload path (connector schema drift).
-    conn.fire("roomUser", { totalUser: 640 });
-    expect(relay.viewerCount("someone")).toBe(640);
+    // Production's raw protobuf path: `total` is concurrent while
+    // `totalUser` is the cumulative unique audience.
+    conn.fire("roomUser", { total: "37", totalUser: "4812" });
+    expect(relay.viewerCount("someone")).toBe(37);
+    conn.fire("roomUser", { viewerCount: "", total: "21", totalUser: "5000" });
+    expect(relay.viewerCount("someone")).toBe(21);
+    // Current snapshots are allowed to go down; they are not a running
+    // total or a high-water mark.
+    conn.fire("roomUser", { viewerCount: 12, total: 9000, totalUser: 9999 });
+    expect(relay.viewerCount("someone")).toBe(12);
+    // A cumulative-only payload is not a truthful current count.
+    conn.fire("roomUser", { totalUser: 10000 });
+    expect(relay.viewerCount("someone")).toBeNull();
 
     // A stream that ended must not keep quoting its last count.
     conn.fire("streamEnd");

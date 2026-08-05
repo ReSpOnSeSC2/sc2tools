@@ -55,6 +55,7 @@ export default function OverlayLayout({
       />
       <style>{`
         html, body { background: transparent !important; }
+        body::before { content: none !important; display: none !important; }
         body > header, body > footer, body > main > footer { display: none !important; }
         [data-cookie-banner] { display: none !important; }
         main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
