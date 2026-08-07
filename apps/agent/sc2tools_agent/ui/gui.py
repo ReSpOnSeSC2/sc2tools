@@ -703,7 +703,9 @@ def _GuiSignals():  # noqa: N802 — class-style factory
     return _make_signals()
 
 
-def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
+def _ObsBuildDialog(
+    *, parent, QtWidgets, webcams, games, update_existing=False,
+):  # noqa: N802
     """Confirm-before-write dialog for the scene builder.
 
     The builder is the only code in the agent that writes to a user's
@@ -715,7 +717,11 @@ def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
     class Dialog(QtWidgets.QDialog):
         def __init__(self) -> None:
             super().__init__(parent)
-            self.setWindowTitle("Build SC2 Tools scenes")
+            self.setWindowTitle(
+                "Update SC2 Tools scenes"
+                if update_existing
+                else "Build SC2 Tools scenes"
+            )
             self.setMinimumWidth(460)
             v = QtWidgets.QVBoxLayout(self)
             v.setContentsMargins(20, 18, 20, 18)
@@ -734,8 +740,29 @@ def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
                 "sources you pick below — the same capture, not a "
                 "second copy, so there is no extra CPU cost."
             )
+            if update_existing:
+                intro.setText(
+                    "This adds one shared Stream Dock cover to the top of "
+                    "your existing SC2 Tools Between Games and In Game "
+                    "scenes. It stays transparent during normal play, then "
+                    "covers the camera, chat and every other source when "
+                    "you select Starting Soon or BRB.\n\n"
+                    "The update keeps your current layout and every source "
+                    "you added. Nothing is removed, rebuilt, or created. A "
+                    "missing generated scene can be built separately after "
+                    "this update."
+                )
             intro.setWordWrap(True)
             v.addWidget(intro)
+
+            if update_existing:
+                picker_note = QtWidgets.QLabel(
+                    "The capture choices below are ignored by Update. They "
+                    "are used only if you choose Replace instead."
+                )
+                picker_note.setWordWrap(True)
+                picker_note.setObjectName("muted")
+                v.addWidget(picker_note)
 
             form = QtWidgets.QFormLayout()
             form.setHorizontalSpacing(16)
@@ -760,16 +787,25 @@ def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
 
             if not webcams or not games:
                 warn = QtWidgets.QLabel(
-                    "Some sources weren't found in OBS. The scenes will "
-                    "still be built — add anything missing afterwards, "
-                    "they're ordinary scenes you can edit by hand."
+                    (
+                        "Some capture choices weren't found. That does not "
+                        "affect Update; it matters only if you choose Replace."
+                        if update_existing
+                        else "Some sources weren't found in OBS. The scenes "
+                        "will still be built — add anything missing "
+                        "afterwards; they're ordinary scenes you can edit."
+                    )
                 )
                 warn.setWordWrap(True)
                 warn.setObjectName("muted")
                 v.addWidget(warn)
 
             self._rebuild = QtWidgets.QCheckBox(
-                "Replace them if they already exist",
+                (
+                    "Replace the scenes instead (resets custom changes)"
+                    if update_existing
+                    else "Replace them if they already exist"
+                ),
             )
             self._rebuild.setToolTip(
                 "Only ever removes scenes named \u201cSC2 Tools — …\u201d. "
@@ -781,7 +817,9 @@ def _ObsBuildDialog(*, parent, QtWidgets, webcams, games):  # noqa: N802
                 QtWidgets.QDialogButtonBox.Ok
                 | QtWidgets.QDialogButtonBox.Cancel,
             )
-            buttons.button(QtWidgets.QDialogButtonBox.Ok).setText("Build")
+            buttons.button(QtWidgets.QDialogButtonBox.Ok).setText(
+                "Update" if update_existing else "Build",
+            )
             buttons.accepted.connect(self.accept)
             buttons.rejected.connect(self.reject)
             v.addWidget(buttons)
@@ -1764,6 +1802,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             list.
             """
             self._obs_sources = {"webcam": [], "game": []}
+            self._obs_manual_update_scenes = []
+            self._obs_needs_manual_update = False
             self._obs_enable_check.setChecked(
                 bool(initial.obs_scene_switch_enabled),
             )
@@ -1837,8 +1877,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             blurb = QtWidgets.QLabel(
                 "Switch OBS scenes automatically when a game starts and "
-                "ends. The agent only ever changes which scene is live — "
-                "it never edits your existing scenes."
+                "ends. Automatic switching only changes which scene is live. "
+                "Scene contents change only when you explicitly build, update, "
+                "or replace the two SC2 Tools scenes."
             )
             blurb.setObjectName("muted")
             blurb.setWordWrap(True)
@@ -1898,8 +1939,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "small game inset, SC2 backdrop) and an In Game scene "
                 "from the sources you already have. Both get a topmost "
                 "Stream Dock cover so Starting Soon and BRB override "
-                "automatic switches. Your existing scenes are never "
-                "modified.",
+                "automatic switches. Existing generated scenes can be "
+                "updated without resetting their layout or added sources.",
             )
             self._obs_build_btn.setEnabled(False)
             self._obs_build_btn.clicked.connect(self._click_obs_build)
@@ -2021,6 +2062,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 QtWidgets=QtWidgets,
                 webcams=webcam,
                 games=game,
+                update_existing=self._obs_needs_manual_update,
             )
             if not confirm.exec():
                 return
@@ -2031,8 +2073,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "webcam_source": confirm.webcam(),
                 "game_source": confirm.game(),
                 "rebuild": confirm.rebuild(),
+                # Carry the exact names shown by Test connection so the
+                # backend never infers permission to edit an existing scene.
+                "update_existing_scenes": list(
+                    self._obs_manual_update_scenes
+                ),
             }
-            self._obs_status.setText("Building scenes…")
+            self._obs_status.setText(
+                "Updating scenes…"
+                if self._obs_needs_manual_update
+                else "Building scenes…"
+            )
             self._run_obs_job("build", lambda: ui._on_obs_build(request))
 
         def _on_obs_probe_done(self, result: dict) -> None:
@@ -2043,10 +2094,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._obs_build_btn.setEnabled(False)
                 return
             self._obs_build_btn.setEnabled(ui._on_obs_build is not None)
-            self._obs_sources = {
-                "webcam": list(result.get("webcams") or []),
-                "game": list(result.get("games") or []),
-            }
+            if result.get("kind") == "probe":
+                self._obs_manual_update_scenes = [
+                    str(name) for name in (
+                        result.get("manual_override_update_scenes") or []
+                    )
+                ]
+                self._obs_needs_manual_update = bool(
+                    self._obs_manual_update_scenes
+                )
+            elif result.get("kind") == "build":
+                self._obs_manual_update_scenes = []
+                self._obs_needs_manual_update = False
+            self._obs_build_btn.setText(
+                "Update my scenes…"
+                if self._obs_needs_manual_update
+                else "Build my scenes…"
+            )
+            # Build/Update responses intentionally contain no source scan.
+            # Keep the choices from the last successful probe so a second
+            # build or explicit replacement does not lose camera/game inputs.
+            if result.get("kind") == "probe":
+                self._obs_sources = {
+                    "webcam": list(result.get("webcams") or []),
+                    "game": list(result.get("games") or []),
+                }
             scenes = [str(x) for x in (result.get("scenes") or [])]
             if scenes:
                 self._repopulate_obs_scene_combos(scenes)

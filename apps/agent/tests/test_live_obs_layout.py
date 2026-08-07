@@ -22,13 +22,16 @@ from sc2tools_agent.live.obs_layout import (
     BETWEEN_GAMES_LAYOUT,
     IN_GAME_LAYOUT,
     MANUAL_OVERRIDE_BROWSER_PATH,
+    MANUAL_OVERRIDE_INPUT_NAME,
     REF_HEIGHT,
     REF_WIDTH,
     SCENE_NAME_PREFIX,
     SceneBuildError,
     build_scenes,
     discover_sources,
+    manual_override_scenes_needing_update,
     plan_scenes,
+    repair_manual_scene_overrides,
 )
 from sc2tools_agent.live.obs_scene import (
     DEFAULT_SCENE_MAP,
@@ -69,6 +72,7 @@ class FakeObs:
         self.created_inputs: List[Dict[str, Any]] = []
         self.transforms: List[Dict[str, Any]] = []
         self.indexes: List[Dict[str, Any]] = []
+        self.enabled_updates: List[Dict[str, Any]] = []
 
     # ---- reads ----
     def get_video_settings(self) -> Dict[str, Any]:
@@ -135,6 +139,166 @@ class FakeObs:
     ) -> None:
         self.indexes.append(
             {"scene": scene_name, "id": item_id, "index": index},
+        )
+
+    def set_scene_item_enabled(
+        self, *, scene_name: str, item_id: int, enabled: bool,
+    ) -> None:
+        self.enabled_updates.append(
+            {"scene": scene_name, "id": item_id, "enabled": enabled},
+        )
+
+
+class LegacyObs(FakeObs):
+    """Models the pre-manual-cover scene collection from the regression.
+
+    Unlike ``FakeObs``, this fake maintains the final OBS stack after every
+    move. That lets the repair tests assert what is actually topmost instead
+    of merely checking which indices the builder requested.
+    """
+
+    def __init__(self, *, colliding_manual_input: bool = False) -> None:
+        browser_inputs = [
+            {"name": "SC2 Tools Backdrop", "kind": "browser_source"},
+            {"name": "SC2 Tools Session Stats", "kind": "browser_source"},
+            {"name": "SC2 Tools Chat", "kind": "browser_source"},
+            {"name": "Stats Ticker", "kind": "browser_source"},
+        ]
+        if colliding_manual_input:
+            browser_inputs.append(
+                {"name": MANUAL_OVERRIDE_INPUT_NAME, "kind": "browser_source"},
+            )
+        super().__init__(
+            scenes=[SCENE_BETWEEN_GAMES, SCENE_IN_GAME],
+            inputs=[
+                {"name": "Logitech Brio", "kind": "dshow_input"},
+                {"name": "StarCraft II", "kind": "game_capture"},
+                *browser_inputs,
+            ],
+        )
+        self.input_settings: Dict[str, Dict[str, Any]] = {
+            "SC2 Tools Backdrop": {
+                "url": f"{BASE_URL}/overlay/{TOKEN}/scene/between-games",
+            },
+            "SC2 Tools Session Stats": {
+                "url": f"{BASE_URL}/overlay/{TOKEN}/widget/session",
+            },
+            "SC2 Tools Chat": {
+                "url": f"{BASE_URL}/overlay/{TOKEN}/widget/multichat",
+            },
+            "Stats Ticker": {
+                "url": f"{BASE_URL}/overlay/{TOKEN}/widget/stats-ticker",
+            },
+        }
+        if colliding_manual_input:
+            self.input_settings[MANUAL_OVERRIDE_INPUT_NAME] = {
+                "url": "https://example.com/not-the-manual-cover",
+            }
+        self.scene_items: Dict[str, List[Dict[str, Any]]] = {
+            SCENE_BETWEEN_GAMES: self._items(
+                [
+                    ("SC2 Tools Backdrop", "browser_source"),
+                    ("Logitech Brio", "dshow_input"),
+                    ("StarCraft II", "game_capture"),
+                    ("SC2 Tools Session Stats", "browser_source"),
+                    ("SC2 Tools Chat", "browser_source"),
+                    # Added by the streamer after the original build. A
+                    # destructive rebuild would lose it.
+                    ("Stats Ticker", "browser_source"),
+                ],
+            ),
+            SCENE_IN_GAME: self._items(
+                [
+                    ("StarCraft II", "game_capture"),
+                    ("Logitech Brio", "dshow_input"),
+                ],
+            ),
+        }
+
+    def _items(self, sources: List[tuple]) -> List[Dict[str, Any]]:
+        out = []
+        for index, (source_name, input_kind) in enumerate(sources):
+            self._next_item_id += 1
+            out.append(
+                {
+                    "source_name": source_name,
+                    "item_id": self._next_item_id,
+                    "index": index,
+                    "input_kind": input_kind,
+                    "enabled": True,
+                    "transform": {},
+                },
+            )
+        return out
+
+    def get_input_settings(self, name: str) -> Dict[str, Any]:
+        return dict(self.input_settings.get(name, {}))
+
+    def get_scene_item_list(self, scene_name: str) -> List[Dict[str, Any]]:
+        return [dict(item) for item in self.scene_items.get(scene_name, [])]
+
+    def create_input(self, **kw: Any) -> int:
+        item_id = super().create_input(**kw)
+        name = str(kw["input_name"])
+        self.input_settings[name] = dict(kw["settings"])
+        self.scene_items[kw["scene_name"]].append(
+            {
+                "source_name": name,
+                "item_id": item_id,
+                "index": len(self.scene_items[kw["scene_name"]]),
+                "input_kind": kw["input_kind"],
+                "enabled": bool(kw.get("enabled", True)),
+                "transform": {},
+            },
+        )
+        return item_id
+
+    def create_scene_item(self, **kw: Any) -> int:
+        item_id = super().create_scene_item(**kw)
+        source_name = str(kw["source_name"])
+        kind = next(
+            row["kind"] for row in self._inputs
+            if row["name"] == source_name
+        )
+        self.scene_items[kw["scene_name"]].append(
+            {
+                "source_name": source_name,
+                "item_id": item_id,
+                "index": len(self.scene_items[kw["scene_name"]]),
+                "input_kind": kind,
+                "enabled": True,
+                "transform": {},
+            },
+        )
+        return item_id
+
+    def set_scene_item_transform(self, **kw: Any) -> None:
+        super().set_scene_item_transform(**kw)
+        item = self._item(kw["scene_name"], kw["item_id"])
+        item["transform"] = dict(kw["transform"])
+
+    def set_scene_item_index(self, **kw: Any) -> None:
+        super().set_scene_item_index(**kw)
+        items = sorted(
+            self.scene_items[kw["scene_name"]],
+            key=lambda item: item["index"],
+        )
+        moving = next(item for item in items if item["item_id"] == kw["item_id"])
+        items.remove(moving)
+        items.insert(max(0, min(int(kw["index"]), len(items))), moving)
+        for index, item in enumerate(items):
+            item["index"] = index
+        self.scene_items[kw["scene_name"]] = items
+
+    def set_scene_item_enabled(self, **kw: Any) -> None:
+        super().set_scene_item_enabled(**kw)
+        item = self._item(kw["scene_name"], kw["item_id"])
+        item["enabled"] = bool(kw["enabled"])
+
+    def _item(self, scene_name: str, item_id: int) -> Dict[str, Any]:
+        return next(
+            item for item in self.scene_items[scene_name]
+            if item["item_id"] == item_id
         )
 
 
@@ -429,6 +593,147 @@ def test_shared_manual_override_uses_its_collision_safe_name() -> None:
     )
 
 
+def test_legacy_scene_repair_preserves_custom_sources_and_covers_both_scenes() -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+
+    assert manual_override_scenes_needing_update(obs) == [
+        SCENE_BETWEEN_GAMES,
+        SCENE_IN_GAME,
+    ]
+    original_between = [
+        item["source_name"] for item in obs.scene_items[SCENE_BETWEEN_GAMES]
+    ]
+
+    repaired = repair_manual_scene_overrides(obs, browser_url=manual_url)
+
+    assert repaired == [SCENE_BETWEEN_GAMES, SCENE_IN_GAME]
+    assert obs.created_scenes == []
+    assert obs.removed_scenes == []
+    manual_inputs = [
+        item for item in obs.created_inputs
+        if item["settings"].get("url") == manual_url
+    ]
+    assert len(manual_inputs) == 1
+    manual_name = manual_inputs[0]["name"]
+    for scene_name in (SCENE_BETWEEN_GAMES, SCENE_IN_GAME):
+        assert obs.scene_items[scene_name][-1]["source_name"] == manual_name
+    assert [
+        item["source_name"]
+        for item in obs.scene_items[SCENE_BETWEEN_GAMES][:-1]
+    ] == original_between
+    assert "Stats Ticker" in original_between
+    assert manual_override_scenes_needing_update(obs) == []
+
+
+def test_legacy_scene_repair_is_idempotent() -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+    writes_after_first = (
+        len(obs.created_inputs),
+        len(obs.created_items),
+        len(obs.transforms),
+        len(obs.indexes),
+    )
+
+    assert repair_manual_scene_overrides(obs, browser_url=manual_url) == []
+    assert (
+        len(obs.created_inputs),
+        len(obs.created_items),
+        len(obs.transforms),
+        len(obs.indexes),
+    ) == writes_after_first
+
+
+def test_legacy_scene_repair_reenables_and_fully_resets_a_broken_cover() -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+    cover = obs.scene_items[SCENE_BETWEEN_GAMES][-1]
+
+    # A disabled, cropped or rotated top item still exposes the camera. OBS
+    # merges transform updates, so repair must explicitly reset every field.
+    cover["enabled"] = False
+    cover["transform"].update(
+        {"rotation": 17.0, "scaleX": 0.5, "cropLeft": 120},
+    )
+    assert manual_override_scenes_needing_update(obs) == [
+        SCENE_BETWEEN_GAMES,
+    ]
+
+    assert repair_manual_scene_overrides(obs, browser_url=manual_url) == [
+        SCENE_BETWEEN_GAMES,
+    ]
+    assert cover["enabled"] is True
+    assert cover["transform"]["rotation"] == 0.0
+    assert cover["transform"]["scaleX"] == 1.0
+    assert cover["transform"]["cropLeft"] == 0
+    assert obs.enabled_updates[-1]["enabled"] is True
+    assert manual_override_scenes_needing_update(obs) == []
+
+
+def test_manual_cover_stretches_even_if_reused_browser_dimensions_are_old() -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+    cover = obs.scene_items[SCENE_BETWEEN_GAMES][-1]
+    manual_name = cover["source_name"]
+
+    # A Browser Source can retain dimensions from an old canvas. STRETCH is
+    # deliberate for the opaque manual card so no letterbox reveals sources.
+    obs.input_settings[manual_name]["width"] = 640
+    obs.input_settings[manual_name]["height"] = 480
+    assert cover["transform"]["boundsType"] == "OBS_BOUNDS_STRETCH"
+    assert manual_override_scenes_needing_update(obs) == []
+
+
+def test_legacy_scene_repair_moves_an_existing_cover_above_later_sources() -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+    manual_name = obs.scene_items[SCENE_BETWEEN_GAMES][-1]["source_name"]
+    created_inputs = len(obs.created_inputs)
+    created_items = len(obs.created_items)
+
+    # Model a streamer adding another source after the upgrade. It lands
+    # above the cover; Update should lift the existing cover, not duplicate it.
+    obs._inputs.append({"name": "Sponsor Bug", "kind": "browser_source"})
+    obs.input_settings["Sponsor Bug"] = {"url": "https://example.com/sponsor"}
+    obs.scene_items[SCENE_BETWEEN_GAMES].append(
+        {
+            "source_name": "Sponsor Bug",
+            "item_id": 999,
+            "index": len(obs.scene_items[SCENE_BETWEEN_GAMES]),
+            "input_kind": "browser_source",
+            "transform": {},
+        },
+    )
+
+    repaired = repair_manual_scene_overrides(obs, browser_url=manual_url)
+
+    assert repaired == [SCENE_BETWEEN_GAMES]
+    assert obs.scene_items[SCENE_BETWEEN_GAMES][-1]["source_name"] == manual_name
+    assert len(obs.created_inputs) == created_inputs
+    assert len(obs.created_items) == created_items
+
+
+def test_legacy_scene_repair_does_not_hijack_a_same_named_foreign_input() -> None:
+    obs = LegacyObs(colliding_manual_input=True)
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+
+    created = next(
+        item for item in obs.created_inputs
+        if item["settings"].get("url") == manual_url
+    )
+    assert created["name"] == f"{MANUAL_OVERRIDE_INPUT_NAME} 2"
+    assert obs.input_settings[MANUAL_OVERRIDE_INPUT_NAME]["url"] == (
+        "https://example.com/not-the-manual-cover"
+    )
+
+
 def test_build_never_touches_pre_existing_scenes() -> None:
     obs = FakeObs(scenes=["My Gameplay", "My BRB"])
     build_scenes(obs, _plan(obs))
@@ -472,11 +777,26 @@ def test_transforms_anchor_top_left_and_preserve_aspect() -> None:
     obs = FakeObs()
     build_scenes(obs, _plan(obs))
     assert obs.transforms
+    manual_ids = {
+        item["id"] for item in obs.created_inputs
+        if item["name"].startswith(MANUAL_OVERRIDE_INPUT_NAME)
+    }
+    manual_ids.update(
+        item["id"] for item in obs.created_items
+        if item["source"].startswith(MANUAL_OVERRIDE_INPUT_NAME)
+    )
     for t in obs.transforms:
-        # SCALE_INNER letterboxes a 4:3 webcam instead of stretching it.
-        assert t["boundsType"] == "OBS_BOUNDS_SCALE_INNER"
         assert t["alignment"] == 5  # OBS_ALIGN_TOP | OBS_ALIGN_LEFT
         assert t["boundsWidth"] >= 1 and t["boundsHeight"] >= 1
+        if t["id"] in manual_ids:
+            # The opaque manual card must cover every pixel even if OBS
+            # reuses a Browser Source from an older canvas/aspect ratio.
+            assert t["boundsType"] == "OBS_BOUNDS_STRETCH"
+            assert t["rotation"] == 0.0
+            assert t["cropLeft"] == t["cropRight"] == 0
+        else:
+            # SCALE_INNER letterboxes a 4:3 webcam instead of stretching it.
+            assert t["boundsType"] == "OBS_BOUNDS_SCALE_INNER"
 
 
 def test_browser_sources_are_sized_to_their_box() -> None:

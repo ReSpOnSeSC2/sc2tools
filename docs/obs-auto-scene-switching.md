@@ -159,13 +159,15 @@ half entirely and point the phase map at their own scene.
 `obs_layout.py` is the only code in the agent that writes to a user's
 OBS, and it runs against a live stream setup. So:
 
-* It runs **only** on an explicit "Build my scenes" click, after a
-  confirm dialog showing which sources will be used.
+* It runs **only** on an explicit **Build my scenes** or **Update my scenes**
+  click, after a confirmation dialog explains the write.
 * It creates only scenes prefixed `SC2 Tools — `.
-* It **never** edits, renames or deletes anything else. A pre-existing
-  scene of ours is a hard error unless `rebuild` is set, and even then
-  a second guard (`_assert_ours`) rejects removing any name without the
-  prefix.
+* A non-destructive update targets only the two exact generated scene names,
+  adds or repositions only the manual cover, and verifies it is topmost. It
+  never removes or reorders the streamer's other sources, and it does not
+  create a missing counterpart; that remains a separate **Build** action.
+* Full replacement remains explicit. A second guard (`_assert_ours`) rejects
+  removing any scene name without the generated prefix.
 * Input-name collisions get a numeric suffix rather than aborting the
   build partway and leaving a half-populated scene behind.
 * Everything it creates is an ordinary OBS scene. Edit it by hand
@@ -177,11 +179,12 @@ chat text rasterises crisply instead of being scaled up), with
 reloads when its scene activates would flash on air every time the
 switcher fires, which is many times a session.
 
-The builder creates the manual override Browser Source once and adds the
+A fresh build creates the manual override Browser Source once and adds the
 same OBS input to both generated scenes. This keeps one connection and one
-piece of state behind both scene items. Existing generated scenes are never
-silently edited; after upgrading, run **Build my scenes…** with **Replace
-them if they already exist** checked to add the cover.
+piece of state behind both scene items. **Test connection** detects older
+generated scenes with a missing or misplaced cover and changes the action to
+**Update my scenes**. That update preserves custom transforms and added
+sources; **Replace the scenes instead** is the separate destructive reset.
 
 For custom phase-mapped scenes, add
 `/overlay/<token>/scene/manual` as a 1920×1080 Browser Source (or your
@@ -197,8 +200,8 @@ the very top of each scene's source list.
    password.
 2. Agent → **Settings → OBS scene switching** → tick *Switch scenes
    automatically*, paste the password, click **Test connection**.
-3. Click **Build my scenes…**, pick your webcam and game capture,
-   confirm.
+3. Click **Build my scenes** (or **Update my scenes** when detected), pick
+   your webcam and game capture, and confirm.
 4. Select the new scenes in the phase dropdowns and **Save settings**.
 
 ### Two PCs (SC2 on the gaming rig, OBS on the stream rig)

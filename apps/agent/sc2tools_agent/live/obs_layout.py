@@ -19,17 +19,19 @@ nothing. That buys three things retransforming in place does not:
 
 * the streamer's configured transition plays on every switch, with no
   frame-stepping over a websocket;
-* their existing scene is never touched, so switching is read-only
-  with respect to scene *contents*;
+* their original source scene is never touched, so automatic switching
+  is read-only with respect to scene *contents*;
 * if the agent dies mid-stream OBS is simply parked on a valid scene,
   rather than stranded halfway through a move.
 
 Safety contract
 ---------------
 
-This module runs **only** when the user clicks "Build my scenes". It
-creates new scenes named with the ``SC2 Tools — `` prefix and never
-edits, renames or deletes anything else. Rebuilding an existing
+The write paths in this module run **only** when the user explicitly
+clicks Build or Update. Building creates scenes named with the
+``SC2 Tools — `` prefix. Updating may add or reposition the shared
+manual-override cover inside those two exact generated scenes, but it
+never removes or reorders their other items. Replacing an existing
 SC2 Tools scene requires an explicit flag, and even then it will only
 remove a scene whose name it owns.
 
@@ -38,10 +40,11 @@ Geometry
 
 Positions below are authored against a 1920×1080 reference and scaled
 by whatever ``GetVideoSettings`` reports, so a 1440p or ultrawide
-canvas lands correctly. Sizing uses ``OBS_BOUNDS_SCALE_INNER`` rather
-than a raw scale factor: bounds produce the right result regardless of
-the source's native resolution, so a 720p and a 1080p webcam both fill
-their box without the caller having to know which one is plugged in.
+canvas lands correctly. Capture/panel sizing uses
+``OBS_BOUNDS_SCALE_INNER`` rather than a raw scale factor: bounds
+produce the right result regardless of the source's native resolution.
+The full-screen manual cover deliberately uses ``OBS_BOUNDS_STRETCH``
+so even a Browser Source retained from an older canvas covers every pixel.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
+from urllib.parse import urlsplit
 
 from .metrics import METRICS
 from .obs_scene import SCENE_BETWEEN_GAMES, SCENE_IN_GAME
@@ -188,6 +192,12 @@ IN_GAME_LAYOUT: Dict[str, Rect] = {
 # automatic program-scene cut can never cover a manual dock selection.
 MANUAL_OVERRIDE_RECT = Rect(0, 0, REF_WIDTH, REF_HEIGHT)
 MANUAL_OVERRIDE_BROWSER_PATH = "scene/manual"
+MANUAL_OVERRIDE_INPUT_NAME = "SC2 Tools Manual Override"
+_MANUAL_OVERRIDE_BOUNDS_TYPE = "OBS_BOUNDS_STRETCH"
+MANUAL_OVERRIDE_SCENES: Sequence[str] = (
+    SCENE_BETWEEN_GAMES,
+    SCENE_IN_GAME,
+)
 
 
 def _overlay_url(base_url: str, token: str, path: str) -> str:
@@ -323,7 +333,7 @@ def plan_scenes(
             # The identical name on both planned scenes is intentional:
             # build_scenes creates this Browser Source once, then adds a
             # reference to that same source in the second scene.
-            input_name="SC2 Tools Manual Override",
+            input_name=MANUAL_OVERRIDE_INPUT_NAME,
             share_key="manual_scene_override",
         ),
     )
@@ -358,7 +368,7 @@ def plan_scenes(
                 rect=MANUAL_OVERRIDE_RECT.scaled(sx, sy),
                 z=2,
                 browser_path=MANUAL_OVERRIDE_BROWSER_PATH,
-                input_name="SC2 Tools Manual Override",
+                input_name=MANUAL_OVERRIDE_INPUT_NAME,
                 share_key="manual_scene_override",
             ),
         )
@@ -451,7 +461,11 @@ def build_scenes(
             client.set_scene_item_transform(
                 scene_name=scene.name,
                 item_id=item_id,
-                transform=_transform_for(item.rect),
+                transform=(
+                    _manual_override_transform_for(item.rect)
+                    if item.share_key == "manual_scene_override"
+                    else _transform_for(item.rect)
+                ),
             )
             client.set_scene_item_index(
                 scene_name=scene.name, item_id=item_id, index=scene_index,
@@ -471,6 +485,334 @@ def build_scenes(
     client.refresh_scenes()
     METRICS.incr("obs.build.ok")
     return created
+
+
+def manual_override_scenes_needing_update(
+    client: Any,
+    *,
+    scene_names: Sequence[str] = MANUAL_OVERRIDE_SCENES,
+) -> List[str]:
+    """Inspect generated scenes without changing OBS.
+
+    A scene needs an update when it has no ``/scene/manual`` Browser
+    Source, when that source is not the top OBS layer, or when its scene-item
+    transform no longer fills the current canvas. The URL, rather than the
+    source's display name, is authoritative so a user's unrelated source with
+    the same name is never mistaken for our cover.
+    """
+    targets = _existing_manual_override_targets(client, scene_names)
+    if not targets:
+        return []
+    rect = _manual_override_rect_for_canvas(client)
+    settings_cache: Dict[str, Dict[str, Any]] = {}
+    needs_update: List[str] = []
+    for scene_name in targets:
+        items = client.get_scene_item_list(scene_name)
+        covers = _manual_cover_items(
+            client,
+            items,
+            settings_cache=settings_cache,
+        )
+        top_index = max((int(item.get("index", 0)) for item in items), default=-1)
+        cover = max(covers, key=lambda item: int(item.get("index", 0))) if covers else None
+        if (
+            cover is None
+            or not bool(cover.get("enabled", True))
+            or int(cover.get("index", -1)) != top_index
+            or not _transform_fills_rect(cover.get("transform"), rect)
+        ):
+            needs_update.append(scene_name)
+    return needs_update
+
+
+def repair_manual_scene_overrides(
+    client: Any,
+    *,
+    browser_url: str,
+    scene_names: Sequence[str] = MANUAL_OVERRIDE_SCENES,
+) -> List[str]:
+    """Non-destructively put the Stream Dock cover atop generated scenes.
+
+    This is the upgrade path for layouts created before ``/scene/manual``
+    existed. It never creates, removes, or reorders any other scene/source:
+    one Browser Source is created (or reused), referenced from each existing
+    generated scene, stretched to the canvas, and moved to the top layer.
+
+    The operation is idempotent and verifies the final OBS stack before it
+    reports success, so an interrupted first attempt can be safely retried.
+    """
+    _assert_manual_override_url(browser_url)
+    targets = _existing_manual_override_targets(client, scene_names)
+    if not targets:
+        return []
+
+    rect = _manual_override_rect_for_canvas(client)
+    expected_url_key = _overlay_url_key(browser_url)
+    settings_cache: Dict[str, Dict[str, Any]] = {}
+    inventories: Dict[str, List[Dict[str, Any]]] = {
+        scene_name: client.get_scene_item_list(scene_name)
+        for scene_name in targets
+    }
+
+    # Prefer a correct cover already present in either generated scene. If a
+    # prior attempt stopped after creating the input but before adding both
+    # scene items, the global input scan below finds and reuses it.
+    shared_source: Optional[str] = None
+    covers_by_scene: Dict[str, List[Dict[str, Any]]] = {}
+    for scene_name, items in inventories.items():
+        covers = _manual_cover_items(
+            client,
+            items,
+            settings_cache=settings_cache,
+            expected_url_key=expected_url_key,
+        )
+        covers_by_scene[scene_name] = covers
+        if covers and shared_source is None:
+            shared_source = str(covers[0]["source_name"])
+
+    if shared_source is None:
+        shared_source = _find_manual_cover_input(
+            client,
+            expected_url_key=expected_url_key,
+            settings_cache=settings_cache,
+        )
+
+    changed: List[str] = []
+    manual_item = PlannedItem(
+        label="Manual scene override",
+        rect=rect,
+        z=0,
+        browser_path=browser_url,
+        input_name=MANUAL_OVERRIDE_INPUT_NAME,
+        share_key="manual_scene_override",
+    )
+
+    for scene_name in targets:
+        items = inventories[scene_name]
+        covers = covers_by_scene[scene_name]
+        cover = max(covers, key=lambda item: int(item.get("index", 0))) if covers else None
+        top_index = max((int(item.get("index", 0)) for item in items), default=-1)
+
+        if cover is None:
+            if shared_source is None:
+                shared_source = _unique_input_name(
+                    client, MANUAL_OVERRIDE_INPUT_NAME,
+                )
+                item_id = client.create_input(
+                    scene_name=scene_name,
+                    input_name=shared_source,
+                    input_kind=BROWSER_INPUT_KIND,
+                    settings=_browser_settings(manual_item),
+                )
+                settings_cache[shared_source] = {
+                    "url": browser_url,
+                    "width": rect.w,
+                    "height": rect.h,
+                }
+            else:
+                item_id = client.create_scene_item(
+                    scene_name=scene_name,
+                    source_name=shared_source,
+                )
+            cover = {
+                "source_name": shared_source,
+                "item_id": item_id,
+                # Force an explicit index write below instead of assuming
+                # which layer a particular OBS version uses for new items.
+                "index": -1,
+                "input_kind": BROWSER_INPUT_KIND,
+                "enabled": True,
+                "transform": {},
+            }
+            top_index += 1
+            changed.append(scene_name)
+
+        if not bool(cover.get("enabled", True)):
+            client.set_scene_item_enabled(
+                scene_name=scene_name,
+                item_id=int(cover["item_id"]),
+                enabled=True,
+            )
+            if scene_name not in changed:
+                changed.append(scene_name)
+
+        transform = _manual_override_transform_for(rect)
+        if not _transform_fills_rect(cover.get("transform"), rect):
+            client.set_scene_item_transform(
+                scene_name=scene_name,
+                item_id=int(cover["item_id"]),
+                transform=transform,
+            )
+            if scene_name not in changed:
+                changed.append(scene_name)
+        if int(cover.get("index", -1)) != top_index:
+            client.set_scene_item_index(
+                scene_name=scene_name,
+                item_id=int(cover["item_id"]),
+                index=top_index,
+            )
+            if scene_name not in changed:
+                changed.append(scene_name)
+
+    # Read the authoritative final order back from OBS. Merely asserting the
+    # indices we requested would repeat the test gap that let the legacy
+    # layout ship without a usable top cover.
+    for scene_name in targets:
+        items = client.get_scene_item_list(scene_name)
+        covers = _manual_cover_items(
+            client,
+            items,
+            settings_cache=settings_cache,
+            expected_url_key=expected_url_key,
+        )
+        top_index = max((int(item.get("index", 0)) for item in items), default=-1)
+        if not covers:
+            raise SceneBuildError(
+                f"OBS did not add the manual scene override to {scene_name!r}.",
+            )
+        cover = max(covers, key=lambda item: int(item.get("index", 0)))
+        if (
+            not bool(cover.get("enabled", True))
+            or int(cover.get("index", -1)) != top_index
+            or not _transform_fills_rect(cover.get("transform"), rect)
+        ):
+            raise SceneBuildError(
+                f"OBS did not place the manual scene override on top of {scene_name!r}.",
+            )
+
+    if changed:
+        METRICS.incr("obs.repair.manual_override.ok")
+    return changed
+
+
+def _existing_manual_override_targets(
+    client: Any, scene_names: Sequence[str],
+) -> List[str]:
+    allowed = set(MANUAL_OVERRIDE_SCENES)
+    requested = list(dict.fromkeys(str(name) for name in scene_names))
+    foreign = [name for name in requested if name not in allowed]
+    if foreign:
+        raise SceneBuildError(
+            "Refusing to modify non-generated OBS scenes: " + ", ".join(foreign),
+        )
+    existing = set(client.refresh_scenes())
+    return [name for name in requested if name in existing]
+
+
+def _manual_override_rect_for_canvas(client: Any) -> Rect:
+    video = client.get_video_settings()
+    canvas_w = int(video.get("base_width") or REF_WIDTH) or REF_WIDTH
+    canvas_h = int(video.get("base_height") or REF_HEIGHT) or REF_HEIGHT
+    return MANUAL_OVERRIDE_RECT.scaled(
+        canvas_w / REF_WIDTH,
+        canvas_h / REF_HEIGHT,
+    )
+
+
+def _manual_cover_items(
+    client: Any,
+    items: Sequence[Dict[str, Any]],
+    *,
+    settings_cache: Dict[str, Dict[str, Any]],
+    expected_url_key: Optional[tuple] = None,
+) -> List[Dict[str, Any]]:
+    covers: List[Dict[str, Any]] = []
+    for item in items:
+        if item.get("input_kind") != BROWSER_INPUT_KIND:
+            continue
+        source_name = str(item.get("source_name") or "")
+        if not source_name:
+            continue
+        settings = settings_cache.get(source_name)
+        if settings is None:
+            settings = client.get_input_settings(source_name)
+            settings_cache[source_name] = settings
+        url = str(settings.get("url") or "")
+        matches = (
+            _overlay_url_key(url) == expected_url_key
+            if expected_url_key is not None
+            else _is_manual_override_url(url)
+        )
+        if matches:
+            covers.append(item)
+    return covers
+
+
+def _find_manual_cover_input(
+    client: Any,
+    *,
+    expected_url_key: tuple,
+    settings_cache: Dict[str, Dict[str, Any]],
+) -> Optional[str]:
+    for row in client.get_input_list(BROWSER_INPUT_KIND):
+        source_name = str(row.get("name") or "")
+        if not source_name:
+            continue
+        settings = settings_cache.get(source_name)
+        if settings is None:
+            settings = client.get_input_settings(source_name)
+            settings_cache[source_name] = settings
+        if _overlay_url_key(str(settings.get("url") or "")) == expected_url_key:
+            return source_name
+    return None
+
+
+def _overlay_url_key(value: str) -> tuple:
+    try:
+        parsed = urlsplit(value)
+    except (TypeError, ValueError):
+        return ("", "", "")
+    return (
+        parsed.scheme.lower(),
+        parsed.netloc.lower(),
+        parsed.path.rstrip("/"),
+    )
+
+
+def _is_manual_override_url(value: str) -> bool:
+    return _overlay_url_key(value)[2].endswith(
+        "/" + MANUAL_OVERRIDE_BROWSER_PATH,
+    )
+
+
+def _assert_manual_override_url(value: str) -> None:
+    key = _overlay_url_key(value)
+    if not key[0] or not key[1] or not _is_manual_override_url(value):
+        raise SceneBuildError("Manual override URL is not a valid overlay scene URL.")
+
+
+def _transform_fills_rect(raw: Any, rect: Rect) -> bool:
+    if not isinstance(raw, dict):
+        return False
+
+    def _same_number(key: str, expected: int) -> bool:
+        try:
+            return abs(float(raw.get(key)) - float(expected)) < 0.5
+        except (TypeError, ValueError):
+            return False
+
+    def _same_int(key: str, expected: int) -> bool:
+        try:
+            return int(raw.get(key, -1)) == expected
+        except (TypeError, ValueError):
+            return False
+
+    return (
+        _same_number("positionX", rect.x)
+        and _same_number("positionY", rect.y)
+        and _same_number("rotation", 0)
+        and _same_number("scaleX", 1)
+        and _same_number("scaleY", 1)
+        and _same_int("alignment", _ALIGN_TOP_LEFT)
+        and raw.get("boundsType") == _MANUAL_OVERRIDE_BOUNDS_TYPE
+        and _same_int("boundsAlignment", _ALIGN_CENTER)
+        and _same_number("boundsWidth", rect.w)
+        and _same_number("boundsHeight", rect.h)
+        and _same_number("cropLeft", 0)
+        and _same_number("cropRight", 0)
+        and _same_number("cropTop", 0)
+        and _same_number("cropBottom", 0)
+    )
 
 
 def _assert_ours(name: str) -> None:
@@ -584,13 +926,41 @@ def _transform_for(rect: Rect) -> Dict[str, Any]:
     }
 
 
+def _manual_override_transform_for(rect: Rect) -> Dict[str, Any]:
+    """Return a reset, full-canvas transform for the manual cover.
+
+    Unlike camera/game items, this source must cover every pixel even if an
+    older Browser Source was authored at a different aspect ratio. Stretching
+    is intentional here, and explicitly resetting rotation, scale and crop
+    prevents stale OBS transform fields from exposing sources underneath.
+    """
+    return {
+        "positionX": rect.x,
+        "positionY": rect.y,
+        "rotation": 0.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
+        "alignment": _ALIGN_TOP_LEFT,
+        "boundsType": _MANUAL_OVERRIDE_BOUNDS_TYPE,
+        "boundsAlignment": _ALIGN_CENTER,
+        "boundsWidth": max(1, rect.w),
+        "boundsHeight": max(1, rect.h),
+        "cropLeft": 0,
+        "cropRight": 0,
+        "cropTop": 0,
+        "cropBottom": 0,
+    }
+
+
 __all__ = [
     "BROWSER_INPUT_KIND",
     "BETWEEN_GAMES_LAYOUT",
     "BuildPlan",
     "IN_GAME_LAYOUT",
     "MANUAL_OVERRIDE_BROWSER_PATH",
+    "MANUAL_OVERRIDE_INPUT_NAME",
     "MANUAL_OVERRIDE_RECT",
+    "MANUAL_OVERRIDE_SCENES",
     "PlannedItem",
     "PlannedScene",
     "Rect",
@@ -598,5 +968,7 @@ __all__ = [
     "SceneBuildError",
     "build_scenes",
     "discover_sources",
+    "manual_override_scenes_needing_update",
     "plan_scenes",
+    "repair_manual_scene_overrides",
 ]

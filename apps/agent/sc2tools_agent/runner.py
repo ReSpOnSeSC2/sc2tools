@@ -1887,7 +1887,10 @@ def _handle_obs_probe(
     user typing a wrong password into the form can't knock the live
     switcher off its connection.
     """
-    from .live.obs_layout import discover_sources
+    from .live.obs_layout import (
+        discover_sources,
+        manual_override_scenes_needing_update,
+    )
 
     client = ObsClient(
         host=host,
@@ -1921,7 +1924,16 @@ def _handle_obs_probe(
         sources = discover_sources(client)
     except Exception as exc:  # noqa: BLE001
         log.info("obs_probe_partial err=%s", exc)
+        client.shutdown()
         return {"ok": False, "message": f"Connected, but OBS errored: {exc}"}
+
+    manual_update_scenes: list[str] = []
+    try:
+        manual_update_scenes = manual_override_scenes_needing_update(client)
+    except Exception as exc:  # noqa: BLE001
+        # Connection testing and source discovery remain useful even when an
+        # older OBS build cannot expose its scene-item inventory.
+        log.info("obs_manual_override_probe_failed err=%s", exc)
     finally:
         client.shutdown()
 
@@ -1933,10 +1945,17 @@ def _handle_obs_probe(
         "message": (
             f"Connected to OBS {version.get('obs_version') or '?'} — "
             f"{len(scenes)} scene(s) found."
+            + (
+                " Your SC2 Tools scenes need a BRB / Starting Soon "
+                "priority update; use Update my scenes below."
+                if manual_update_scenes
+                else ""
+            )
         ),
         "scenes": scenes,
         "webcams": sources.get("webcam", []),
         "games": sources.get("game", []),
+        "manual_override_update_scenes": manual_update_scenes,
     }
 
 
@@ -1947,13 +1966,20 @@ def _handle_obs_build(
     request: dict,
     log: logging.Logger,
 ) -> dict:
-    """GUI "Build my scenes": create the two layouts in the user's OBS.
+    """GUI Build/Update: create or safely upgrade the two OBS layouts.
 
     Needs a paired overlay token — the backdrop, chat and stats panels
     are all Browser Sources pointed at the user's own overlay URLs, so
     there is nothing meaningful to build without one.
     """
-    from .live.obs_layout import SceneBuildError, build_scenes, plan_scenes
+    from .live.obs_layout import (
+        BuildPlan,
+        PlannedScene,
+        SceneBuildError,
+        build_scenes,
+        plan_scenes,
+        repair_manual_scene_overrides,
+    )
 
     token = _overlay_token_for_build(cfg, state, log)
     if not token:
@@ -1984,9 +2010,84 @@ def _handle_obs_build(
             webcam_source=request.get("webcam_source") or None,
             game_source=request.get("game_source") or None,
         )
-        created = build_scenes(
-            client, plan, rebuild=bool(request.get("rebuild")),
-        )
+        rebuild = bool(request.get("rebuild"))
+        repaired: list[str] = []
+        missing_generated: list[str] = []
+        raw_authorized_updates = request.get("update_existing_scenes") or []
+        if isinstance(raw_authorized_updates, str):
+            raw_authorized_updates = [raw_authorized_updates]
+        authorized_updates = list(dict.fromkeys(
+            str(name) for name in raw_authorized_updates
+        ))
+        planned_names = {scene.name for scene in plan.scenes}
+        foreign_updates = [
+            name for name in authorized_updates if name not in planned_names
+        ]
+        if foreign_updates:
+            raise SceneBuildError(
+                "Refusing an update request for non-generated OBS scenes: "
+                + ", ".join(foreign_updates),
+            )
+
+        if rebuild:
+            created = build_scenes(client, plan, rebuild=True)
+        elif authorized_updates:
+            # Test connection grants update permission for exact scene names.
+            # Never infer permission merely because a generated name exists:
+            # the inventory read may have failed or OBS may have changed after
+            # the confirmation dialog was shown.
+            created = []
+            authorized_existing = [
+                scene.name for scene in plan.scenes
+                if scene.exists and scene.name in authorized_updates
+            ]
+            missing_generated = [
+                scene.name for scene in plan.scenes if not scene.exists
+            ]
+            if authorized_existing:
+                manual_url = next(
+                    item.browser_path
+                    for scene in plan.scenes
+                    for item in scene.items
+                    if item.share_key == "manual_scene_override"
+                    and item.browser_path
+                )
+                repaired = repair_manual_scene_overrides(
+                    client,
+                    browser_url=manual_url,
+                    scene_names=authorized_existing,
+                )
+        elif plan.conflicts:
+            # A normal Build may create a missing counterpart, but it has no
+            # authority to alter an existing generated scene. Keeping this
+            # separate keeps scene creation out of the non-destructive repair
+            # transaction the user just confirmed.
+            missing_scenes = [
+                PlannedScene(
+                    name=scene.name,
+                    exists=False,
+                    items=list(scene.items),
+                )
+                for scene in plan.scenes
+                if not scene.exists
+            ]
+            missing_plan = BuildPlan(
+                canvas_width=plan.canvas_width,
+                canvas_height=plan.canvas_height,
+                scenes=missing_scenes,
+                webcam_source=plan.webcam_source,
+                game_source=plan.game_source,
+                warnings=list(plan.warnings),
+            )
+            created = build_scenes(client, missing_plan) if missing_scenes else []
+            if not created:
+                raise SceneBuildError(
+                    "These SC2 Tools scenes already exist. Run Test "
+                    "connection and use Update my scenes, or explicitly "
+                    "choose Replace in the confirmation dialog.",
+                )
+        else:
+            created = build_scenes(client, plan)
     except SceneBuildError as exc:
         return {"ok": False, "message": str(exc)}
     except Exception as exc:  # noqa: BLE001
@@ -1995,14 +2096,44 @@ def _handle_obs_build(
     finally:
         client.shutdown()
 
-    log.info("obs_scene_build_ok created=%s", ",".join(created))
+    log.info(
+        "obs_scene_build_ok created=%s repaired=%s",
+        ",".join(created),
+        ",".join(repaired),
+    )
     note = " ".join(plan.warnings) if plan.warnings else ""
+    updated_existing = [name for name in repaired if name not in created]
+    outcomes: list[str] = []
+    if updated_existing:
+        outcomes.append(
+            "Updated the BRB / Starting Soon priority in "
+            f"{len(updated_existing)} existing scene(s) without changing "
+            f"their layout: {', '.join(updated_existing)}."
+        )
+    if created:
+        outcomes.append(
+            f"Created {len(created)} missing scene(s): {', '.join(created)}."
+        )
+    if missing_generated:
+        outcomes.append(
+            "Update left the missing generated scene(s) untouched: "
+            f"{', '.join(missing_generated)}. Click Build my scenes to "
+            "create them separately."
+        )
+    if not outcomes:
+        outcomes.append("Your SC2 Tools scenes are already up to date.")
+    outcome = " ".join(outcomes) + " "
+    next_step = (
+        "After building the missing scene, click Save to turn on switching."
+        if missing_generated
+        else "They're selected in the dropdowns below — click Save to "
+        "turn on switching."
+    )
     return {
         "ok": True,
         "message": (
-            f"Created {len(created)} scene(s): {', '.join(created)}. "
-            "They're selected in the dropdowns below — click Save to "
-            "turn on switching. " + note
+            outcome +
+            next_step + " " + note
         ).strip(),
         "scenes": client.scene_names or created,
     }

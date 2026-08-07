@@ -2,15 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.15.11
 
 ### Fixed — Stream Dock cards overridden by automatic scene switching
 
 - The scene builder now puts one shared, full-canvas manual override at the
   top of both generated layouts. It stays transparent during Go Live and
   displays Starting Soon or BRB above whichever scene the automatic switcher
-  selects underneath. Run **Build my scenes…** with **Replace them if they
-  already exist** checked once to add it to previously generated scenes.
+  selects underneath.
+- Existing generated scenes are detected during **Test connection** and can be
+  upgraded with **Update my scenes**. The update adds or repositions only the
+  shared cover, preserving the current layout and custom sources; a full
+  replacement remains a separate, explicit option.
 
 ## 0.15.10
 

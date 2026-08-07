@@ -331,6 +331,10 @@ class ProbeClient:
         {"name": "Cam", "kind": "dshow_input"},
         {"name": "SC2", "kind": "game_capture"},
     ]
+    scene_items: Dict[str, List[Dict[str, Any]]] = {}
+    input_settings: Dict[str, Dict[str, Any]] = {}
+    next_item_id: int = 100
+    inventory_error: Optional[BaseException] = None
 
     def __init__(self, **kw: Any) -> None:
         self.kwargs = kw
@@ -364,24 +368,89 @@ class ProbeClient:
     def get_video_settings(self) -> Dict[str, Any]:
         return {"base_width": 1920, "base_height": 1080}
 
+    def get_input_settings(self, name: str) -> Dict[str, Any]:
+        return dict(ProbeClient.input_settings.get(name, {}))
+
+    def get_scene_item_list(self, scene_name: str) -> List[Dict[str, Any]]:
+        if ProbeClient.inventory_error is not None:
+            raise ProbeClient.inventory_error
+        return [
+            {**item, "transform": dict(item.get("transform") or {})}
+            for item in ProbeClient.scene_items.get(scene_name, [])
+        ]
+
     def create_scene(self, name: str) -> None:
         ProbeClient.scenes.append(name)
+        ProbeClient.scene_items[name] = []
 
     def remove_scene(self, name: str) -> None:
         if name in ProbeClient.scenes:
             ProbeClient.scenes.remove(name)
+        ProbeClient.scene_items.pop(name, None)
 
     def create_scene_item(self, **kw: Any) -> int:
-        return 1
+        ProbeClient.next_item_id += 1
+        source_name = str(kw["source_name"])
+        kind = next(
+            (row["kind"] for row in ProbeClient.inputs if row["name"] == source_name),
+            "",
+        )
+        items = ProbeClient.scene_items.setdefault(kw["scene_name"], [])
+        items.append(
+            {
+                "source_name": source_name,
+                "item_id": ProbeClient.next_item_id,
+                "index": len(items),
+                "input_kind": kind,
+                "enabled": True,
+                "transform": {},
+            },
+        )
+        return ProbeClient.next_item_id
 
     def create_input(self, **kw: Any) -> int:
-        return 2
+        ProbeClient.next_item_id += 1
+        name = str(kw["input_name"])
+        ProbeClient.inputs.append({"name": name, "kind": kw["input_kind"]})
+        ProbeClient.input_settings[name] = dict(kw["settings"])
+        items = ProbeClient.scene_items.setdefault(kw["scene_name"], [])
+        items.append(
+            {
+                "source_name": name,
+                "item_id": ProbeClient.next_item_id,
+                "index": len(items),
+                "input_kind": kw["input_kind"],
+                "enabled": bool(kw.get("enabled", True)),
+                "transform": {},
+            },
+        )
+        return ProbeClient.next_item_id
 
     def set_scene_item_transform(self, **kw: Any) -> None:
-        pass
+        item = next(
+            row for row in ProbeClient.scene_items[kw["scene_name"]]
+            if row["item_id"] == kw["item_id"]
+        )
+        item["transform"] = dict(kw["transform"])
 
     def set_scene_item_index(self, **kw: Any) -> None:
-        pass
+        items = sorted(
+            ProbeClient.scene_items[kw["scene_name"]],
+            key=lambda row: row["index"],
+        )
+        moving = next(row for row in items if row["item_id"] == kw["item_id"])
+        items.remove(moving)
+        items.insert(max(0, min(int(kw["index"]), len(items))), moving)
+        for index, item in enumerate(items):
+            item["index"] = index
+        ProbeClient.scene_items[kw["scene_name"]] = items
+
+    def set_scene_item_enabled(self, **kw: Any) -> None:
+        item = next(
+            row for row in ProbeClient.scene_items[kw["scene_name"]]
+            if row["item_id"] == kw["item_id"]
+        )
+        item["enabled"] = bool(kw["enabled"])
 
     def shutdown(self) -> None:
         self.shutdown_called = True
@@ -396,6 +465,10 @@ def _patch_client(monkeypatch):
         {"name": "Cam", "kind": "dshow_input"},
         {"name": "SC2", "kind": "game_capture"},
     ]
+    ProbeClient.scene_items = {}
+    ProbeClient.input_settings = {}
+    ProbeClient.next_item_id = 100
+    ProbeClient.inventory_error = None
     monkeypatch.setattr(runner, "ObsClient", ProbeClient)
     yield
 
@@ -409,6 +482,39 @@ def test_probe_reports_version_scenes_and_sources() -> None:
     assert result["scenes"] == ["Gameplay", "BRB"]
     assert result["webcams"] == ["Cam"]
     assert result["games"] == ["SC2"]
+
+
+def test_probe_reports_legacy_scenes_that_need_the_priority_update() -> None:
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES, SCENE_IN_GAME]
+    ProbeClient.scene_items = {
+        SCENE_BETWEEN_GAMES: [],
+        SCENE_IN_GAME: [],
+    }
+
+    result = _handle_obs_probe(
+        host="127.0.0.1", port=4455, password="pw", log=_LOG,
+    )
+
+    assert result["ok"] is True
+    assert result["manual_override_update_scenes"] == [
+        SCENE_BETWEEN_GAMES,
+        SCENE_IN_GAME,
+    ]
+    assert "priority update" in result["message"]
+
+
+def test_probe_inventory_failure_keeps_the_connection_result_useful() -> None:
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES, SCENE_IN_GAME]
+    ProbeClient.inventory_error = RuntimeError("inventory unavailable")
+
+    result = _handle_obs_probe(
+        host="127.0.0.1", port=4455, password="pw", log=_LOG,
+    )
+
+    assert result["ok"] is True
+    assert "30.1.2" in result["message"]
+    assert result["manual_override_update_scenes"] == []
+    assert ProbeClient.instances[0].shutdown_called is True
 
 
 def test_probe_closes_its_throwaway_client() -> None:
@@ -477,21 +583,98 @@ def test_build_creates_both_scenes(tmp_path: Path, monkeypatch) -> None:
     assert SCENE_IN_GAME in ProbeClient.scenes
 
 
-def test_build_surfaces_the_conflict_instead_of_clobbering(
+def test_build_updates_existing_generated_scenes_without_clobbering(
     tmp_path: Path, monkeypatch,
 ) -> None:
     monkeypatch.setattr(
         runner, "_overlay_token_for_build", lambda cfg, state, log: "tok",
     )
     ProbeClient.scenes = ["Gameplay", SCENE_BETWEEN_GAMES]
+    ProbeClient.scene_items[SCENE_BETWEEN_GAMES] = [
+        {
+            "source_name": "Custom Stats Ticker",
+            "item_id": 77,
+            "index": 0,
+            "input_kind": "browser_source",
+            "transform": {},
+        },
+    ]
+    ProbeClient.inputs.append(
+        {"name": "Custom Stats Ticker", "kind": "browser_source"},
+    )
+    ProbeClient.input_settings["Custom Stats Ticker"] = {
+        "url": "https://example.com/custom",
+    }
+    result = _handle_obs_build(
+        cfg=_cfg(tmp_path),
+        state=AgentState(device_token="dev"),
+        request={
+            "webcam_source": "Cam",
+            "game_source": "SC2",
+            "update_existing_scenes": [SCENE_BETWEEN_GAMES],
+        },
+        log=_LOG,
+    )
+    assert result["ok"] is True, result["message"]
+    assert "without changing their layout" in result["message"]
+    assert "left the missing generated scene(s) untouched" in result["message"]
+    assert "Custom Stats Ticker" in [
+        item["source_name"]
+        for item in ProbeClient.scene_items[SCENE_BETWEEN_GAMES]
+    ]
+    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][-1][
+        "source_name"
+    ].startswith("SC2 Tools Manual Override")
+    assert SCENE_IN_GAME not in ProbeClient.scenes
+
+    # A separate Build creates only the missing counterpart; it still has no
+    # permission to rewrite the customized scene we just upgraded.
+    between_after_update = [
+        dict(item) for item in ProbeClient.scene_items[SCENE_BETWEEN_GAMES]
+    ]
+    build_missing = _handle_obs_build(
+        cfg=_cfg(tmp_path),
+        state=AgentState(device_token="dev"),
+        request={"webcam_source": "Cam", "game_source": "SC2"},
+        log=_LOG,
+    )
+    assert build_missing["ok"] is True, build_missing["message"]
+    assert f"Created 1 missing scene(s): {SCENE_IN_GAME}" in (
+        build_missing["message"]
+    )
+    assert SCENE_IN_GAME in ProbeClient.scenes
+    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES] == between_after_update
+
+
+def test_build_does_not_infer_permission_to_modify_existing_scenes(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        runner, "_overlay_token_for_build", lambda cfg, state, log: "tok",
+    )
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES, SCENE_IN_GAME]
+    ProbeClient.scene_items = {
+        SCENE_BETWEEN_GAMES: [],
+        SCENE_IN_GAME: [],
+    }
+
     result = _handle_obs_build(
         cfg=_cfg(tmp_path),
         state=AgentState(device_token="dev"),
         request={"webcam_source": "Cam", "game_source": "SC2"},
         log=_LOG,
     )
+
     assert result["ok"] is False
-    assert "already exist" in result["message"]
+    assert "use Update my scenes" in result["message"]
+    assert ProbeClient.scene_items == {
+        SCENE_BETWEEN_GAMES: [],
+        SCENE_IN_GAME: [],
+    }
+    assert not any(
+        row["name"].startswith("SC2 Tools Manual Override")
+        for row in ProbeClient.inputs
+    )
 
 
 def test_build_rebuild_flag_replaces(tmp_path: Path, monkeypatch) -> None:

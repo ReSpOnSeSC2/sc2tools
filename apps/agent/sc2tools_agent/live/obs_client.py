@@ -448,7 +448,17 @@ class ObsClient:
             # (distinguishing "bad request" from "socket died") needs
             # library-specific error types that shift between releases.
             with self._lock:
-                self._raw = None
+                # A reconfigure/reconnect may have installed a newer handle
+                # while this request was in flight. Only clear and close the
+                # connection that actually failed.
+                failed_current_connection = self._raw is raw
+                if failed_current_connection:
+                    self._raw = None
+            if failed_current_connection:
+                try:
+                    raw.disconnect()
+                except Exception:  # noqa: BLE001 — teardown is best-effort
+                    pass
             METRICS.incr("obs.request.error")
             _log.debug("obs_request_failed method=%s", method, exc_info=True)
             raise ObsUnavailable(f"{method} failed: {exc}") from exc
@@ -516,6 +526,81 @@ class ObsClient:
                 )
         return [row for row in out if row["name"]]
 
+    def get_input_settings(self, name: str) -> Dict[str, Any]:
+        """Return one input's settings as a plain dictionary.
+
+        The scene-upgrade path uses this to identify the manual cover by
+        its overlay URL, never by a display name that could collide with a
+        source the streamer created themselves.
+        """
+        resp = self._call("get_input_settings", name)
+        settings = getattr(resp, "input_settings", None) or {}
+        return dict(settings) if isinstance(settings, dict) else {}
+
+    def get_scene_item_list(self, scene_name: str) -> List[Dict[str, Any]]:
+        """Return the scene stack in OBS layer order (bottom to top).
+
+        obs-websocket exposes camelCase dictionaries inside the response;
+        normalising them here keeps the layout/repair code independent of
+        the client library's response representation.
+        """
+        resp = self._call("get_scene_item_list", scene_name)
+        raw_items = getattr(resp, "scene_items", None) or []
+        out: List[Dict[str, Any]] = []
+        for raw in raw_items:
+            if isinstance(raw, dict):
+                source_name = raw.get("sourceName") or raw.get("source_name")
+                item_id = raw.get("sceneItemId")
+                if item_id is None:
+                    item_id = raw.get("scene_item_id")
+                index = raw.get("sceneItemIndex")
+                if index is None:
+                    index = raw.get("scene_item_index")
+                input_kind = raw.get("inputKind") or raw.get("input_kind")
+                enabled = raw.get("sceneItemEnabled")
+                if enabled is None:
+                    enabled = raw.get("scene_item_enabled")
+                transform = raw.get("sceneItemTransform") or raw.get(
+                    "scene_item_transform",
+                )
+            else:
+                source_name = getattr(raw, "source_name", None) or getattr(
+                    raw, "sourceName", None,
+                )
+                item_id = getattr(raw, "scene_item_id", None)
+                if item_id is None:
+                    item_id = getattr(raw, "sceneItemId", None)
+                index = getattr(raw, "scene_item_index", None)
+                if index is None:
+                    index = getattr(raw, "sceneItemIndex", None)
+                input_kind = getattr(raw, "input_kind", None) or getattr(
+                    raw, "inputKind", None,
+                )
+                enabled = getattr(raw, "scene_item_enabled", None)
+                if enabled is None:
+                    enabled = getattr(raw, "sceneItemEnabled", None)
+                transform = getattr(raw, "scene_item_transform", None) or getattr(
+                    raw, "sceneItemTransform", None,
+                )
+            if not source_name or item_id is None:
+                continue
+            out.append(
+                {
+                    "source_name": str(source_name),
+                    "item_id": int(item_id),
+                    "index": int(index or 0),
+                    "input_kind": str(input_kind or ""),
+                    # Older test doubles and unexpected clients may omit the
+                    # field. OBS itself always returns it, and treating an
+                    # omission as enabled preserves backward compatibility.
+                    "enabled": True if enabled is None else bool(enabled),
+                    "transform": (
+                        dict(transform) if isinstance(transform, dict) else {}
+                    ),
+                },
+            )
+        return sorted(out, key=lambda item: item["index"])
+
     def create_scene(self, name: str) -> None:
         self._call("create_scene", name)
 
@@ -564,6 +649,11 @@ class ObsClient:
         self, *, scene_name: str, item_id: int, index: int,
     ) -> None:
         self._call("set_scene_item_index", scene_name, item_id, index)
+
+    def set_scene_item_enabled(
+        self, *, scene_name: str, item_id: int, enabled: bool,
+    ) -> None:
+        self._call("set_scene_item_enabled", scene_name, item_id, enabled)
 
     def set_current_scene_transition(self, name: str) -> None:
         self._call("set_current_scene_transition", name)

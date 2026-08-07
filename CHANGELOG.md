@@ -73,7 +73,10 @@ corresponding GitHub Release.
   changes** — the scene builder adds one shared, transparent-until-selected
   manual cover to the top of both generated layouts. The phase switcher can
   keep the scene underneath current without replacing a card the streamer
-  selected manually. Rebuild existing generated scenes once to add it.
+  selected manually. Existing generated scenes now get a detected,
+  non-destructive **Update my scenes** path that preserves custom layout
+  changes and added sources. Ships with **agent 0.15.11**
+  (`agent-v0.15.11`).
 
 - **Stats ticker quoted a stale opponent MMR** — the ticker's
   "NOW PLAYING" segment announced the rating from the *last* time you
