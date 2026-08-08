@@ -91,6 +91,10 @@ describe("services/games.todaySession", () => {
   });
 
   test("counts only games that fall on today's local-day key", async () => {
+    jest.useFakeTimers({
+      ...TIMER_FAKE_OPTS,
+      now: new Date("2026-05-10T15:00:00Z").getTime(),
+    });
     const now = new Date();
     const yesterday = new Date(now.getTime() - 30 * 60 * 60 * 1000);
     const twoDaysAgo = new Date(now.getTime() - 60 * 60 * 60 * 1000);
@@ -174,7 +178,11 @@ describe("services/games.todaySession", () => {
   });
 
   test("derives mmrStart and mmrCurrent from chronological order when myMmr is populated", async () => {
-    const t0 = new Date();
+    jest.useFakeTimers({
+      ...TIMER_FAKE_OPTS,
+      now: new Date("2026-05-10T15:10:00Z").getTime(),
+    });
+    const t0 = new Date(Date.now() - 10 * 60 * 1000);
     const t1 = new Date(t0.getTime() + 5 * 60 * 1000);
     const t2 = new Date(t0.getTime() + 10 * 60 * 1000);
     await db.games.insertMany([
@@ -214,8 +222,15 @@ describe("services/games.todaySession", () => {
     // "first EU MMR → last NA MMR" once produced a bogus "+400" that
     // was entirely a server switch. Net MMR must be computed within
     // the region of the LATEST MMR-bearing game only.
+    beforeEach(() => {
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: new Date("2026-05-10T15:30:00Z").getTime(),
+      });
+    });
+
     test("server switch mid-session: net MMR comes from the latest region only", async () => {
-      const t0 = new Date();
+      const t0 = new Date(Date.now() - 30 * 60 * 1000);
       const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
       await db.games.insertMany([
         // Morning on EU (toon-handle byte 2) around 3900.
@@ -267,7 +282,7 @@ describe("services/games.todaySession", () => {
     });
 
     test("returning to the original region re-anchors to that region's first game", async () => {
-      const t0 = new Date();
+      const t0 = new Date(Date.now() - 30 * 60 * 1000);
       const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
       await db.games.insertMany([
         {
@@ -306,7 +321,7 @@ describe("services/games.todaySession", () => {
     test("opponent toon handle serves as the region fallback per game", async () => {
       // Rows without myToonHandle still region-tag via the opponent's
       // handle — both players sit on the same regional ladder.
-      const t0 = new Date();
+      const t0 = new Date(Date.now() - 30 * 60 * 1000);
       const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
       await db.games.insertMany([
         {
@@ -335,7 +350,7 @@ describe("services/games.todaySession", () => {
       // A row with no handles at all is ambiguous — when the latest
       // MMR-bearing game IS region-tagged, a possibly-foreign baseline
       // is worse than a conservative ±0.
-      const t0 = new Date();
+      const t0 = new Date(Date.now() - 30 * 60 * 1000);
       const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
       await db.games.insertMany([
         { userId: "u1", gameId: "legacy", result: "Victory", date: t0, myMmr: 3900 },
@@ -354,7 +369,7 @@ describe("services/games.todaySession", () => {
     });
 
     test("pure-legacy rows (no handles anywhere) keep the region-blind behavior", async () => {
-      const t0 = new Date();
+      const t0 = new Date(Date.now() - 30 * 60 * 1000);
       const mins = (n) => new Date(t0.getTime() + n * 60 * 1000);
       await db.games.insertMany([
         { userId: "u1", gameId: "l1", result: "Victory", date: t0, myMmr: 4000 },
@@ -1459,15 +1474,14 @@ describe("services/games.todaySession", () => {
   });
 
   test("respects the requested timezone when bucketing day boundaries", async () => {
-    // Pick a moment we control: a game timestamped at 23:00 UTC.
-    // For a UTC overlay this is "today"; for an Auckland overlay
-    // (UTC+12/13) the same instant has already rolled into "tomorrow",
-    // and so the per-tz aggregate diverges. We build the timestamp
-    // anchored to the current wall clock so the test stays valid as
-    // calendars roll.
-    const now = new Date();
-    // Move the game to 1 minute ago so it's unambiguously "today" in UTC.
-    const recent = new Date(now.getTime() - 60 * 1000);
+    // At 04:30 UTC it is 00:30 in New York. A game from one hour ago is
+    // therefore part of today's UTC bucket but yesterday's New York
+    // bucket, giving the two timezone queries deterministic answers.
+    jest.useFakeTimers({
+      ...TIMER_FAKE_OPTS,
+      now: new Date("2026-05-10T04:30:00Z").getTime(),
+    });
+    const recent = new Date(Date.now() - 60 * 60 * 1000);
     await db.games.insertOne({
       userId: "u1",
       gameId: "recent",
@@ -1476,13 +1490,8 @@ describe("services/games.todaySession", () => {
     });
     const utc = await svc.todaySession("u1", "UTC");
     expect(utc.games).toBe(1);
-    // Sanity: the same query in a different valid TZ still produces a
-    // well-formed response (count may be 0 or 1 depending on whether
-    // the moment crossed the day boundary in that TZ; the exact value
-    // is environment-sensitive).
     const ny = await svc.todaySession("u1", "America/New_York");
-    expect(ny.games === 0 || ny.games === 1).toBe(true);
-    expect(ny.games + utc.games).toBeGreaterThanOrEqual(1);
+    expect(ny.games).toBe(0);
   });
 });
 
