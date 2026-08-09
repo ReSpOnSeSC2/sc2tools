@@ -2,6 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.12
+
+### Fixed — legacy generated scenes now repair automatically
+
+- Existing `SC2 Tools — Between Games` and `SC2 Tools — In Game` scenes now
+  receive their missing full-screen Stream Dock cover automatically when the
+  enabled scene switcher connects to OBS. Auto-started and minimized agents no
+  longer require a hidden **Test connection → Update my scenes** migration
+  before Starting Soon or BRB can cover the camera and game capture.
+- The migration remains non-destructive and idempotent: it derives the manual
+  route from the generated scene's existing authenticated Browser Source,
+  adds or reuses one shared cover, and changes no camera, capture, widget, or
+  custom source.
+
 ## 0.15.11
 
 ### Fixed — Stream Dock cards overridden by automatic scene switching

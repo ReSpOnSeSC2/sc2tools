@@ -28,6 +28,7 @@ from sc2tools_agent.live.obs_layout import (
     SCENE_NAME_PREFIX,
     SceneBuildError,
     build_scenes,
+    discover_manual_override_url,
     discover_sources,
     manual_override_scenes_needing_update,
     plan_scenes,
@@ -345,6 +346,94 @@ def test_discovery_prefers_game_capture_over_window_capture() -> None:
         ],
     )
     assert discover_sources(obs)["game"] == ["Game", "Window"]
+
+
+def test_manual_override_url_is_discovered_from_a_legacy_generated_scene() -> None:
+    obs = LegacyObs()
+
+    assert discover_manual_override_url(obs) == (
+        f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    )
+
+
+def test_manual_override_url_discovery_ignores_foreign_browser_routes() -> None:
+    obs = LegacyObs()
+    obs.input_settings = {
+        name: {"url": "https://example.com/overlay/stolen/scene/not-ours"}
+        for name in obs.input_settings
+    }
+
+    assert discover_manual_override_url(obs) is None
+
+
+def test_manual_override_url_discovery_ignores_custom_overlay_sources() -> None:
+    obs = LegacyObs()
+    obs._inputs.append({"name": "Sponsor Overlay", "kind": "browser_source"})
+    obs.input_settings["Sponsor Overlay"] = {
+        "url": "https://evil.example/overlay/stolen/scene/manual",
+    }
+    obs.scene_items[SCENE_BETWEEN_GAMES].insert(
+        0,
+        {
+            "source_name": "Sponsor Overlay",
+            "item_id": 999,
+            "index": -1,
+            "input_kind": "browser_source",
+            "enabled": True,
+            "transform": {},
+        },
+    )
+
+    assert discover_manual_override_url(obs) == (
+        f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    )
+
+
+def test_manual_override_url_discovery_rejects_a_same_named_foreign_scene() -> None:
+    obs = LegacyObs()
+    obs.scene_items[SCENE_BETWEEN_GAMES] = [
+        {
+            "source_name": "Stats Ticker",
+            "item_id": 999,
+            "index": 0,
+            "input_kind": "browser_source",
+            "enabled": True,
+            "transform": {},
+        },
+    ]
+
+    assert discover_manual_override_url(obs) is None
+
+
+def test_manual_override_url_discovery_rejects_non_http_urls() -> None:
+    obs = LegacyObs()
+    for name, settings in obs.input_settings.items():
+        route = str(settings["url"]).split(f"/overlay/{TOKEN}/", 1)[-1]
+        settings["url"] = f"ftp://example.com/overlay/{TOKEN}/{route}"
+
+    assert discover_manual_override_url(obs) is None
+
+
+def test_manual_override_url_discovery_preserves_a_base_path() -> None:
+    obs = LegacyObs()
+    obs.input_settings.update(
+        {
+            "SC2 Tools Backdrop": {
+                "url": "https://example.com/app/overlay/tok/scene/"
+                "between-games?preview=1",
+            },
+            "SC2 Tools Session Stats": {
+                "url": "https://example.com/app/overlay/tok/widget/session",
+            },
+            "SC2 Tools Chat": {
+                "url": "https://example.com/app/overlay/tok/widget/multichat",
+            },
+        },
+    )
+
+    assert discover_manual_override_url(obs) == (
+        "https://example.com/app/overlay/tok/scene/manual"
+    )
 
 
 # ---------------- planning ----------------

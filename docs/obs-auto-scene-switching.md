@@ -159,13 +159,18 @@ half entirely and point the phase map at their own scene.
 `obs_layout.py` is the only code in the agent that writes to a user's
 OBS, and it runs against a live stream setup. So:
 
-* It runs **only** on an explicit **Build my scenes** or **Update my scenes**
-  click, after a confirmation dialog explains the write.
+* Creating or replacing a layout runs **only** on an explicit
+  **Build my scenes** or **Replace scenes** confirmation.
 * It creates only scenes prefixed `SC2 Tools — `.
-* A non-destructive update targets only the two exact generated scene names,
-  adds or repositions only the manual cover, and verifies it is topmost. It
-  never removes or reorders the streamer's other sources, and it does not
-  create a missing counterpart; that remains a separate **Build** action.
+* Whenever the enabled scene switcher connects to OBS, a non-destructive
+  compatibility repair targets only the two exact generated scene names. It
+  adds, enables, resizes, or raises only the manual cover and verifies it is
+  topmost. It never removes or reorders the streamer's other sources, and it
+  does not create a missing counterpart; that remains a separate **Build**
+  action. Before any automatic write, the existing Between Games scene must
+  still carry the builder's Backdrop, Session Stats, and Chat Browser Sources
+  with their expected routes and one shared overlay origin/token; a scene name
+  alone is never treated as ownership.
 * Full replacement remains explicit. A second guard (`_assert_ours`) rejects
   removing any scene name without the generated prefix.
 * Input-name collisions get a numeric suffix rather than aborting the
@@ -181,10 +186,12 @@ switcher fires, which is many times a session.
 
 A fresh build creates the manual override Browser Source once and adds the
 same OBS input to both generated scenes. This keeps one connection and one
-piece of state behind both scene items. **Test connection** detects older
-generated scenes with a missing or misplaced cover and changes the action to
-**Update my scenes**. That update preserves custom transforms and added
-sources; **Replace the scenes instead** is the separate destructive reset.
+piece of state behind both scene items. When the enabled scene switcher
+connects to OBS, older generated scenes with a missing or misplaced cover are
+upgraded automatically using the authenticated overlay URL already present in
+the layout. The same non-destructive repair remains available through **Test
+connection → Update my scenes**; **Replace the scenes instead** is the separate
+destructive reset.
 
 For custom phase-mapped scenes, add
 `/overlay/<token>/scene/manual` as a 1920×1080 Browser Source (or your

@@ -217,6 +217,12 @@ class ObsClient:
         with self._lock:
             return list(self._scene_names)
 
+    @property
+    def connection_settings(self) -> tuple[str, int, Optional[str]]:
+        """Current endpoint snapshot for short-lived companion clients."""
+        with self._lock:
+            return self._host, self._port, self._password
+
     def connect_now(self) -> bool:
         """Synchronous single attempt — the GUI's "Test connection".
 
@@ -287,6 +293,8 @@ class ObsClient:
             self.refresh_scenes()
         except Exception:  # noqa: BLE001
             _log.debug("obs_scene_list_refresh_failed", exc_info=True)
+        if not self.is_connected:
+            return False
 
         if self._subscribe_events:
             self._attach_events()
@@ -296,7 +304,11 @@ class ObsClient:
                 self._on_connected()
             except Exception:  # noqa: BLE001
                 _log.debug("obs_on_connected_callback_failed", exc_info=True)
-        return True
+        # A post-connect inventory request can discover that the request
+        # socket is already unusable and clear ``_raw``. Report that as a
+        # failed attempt so the connection loop applies its normal exponential
+        # backoff instead of spinning through immediate reconnects.
+        return self.is_connected
 
     def _attach_events(self) -> None:
         """Open the event socket for manual-override detection.
@@ -333,9 +345,19 @@ class ObsClient:
             events.callback.register(_on_current_program_scene_changed)
         except Exception:  # noqa: BLE001
             _log.debug("obs_event_register_failed", exc_info=True)
+            try:
+                events.disconnect()
+            except Exception:  # noqa: BLE001 — teardown is best-effort
+                pass
             return
         with self._lock:
+            previous_events = self._events
             self._events = events
+        if previous_events is not None and previous_events is not events:
+            try:
+                previous_events.disconnect()
+            except Exception:  # noqa: BLE001 — teardown is best-effort
+                pass
 
     def _record_connect_failure(self, exc: BaseException) -> None:
         classified = self._classify(exc)

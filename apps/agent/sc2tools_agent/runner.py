@@ -2219,10 +2219,59 @@ def _build_obs_switcher(
         transition_name=state.obs_transition_name,
         transition_duration_ms=state.obs_transition_duration_ms,
     )
+    client: ObsClient
+
+    def _repair_generated_manual_covers() -> None:
+        """Upgrade legacy generated layouts after each OBS connection.
+
+        This callback is best-effort by design: scene switching must stay
+        available even if an older OBS build cannot inventory or edit items.
+        The repair itself is restricted to the two exact generated scenes and
+        never changes their existing camera, capture, or custom sources. It
+        uses a throwaway request connection so a failed migration cannot drop
+        the switcher's long-lived request or event sockets.
+        """
+        repair_host, repair_port, repair_password = client.connection_settings
+        repair_client = ObsClient(
+            host=repair_host,
+            port=repair_port,
+            password=repair_password,
+            subscribe_events=False,
+        )
+        try:
+            from .live.obs_layout import (
+                discover_manual_override_url,
+                repair_manual_scene_overrides,
+            )
+
+            if not repair_client.connect_now():
+                raise RuntimeError("OBS repair connection did not stay healthy")
+            manual_url = discover_manual_override_url(repair_client)
+            if manual_url is None:
+                log.debug(
+                    "obs_manual_override_auto_repair_skipped "
+                    "reason=no_generated_overlay_url",
+                )
+                return
+            repaired = repair_manual_scene_overrides(
+                repair_client,
+                browser_url=manual_url,
+            )
+            if repaired:
+                log.info(
+                    "obs_manual_override_auto_repaired scenes=%r",
+                    repaired,
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("obs_manual_override_auto_repair_failed err=%s", exc)
+        finally:
+            repair_client.shutdown()
+
     client = ObsClient(
         host=host,
         port=port,
         password=password,
+        on_connected=_repair_generated_manual_covers,
         on_program_scene_changed=controller.on_program_scene_changed,
     )
     controller.attach_client(client)

@@ -73,10 +73,12 @@ corresponding GitHub Release.
   changes** — the scene builder adds one shared, transparent-until-selected
   manual cover to the top of both generated layouts. The phase switcher can
   keep the scene underneath current without replacing a card the streamer
-  selected manually. Existing generated scenes now get a detected,
-  non-destructive **Update my scenes** path that preserves custom layout
-  changes and added sources. Ships with **agent 0.15.11**
-  (`agent-v0.15.11`).
+  selected manually. Agent 0.15.12 automatically and non-destructively adds
+  that cover to older generated scenes whenever the enabled scene switcher
+  connects to OBS, including auto-started/minimized installs; custom layouts
+  and added sources are preserved. The manual **Update my scenes** action
+  remains available as a recovery path. Ships with **agent 0.15.12**
+  (`agent-v0.15.12`).
 
 - **Stats ticker quoted a stale opponent MMR** — the ticker's
   "NOW PLAYING" segment announced the rating from the *last* time you

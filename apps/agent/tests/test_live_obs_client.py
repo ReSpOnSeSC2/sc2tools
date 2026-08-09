@@ -48,6 +48,19 @@ class _RawObs:
         self.disconnected = True
 
 
+class _RawEvents:
+    def __init__(self) -> None:
+        self.disconnected = False
+        self.registered = None
+        self.callback = SimpleNamespace(register=self._register)
+
+    def _register(self, callback):
+        self.registered = callback
+
+    def disconnect(self):
+        self.disconnected = True
+
+
 def _client(raw: _RawObs) -> ObsClient:
     client = ObsClient(
         connect_factory=lambda **_kwargs: raw,
@@ -98,3 +111,62 @@ def test_failed_request_disconnects_the_failed_socket() -> None:
 
     assert raw.disconnected is True
     assert client.is_connected is False
+
+
+def test_post_connect_request_failure_reports_an_unhealthy_connection() -> None:
+    """The reconnect loop must back off if migration loses its request socket."""
+    class BrokenRaw(_RawObs):
+        def get_current_program_scene(self):
+            raise RuntimeError("socket died during post-connect work")
+
+    raw = BrokenRaw()
+    holder = {}
+    client = ObsClient(
+        connect_factory=lambda **_kwargs: raw,
+        on_connected=lambda: holder["client"].current_program_scene(),
+        subscribe_events=False,
+    )
+    holder["client"] = client
+
+    assert client.connect_now() is False
+    assert raw.disconnected is True
+    assert client.is_connected is False
+
+
+def test_reconnect_replaces_and_closes_the_old_event_socket() -> None:
+    class FirstRaw(_RawObs):
+        def get_current_program_scene(self):
+            raise RuntimeError("request socket died")
+
+    request_clients = iter([FirstRaw(), _RawObs()])
+    event_clients = [_RawEvents(), _RawEvents()]
+    event_iter = iter(event_clients)
+    client = ObsClient(
+        connect_factory=lambda **_kwargs: next(request_clients),
+        event_factory=lambda **_kwargs: next(event_iter),
+        on_program_scene_changed=lambda _name: None,
+    )
+    try:
+        assert client.connect_now() is True
+        with pytest.raises(ObsUnavailable):
+            client.current_program_scene()
+
+        assert client.connect_now() is True
+        assert event_clients[0].disconnected is True
+        assert event_clients[1].disconnected is False
+    finally:
+        client.shutdown()
+    assert event_clients[1].disconnected is True
+
+
+def test_connection_settings_follow_reconfigure() -> None:
+    client = ObsClient(
+        host="127.0.0.1",
+        port=4455,
+        password="old",
+        subscribe_events=False,
+    )
+
+    client.reconfigure(host="10.0.0.8", port=4466, password="new")
+
+    assert client.connection_settings == ("10.0.0.8", 4466, "new")

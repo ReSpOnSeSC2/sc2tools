@@ -27,13 +27,14 @@ nothing. That buys three things retransforming in place does not:
 Safety contract
 ---------------
 
-The write paths in this module run **only** when the user explicitly
-clicks Build or Update. Building creates scenes named with the
-``SC2 Tools — `` prefix. Updating may add or reposition the shared
-manual-override cover inside those two exact generated scenes, but it
-never removes or reorders their other items. Replacing an existing
-SC2 Tools scene requires an explicit flag, and even then it will only
-remove a scene whose name it owns.
+Building or replacing a layout runs **only** when the user explicitly
+clicks Build or Replace. The agent may also repair the shared manual-
+override cover when it connects to OBS. That repair is deliberately
+narrow: it can add, enable, resize, or raise the cover inside the two
+exact generated scenes, but it never creates a scene or removes or
+reorders any other item. Replacing an existing SC2 Tools scene requires
+an explicit flag, and even then it will only remove a scene whose name
+it owns.
 
 Geometry
 --------
@@ -198,6 +199,12 @@ MANUAL_OVERRIDE_SCENES: Sequence[str] = (
     SCENE_BETWEEN_GAMES,
     SCENE_IN_GAME,
 )
+_GENERATED_BROWSER_ROUTES = {
+    "SC2 Tools Backdrop": ("scene", "between-games"),
+    "SC2 Tools Session Stats": ("widget", "session"),
+    "SC2 Tools Chat": ("widget", "multichat"),
+    MANUAL_OVERRIDE_INPUT_NAME: ("scene", "manual"),
+}
 
 
 def _overlay_url(base_url: str, token: str, path: str) -> str:
@@ -525,6 +532,65 @@ def manual_override_scenes_needing_update(
     return needs_update
 
 
+def discover_manual_override_url(
+    client: Any,
+    *,
+    scene_names: Sequence[str] = MANUAL_OVERRIDE_SCENES,
+) -> Optional[str]:
+    """Derive the manual-cover URL from an existing generated layout.
+
+    Older layouts already contain authenticated SC2 Tools Browser Sources,
+    but predate ``/scene/manual``. Reusing their origin and overlay token lets
+    startup migrate those layouts without a cloud request or persisting the
+    token in the agent. Automatic authorization requires the complete legacy
+    builder fingerprint inside the exact Between Games scene.
+    """
+    targets = _existing_manual_override_targets(client, scene_names)
+    if SCENE_BETWEEN_GAMES not in targets:
+        return None
+
+    # A name alone is not proof that a scene belongs to the builder. Require
+    # the three Browser Sources every legacy Between Games layout contained,
+    # with their collision-safe names, exact routes, and one shared
+    # origin/token. A customized or same-named foreign scene then falls back
+    # to the explicit Test -> Update flow rather than being changed at startup.
+    required_routes = {
+        ("scene", "between-games"),
+        ("widget", "session"),
+        ("widget", "multichat"),
+    }
+    settings_cache: Dict[str, Dict[str, Any]] = {}
+    candidates: Dict[tuple[str, str], List[str]] = {
+        route: [] for route in required_routes
+    }
+    for item in client.get_scene_item_list(SCENE_BETWEEN_GAMES):
+        if item.get("input_kind") != BROWSER_INPUT_KIND:
+            continue
+        source_name = str(item.get("source_name") or "")
+        expected_route = _generated_browser_route_for_input_name(source_name)
+        if expected_route not in required_routes:
+            continue
+        settings = settings_cache.get(source_name)
+        if settings is None:
+            settings = client.get_input_settings(source_name)
+            settings_cache[source_name] = settings
+        manual_url = _manual_override_url_from_overlay_url(
+            str(settings.get("url") or ""),
+            expected_route=expected_route,
+        )
+        if manual_url is not None:
+            candidates[expected_route].append(manual_url)
+
+    if any(len(urls) != 1 for urls in candidates.values()):
+        return None
+    unique_urls = {
+        _overlay_url_key(urls[0]) for urls in candidates.values()
+    }
+    if len(unique_urls) != 1:
+        return None
+    return candidates[("scene", "between-games")][0]
+
+
 def repair_manual_scene_overrides(
     client: Any,
     *,
@@ -769,6 +835,49 @@ def _overlay_url_key(value: str) -> tuple:
     )
 
 
+def _generated_browser_route_for_input_name(
+    source_name: str,
+) -> Optional[tuple[str, str]]:
+    for base_name, route in _GENERATED_BROWSER_ROUTES.items():
+        if source_name == base_name:
+            return route
+        prefix = base_name + " "
+        if (
+            source_name.startswith(prefix)
+            and source_name[len(prefix):].isdigit()
+        ):
+            return route
+    return None
+
+
+def _manual_override_url_from_overlay_url(
+    value: str,
+    *,
+    expected_route: tuple[str, str],
+) -> Optional[str]:
+    """Convert one authenticated overlay scene/widget URL to the cover URL."""
+    try:
+        parsed = urlsplit(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+
+    # Expected route: [/optional-prefix]/overlay/<token>/(scene|widget)/<name>.
+    # Keep the token opaque and never log or return it separately.
+    parts = parsed.path.rstrip("/").split("/")
+    for index in range(len(parts) - 3, -1, -1):
+        if (
+            parts[index] == "overlay"
+            and parts[index + 1]
+            and (parts[index + 2], parts[index + 3]) == expected_route
+            and index + 3 == len(parts) - 1
+        ):
+            path = "/".join(parts[: index + 2] + ["scene", "manual"])
+            return parsed._replace(path=path, query="", fragment="").geturl()
+    return None
+
+
 def _is_manual_override_url(value: str) -> bool:
     return _overlay_url_key(value)[2].endswith(
         "/" + MANUAL_OVERRIDE_BROWSER_PATH,
@@ -967,6 +1076,7 @@ __all__ = [
     "SCENE_NAME_PREFIX",
     "SceneBuildError",
     "build_scenes",
+    "discover_manual_override_url",
     "discover_sources",
     "manual_override_scenes_needing_update",
     "plan_scenes",

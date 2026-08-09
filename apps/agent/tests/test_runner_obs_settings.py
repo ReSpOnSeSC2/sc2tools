@@ -209,6 +209,180 @@ def test_boot_builder_treats_all_blank_map_as_unconfigured() -> None:
             ctrl.shutdown()
 
 
+def test_obs_connect_auto_repairs_legacy_generated_scene_covers() -> None:
+    """An auto-started agent must migrate old layouts without a Settings trip."""
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES, SCENE_IN_GAME]
+    ProbeClient.inputs = [
+        {"name": "SC2 Tools Backdrop", "kind": "browser_source"},
+        {"name": "SC2 Tools Session Stats", "kind": "browser_source"},
+        {"name": "SC2 Tools Chat", "kind": "browser_source"},
+        {"name": "Cam", "kind": "dshow_input"},
+        {"name": "SC2", "kind": "game_capture"},
+    ]
+    ProbeClient.input_settings = {
+        "SC2 Tools Backdrop": {
+            "url": "https://sc2tools.com/overlay/tok/scene/between-games",
+        },
+        "SC2 Tools Session Stats": {
+            "url": "https://sc2tools.com/overlay/tok/widget/session",
+        },
+        "SC2 Tools Chat": {
+            "url": "https://sc2tools.com/overlay/tok/widget/multichat",
+        },
+    }
+    ProbeClient.scene_items = {
+        SCENE_BETWEEN_GAMES: [
+            {
+                "source_name": "SC2 Tools Backdrop",
+                "item_id": 1,
+                "index": 0,
+                "input_kind": "browser_source",
+                "enabled": True,
+                "transform": {},
+            },
+            {
+                "source_name": "Cam",
+                "item_id": 2,
+                "index": 1,
+                "input_kind": "dshow_input",
+                "enabled": True,
+                "transform": {"custom": "preserve"},
+            },
+            {
+                "source_name": "SC2 Tools Session Stats",
+                "item_id": 4,
+                "index": 2,
+                "input_kind": "browser_source",
+                "enabled": True,
+                "transform": {},
+            },
+            {
+                "source_name": "SC2 Tools Chat",
+                "item_id": 5,
+                "index": 3,
+                "input_kind": "browser_source",
+                "enabled": True,
+                "transform": {},
+            },
+        ],
+        SCENE_IN_GAME: [
+            {
+                "source_name": "SC2",
+                "item_id": 3,
+                "index": 0,
+                "input_kind": "game_capture",
+                "enabled": True,
+                "transform": {"custom": "preserve"},
+            },
+        ],
+    }
+    state = AgentState(obs_scene_switch_enabled=True)
+    client, ctrl = _build_obs_switcher(
+        state=state,
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        on_connected = client.kwargs["on_connected"]
+        on_connected()
+        assert len(ProbeClient.instances) == 2
+        assert ProbeClient.instances[0] is client
+        assert ProbeClient.instances[0].shutdown_called is False
+        assert ProbeClient.instances[1].shutdown_called is True
+        assert ProbeClient.instances[1].kwargs["subscribe_events"] is False
+
+        manual_inputs = [
+            row for row in ProbeClient.inputs
+            if row["name"].startswith("SC2 Tools Manual Override")
+        ]
+        assert len(manual_inputs) == 1
+        manual_name = manual_inputs[0]["name"]
+        assert ProbeClient.input_settings[manual_name]["url"] == (
+            "https://sc2tools.com/overlay/tok/scene/manual"
+        )
+        for scene_name in (SCENE_BETWEEN_GAMES, SCENE_IN_GAME):
+            assert ProbeClient.scene_items[scene_name][-1]["source_name"] == (
+                manual_name
+            )
+        assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][1]["transform"] == {
+            "custom": "preserve",
+        }
+        assert ProbeClient.scene_items[SCENE_IN_GAME][0]["transform"] == {
+            "custom": "preserve",
+        }
+
+        counts = (
+            len(ProbeClient.inputs),
+            sum(len(items) for items in ProbeClient.scene_items.values()),
+        )
+        on_connected()
+        assert (
+            len(ProbeClient.inputs),
+            sum(len(items) for items in ProbeClient.scene_items.values()),
+        ) == counts
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
+def test_obs_connect_repair_failure_does_not_break_switcher() -> None:
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES]
+    ProbeClient.inventory_error = RuntimeError("inventory unavailable")
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        client.kwargs["on_connected"]()
+        assert ProbeClient.instances[0].shutdown_called is False
+        assert ProbeClient.instances[1].shutdown_called is True
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
+def test_obs_connect_repair_uses_the_reconfigured_endpoint() -> None:
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        client.reconfigure(host="10.0.0.8", port=4466, password="new")
+        client.kwargs["on_connected"]()
+
+        repair_client = ProbeClient.instances[1]
+        assert repair_client.kwargs["host"] == "10.0.0.8"
+        assert repair_client.kwargs["port"] == 4466
+        assert repair_client.kwargs["password"] == "new"
+        assert repair_client.shutdown_called is True
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
 def test_scene_map_change_alone_does_not_drop_the_connection() -> None:
     """Reconnecting mid-stream because someone re-mapped a dropdown
     would be a needless blip."""
@@ -341,6 +515,19 @@ class ProbeClient:
         self.shutdown_called = False
         self.started = False
         ProbeClient.instances.append(self)
+
+    @property
+    def connection_settings(self):
+        return (
+            self.kwargs.get("host", "127.0.0.1"),
+            int(self.kwargs.get("port", 4455)),
+            self.kwargs.get("password"),
+        )
+
+    def reconfigure(self, **kw: Any) -> None:
+        self.kwargs.update(
+            {key: value for key, value in kw.items() if value is not None},
+        )
 
     def start(self) -> None:
         # The late-build path in _apply_obs_settings starts the client
