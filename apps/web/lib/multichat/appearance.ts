@@ -118,7 +118,7 @@ export const DEFAULT_APPEARANCE: ChatAppearance = {
   showTimestamps: false,
   emoteImages: true,
   maxVisible: 30,
-  messageTtlSec: 0,
+  messageTtlSec: 30,
   entryAnimation: "fade",
   bgColor: "#11141b",
   bgOpacity: 88,
@@ -302,7 +302,7 @@ export function visibleMessages(
   const ttlMs = a.messageTtlSec > 0 ? a.messageTtlSec * 1000 : null;
   const kept: ChatMessage[] = [];
   for (const m of messages) {
-    if (ttlMs !== null && nowMs - m.atMs > ttlMs) continue;
+    if (ttlMs !== null && nowMs - m.atMs >= ttlMs) continue;
     if (a.hideCommands && m.text.startsWith("!")) continue;
     if (blocked.size > 0 && blocked.has(m.user.trim().toLowerCase())) continue;
     kept.push(m);

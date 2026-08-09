@@ -250,15 +250,9 @@ export function SettingsMultiChatAppearance({
                 max={MAX_VISIBLE_MAX}
                 onChange={(v) => set({ maxVisible: v })}
               />
-              <SliderField
-                label="Hide messages after"
+              <MessageLifetimeField
                 value={value.messageTtlSec}
-                min={0}
-                max={TTL_MAX_SEC}
-                step={5}
-                unit="s"
-                zeroLabel="never"
-                onChange={(v) => set({ messageTtlSec: v })}
+                onChange={(messageTtlSec) => set({ messageTtlSec })}
               />
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
@@ -487,6 +481,92 @@ function SliderField({
         className="w-full accent-[var(--accent,#3ec0c7)]"
       />
     </label>
+  );
+}
+
+const MESSAGE_TTL_PRESETS = [
+  { value: 0, label: "Never" },
+  { value: 15, label: "15 sec" },
+  { value: 30, label: "30 sec" },
+  { value: 60, label: "1 min" },
+  { value: 120, label: "2 min" },
+  { value: 300, label: "5 min" },
+] as const;
+
+function formatMessageLifetime(seconds: number): string {
+  if (seconds === 0) return "Never";
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+  }
+  return `${seconds} seconds`;
+}
+
+function MessageLifetimeField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (seconds: number) => void;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-accent/30 bg-accent/5 p-3 sm:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-caption font-medium text-text">
+            On-stream message lifetime
+          </div>
+          <p className="mt-0.5 text-micro text-text-dim">
+            Messages disappear from the OBS chat after this time. Your Stream
+            Dock chat history is unchanged.
+          </p>
+        </div>
+        <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-caption font-medium tabular-nums text-accent-cyan">
+          {formatMessageLifetime(value)}
+        </span>
+      </div>
+
+      <div
+        className="mt-3 flex flex-wrap gap-1.5"
+        role="group"
+        aria-label="On-stream message lifetime presets"
+      >
+        {MESSAGE_TTL_PRESETS.map((preset) => {
+          const active = value === preset.value;
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(preset.value)}
+              className={[
+                "rounded-md border px-2.5 py-1 text-caption transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+                active
+                  ? "border-accent bg-accent/15 font-medium text-accent-cyan"
+                  : "border-border bg-bg-elevated text-text-dim hover:border-border-strong hover:text-text",
+              ].join(" ")}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <label className="mt-2 block min-w-0">
+        <span className="sr-only">Custom on-stream message lifetime</span>
+        <input
+          type="range"
+          min={0}
+          max={TTL_MAX_SEC}
+          step={5}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          aria-label="Custom on-stream message lifetime"
+          aria-valuetext={formatMessageLifetime(value)}
+          className="w-full accent-[var(--accent,#3ec0c7)]"
+        />
+      </label>
+    </div>
   );
 }
 

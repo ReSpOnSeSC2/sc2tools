@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { MultiChatWidget } from "../MultiChatWidget";
+import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
 
@@ -17,6 +18,26 @@ let mockChat: MultiChatState = {
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: () => mockChat,
+}));
+
+vi.mock("@/lib/multichat/useEngagementReporter", () => ({
+  useEngagementReporter: () => undefined,
+}));
+
+vi.mock("@/lib/multichat/useChatSound", () => ({
+  useChatSound: () => undefined,
+}));
+
+vi.mock("@/lib/multichat/useChatTts", () => ({
+  useChatTts: () => ({ needsGesture: false, onUserGesture: vi.fn() }),
+}));
+
+vi.mock("@/lib/multichat/useCommandAnswers", () => ({
+  useCommandAnswers: () => null,
+}));
+
+vi.mock("@/lib/multichat/useTranslation", () => ({
+  useTranslation: () => ({}),
 }));
 
 // The config loader hits the token-authed relay; stub fetch with the
@@ -41,7 +62,11 @@ afterEach(() => {
 async function renderWidget() {
   const view = render(<MultiChatWidget token="tok_test" />);
   // Let the config fetch promise chain settle.
-  await screen.findByText(/./, undefined, { timeout: 2000 }).catch(() => null);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
   return view;
 }
 
@@ -56,6 +81,7 @@ describe("MultiChatWidget", () => {
 
   it("renders merged messages with platform chips and colors", async () => {
     mockConfig.config = { twitch: { enabled: true, channel: "me" } };
+    const now = Date.now();
     mockChat = {
       active: true,
       statuses: { twitch: { state: "connected" } },
@@ -68,7 +94,7 @@ describe("MultiChatWidget", () => {
           text: "gg wp",
           color: "#FF69B4",
           badges: ["moderator"],
-          atMs: 1,
+          atMs: now,
         },
         {
           platform: "tiktok",
@@ -76,7 +102,7 @@ describe("MultiChatWidget", () => {
           user: "tikfan",
           text: "hello from tiktok",
           badges: [],
-          atMs: 2,
+          atMs: now,
         },
       ],
     };
@@ -108,5 +134,50 @@ describe("MultiChatWidget", () => {
     // stream itself is unaffected.
     expect(await screen.findByText("offline")).toBeTruthy();
     expect(screen.getByText("Connected — waiting for chat…")).toBeTruthy();
+  });
+
+  it("removes an idle chat line at its configured 30-second lifetime", async () => {
+    const base = Date.parse("2026-08-08T12:00:00Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(base);
+
+    try {
+      mockConfig.config = {
+        twitch: { enabled: true, channel: "me" },
+        appearance: { ...DEFAULT_APPEARANCE, messageTtlSec: 30 },
+      };
+      mockChat = {
+        active: true,
+        statuses: { twitch: { state: "connected" } },
+        events: [],
+        messages: [
+          {
+            platform: "twitch",
+            id: "ttl",
+            user: "Viewer",
+            text: "expires on time",
+            badges: [],
+            atMs: base,
+          },
+        ],
+      };
+
+      render(<MultiChatWidget token="tok_test" />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText("expires on time")).toBeTruthy();
+      act(() => vi.advanceTimersByTime(29_999));
+      expect(screen.getByText("expires on time")).toBeTruthy();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByText("expires on time")).toBeNull();
+    } finally {
+      cleanup();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });

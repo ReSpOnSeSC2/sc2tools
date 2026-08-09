@@ -918,6 +918,12 @@ describe("sanitizeMultichatConfig", () => {
     expect(out.appearance.evil).toBeUndefined();
     // A complete render-safe object always comes back.
     expect(typeof out.appearance.maxVisible).toBe("number");
+    expect(out.appearance.messageTtlSec).toBe(30);
+
+    const explicitNever = sanitizeMultichatConfig({
+      appearance: { messageTtlSec: 0 },
+    });
+    expect(explicitNever.appearance.messageTtlSec).toBe(0);
   });
 
   test("tts passes through strict-sanitized", () => {

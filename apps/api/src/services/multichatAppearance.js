@@ -46,7 +46,7 @@ const DEFAULT_APPEARANCE = Object.freeze({
   showTimestamps: false,
   emoteImages: true,
   maxVisible: 30,
-  messageTtlSec: 0,
+  messageTtlSec: 30,
   entryAnimation: "fade",
   bgColor: "#11141b",
   bgOpacity: 88,

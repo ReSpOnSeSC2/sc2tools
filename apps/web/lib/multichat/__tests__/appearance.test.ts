@@ -32,6 +32,8 @@ describe("sanitizeAppearance", () => {
     expect(sanitizeAppearance(null)).toEqual(DEFAULT_APPEARANCE);
     expect(sanitizeAppearance("junk")).toEqual(DEFAULT_APPEARANCE);
     expect(sanitizeAppearance(42)).toEqual(DEFAULT_APPEARANCE);
+    expect(sanitizeAppearance({}).messageTtlSec).toBe(30);
+    expect(sanitizeAppearance({ messageTtlSec: 0 }).messageTtlSec).toBe(0);
   });
 
   test("clamps numbers and validates enums / colours", () => {
@@ -120,8 +122,20 @@ describe("visibleMessages", () => {
       100_000,
     );
     expect(withTtl.map((m) => m.id)).toEqual(["fresh"]);
-    const withoutTtl = visibleMessages(feed, DEFAULT_APPEARANCE, 100_000);
+    const withoutTtl = visibleMessages(
+      feed,
+      { ...DEFAULT_APPEARANCE, messageTtlSec: 0 },
+      100_000,
+    );
     expect(withoutTtl).toHaveLength(2);
+  });
+
+  test("expires a line at the exact configured lifetime", () => {
+    const feed = [msg({ id: "timed", atMs: 70_000 })];
+    const appearance = { ...DEFAULT_APPEARANCE, messageTtlSec: 30 };
+
+    expect(visibleMessages(feed, appearance, 99_999)).toHaveLength(1);
+    expect(visibleMessages(feed, appearance, 100_000)).toHaveLength(0);
   });
 
   test("hideCommands drops !lines", () => {

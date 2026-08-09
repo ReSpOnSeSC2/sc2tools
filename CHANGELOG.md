@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Added
 
+- **30-second stream chat cleanup** — on-stream chat messages now default
+  to disappearing after 30 seconds. A clearer message-lifetime control in
+  Settings offers one-click 15-second, 30-second, one-minute and longer
+  choices (plus **Never**), while the Stream Dock chat history is unchanged.
+
 - **Live viewer counts in the Stream Dock** — the dock's chat header
   now shows how many people each platform you're streaming to has
   watching right now, next to the connection dot that's already there,
