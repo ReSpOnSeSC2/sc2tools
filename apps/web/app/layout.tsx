@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Fraunces, Hanken_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
 import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { CookieBanner } from "@/components/CookieBanner";
@@ -11,30 +11,29 @@ import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
 /**
- * Inter, self-hosted at build time via next/font (no render-blocking
- * Google Fonts request, no layout shift). Exposed as the `--font-sans`
- * CSS variable that tailwind.config.ts reads for `fontFamily.sans`, so
- * the whole app actually renders in Inter instead of falling back to
- * system-ui. `display: "swap"` keeps text visible during font load.
- */
-/**
  * "Courtside" type system (adapted from RallyReady):
  *   - Hanken Grotesk — clean humanist body/UI face (--font-sans)
  *   - Bricolage Grotesque — confident grotesque DISPLAY face for headings,
  *     wordmark, big numbers (--font-display)
- * Both load via next/font (self-hosted at build, no layout shift). Numeric
- * monospace falls back to the system mono stack in tailwind.config.ts.
+ * Both are committed Latin WOFF2 files loaded through next/font/local, so a
+ * production build never depends on Google Fonts being reachable. Numeric
+ * monospace uses the system mono stack in tailwind.config.ts.
  */
-const sans = Hanken_Grotesk({
-  subsets: ["latin"],
+const sans = localFont({
+  src: "./fonts/hanken-grotesk-latin.woff2",
   display: "swap",
+  weight: "100 900",
+  style: "normal",
+  adjustFontFallback: "Arial",
   variable: "--font-sans",
 });
 
-const display = Bricolage_Grotesque({
-  subsets: ["latin"],
+const display = localFont({
+  src: "./fonts/bricolage-grotesque-latin.woff2",
   display: "swap",
-  weight: ["600", "700", "800"],
+  weight: "600 800",
+  style: "normal",
+  adjustFontFallback: "Arial",
   variable: "--font-display",
 });
 
@@ -46,11 +45,21 @@ const display = Bricolage_Grotesque({
  * in tailwind.config.ts; only the marketing landing page opts into it, so
  * the rest of the app keeps the established grotesque display voice.
  */
-const serif = Fraunces({
-  subsets: ["latin"],
+const serif = localFont({
+  src: [
+    {
+      path: "./fonts/fraunces-latin-normal.woff2",
+      weight: "400 700",
+      style: "normal",
+    },
+    {
+      path: "./fonts/fraunces-latin-italic.woff2",
+      weight: "400 700",
+      style: "italic",
+    },
+  ],
   display: "swap",
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  adjustFontFallback: "Times New Roman",
   variable: "--font-serif",
 });
 
