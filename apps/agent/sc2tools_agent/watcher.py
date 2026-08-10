@@ -377,10 +377,10 @@ class ReplayWatcher:
         self._cfg = cfg
         self._state = state
         self._upload = upload
-        # Optional observer for per-file skips (AI game, parse failure,
-        # unresolved player). The import controller uses it to feed the
-        # cloud's import-progress error breakdown; everything else can
-        # leave it unset.
+        # Optional observer for per-file skips (AI/resumed game, parse
+        # failure, unresolved player). The import controller uses it to feed
+        # the cloud's import-progress breakdown; everything else can leave
+        # it unset.
         self._on_replay_skipped = on_replay_skipped
         self._stop = threading.Event()
         self._observer: Optional[Observer] = None

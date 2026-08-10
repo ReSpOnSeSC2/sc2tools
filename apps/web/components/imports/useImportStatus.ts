@@ -41,11 +41,20 @@ export const ERROR_CODE_COPY: Record<string, string> = {
     "Couldn't tell which player is you — set your BattleTag in Settings → Profile, then re-import.",
   no_result: "The replay has no recorded result (left during loading?).",
   ai_game: "Skipped — game vs the AI.",
+  resumed_replay:
+    "Skipped — a replay-resume session is not a new ladder result.",
   filtered: "Skipped — outside your import date range.",
   rejected_by_server: "The server rejected the upload.",
   file_unstable: "The file never finished writing (cloud-sync lag?).",
   analyzer_unavailable: "The agent's parser couldn't load — restart the agent.",
 };
+
+/** Skip reasons that mean the importer deliberately ignored a file. */
+export const BENIGN_SKIP_CODES = new Set(["ai_game", "resumed_replay"]);
+
+export function isBenignImportSkip(code: string): boolean {
+  return BENIGN_SKIP_CODES.has(code);
+}
 
 export type ImportStatusState = {
   /** Latest job (any status), or null before the first job ever. */

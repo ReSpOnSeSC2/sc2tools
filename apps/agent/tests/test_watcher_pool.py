@@ -376,6 +376,29 @@ def test_in_range_replay_reaches_upload_queue_in_process_mode(
     assert path_str not in watcher._inflight
 
 
+def test_resumed_replay_skip_reason_is_persisted_in_process_mode(
+    monkeypatch, watcher_factory,
+) -> None:
+    monkeypatch.delenv("SC2TOOLS_PARSE_USE_PROCESSES", raising=False)
+    with patch(
+        "sc2tools_agent.watcher._probe_process_pool",
+        return_value=(True, None),
+    ):
+        watcher = watcher_factory()
+
+    path_str = str(watcher._cfg.state_dir / "resumed.SC2Replay")
+    with watcher._inflight_lock:
+        watcher._inflight.add(path_str)
+    fut: Future = Future()
+    fut.set_result(("skipped", path_str, "resumed_replay"))
+
+    watcher._on_worker_done(fut, path_str)
+
+    assert watcher._test_state.uploaded[path_str] == "skipped:resumed_replay"
+    assert watcher._test_upload.submitted == []
+    assert path_str not in watcher._inflight
+
+
 # --- inflight cleanup invariants --------------------------------------
 
 

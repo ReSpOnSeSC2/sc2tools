@@ -29,6 +29,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import sc2reader
 from sc2reader.events.tracker import PlayerStatsEvent
 
+try:
+    from sc2reader.exceptions import CorruptTrackerFileError
+except (ImportError, ModuleNotFoundError):
+    # A few pure unit tests replace ``sc2reader`` with a minimal module stub
+    # before importing this parser. Production pins sc2reader 1.8.0, which
+    # always provides the real exception; the fallback keeps those metadata-
+    # only tests importable without weakening the runtime path.
+    class CorruptTrackerFileError(Exception):
+        pass
+
 from .build_definitions import BUILD_DEFINITIONS
 from .custom_builds import load_custom_builds, load_custom_builds_v2
 from .event_extractor import build_log_lines, extract_events
@@ -66,6 +76,10 @@ class ReplayContext:
     date_iso: str = "unknown"
     length_seconds: int = 0
     is_ai_game: bool = False
+    # True when this file was created by taking control/resuming from an
+    # existing replay. SC2 retains the source game's result metadata in
+    # these files, so they must not be treated as newly played matches.
+    is_resumed_from_replay: bool = False
     # Exact client provenance from the replay header. ``game_version``
     # keeps sc2reader's full release string (for example
     # ``5.0.16.97425``); ``game_build`` keeps the numeric client build.
@@ -257,6 +271,27 @@ def _load_replay(file_path: str, load_level: int):
     for lvl in (load_level, 3, 2):
         try:
             return sc2reader.load_replay(file_path, load_level=lvl)
+        except CorruptTrackerFileError as exc:
+            # sc2reader raises this only for old (base build <= 26490)
+            # resumed replays when tracker events are enabled. Falling
+            # straight back to level 3/2 drops the game event that marks
+            # the file as resumed, so retry the full parse without tracker
+            # events and retain the definitive resume flag.
+            last_exc = exc
+            if lvl >= 4:
+                try:
+                    return sc2reader.load_replay(
+                        file_path,
+                        load_level=lvl,
+                        do_tracker_events=False,
+                    )
+                except Exception as retry_exc:
+                    # The first exception is itself definitive evidence of
+                    # a resumed replay. Never fall through to level 3/2:
+                    # those levels omit game events, lose the resume marker,
+                    # and could let the inherited result upload as a match.
+                    raise retry_exc from exc
+            continue
         except Exception as exc:
             last_exc = exc
             continue
@@ -348,6 +383,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     replay = _load_replay(file_path, load_level)
 
     ctx = ReplayContext(file_path=os.path.abspath(file_path), depth=depth, raw=replay)
+    ctx.is_resumed_from_replay = bool(
+        getattr(replay, "resume_from_replay", False)
+    )
     ctx.map_name = getattr(replay, "map_name", "") or ""
     ctx.date_iso = replay.date.isoformat() if getattr(replay, "date", None) else "unknown"
     ctx.game_version = _normalise_game_version(
@@ -376,8 +414,10 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
             f"{ctx.map_name or 'unknown'}|{ctx.length_seconds}"
         )
 
-    # Live depth stops here.
-    if depth == "live":
+    # Live depth stops here. Resumed files also stop before deep analysis:
+    # the importer will intentionally skip the artifact instead of trusting
+    # its inherited win/loss metadata.
+    if depth == "live" or ctx.is_resumed_from_replay:
         return ctx
 
     # Deep depth: events, strategy detection, build log, graph data.

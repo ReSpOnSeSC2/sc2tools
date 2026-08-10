@@ -718,6 +718,36 @@ def test_build_log_from_events_swallows_formatter_exceptions(monkeypatch):
 # -------------------------------------------------------------------------
 
 
+def test_parse_replay_for_cloud_skips_resumed_replay_before_result_upload(
+    monkeypatch, tmp_path,
+):
+    """A take-control artifact inherits the source game's result."""
+    fake_ctx = SimpleNamespace(
+        is_resumed_from_replay=True,
+        is_ai_game=False,
+        me=SimpleNamespace(result="Win"),
+        raw=SimpleNamespace(resume_from_replay=True),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "core.sc2_replay_parser",
+        SimpleNamespace(parse_deep=lambda _path, _handle: fake_ctx),
+    )
+
+    from sc2tools_agent.replay_pipeline import (
+        SKIP_RESUMED_REPLAY,
+        parse_replay_for_cloud_ex,
+    )
+
+    game, reason = parse_replay_for_cloud_ex(
+        tmp_path / "resumed.SC2Replay",
+        player_handle="Me",
+    )
+
+    assert game is None
+    assert reason == SKIP_RESUMED_REPLAY
+
+
 def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     monkeypatch, tmp_path,
 ):

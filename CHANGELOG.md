@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Resume-from-replay sessions no longer count as ladder games** — the
+  Windows agent now recognizes StarCraft II's replay-resume marker before it
+  trusts the copied win/loss metadata. These files are intentionally skipped
+  and shown separately in import progress, while ordinary ladder replays are
+  unchanged. Ships with **agent 0.15.13** (`agent-v0.15.13`).
+
 ### Added
 
 - **30-second stream chat cleanup** — on-stream chat messages now default

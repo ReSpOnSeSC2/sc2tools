@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   ERROR_CODE_COPY,
   fmtEta,
+  isBenignImportSkip,
   type ImportJob,
 } from "./useImportStatus";
 
@@ -43,7 +44,12 @@ export function ImportProgressCard({
   const eta = fmtEta(etaSeconds);
   const isDone = job.status === "done";
   const breakdown = job.errorBreakdown || {};
-  const benignSkips = breakdown.ai_game || 0;
+  const aiGameSkips = breakdown.ai_game || 0;
+  const resumedReplaySkips = breakdown.resumed_replay || 0;
+  const importedCount = Math.max(
+    0,
+    (job.completed || 0) - aiGameSkips - resumedReplaySkips,
+  );
   const failureCount = Math.max(0, job.errors || 0);
   const samples = job.errorSamples || [];
 
@@ -103,8 +109,11 @@ export function ImportProgressCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-caption text-text-dim">
-        <span>imported: {(job.completed || 0).toLocaleString()}</span>
-        {benignSkips > 0 ? <span>vs AI skipped: {benignSkips}</span> : null}
+        <span>imported: {importedCount.toLocaleString()}</span>
+        {aiGameSkips > 0 ? <span>vs AI skipped: {aiGameSkips}</span> : null}
+        {resumedReplaySkips > 0 ? (
+          <span>replay-resume sessions skipped: {resumedReplaySkips}</span>
+        ) : null}
         {failureCount > 0 ? (
           <button
             type="button"
@@ -138,7 +147,7 @@ export function ImportProgressCard({
       {showErrors && failureCount > 0 ? (
         <div className="space-y-2 rounded-lg border border-border bg-bg-elevated/60 p-3">
           {Object.entries(breakdown)
-            .filter(([code]) => code !== "ai_game")
+            .filter(([code]) => !isBenignImportSkip(code))
             .map(([code, count]) => (
               <div key={code} className="text-caption">
                 <span className="font-semibold text-text">
@@ -152,7 +161,7 @@ export function ImportProgressCard({
           {samples.length > 0 ? (
             <ul className="space-y-0.5 border-t border-border pt-2">
               {samples
-                .filter((s) => s.errorCode !== "ai_game")
+                .filter((s) => !isBenignImportSkip(s.errorCode))
                 .slice(0, 10)
                 .map((s, i) => (
                   <li
@@ -170,7 +179,7 @@ export function ImportProgressCard({
 
       {isDone ? (
         <p className="text-caption text-success">
-          {(job.completed || 0).toLocaleString()} replays imported. Live sync
+          {importedCount.toLocaleString()} replays imported. Live sync
           keeps things current from here — just play.
         </p>
       ) : null}

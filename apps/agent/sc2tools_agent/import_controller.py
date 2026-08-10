@@ -23,11 +23,12 @@ counts it and reports it:
     ``POST /v1/import/agent-start`` when enough un-uploaded replays
     are on disk to be worth a progress card.
 
-Skip-reason semantics: ``ai_game`` counts as *completed* (the file was
-processed and intentionally not uploaded — not a failure), but still
-appears in ``errorBreakdown`` so the UI can say "12 vs-AI replays
-skipped". Every other reason (``parse_failed``, ``player_unresolved``,
-``no_result``, upload rejections) counts as an error and contributes a
+Skip-reason semantics: ``ai_game`` and ``resumed_replay`` count as
+*completed*: the file was processed and intentionally not uploaded, not a
+failure. Both still appear in ``errorBreakdown`` so the UI can explain the
+intentional skips.
+Other reasons (``parse_failed``, ``player_unresolved``,
+``no_result``, upload rejections) count as errors and contribute a
 capped ``errorSamples`` entry with the filename so the user can act.
 """
 
@@ -44,7 +45,7 @@ from .uploader.queue import TerminalUploadError
 log = logging.getLogger(__name__)
 
 # Reasons that are "the pipeline worked as intended", not failures.
-_BENIGN_REASONS = {"ai_game"}
+_BENIGN_REASONS = {"ai_game", "resumed_replay"}
 
 # Minimum un-uploaded replay count for the startup sweep to register
 # itself as a visible job. Below this the sweep finishes in seconds

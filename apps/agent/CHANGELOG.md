@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.13
+
+### Fixed — resumed replays no longer become false match results
+
+- Replays created by **Resume from Replay / Take Command** are now detected
+  from StarCraft II's own replay marker and intentionally skipped. Their
+  inherited source-game result can no longer create duplicate wins/losses or
+  pollute opponent records.
+- Resume artifacts are reported as an intentional import skip, not a parse
+  failure. Legacy resumed replay formats retain the marker even when their
+  tracker stream requires sc2reader's compatibility fallback.
+
 ## 0.15.12
 
 ### Fixed — legacy generated scenes now repair automatically

@@ -97,21 +97,26 @@ def test_start_tracks_counters_and_reports_done(monkeypatch):
     monkeypatch.setattr(
         "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.05,
     )
-    ctl, api, w = make_controller(pending=3)
+    ctl, api, w = make_controller(pending=4)
     ctl.handle_start_request({"jobId": "job3"})
     assert w.sweep_requests == 1
 
     ctl.on_upload_success(Path("a.SC2Replay"))
     ctl.on_replay_skipped(Path("b.SC2Replay"), "ai_game")     # benign
+    ctl.on_replay_skipped(Path("r.SC2Replay"), "resumed_replay")  # benign
     ctl.on_replay_skipped(Path("c.SC2Replay"), "parse_failed")  # error
 
     assert wait_for(
         lambda: any(c.get("done") for c in api.progress_calls if c["jobId"] == "job3"),
     ), f"reporter never finished: {api.progress_calls!r}"
     final = [c for c in api.progress_calls if c.get("done") and c["jobId"] == "job3"][-1]
-    assert final["completed"] == 2  # upload + vs-AI skip
+    assert final["completed"] == 3  # upload + two intentional skips
     assert final["errors"] == 1
-    assert final["errorBreakdown"] == {"ai_game": 1, "parse_failed": 1}
+    assert final["errorBreakdown"] == {
+        "ai_game": 1,
+        "resumed_replay": 1,
+        "parse_failed": 1,
+    }
     samples = final["errorSamples"]
     assert len(samples) == 1  # benign reasons don't produce samples
     assert samples[0]["file"] == "c.SC2Replay"

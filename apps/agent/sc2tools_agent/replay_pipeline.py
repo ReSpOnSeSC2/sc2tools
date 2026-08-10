@@ -546,6 +546,7 @@ def _is_ladder_game(ctx: Any) -> Optional[bool]:
 # with the cloud import-progress UI (apps/web ImportProgressCard maps
 # each code to human copy), so changes here are wire-format changes.
 SKIP_AI_GAME = "ai_game"
+SKIP_RESUMED_REPLAY = "resumed_replay"
 SKIP_PLAYER_UNRESOLVED = "player_unresolved"
 SKIP_NO_RESULT = "no_result"
 SKIP_PARSE_FAILED = "parse_failed"
@@ -611,6 +612,17 @@ def parse_replay_for_cloud_ex(
     except Exception as exc:  # noqa: BLE001
         log.warning("parse_deep_failed for %s: %s", file_path.name, exc)
         return None, SKIP_PARSE_FAILED
+
+    # Taking control of a replay writes a new .SC2Replay file, but SC2 keeps
+    # the source replay's player results in its details block. Trusting those
+    # values records the resumed branch as another copy of the source result
+    # (and a synthetic-id collision can overwrite the source row). sc2reader
+    # detects the HijackReplayGameEvent for us; skip before identity cache
+    # repair or any upload payload is produced.
+    if bool(getattr(ctx, "is_resumed_from_replay", False)) or bool(
+        getattr(getattr(ctx, "raw", None), "resume_from_replay", False)
+    ):
+        return None, SKIP_RESUMED_REPLAY
 
     if ctx.is_ai_game:
         return None, SKIP_AI_GAME

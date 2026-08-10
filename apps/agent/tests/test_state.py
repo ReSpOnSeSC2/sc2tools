@@ -376,6 +376,7 @@ def test_count_synced_counts_only_dated_entries() -> None:
             "e.SC2Replay": "skipped",
             "f.SC2Replay": "skipped:ai_game",
             "g.SC2Replay": "skipped:parse_failed",
+            "h.SC2Replay": "skipped:resumed_replay",
         },
     )
     assert count_synced(s) == 2

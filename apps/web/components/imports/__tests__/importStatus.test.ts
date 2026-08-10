@@ -3,6 +3,7 @@ import {
   fmtEta,
   foldEtaSample,
   ERROR_CODE_COPY,
+  isBenignImportSkip,
   mergeProgressEvent,
   type ProgressSample,
 } from "../useImportStatus";
@@ -162,11 +163,18 @@ describe("ERROR_CODE_COPY", () => {
       "player_unresolved",
       "no_result",
       "ai_game",
+      "resumed_replay",
       "filtered",
       "rejected_by_server",
     ]) {
       expect(ERROR_CODE_COPY[code]).toBeTruthy();
     }
+  });
+
+  it("classifies replay resumes as intentional skips", () => {
+    expect(isBenignImportSkip("ai_game")).toBe(true);
+    expect(isBenignImportSkip("resumed_replay")).toBe(true);
+    expect(isBenignImportSkip("parse_failed")).toBe(false);
   });
 });
 
