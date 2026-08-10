@@ -6,6 +6,10 @@ import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { MapArtwork } from "@/components/maps/MapArtwork";
+import {
+  GameStreamLinks,
+  type GameStreamLink,
+} from "@/components/analyzer/GameStreamLinks";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
@@ -27,10 +31,12 @@ export function GameDetailShell({
   game,
   children,
   opponentContext,
+  streamLinks,
 }: {
   game: GameSummary;
   children: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
+  streamLinks?: GameStreamLink[] | null;
 }) {
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const oppName = (game.opponent?.displayName || "").trim() || "Opponent";
@@ -108,6 +114,10 @@ export function GameDetailShell({
                 </span>
               </MetaItem>
             </dl>
+
+            {streamLinks && streamLinks.length > 0 ? (
+              <GameStreamLinks links={streamLinks} />
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-2 text-caption">
               <span className="text-text-dim">My build</span>

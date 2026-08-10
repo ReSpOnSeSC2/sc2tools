@@ -20,6 +20,9 @@ const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
 const { GamesService } = require("./services/games");
+const { GameVodsService } = require("./services/gameVods");
+const { PulseMatchVodsService } = require("./services/pulseMatchVods");
+const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { CustomBuildsService } = require("./services/customBuilds");
@@ -295,6 +298,22 @@ function makeServices(deps) {
     pulseMmr,
     logger: deps.logger,
   });
+  // Timestamped game archives combine two independent public signals:
+  // configured Twitch/YouTube channels matched by broadcast interval, and
+  // SC2Pulse's participant-scoped Twitch index. The composite preserves
+  // whichever source is healthy and deduplicates them into at most one icon
+  // per platform/player perspective.
+  const directGameVods = new GameVodsService({
+    users,
+    pulseIntel,
+    log: deps.logger,
+  });
+  const pulseMatchVods = new PulseMatchVodsService({ logger: deps.logger });
+  const gameVods = new GameVodLinksService({
+    archives: directGameVods,
+    pulseMatches: pulseMatchVods,
+    log: deps.logger,
+  });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   // TikTok chat relay for the multichat overlay widget — one upstream
@@ -487,6 +506,7 @@ function makeServices(deps) {
     users,
     opponents,
     games,
+    gameVods,
     gameDetails,
     customBuilds,
     pairings,
@@ -839,6 +859,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
     SERVICE.ROUTE_PREFIX,
     buildGamesRouter({
       games: services.games,
+      gameVods: services.gameVods,
       opponents: services.opponents,
       users: services.users,
       customBuilds: services.customBuilds,

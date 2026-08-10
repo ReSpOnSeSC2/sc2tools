@@ -447,6 +447,10 @@ class CloudGame:
     # replayer (unit tracks + buildings + battles over the map). Added
     # AFTER my_ladder_race to preserve positional-call compatibility.
     map_playback: Optional[Dict[str, Any]] = None
+    # Exact replay start in RFC 3339 UTC. ``date_iso`` remains the replay
+    # end time for backwards compatibility. Added last so positional
+    # CloudGame constructors from older integrations keep their meaning.
+    started_at: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -503,6 +507,8 @@ class CloudGame:
             out["spatial"] = self.spatial
         if self.map_playback is not None:
             out["mapPlayback"] = self.map_playback
+        if self.started_at:
+            out["startedAt"] = self.started_at
         return out
 
 
@@ -855,6 +861,7 @@ def parse_replay_for_cloud_ex(
         getattr(me, "selected_race", None)
         or getattr(me, "race", None)
     )
+    started_at_raw = getattr(ctx, "started_at_iso", None)
 
     return CloudGame(
         game_id=str(ctx.game_id),
@@ -885,6 +892,11 @@ def parse_replay_for_cloud_ex(
         apm_curve=apm_curve,
         spatial=spatial,
         map_playback=map_playback,
+        started_at=(
+            _to_iso(started_at_raw)
+            if started_at_raw not in (None, "", "unknown")
+            else None
+        ),
     ), None
 
 

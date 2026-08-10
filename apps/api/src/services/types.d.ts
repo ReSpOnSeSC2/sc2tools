@@ -154,6 +154,7 @@ export interface GamesService {
     opts?: { limit?: number; before?: Date; oppPulseId?: string },
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
   get(userId: string, gameId: string): Promise<object | null>;
+  findMany(userId: string, gameIds: string[]): Promise<object[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
   stats(userId: string): Promise<{ total: number; latest: Date | null }>;
   todaySession(

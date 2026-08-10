@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.14
+
+### Added — exact replay timestamps for stream VOD links
+
+- New replay uploads now include StarCraft II's exact UTC game-start time so
+  Twitch and YouTube links can open at the beginning of the matching game.
+- The existing replay `date` remains the game-end time for compatibility, and
+  older uploads continue to work by deriving their start from game duration.
+- Ships the bundled replay engine 1.5.7 timestamp metadata update.
+
 ## 0.15.13
 
 ### Fixed — resumed replays no longer become false match results

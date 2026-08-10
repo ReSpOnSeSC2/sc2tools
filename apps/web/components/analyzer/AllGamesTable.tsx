@@ -15,6 +15,11 @@ import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
 import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
 import { BuildOrderDualTimeline } from "./charts/BuildOrderDualTimeline";
 import {
+  GameStreamLinks,
+  type GameStreamLink,
+} from "./GameStreamLinks";
+import { useGameVodLinks } from "./useGameVodLinks";
+import {
   gameAnalysisHref,
   type OpponentNavigationContext,
 } from "@/lib/opponentNavigation";
@@ -106,6 +111,11 @@ export function AllGamesTable({
     () => (games || []).some((g) => g.opp_mmr != null),
     [games],
   );
+  const vodLinksData = useGameVodLinks(games || [], opponentContext);
+  const linksByGameId = vodLinksData?.linksByGameId ?? {};
+  const showStreams = (games || []).some(
+    (game) => (gameStreamLinks(linksByGameId, game.id)?.length ?? 0) > 0,
+  );
 
   const sortedGames = useMemo(() => {
     return sort.sortRows(
@@ -171,6 +181,11 @@ export function AllGamesTable({
               <SortableTh col={SORT_COLS.macro} label="Macro" {...sort} align="right" />
               <SortableTh col={SORT_COLS.length} label="Length" {...sort} align="right" />
               <SortableTh col={SORT_COLS.result} label="Result" {...sort} align="right" />
+              {showStreams ? (
+                <th className="px-2 py-1 text-right font-medium">
+                  POV streams
+                </th>
+              ) : null}
               <th className="px-2 py-1 text-right font-medium">
                 Game analysis
               </th>
@@ -186,6 +201,8 @@ export function AllGamesTable({
                 onToggle={() => toggle(g.id)}
                 showPlayers={showPlayers}
                 showOppMmr={showOppMmr}
+                showStreams={showStreams}
+                streamLinks={gameStreamLinks(linksByGameId, g.id)}
                 myName={myName}
                 opponentContext={opponentContext}
               />
@@ -202,6 +219,7 @@ export function AllGamesTable({
             expanded={!!g.id && expandedId === g.id}
             highlighted={!!g.id && highlightId === g.id}
             onToggle={() => toggle(g.id)}
+            streamLinks={gameStreamLinks(linksByGameId, g.id)}
             myName={myName}
             opponentContext={opponentContext}
           />
@@ -211,6 +229,15 @@ export function AllGamesTable({
   );
 }
 
+function gameStreamLinks(
+  linksByGameId: Record<string, GameStreamLink[]>,
+  gameId?: string | null,
+): GameStreamLink[] | undefined {
+  if (!gameId) return undefined;
+  const links = linksByGameId[gameId];
+  return Array.isArray(links) ? links : undefined;
+}
+
 function GameRow({
   game,
   expanded,
@@ -218,6 +245,8 @@ function GameRow({
   onToggle,
   showPlayers,
   showOppMmr,
+  showStreams,
+  streamLinks,
   myName,
   opponentContext,
 }: {
@@ -227,6 +256,8 @@ function GameRow({
   onToggle: () => void;
   showPlayers: boolean;
   showOppMmr: boolean;
+  showStreams: boolean;
+  streamLinks?: GameStreamLink[];
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
 }) {
@@ -234,8 +265,12 @@ function GameRow({
   const { macro, macroColour, resultBadge } = useGameMeta(game);
   const [macroOpen, setMacroOpen] = useState(false);
   // base cols: toggle + date + map + race + strategy + build + macro
-  // + length + result + open-link = 10; plus the two optional columns.
-  const colSpan = 10 + (showPlayers ? 1 : 0) + (showOppMmr ? 1 : 0);
+  // + length + result + open-link = 10; plus the optional columns.
+  const colSpan =
+    10
+    + (showPlayers ? 1 : 0)
+    + (showOppMmr ? 1 : 0)
+    + (showStreams ? 1 : 0);
 
   return (
     <Fragment>
@@ -303,6 +338,21 @@ function GameRow({
           {game.game_length ? fmtMinutes(game.game_length) : "—"}
         </td>
         <td className="px-2 py-1 text-right">{resultBadge}</td>
+        {showStreams ? (
+          <td className="px-2 py-1 text-right">
+            {streamLinks && streamLinks.length > 0 ? (
+              <GameStreamLinks
+                links={streamLinks}
+                compact
+                className="justify-end"
+              />
+            ) : (
+              <span className="text-text-dim" aria-label="No stream available">
+                &mdash;
+              </span>
+            )}
+          </td>
+        ) : null}
         <td className="px-2 py-1 text-right">
           <GameDeepDiveLink
             gameId={game.id}
@@ -458,6 +508,7 @@ function GameMobileCard({
   expanded,
   highlighted,
   onToggle,
+  streamLinks,
   myName,
   opponentContext,
 }: {
@@ -465,6 +516,7 @@ function GameMobileCard({
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
+  streamLinks?: GameStreamLink[];
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
 }) {
@@ -558,7 +610,13 @@ function GameMobileCard({
         </div>
       </div>
       {game.id ? (
-        <div className="border-t border-border px-3 py-2">
+        <div className="space-y-2 border-t border-border px-3 py-2">
+          {streamLinks && streamLinks.length > 0 ? (
+            <GameStreamLinks
+              links={streamLinks}
+              className="[&_a]:h-11 [&_a]:w-11"
+            />
+          ) : null}
           <GameDeepDiveLink
             gameId={game.id}
             mobile

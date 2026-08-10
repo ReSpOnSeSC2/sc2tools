@@ -203,6 +203,44 @@ class GamesService {
   }
 
   /**
+   * Fetch a bounded, explicit set of games in the caller's order.
+   *
+   * The opponent dossier can merge several SC2Pulse identities into one
+   * visible history, so filtering that history by one opponent id is not
+   * sufficient.  A single `$in` query keeps the VOD batch endpoint exact
+   * without turning a 1,000-row dossier into 1,000 database round trips.
+   *
+   * @param {string} userId
+   * @param {string[]} gameIds
+   * @returns {Promise<Array<Record<string, any>>>}
+   */
+  async findMany(userId, gameIds) {
+    const ids = Array.from(
+      new Set(
+        (Array.isArray(gameIds) ? gameIds : [])
+          .map((id) => String(id || "").trim().slice(0, 200))
+          .filter(Boolean),
+      ),
+    ).slice(0, 1000);
+    if (ids.length === 0) return [];
+
+    const rows = await this.db.games
+      .find(
+        { userId, gameId: { $in: ids } },
+        { projection: { _id: 0 } },
+      )
+      .toArray();
+    const byId = new Map(rows.map((row) => [String(row.gameId), row]));
+    /** @type {Array<Record<string, any>>} */
+    const ordered = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (row) ordered.push(row);
+    }
+    return ordered;
+  }
+
+  /**
    * @param {string} userId
    * @returns {Promise<{total: number, latest: Date|null}>}
    */

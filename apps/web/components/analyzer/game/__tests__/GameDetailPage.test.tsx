@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
+import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
 import type { GameSummary } from "../types";
 
@@ -124,10 +125,12 @@ function mockEndpoints({
   slim = SLIM,
   macro = MACRO,
   slimError,
+  vodLinks,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
   slimError?: { status: number; message: string };
+  vodLinks?: GameVodLinksResponse;
 } = {}) {
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
@@ -147,6 +150,9 @@ function mockEndpoints({
     }
     if (path === "/v1/games/g1/build-order") {
       return { data: BUILD_ORDER, error: undefined, isLoading: false };
+    }
+    if (path === "/v1/games/vod-links?gameId=g1") {
+      return { data: vodLinks, error: undefined, isLoading: false };
     }
     return { data: undefined, error: undefined, isLoading: false };
   });
@@ -250,5 +256,36 @@ describe("GameDetailPage", () => {
     expect(screen.getByText("Game not found")).toBeTruthy();
     const back = screen.getByRole("link", { name: /back to dashboard/i });
     expect(back.getAttribute("href")).toBe("/app");
+  });
+
+  it("shows timestamped POV stream controls in the game hero", () => {
+    mockEndpoints({
+      vodLinks: {
+        configuredPlatforms: ["twitch"],
+        linksByGameId: {
+          g1: [
+            {
+              platform: "twitch",
+              perspective: "opponent",
+              playerName: "Foe",
+              url: "https://www.twitch.tv/videos/99",
+              offsetSec: 65,
+            },
+          ],
+        },
+      },
+    });
+    render(<GameDetailPage gameId="g1" />);
+
+    const link = screen.getByRole("link", {
+      name: /Watch Opponent POV on Twitch at 1:05 - Foe/i,
+    });
+    expect(link.getAttribute("href")).toBe(
+      "https://www.twitch.tv/videos/99?t=0h1m5s",
+    );
+    expect(useApiMock).toHaveBeenCalledWith(
+      "/v1/games/vod-links?gameId=g1",
+      { revalidateOnFocus: false, shouldRetryOnError: false },
+    );
   });
 });

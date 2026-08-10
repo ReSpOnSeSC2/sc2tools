@@ -21,6 +21,15 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Timestamped Twitch and YouTube links for both player perspectives** — the
+  opponent dossier's full game list and each game detail page now show compact,
+  grouped **You** and **Opp** platform icons whenever a verified matching VOD
+  exists. Links seek directly to the game's start, use saved streamer accounts
+  plus SC2Pulse's participant/public account associations, and omit missing or
+  unverified archives instead of guessing. New uploads carry the exact replay
+  start with **agent 0.15.14** (`agent-v0.15.14`, replay engine 1.5.7); older
+  games remain supported using replay end time minus duration.
+
 - **30-second stream chat cleanup** — on-stream chat messages now default
   to disappearing after 30 seconds. A clearer message-lifetime control in
   Settings offers one-click 15-second, 30-second, one-minute and longer

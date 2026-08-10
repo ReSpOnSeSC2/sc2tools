@@ -326,6 +326,18 @@ def test_to_payload_omits_game_version_and_build_when_unset():
     assert "gameBuild" not in payload
 
 
+def test_to_payload_emits_exact_replay_start_time_when_set():
+    payload = _bare_cloud_game(
+        started_at="2026-05-04T11:50:00Z",
+    ).to_payload()
+
+    assert payload["startedAt"] == "2026-05-04T11:50:00Z"
+
+
+def test_to_payload_omits_replay_start_time_when_unset():
+    assert "startedAt" not in _bare_cloud_game().to_payload()
+
+
 def test_is_ladder_game_reads_replay_category():
     """``_is_ladder_game`` trusts sc2reader's category, with an amm
     boolean fallback, and returns None when neither is present."""
@@ -785,6 +797,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     fake_ctx = SimpleNamespace(
         game_id="2026-05-06T17:48:32|Opp|Goldenaura|600",
         date_iso="2026-05-06T17:48:32",
+        started_at_iso="2026-05-06T17:38:32",
         game_version="5.0.16.97425",
         game_build=97425,
         map_name="Goldenaura",
@@ -990,6 +1003,7 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     assert payload["opponent"]["leagueId"] == 5
     assert payload["gameVersion"] == "5.0.16.97425"
     assert payload["gameBuild"] == 97425
+    assert payload["startedAt"] == "2026-05-06T17:38:32Z"
 
 
 def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(

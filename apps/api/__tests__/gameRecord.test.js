@@ -73,6 +73,35 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(false);
   });
 
+  test("accepts and preserves an optional exact replay start time", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      startedAt: "2026-05-04T11:50:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+    });
+    expect(r.valid).toBe(true);
+    if (r.valid) {
+      expect(/** @type {any} */ (r.value).startedAt).toBe(
+        "2026-05-04T11:50:00.000Z",
+      );
+    }
+  });
+
+  test("rejects a non-ISO replay start time", () => {
+    const r = validateGameRecord({
+      gameId: "abc-123",
+      date: "2026-05-04T12:00:00.000Z",
+      startedAt: "ten minutes ago",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test("accepts and preserves replay game version/build provenance", () => {
     const r = validateGameRecord({
       gameId: "abc-123",

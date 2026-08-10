@@ -38,6 +38,12 @@ const {
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
+ *   gameVods?: {
+ *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
+ *       configuredPlatforms: string[],
+ *       linksByGameId: Record<string, Array<Record<string, any>>>,
+ *     }>,
+ *   },
  *   ladderMapPool?: { get(): Promise<{ maps: string[], teamMaps?: string[] }> },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
@@ -87,6 +93,139 @@ function buildGamesRouter(deps) {
         oppPulseId,
       });
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Resolve timestamped Twitch / YouTube VOD links for a game or a
+   * visible date range.  This is intentionally a separate, fail-soft
+   * read from the core games list: an expired/private provider archive
+   * must never make replay history itself slow or unavailable.
+   *
+   * The range form lets the all-games table pay one HTTP request (and,
+   * behind the service cache, one provider lookup) instead of issuing a
+   * request per row.  The gameId form is used by the single-game page.
+   */
+  router.get("/games/vod-links", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+
+      /** @type {Array<Record<string, any>>} */
+      let games = [];
+      const gameId =
+        typeof req.query.gameId === "string"
+          ? req.query.gameId.trim().slice(0, 200)
+          : "";
+
+      if (gameId) {
+        const game = await deps.games.get(auth.userId, gameId);
+        if (game) games = [game];
+      } else {
+        const since = parseDate(req.query.since);
+        const until = parseDate(req.query.until);
+        if (!since || !until || since.getTime() > until.getTime()) {
+          res.status(400).json({ error: { code: "invalid_date_range" } });
+          return;
+        }
+        // GamesService's cursor is exclusive. Move the upper bound one
+        // millisecond forward so a replay whose date exactly equals the
+        // visible table's newest row is included.
+        const before = new Date(until.getTime() + 1);
+        const page = await deps.games.list(auth.userId, {
+          before,
+          // Bounded independently of the ordinary list default. This is
+          // enough for even a very large visible dossier without letting
+          // a crafted range turn provider matching into an unbounded scan.
+          limit: 2000,
+        });
+        const pageItems = /** @type {Array<Record<string, any>>} */ (
+          Array.isArray(page?.items) ? page.items : []
+        );
+        games = pageItems.filter((game) => {
+          const at = new Date(game?.date).getTime();
+          return (
+            Number.isFinite(at)
+            && at >= since.getTime()
+            && at <= until.getTime()
+          );
+        });
+      }
+
+      if (!deps.gameVods) {
+        res.json({ configuredPlatforms: [], linksByGameId: {} });
+        return;
+      }
+      const includeOpponent = gameId
+        ? true
+        : req.query.includeOpponent === "1"
+          || req.query.includeOpponent === "true";
+      res.json(
+        await deps.gameVods.resolveForGames(auth.userId, games, {
+          includeOpponent,
+        }),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Exact bulk form used by the opponent dossier. A dossier may merge
+   * several SC2Pulse identities, which makes a date or single-opponent
+   * filter an imprecise proxy for the rows actually on screen. Sending
+   * the visible ids keeps provider work bounded and avoids leaking links
+   * for games the client did not request.
+   */
+  router.post("/games/vod-links", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const rawIds = req.body?.gameIds;
+      if (!Array.isArray(rawIds) || rawIds.length > 1000) {
+        res.status(400).json({ error: { code: "invalid_game_ids" } });
+        return;
+      }
+      if (
+        rawIds.some(
+          (id) =>
+            typeof id !== "string"
+            || !id.trim()
+            || id.trim().length > 200,
+        )
+      ) {
+        res.status(400).json({ error: { code: "invalid_game_ids" } });
+        return;
+      }
+      const gameIds = Array.from(
+        new Set(
+          /** @type {string[]} */ (rawIds).map((id) => id.trim()),
+        ),
+      );
+      if (gameIds.length !== rawIds.length || gameIds.length === 0) {
+        res.status(400).json({ error: { code: "invalid_game_ids" } });
+        return;
+      }
+
+      const games = typeof deps.games.findMany === "function"
+        ? await deps.games.findMany(auth.userId, gameIds)
+        : /** @type {Array<Record<string, any>>} */ ((
+            await Promise.all(
+              gameIds.map((id) => deps.games.get(auth.userId, id)),
+            )
+          ).filter(Boolean));
+
+      if (!deps.gameVods) {
+        res.json({ configuredPlatforms: [], linksByGameId: {} });
+        return;
+      }
+      res.json(
+        await deps.gameVods.resolveForGames(auth.userId, games, {
+          includeOpponent: req.body?.includeOpponent === true,
+        }),
+      );
     } catch (err) {
       next(err);
     }

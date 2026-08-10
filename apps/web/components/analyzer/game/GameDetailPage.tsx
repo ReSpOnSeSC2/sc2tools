@@ -6,6 +6,7 @@ import { ArrowLeft, FileQuestion } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameDetailShell } from "./GameDetailShell";
@@ -27,12 +28,13 @@ import {
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
- * game, show me THAT game"). Client-fetches three endpoints the same
+ * game, show me THAT game"). Client-fetches four endpoints the same
  * way sibling analyzer surfaces do (useApi/SWR + Clerk JWT):
  *
  *   - GET /v1/games/:id                  → slim metadata row (header)
  *   - GET /v1/games/:id/macro-breakdown  → stats_events, leaks, raw
  *   - GET /v1/games/:id/build-order      → parsed build logs, both sides
+ *   - GET /v1/games/vod-links?gameId=:id → timestamped POV VOD links
  *
  * Every payload degrades independently: a 404 on the game row is a
  * branded empty state; a missing macro breakdown (pre-v0.5 agents)
@@ -58,6 +60,10 @@ export function GameDetailPage({
   const buildReq = useApi<GameBuildOrderResponse>(
     gameId ? `/v1/games/${enc}/build-order` : null,
     { revalidateOnFocus: false },
+  );
+  const vodLinksReq = useApi<GameVodLinksResponse>(
+    gameId ? `/v1/games/vod-links?gameId=${enc}` : null,
+    { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
   // Timeline scrub cursor — shared so the loss-autopsy timestamps and
@@ -133,9 +139,21 @@ export function GameDetailPage({
   const ghostMyRace = buildReq.data?.my_race ?? game.myRace;
   const ghostOpponentRace =
     buildReq.data?.opp_race ?? game.opponent?.race;
+  const linksByGameId = vodLinksReq.data?.linksByGameId;
+  const primaryStreamLinks = linksByGameId?.[game.gameId];
+  const fallbackStreamLinks = linksByGameId?.[gameId];
+  const streamLinks = Array.isArray(primaryStreamLinks)
+    ? primaryStreamLinks
+    : Array.isArray(fallbackStreamLinks)
+      ? fallbackStreamLinks
+      : undefined;
 
   return (
-    <GameDetailShell game={game} opponentContext={opponentContext}>
+    <GameDetailShell
+      game={game}
+      opponentContext={opponentContext}
+      streamLinks={streamLinks}
+    >
       <InteractiveTimeline
         statsEvents={breakdown?.stats_events}
         oppStatsEvents={breakdown?.opp_stats_events}

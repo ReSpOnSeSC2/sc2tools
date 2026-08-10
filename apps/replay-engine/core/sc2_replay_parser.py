@@ -111,6 +111,12 @@ class ReplayContext:
     # need to reference the same match.
     pulse_id: Optional[str] = None
 
+    # Exact UTC game start reported by sc2reader. Kept separate from
+    # ``date_iso``, which is the replay's end time, so downstream VOD
+    # deep links do not have to reconstruct the start from game length.
+    # Added last to preserve positional compatibility for older callers.
+    started_at_iso: Optional[str] = None
+
 
 # =========================================================
 # Identity helpers
@@ -388,6 +394,8 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     )
     ctx.map_name = getattr(replay, "map_name", "") or ""
     ctx.date_iso = replay.date.isoformat() if getattr(replay, "date", None) else "unknown"
+    start_time = getattr(replay, "start_time", None)
+    ctx.started_at_iso = start_time.isoformat() if start_time else None
     ctx.game_version = _normalise_game_version(
         getattr(replay, "release_string", None)
     )

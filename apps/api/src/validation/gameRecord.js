@@ -33,6 +33,10 @@ const GAME_SCHEMA = {
   properties: {
     gameId: { type: "string", minLength: 1, maxLength: 200 },
     date: { type: "string", format: "date-time" },
+    // Exact replay start time from sc2reader. ``date`` remains the replay
+    // end time for backwards compatibility with existing rows/clients.
+    // Optional for records uploaded by agents predating this field.
+    startedAt: { type: "string", format: "date-time" },
     result: { type: "string", enum: ["Victory", "Defeat", "Tie"] },
     myRace: { type: "string", minLength: 1, maxLength: 24 },
     // Race selected when queueing for ladder. This can be "Random"

@@ -26,6 +26,7 @@ def _raw_replay(**overrides):
     values = {
         "map_name": "Goldenaura",
         "date": datetime(2026, 7, 1, tzinfo=timezone.utc),
+        "start_time": datetime(2026, 7, 1, 11, 50, tzinfo=timezone.utc),
         "game_length": timedelta(minutes=10),
         "players": [],
         "release_string": "5.0.16.97425",
@@ -43,6 +44,26 @@ def test_parse_replay_carries_exact_normalized_version_and_build(monkeypatch):
 
     assert ctx.game_version == "5.0.16.97425"
     assert ctx.game_build == 97425
+
+
+def test_parse_replay_carries_exact_start_time(monkeypatch):
+    raw = _raw_replay(
+        start_time=datetime(2026, 7, 1, 11, 49, 58, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(parser, "_load_replay", lambda _path, _level: raw)
+
+    ctx = parser.parse_replay("example.SC2Replay", "Me", depth="live")
+
+    assert ctx.started_at_iso == "2026-07-01T11:49:58+00:00"
+
+
+def test_parse_replay_leaves_start_time_optional(monkeypatch):
+    raw = _raw_replay(start_time=None)
+    monkeypatch.setattr(parser, "_load_replay", lambda _path, _level: raw)
+
+    ctx = parser.parse_replay("legacy.SC2Replay", "Me", depth="live")
+
+    assert ctx.started_at_iso is None
 
 
 def test_parse_replay_exposes_resumed_replay_marker(monkeypatch):
