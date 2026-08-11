@@ -61,7 +61,7 @@ describe("config loader - Cloudflare infrastructure analytics", () => {
   test("accepts the all-or-none analytics block and custom cycle day", () => {
     const cfg = loadConfig({
       ...BASE_ENV,
-      R2_BUCKET: "sc2tools-replays-prod",
+      R2_BUCKET: "sample-replays-bucket",
       CLOUDFLARE_ACCOUNT_ID: "account-id",
       CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token",
       CLOUDFLARE_BILLING_CYCLE_DAY: "15",
@@ -69,7 +69,7 @@ describe("config loader - Cloudflare infrastructure analytics", () => {
     expect(cfg.cloudflareAnalytics).toEqual({
       accountId: "account-id",
       apiToken: "analytics-token",
-      bucket: "sc2tools-replays-prod",
+      bucket: "sample-replays-bucket",
       billingCycleDay: 15,
     });
   });
@@ -80,7 +80,7 @@ describe("config loader - Cloudflare infrastructure analytics", () => {
   ])("rejects partial analytics credentials: %p", (partial) => {
     expect(() => loadConfig({
       ...BASE_ENV,
-      R2_BUCKET: "sc2tools-replays-prod",
+      R2_BUCKET: "sample-replays-bucket",
       ...partial,
     })).toThrow(/must be set together/);
   });
@@ -93,10 +93,52 @@ describe("config loader - Cloudflare infrastructure analytics", () => {
     })).toThrow(/R2_BUCKET/);
     expect(() => loadConfig({
       ...BASE_ENV,
-      R2_BUCKET: "sc2tools-replays-prod",
+      R2_BUCKET: "sample-replays-bucket",
       CLOUDFLARE_ACCOUNT_ID: "account-id",
       CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token",
       CLOUDFLARE_BILLING_CYCLE_DAY: "29",
     })).toThrow(/1 to 28/);
+  });
+});
+
+describe("config loader - Atlas infrastructure diagnostics", () => {
+  const ATLAS = {
+    ATLAS_SERVICE_ACCOUNT_ID: "service-account-id",
+    ATLAS_SERVICE_ACCOUNT_SECRET: "service-account-secret",
+    ATLAS_ORG_ID: "0123456789abcdef01234567",
+    ATLAS_PROJECT_ID: "89abcdef0123456701234567",
+    ATLAS_CLUSTER_NAME: "production-cluster",
+  };
+
+  test("is optional and accepts an all-or-none service-account block", () => {
+    expect(loadConfig({ ...BASE_ENV }).atlasAdmin).toBeNull();
+    expect(loadConfig({
+      ...BASE_ENV,
+      ...ATLAS,
+      ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT: "2028-01-01T00:00:00Z",
+    }).atlasAdmin).toEqual({
+      clientId: "service-account-id",
+      clientSecret: "service-account-secret",
+      orgId: "0123456789abcdef01234567",
+      projectId: "89abcdef0123456701234567",
+      clusterName: "production-cluster",
+      secretExpiresAt: "2028-01-01T00:00:00.000Z",
+    });
+  });
+
+  test("rejects partial credentials and malformed expiry metadata", () => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      ATLAS_SERVICE_ACCOUNT_ID: "service-account-id",
+    })).toThrow(/must be set together/);
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      ...ATLAS,
+      ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT: "next summer",
+    })).toThrow(/ISO 8601/);
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT: "2028-01-01T00:00:00Z",
+    })).toThrow(/must be set together/);
   });
 });

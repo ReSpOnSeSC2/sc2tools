@@ -53,6 +53,14 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     bucket: string,
  *     billingCycleDay: number,
  *   }|null,
+ *   atlasAdmin: {
+ *     clientId: string,
+ *     clientSecret: string,
+ *     orgId: string,
+ *     projectId: string,
+ *     clusterName: string,
+ *     secretExpiresAt: string|null,
+ *   }|null,
  *   analytics: {
  *     enabled: boolean,
  *     propertyId: string|null,
@@ -126,6 +134,7 @@ function loadConfig(env = process.env) {
     replayFilesStore: parseReplayFilesStore(env.REPLAY_FILES_STORE),
     r2: parseR2Config(env),
     cloudflareAnalytics: parseCloudflareAnalyticsConfig(env),
+    atlasAdmin: parseAtlasAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
   };
 }
@@ -284,6 +293,53 @@ function parseCloudflareAnalyticsConfig(env) {
   return { accountId, apiToken, bucket, billingCycleDay };
 }
 
+/**
+ * Optional, read-only Atlas Admin API service account. The five settings are
+ * all-or-none so a production deploy cannot silently report partial Atlas
+ * health or accidentally query a different project/cluster.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{
+ *   clientId: string,
+ *   clientSecret: string,
+ *   orgId: string,
+ *   projectId: string,
+ *   clusterName: string,
+ *   secretExpiresAt: string|null,
+ * } | null}
+ */
+function parseAtlasAdminConfig(env) {
+  const fields = {
+    clientId: String(env.ATLAS_SERVICE_ACCOUNT_ID || "").trim(),
+    clientSecret: String(env.ATLAS_SERVICE_ACCOUNT_SECRET || "").trim(),
+    orgId: String(env.ATLAS_ORG_ID || "").trim(),
+    projectId: String(env.ATLAS_PROJECT_ID || "").trim(),
+    clusterName: String(env.ATLAS_CLUSTER_NAME || "").trim(),
+  };
+  const populated = Object.values(fields).filter(Boolean).length;
+  const secretExpiresAtRaw = String(
+    env.ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT || "",
+  ).trim();
+  if (populated === 0 && !secretExpiresAtRaw) return null;
+  if (populated !== Object.keys(fields).length) {
+    throw new Error(
+      "ATLAS_SERVICE_ACCOUNT_ID, ATLAS_SERVICE_ACCOUNT_SECRET, "
+      + "ATLAS_ORG_ID, ATLAS_PROJECT_ID, and ATLAS_CLUSTER_NAME must be set together",
+    );
+  }
+  let secretExpiresAt = null;
+  if (secretExpiresAtRaw) {
+    const expires = new Date(secretExpiresAtRaw);
+    if (Number.isNaN(expires.getTime())) {
+      throw new Error(
+        "ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT must be an ISO 8601 timestamp",
+      );
+    }
+    secretExpiresAt = expires.toISOString();
+  }
+  return { ...fields, secretExpiresAt };
+}
+
 /** @param {string|undefined} raw */
 function parseBillingCycleDay(raw) {
   if (raw === undefined || raw === null || raw === "") return 1;
@@ -343,5 +399,6 @@ module.exports = {
   parseReplayFilesStore,
   parseR2Config,
   parseCloudflareAnalyticsConfig,
+  parseAtlasAdminConfig,
   parseAnalyticsConfig,
 };

@@ -220,7 +220,9 @@ function makeServices(deps) {
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
   const infrastructureUsage = new InfrastructureUsageService({
     games: deps.db.games,
+    mongoDb: deps.db.db,
     cloudflareAnalytics: deps.config.cloudflareAnalytics || null,
+    atlasAdmin: deps.config.atlasAdmin || null,
   });
   // Cloud-side SC2Pulse resolver — drives the backfill cron's
   // recovery path for opponents whose pulseCharacterId never landed
@@ -495,7 +497,11 @@ function makeServices(deps) {
   });
   // AdminService composes db + gdpr; deliberately near the bottom so
   // its dependencies are already constructed.
-  const admin = new AdminService({ db: deps.db, gdpr });
+  const admin = new AdminService({
+    db: deps.db,
+    gdpr,
+    infrastructureUsage,
+  });
   // Cross-user global tracking for the admin Global tab — merges every
   // user's opponents / games into platform-wide player, strategy,
   // build, and map records. Reads the shared Pulse cache for resolve /
@@ -819,6 +825,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
         if (clerkUserId) adminClerkIds.add(clerkUserId);
       },
       gameDetailsStoreKind: deps.config.gameDetailsStore,
+      replayFilesStoreKind: deps.config.replayFilesStore,
     }),
   );
   // User → admin messaging (bug reports). Auth-gated per-path inside

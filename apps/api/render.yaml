@@ -75,6 +75,22 @@ services:
       # UTC day on which the Cloudflare billing cycle starts (1-28).
       - key: CLOUDFLARE_BILLING_CYCLE_DAY
         sync: false
+      # Optional read-only Atlas Admin API diagnostics. The service account
+      # needs Project Read Only and Organization Billing Viewer. Core identity
+      # settings are all-or-none; expiry is shown only in authenticated admin
+      # health so secret rotation cannot be missed.
+      - key: ATLAS_SERVICE_ACCOUNT_ID
+        sync: false
+      - key: ATLAS_SERVICE_ACCOUNT_SECRET
+        sync: false
+      - key: ATLAS_ORG_ID
+        sync: false
+      - key: ATLAS_PROJECT_ID
+        sync: false
+      - key: ATLAS_CLUSTER_NAME
+        sync: false
+      - key: ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: SERVER_PEPPER_HEX

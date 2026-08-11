@@ -43,6 +43,7 @@ const express = require("express");
  *   isAdmin: (req: any) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
  *   gameDetailsStoreKind?: string,
+ *   replayFilesStoreKind?: string,
  * }} deps
  */
 function buildAdminRouter(deps) {
@@ -416,6 +417,7 @@ function buildAdminRouter(deps) {
       res.json(
         await deps.admin.health({
           gameDetailsStoreKind: deps.gameDetailsStoreKind,
+          replayFilesStoreKind: deps.replayFilesStoreKind,
         }),
       );
     } catch (err) {

@@ -175,6 +175,18 @@ describe("/v1/admin", () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.totalDocs).toBe("number");
     expect(typeof res.body.totalStorageBytes).toBe("number");
+    expect(res.body.database.available).toBe(true);
+    expect(res.body.database.appData.scope).toBe("sc2tools_database_only");
+    expect(typeof res.body.database.appData.allocatedTotalBytes).toBe("number");
+    expect(res.body.database.pricing).toMatchObject({
+      monthlyPlanningEstimateUsd: 56.94,
+      estimate: true,
+    });
+    expect(res.body.database.atlas).toMatchObject({
+      configured: false,
+      available: false,
+      errorCode: "not_configured",
+    });
     const games = res.body.collections.find((c) => c.name === "games");
     expect(games).toBeTruthy();
     expect(games.count).toBe(1);
@@ -504,6 +516,27 @@ describe("/v1/admin", () => {
     expect(res.body.mongo.ok).toBe(true);
     expect(typeof res.body.mongo.latencyMs).toBe("number");
     expect(res.body.runtime.gameDetailsStore).toBe("mongo");
+    expect(res.body.runtime.replayFilesStore).toBe("disabled");
+    expect(res.body.runtime.infrastructureCostsConfigured).toBe(false);
     expect(typeof res.body.runtime.nodeVersion).toBe("string");
+    expect(res.body.cloudflareAnalytics).toEqual({
+      configured: false,
+      available: false,
+      stale: false,
+      asOf: null,
+      errorCode: "not_configured",
+    });
+    expect(res.body.mongo.storage.scope).toBe("sc2tools_database_only");
+    expect(res.body.mongo.pricing.monthlyPlanningEstimateUsd).toBe(56.94);
+    expect(res.body.mongo.atlas).toMatchObject({
+      configured: false,
+      available: false,
+      credential: {
+        expiresAt: null,
+        daysRemaining: null,
+        expiringSoon: false,
+      },
+      errorCode: "not_configured",
+    });
   });
 });

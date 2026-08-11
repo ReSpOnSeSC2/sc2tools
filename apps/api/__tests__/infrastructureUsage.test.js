@@ -64,6 +64,13 @@ function configured(overrides = {}) {
 function service(opts = {}) {
   return new InfrastructureUsageService({
     games: opts.games || { countDocuments: jest.fn(async () => 15) },
+    mongoDb: opts.mongoDb || {
+      command: jest.fn(async () => ({
+        dataSize: 1_200,
+        storageSize: 800,
+        indexSize: 200,
+      })),
+    },
     cloudflareAnalytics:
       opts.cloudflareAnalytics === undefined
         ? configured()
@@ -74,6 +81,8 @@ function service(opts = {}) {
     cacheTtlMs: opts.cacheTtlMs,
     errorRetryMs: opts.errorRetryMs,
     timeoutMs: opts.timeoutMs,
+    atlasAdmin: opts.atlasAdmin,
+    atlasClient: opts.atlasClient,
   });
 }
 
@@ -105,8 +114,26 @@ describe("InfrastructureUsageService", () => {
           currentMonthly: 4.905,
         },
       },
+      mongo: {
+        appData: {
+          logicalDataBytes: 1_200,
+          allocatedDocumentBytes: 800,
+          allocatedIndexBytes: 200,
+          allocatedTotalBytes: 1_000,
+          measuredAt: NOW.toISOString(),
+          scope: "sc2tools_database_only",
+        },
+        atlas: {
+          available: false,
+          cluster: null,
+          billing: null,
+        },
+        planning: { monthlyUsd: 56.94 },
+      },
       site: {
         fixedMonthlyEquivalentUsd: 65.19,
+        nonMongoFixedMonthlyUsd: 8.25,
+        pricingMode: "planning_fallback",
         estimatedCurrentMonthlyTotalUsd: 70.095,
       },
     });
@@ -126,6 +153,188 @@ describe("InfrastructureUsageService", () => {
     });
     expect(JSON.stringify(result)).not.toMatch(
       /account-secret|token-secret|private-bucket/,
+    );
+  });
+
+  test("uses the Atlas projection while stripping provider identifiers", async () => {
+    const atlasClient = {
+      snapshot: jest.fn(async () => ({
+        available: true,
+        measuredAt: NOW.toISOString(),
+        cluster: {
+          tier: "M10",
+          provider: "SECRET_PROVIDER",
+          region: "SECRET_REGION",
+          clusterName: "secret-cluster-name",
+          provisionedDiskGb: 10,
+          autoExpandStorage: true,
+          diskUsedBytes: 3_954_452_070,
+          diskCapacityBytes: 10_632_560_640,
+          diskMeasuredAt: "2026-08-11T14:40:00.000Z",
+        },
+        billing: {
+          available: true,
+          cycleStart: "2026-08-01T00:00:00.000Z",
+          cycleEnd: "2026-09-01T00:00:00.000Z",
+          postedThrough: "2026-08-11T00:00:00.000Z",
+          postedCycleCents: 2_000,
+          categoryCents: {
+            compute: 1_800,
+            storage: 200,
+            transfer: 0,
+            other: 0,
+          },
+          projectedMonthlyRunRateCents: 6_000,
+          projectedMonthlyRunRateUsd: 60,
+          rawSku: "SECRET_SKU",
+        },
+      })),
+    };
+    const result = await service({ atlasClient }).snapshot();
+
+    expect(result.mongo).toEqual({
+      appData: {
+        logicalDataBytes: 1_200,
+        allocatedDocumentBytes: 800,
+        allocatedIndexBytes: 200,
+        allocatedTotalBytes: 1_000,
+        measuredAt: NOW.toISOString(),
+        scope: "sc2tools_database_only",
+      },
+      atlas: {
+        available: true,
+        cluster: {
+          tier: "M10",
+          provisionedDiskGb: 10,
+          diskUsedBytes: 3_954_452_070,
+          diskCapacityBytes: 10_632_560_640,
+          diskMeasuredAt: "2026-08-11T14:40:00.000Z",
+          autoExpandStorage: true,
+        },
+        billing: {
+          available: true,
+          cycleStart: "2026-08-01T00:00:00.000Z",
+          cycleEnd: "2026-09-01T00:00:00.000Z",
+          postedThrough: "2026-08-11T00:00:00.000Z",
+          postedCycleCents: 2_000,
+          categoryCents: {
+            compute: 1_800,
+            storage: 200,
+            transfer: 0,
+            other: 0,
+          },
+          projectedMonthlyRunRateCents: 6_000,
+          projectedMonthlyRunRateUsd: 60,
+        },
+      },
+      planning: { monthlyUsd: 56.94 },
+    });
+    expect(result.site).toMatchObject({
+      nonMongoFixedMonthlyUsd: 8.25,
+      pricingMode: "atlas_projected",
+      estimatedCurrentMonthlyTotalUsd: 73.155,
+    });
+    expect(JSON.stringify(result)).not.toMatch(
+      /SECRET_PROVIDER|SECRET_REGION|secret-cluster|SECRET_SKU/,
+    );
+  });
+
+  test("reports live app database bytes without treating usage as Atlas price", async () => {
+    const mongoDb = {
+      command: jest.fn(async () => ({
+        dataSize: 3_000,
+        storageSize: 2_000,
+        indexSize: 500,
+      })),
+    };
+    await expect(service({ mongoDb }).mongoStorageSnapshot()).resolves.toEqual({
+      appData: {
+        logicalDataBytes: 3_000,
+        allocatedDocumentBytes: 2_000,
+        allocatedIndexBytes: 500,
+        allocatedTotalBytes: 2_500,
+        scope: "sc2tools_database_only",
+        measuredAt: NOW.toISOString(),
+      },
+      pricing: {
+        monthlyPlanningEstimateUsd: 56.94,
+        includedInSiteFixedMonthlyEquivalent: true,
+        estimate: true,
+        basis: "repo_budget_assumption",
+      },
+      atlas: {
+        configured: false,
+        available: false,
+        measuredAt: null,
+        cluster: null,
+        billing: null,
+        credential: {
+          expiresAt: null,
+          daysRemaining: null,
+          expiringSoon: false,
+        },
+        errorCode: "not_configured",
+      },
+    });
+    expect(mongoDb.command).toHaveBeenCalledWith({
+      dbStats: 1,
+      scale: 1,
+      maxTimeMS: 8_000,
+    });
+  });
+
+  test("admin diagnostics expose config health but never provider identifiers", async () => {
+    const atlasClient = {
+      snapshot: jest.fn(async () => ({
+        available: true,
+        measuredAt: NOW.toISOString(),
+        cluster: {
+          tier: "M10",
+          provider: "GCP",
+          region: "WESTERN_US",
+          provisionedDiskGb: 10,
+          autoExpandStorage: true,
+          diskUsedBytes: 3_954_452_070,
+          diskCapacityBytes: 10_632_560_640,
+          diskMeasuredAt: NOW.toISOString(),
+        },
+        billing: {
+          available: true,
+          postedCycleCents: 2_859,
+          projectedMonthlyRunRateCents: 8_863,
+        },
+        configErrorCode: null,
+      })),
+    };
+    const instance = service({
+      atlasClient,
+      atlasAdmin: {
+        ...configured(),
+        secretExpiresAt: "2028-01-01T00:00:00.000Z",
+      },
+    });
+    const status = await instance.adminStatus();
+    expect(status).toMatchObject({
+      cloudflareAnalytics: {
+        configured: true,
+        available: true,
+        stale: false,
+      },
+      mongo: {
+        atlas: {
+          configured: true,
+          available: true,
+          cluster: { tier: "M10", provisionedDiskGb: 10 },
+          credential: {
+            expiresAt: "2028-01-01T00:00:00.000Z",
+            daysRemaining: expect.any(Number),
+            expiringSoon: false,
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(status)).not.toMatch(
+      /service-account-secret|account-secret|token-secret|private-bucket/,
     );
   });
 

@@ -37,8 +37,22 @@ const SNAPSHOT = {
       currentMonthly: 0,
     },
   },
+  mongo: {
+    appData: {
+      logicalDataBytes: 1_000,
+      allocatedDocumentBytes: 600,
+      allocatedIndexBytes: 100,
+      allocatedTotalBytes: 700,
+      measuredAt: "2026-08-11T00:00:00.000Z",
+      scope: "sc2tools_database_only",
+    },
+    atlas: { available: false, cluster: null, billing: null },
+    planning: { monthlyUsd: 56.94 },
+  },
   site: {
     fixedMonthlyEquivalentUsd: 65.19,
+    nonMongoFixedMonthlyUsd: 8.25,
+    pricingMode: "planning_fallback",
     estimatedCurrentMonthlyTotalUsd: 65.19,
   },
 };

@@ -79,6 +79,7 @@ class AdminService {
    * @param {{
    *   db: import('../db/connect').DbContext,
    *   gdpr: import('./gdpr').GdprService,
+   *   infrastructureUsage?: import('./infrastructureUsage').InfrastructureUsageService,
    * }} deps
    */
   constructor(deps) {
@@ -86,6 +87,7 @@ class AdminService {
     if (!deps.gdpr) throw new Error("AdminService: gdpr required");
     this.db = deps.db;
     this.gdpr = deps.gdpr;
+    this.infrastructureUsage = deps.infrastructureUsage || null;
     this._startedAt = Date.now();
   }
 
@@ -101,6 +103,7 @@ class AdminService {
    *   totalDataBytes: number,
    *   totalStorageBytes: number,
    *   totalIndexBytes: number,
+   *   database: Record<string, any>,
    *   collections: Array<{
    *     name: string,
    *     count: number,
@@ -154,12 +157,14 @@ class AdminService {
       totalStorageBytes += r.storageSize;
       totalIndexBytes += r.indexSize;
     }
+    const database = await this._mongoStorageStatus();
     return {
       totalDocs,
       totalDataBytes,
       totalStorageBytes,
       totalIndexBytes,
       collections: results.sort((a, b) => b.totalSize - a.totalSize),
+      database,
     };
   }
 
@@ -722,6 +727,7 @@ class AdminService {
    *
    * @param {{
    *   gameDetailsStoreKind?: string,
+   *   replayFilesStoreKind?: string,
    *   nodeVersion?: string,
    * }} [ctx]
    */
@@ -729,15 +735,29 @@ class AdminService {
     /** @type {{ ok: boolean, latencyMs: number | null, error: string | null }} */
     const mongo = { ok: false, latencyMs: null, error: null };
     const t0 = Date.now();
-    try {
-      await this.db.client.db().admin().ping();
-      mongo.ok = true;
-      mongo.latencyMs = Date.now() - t0;
-    } catch (/** @type {any} */ err) {
-      mongo.error = err && err.message ? err.message : String(err);
-    }
+    const infrastructurePromise = this.infrastructureUsage
+      ? this.infrastructureUsage.adminStatus()
+      : Promise.resolve(defaultInfrastructureStatus());
+    const [, infrastructure] = await Promise.all([
+      (async () => {
+        try {
+          await this.db.client.db().admin().ping();
+          mongo.ok = true;
+          mongo.latencyMs = Date.now() - t0;
+        } catch (/** @type {any} */ err) {
+          mongo.error = err && err.message ? err.message : String(err);
+        }
+      })(),
+      infrastructurePromise.catch(() => defaultInfrastructureStatus()),
+    ]);
     return {
-      mongo,
+      mongo: {
+        ...mongo,
+        storage: infrastructure.mongo.appData,
+        pricing: infrastructure.mongo.pricing,
+        atlas: infrastructure.mongo.atlas,
+      },
+      cloudflareAnalytics: infrastructure.cloudflareAnalytics,
       uptime: {
         startedAt: new Date(this._startedAt).toISOString(),
         uptimeSeconds: Math.floor((Date.now() - this._startedAt) / 1000),
@@ -745,9 +765,54 @@ class AdminService {
       runtime: {
         nodeVersion: ctx.nodeVersion || process.version,
         gameDetailsStore: ctx.gameDetailsStoreKind || "mongo",
+        replayFilesStore: ctx.replayFilesStoreKind || "disabled",
+        infrastructureCostsConfigured:
+          infrastructure.cloudflareAnalytics.configured
+          && infrastructure.mongo.atlas.configured,
       },
     };
   }
+
+  async _mongoStorageStatus() {
+    if (!this.infrastructureUsage) {
+      return { available: false, ...defaultInfrastructureStatus().mongo };
+    }
+    try {
+      const value = await this.infrastructureUsage.mongoStorageSnapshot();
+      return { available: true, ...value };
+    } catch {
+      return { available: false, ...defaultInfrastructureStatus().mongo };
+    }
+  }
+}
+
+function defaultInfrastructureStatus() {
+  return {
+    cloudflareAnalytics: {
+      configured: false,
+      available: false,
+      stale: false,
+      asOf: null,
+      errorCode: "not_configured",
+    },
+    mongo: {
+      appData: null,
+      pricing: null,
+      atlas: {
+        configured: false,
+        available: false,
+        measuredAt: null,
+        cluster: null,
+        billing: null,
+        credential: {
+          expiresAt: null,
+          daysRemaining: null,
+          expiringSoon: false,
+        },
+        errorCode: "not_configured",
+      },
+    },
+  };
 }
 
 /** @param {unknown} raw @param {number} fallback */

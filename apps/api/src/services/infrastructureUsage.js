@@ -10,6 +10,10 @@
  * landing-page request can never fan out into repeated provider queries.
  */
 
+const {
+  AtlasInfrastructureClient,
+} = require("./atlasInfrastructure");
+
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const ERROR_RETRY_MS = 60 * 1000;
@@ -19,6 +23,9 @@ const STORAGE_LOOKBACK_MS = 31 * 24 * 60 * 60 * 1000;
 // All monetary values are integer mills (1 mill = $0.001).  Integer math
 // prevents display drift around Cloudflare's rounded billing units.
 const FIXED_MONTHLY_MILLS = 65_190;
+const MONGO_MONTHLY_PLANNING_MILLS = 56_940;
+const NON_MONGO_FIXED_MONTHLY_MILLS =
+  FIXED_MONTHLY_MILLS - MONGO_MONTHLY_PLANNING_MILLS;
 const STANDARD_FREE_STORAGE_GB = 10;
 const STANDARD_STORAGE_MILLS_PER_GB_MONTH = 15;
 const CLASS_A_FREE_REQUESTS = 1_000_000;
@@ -115,12 +122,22 @@ class InfrastructureUsageService {
   /**
    * @param {{
    *   games: import('mongodb').Collection,
+   *   mongoDb: import('mongodb').Db,
    *   cloudflareAnalytics?: {
    *     accountId: string,
    *     apiToken: string,
    *     bucket: string,
    *     billingCycleDay?: number,
    *   } | null,
+   *   atlasAdmin?: {
+   *     clientId: string,
+   *     clientSecret: string,
+   *     orgId: string,
+   *     projectId: string,
+   *     clusterName: string,
+   *     secretExpiresAt?: string|null,
+   *   } | null,
+   *   atlasClient?: { snapshot: () => Promise<Record<string, any>> } | null,
    *   fetchImpl?: typeof fetch,
    *   now?: () => Date,
    *   cacheTtlMs?: number,
@@ -129,16 +146,28 @@ class InfrastructureUsageService {
    * }} deps
    */
   constructor(deps) {
-    if (!deps || !deps.games) {
-      throw new Error("InfrastructureUsageService: games required");
+    if (!deps || !deps.games || !deps.mongoDb) {
+      throw new Error("InfrastructureUsageService: games and mongoDb required");
     }
     this.games = deps.games;
+    this.mongoDb = deps.mongoDb;
     this.config = deps.cloudflareAnalytics || null;
     this.fetchImpl = deps.fetchImpl || globalThis.fetch;
     this.now = deps.now || (() => new Date());
     this.cacheTtlMs = positiveMs(deps.cacheTtlMs, CACHE_TTL_MS);
     this.errorRetryMs = positiveMs(deps.errorRetryMs, ERROR_RETRY_MS);
     this.timeoutMs = positiveMs(deps.timeoutMs, REQUEST_TIMEOUT_MS);
+    this.atlasSecretExpiresAt = deps.atlasAdmin?.secretExpiresAt || null;
+    this.atlas = deps.atlasClient === undefined
+      ? (deps.atlasAdmin
+        ? new AtlasInfrastructureClient({
+          config: deps.atlasAdmin,
+          fetchImpl: this.fetchImpl,
+          now: this.now,
+          timeoutMs: this.timeoutMs,
+        })
+        : null)
+      : deps.atlasClient;
 
     /** @type {Record<string, any> | null} */
     this._lastGood = null;
@@ -171,6 +200,69 @@ class InfrastructureUsageService {
     }
   }
 
+  /**
+   * Whole-database dbStats, Atlas capacity/billing diagnostics, and the
+   * repository's planning allowance. Atlas failures degrade inside the
+   * returned provider status, so dbStats remains available independently.
+   */
+  async mongoStorageSnapshot() {
+    const [appData, atlas] = await Promise.all([
+      this._readMongoStorage(),
+      this._readAtlas(),
+    ]);
+    return this._adminMongoStatus({
+      appData,
+      atlas,
+      pricing: mongoPlanningPrice(),
+    });
+  }
+
+  /**
+   * Credential-free diagnostics for the admin Health surface. Provider error
+   * messages are reduced to stable codes so a failed upstream request cannot
+   * reflect tokens, identifiers, hostnames, or cluster names.
+   */
+  async adminStatus() {
+    if (this.config) {
+      try {
+        const snapshot = await this.snapshot();
+        return {
+          cloudflareAnalytics: {
+            configured: true,
+            available: true,
+            stale: snapshot.stale,
+            asOf: snapshot.asOf,
+            errorCode: snapshot.stale ? "stale_last_good" : null,
+          },
+          mongo: this._adminMongoStatus(this._lastGood?.mongo),
+        };
+      } catch {
+        // Fall through to independent Mongo/Atlas probes. This preserves
+        // useful diagnostics when Cloudflare is the only failing provider.
+      }
+    }
+    const [mongoResult, atlasResult] = await Promise.allSettled([
+      this._readMongoStorage(),
+      this._readAtlas(),
+    ]);
+    return {
+      cloudflareAnalytics: {
+        configured: Boolean(this.config),
+        available: false,
+        stale: false,
+        asOf: null,
+        errorCode: this.config ? "analytics_unavailable" : "not_configured",
+      },
+      mongo: this._adminMongoStatus({
+        appData: mongoResult.status === "fulfilled" ? mongoResult.value : null,
+        atlas: atlasResult.status === "fulfilled"
+          ? atlasResult.value
+          : unavailableAtlas("atlas_admin_unavailable"),
+        pricing: mongoPlanningPrice(),
+      }),
+    };
+  }
+
   async _refreshWithFallback() {
     if (!this.config) throw unavailableError();
     try {
@@ -195,9 +287,16 @@ class InfrastructureUsageService {
     const cycleStart = billingCycleStart(now, config.billingCycleDay || 1);
     const storageStart = new Date(now.getTime() - STORAGE_LOOKBACK_MS);
 
-    const [analytics, archivedOriginalReplayCount] = await Promise.all([
+    const [
+      analytics,
+      archivedOriginalReplayCount,
+      mongoAppData,
+      atlas,
+    ] = await Promise.all([
       this._fetchAnalytics({ now, cycleStart, storageStart }),
       this._countArchivedOriginalReplays(),
+      this._readMongoStorage(now),
+      this._readAtlas(),
     ]);
     const operations = classifyOperations(analytics.operationRows);
     const costs = calculateCosts({
@@ -224,6 +323,11 @@ class InfrastructureUsageService {
         unknownRequests: operations.unknownRequests,
       },
       costs,
+      mongo: {
+        appData: mongoAppData,
+        atlas,
+        pricing: mongoPlanningPrice(),
+      },
       providerAsOf: analytics.storage.asOf,
       computedAt: now.toISOString(),
     };
@@ -235,6 +339,58 @@ class InfrastructureUsageService {
       { maxTimeMS: this.timeoutMs },
     );
     return nonNegativeSafeInteger(count, "archived replay count");
+  }
+
+  /** @param {Date} [measuredAt] */
+  async _readMongoStorage(measuredAt = this._now()) {
+    const stats = await this.mongoDb.command({
+      dbStats: 1,
+      scale: 1,
+      maxTimeMS: this.timeoutMs,
+    });
+    const allocatedDocumentBytes = nonNegativeSafeInteger(
+      stats?.storageSize,
+      "Mongo storageSize",
+    );
+    const allocatedIndexBytes = nonNegativeSafeInteger(
+      stats?.indexSize,
+      "Mongo indexSize",
+    );
+    const allocatedTotalBytes = allocatedDocumentBytes + allocatedIndexBytes;
+    if (!Number.isSafeInteger(allocatedTotalBytes)) {
+      throw new Error("Mongo allocated total exceeds safe integer");
+    }
+    return {
+      logicalDataBytes: nonNegativeSafeInteger(
+        stats?.dataSize,
+        "Mongo dataSize",
+      ),
+      allocatedDocumentBytes,
+      allocatedIndexBytes,
+      allocatedTotalBytes,
+      scope: "sc2tools_database_only",
+      measuredAt: measuredAt.toISOString(),
+    };
+  }
+
+  async _readAtlas() {
+    if (!this.atlas) return unavailableAtlas("not_configured");
+    try {
+      const value = await this.atlas.snapshot();
+      return adminAtlasStatus(value);
+    } catch {
+      return unavailableAtlas("atlas_admin_unavailable");
+    }
+  }
+
+  /** @param {Record<string, any> | null | undefined} mongo */
+  _adminMongoStatus(mongo) {
+    const status = adminMongoStatus(mongo);
+    /** @type {any} */ (status.atlas).credential = atlasCredentialHealth(
+      this.atlasSecretExpiresAt,
+      this._now(),
+    );
+    return status;
   }
 
   /**
@@ -414,6 +570,26 @@ function publicSnapshot(value, stale) {
   // Explicit reconstruction is a response allowlist.  Provider credentials,
   // account IDs, bucket names, and raw action names cannot leak even if the
   // internal refresh representation grows later.
+  const mongo = publicMongoSnapshot(value.mongo);
+  const projectedAtlasCents = mongo.atlas.billing?.available
+    ? mongo.atlas.billing.projectedMonthlyRunRateCents
+    : null;
+  const hasAtlasProjection = Number.isSafeInteger(projectedAtlasCents)
+    && projectedAtlasCents >= 0;
+  const atlasMonthlyMills = hasAtlasProjection
+    ? nonNegativeSafeInteger(
+      projectedAtlasCents * 10,
+      "Atlas projected monthly mills",
+    )
+    : MONGO_MONTHLY_PLANNING_MILLS;
+  const estimatedCurrentMonthlyMills = nonNegativeSafeInteger(
+    (hasAtlasProjection
+      ? NON_MONGO_FIXED_MONTHLY_MILLS + atlasMonthlyMills
+      : FIXED_MONTHLY_MILLS)
+      + value.costs.r2EstimatedMonthlyMills,
+    "site estimated current monthly mills",
+  );
+
   return {
     asOf: value.providerAsOf,
     stale: Boolean(stale),
@@ -436,12 +612,155 @@ function publicSnapshot(value, stale) {
         currentMonthly: millsToUsd(value.costs.r2EstimatedMonthlyMills),
       },
     },
+    mongo,
     site: {
+      // Retained during the rollout so the already-deployed web build can
+      // consume the expanded response until its replacement is live.
       fixedMonthlyEquivalentUsd: millsToUsd(value.costs.fixedMonthlyMills),
+      nonMongoFixedMonthlyUsd: millsToUsd(NON_MONGO_FIXED_MONTHLY_MILLS),
+      pricingMode: hasAtlasProjection
+        ? "atlas_projected"
+        : "planning_fallback",
       estimatedCurrentMonthlyTotalUsd: millsToUsd(
-        value.costs.estimatedTotalMonthlyMills,
+        estimatedCurrentMonthlyMills,
       ),
     },
+  };
+}
+
+/**
+ * Public Mongo allowlist. Application bytes, disk capacity, and aggregate
+ * charges are intentionally public because they power the site's transparent
+ * cost explanation. Provider/region, org/project/cluster identifiers,
+ * hostnames, credential health, SKUs, and raw line items stay admin-only.
+ *
+ * @param {Record<string, any>} value
+ */
+function publicMongoSnapshot(value) {
+  const app = value?.appData || {};
+  const atlas = value?.atlas || {};
+  const cluster = atlas.available && atlas.cluster
+    ? {
+      tier: atlas.cluster.tier ?? null,
+      provisionedDiskGb: atlas.cluster.provisionedDiskGb ?? null,
+      diskUsedBytes: atlas.cluster.diskUsedBytes ?? null,
+      diskCapacityBytes: atlas.cluster.diskCapacityBytes ?? null,
+      diskMeasuredAt: atlas.cluster.diskMeasuredAt ?? null,
+      autoExpandStorage: Boolean(atlas.cluster.autoExpandStorage),
+    }
+    : null;
+  const sourceBilling = atlas.available ? atlas.billing : null;
+  const sourceCategories = sourceBilling?.categoryCents;
+  const billing = sourceBilling
+    ? {
+      available: Boolean(sourceBilling.available),
+      cycleStart: sourceBilling.cycleStart ?? null,
+      cycleEnd: sourceBilling.cycleEnd ?? null,
+      postedThrough: sourceBilling.postedThrough ?? null,
+      postedCycleCents: sourceBilling.postedCycleCents ?? null,
+      categoryCents: sourceCategories
+        ? {
+          compute: sourceCategories.compute,
+          storage: sourceCategories.storage,
+          transfer: sourceCategories.transfer,
+          other: sourceCategories.other,
+        }
+        : null,
+      projectedMonthlyRunRateCents:
+        sourceBilling.projectedMonthlyRunRateCents ?? null,
+      projectedMonthlyRunRateUsd:
+        sourceBilling.projectedMonthlyRunRateUsd ?? null,
+    }
+    : null;
+
+  return {
+    appData: {
+      logicalDataBytes: app.logicalDataBytes,
+      allocatedDocumentBytes: app.allocatedDocumentBytes,
+      allocatedIndexBytes: app.allocatedIndexBytes,
+      allocatedTotalBytes: app.allocatedTotalBytes,
+      measuredAt: app.measuredAt,
+      scope: "sc2tools_database_only",
+    },
+    atlas: {
+      available: Boolean(atlas.available),
+      cluster,
+      billing,
+    },
+    planning: {
+      monthlyUsd: millsToUsd(MONGO_MONTHLY_PLANNING_MILLS),
+    },
+  };
+}
+
+function mongoPlanningPrice() {
+  return {
+    monthlyPlanningEstimateUsd: millsToUsd(MONGO_MONTHLY_PLANNING_MILLS),
+    includedInSiteFixedMonthlyEquivalent: true,
+    estimate: true,
+    basis: "repo_budget_assumption",
+  };
+}
+
+/** @param {Record<string, any> | null | undefined} mongo */
+function adminMongoStatus(mongo) {
+  if (!mongo) {
+    return {
+      appData: null,
+      atlas: unavailableAtlas("atlas_admin_unavailable"),
+      pricing: mongoPlanningPrice(),
+    };
+  }
+  return {
+    appData: mongo.appData,
+    atlas: adminAtlasStatus(mongo.atlas),
+    pricing: mongoPlanningPrice(),
+  };
+}
+
+/** @param {Record<string, any>} value */
+function adminAtlasStatus(value) {
+  if (!value || !value.available) {
+    return unavailableAtlas(value?.errorCode || "atlas_admin_unavailable");
+  }
+  return {
+    configured: true,
+    available: true,
+    measuredAt: value.measuredAt ?? null,
+    cluster: value.cluster || null,
+    billing: value.billing || null,
+    errorCode: value.configErrorCode ?? null,
+  };
+}
+
+/** @param {string} errorCode */
+function unavailableAtlas(errorCode) {
+  return {
+    configured: errorCode !== "not_configured",
+    available: false,
+    measuredAt: null,
+    cluster: null,
+    billing: null,
+    errorCode,
+  };
+}
+
+/** @param {string|null} expiresAt @param {Date} now */
+function atlasCredentialHealth(expiresAt, now) {
+  if (!expiresAt) {
+    return {
+      expiresAt: null,
+      daysRemaining: null,
+      expiringSoon: false,
+    };
+  }
+  const expiresMs = new Date(expiresAt).getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.ceil((expiresMs - now.getTime()) / dayMs);
+  return {
+    expiresAt: new Date(expiresMs).toISOString(),
+    daysRemaining,
+    expiringSoon: daysRemaining <= 30,
   };
 }
 
@@ -463,7 +782,7 @@ function unavailableError(cause) {
 function nonNegativeSafeInteger(value, label) {
   const number = typeof value === "number" ? value : Number(value);
   if (!Number.isSafeInteger(number) || number < 0) {
-    throw new Error(`invalid cloudflare ${label}`);
+    throw new Error(`invalid ${label}`);
   }
   return number;
 }
