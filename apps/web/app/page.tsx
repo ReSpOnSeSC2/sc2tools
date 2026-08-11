@@ -28,6 +28,14 @@ import { ReplayDemo } from "@/components/landing/ReplayDemo";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
 import { StreamStudioShowcase } from "@/components/landing/StreamStudioShowcase";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import {
+  FIXED_MONTHLY_FALLBACK_USD,
+  formatReplayCount,
+  formatStorageBytes,
+  formatUsd,
+  getInfrastructureCosts,
+  type InfrastructureCosts,
+} from "@/lib/infrastructureCosts";
 
 /* =============================================================== */
 /* PAGE                                                             */
@@ -69,7 +77,8 @@ const WEBSITE_JSON_LD = {
     "Opponent intel, build orders, and a live OBS overlay for StarCraft II.",
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const infrastructureCosts = await getInfrastructureCosts();
   return (
     <div className="mx-auto max-w-6xl">
       <script
@@ -95,7 +104,7 @@ export default function LandingPage() {
       <ReplaySection />
       <HowItWorksSection />
       <MobileInstallSection />
-      <DonateBanner />
+      <DonateBanner costs={infrastructureCosts} />
       <FinalCtaSection />
     </div>
   );
@@ -597,7 +606,9 @@ function ArcadeMoreEntry() {
 /* DONATE BANNER                                                    */
 /* =============================================================== */
 
-function DonateBanner() {
+function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
+  const fixedMonthly =
+    costs?.site.fixedMonthlyEquivalentUsd ?? FIXED_MONTHLY_FALLBACK_USD;
   return (
     <section className="mt-24 md:mt-32">
       <div className="grid items-center gap-6 rounded-md border-2 border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
@@ -610,16 +621,31 @@ function DonateBanner() {
         <div className="space-y-1.5">
           <p className="kicker">What it costs</p>
           <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
-            Free for players — about $65 a month to run today.
+            {costs
+              ? `Free for players — about ${formatUsd(costs.site.estimatedCurrentMonthlyTotalUsd)} a month to run today.`
+              : `Free for players — ${formatUsd(fixedMonthly)} fixed base each month.`}
           </h2>
-          <p className="text-body text-text-muted">
-            At the repository&rsquo;s currently declared Render Starter tier,
-            the public-list-price base is about $65.19/month for MongoDB
-            Atlas, the always-on API and the domain. Vercel, Clerk and
-            today&rsquo;s private replay archive are within or close to their
-            included allowances; R2 storage grows at $0.015 per GB-month
-            after the first 10 GB.
-          </p>
+          {costs ? (
+            <p className="text-body text-text-muted">
+              SC2 Tools has verified{" "}
+              {formatReplayCount(costs.archive.verifiedOriginalReplays)} original{" "}
+              {costs.archive.verifiedOriginalReplays === 1 ? "replay" : "replays"}
+              {" "}in its private archive. Original files and analysis objects
+              currently use {formatStorageBytes(costs.archive.r2StoredBytes)} in
+              Cloudflare R2, an estimated{" "}
+              {formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}/month at the
+              current storage run-rate and measured operation usage. Fixed
+              infrastructure is {formatUsd(fixedMonthly)}/month. This is an
+              estimate; the provider dashboards are authoritative.
+            </p>
+          ) : (
+            <p className="text-body text-text-muted">
+              The public-list-price base covers MongoDB Atlas, one always-on
+              Render API and the domain. Live archive usage is temporarily
+              unavailable, so no Cloudflare R2 amount has been guessed. Vercel
+              and Clerk currently remain within their included allowances.
+            </p>
+          )}
         </div>
         <Link
           href="/donate"

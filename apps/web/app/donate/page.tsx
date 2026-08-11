@@ -14,6 +14,15 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
+import {
+  FIXED_MONTHLY_FALLBACK_USD,
+  formatCostSnapshotTime,
+  formatReplayCount,
+  formatStorageBytes,
+  formatUsd,
+  getInfrastructureCosts,
+  type InfrastructureCosts,
+} from "@/lib/infrastructureCosts";
 
 export const metadata = {
   alternates: { canonical: "/donate" },
@@ -71,10 +80,11 @@ const CHANNELS: ReadonlyArray<DonationChannel> = [
   },
 ];
 
-export default function DonatePage() {
+export default async function DonatePage() {
+  const infrastructureCosts = await getInfrastructureCosts();
   return (
     <div className="space-y-12">
-      <HeroBlock />
+      <HeroBlock costs={infrastructureCosts} />
       <Section
         title="Two ways to chip in"
         description="Either channel goes to the same person. Pick whichever is easier."
@@ -88,13 +98,15 @@ export default function DonatePage() {
           ))}
         </ul>
       </Section>
-      <CostBreakdown />
+      <CostBreakdown costs={infrastructureCosts} />
       <FaqBlock />
     </div>
   );
 }
 
-function HeroBlock() {
+function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
+  const fixedMonthly =
+    costs?.site.fixedMonthlyEquivalentUsd ?? FIXED_MONTHLY_FALLBACK_USD;
   return (
     <section className="relative mx-auto max-w-3xl text-center">
       <div
@@ -115,12 +127,19 @@ function HeroBlock() {
         <span className="text-accent-cyan">Donations keep it that way.</span>
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
-        Every feature ships free for every player. The current public-list-price
-        infrastructure base is about $65.19/month at the repository&rsquo;s
-        declared Render Starter tier: one Render-hosted API, MongoDB Atlas M10
-        and the domain. A one-time tip helps cover that bill while the website,
-        authentication and current replay archive remain within or close to
-        their included allowances.
+        Every feature ships free for every player. The fixed public-list-price
+        infrastructure base is {formatUsd(fixedMonthly)}/month: one
+        Render-hosted API, MongoDB Atlas M10 and the domain. A one-time tip
+        helps cover that bill
+        {costs ? (
+          <>
+            {", plus the current "}
+            {formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}/month
+            estimated Cloudflare R2 archive cost.
+          </>
+        ) : (
+          ". Live archive usage is temporarily unavailable, so no R2 amount is being guessed."
+        )}
       </p>
     </section>
   );
@@ -219,8 +238,6 @@ const COST_LINES: ReadonlyArray<CostLine> = [
       "Stores original .SC2Replay files and detailed analysis objects. Standard storage includes the first 10 GB each month, then costs $0.015 per GB-month; monthly operation allowances apply, and direct R2 egress is free.",
     approxMonthlyUsd: 0,
     includedInBase: false,
-    priceLabel: "$0–$0.08/mo",
-    priceNote: "current estimate",
     pricingHref: "https://developers.cloudflare.com/r2/pricing/",
   },
   {
@@ -254,17 +271,11 @@ const APPROX_MONTHLY_BASE = BASE_COST_LINES.reduce(
   (acc, line) => acc + line.approxMonthlyUsd,
   0,
 );
-const APPROX_YEARLY_BASE = BASE_COST_LINES.reduce(
-  (acc, line) =>
-    acc + (line.approxYearlyUsd ?? line.approxMonthlyUsd * 12),
-  0,
-);
 
-function fmtUsd(n: number): string {
-  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
-}
-
-function CostBreakdown() {
+function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
+  const fixedMonthly =
+    costs?.site.fixedMonthlyEquivalentUsd ?? APPROX_MONTHLY_BASE;
+  const displayedLines = costLines(costs);
   return (
     <Section
       title="Where every penny goes"
@@ -273,41 +284,107 @@ function CostBreakdown() {
     >
       <Card padded={false}>
         <ul className="divide-y divide-border">
-          {COST_LINES.map((line) => (
+          {displayedLines.map((line) => (
             <CostRow key={line.id} line={line} />
           ))}
         </ul>
         <div className="grid gap-2 border-t border-border bg-bg-elevated/40 px-5 py-4 sm:grid-cols-2">
           <div className="space-y-0.5">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              Fixed base · monthly equivalent
+              {costs
+                ? "Estimated current monthly total"
+                : "Fixed base · monthly equivalent"}
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
-              ~{fmtUsd(APPROX_MONTHLY_BASE)}
+              ~
+              {formatUsd(
+                costs?.site.estimatedCurrentMonthlyTotalUsd ?? fixedMonthly,
+              )}
               <span className="ml-1 text-caption font-normal text-text-muted">
                 /month
               </span>
             </p>
+            <p className="text-caption text-text-dim">
+              {costs
+                ? `${formatUsd(fixedMonthly)} fixed + ${formatUsd(costs.r2.estimatedCostUsd.currentMonthly)} R2 estimate`
+                : "Live archive usage temporarily unavailable"}
+            </p>
           </div>
           <div className="space-y-0.5 sm:text-right">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              Fixed base · annualised
+              Cloudflare R2 · current estimate
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
-              ~{fmtUsd(APPROX_YEARLY_BASE)}
-              <span className="ml-1 text-caption font-normal text-text-muted">
-                /year
-              </span>
+              {costs ? (
+                <>
+                  ~{formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}
+                  <span className="ml-1 text-caption font-normal text-text-muted">
+                    /month
+                  </span>
+                </>
+              ) : (
+                "Unavailable"
+              )}
+            </p>
+            <p className="text-caption text-text-dim">
+              {costs
+                ? `${formatStorageBytes(costs.archive.r2StoredBytes)} stored`
+                : "No zero-cost assumption shown"}
             </p>
           </div>
         </div>
       </Card>
       <div className="mt-4 max-w-3xl space-y-2 text-caption text-text-muted">
-        <p>
-          At today&rsquo;s scale, R2 is estimated to add $0–$0.08/month, so the
-          current total remains about $65/month before variable Atlas or
-          Render usage, taxes and provider-specific adjustments.
-        </p>
+        {costs ? (
+          <>
+            <p>
+              Cloudflare&rsquo;s latest archive snapshot reports{" "}
+              {formatStorageBytes(costs.archive.r2StoredBytes)} across{" "}
+              {formatReplayCount(costs.archive.r2ObjectCount)} R2{" "}
+              {costs.archive.r2ObjectCount === 1 ? "object" : "objects"},
+              including {formatReplayCount(
+                costs.archive.verifiedOriginalReplays,
+              )} verified original{" "}
+              {costs.archive.verifiedOriginalReplays === 1
+                ? "replay"
+                : "replays"}
+              . Snapshot time:{" "}
+              <time dateTime={costs.asOf}>
+                {formatCostSnapshotTime(costs.asOf)}
+              </time>
+              {costs.stale
+                ? ". This cached snapshot is currently marked stale and will refresh when provider analytics recover"
+                : ""}
+              .
+            </p>
+            <p>
+              The R2 estimate combines a{" "}
+              {formatUsd(costs.r2.estimatedCostUsd.storageRunRate)} monthly
+              storage run-rate with {formatUsd(
+                costs.r2.estimatedCostUsd.classAThisCycle,
+              )} of Class A and {formatUsd(
+                costs.r2.estimatedCostUsd.classBThisCycle,
+              )} of Class B operations measured in the current cycle. R2
+              storage is billed from average daily peaks in GB-months, and
+              Cloudflare may round billable units. Its dashboard and invoice
+              remain authoritative.
+            </p>
+            {costs.r2.unknownRequests > 0 ? (
+              <p>
+                {formatReplayCount(costs.r2.unknownRequests)} current-cycle R2
+                operations could not be classified and may not be reflected in
+                the estimate.
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p>
+            Live archive usage is temporarily unavailable. The fixed{" "}
+            {formatUsd(fixedMonthly)}/month base is still shown, but no replay
+            storage amount, R2 cost or combined total has been invented.
+            Provider dashboards remain authoritative.
+          </p>
+        )}
         <p>
           This assumes Render&rsquo;s no-fee Hobby workspace. A Render Pro
           workspace is a separate $25/month operations subscription; buying it
@@ -322,15 +399,40 @@ function CostBreakdown() {
           separately, and real replay sizes and access patterns will vary.
         </p>
         <p>
-          R2 operations are separate. If all 10 million originals and analysis
-          objects were backfilled in one billing month, the current direct
-          upload-and-promote flow would be roughly $130 in one-time Class A
-          operation charges after the monthly free allowance. Organic growth
-          spreads those operations across monthly allowances.
+          The live R2 estimate includes classified Class A and Class B
+          operations when provider analytics are available. If all 10 million
+          originals and analysis objects were backfilled in one billing month,
+          the current direct upload-and-promote flow would be roughly $130 in
+          one-time Class A operation charges after the monthly free allowance.
+          Organic growth spreads those operations across monthly allowances.
         </p>
       </div>
     </Section>
   );
+}
+
+function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
+  return COST_LINES.map((line) => {
+    if (line.id !== "r2") return line;
+    if (!costs) {
+      return {
+        ...line,
+        priceLabel: "Unavailable",
+        priceNote: "live usage temporarily unavailable",
+      };
+    }
+    const replayCount = formatReplayCount(
+      costs.archive.verifiedOriginalReplays,
+    );
+    return {
+      ...line,
+      detail:
+        `Stores ${replayCount} verified original ${costs.archive.verifiedOriginalReplays === 1 ? "replay" : "replays"} `
+        + "plus detailed analysis objects. Standard storage includes the first 10 GB-month; the estimate also includes classified Class A and Class B operations from the current cycle.",
+      priceLabel: `~${formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}/mo`,
+      priceNote: `${formatStorageBytes(costs.archive.r2StoredBytes)} stored${costs.stale ? " · stale snapshot" : ""}`,
+    };
+  });
 }
 
 function CostRow({ line }: { line: CostLine }) {
@@ -360,7 +462,7 @@ function CostRow({ line }: { line: CostLine }) {
       </div>
       <div className="text-right tabular-nums">
         <p className="text-body font-semibold text-text">
-          {line.priceLabel ?? `~${fmtUsd(line.approxMonthlyUsd)}`}
+          {line.priceLabel ?? `~${formatUsd(line.approxMonthlyUsd)}`}
           {!line.priceLabel ? (
             <span className="ml-1 text-caption font-normal text-text-muted">
               /mo
@@ -371,7 +473,7 @@ function CostRow({ line }: { line: CostLine }) {
           <p className="text-caption text-text-dim">{line.priceNote}</p>
         ) : line.approxYearlyUsd ? (
           <p className="text-caption text-text-dim">
-            (~{fmtUsd(line.approxYearlyUsd)}/yr billed)
+            (~{formatUsd(line.approxYearlyUsd)}/yr billed)
           </p>
         ) : null}
       </div>

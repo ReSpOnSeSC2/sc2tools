@@ -16,9 +16,12 @@ corresponding GitHub Release.
 - **Infrastructure costs are now explained with the real production split** —
   the landing and support pages separate the single Render API instance,
   MongoDB Atlas, domain renewal, included Vercel/Clerk allowances, and
-  usage-based Cloudflare R2 storage. With the deprecated community-builds
-  service retired, the current public-list-price baseline is about
-  **$65.19/month**, while replay storage grows independently with usage.
+  usage-based Cloudflare R2 storage. They now show the provider-reported R2
+  bytes and object count, verified original-replay count, classified operation
+  costs and the resulting estimated monthly total from a cached live usage
+  snapshot. With the deprecated community-builds service retired, the fixed
+  public-list-price baseline is about **$65.19/month**; an unavailable provider
+  snapshot is labeled clearly instead of being reported as zero usage.
 
 ### Fixed
 
