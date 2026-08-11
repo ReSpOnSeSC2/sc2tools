@@ -26,6 +26,9 @@ const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
+const {
+  InfrastructureUsageService,
+} = require("./services/infrastructureUsage");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
@@ -95,6 +98,9 @@ const { buildMeRouter } = require("./routes/me");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
+const {
+  buildInfrastructureCostsRouter,
+} = require("./routes/infrastructureCosts");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
@@ -212,6 +218,10 @@ function makeServices(deps) {
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
+  const infrastructureUsage = new InfrastructureUsageService({
+    games: deps.db.games,
+    cloudflareAnalytics: deps.config.cloudflareAnalytics || null,
+  });
   // Cloud-side SC2Pulse resolver — drives the backfill cron's
   // recovery path for opponents whose pulseCharacterId never landed
   // on first ingest (typically because sc2pulse.nephest.com was
@@ -513,6 +523,7 @@ function makeServices(deps) {
     gameVods,
     gameDetails,
     replayFiles,
+    infrastructureUsage,
     customBuilds,
     pairings,
     overlayTokens,
@@ -626,6 +637,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
   // ones the auth-using router won't even handle. Mounting public routes
   // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildInfrastructureCostsRouter({
+      infrastructureUsage: services.infrastructureUsage,
+    }),
+  );
   // Prometheus scrape endpoint. Mounted only when METRICS_TOKEN is
   // configured (the route enforces the bearer token itself).
   if (deps.config.metricsToken) {

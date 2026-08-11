@@ -65,6 +65,16 @@ services:
         sync: false
       - key: R2_REPLAY_PREFIX
         value: raw-replays/v1
+      # Optional public cost snapshot. This is a separate least-privilege
+      # Cloudflare API token with Account Analytics: Read; the S3 object token
+      # above cannot query GraphQL Analytics. Account id + token are all-or-none.
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_ANALYTICS_API_TOKEN
+        sync: false
+      # UTC day on which the Cloudflare billing cycle starts (1-28).
+      - key: CLOUDFLARE_BILLING_CYCLE_DAY
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: SERVER_PEPPER_HEX

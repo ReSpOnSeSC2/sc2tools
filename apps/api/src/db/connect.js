@@ -213,6 +213,18 @@ async function ensureIndexes(ctx) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
+  // Public infrastructure usage counts only completed original-replay
+  // markers. A partial index keeps that global count index-only without
+  // allocating entries for the much larger set of pre-archive game rows.
+  await ctx.games.createIndex(
+    { "replayFile.storedAt": 1 },
+    {
+      name: "replay_file_stored_at",
+      partialFilterExpression: {
+        "replayFile.storedAt": { $exists: true },
+      },
+    },
+  );
   // Global recent-row scan for opponentMmrEnrichmentJob. The job is
   // intentionally bounded by createdAt and walks oldest-first inside
   // that small window; without a global ingest-time index every

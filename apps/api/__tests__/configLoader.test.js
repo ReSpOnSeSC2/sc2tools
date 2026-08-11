@@ -52,3 +52,51 @@ describe("config loader - original replay storage", () => {
     })).toThrow(/REPLAY_FILES_STORE/);
   });
 });
+
+describe("config loader - Cloudflare infrastructure analytics", () => {
+  test("is optional when both credentials are absent", () => {
+    expect(loadConfig({ ...BASE_ENV }).cloudflareAnalytics).toBeNull();
+  });
+
+  test("accepts the all-or-none analytics block and custom cycle day", () => {
+    const cfg = loadConfig({
+      ...BASE_ENV,
+      R2_BUCKET: "sc2tools-replays-prod",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token",
+      CLOUDFLARE_BILLING_CYCLE_DAY: "15",
+    });
+    expect(cfg.cloudflareAnalytics).toEqual({
+      accountId: "account-id",
+      apiToken: "analytics-token",
+      bucket: "sc2tools-replays-prod",
+      billingCycleDay: 15,
+    });
+  });
+
+  test.each([
+    { CLOUDFLARE_ACCOUNT_ID: "account-id" },
+    { CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token" },
+  ])("rejects partial analytics credentials: %p", (partial) => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      R2_BUCKET: "sc2tools-replays-prod",
+      ...partial,
+    })).toThrow(/must be set together/);
+  });
+
+  test("requires the existing R2 bucket and a cycle day from 1 to 28", () => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token",
+    })).toThrow(/R2_BUCKET/);
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      R2_BUCKET: "sc2tools-replays-prod",
+      CLOUDFLARE_ACCOUNT_ID: "account-id",
+      CLOUDFLARE_ANALYTICS_API_TOKEN: "analytics-token",
+      CLOUDFLARE_BILLING_CYCLE_DAY: "29",
+    })).toThrow(/1 to 28/);
+  });
+});

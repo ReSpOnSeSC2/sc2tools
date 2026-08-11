@@ -47,6 +47,12 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     prefix: string,
  *     replayPrefix: string,
  *   }|null,
+ *   cloudflareAnalytics: {
+ *     accountId: string,
+ *     apiToken: string,
+ *     bucket: string,
+ *     billingCycleDay: number,
+ *   }|null,
  *   analytics: {
  *     enabled: boolean,
  *     propertyId: string|null,
@@ -119,6 +125,7 @@ function loadConfig(env = process.env) {
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
     replayFilesStore: parseReplayFilesStore(env.REPLAY_FILES_STORE),
     r2: parseR2Config(env),
+    cloudflareAnalytics: parseCloudflareAnalyticsConfig(env),
     analytics: parseAnalyticsConfig(env),
   };
 }
@@ -237,6 +244,60 @@ function parseR2Config(env) {
   };
 }
 
+/**
+ * Optional read-only Cloudflare Analytics credentials used for the public
+ * infrastructure-cost snapshot. These are deliberately separate from the R2
+ * S3 access key: bucket-scoped Object Read/Write credentials cannot call the
+ * Cloudflare GraphQL Analytics API.
+ *
+ * Account id + token are all-or-none. The bucket name reuses ``R2_BUCKET`` so
+ * analytics can never be pointed at a request-controlled or divergent bucket.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{
+ *   accountId: string,
+ *   apiToken: string,
+ *   bucket: string,
+ *   billingCycleDay: number,
+ * } | null}
+ */
+function parseCloudflareAnalyticsConfig(env) {
+  const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+  const apiToken = String(
+    env.CLOUDFLARE_ANALYTICS_API_TOKEN || "",
+  ).trim();
+  const billingCycleDay = parseBillingCycleDay(
+    env.CLOUDFLARE_BILLING_CYCLE_DAY,
+  );
+  if (!accountId && !apiToken) return null;
+  if (!accountId || !apiToken) {
+    throw new Error(
+      "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_ANALYTICS_API_TOKEN must be set together",
+    );
+  }
+  const bucket = String(env.R2_BUCKET || "").trim();
+  if (!bucket) {
+    throw new Error(
+      "Cloudflare analytics requires the existing R2_BUCKET setting",
+    );
+  }
+  return { accountId, apiToken, bucket, billingCycleDay };
+}
+
+/** @param {string|undefined} raw */
+function parseBillingCycleDay(raw) {
+  if (raw === undefined || raw === null || raw === "") return 1;
+  const value = String(raw).trim();
+  if (!/^\d+$/.test(value)) {
+    throw new Error("CLOUDFLARE_BILLING_CYCLE_DAY must be an integer from 1 to 28");
+  }
+  const day = Number.parseInt(value, 10);
+  if (day < 1 || day > 28) {
+    throw new Error("CLOUDFLARE_BILLING_CYCLE_DAY must be an integer from 1 to 28");
+  }
+  return day;
+}
+
 /** @param {string|undefined} raw @returns {'disabled'|'r2'} */
 function parseReplayFilesStore(raw) {
   const value = String(raw || "disabled").trim().toLowerCase();
@@ -281,5 +342,6 @@ module.exports = {
   parseGameDetailsStore,
   parseReplayFilesStore,
   parseR2Config,
+  parseCloudflareAnalyticsConfig,
   parseAnalyticsConfig,
 };
