@@ -33,14 +33,11 @@ services:
       minInstances: 1
       maxInstances: 1
       targetCPUPercent: 70
-    # Sticky sessions are required for Socket.io once we scale beyond a
-    # single instance: the client opens an XHR-poll handshake against
-    # one node, then upgrades to WebSocket — both legs must hit the
-    # same node or the upgrade fails. Render's "Session Affinity"
-    # routes by cookie, which is exactly what `socket.io-client` uses
-    # in fallback transports. Leave on even at one instance — it's a
-    # no-op and makes scale-up safe.
-    sessionAffinity: true
+    # This service is intentionally pinned to one instance, so session
+    # affinity is unnecessary. Render's Blueprint schema does not expose
+    # the dashboard-only Session Affinity toggle. If the realtime layer is
+    # made multi-instance safe later, enable that toggle in Render before
+    # raising maxInstances.
     envVars:
       - key: NODE_ENV
         value: production

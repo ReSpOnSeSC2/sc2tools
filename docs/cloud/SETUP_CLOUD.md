@@ -301,13 +301,11 @@ deployed with the R2 stores enabled.
 > to Standard for additional CPU/RAM when measurements justify it, not merely
 > to prevent a Starter instance from sleeping.
 
-> **About sticky sessions**: `render.yaml` sets `sessionAffinity: true`
-> so Socket.io upgrades work across multiple instances. You don't need
-> to do anything for the single-instance Starter tier; if you scale to
-> 2+ web instances later, this is what keeps overlay + sync sockets
-> from bouncing mid-handshake. Verify the toggle is on under
-> **Service** → **Settings** → **Health & Networking** → **Session
-> Affinity** if you ever scale up.
+> **About sticky sessions**: the service is pinned to one instance, so it
+> does not need session affinity today. Render's Blueprint schema does not
+> expose the dashboard-only toggle. If the realtime layer is made safe for
+> 2+ instances later, enable **Service** → **Settings** → **Health &
+> Networking** → **Session Affinity** before raising `maxInstances`.
 
 ### Finish the private replay rollout
 
