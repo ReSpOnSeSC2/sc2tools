@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { DonateBanner } from "@/app/page";
+import { DonateBanner } from "@/components/landing/DonateBanner";
 import type { InfrastructureCosts } from "@/lib/infrastructureCosts";
 
 afterEach(cleanup);
