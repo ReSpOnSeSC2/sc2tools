@@ -2,10 +2,10 @@ export const metadata = {
   alternates: { canonical: "/legal/privacy" },
   title: "Privacy Policy — SC2 Tools",
   description:
-    "How SC2 Tools collects, processes, and stores StarCraft II replay metadata.",
+    "How SC2 Tools processes replay data and stores private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "June 1, 2026";
+const LAST_UPDATED = "August 11, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -30,11 +30,12 @@ export default function PrivacyPage() {
             We do not see your Google password.
           </li>
           <li>
-            <strong>Replay metadata.</strong> Each .SC2Replay file you produce
-            in your local Replays folder is parsed by the SC2 Tools agent
-            running on your PC. We upload structured metadata: map name, race
-            matchup, build orders, APM, MMR, opponent battle tag and SC2 pulse
-            ID. We never upload the .SC2Replay file itself.
+            <strong>Replay data and original files.</strong> Each .SC2Replay
+            file in a replay folder you add is read by the SC2 Tools agent on
+            your PC. The agent uploads structured data such as map, matchup,
+            build orders, APM, MMR, opponent identity, and the original replay
+            file. Originals are kept in a private cloud archive so you can
+            download your own replays from the dashboard.
           </li>
           <li>
             <strong>Personal builds and notes.</strong> Anything you type into
@@ -69,7 +70,6 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">What we do NOT collect</h2>
         <ul className="list-disc space-y-2 pl-6">
-          <li>The contents of your replay files.</li>
           <li>Anything from outside your Replays folder.</li>
           <li>Voice or video.</li>
           <li>Payment information (we don&apos;t take payments).</li>
@@ -79,9 +79,18 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Where the data lives</h2>
         <p>
-          MongoDB Atlas (US-East), Render (US-East), Vercel (US/EU edge for the
-          static site, US-East for server functions). All connections are
-          TLS-encrypted. Database backups run nightly with 7-day retention.
+          Structured replay data lives in MongoDB Atlas. Original replay files
+          and larger replay-detail payloads live in a private Cloudflare R2
+          bucket. Render hosts the API, and Vercel hosts the website. Data is
+          sent over TLS; access to replay downloads requires your signed-in
+          account and a short-lived private download link.
+        </p>
+        <p>
+          Replay files remain stored until you delete the matching history or
+          your account. Temporary download links expire after a short period
+          and do not make the bucket public. Incomplete temporary uploads are
+          not exposed in your library and are covered by a one-day automatic
+          expiration rule.
         </p>
       </section>
 
@@ -90,9 +99,9 @@ export default function PrivacyPage() {
         <p>
           We do not sell or rent your data. We share it only with the
           subprocessors above (Clerk for auth, MongoDB Atlas for database
-          hosting, Render for API hosting, Vercel for the website, Sentry for
-          opt-in crash reporting, and Google Analytics for opt-in usage
-          analytics).
+          hosting, Cloudflare R2 for private replay-file storage, Render for
+          API hosting, Vercel for the website, Sentry for opt-in crash
+          reporting, and Google Analytics for opt-in usage analytics).
         </p>
       </section>
 
@@ -110,8 +119,9 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Your rights</h2>
         <p>
-          You can export every byte of your data as a JSON archive, or delete
-          your account permanently, from{" "}
+          You can export your structured account data as a JSON archive,
+          download stored replay originals from replay history, or delete your
+          replay history or account permanently from{" "}
           <a href="/settings" className="underline">
             Settings → Backups → Export / delete (GDPR)
           </a>

@@ -213,7 +213,8 @@ function NextSteps() {
         <>
           Look for the SC2 Tools icon in your system tray (next to the
           clock). Every replay you finish is parsed and synced
-          automatically — your replay files never leave your machine.
+          automatically to your private account library, including the
+          original file used by Replay download.
         </>
       ),
     },

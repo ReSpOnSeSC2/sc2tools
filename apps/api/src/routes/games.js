@@ -315,14 +315,13 @@ function buildGamesRouter(deps) {
             ? game.isLadderGame
             : isLadderMap(game.map, ladderMapSet);
         game.isLadderMapV = LADDER_CLASSIFY_VERSION;
-        // GamesService.upsert now writes the slim row to ``games``
-        // and forwards the heavy fields to GameDetailsService. A
-        // detail-store failure (R2 down, Mongo gameDetails write
-        // refused, etc.) propagates here — we mark the game rejected
-        // rather than silently shipping a broken inspector experience.
-        // The slim row is left in place if the upsert wrote it before
-        // the detail store call failed; the next agent re-upload
-        // recovers, so this is a transient failure mode.
+        // GamesService.upsert commits heavy fields through
+        // GameDetailsService before it creates the slim ``games`` row. A
+        // detail-store failure (R2 down, Mongo gameDetails write refused,
+        // etc.) therefore propagates without consuming the ``created=true``
+        // result that gates the exactly-once opponent aggregate below. The
+        // agent retries this game; once detail storage succeeds, the slim
+        // insert and OpponentsService.recordGame still run exactly once.
         // ``myMmr`` is historical data: it must describe the rating at
         // game time. Never substitute SC2Pulse's current rating when a
         // replay omits it. A history resync spans months or years, so a
@@ -342,6 +341,11 @@ function buildGamesRouter(deps) {
           }
           rejected.push({
             gameId: game.gameId || null,
+            // Validation already passed; this is an infrastructure/storage
+            // failure (for example a transient R2 detail-store outage).
+            // The desktop queue must retry this one game instead of writing
+            // a permanent local "rejected" cursor.
+            retryable: true,
             errors: [
               `upsert_failed: ${
                 e && e.message ? e.message : String(err)

@@ -17,6 +17,7 @@ const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { sha256 } = require("../src/util/hash");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -70,6 +71,14 @@ describe("/v1/me/profile/battletag/detect", () => {
     pythonExe: null,
     pythonAnalyzerDir: "/tmp/__nonexistent__",
     adminUserIds: [],
+    replayFilesStore: "r2",
+    r2: {
+      endpoint: "http://127.0.0.1:1",
+      region: "auto",
+      bucket: "test-replays",
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+    },
   };
 
   beforeAll(async () => {
@@ -162,5 +171,102 @@ describe("/v1/me/profile/battletag/detect", () => {
     const res = await withAuth(request(app).get("/v1/me/doctor"));
     const ids = res.body.warnings.map((w) => w.id);
     expect(ids).toContain("no_profile");
+  });
+
+  test("replay archive status drives the update-and-resync doctor warning", async () => {
+    const me = await withAuth(request(app).get("/v1/me"));
+    const userId = me.body.userId;
+    await db.games.insertMany([
+      {
+        userId,
+        gameId: "archive-complete",
+        date: new Date("2026-08-01T00:00:00Z"),
+        replayFile: { storedAt: new Date("2026-08-02T00:00:00Z") },
+      },
+      {
+        userId,
+        gameId: "archive-missing",
+        date: new Date("2026-08-01T01:00:00Z"),
+      },
+    ]);
+
+    const status = await withAuth(
+      request(app).get("/v1/me/replay-archive-status"),
+    );
+    expect(status.status).toBe(200);
+    expect(status.body).toEqual({
+      totalGames: 2,
+      archivedGames: 1,
+      missingGames: 1,
+      archiveComplete: false,
+      enabled: true,
+      backfillVersion: 0,
+      resyncRequestedAt: null,
+      requiresResync: true,
+    });
+
+    const doctor = await withAuth(request(app).get("/v1/me/doctor"));
+    const warning = doctor.body.warnings.find(
+      (item) => item.id === "replay_archive_incomplete",
+    );
+    expect(warning).toMatchObject({
+      severity: "warn",
+      cta: { label: "Update agent", href: "/download" },
+    });
+    expect(warning.message).toMatch(/latest desktop agent/i);
+    expect(warning.message).toMatch(/click Re-sync once/i);
+    expect(warning.message).toMatch(/files already deleted locally/i);
+
+    // The latest desktop build marks the one-time full local scan when the
+    // user starts it. One replay is intentionally still absent: this models
+    // a historical file deleted from the PC, which can never be archived.
+    // That partial archive must remain honestly counted without nagging the
+    // user to repeat an impossible re-sync forever.
+    const deviceToken = "a".repeat(43);
+    await db.deviceTokens.insertOne({
+      tokenHash: sha256(deviceToken),
+      userId,
+      createdAt: new Date(),
+      lastSeenAt: new Date(),
+      revokedAt: null,
+    });
+    const marked = await request(app)
+      .post("/v1/me/replay-archive-resync")
+      .set("authorization", `Bearer ${deviceToken}`)
+      .send({ agentVersion: "0.15.0" });
+    expect(marked.status).toBe(200);
+    expect(marked.body).toMatchObject({
+      ok: true,
+      version: 1,
+      agentVersion: "0.15.0",
+    });
+
+    const partial = await withAuth(
+      request(app).get("/v1/me/replay-archive-status"),
+    );
+    expect(partial.body).toMatchObject({
+      totalGames: 2,
+      archivedGames: 1,
+      missingGames: 1,
+      archiveComplete: false,
+      enabled: true,
+      backfillVersion: 1,
+      requiresResync: false,
+    });
+    expect(partial.body.resyncRequestedAt).toEqual(expect.any(String));
+
+    const afterResyncDoctor = await withAuth(
+      request(app).get("/v1/me/doctor"),
+    );
+    expect(
+      afterResyncDoctor.body.warnings.map((item) => item.id),
+    ).not.toContain("replay_archive_incomplete");
+
+    await db.games.deleteMany({ userId });
+    await db.deviceTokens.deleteMany({ userId });
+    await db.users.updateOne(
+      { userId },
+      { $unset: { "preferences.replayArchive": "" } },
+    );
   });
 });

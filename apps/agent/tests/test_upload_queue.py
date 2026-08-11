@@ -153,6 +153,71 @@ def test_set_paused_persists_state_and_skips_uploads(tmp_path: Path) -> None:
         q.stop()
 
 
+def test_accepted_game_archives_original_before_success_callback(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+
+    class _ArchiveApi(_StubApi):
+        def upload_replay_file(self, game_id: str, path: Path) -> bool:
+            assert path.name == "archive.SC2Replay"
+            events.append(f"archive:{game_id}")
+            return True
+
+    state = AgentState(device_token="t")
+    api = _ArchiveApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=state,
+        api=api,
+        on_success=lambda path: events.append(f"success:{path.name}"),
+    )
+    job = _game(tmp_path, "archive.SC2Replay")
+    q.start()
+    try:
+        assert q.submit(job)
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+    finally:
+        q.stop()
+
+    assert events == [
+        "archive:id-archive.SC2Replay",
+        "success:archive.SC2Replay",
+    ]
+
+
+def test_permanently_unarchivable_file_does_not_block_parsed_sync(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+
+    class _UnavailableArchiveApi(_StubApi):
+        def upload_replay_file(self, game_id: str, path: Path) -> bool:
+            events.append(f"unavailable:{game_id}:{path.name}")
+            return False
+
+    state = AgentState(device_token="t")
+    api = _UnavailableArchiveApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=state,
+        api=api,
+        on_success=lambda path: events.append(f"success:{path.name}"),
+    )
+    job = _game(tmp_path, "too-large.SC2Replay")
+    q.start()
+    try:
+        assert q.submit(job)
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+    finally:
+        q.stop()
+
+    assert events == [
+        "unavailable:id-too-large.SC2Replay:too-large.SC2Replay",
+        "success:too-large.SC2Replay",
+    ]
+
+
 def test_resync_event_can_be_acknowledged(tmp_path: Path) -> None:
     state = AgentState(device_token="t")
     q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=_StubApi())
@@ -1178,6 +1243,94 @@ def test_batch_partial_success_marks_per_game_outcomes(
             assert marker == "rejected", (
                 f"index {i} expected 'rejected', got {marker!r}"
             )
+
+
+class _MixedRetryableApi:
+    """Accept one, permanently reject one, retry one storage failure."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def upload_games_batch(
+        self, games: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        ids = [str(game["gameId"]) for game in games]
+        self.calls.append(ids)
+        if len(self.calls) == 1:
+            return {
+                "accepted": [{"gameId": "id-0", "created": True}],
+                "rejected": [
+                    {
+                        "gameId": "id-1",
+                        "retryable": True,
+                        "errors": ["upsert_failed: r2 unavailable"],
+                    },
+                    {
+                        "gameId": "id-2",
+                        "errors": ["schema rejection"],
+                    },
+                ],
+            }
+        return {
+            "accepted": [
+                {"gameId": game["gameId"], "created": False}
+                for game in games
+            ],
+            "rejected": [],
+        }
+
+    def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+        return {"ok": True, "wrote": False}
+
+
+def test_mixed_batch_retries_only_retryable_server_rejection(
+    tmp_path: Path,
+) -> None:
+    state = AgentState(device_token="t")
+    api = _MixedRetryableApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=3),
+        state=state,
+        api=api,
+    )
+    jobs = []
+    for index in range(3):
+        original = _game(tmp_path, f"retry-{index}.SC2Replay")
+        jobs.append(
+            UploadJob(
+                file_path=original.file_path,
+                game=CloudGame(
+                    game_id=f"id-{index}",
+                    date_iso=original.game.date_iso,
+                    result=original.game.result,
+                    my_race=original.game.my_race,
+                    my_build=original.game.my_build,
+                    map_name=original.game.map_name,
+                    duration_sec=original.game.duration_sec,
+                    macro_score=original.game.macro_score,
+                    apm=original.game.apm,
+                    spq=original.game.spq,
+                    opponent=original.game.opponent,
+                    build_log=original.game.build_log,
+                    early_build_log=original.game.early_build_log,
+                    opp_early_build_log=original.game.opp_early_build_log,
+                    opp_build_log=original.game.opp_build_log,
+                ),
+            ),
+        )
+    for job in jobs:
+        assert q.submit(job)
+    q.start()
+    try:
+        assert _wait_for(lambda: len(state.uploaded) == 3, timeout=8.0)
+    finally:
+        q.stop()
+
+    assert api.calls[0] == ["id-0", "id-1", "id-2"]
+    assert api.calls[1:] == [["id-1"]]
+    assert state.uploaded[str(jobs[0].file_path)] != "rejected"
+    assert state.uploaded[str(jobs[1].file_path)] != "rejected"
+    assert state.uploaded[str(jobs[2].file_path)] == "rejected"
 
 
 class _BatchFlakyApi:

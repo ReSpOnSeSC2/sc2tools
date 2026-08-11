@@ -29,7 +29,7 @@ const STATIC_SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> 
   },
   {
     heading: "Network",
-    body: "Outbound HTTPS to api.sc2tools.com. No inbound ports — your replays never leave the machine.",
+    body: "Outbound HTTPS to SC2 Tools and its private replay archive. No inbound ports are opened.",
   },
   {
     heading: "StarCraft II",
@@ -186,8 +186,8 @@ function RecapCard() {
           per replay).
         </li>
         <li>
-          Uploads the parsed JSON record to your account. The replay
-          file itself never leaves your machine.
+          Uploads the parsed record and original replay to your private
+          account library, so you can download it later from any device.
         </li>
         <li>
           Desktop control panel: live sync status, pause / resume,

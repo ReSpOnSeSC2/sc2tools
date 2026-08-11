@@ -41,6 +41,9 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
+const { stampVersion } = require(
+  path.join(__dirname, "..", "schemaVersioning"),
+);
 // path.join require keeps the script runnable from any CWD; the cast
 // restores the module type TS loses on a dynamic require path.
 const { HEAVY_FIELDS } = /** @type {typeof import("../../services/gameDetails")} */ (
@@ -117,7 +120,6 @@ async function main() {
         gameId: g.gameId,
         date: g.date,
         createdAt: new Date(),
-        _schemaVersion: 1,
       };
       let any = false;
       for (const k of HEAVY_FIELDS) {
@@ -127,6 +129,7 @@ async function main() {
         }
       }
       if (!any) continue;
+      stampVersion(setOnInsert, COLLECTIONS.GAME_DETAILS);
       ops.push({
         updateOne: {
           filter: { userId: g.userId, gameId: g.gameId },

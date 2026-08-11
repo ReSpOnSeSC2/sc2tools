@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Infrastructure costs are now explained with the real production split** —
+  the landing and support pages separate the single Render API instance,
+  MongoDB Atlas, domain renewal, included Vercel/Clerk allowances, and
+  usage-based Cloudflare R2 storage. With the deprecated community-builds
+  service retired, the current public-list-price baseline is about
+  **$65.19/month**, while replay storage grows independently with usage.
+
 ### Fixed
 
 - **Analyzer game filters now default to ranked 1v1 and stay applied** —
@@ -28,6 +37,14 @@ corresponding GitHub Release.
   unchanged. Ships with **agent 0.15.13** (`agent-v0.15.13`).
 
 ### Added
+
+- **Private original replay library and downloads** — Opponent dossiers now
+  offer an uncluttered per-game `.SC2Replay` download action backed by a
+  private Cloudflare R2 archive. Existing users update to **agent 0.15.16**
+  (`agent-v0.15.16`) and run **Re-sync** once; dashboard and desktop prompts
+  remain actionable until that one-time scan is requested. Historical files
+  already deleted from the PC remain unavailable, while future accepted games
+  archive automatically.
 
 - **Timestamped Twitch and YouTube links for both player perspectives** — the
   opponent dossier's full game list and each game detail page now show compact,

@@ -143,6 +143,11 @@ QFrame#cardElevated {{
     border: 1px solid {_BORDER_STRONG};
     border-radius: 10px;
 }}
+QFrame#cardArchive {{
+    background-color: rgba(124, 140, 255, 0.10);
+    border: 1px solid {_ACCENT};
+    border-radius: 10px;
+}}
 QFrame#sidebar {{
     background-color: {_SURFACE};
     border-right: 1px solid {_BORDER};
@@ -541,6 +546,7 @@ class GuiUI:
         self._window = None
         self._signals = None
         self._started_event = threading.Event()
+        self._pending_replay_archive_status: Optional[tuple[int, int]] = None
 
     # ---------------- public sink interface ----------------
 
@@ -601,6 +607,23 @@ class GuiUI:
         if self._signals:
             self._signals.updateNotice.emit(str(message), bool(sticky))
 
+    def on_replay_archive_status(
+        self,
+        missing_games: int,
+        total_games: int,
+    ) -> None:
+        """Show the one-time latest-agent/full-Re-sync action.
+
+        The startup worker can finish its status request just before Qt has
+        constructed its signals, so retain one pending value and replay it as
+        soon as the window exists instead of racing the prompt away.
+        """
+        status = (max(0, int(missing_games)), max(0, int(total_games)))
+        if self._signals:
+            self._signals.replayArchiveStatus.emit(*status)
+        else:
+            self._pending_replay_archive_status = status
+
     # ---------------- lifecycle ----------------
 
     def run(self) -> int:
@@ -629,6 +652,12 @@ class GuiUI:
             QtWidgets=QtWidgets,
         )
         self._window = window
+
+        if self._pending_replay_archive_status is not None:
+            self._signals.replayArchiveStatus.emit(
+                *self._pending_replay_archive_status,
+            )
+            self._pending_replay_archive_status = None
 
         if self._start_minimized:
             log.info("gui_starting_minimized")
@@ -687,6 +716,9 @@ def _make_signals():
         # Result of a user-initiated "Check for updates" round-trip —
         # re-enables the button and surfaces the outcome.
         updateCheckDone = QtCore.Signal(str)
+        # One-time original-replay archive backfill prompt. Counts only;
+        # never sends filenames or game IDs through the UI layer.
+        replayArchiveStatus = QtCore.Signal(int, int)
         foldersChanged = QtCore.Signal(list)
         settingsStatus = QtCore.Signal(str)
         # Result of a Test-connection or Build-scenes round-trip. The
@@ -985,12 +1017,48 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addWidget(title)
 
             v.addWidget(self._build_status_card())
+            v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
             v.addWidget(self._build_stats_row())
             v.addWidget(self._build_action_row())
             v.addStretch(1)
 
             return page
+
+        def _build_replay_archive_card(self) -> QtWidgets.QFrame:
+            card = QtWidgets.QFrame()
+            card.setObjectName("cardArchive")
+            card.hide()
+            self._replay_archive_card = card
+
+            row = QtWidgets.QHBoxLayout(card)
+            row.setContentsMargins(20, 16, 20, 16)
+            row.setSpacing(18)
+
+            copy = QtWidgets.QVBoxLayout()
+            copy.setSpacing(4)
+            heading = QtWidgets.QLabel("Enable original replay downloads")
+            heading.setObjectName("h2")
+            copy.addWidget(heading)
+            self._replay_archive_text = QtWidgets.QLabel("")
+            self._replay_archive_text.setObjectName("muted")
+            self._replay_archive_text.setWordWrap(True)
+            copy.addWidget(self._replay_archive_text)
+            row.addLayout(copy, stretch=1)
+
+            self._replay_archive_button = QtWidgets.QPushButton(
+                "Re-sync replay library",
+            )
+            self._replay_archive_button.setObjectName("primary")
+            self._replay_archive_button.setSizePolicy(
+                QtWidgets.QSizePolicy.Maximum,
+                QtWidgets.QSizePolicy.Fixed,
+            )
+            self._replay_archive_button.clicked.connect(
+                self._click_archive_resync,
+            )
+            row.addWidget(self._replay_archive_button)
+            return card
 
         def _build_status_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
@@ -2188,6 +2256,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.updateAvailable.connect(self._on_update_available)
             signals.updateNotice.connect(self._on_update_notice)
             signals.updateCheckDone.connect(self._on_update_check_done)
+            signals.replayArchiveStatus.connect(
+                self._on_replay_archive_status,
+            )
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
             signals.obsProbeDone.connect(self._on_obs_probe_done)
@@ -2273,6 +2344,32 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if message:
                 self._set_update_notice(message, sticky=False)
 
+        def _on_replay_archive_status(
+            self,
+            missing_games: int,
+            total_games: int,
+        ) -> None:
+            if missing_games <= 0 or total_games <= 0:
+                self._replay_archive_card.hide()
+                return
+            progress = (
+                f"One of your {total_games:,} saved games still needs"
+                if missing_games == 1
+                else (
+                    f"{missing_games:,} of your {total_games:,} saved games "
+                    "still need"
+                )
+            )
+            self._replay_archive_text.setText(
+                f"{progress} the original file archived. Run one full "
+                "Re-sync with "
+                "this latest agent. Files no longer on this PC will remain "
+                "unavailable.",
+            )
+            self._replay_archive_button.setText("Re-sync replay library")
+            self._replay_archive_button.setEnabled(True)
+            self._replay_archive_card.show()
+
         def _on_folders_changed(self, folders: List[str]) -> None:
             ui._replay_folders = [Path(p) for p in folders]
             self._sync_folder_list_widget(folders)
@@ -2327,23 +2424,62 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 log.exception("gui_pause_callback_failed")
 
         def _click_resync(self) -> None:
+            self._confirm_and_request_resync()
+
+        def _click_archive_resync(self) -> None:
+            if self._paused:
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Resume syncing first",
+                    "Replay-library Re-sync cannot start while syncing is "
+                    "paused. Click Resume syncing, then click Re-sync replay "
+                    "library again.",
+                )
+                return
+            filter_block = _replay_archive_filter_block_message(
+                self._active_filter_label,
+            )
+            if filter_block:
+                settings_button = self._nav_group.button(3)
+                if settings_button is not None:
+                    settings_button.setChecked(True)
+                self._stack.setCurrentIndex(3)
+                QtWidgets.QMessageBox.information(
+                    self,
+                    "Select All time first",
+                    filter_block,
+                )
+                return
+            if not self._confirm_and_request_resync():
+                return
+            self._replay_archive_text.setText(
+                "Full Re-sync started. Keep the agent open while it archives "
+                "every replay file still available on this PC.",
+            )
+            self._replay_archive_button.setText("Re-sync started")
+            self._replay_archive_button.setEnabled(False)
+
+        def _confirm_and_request_resync(self) -> bool:
             confirm = QtWidgets.QMessageBox.question(
                 self,
                 "Re-sync from scratch?",
                 "This clears the local upload cursor and re-uploads every "
-                "replay we can see. The cloud de-duplicates by game ID, "
-                "so existing records are not overwritten — but it can "
-                "take a while if you have hundreds of replays.\n\n"
+                "replay file still on this PC. Existing games are matched "
+                "by game ID instead of duplicated, and their original replay "
+                "files are archived privately for download. This can take a "
+                "while if you have hundreds or thousands of replays.\n\n"
                 "Proceed?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                 QtWidgets.QMessageBox.No,
             )
             if confirm != QtWidgets.QMessageBox.Yes:
-                return
+                return False
             try:
                 ui._on_resync()
             except Exception:  # noqa: BLE001
                 log.exception("gui_resync_failed")
+                return False
+            return True
 
         def _click_choose_folder(self) -> None:
             picked = QtWidgets.QFileDialog.getExistingDirectory(
@@ -2963,8 +3099,24 @@ def _matches_level(line: str, filter_label: str) -> bool:
     return level in keep
 
 
+def _replay_archive_filter_block_message(
+    active_filter_label: str,
+) -> Optional[str]:
+    """Explain why an archive backfill cannot run through a date filter."""
+    label = str(active_filter_label or "").strip()
+    if not label:
+        return None
+    return (
+        f"Your saved replay filter is {label}. A filtered scan cannot archive "
+        "your full replay library. In Settings, choose All time and click "
+        "Save settings. Then return to Dashboard and click Re-sync replay "
+        "library again."
+    )
+
+
 __all__ = [
     "GuiUI",
     "SettingsPayload",
     "can_use_gui",
+    "_replay_archive_filter_block_message",
 ]

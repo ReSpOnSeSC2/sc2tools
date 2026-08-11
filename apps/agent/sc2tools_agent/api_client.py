@@ -6,9 +6,13 @@ auth-header handling are in one place.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -25,6 +29,16 @@ RETRY_BACKOFF_BASE_SEC = 0.5
 # budget with the batch so big batches get a proportionally longer
 # leash while single games keep the snappy default.
 BATCH_READ_TIMEOUT_PER_GAME_SEC = 3.0
+
+# Replay binaries upload directly to the private object-store URL the
+# API signs for this device.  The control-plane requests still use the
+# ordinary API timeout; the R2 PUT gets a longer leash because slower
+# home connections can take more than 30 seconds for a large replay.
+REPLAY_PUT_READ_TIMEOUT_SEC = 120.0
+# Must stay aligned with API ``LIMITS.REPLAY_FILE_MAX_BYTES``. Replays over
+# this ceiling still sync their parsed stats; only the original download is
+# unavailable. Rejecting locally avoids an unrecoverable 413 retry loop.
+REPLAY_FILE_MAX_BYTES = 5 * 1024 * 1024
 
 _USER_AGENT = "sc2tools-agent/0.1"
 
@@ -83,6 +97,177 @@ class ApiClient:
             body={"games": games},
             read_timeout=read_timeout,
         )
+
+    def upload_replay_file(self, game_id: str, file_path: Path) -> bool:
+        """Archive the original ``.SC2Replay`` for an accepted game.
+
+        The API first verifies that the paired device owns ``game_id``
+        and returns a short-lived, single-object PUT URL.  Bytes then go
+        straight from the player's machine to the private R2 bucket;
+        permanent R2 credentials stay server-side and the bulk file transfer
+        bypasses the Render API. A final authenticated call asks the API
+        to confirm R2's Content-MD5 check, the declared SHA-256 metadata,
+        size, and MPQ magic before exposing the download action.
+
+        ``False`` means this file cannot be archived (missing, oversized, or
+        permanently rejected) or the deployed API has not enabled archival.
+        Parsed-stat syncing must continue in those cases. Transport and
+        retryable object-store failures raise so the queue tries again.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        path = Path(file_path)
+        if not path.is_file():
+            return False
+
+        size_bytes = path.stat().st_size
+        if size_bytes <= 0 or size_bytes > REPLAY_FILE_MAX_BYTES:
+            return False
+        digest = hashlib.sha256()
+        md5 = hashlib.md5(usedforsecurity=False)
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+                md5.update(chunk)
+        metadata = {
+            "filename": path.name,
+            "sizeBytes": size_bytes,
+            "sha256": digest.hexdigest(),
+            "md5": base64.b64encode(md5.digest()).decode("ascii"),
+        }
+        encoded_id = quote(str(game_id), safe="")
+        prepare_path = f"/v1/games/{encoded_id}/replay-upload"
+        try:
+            prepared = self._post(
+                prepare_path,
+                auth=True,
+                body=metadata,
+            )
+        except _ApiError as exc:
+            if exc.status in (400, 404, 413, 503):
+                return False
+            raise
+
+        # A retry or full-history Re-sync commonly encounters an object the
+        # server already verified. In that case the API deliberately skips a
+        # new signed PUT and returns this terminal success shape.
+        if (
+            prepared.get("alreadyStored") is True
+            and prepared.get("replayAvailable") is True
+        ):
+            return True
+
+        upload_url = prepared.get("url")
+        upload_id = prepared.get("uploadId")
+        if not isinstance(upload_url, str) or not upload_url.startswith(
+            ("https://", "http://"),
+        ):
+            raise RuntimeError("replay_upload_url_missing")
+        if not isinstance(upload_id, str) or not upload_id:
+            raise RuntimeError("replay_upload_id_missing")
+        raw_headers = prepared.get("headers") or {}
+        if not isinstance(raw_headers, dict):
+            raise RuntimeError("replay_upload_headers_invalid")
+        put_headers = {
+            str(key): str(value)
+            for key, value in raw_headers.items()
+            if isinstance(key, str) and isinstance(value, (str, int))
+        }
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(DEFAULT_RETRIES):
+            try:
+                # Re-open on every attempt.  Retrying a consumed file
+                # handle would silently PUT a zero-byte object.
+                with path.open("rb") as fh:
+                    response = requests.put(
+                        upload_url,
+                        data=fh,
+                        headers=put_headers,
+                        timeout=(
+                            CONNECT_TIMEOUT_SEC,
+                            REPLAY_PUT_READ_TIMEOUT_SEC,
+                        ),
+                    )
+            except requests.RequestException as exc:
+                last_exc = exc
+                _backoff(attempt)
+                continue
+
+            if 200 <= response.status_code < 300:
+                break
+            if response.status_code in (408, 429) or response.status_code >= 500:
+                last_exc = _ApiError(response.status_code, response.text)
+                retry_after = _retry_after_seconds(response)
+                if retry_after is not None:
+                    time.sleep(retry_after)
+                else:
+                    _backoff(attempt)
+                continue
+            if response.status_code in (400, 413):
+                return False
+            raise _ApiError(response.status_code, response.text)
+        else:
+            raise last_exc or RuntimeError("replay_upload_failed")
+
+        try:
+            complete = self._post(
+                f"{prepare_path}/complete",
+                auth=True,
+                body={"uploadId": upload_id},
+            )
+        except _ApiError as exc:
+            if exc.status in (400, 404, 413, 503):
+                return False
+            raise
+        return complete.get("replayAvailable") is True
+
+    def get_replay_archive_status(self) -> Optional[Dict[str, Any]]:
+        """Return progress for the one-time original-replay backfill.
+
+        The current agent uses this only to decide whether to show its
+        Re-sync prompt. A 404 means the control-plane endpoint has not
+        reached this environment yet, so a rolling deployment stays quiet
+        instead of turning an optional prompt into a startup failure.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        try:
+            payload = self._get(
+                "/v1/me/replay-archive-status",
+                auth=True,
+            )
+        except _ApiError as exc:
+            if exc.status in (404, 503):
+                return None
+            raise
+        return payload
+
+    def mark_replay_archive_resync_started(
+        self,
+        *,
+        agent_version: str,
+    ) -> bool:
+        """Acknowledge that this current build started one full local scan.
+
+        The cloud uses this marker to avoid permanently nagging someone whose
+        oldest replay file was already deleted and therefore cannot ever be
+        archived. The call happens only after the local upload cursor has been
+        cleared and the full-sweep request has been accepted.
+        """
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        try:
+            payload = self._post(
+                "/v1/me/replay-archive-resync",
+                auth=True,
+                body={"agentVersion": str(agent_version)},
+            )
+        except _ApiError as exc:
+            if exc.status in (404, 503):
+                return False
+            raise
+        return payload.get("ok") is True
 
     # ---------------- Live game bridge ----------------
     def push_agent_live(self, *, envelope: Dict[str, Any]) -> Dict[str, Any]:

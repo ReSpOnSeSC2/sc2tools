@@ -4,6 +4,9 @@ directly is cleaner for the small surface area we test."""
 
 from __future__ import annotations
 
+import base64
+import hashlib
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch, MagicMock
 
@@ -56,6 +59,212 @@ def test_upload_game_sends_bearer() -> None:
         api.upload_game({"gameId": "x"})
     args, kwargs = m.call_args
     assert kwargs["headers"]["authorization"] == "Bearer tok"
+
+
+def test_upload_replay_file_uses_signed_put_and_completes(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "Ladder Game.SC2Replay"
+    payload = b"MPQ\x1b" + (b"replay-bytes" * 32)
+    replay.write_bytes(payload)
+    signed_url = "https://example.r2.cloudflarestorage.com/signed"
+    prepared = _mock_response(
+        200,
+        {
+            "url": signed_url,
+            "uploadId": "upload-123",
+            "headers": {
+                "content-type": "application/octet-stream",
+                "content-length": str(len(payload)),
+                "cache-control": "private, no-store",
+                "content-md5": base64.b64encode(
+                    hashlib.md5(payload, usedforsecurity=False).digest(),
+                ).decode("ascii"),
+                "x-amz-meta-sha256": hashlib.sha256(payload).hexdigest(),
+            },
+            "expiresIn": 600,
+        },
+    )
+    completed = _mock_response(200, {"replayAvailable": True})
+    uploaded: list[bytes] = []
+
+    def _put(_url: str, **kwargs: Any) -> MagicMock:
+        uploaded.append(kwargs["data"].read())
+        return _mock_response(200, None)
+
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        side_effect=[prepared, completed],
+    ) as control, patch("requests.put", side_effect=_put) as put:
+        assert api.upload_replay_file("date|opp/map", replay) is True
+
+    assert uploaded == [payload]
+    assert put.call_args.args[0] == signed_url
+    assert put.call_args.kwargs["headers"] == {
+        "content-type": "application/octet-stream",
+        "content-length": str(len(payload)),
+        "cache-control": "private, no-store",
+        "content-md5": base64.b64encode(
+            hashlib.md5(payload, usedforsecurity=False).digest(),
+        ).decode("ascii"),
+        "x-amz-meta-sha256": hashlib.sha256(payload).hexdigest(),
+    }
+    assert control.call_args_list[0].args[:2] == (
+        "POST",
+        "http://x/v1/games/date%7Copp%2Fmap/replay-upload",
+    )
+    complete_kwargs = control.call_args_list[1].kwargs
+    assert control.call_args_list[1].args[1].endswith(
+        "/replay-upload/complete",
+    )
+    assert complete_kwargs["json"] == {
+        "uploadId": "upload-123",
+    }
+    assert control.call_args_list[0].kwargs["json"] == {
+        "filename": replay.name,
+        "sizeBytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "md5": base64.b64encode(
+            hashlib.md5(payload, usedforsecurity=False).digest(),
+        ).decode("ascii"),
+    }
+
+
+def test_upload_replay_file_is_optional_during_api_rollout(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "game.SC2Replay"
+    replay.write_bytes(b"MPQ\x1bdata")
+    unavailable = _mock_response(503, {"error": {"code": "replay_storage_unavailable"}})
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch("requests.request", return_value=unavailable), patch(
+        "requests.put",
+    ) as put, patch("time.sleep"):
+        assert api.upload_replay_file("g1", replay) is False
+    put.assert_not_called()
+
+
+def test_upload_replay_file_accepts_already_verified_object(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "already-stored.SC2Replay"
+    replay.write_bytes(b"MPQ\x1balready-there")
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(
+            200,
+            {"alreadyStored": True, "replayAvailable": True},
+        ),
+    ), patch("requests.put") as put:
+        assert api.upload_replay_file("g1", replay) is True
+
+    put.assert_not_called()
+
+
+def test_upload_replay_file_skips_oversized_original(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "oversized.SC2Replay"
+    # Sparse/truncated fixture mechanics are platform-dependent; a 5 MiB + 1
+    # byte file is still small enough for this focused local-only test.
+    replay.write_bytes(b"MPQ\x1b" + b"x" * (5 * 1024 * 1024 - 3))
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch("requests.request") as request_mock, patch(
+        "requests.put",
+    ) as put:
+        assert api.upload_replay_file("g1", replay) is False
+
+    request_mock.assert_not_called()
+    put.assert_not_called()
+
+
+@pytest.mark.parametrize("status", [400, 413])
+def test_upload_replay_file_treats_permanent_prepare_rejection_as_unavailable(
+    tmp_path: Path,
+    status: int,
+) -> None:
+    replay = tmp_path / "rejected.SC2Replay"
+    replay.write_bytes(b"MPQ\x1bdata")
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(status, {"error": {"code": "invalid"}}),
+    ), patch("requests.put") as put:
+        assert api.upload_replay_file("g1", replay) is False
+
+    put.assert_not_called()
+
+
+def test_replay_archive_status_uses_device_auth() -> None:
+    payload = {
+        "totalGames": 12,
+        "archivedGames": 5,
+        "missingGames": 7,
+        "requiresResync": True,
+    }
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(200, payload),
+    ) as request_mock:
+        assert api.get_replay_archive_status() == payload
+
+    args, kwargs = request_mock.call_args
+    assert args[:2] == ("GET", "http://x/v1/me/replay-archive-status")
+    assert kwargs["headers"]["authorization"] == "Bearer tok"
+
+
+def test_replay_archive_status_is_optional_during_api_rollout() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(404, {"error": {"code": "not_found"}}),
+    ):
+        assert api.get_replay_archive_status() is None
+
+
+def test_replay_archive_status_is_quiet_while_storage_is_disabled() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(
+            503,
+            {"error": {"code": "replay_storage_unavailable"}},
+        ),
+    ), patch("time.sleep"):
+        assert api.get_replay_archive_status() is None
+
+
+def test_mark_replay_archive_resync_started_sends_agent_version() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(200, {"ok": True}),
+    ) as request_mock:
+        assert api.mark_replay_archive_resync_started(
+            agent_version="0.15.0",
+        ) is True
+
+    args, kwargs = request_mock.call_args
+    assert args[:2] == ("POST", "http://x/v1/me/replay-archive-resync")
+    assert kwargs["json"] == {"agentVersion": "0.15.0"}
+    assert kwargs["headers"]["authorization"] == "Bearer tok"
+
+
+def test_mark_replay_archive_resync_is_optional_while_disabled() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(
+            503,
+            {"error": {"code": "replay_storage_unavailable"}},
+        ),
+    ), patch("time.sleep"):
+        assert api.mark_replay_archive_resync_started(
+            agent_version="0.15.0",
+        ) is False
 
 
 def test_poll_pairing_accepts_202() -> None:

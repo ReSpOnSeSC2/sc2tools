@@ -129,4 +129,34 @@ describe("POST /games ladder-map + player-count stamping", () => {
     // Falls back to the baked-in list, so it's still classified.
     expect(upserts[0].isLadderMap).toBe(true);
   });
+
+  test("marks post-validation storage failures as retryable", async () => {
+    const games = {
+      upsert: jest.fn(async () => {
+        throw new Error("r2 temporarily unavailable");
+      }),
+    };
+    const opponents = { refreshMetadata: jest.fn(async () => ({})) };
+    const auth = (req, _res, next) => {
+      req.auth = { userId: "u1" };
+      next();
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(buildGamesRouter({ games, opponents, auth }));
+
+    const res = await request(app)
+      .post("/games")
+      .send({ ...baseGame, gameId: "r2-retry", map: "Site Delta" });
+
+    expect(res.status).toBe(202);
+    expect(res.body.accepted).toEqual([]);
+    expect(res.body.rejected).toEqual([
+      expect.objectContaining({
+        gameId: "r2-retry",
+        retryable: true,
+        errors: [expect.stringMatching(/upsert_failed.*r2 temporarily/i)],
+      }),
+    ]);
+  });
 });

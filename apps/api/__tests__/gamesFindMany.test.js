@@ -16,7 +16,7 @@ describe("GamesService.findMany", () => {
 
     expect(find).toHaveBeenCalledWith(
       { userId: "u1", gameId: { $in: ["b", "a", "missing"] } },
-      { projection: { _id: 0 } },
+      { projection: { _id: 0, replayUpload: 0 } },
     );
     expect(result.map((row) => row.gameId)).toEqual(["b", "a"]);
   });
@@ -33,7 +33,7 @@ describe("GamesService.findMany", () => {
     expect(result.map((row) => row.gameId)).toEqual(["g1"]);
     expect(find).toHaveBeenCalledWith(
       { userId: "u1", gameId: { $in: ["g1"] } },
-      { projection: { _id: 0 } },
+      { projection: { _id: 0, replayUpload: 0 } },
     );
   });
 });

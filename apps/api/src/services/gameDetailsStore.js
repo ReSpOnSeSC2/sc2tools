@@ -2,7 +2,8 @@
 
 /**
  * Pluggable storage backends for the per-game heavy-field blob
- * (``buildLog`` / ``oppBuildLog`` / ``macroBreakdown`` / ``apmCurve``).
+ * (``buildLog`` / ``oppBuildLog`` / ``macroBreakdown`` / ``apmCurve`` /
+ * ``mapPlayback``).
  *
  * The ``GameDetailsService`` (services/gameDetails.js) is the public
  * API every reader / writer talks to. Internally it delegates blob I/O
@@ -31,7 +32,7 @@
  *   async delete(userId, gameId)
  *   async deleteAllForUser(userId)
  *
- * ``blob`` is always the JSON-serialisable subset of the four heavy
+ * ``blob`` is always the JSON-serialisable subset of the five heavy
  * fields. Stores are responsible for any compression / serialisation;
  * callers never touch raw bytes.
  */
@@ -44,6 +45,12 @@ const gunzip = promisify(zlib.gunzip);
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { HEAVY_FIELDS } = require("./gameDetails");
+
+const UNSET_HEAVY_FIELDS = Object.freeze(
+  Object.fromEntries(HEAVY_FIELDS.map((field) => [field, ""])),
+);
+const R2_WRITE_MAX_ATTEMPTS = 5;
 
 /**
  * Backend identifier strings. Public for tests and the config
@@ -164,7 +171,7 @@ class MongoDetailsStore {
  * R2 / S3-backed implementation. Persists the blob as a single
  * gzip-compressed JSON object at ``${prefix}/${userId}/${gameId}.json.gz``.
  *
- * Why one object per game (and not per-field) — the four heavy
+ * Why one object per game (and not per-field) — the five heavy
  * fields are always read together (per-game inspector pulls all of
  * them), so atomic write + atomic read is the natural unit. Per-field
  * objects would 4× the request count without changing what's
@@ -178,7 +185,7 @@ class MongoDetailsStore {
  * The MongoDB ``game_details`` collection is still kept in sync with
  * (userId, gameId, date) tuples even when R2 is the blob store —
  * the slim row is what GDPR delete and the spatial filter pipelines
- * reach for. Only the four heavy fields are externalised.
+ * reach for. Only the configured heavy fields are externalised.
  */
 class R2DetailsStore {
   /**
@@ -235,11 +242,19 @@ class R2DetailsStore {
    * @param {Record<string, any>} blob
    */
   async write(userId, gameId, date, blob) {
-    const body = await gzip(Buffer.from(JSON.stringify(blob), "utf8"));
-    await this.client.send(
-      new this._sdk.PutObjectCommand({
+    const key = this.keyFor(userId, gameId);
+    for (let attempt = 0; attempt < R2_WRITE_MAX_ATTEMPTS; attempt += 1) {
+      // Recompute routes intentionally send only the field they updated.
+      // Mirror Mongo's $set behavior by preserving the rest of the object.
+      // The ETag precondition makes this read/merge/write safe even when two
+      // Render instances update different fields on the same replay.
+      const current = await this._readVersioned(userId, gameId);
+      const merged = { ...(current?.blob || {}), ...blob };
+      const body = await gzip(Buffer.from(JSON.stringify(merged), "utf8"));
+      /** @type {import('@aws-sdk/client-s3').PutObjectCommandInput} */
+      const put = {
         Bucket: this.bucket,
-        Key: this.keyFor(userId, gameId),
+        Key: key,
         Body: body,
         ContentType: "application/json",
         ContentEncoding: "gzip",
@@ -248,19 +263,38 @@ class R2DetailsStore {
         // safe — the agent re-uploads under the same key on
         // recompute, which invalidates the CDN entry naturally.
         CacheControl: "private, max-age=86400",
-      }),
-    );
-    // Maintain the slim metadata row in Mongo so GDPR delete and
-    // any future $lookup-style queries still have an authoritative
-    // (userId, gameId, date) tuple per game.
-    /** @type {Record<string, any>} */
-    const meta = { userId, gameId, date, storedIn: STORE_KINDS.R2 };
-    stampVersion(meta, COLLECTIONS.GAME_DETAILS);
-    await this.gameDetailsCollection.updateOne(
-      { userId, gameId },
-      { $setOnInsert: { createdAt: new Date() }, $set: meta },
-      { upsert: true },
-    );
+      };
+      if (current) put.IfMatch = current.etag;
+      else put.IfNoneMatch = "*";
+      try {
+        await this.client.send(new this._sdk.PutObjectCommand(put));
+      } catch (err) {
+        if (
+          isConditionalWriteConflict(err)
+          && attempt + 1 < R2_WRITE_MAX_ATTEMPTS
+        ) {
+          continue;
+        }
+        throw err;
+      }
+      // Maintain the slim metadata row in Mongo so GDPR delete and
+      // any future $lookup-style queries still have an authoritative
+      // (userId, gameId, date) tuple per game.
+      /** @type {Record<string, any>} */
+      const meta = { userId, gameId, date, storedIn: STORE_KINDS.R2 };
+      stampVersion(meta, COLLECTIONS.GAME_DETAILS);
+      await this.gameDetailsCollection.updateOne(
+        { userId, gameId },
+        {
+          $setOnInsert: { createdAt: new Date() },
+          $set: meta,
+          $unset: UNSET_HEAVY_FIELDS,
+        },
+        { upsert: true },
+      );
+      return;
+    }
+    throw new Error("r2_details_write_conflict");
   }
 
   /**
@@ -269,6 +303,20 @@ class R2DetailsStore {
    * @returns {Promise<Record<string, any> | null>}
    */
   async read(userId, gameId) {
+    const versioned = await this._readVersioned(userId, gameId);
+    return versioned ? versioned.blob : null;
+  }
+
+  /**
+   * Read both the JSON value and its object version for an optimistic merge.
+   * R2 returns a strong ETag for GET; refusing a missing ETag is safer than
+   * silently falling back to an unconditional overwrite.
+   *
+   * @param {string} userId
+   * @param {string} gameId
+   * @returns {Promise<{blob: Record<string, any>, etag: string}|null>}
+   */
+  async _readVersioned(userId, gameId) {
     let resp;
     try {
       resp = await this.client.send(
@@ -281,9 +329,11 @@ class R2DetailsStore {
       if (isNotFoundError(err)) return null;
       throw err;
     }
+    const etag = typeof resp.ETag === "string" ? resp.ETag.trim() : "";
+    if (!etag) throw new Error("r2_details_etag_missing");
     const buf = await streamToBuffer(/** @type {any} */ (resp.Body));
     const json = (await gunzip(buf)).toString("utf8");
-    return JSON.parse(json);
+    return { blob: JSON.parse(json), etag };
   }
 
   /**
@@ -370,7 +420,7 @@ class R2DetailsStore {
       );
       const contents = listResp.Contents || [];
       if (contents.length > 0) {
-        await this.client.send(
+        const deleteResp = await this.client.send(
           new this._sdk.DeleteObjectsCommand({
             Bucket: this.bucket,
             Delete: {
@@ -379,6 +429,7 @@ class R2DetailsStore {
             },
           }),
         );
+        assertDeleteObjectsSucceeded(deleteResp);
       }
       continuationToken = listResp.IsTruncated
         ? listResp.NextContinuationToken
@@ -386,6 +437,25 @@ class R2DetailsStore {
     } while (continuationToken);
     await this.gameDetailsCollection.deleteMany({ userId });
   }
+}
+
+/**
+ * S3-compatible bulk deletion can return HTTP 200 while individual object
+ * deletes failed. Never remove the Mongo index rows in that state: retaining
+ * them keeps the failed keys discoverable and makes the whole cleanup
+ * retryable instead of silently orphaning private R2 data.
+ *
+ * @param {any} response
+ */
+function assertDeleteObjectsSucceeded(response) {
+  if (!Array.isArray(response?.Errors) || response.Errors.length === 0) return;
+  const first = response.Errors[0] || {};
+  const err = new Error(
+    `game_details_object_delete_failed:${first.Code || "unknown"}`,
+  );
+  /** @type {any} */ (err).code = "game_details_object_delete_failed";
+  /** @type {any} */ (err).objects = response.Errors;
+  throw err;
 }
 
 /**
@@ -423,6 +493,16 @@ function isNotFoundError(err) {
   if (err.Code === "NoSuchKey") return true;
   if (err.$metadata && err.$metadata.httpStatusCode === 404) return true;
   return false;
+}
+
+/** @param {any} err */
+function isConditionalWriteConflict(err) {
+  if (!err) return false;
+  return err.name === "PreconditionFailed"
+    || err.name === "ConditionalRequestConflict"
+    || err.Code === "PreconditionFailed"
+    || err.$metadata?.httpStatusCode === 409
+    || err.$metadata?.httpStatusCode === 412;
 }
 
 /**
@@ -488,5 +568,9 @@ module.exports = {
   R2DetailsStore,
   buildStoreFromConfig,
   // Internal helpers exported for tests:
-  _internals: { streamToBuffer, isNotFoundError },
+  _internals: {
+    streamToBuffer,
+    isNotFoundError,
+    isConditionalWriteConflict,
+  },
 };

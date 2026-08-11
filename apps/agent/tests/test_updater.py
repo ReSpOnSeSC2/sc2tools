@@ -12,6 +12,7 @@ from typing import Optional
 
 import pytest
 
+from sc2tools_agent import __version__
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.state import AgentState
 from sc2tools_agent.updater import (
@@ -205,6 +206,11 @@ def test_version_lt_orders_numeric_versions() -> None:
     # Unparseable input must never force an update.
     assert not _version_lt("garbage", "1.0.0")
     assert not _version_lt("1.0.0", "garbage")
+
+
+def test_replay_archive_release_is_newer_than_previous_agent() -> None:
+    """Existing 0.15.15 installs must see the archive-capable build."""
+    assert _version_lt("0.15.15", __version__)
 
 
 def test_update_is_mandatory_only_below_floor() -> None:

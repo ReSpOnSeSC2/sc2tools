@@ -50,6 +50,28 @@ services:
         sync: false
       - key: MONGODB_DB
         value: sc2tools_saas
+      # Heavy replay details live in Cloudflare R2. After deployment, update
+      # agents and run Full Resync to rebuild objects from local replays.
+      - key: GAME_DETAILS_STORE
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_REGION
+        value: auto
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PREFIX
+        value: game-details
+      - key: REPLAY_FILES_STORE
+        # Explicit rollout gate: set to r2 in Render only after agent 0.15.16
+        # is published and the private bucket/lifecycle rule are ready.
+        sync: false
+      - key: R2_REPLAY_PREFIX
+        value: raw-replays/v1
       - key: CLERK_SECRET_KEY
         sync: false
       - key: SERVER_PEPPER_HEX

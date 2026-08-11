@@ -22,6 +22,8 @@ const ME_MMR_MAX_TOONS = 8;
  *   GET    /me/preferences/:type    — read stored preferences ("misc" | "voice")
  *   PUT    /me/preferences/:type    — replace preferences for that type
  *   GET    /me/doctor               — diagnostic warnings (no agent, no profile, etc.)
+ *   GET    /me/replay-archive-status — one-time original replay backfill progress
+ *   POST   /me/replay-archive-resync — agent acknowledges a full local re-sync
  *   GET    /me/export               — download every per-user record as JSON
  *   DELETE /me                      — permanently delete the account
  *   GET    /me/backups              — list manual snapshots
@@ -35,6 +37,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   imports?: import('../services/import').ImportService,
  *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
+ *   replayArchiveEnabled?: boolean,
  *   clerk?: import('../services/clerkClient').ClerkClient,
  *   pulseMmr?: {
  *     getCurrentMmr(pulseId: string): Promise<{
@@ -481,11 +484,20 @@ function buildMeRouter(deps) {
       /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}}>} */
       const warnings = [];
 
-      const [profile, devices, gameStats] = await Promise.all([
+      const [profile, devices, gameStats, replayCounts, replayArchivePrefs] = await Promise.all([
         deps.users.getProfile(auth.userId),
         deps.pairings.listDevices(auth.userId),
         deps.games.stats(auth.userId),
+        deps.replayArchiveEnabled
+          ? deps.games.replayArchiveStatus(auth.userId)
+          : Promise.resolve(emptyReplayArchiveCounts()),
+        deps.users.getPreferences(auth.userId, "replayArchive"),
       ]);
+      const replayArchive = withReplayResyncState(
+        replayCounts,
+        replayArchivePrefs,
+        Boolean(deps.replayArchiveEnabled),
+      );
 
       // Any one identity signal is enough: the replay matcher keys off
       // displayName first, pulse ids drive MMR lookups, and battleTag
@@ -527,11 +539,89 @@ function buildMeRouter(deps) {
         });
       }
 
+      if (replayArchive.requiresResync) {
+        const count = replayArchive.missingGames;
+        warnings.push({
+          id: "replay_archive_incomplete",
+          severity: "warn",
+          message:
+            `${count.toLocaleString("en-US")} saved ${count === 1 ? "game is" : "games are"} `
+            + "missing the original replay file. Update to the latest desktop "
+            + "agent, then open it and click Re-sync once. The agent will "
+            + "archive replay files still on this PC; files already deleted "
+            + "locally will remain unavailable.",
+          cta: { label: "Update agent", href: "/download" },
+        });
+      }
+
       res.json({ ok: warnings.filter((w) => w.severity !== "info").length === 0, warnings });
     } catch (err) {
       next(err);
     }
   });
+
+  router.get(
+    "/me/replay-archive-status",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const [counts, prefs] = await Promise.all([
+          deps.replayArchiveEnabled
+            ? deps.games.replayArchiveStatus(auth.userId)
+            : Promise.resolve(emptyReplayArchiveCounts()),
+          deps.users.getPreferences(auth.userId, "replayArchive"),
+        ]);
+        res.json(withReplayResyncState(
+          counts,
+          prefs,
+          Boolean(deps.replayArchiveEnabled),
+        ));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.post(
+    "/me/replay-archive-resync",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        if (auth.source !== "device") {
+          res.status(403).json({ error: { code: "device_auth_required" } });
+          return;
+        }
+        if (!deps.replayArchiveEnabled) {
+          res.status(503).json({
+            error: { code: "replay_storage_unavailable" },
+          });
+          return;
+        }
+        const rawVersion = req.body && req.body.agentVersion;
+        const agentVersion =
+          typeof rawVersion === "string" && rawVersion.trim().length <= 50
+            ? rawVersion.trim()
+            : null;
+        const prefs = {
+          version: 1,
+          resyncRequestedAt: new Date().toISOString(),
+          ...(agentVersion ? { agentVersion } : {}),
+        };
+        await deps.users.updatePreferences(
+          auth.userId,
+          "replayArchive",
+          prefs,
+        );
+        res.json({ ok: true, ...prefs });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.get("/me/export", deps.auth, async (req, res, next) => {
     try {
@@ -752,4 +842,52 @@ function parseIso(raw) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-module.exports = { buildMeRouter };
+module.exports = {
+  buildMeRouter,
+  _internals: { withReplayResyncState },
+};
+
+/**
+ * A missing object does not necessarily mean the user skipped the rollout:
+ * old files may have been deleted from their PC. Stop the one-time prompt as
+ * soon as the latest agent has actually requested a full local re-sync, while
+ * continuing to expose the honest archived/missing counts.
+ *
+ * @param {{totalGames: number, archivedGames: number, missingGames: number, archiveComplete: boolean}} counts
+ * @param {Record<string, unknown>} prefs
+ * @param {boolean} enabled
+ */
+function withReplayResyncState(counts, prefs, enabled) {
+  const backfillVersion =
+    prefs
+    && typeof prefs.version === "number"
+    && Number.isInteger(prefs.version)
+      ? prefs.version
+      : 0;
+  const resyncRequestedAt =
+    backfillVersion >= 1
+    && prefs
+    && typeof prefs.resyncRequestedAt === "string"
+      ? prefs.resyncRequestedAt
+      : null;
+  return {
+    ...counts,
+    enabled,
+    backfillVersion,
+    resyncRequestedAt,
+    requiresResync:
+      enabled
+      && counts.totalGames > 0
+      && counts.missingGames > 0
+      && (backfillVersion < 1 || !resyncRequestedAt),
+  };
+}
+
+function emptyReplayArchiveCounts() {
+  return {
+    totalGames: 0,
+    archivedGames: 0,
+    missingGames: 0,
+    archiveComplete: true,
+  };
+}

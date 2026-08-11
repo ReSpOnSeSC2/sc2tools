@@ -127,6 +127,47 @@ def test_settings_payload_empty_folder_list_means_clear() -> None:
     assert p.replay_folders is not None
 
 
+def test_replay_archive_status_is_retained_until_qt_signals_exist(
+    tmp_path: Path,
+) -> None:
+    from sc2tools_agent.ui.gui import GuiUI, SettingsPayload
+
+    ui = GuiUI(
+        version="0.15.0",
+        dashboard_url="https://example.test/app",
+        pairing_url="https://example.test/devices",
+        log_dir=tmp_path,
+        log_file=tmp_path / "agent.log",
+        api_base="https://api.example.test",
+        replay_folders=[],
+        initial_paused=False,
+        initial_paired=True,
+        initial_user_id="u1",
+        initial_settings=SettingsPayload(),
+        on_pause=lambda _paused: None,
+        on_resync=lambda: None,
+        on_choose_folder=lambda _path: None,
+        on_check_updates=lambda: None,
+        on_save_settings=lambda _settings: None,
+        on_quit=lambda: None,
+    )
+
+    ui.on_replay_archive_status(4, 10)
+
+    assert ui._pending_replay_archive_status == (4, 10)
+
+
+def test_archive_resync_explains_how_to_clear_a_saved_filter() -> None:
+    from sc2tools_agent.ui.gui import _replay_archive_filter_block_message
+
+    assert _replay_archive_filter_block_message("") is None
+    message = _replay_archive_filter_block_message("Season 67")
+    assert message is not None
+    assert "Season 67" in message
+    assert "choose All time" in message
+    assert "Save settings" in message
+
+
 def test_log_level_filter() -> None:
     from sc2tools_agent.ui.gui import _matches_level
 

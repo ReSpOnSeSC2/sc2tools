@@ -7,8 +7,9 @@ you'll have, in roughly **60–90 minutes**:
 1. A signed-in `https://your-domain.app/sign-in` page (Clerk + Google)
 2. A live API at `https://your-api.onrender.com/v1/health`
 3. A MongoDB Atlas cluster with backups + your indexes
-4. A Vercel project hosting the Next.js frontend
-5. A working agent on your gaming PC that auto-syncs replays
+4. A private Cloudflare R2 bucket for replay details and originals
+5. A Vercel project hosting the Next.js frontend
+6. A working agent on your gaming PC that auto-syncs replays
 
 You don't need to be a developer. Read each step, follow it, paste
 the values where the guide says to. If a step fails, the troubleshooting
@@ -19,9 +20,9 @@ section at the bottom tells you what went wrong.
 ## What you'll need before you start
 
 - A GitHub account, with this repo (`ReSpOnSeSC2/sc2tools`) pushed up.
-- A credit card for the paid tiers (you can start everything on free).
+- A credit card for the Atlas M10 and Render Starter paid tiers.
 - A domain name. If you don't have one yet, see step 7. Total cost is
-  about $14/year.
+  registrar-dependent; the planning baseline below uses $15/year.
 - 60–90 min of focused time.
 
 ---
@@ -59,13 +60,15 @@ independently.
 
 ### 1b. Backups + alerting (do this BEFORE you have real users)
 
-Atlas's free tier includes daily snapshots if you turn them on. Cost
-on the M0 free tier is $0; on M10+ paid tiers it's a few dollars per
-month. Worth every penny.
+This site uses an M10+ dedicated cluster. Configure
+[Atlas Cloud Backups](https://www.mongodb.com/docs/atlas/backup/cloud-backup/overview/)
+and review the schedule, retention, and estimated backup charges in Atlas;
+backup cost varies with provider, region, retained data, and policy. Atlas
+does not provide Cloud Backups for M0 Free clusters, so do not treat M0 as a
+recoverable production backup plan.
 
-1. **Backups.** Atlas → your cluster → **Backup** tab → **Enable
-   backup** (M2 tier and up). On M0 free tier, take manual snapshots
-   from this same panel weekly until you upgrade.
+1. **Backups.** Atlas → your M10+ cluster → **Backup** tab → enable
+   Cloud Backups, then set the snapshot schedule and retention policy.
 2. **Alerts.** Atlas → **Project Settings** → **Alerts** → **Add
    Alert**. Add at minimum:
 
@@ -159,6 +162,36 @@ if you want the JWT to include your user's email or stable ID:
 
 Render hosts the Express + MongoDB API.
 
+### Existing-site rollout gate: publish agent 0.15.16 first
+
+If this is an upgrade of an existing site, build and publish **agent 0.15.16**
+as `agent-v0.15.16`, select it as the latest stable release, and confirm the
+site's `/download` flow serves that installer **before** deploying the
+R2-enabled API configuration below. Enabling `REPLAY_FILES_STORE=r2` also
+enables the dashboard's replay-archive update prompt. Publishing first keeps
+that prompt from sending users back to agent 0.15.15.
+
+For a brand-new site with no existing users, there is no backfill prompt to
+coordinate, but the private R2 storage must still be ready before the API is
+deployed with the R2 stores enabled.
+
+### Prepare private Cloudflare R2 storage
+
+1. In the Cloudflare dashboard, open **R2 Object Storage** and create a bucket.
+   Keep it private: do not enable public development access or attach a public
+   custom domain.
+2. Create an R2 API token with **Object Read & Write** access scoped only to
+   that bucket. Save its Access Key ID and Secret Access Key; the secret is
+   only shown once.
+3. Copy the S3 endpoint for the account. It normally has the form
+   `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`.
+4. Add an
+   [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)
+   that expires objects with prefix `raw-replays/v1-pending/` after one day.
+   If `R2_REPLAY_PREFIX` is customized, use
+   `<R2_REPLAY_PREFIX>-pending/` instead. This removes abandoned nonce-scoped
+   uploads after an interrupted or superseded agent upload.
+
 1. Go to https://render.com/ → sign in (use the same email as MongoDB
    if convenient).
 2. **New** → **Blueprint** → connect your GitHub account → pick the
@@ -175,6 +208,15 @@ Render hosts the Express + MongoDB API.
    | `SERVER_PEPPER_HEX`      | Run `openssl rand -hex 32` in a terminal and paste the result. **Save this** — losing it means losing the ability to verify cross-user opponent dedupe hashes. |
    | `CORS_ALLOWED_ORIGINS`   | Comma-separated. Include `http://localhost:3000` and whatever Vercel URL you'll use. Edit again after step 5 once you know the prod URL. |
    | `GITHUB_TOKEN`           | A GitHub token with public-repo read access (fine-grained, no extra permissions needed). The agent auto-update feed resolves releases from `api.github.com`; unauthenticated calls share Render's egress-IP rate budget (60 req/h across ALL tenants on that IP) and get 403s, which can pin the update feed to a stale version. A token lifts the limit to 5000 req/h. |
+   | `GAME_DETAILS_STORE`     | `r2`                                        |
+   | `REPLAY_FILES_STORE`     | `r2`                                        |
+   | `R2_ENDPOINT`            | The account S3 endpoint from the R2 setup above |
+   | `R2_REGION`              | `auto`                                      |
+   | `R2_BUCKET`              | The private bucket name                     |
+   | `R2_ACCESS_KEY_ID`       | The bucket-scoped token's Access Key ID     |
+   | `R2_SECRET_ACCESS_KEY`   | The bucket-scoped token's Secret Access Key |
+   | `R2_PREFIX`              | `game-details`                              |
+   | `R2_REPLAY_PREFIX`       | `raw-replays/v1`                            |
 
    Other vars (`NODE_ENV`, `MONGODB_DB`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE`)
    already have sane defaults from `render.yaml`.
@@ -253,11 +295,11 @@ Render hosts the Express + MongoDB API.
    If you see `{"status":"ok"}`, the API is healthy and connected to
    Mongo. Save this URL — you'll need it for steps 5 and 7.
 
-> **About cold starts**: the $7 Starter tier sleeps after 15 min of
-> inactivity. The first request after a sleep takes ~30s. The agent
-> retries automatically, so this is fine for early users; once you have
-> a few active accounts, upgrade to Standard ($25/mo) which doesn't
-> sleep.
+> **About cold starts**: the repo blueprint declares Render's paid $7
+> Starter instance, which does not spin down for inactivity. Render's Free
+> instances do spin down after 15 minutes without inbound traffic. Upgrade
+> to Standard for additional CPU/RAM when measurements justify it, not merely
+> to prevent a Starter instance from sleeping.
 
 > **About sticky sessions**: `render.yaml` sets `sessionAffinity: true`
 > so Socket.io upgrades work across multiple instances. You don't need
@@ -266,6 +308,27 @@ Render hosts the Express + MongoDB API.
 > from bouncing mid-handshake. Verify the toggle is on under
 > **Service** → **Settings** → **Health & Networking** → **Session
 > Affinity** if you ever scale up.
+
+### Finish the private replay rollout
+
+After the R2-enabled API is healthy:
+
+1. Update every desktop installation to agent 0.15.16 or newer.
+2. In each agent, set the replay-history filter to **All time**, save it, and
+   run **Re-sync replay library**. The agent re-parses the local files, writes
+   the R2 detail objects, and uploads the original `.SC2Replay` files directly
+   through short-lived signed URLs.
+3. Confirm the dashboard no longer asks that user to update and re-sync, then
+   open several replay-detail views and download several originals from
+   **Opponents → All replays**.
+
+This All-time Re-sync is the normal rollout; do not run a Mongo-to-R2 migration
+for the current users. Mongo detail data cannot reconstruct an original
+`.SC2Replay`, so a replay removed from the user's PC cannot be added to the
+downloadable archive. The migration scripts are optional recovery tools only
+for detail rows whose source replay is unavailable. See
+[`apps/api/README.md`](../../apps/api/README.md#enable-r2-with-a-full-agent-resync)
+for the upload integrity checks, routes, cleanup behavior, and recovery caveat.
 
 ---
 
@@ -418,9 +481,11 @@ delay — ~30s after a game finishes for the deep parse. Open the
 Render Logs while you play; you'll see `accepted: [{...}]` lines as
 each game arrives.
 
-**Cold start on first request after a long idle.** Expected on Render's
-$7 Starter tier. Upgrade to Standard ($25/mo) when you're ready, or
-add an UptimeRobot ping every 10 min to keep the dyno warm (free).
+**Cold start on first request after a long idle.** Check the Render service's
+instance type. The repo declares paid Starter, which stays running; inactivity
+spin-down applies to Free instances. If the service is already Starter,
+inspect deploys, restarts, health checks, and API logs instead of upgrading
+solely for this symptom.
 
 ---
 
@@ -432,14 +497,31 @@ After these 7 steps:
 - **Their data** lives in your Atlas cluster, isolated per-user via
   the Clerk userId → internal userId mapping.
 - **The agent** runs invisibly in the background on each user's PC,
-  uploading every replay within seconds of finishing a game.
+  uploading searchable replay data and private original replay files within
+  seconds of finishing a game.
 - **Your existing local install** (the `START_SC2_TOOLS.bat` flow)
   still works for users who don't want cloud — both paths use the
   same parsers, so feature parity is maintained.
 
-Cost at this scale: ~$21/month total (Render $7 + MongoDB $9 free
-tier upgrade + domain $14/yr). See `CLOUD_SAAS_ROADMAP.md` for the
-breakdown by user count.
+The repo-declared planning baseline is about **$65.19/month**
+(**$782.28/year**): [Render Starter](https://render.com/pricing) at $7,
+the current [Atlas](https://www.mongodb.com/pricing) M10 planning assumption
+of $56.94, and $1.25/month as the domain's annualized cost.
+[Vercel](https://vercel.com/pricing) and [Clerk](https://clerk.com/pricing)
+can remain $0 while usage stays within their free allowances. Atlas pricing
+varies by cloud provider and region, and backup storage, taxes, and overages
+are not included. If the Render dashboard actually uses Standard at $25
+rather than the repo-declared Starter plan, the same baseline is about
+$83.19/month before R2.
+
+[Cloudflare R2 storage](https://developers.cloudflare.com/r2/pricing/) is
+usage-based. With fewer than 15 users at roughly 10,000 replays each, the
+measured combined detail-and-original replay mix is about 14.9 GB and adds
+approximately **$0–$0.08/month** in storage after R2's 10 GB-month free
+storage allowance. At 1,000 users with the same profile (about 994 GB),
+storage is approximately **$14.76/month**. Treat these as capacity estimates,
+not a fixed invoice: replay sizes, retention, request operations, allowance
+usage, and future provider pricing can change the total.
 
 ---
 

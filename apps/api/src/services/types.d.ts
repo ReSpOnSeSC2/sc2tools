@@ -63,6 +63,16 @@ export interface OpponentsService {
       mergeLinked?: boolean;
     },
   ): Promise<object | null>;
+  listGames(
+    userId: string,
+    pulseId: string,
+    opts?: {
+      filters?: Record<string, unknown>;
+      mergeLinked?: boolean;
+      limit?: number;
+      cursor?: string;
+    },
+  ): Promise<{ items: object[]; nextCursor: string | null } | null>;
   recordGame(
     userId: string,
     game: {
@@ -162,6 +172,12 @@ export interface GamesService {
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
   stats(userId: string): Promise<{ total: number; latest: Date | null }>;
+  replayArchiveStatus(userId: string): Promise<{
+    totalGames: number;
+    archivedGames: number;
+    missingGames: number;
+    archiveComplete: boolean;
+  }>;
   todaySession(
     userId: string,
     timezone?: string,

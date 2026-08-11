@@ -53,6 +53,23 @@ class ConsoleUI:
         with self._lock:
             self._pending = count
 
+    def on_replay_archive_status(
+        self,
+        missing_games: int,
+        total_games: int,
+    ) -> None:
+        progress = (
+            f"one of your {total_games:,} saved games is"
+            if missing_games == 1
+            else f"{missing_games:,} of your {total_games:,} saved games are"
+        )
+        print(
+            "[agent] Original replay downloads need one full Re-sync with "
+            f"this latest agent ({progress} not archived yet). Only files "
+            "still on this PC can "
+            "be archived.",
+        )
+
     def wait_for_exit(self) -> None:
         try:
             while not self._stop.is_set():

@@ -33,8 +33,9 @@ export function OnboardingDownload({
         </h1>
         <p className="text-body-lg text-text-muted">
           A small background program that watches your StarCraft II
-          replays folder. Read-only. Your replay files never leave your
-          machine — only the parsed game record syncs.
+          replays folder without modifying it. Parsed game data and original
+          replay files sync securely to your private account library so you
+          can review or download them later.
         </p>
       </header>
 

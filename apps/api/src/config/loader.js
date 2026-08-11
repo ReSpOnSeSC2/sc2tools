@@ -5,6 +5,7 @@ const { DEFAULTS } = require("./constants");
 const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
 
 const VALID_GAME_DETAILS_STORES = new Set(["mongo", "r2"]);
+const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
 
 /**
  * Read and validate runtime configuration from process.env.
@@ -36,6 +37,7 @@ const VALID_GAME_DETAILS_STORES = new Set(["mongo", "r2"]);
  *   slowQueryMs: number,
  *   metricsToken: string|null,
  *   gameDetailsStore: "mongo"|"r2",
+ *   replayFilesStore: "disabled"|"r2",
  *   r2: {
  *     endpoint: string,
  *     region: string,
@@ -43,6 +45,7 @@ const VALID_GAME_DETAILS_STORES = new Set(["mongo", "r2"]);
  *     accessKeyId: string,
  *     secretAccessKey: string,
  *     prefix: string,
+ *     replayPrefix: string,
  *   }|null,
  *   analytics: {
  *     enabled: boolean,
@@ -114,6 +117,7 @@ function loadConfig(env = process.env) {
     // Unset = endpoint disabled.
     metricsToken: env.METRICS_TOKEN || null,
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
+    replayFilesStore: parseReplayFilesStore(env.REPLAY_FILES_STORE),
     r2: parseR2Config(env),
     analytics: parseAnalyticsConfig(env),
   };
@@ -191,9 +195,9 @@ function parseServiceAccountKey(raw) {
 
 /**
  * Validate the GAME_DETAILS_STORE env var. Defaults to ``mongo`` so a
- * fresh deploy always starts with the safe in-database backend; flip
- * to ``r2`` once the bucket is provisioned and the migration script
- * has copied existing detail rows over.
+ * fresh deploy always starts with the safe in-database backend; production
+ * can switch to ``r2`` once the bucket is provisioned and a Full Resync is
+ * scheduled to rebuild the detail objects from local replay files.
  *
  * @param {string|undefined} raw
  * @returns {"mongo"|"r2"}
@@ -229,7 +233,19 @@ function parseR2Config(env) {
     accessKeyId: env.R2_ACCESS_KEY_ID || "",
     secretAccessKey: env.R2_SECRET_ACCESS_KEY || "",
     prefix: env.R2_PREFIX || "game-details",
+    replayPrefix: env.R2_REPLAY_PREFIX || "raw-replays/v1",
   };
+}
+
+/** @param {string|undefined} raw @returns {'disabled'|'r2'} */
+function parseReplayFilesStore(raw) {
+  const value = String(raw || "disabled").trim().toLowerCase();
+  if (!VALID_REPLAY_FILES_STORES.has(value)) {
+    throw new Error(
+      `REPLAY_FILES_STORE must be one of [disabled, r2]; got: ${raw}`,
+    );
+  }
+  return /** @type {'disabled'|'r2'} */ (value);
 }
 
 /** @param {NodeJS.ProcessEnv} env @param {string} name @returns {string} */
@@ -263,6 +279,7 @@ function parseCsv(raw) {
 module.exports = {
   loadConfig,
   parseGameDetailsStore,
+  parseReplayFilesStore,
   parseR2Config,
   parseAnalyticsConfig,
 };

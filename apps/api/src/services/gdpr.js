@@ -57,6 +57,7 @@ class GdprService {
    *   opponents?: import('./opponents').OpponentsService,
    *   logger?: import('pino').Logger,
    *   gameDetails?: import('./gameDetails').GameDetailsService,
+   *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -73,6 +74,7 @@ class GdprService {
     // objects when GAME_DETAILS_STORE=r2; a bare
     // ``db.gameDetails.deleteMany`` only covers the Mongo backend.
     this.gameDetails = (opts && opts.gameDetails) || null;
+    this.replayFiles = (opts && opts.replayFiles) || null;
   }
 
   /**
@@ -121,6 +123,16 @@ class GdprService {
       { userId },
       { projection: { _id: 0, clerkUserId: 1 } },
     );
+
+    await this._assertReplayCleanupAvailable({ userId });
+
+    // Original replay binaries are outside Mongo. Delete them while the
+    // account still exists so an R2 failure aborts the request instead of
+    // reporting success with private objects orphaned in storage.
+    if (this.replayFiles) {
+      await this.replayFiles.deleteAllForUser(userId);
+      counts.replayFiles = -1;
+    }
 
     for (const [key] of USER_SCOPED_COLLECTIONS) {
       const coll = /** @type {any} */ (this.db)[key];
@@ -175,6 +187,15 @@ class GdprService {
       counts.adminEventsScrubbed = scrubRes.modifiedCount || 0;
     }
 
+    // Close the upload-completion race: a request that passed ownership
+    // checks before the first purge can promote its pending object while the
+    // Mongo rows are being removed. With ownership gone it cannot become a
+    // valid download, and this second deterministic prefix purge removes any
+    // object that landed in that interval. Do this before removing the user
+    // row so an R2 failure remains retryable under the same account identity.
+    if (this.replayFiles) {
+      await this.replayFiles.deleteAllForUser(userId);
+    }
     const userRes = await this.db.users.deleteOne({ userId });
     counts.users = userRes.deletedCount || 0;
     return counts;
@@ -215,7 +236,54 @@ class GdprService {
       filter.date = range;
     }
 
-    const gamesRes = await this.db.games.deleteMany(filter);
+    await this._assertReplayCleanupAvailable(filter);
+
+    // Resolve raw-replay keys before removing their Mongo ownership rows.
+    // A full wipe can delete by user prefix; a ranged wipe needs the exact
+    // game ids because object storage cannot filter by Mongo dates.
+    /** @type {string[]} */
+    let replayGameIds = [];
+    let gamesDeleteFilter = filter;
+    if (this.replayFiles) {
+      if (since || until) {
+        const replayRows = await this.db.games
+          .find(filter, { projection: { _id: 0, gameId: 1 } })
+          .toArray();
+        replayGameIds = replayRows
+          .map((row) => row && row.gameId)
+          .filter((gameId) => typeof gameId === "string" && gameId);
+        // Linearize a ranged wipe at this snapshot. Deleting with the broad
+        // date filter below could also remove a replay that the agent inserts
+        // between this ID read and deleteMany; that new row's R2 key would not
+        // be in replayGameIds and could be orphaned. The unique gameId list
+        // ensures every Mongo row this operation removes has a deterministic
+        // pre/post object cleanup, while concurrent later inserts survive for
+        // a future wipe instead of losing their ownership record.
+        gamesDeleteFilter = {
+          userId,
+          gameId: { $in: replayGameIds },
+        };
+        await this.replayFiles.deleteMany(
+          userId,
+          replayGameIds,
+        );
+      } else {
+        await this.replayFiles.deleteAllForUser(userId);
+      }
+    }
+
+    const gamesRes = await this.db.games.deleteMany(gamesDeleteFilter);
+    // A completion already in flight may have promoted an object after the
+    // first purge. Repeat the same key-scoped cleanup immediately after the
+    // matching ownership rows are gone; completion's conditional marker
+    // update can no longer authorize the object.
+    if (this.replayFiles) {
+      if (since || until) {
+        await this.replayFiles.deleteMany(userId, replayGameIds);
+      } else {
+        await this.replayFiles.deleteAllForUser(userId);
+      }
+    }
     // Mirror the delete on the split-out ``game_details`` storage so
     // heavy per-game fields (build logs, macro breakdown, apm curve,
     // spatial extracts) are removed in lockstep with the slim row.
@@ -226,8 +294,14 @@ class GdprService {
     if (this.gameDetails && (since || until)) {
       // Ranged wipe: resolve the affected gameIds from the detail
       // index rows, then delete blob+row per game through the store.
+      // When replay storage is active, use the same linearized game-ID
+      // snapshot as the slim-row/raw-file cleanup so an in-range game that
+      // arrives concurrently survives with both its row and detail object.
+      const detailFilter = this.replayFiles
+        ? { userId, gameId: { $in: replayGameIds } }
+        : filter;
       const rows = await this.db.gameDetails
-        .find(filter, { projection: { _id: 0, gameId: 1 } })
+        .find(detailFilter, { projection: { _id: 0, gameId: 1 } })
         .toArray();
       for (const row of rows) {
         if (row && typeof row.gameId === "string" && row.gameId) {
@@ -488,6 +562,33 @@ class GdprService {
       /** @type {any} */ (err).status = 404;
       throw err;
     }
+    const snapshotGames = /** @type {Array<Record<string, any>>} */ (
+      Array.isArray(snap.payload?.data?.games) ? snap.payload.data.games : []
+    );
+    const snapshotHasReplayMarkers = snapshotGames.some(
+      (game) => game && (
+        (game.replayFile && game.replayFile.storedAt)
+        || (game.replayUpload && game.replayUpload.uploadId)
+      ),
+    );
+    await this._assertReplayCleanupAvailable(
+      { userId },
+      snapshotHasReplayMarkers,
+    );
+    // Heavy detail blobs are not embedded in manual snapshot JSON. Purge the
+    // active store before restoring slim game rows so current R2/Mongo detail
+    // data cannot survive the restore and attach to a historical gameId.
+    if (this.gameDetails) {
+      await this.gameDetails.deleteAllForUser(userId);
+    } else if (this.db.gameDetails) {
+      await this.db.gameDetails.deleteMany({ userId });
+    }
+    // Replay binaries are intentionally not embedded in JSON snapshots.
+    // Remove current objects before clearing their Mongo ownership rows, so
+    // any object-store failure aborts before historical rows are inserted.
+    if (this.replayFiles) {
+      await this.replayFiles.deleteAllForUser(userId);
+    }
     // Clear current data (NOT the user record — the user keeps their id).
     for (const [key] of USER_SCOPED_COLLECTIONS) {
       const c = /** @type {any} */ (this.db)[key];
@@ -499,12 +600,54 @@ class GdprService {
       const rows = Array.isArray(data[jsonKey]) ? data[jsonKey] : [];
       if (c && rows.length > 0) {
         await c.insertMany(
-          rows.map((r) => ({ ...r, userId })),
+          rows.map((r) => {
+            const restored = { ...r, userId };
+            if (key === "games") {
+              delete restored.replayFile;
+              delete restored.replayUpload;
+            }
+            return restored;
+          }),
           { ordered: false },
         );
       }
     }
+    // Snapshot JSON never restores raw replay markers. A second pass closes
+    // the same in-flight completion race as account/history deletion.
+    if (this.replayFiles) {
+      await this.replayFiles.deleteAllForUser(userId);
+    }
     return { restoredAt: new Date(), counts: countsOf(data) };
+  }
+
+  /**
+   * Never remove the Mongo ownership rows while their private objects cannot
+   * be addressed. Explicitly disabling replay storage is safe for local
+   * development, but production cleanup fails closed if archived markers
+   * prove that R2 objects may exist.
+   *
+   * @param {Record<string, any>} gameFilter
+   * @param {boolean} [additionalMarker]
+   */
+  async _assertReplayCleanupAvailable(gameFilter, additionalMarker = false) {
+    if (this.replayFiles) return;
+    const archivedGame = await this.db.games.findOne(
+      {
+        ...gameFilter,
+        $or: [
+          { "replayFile.storedAt": { $exists: true } },
+          { "replayUpload.uploadId": { $exists: true } },
+        ],
+      },
+      { projection: { _id: 1 } },
+    );
+    if (!archivedGame && !additionalMarker) return;
+    const err = /** @type {Error & {status: number, code: string}} */ (
+      new Error("replay_storage_unavailable")
+    );
+    err.status = 503;
+    err.code = "replay_storage_unavailable";
+    throw err;
   }
 }
 

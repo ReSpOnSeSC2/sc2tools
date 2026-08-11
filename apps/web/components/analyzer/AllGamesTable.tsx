@@ -19,6 +19,7 @@ import {
   type GameStreamLink,
 } from "./GameStreamLinks";
 import { useGameVodLinks } from "./useGameVodLinks";
+import { ReplayDownloadButton } from "./ReplayDownloadButton";
 import {
   gameAnalysisHref,
   type OpponentNavigationContext,
@@ -116,6 +117,10 @@ export function AllGamesTable({
   const showStreams = (games || []).some(
     (game) => (gameStreamLinks(linksByGameId, game.id)?.length ?? 0) > 0,
   );
+  // Replay downloads belong to the opponent dossier's All-games surface.
+  // Other consumers reuse this table for strategy/MMR drilldowns and keep
+  // their existing analysis-only action cell.
+  const showReplayDownload = !!opponentContext;
 
   const sortedGames = useMemo(() => {
     return sort.sortRows(
@@ -186,9 +191,7 @@ export function AllGamesTable({
                   POV streams
                 </th>
               ) : null}
-              <th className="px-2 py-1 text-right font-medium">
-                Game analysis
-              </th>
+              <th className="px-2 py-1 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +208,7 @@ export function AllGamesTable({
                 streamLinks={gameStreamLinks(linksByGameId, g.id)}
                 myName={myName}
                 opponentContext={opponentContext}
+                showReplayDownload={showReplayDownload}
               />
             ))}
           </tbody>
@@ -222,6 +226,7 @@ export function AllGamesTable({
             streamLinks={gameStreamLinks(linksByGameId, g.id)}
             myName={myName}
             opponentContext={opponentContext}
+            showReplayDownload={showReplayDownload}
           />
         ))}
       </ul>
@@ -249,6 +254,7 @@ function GameRow({
   streamLinks,
   myName,
   opponentContext,
+  showReplayDownload,
 }: {
   game: GameRowData;
   expanded: boolean;
@@ -260,6 +266,7 @@ function GameRow({
   streamLinks?: GameStreamLink[];
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
+  showReplayDownload: boolean;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -354,10 +361,20 @@ function GameRow({
           </td>
         ) : null}
         <td className="px-2 py-1 text-right">
-          <GameDeepDiveLink
-            gameId={game.id}
-            opponentContext={opponentContext}
-          />
+          <div className="inline-flex items-center justify-end gap-1.5">
+            <GameDeepDiveLink
+              gameId={game.id}
+              opponentContext={opponentContext}
+            />
+            {showReplayDownload ? (
+              <ReplayDownloadButton
+                gameId={game.id}
+                available={game.replayAvailable}
+                filename={game.replayFilename}
+                sizeBytes={game.replaySizeBytes}
+              />
+            ) : null}
+          </div>
         </td>
       </tr>
       {expanded && game.id ? (
@@ -511,6 +528,7 @@ function GameMobileCard({
   streamLinks,
   myName,
   opponentContext,
+  showReplayDownload,
 }: {
   game: GameRowData;
   expanded: boolean;
@@ -519,6 +537,7 @@ function GameMobileCard({
   streamLinks?: GameStreamLink[];
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
+  showReplayDownload: boolean;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -617,11 +636,22 @@ function GameMobileCard({
               className="[&_a]:h-11 [&_a]:w-11"
             />
           ) : null}
-          <GameDeepDiveLink
-            gameId={game.id}
-            mobile
-            opponentContext={opponentContext}
-          />
+          <div className="space-y-2">
+            <GameDeepDiveLink
+              gameId={game.id}
+              mobile
+              opponentContext={opponentContext}
+            />
+            {showReplayDownload ? (
+              <ReplayDownloadButton
+                gameId={game.id}
+                available={game.replayAvailable}
+                filename={game.replayFilename}
+                sizeBytes={game.replaySizeBytes}
+                mobile
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
       {expanded && game.id ? (

@@ -128,23 +128,44 @@ describe("MongoDetailsStore", () => {
  */
 class FakeS3Client {
   constructor() {
-    /** @type {Map<string, { body: Buffer, ContentType?: string, ContentEncoding?: string, CacheControl?: string }>} */
+    /** @type {Map<string, { body: Buffer, etag: string, ContentType?: string, ContentEncoding?: string, CacheControl?: string }>} */
     this.objects = new Map();
     this.deleteObjectsCalls = 0;
+    this.preconditionFailures = 0;
+    this.version = 0;
+    this.forcedConflicts = 0;
+    this.deleteErrors = [];
   }
 
   async send(command) {
     const name = command.constructor.name;
     const input = command.input;
     if (name === "PutObjectCommand") {
+      const previous = this.objects.get(input.Key);
+      const forceConflict = this.forcedConflicts > 0;
+      if (forceConflict) this.forcedConflicts -= 1;
+      if (
+        forceConflict
+        || (input.IfNoneMatch === "*" && previous)
+        || (input.IfMatch && (!previous || previous.etag !== input.IfMatch))
+      ) {
+        this.preconditionFailures += 1;
+        const err = new Error("PreconditionFailed");
+        err.name = "PreconditionFailed";
+        err.$metadata = { httpStatusCode: 412 };
+        throw err;
+      }
       const body = await toBuffer(input.Body);
+      this.version += 1;
+      const etag = `"fake-etag-${this.version}"`;
       this.objects.set(input.Key, {
         body,
+        etag,
         ContentType: input.ContentType,
         ContentEncoding: input.ContentEncoding,
         CacheControl: input.CacheControl,
       });
-      return {};
+      return { ETag: etag };
     }
     if (name === "GetObjectCommand") {
       const stored = this.objects.get(input.Key);
@@ -158,6 +179,7 @@ class FakeS3Client {
         Body: bufferToStream(stored.body),
         ContentType: stored.ContentType,
         ContentEncoding: stored.ContentEncoding,
+        ETag: stored.etag,
         $metadata: { httpStatusCode: 200 },
       };
     }
@@ -179,9 +201,11 @@ class FakeS3Client {
     if (name === "DeleteObjectsCommand") {
       this.deleteObjectsCalls += 1;
       for (const obj of input.Delete.Objects) {
-        this.objects.delete(obj.Key);
+        if (!this.deleteErrors.some((err) => err.Key === obj.Key)) {
+          this.objects.delete(obj.Key);
+        }
       }
-      return {};
+      return { Errors: this.deleteErrors };
     }
     throw new Error(`FakeS3Client: unsupported command ${name}`);
   }
@@ -278,6 +302,67 @@ describe("R2DetailsStore", () => {
     expect(got).toEqual(SAMPLE_BLOB);
   });
 
+  test("partial writes preserve fields already stored on the object", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+    const replacementCurve = { window_sec: 10, has_data: true, players: ["new"] };
+
+    await store.write("u1", "g1", date, { apmCurve: replacementCurve });
+
+    expect(await store.read("u1", "g1")).toEqual({
+      ...SAMPLE_BLOB,
+      apmCurve: replacementCurve,
+    });
+  });
+
+  test("concurrent writes from separate instances retry without losing fields", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    const secondInstance = new R2DetailsStore({
+      client: s3,
+      bucket: "test-bucket",
+      prefix: "details",
+      gameDetailsCollection: collection,
+    });
+
+    await Promise.all([
+      store.write("u1", "g1", date, { buildLog: ["first"] }),
+      secondInstance.write("u1", "g1", date, {
+        apmCurve: { has_data: true },
+      }),
+    ]);
+
+    expect(await store.read("u1", "g1")).toEqual({
+      buildLog: ["first"],
+      apmCurve: { has_data: true },
+    });
+    expect(s3.preconditionFailures).toBeGreaterThan(0);
+  });
+
+  test("write removes legacy heavy fields from the Mongo metadata row", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+    await collection.updateOne(
+      { userId: "u1", gameId: "g1" },
+      { $set: { buildLog: ["legacy duplicate"], mapPlayback: { ticks: [] } } },
+    );
+
+    await store.write("u1", "g1", date, { apmCurve: { has_data: false } });
+
+    const meta = await collection.findOne({ userId: "u1", gameId: "g1" });
+    expect(meta).not.toHaveProperty("buildLog");
+    expect(meta).not.toHaveProperty("mapPlayback");
+  });
+
+  test("exhausted conditional conflicts never stamp Mongo metadata", async () => {
+    s3.forcedConflicts = 10;
+    await expect(
+      store.write("u1", "conflicted", new Date(), { buildLog: ["x"] }),
+    ).rejects.toMatchObject({ name: "PreconditionFailed" });
+    expect(
+      await collection.findOne({ userId: "u1", gameId: "conflicted" }),
+    ).toBeNull();
+  });
+
   test("read returns null on NoSuchKey instead of throwing", async () => {
     expect(await store.read("u1", "missing")).toBeNull();
   });
@@ -310,6 +395,29 @@ describe("R2DetailsStore", () => {
     expect([...s3.objects.keys()][0]).toMatch(/^details\/u2\//);
     expect(await collection.countDocuments({ userId: "u1" })).toBe(0);
     expect(await collection.countDocuments({ userId: "u2" })).toBe(1);
+  });
+
+  test("bulk-delete errors preserve Mongo metadata so cleanup stays retryable", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+    await store.write("u1", "g2", date, SAMPLE_BLOB);
+    const failedKey = store.keyFor("u1", "g2");
+    s3.deleteErrors = [{ Key: failedKey, Code: "AccessDenied" }];
+
+    await expect(store.deleteAllForUser("u1")).rejects.toMatchObject({
+      code: "game_details_object_delete_failed",
+      objects: [{ Key: failedKey, Code: "AccessDenied" }],
+    });
+
+    expect(s3.objects.has(failedKey)).toBe(true);
+    expect(await collection.countDocuments({ userId: "u1" })).toBe(2);
+
+    // Once the object-store failure clears, the retained metadata lets a
+    // retry finish the remaining prefix and only then remove the index rows.
+    s3.deleteErrors = [];
+    await store.deleteAllForUser("u1");
+    expect(s3.objects.size).toBe(0);
+    expect(await collection.countDocuments({ userId: "u1" })).toBe(0);
   });
 });
 

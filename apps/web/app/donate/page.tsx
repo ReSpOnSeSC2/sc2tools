@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Cloud,
   Database,
   ExternalLink,
   Globe,
@@ -114,9 +115,12 @@ function HeroBlock() {
         <span className="text-accent-cyan">Donations keep it that way.</span>
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
-        Every feature ships free for every player. If the agent, dossiers, or
-        overlay save you ladder anxiety, a one-time tip helps cover the
-        Render-hosted API, MongoDB, and the time spent shipping new pillars.
+        Every feature ships free for every player. The current public-list-price
+        infrastructure base is about $65.19/month at the repository&rsquo;s
+        declared Render Starter tier: one Render-hosted API, MongoDB Atlas M10
+        and the domain. A one-time tip helps cover that bill while the website,
+        authentication and current replay archive remain within or close to
+        their included allowances.
       </p>
     </section>
   );
@@ -162,9 +166,15 @@ interface CostLine {
   icon: LucideIcon;
   label: string;
   detail: string;
-  /** Approx list price in USD/month. Rendered as "~$N / mo". */
+  /** Public list-price equivalent in USD/month. */
   approxMonthlyUsd: number;
-  /** Set when billed annually; we show both the per-month + per-year. */
+  /** Fixed costs participate in the base monthly and annual totals. */
+  includedInBase: boolean;
+  /** Override the standard monthly-price rendering for included/variable rows. */
+  priceLabel?: string;
+  /** Optional supporting label below the primary price. */
+  priceNote?: string;
+  /** Set when billed annually so annual math follows the real billing period. */
   approxYearlyUsd?: number;
   /** Optional public pricing-page link so the figures are auditable. */
   pricingHref?: string;
@@ -174,10 +184,11 @@ const COST_LINES: ReadonlyArray<CostLine> = [
   {
     id: "render",
     icon: Server,
-    label: "Render — paid web service",
+    label: "Render — Starter API instance",
     detail:
-      "One paid Render subscription. Runs the Express + Socket.io API (auth, replay sync, live overlay event bus) plus the Next.js frontend you're reading this on.",
-    approxMonthlyUsd: 25,
+      "One always-on instance runs the Express + Socket.io API, replay sync, parser jobs and live overlays. The Next.js website is hosted separately on Vercel.",
+    approxMonthlyUsd: 7,
+    includedInBase: true,
     pricingHref: "https://render.com/pricing",
   },
   {
@@ -185,8 +196,9 @@ const COST_LINES: ReadonlyArray<CostLine> = [
     icon: Database,
     label: "MongoDB Atlas — M10",
     detail:
-      "Dedicated M10 cluster with automated backups. Stores every parsed game for every signed-in player.",
-    approxMonthlyUsd: 57,
+      "Dedicated M10 base tier for accounts, searchable replay metadata, opponent histories and aggregates. Backups, added storage and data transfer are usage-priced separately.",
+    approxMonthlyUsd: 56.94,
+    includedInBase: true,
     pricingHref: "https://www.mongodb.com/pricing",
   },
   {
@@ -194,17 +206,59 @@ const COST_LINES: ReadonlyArray<CostLine> = [
     icon: Globe,
     label: "sc2tools.com domain",
     detail:
-      "Annual .com registration so the project has a home that won't disappear.",
-    approxMonthlyUsd: 1,
+      "Annual .com registration so the project has a stable home. The actual renewal can vary by registrar.",
+    approxMonthlyUsd: 1.25,
+    includedInBase: true,
     approxYearlyUsd: 15,
+  },
+  {
+    id: "r2",
+    icon: Cloud,
+    label: "Cloudflare R2 — private replay archive",
+    detail:
+      "Stores original .SC2Replay files and detailed analysis objects. Standard storage includes the first 10 GB each month, then costs $0.015 per GB-month; monthly operation allowances apply, and direct R2 egress is free.",
+    approxMonthlyUsd: 0,
+    includedInBase: false,
+    priceLabel: "$0–$0.08/mo",
+    priceNote: "current estimate",
+    pricingHref: "https://developers.cloudflare.com/r2/pricing/",
+  },
+  {
+    id: "vercel",
+    icon: Tv,
+    label: "Vercel — Next.js website",
+    detail:
+      "Hosts the frontend and edge delivery. This estimate assumes the repo-declared deployment remains eligible for Vercel Hobby and within its included usage.",
+    approxMonthlyUsd: 0,
+    includedInBase: false,
+    priceLabel: "$0/mo",
+    priceNote: "Hobby allowance",
+    pricingHref: "https://vercel.com/pricing",
+  },
+  {
+    id: "clerk",
+    icon: ShieldCheck,
+    label: "Clerk — sign-in and accounts",
+    detail:
+      "Provides authentication. The Hobby allowance includes up to 50,000 monthly retained users per application, well above today's membership.",
+    approxMonthlyUsd: 0,
+    includedInBase: false,
+    priceLabel: "$0/mo",
+    priceNote: "Hobby allowance",
+    pricingHref: "https://clerk.com/pricing",
   },
 ];
 
-const APPROX_MONTHLY_TOTAL = COST_LINES.reduce(
-  (acc, l) => acc + l.approxMonthlyUsd,
+const BASE_COST_LINES = COST_LINES.filter((line) => line.includedInBase);
+const APPROX_MONTHLY_BASE = BASE_COST_LINES.reduce(
+  (acc, line) => acc + line.approxMonthlyUsd,
   0,
 );
-const APPROX_YEARLY_TOTAL = APPROX_MONTHLY_TOTAL * 12;
+const APPROX_YEARLY_BASE = BASE_COST_LINES.reduce(
+  (acc, line) =>
+    acc + (line.approxYearlyUsd ?? line.approxMonthlyUsd * 12),
+  0,
+);
 
 function fmtUsd(n: number): string {
   return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
@@ -214,7 +268,7 @@ function CostBreakdown() {
   return (
     <Section
       title="Where every penny goes"
-      description="No ads, no investor money. Each figure below is the public list-price approximation for the tier we're on — auditable via the linked pricing page."
+      description="No ads and no investor money. This is a public-list-price estimate for the tiers declared in the repository, not a live invoice; provider dashboards remain the source of truth."
       className="mx-auto max-w-5xl"
     >
       <Card padded={false}>
@@ -226,10 +280,10 @@ function CostBreakdown() {
         <div className="grid gap-2 border-t border-border bg-bg-elevated/40 px-5 py-4 sm:grid-cols-2">
           <div className="space-y-0.5">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              Approx monthly run cost
+              Fixed base · monthly equivalent
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
-              ~{fmtUsd(APPROX_MONTHLY_TOTAL)}
+              ~{fmtUsd(APPROX_MONTHLY_BASE)}
               <span className="ml-1 text-caption font-normal text-text-muted">
                 /month
               </span>
@@ -237,10 +291,10 @@ function CostBreakdown() {
           </div>
           <div className="space-y-0.5 sm:text-right">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              Approx annualised
+              Fixed base · annualised
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
-              ~{fmtUsd(APPROX_YEARLY_TOTAL)}
+              ~{fmtUsd(APPROX_YEARLY_BASE)}
               <span className="ml-1 text-caption font-normal text-text-muted">
                 /year
               </span>
@@ -248,13 +302,33 @@ function CostBreakdown() {
           </div>
         </div>
       </Card>
-      <p className="mt-4 max-w-3xl text-caption text-text-muted">
-        These are vendor list prices, not invoiced totals — the actual bill
-        wobbles a few dollars with usage. There&rsquo;s no salary line, no
-        marketing line, no overhead. Every penny tipped goes against this
-        bill, and even a small tip helps: $5 covers a few days on the Render
-        service or roughly two days of MongoDB. Thank you.
-      </p>
+      <div className="mt-4 max-w-3xl space-y-2 text-caption text-text-muted">
+        <p>
+          At today&rsquo;s scale, R2 is estimated to add $0–$0.08/month, so the
+          current total remains about $65/month before variable Atlas or
+          Render usage, taxes and provider-specific adjustments.
+        </p>
+        <p>
+          This assumes Render&rsquo;s no-fee Hobby workspace. A Render Pro
+          workspace is a separate $25/month operations subscription; buying it
+          alone does not add API CPU or memory. Capacity changes come from the
+          web service&rsquo;s Starter, Standard or Pro instance type.
+        </p>
+        <p>
+          At the planning target of 1,000 members with 10,000 replays each,
+          measured repository samples put the R2 archive near 994 GB and
+          about $14.76/month for storage. That is a storage estimate, not a
+          whole-site capacity promise: database and API tiers would be reviewed
+          separately, and real replay sizes and access patterns will vary.
+        </p>
+        <p>
+          R2 operations are separate. If all 10 million originals and analysis
+          objects were backfilled in one billing month, the current direct
+          upload-and-promote flow would be roughly $130 in one-time Class A
+          operation charges after the monthly free allowance. Organic growth
+          spreads those operations across monthly allowances.
+        </p>
+      </div>
     </Section>
   );
 }
@@ -286,12 +360,16 @@ function CostRow({ line }: { line: CostLine }) {
       </div>
       <div className="text-right tabular-nums">
         <p className="text-body font-semibold text-text">
-          ~{fmtUsd(line.approxMonthlyUsd)}
-          <span className="ml-1 text-caption font-normal text-text-muted">
-            /mo
-          </span>
+          {line.priceLabel ?? `~${fmtUsd(line.approxMonthlyUsd)}`}
+          {!line.priceLabel ? (
+            <span className="ml-1 text-caption font-normal text-text-muted">
+              /mo
+            </span>
+          ) : null}
         </p>
-        {line.approxYearlyUsd ? (
+        {line.priceNote ? (
+          <p className="text-caption text-text-dim">{line.priceNote}</p>
+        ) : line.approxYearlyUsd ? (
           <p className="text-caption text-text-dim">
             (~{fmtUsd(line.approxYearlyUsd)}/yr billed)
           </p>

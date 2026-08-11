@@ -160,6 +160,34 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  // Complete, metadata-only replay history for one opponent. Kept separate
+  // from the analytics profile below: that response intentionally caps and
+  // hydrates games for aggregate computation, while this feed pages every
+  // matching row without touching the detail store.
+  router.get("/opponents/:pulseId/games", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const result = await deps.opponents.listGames(
+        auth.userId,
+        String(req.params.pulseId),
+        {
+          filters: parseFilters(req.query),
+          mergeLinked: req.query.mergeLinked === "1",
+          limit: parseLimit(req.query.limit),
+          cursor: parseCursor(req.query.cursor),
+        },
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+      res.set("Cache-Control", "private, no-store").json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/opponents/:pulseId", async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -205,6 +233,18 @@ function parseDate(raw) {
   if (!raw || typeof raw !== "string") return undefined;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/** @param {unknown} raw @returns {string|undefined} */
+function parseCursor(raw) {
+  if (raw === undefined) return undefined;
+  if (typeof raw === "string") return raw;
+  const err = /** @type {Error & {status: number, code: string}} */ (
+    new Error("cursor must be a string")
+  );
+  err.status = 400;
+  err.code = "bad_request";
+  throw err;
 }
 
 module.exports = { buildOpponentsRouter };

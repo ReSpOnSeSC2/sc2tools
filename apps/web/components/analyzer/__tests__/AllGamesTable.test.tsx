@@ -84,7 +84,7 @@ describe("AllGamesTable game analysis entry point", () => {
     });
 
     expect(
-      screen.getByRole("columnheader", { name: "Game analysis" }),
+      screen.getByRole("columnheader", { name: "Actions" }),
     ).toBeTruthy();
 
     const links = screen.getAllByRole("link", {
@@ -146,6 +146,9 @@ describe("AllGamesTable game analysis entry point", () => {
             date: "2026-07-10T12:00:00.000Z",
             result: "Win",
             map: "Ancient Cistern",
+            replayAvailable: true,
+            replayFilename: "Ancient Cistern vs Barcode Rival.SC2Replay",
+            replaySizeBytes: 128_000,
           },
         ]}
         opponentContext={{
@@ -162,6 +165,9 @@ describe("AllGamesTable game analysis entry point", () => {
         "/app/game/game%2F42?opponent=1-S2-1-42%2Falt&opponentName=Barcode+Rival",
       );
     });
+    expect(
+      screen.getAllByRole("button", { name: "Download replay" }),
+    ).toHaveLength(2);
   });
 
   it("loads visible games in one request and renders timestamped POV controls", async () => {

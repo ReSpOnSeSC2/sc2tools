@@ -20,8 +20,8 @@
  * rows are at risk before proceeding.
  *
  * Idempotent: re-running on docs already missing the fields is a
- * no-op. Stamps ``_schemaVersion: 4`` so we can tell at a glance
- * which generation a doc is on.
+ * no-op. Stamps the current ``games`` schema version from the central
+ * registry so running this older cleanup cannot downgrade newer rows.
  *
  * Run with:
  *   MONGODB_URI=... MONGODB_DB=... \
@@ -38,13 +38,16 @@ const { MongoClient } = require("mongodb");
 const { COLLECTIONS } = require(
   path.join(__dirname, "..", "..", "config", "constants"),
 );
+const { expectedVersion } = require(
+  path.join(__dirname, "..", "schemaVersioning"),
+);
 // path.join require keeps the script runnable from any CWD; the cast
 // restores the module type TS loses on a dynamic require path.
 const { HEAVY_FIELDS } = /** @type {typeof import("../../services/gameDetails")} */ (
   require(path.join(__dirname, "..", "..", "services", "gameDetails"))
 );
 
-const TARGET_VERSION = 4;
+const TARGET_VERSION = expectedVersion(COLLECTIONS.GAMES);
 
 function parseArgs() {
   return {
@@ -66,7 +69,6 @@ async function main() {
   try {
     const db = client.db(dbName);
     const games = db.collection(COLLECTIONS.GAMES);
-    const details = db.collection(COLLECTIONS.GAME_DETAILS);
 
     // Risk audit: any game that has heavy fields inline AND no
     // matching gameDetails row is one we're about to lose data for.
@@ -79,30 +81,42 @@ async function main() {
     );
     if (candidate === 0) return;
 
-    // Walk a sample of candidates and check whether each has a
-    // matching detail row. Full scan would be O(N) round-trips; a
-    // 1000-doc sample is enough to flag a botched backfill.
-    const sampleSize = Math.min(1000, candidate);
-    const sample = await games
-      .find(filter, { projection: { _id: 0, userId: 1, gameId: 1 } })
-      .limit(sampleSize)
-      .toArray();
-    const sampleIds = sample.map((g) => ({ userId: g.userId, gameId: g.gameId }));
-    /** @type {Array<{userId: string, gameId: string}>} */
-    const missing = [];
-    for (const id of sampleIds) {
-      // eslint-disable-next-line no-await-in-loop
-      const has = await details.countDocuments(
-        { userId: id.userId, gameId: id.gameId },
-        { limit: 1 },
-      );
-      if (has === 0) missing.push(id);
-    }
+    // Audit every candidate with an indexed lookup. Sampling can miss a
+    // lone un-backfilled game and turn this cleanup into permanent loss.
+    const missingRows = await games.aggregate(
+      [
+        { $match: filter },
+        {
+          $lookup: {
+            from: COLLECTIONS.GAME_DETAILS,
+            let: { uid: "$userId", gid: "$gameId" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$userId", "$$uid"] },
+                      { $eq: ["$gameId", "$$gid"] },
+                    ],
+                  },
+                },
+              },
+              { $limit: 1 },
+            ],
+            as: "matchingDetails",
+          },
+        },
+        { $match: { "matchingDetails.0": { $exists: false } } },
+        { $count: "count" },
+      ],
+      { allowDiskUse: true },
+    ).toArray();
+    const missing = missingRows.length > 0 ? missingRows[0].count : 0;
     console.log(
-      `sample of ${sampleSize} candidates: ${missing.length} missing a `
-        + `gameDetails row (those would lose heavy data on $unset).`,
+      `full audit of ${candidate} candidates: ${missing} missing a `
+        + "gameDetails row (those would lose heavy data on $unset).",
     );
-    if (missing.length > 0 && !force) {
+    if (missing > 0 && !force) {
       console.error(
         "Refusing to proceed: backfill is incomplete. Re-run "
           + "``2026-05-07-backfill-game-details.js`` first, or pass "

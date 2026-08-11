@@ -5,7 +5,12 @@ import Link from "next/link";
 
 type DoctorResp = {
   ok: boolean;
-  warnings?: { id: string; severity: "info" | "warn" | "error"; message: string; cta?: { label: string; href: string } }[];
+  warnings?: {
+    id: string;
+    severity: "info" | "warn" | "error";
+    message: string;
+    cta?: { label: string; href: string };
+  }[];
 };
 
 /**
@@ -14,14 +19,24 @@ type DoctorResp = {
  * The API computes warnings; the UI just renders them.
  */
 export function DoctorBanner() {
-  const { data } = useApi<DoctorResp>("/v1/me/doctor");
+  // A full re-sync can begin while this page is open. Poll lightly so the
+  // one-time notice disappears after the latest agent acknowledges that the
+  // all-time scan started, without requiring a dashboard refresh.
+  const { data } = useApi<DoctorResp>("/v1/me/doctor", {
+    refreshInterval: (latest) =>
+      latest?.warnings?.some(
+        (warning) => warning.id === "replay_archive_incomplete",
+      )
+        ? 30_000
+        : 0,
+  });
   const warnings = (data?.warnings || []).filter(
     (w) => w.severity !== "info",
   );
   if (!warnings.length) return null;
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2" aria-live="polite">
       {warnings.map((w) => {
         const cls =
           w.severity === "error"
@@ -34,7 +49,10 @@ export function DoctorBanner() {
           >
             <span>{w.message}</span>
             {w.cta && (
-              <Link href={w.cta.href} className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-xs">
+              <Link
+                href={w.cta.href}
+                className="hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bold text-text hover:bg-bg-elevated"
+              >
                 {w.cta.label}
               </Link>
             )}

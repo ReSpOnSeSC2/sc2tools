@@ -89,6 +89,22 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
+    // ``replayFile`` is server-owned proof that the private object store
+    // contains a verified original replay; ``replayUpload`` is its short-
+    // lived signed-upload intent. Agent JSON is intentionally patch-like, so
+    // accepting either field here would let a paired device forge or erase
+    // state without completing the upload flow. Strip parent and defensive
+    // dotted-key variants while leaving existing Mongo values untouched.
+    for (const key of Object.keys(doc)) {
+      if (
+        key === "replayFile"
+        || key.startsWith("replayFile.")
+        || key === "replayUpload"
+        || key.startsWith("replayUpload.")
+      ) {
+        delete doc[key];
+      }
+    }
     // Older agents did not report provenance and could substitute the
     // account's *current* Pulse rating for every historical replay. A
     // bare numeric value is therefore unverified, not replay-authored.
@@ -150,19 +166,22 @@ class GamesService {
         $set: slimSet,
         $unset: unset,
       };
+    if (this.gameDetails && Object.keys(heavy).length > 0) {
+      // Commit the detail payload before creating the slim row. The route
+      // uses the slim-row insert result as the exactly-once gate for
+      // OpponentsService.recordGame. If a transient detail-store failure
+      // happened after that insert, a retry would see ``created=false`` and
+      // permanently skip the opponent aggregate. Detail upserts are
+      // idempotent, so doing this first also makes a later Mongo retry safe.
+      // Failures propagate to the ingest route, which marks only this game
+      // retryable and continues the rest of the batch.
+      await this.gameDetails.upsert(userId, game.gameId, date, heavy);
+    }
     const res = await this.db.games.updateOne(
       { userId, gameId: game.gameId },
       update,
       { upsert: true },
     );
-    if (this.gameDetails && Object.keys(heavy).length > 0) {
-      // Detail-write failures DO propagate now that the slim row no
-      // longer carries the heavy fields. A silent failure here
-      // would leave the per-game inspector permanently empty. The
-      // ingest route catches and logs; failure of one game doesn't
-      // block subsequent games in a batch upload.
-      await this.gameDetails.upsert(userId, game.gameId, date, heavy);
-    }
     return res.upsertedCount === 1;
   }
 
@@ -181,7 +200,7 @@ class GamesService {
       filter.date = { $lt: opts.before };
     }
     const items = await this.db.games
-      .find(filter, { projection: { _id: 0 } })
+      .find(filter, { projection: { _id: 0, replayUpload: 0 } })
       .sort({ date: -1 })
       .limit(limit + 1)
       .toArray();
@@ -198,7 +217,7 @@ class GamesService {
   async get(userId, gameId) {
     return this.db.games.findOne(
       { userId, gameId },
-      { projection: { _id: 0 } },
+      { projection: { _id: 0, replayUpload: 0 } },
     );
   }
 
@@ -227,7 +246,7 @@ class GamesService {
     const rows = await this.db.games
       .find(
         { userId, gameId: { $in: ids } },
-        { projection: { _id: 0 } },
+        { projection: { _id: 0, replayUpload: 0 } },
       )
       .toArray();
     const byId = new Map(rows.map((row) => [String(row.gameId), row]));
@@ -252,6 +271,41 @@ class GamesService {
       .limit(1)
       .toArray();
     return { total, latest: latest[0]?.date || null };
+  }
+
+  /**
+   * Progress for the one-time original-replay archive backfill.
+   *
+   * Parsed game rows existed before SC2 Tools retained the source
+   * ``.SC2Replay`` file.  A completed archive upload stamps the
+   * server-owned ``replayFile.storedAt`` marker on that same row.  Keeping
+   * this query in GamesService gives both the dashboard doctor and the
+   * desktop agent one authoritative answer without listing game IDs or
+   * exposing object-store details.
+   *
+   * @param {string} userId
+   * @returns {Promise<{
+   *   totalGames: number,
+   *   archivedGames: number,
+   *   missingGames: number,
+   *   archiveComplete: boolean,
+   * }>}
+   */
+  async replayArchiveStatus(userId) {
+    const [totalGames, archivedGames] = await Promise.all([
+      this.db.games.countDocuments({ userId }),
+      this.db.games.countDocuments({
+        userId,
+        "replayFile.storedAt": { $exists: true },
+      }),
+    ]);
+    const missingGames = Math.max(0, totalGames - archivedGames);
+    return {
+      totalGames,
+      archivedGames,
+      missingGames,
+      archiveComplete: missingGames === 0,
+    };
   }
 
   /**
@@ -1039,6 +1093,19 @@ function buildUnavailableMmrUpdate(slimSet, unset) {
  */
 function buildSlimSet(doc) {
   const set = { ...doc };
+  // Defense in depth for future callers that bypass ``upsert``'s input
+  // normalization. Replay archive markers/intents may only be written by
+  // ReplayFilesService after it verifies the R2 object.
+  for (const key of Object.keys(set)) {
+    if (
+      key === "replayFile"
+      || key.startsWith("replayFile.")
+      || key === "replayUpload"
+      || key.startsWith("replayUpload.")
+    ) {
+      delete set[key];
+    }
+  }
   const opponent = set.opponent;
   if (!opponent || typeof opponent !== "object" || Array.isArray(opponent)) {
     return set;

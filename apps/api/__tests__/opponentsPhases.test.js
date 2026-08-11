@@ -401,6 +401,45 @@ describe("OpponentsService phase + transition envelope", () => {
     }
   });
 
+  test("games expose replay availability without leaking the archive marker", async () => {
+    await seedFixture();
+    await db.games.updateOne(
+      { userId, gameId: "g5" },
+      {
+        $set: {
+          replayFile: {
+            version: 1,
+            sizeBytes: 128_000,
+            sha256: "private-checksum",
+            storedAt: new Date("2026-08-11T12:00:00Z"),
+          },
+        },
+      },
+    );
+    await db.games.updateOne(
+      { userId, gameId: "g4" },
+      { $set: { replayFile: { version: 1, sizeBytes: 64_000 } } },
+    );
+
+    const out = await opponents.get(userId, pulseId);
+    const archived = out.games.find((g) => g.id === "g5");
+    const incomplete = out.games.find((g) => g.id === "g4");
+
+    expect(archived).toMatchObject({
+      replayAvailable: true,
+      replayFilename: null,
+      replaySizeBytes: 128_000,
+    });
+    expect(archived.replayFile).toBeUndefined();
+    expect(archived.sha256).toBeUndefined();
+    expect(incomplete).toMatchObject({
+      replayAvailable: false,
+      replayFilename: null,
+      replaySizeBytes: 64_000,
+    });
+    expect(incomplete.replayFile).toBeUndefined();
+  });
+
   test("phases.byStrategy groups games by opponent strategy with full per-phase envelopes", async () => {
     await seedFixture();
     const out = await opponents.get(userId, pulseId);

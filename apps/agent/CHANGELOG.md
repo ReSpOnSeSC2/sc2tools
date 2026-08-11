@@ -2,6 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.16
+
+### Added — private replay archive and one-time library re-sync
+
+- Accepted games now archive their original `.SC2Replay` file directly to
+  private cloud storage through a short-lived upload URL. Permanent storage
+  credentials stay server-side, and the bulk replay transfer bypasses the
+  SC2 Tools API (the API reads only the four-byte replay signature while
+  validating completion).
+- The desktop dashboard shows a one-time **Re-sync replay library** action
+  when an existing account still needs its original replay files archived.
+- Re-syncing is idempotent: originals already verified in cloud storage are
+  skipped, while transient upload failures remain queued for retry.
+
 ## 0.15.15
 
 ### Fixed — replay format and ladder classification

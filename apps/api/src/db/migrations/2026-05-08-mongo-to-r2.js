@@ -124,25 +124,26 @@ async function main() {
     );
     if (planned === 0) return;
 
-    const cursor = collection.find(filter).limit(planned);
-    /** @type {Array<any>} */
-    const queue = [];
-    for await (const doc of cursor) queue.push(doc);
-
+    // Stream from Mongo with only a bounded set of uploads in flight.
+    // This keeps memory flat even when the collection grows large.
+    const cursor = collection
+      .find(filter)
+      .limit(planned)
+      .batchSize(Math.max(16, concurrency * 4));
     let uploaded = 0;
     let failed = 0;
-    let i = 0;
+    let skipped = 0;
     /** @type {Record<string, any>} */
     const unsetFields = {};
     for (const k of HEAVY_FIELDS) unsetFields[k] = "";
 
-    const worker = async () => {
-      for (;;) {
-        const idx = i;
-        i += 1;
-        if (idx >= queue.length) return;
-        const doc = queue[idx];
-        if (!doc.userId || !doc.gameId) continue;
+    /** @param {Record<string, any>} doc */
+    const migrateDoc = async (doc) => {
+      try {
+        if (!doc.userId || !doc.gameId) {
+          skipped += 1;
+          return;
+        }
         /** @type {Record<string, any>} */
         const blob = {};
         let any = false;
@@ -152,57 +153,69 @@ async function main() {
             any = true;
           }
         }
-        if (!any) continue;
-        try {
-          if (!dryRun) {
-            const body = await gzip(Buffer.from(JSON.stringify(blob), "utf8"));
-            await client.send(
-              new sdk.PutObjectCommand({
-                Bucket: bucket,
-                Key: keyFor(prefix, doc.userId, doc.gameId),
-                Body: body,
-                ContentType: "application/json",
-                ContentEncoding: "gzip",
-                CacheControl: "private, max-age=86400",
-              }),
-            );
-            await collection.updateOne(
-              { userId: doc.userId, gameId: doc.gameId },
-              {
-                $set: { storedIn: "r2" },
-                $unset: unsetFields,
-              },
-            );
-          }
-          uploaded += 1;
-          if (uploaded % 100 === 0) {
-            console.log(
-              `progress: uploaded=${uploaded} failed=${failed} `
-                + `pending=${queue.length - i}`,
-            );
-          }
-        } catch (err) {
-          failed += 1;
-          const e = /** @type {{ message?: unknown }} */ (err);
-          console.warn(
-            `upload failed for ${doc.userId}/${doc.gameId}: `
-              + (e && e.message ? e.message : String(e)),
+        if (!any) {
+          skipped += 1;
+          return;
+        }
+        if (!dryRun) {
+          const body = await gzip(Buffer.from(JSON.stringify(blob), "utf8"));
+          await client.send(
+            new sdk.PutObjectCommand({
+              Bucket: bucket,
+              Key: keyFor(prefix, doc.userId, doc.gameId),
+              Body: body,
+              ContentType: "application/json",
+              ContentEncoding: "gzip",
+              CacheControl: "private, max-age=86400",
+            }),
+          );
+          await collection.updateOne(
+            { userId: doc.userId, gameId: doc.gameId },
+            {
+              $set: { storedIn: "r2" },
+              $unset: unsetFields,
+            },
+          );
+        }
+        uploaded += 1;
+      } catch (err) {
+        failed += 1;
+        const e = /** @type {{ message?: unknown }} */ (err);
+        console.warn(
+          `upload failed for ${doc.userId}/${doc.gameId}: `
+            + (e && e.message ? e.message : String(e)),
+        );
+      } finally {
+        const completed = uploaded + failed + skipped;
+        if (completed > 0 && completed % 100 === 0) {
+          console.log(
+            `progress: uploaded=${uploaded} failed=${failed} `
+              + `skipped=${skipped} pending=${Math.max(0, planned - completed)}`,
           );
         }
       }
     };
-    const workers = [];
-    for (let w = 0; w < concurrency; w += 1) workers.push(worker());
-    await Promise.all(workers);
+
+    /** @type {Set<Promise<void>>} */
+    const inFlight = new Set();
+    for await (const doc of cursor) {
+      const task = migrateDoc(doc).finally(() => inFlight.delete(task));
+      inFlight.add(task);
+      if (inFlight.size >= concurrency) await Promise.race(inFlight);
+    }
+    await Promise.all(inFlight);
     console.log(
-      `done: uploaded=${uploaded} failed=${failed} of ${planned}`,
+      `done: uploaded=${uploaded} failed=${failed} skipped=${skipped} of ${planned}`,
     );
+    const remaining = await collection.countDocuments(filter);
+    console.log(`remaining Mongo detail rows to migrate: ${remaining}`);
     if (failed > 0) {
       console.warn(
         `${failed} rows failed and remain in Mongo. Re-run after `
           + "investigating; the dry-run filter excludes successfully "
           + "migrated rows so the re-run only retries the failures.",
       );
+      process.exitCode = 1;
     }
   } finally {
     await mongo.close();

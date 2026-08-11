@@ -1,5 +1,6 @@
 "use strict";
 
+const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
@@ -62,6 +63,9 @@ const PROFILE_GAME_PROJECTION = {
   myBuild: 1,
   durationSec: 1,
   macroScore: 1,
+  // Internal raw-replay marker. The serializer exposes only availability
+  // and size, never its checksum or storage metadata.
+  replayFile: 1,
   top3Leaks: 1,
   apm: 1,
   spq: 1,
@@ -93,6 +97,28 @@ const PROFILE_GAME_PROJECTION = {
   // client.
   macroBreakdown: 1,
   opponent: 1,
+};
+
+// Metadata-only projection for the independently paginated All replays table.
+// It intentionally excludes every detail-store field (build logs, macro
+// breakdown, timelines, spatial data): expanding a row already fetches that
+// one game's detail through the existing per-game endpoint.
+const PROFILE_GAME_ROW_PROJECTION = {
+  _id: 1,
+  gameId: 1,
+  date: 1,
+  result: 1,
+  map: 1,
+  myRace: 1,
+  myBuild: 1,
+  myMmr: 1,
+  durationSec: 1,
+  macroScore: 1,
+  replayFile: 1,
+  "opponent.displayName": 1,
+  "opponent.race": 1,
+  "opponent.strategy": 1,
+  "opponent.mmr": 1,
 };
 
 /**
@@ -943,6 +969,83 @@ class OpponentsService {
   }
 
   /**
+   * Cursor-page the complete replay history for one opponent without loading
+   * any game-detail blobs. This is the data source for the dossier's All
+   * replays table; the heavier `get` method remains capped for analytics.
+   *
+   * The cursor is an opaque `{date, _id}` tuple. `_id` is the deterministic
+   * tie-breaker for replays with identical timestamps, so paging cannot skip
+   * or duplicate rows uploaded in the same agent batch.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {{
+   *   filters?: import('../util/parseQuery').GlobalFilters,
+   *   mergeLinked?: boolean,
+   *   limit?: number,
+   *   cursor?: string,
+   * }} [opts]
+   * @returns {Promise<{items: object[], nextCursor: string|null}|null>}
+   */
+  async listGames(userId, pulseId, opts = {}) {
+    const doc = await this.db.opponents.findOne(
+      { userId, pulseId },
+      {
+        projection: {
+          _id: 0,
+          userId: 1,
+          pulseId: 1,
+          pulseCharacterId: 1,
+          toonHandle: 1,
+          displayNameSample: 1,
+          revealedName: 1,
+          wins: 1,
+          losses: 1,
+          gameCount: 1,
+          lastSeen: 1,
+        },
+      },
+    );
+    if (!doc) return null;
+
+    const linked = opts.mergeLinked
+      ? await this._resolveLinkedIdentities(userId, doc)
+      : null;
+    const identityFilter = profileGamesIdentityFilter(pulseId, doc, linked);
+
+    const cursor = decodeOpponentGamesCursor(opts.cursor);
+    const clauses = [
+      gamesMatchStage(userId, opts.filters || {}),
+      identityFilter,
+    ];
+    if (cursor) {
+      clauses.push({
+        $or: [
+          { date: { $lt: cursor.date } },
+          { date: cursor.date, _id: { $lt: cursor.id } },
+        ],
+      });
+    }
+
+    const limit = clampOpponentGamesLimit(opts.limit);
+    /** @type {Array<any>} */
+    const rows = await this.db.games
+      .find({ $and: clauses }, { projection: PROFILE_GAME_ROW_PROJECTION })
+      .sort({ date: -1, _id: -1 })
+      .limit(limit + 1)
+      .toArray();
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    return {
+      items: page.map(serializeCompactProfileGame),
+      nextCursor: hasMore && last
+        ? encodeOpponentGamesCursor(last.date, last._id)
+        : null,
+    };
+  }
+
+  /**
    * Build the full opponent profile payload consumed by the SPA's
    * `OpponentProfile` view: totals, byMap, byStrategy, top strategies,
    * recency-weighted predictions, matchup-aware median timings (overall
@@ -1016,7 +1119,7 @@ class OpponentsService {
         ? { userId, ...idsFilter }
         : { userId, "opponent.pulseId": pulseId };
     /** @type {Array<any>} */
-    const rawGames = await this.db.games
+    const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
       .sort({ date: -1 })
       // Hard cap: an opponent faced hundreds/thousands of times would
@@ -1024,8 +1127,12 @@ class OpponentsService {
       // per game below — into memory on every profile view. date:-1
       // keeps the most recent games, which are the ones the profile's
       // tendency stats should weight anyway.
-      .limit(OPPONENT_PROFILE_MAX_GAMES)
+      // Fetch one sentinel row so the response can describe the cap honestly
+      // instead of labelling a truncated table "All replays".
+      .limit(OPPONENT_PROFILE_MAX_GAMES + 1)
       .toArray();
+    const gamesTruncated = fetchedGames.length > OPPONENT_PROFILE_MAX_GAMES;
+    const rawGames = fetchedGames.slice(0, OPPONENT_PROFILE_MAX_GAMES);
     // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
     // object to compute first-occurrence-of-token timings, and the
     // phase classifier (powering the trajectory strip + transition
@@ -1290,6 +1397,7 @@ class OpponentsService {
       last5Games,
       last5GamesScouting,
       gamesScouting,
+      gamesTruncated,
       games: filteredGames,
     };
   }
@@ -2751,6 +2859,93 @@ function clampLimit(raw, fallback) {
   return Math.min(n, ceiling);
 }
 
+/** @param {unknown} raw @returns {number} */
+function clampOpponentGamesLimit(raw) {
+  const fallback = LIMITS.OPPONENT_GAMES_PAGE_SIZE || 200;
+  const ceiling = LIMITS.OPPONENT_GAMES_LIST_MAX || fallback;
+  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, ceiling);
+}
+
+/**
+ * @param {string} pulseId
+ * @param {Record<string, any>} doc
+ * @param {{pulseIds: string[], characterIds: string[]}|null} linked
+ * @returns {Record<string, any>}
+ */
+function profileGamesIdentityFilter(pulseId, doc, linked) {
+  if (linked) {
+    return {
+      $or: [
+        { "opponent.pulseId": { $in: linked.pulseIds } },
+        {
+          "opponent.pulseCharacterId": {
+            $in: linked.characterIds,
+          },
+        },
+      ],
+    };
+  }
+  return opponentGamesFilter({
+    pulseId,
+    pulseCharacterId: doc.pulseCharacterId,
+  }) || { "opponent.pulseId": pulseId };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{date: Date, id: import('mongodb').ObjectId}|null}
+ */
+function decodeOpponentGamesCursor(raw) {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string" || raw.length > 512) {
+    throw invalidOpponentGamesCursor();
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!parsed || parsed.v !== 1 || typeof parsed.d !== "string") {
+      throw invalidOpponentGamesCursor();
+    }
+    const date = new Date(parsed.d);
+    const idText = typeof parsed.i === "string" ? parsed.i.toLowerCase() : "";
+    if (
+      Number.isNaN(date.getTime())
+      || !ObjectId.isValid(idText)
+      || new ObjectId(idText).toHexString() !== idText
+    ) {
+      throw invalidOpponentGamesCursor();
+    }
+    return { date, id: new ObjectId(idText) };
+  } catch (err) {
+    const known = /** @type {{code?: unknown}|null} */ (err);
+    if (known && known.code === "bad_request") throw err;
+    throw invalidOpponentGamesCursor();
+  }
+}
+
+/** @param {unknown} date @param {unknown} id @returns {string} */
+function encodeOpponentGamesCursor(date, id) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    throw new Error("opponent_games_cursor_date_missing");
+  }
+  const objectId = id instanceof ObjectId ? id : new ObjectId(String(id));
+  return Buffer.from(
+    JSON.stringify({ v: 1, d: date.toISOString(), i: objectId.toHexString() }),
+    "utf8",
+  ).toString("base64url");
+}
+
+/** @returns {Error & {status?: number, code?: string}} */
+function invalidOpponentGamesCursor() {
+  const err = /** @type {Error & {status: number, code: string}} */ (
+    new Error("invalid opponent games cursor")
+  );
+  err.status = 400;
+  err.code = "bad_request";
+  return err;
+}
+
 /**
  * True if any filter that invalidates the cached opponent counters is
  * set. When true, ``list`` re-aggregates from the games collection via
@@ -2798,11 +2993,17 @@ function hasFilters(f) {
 function serializeGameForProfile(g) {
   if (!g) return g;
   const opp = g.opponent || {};
+  const replaySizeBytes =
+    Number.isFinite(g.replayFile?.sizeBytes) && g.replayFile.sizeBytes > 0
+      ? g.replayFile.sizeBytes
+      : null;
   // ``macroBreakdown`` is hydrated onto rawGames so the phase
   // classifier can read it server-side, but the profile JSON envelope
   // emits only the compact phase aggregates — drop the raw blob here
   // so it doesn't bloat the response.
-  const { macroBreakdown: _macroDrop, ...rest } = g;
+  const rest = { ...g };
+  delete rest.macroBreakdown;
+  delete rest.replayFile;
   return {
     ...rest,
     id: g.gameId || null,
@@ -2816,6 +3017,47 @@ function serializeGameForProfile(g) {
     my_race: g.myRace || "",
     game_length: g.durationSec || 0,
     macro_score: typeof g.macroScore === "number" ? g.macroScore : null,
+    replayAvailable:
+      replaySizeBytes !== null && Boolean(g.replayFile?.storedAt),
+    replayFilename: null,
+    replaySizeBytes,
+  };
+}
+
+/**
+ * Strict allow-list serializer for cursor-paged replay rows. Keeping this
+ * separate from `serializeGameForProfile` prevents newly-added slim/detail
+ * fields from accidentally inflating the full-history response.
+ *
+ * @param {any} g
+ * @returns {object}
+ */
+function serializeCompactProfileGame(g) {
+  const opp = g && g.opponent && typeof g.opponent === "object"
+    ? g.opponent
+    : {};
+  const replaySizeBytes =
+    Number.isFinite(g?.replayFile?.sizeBytes) && g.replayFile.sizeBytes > 0
+      ? g.replayFile.sizeBytes
+      : null;
+  return {
+    id: g?.gameId || null,
+    date: g?.date instanceof Date ? g.date.toISOString() : g?.date || null,
+    result: g?.result || "",
+    map: g?.map || "",
+    opponent: opp.displayName || "",
+    opp_race: opp.race || "",
+    opp_strategy: opp.strategy || null,
+    my_build: g?.myBuild || "",
+    my_race: g?.myRace || "",
+    game_length: g?.durationSec || 0,
+    macro_score: typeof g?.macroScore === "number" ? g.macroScore : null,
+    my_mmr: typeof g?.myMmr === "number" ? g.myMmr : null,
+    opp_mmr: typeof opp.mmr === "number" ? opp.mmr : null,
+    replayAvailable:
+      replaySizeBytes !== null && Boolean(g?.replayFile?.storedAt),
+    replayFilename: null,
+    replaySizeBytes,
   };
 }
 

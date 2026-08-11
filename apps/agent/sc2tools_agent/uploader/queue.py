@@ -87,6 +87,15 @@ class _ServerRejectedError(TerminalUploadError):
     """
 
 
+class _RetryablePerGameError(Exception):
+    """One or more validated games hit transient server-side storage.
+
+    Raised after accepted and permanent outcomes in the same response have
+    been committed. The worker's ordinary transient-exception path then
+    requeues only paths whose pending reservation remains live.
+    """
+
+
 class _FilteredOutError(TerminalUploadError):
     """Job dropped at upload time because the active sync filter
     excludes it. Distinct from a transport failure or a server-side
@@ -912,8 +921,20 @@ class UploadQueue:
         accepted = result.get("accepted") or []
         rejected = result.get("rejected") or []
 
+        # Parsed stats and the exact replay file form one user-visible
+        # sync. Archive one local file per accepted gameId before the
+        # durable ``state.uploaded`` cursor advances. A transient R2 or
+        # network failure therefore follows the queue's existing retry
+        # path; replay/game upserts are both idempotent.
+        for acc in accepted:
+            gid = acc.get("gameId") if isinstance(acc, dict) else None
+            jobs = by_id.get(gid) if isinstance(gid, str) else None
+            if jobs and isinstance(gid, str):
+                self._archive_original_replay(jobs[0], gid)
+
         accepted_jobs: List[UploadJob] = []
         rejected_jobs: List[Tuple[UploadJob, str]] = []
+        retryable_jobs: List[Tuple[UploadJob, str]] = []
         terminal_paths: set[str] = set()
         with self._lock:
             now_iso = datetime.now(timezone.utc).isoformat()
@@ -943,9 +964,16 @@ class UploadQueue:
                     continue
                 errs = rej.get("errors") if isinstance(rej, dict) else None
                 err_msg = "; ".join(str(e) for e in (errs or [])) or "unknown"
+                retryable = (
+                    isinstance(rej, dict)
+                    and rej.get("retryable") is True
+                )
                 for job in jobs:
                     path_str = str(job.file_path)
                     if path_str in terminal_paths:
+                        continue
+                    if retryable:
+                        retryable_jobs.append((job, err_msg))
                         continue
                     terminal_paths.add(path_str)
                     self._state.uploaded[path_str] = "rejected"
@@ -1006,6 +1034,13 @@ class UploadQueue:
                 )
                 self._retry_q.put_nowait(self._queue_item(job))
 
+        if retryable_jobs:
+            summary = "; ".join(
+                f"{job.file_path.name}: {message}"
+                for job, message in retryable_jobs[:3]
+            )
+            raise _RetryablePerGameError(summary)
+
     def _push_last_mmr_for_newest(self, jobs: List[UploadJob]) -> None:
         """Run sticky-MMR push for the newest dated game in ``jobs``.
 
@@ -1034,6 +1069,33 @@ class UploadQueue:
                 newest = job
         if newest is not None:
             self._maybe_push_last_mmr(newest)
+
+    def _archive_original_replay(self, job: UploadJob, game_id: str) -> None:
+        """Upload the exact replay when this API deployment supports it.
+
+        Focused queue tests and older ApiClient stand-ins are deliberately
+        duck typed, so a missing method means "archive unavailable" rather
+        than a crash. The real client returns False for a rolling-deploy
+        404/503 or a local file that disappeared after parsing; parsed
+        analysis still syncs and the web UI keeps the download disabled.
+        Other failures raise and are retried by the normal queue loop.
+        """
+        upload = getattr(self._api, "upload_replay_file", None)
+        if not callable(upload):
+            return
+        stored = bool(upload(game_id, job.file_path))
+        if stored:
+            log.info(
+                "replay_archived %s gameId=%s",
+                job.file_path.name,
+                game_id,
+            )
+            return
+        log.warning(
+            "replay_archive_unavailable %s gameId=%s",
+            job.file_path.name,
+            game_id,
+        )
 
     def _upload_one(self, job: UploadJob) -> None:
         """Legacy single-game upload path. v0.5.8 routes everything
@@ -1078,6 +1140,9 @@ class UploadQueue:
         if not accepted:
             self._release_pending((job,))
             raise _ServerRejectedError(f"server_rejected: {result!r}")
+        game_id = getattr(job.game, "game_id", None)
+        if isinstance(game_id, str) and game_id:
+            self._archive_original_replay(job, game_id)
         path_str = str(job.file_path)
         with self._lock:
             self._state.uploaded[path_str] = (

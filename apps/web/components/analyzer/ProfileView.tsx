@@ -18,7 +18,7 @@ import {
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
-import { AllGamesTable } from "./AllGamesTable";
+import { OpponentReplayHistory } from "./OpponentReplayHistory";
 import { LadderContextCard } from "./LadderContextCard";
 import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
 import {
@@ -78,6 +78,7 @@ type OpponentProfileResp = {
   // the rest of the profile without a runtime error.
   phases?: BuildPhasePayload;
   transitions?: BuildTransitionsPayload;
+  gamesTruncated?: boolean;
   games?: ProfileGame[];
 };
 
@@ -108,7 +109,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   // opponents list that led here. In particular, opening an opponent
   // must not silently re-introduce custom or team games after the list
   // was narrowed to ladder 1v1.
-  const { filters } = useFilters();
+  const { filters, dbRev } = useFilters();
   const myName = useMyDisplayName();
   // Same "Group same player" toggle the Opponents tab persists. When
   // on, the API folds every identity SC2Pulse links to this player
@@ -154,6 +155,14 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       return true;
     });
   }, [games, selectedMap, selectedBuildMatchup]);
+  const replayHistoryQuery = buildOpponentReplayHistoryQuery(
+    filters,
+    groupByPlayer,
+    selectedMap,
+    selectedBuildMatchup,
+  );
+  const replayHistoryPath =
+    `/v1/opponents/${encodeURIComponent(pulseId)}/games${replayHistoryQuery}`;
 
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
@@ -330,27 +339,22 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
       />
 
-      <Card
-        title={
-          filterActive
-            ? `All games (${filteredGames.length} of ${games.length}) · newest first`
-            : `All games (${games.length}) · newest first`
-        }
-      >
-        <AllGamesTable
-          games={filteredGames.map((g) => ({
-            ...g,
-            opponent: g.opponent || opponentName,
-          }))}
-          targetGameId={pendingGameId}
-          targetGameSeq={pendingGameSeq}
-          myName={myName}
-          opponentContext={{
-            pulseId,
-            displayName: data.name || data.displayNameSample || null,
-          }}
-        />
-      </Card>
+      <OpponentReplayHistory
+        // A query-scope or database revision change must reset cursor history
+        // to page one. Remounting avoids briefly applying an old opaque cursor
+        // to a new filter set.
+        key={`${replayHistoryPath}:${dbRev}`}
+        path={replayHistoryPath}
+        initialGames={filteredGames}
+        profileTruncated={data.gamesTruncated}
+        targetGameId={pendingGameId}
+        targetGameSeq={pendingGameSeq}
+        myName={myName}
+        opponentContext={{
+          pulseId,
+          displayName: data.name || data.displayNameSample || null,
+        }}
+      />
     </div>
   );
 }
@@ -439,6 +443,28 @@ export function buildProfileQuery(
   if (mergeLinked) usp.set("mergeLinked", "1");
   const q = usp.toString();
   return q ? `?${q}` : "";
+}
+
+/** Build the compact history request, including H2H table drill-downs. */
+export function buildOpponentReplayHistoryQuery(
+  filters: AnalyzerFilters,
+  mergeLinked?: boolean,
+  selectedMap?: string | null,
+  selectedBuildMatchup?: BuildMatchupSelection | null,
+): string {
+  return buildProfileQuery(
+    {
+      ...filters,
+      ...(selectedMap ? { map: selectedMap } : {}),
+      ...(selectedBuildMatchup
+        ? {
+            build: selectedBuildMatchup.myBuild,
+            opp_strategy: selectedBuildMatchup.oppStrategy,
+          }
+        : {}),
+    },
+    mergeLinked,
+  );
 }
 
 /**

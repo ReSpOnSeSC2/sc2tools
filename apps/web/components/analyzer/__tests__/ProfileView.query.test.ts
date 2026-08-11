@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildProfileQuery } from "../ProfileView";
+import {
+  buildOpponentReplayHistoryQuery,
+  buildProfileQuery,
+} from "../ProfileView";
 
 function params(query: string): URLSearchParams {
   return new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
@@ -40,5 +43,23 @@ describe("opponent profile query", () => {
     );
     expect(query.has("map_pool")).toBe(false);
     expect(query.has("game_size")).toBe(false);
+  });
+
+  it("adds local H2H selections to the independently paged replay feed", () => {
+    const query = params(
+      buildOpponentReplayHistoryQuery(
+        { map_pool: "ladder", game_size: "1v1", map: "old global map" },
+        true,
+        "Alcyone LE",
+        { myBuild: "Blink", oppStrategy: "2-1-1" },
+      ),
+    );
+
+    expect(query.get("map")).toBe("Alcyone LE");
+    expect(query.get("build")).toBe("Blink");
+    expect(query.get("opp_strategy")).toBe("2-1-1");
+    expect(query.get("map_pool")).toBe("ladder");
+    expect(query.get("game_size")).toBe("1v1");
+    expect(query.get("mergeLinked")).toBe("1");
   });
 });

@@ -26,6 +26,12 @@ export type ProfileGame = {
   /** Effective opponent MMR used to bucket the game — per-game
    *  snapshot when present, else the opponents-collection fallback. */
   opp_mmr?: number | null;
+  /** True only after the original .SC2Replay binary has been archived. */
+  replayAvailable?: boolean;
+  /** Server-sanitized suggested download name for the archived replay. */
+  replayFilename?: string | null;
+  /** Original replay size, used for a compact download-size hint. */
+  replaySizeBytes?: number | null;
 };
 
 /**

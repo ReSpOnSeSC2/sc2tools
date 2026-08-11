@@ -32,3 +32,23 @@ describe("config loader — CORS allowlist fail-fast", () => {
     expect(cfg.corsAllowedOrigins).toEqual([]);
   });
 });
+
+describe("config loader - original replay storage", () => {
+  test("is explicitly disabled by default", () => {
+    expect(loadConfig({ ...BASE_ENV }).replayFilesStore).toBe("disabled");
+  });
+
+  test("accepts the R2 backend", () => {
+    expect(loadConfig({
+      ...BASE_ENV,
+      REPLAY_FILES_STORE: "r2",
+    }).replayFilesStore).toBe("r2");
+  });
+
+  test("rejects an unknown backend", () => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      REPLAY_FILES_STORE: "filesystem",
+    })).toThrow(/REPLAY_FILES_STORE/);
+  });
+});

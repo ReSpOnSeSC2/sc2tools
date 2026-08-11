@@ -371,7 +371,9 @@ def _run_headless(
             log_dir=log_dir,
             replay_folders=initial_replay_folders,
             on_pause=lambda paused: _handle_pause(cfg, state, upload, paused),
-            on_resync=lambda: _handle_resync(cfg, state, upload),
+            on_resync=lambda: _handle_replay_archive_resync(
+                cfg, state, upload,
+            ),
             on_choose_folder=lambda picked: _handle_choose_folder(
                 cfg, state, picked, tray, log, upload=upload,
             ),
@@ -444,7 +446,9 @@ def _run_headless(
     import_ctl = ImportController(
         api=api,
         watcher=watcher,
-        full_resync=lambda: _handle_resync(cfg, state, upload),
+        full_resync=lambda: _handle_replay_archive_resync(
+            cfg, state, upload,
+        ),
         list_folders=lambda: [
             str(p) for p in _discover_replay_folders(cfg, state)
         ],
@@ -471,7 +475,9 @@ def _run_headless(
             # uploaded cursor and have the watcher re-walk every replay
             # folder so spatial extracts (and any other newly-added
             # outputs) get backfilled on a fresh parse.
-            full_resync=lambda: _handle_resync(cfg, state, upload),
+            full_resync=lambda: _handle_replay_archive_resync(
+                cfg, state, upload,
+            ),
         )
         socket_client = SocketClient(
             base_url=cfg.api_base,
@@ -538,6 +544,12 @@ def _run_headless(
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
+        threading.Thread(
+            target=_surface_replay_archive_prompt,
+            args=(api, ui, log),
+            name="sc2tools-replay-archive-status",
+            daemon=True,
+        ).start()
         log.info("agent_ready paused=%s", state.paused)
         console.wait_for_exit()
     except KeyboardInterrupt:
@@ -658,7 +670,9 @@ def _run_with_gui(
         # restarts instead of resetting to 0 every launch.
         synced_count_provider=lambda: count_synced(state),
         on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused),
-        on_resync=lambda: _handle_resync(cfg, state, cell.upload),
+        on_resync=lambda: _handle_replay_archive_resync(
+            cfg, state, cell.upload,
+        ),
         on_choose_folder=lambda picked: _handle_choose_folder_gui(
             cfg, state, picked, cell, log,
         ),
@@ -684,7 +698,9 @@ def _run_with_gui(
             log_dir=log_dir,
             replay_folders=initial_folders,
             on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused),
-            on_resync=lambda: _handle_resync(cfg, state, cell.upload),
+            on_resync=lambda: _handle_replay_archive_resync(
+                cfg, state, cell.upload,
+            ),
             on_choose_folder=lambda picked: _handle_choose_folder_gui(
                 cfg, state, picked, cell, log,
             ),
@@ -838,7 +854,9 @@ def _gui_boot_worker(
         import_ctl = ImportController(
             api=api,
             watcher=watcher,
-            full_resync=lambda: _handle_resync(cfg, state, upload),
+            full_resync=lambda: _handle_replay_archive_resync(
+                cfg, state, upload,
+            ),
             list_folders=lambda: [
                 str(p) for p in _discover_replay_folders(cfg, state)
             ],
@@ -874,7 +892,9 @@ def _gui_boot_worker(
                 queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                     state, upload, paths, log,
                 ),
-                full_resync=lambda: _handle_resync(cfg, state, upload),
+                full_resync=lambda: _handle_replay_archive_resync(
+                    cfg, state, upload,
+                ),
             )
             socket_client = SocketClient(
                 base_url=cfg.api_base,
@@ -947,6 +967,12 @@ def _gui_boot_worker(
         ui.on_status(
             "watching for replays" + (" (paused)" if state.paused else ""),
         )
+        threading.Thread(
+            target=_surface_replay_archive_prompt,
+            args=(api, ui, log),
+            name="sc2tools-replay-archive-status",
+            daemon=True,
+        ).start()
         log.info("agent_ready (gui worker) paused=%s", state.paused)
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_boot_worker_failed")
@@ -980,6 +1006,97 @@ def _handle_resync(
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
+
+
+def _handle_replay_archive_resync(
+    cfg: AgentConfig,
+    state: AgentState,
+    upload: Optional[UploadQueue],
+) -> None:
+    """Start a real full sweep, then acknowledge this versioned backfill.
+
+    The local request is made first. The acknowledgement runs off the UI
+    thread and only persists server-side when replay storage is enabled; a
+    rolling-deploy 404/503 is deliberately a quiet no-op.
+    """
+    _handle_resync(cfg, state, upload)
+    if upload is None:
+        logging.getLogger(__name__).info(
+            "replay_archive_resync_ack_skipped reason=queue_unavailable",
+        )
+        return
+    if not state.device_token:
+        return
+    if not _replay_archive_ack_allowed(state):
+        logging.getLogger(__name__).info(
+            "replay_archive_resync_ack_skipped reason=active_sync_filter",
+        )
+        return
+    api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
+
+    def _acknowledge() -> None:
+        try:
+            marked = api.mark_replay_archive_resync_started(
+                agent_version=__version__,
+            )
+            logging.getLogger(__name__).info(
+                "replay_archive_resync_acknowledged marked=%s",
+                marked,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # The local full sweep is already in motion. A failed optional
+            # acknowledgement must not stop uploads; the dashboard can ask
+            # again on the next launch.
+            logging.getLogger(__name__).warning(
+                "replay_archive_resync_ack_failed err=%s",
+                exc,
+            )
+
+    threading.Thread(
+        target=_acknowledge,
+        name="sc2tools-replay-archive-ack",
+        daemon=True,
+    ).start()
+
+
+def _replay_archive_ack_allowed(state: AgentState) -> bool:
+    """Only a running, All-time sweep can satisfy the archive backfill."""
+    if state.paused:
+        return False
+    active_filter = SyncFilter.from_state(
+        preset=state.sync_filter_preset,
+        since_iso=state.sync_filter_since,
+        until_iso=state.sync_filter_until,
+    )
+    return not active_filter.is_active()
+
+
+def _surface_replay_archive_prompt(
+    api: ApiClient,
+    ui: Any,
+    log: logging.Logger,
+) -> None:
+    """Fetch and surface the one-time backfill action without blocking boot."""
+    try:
+        status = api.get_replay_archive_status()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("replay_archive_status_failed err=%s", exc)
+        return
+    if not status or status.get("enabled") is not True:
+        return
+    if status.get("requiresResync") is not True:
+        return
+    try:
+        missing_games = max(0, int(status.get("missingGames") or 0))
+        total_games = max(0, int(status.get("totalGames") or 0))
+    except (TypeError, ValueError):
+        log.warning("replay_archive_status_invalid payload=%r", status)
+        return
+    if missing_games <= 0 or total_games <= 0:
+        return
+    callback = getattr(ui, "on_replay_archive_status", None)
+    if callable(callback):
+        callback(missing_games, total_games)
 
 
 def _queue_replays_for_resync(
@@ -2369,6 +2486,16 @@ class _Multiplexer:
     def on_pending(self, count: int) -> None:
         for s in self._sinks:
             s.on_pending(count)
+
+    def on_replay_archive_status(
+        self,
+        missing_games: int,
+        total_games: int,
+    ) -> None:
+        for sink in self._sinks:
+            callback = getattr(sink, "on_replay_archive_status", None)
+            if callable(callback):
+                callback(missing_games, total_games)
 
 
 __all__ = ["run_agent"]

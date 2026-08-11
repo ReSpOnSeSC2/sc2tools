@@ -71,6 +71,9 @@ All routes are mounted under `/v1`.
 | GET    | /v1/games/:gameId/macro-breakdown            | clerk/device | Read stored breakdown         |
 | POST   | /v1/games/:gameId/macro-breakdown            | clerk/device | Persist or request recompute  |
 | POST   | /v1/games/:gameId/opp-build-order            | device       | Agent uploads opp build log   |
+| POST   | /v1/games/:gameId/replay-upload              | device       | Prepare signed pending PUT    |
+| POST   | /v1/games/:gameId/replay-upload/complete     | device       | Verify and promote replay     |
+| GET    | /v1/games/:gameId/replay-download            | clerk/device | Prepare signed private GET    |
 | POST   | /v1/macro/backfill/start                     | clerk        | Kick a per-user macro pass    |
 | GET    | /v1/macro/backfill/status                    | clerk/device | Job state                     |
 | POST   | /v1/macro/backfill/progress                  | device       | Agent reports per-game result |
@@ -125,6 +128,70 @@ All routes are mounted under `/v1`.
 listed in `.env.example` from the Render dashboard. See
 [`docs/cloud/SETUP_CLOUD.md`](../../docs/cloud/SETUP_CLOUD.md) for the
 full step-by-step.
+
+### Enable R2 with a full agent resync
+
+The current rollout does not require a Mongo-to-R2 migration. MongoDB keeps
+the slim, searchable game rows; R2 stores gzip-compressed detail objects and
+the private original replay files. With the current small user base, rebuild
+R2 from each user's local replay directory:
+
+1. Create a private R2 bucket and a bucket-scoped Object Read & Write token.
+2. Build and publish **agent 0.15.16** (`agent-v0.15.16`) with its checksum,
+   select it as the latest stable release, and confirm `/download` serves that
+   installer. Do this before enabling the dashboard warning so “Update agent”
+   never sends a user back to 0.15.15.
+3. Add the `R2_*` values from `.env.example` to Render, set
+   `GAME_DETAILS_STORE=r2` and `REPLAY_FILES_STORE=r2`, and deploy the API.
+4. Update every desktop installation to the latest agent version.
+5. Have each user select **All time** and run **Re-sync replay library**.
+   The agent re-reads the local `.SC2Replay` files, regenerates the R2 detail
+   objects, and uploads the original replay binaries through short-lived
+   signed URLs. On the Starter API, stagger the current users a few at a time
+   so their parsing/metadata requests do not arrive in one burst.
+6. Confirm Admin Health reports the R2 detail backend, then open several
+   replay-detail views and download several originals before treating the
+   rollout as complete.
+
+The scripts under `src/db/migrations/2026-05-0*-*.js` remain optional recovery
+tools for detail rows whose source replay is no longer available locally; they
+are not part of the normal rollout. Mongo detail data cannot reconstruct an
+original `.SC2Replay`, so only an All-time Re-sync from the source file can
+backfill the downloadable archive. Do not run the heavy-field cleanup
+migration until the R2 objects have been verified.
+
+### Original replay files
+
+With `REPLAY_FILES_STORE=r2` and the `R2_*` credentials configured, original
+`.SC2Replay` files share the same private bucket under `R2_REPLAY_PREFIX` (default
+`raw-replays/v1`). The desktop agent receives a five-minute, object-scoped
+pending upload URL and sends the file directly to R2. R2 validates the signed
+Content-MD5 against the uploaded bytes. Completion checks the stored size,
+client identity SHA-256 metadata, and MPQ replay header, then server-side
+copies the pending object to its permanent key and deletes the pending copy.
+Web downloads receive a one-minute, object-scoped URL. Never make the bucket
+public or ship R2 credentials to the agent or browser.
+
+Add an [R2 lifecycle rule](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)
+that expires objects under
+`raw-replays/v1-pending/` after one day (replace `raw-replays/v1` if
+`R2_REPLAY_PREFIX` is customized). The API deletes pending objects during
+normal completion and account/history cleanup; the lifecycle rule is the
+safety net for abandoned URLs, crashed agents, and superseded upload nonces.
+
+The authenticated endpoints are:
+
+- `POST /v1/games/:gameId/replay-upload` (paired device only)
+- `POST /v1/games/:gameId/replay-upload/complete` (paired device only)
+- `GET /v1/games/:gameId/replay-download` (owning user)
+
+Upload preparation accepts `{ filename, sizeBytes, sha256, md5 }`, where
+`md5` is the standard base64 encoding of the 16-byte digest. It returns a
+signed PUT plus `uploadId`, or `{ alreadyStored: true, replayAvailable: true }`
+when an All-time Re-sync finds the same verified object. Completion accepts
+`{ uploadId }`. Files are limited to 5 MB and must use the `.SC2Replay`
+extension. Account deletion and full or date-ranged history wipes remove
+both permanent and pending R2 objects before their Mongo ownership rows.
 
 ## Realtime
 

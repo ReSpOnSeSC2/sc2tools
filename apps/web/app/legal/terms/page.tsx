@@ -6,7 +6,7 @@ export const metadata = {
   description: "Terms governing use of SC2 Tools.",
 };
 
-const LAST_UPDATED = "May 4, 2026";
+const LAST_UPDATED = "August 11, 2026";
 
 export default function TermsPage() {
   return (
@@ -25,9 +25,11 @@ export default function TermsPage() {
         <h2 className="text-xl font-semibold">1. The service</h2>
         <p>
           We parse the StarCraft II replays your local agent finds and present
-          you with analytics. We are not affiliated with, endorsed by, or
-          sponsored by Blizzard Entertainment. StarCraft II is a trademark of
-          Blizzard Entertainment.
+          you with analytics. The agent also stores originals in your private
+          replay library so you can download them while they remain in your
+          account. We are not affiliated with, endorsed by, or sponsored by
+          Blizzard Entertainment. StarCraft II is a trademark of Blizzard
+          Entertainment.
         </p>
       </section>
 

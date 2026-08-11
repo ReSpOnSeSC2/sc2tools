@@ -25,6 +25,7 @@ const { PulseMatchVodsService } = require("./services/pulseMatchVods");
 const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
+const { buildReplayFilesFromConfig } = require("./services/replayFiles");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
@@ -93,6 +94,7 @@ const { buildMetricsRouter } = require("./routes/metrics");
 const { buildMeRouter } = require("./routes/me");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
+const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
@@ -209,6 +211,7 @@ function makeServices(deps) {
     },
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
+  const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
   // Cloud-side SC2Pulse resolver — drives the backfill cron's
   // recovery path for opponents whose pulseCharacterId never landed
   // on first ingest (typically because sc2pulse.nephest.com was
@@ -457,6 +460,7 @@ function makeServices(deps) {
     // Store-aware heavy-blob deleter: without it, delete-account and
     // wipe-history leave R2 objects behind when GAME_DETAILS_STORE=r2.
     gameDetails,
+    replayFiles,
   });
   const community = new CommunityService(deps.db);
   // Opt-in public player pages (/p/:handle). Derives entirely from
@@ -508,6 +512,7 @@ function makeServices(deps) {
     games,
     gameVods,
     gameDetails,
+    replayFiles,
     customBuilds,
     pairings,
     overlayTokens,
@@ -717,6 +722,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       pairings: services.pairings,
       imports: services.imports,
       multichatSounds: services.multichatSounds,
+      replayArchiveEnabled: Boolean(services.replayFiles),
       clerk,
       pulseMmr: services.pulseMmr,
       auth,
@@ -853,6 +859,13 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
           ? row.pulseCharacterId
           : null;
       },
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildReplayFilesRouter({
+      replayFiles: services.replayFiles,
+      auth,
     }),
   );
   app.use(

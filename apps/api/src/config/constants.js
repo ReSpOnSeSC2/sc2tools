@@ -77,6 +77,10 @@ const COLLECTIONS = Object.freeze({
 
 const LIMITS = Object.freeze({
   REQUEST_BODY_BYTES: 5 * 1024 * 1024,
+  // Original .SC2Replay uploads use direct-to-R2 signed URLs, but the API
+  // still validates the declared and completed object size against this
+  // ceiling. Matches the established public replay-preview limit.
+  REPLAY_FILE_MAX_BYTES: 5 * 1024 * 1024,
   GAMES_PAGE_SIZE: 100,
   GAMES_LIST_MAX: 20000,
   GAMES_LIST_DEFAULT: 2000,
@@ -86,6 +90,12 @@ const LIMITS = Object.freeze({
   // through pages just to see the full table. Cursor pagination
   // (`before`) still works above this; this is a per-request ceiling.
   OPPONENTS_LIST_MAX: 5000,
+  // Opponent replay history is deliberately paged instead of accumulated in
+  // the browser. AllGamesTable renders both desktop and mobile row trees, so
+  // keeping each page at 200 bounds both Mongo response size and DOM cost even
+  // for accounts with tens of thousands of replays.
+  OPPONENT_GAMES_PAGE_SIZE: 200,
+  OPPONENT_GAMES_LIST_MAX: 200,
   PAIRING_CODE_TTL_SEC: 600,
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,

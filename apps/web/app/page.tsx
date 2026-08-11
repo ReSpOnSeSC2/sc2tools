@@ -608,21 +608,24 @@ function DonateBanner() {
           <Heart className="h-7 w-7" />
         </span>
         <div className="space-y-1.5">
-          <p className="kicker">Why it&rsquo;s free</p>
+          <p className="kicker">What it costs</p>
           <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
-            Free to use — donations keep the servers running.
+            Free for players — about $65 a month to run today.
           </h2>
           <p className="text-body text-text-muted">
-            No paywall and no ads. A handful of cloud bills keep it online — if
-            SC2 Tools is helping your ladder games, a one-time tip helps cover
-            them.
+            At the repository&rsquo;s currently declared Render Starter tier,
+            the public-list-price base is about $65.19/month for MongoDB
+            Atlas, the always-on API and the domain. Vercel, Clerk and
+            today&rsquo;s private replay archive are within or close to their
+            included allowances; R2 storage grows at $0.015 per GB-month
+            after the first 10 GB.
           </p>
         </div>
         <Link
           href="/donate"
           className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-accent px-5 text-body-lg font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:self-center"
         >
-          See how to chip in
+          See the full cost breakdown
           <ArrowRight className="h-5 w-5" aria-hidden />
         </Link>
       </div>
@@ -646,8 +649,9 @@ function FinalCtaSection() {
           </em>
         </h2>
         <p className="mt-5 max-w-2xl text-body-lg text-text-muted">
-          Free to start, no card needed. Your replay files stay on your PC —
-          only the parsed stats sync to the cloud.
+          Free to start, no card needed. Your replays sync securely to your
+          private cloud library, so you can review or download them from any
+          device.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <CtaLink

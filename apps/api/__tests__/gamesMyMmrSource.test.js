@@ -106,3 +106,46 @@ describe("GamesService game-time MMR compatibility", () => {
     expect(stored.createdAt).toBeInstanceOf(Date);
   });
 });
+
+describe("GamesService server-owned replay archive marker", () => {
+  test("agent game upserts cannot forge or erase replayFile", async () => {
+    const verified = {
+      version: 1,
+      sizeBytes: 12345,
+      sha256: "b".repeat(64),
+      storedAt: new Date("2026-08-01T00:00:00.000Z"),
+    };
+    const uploadIntent = {
+      version: 1,
+      uploadIdHash: "intent-hash",
+      state: "prepared",
+      expiresAt: new Date("2026-08-01T00:10:00.000Z"),
+    };
+    await db.games.insertOne({
+      ...game(),
+      userId: "u1",
+      date: new Date("2026-04-01T12:00:00.000Z"),
+      replayFile: verified,
+      replayUpload: uploadIntent,
+    });
+
+    await service.upsert(
+      "u1",
+      game({
+        result: "Defeat",
+        replayFile: {
+          storedAt: new Date("2099-01-01T00:00:00.000Z"),
+          sha256: "forged",
+        },
+        "replayFile.storedAt": new Date("2099-02-01T00:00:00.000Z"),
+        replayUpload: { state: "completing" },
+        "replayUpload.state": "completing",
+      }),
+    );
+
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.result).toBe("Defeat");
+    expect(stored.replayFile).toEqual(verified);
+    expect(stored.replayUpload).toEqual(uploadIntent);
+  });
+});
