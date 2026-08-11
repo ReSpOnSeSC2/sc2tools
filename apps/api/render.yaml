@@ -17,7 +17,7 @@ services:
     dockerfilePath: ./apps/api/Dockerfile
     healthCheckPath: /v1/health
     autoDeploy: true
-    # PINNED TO ONE INSTANCE — do not raise maxInstances until the
+    # PINNED TO ONE INSTANCE — do not increase it until the
     # realtime layer is multi-instance safe. Socket.io runs on the
     # default in-memory adapter and LiveGameBroker is in-process
     # pub/sub: with N instances, the agent's POST /v1/agent/live, the
@@ -29,15 +29,11 @@ services:
     #   2. LiveGameBroker snapshots + pub/sub moved to that store
     #   3. express-rate-limit moved off its per-process MemoryStore
     numInstances: 1
-    scaling:
-      minInstances: 1
-      maxInstances: 1
-      targetCPUPercent: 70
     # This service is intentionally pinned to one instance, so session
     # affinity is unnecessary. Render's Blueprint schema does not expose
     # the dashboard-only Session Affinity toggle. If the realtime layer is
     # made multi-instance safe later, enable that toggle in Render before
-    # raising maxInstances.
+    # increasing the fixed instance count or adding autoscaling.
     envVars:
       - key: NODE_ENV
         value: production

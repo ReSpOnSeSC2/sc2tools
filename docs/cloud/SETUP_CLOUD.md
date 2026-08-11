@@ -305,7 +305,8 @@ deployed with the R2 stores enabled.
 > does not need session affinity today. Render's Blueprint schema does not
 > expose the dashboard-only toggle. If the realtime layer is made safe for
 > 2+ instances later, enable **Service** → **Settings** → **Health &
-> Networking** → **Session Affinity** before raising `maxInstances`.
+> Networking** → **Session Affinity** before increasing `numInstances` or
+> adding an autoscaling policy.
 
 ### Finish the private replay rollout
 
