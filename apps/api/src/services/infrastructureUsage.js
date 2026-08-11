@@ -45,6 +45,10 @@ const CLASS_A_ACTIONS = new Set([
   "ListBuckets",
   "PutBucket",
   "ListObjects",
+  // Cloudflare prices object listings as ListObjects, while its
+  // S3-compatible API can report the concrete v1/v2 operation name.
+  "ListObjectsV1",
+  "ListObjectsV2",
   "PutObject",
   "CopyObject",
   "CompleteMultipartUpload",
@@ -72,6 +76,8 @@ const CLASS_B_ACTIONS = new Set([
 
 const FREE_ACTIONS = new Set([
   "DeleteObject",
+  // DeleteObjects is the S3 bulk form of the same free delete operation.
+  "DeleteObjects",
   "DeleteBucket",
   "AbortMultipartUpload",
 ]);

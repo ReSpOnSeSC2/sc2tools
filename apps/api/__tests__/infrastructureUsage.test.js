@@ -549,6 +549,19 @@ describe("infrastructure usage cost model", () => {
     });
   });
 
+  test("classifies S3 list and bulk-delete action aliases", () => {
+    expect(_internals.classifyOperations([
+      operation("ListObjectsV1", 2),
+      operation("ListObjectsV2", 3),
+      operation("DeleteObjects", 5),
+    ])).toEqual({
+      classARequests: 5,
+      classBRequests: 0,
+      freeRequests: 5,
+      unknownRequests: 0,
+    });
+  });
+
   test("computes UTC custom billing-cycle boundaries", () => {
     expect(_internals.billingCycleStart(
       new Date("2026-08-11T01:00:00Z"),
