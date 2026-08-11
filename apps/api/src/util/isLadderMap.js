@@ -31,9 +31,9 @@ const LADDER_CLASSIFY_VERSION = 2;
 
 // All LotV ladder maps (1v1 + 2v2/3v3/4v4) across every season, from
 // the Liquipedia Ladder Map Timeline. Over-inclusive by design: an
-// extra name only ever costs a false "ladder" on a custom game played
-// on that exact map, whereas a MISSING map wrongly buckets real ladder
-// games as custom — the bug this list fixes.
+// extra name only costs a false ladder-MAP membership stamp, whereas a
+// missing name loses historical map coverage. This utility never decides
+// whether the replay itself was ranked; ``isLadderGame`` owns that.
 const ALL_LADDER_MAPS = Object.freeze([
   "10000 Feet LE",
   "16-Bit LE",

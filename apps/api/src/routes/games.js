@@ -256,9 +256,11 @@ function buildGamesRouter(deps) {
         : [req.body];
       const accepted = [];
       const rejected = [];
-      // Build the ladder-map classifier set once per batch so each game
-      // can be stamped with ``isLadderMap`` for the FilterBar's ladder /
-      // non-ladder filter. The set is the all-seasons historical list
+      // Build the historical map classifier once per batch for the
+      // legacy ``isLadderMap`` compatibility stamp. The analyzer's
+      // ranked/custom filter now uses canonical ``isLadderGame`` only;
+      // this proxy remains for older readers and diagnostics. The set is
+      // the all-seasons historical list
       // (baked into the util) UNIONed with the live current pool when
       // reachable — so it spans 1v1 AND team maps from every season, and
       // still classifies correctly even if the pool lookup fails. The
@@ -302,14 +304,12 @@ function buildGamesRouter(deps) {
         // to remember to strip them.
         if ("earlyBuildLog" in game) delete game.earlyBuildLog;
         if ("oppEarlyBuildLog" in game) delete game.oppEarlyBuildLog;
-        // Classify ladder vs custom for the FilterBar filter. Prefer the
-        // agent's authoritative matchmaking flag (``isLadderGame``, from
-        // the replay's category) when present; otherwise fall back to
-        // the all-seasons map-name proxy. The proxy set is never empty
-        // (the historical list is baked in), so every ingest gets a real
-        // true/false rather than an "unknown" gap. ``isLadderMapV``
-        // records which classifier version produced it so the startup
-        // backfill reclassifies only when the logic/list changes.
+        // Maintain the legacy ``isLadderMap`` compatibility field. Mirror
+        // the agent's authoritative matchmaking flag when present;
+        // otherwise use the historical map-name proxy for old readers.
+        // Strict analyzer filters deliberately do not treat that proxy as
+        // proof of ladder, because custom lobbies can use ladder maps.
+        // ``isLadderMapV`` records which classifier version produced it.
         game.isLadderMap =
           typeof game.isLadderGame === "boolean"
             ? game.isLadderGame

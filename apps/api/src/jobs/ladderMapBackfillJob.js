@@ -6,10 +6,12 @@
  * Stamps ``isLadderMap`` (+ ``isLadderMapV``, the classifier version) on
  * games that aren't at the CURRENT classifier version — i.e. games that
  * pre-date the field AND games classified by an older version of the
- * logic / map list. Matching uses the all-seasons ladder set
+ * logic / map list. This is now a legacy compatibility/diagnostic field;
+ * ranked/custom analyzer filtering uses ``isLadderGame`` and never treats
+ * map membership alone as proof of a ranked match. Matching uses the
+ * all-seasons ladder set
  * (``buildClassifierSet``: the baked-in historical list ∪ the live
- * current pool), so a game on a since-retired ladder map counts as
- * ladder rather than leaking into the Custom bucket.
+ * current pool), so the compatibility stamp still recognizes retired maps.
  *
  * Runs on every boot (so deployers who only merge + auto-deploy never
  * touch a terminal), but version-gated so the work is bounded:

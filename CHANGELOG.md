@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Analyzer game filters now default to ranked 1v1 and stay applied** —
+  fresh and legacy sessions start with Ladder + 1v1 selected, explicit All
+  choices persist, and opening an opponent profile or reading dashboard KPIs
+  no longer brings filtered-out custom/team games back. Ranked/custom now
+  follows the replay's matchmaking metadata instead of its map name, while
+  normalized match formats keep FFA out of Team. Ships with **agent 0.15.15**
+  (`agent-v0.15.15`) for newly uploaded replay classifications.
+
 - **Resume-from-replay sessions no longer count as ladder games** — the
   Windows agent now recognizes StarCraft II's replay-resume marker before it
   trusts the copied win/loss metadata. These files are intentionally skipped

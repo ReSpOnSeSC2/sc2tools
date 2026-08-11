@@ -225,10 +225,11 @@ async function main() {
   });
   ladderMapPoolRefresh.start();
 
-  // One-time ladder-map backfill. Stamps ``isLadderMap`` on games that
-  // pre-date the ingest-time classifier so the FilterBar's ladder /
-  // non-ladder filter works on full history without a manual migration
-  // run. Self-skips once every game carries the field; fire-and-forget
+  // Legacy ladder-map backfill. Stamps ``isLadderMap`` on games that
+  // pre-date the ingest-time classifier for compatibility/diagnostics;
+  // ranked/custom analyzer filters now require authoritative
+  // ``isLadderGame``. Self-skips once every game carries the field;
+  // fire-and-forget
   // so it never blocks boot. Disable with
   // ``SC2TOOLS_LADDER_BACKFILL_DISABLED=1``.
   const ladderMapBackfill = buildLadderMapBackfillJob({

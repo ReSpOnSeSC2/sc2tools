@@ -180,26 +180,57 @@ describe("util/parseQuery", () => {
       expect(parseFilters({}).excludeTooShort).toBeUndefined();
     });
 
-    test("mapPool ladder/nonladder match an isLadderMap boolean", () => {
-      expect(gamesMatchStage("u1", { mapPool: "ladder" }).isLadderMap).toBe(true);
-      expect(gamesMatchStage("u1", { mapPool: "nonladder" }).isLadderMap).toBe(false);
-      expect(gamesMatchStage("u1", {}).isLadderMap).toBeUndefined();
+    test("mapPool ladder/nonladder match authoritative isLadderGame", () => {
+      expect(gamesMatchStage("u1", { mapPool: "ladder" }).$and).toEqual([
+        { isLadderGame: true },
+      ]);
+      expect(gamesMatchStage("u1", { mapPool: "nonladder" }).$and).toEqual([
+        { isLadderGame: false },
+      ]);
+      expect(gamesMatchStage("u1", {}).$and).toBeUndefined();
     });
 
-    test("gameSize 1v1/team match playerCount", () => {
-      expect(gamesMatchStage("u1", { gameSize: "1v1" }).playerCount).toBe(2);
-      expect(gamesMatchStage("u1", { gameSize: "team" }).playerCount).toEqual({
-        $gt: 2,
+    test("gameSize prefers matchFormat and keeps only a safe 1v1 legacy fallback", () => {
+      expect(gamesMatchStage("u1", { gameSize: "1v1" }).$and).toEqual([
+        {
+          $or: [
+            { matchFormat: "1v1" },
+            { matchFormat: { $exists: false }, playerCount: 2 },
+          ],
+        },
+      ]);
+      expect(gamesMatchStage("u1", { gameSize: "team" }).$and).toEqual([
+        { matchFormat: "team" },
+      ]);
+      expect(gamesMatchStage("u1", {}).$and).toBeUndefined();
+    });
+
+    test("ranked/custom and format clauses coexist with the region $or", () => {
+      const stage = gamesMatchStage("u1", {
+        regions: ["NA"],
+        mapPool: "ladder",
+        gameSize: "1v1",
       });
-      expect(gamesMatchStage("u1", {}).playerCount).toBeUndefined();
+      expect(stage.$or).toHaveLength(3);
+      expect(stage.$and).toEqual([
+        { isLadderGame: true },
+        {
+          $or: [
+            { matchFormat: "1v1" },
+            { matchFormat: { $exists: false }, playerCount: 2 },
+          ],
+        },
+      ]);
     });
 
     test("parseFilters accepts map_pool and game_size enums, drops junk", () => {
       expect(parseFilters({ map_pool: "ladder" }).mapPool).toBe("ladder");
       expect(parseFilters({ map_pool: "nonladder" }).mapPool).toBe("nonladder");
+      expect(parseFilters({ map_pool: "all" }).mapPool).toBeUndefined();
       expect(parseFilters({ map_pool: "bogus" }).mapPool).toBeUndefined();
       expect(parseFilters({ game_size: "1v1" }).gameSize).toBe("1v1");
       expect(parseFilters({ game_size: "team" }).gameSize).toBe("team");
+      expect(parseFilters({ game_size: "all" }).gameSize).toBeUndefined();
       expect(parseFilters({ game_size: "2v2" }).gameSize).toBeUndefined();
     });
 

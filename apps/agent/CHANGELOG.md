@@ -2,6 +2,15 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.15
+
+### Fixed — replay format and ladder classification
+
+- Replay uploads now distinguish observed 1v1, team, FFA, and other formats
+  instead of treating every game with more than two players as a team game.
+- Ranked/custom detection now reads sc2reader's real numeric flags and keeps
+  missing metadata unknown instead of guessing.
+
 ## 0.15.14
 
 ### Added — exact replay timestamps for stream VOD links

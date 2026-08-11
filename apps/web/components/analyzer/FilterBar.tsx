@@ -247,8 +247,8 @@ export function FilterBar() {
 
 /**
  * Segmented control shared by the ladder-map and game-size filters.
- * Three states: an "All" no-op plus two mutually-exclusive buckets.
- * Picking the already-active bucket clears back to "All".
+ * Three states: an explicit "All" no-op plus two mutually-exclusive
+ * buckets. Active choices are idempotent; only All clears a constraint.
  */
 function SegmentedFilter<T extends string>({
   label,
@@ -259,9 +259,9 @@ function SegmentedFilter<T extends string>({
 }: {
   label: string;
   ariaLabel: string;
-  value: T | undefined;
+  value: T | "all" | undefined;
   options: { value: T; label: string; title: string }[];
-  onChange: (next: T | undefined) => void;
+  onChange: (next: T | "all") => void;
 }) {
   return (
     <div
@@ -273,9 +273,9 @@ function SegmentedFilter<T extends string>({
         {label}
       </span>
       <PillButton
-        active={value === undefined}
+        active={value === undefined || value === "all"}
         title={`All ${label.toLowerCase()}`}
-        onClick={() => onChange(undefined)}
+        onClick={() => onChange("all")}
       >
         All
       </PillButton>
@@ -286,7 +286,7 @@ function SegmentedFilter<T extends string>({
             key={opt.value}
             active={on}
             title={opt.title}
-            onClick={() => onChange(on ? undefined : opt.value)}
+            onClick={() => onChange(opt.value)}
           >
             {opt.label}
           </PillButton>
@@ -328,30 +328,28 @@ function PillButton({
 }
 
 /**
- * Ladder vs non-ladder map filter. "Ladder" keeps only games on a map
- * that was in the SC2 ladder pool at ingest (1v1 and team ladder maps
- * both count); "Custom" keeps only games on non-pool maps. Drives every
- * analyzer tab (Opponents, Strategies, Trends, Maps, Builds) through the
- * shared filter context. Default "All" so nothing changes for users who
- * never touch it.
+ * Ranked ladder vs custom/unranked game filter. The API parameter keeps
+ * its legacy ``map_pool`` name, but current replays use the authoritative
+ * matchmaking category rather than guessing from the map name. Ranked
+ * ladder is the default; All is an explicit persisted opt-out.
  */
 function MapPoolToggle() {
   const { filters, setFilters } = useFilters();
   return (
     <SegmentedFilter
       label="Maps"
-      ariaLabel="Filter by ladder map pool"
+      ariaLabel="Filter by ladder or custom games"
       value={filters.map_pool}
       options={[
         {
           value: "ladder",
           label: "Ladder",
-          title: "Only games on current SC2 ladder maps (1v1 + team)",
+          title: "Only ranked ladder games",
         },
         {
           value: "nonladder",
           label: "Custom",
-          title: "Only games on non-ladder (custom / arcade) maps",
+          title: "Only custom or unranked games",
         },
       ]}
       onChange={(next) => setFilters({ ...filters, map_pool: next })}
@@ -360,11 +358,10 @@ function MapPoolToggle() {
 }
 
 /**
- * 1v1 vs team game-size filter. "1v1" keeps two-player games; "Team"
- * keeps games with more than two players (2v2 / 3v3 / 4v4). Backed by
- * the per-replay ``playerCount`` the agent records — games uploaded by
- * older agents carry no count and drop out of both buckets. Default
- * "All".
+ * 1v1 vs team match-format filter. New replays carry a normalized format
+ * so FFA is not mistaken for Team. Two-player legacy rows can safely
+ * fall back to 1v1; Team remains strict. 1v1 is the default and All is
+ * an explicit persisted opt-out.
  */
 function GameSizeToggle() {
   const { filters, setFilters } = useFilters();
@@ -378,7 +375,7 @@ function GameSizeToggle() {
         {
           value: "team",
           label: "Team",
-          title: "Only team games (more than two players)",
+          title: "Only team-format games (FFA excluded)",
         },
       ]}
       onChange={(next) => setFilters({ ...filters, game_size: next })}

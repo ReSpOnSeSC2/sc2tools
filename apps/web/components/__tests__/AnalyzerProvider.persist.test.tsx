@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { pickPersisted } from "../AnalyzerProvider";
+import {
+  hydrateStoredFilters,
+  pickPersisted,
+} from "../AnalyzerProvider";
 
 /**
  * Regression: drill-down filters must NOT persist across reloads.
@@ -24,6 +27,8 @@ describe("pickPersisted", () => {
       until: "2026-03-31T23:59:59.999Z",
       regions: "NA,EU",
       exclude_too_short: true,
+      map_pool: "ladder",
+      game_size: "1v1",
     });
     expect(out).toEqual({
       preset: "current_season",
@@ -31,6 +36,8 @@ describe("pickPersisted", () => {
       until: "2026-03-31T23:59:59.999Z",
       regions: "NA,EU",
       exclude_too_short: true,
+      map_pool: "ladder",
+      game_size: "1v1",
     });
   });
 
@@ -58,5 +65,44 @@ describe("pickPersisted", () => {
     const out = pickPersisted({ preset: "today", since: undefined });
     expect(out).toEqual({ preset: "today" });
     expect(Object.prototype.hasOwnProperty.call(out, "since")).toBe(false);
+  });
+
+  it("persists explicit All choices instead of collapsing them to missing", () => {
+    expect(
+      pickPersisted({ map_pool: "all", game_size: "all" }),
+    ).toEqual({ map_pool: "all", game_size: "all" });
+  });
+});
+
+describe("hydrateStoredFilters", () => {
+  it("defaults fresh and legacy storage to ranked-ladder 1v1", () => {
+    expect(hydrateStoredFilters(null)).toMatchObject({
+      map_pool: "ladder",
+      game_size: "1v1",
+      exclude_too_short: true,
+    });
+    expect(hydrateStoredFilters({ preset: "all" })).toMatchObject({
+      preset: "all",
+      map_pool: "ladder",
+      game_size: "1v1",
+    });
+  });
+
+  it("preserves explicit All and other stored preferences", () => {
+    expect(
+      hydrateStoredFilters({
+        preset: "custom",
+        since: "2026-01-01T00:00:00.000Z",
+        map_pool: "all",
+        game_size: "all",
+        exclude_too_short: false,
+      }),
+    ).toMatchObject({
+      preset: "custom",
+      since: "2026-01-01T00:00:00.000Z",
+      map_pool: "all",
+      game_size: "all",
+      exclude_too_short: false,
+    });
   });
 });

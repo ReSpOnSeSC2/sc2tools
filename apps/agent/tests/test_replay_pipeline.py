@@ -282,8 +282,8 @@ def test_to_payload_omits_my_ladder_race_when_unset():
 
 
 def test_to_payload_emits_player_count_when_set():
-    """Drives the cloud FilterBar's 1v1 / team game-size filter — the
-    server $matches on ``playerCount`` (2 for 1v1, >2 for team)."""
+    """Player count remains useful metadata and a safe legacy 1v1
+    fallback; normalized matchFormat owns team-vs-FFA classification."""
     payload = _bare_cloud_game(player_count=4).to_payload()
     assert payload["playerCount"] == 4
 
@@ -293,6 +293,15 @@ def test_to_payload_omits_player_count_when_unset():
     means the cloud records the game as size-unknown."""
     payload = _bare_cloud_game().to_payload()
     assert "playerCount" not in payload
+
+
+def test_to_payload_emits_match_format_when_set():
+    payload = _bare_cloud_game(match_format="ffa").to_payload()
+    assert payload["matchFormat"] == "ffa"
+
+
+def test_to_payload_omits_match_format_when_unset():
+    assert "matchFormat" not in _bare_cloud_game().to_payload()
 
 
 def test_to_payload_emits_is_ladder_game_both_values():
@@ -338,16 +347,84 @@ def test_to_payload_omits_replay_start_time_when_unset():
     assert "startedAt" not in _bare_cloud_game().to_payload()
 
 
-def test_is_ladder_game_reads_replay_category():
-    """``_is_ladder_game`` trusts sc2reader's category, with an amm
-    boolean fallback, and returns None when neither is present."""
-    from types import SimpleNamespace
+@pytest.mark.parametrize(
+    ("real_type", "expected"),
+    [
+        ("1v1", "1v1"),
+        ("FFA", "ffa"),
+        ("1v1v1", "ffa"),
+        ("2v2", "team"),
+        ("1v3", "team"),
+        ("1v1v2", "team"),
+        ("Archon", "other"),
+    ],
+)
+def test_match_format_prefers_observed_real_type(real_type, expected):
+    from sc2tools_agent.replay_pipeline import _match_format
+
+    ctx = SimpleNamespace(
+        raw=SimpleNamespace(real_type=real_type, game_type="1v1"),
+        all_players=[object(), object()],
+    )
+    assert _match_format(ctx) == expected
+
+
+def test_match_format_uses_game_type_when_real_type_is_absent():
+    from sc2tools_agent.replay_pipeline import _match_format
+
+    ctx = SimpleNamespace(
+        raw=SimpleNamespace(real_type="", game_type="2v2"),
+        all_players=[object()] * 4,
+    )
+    assert _match_format(ctx) == "team"
+
+
+def test_match_format_count_fallback_is_observer_safe_and_conservative():
+    from sc2tools_agent.replay_pipeline import _match_format
+
+    # sc2reader keeps observers outside ctx.all_players. Even with an
+    # observer on the raw replay, two actual participants remain 1v1.
+    observed = SimpleNamespace(
+        raw=SimpleNamespace(real_type="", game_type="", observers=[object()]),
+        all_players=[object(), object()],
+    )
+    assert _match_format(observed) == "1v1"
+
+    # A count above two could be either teams or FFA; do not guess.
+    unknown_multi = SimpleNamespace(raw=None, all_players=[object()] * 8)
+    assert _match_format(unknown_multi) is None
+
+
+def test_is_ladder_game_prefers_ranked_flags_and_accepts_numeric_values():
     from sc2tools_agent.replay_pipeline import _is_ladder_game
 
-    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(category="Ladder"))) is True
-    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(category="Private"))) is False
-    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(amm=True))) is True
-    assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace(amm=False))) is False
+    # Real sc2reader replays expose BitPackedDecoder flags as integer 0/1.
+    unranked = SimpleNamespace(
+        raw=SimpleNamespace(competitive=0, category="Ladder", amm=1),
+    )
+    assert _is_ladder_game(unranked) is False
+
+    ranked = SimpleNamespace(
+        raw=SimpleNamespace(ranked=1, competitive=0, category="Private", amm=0),
+    )
+    assert _is_ladder_game(ranked) is True
+
+
+def test_is_ladder_game_uses_known_category_then_numeric_amm_fallback():
+    from sc2tools_agent.replay_pipeline import _is_ladder_game
+
+    assert _is_ladder_game(
+        SimpleNamespace(raw=SimpleNamespace(category="Ladder")),
+    ) is True
+    assert _is_ladder_game(
+        SimpleNamespace(raw=SimpleNamespace(category="Private")),
+    ) is False
+    assert _is_ladder_game(
+        SimpleNamespace(raw=SimpleNamespace(category="Unknown", amm=1)),
+    ) is True
+    assert _is_ladder_game(
+        SimpleNamespace(raw=SimpleNamespace(category="", amm=0)),
+    ) is False
     assert _is_ladder_game(SimpleNamespace(raw=SimpleNamespace())) is None
     assert _is_ladder_game(SimpleNamespace(raw=None)) is None
 
@@ -984,9 +1061,10 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     # though ctx.macro_score was None.
     assert payload["macroScore"] == 78
 
-    # all_players had two entries (me + opp) → a 1v1; the cloud's
-    # game-size filter keys off this.
+    # all_players had two entries (me + opp), producing both the raw
+    # count and the normalized 1v1 format.
     assert payload["playerCount"] == 2
+    assert payload["matchFormat"] == "1v1"
 
     # Random queue keeps its selected ladder pool even though this
     # particular replay spawned Protoss for build/matchup analysis.

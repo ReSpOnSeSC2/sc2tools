@@ -2,6 +2,9 @@
 
 /**
  * One-shot migration — backfill ``isLadderMap`` on existing games.
+ * Historical note: current ranked/custom analyzer filters use the
+ * authoritative ``isLadderGame`` field instead; this map-name stamp is
+ * retained only for compatibility and diagnostics.
  *
  * The FilterBar's ladder / non-ladder map filter ($matches on a stored
  * ``isLadderMap`` boolean) only works on games that were stamped at

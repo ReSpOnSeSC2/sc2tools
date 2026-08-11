@@ -4,7 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters } from "@/lib/filterContext";
+import {
+  filtersToQuery,
+  useFilters,
+  type AnalyzerFilters,
+} from "@/lib/filterContext";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
@@ -100,9 +104,10 @@ export function ProfileView({
 }
 
 function ProfileBody({ pulseId }: { pulseId: string }) {
-  // Date-range filter applies to every panel below except "Likely
-  // strategies next", which the API resolves from the unfiltered
-  // history regardless of since/until.
+  // The shared analyzer scope applies to the profile as well as the
+  // opponents list that led here. In particular, opening an opponent
+  // must not silently re-introduce custom or team games after the list
+  // was narrowed to ladder 1v1.
   const { filters } = useFilters();
   const myName = useMyDisplayName();
   // Same "Group same player" toggle the Opponents tab persists. When
@@ -114,11 +119,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     true,
     (raw): raw is boolean => typeof raw === "boolean",
   );
-  const profileQuery = buildProfileQuery(
-    filters.since,
-    filters.until,
-    groupByPlayer,
-  );
+  const profileQuery = buildProfileQuery(filters, groupByPlayer);
   const { data, isLoading } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
@@ -427,14 +428,14 @@ function totalsFromGames(games: ProfileGame[]): {
   return { wins, losses, total, winRate: total > 0 ? wins / total : 0 };
 }
 
-function buildProfileQuery(
-  since: string | undefined,
-  until: string | undefined,
+export function buildProfileQuery(
+  filters: AnalyzerFilters,
   mergeLinked?: boolean,
 ): string {
-  const usp = new URLSearchParams();
-  if (since) usp.set("since", since);
-  if (until) usp.set("until", until);
+  const filterQuery = filtersToQuery(filters);
+  const usp = new URLSearchParams(
+    filterQuery.startsWith("?") ? filterQuery.slice(1) : filterQuery,
+  );
   if (mergeLinked) usp.set("mergeLinked", "1");
   const q = usp.toString();
   return q ? `?${q}` : "";

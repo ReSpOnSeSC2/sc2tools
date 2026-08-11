@@ -47,26 +47,36 @@ export type AnalyzerFilters = {
    */
   regions?: string;
   /**
-   * Ladder-map filter. "ladder" keeps only games played on a map that
-   * was in the SC2 ladder pool at ingest (1v1 and team ladder maps
-   * both count — the API stamps an ``isLadderMap`` boolean on each game
-   * using the live Liquipedia-sourced pool). "nonladder" keeps only
-   * games on a non-pool (custom / arcade / retired) map. Undefined =
-   * no constraint. Drives every analyzer tab via the shared filter
-   * context.
+   * Ladder-game filter. "ladder" keeps ranked ladder games;
+   * "nonladder" keeps custom / unranked games. The legacy wire name is
+   * ``map_pool``, but current replays use the authoritative matchmaking
+   * flag. Rows without that flag are excluded from explicit buckets so a
+   * custom lobby on a ladder map cannot leak into Ladder. "all" is an
+   * explicit, persisted no-constraint choice. Default = "ladder".
    */
-  map_pool?: "ladder" | "nonladder";
+  map_pool?: "ladder" | "nonladder" | "all";
   /**
-   * Game-size filter. "1v1" keeps two-player games; "team" keeps games
-   * with more than two players (2v2 / 3v3 / 4v4). Backed by the
-   * ``playerCount`` the agent records per replay; games uploaded before
-   * that field shipped have no count and fall out of both buckets.
-   * Undefined = no constraint.
+   * Match-format filter. "1v1" keeps one-player-per-side games; "team"
+   * keeps actual team formats (2v2 / 3v3 / 4v4) without admitting FFA.
+   * Backed by the agent's normalized ``matchFormat``; a legacy
+   * ``playerCount: 2`` is a safe 1v1 fallback, while Team stays strict.
+   * "all" is an explicit, persisted no-constraint choice. Default = "1v1".
    */
-  game_size?: "1v1" | "team";
+  game_size?: "1v1" | "team" | "all";
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };
+
+/**
+ * Product defaults shared by the context fallback and AnalyzerProvider.
+ * A fresh or legacy session starts with ranked-ladder 1v1 games only.
+ */
+export const DEFAULT_ANALYZER_FILTERS = {
+  preset: DEFAULT_PRESET,
+  exclude_too_short: true,
+  map_pool: "ladder",
+  game_size: "1v1",
+} as const satisfies AnalyzerFilters;
 
 export type FiltersValue = {
   filters: AnalyzerFilters;
@@ -78,7 +88,7 @@ export type FiltersValue = {
 };
 
 export const FiltersContext = createContext<FiltersValue>({
-  filters: { preset: DEFAULT_PRESET },
+  filters: { ...DEFAULT_ANALYZER_FILTERS },
   setFilters: () => {},
   dbRev: 0,
   bumpRev: () => {},
@@ -104,6 +114,10 @@ export function filtersToQuery(p: Record<string, unknown>): string {
     // when the flag is truthy). Drop it here so the query string stays
     // clean when the toggle is off.
     if (k === "exclude_too_short" && v === false) continue;
+    // Unlike undefined, "all" survives localStorage so a user's explicit
+    // opt-out from the default cohort persists. It remains a no-op on the
+    // wire, where an omitted parameter means no constraint.
+    if ((k === "map_pool" || k === "game_size") && v === "all") continue;
     usp.set(k, String(v));
   }
   const q = usp.toString();

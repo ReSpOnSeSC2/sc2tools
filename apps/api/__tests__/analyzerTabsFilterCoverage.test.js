@@ -60,8 +60,10 @@ describe("analyzer tabs honour map_pool / game_size", () => {
       .set("authorization", "Bearer test-token");
     userId = me.body.userId;
     await db.games.deleteMany({});
-    // A: ladder map, 1v1, ZvT, distinct build + strategy.
-    // B: custom map, team (4 players), ZvP, distinct build + strategy.
+    // A: ranked ladder 1v1, ZvT, distinct build + strategy.
+    // B: custom team game whose map proxy deliberately disagrees with
+    //    the authoritative matchmaking category.
+    // C: custom FFA. Its eight players must not make it a team game.
     await db.games.insertMany([
       {
         userId,
@@ -72,7 +74,9 @@ describe("analyzer tabs honour map_pool / game_size", () => {
         map: "Acro Ladder",
         durationSec: 600,
         myBuild: "ZvT Ling Bane",
+        isLadderGame: true,
         isLadderMap: true,
+        matchFormat: "1v1",
         playerCount: 2,
         opponent: { pulseId: "1-1-1-1", displayName: "Terry", race: "Terran", strategy: "T - Bio" },
       },
@@ -85,9 +89,26 @@ describe("analyzer tabs honour map_pool / game_size", () => {
         map: "Custom Arena",
         durationSec: 700,
         myBuild: "ZvP Macro",
-        isLadderMap: false,
+        isLadderGame: false,
+        isLadderMap: true,
+        matchFormat: "team",
         playerCount: 4,
         opponent: { pulseId: "1-1-1-2", displayName: "Petra", race: "Protoss", strategy: "P - Cannon Rush" },
+      },
+      {
+        userId,
+        gameId: "C",
+        date: new Date("2026-05-12T12:00:00.000Z"),
+        result: "Victory",
+        myRace: "Zerg",
+        map: "FFA Basin",
+        durationSec: 800,
+        myBuild: "ZvZ FFA",
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "ffa",
+        playerCount: 8,
+        opponent: { pulseId: "1-1-1-3", displayName: "Zara", race: "Zerg", strategy: "Z - FFA" },
       },
     ]);
   });
@@ -107,22 +128,22 @@ describe("analyzer tabs honour map_pool / game_size", () => {
       });
 
   test("/v1/maps narrows by map_pool", async () => {
-    expect((await get("/v1/maps")).length).toBe(2);
+    expect((await get("/v1/maps")).length).toBe(3);
     const ladder = await get("/v1/maps?map_pool=ladder");
     expect(ladder.length).toBe(1);
     expect(ladder[0].name).toBe("Acro Ladder");
   });
 
   test("/v1/matchups narrows by game_size", async () => {
-    expect((await get("/v1/matchups")).length).toBe(2);
+    expect((await get("/v1/matchups")).length).toBe(3);
     const team = await get("/v1/matchups?game_size=team");
     expect(team.length).toBe(1); // only the 4-player ZvP game
   });
 
   test("/v1/maps/matchups cross-tabs map x matchup and narrows by filters", async () => {
-    // Two games, two distinct maps, one matchup cell each.
+    // Three games, three distinct maps, one matchup cell each.
     const all = await get("/v1/maps/matchups");
-    expect(all.length).toBe(2);
+    expect(all.length).toBe(3);
     const acro = all.find((r) => r.map === "Acro Ladder");
     expect(acro).toMatchObject({
       map: "Acro Ladder",
@@ -150,21 +171,22 @@ describe("analyzer tabs honour map_pool / game_size", () => {
   });
 
   test("/v1/builds narrows by map_pool", async () => {
-    expect((await get("/v1/builds")).length).toBe(2);
+    expect((await get("/v1/builds")).length).toBe(3);
     const ladder = await get("/v1/builds?map_pool=ladder");
     expect(ladder.map((b) => b.name)).toEqual(["ZvT Ling Bane"]);
   });
 
   test("/v1/opp-strategies narrows by map_pool", async () => {
-    expect((await get("/v1/opp-strategies")).length).toBe(2);
+    expect((await get("/v1/opp-strategies")).length).toBe(3);
     const ladder = await get("/v1/opp-strategies?map_pool=ladder");
     expect(ladder.map((s) => s.name)).toEqual(["T - Bio"]);
   });
 
   test("/v1/timeseries totals reflect the filter", async () => {
     const sum = (ts) => ts.points.reduce((n, p) => n + p.total, 0);
-    expect(sum(await get("/v1/timeseries"))).toBe(2);
+    expect(sum(await get("/v1/timeseries"))).toBe(3);
     expect(sum(await get("/v1/timeseries?map_pool=ladder"))).toBe(1);
     expect(sum(await get("/v1/timeseries?game_size=team"))).toBe(1);
+    expect(sum(await get("/v1/timeseries?game_size=1v1"))).toBe(1);
   });
 });

@@ -58,11 +58,20 @@ const PROFILE_GAME_PROJECTION = {
   result: 1,
   map: 1,
   myRace: 1,
+  myLadderRace: 1,
   myBuild: 1,
   durationSec: 1,
   macroScore: 1,
+  top3Leaks: 1,
   apm: 1,
   spq: 1,
+  // Canonical game-kind fields used by the analyzer's default
+  // ladder-1v1 scope. isLadderMap remains projected only for response
+  // compatibility; filtering deliberately trusts isLadderGame.
+  isLadderGame: 1,
+  isLadderMap: 1,
+  playerCount: 1,
+  matchFormat: 1,
   buildLog: 1,
   oppBuildLog: 1,
   // earlyBuildLog / oppEarlyBuildLog deliberately omitted: dnaTimings
@@ -940,13 +949,13 @@ class OpponentsService {
    * + per matchup), last 5 games, and the full games array (newest
    * first) for the all-games table.
    *
-   * Date-range filtering: when `opts.since` / `opts.until` are provided,
-   * totals / byMap / byStrategy / topStrategies / median + matchup
-   * timings / matchup counts / the all-games table are computed from
-   * the games inside the window. `last5Games` and `predictedStrategies`
-   * always come from the unfiltered (full-history) games list, since the
-   * UI surfaces them as "what's likely next" and "most recent activity"
-   * — both of which would be misleading if scoped to a stale window.
+   * Analyzer filtering: totals / byMap / byStrategy / topStrategies /
+   * timings / phases / scouting / the all-games table are computed from
+   * the shared analyzer scope. `last5Games` and `predictedStrategies`
+   * intentionally ignore only the date bounds (they describe recent
+   * activity), while still honoring game-kind, race, map, and other
+   * cohort filters. This prevents a ladder-1v1 profile from silently
+   * re-introducing custom or team replays after drill-in.
    *
    * Linked-player merge: with ``opts.mergeLinked`` set (and the
    * pulseLinks service wired), the profile spans EVERY opponent row
@@ -958,9 +967,20 @@ class OpponentsService {
    *
    * @param {string} userId
    * @param {string} pulseId
-   * @param {{ since?: Date, until?: Date, mergeLinked?: boolean }} [opts]
+   * @param {{
+   *   filters?: import('../util/parseQuery').GlobalFilters,
+   *   since?: Date,
+   *   until?: Date,
+   *   mergeLinked?: boolean,
+   * }} [opts]
    */
   async get(userId, pulseId, opts = {}) {
+    // Keep direct since/until options working for internal callers and
+    // older tests while the HTTP route supplies the complete parsed
+    // filter object.
+    const filters = { ...(opts.filters || {}) };
+    if (!filters.since && opts.since) filters.since = opts.since;
+    if (!filters.until && opts.until) filters.until = opts.until;
     const doc = await this.db.opponents.findOne(
       { userId, pulseId },
       { projection: { _id: 0 } },
@@ -1040,8 +1060,15 @@ class OpponentsService {
         }
       }
     }
-    const allGames = rawGames.map(serializeGameForProfile);
-    const filteredGames = filterGamesByDate(allGames, opts.since, opts.until);
+    // Apply every non-date analyzer facet before deriving profile
+    // aggregates. Date bounds remain separate so recency-oriented panels
+    // can intentionally show the latest games inside the same cohort.
+    const scopedRawGames = filterGamesByAnalyzerScope(rawGames, filters);
+    const rawFilteredGames = filterGamesByDate(
+      scopedRawGames, filters.since, filters.until,
+    );
+    const allGames = scopedRawGames.map(serializeGameForProfile);
+    const filteredGames = rawFilteredGames.map(serializeGameForProfile);
     // Authoritative current name. ``rawGames`` is sorted by date desc
     // and is NOT filtered by ``opts.since`` / ``opts.until`` — so
     // ``[0]`` is the absolute most-recent game we've ingested for
@@ -1081,7 +1108,14 @@ class OpponentsService {
     // omit this field entirely so the UI shows nothing extra.
     const mergedToonHandles = collectMergedToonHandles(rawGames, doc);
     const aggregates = aggregateByMapAndStrategy(filteredGames);
-    const totals = computeTotals(filteredGames, doc);
+    // A real filter that happens to match zero games must return zero;
+    // falling back to the opponent row's lifetime counters would make the
+    // filter appear broken. Retain that fallback only for an unscoped
+    // legacy profile request.
+    const totals = computeTotals(
+      filteredGames,
+      hasProfileFilters(filters) ? null : doc,
+    );
     const dna = computeDnaFields(filteredGames);
     // Phase trajectory + transition Sankey for "How games against this
     // opponent play out". Pure compute over the same date-filtered
@@ -1094,13 +1128,8 @@ class OpponentsService {
     const opponentLabel = authoritativeName
       ? `vs ${authoritativeName}`
       : "vs opponent";
-    // ``filterGamesByDate`` reads ``g.date`` via ``new Date(...)``,
-    // which works for both Date instances (rawGames) and the ISO
-    // strings ``serializeGameForProfile`` emits (allGames). Same
-    // window the by-map / by-strategy aggregates use.
-    const rawFilteredGames = filterGamesByDate(
-      rawGames, opts.since, opts.until,
-    );
+    // Same raw, date-filtered cohort the by-map/by-strategy aggregates
+    // use; retaining raw rows here keeps detail-backed phase data intact.
     const phasesCompute = computeCompositions(rawFilteredGames);
     const transitionsCompute = computeTransitions(rawFilteredGames, {
       mode: "opponent",
@@ -1132,19 +1161,19 @@ class OpponentsService {
       name: opponentLabel,
       transitions: transitionsCompute,
     };
-    // Predictions and the most-recent-5 list always reflect the full
-    // history — see method jsdoc.
+    // Predictions and the most-recent-5 list ignore date bounds but
+    // remain inside the active analyzer cohort — see method jsdoc.
     const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
     const last5Games = allGames.slice(0, 5);
     // Per-game scouting envelopes for the overlay's scouting widget.
-    // Operates on the un-serialized rawGames entries (which still
+    // Operates on the un-serialized scopedRawGames entries (which still
     // carry ``macroBreakdown`` + ``oppBuildLog``) so the per-game
     // build-order strip + composition snapshots have real source
     // data. ``serializeGameForProfile`` strips the heavy blobs from
     // ``allGames``, hence the raw-side traversal here. The compute
     // itself lives in ``scouting/perGameScouting.js`` to keep this
     // file under the 800-line ceiling.
-    const last5GamesScouting = rawGames.slice(0, 5).map((g) => {
+    const last5GamesScouting = scopedRawGames.slice(0, 5).map((g) => {
       try {
         return computePerGameScouting(g);
       } catch (err) {
@@ -2750,6 +2779,10 @@ function hasFilters(f) {
       || typeof f.mmrMax === "number"
       || f.oppStrategy
       || f.build
+      || f.leak
+      || typeof f.macroMin === "number"
+      || typeof f.macroMax === "number"
+      || f.excludeTooShort
       || f.mapPool
       || f.gameSize,
   );
@@ -2787,10 +2820,124 @@ function serializeGameForProfile(g) {
 }
 
 /**
+ * Apply every analyzer filter except the date window to an in-memory
+ * profile game set. Opponent profiles load a bounded, identity-scoped
+ * history first because the latest unfiltered row is still needed for
+ * identity and MMR display; this matcher keeps all statistical panels in
+ * lock-step with gamesMatchStage without making those identity fields
+ * filter-dependent.
+ *
+ * @param {Array<any>} games
+ * @param {import('../util/parseQuery').GlobalFilters | null | undefined} f
+ * @returns {Array<any>}
+ */
+function filterGamesByAnalyzerScope(games, f) {
+  if (!f || typeof f !== "object") return games;
+  return games.filter((g) => {
+    if (!g || typeof g !== "object") return false;
+    const opp = g.opponent || {};
+
+    if (f.race && canonicalRaceLetter(g.myRace) !== f.race) return false;
+    if (f.oppRace && canonicalRaceLetter(opp.race) !== f.oppRace) {
+      return false;
+    }
+    if (
+      f.map
+      && !String(g.map || "").toLowerCase().includes(String(f.map).toLowerCase())
+    ) {
+      return false;
+    }
+
+    if (typeof f.mmrMin === "number" || typeof f.mmrMax === "number") {
+      const mmr = opp.mmr;
+      // Mongo's numeric range predicates use type bracketing: a numeric
+      // string or null does not match a numeric $gte/$lte constraint.
+      if (typeof mmr !== "number" || !Number.isFinite(mmr)) return false;
+      if (typeof f.mmrMin === "number" && mmr < f.mmrMin) return false;
+      if (typeof f.mmrMax === "number" && mmr > f.mmrMax) return false;
+    }
+    if (f.oppStrategy && opp.strategy !== f.oppStrategy) return false;
+    if (f.build && g.myBuild !== f.build) return false;
+
+    if (f.leak) {
+      const leaks = Array.isArray(g.top3Leaks) ? g.top3Leaks : [];
+      if (!leaks.some((/** @type {any} */ leak) => leak && leak.name === f.leak)) {
+        return false;
+      }
+    }
+    if (typeof f.macroMin === "number" || typeof f.macroMax === "number") {
+      const score = g.macroScore;
+      if (typeof score !== "number" || !Number.isFinite(score)) return false;
+      if (typeof f.macroMin === "number" && score < f.macroMin) return false;
+      // Exclusive upper bound, matching gamesMatchStage.
+      if (typeof f.macroMax === "number" && score >= f.macroMax) return false;
+    }
+
+    if (f.excludeTooShort) {
+      if (!f.build && /Game Too Short$/.test(String(g.myBuild || ""))) {
+        return false;
+      }
+      if (
+        !f.oppStrategy
+        && /Game Too Short$/.test(String(opp.strategy || ""))
+      ) {
+        return false;
+      }
+    }
+
+    if (Array.isArray(f.regions) && f.regions.length > 0) {
+      const storedRegion = typeof opp.region === "string" && opp.region
+        ? opp.region
+        : null;
+      const region = storedRegion || regionFromToonHandle(opp.toonHandle);
+      if (!region || !f.regions.includes(region)) return false;
+    }
+
+    // Ranked/custom is an authoritative replay classification, not a map
+    // name proxy. Unknown legacy rows deliberately fall out of both
+    // explicit buckets instead of letting custom games on ladder maps in.
+    if (f.mapPool === "ladder" && g.isLadderGame !== true) return false;
+    if (f.mapPool === "nonladder" && g.isLadderGame !== false) return false;
+
+    // A two-player count is a safe fallback for legacy 1v1 rows. Counts
+    // above two are not sufficient evidence of a team match because FFA
+    // has the same shape, so Team requires the normalized format.
+    if (f.gameSize === "1v1") {
+      const isLegacyOneVsOne =
+        !Object.prototype.hasOwnProperty.call(g, "matchFormat")
+        && g.playerCount === 2;
+      if (g.matchFormat !== "1v1" && !isLegacyOneVsOne) return false;
+    }
+    if (f.gameSize === "team" && g.matchFormat !== "team") return false;
+
+    return true;
+  });
+}
+
+/**
+ * Whether a profile request carries any filter that makes falling back to
+ * lifetime opponent counters incorrect when the matched game set is empty.
+ *
+ * @param {import('../util/parseQuery').GlobalFilters | null | undefined} f
+ * @returns {boolean}
+ */
+function hasProfileFilters(f) {
+  if (!f || typeof f !== "object") return false;
+  return hasFilters(f)
+    || Boolean(
+      f.leak
+      || typeof f.macroMin === "number"
+      || typeof f.macroMax === "number"
+      || f.excludeTooShort
+      || (Array.isArray(f.regions) && f.regions.length > 0),
+    );
+}
+
+/**
  * Restrict a games array to those whose `date` falls inside the
  * inclusive [since, until] range. Either bound can be omitted. Games
- * with an unparseable date are kept (matches the rest of the pipeline,
- * which tolerates legacy rows without timestamps).
+ * without a valid stored Date are excluded when a bound is active,
+ * matching Mongo's Date range type-bracketing in gamesMatchStage.
  *
  * @param {Array<any>} games
  * @param {Date|undefined} since
@@ -2809,9 +2956,9 @@ function filterGamesByDate(games, since, until) {
       : null;
   if (sinceMs === null && untilMs === null) return games;
   return games.filter((g) => {
-    if (!g || !g.date) return true;
-    const t = new Date(g.date).getTime();
-    if (Number.isNaN(t)) return true;
+    if (!g || !(g.date instanceof Date)) return false;
+    const t = g.date.getTime();
+    if (Number.isNaN(t)) return false;
     if (sinceMs !== null && t < sinceMs) return false;
     if (untilMs !== null && t > untilMs) return false;
     return true;

@@ -14,6 +14,36 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  test.each(["1v1", "team", "ffa", "other"])(
+    "accepts and preserves matchFormat=%s",
+    (matchFormat) => {
+      const r = validateGameRecord({
+        gameId: `format-${matchFormat}`,
+        date: "2026-05-04T12:00:00.000Z",
+        result: "Victory",
+        myRace: "Protoss",
+        map: "Goldenaura",
+        matchFormat,
+      });
+      expect(r.valid).toBe(true);
+      if (r.valid) {
+        expect(/** @type {any} */ (r.value).matchFormat).toBe(matchFormat);
+      }
+    },
+  );
+
+  test("rejects an unknown matchFormat", () => {
+    const r = validateGameRecord({
+      gameId: "format-unknown",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      matchFormat: "8-player",
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test("accepts and preserves an optional selected ladder race", () => {
     const r = validateGameRecord({
       gameId: "abc-123",

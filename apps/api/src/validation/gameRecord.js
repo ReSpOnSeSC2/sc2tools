@@ -45,11 +45,19 @@ const GAME_SCHEMA = {
     myLadderRace: { type: "string", minLength: 1, maxLength: 24 },
     myBuild: { type: "string", maxLength: 200 },
     map: { type: "string", minLength: 1, maxLength: 200 },
-    // Total players in the replay (2 for 1v1, >2 for team games).
-    // Emitted by the agent from the parsed player list; drives the
-    // global FilterBar's 1v1 / team game-size filter. Optional — games
-    // uploaded by agents predating this field carry no count.
+    // Total players in the replay. Emitted by the agent from the parsed
+    // player list; retained as display metadata and as the legacy 1v1
+    // fallback when matchFormat is absent. Count alone cannot distinguish
+    // a team game from FFA. Optional for older agents.
     playerCount: { type: "integer", minimum: 1, maximum: 16 },
+    // Normalized topology of the replay's actual player/team layout.
+    // Unlike playerCount, this distinguishes an 8-player FFA from a
+    // 4v4 team game. The global Players filter uses this as the
+    // authoritative format signal; older agents omit it.
+    matchFormat: {
+      type: "string",
+      enum: ["1v1", "team", "ffa", "other"],
+    },
     // Authoritative ladder-vs-custom signal from the replay's
     // matchmaking category. true = ranked ladder, false = custom. The
     // ingest path prefers this over the map-name proxy when present.

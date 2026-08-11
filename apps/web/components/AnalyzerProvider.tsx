@@ -2,23 +2,28 @@
 
 import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import {
+  DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { DEFAULT_PRESET, resolvePreset, type PresetId } from "@/lib/datePresets";
-import { rollUpSeasons, useSeasons } from "@/lib/useSeasons";
+import {
+  rollUpSeasons,
+  useSeasons,
+  type LogicalSeason,
+} from "@/lib/useSeasons";
 import { useUserSocket } from "@/lib/useUserSocket";
 
 const LS_KEY = "analyzer.filters";
 
-type StoredFilters = {
+export type StoredFilters = {
   preset?: PresetId;
   since?: string;
   until?: string;
   regions?: string;
   exclude_too_short?: boolean;
-  map_pool?: "ladder" | "nonladder";
-  game_size?: "1v1" | "team";
+  map_pool?: "ladder" | "nonladder" | "all";
+  game_size?: "1v1" | "team" | "all";
 };
 
 // Only the globally-visible FilterBar controls persist across reloads.
@@ -83,11 +88,35 @@ function initialFilters(): AnalyzerFilters {
   // localStorage so their choice persists on subsequent visits.
   const range = resolvePreset(DEFAULT_PRESET);
   return {
-    preset: DEFAULT_PRESET,
+    ...DEFAULT_ANALYZER_FILTERS,
     since: range.since?.toISOString(),
     until: range.until?.toISOString(),
-    exclude_too_short: true,
   };
+}
+
+/**
+ * Merge persisted FilterBar state with current product defaults.
+ * Missing mode keys identify first-time or legacy storage and inherit
+ * ranked-ladder + 1v1. Explicit "all" choices survive verbatim.
+ */
+export function hydrateStoredFilters(
+  stored: StoredFilters | null,
+  logicalSeasons: LogicalSeason[] = [],
+): AnalyzerFilters {
+  const next: AnalyzerFilters = {
+    ...DEFAULT_ANALYZER_FILTERS,
+    ...(stored || {}),
+  };
+  if (!next.preset) next.preset = DEFAULT_PRESET;
+  if (next.preset !== "custom") {
+    const range = resolvePreset(next.preset, undefined, logicalSeasons);
+    next.since = range.since ? range.since.toISOString() : undefined;
+    next.until = range.until ? range.until.toISOString() : undefined;
+  }
+  if (next.exclude_too_short === undefined) next.exclude_too_short = true;
+  if (next.map_pool === undefined) next.map_pool = "ladder";
+  if (next.game_size === undefined) next.game_size = "1v1";
+  return next;
 }
 
 /**
@@ -100,7 +129,9 @@ function initialFilters(): AnalyzerFilters {
  * non-custom preset is re-resolved against "now" (and
  * against the latest SC2Pulse season catalog) on every mount, so a
  * saved "Last 7 days" reflects today's window and "Current season"
- * tracks whichever season is current right now.
+ * tracks whichever season is current right now. Fresh and legacy
+ * sessions default to ranked-ladder 1v1 unless an explicit persisted
+ * mode choice overrides that cohort.
  */
 export function AnalyzerProvider({ children }: { children: ReactNode }) {
   const [filters, setFiltersState] = useState<AnalyzerFilters>(initialFilters);
@@ -131,19 +162,7 @@ export function AnalyzerProvider({ children }: { children: ReactNode }) {
   // Hydrate from localStorage after mount.
   useEffect(() => {
     const stored = readStored();
-    const next: AnalyzerFilters = stored ? { ...stored } : { preset: DEFAULT_PRESET };
-    if (!next.preset) next.preset = DEFAULT_PRESET;
-    if (next.preset && next.preset !== "custom") {
-      const range = resolvePreset(next.preset, undefined, logicalSeasons);
-      next.since = range.since ? range.since.toISOString() : undefined;
-      next.until = range.until ? range.until.toISOString() : undefined;
-    }
-    // Default "Hide too-short games" to ON for any session that has
-    // not explicitly recorded a preference. Stored ``false`` (the
-    // user toggled it off) is respected verbatim; ``undefined``
-    // (legacy localStorage from before this feature shipped, or a
-    // first-time visitor) becomes ``true``.
-    if (next.exclude_too_short === undefined) next.exclude_too_short = true;
+    const next = hydrateStoredFilters(stored, logicalSeasons);
     setFiltersState(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -93,16 +93,17 @@ function parseFilters(q) {
   }
   const regions = parseRegionList(q.regions);
   if (regions) out.regions = regions;
-  // Ladder-map filter. "ladder" keeps only games whose map was in the
-  // SC2 ladder pool at ingest (the API stamps ``isLadderMap`` on each
-  // game using LadderMapPoolService); "nonladder" keeps only games on
-  // a map that was NOT in the pool. Anything else is no constraint.
+  // Ranked/custom game filter. The public query key remains
+  // ``map_pool`` for backwards compatibility with the FilterBar, but
+  // classification comes from the replay's authoritative matchmaking
+  // category (``isLadderGame``), not the map name. ``all`` remains an
+  // explicit no-op sentinel for the web controls.
   if (q.map_pool === "ladder" || q.map_pool === "nonladder") {
     out.mapPool = q.map_pool;
   }
-  // Game-size filter. "1v1" keeps two-player games; "team" keeps games
-  // with more than two players. Both rely on ``playerCount``, stamped
-  // by the agent from the parsed replay's player list.
+  // Match-format filter. ``matchFormat`` distinguishes team games from
+  // FFA/custom lobbies that merely have more than two players. ``all``
+  // remains an explicit no-op sentinel for the web controls.
   if (q.game_size === "1v1" || q.game_size === "team") {
     out.gameSize = q.game_size;
   }
@@ -233,28 +234,45 @@ function gamesMatchStage(userId, filters) {
       ];
     }
   }
-  // Ladder-map filter, driving every analyzer tab. ``isLadderMap`` is a
-  // boolean stamped on each game at ingest from the live ladder pool
-  // (apps/api/data/ladder-map-pool.json, refreshed from Liquipedia).
-  // Games uploaded before this field shipped carry no flag and are
-  // intentionally excluded from BOTH buckets — we can't retroactively
-  // know whether a map was in the rotation when it was played, so a
-  // strict equality keeps the cohort honest rather than guessing.
+  // Ranked/custom filter, driving every analyzer tab. ``isLadderGame``
+  // is authored from the replay's matchmaking category and is the only
+  // trustworthy discriminator: custom games can be played on ladder
+  // maps, so the historical ``isLadderMap`` proxy must not participate.
+  // Missing canonical flags are intentionally excluded from both
+  // explicit buckets. Keep these clauses inside ``$and`` so they can
+  // coexist with the region filter's top-level ``$or``.
   if (f.mapPool === "ladder") {
-    match.isLadderMap = true;
+    addAndClause(match, { isLadderGame: true });
   } else if (f.mapPool === "nonladder") {
-    match.isLadderMap = false;
+    addAndClause(match, { isLadderGame: false });
   }
-  // Game-size filter. ``playerCount`` is the total number of players in
-  // the replay (2 for 1v1, >2 for team games). Older games predate the
-  // field and are excluded from both buckets for the same reason as
-  // above — no stored count means no honest classification.
+  // Match-format filter. New rows carry the authoritative normalized
+  // ``matchFormat``. For 1v1 only, retain the safe legacy fallback of a
+  // two-player replay when matchFormat is absent. Team is strict:
+  // ``playerCount > 2`` also describes FFA, so count cannot identify it.
   if (f.gameSize === "1v1") {
-    match.playerCount = 2;
+    addAndClause(match, {
+      $or: [
+        { matchFormat: "1v1" },
+        { matchFormat: { $exists: false }, playerCount: 2 },
+      ],
+    });
   } else if (f.gameSize === "team") {
-    match.playerCount = { $gt: 2 };
+    addAndClause(match, { matchFormat: "team" });
   }
   return match;
+}
+
+/**
+ * Append a Mongo clause without consuming the top-level ``$or`` used by
+ * the region fallback matcher.
+ *
+ * @param {Record<string, any>} match
+ * @param {Record<string, any>} clause
+ */
+function addAndClause(match, clause) {
+  if (!Array.isArray(match.$and)) match.$and = [];
+  match.$and.push(clause);
 }
 
 /**

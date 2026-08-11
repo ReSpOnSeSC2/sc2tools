@@ -171,8 +171,8 @@ describe("OpponentsService._listFiltered identity fallback", () => {
     // hasFilters() false, so the list served cached counters and
     // ignored the filter — every opponent still showed.
     const userId = "u_pool";
-    // Three opponents, each with one game carrying the classification
-    // fields the ingest/backfill stamps.
+    // Opponents spanning the authoritative ranked/custom and normalized
+    // match-format buckets, plus one legacy two-player row.
     const mkOpp = (pulseId, name) => ({
       userId,
       pulseId,
@@ -189,6 +189,10 @@ describe("OpponentsService._listFiltered identity fallback", () => {
       mkOpp("1-S2-1-1", "LadderSolo"),
       mkOpp("1-S2-1-2", "LadderTeam"),
       mkOpp("1-S2-1-3", "Custom1v1"),
+      mkOpp("1-S2-1-4", "CustomOnLadder"),
+      mkOpp("1-S2-1-5", "CustomTeam"),
+      mkOpp("1-S2-1-6", "CustomFFA"),
+      mkOpp("1-S2-1-7", "LegacySolo"),
     ]);
     const mkGame = (gameId, pulseId, name, extra) => ({
       userId,
@@ -202,9 +206,47 @@ describe("OpponentsService._listFiltered identity fallback", () => {
       ...extra,
     });
     await db.games.insertMany([
-      mkGame("g1", "1-S2-1-1", "LadderSolo", { isLadderMap: true, playerCount: 2 }),
-      mkGame("g2", "1-S2-1-2", "LadderTeam", { isLadderMap: true, playerCount: 4 }),
-      mkGame("g3", "1-S2-1-3", "Custom1v1", { isLadderMap: false, playerCount: 2 }),
+      mkGame("g1", "1-S2-1-1", "LadderSolo", {
+        isLadderGame: true,
+        isLadderMap: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      mkGame("g2", "1-S2-1-2", "LadderTeam", {
+        isLadderGame: true,
+        isLadderMap: true,
+        matchFormat: "team",
+        playerCount: 4,
+      }),
+      mkGame("g3", "1-S2-1-3", "Custom1v1", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      // Canonical category wins over the deliberately wrong map proxy.
+      mkGame("g4", "1-S2-1-4", "CustomOnLadder", {
+        isLadderGame: false,
+        isLadderMap: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      mkGame("g5", "1-S2-1-5", "CustomTeam", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "team",
+        playerCount: 4,
+      }),
+      mkGame("g6", "1-S2-1-6", "CustomFFA", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "ffa",
+        playerCount: 8,
+      }),
+      mkGame("g7", "1-S2-1-7", "LegacySolo", {
+        isLadderMap: true,
+        playerCount: 2,
+      }),
     ]);
 
     const opponents = new OpponentsService(db, Buffer.alloc(32, 1));
@@ -213,16 +255,44 @@ describe("OpponentsService._listFiltered identity fallback", () => {
         .map((r) => r.displayNameSample)
         .sort();
 
-    // No filters → fast path → all three.
-    expect(await names({})).toEqual(["Custom1v1", "LadderSolo", "LadderTeam"]);
-    // Ladder → only the two ladder-map opponents.
+    // No filters → fast path → all seven.
+    expect(await names({})).toEqual([
+      "Custom1v1",
+      "CustomFFA",
+      "CustomOnLadder",
+      "CustomTeam",
+      "LadderSolo",
+      "LadderTeam",
+      "LegacySolo",
+    ]);
+    // Ladder → only canonical ranked opponents; legacy map proxies drop out.
     expect(await names({ mapPool: "ladder" })).toEqual(["LadderSolo", "LadderTeam"]);
-    // Custom → only the non-ladder opponent.
-    expect(await names({ mapPool: "nonladder" })).toEqual(["Custom1v1"]);
-    // Team → only the >2-player opponent.
-    expect(await names({ gameSize: "team" })).toEqual(["LadderTeam"]);
+    // Custom includes a custom game played on a ladder-map name.
+    expect(await names({ mapPool: "nonladder" })).toEqual([
+      "Custom1v1",
+      "CustomFFA",
+      "CustomOnLadder",
+      "CustomTeam",
+    ]);
+    // Team uses matchFormat, excluding the eight-player FFA.
+    expect(await names({ gameSize: "team" })).toEqual([
+      "CustomTeam",
+      "LadderTeam",
+    ]);
+    // 1v1 retains the safe two-player fallback for legacy rows.
+    expect(await names({ gameSize: "1v1" })).toEqual([
+      "Custom1v1",
+      "CustomOnLadder",
+      "LadderSolo",
+      "LegacySolo",
+    ]);
     // Ladder + 1v1 → intersection.
     expect(await names({ mapPool: "ladder", gameSize: "1v1" })).toEqual(["LadderSolo"]);
+    // Custom + 1v1 → canonical custom rows, including the map-proxy conflict.
+    expect(await names({ mapPool: "nonladder", gameSize: "1v1" })).toEqual([
+      "Custom1v1",
+      "CustomOnLadder",
+    ]);
   });
 
   test("filtered list leaves rows alone when neither source has the id", async () => {

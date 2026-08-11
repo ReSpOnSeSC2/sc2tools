@@ -405,11 +405,10 @@ class CloudGame:
     # attribute, and the cloud Tier-3 fallback already handles its
     # absence.
     my_toon_handle: Optional[str] = None
-    # Total players in the replay (2 for a 1v1, more for team games).
-    # Drives the cloud FilterBar's 1v1 / team game-size filter. Optional
-    # so the dataclass stays backwards-compatible with test fixtures
-    # that pre-date the field; the cloud treats an absent count as
-    # "unknown" and excludes the game from both size buckets.
+    # Total players in the replay. Retained as display metadata and as a
+    # safe legacy 1v1 fallback; counts above two can also describe FFA, so
+    # authoritative team filtering uses ``match_format`` below. Optional
+    # for backwards compatibility with older fixtures.
     player_count: Optional[int] = None
     # Authoritative ladder-vs-custom signal from the replay's matchmaking
     # category (sc2reader ``replay.category``/``amm``). True = ranked
@@ -417,7 +416,8 @@ class CloudGame:
     # the map-name proxy for the FilterBar's ladder / Custom filter, so a
     # custom game on a ladder map (or a ladder game on a since-retired
     # map) classifies correctly. ``None`` when the replay doesn't expose
-    # the field — the cloud then falls back to the map-name proxy.
+    # enough evidence; strict cloud filters keep that unknown row out of
+    # both explicit buckets rather than guessing from the map name.
     is_ladder_game: Optional[bool] = None
     # Exact SC2 client provenance read from the replay header by the
     # shared replay engine. ``game_version`` is the full sc2reader
@@ -451,6 +451,12 @@ class CloudGame:
     # end time for backwards compatibility. Added last so positional
     # CloudGame constructors from older integrations keep their meaning.
     started_at: Optional[str] = None
+    # Normalized observed replay format. Kept distinct from sc2reader's
+    # lobby-selected ``game_type``: ``real_type`` reflects the teams that
+    # actually loaded, and can distinguish an FFA from a team game even
+    # though both have more than two players. Added last for positional
+    # CloudGame constructor compatibility.
+    match_format: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -491,6 +497,8 @@ class CloudGame:
             out["myToonHandle"] = str(self.my_toon_handle)
         if self.player_count is not None:
             out["playerCount"] = int(self.player_count)
+        if self.match_format:
+            out["matchFormat"] = str(self.match_format)
         if self.is_ladder_game is not None:
             out["isLadderGame"] = bool(self.is_ladder_game)
         if self.game_version:
@@ -513,38 +521,99 @@ class CloudGame:
 
 
 def _player_count(ctx: Any) -> Optional[int]:
-    """Total players in the replay, for the cloud's 1v1 / team filter.
+    """Total non-observer players in the replay.
 
     ``ctx.all_players`` is sc2reader's ``replay.players`` (humans + AI,
     excluding observers) mapped to PlayerInfo. AI games are dropped
     upstream, so on a real upload this is the human headcount: 2 for a
-    1v1, 4/6/8 for 2v2/3v3/4v4. Returns ``None`` when the list is
-    empty/absent so the cloud records "unknown" rather than a bogus 0.
+    1v1, or a larger number for teams/FFA. Returns ``None`` when the list
+    is empty/absent so the cloud records "unknown" rather than a bogus 0.
     """
     players = getattr(ctx, "all_players", None) or []
     n = len(players)
     return n if n > 0 else None
 
 
-def _is_ladder_game(ctx: Any) -> Optional[bool]:
-    """Authoritative ladder-vs-custom signal from the raw replay.
+def _format_from_replay_type(value: Any) -> Optional[str]:
+    """Normalize a sc2reader ``real_type`` / ``game_type`` value.
 
-    sc2reader exposes the matchmaking category on the Replay object:
-    ``category`` is "Ladder" / "Private" / "Public"; older builds carry
-    an ``amm`` (automated match making) boolean. We trust those over the
-    cloud's map-name proxy. Returns ``None`` when neither is present so
-    the cloud falls back to the proxy rather than guessing.
+    ``real_type`` normally looks like ``1v1``, ``2v2``, ``2v4``, or
+    ``FFA``. Multi-sided all-solo forms (for example ``1v1v1``) are FFA;
+    any numeric matchup with a side larger than one is a team game.
+    A non-empty value outside those known shapes is preserved as the
+    bounded ``other`` bucket instead of being guessed from player count.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    compact = re.sub(r"\s+", "", value).lower()
+    if compact == "1v1":
+        return "1v1"
+    if compact in {"ffa", "freeforall"}:
+        return "ffa"
+    if re.fullmatch(r"\d+(?:v\d+)+", compact):
+        sides = [int(piece) for piece in compact.split("v")]
+        if len(sides) > 2 and all(size == 1 for size in sides):
+            return "ffa"
+        if any(size > 1 for size in sides):
+            return "team"
+        return "other"
+    return "other"
+
+
+def _match_format(ctx: Any) -> Optional[str]:
+    """Return ``1v1`` / ``team`` / ``ffa`` / ``other`` when known.
+
+    Prefer sc2reader's observed ``real_type`` over the lobby-selected
+    ``game_type``. Only a two-player count is a safe metadata fallback:
+    more than two participants might be FFA, so count alone must never
+    label such a replay as a team game.
+    """
+    raw = getattr(ctx, "raw", None)
+    if raw is not None:
+        for attr in ("real_type", "game_type"):
+            normalized = _format_from_replay_type(getattr(raw, attr, None))
+            if normalized is not None:
+                return normalized
+    return "1v1" if _player_count(ctx) == 2 else None
+
+
+def _coerce_replay_flag(value: Any) -> Optional[bool]:
+    """Coerce sc2reader's bool-like replay flags without guessing."""
+    if isinstance(value, bool):
+        return value
+    # BitPackedDecoder exposes these flags as integer 0/1 in real
+    # replays, despite sc2reader documenting them as booleans.
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    return None
+
+
+def _is_ladder_game(ctx: Any) -> Optional[bool]:
+    """Authoritative ranked-ladder vs custom/unranked replay signal.
+
+    Prefer the explicit ranked/competitive flags when a replay version
+    exposes either one. The category and AMM flag describe matchmaking
+    more broadly and remain compatibility fallbacks. Every flag is
+    tri-state: real sc2reader values are numeric 0/1, while missing or
+    unfamiliar values stay ``None`` rather than becoming custom.
     """
     raw = getattr(ctx, "raw", None)
     if raw is None:
         return None
+    for attr in ("ranked", "competitive"):
+        flag = _coerce_replay_flag(getattr(raw, attr, None))
+        if flag is not None:
+            return flag
     category = getattr(raw, "category", None)
     if isinstance(category, str) and category.strip():
-        return category.strip().lower() == "ladder"
-    for attr in ("amm", "ranked", "competitive"):
-        val = getattr(raw, attr, None)
-        if isinstance(val, bool):
-            return val
+        normalized = category.strip().lower()
+        if normalized == "ladder":
+            return True
+        if normalized in {"private", "public", "single player", "singleplayer"}:
+            return False
+    flag = _coerce_replay_flag(getattr(raw, "amm", None))
+    if flag is not None:
+        return flag
     return None
 
 
@@ -880,6 +949,7 @@ def parse_replay_for_cloud_ex(
         my_mmr=my_mmr,
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
+        match_format=_match_format(ctx),
         is_ladder_game=is_ladder,
         game_version=getattr(ctx, "game_version", None),
         game_build=getattr(ctx, "game_build", None),

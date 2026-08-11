@@ -164,9 +164,10 @@ function buildOpponentsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      // Date-range filter applies to every panel except "Likely
-      // strategies next" and "Last 5 games", which always reflect the
-      // most recent activity for the opponent regardless of the picker.
+      // Apply the same analyzer scope that produced the opponents list to
+      // the profile behind it. Date bounds remain special for the
+      // recency-oriented panels, but game classification (ladder/custom
+      // and 1v1/team) must never expand again after drill-in.
       // ``mergeLinked=1`` folds every identity SC2Pulse links to the
       // same player into this one profile (the deep dive behind the
       // Opponents tab's grouped rows).
@@ -175,8 +176,7 @@ function buildOpponentsRouter(deps) {
         auth.userId,
         String(req.params.pulseId),
         {
-          since: filters.since,
-          until: filters.until,
+          filters,
           mergeLinked: req.query.mergeLinked === "1",
         },
       );

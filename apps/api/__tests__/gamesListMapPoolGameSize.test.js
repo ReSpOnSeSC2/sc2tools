@@ -3,10 +3,10 @@
 
 /**
  * End-to-end: the FilterBar's map_pool (ladder/custom) and game_size
- * (1v1/team) params actually narrow the /v1/games-list response. Proves
- * the parseFilters -> gamesMatchStage -> aggregation path is wired, and
- * documents that games WITHOUT the stored fields drop out of either
- * bucket (the "old data can't be filtered" case).
+ * (1v1/team) params actually narrow the /v1/games-list response. Ranked
+ * vs custom comes from authoritative ``isLadderGame``; team vs FFA
+ * comes from normalized ``matchFormat``. A two-player count is retained
+ * only as the safe legacy fallback for 1v1.
  */
 
 const request = require("supertest");
@@ -62,15 +62,60 @@ describe("/v1/games-list honours map_pool and game_size", () => {
 
   beforeEach(async () => {
     await db.games.deleteMany({});
-    // Insert slim game rows directly so the test controls the stored
-    // classification fields (the ingest route stamps isLadderMap from
-    // the live pool, which we don't want to depend on here).
+    // Insert slim game rows directly so the test controls canonical
+    // matchmaking/format fields and deliberately conflicting legacy
+    // map-proxy values without depending on ingest-time classification.
     await db.games.insertMany([
-      mkGame("ladder-1v1", { isLadderMap: true, playerCount: 2 }),
-      mkGame("ladder-team", { isLadderMap: true, playerCount: 4 }),
-      mkGame("custom-1v1", { isLadderMap: false, playerCount: 2 }),
-      // Legacy row: neither field present (pre-feature upload).
-      mkGame("legacy", {}),
+      mkGame("ladder-1v1", {
+        isLadderGame: true,
+        isLadderMap: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      mkGame("ladder-team", {
+        isLadderGame: true,
+        isLadderMap: true,
+        matchFormat: "team",
+        playerCount: 4,
+      }),
+      mkGame("custom-1v1", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      mkGame("custom-team", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "team",
+        playerCount: 4,
+      }),
+      // Canonical matchmaking category must win over the old map proxy.
+      mkGame("custom-on-ladder-map", {
+        isLadderGame: false,
+        isLadderMap: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      mkGame("ladder-on-nonladder-map", {
+        isLadderGame: true,
+        isLadderMap: false,
+        matchFormat: "1v1",
+        playerCount: 2,
+      }),
+      // More than two players does not imply a team game.
+      mkGame("custom-ffa", {
+        isLadderGame: false,
+        isLadderMap: false,
+        matchFormat: "ffa",
+        playerCount: 8,
+      }),
+      // Legacy format fallback: exactly two players may still be 1v1.
+      mkGame("legacy-1v1", { isLadderMap: true, playerCount: 2 }),
+      // No matchFormat means a large lobby is not safely classifiable as team.
+      mkGame("legacy-many", { isLadderMap: true, playerCount: 8 }),
+      // Fully unknown pre-feature row.
+      mkGame("unknown", {}),
     ]);
   });
 
@@ -99,33 +144,72 @@ describe("/v1/games-list honours map_pool and game_size", () => {
 
   test("no filter returns every game", async () => {
     expect(await listIds("")).toEqual(
-      ["custom-1v1", "ladder-1v1", "ladder-team", "legacy"].sort(),
+      [
+        "custom-1v1",
+        "custom-team",
+        "custom-on-ladder-map",
+        "ladder-1v1",
+        "ladder-team",
+        "ladder-on-nonladder-map",
+        "custom-ffa",
+        "legacy-1v1",
+        "legacy-many",
+        "unknown",
+      ].sort(),
     );
   });
 
-  test("map_pool=ladder keeps only isLadderMap:true rows", async () => {
+  test("map_pool=ladder keeps only authoritative ladder rows", async () => {
     expect(await listIds("?map_pool=ladder")).toEqual(
-      ["ladder-1v1", "ladder-team"].sort(),
+      ["ladder-1v1", "ladder-team", "ladder-on-nonladder-map"].sort(),
     );
   });
 
-  test("map_pool=nonladder keeps only isLadderMap:false rows (legacy excluded)", async () => {
-    expect(await listIds("?map_pool=nonladder")).toEqual(["custom-1v1"]);
+  test("map_pool=nonladder keeps authoritative custom rows", async () => {
+    expect(await listIds("?map_pool=nonladder")).toEqual(
+      ["custom-1v1", "custom-team", "custom-on-ladder-map", "custom-ffa"].sort(),
+    );
   });
 
-  test("game_size=1v1 keeps only playerCount:2 rows", async () => {
+  test("game_size=1v1 uses matchFormat plus the two-player legacy fallback", async () => {
     expect(await listIds("?game_size=1v1")).toEqual(
-      ["custom-1v1", "ladder-1v1"].sort(),
+      [
+        "custom-1v1",
+        "custom-on-ladder-map",
+        "ladder-1v1",
+        "ladder-on-nonladder-map",
+        "legacy-1v1",
+      ].sort(),
     );
   });
 
-  test("game_size=team keeps only playerCount>2 rows", async () => {
-    expect(await listIds("?game_size=team")).toEqual(["ladder-team"]);
+  test("game_size=team uses matchFormat and excludes FFA/unknown large lobbies", async () => {
+    expect(await listIds("?game_size=team")).toEqual(
+      ["custom-team", "ladder-team"].sort(),
+    );
   });
 
   test("combined ladder + team narrows to the intersection", async () => {
     expect(await listIds("?map_pool=ladder&game_size=team")).toEqual([
       "ladder-team",
     ]);
+  });
+
+  test("combined ladder + 1v1 is the strict product-default cohort", async () => {
+    expect(await listIds("?map_pool=ladder&game_size=1v1")).toEqual(
+      ["ladder-1v1", "ladder-on-nonladder-map"].sort(),
+    );
+  });
+
+  test("combined custom + 1v1 includes custom games on ladder-map names", async () => {
+    expect(await listIds("?map_pool=nonladder&game_size=1v1")).toEqual(
+      ["custom-1v1", "custom-on-ladder-map"].sort(),
+    );
+  });
+
+  test("all sentinels remain an explicit no-op", async () => {
+    expect(await listIds("?map_pool=all&game_size=all")).toEqual(
+      await listIds(""),
+    );
   });
 });
