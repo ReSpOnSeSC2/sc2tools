@@ -200,6 +200,7 @@ calibration-replays/
 /_portfolio-update/
 /_profile-repo/
 /.codex/
+/.codex-remote-attachments/
 
 # Worktree-local CI venv (mirror of /.venv/ rule)
 /.venv-ci/

@@ -32,7 +32,7 @@ const TABS: ReadonlyArray<TabDef> = [
   { id: "overlay", label: "Overlay", Icon: MonitorPlay },
   { id: "randomizer", label: "Randomizer", Icon: Dices },
   { id: "voice", label: "Voice", Icon: Volume2 },
-  { id: "backups", label: "Backups", Icon: Database },
+  { id: "backups", label: "Backups & data", Icon: Database },
   { id: "misc", label: "Misc", Icon: Settings2 },
   { id: "help", label: "Help", Icon: LifeBuoy },
 ];

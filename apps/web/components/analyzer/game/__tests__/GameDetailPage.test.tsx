@@ -6,8 +6,16 @@ import { GameDetailPage } from "../GameDetailPage";
 import type { GameSummary } from "../types";
 
 const useApiMock = vi.fn();
+const apiCallMock = vi.fn();
+const getTokenMock = vi.fn(async () => "test-token");
+
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ getToken: getTokenMock }),
+}));
+
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
+  apiCall: (...args: unknown[]) => apiCallMock(...args),
 }));
 
 // next/image needs the Next runtime; a bare <img> is equivalent here.
@@ -32,6 +40,8 @@ class ResizeObserverStub {
 afterEach(() => {
   cleanup();
   useApiMock.mockReset();
+  apiCallMock.mockReset();
+  getTokenMock.mockClear();
 });
 
 const SLIM: GameSummary = {
@@ -260,6 +270,13 @@ describe("GameDetailPage", () => {
 
   it("shows timestamped POV stream controls in the game hero", () => {
     mockEndpoints({
+      slim: {
+        ...SLIM,
+        replayFile: {
+          storedAt: "2026-08-11T16:30:00.000Z",
+          sizeBytes: 128_000,
+        },
+      },
       vodLinks: {
         configuredPlatforms: ["twitch"],
         linksByGameId: {
@@ -283,9 +300,37 @@ describe("GameDetailPage", () => {
     expect(link.getAttribute("href")).toBe(
       "https://www.twitch.tv/videos/99?t=0h1m5s",
     );
+    expect(link.className).toContain("text-[#9146ff]");
+    expect(link.className).toContain("hover:bg-[#9146ff]/15");
+    expect(link.className).toContain("focus-visible:ring-[#9146ff]");
+
+    const download = screen.getByRole("button", { name: "Download replay" });
+    expect(download.textContent).toContain("Download replay");
+    expect(download.getAttribute("title")).toContain("125 KB");
+    const actionLine = screen.getByRole("group", { name: "Game actions" });
+    const actions = Array.from(actionLine.querySelectorAll("a,button"));
+    expect(actions).toEqual([link, download]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
+  });
+
+  it("keeps the replay download action visible when no stream link exists", () => {
+    mockEndpoints({
+      slim: {
+        ...SLIM,
+        replayAvailable: true,
+        replayFilename: "Ephemeron vs Foe.SC2Replay",
+        replaySizeBytes: 256_000,
+      },
+    });
+    render(<GameDetailPage gameId="g1" />);
+
+    const actionLine = screen.getByRole("group", { name: "Game actions" });
+    const download = screen.getByRole("button", { name: "Download replay" });
+    expect(actionLine.contains(download)).toBe(true);
+    expect(actionLine.querySelectorAll("a")).toHaveLength(0);
+    expect(download.textContent).toContain("Download replay");
   });
 });

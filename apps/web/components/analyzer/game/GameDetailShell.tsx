@@ -10,6 +10,7 @@ import {
   GameStreamLinks,
   type GameStreamLink,
 } from "@/components/analyzer/GameStreamLinks";
+import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
@@ -48,6 +49,10 @@ export function GameDetailShell({
   const backLabel = opponentContext
     ? `Back to ${backName}`
     : "Back to dashboard";
+  const replayAvailable =
+    game.replayAvailable === true || Boolean(game.replayFile?.storedAt);
+  const replaySizeBytes =
+    game.replaySizeBytes ?? game.replayFile?.sizeBytes ?? null;
   return (
     <div className="space-y-6">
       <header className="space-y-3">
@@ -115,9 +120,22 @@ export function GameDetailShell({
               </MetaItem>
             </dl>
 
-            {streamLinks && streamLinks.length > 0 ? (
-              <GameStreamLinks links={streamLinks} />
-            ) : null}
+            <div
+              role="group"
+              aria-label="Game actions"
+              className="flex min-h-9 flex-wrap items-center gap-2"
+            >
+              {streamLinks && streamLinks.length > 0 ? (
+                <GameStreamLinks links={streamLinks} />
+              ) : null}
+              <ReplayDownloadButton
+                gameId={game.gameId}
+                available={replayAvailable}
+                filename={game.replayFilename}
+                sizeBytes={replaySizeBytes}
+                showLabel
+              />
+            </div>
 
             <div className="flex flex-wrap items-center gap-2 text-caption">
               <span className="text-text-dim">My build</span>

@@ -30,10 +30,14 @@ import { StreamStudioShowcase } from "@/components/landing/StreamStudioShowcase"
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
+  formatAtlasDiskBytes,
+  formatBinaryStorageBytes,
+  formatCostSnapshotTime,
   formatReplayCount,
   formatStorageBytes,
   formatUsd,
   getInfrastructureCosts,
+  monthlyCostSummary,
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
 
@@ -606,9 +610,14 @@ function ArcadeMoreEntry() {
 /* DONATE BANNER                                                    */
 /* =============================================================== */
 
-function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
-  const fixedMonthly =
-    costs?.site.fixedMonthlyEquivalentUsd ?? FIXED_MONTHLY_FALLBACK_USD;
+export function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
+  const summary = costs ? monthlyCostSummary(costs) : null;
+  const cluster = costs?.mongo.atlas.cluster;
+  const billing = costs?.mongo.atlas.billing;
+  const hasAtlasDisk =
+    cluster?.diskUsedBytes !== null &&
+    cluster?.diskUsedBytes !== undefined &&
+    cluster.diskCapacityBytes !== null;
   return (
     <section className="mt-24 md:mt-32">
       <div className="grid items-center gap-6 rounded-md border-2 border-line bg-bg-surface p-6 shadow-hard md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-8 md:p-8">
@@ -621,9 +630,11 @@ function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
         <div className="space-y-1.5">
           <p className="kicker">What it costs</p>
           <h2 className="font-serif text-h3 font-semibold tracking-[-0.01em] text-text md:text-h2">
-            {costs
-              ? `Free for players — about ${formatUsd(costs.site.estimatedCurrentMonthlyTotalUsd)} a month to run today.`
-              : `Free for players — ${formatUsd(fixedMonthly)} fixed base each month.`}
+            {summary
+              ? costs?.stale
+                ? `Free for players — about ${formatUsd(summary.totalUsd)} a month from the latest available provider snapshot.`
+                : `Free for players — about ${formatUsd(summary.totalUsd)} a month at today’s projected run rate.`
+              : `Free for players — ${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} monthly planning baseline.`}
           </h2>
           {costs ? (
             <p className="text-body text-text-muted">
@@ -634,9 +645,60 @@ function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
               currently use {formatStorageBytes(costs.archive.r2StoredBytes)} in
               Cloudflare R2, an estimated{" "}
               {formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}/month at the
-              current storage run-rate and measured operation usage. Fixed
-              infrastructure is {formatUsd(fixedMonthly)}/month. This is an
-              estimate; the provider dashboards are authoritative.
+              current storage run-rate and measured operation usage.{" "}
+              {hasAtlasDisk ? (
+                <>
+                  Atlas reports {formatAtlasDiskBytes(cluster!.diskUsedBytes!)}{" "}
+                  of {formatAtlasDiskBytes(cluster!.diskCapacityBytes!)} disk
+                  used (binary GiB), while the SC2 Tools database itself uses{" "}
+                  {formatBinaryStorageBytes(
+                    costs.mongo.appData.allocatedTotalBytes,
+                  )}{" "}
+                  allocated and{" "}
+                  {formatBinaryStorageBytes(costs.mongo.appData.logicalDataBytes)}{" "}
+                  logical data.{" "}
+                </>
+              ) : (
+                <>
+                  The SC2 Tools database uses{" "}
+                  {formatBinaryStorageBytes(
+                    costs.mongo.appData.allocatedTotalBytes,
+                  )}{" "}
+                  allocated and{" "}
+                  {formatBinaryStorageBytes(costs.mongo.appData.logicalDataBytes)}{" "}
+                  logical data; live Atlas disk telemetry is unavailable.{" "}
+                </>
+              )}
+              {billing?.available &&
+              billing.postedCycleCents !== null &&
+              billing.postedThrough ? (
+                <>
+                  Atlas has posted {formatUsd(billing.postedCycleCents / 100)}{" "}
+                  this billing cycle through{" "}
+                  {formatCostSnapshotTime(billing.postedThrough)}; that is not
+                  a full-month invoice.{" "}
+                </>
+              ) : (
+                <>
+                  Live Atlas billing is unavailable, so this uses the{" "}
+                  {formatUsd(FIXED_MONTHLY_FALLBACK_USD)} planning fallback
+                  plus the live R2 estimate.{" "}
+                </>
+              )}
+              {summary?.mode === "atlas_projected"
+                ? `The monthly total uses ${formatUsd(costs.site.nonMongoFixedMonthlyUsd)} of non-Mongo fixed costs plus a ${formatUsd(summary.atlasUsd)} projected Atlas run rate and ${formatUsd(summary.r2Usd)} R2 estimate.`
+                : `The monthly total is the planning fallback + live R2 estimate: ${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} + ${formatUsd(summary?.r2Usd ?? 0)}.`}{" "}
+              Projections are estimates; provider dashboards remain
+              authoritative.{" "}
+              <span className="text-caption text-text-dim">
+                {costs.stale
+                  ? "Last successful provider snapshot"
+                  : "Provider usage snapshot measured"}{" "}
+                {formatCostSnapshotTime(costs.asOf)}
+                {costs.stale
+                  ? "; live refresh is currently delayed."
+                  : "."}
+              </span>
             </p>
           ) : (
             <p className="text-body text-text-muted">

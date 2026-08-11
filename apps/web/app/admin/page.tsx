@@ -5,7 +5,12 @@ import Link from "next/link";
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
-import { compactNumber, formatBytes } from "./components/format";
+import {
+  compactNumber,
+  formatBytes,
+  formatUsd,
+  timeSince,
+} from "./components/format";
 import { ForbiddenCard, LoadingRows, MetricStat } from "./components/AdminFragments";
 import { AdminEventRow } from "./components/AdminEventRow";
 import { useAdminEventsSocket } from "./components/useAdminEventsSocket";
@@ -247,6 +252,19 @@ function StorageSection({
   if (!data) return null;
   return (
     <div className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-h3 font-semibold text-text">Storage</h2>
+        <p className="text-body text-text-muted">
+          Whole application-database allocation first, followed by the
+          tracked collection breakdown.
+        </p>
+      </div>
+
+      <DatabaseFootprint database={data.database} />
+
+      <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">
+        Tracked collection totals
+      </h3>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricStat
           label="Total documents"
@@ -352,6 +370,75 @@ function StorageSection({
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function DatabaseFootprint({
+  database,
+}: {
+  database: StorageStatsResp["database"] | undefined;
+}) {
+  const app = database?.available ? database.appData : null;
+  if (!app) {
+    return (
+      <Card padded>
+        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+          Application database footprint
+        </h3>
+        <p className="mt-2 text-body text-text-muted">
+          Whole-database dbStats are temporarily unavailable. No storage value
+          has been inferred from the collection table below.
+        </p>
+      </Card>
+    );
+  }
+  const planning = database?.pricing;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+          Application database footprint
+        </h3>
+        <span className="text-caption text-text-dim">
+          database-only dbStats · measured {timeSince(app.measuredAt)}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <MetricStat
+          label="Logical app data"
+          value={formatBytes(app.logicalDataBytes)}
+          caption="uncompressed documents"
+        />
+        <MetricStat
+          label="Allocated documents"
+          value={formatBytes(app.allocatedDocumentBytes)}
+          caption="WiredTiger document allocation"
+        />
+        <MetricStat
+          label="Allocated indexes"
+          value={formatBytes(app.allocatedIndexBytes)}
+          caption="database index allocation"
+        />
+        <MetricStat
+          label="Allocated app total"
+          value={formatBytes(app.allocatedTotalBytes)}
+          caption="documents + indexes"
+        />
+        <MetricStat
+          label="Mongo planning baseline"
+          value={
+            planning
+              ? `${formatUsd(planning.monthlyPlanningEstimateUsd)}/mo`
+              : "Unavailable"
+          }
+          caption="repository estimate, not an Atlas invoice"
+        />
+      </div>
+      <p className="text-caption text-text-dim">
+        This is the SC2 Tools application database only. It is not Atlas disk
+        capacity, backup storage, data transfer, or a provider bill.
+      </p>
     </div>
   );
 }

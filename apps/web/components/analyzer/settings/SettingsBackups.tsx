@@ -20,6 +20,7 @@ import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDial
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
+import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 
 type Backup = {
   id: string;
@@ -174,11 +175,20 @@ export function SettingsBackups() {
     }
   }
 
-  if (backups.isLoading) return <Skeleton rows={3} />;
+  if (backups.isLoading) {
+    return (
+      <div className="space-y-6">
+        <ReplayArchiveStatusCard />
+        <Skeleton rows={3} />
+      </div>
+    );
+  }
   const items = backups.data?.items ?? [];
 
   return (
     <div className="space-y-6">
+      <ReplayArchiveStatusCard />
+
       <Section
         title="Snapshots"
         description="Atlas takes daily continuous backups in the background. These manual snapshots are for 'before I migrate' checkpoints — labelled and restorable from this UI."

@@ -20,12 +20,15 @@ export function ReplayDownloadButton({
   filename,
   sizeBytes,
   mobile = false,
+  showLabel = false,
 }: {
   gameId?: string | null;
   available?: boolean;
   filename?: string | null;
   sizeBytes?: number | null;
   mobile?: boolean;
+  /** Show a visible label for roomy action bars; icon-only remains the default. */
+  showLabel?: boolean;
 }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -110,7 +113,9 @@ export function ReplayDownloadButton({
           "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed",
           mobile
             ? "min-h-[44px] w-full gap-2 border-border-strong bg-bg-elevated/60 px-3 py-2 text-caption"
-            : "h-8 w-8 border-border bg-bg-elevated/60",
+            : showLabel
+              ? "min-h-9 gap-2 border-border-strong bg-bg-elevated/75 px-3 py-1.5 text-caption shadow-sm"
+              : "h-8 w-8 border-border bg-bg-elevated/60",
           !canDownload
             ? "text-text-dim opacity-55"
             : state === "error"
@@ -125,7 +130,7 @@ export function ReplayDownloadButton({
         ) : (
           <Download className="h-4 w-4" aria-hidden />
         )}
-        {mobile ? (
+        {mobile || showLabel ? (
           <span>
             {!canDownload
               ? "Replay unavailable"

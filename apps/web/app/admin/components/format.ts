@@ -4,6 +4,7 @@
  */
 
 const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
+const BINARY_BYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
 
 /**
  * Render a byte count using metric units (1 kB = 1000 B), matching
@@ -22,6 +23,40 @@ export function formatBytes(bytes: number): string {
   }
   const digits = unit === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
   return `${value.toFixed(digits)} ${BYTE_UNITS[unit]}`;
+}
+
+/**
+ * Binary units for Atlas disk telemetry. Atlas renders these partition
+ * measurements in GiB even though its API payload is normalized to bytes.
+ * Keep Mongo dbStats and collection sizes on {@link formatBytes}.
+ */
+export function formatBinaryBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < BINARY_BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 ? 0 : 2;
+  return `${value.toFixed(digits)} ${BINARY_BYTE_UNITS[unit]}`;
+}
+
+/** Fixed two-decimal USD for provider charges and planning estimates. */
+export function formatUsd(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function formatUsdCents(value: number | null): string {
+  return value === null || !Number.isFinite(value)
+    ? "—"
+    : formatUsd(value / 100);
 }
 
 /**

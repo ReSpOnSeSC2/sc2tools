@@ -20,6 +20,30 @@ export type StorageStatsResp = {
     totalSize: number;
     indexSize: number;
   }>;
+  database: MongoDatabaseStorageStatus;
+};
+
+export type MongoAppStorage = {
+  logicalDataBytes: number;
+  allocatedDocumentBytes: number;
+  allocatedIndexBytes: number;
+  allocatedTotalBytes: number;
+  scope: "sc2tools_database_only";
+  measuredAt: string;
+};
+
+export type MongoPlanningPrice = {
+  monthlyPlanningEstimateUsd: number;
+  includedInSiteFixedMonthlyEquivalent: boolean;
+  estimate: true;
+  basis: "repo_budget_assumption";
+};
+
+export type MongoDatabaseStorageStatus = {
+  available: boolean;
+  appData: MongoAppStorage | null;
+  pricing: MongoPlanningPrice | null;
+  atlas: AtlasInfrastructureStatus;
 };
 
 export type UserListFilter = "all" | "with_games" | "no_games" | "with_agent";
@@ -154,6 +178,16 @@ export type HealthResp = {
     ok: boolean;
     latencyMs: number | null;
     error: string | null;
+    storage: MongoAppStorage | null;
+    pricing: MongoPlanningPrice | null;
+    atlas: AtlasInfrastructureStatus;
+  };
+  cloudflareAnalytics: {
+    configured: boolean;
+    available: boolean;
+    stale: boolean;
+    asOf: string | null;
+    errorCode: string | null;
   };
   uptime: {
     startedAt: string;
@@ -162,7 +196,54 @@ export type HealthResp = {
   runtime: {
     nodeVersion: string;
     gameDetailsStore: string;
+    replayFilesStore: string;
+    infrastructureCostsConfigured: boolean;
   };
+};
+
+export type AtlasInfrastructureStatus = {
+  configured: boolean;
+  available: boolean;
+  measuredAt: string | null;
+  cluster: {
+    tier: string | null;
+    provider: string | null;
+    region: string | null;
+    provisionedDiskGb: number | null;
+    autoExpandStorage: boolean;
+    diskUsedBytes: number | null;
+    diskCapacityBytes: number | null;
+    diskMeasuredAt: string | null;
+  } | null;
+  billing: {
+    available: boolean;
+    cycleStart: string | null;
+    cycleEnd: string | null;
+    postedThrough: string | null;
+    postedCycleCents: number | null;
+    categoryCents: {
+      compute: number;
+      storage: number;
+      transfer: number;
+      other: number;
+    } | null;
+    projectedMonthlyRunRateCents: number | null;
+    projectedMonthlyRunRateUsd: number | null;
+    clusterPostedGrossUsd: number | null;
+    clusterPostedDiscountUsd: number | null;
+    clusterPostedNetUsd: number | null;
+    lineItemCount: number;
+    currency: "USD";
+    source: "atlas_pending_invoice";
+    lagDaysApprox: number;
+    errorCode: string | null;
+  } | null;
+  credential: {
+    expiresAt: string | null;
+    daysRemaining: number | null;
+    expiringSoon: boolean;
+  };
+  errorCode: string | null;
 };
 
 // ---- Global tracking (/admin/global) ----------------------------------

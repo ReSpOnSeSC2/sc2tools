@@ -30,6 +30,15 @@ export interface GameSummary {
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;
+  /** Flattened replay fields used by opponent-history projections. */
+  replayAvailable?: boolean;
+  replayFilename?: string | null;
+  replaySizeBytes?: number | null;
+  /** Completed R2 marker returned by the direct game-detail endpoint. */
+  replayFile?: {
+    storedAt?: string | null;
+    sizeBytes?: number | null;
+  } | null;
   opponent?: GameOpponentSummary | null;
 }
 

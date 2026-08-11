@@ -16,11 +16,14 @@ import type { LucideIcon } from "lucide-react";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
 import {
   FIXED_MONTHLY_FALLBACK_USD,
+  formatAtlasDiskBytes,
+  formatBinaryStorageBytes,
   formatCostSnapshotTime,
   formatReplayCount,
   formatStorageBytes,
   formatUsd,
   getInfrastructureCosts,
+  monthlyCostSummary,
   type InfrastructureCosts,
 } from "@/lib/infrastructureCosts";
 
@@ -105,8 +108,7 @@ export default async function DonatePage() {
 }
 
 function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
-  const fixedMonthly =
-    costs?.site.fixedMonthlyEquivalentUsd ?? FIXED_MONTHLY_FALLBACK_USD;
+  const summary = costs ? monthlyCostSummary(costs) : null;
   return (
     <section className="relative mx-auto max-w-3xl text-center">
       <div
@@ -127,18 +129,23 @@ function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
         <span className="text-accent-cyan">Donations keep it that way.</span>
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
-        Every feature ships free for every player. The fixed public-list-price
-        infrastructure base is {formatUsd(fixedMonthly)}/month: one
-        Render-hosted API, MongoDB Atlas M10 and the domain. A one-time tip
-        helps cover that bill
-        {costs ? (
+        Every feature ships free for every player. A one-time tip helps cover
+        the infrastructure behind it.{" "}
+        {summary ? (
           <>
-            {", plus the current "}
-            {formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}/month
-            estimated Cloudflare R2 archive cost.
+            The current estimated monthly run rate is{" "}
+            {formatUsd(summary.totalUsd)}:{" "}
+            {summary.mode === "atlas_projected"
+              ? `${formatUsd(costs!.site.nonMongoFixedMonthlyUsd)} non-Mongo fixed costs + ${formatUsd(summary.atlasUsd)} projected Atlas + ${formatUsd(summary.r2Usd)} estimated R2.`
+              : `${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} planning fallback + ${formatUsd(summary.r2Usd)} live R2 estimate.`}
           </>
         ) : (
-          ". Live archive usage is temporarily unavailable, so no R2 amount is being guessed."
+          <>
+            The {formatUsd(FIXED_MONTHLY_FALLBACK_USD)}/month public-list
+            planning baseline covers one Render-hosted API, MongoDB Atlas M10
+            and the domain. Live usage is temporarily unavailable, so no R2
+            amount is being guessed.
+          </>
         )}
       </p>
     </section>
@@ -266,20 +273,19 @@ const COST_LINES: ReadonlyArray<CostLine> = [
   },
 ];
 
-const BASE_COST_LINES = COST_LINES.filter((line) => line.includedInBase);
-const APPROX_MONTHLY_BASE = BASE_COST_LINES.reduce(
-  (acc, line) => acc + line.approxMonthlyUsd,
-  0,
-);
-
 function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
-  const fixedMonthly =
-    costs?.site.fixedMonthlyEquivalentUsd ?? APPROX_MONTHLY_BASE;
+  const summary = costs ? monthlyCostSummary(costs) : null;
+  const atlasBilling = costs?.mongo.atlas.billing;
+  const postedAtlasUsd =
+    atlasBilling?.available && atlasBilling.postedCycleCents !== null
+      ? atlasBilling.postedCycleCents / 100
+      : null;
+  const fixedMonthly = FIXED_MONTHLY_FALLBACK_USD;
   const displayedLines = costLines(costs);
   return (
     <Section
       title="Where every penny goes"
-      description="No ads and no investor money. This is a public-list-price estimate for the tiers declared in the repository, not a live invoice; provider dashboards remain the source of truth."
+      description="No ads and no investor money. Live provider measurements are separated from planning estimates, and a posted billing-cycle amount is never presented as a completed monthly invoice."
       className="mx-auto max-w-5xl"
     >
       <Card padded={false}>
@@ -291,44 +297,35 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
         <div className="grid gap-2 border-t border-border bg-bg-elevated/40 px-5 py-4 sm:grid-cols-2">
           <div className="space-y-0.5">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              {costs
-                ? "Estimated current monthly total"
-                : "Fixed base · monthly equivalent"}
+              {summary ? "Estimated monthly run rate" : "Planning baseline"}
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
               ~
-              {formatUsd(
-                costs?.site.estimatedCurrentMonthlyTotalUsd ?? fixedMonthly,
-              )}
+              {formatUsd(summary?.totalUsd ?? fixedMonthly)}
               <span className="ml-1 text-caption font-normal text-text-muted">
                 /month
               </span>
             </p>
             <p className="text-caption text-text-dim">
-              {costs
-                ? `${formatUsd(fixedMonthly)} fixed + ${formatUsd(costs.r2.estimatedCostUsd.currentMonthly)} R2 estimate`
-                : "Live archive usage temporarily unavailable"}
+              {summary?.mode === "atlas_projected"
+                ? `${formatUsd(costs!.site.nonMongoFixedMonthlyUsd)} non-Mongo fixed + ${formatUsd(summary.atlasUsd)} projected Atlas + ${formatUsd(summary.r2Usd)} R2 estimate`
+                : summary
+                  ? `planning fallback + live R2 estimate: ${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} + ${formatUsd(summary.r2Usd)} R2`
+                  : "Live usage temporarily unavailable"}
             </p>
           </div>
           <div className="space-y-0.5 sm:text-right">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
-              Cloudflare R2 · current estimate
+              Atlas charges posted this cycle
             </p>
             <p className="text-h3 font-semibold tabular-nums text-text">
-              {costs ? (
-                <>
-                  ~{formatUsd(costs.r2.estimatedCostUsd.currentMonthly)}
-                  <span className="ml-1 text-caption font-normal text-text-muted">
-                    /month
-                  </span>
-                </>
-              ) : (
-                "Unavailable"
-              )}
+              {postedAtlasUsd === null
+                ? "Unavailable"
+                : formatUsd(postedAtlasUsd)}
             </p>
             <p className="text-caption text-text-dim">
-              {costs
-                ? `${formatStorageBytes(costs.archive.r2StoredBytes)} stored`
+              {postedAtlasUsd !== null && atlasBilling?.postedThrough
+                ? `through ${formatCostSnapshotTime(atlasBilling.postedThrough)} · not a full-month invoice`
                 : "No zero-cost assumption shown"}
             </p>
           </div>
@@ -369,6 +366,7 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
               Cloudflare may round billable units. Its dashboard and invoice
               remain authoritative.
             </p>
+            <MongoUsageDetails costs={costs} />
             {costs.r2.unknownRequests > 0 ? (
               <p>
                 {formatReplayCount(costs.r2.unknownRequests)} current-cycle R2
@@ -381,7 +379,7 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
           <p>
             Live archive usage is temporarily unavailable. The fixed{" "}
             {formatUsd(fixedMonthly)}/month base is still shown, but no replay
-            storage amount, R2 cost or combined total has been invented.
+            storage amount, R2 cost or live combined total has been invented.
             Provider dashboards remain authoritative.
           </p>
         )}
@@ -413,6 +411,37 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
 
 function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
   return COST_LINES.map((line) => {
+    if (line.id === "mongo") {
+      if (!costs) return line;
+      const billing = costs.mongo.atlas.billing;
+      const projected = billing?.available
+        ? billing.projectedMonthlyRunRateUsd
+        : null;
+      const cluster = costs.mongo.atlas.cluster;
+      const allocated = formatBinaryStorageBytes(
+        costs.mongo.appData.allocatedTotalBytes,
+      );
+      const disk =
+        cluster?.diskUsedBytes !== null &&
+        cluster?.diskUsedBytes !== undefined &&
+        cluster.diskCapacityBytes !== null
+          ? `${formatAtlasDiskBytes(cluster.diskUsedBytes)} of ${formatAtlasDiskBytes(cluster.diskCapacityBytes)} Atlas disk used`
+          : "Atlas disk telemetry unavailable";
+      return {
+        ...line,
+        detail:
+          `${cluster?.tier ?? "Dedicated Atlas"} stores searchable replay metadata, opponent histories and aggregates. `
+          + `SC2 Tools database allocation: ${allocated}; ${disk}.`,
+        priceLabel:
+          projected === null
+            ? `~${formatUsd(costs.mongo.planning.monthlyUsd)}/mo`
+            : `~${formatUsd(projected)}/mo`,
+        priceNote:
+          projected === null
+            ? "public-list planning estimate"
+            : "projected run rate · not an invoice",
+      };
+    }
     if (line.id !== "r2") return line;
     if (!costs) {
       return {
@@ -433,6 +462,96 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
       priceNote: `${formatStorageBytes(costs.archive.r2StoredBytes)} stored${costs.stale ? " · stale snapshot" : ""}`,
     };
   });
+}
+
+function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
+  const { appData, atlas } = costs.mongo;
+  const cluster = atlas.cluster;
+  const billing = atlas.billing;
+  const hasDisk =
+    cluster?.diskUsedBytes !== null &&
+    cluster?.diskUsedBytes !== undefined &&
+    cluster.diskCapacityBytes !== null;
+  const hasPostedBilling =
+    billing?.available && billing.postedCycleCents !== null;
+  return (
+    <>
+      <p>
+        SC2 Tools&rsquo; database currently reports{" "}
+        {formatBinaryStorageBytes(appData.allocatedTotalBytes)} allocated:{" "}
+        {formatBinaryStorageBytes(appData.allocatedDocumentBytes)} for documents
+        and {formatBinaryStorageBytes(appData.allocatedIndexBytes)} for indexes.
+        Its logical, uncompressed data is{" "}
+        {formatBinaryStorageBytes(appData.logicalDataBytes)}. These are
+        database-only measurements, not billed Atlas disk usage.
+      </p>
+      {hasDisk ? (
+        <p>
+          Atlas reports {formatAtlasDiskBytes(cluster!.diskUsedBytes!)} of{" "}
+          {formatAtlasDiskBytes(cluster!.diskCapacityBytes!)} disk in use
+          (binary GiB), including database and operational storage
+          {cluster?.tier ? ` on ${cluster.tier}` : ""}. Atlas measured that
+          disk usage{" "}
+          {cluster?.diskMeasuredAt ? (
+            <>
+              at{" "}
+              <time dateTime={cluster.diskMeasuredAt}>
+                {formatCostSnapshotTime(cluster.diskMeasuredAt)}
+              </time>
+            </>
+          ) : (
+            "in its latest available sample"
+          )}
+          .
+        </p>
+      ) : (
+        <p>
+          Live Atlas disk telemetry is unavailable; no disk-used amount has
+          been guessed.
+        </p>
+      )}
+      {hasPostedBilling ? (
+        <p>
+          Atlas has posted {formatUsd(billing!.postedCycleCents! / 100)} for the
+          current billing cycle
+          {billing?.postedThrough
+            ? ` through ${formatCostSnapshotTime(billing.postedThrough)}`
+            : ""}
+          . That posted amount is not a full-month invoice. The category split
+          is {formatAtlasCategories(billing!.categoryCents)}. The{" "}
+          {billing?.projectedMonthlyRunRateUsd !== null
+            ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate is a projection from posted charges`
+            : "monthly Atlas run-rate projection is unavailable"}
+          ; Atlas charges usually post about one day later, and provider
+          billing remains authoritative.
+        </p>
+      ) : (
+        <p>
+          Live Atlas billing is unavailable, so the combined monthly estimate
+          uses the {formatUsd(costs.mongo.planning.monthlyUsd)} MongoDB planning
+          amount instead of claiming a zero charge.
+        </p>
+      )}
+    </>
+  );
+}
+
+function formatAtlasCategories(
+  categories:
+    | NonNullable<
+        NonNullable<
+          InfrastructureCosts["mongo"]["atlas"]["billing"]
+        >["categoryCents"]
+      >
+    | null,
+): string {
+  if (!categories) return "unavailable";
+  return [
+    `compute ${formatUsd(categories.compute / 100)}`,
+    `storage and backups ${formatUsd(categories.storage / 100)}`,
+    `transfer ${formatUsd(categories.transfer / 100)}`,
+    `other ${formatUsd(categories.other / 100)}`,
+  ].join(", ");
 }
 
 function CostRow({ line }: { line: CostLine }) {

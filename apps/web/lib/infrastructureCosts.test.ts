@@ -7,10 +7,13 @@ vi.mock("@/lib/serverApi", () => ({
 }));
 
 import {
+  formatAtlasDiskBytes,
+  formatBinaryStorageBytes,
   formatReplayCount,
   formatStorageBytes,
   formatUsd,
   getInfrastructureCosts,
+  monthlyCostSummary,
   normalizeInfrastructureCosts,
 } from "./infrastructureCosts";
 
@@ -36,9 +39,46 @@ const VALID_PAYLOAD = {
       currentMonthly: 0.045,
     },
   },
+  mongo: {
+    appData: {
+      logicalDataBytes: 1_200_000_000,
+      allocatedDocumentBytes: 520_000_000,
+      allocatedIndexBytes: 80_000_000,
+      allocatedTotalBytes: 600_000_000,
+      measuredAt: "2026-08-11T16:29:00.000Z",
+      scope: "sc2tools_database_only",
+    },
+    atlas: {
+      available: true,
+      cluster: {
+        tier: "M10",
+        provisionedDiskGb: 10,
+        diskUsedBytes: 3_954_452_070,
+        diskCapacityBytes: 10_632_560_640,
+        diskMeasuredAt: "2026-08-11T16:25:00.000Z",
+        autoExpandStorage: true,
+      },
+      billing: {
+        available: true,
+        cycleStart: "2026-08-01T00:00:00.000Z",
+        cycleEnd: "2026-09-01T00:00:00.000Z",
+        postedThrough: "2026-08-10T23:59:59.000Z",
+        postedCycleCents: 2_000,
+        categoryCents: {
+          compute: 1_800,
+          storage: 200,
+          transfer: 0,
+          other: 0,
+        },
+        projectedMonthlyRunRateUsd: 60,
+      },
+    },
+    planning: { monthlyUsd: 56.94 },
+  },
   site: {
-    fixedMonthlyEquivalentUsd: 65.19,
-    estimatedCurrentMonthlyTotalUsd: 65.235,
+    nonMongoFixedMonthlyUsd: 8.25,
+    pricingMode: "atlas_projected",
+    estimatedCurrentMonthlyTotalUsd: 68.295,
   },
 } as const;
 
@@ -51,6 +91,8 @@ describe("infrastructure cost response validation", () => {
     const value = normalizeInfrastructureCosts(VALID_PAYLOAD);
     expect(value?.archive.verifiedOriginalReplays).toBe(12_345);
     expect(value?.r2.estimatedCostUsd.currentMonthly).toBe(0.045);
+    expect(value?.mongo.atlas.cluster?.diskUsedBytes).toBe(3_954_452_070);
+    expect(value?.mongo.atlas.billing?.postedCycleCents).toBe(2_000);
   });
 
   test.each([
@@ -72,6 +114,29 @@ describe("infrastructure cost response validation", () => {
         estimatedCurrentMonthlyTotalUsd: Number.NaN,
       },
     },
+    {
+      ...VALID_PAYLOAD,
+      mongo: {
+        ...VALID_PAYLOAD.mongo,
+        appData: {
+          ...VALID_PAYLOAD.mongo.appData,
+          allocatedTotalBytes: 599_999_999,
+        },
+      },
+    },
+    {
+      ...VALID_PAYLOAD,
+      mongo: {
+        ...VALID_PAYLOAD.mongo,
+        atlas: {
+          ...VALID_PAYLOAD.mongo.atlas,
+          billing: {
+            ...VALID_PAYLOAD.mongo.atlas.billing,
+            postedCycleCents: -1,
+          },
+        },
+      },
+    },
   ])("rejects partial or unsafe public cost data", (value) => {
     expect(normalizeInfrastructureCosts(value)).toBeNull();
   });
@@ -91,6 +156,48 @@ describe("infrastructure cost response validation", () => {
   });
 });
 
+describe("monthly cost accounting", () => {
+  test("uses the projected Atlas run rate with the non-Mongo fixed costs", () => {
+    const costs = normalizeInfrastructureCosts(VALID_PAYLOAD);
+    expect(costs).not.toBeNull();
+    expect(monthlyCostSummary(costs!)).toEqual({
+      mode: "atlas_projected",
+      baseUsd: 8.25,
+      atlasUsd: 60,
+      r2Usd: 0.045,
+      totalUsd: 68.295,
+    });
+  });
+
+  test("uses the planning baseline plus live R2 when Atlas billing is unavailable", () => {
+    const payload = {
+      ...VALID_PAYLOAD,
+      mongo: {
+        ...VALID_PAYLOAD.mongo,
+        atlas: {
+          available: false,
+          cluster: null,
+          billing: null,
+        },
+      },
+      site: {
+        ...VALID_PAYLOAD.site,
+        pricingMode: "planning_fallback",
+        estimatedCurrentMonthlyTotalUsd: 65.235,
+      },
+    } as const;
+    const costs = normalizeInfrastructureCosts(payload);
+    expect(costs).not.toBeNull();
+    expect(monthlyCostSummary(costs!)).toEqual({
+      mode: "planning_fallback",
+      baseUsd: 65.19,
+      atlasUsd: 56.94,
+      r2Usd: 0.045,
+      totalUsd: 65.235,
+    });
+  });
+});
+
 describe("public cost formatting", () => {
   test.each([
     [0, "0 B"],
@@ -106,6 +213,12 @@ describe("public cost formatting", () => {
   test("does not turn an invalid byte value into a zero claim", () => {
     expect(formatStorageBytes(Number.NaN)).toBe("Unavailable");
     expect(formatStorageBytes(-1)).toBe("Unavailable");
+  });
+
+  test("formats Atlas and Mongo byte metrics in honest binary units", () => {
+    expect(formatAtlasDiskBytes(3_954_452_070)).toBe("3.68 GiB");
+    expect(formatAtlasDiskBytes(10_632_560_640)).toBe("9.90 GiB");
+    expect(formatBinaryStorageBytes(600_000_000)).toBe("572 MiB");
   });
 
   test("shows exact replay counts and currency to cents", () => {

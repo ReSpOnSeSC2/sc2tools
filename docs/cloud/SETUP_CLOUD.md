@@ -217,6 +217,23 @@ deployed with the R2 stores enabled.
    | `R2_SECRET_ACCESS_KEY`   | The bucket-scoped token's Secret Access Key |
    | `R2_PREFIX`              | `game-details`                              |
    | `R2_REPLAY_PREFIX`       | `raw-replays/v1`                            |
+   | `CLOUDFLARE_ACCOUNT_ID`  | Cloudflare account ID used for aggregate R2 analytics |
+   | `CLOUDFLARE_ANALYTICS_API_TOKEN` | A separate token with **Account Analytics: Read** only |
+   | `CLOUDFLARE_BILLING_CYCLE_DAY` | UTC start day for the Cloudflare cycle (`1`-`28`) |
+   | `ATLAS_SERVICE_ACCOUNT_ID` | Read-only Atlas service-account client ID |
+   | `ATLAS_SERVICE_ACCOUNT_SECRET` | Secret for that Atlas service account |
+   | `ATLAS_ORG_ID`           | Atlas organization containing the bill     |
+   | `ATLAS_PROJECT_ID`       | Atlas project containing the API database  |
+   | `ATLAS_CLUSTER_NAME`     | Production Atlas cluster name               |
+   | `ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT` | ISO-8601 expiry shown in Admin Health for rotation reminders |
+
+   The Cloudflare analytics token is intentionally separate from the R2 S3
+   access key. Give it only **Account Analytics: Read**; it does not need
+   object access. For Atlas, create a service account with **Project Read
+   Only** on this project and **Organization Billing Viewer** on the owning
+   organization. Admin Health reports the configured secret's expiry during
+   the final 30 days, but no credential or provider identifier is returned by
+   the public infrastructure-cost endpoint.
 
    Other vars (`NODE_ENV`, `MONGODB_DB`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE`)
    already have sane defaults from `render.yaml`.
@@ -512,6 +529,15 @@ varies by cloud provider and region, and backup storage, taxes, and overages
 are not included. If the Render dashboard actually uses Standard at $25
 rather than the repo-declared Starter plan, the same baseline is about
 $83.19/month before R2.
+
+The landing and support pages replace that planning amount with a live Atlas
+monthly projection when the read-only provider integrations above are healthy.
+They show the pending-invoice amount posted so far and its through-date
+separately from the projection: the posted amount is not presented as a full
+month or final invoice. Atlas disk telemetry is shown in binary GiB, while
+Mongo `dbStats` is labeled as application-database allocation rather than
+billed cluster disk. If Atlas billing is unavailable, the UI falls back to the
+$65.19 planning baseline and still adds the current R2 estimate.
 
 [Cloudflare R2 storage](https://developers.cloudflare.com/r2/pricing/) is
 usage-based. With fewer than 15 users at roughly 10,000 replays each, the

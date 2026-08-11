@@ -21,5 +21,8 @@ describe("SettingsShell layout containment", () => {
 
     const panel = screen.getByRole("tabpanel", { name: "Overlay" });
     expect(panel.className.split(/\s+/)).toContain("min-w-0");
+    expect(
+      screen.getAllByRole("tab", { name: "Backups & data" }),
+    ).toHaveLength(2);
   });
 });

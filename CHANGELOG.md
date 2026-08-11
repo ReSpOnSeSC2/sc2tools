@@ -16,12 +16,19 @@ corresponding GitHub Release.
 - **Infrastructure costs are now explained with the real production split** —
   the landing and support pages separate the single Render API instance,
   MongoDB Atlas, domain renewal, included Vercel/Clerk allowances, and
-  usage-based Cloudflare R2 storage. They now show the provider-reported R2
-  bytes and object count, verified original-replay count, classified operation
-  costs and the resulting estimated monthly total from a cached live usage
-  snapshot. With the deprecated community-builds service retired, the fixed
-  public-list-price baseline is about **$65.19/month**; an unavailable provider
-  snapshot is labeled clearly instead of being reported as zero usage.
+  usage-based Cloudflare R2 storage. A sanitized live snapshot now reports R2
+  bytes, objects, verified original replays and classified operations alongside
+  SC2 Tools' logical/allocated database size, Atlas disk used versus capacity
+  in binary GiB, and Atlas charges posted in the current cycle with their
+  through-date and category split. Posted charges remain visibly separate from
+  the projected monthly Atlas run rate. When that projection is available, the
+  combined estimate is the **$8.25/month** non-Mongo fixed cost plus projected
+  Atlas and estimated R2; otherwise it is clearly labeled as the
+  **$65.19/month** planning fallback plus the live R2 estimate. Missing provider
+  data is never reported as zero usage or a completed invoice. Admin Health
+  and Storage now surface replay/R2 readiness, database allocation, Atlas disk
+  capacity, billing freshness and credential-expiry warnings without exposing
+  provider credentials or identifiers.
 
 ### Fixed
 
@@ -41,9 +48,11 @@ corresponding GitHub Release.
 
 ### Added
 
-- **Private original replay library and downloads** — Opponent dossiers now
-  offer an uncluttered per-game `.SC2Replay` download action backed by a
-  private Cloudflare R2 archive. Existing users update to **agent 0.15.16**
+- **Private original replay library and downloads** — Opponent dossiers and
+  individual game-analysis pages now offer an uncluttered `.SC2Replay`
+  download action backed by a private Cloudflare R2 archive. The Settings
+  **Backups & data** tab reports private archive coverage and exact re-sync
+  guidance. Existing users update to **agent 0.15.16**
   (`agent-v0.15.16`) and run **Re-sync** once; dashboard and desktop prompts
   remain actionable until that one-time scan is requested. Historical files
   already deleted from the PC remain unavailable, while future accepted games
@@ -52,7 +61,9 @@ corresponding GitHub Release.
 - **Timestamped Twitch and YouTube links for both player perspectives** — the
   opponent dossier's full game list and each game detail page now show compact,
   grouped **You** and **Opp** platform icons whenever a verified matching VOD
-  exists. Links seek directly to the game's start, use saved streamer accounts
+  exists. Twitch actions use the platform's purple with matching hover and
+  keyboard-focus highlights. Links seek directly to the game's start, use
+  saved streamer accounts
   plus SC2Pulse's participant/public account associations, and omit missing or
   unverified archives instead of guessing. New uploads carry the exact replay
   start with **agent 0.15.14** (`agent-v0.15.14`, replay engine 1.5.7); older
