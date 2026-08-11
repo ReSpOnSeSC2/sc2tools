@@ -13,9 +13,9 @@ corresponding GitHub Release.
 
 ### Changed
 
-- Fixed Cloudflare R2 cost monitoring so S3 `ListObjectsV1`,
-  `ListObjectsV2`, and bulk `DeleteObjects` analytics are assigned to their
-  documented billing classes instead of appearing as unclassified activity.
+- Fixed Cloudflare R2 cost monitoring so S3 list/bulk-delete aliases and
+  non-billable Sippy/notification configuration reads are assigned correctly
+  instead of appearing as unclassified activity.
 
 - **Infrastructure costs are now explained with the real production split** —
   the landing and support pages separate the single Render API instance,

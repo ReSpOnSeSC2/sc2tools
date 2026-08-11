@@ -532,7 +532,9 @@ describe("infrastructure usage cost model", () => {
       classBMonthlyMills: 720,
     });
   });
+});
 
+describe("infrastructure operation classifier", () => {
   test("classifies official free/A/B actions and exposes unknown requests", () => {
     expect(_internals.classifyOperations([
       operation("PutObject", 2),
@@ -562,6 +564,20 @@ describe("infrastructure usage cost model", () => {
     });
   });
 
+  test("does not bill Cloudflare dashboard configuration reads", () => {
+    expect(_internals.classifyOperations([
+      operation("GetBucketSippyConfiguration", 2),
+      operation("GetBucketNotificationConfiguration", 1),
+    ])).toEqual({
+      classARequests: 0,
+      classBRequests: 0,
+      freeRequests: 3,
+      unknownRequests: 0,
+    });
+  });
+});
+
+describe("infrastructure billing cycle", () => {
   test("computes UTC custom billing-cycle boundaries", () => {
     expect(_internals.billingCycleStart(
       new Date("2026-08-11T01:00:00Z"),

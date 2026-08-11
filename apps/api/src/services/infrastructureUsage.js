@@ -80,6 +80,11 @@ const FREE_ACTIONS = new Set([
   "DeleteObjects",
   "DeleteBucket",
   "AbortMultipartUpload",
+  // Cloudflare's bucket dashboard emits these control-plane configuration
+  // reads. They are absent from the documented Class A/B billing lists and
+  // are not replay-storage traffic.
+  "GetBucketNotificationConfiguration",
+  "GetBucketSippyConfiguration",
 ]);
 
 const ANALYTICS_QUERY = `
