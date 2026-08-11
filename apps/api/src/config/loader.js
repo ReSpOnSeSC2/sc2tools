@@ -61,6 +61,11 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     clusterName: string,
  *     secretExpiresAt: string|null,
  *   }|null,
+ *   renderAdmin: {
+ *     apiKey: string,
+ *     serviceId: string,
+ *     monthlyCostUsd: number|null,
+ *   }|null,
  *   analytics: {
  *     enabled: boolean,
  *     propertyId: string|null,
@@ -135,6 +140,7 @@ function loadConfig(env = process.env) {
     r2: parseR2Config(env),
     cloudflareAnalytics: parseCloudflareAnalyticsConfig(env),
     atlasAdmin: parseAtlasAdminConfig(env),
+    renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
   };
 }
@@ -340,6 +346,39 @@ function parseAtlasAdminConfig(env) {
   return { ...fields, secretExpiresAt };
 }
 
+/**
+ * Optional Render API capacity diagnostics. Render API keys are broadly
+ * account-scoped rather than least-privilege credentials, so this integration
+ * is opt-in and the adapter only performs service/metric GET requests. Render
+ * injects RENDER_SERVICE_ID into a running service; only the API key normally
+ * needs to be copied into the dashboard.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{
+ *   apiKey: string,
+ *   serviceId: string,
+ *   monthlyCostUsd: number|null,
+ * } | null}
+ */
+function parseRenderAdminConfig(env) {
+  const apiKey = String(env.RENDER_API_KEY || "").trim();
+  const serviceId = String(env.RENDER_SERVICE_ID || "").trim();
+  const monthlyRaw = String(env.RENDER_MONTHLY_COST_USD || "").trim();
+  // Render injects RENDER_SERVICE_ID automatically into every service. Its
+  // presence alone must not turn this optional integration on or break an
+  // existing production boot.
+  if (!apiKey && !monthlyRaw) return null;
+  if (!apiKey || !serviceId) {
+    throw new Error(
+      "RENDER_API_KEY and RENDER_SERVICE_ID must be set together",
+    );
+  }
+  const monthlyCostUsd = monthlyRaw
+    ? parseUsd(monthlyRaw, "RENDER_MONTHLY_COST_USD")
+    : null;
+  return { apiKey, serviceId, monthlyCostUsd };
+}
+
 /** @param {string|undefined} raw */
 function parseBillingCycleDay(raw) {
   if (raw === undefined || raw === null || raw === "") return 1;
@@ -384,6 +423,18 @@ function parseInteger(raw, fallback) {
   return parsed;
 }
 
+/** @param {string} raw @param {string} name */
+function parseUsd(raw, name) {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+    throw new Error(`${name} must be a non-negative USD amount`);
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value > 1_000_000) {
+    throw new Error(`${name} must be a non-negative USD amount`);
+  }
+  return value;
+}
+
 /** @param {string|undefined} raw @returns {string[]} */
 function parseCsv(raw) {
   if (!raw) return [];
@@ -400,5 +451,6 @@ module.exports = {
   parseR2Config,
   parseCloudflareAnalyticsConfig,
   parseAtlasAdminConfig,
+  parseRenderAdminConfig,
   parseAnalyticsConfig,
 };

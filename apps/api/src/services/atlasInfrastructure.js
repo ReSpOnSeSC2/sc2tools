@@ -6,6 +6,9 @@ const ATLAS_API_VERSION = "2025-03-12";
 const TOKEN_SKEW_MS = 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 8 * 1000;
 const DISK_METRIC_PERIOD = "PT1H";
+const PROCESS_METRIC_PERIOD = "PT1H";
+const SUSTAINED_SAMPLE_COUNT = 3;
+const MAX_CLUSTER_PROCESSES = 9;
 
 /**
  * Read-only MongoDB Atlas control-plane client. It deliberately returns an
@@ -72,14 +75,14 @@ class AtlasInfrastructureClient {
       `/api/atlas/v2/groups/${project}/clusters/${name}`,
     );
     const parsed = parseCluster(raw);
-    let disk = null;
+    let operational = null;
     try {
-      disk = await this._diskSnapshot(raw);
+      operational = await this._operationalSnapshot(raw);
     } catch {
       // Cluster configuration remains useful if metrics are temporarily
       // unavailable, still warming up, or the process list is paginated.
     }
-    return { ...parsed, ...disk };
+    return { ...parsed, ...operational };
   }
 
   async _billingSnapshot() {
@@ -94,13 +97,54 @@ class AtlasInfrastructureClient {
   }
 
   /** @param {Record<string, any>} cluster */
-  async _diskSnapshot(cluster) {
+  async _operationalSnapshot(cluster) {
     const project = encodeURIComponent(this.config.projectId);
     const processes = await this._apiJson(
       `/api/atlas/v2/groups/${project}/processes?itemsPerPage=100`,
     );
-    const process = selectClusterProcess(cluster, processes?.results || []);
-    if (!process) throw atlasError("atlas_cluster_process_missing");
+    const processWindow = selectClusterProcessWindow(
+      cluster,
+      processes?.results || [],
+    );
+    const clusterProcesses = processWindow.processes;
+    if (clusterProcesses.length === 0) {
+      throw atlasError("atlas_cluster_process_missing");
+    }
+    const rows = await Promise.allSettled(clusterProcesses.map(
+      async (process) => {
+        const [diskResult, performanceResult] = await Promise.allSettled([
+          this._diskSnapshot(process),
+          this._performanceSnapshot(process),
+        ]);
+        return {
+          disk: diskResult.status === "fulfilled" ? diskResult.value : null,
+          performance: performanceResult.status === "fulfilled"
+            ? performanceResult.value
+            : null,
+        };
+      },
+    ));
+    const values = rows
+      .filter((row) => row.status === "fulfilled")
+      .map((row) => row.value);
+    const diskRows = values
+      .map((row) => row.disk)
+      .filter((row) => row !== null);
+    const performanceRows = values
+      .map((row) => row.performance)
+      .filter((row) => row !== null);
+    return {
+      ...worstDisk(diskRows),
+      performance: aggregateProcessPerformance(
+        performanceRows,
+        processWindow.expectedProcessCount,
+      ),
+    };
+  }
+
+  /** @param {Record<string, any>} process */
+  async _diskSnapshot(process) {
+    const project = encodeURIComponent(this.config.projectId);
     const processId = encodeURIComponent(String(process.id || ""));
     const disks = await this._apiJson(
       `/api/atlas/v2/groups/${project}/processes/${processId}/disks`
@@ -141,6 +185,24 @@ class AtlasInfrastructureClient {
     }
     candidates.sort((a, b) => b.diskCapacityBytes - a.diskCapacityBytes);
     return candidates[0];
+  }
+
+  /** @param {Record<string, any>} process */
+  async _performanceSnapshot(process) {
+    const project = encodeURIComponent(this.config.projectId);
+    const processId = encodeURIComponent(String(process.id || ""));
+    const query = "granularity=PT5M&period=" + PROCESS_METRIC_PERIOD
+      + "&m=SYSTEM_NORMALIZED_CPU_USER"
+      + "&m=SYSTEM_NORMALIZED_CPU_KERNEL"
+      + "&m=CACHE_FILL_RATIO"
+      + "&m=CONNECTIONS";
+    const raw = await this._apiJson(
+      `/api/atlas/v2/groups/${project}/processes/${processId}`
+        + `/measurements?${query}`,
+    );
+    const parsed = parseProcessMeasurements(raw);
+    if (!parsed) throw atlasError("atlas_process_metrics_unavailable");
+    return parsed;
   }
 
   /** @param {string} path */
@@ -245,9 +307,11 @@ class AtlasInfrastructureClient {
 
 /** @param {Record<string, any>} raw */
 function parseCluster(raw) {
-  const specs = Array.isArray(raw?.replicationSpecs)
-    ? raw.replicationSpecs
-    : raw?.effectiveReplicationSpecs;
+  const effective = Array.isArray(raw?.effectiveReplicationSpecs)
+    && raw.effectiveReplicationSpecs.length > 0
+    ? raw.effectiveReplicationSpecs
+    : null;
+  const specs = effective || raw?.replicationSpecs;
   const regions = (Array.isArray(specs) ? specs : [])
     .flatMap((spec) => Array.isArray(spec?.regionConfigs)
       ? spec.regionConfigs
@@ -273,6 +337,7 @@ function parseCluster(raw) {
     diskUsedBytes: null,
     diskCapacityBytes: null,
     diskMeasuredAt: null,
+    performance: null,
   };
 }
 
@@ -320,6 +385,13 @@ function parsePendingInvoices(raw, target) {
       pushDate(postedThrough, item?.endDate ?? item?.created);
     }
   }
+  // A valid pending-invoice response with no lines for the configured
+  // project/cluster is not evidence of a $0 monthly run rate. It can mean
+  // provider posting lag or a target mismatch, so preserve the planning
+  // fallback instead of projecting zero.
+  if (lineItemCount === 0) {
+    return unavailableBilling("atlas_billing_no_matching_line_items");
+  }
   const cycleStart = minIso(cycleStarts);
   const cycleEnd = maxIso(cycleEnds);
   const through = maxIso(postedThrough);
@@ -352,7 +424,7 @@ function parsePendingInvoices(raw, target) {
   };
 }
 
-function unavailableBilling() {
+function unavailableBilling(errorCode = "atlas_billing_unavailable") {
   return {
     available: false,
     cycleStart: null,
@@ -369,7 +441,7 @@ function unavailableBilling() {
     currency: "USD",
     source: "atlas_pending_invoice",
     lagDaysApprox: 1,
-    errorCode: "atlas_billing_unavailable",
+    errorCode,
   };
 }
 
@@ -409,6 +481,11 @@ function projectCycleCost(input) {
 
 /** @param {Record<string, any>} cluster @param {any[]} rows */
 function selectClusterProcess(cluster, rows) {
+  return selectClusterProcesses(cluster, rows)[0] || null;
+}
+
+/** @param {Record<string, any>} cluster @param {any[]} rows */
+function selectClusterProcesses(cluster, rows) {
   const hosts = connectionHosts(cluster?.connectionStrings?.standard);
   const matches = rows.filter((row) => {
     const hostname = String(row?.hostname || "").toLowerCase();
@@ -416,9 +493,27 @@ function selectClusterProcess(cluster, rows) {
     const id = String(row?.id || "").toLowerCase();
     return hosts.has(hostname) || hosts.has(alias) || hosts.has(id);
   });
-  return matches.find((row) => String(row?.typeName || "").includes("PRIMARY"))
-    || matches[0]
-    || null;
+  return matches.sort((left, right) => {
+    const leftPrimary = String(left?.typeName || "").includes("PRIMARY");
+    const rightPrimary = String(right?.typeName || "").includes("PRIMARY");
+    return Number(rightPrimary) - Number(leftPrimary);
+  });
+}
+
+/**
+ * Keep provider fan-out bounded while preserving the true matched node count.
+ * A cluster larger than the cap must report incomplete coverage rather than
+ * incorrectly claiming that all electable processes were measured.
+ *
+ * @param {Record<string, any>} cluster
+ * @param {any[]} rows
+ */
+function selectClusterProcessWindow(cluster, rows) {
+  const matches = selectClusterProcesses(cluster, rows);
+  return {
+    processes: matches.slice(0, MAX_CLUSTER_PROCESSES),
+    expectedProcessCount: matches.length,
+  };
 }
 
 /** @param {unknown} raw */
@@ -451,6 +546,208 @@ function parseDiskMeasurements(raw) {
     diskCapacityBytes: capacity,
     diskMeasuredAt: maxIso([used.timestamp, free.timestamp]),
   };
+}
+
+/** @param {Record<string, any>} raw */
+function parseProcessMeasurements(raw) {
+  const rows = Array.isArray(raw?.measurements) ? raw.measurements : [];
+  const user = measurementPoints(rows, "SYSTEM_NORMALIZED_CPU_USER");
+  const kernel = measurementPoints(rows, "SYSTEM_NORMALIZED_CPU_KERNEL");
+  const cache = measurementPoints(rows, "CACHE_FILL_RATIO", true);
+  const connections = measurementPoints(rows, "CONNECTIONS");
+  const cpu = combinePointSeries(user, kernel);
+  const cpuStats = numericStats(cpu);
+  const cacheStats = numericStats(cache);
+  const connectionStats = numericStats(connections);
+  if (!cpuStats && !cacheStats && !connectionStats) return null;
+  return {
+    scope: "single_electable_process",
+    windowMinutes: 60,
+    sustainedWindowMinutes: 15,
+    measuredAt: maxIso(/** @type {string[]} */ ([
+      cpuStats?.measuredAt,
+      cacheStats?.measuredAt,
+      connectionStats?.measuredAt,
+    ].filter((value) => typeof value === "string"))),
+    cpu: stripStatsTimestamp(cpuStats),
+    cache: stripStatsTimestamp(cacheStats),
+    connections: stripNumberStatsTimestamp(connectionStats),
+  };
+}
+
+/** @param {Array<Record<string, any>>} rows */
+function worstDisk(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return [...rows].sort((left, right) => {
+    const leftCapacity = Number(left.diskCapacityBytes) || 0;
+    const rightCapacity = Number(right.diskCapacityBytes) || 0;
+    const leftRatio = leftCapacity > 0
+      ? Number(left.diskUsedBytes) / leftCapacity
+      : -1;
+    const rightRatio = rightCapacity > 0
+      ? Number(right.diskUsedBytes) / rightCapacity
+      : -1;
+    return rightRatio - leftRatio;
+  })[0];
+}
+
+/**
+ * Atlas returns host measurements per process. Capacity advice uses the worst
+ * electable-node aggregate, never one selected primary, because a secondary
+ * under pressure can become primary after a failover.
+ *
+ * @param {Array<Record<string, any>>} rows
+ * @param {number} expectedProcessCount
+ */
+function aggregateProcessPerformance(rows, expectedProcessCount) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return {
+    scope: "cluster_electable_processes_worst_case",
+    processCount: rows.length,
+    expectedProcessCount,
+    complete: rows.length === expectedProcessCount,
+    windowMinutes: 60,
+    sustainedWindowMinutes: 15,
+    measuredAt: maxIso(rows.map((row) => row.measuredAt).filter(Boolean)),
+    cpu: worstPercentStats(rows.map((row) => row.cpu).filter(Boolean)),
+    cache: worstPercentStats(rows.map((row) => row.cache).filter(Boolean)),
+    connections: worstNumberStats(
+      rows.map((row) => row.connections).filter(Boolean),
+    ),
+  };
+}
+
+/** @param {Array<Record<string, any>>} rows */
+function worstPercentStats(rows) {
+  if (rows.length === 0) return null;
+  return {
+    averagePercent: maxFinite(rows, "averagePercent"),
+    peakPercent: maxFinite(rows, "peakPercent"),
+    latestPercent: maxFinite(rows, "latestPercent"),
+    recentAveragePercent: maxFinite(rows, "recentAveragePercent"),
+    recentSampleCount: minFinite(rows, "recentSampleCount"),
+    sampleCount: minFinite(rows, "sampleCount"),
+  };
+}
+
+/** @param {Array<Record<string, any>>} rows */
+function worstNumberStats(rows) {
+  if (rows.length === 0) return null;
+  return {
+    average: maxFinite(rows, "average"),
+    peak: maxFinite(rows, "peak"),
+    latest: maxFinite(rows, "latest"),
+    sampleCount: minFinite(rows, "sampleCount"),
+  };
+}
+
+/** @param {Array<Record<string, any>>} rows @param {string} field */
+function maxFinite(rows, field) {
+  const values = rows.map((row) => Number(row[field])).filter(Number.isFinite);
+  return values.length ? roundOne(Math.max(...values)) : null;
+}
+
+/** @param {Array<Record<string, any>>} rows @param {string} field */
+function minFinite(rows, field) {
+  const values = rows.map((row) => Number(row[field])).filter(Number.isFinite);
+  return values.length ? Math.min(...values) : null;
+}
+
+/**
+ * @param {any[]} rows
+ * @param {string} name
+ * @param {boolean} [ratio]
+ */
+function measurementPoints(rows, name, ratio = false) {
+  const metric = rows.find((row) => row?.name === name);
+  const dataPoints = Array.isArray(metric?.dataPoints)
+    ? metric.dataPoints
+    : [];
+  /** @type {Array<{timestamp:string,value:number}>} */
+  const points = [];
+  for (const point of dataPoints) {
+    if (point?.value === null
+      || point?.value === undefined
+      || (typeof point.value === "string" && point.value.trim() === "")) {
+      continue;
+    }
+    const timestamp = validIso(point?.timestamp);
+    let value = Number(point?.value);
+    if (!timestamp || !Number.isFinite(value) || value < 0) continue;
+    if (ratio && value <= 1) value *= 100;
+    points.push({
+      timestamp,
+      value: ratio ? Math.min(100, value) : value,
+    });
+  }
+  return points.sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp));
+}
+
+/** @param {Array<{timestamp:string,value:number}>} left @param {Array<{timestamp:string,value:number}>} right */
+function combinePointSeries(left, right) {
+  const values = new Map();
+  for (const point of [...left, ...right]) {
+    values.set(
+      point.timestamp,
+      Math.min(100, (values.get(point.timestamp) || 0) + point.value),
+    );
+  }
+  return [...values.entries()]
+    .map(([timestamp, value]) => ({ timestamp, value }))
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+}
+
+/** @param {Array<{timestamp:string,value:number}>} points */
+function numericStats(points) {
+  if (!Array.isArray(points) || points.length === 0) return null;
+  const values = points.map((point) => point.value);
+  const recent = points.slice(-SUSTAINED_SAMPLE_COUNT);
+  return {
+    average: roundOne(
+      values.reduce((sum, value) => sum + value, 0) / values.length,
+    ),
+    peak: roundOne(Math.max(...values)),
+    latest: roundOne(points[points.length - 1].value),
+    recentAverage: recent.length >= SUSTAINED_SAMPLE_COUNT
+      ? roundOne(
+        recent.reduce((sum, point) => sum + point.value, 0)
+          / SUSTAINED_SAMPLE_COUNT,
+      )
+      : null,
+    recentSampleCount: recent.length,
+    sampleCount: points.length,
+    measuredAt: points[points.length - 1].timestamp,
+  };
+}
+
+/** @param {Record<string, any>|null} stats */
+function stripStatsTimestamp(stats) {
+  if (!stats) return null;
+  return {
+    averagePercent: stats.average,
+    peakPercent: stats.peak,
+    latestPercent: stats.latest,
+    recentAveragePercent: stats.recentAverage,
+    recentSampleCount: stats.recentSampleCount,
+    sampleCount: stats.sampleCount,
+  };
+}
+
+/** @param {Record<string, any>|null} stats */
+function stripNumberStatsTimestamp(stats) {
+  if (!stats) return null;
+  return {
+    average: stats.average,
+    peak: stats.peak,
+    latest: stats.latest,
+    sampleCount: stats.sampleCount,
+  };
+}
+
+/** @param {number} value */
+function roundOne(value) {
+  return Math.round(value * 10) / 10;
 }
 
 /**
@@ -563,8 +860,13 @@ module.exports = {
     connectionHosts,
     parseCluster,
     parseDiskMeasurements,
+    parseProcessMeasurements,
     parsePendingInvoices,
     projectCycleCost,
     selectClusterProcess,
+    selectClusterProcesses,
+    selectClusterProcessWindow,
+    aggregateProcessPerformance,
+    worstDisk,
   },
 };

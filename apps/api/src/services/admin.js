@@ -735,6 +735,7 @@ class AdminService {
     /** @type {{ ok: boolean, latencyMs: number | null, error: string | null }} */
     const mongo = { ok: false, latencyMs: null, error: null };
     const t0 = Date.now();
+    /** @type {Promise<Record<string, any>>} */
     const infrastructurePromise = this.infrastructureUsage
       ? this.infrastructureUsage.adminStatus()
       : Promise.resolve(defaultInfrastructureStatus());
@@ -758,6 +759,7 @@ class AdminService {
         atlas: infrastructure.mongo.atlas,
       },
       cloudflareAnalytics: infrastructure.cloudflareAnalytics,
+      render: infrastructure.render,
       uptime: {
         startedAt: new Date(this._startedAt).toISOString(),
         uptimeSeconds: Math.floor((Date.now() - this._startedAt) / 1000),
@@ -769,8 +771,19 @@ class AdminService {
         infrastructureCostsConfigured:
           infrastructure.cloudflareAnalytics.configured
           && infrastructure.mongo.atlas.configured,
+        capacityMonitoringConfigured:
+          infrastructure.mongo.atlas.configured
+          && infrastructure.render.configured,
       },
     };
+  }
+
+  /** Authenticated admin-only provider usage and capacity advisories. */
+  async infrastructureSnapshot() {
+    if (!this.infrastructureUsage) {
+      throw new Error("infrastructure_monitoring_unavailable");
+    }
+    return this.infrastructureUsage.adminSnapshot();
   }
 
   async _mongoStorageStatus() {
@@ -786,6 +799,7 @@ class AdminService {
   }
 }
 
+/** @returns {Record<string, any>} */
 function defaultInfrastructureStatus() {
   return {
     cloudflareAnalytics: {
@@ -811,6 +825,17 @@ function defaultInfrastructureStatus() {
         },
         errorCode: "not_configured",
       },
+    },
+    render: {
+      configured: false,
+      available: false,
+      stale: false,
+      measuredAt: null,
+      fetchedAt: null,
+      service: null,
+      metrics: null,
+      cost: null,
+      errorCode: "not_configured",
     },
   };
 }

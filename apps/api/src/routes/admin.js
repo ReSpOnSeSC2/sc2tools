@@ -13,6 +13,7 @@
  * ---------
  *
  *   GET  /admin/storage-stats       per-collection size + total
+ *   GET  /admin/infrastructure      provider costs + capacity advisories
  *   GET  /admin/users               paginated user list w/ activity
  *   GET  /admin/users/:userId       per-user detail snapshot
  *   POST /admin/users/:userId/rebuild-opponents
@@ -65,6 +66,18 @@ function buildAdminRouter(deps) {
   router.get("/admin/storage-stats", async (_req, res, next) => {
     try {
       res.json(await deps.admin.storageStats());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/infrastructure", async (_req, res, next) => {
+    try {
+      // Capacity is operator-only and changes independently of the web build;
+      // never let a browser or shared CDN cache the response.
+      res.set("Cache-Control", "private, no-store").json(
+        await deps.admin.infrastructureSnapshot(),
+      );
     } catch (err) {
       next(err);
     }

@@ -7,9 +7,12 @@ import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { Menu, X } from "lucide-react";
 
-import { apiCall } from "@/lib/clientApi";
+import { apiCall, useApi } from "@/lib/clientApi";
 import { useAdminEventsSocket } from "./useAdminEventsSocket";
-import type { AdminEventCountsResp } from "./adminTypes";
+import type {
+  AdminEventCountsResp,
+  AdminInfrastructureResp,
+} from "./adminTypes";
 
 /**
  * Responsive shell for the admin section.
@@ -80,8 +83,8 @@ const NAV: ReadonlyArray<NavItem> = [
   },
   {
     href: "/admin/health",
-    label: "Health",
-    description: "Mongo ping, runtime info",
+    label: "Infrastructure",
+    description: "Costs, capacity, health",
     icon: "M3 12h4l3-9 4 18 3-9h4",
   },
 ];
@@ -91,6 +94,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const active = pickActive(NAV, pathname || "/admin");
   const unread = useUnreadCount();
+  const infrastructureNotice = useInfrastructureNotice();
 
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col gap-4 md:flex-row md:gap-6">
@@ -99,11 +103,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
           <button
             type="button"
-            aria-label={
-              unread > 0
-                ? `Open admin navigation (${unread} unread)`
-                : "Open admin navigation"
-            }
+            aria-label={adminMenuLabel(unread, infrastructureNotice)}
             className="hard-press relative inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             onClick={() => setDrawerOpen(true)}
           >
@@ -119,6 +119,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
               >
                 {unread > 99 ? "99+" : unread}
               </span>
+            ) : null}
+            {infrastructureNotice ? (
+              <span
+                className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-bg-surface ${infrastructureNotice === "upgrade" ? "bg-danger" : "bg-warning"}`}
+                aria-hidden
+              />
             ) : null}
           </button>
           <div className="flex min-w-0 flex-col">
@@ -166,6 +172,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
             const isActive = item.href === active?.href;
             const badge =
               item.href === "/admin/notifications" && unread > 0 ? unread : 0;
+            const capacityStatus = item.href === "/admin/health"
+              ? infrastructureNotice
+              : null;
             return (
               <Link
                 key={item.href}
@@ -200,6 +209,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
                       >
                         {badge > 99 ? "99+" : badge}
                       </span>
+                    ) : null}
+                    {capacityStatus ? (
+                      <span
+                        className={`inline-block h-2.5 w-2.5 flex-none rounded-full ${capacityStatus === "upgrade" ? "bg-danger" : "bg-warning"}`}
+                        role="img"
+                        aria-label={`Infrastructure status: ${capacityStatus}`}
+                      />
                     ) : null}
                   </span>
                   <span className="text-caption text-text-dim">
@@ -247,6 +263,35 @@ function useUnreadCount(): number {
     }, [swr]),
   );
   return swr.data?.unreadCount ?? 0;
+}
+
+/**
+ * Keep a quiet capacity signal in the persistent admin navigation. SWR shares
+ * this request with the Infrastructure page, so opening that tab does not
+ * duplicate provider polling.
+ */
+function useInfrastructureNotice(): "watch" | "upgrade" | null {
+  const { data } = useApi<AdminInfrastructureResp>(
+    "/v1/admin/infrastructure",
+    { refreshInterval: 5 * 60_000 },
+  );
+  return data?.overallStatus === "watch" || data?.overallStatus === "upgrade"
+    ? data.overallStatus
+    : null;
+}
+
+function adminMenuLabel(
+  unread: number,
+  infrastructureNotice: "watch" | "upgrade" | null,
+): string {
+  const notices: string[] = [];
+  if (unread > 0) notices.push(`${unread} unread`);
+  if (infrastructureNotice) {
+    notices.push(`infrastructure ${infrastructureNotice}`);
+  }
+  return notices.length > 0
+    ? `Open admin navigation (${notices.join(", ")})`
+    : "Open admin navigation";
 }
 
 function pickActive(items: ReadonlyArray<NavItem>, pathname: string) {

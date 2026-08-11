@@ -91,6 +91,16 @@ services:
         sync: false
       - key: ATLAS_SERVICE_ACCOUNT_SECRET_EXPIRES_AT
         sync: false
+      # Optional Render CPU/memory monitoring for authenticated Admin. Render
+      # automatically injects RENDER_SERVICE_ID; do not declare or override it
+      # here. API keys are broadly account-scoped, not metrics-only, so keep
+      # this server-side and rotate it if exposed. Our adapter performs GETs.
+      - key: RENDER_API_KEY
+        sync: false
+      # Optional operator-maintained planning cost. Update it whenever the
+      # instance tier changes; Render's metrics API does not return invoices.
+      - key: RENDER_MONTHLY_COST_USD
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: SERVER_PEPPER_HEX

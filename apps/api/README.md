@@ -122,6 +122,43 @@ All routes are mounted under `/v1`.
 | GET    | /v1/agent/releases                  | none         | Release history                  |
 | POST   | /v1/agent/releases                  | admin token  | Publish a new release            |
 
+### Infrastructure monitoring
+
+| Method | Path                              | Auth  | Purpose                              |
+| ------ | --------------------------------- | ----- | ------------------------------------ |
+| GET    | /v1/public/infrastructure-costs   | none  | Aggregate public cost transparency   |
+| GET    | /v1/admin/infrastructure          | admin | Provider usage + capacity advisories |
+| GET    | /v1/admin/health                  | admin | Provider/configuration health        |
+
+The admin infrastructure response uses three compact states: `healthy`,
+`watch`, and `upgrade`. Capacity advisories use sustained Render and Atlas
+compute signals, worst-case metrics across the Atlas electable nodes that were
+successfully measured, and Atlas disk use. Disk pressure produces a
+storage-specific action; tier-up advice requires sustained compute pressure.
+A single five-minute spike and a full WiredTiger cache do not independently
+recommend an upgrade. The endpoint
+is `private, no-store` and returns a strict allowlist; provider credentials,
+account/project/service IDs, bucket and cluster names, hostnames, and URLs are
+never returned.
+
+Optional provider settings are documented in `.env.example`:
+
+- Cloudflare Account Analytics reads the configured bucket's R2 storage and
+  operations. Its amount is an estimate: storage uses the provider's daily
+  peak and Cloudflare applies free allowances account-wide.
+- Atlas uses a service account with Project Read Only and Organization Billing
+  Viewer. Billing is a pending-cycle projection, not a completed invoice.
+- Render uses `RENDER_API_KEY`; Render injects `RENDER_SERVICE_ID`
+  automatically. Render API keys are broadly account-scoped, not metrics-only,
+  so this integration is optional, server-only, GET-only in this application,
+  and must never be copied into the web app. Render has no invoice value in
+  this API, so `RENDER_MONTHLY_COST_USD` is an optional operator-maintained
+  planning amount.
+
+Advisories are prominent in-admin notifications generated when the page is
+loaded. They are not email or background alerts. Durable alert history and
+email delivery require a separate scheduled-monitoring integration.
+
 ## Deploy
 
 `render.yaml` provisions a Docker web service. Set the env vars

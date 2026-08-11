@@ -201,6 +201,151 @@ export type HealthResp = {
   };
 };
 
+export type InfrastructureLevel = "healthy" | "watch" | "upgrade";
+
+export type InfrastructurePercentStats = {
+  averagePercent: number | null;
+  peakPercent: number | null;
+  latestPercent: number | null;
+  sampleCount: number | null;
+};
+
+export type InfrastructureNumberStats = {
+  average: number | null;
+  peak: number | null;
+  latest: number | null;
+  sampleCount: number | null;
+};
+
+export type InfrastructureAdvisory = {
+  provider: "cloudflare" | "mongo" | "render";
+  level: InfrastructureLevel;
+  code: string;
+  title: string;
+  message: string;
+  action: string;
+  metric: string | null;
+  value: number | null;
+  threshold: number | null;
+};
+
+export type AdminInfrastructureResp = {
+  asOf: string;
+  overallStatus: InfrastructureLevel;
+  providers: {
+    cloudflare: {
+      configured: boolean;
+      available: boolean;
+      stale: boolean;
+      status: InfrastructureLevel;
+      measuredAt: string | null;
+      errorCode: string | null;
+      usage: {
+        verifiedOriginalReplays: number | null;
+        storedBytes: number | null;
+        objectCount: number | null;
+        includes: "originals_and_analysis";
+        billingCycleStart: string | null;
+        classARequests: number | null;
+        classBRequests: number | null;
+        unknownRequests: number | null;
+      } | null;
+      cost: {
+        currency: "USD";
+        estimate: true;
+        storageMonthlyRunRateUsd: number | null;
+        classAThisCycleUsd: number | null;
+        classBThisCycleUsd: number | null;
+        estimatedCurrentMonthlyUsd: number | null;
+      } | null;
+    };
+    mongo: {
+      configured: boolean;
+      available: boolean;
+      monitoringAvailable: boolean;
+      stale: boolean;
+      status: InfrastructureLevel;
+      measuredAt: string | null;
+      errorCode: string | null;
+      appData: {
+        logicalDataBytes: number | null;
+        allocatedDocumentBytes: number | null;
+        allocatedIndexBytes: number | null;
+        allocatedTotalBytes: number | null;
+        measuredAt: string | null;
+        scope: "sc2tools_database_only";
+      } | null;
+      cluster: {
+        tier: string | null;
+        provisionedDiskGb: number | null;
+        diskUsedBytes: number | null;
+        diskCapacityBytes: number | null;
+        diskUtilizationPercent: number | null;
+        diskMeasuredAt: string | null;
+        autoExpandStorage: boolean;
+        performance: {
+          scope: "cluster_electable_processes_worst_case" | "unknown";
+          processCount: number | null;
+          expectedProcessCount: number | null;
+          complete: boolean;
+          windowMinutes: number | null;
+          sustainedWindowMinutes: number | null;
+          measuredAt: string | null;
+          cpu: InfrastructurePercentStats | null;
+          cache: InfrastructurePercentStats | null;
+          connections: InfrastructureNumberStats | null;
+        } | null;
+      } | null;
+      credential: {
+        expiresAt: string | null;
+        daysRemaining: number | null;
+        expiringSoon: boolean;
+      };
+      cost: {
+        currency: "USD";
+        estimate: true;
+        pricingMode: "atlas_projected" | "planning_fallback";
+        planningMonthlyUsd: number | null;
+        projectedMonthlyUsd: number | null;
+        postedCycleUsd: number | null;
+        postedThrough: string | null;
+      };
+    };
+    render: {
+      configured: boolean;
+      available: boolean;
+      stale: boolean;
+      status: InfrastructureLevel;
+      measuredAt: string | null;
+      errorCode: string | null;
+      service: {
+        plan: string | null;
+        instanceCount: number | null;
+        suspended: boolean;
+        autoscalingEnabled: boolean;
+      } | null;
+      metrics: {
+        windowMinutes: number | null;
+        resolutionSeconds: number | null;
+        measuredAt: string | null;
+        cpu: InfrastructurePercentStats | null;
+        memory: InfrastructurePercentStats | null;
+      } | null;
+      cost: {
+        currency: "USD";
+        estimate: true;
+        monthlyPlanningUsd: number | null;
+        basis: "not_configured" | "operator_configured";
+      } | null;
+    };
+  };
+  advisories: InfrastructureAdvisory[];
+  thresholds: {
+    mongo: Record<string, { watch: number; upgrade: number }>;
+    render: Record<string, { watch: number; upgrade: number }>;
+  };
+};
+
 export type AtlasInfrastructureStatus = {
   configured: boolean;
   available: boolean;

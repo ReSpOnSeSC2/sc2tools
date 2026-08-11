@@ -83,6 +83,8 @@ function service(opts = {}) {
     timeoutMs: opts.timeoutMs,
     atlasAdmin: opts.atlasAdmin,
     atlasClient: opts.atlasClient,
+    renderAdmin: opts.renderAdmin,
+    renderClient: opts.renderClient,
   });
 }
 
@@ -239,6 +241,39 @@ describe("InfrastructureUsageService", () => {
     );
   });
 
+  test("keeps the Mongo planning fallback when Atlas has no matched charges", async () => {
+    const atlasClient = {
+      snapshot: jest.fn(async () => ({
+        available: true,
+        measuredAt: NOW.toISOString(),
+        cluster: {
+          tier: "M10",
+          provisionedDiskGb: 10,
+          autoExpandStorage: true,
+          diskUsedBytes: 1_000,
+          diskCapacityBytes: 10_000,
+        },
+        billing: {
+          available: false,
+          projectedMonthlyRunRateCents: null,
+          projectedMonthlyRunRateUsd: null,
+          lineItemCount: 0,
+          errorCode: "atlas_billing_no_matching_line_items",
+        },
+      })),
+    };
+    const result = await service({ atlasClient }).snapshot();
+    expect(result.site).toMatchObject({
+      pricingMode: "planning_fallback",
+      fixedMonthlyEquivalentUsd: 65.19,
+      estimatedCurrentMonthlyTotalUsd: 70.095,
+    });
+    expect(result.mongo.atlas.billing).toMatchObject({
+      available: false,
+      projectedMonthlyRunRateCents: null,
+    });
+  });
+
   test("reports live app database bytes without treating usage as Atlas price", async () => {
     const mongoDb = {
       command: jest.fn(async () => ({
@@ -336,6 +371,74 @@ describe("InfrastructureUsageService", () => {
     expect(JSON.stringify(status)).not.toMatch(
       /service-account-secret|account-secret|token-secret|private-bucket/,
     );
+  });
+
+  test("builds the private admin cost and capacity contract independently", async () => {
+    const renderClient = {
+      snapshot: jest.fn(async () => ({
+        configured: true,
+        available: true,
+        stale: false,
+        measuredAt: NOW.toISOString(),
+        serviceId: "SECRET_RENDER_ID",
+        service: {
+          plan: "starter",
+          configuredInstanceCount: 1,
+          suspended: false,
+          autoscalingEnabled: false,
+        },
+        metrics: {
+          available: true,
+          windowMinutes: 60,
+          sustainedWindowMinutes: 15,
+          resolutionSeconds: 300,
+          measuredAt: NOW.toISOString(),
+          cpu: {
+            averagePercent: 20,
+            peakPercent: 35,
+            latestPercent: 25,
+            recentAveragePercent: 25,
+            recentSampleCount: 3,
+            sampleCount: 12,
+          },
+          memory: {
+            averagePercent: 40,
+            peakPercent: 50,
+            latestPercent: 42,
+            recentAveragePercent: 42,
+            recentSampleCount: 3,
+            sampleCount: 12,
+          },
+        },
+        cost: { monthlyPlanningUsd: 7 },
+      })),
+    };
+    const result = await service({ renderClient }).adminSnapshot();
+    expect(result).toMatchObject({
+      overallStatus: "watch",
+      providers: {
+        cloudflare: {
+          configured: true,
+          available: true,
+          usage: { storedBytes: 12_000_000_001, objectCount: 30 },
+          cost: { estimatedCurrentMonthlyUsd: 4.905 },
+        },
+        mongo: {
+          available: true,
+          monitoringAvailable: false,
+          status: "watch",
+        },
+        render: {
+          available: true,
+          status: "healthy",
+          service: { plan: "starter", instanceCount: 1 },
+        },
+      },
+    });
+    expect(result.advisories).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "atlas_monitoring_not_configured" }),
+    ]));
+    expect(JSON.stringify(result)).not.toMatch(/SECRET_RENDER_ID/);
   });
 
   test("caches for 15 minutes and coalesces concurrent refreshes", async () => {

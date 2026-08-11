@@ -13,6 +13,12 @@
 const {
   AtlasInfrastructureClient,
 } = require("./atlasInfrastructure");
+const {
+  RenderInfrastructureClient,
+} = require("./renderInfrastructure");
+const {
+  buildInfrastructureAdminSnapshot,
+} = require("./infrastructureAdvisories");
 
 const CLOUDFLARE_GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -138,6 +144,12 @@ class InfrastructureUsageService {
    *     secretExpiresAt?: string|null,
    *   } | null,
    *   atlasClient?: { snapshot: () => Promise<Record<string, any>> } | null,
+   *   renderAdmin?: {
+   *     apiKey: string,
+   *     serviceId: string,
+   *     monthlyCostUsd?: number|null,
+   *   } | null,
+   *   renderClient?: { snapshot: () => Promise<Record<string, any>> } | null,
    *   fetchImpl?: typeof fetch,
    *   now?: () => Date,
    *   cacheTtlMs?: number,
@@ -168,6 +180,16 @@ class InfrastructureUsageService {
         })
         : null)
       : deps.atlasClient;
+    this.render = deps.renderClient === undefined
+      ? (deps.renderAdmin
+        ? new RenderInfrastructureClient({
+          config: deps.renderAdmin,
+          fetchImpl: this.fetchImpl,
+          now: this.now,
+          timeoutMs: this.timeoutMs,
+        })
+        : null)
+      : deps.renderClient;
 
     /** @type {Record<string, any> | null} */
     this._lastGood = null;
@@ -221,12 +243,16 @@ class InfrastructureUsageService {
    * Credential-free diagnostics for the admin Health surface. Provider error
    * messages are reduced to stable codes so a failed upstream request cannot
    * reflect tokens, identifiers, hostnames, or cluster names.
+   *
+   * @returns {Promise<Record<string, any>>}
    */
   async adminStatus() {
+    /** @type {Record<string, any>|null} */
+    let status = null;
     if (this.config) {
       try {
         const snapshot = await this.snapshot();
-        return {
+        status = {
           cloudflareAnalytics: {
             configured: true,
             available: true,
@@ -234,33 +260,84 @@ class InfrastructureUsageService {
             asOf: snapshot.asOf,
             errorCode: snapshot.stale ? "stale_last_good" : null,
           },
-          mongo: this._adminMongoStatus(this._lastGood?.mongo),
+          mongo: this._adminMongoStatus(
+            this._lastGood?.mongo,
+            snapshot.stale,
+          ),
         };
       } catch {
         // Fall through to independent Mongo/Atlas probes. This preserves
         // useful diagnostics when Cloudflare is the only failing provider.
       }
     }
-    const [mongoResult, atlasResult] = await Promise.allSettled([
-      this._readMongoStorage(),
-      this._readAtlas(),
+    if (!status) {
+      const [mongoResult, atlasResult] = await Promise.allSettled([
+        this._readMongoStorage(),
+        this._readAtlas(),
+      ]);
+      status = {
+        cloudflareAnalytics: {
+          configured: Boolean(this.config),
+          available: false,
+          stale: false,
+          asOf: null,
+          errorCode: this.config
+            ? "analytics_unavailable"
+            : "not_configured",
+        },
+        mongo: this._adminMongoStatus({
+          appData: mongoResult.status === "fulfilled"
+            ? mongoResult.value
+            : null,
+          atlas: atlasResult.status === "fulfilled"
+            ? atlasResult.value
+            : unavailableAtlas("atlas_admin_unavailable"),
+          pricing: mongoPlanningPrice(),
+        }),
+      };
+    }
+    status.render = await this._readRender();
+    return status;
+  }
+
+  /**
+   * Authenticated-admin infrastructure contract. Cloudflare may be absent or
+   * temporarily unavailable without hiding Mongo/Render diagnostics.
+   *
+   * @returns {Promise<Record<string, any>>}
+   */
+  async adminSnapshot() {
+    const [statusResult, costResult] = await Promise.allSettled([
+      this.adminStatus(),
+      this.config ? this.snapshot() : Promise.resolve(null),
     ]);
-    return {
-      cloudflareAnalytics: {
-        configured: Boolean(this.config),
-        available: false,
-        stale: false,
-        asOf: null,
-        errorCode: this.config ? "analytics_unavailable" : "not_configured",
+    /** @type {Record<string, any>} */
+    const status = statusResult.status === "fulfilled"
+      ? statusResult.value
+      : {
+        cloudflareAnalytics: {
+          configured: Boolean(this.config),
+          available: false,
+          stale: false,
+          asOf: null,
+          errorCode: "analytics_unavailable",
+        },
+        mongo: this._adminMongoStatus(null),
+        render: unavailableRender(
+          this.render ? "render_admin_unavailable" : "not_configured",
+        ),
+      };
+    return buildInfrastructureAdminSnapshot({
+      asOf: this._now().toISOString(),
+      cloudflare: {
+        status: status.cloudflareAnalytics,
+        snapshot: costResult.status === "fulfilled"
+          ? costResult.value
+          : null,
       },
-      mongo: this._adminMongoStatus({
-        appData: mongoResult.status === "fulfilled" ? mongoResult.value : null,
-        atlas: atlasResult.status === "fulfilled"
-          ? atlasResult.value
-          : unavailableAtlas("atlas_admin_unavailable"),
-        pricing: mongoPlanningPrice(),
-      }),
-    };
+      mongo: status.mongo,
+      render: status.render,
+    });
   }
 
   async _refreshWithFallback() {
@@ -383,9 +460,21 @@ class InfrastructureUsageService {
     }
   }
 
-  /** @param {Record<string, any> | null | undefined} mongo */
-  _adminMongoStatus(mongo) {
-    const status = adminMongoStatus(mongo);
+  async _readRender() {
+    if (!this.render) return unavailableRender("not_configured");
+    try {
+      return await this.render.snapshot();
+    } catch {
+      return unavailableRender("render_admin_unavailable");
+    }
+  }
+
+  /**
+   * @param {Record<string, any> | null | undefined} mongo
+   * @param {boolean} [stale]
+   */
+  _adminMongoStatus(mongo, stale = false) {
+    const status = adminMongoStatus(mongo, stale);
     /** @type {any} */ (status.atlas).credential = atlasCredentialHealth(
       this.atlasSecretExpiresAt,
       this._now(),
@@ -702,8 +791,11 @@ function mongoPlanningPrice() {
   };
 }
 
-/** @param {Record<string, any> | null | undefined} mongo */
-function adminMongoStatus(mongo) {
+/**
+ * @param {Record<string, any> | null | undefined} mongo
+ * @param {boolean} [stale]
+ */
+function adminMongoStatus(mongo, stale = false) {
   if (!mongo) {
     return {
       appData: null,
@@ -712,6 +804,7 @@ function adminMongoStatus(mongo) {
     };
   }
   return {
+    ...(stale ? { stale: true } : {}),
     appData: mongo.appData,
     atlas: adminAtlasStatus(mongo.atlas),
     pricing: mongoPlanningPrice(),
@@ -741,6 +834,21 @@ function unavailableAtlas(errorCode) {
     measuredAt: null,
     cluster: null,
     billing: null,
+    errorCode,
+  };
+}
+
+/** @param {string} errorCode */
+function unavailableRender(errorCode) {
+  return {
+    configured: errorCode !== "not_configured",
+    available: false,
+    stale: false,
+    measuredAt: null,
+    fetchedAt: null,
+    service: null,
+    metrics: null,
+    cost: null,
     errorCode,
   };
 }

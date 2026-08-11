@@ -145,6 +145,7 @@ describe("/v1/admin", () => {
 
     const probes = [
       ["GET", "/v1/admin/storage-stats"],
+      ["GET", "/v1/admin/infrastructure"],
       ["GET", "/v1/admin/users"],
       ["GET", "/v1/admin/users/u_1"],
       ["GET", "/v1/admin/users/u_1/opponents"],
@@ -196,6 +197,34 @@ describe("/v1/admin", () => {
     const mlModels = res.body.collections.find((c) => c.name === "ml_models");
     expect(mlModels).toBeTruthy();
     expect(mlModels.count).toBe(0);
+  });
+
+  test("infrastructure returns private setup advisories without identifiers", async () => {
+    const res = await asAdmin(
+      request(app).get("/v1/admin/infrastructure"),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body).toMatchObject({
+      overallStatus: "watch",
+      providers: {
+        cloudflare: { configured: false, status: "watch" },
+        mongo: {
+          available: true,
+          monitoringAvailable: false,
+          status: "watch",
+        },
+        render: { configured: false, status: "watch" },
+      },
+    });
+    expect(res.body.advisories.map((row) => row.code)).toEqual([
+      "cloudflare_monitoring_not_configured",
+      "atlas_monitoring_not_configured",
+      "render_monitoring_not_configured",
+    ]);
+    expect(JSON.stringify(res.body)).not.toMatch(
+      /mongodb:\/\/|srv-|rnd_|accountId|projectId|clusterName/,
+    );
   });
 
   test("listUsers aggregates game counts and joins user identity", async () => {
@@ -518,6 +547,7 @@ describe("/v1/admin", () => {
     expect(res.body.runtime.gameDetailsStore).toBe("mongo");
     expect(res.body.runtime.replayFilesStore).toBe("disabled");
     expect(res.body.runtime.infrastructureCostsConfigured).toBe(false);
+    expect(res.body.runtime.capacityMonitoringConfigured).toBe(false);
     expect(typeof res.body.runtime.nodeVersion).toBe("string");
     expect(res.body.cloudflareAnalytics).toEqual({
       configured: false,
@@ -536,6 +566,11 @@ describe("/v1/admin", () => {
         daysRemaining: null,
         expiringSoon: false,
       },
+      errorCode: "not_configured",
+    });
+    expect(res.body.render).toMatchObject({
+      configured: false,
+      available: false,
       errorCode: "not_configured",
     });
   });

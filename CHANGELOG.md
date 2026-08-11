@@ -48,6 +48,16 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Admin infrastructure costs and capacity guidance** - the authenticated
+  Infrastructure page now combines Cloudflare R2 usage and estimated cost,
+  MongoDB Atlas storage/CPU and projected charges, and Render plan/CPU/memory
+  into three compact provider cards. Sustained capacity signals produce clear
+  watch or upgrade notices plus a persistent Admin navigation indicator;
+  stale data and isolated spikes never trigger purchase advice. Provider
+  credentials and internal account, bucket, cluster, and service identifiers
+  remain server-only. These are in-admin notices, not email alerts or final
+  provider invoices.
+
 - **Private original replay library and downloads** — Opponent dossiers and
   individual game-analysis pages now offer an uncluttered `.SC2Replay`
   download action backed by a private Cloudflare R2 archive. The Settings

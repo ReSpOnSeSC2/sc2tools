@@ -142,3 +142,36 @@ describe("config loader - Atlas infrastructure diagnostics", () => {
     })).toThrow(/must be set together/);
   });
 });
+
+describe("config loader - Render capacity diagnostics", () => {
+  test("is optional and accepts the API key with Render's service id", () => {
+    expect(loadConfig({ ...BASE_ENV }).renderAdmin).toBeNull();
+    expect(loadConfig({
+      ...BASE_ENV,
+      RENDER_SERVICE_ID: "srv-automatically-injected",
+    }).renderAdmin).toBeNull();
+    expect(loadConfig({
+      ...BASE_ENV,
+      RENDER_API_KEY: "rnd_secret",
+      RENDER_SERVICE_ID: "srv-example",
+      RENDER_MONTHLY_COST_USD: "7.00",
+    }).renderAdmin).toEqual({
+      apiKey: "rnd_secret",
+      serviceId: "srv-example",
+      monthlyCostUsd: 7,
+    });
+  });
+
+  test("rejects partial credentials and malformed planning cost", () => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      RENDER_API_KEY: "rnd_secret",
+    })).toThrow(/must be set together/);
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      RENDER_API_KEY: "rnd_secret",
+      RENDER_SERVICE_ID: "srv-example",
+      RENDER_MONTHLY_COST_USD: "seven",
+    })).toThrow(/non-negative USD/);
+  });
+});

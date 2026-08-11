@@ -223,6 +223,7 @@ function makeServices(deps) {
     mongoDb: deps.db.db,
     cloudflareAnalytics: deps.config.cloudflareAnalytics || null,
     atlasAdmin: deps.config.atlasAdmin || null,
+    renderAdmin: deps.config.renderAdmin || null,
   });
   // Cloud-side SC2Pulse resolver — drives the backfill cron's
   // recovery path for opponents whose pulseCharacterId never landed
