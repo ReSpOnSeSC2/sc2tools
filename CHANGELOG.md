@@ -13,6 +13,9 @@ corresponding GitHub Release.
 
 ### Changed
 
+- Simplified the public infrastructure-cost page by removing internal growth
+  scenarios, tightening MongoDB cost wording, and improving mobile spacing.
+
 - Fixed Cloudflare R2 cost monitoring so S3 list/bulk-delete aliases and
   non-billable Sippy/notification configuration reads are assigned correctly
   instead of appearing as unclassified activity.

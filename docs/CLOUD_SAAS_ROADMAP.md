@@ -157,8 +157,8 @@ costs ~1 week.
    marginal wins, not worth the migration.
 
 4. **DB provider.** **MongoDB Atlas** (already deployed for
-   community-builds). M0 free tier (512MB) covers the first ~10 users;
-   M10 ($57/mo) is your "we have real users" tier.
+   community-builds). Select and scale the production tier from measured
+   storage, working-set and concurrency signals.
 
 5. **Pulse polling — per-user or centralized?**
    - Per-user (agent polls): zero cloud cost, scales linearly with
@@ -442,41 +442,22 @@ mirrored in the cloud, with no record left behind.
 
 ## Cost estimate
 
-Per month, USD, by user-count tier. Assumes you're on the cheapest
-viable plan that doesn't compromise UX.
-
-| Service | Empty | 50 users | 500 users | 5000 users |
-|---|---|---|---|---|
-| Vercel (Hobby → Pro) | $0 | $0 | $20 | $20 |
-| Render web ($7 Starter → $25 Standard → $85 Pro) | $7 | $7 | $25 | $85 |
-| Render worker (Pulse poller) | $7 | $7 | $25 | $85 |
-| MongoDB Atlas (M0 → M2 → M10 → M30) | $0 | $0 | $9 | $57 |
-| Clerk (free → Pro at 10k MAU) | $0 | $0 | $0 | $25 |
-| Cloudflare R2 / GridFS for replay binaries | $0 | $0 | $5 | $30 |
-| Domain | $1.20 | $1.20 | $1.20 | $1.20 |
-| Sentry (Developer free → Team) | $0 | $0 | $0 | $26 |
-| Code-signing cert | $6 | $6 | $6 | $6 |
-| **Total** | **$21** | **$21** | **$91** | **$335** |
-
-**Break-even at $5/mo Pro tier with 30% conversion:**
-- 50 users × 30% × $5 = $75/mo revenue vs $21/mo cost. Profitable from
-  user 15 or so.
-- 500 users × 30% × $5 = $750/mo revenue vs $91/mo cost. Healthy margin.
-
-These numbers don't include your time. They do include enough headroom
-to handle a Reddit hug-of-death.
+Capacity targets, membership forecasts and commercial projections are
+intentionally excluded from this public roadmap. Production costs should be
+derived from current provider usage, while scenario planning stays in private
+operations material.
 
 ---
 
 ## Risks and what could go wrong
 
-1. **Pulse rate limits.** SC2Pulse has informal rate limits. With 500
-   users polling individually you'll get banned. Centralizing the
+1. **Pulse rate limits.** SC2Pulse has informal rate limits. At scale,
+   polling individually risks throttling. Centralizing the
    poller (Decision 5) and caching aggressively are the only real
-   answers. Have a contact at SC2Pulse before you scale past ~100.
+   answers.
 
-2. **Replay parsing CPU.** Each replay parse is ~150-500ms. If 100
-   users finish games in the same minute, the agent absorbs it
+2. **Replay parsing CPU.** Each replay parse is ~150-500ms. During bursts,
+   the agent absorbs the work
    locally — but if you ever want server-side reparse, budget for a
    Render worker pool.
 
@@ -498,8 +479,8 @@ to handle a Reddit hug-of-death.
    15min of inactivity. First request after sleep takes 30-60s. If
    you ever go to free tier to save $7, expect angry users.
 
-7. **Single-region.** Atlas + Render in `us-west-2` is fine for the
-   first 1000 users. EU users will see 150ms+ latency. Defer
+7. **Single-region.** Atlas + Render in `us-west-2` is appropriate for the
+   initial deployment. Distant users will see higher latency. Defer
    multi-region until you have an EU userbase asking for it.
 
 8. **Migration loss.** When users migrate from local to cloud, ANY
@@ -517,10 +498,9 @@ to handle a Reddit hug-of-death.
 - **Don't drop the local-only mode.** Some users will refuse cloud.
   Keep local Express working. The maintenance cost is low if you
   share the React components between web and local.
-- **Don't move replay binaries to the cloud by default.** Each replay
-  is 30-300KB. With 1000 users at 100 replays each, that's ~10GB
-  storage and meaningful egress costs. Parse locally, upload only
-  the JSON record.
+- **Don't move replay binaries without an explicit storage design.** Raw
+  replay libraries grow with retention and require object-storage lifecycle,
+  privacy, deletion and cost controls.
 - **Don't ship without billing entitlements before going public.**
   Even if launch is free, having the gating logic in place means you
   can flip on Pro tier without an emergency refactor.

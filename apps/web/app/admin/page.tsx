@@ -432,7 +432,7 @@ function DatabaseFootprint({
               ? `${formatUsd(planning.monthlyPlanningEstimateUsd)}/mo`
               : "Unavailable"
           }
-          caption="repository estimate, not an Atlas invoice"
+          caption="repository planning estimate"
         />
       </div>
       <p className="text-caption text-text-dim">

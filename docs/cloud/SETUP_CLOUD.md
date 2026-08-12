@@ -540,13 +540,11 @@ billed cluster disk. If Atlas billing is unavailable, the UI falls back to the
 $65.19 planning baseline and still adds the current R2 estimate.
 
 [Cloudflare R2 storage](https://developers.cloudflare.com/r2/pricing/) is
-usage-based. With fewer than 15 users at roughly 10,000 replays each, the
-measured combined detail-and-original replay mix is about 14.9 GB and adds
-approximately **$0–$0.08/month** in storage after R2's 10 GB-month free
-storage allowance. At 1,000 users with the same profile (about 994 GB),
-storage is approximately **$14.76/month**. Treat these as capacity estimates,
-not a fixed invoice: replay sizes, retention, request operations, allowance
-usage, and future provider pricing can change the total.
+usage-based. The public landing and support pages derive the current storage
+and operation estimate from aggregate provider analytics instead of exposing
+internal membership targets or fixed growth scenarios. Replay sizes,
+retention, request operations, allowance usage, and future provider pricing
+can change the total.
 
 ---
 

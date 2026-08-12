@@ -105,8 +105,12 @@ test("separates live usage, posted Atlas charges, and the projected run rate", a
   expect(screen.getByText(/572 MiB allocated/)).toBeTruthy();
   expect(screen.getByText(/compute \$18\.00, storage and backups \$2\.00/))
     .toBeTruthy();
-  expect(screen.getAllByText(/not a full-month invoice/i).length)
-    .toBeGreaterThan(0);
+  expect(screen.queryByText(/not (?:a |an )?(?:full-month )?invoice/i))
+    .toBeNull();
+  expect(screen.queryByText(
+    /1,000 members|10,000 replays|10 million|994 GB|\$130/i,
+  ))
+    .toBeNull();
   expect(screen.getByText(/dashboard and invoice remain authoritative/i))
     .toBeTruthy();
 });

@@ -454,7 +454,7 @@ describe("admin dashboard storage", () => {
     expect(screen.getByText("5.50 MB")).toBeTruthy();
     expect(screen.getByText("4.50 MB")).toBeTruthy();
     expect(screen.getByText("$56.94/mo")).toBeTruthy();
-    expect(screen.getByText(/repository estimate, not an Atlas invoice/i)).toBeTruthy();
+    expect(screen.getByText(/repository planning estimate/i)).toBeTruthy();
     expect(screen.getByText(/not Atlas disk capacity/i)).toBeTruthy();
     expect(screen.getByText("Tracked collection totals")).toBeTruthy();
   });

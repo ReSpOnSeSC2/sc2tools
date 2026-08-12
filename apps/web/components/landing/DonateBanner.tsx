@@ -78,8 +78,7 @@ export function DonateBanner({ costs }: { costs: InfrastructureCosts | null }) {
                 <>
                   Atlas has posted {formatUsd(billing.postedCycleCents / 100)}{" "}
                   this billing cycle through{" "}
-                  {formatCostSnapshotTime(billing.postedThrough)}; that is not
-                  a full-month invoice.{" "}
+                  {formatCostSnapshotTime(billing.postedThrough)}.{" "}
                 </>
               ) : (
                 <>

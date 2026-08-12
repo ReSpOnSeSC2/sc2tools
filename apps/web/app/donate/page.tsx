@@ -86,7 +86,7 @@ const CHANNELS: ReadonlyArray<DonationChannel> = [
 export default async function DonatePage() {
   const infrastructureCosts = await getInfrastructureCosts();
   return (
-    <div className="space-y-12">
+    <div className="space-y-16 pb-4 md:space-y-24 md:pb-8">
       <HeroBlock costs={infrastructureCosts} />
       <Section
         title="Two ways to chip in"
@@ -264,7 +264,7 @@ const COST_LINES: ReadonlyArray<CostLine> = [
     icon: ShieldCheck,
     label: "Clerk — sign-in and accounts",
     detail:
-      "Provides authentication. The Hobby allowance includes up to 50,000 monthly retained users per application, well above today's membership.",
+      "Provides authentication. The Hobby allowance includes up to 50,000 monthly retained users per application.",
     approxMonthlyUsd: 0,
     includedInBase: false,
     priceLabel: "$0/mo",
@@ -285,7 +285,7 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
   return (
     <Section
       title="Where every penny goes"
-      description="No ads and no investor money. Live provider measurements are separated from planning estimates, and a posted billing-cycle amount is never presented as a completed monthly invoice."
+      description="No ads and no investor money. Live provider measurements, posted charges and projected monthly costs are shown separately."
       className="mx-auto max-w-5xl"
     >
       <Card padded={false}>
@@ -294,8 +294,8 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
             <CostRow key={line.id} line={line} />
           ))}
         </ul>
-        <div className="grid gap-2 border-t border-border bg-bg-elevated/40 px-5 py-4 sm:grid-cols-2">
-          <div className="space-y-0.5">
+        <div className="grid gap-6 border-t border-border bg-bg-elevated/40 px-5 py-6 sm:grid-cols-2 md:px-6">
+          <div className="space-y-1">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
               {summary ? "Estimated monthly run rate" : "Planning baseline"}
             </p>
@@ -314,7 +314,7 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
                   : "Live usage temporarily unavailable"}
             </p>
           </div>
-          <div className="space-y-0.5 sm:text-right">
+          <div className="space-y-1 sm:border-l sm:border-border sm:pl-6 sm:text-right">
             <p className="text-caption font-semibold uppercase tracking-wider text-text-muted">
               Atlas charges posted this cycle
             </p>
@@ -325,13 +325,13 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
             </p>
             <p className="text-caption text-text-dim">
               {postedAtlasUsd !== null && atlasBilling?.postedThrough
-                ? `through ${formatCostSnapshotTime(atlasBilling.postedThrough)} · not a full-month invoice`
+                ? `posted through ${formatCostSnapshotTime(atlasBilling.postedThrough)}`
                 : "No zero-cost assumption shown"}
             </p>
           </div>
         </div>
       </Card>
-      <div className="mt-4 max-w-3xl space-y-2 text-caption text-text-muted">
+      <div className="mt-7 max-w-3xl space-y-4 text-caption leading-relaxed text-text-muted">
         {costs ? (
           <>
             <p>
@@ -383,26 +383,11 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
             Provider dashboards remain authoritative.
           </p>
         )}
-        <p>
+        <p className="pt-1">
           This assumes Render&rsquo;s no-fee Hobby workspace. A Render Pro
           workspace is a separate $25/month operations subscription; buying it
           alone does not add API CPU or memory. Capacity changes come from the
           web service&rsquo;s Starter, Standard or Pro instance type.
-        </p>
-        <p>
-          At the planning target of 1,000 members with 10,000 replays each,
-          measured repository samples put the R2 archive near 994 GB and
-          about $14.76/month for storage. That is a storage estimate, not a
-          whole-site capacity promise: database and API tiers would be reviewed
-          separately, and real replay sizes and access patterns will vary.
-        </p>
-        <p>
-          The live R2 estimate includes classified Class A and Class B
-          operations when provider analytics are available. If all 10 million
-          originals and analysis objects were backfilled in one billing month,
-          the current direct upload-and-promote flow would be roughly $130 in
-          one-time Class A operation charges after the monthly free allowance.
-          Organic growth spreads those operations across monthly allowances.
         </p>
       </div>
     </Section>
@@ -439,7 +424,7 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
         priceNote:
           projected === null
             ? "public-list planning estimate"
-            : "projected run rate · not an invoice",
+            : "projected monthly run rate",
       };
     }
     if (line.id !== "r2") return line;
@@ -517,8 +502,9 @@ function MongoUsageDetails({ costs }: { costs: InfrastructureCosts }) {
           {billing?.postedThrough
             ? ` through ${formatCostSnapshotTime(billing.postedThrough)}`
             : ""}
-          . That posted amount is not a full-month invoice. The category split
-          is {formatAtlasCategories(billing!.categoryCents)}. The{" "}
+          . The category split is {formatAtlasCategories(
+            billing!.categoryCents,
+          )}. The{" "}
           {billing?.projectedMonthlyRunRateUsd !== null
             ? `${formatUsd(billing.projectedMonthlyRunRateUsd)} monthly Atlas run rate is a projection from posted charges`
             : "monthly Atlas run-rate projection is unavailable"}
@@ -557,14 +543,14 @@ function formatAtlasCategories(
 function CostRow({ line }: { line: CostLine }) {
   const Icon = line.icon;
   return (
-    <li className="flex flex-wrap items-start gap-3 px-5 py-3">
+    <li className="flex flex-wrap items-start gap-x-3 gap-y-4 px-5 py-5 sm:flex-nowrap sm:gap-4 sm:px-6">
       <span
         aria-hidden
         className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-accent-cyan/30 bg-accent-cyan/10 text-accent-cyan"
       >
         <Icon className="h-4 w-4" />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 space-y-1">
         <p className="text-body font-semibold text-text">{line.label}</p>
         <p className="text-caption text-text-muted">{line.detail}</p>
         {line.pricingHref ? (
@@ -572,14 +558,14 @@ function CostRow({ line }: { line: CostLine }) {
             href={line.pricingHref}
             target="_blank"
             rel="noopener"
-            className="mt-1 inline-flex items-center gap-1 text-caption text-accent-cyan hover:underline"
+            className="mt-1.5 inline-flex items-center gap-1 text-caption text-accent-cyan hover:underline"
           >
             Pricing page
             <ExternalLink className="h-3 w-3" aria-hidden />
           </a>
         ) : null}
       </div>
-      <div className="text-right tabular-nums">
+      <div className="basis-full pl-12 text-left tabular-nums sm:ml-auto sm:min-w-[8rem] sm:basis-auto sm:pl-0 sm:text-right">
         <p className="text-body font-semibold text-text">
           {line.priceLabel ?? `~${formatUsd(line.approxMonthlyUsd)}`}
           {!line.priceLabel ? (
