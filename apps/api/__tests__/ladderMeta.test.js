@@ -174,6 +174,69 @@ describe("ladder meta radar", () => {
     expect(row.openers[2].winRate).toBeCloseTo(0.5, 5);
   });
 
+  test("recompute pools filtered Terran and Zerg matchups across all users", async () => {
+    idSeq = 50000;
+    const matchups = [
+      {
+        matchup: "TvZ",
+        myRace: "Terran",
+        oppRace: "Zerg",
+        users: [
+          ["terran-user-a", "TvZ - 3 CC Bio", 14],
+          ["terran-user-b", "TvZ - 2-1-1 Marine Drop", 10],
+          ["terran-user-c", "Terran - Banshee Rush", 6],
+        ],
+      },
+      {
+        matchup: "ZvT",
+        myRace: "Zerg",
+        oppRace: "Terran",
+        users: [
+          ["zerg-user-a", "ZvT - Roach Ravager", 13],
+          ["zerg-user-b", "ZvT - Ling Bane", 11],
+          ["zerg-user-c", "Zerg - Mutalisk", 6],
+        ],
+      },
+    ];
+    const docs = matchups.flatMap((fixture) =>
+      fixture.users.flatMap(([userId, build, wins]) =>
+        bucket({
+          build,
+          count: 20,
+          wins,
+          myRace: fixture.myRace,
+          oppRace: fixture.oppRace,
+          extra: { userId },
+        }),
+      ),
+    );
+    await db.games.insertMany(docs);
+
+    await svc.recompute();
+
+    for (const fixture of matchups) {
+      const row = await svc.lookup({
+        leagueId: DIAMOND,
+        matchup: fixture.matchup,
+        era: "after",
+      });
+      expect(row).not.toBeNull();
+      expect(row).toMatchObject({
+        league: "Diamond",
+        matchup: fixture.matchup,
+        n: 60,
+      });
+      expect(new Set(row.openers.map((opener) => opener.build))).toEqual(
+        new Set(fixture.users.map(([, build]) => build)),
+      );
+      expect(row.openers.reduce((sum, opener) => sum + opener.games, 0)).toBe(60);
+      expect(JSON.stringify(row)).not.toContain("userId");
+      for (const [userId] of fixture.users) {
+        expect(JSON.stringify(row)).not.toContain(userId);
+      }
+    }
+  });
+
   test("lookup suppresses bands under the MIN_SAMPLE games floor", async () => {
     await seedCorpus();
     await svc.recompute();

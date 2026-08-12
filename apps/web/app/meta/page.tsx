@@ -133,11 +133,12 @@ export default async function MetaPage({
       )}
 
       <p className="max-w-2xl text-caption text-text-muted">
-        Aggregated across every SC2 Tools user, names withheld. Openers are the
-        classified opening for each game; matchups band by opponent league or
-        opponent MMR. MMR bands use recently enriched ratings and may be sparse
-        while that forward-only sample grows. Nothing here is tied to any
-        individual player.
+        Eligible replays are pooled from every SC2 Tools user before the game
+        version, opponent band, and matchup filters above are applied. Names
+        are withheld. Openers are the classified opening for each game; MMR
+        bands use recently enriched ratings and may be sparse while that
+        forward-only sample grows. Nothing here is tied to any individual
+        player.
       </p>
     </article>
   );

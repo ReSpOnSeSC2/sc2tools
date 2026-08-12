@@ -55,8 +55,9 @@ export interface MacroChartSectionProps {
 
 /** Hover state with sticky semantics. ``sticky=true`` means the value
  *  was set by a touch tap and persists until the user taps outside the
- *  chart. ``sticky=false`` is a transient mouse-hover that clears on
- *  pointer-leave. */
+ *  chart. ``sticky=false`` is the latest mouse position: it remains
+ *  visible after pointer-leave, then resumes following the cursor as
+ *  soon as the mouse re-enters the plot. */
 interface HoverState {
   time: number | null;
   sticky: boolean;
@@ -79,7 +80,8 @@ const INITIAL_HOVER: HoverState = { time: null, sticky: false };
  * from the roster whenever sample/timeline times didn't align.
  *
  * Hover behaviour:
- *   - Mouse: continuous hover that clears on pointer-leave.
+ *   - Mouse: continuous hover; pointer-leave keeps the last inspected
+ *     time, tooltip, composition, and vertical crosshair visible.
  *   - Touch / pen: tap (or drag-tap) locks the crosshair. The user
  *     does NOT have to keep their finger pressed — release leaves the
  *     value visible. Tapping outside the chart container (still inside
@@ -153,9 +155,11 @@ export function MacroChartSection({
         if (prev.sticky) return prev;
         return { time: event.time, sticky: false };
       }
-      // event.type === "leave"
-      if (prev.sticky) return prev;
-      return INITIAL_HOVER;
+      // event.type === "leave". Preserve the last mouse position so the
+      // tooltip, composition snapshot, and vertical crosshair stay locked
+      // together after the pointer exits. Because sticky remains false, the
+      // very next mouse move inside the chart updates the selection normally.
+      return prev;
     });
   }, []);
 

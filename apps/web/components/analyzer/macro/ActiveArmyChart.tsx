@@ -36,10 +36,10 @@ export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
 
 /**
  * Single hover dispatch — the chart emits these to the parent so the
- * parent can manage sticky-vs-transient hover state. Mouse moves are
- * transient ("hover"); touch/pen taps are sticky ("tap"). A
- * "mouse-leave" only fires for true mouse pointers, so finger lifts
- * never clear the locked time.
+ * parent can manage mouse-vs-touch selection state. Mouse moves emit
+ * "hover" and the parent retains the last value on "leave"; touch/pen
+ * taps are sticky ("tap"). A "leave" only fires for true mouse
+ * pointers, so finger lifts never clear the locked time.
  */
 export type HoverEvent =
   | { type: "hover"; time: number }
@@ -171,9 +171,9 @@ export function ActiveArmyChart({
       if (!onHover) return;
       const t = timeFromPointer(e);
       if (t == null) return;
-      // Mouse pointers stay transient (clears on leave). Touch and pen
-      // are sticky — a tap or drag locks the crosshair so the user
-      // doesn't have to keep their finger pressed against the screen.
+      // Mouse pointers continuously update the retained desktop selection.
+      // Touch and pen are sticky: a tap or drag locks the crosshair so the
+      // user doesn't have to keep their finger pressed against the screen.
       if (e.pointerType === "mouse") {
         onHover({ type: "hover", time: t });
         return;
@@ -208,8 +208,9 @@ export function ActiveArmyChart({
   const handlePointerLeave = useCallback(
     (e: ReactPointerEvent<SVGRectElement>) => {
       if (!onHover) return;
-      // Only mouse leaves clear the hover. Touch lifts must NOT clear
-      // — that's how we get the lock-on-tap behaviour on mobile.
+      // Only mouse leaves are reported. The parent keeps that last position
+      // visible; touch lifts must not emit leave because taps use a stronger
+      // lock that is cleared by tapping outside the chart.
       if (e.pointerType === "mouse") {
         onHover({ type: "leave" });
       }
@@ -241,7 +242,7 @@ export function ActiveArmyChart({
       >
         <svg
           role="img"
-          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover for details."
+          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover to inspect a time; the last position remains selected."
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
           className="block h-[220px] w-full min-w-[320px] sm:h-[260px] sm:min-w-[480px]"

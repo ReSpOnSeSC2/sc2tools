@@ -485,6 +485,9 @@ function buildGamesMatch(bandType, era) {
     ? { "opponent.mmr": { $type: "number", $gte: MMR_FLOOR, $lt: MMR_CEILING } }
     : { "opponent.leagueId": { $type: "number" } };
   return {
+    // Intentionally no userId predicate: Ladder Meta is computed from the
+    // shared games collection across every account. User-scoped analytics
+    // add userId in their service layer; this public aggregate must not.
     ...bandMatch,
     myRace: { $type: "string" },
     "opponent.race": { $type: "string" },
