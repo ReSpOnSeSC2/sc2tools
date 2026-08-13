@@ -1,7 +1,16 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
+
+const GDPR_MUTATION_LEASE_MS = 15 * 60 * 1000;
+const GDPR_MUTATION_RENEW_MS = 60 * 1000;
+
+/** @param {number} ms */
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * GDPR service. Three jobs:
@@ -45,6 +54,9 @@ const USER_SCOPED_COLLECTIONS = [
  */
 const PURGE_ONLY_COLLECTIONS = [
   ["devicePairings", "userId"],
+  // Ephemeral background work must never be exported/restored: doing so could
+  // resurrect a completed classifier after an account recovery.
+  ["customBuildJobs", "userId"],
   ["arcadeLeaderboard", "userId"],
   ["communityBuilds", "ownerUserId"],
   ["communityReports", "reporterUserId"],
@@ -58,6 +70,7 @@ class GdprService {
    *   logger?: import('pino').Logger,
    *   gameDetails?: import('./gameDetails').GameDetailsService,
    *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
+   *   customBuilds?: import('./types').CustomBuildsService,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -75,6 +88,7 @@ class GdprService {
     // ``db.gameDetails.deleteMany`` only covers the Mongo backend.
     this.gameDetails = (opts && opts.gameDetails) || null;
     this.replayFiles = (opts && opts.replayFiles) || null;
+    this.customBuilds = (opts && opts.customBuilds) || null;
   }
 
   /**
@@ -124,17 +138,30 @@ class GdprService {
       { projection: { _id: 0, clerkUserId: 1 } },
     );
 
+    const gdprFence = await this._acquireMutationFence(userId, "delete_all");
+    try {
+      await gdprFence.assert();
+      await this._drainOpponentBuildOrderWriters(userId);
+
+    if (this.customBuilds) {
+      await this.customBuilds.cancelUserReclassifications(userId);
+    }
+
     await this._assertReplayCleanupAvailable({ userId });
 
     // Original replay binaries are outside Mongo. Delete them while the
     // account still exists so an R2 failure aborts the request instead of
     // reporting success with private objects orphaned in storage.
     if (this.replayFiles) {
+      await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      await gdprFence.assert();
       counts.replayFiles = -1;
     }
 
+    await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
+      await gdprFence.assert();
       const coll = /** @type {any} */ (this.db)[key];
       if (!coll) continue;
       const res = await coll.deleteMany({ userId });
@@ -144,8 +171,10 @@ class GdprService {
     // Heavy per-game blobs. Store-aware: removes R2/S3 objects when
     // that backend is active; falls back to the Mongo collection when
     // the service wasn't injected (older callers / focused tests).
+    await gdprFence.assert();
     if (this.gameDetails) {
       await this.gameDetails.deleteAllForUser(userId);
+      await gdprFence.assert();
       counts.gameDetails = -1; // store contract doesn't report counts
     } else if (this.db.gameDetails) {
       const res = await this.db.gameDetails.deleteMany({ userId });
@@ -194,11 +223,22 @@ class GdprService {
     // object that landed in that interval. Do this before removing the user
     // row so an R2 failure remains retryable under the same account identity.
     if (this.replayFiles) {
+      await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      await gdprFence.assert();
     }
-    const userRes = await this.db.users.deleteOne({ userId });
+    await gdprFence.assert();
+    clearInterval(gdprFence.timer);
+    const userRes = await this.db.users.deleteOne({
+      userId,
+      "_gdprMutation.id": gdprFence.id,
+    });
     counts.users = userRes.deletedCount || 0;
     return counts;
+    } catch (err) {
+      await this._releaseMutationFence(userId, gdprFence);
+      throw err;
+    }
   }
 
   /**
@@ -219,6 +259,10 @@ class GdprService {
    * @returns {Promise<{ games: number, opponents: number, macroJobs: number, range: { since: string|null, until: string|null } }>}
    */
   async wipeGames(userId, opts = {}) {
+    const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
+    try {
+      await gdprFence.assert();
+      await this._drainOpponentBuildOrderWriters(userId);
     const since = opts.since instanceof Date && !Number.isNaN(opts.since.getTime())
       ? opts.since
       : null;
@@ -236,6 +280,10 @@ class GdprService {
       filter.date = range;
     }
 
+    if (this.customBuilds) {
+      await this.customBuilds.cancelUserReclassifications(userId);
+    }
+
     await this._assertReplayCleanupAvailable(filter);
 
     // Resolve raw-replay keys before removing their Mongo ownership rows.
@@ -245,6 +293,7 @@ class GdprService {
     let replayGameIds = [];
     let gamesDeleteFilter = filter;
     if (this.replayFiles) {
+      await gdprFence.assert();
       if (since || until) {
         const replayRows = await this.db.games
           .find(filter, { projection: { _id: 0, gameId: 1 } })
@@ -270,19 +319,23 @@ class GdprService {
       } else {
         await this.replayFiles.deleteAllForUser(userId);
       }
+      await gdprFence.assert();
     }
 
+    await gdprFence.assert();
     const gamesRes = await this.db.games.deleteMany(gamesDeleteFilter);
     // A completion already in flight may have promoted an object after the
     // first purge. Repeat the same key-scoped cleanup immediately after the
     // matching ownership rows are gone; completion's conditional marker
     // update can no longer authorize the object.
     if (this.replayFiles) {
+      await gdprFence.assert();
       if (since || until) {
         await this.replayFiles.deleteMany(userId, replayGameIds);
       } else {
         await this.replayFiles.deleteAllForUser(userId);
       }
+      await gdprFence.assert();
     }
     // Mirror the delete on the split-out ``game_details`` storage so
     // heavy per-game fields (build logs, macro breakdown, apm curve,
@@ -291,6 +344,7 @@ class GdprService {
     // rows — the blobs live as objects, and deleting just the rows
     // would orphan every object. Detail rows duplicate the ``date``
     // field precisely so this ranged filter works.
+    await gdprFence.assert();
     if (this.gameDetails && (since || until)) {
       // Ranged wipe: resolve the affected gameIds from the detail
       // index rows, then delete blob+row per game through the store.
@@ -304,6 +358,7 @@ class GdprService {
         .find(detailFilter, { projection: { _id: 0, gameId: 1 } })
         .toArray();
       for (const row of rows) {
+        await gdprFence.assert();
         if (row && typeof row.gameId === "string" && row.gameId) {
           await this.gameDetails.delete(userId, row.gameId);
         }
@@ -313,9 +368,11 @@ class GdprService {
     } else if (this.db.gameDetails) {
       await this.db.gameDetails.deleteMany(filter);
     }
+    await gdprFence.assert();
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
 
     const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
+    await gdprFence.assert();
 
     return {
       games: gamesRes.deletedCount || 0,
@@ -326,6 +383,9 @@ class GdprService {
         until: until ? until.toISOString() : null,
       },
     };
+    } finally {
+      await this._releaseMutationFence(userId, gdprFence);
+    }
   }
 
   /**
@@ -582,6 +642,13 @@ class GdprService {
       /** @type {any} */ (err).status = 404;
       throw err;
     }
+    const gdprFence = await this._acquireMutationFence(userId, "restore");
+    try {
+      await gdprFence.assert();
+      await this._drainOpponentBuildOrderWriters(userId);
+    if (this.customBuilds) {
+      await this.customBuilds.cancelUserReclassifications(userId);
+    }
     const snapshotGames = /** @type {Array<Record<string, any>>} */ (
       Array.isArray(snap.payload?.data?.games) ? snap.payload.data.games : []
     );
@@ -598,8 +665,10 @@ class GdprService {
     // Heavy detail blobs are not embedded in manual snapshot JSON. Purge the
     // active store before restoring slim game rows so current R2/Mongo detail
     // data cannot survive the restore and attach to a historical gameId.
+    await gdprFence.assert();
     if (this.gameDetails) {
       await this.gameDetails.deleteAllForUser(userId);
+      await gdprFence.assert();
     } else if (this.db.gameDetails) {
       await this.db.gameDetails.deleteMany({ userId });
     }
@@ -607,15 +676,20 @@ class GdprService {
     // Remove current objects before clearing their Mongo ownership rows, so
     // any object-store failure aborts before historical rows are inserted.
     if (this.replayFiles) {
+      await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      await gdprFence.assert();
     }
     // Clear current data (NOT the user record — the user keeps their id).
+    await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
+      await gdprFence.assert();
       const c = /** @type {any} */ (this.db)[key];
       if (c) await c.deleteMany({ userId });
     }
     const data = snap.payload?.data || {};
     for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
+      await gdprFence.assert();
       const c = /** @type {any} */ (this.db)[key];
       const rows = Array.isArray(data[jsonKey]) ? data[jsonKey] : [];
       if (c && rows.length > 0) {
@@ -625,6 +699,13 @@ class GdprService {
             if (key === "games") {
               delete restored.replayFile;
               delete restored.replayUpload;
+              delete restored._customBuildReclassify;
+              delete restored._customBuildClassificationSequence;
+              delete restored._opponentBuildOrderWriteLease;
+              restored._customBuildRevision = randomUUID();
+              // Preserve `_customBuildSlug`: unlike transient stage/order
+              // state, it is durable ownership provenance for `myBuild`.
+              stampVersion(restored, COLLECTIONS.GAMES);
             }
             return restored;
           }),
@@ -635,9 +716,115 @@ class GdprService {
     // Snapshot JSON never restores raw replay markers. A second pass closes
     // the same in-flight completion race as account/history deletion.
     if (this.replayFiles) {
+      await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      await gdprFence.assert();
     }
     return { restoredAt: new Date(), counts: countsOf(data) };
+    } finally {
+      await this._releaseMutationFence(userId, gdprFence);
+    }
+  }
+
+  /** @param {string} userId @param {string} kind */
+  async _acquireMutationFence(userId, kind) {
+    const id = randomUUID();
+    const now = new Date();
+    const claimed = await this.db.users.updateOne(
+      { userId, $or: [
+        { _gdprMutation: { $exists: false } },
+        { "_gdprMutation.leaseUntil": { $lte: now } },
+        { "_gdprMutation.leaseUntil": { $exists: false } },
+      ] },
+      { $set: { _gdprMutation: {
+        id,
+        kind,
+        startedAt: now,
+        leaseUntil: new Date(now.getTime() + GDPR_MUTATION_LEASE_MS),
+      } } },
+    );
+    if (claimed.matchedCount === 0) {
+      const err = new Error("gdpr_operation_busy");
+      /** @type {any} */ (err).status = 409;
+      throw err;
+    }
+    let lost = false;
+    const renew = async () => {
+      const renewed = await this.db.users.updateOne(
+        { userId, "_gdprMutation.id": id },
+        { $set: {
+          "_gdprMutation.leaseUntil": new Date(
+            Date.now() + GDPR_MUTATION_LEASE_MS,
+          ),
+        } },
+      );
+      if (renewed.matchedCount === 0) {
+        lost = true;
+        throw new Error("gdpr_operation_lease_lost");
+      }
+    };
+    const timer = setInterval(() => {
+      void renew().catch((err) => {
+        lost = true;
+        if (this.logger?.error) {
+          this.logger.error(
+            { err, userId, kind },
+            "gdpr_operation_lease_renew_failed",
+          );
+        }
+      });
+    }, GDPR_MUTATION_RENEW_MS);
+    if (typeof timer.unref === "function") timer.unref();
+    const assert = async () => {
+      if (lost) throw new Error("gdpr_operation_lease_lost");
+      await renew();
+      if (lost) throw new Error("gdpr_operation_lease_lost");
+    };
+    return { id, timer, assert };
+  }
+
+  /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>}} fence */
+  async _releaseMutationFence(userId, fence) {
+    clearInterval(fence.timer);
+    await this.db.users.updateOne(
+      { userId, "_gdprMutation.id": fence.id },
+      { $unset: { _gdprMutation: "" } },
+    );
+  }
+
+  /** @param {string} userId */
+  async _drainOpponentBuildOrderWriters(userId) {
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      const now = new Date();
+      // Crash residue cannot write again. Remove its row fence immediately so
+      // the destructive operation can proceed without waiting five minutes.
+      await this.db.games.updateMany(
+        {
+          userId,
+          "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now },
+        },
+        { $set: { _customBuildRevision: randomUUID() }, $unset: {
+          _opponentBuildOrderWriteLease: "",
+          _customBuildClassificationSequence: "",
+          _customBuildReclassify: "",
+        } },
+      );
+      const active = await this.db.games.findOne(
+        {
+          userId,
+          "_opponentBuildOrderWriteLease.leaseUntil": { $gt: now },
+        },
+        { projection: { _id: 1 } },
+      );
+      if (!active) return;
+      if (Date.now() >= deadline) {
+        const err = new Error("opponent_build_order_write_busy");
+        /** @type {any} */ (err).status = 503;
+        throw err;
+      }
+      await wait(50);
+    }
   }
 
   /**

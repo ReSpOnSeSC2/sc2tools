@@ -86,7 +86,11 @@ const REGISTRY = Object.freeze({
     //      are bumped by the ``2026-05-17-rescale-timebase``
     //      migration. ``db.games.countDocuments({ _schemaVersion:
     //      { $lt: 5 } })`` reports unmigrated rows.
-    currentVersion: 5,
+    // v6 â€” durable custom-build reclassification fencing. Fresh writes may
+    //      carry server-private revision/staging/order/provenance/detail-write
+    //      lease fields; historical rows
+    //      remain valid and acquire them lazily on their next replay write.
+    currentVersion: 6,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.GAME_DETAILS]: {
@@ -105,6 +109,12 @@ const REGISTRY = Object.freeze({
     // seconds, matching the build-log times the matcher reads off
     // games.
     currentVersion: 2,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.CUSTOM_BUILD_JOBS]: {
+    collection: COLLECTIONS.CUSTOM_BUILD_JOBS,
+    // Ephemeral, purge-only background classifier lease/progress documents.
+    currentVersion: 1,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.DEVICE_PAIRINGS]: {

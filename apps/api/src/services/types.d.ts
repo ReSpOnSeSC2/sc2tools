@@ -312,12 +312,32 @@ export interface BuildTransitionsPayload {
   };
 }
 
+export interface CustomBuildRecord {
+  slug?: string;
+  name?: string;
+  race?: string;
+  vsRace?: string;
+  perspective?: "you" | "opponent";
+  rules?: object[];
+}
+
+export interface ReclassifyQueueResult {
+  status: string;
+  generation: string | null;
+  sequence?: number;
+  requestedAt: Date;
+}
+
 export interface CustomBuildsService {
   list(userId: string): Promise<object[]>;
   get(userId: string, slug: string): Promise<object | null>;
   upsert(userId: string, build: object & { slug: string }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
-  evaluateBuild(userId: string, slug: string): Promise<object | null>;
+  evaluateBuild(
+    userId: string,
+    slug: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<object | null>;
   evaluateBuildPhases(
     userId: string,
     slug: string,
@@ -337,17 +357,42 @@ export interface CustomBuildsService {
        * restricts the game cohort the phases are computed over.
        */
       filters?: object;
+      signal?: AbortSignal;
     },
   ): Promise<
     | null
     | (BuildPhasePayload & { transitions?: BuildTransitionsPayload["transitions"] })
   >;
-  evaluateAllStats(userId: string): Promise<object[]>;
+  evaluateAllStats(userId: string, opts?: { signal?: AbortSignal }): Promise<object[]>;
   latestGameDateMs(userId: string): Promise<number>;
+  enqueueReclassify(
+    userId: string,
+    slug: string,
+    opts?: {
+      replace?: boolean;
+      previousNames?: string[];
+    },
+  ): Promise<ReclassifyQueueResult>;
+  enqueueReclassifyAll(
+    userId: string,
+    opts?: {
+      clearUnmatched?: boolean;
+      previousNamesBySlug?: Record<string, string[]>;
+    },
+  ): Promise<ReclassifyQueueResult & { builds: number }>;
+  recoverQueuedReclassifications(): Promise<void>;
+  stopReclassifications(): Promise<void>;
+  cancelUserReclassifications(userId: string): Promise<void>;
   reclassify(
     userId: string,
     slug: string,
-    opts?: { replace?: boolean },
+    opts?: {
+      replace?: boolean;
+      previousName?: string;
+      previousNames?: string[];
+      signal?: AbortSignal;
+      jobSequence?: number;
+    },
   ): Promise<{
     slug: string;
     name: string;
@@ -359,7 +404,13 @@ export interface CustomBuildsService {
   } | null>;
   reclassifyAll(
     userId: string,
-    opts?: { clearUnmatched?: boolean },
+    opts?: {
+      clearUnmatched?: boolean;
+      signal?: AbortSignal;
+      previousNamesBySlug?: Record<string, string[]>;
+      assertLease?: () => Promise<void>;
+      jobSequence?: number;
+    },
   ): Promise<{
     builds: number;
     scanned: number;
@@ -394,6 +445,15 @@ export interface ParsedBuildLogEvent {
 export interface PerGameComputeServiceListedGame {
   gameId: string;
   myBuild: string | null;
+  /** Server-owned replay payload revision used to fence background writes. */
+  customBuildRevision?: string | null;
+  customBuildSlug?: string | null;
+  /** Server-private opponent-detail writer lease, exposed only to internal
+   * classifier pages so destructive work can defer until the blob is stable. */
+  opponentBuildOrderWriteLease?: {
+    id: string;
+    leaseUntil: Date | null;
+  } | null;
   myRace: string | null;
   oppRace: string | null;
   /** Embedded opponent block. ``strategy`` is what the StrategyPhases
@@ -413,6 +473,9 @@ export interface PerGameComputeServiceListedGame {
    *  service is the primary consumer; rule preview / reclassify
    *  paths never request it. */
   macroBreakdown?: object | null;
+  detailAvailableYou?: boolean;
+  detailAvailableOpponent?: boolean;
+  detailAvailable?: boolean;
 }
 
 export interface DeviceListItem {
@@ -700,12 +763,14 @@ export interface PerGameComputeService {
     userId: string,
     gameId: string,
     payload: { oppBuildLog: string[]; oppEarlyBuildLog?: string[] },
+    opts?: { signal?: AbortSignal },
   ): Promise<void>;
   listForRulePreview(
     userId: string,
     opts?: {
       limit?: number;
       includeMacroBreakdown?: boolean;
+      perspective?: "you" | "opponent" | "both";
       /**
        * Optional Mongo-level filter merged into the find query under
        * the user scope. Callers that already know the matchup (e.g.
@@ -722,6 +787,33 @@ export interface PerGameComputeService {
       filters?: object;
     },
   ): Promise<PerGameComputeServiceListedGame[]>;
+  iterateRulePreviewPages(
+    userId: string,
+    opts?: {
+      limit?: number;
+      pageSize?: number;
+      perspective?: "you" | "opponent" | "both";
+      includeMacroBreakdown?: boolean;
+      filters?: object;
+      signal?: AbortSignal;
+      match?: Record<string, unknown>;
+      metadataFilter?: (game: {
+        gameId?: string;
+        myBuild?: string | null;
+        myRace?: string | null;
+        opponent?: {
+          displayName?: string | null;
+          race?: string | null;
+          strategy?: string | null;
+        } | null;
+      }) => boolean;
+      strictDetails?: boolean;
+    },
+  ): AsyncGenerator<{
+    games: PerGameComputeServiceListedGame[];
+    candidates: number;
+    hasMore: boolean;
+  }>;
 }
 
 export interface MacroBackfillService {

@@ -150,14 +150,38 @@ function buildPerGameRouter(deps) {
       const gameId = String(req.params.gameId);
       const body = req.body || {};
       if (Array.isArray(body.oppBuildLog)) {
+        const controller = new AbortController();
+        const onAborted = () => controller.abort();
+        req.once("aborted", onAborted);
+        res.once("close", onAborted);
         // ``oppEarlyBuildLog`` from the body is intentionally discarded:
         // since v0.4.3 it is derived from ``oppBuildLog`` at read time
         // (perGameCompute.readOppEarlyBuildLog), not stored. Older
         // agent payloads that still include the field round-trip
         // harmlessly — writeOpponentBuildOrder $unsets any stale value.
-        await deps.perGame.writeOpponentBuildOrder(userId, gameId, {
-          oppBuildLog: body.oppBuildLog,
-        });
+        try {
+          await deps.perGame.writeOpponentBuildOrder(userId, gameId, {
+            oppBuildLog: body.oppBuildLog,
+          }, { signal: controller.signal });
+        } catch (err) {
+          if (
+            err && typeof err === "object" && "code" in err
+            && err.code === "opponent_build_order_busy"
+          ) {
+            const retryAfterSec = "retryAfterSec" in err
+              ? Number(err.retryAfterSec) || 2
+              : 2;
+            res.set("Retry-After", String(retryAfterSec));
+            res.status(503).json({
+              error: { code: "opponent_build_order_busy", retryable: true },
+            });
+            return;
+          }
+          throw err;
+        } finally {
+          req.removeListener("aborted", onAborted);
+          res.removeListener("close", onAborted);
+        }
         res.status(202).json({ ok: true, persisted: true });
         return;
       }

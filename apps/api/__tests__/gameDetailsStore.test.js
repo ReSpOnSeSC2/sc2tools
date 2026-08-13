@@ -427,6 +427,30 @@ describe("R2DetailsStore", () => {
     expect(out.get("g3").buildLog).toEqual(["c"]);
   });
 
+  test("concurrent bulk readers share the global four-object memory ceiling", async () => {
+    let active = 0;
+    let maxActive = 0;
+    store.read = jest.fn(async (_userId, gameId) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setImmediate(resolve));
+      active -= 1;
+      return { buildLog: [gameId] };
+    });
+
+    await Promise.all([
+      store.readMany("u1", Array.from({ length: 12 }, (_, i) => `a-${i}`), {
+        concurrency: 8,
+      }),
+      store.readMany("u2", Array.from({ length: 12 }, (_, i) => `b-${i}`), {
+        concurrency: 8,
+      }),
+    ]);
+
+    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(store.read).toHaveBeenCalledTimes(24);
+  });
+
   test("delete removes the object + its Mongo metadata row", async () => {
     const date = new Date("2026-05-04T12:00:00Z");
     await store.write("u1", "g1", date, SAMPLE_BLOB);

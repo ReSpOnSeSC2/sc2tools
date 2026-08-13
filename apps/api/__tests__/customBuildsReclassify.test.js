@@ -53,6 +53,21 @@ const TERRAN_OPP_OPENER = [
   "[5:00] Factory",
 ];
 
+async function waitForJob(db, userId, generation, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const job = await db.customBuildJobs.findOne({ userId, generation });
+    if (job && job.status === "complete") return job;
+    if (job && job.status === "failed") {
+      throw new Error(`reclassification failed: ${job.error}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out waiting for reclassification ${generation}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe("POST /v1/custom-builds/:slug/reclassify", () => {
   let mongo;
   let db;
@@ -85,6 +100,9 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });
@@ -125,8 +143,8 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
       opponent: { displayName: "DuncanTheFat", race: "Terran" },
     });
 
-    // PUT now reclassifies cloud-side as part of save so opponent /
-    // recent-games views see the new build name immediately.
+    // PUT durably queues cloud-side reclassification without holding the
+    // request open for a full replay-library scan.
     const putRes = await withAuth(
       request(app).put("/v1/custom-builds/pvp-oracle").send({
         slug: "pvp-oracle",
@@ -138,20 +156,18 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
     );
     expect(putRes.status).toBe(200);
     expect(putRes.body.reclassify).toMatchObject({
-      tagged: 1,
-      matched: 1,
-      name: "PvP Oracle Opener",
+      status: "queued",
+      generation: expect.any(String),
     });
 
-    // Subsequent explicit reclassify is a no-op because the PUT already
-    // tagged everything that matches.
+    // An explicit request uses the same durable queue contract.
     const res = await withAuth(
       request(app).post("/v1/custom-builds/pvp-oracle/reclassify").send({}),
     );
-    expect(res.status).toBe(200);
-    expect(res.body.tagged).toBe(0);
-    expect(res.body.matched).toBe(1);
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe("queued");
     expect(res.body.name).toBe("PvP Oracle Opener");
+    await waitForJob(db, userId, res.body.generation);
 
     const tagged = await db.games.findOne({ userId, gameId: "g-pvp-stargate-1" });
     const untouched = await db.games.findOne({
@@ -179,12 +195,17 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
       map: "Equilibrium LE",
       opponent: { displayName: "noOracle", race: "Protoss" },
     });
+    await db.games.updateOne(
+      { userId, gameId: "g-stale-tag" },
+      { $set: { _customBuildSlug: "pvp-oracle" } },
+    );
 
     const res = await withAuth(
       request(app).post("/v1/custom-builds/pvp-oracle/reclassify").send({}),
     );
-    expect(res.status).toBe(200);
-    expect(res.body.cleared).toBeGreaterThanOrEqual(1);
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe("queued");
+    await waitForJob(db, userId, res.body.generation);
 
     const stale = await db.games.findOne({ userId, gameId: "g-stale-tag" });
     expect(stale.myBuild).toBeUndefined();
@@ -238,10 +259,10 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
     );
     expect(initial.status).toBe(200);
     expect(initial.body.reclassify).toMatchObject({
-      tagged: 1,
-      matched: 1,
-      name: "First name",
+      status: "queued",
+      generation: expect.any(String),
     });
+    await waitForJob(db, userId, initial.body.reclassify.generation);
 
     let row = await db.games.findOne({ userId, gameId: "g-rename-1" });
     expect(row.myBuild).toBe("First name");
@@ -259,7 +280,8 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
       }),
     );
     expect(renamed.status).toBe(200);
-    expect(renamed.body.reclassify.tagged).toBe(1);
+    expect(renamed.body.reclassify.status).toBe("queued");
+    await waitForJob(db, userId, renamed.body.reclassify.generation);
 
     row = await db.games.findOne({ userId, gameId: "g-rename-1" });
     expect(row.myBuild).toBe("Second name");
@@ -298,6 +320,9 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });
@@ -364,9 +389,11 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     const res = await withAuth(
       request(app).post("/v1/custom-builds/reclassify-all").send({}),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe("queued");
     expect(res.body.builds).toBe(2);
-    expect(Array.isArray(res.body.perBuild)).toBe(true);
+    expect(res.body.perBuild).toBeUndefined();
+    await waitForJob(db, userId, res.body.job.generation);
 
     const a = await db.games.findOne({ userId, gameId: "g-a" });
     const b = await db.games.findOne({ userId, gameId: "g-b" });
@@ -425,7 +452,9 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     const res = await withAuth(
       request(app).post("/v1/custom-builds/reclassify-all").send({}),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe("queued");
+    await waitForJob(db, userId, res.body.job.generation);
 
     const row = await db.games.findOne({ userId, gameId: "g-closest" });
     expect(row.myBuild).toBe("Specific build (3 rules)");

@@ -39,6 +39,7 @@ const COLLECTIONS = Object.freeze({
   // as games. See ``services/gameDetails.js``.
   GAME_DETAILS: "game_details",
   CUSTOM_BUILDS: "custom_builds",
+  CUSTOM_BUILD_JOBS: "custom_build_jobs",
   DEVICE_PAIRINGS: "device_pairings",
   DEVICE_TOKENS: "device_tokens",
   OVERLAY_TOKENS: "overlay_tokens",

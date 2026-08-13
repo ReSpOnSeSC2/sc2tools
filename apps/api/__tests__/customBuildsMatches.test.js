@@ -97,6 +97,9 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });
@@ -250,6 +253,9 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });
@@ -556,7 +562,12 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
     const reclassify = await withAuth(
       request(app).post("/v1/custom-builds/pvz-adept/reclassify"),
     );
-    expect(reclassify.status).toBe(200);
+    expect(reclassify.status).toBe(202);
+    expect(reclassify.body).toEqual(expect.objectContaining({
+      ok: true,
+      status: "queued",
+      generation: expect.any(String),
+    }));
 
     const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
     try {
@@ -603,6 +614,9 @@ describe("GET /v1/custom-builds/:slug/transitions", () => {
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });

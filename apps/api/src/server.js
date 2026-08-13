@@ -154,6 +154,16 @@ async function main() {
     },
   });
 
+  // Saving a custom build returns immediately while its full-history rule
+  // scan runs in one memory-bounded background lane. Resume jobs left queued
+  // or interrupted by a deploy before accepting new requests.
+  try {
+    await /** @type {any} */ (services).customBuilds
+      .recoverQueuedReclassifications();
+  } catch (err) {
+    logger.error({ err }, "custom_build_reclassify_recovery_failed");
+  }
+
   httpServer.listen(config.port, () => {
     logger.info({ port: config.port }, "listening");
   });
@@ -290,6 +300,7 @@ async function main() {
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
     await ladderMetaJob.stop();
+    await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();
     logger.info("shutdown_complete");
     process.exit(0);

@@ -27,20 +27,13 @@ type ReclassifyResult = {
   ok: true;
   slug: string;
   name: string;
-  scanned: number;
-  matched: number;
-  tagged: number;
-  cleared: number;
-  ruleCount: number;
+  status: "queued" | "complete";
 };
 
 type ReclassifyAllResult = {
   ok: true;
+  status: "queued" | "complete";
   builds: number;
-  scanned: number;
-  tagged: number;
-  cleared: number;
-  perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
 };
 
 const DEFAULT_FILTERS: BuildFilterState = {
@@ -182,14 +175,9 @@ function BuildsLibraryInner() {
           `/v1/custom-builds/${encodeURIComponent(slug)}/reclassify`,
           { method: "POST", body: JSON.stringify({ replace: true }) },
         );
-        const summary = describeReclassify({
-          tagged: res.tagged,
-          cleared: res.cleared,
-          matched: res.matched,
+        toast.success(`Replay matching queued for “${res.name}”.`, {
+          description: "Your full replay history will update safely in the background.",
         });
-        toast.success(`Reclassified “${res.name}”.`, { description: summary });
-        await stats.mutate();
-        await builds.mutate();
       } catch (err) {
         toast.error("Couldn’t reclassify replays", {
           description: extractErr(err),
@@ -198,7 +186,7 @@ function BuildsLibraryInner() {
         setReclassifyingSlug(null);
       }
     },
-    [getToken, items, stats, builds, toast],
+    [getToken, items, toast],
   );
 
   const reclassifyAll = useCallback(async () => {
@@ -209,15 +197,9 @@ function BuildsLibraryInner() {
         "/v1/custom-builds/reclassify-all",
         { method: "POST", body: JSON.stringify({ clearUnmatched: true }) },
       );
-      toast.success(`Reclassified ${res.builds} build${res.builds === 1 ? "" : "s"}.`, {
-        description: describeReclassify({
-          tagged: res.tagged,
-          cleared: res.cleared,
-          matched: res.perBuild.reduce((a, b) => a + (b.matched || 0), 0),
-        }),
+      toast.success(`Replay matching queued for ${res.builds} build${res.builds === 1 ? "" : "s"}.`, {
+        description: "Your full replay history will update safely in the background.",
       });
-      await stats.mutate();
-      await builds.mutate();
     } catch (err) {
       toast.error("Couldn’t reclassify replays", {
         description: extractErr(err),
@@ -225,7 +207,7 @@ function BuildsLibraryInner() {
     } finally {
       setReclassifyAllPending(false);
     }
-  }, [getToken, stats, builds, toast]);
+  }, [getToken, toast]);
 
   const isInitialLoad = !builds.data && builds.isLoading;
   const totalCount = decorated.length;

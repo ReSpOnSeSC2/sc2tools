@@ -19,8 +19,8 @@ const {
  * column i+1. Games whose ``finalPhase`` is not "late" terminate at
  * their col 2 node and never emit a col 3 edge. Games whose
  * ``finalPhase`` is "late" pick a single late-composition signature
- * (top-3 non-worker units at the late-window midpoint, same picker
- * the compositions service uses) and route to that col 3 node.
+   * (top-3 non-worker units alive across the late window, using the same
+   * picker as the compositions service) and route to that col 3 node.
  *
  * Rare-collapse rule: any column-1..3 node with games < 2 is folded
  * into a sibling "Other" node at the same column; any remaining edge
@@ -245,18 +245,8 @@ function pathForGame(g, buildLabel, perspective) {
   if (finalPhase === "late") {
     const win = lateWindow(classified.crossings, durationSec);
     if (win) {
-      const midpoint = (win.start + win.end) / 2;
-      // NOTE: ``pickSignatureUnits`` is (macroBreakdown, windowStart,
-      // windowEnd, perspective) since the peak-alive refactor in
-      // buildCompositions.js; this call still passes the pre-refactor
-      // (macroBreakdown, midpoint, perspective) triple, so the
-      // perspective string lands in ``windowEnd`` (making the window
-      // extend to game end via a NaN comparison) and the 4th param is
-      // undefined (side always "my"). Cast kept to preserve the
-      // long-standing runtime behavior the snapshots pin — flagged as
-      // a suspected bug rather than silently changing output.
       const units = pickSignatureUnits(
-        macroBreakdown, midpoint, /** @type {any} */ (sidePerspective),
+        macroBreakdown, win.start, win.end, sidePerspective,
       );
       const key = units.length > 0 ? signatureKey(units) : "Unknown";
       /** @type {TransitionPathNode} */

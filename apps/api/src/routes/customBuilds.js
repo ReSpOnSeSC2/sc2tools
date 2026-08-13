@@ -7,7 +7,16 @@ const { parseFilters } = require("../util/parseQuery");
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
+const PREVIEW_PAGE_SIZE = 50;
+const PREVIEW_MAX_CONCURRENT = 2;
+const PREVIEW_MAX_WAITERS = 4;
 const PHASE_CACHE_TTL_MS = 60 * 1000;
+const PHASE_CACHE_MAX_ENTRIES = 32;
+const PHASE_MAX_CONCURRENT = 1;
+const PHASE_MAX_WAITERS = 8;
+const PHASE_RETRY_AFTER_SEC = 2;
+const PHASE_BUSY = Symbol("phase_busy");
+const PHASE_CANCELLED = Symbol("phase_cancelled");
 
 /**
  * Permissive matchup filter mirroring the local SPA semantics: a game
@@ -84,6 +93,61 @@ function buildCustomBuildsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
 
+  // Custom-build previews are detail-store reads, not cheap metadata calls.
+  // Bound them independently of replay ingest and supersede an older preview
+  // from the same editor/user when a new debounce request arrives.
+  let activePreviews = 0;
+  /** @type {Array<{signal: AbortSignal, resolve: (release: (() => void) | null) => void}>} */
+  const previewWaiters = [];
+  /** @type {Map<string, AbortController>} */
+  const previewByUser = new Map();
+  /**
+   * @param {AbortSignal} signal
+   * @returns {Promise<(() => void) | null>}
+   */
+  function acquirePreviewSlot(signal) {
+    if (signal.aborted) return Promise.resolve(null);
+    if (activePreviews < PREVIEW_MAX_CONCURRENT) {
+      activePreviews += 1;
+      return Promise.resolve(releasePreviewSlot);
+    }
+    if (previewWaiters.length >= PREVIEW_MAX_WAITERS) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      /** @type {() => void} */
+      let onAbort = () => {};
+      /** @param {(() => void) | null} release */
+      const finish = (release) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(release);
+      };
+      const waiter = { signal, resolve: finish };
+      onAbort = () => {
+        const index = previewWaiters.indexOf(waiter);
+        if (index >= 0) previewWaiters.splice(index, 1);
+        finish(null);
+      };
+      previewWaiters.push(waiter);
+      signal.addEventListener("abort", onAbort, { once: true });
+      // Abort may race between the initial check and listener registration.
+      if (signal.aborted) onAbort();
+    });
+  }
+  function releasePreviewSlot() {
+    activePreviews = Math.max(0, activePreviews - 1);
+    while (previewWaiters.length > 0) {
+      const waiter = previewWaiters.shift();
+      if (!waiter || waiter.signal.aborted) continue;
+      activePreviews += 1;
+      waiter.resolve(releasePreviewSlot);
+      break;
+    }
+  }
+
   // In-process cache for the phase-aware compositions / transitions
   // payloads. Both endpoints are heavy: every request re-fetches the
   // full game set + macroBreakdown blobs, then runs the classifier
@@ -95,6 +159,21 @@ function buildCustomBuildsRouter(deps) {
   // from the reclassify endpoint where the matched set may shift.
   /** @type {Map<string, {expires: number, value: any}>} */
   const phaseCache = new Map();
+  /**
+   * @type {Map<string, {
+   *   controller: AbortController,
+   *   promise: Promise<any | typeof PHASE_BUSY | typeof PHASE_CANCELLED>,
+   *   subscribers: number,
+   *   settled: boolean,
+   * }>}
+   */
+  const phaseInFlight = new Map();
+  let activePhaseComputations = 0;
+  /** @type {Array<{
+   *   signal: AbortSignal,
+   *   resolve: (release: (() => void) | null) => void,
+   * }>} */
+  const phaseWaiters = [];
   /**
    * @param {string} userId
    * @param {string} slug
@@ -144,11 +223,25 @@ function buildCustomBuildsRouter(deps) {
       phaseCache.delete(key);
       return null;
     }
+    // Map insertion order doubles as a tiny LRU. A frequently-read dossier
+    // stays resident while one-off filter combinations age out first.
+    phaseCache.delete(key);
+    phaseCache.set(key, hit);
     return hit.value;
   }
   /** @param {string} key @param {unknown} value */
   function phaseCacheSet(key, value) {
-    phaseCache.set(key, { value, expires: Date.now() + PHASE_CACHE_TTL_MS });
+    const now = Date.now();
+    for (const [cachedKey, entry] of phaseCache) {
+      if (entry.expires <= now) phaseCache.delete(cachedKey);
+    }
+    phaseCache.delete(key);
+    phaseCache.set(key, { value, expires: now + PHASE_CACHE_TTL_MS });
+    while (phaseCache.size > PHASE_CACHE_MAX_ENTRIES) {
+      const oldest = phaseCache.keys().next().value;
+      if (oldest === undefined) break;
+      phaseCache.delete(oldest);
+    }
   }
   /** @param {string} userId @param {string} slug */
   function phaseCacheBust(userId, slug) {
@@ -156,12 +249,190 @@ function buildCustomBuildsRouter(deps) {
     for (const key of phaseCache.keys()) {
       if (key.startsWith(prefix)) phaseCache.delete(key);
     }
+    const matchesKey = `matches|${userId}|${slug}`;
+    const statsKey = `stats|${userId}`;
+    for (const [key, entry] of phaseInFlight) {
+      if (
+        key.startsWith(prefix)
+        || key === matchesKey
+        || key === statsKey
+      ) {
+        entry.controller.abort();
+        phaseInFlight.delete(key);
+      }
+    }
   }
   /** @param {string} userId */
   function latestGameMs(userId) {
     // Cheap probe so a fresh upload invalidates the cache key without
     // waiting for the TTL.
     return deps.customBuilds.latestGameDateMs(userId);
+  }
+
+  /**
+   * @param {AbortSignal} signal
+   * @returns {Promise<(() => void) | null>}
+   */
+  function acquirePhaseSlot(signal) {
+    if (signal.aborted) return Promise.resolve(null);
+    if (activePhaseComputations < PHASE_MAX_CONCURRENT) {
+      activePhaseComputations += 1;
+      return Promise.resolve(releasePhaseSlot);
+    }
+    if (phaseWaiters.length >= PHASE_MAX_WAITERS) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      /** @type {() => void} */
+      let onAbort = () => {};
+      /** @param {(() => void) | null} release */
+      const finish = (release) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(release);
+      };
+      const waiter = { signal, resolve: finish };
+      onAbort = () => {
+        const index = phaseWaiters.indexOf(waiter);
+        if (index >= 0) phaseWaiters.splice(index, 1);
+        finish(null);
+      };
+      phaseWaiters.push(waiter);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
+  }
+
+  function releasePhaseSlot() {
+    activePhaseComputations = Math.max(0, activePhaseComputations - 1);
+    while (phaseWaiters.length > 0) {
+      const next = phaseWaiters.shift();
+      if (!next || next.signal.aborted) continue;
+      activePhaseComputations += 1;
+      next.resolve(releasePhaseSlot);
+      break;
+    }
+  }
+
+  /**
+   * Share identical phase work, while admitting distinct scans through one
+   * process-wide lane for this router. The small waiter cap prevents a burst
+   * of unique filters from becoming an unbounded queue of retained requests.
+   * @param {string} key
+   * @param {(signal: AbortSignal) => Promise<any>} compute
+   * @param {AbortSignal} subscriberSignal
+   * @returns {Promise<any | typeof PHASE_BUSY | typeof PHASE_CANCELLED>}
+   */
+  async function runPhaseComputation(key, compute, subscriberSignal) {
+    if (subscriberSignal.aborted) return PHASE_CANCELLED;
+    let entry = phaseInFlight.get(key);
+    // The last subscriber may have disconnected one tick before a replacement
+    // request arrived. Never attach that replacement to work whose shared
+    // controller is already cancelled: an iterator may resolve with a partial
+    // result instead of throwing on abort.
+    if (entry && entry.controller.signal.aborted && !entry.settled) {
+      if (phaseInFlight.get(key) === entry) phaseInFlight.delete(key);
+      entry = undefined;
+    }
+    if (!entry) {
+      const controller = new AbortController();
+      entry = {
+        controller,
+        promise: Promise.resolve(PHASE_CANCELLED),
+        subscribers: 0,
+        settled: false,
+      };
+      entry.promise = (async () => {
+        const release = await acquirePhaseSlot(controller.signal);
+        if (!release) {
+          return controller.signal.aborted ? PHASE_CANCELLED : PHASE_BUSY;
+        }
+        try {
+          const value = await compute(controller.signal);
+          return controller.signal.aborted ? PHASE_CANCELLED : value;
+        } catch (error) {
+          if (controller.signal.aborted) return PHASE_CANCELLED;
+          throw error;
+        } finally {
+          release();
+        }
+      })();
+      phaseInFlight.set(key, entry);
+      const createdEntry = entry;
+      const settle = () => {
+        createdEntry.settled = true;
+        if (phaseInFlight.get(key) === createdEntry) {
+          phaseInFlight.delete(key);
+        }
+      };
+      // Both branches consume settlement so a computation whose final
+      // subscriber disconnects cannot produce an unhandled rejection.
+      void entry.promise.then(settle, settle);
+    }
+
+    entry.subscribers += 1;
+    let detached = false;
+    /** @type {() => void} */
+    let onAbort = () => {};
+    const disconnected = new Promise((resolve) => {
+      onAbort = () => resolve(PHASE_CANCELLED);
+      subscriberSignal.addEventListener("abort", onAbort, { once: true });
+      if (subscriberSignal.aborted) onAbort();
+    });
+    try {
+      return await Promise.race([entry.promise, disconnected]);
+    } finally {
+      subscriberSignal.removeEventListener("abort", onAbort);
+      if (!detached) {
+        detached = true;
+        entry.subscribers = Math.max(0, entry.subscribers - 1);
+        if (entry.subscribers === 0 && !entry.settled) {
+          entry.controller.abort();
+        }
+      }
+    }
+  }
+
+  /**
+   * Tie one phase subscriber to its HTTP connection. A closed tab should
+   * release queued admission immediately, while a normally-finished response
+   * must not cancel a shared computation after its payload is written.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  function phaseRequestAbort(req, res) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const close = () => {
+      if (!res.writableEnded) abort();
+    };
+    req.once("aborted", abort);
+    res.once("close", close);
+    return {
+      signal: controller.signal,
+      cleanup() {
+        req.removeListener("aborted", abort);
+        res.removeListener("close", close);
+      },
+    };
+  }
+
+  /** @param {import('express').Response} res */
+  function sendPhaseBusy(res) {
+    res.set("Retry-After", String(PHASE_RETRY_AFTER_SEC));
+    res.status(503).json({ error: { code: "phase_analysis_busy" } });
+  }
+
+  /**
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  function sendPhaseCancelled(req, res) {
+    if (req.destroyed || res.headersSent) return;
+    res.set("Retry-After", String(PHASE_RETRY_AFTER_SEC));
+    res.status(409).json({ error: { code: "analysis_invalidated" } });
   }
 
   /**
@@ -197,6 +468,12 @@ function buildCustomBuildsRouter(deps) {
       // runtime validation (object with a non-empty string ``name``).
       /** @type {any[]} */
       const rawRules = Array.isArray(body.rules) ? body.rules : [];
+      if (rawRules.length > 30) {
+        res.status(400).json({
+          error: { code: "bad_request", details: ["rules must contain at most 30 items"] },
+        });
+        return;
+      }
       // Drop placeholder rules (empty name) so the user sees a useful
       // preview while typing instead of zero matches + a 500.
       const rules = rawRules.filter(
@@ -218,30 +495,69 @@ function buildCustomBuildsRouter(deps) {
       const race = typeof body.race === "string" ? body.race : undefined;
       const vsRace = typeof body.vsRace === "string" ? body.vsRace : undefined;
       const perspective = body.perspective === "opponent" ? "opponent" : "you";
-      const games = await deps.perGame.listForRulePreview(auth.userId, {
-        limit: PREVIEW_GAME_SCAN_CAP,
+      const previous = previewByUser.get(auth.userId);
+      if (previous) previous.abort();
+      const controller = new AbortController();
+      previewByUser.set(auth.userId, controller);
+      req.once("aborted", () => controller.abort());
+      res.once("close", () => {
+        if (!res.writableEnded) controller.abort();
       });
+      /** @type {(() => void) | null} */
+      let release = null;
       /** @type {Array<{game_id: string, build_name: string, map: string|null, result: string|null, date: Date|null}>} */
       const matches = [];
       /** @type {Array<{game_id: string, build_name: string, failed_rule_name?: string, failed_reason: string, map: string|null, result: string|null, date: Date|null}>} */
       const almostMatches = [];
       let evalErrors = 0;
       let scanned = 0;
-      for (const g of games) {
+      let candidates = 0;
+      let sampleTruncated = false;
+      try {
+      release = await acquirePreviewSlot(controller.signal);
+      if (!release) {
+        if (!req.destroyed && !res.headersSent) {
+          res.status(controller.signal.aborted ? 409 : 503).json({
+            error: { code: controller.signal.aborted
+              ? "preview_superseded"
+              : "preview_busy" },
+          });
+        }
+        return;
+      }
+      let lastPageHadMore = false;
+      const pages = typeof deps.perGame.iterateRulePreviewPages === "function"
+        ? deps.perGame.iterateRulePreviewPages(auth.userId, {
+          limit: PREVIEW_GAME_SCAN_CAP,
+          pageSize: PREVIEW_PAGE_SIZE,
+          perspective,
+          signal: controller.signal,
+          metadataFilter: (g) => {
+            const sideRace = perspective === "opponent" ? g.opponent?.race : g.myRace;
+            const otherRace = perspective === "opponent" ? g.myRace : g.opponent?.race;
+            return gameMatchesMatchup(
+              { myRace: sideRace, oppRace: otherRace, myBuild: g.myBuild },
+              race,
+              vsRace,
+            );
+          },
+        })
+        : legacyPreviewPages(deps.perGame, auth.userId, perspective);
+      for await (const page of pages) {
+        if (controller.signal.aborted) break;
+        candidates += page.candidates;
+        lastPageHadMore = page.hasMore;
+        for (const g of page.games) {
         // Build "what race is on each side of this game" relative to
         // the build's perspective, then ask `gameMatchesMatchup` whether
         // the rule's race + vs match.
+        // The paged production path applied this gate before hydration.
+        // Retain it for narrow test doubles using the legacy fallback.
         const sideRace = perspective === "opponent" ? g.oppRace : g.myRace;
         const otherRace = perspective === "opponent" ? g.myRace : g.oppRace;
-        if (
-          !gameMatchesMatchup(
-            { myRace: sideRace, oppRace: otherRace, myBuild: g.myBuild },
-            race,
-            vsRace,
-          )
-        ) {
-          continue;
-        }
+        if (!gameMatchesMatchup(
+          { myRace: sideRace, oppRace: otherRace, myBuild: g.myBuild }, race, vsRace,
+        )) continue;
         const events =
           perspective === "opponent" ? g.oppEvents || [] : g.events || [];
         if (events.length === 0) continue;
@@ -284,16 +600,38 @@ function buildCustomBuildsRouter(deps) {
           });
         }
       }
+      }
+      sampleTruncated = lastPageHadMore && candidates >= PREVIEW_GAME_SCAN_CAP;
+      } finally {
+        if (release) release();
+        if (previewByUser.get(auth.userId) === controller) {
+          previewByUser.delete(auth.userId);
+        }
+      }
+      if (controller.signal.aborted || res.headersSent) {
+        if (!req.destroyed && !res.headersSent) {
+          res.status(409).json({ error: { code: "preview_superseded" } });
+        }
+        return;
+      }
       res.json({
         matches,
         almost_matches: almostMatches,
         scanned_games: scanned,
         truncated:
+          sampleTruncated ||
           matches.length >= PREVIEW_TRUNCATION_LIMIT ||
           almostMatches.length >= PREVIEW_TRUNCATION_LIMIT,
+        sampled_games: candidates,
         eval_errors: evalErrors > 0 ? evalErrors : undefined,
       });
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        if (!req.destroyed && !res.headersSent) {
+          res.status(409).json({ error: { code: "preview_superseded" } });
+        }
+        return;
+      }
       next(err);
     }
   });
@@ -325,7 +663,28 @@ function buildCustomBuildsRouter(deps) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
         return;
       }
-      const items = await deps.customBuilds.evaluateAllStats(auth.userId);
+      const requestAbort = phaseRequestAbort(req, res);
+      let items;
+      try {
+        items = await runPhaseComputation(
+          `stats|${auth.userId}`,
+          (signal) => deps.customBuilds.evaluateAllStats(
+            auth.userId,
+            { signal },
+          ),
+          requestAbort.signal,
+        );
+      } finally {
+        requestAbort.cleanup();
+      }
+      if (items === PHASE_CANCELLED) {
+        sendPhaseCancelled(req, res);
+        return;
+      }
+      if (items === PHASE_BUSY) {
+        sendPhaseBusy(res);
+        return;
+      }
       res.json(items);
     } catch (err) {
       next(err);
@@ -347,10 +706,30 @@ function buildCustomBuildsRouter(deps) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
         return;
       }
-      const result = await deps.customBuilds.evaluateBuild(
-        auth.userId,
-        String(req.params.slug),
-      );
+      const slug = String(req.params.slug);
+      const requestAbort = phaseRequestAbort(req, res);
+      let result;
+      try {
+        result = await runPhaseComputation(
+          `matches|${auth.userId}|${slug}`,
+          (signal) => deps.customBuilds.evaluateBuild(
+            auth.userId,
+            slug,
+            { signal },
+          ),
+          requestAbort.signal,
+        );
+      } finally {
+        requestAbort.cleanup();
+      }
+      if (result === PHASE_CANCELLED) {
+        sendPhaseCancelled(req, res);
+        return;
+      }
+      if (result === PHASE_BUSY) {
+        sendPhaseBusy(res);
+        return;
+      }
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
@@ -402,11 +781,35 @@ function buildCustomBuildsRouter(deps) {
         res.json(cached);
         return;
       }
-      const result = await deps.customBuilds.evaluateBuildPhases(
-        auth.userId,
-        slug,
-        { includeTransitions: false, perspective, strategyName, filters },
-      );
+      const requestAbort = phaseRequestAbort(req, res);
+      let result;
+      try {
+        result = await runPhaseComputation(
+          key,
+          (signal) => deps.customBuilds.evaluateBuildPhases(
+            auth.userId,
+            slug,
+            {
+              includeTransitions: false,
+              perspective,
+              strategyName,
+              filters,
+              signal,
+            },
+          ),
+          requestAbort.signal,
+        );
+      } finally {
+        requestAbort.cleanup();
+      }
+      if (result === PHASE_CANCELLED) {
+        sendPhaseCancelled(req, res);
+        return;
+      }
+      if (result === PHASE_BUSY) {
+        sendPhaseBusy(res);
+        return;
+      }
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
@@ -445,11 +848,29 @@ function buildCustomBuildsRouter(deps) {
         res.json(cached);
         return;
       }
-      const result = await deps.customBuilds.evaluateBuildPhases(
-        auth.userId,
-        slug,
-        { includeTransitions: true, perspective },
-      );
+      const requestAbort = phaseRequestAbort(req, res);
+      let result;
+      try {
+        result = await runPhaseComputation(
+          key,
+          (signal) => deps.customBuilds.evaluateBuildPhases(
+            auth.userId,
+            slug,
+            { includeTransitions: true, perspective, signal },
+          ),
+          requestAbort.signal,
+        );
+      } finally {
+        requestAbort.cleanup();
+      }
+      if (result === PHASE_CANCELLED) {
+        sendPhaseCancelled(req, res);
+        return;
+      }
+      if (result === PHASE_BUSY) {
+        sendPhaseBusy(res);
+        return;
+      }
       if (!result) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
@@ -497,10 +918,16 @@ function buildCustomBuildsRouter(deps) {
         });
         return;
       }
+      const previousBuild = /** @type {import('../services/types').CustomBuildRecord|null} */ (
+        await deps.customBuilds.get(auth.userId, slug)
+      );
       await deps.customBuilds.upsert(
         auth.userId,
         /** @type {any} */ (validation.value),
       );
+      // The key tracks replay freshness, not build edits. Invalidate now so a
+      // rule/name change cannot serve the prior phase analysis for 60 seconds.
+      phaseCacheBust(auth.userId, slug);
       // Cloud-side reclassify so `myBuild` on stored games stays in sync
       // with the saved rules. Without this, the BuildDetail view (live
       // rule eval) and the opponent profile / Recent games table (reads
@@ -512,8 +939,11 @@ function buildCustomBuildsRouter(deps) {
       let reclassify = null;
       if (deps.perGame) {
         try {
-          reclassify = await deps.customBuilds.reclassify(auth.userId, slug, {
+          reclassify = await deps.customBuilds.enqueueReclassify(auth.userId, slug, {
             replace: true,
+            previousNames: previousBuild && previousBuild.name
+              ? [previousBuild.name]
+              : [],
           });
         } catch (e) {
           if (req.log) {
@@ -557,7 +987,9 @@ function buildCustomBuildsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      await deps.customBuilds.softDelete(auth.userId, String(req.params.slug));
+      const slug = String(req.params.slug);
+      await deps.customBuilds.softDelete(auth.userId, slug);
+      phaseCacheBust(auth.userId, slug);
       res.status(204).end();
     } catch (err) {
       next(err);
@@ -567,16 +999,13 @@ function buildCustomBuildsRouter(deps) {
   /**
    * POST /v1/custom-builds/:slug/reclassify
    *
-   * Re-evaluate the saved build's rules against every stored game and
-   * write `myBuild = build.name` on each match (and clear the tag from
-   * games that previously matched but no longer do, unless the body
-   * sets `replace: false`). Returns counts so the UI can show
-   * "Tagged 12, cleared 0".
+   * Queue a durable, memory-bounded all-history classifier. One background
+   * worker hydrates small pages, chooses the closest saved-build match, and
+   * only publishes tags after a successful complete scan.
    *
    * This is the "no-agent reclassify" path: the cloud already has the
-   * parsed buildLog/oppBuildLog for every uploaded game, so this is a
-   * single Mongo updateMany loop — not a round-trip to the desktop
-   * agent.
+   * parsed buildLog/oppBuildLog for uploaded games, so the worker pages
+   * through cloud data without a round-trip to the desktop agent.
    */
   router.post("/custom-builds/:slug/reclassify", async (req, res, next) => {
     try {
@@ -588,19 +1017,21 @@ function buildCustomBuildsRouter(deps) {
       }
       const body = req.body || {};
       const slug = String(req.params.slug);
-      const result = await deps.customBuilds.reclassify(
-        auth.userId,
-        slug,
-        { replace: body.replace !== false },
+      const build = /** @type {import('../services/types').CustomBuildRecord|null} */ (
+        await deps.customBuilds.get(auth.userId, slug)
       );
-      if (!result) {
+      if (!build) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
+      const result = await deps.customBuilds.enqueueReclassify(auth.userId, slug, {
+        replace: body.replace !== false,
+        previousNames: build.name ? [build.name] : [],
+      });
       // Matched-set may have shifted — drop any cached compositions /
       // transitions for this build so the next read recomputes.
       phaseCacheBust(auth.userId, slug);
-      res.json({ ok: true, ...result });
+      res.status(202).json({ ok: true, slug, name: build.name || slug, ...result });
     } catch (err) {
       next(err);
     }
@@ -609,10 +1040,8 @@ function buildCustomBuildsRouter(deps) {
   /**
    * POST /v1/custom-builds/reclassify-all
    *
-   * Re-evaluate every saved build against every stored game in one
-   * pass. Useful after editing several builds at once, or after the
-   * user adds many new replays. First-write-wins on conflicts, ranked
-   * by the build's most recent edit timestamp.
+   * Queue one deterministic all-build pass. More-specific rule sets win;
+   * the saved build's most recent edit timestamp breaks equal-rule ties.
    */
   router.post("/custom-builds/reclassify-all", async (req, res, next) => {
     try {
@@ -623,16 +1052,36 @@ function buildCustomBuildsRouter(deps) {
         return;
       }
       const body = req.body || {};
-      const out = await deps.customBuilds.reclassifyAll(auth.userId, {
+      const job = await deps.customBuilds.enqueueReclassifyAll(auth.userId, {
         clearUnmatched: !!body.clearUnmatched,
       });
-      res.json({ ok: true, ...out });
+      const buildCount = Math.max(0, Number(job.builds) || 0);
+      res.status(202).json({
+        ok: true,
+        status: "queued",
+        builds: buildCount,
+        job,
+      });
     } catch (err) {
       next(err);
     }
   });
 
   return router;
+}
+
+/**
+ * @param {import('../services/types').PerGameComputeService} perGame
+ * @param {string} userId
+ * @param {'you'|'opponent'} perspective
+ * @returns {AsyncGenerator<{games: import('../services/types').PerGameComputeServiceListedGame[], candidates: number, hasMore: boolean}>}
+ */
+async function* legacyPreviewPages(perGame, userId, perspective) {
+  const games = await perGame.listForRulePreview(userId, {
+    limit: PREVIEW_GAME_SCAN_CAP,
+    perspective,
+  });
+  yield { games, candidates: games.length, hasMore: false };
 }
 
 /**

@@ -31,6 +31,7 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
   let mongo;
   let db;
   let app;
+  let services;
 
   const config = {
     port: 0,
@@ -55,9 +56,13 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
     const built = buildApp({ db, logger: pino({ level: "silent" }), config });
     app = built.app;
+    services = built.services;
   });
 
   afterAll(async () => {
+    if (services?.customBuilds) {
+      await services.customBuilds.stopReclassifications();
+    }
     if (db) await db.close();
     if (mongo) await mongo.stop();
   });

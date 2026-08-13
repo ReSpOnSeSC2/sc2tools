@@ -20,7 +20,17 @@ describe("GamesService.findMany", () => {
         gameId: { $in: ["b", "a", "missing"] },
         isResumedFromReplay: { $ne: true },
       },
-      { projection: { _id: 0, replayUpload: 0 } },
+      {
+        projection: {
+          _id: 0,
+          replayUpload: 0,
+          _customBuildSlug: 0,
+          _customBuildRevision: 0,
+          _customBuildReclassify: 0,
+          _customBuildClassificationSequence: 0,
+          _opponentBuildOrderWriteLease: 0,
+        },
+      },
     );
     expect(result.map((row) => row.gameId)).toEqual(["b", "a"]);
   });
@@ -41,7 +51,17 @@ describe("GamesService.findMany", () => {
         gameId: { $in: ["g1"] },
         isResumedFromReplay: { $ne: true },
       },
-      { projection: { _id: 0, replayUpload: 0 } },
+      {
+        projection: {
+          _id: 0,
+          replayUpload: 0,
+          _customBuildSlug: 0,
+          _customBuildRevision: 0,
+          _customBuildReclassify: 0,
+          _customBuildClassificationSequence: 0,
+          _opponentBuildOrderWriteLease: 0,
+        },
+      },
     );
   });
 });

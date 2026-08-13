@@ -3,9 +3,15 @@
 const crypto = require("crypto");
 const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
-const { stampVersion } = require("../db/schemaVersioning");
+const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
+
+/** @param {number} ms */
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Exact field contract shared by the dashboard Daily Pulse and Arcade.  A
 // normal slim game row is still roughly 3 kB and grows whenever another
@@ -121,6 +127,25 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
+    // Reclassification staging is server-owned and invalidated by any fresh
+    // replay upload. A staged stale verdict must never clear a newly parsed
+    // game at the end of an older background run.
+    for (const key of Object.keys(doc)) {
+      if (
+        key === "_customBuildReclassify"
+        || key.startsWith("_customBuildReclassify.")
+        || key === "_customBuildRevision"
+        || key.startsWith("_customBuildRevision.")
+        || key === "_customBuildClassificationSequence"
+        || key.startsWith("_customBuildClassificationSequence.")
+        || key === "_customBuildSlug"
+        || key.startsWith("_customBuildSlug.")
+        || key === "_opponentBuildOrderWriteLease"
+        || key.startsWith("_opponentBuildOrderWriteLease.")
+      ) {
+        delete doc[key];
+      }
+    }
     // Resume markers are sticky, server-owned quarantine state. A normal
     // replay upload (including an old client that explicitly sends false)
     // must never clear a marker that was set by the resume detector.
@@ -192,13 +217,24 @@ class GamesService {
     delete doc.oppEarlyBuildLog;
     stampVersion(doc, COLLECTIONS.GAMES);
     /** @type {Record<string, string>} */
-    const unset = { earlyBuildLog: "", oppEarlyBuildLog: "" };
+    const unset = {
+      earlyBuildLog: "",
+      oppEarlyBuildLog: "",
+      _customBuildReclassify: "",
+      _customBuildClassificationSequence: "",
+      _customBuildSlug: "",
+      _opponentBuildOrderWriteLease: "",
+    };
     for (const k of HEAVY_FIELDS) unset[k] = "";
     // Patch opponent fields individually. Server-owned enrichment
     // fields (notably mmrLookupAttempted) are absent from agent
     // re-uploads and must survive them; $setting the whole parent
     // object would erase the marker and retry Pulse misses forever.
     const slimSet = buildSlimSet(doc);
+    // A fresh replay parse invalidates any background decision made from the
+    // previous payload. Reclassification staging compares this opaque,
+    // server-owned token before recording a decision.
+    slimSet._customBuildRevision = crypto.randomUUID();
     const update = clearUnavailableMyMmr
       ? buildUnavailableMmrUpdate(slimSet, unset)
       : {
@@ -217,11 +253,41 @@ class GamesService {
       // retryable and continues the rest of the batch.
       await this.gameDetails.upsert(userId, game.gameId, date, heavy);
     }
-    const res = await this.db.games.updateOne(
-      { userId, gameId: game.gameId },
-      update,
-      { upsert: true },
-    );
+    // Do not tear down an active opponent-detail writer's lease/fence. The
+    // full replay upsert waits for that short serialized critical section,
+    // then atomically invalidates classification state with its fresh row.
+    let res;
+    const leaseDeadline = Date.now() + 1_000;
+    for (;;) {
+      const now = new Date();
+      res = await this.db.games.updateOne(
+        {
+          userId,
+          gameId: game.gameId,
+          $or: [
+            { _opponentBuildOrderWriteLease: { $exists: false } },
+            { "_opponentBuildOrderWriteLease.leaseUntil": { $lte: now } },
+            { "_opponentBuildOrderWriteLease.leaseUntil": { $exists: false } },
+          ],
+        },
+        update,
+      );
+      if (res.matchedCount > 0 || res.upsertedCount > 0) break;
+      const existing = await this.db.games.findOne(
+        { userId, gameId: game.gameId },
+        { projection: { _id: 1 } },
+      );
+      if (!existing) {
+        res = await this.db.games.updateOne(
+          { userId, gameId: game.gameId },
+          update,
+          { upsert: true },
+        );
+        break;
+      }
+      if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
+      await wait(50);
+    }
     return res.upsertedCount === 1;
   }
 
@@ -286,6 +352,7 @@ class GamesService {
     insert.resumedReplayCounterRepairPending = false;
     insert.resumedReplayMmrRepairPending = false;
     insert.resumedReplayBoundaryRepairPending = false;
+    insert._customBuildRevision = crypto.randomUUID();
     stampVersion(insert, COLLECTIONS.GAMES);
     // Ensure the current id exists before transitioning competitive rows. If
     // an old agent races this marker and inserts the same id first, its row is
@@ -313,12 +380,18 @@ class GamesService {
       {
         $set: {
           isResumedFromReplay: true,
+          _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+          _customBuildRevision: crypto.randomUUID(),
           resumedReplayCounterRepairPending: true,
           resumedReplayMmrRepairPending: true,
           resumedReplayMmrRepairToken: mmrRepairToken,
           resumedReplayBoundaryRepairPending: true,
         },
         $unset: {
+          _customBuildReclassify: "",
+          _customBuildClassificationSequence: "",
+          _customBuildSlug: "",
+          _opponentBuildOrderWriteLease: "",
           resumedReplayCounterRepairedAt: "",
           resumedReplayMmrRepairedAt: "",
           resumedReplayBoundaryRepairedAt: "",
@@ -348,7 +421,17 @@ class GamesService {
       filter.date = { $lt: opts.before };
     }
     const items = await this.db.games
-      .find(filter, { projection: { _id: 0, replayUpload: 0 } })
+      .find(filter, {
+        projection: {
+          _id: 0,
+          replayUpload: 0,
+          _customBuildReclassify: 0,
+          _customBuildRevision: 0,
+          _customBuildClassificationSequence: 0,
+          _customBuildSlug: 0,
+          _opponentBuildOrderWriteLease: 0,
+        },
+      })
       .sort({ date: -1 })
       .limit(limit + 1)
       .toArray();
@@ -413,7 +496,17 @@ class GamesService {
   async get(userId, gameId) {
     return this.db.games.findOne(
       { userId, gameId },
-      { projection: { _id: 0, replayUpload: 0 } },
+      {
+        projection: {
+          _id: 0,
+          replayUpload: 0,
+          _customBuildReclassify: 0,
+          _customBuildRevision: 0,
+          _customBuildClassificationSequence: 0,
+          _customBuildSlug: 0,
+          _opponentBuildOrderWriteLease: 0,
+        },
+      },
     );
   }
 
@@ -446,7 +539,17 @@ class GamesService {
           gameId: { $in: ids },
           isResumedFromReplay: { $ne: true },
         },
-        { projection: { _id: 0, replayUpload: 0 } },
+        {
+          projection: {
+            _id: 0,
+            replayUpload: 0,
+            _customBuildReclassify: 0,
+            _customBuildRevision: 0,
+            _customBuildClassificationSequence: 0,
+            _customBuildSlug: 0,
+            _opponentBuildOrderWriteLease: 0,
+          },
+        },
       )
       .toArray();
     const byId = new Map(rows.map((row) => [String(row.gameId), row]));

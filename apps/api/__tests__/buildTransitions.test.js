@@ -62,6 +62,26 @@ function makeMacroLate(opts) {
  *
  * @param {{ duration?: number }} [opts]
  */
+function makeOpponentMacroLate(units) {
+  const opponentSide = makeMacroLate({
+    units: { Marine: 99 },
+    duration: 600,
+  });
+  return {
+    bases: [],
+    production_buildings: [],
+    stats_events: [],
+    opp_bases: opponentSide.bases,
+    opp_production_buildings: opponentSide.production_buildings,
+    opp_stats_events: opponentSide.stats_events,
+    unit_timeline: opponentSide.unit_timeline.map((row) => ({
+      time: row.time,
+      my: row.my,
+      opp: { ...units },
+    })),
+  };
+}
+
 function makeMacroMid(opts) {
   const duration = (opts && opts.duration) || 600;
   const bases = [
@@ -313,6 +333,47 @@ describe("computeTransitions — missing opponent.strategy", () => {
     );
     expect(edge).toBeDefined();
     expect(edge.games).toBe(2);
+  });
+});
+
+describe("computeTransitions — opponent-side late composition", () => {
+  test("uses the opponent side throughout the full late-phase window", () => {
+    const base = {
+      myBuild: "Opponent carrier read",
+      myRace: "Terran",
+      oppRace: "Protoss",
+      durationSec: 600,
+      result: "Victory",
+      opponent: { strategy: "Protoss - Carrier" },
+      macroBreakdown: makeOpponentMacroLate({
+        Carrier: 8,
+        Immortal: 5,
+        Stalker: 3,
+        Probe: 70,
+      }),
+      events: [],
+    };
+    const out = computeTransitions([
+      { ...base, gameId: "opponent-late-a" },
+      { ...base, gameId: "opponent-late-b" },
+    ], { perspective: "opponent" });
+
+    expect(out.nodes.find((node) => node.column === 3)).toEqual(
+      expect.objectContaining({
+        id: "comp:Carrier|Immortal|Stalker",
+        label: "Carrier|Immortal|Stalker",
+        kind: "lateComp",
+        games: 2,
+        iconTokens: ["Carrier", "Immortal", "Stalker"],
+      }),
+    );
+    expect(out.nodes.some((node) => String(node.label).includes("Marine")))
+      .toBe(false);
+    expect(out.edges).toContainEqual(expect.objectContaining({
+      from: "phase:late",
+      to: "comp:Carrier|Immortal|Stalker",
+      games: 2,
+    }));
   });
 });
 

@@ -54,6 +54,7 @@ interface BuildOrderApiResp {
 }
 
 interface ReclassifyResponseSummary {
+  status?: "queued" | "complete";
   tagged?: number;
   cleared?: number;
   matched?: number;
@@ -110,6 +111,7 @@ export function useBuildEditorState(
   const [toasts, setToasts] = useState<BuildEditorToast[]>([]);
 
   const pristineRef = useRef<string>(JSON.stringify(initialDraft));
+  const previewGenerationRef = useRef(0);
 
   // Reset state every time the modal opens with a new context.
   useEffect(() => {
@@ -117,6 +119,7 @@ export function useBuildEditorState(
     setDraft(initialDraft);
     setErrors({});
     setPreview(null);
+    setPreviewLoading(false);
     setPreviewError(null);
     setPreviewPage(0);
     setAlmostPage(0);
@@ -133,7 +136,11 @@ export function useBuildEditorState(
 
   // Debounced preview fetch.
   useEffect(() => {
-    if (!open) return;
+    const generation = ++previewGenerationRef.current;
+    if (!open) {
+      setPreviewLoading(false);
+      return;
+    }
     if (demoMode) {
       // Demo (landing page): no signed-in library to match against, so
       // we render an empty preview without firing the auth'd request.
@@ -155,12 +162,16 @@ export function useBuildEditorState(
         truncated: false,
       });
       setPreviewError(null);
+      setPreviewLoading(false);
       return;
     }
-    let cancelled = false;
+    let disposed = false;
+    let activeController: AbortController | null = null;
     setPreviewError(null);
     setPreviewLoading(true);
     const handle = window.setTimeout(async () => {
+      const controller = new AbortController();
+      activeController = controller;
       try {
         const result = await apiCall<BuildEditorPreviewResult>(
           getToken,
@@ -173,20 +184,42 @@ export function useBuildEditorState(
               vsRace: draft.vsRace,
               perspective: context.perspective === "opponent" ? "opponent" : "you",
             }),
+            signal: controller.signal,
           },
         );
-        if (cancelled) return;
+        if (
+          disposed ||
+          controller.signal.aborted ||
+          generation !== previewGenerationRef.current
+        ) {
+          return;
+        }
         setPreview(result);
-        setPreviewLoading(false);
       } catch (err: unknown) {
-        if (cancelled) return;
-        setPreviewLoading(false);
-        setPreviewError(extractMessage(err) || "Preview failed.");
+        if (
+          disposed ||
+          controller.signal.aborted ||
+          generation !== previewGenerationRef.current ||
+          isAbortError(err)
+        ) {
+          return;
+        }
+        setPreviewError(previewFailureMessage(err));
+      } finally {
+        if (
+          !disposed &&
+          generation === previewGenerationRef.current
+        ) {
+          setPreviewLoading(false);
+        }
       }
     }, PREVIEW_DEBOUNCE_MS);
     return () => {
-      cancelled = true;
+      disposed = true;
       window.clearTimeout(handle);
+      // A rule edit, perspective change, modal close, or unmount must stop
+      // the prior browser request before another heavyweight preview starts.
+      activeController?.abort();
     };
   }, [open, demoMode, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
 
@@ -488,6 +521,9 @@ function describeReclassifySummary(
   r: ReclassifyResponseSummary | null | undefined,
 ): string | null {
   if (!r) return null;
+  if (r.status === "queued") {
+    return "Saved — replay matching continues in the background.";
+  }
   const tagged = r.tagged ?? 0;
   const cleared = r.cleared ?? 0;
   const matched = r.matched ?? 0;
@@ -521,6 +557,31 @@ function extractMessage(err: unknown): string | null {
     return humanizeIfJsonEnvelope(raw);
   }
   return null;
+}
+
+function isAbortError(err: unknown): boolean {
+  return !!(
+    err &&
+    typeof err === "object" &&
+    "name" in err &&
+    (err as { name?: unknown }).name === "AbortError"
+  );
+}
+
+function previewFailureMessage(err: unknown): string {
+  const message = extractMessage(err);
+  if (!message) {
+    return "Preview is temporarily unavailable. Your build is safe — wait a moment, then change a rule to try again.";
+  }
+  const normalized = message.trim().toLowerCase();
+  if (
+    /failed to fetch|fetch failed|network(?:error| request failed)|load failed|connection.*(?:closed|reset|interrupted)/.test(
+      normalized,
+    )
+  ) {
+    return "The server connection was interrupted. Your build is safe — wait a moment, then change a rule to try again.";
+  }
+  return message;
 }
 
 function humanizeIfJsonEnvelope(s: string): string {

@@ -56,7 +56,7 @@ const HEAVY_FIELDS = Object.freeze([
 class GameDetailsService {
   /**
    * @param {{
-   *   write: (userId: string, gameId: string, date: Date, blob: object) => Promise<void>,
+   *   write: (userId: string, gameId: string, date: Date, blob: object, opts?: {signal?: AbortSignal, assertLease?: () => Promise<void>}) => Promise<void>,
    *   read: (userId: string, gameId: string) => Promise<object | null>,
    *   readMany: (userId: string, gameIds: string[], opts?: object) => Promise<Map<string, object>>,
    *   delete: (userId: string, gameId: string) => Promise<void>,
@@ -86,8 +86,9 @@ class GameDetailsService {
    *                     date-range deletes can match without a join.
    * @param {Record<string, any>} fields  pre-validated heavy fields;
    *                                     any extras are passed through.
+   * @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts]
    */
-  async upsert(userId, gameId, date, fields) {
+  async upsert(userId, gameId, date, fields, opts = {}) {
     if (!userId) throw new Error("userId required");
     if (!gameId) throw new Error("gameId required");
     /** @type {Record<string, any>} */
@@ -104,7 +105,7 @@ class GameDetailsService {
       // Skip the write so we don't store an empty blob.
       return;
     }
-    await this.store.write(userId, gameId, date, blob);
+    await this.store.write(userId, gameId, date, blob, opts);
   }
 
   /**
@@ -127,10 +128,11 @@ class GameDetailsService {
    *
    * @param {string} userId
    * @param {string[]} gameIds
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
-  async findMany(userId, gameIds) {
-    return this.store.readMany(userId, gameIds);
+  async findMany(userId, gameIds, opts = {}) {
+    return this.store.readMany(userId, gameIds, opts);
   }
 
   /**

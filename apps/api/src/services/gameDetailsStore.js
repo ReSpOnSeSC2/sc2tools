@@ -42,6 +42,7 @@ const { isDeepStrictEqual, promisify } = require("util");
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
+const R2_BULK_READ_MAX_ACTIVE = 4;
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -87,15 +88,18 @@ class MongoDetailsStore {
    * @param {string} gameId
    * @param {Date} date
    * @param {Record<string, any>} blob
+   * @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts]
    */
-  async write(userId, gameId, date, blob) {
+  async write(userId, gameId, date, blob, opts = {}) {
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+    if (opts.assertLease) await opts.assertLease();
     /** @type {Record<string, any>} */
     const set = { userId, gameId, date, ...blob };
     stampVersion(set, COLLECTIONS.GAME_DETAILS);
     await this.db.gameDetails.updateOne(
       { userId, gameId },
       { $setOnInsert: { createdAt: new Date() }, $set: set },
-      { upsert: true },
+      { upsert: true, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
   }
 
@@ -134,16 +138,23 @@ class MongoDetailsStore {
    *
    * @param {string} userId
    * @param {string[]} gameIds
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
-  async readMany(userId, gameIds) {
+  async readMany(userId, gameIds, opts = {}) {
     if (!Array.isArray(gameIds) || gameIds.length === 0) return new Map();
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+    const fields = normaliseReadFields(opts.fields);
+    const projection = fields
+      ? Object.fromEntries([["_id", 0], ["gameId", 1], ...fields.map((f) => [f, 1])])
+      : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0 };
     const cursor = this.db.gameDetails.find(
       { userId, gameId: { $in: gameIds } },
-      { projection: { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0 } },
+      { projection },
     );
     const out = new Map();
     for await (const doc of cursor) {
+      if (opts.signal && opts.signal.aborted) throw detailsAbortError();
       if (!doc || !doc.gameId) continue;
       const { gameId, ...rest } = doc;
       out.set(gameId, rest);
@@ -214,6 +225,74 @@ class R2DetailsStore {
     this.prefix = (opts.prefix || "game-details").replace(/^\/+|\/+$/g, "");
     this.gameDetailsCollection = opts.gameDetailsCollection;
     this.kind = STORE_KINDS.R2;
+    this._bulkReadActive = 0;
+    /** @type {Array<{
+     *   signal?: AbortSignal,
+     *   resolve: () => void,
+     *   reject: (err: Error) => void,
+     *   onAbort: () => void,
+     * }>} */
+    this._bulkReadWaiters = [];
+  }
+
+  /**
+   * Process-wide-for-this-store admission for bulk object reads. Every
+   * readMany caller shares it, so simultaneous previews, reclassification,
+   * and stats requests cannot each decompress their own full concurrency
+   * window. Foreground single-game reads remain unaffected.
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<() => void>}
+   */
+  async _acquireBulkReadSlot(signal) {
+    if (signal && signal.aborted) throw detailsAbortError();
+    if (this._bulkReadActive < R2_BULK_READ_MAX_ACTIVE) {
+      this._bulkReadActive += 1;
+      return () => this._releaseBulkReadSlot();
+    }
+    // A release hands its existing slot directly to this waiter. Do not
+    // increment after waking: a new caller could otherwise claim the briefly
+    // decremented slot first and push active work above the global limit.
+    await new Promise(
+      /**
+       * @param {(value: any) => void} resolve
+       * @param {(err: Error) => void} reject
+       */
+      (resolve, reject) => {
+      /** @type {any} */
+      const waiter = {
+        signal,
+        resolve: () => {
+          if (signal) signal.removeEventListener("abort", waiter.onAbort);
+          resolve(undefined);
+        },
+        reject,
+        onAbort: () => {
+          const index = this._bulkReadWaiters.indexOf(waiter);
+          if (index >= 0) this._bulkReadWaiters.splice(index, 1);
+          if (signal) signal.removeEventListener("abort", waiter.onAbort);
+          reject(detailsAbortError());
+        },
+      };
+      this._bulkReadWaiters.push(waiter);
+      if (signal) signal.addEventListener("abort", waiter.onAbort, { once: true });
+      if (signal && signal.aborted) waiter.onAbort();
+      },
+    );
+    return () => this._releaseBulkReadSlot();
+  }
+
+  _releaseBulkReadSlot() {
+    while (this._bulkReadWaiters.length > 0) {
+      const next = this._bulkReadWaiters.shift();
+      if (!next) continue;
+      if (next.signal && next.signal.aborted) {
+        next.onAbort();
+        continue;
+      }
+      next.resolve();
+      return;
+    }
+    this._bulkReadActive = Math.max(0, this._bulkReadActive - 1);
   }
 
   /**
@@ -240,15 +319,19 @@ class R2DetailsStore {
    * @param {string} gameId
    * @param {Date} date
    * @param {Record<string, any>} blob
+   * @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts]
    */
-  async write(userId, gameId, date, blob) {
+  async write(userId, gameId, date, blob, opts = {}) {
     const key = this.keyFor(userId, gameId);
     for (let attempt = 0; attempt < R2_WRITE_MAX_ATTEMPTS; attempt += 1) {
+      if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+      if (opts.assertLease) await opts.assertLease();
       // Recompute routes intentionally send only the field they updated.
       // Mirror Mongo's $set behavior by preserving the rest of the object.
       // The ETag precondition makes this read/merge/write safe even when two
       // Render instances update different fields on the same replay.
-      const current = await this._readVersioned(userId, gameId);
+      const current = await this._readVersioned(userId, gameId, opts);
+      if (opts.assertLease) await opts.assertLease();
       const merged = { ...(current?.blob || {}), ...blob };
       if (current && isDeepStrictEqual(current.blob, merged)) {
         // A Full Re-sync commonly sends a byte-for-byte equivalent analysis
@@ -257,14 +340,17 @@ class R2DetailsStore {
         // by _readVersioned is still current. A concurrent writer produces a
         // 412 and retries the merge just like the conditional PUT path.
         try {
+          if (opts.assertLease) await opts.assertLease();
           await this.client.send(
             new this._sdk.HeadObjectCommand({
               Bucket: this.bucket,
               Key: key,
               IfMatch: current.etag,
             }),
+            opts.signal ? { abortSignal: opts.signal } : undefined,
           );
         } catch (err) {
+          if (opts.signal && opts.signal.aborted) throw detailsAbortError();
           if (
             (isConditionalWriteConflict(err) || isNotFoundError(err))
             && attempt + 1 < R2_WRITE_MAX_ATTEMPTS
@@ -273,7 +359,7 @@ class R2DetailsStore {
           }
           throw err;
         }
-        await this._writeMetadata(userId, gameId, date);
+        await this._writeMetadata(userId, gameId, date, opts);
         return;
       }
       const body = await gzip(Buffer.from(JSON.stringify(merged), "utf8"));
@@ -293,8 +379,13 @@ class R2DetailsStore {
       if (current) put.IfMatch = current.etag;
       else put.IfNoneMatch = "*";
       try {
-        await this.client.send(new this._sdk.PutObjectCommand(put));
+        if (opts.assertLease) await opts.assertLease();
+        await this.client.send(
+          new this._sdk.PutObjectCommand(put),
+          opts.signal ? { abortSignal: opts.signal } : undefined,
+        );
       } catch (err) {
+        if (opts.signal && opts.signal.aborted) throw detailsAbortError();
         if (
           isConditionalWriteConflict(err)
           && attempt + 1 < R2_WRITE_MAX_ATTEMPTS
@@ -306,14 +397,18 @@ class R2DetailsStore {
       // Maintain the slim metadata row in Mongo so GDPR delete and
       // any future $lookup-style queries still have an authoritative
       // (userId, gameId, date) tuple per game.
-      await this._writeMetadata(userId, gameId, date);
+      if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+      if (opts.assertLease) await opts.assertLease();
+      await this._writeMetadata(userId, gameId, date, opts);
       return;
     }
     throw new Error("r2_details_write_conflict");
   }
 
-  /** @param {string} userId @param {string} gameId @param {Date} date */
-  async _writeMetadata(userId, gameId, date) {
+  /** @param {string} userId @param {string} gameId @param {Date} date @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts] */
+  async _writeMetadata(userId, gameId, date, opts = {}) {
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+    if (opts.assertLease) await opts.assertLease();
     /** @type {Record<string, any>} */
     const meta = { userId, gameId, date, storedIn: STORE_KINDS.R2 };
     stampVersion(meta, COLLECTIONS.GAME_DETAILS);
@@ -324,17 +419,18 @@ class R2DetailsStore {
         $set: meta,
         $unset: UNSET_HEAVY_FIELDS,
       },
-      { upsert: true },
+      { upsert: true, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
   }
 
   /**
    * @param {string} userId
    * @param {string} gameId
+   * @param {{signal?: AbortSignal}} [opts]
    * @returns {Promise<Record<string, any> | null>}
    */
-  async read(userId, gameId) {
-    const versioned = await this._readVersioned(userId, gameId);
+  async read(userId, gameId, opts = {}) {
+    const versioned = await this._readVersioned(userId, gameId, opts);
     return versioned ? versioned.blob : null;
   }
 
@@ -345,9 +441,11 @@ class R2DetailsStore {
    *
    * @param {string} userId
    * @param {string} gameId
+   * @param {{signal?: AbortSignal}} [opts]
    * @returns {Promise<{blob: Record<string, any>, etag: string}|null>}
    */
-  async _readVersioned(userId, gameId) {
+  async _readVersioned(userId, gameId, opts = {}) {
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     let resp;
     try {
       resp = await this.client.send(
@@ -355,6 +453,7 @@ class R2DetailsStore {
           Bucket: this.bucket,
           Key: this.keyFor(userId, gameId),
         }),
+        opts.signal ? { abortSignal: opts.signal } : undefined,
       );
     } catch (err) {
       if (isNotFoundError(err)) return null;
@@ -377,38 +476,67 @@ class R2DetailsStore {
    *
    * @param {string} userId
    * @param {string[]} gameIds
-   * @param {{ concurrency?: number }} [opts]
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
   async readMany(userId, gameIds, opts = {}) {
     if (!Array.isArray(gameIds) || gameIds.length === 0) return new Map();
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     const concurrency = Math.max(1, Math.min(64, opts.concurrency || 16));
+    const fields = normaliseReadFields(opts.fields);
+    const strict = opts.strict === true;
     const out = new Map();
     let i = 0;
+    /** @type {any} */
+    let strictError = null;
     const worker = async () => {
       for (;;) {
+        if (strictError || (opts.signal && opts.signal.aborted)) return;
         const idx = i;
         i += 1;
         if (idx >= gameIds.length) return;
         const gid = gameIds[idx];
+        let release;
         try {
-          const blob = await this.read(userId, gid);
-          if (blob !== null) out.set(gid, blob);
+          release = await this._acquireBulkReadSlot(opts.signal);
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") return;
+          throw err;
+        }
+        if (strictError || (opts.signal && opts.signal.aborted)) {
+          release();
+          return;
+        }
+        try {
+          const blob = await this.read(userId, gid, { signal: opts.signal });
+          if (blob !== null) out.set(gid, selectReadFields(blob, fields));
         } catch (/** @type {any} */ err) {
           // One failed object shouldn't fail the whole batch — the
           // caller's per-game logic empty-states for missing details.
           // Surface enough context that a real failure is debuggable.
+          if ((opts.signal && opts.signal.aborted) || err?.name === "AbortError") {
+            strictError = detailsAbortError();
+            return;
+          }
+          if (strict) {
+            strictError = err;
+            return;
+          }
           // eslint-disable-next-line no-console
           console.warn(
             `R2DetailsStore.readMany: ${this.keyFor(userId, gid)} failed`,
             err && err.message,
           );
+        } finally {
+          release();
         }
       }
     };
     const workers = [];
     for (let w = 0; w < concurrency; w += 1) workers.push(worker());
     await Promise.all(workers);
+    if (strictError) throw strictError;
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     return out;
   }
 
@@ -468,6 +596,30 @@ class R2DetailsStore {
     } while (continuationToken);
     await this.gameDetailsCollection.deleteMany({ userId });
   }
+}
+
+/**
+ * Restrict bulk detail reads to known heavy fields. Mongo can project these
+ * server-side; object stores still download one compressed object, but trim it
+ * immediately while the caller's small page is live.
+ * @param {unknown} raw
+ * @returns {string[]|null}
+ */
+function normaliseReadFields(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const allowed = new Set(HEAVY_FIELDS);
+  return [...new Set(raw.filter((f) => typeof f === "string" && allowed.has(f)))];
+}
+
+/** @param {Record<string, any>} blob @param {string[]|null} fields */
+function selectReadFields(blob, fields) {
+  if (!fields) return blob;
+  /** @type {Record<string, any>} */
+  const out = {};
+  for (const field of fields) {
+    if (blob[field] !== undefined) out[field] = blob[field];
+  }
+  return out;
 }
 
 /**
@@ -534,6 +686,12 @@ function isConditionalWriteConflict(err) {
     || err.Code === "PreconditionFailed"
     || err.$metadata?.httpStatusCode === 409
     || err.$metadata?.httpStatusCode === 412;
+}
+
+function detailsAbortError() {
+  const err = new Error("game_details_read_aborted");
+  err.name = "AbortError";
+  return err;
 }
 
 /**

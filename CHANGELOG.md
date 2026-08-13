@@ -59,6 +59,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Creating or reclassifying a custom build no longer exhausts API memory** -
+  live rule previews now scan a bounded recent sample in small pages, hydrate
+  only the build-log side being evaluated, cancel superseded editor requests,
+  and share a strict object-read ceiling. Saving queues a durable,
+  memory-bounded full-history match in the background, with restart recovery
+  and safe coalescing for rapid edits, instead of retaining hundreds of full
+  replay-analysis blobs inside one web request.
+
 - **Full Re-sync no longer exhausts the production API's memory** — replay
   ingestion now admits one memory-heavy batch per API process and safely asks
   additional agents to retry without losing files. Validation no longer

@@ -60,6 +60,28 @@ function opponentsV2toV1(doc) {
   return rest;
 }
 
+/**
+ * Games v6 introduces optional, server-private classifier fencing fields.
+ * Existing rows need no synthetic values: a replay/detail write creates a
+ * fresh revision, and background classification creates ordering state only
+ * when it commits a decision.
+ * @param {Record<string, any>} doc
+ */
+function gamesV5toV6(doc) {
+  return { ...doc };
+}
+
+/** @param {Record<string, any>} doc */
+function gamesV6toV5(doc) {
+  const next = { ...doc };
+  delete next._customBuildRevision;
+  delete next._customBuildReclassify;
+  delete next._customBuildClassificationSequence;
+  delete next._customBuildSlug;
+  delete next._opponentBuildOrderWriteLease;
+  return next;
+}
+
 const REGISTRATIONS = [
   {
     collection: COLLECTIONS.OPPONENTS,
@@ -69,6 +91,15 @@ const REGISTRATIONS = [
     backward: opponentsV2toV1,
     description:
       "May-2026 fix: coerce empty pulseCharacterId to unset; add pulseResolveAttemptedAt slot.",
+  },
+  {
+    collection: COLLECTIONS.GAMES,
+    fromVersion: 5,
+    toVersion: 6,
+    forward: gamesV5toV6,
+    backward: gamesV6toV5,
+    description:
+      "August-2026: add optional server-private custom-build classification fences.",
   },
 ];
 
@@ -101,5 +132,11 @@ module.exports = {
   loadAllMigrations,
   REGISTRATIONS,
   // Exported for tests.
-  __internal: { opponentsV1toV2, opponentsV2toV1, alreadyRegistered },
+  __internal: {
+    opponentsV1toV2,
+    opponentsV2toV1,
+    gamesV5toV6,
+    gamesV6toV5,
+    alreadyRegistered,
+  },
 };

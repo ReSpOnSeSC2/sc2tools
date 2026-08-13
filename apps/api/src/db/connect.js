@@ -13,6 +13,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   games: import('mongodb').Collection,
  *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
+ *   customBuildJobs: import('mongodb').Collection,
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
  *   overlayTokens: import('mongodb').Collection,
@@ -75,6 +76,7 @@ async function connect({ uri, dbName }, observability = {}) {
     games: db.collection(COLLECTIONS.GAMES),
     gameDetails: db.collection(COLLECTIONS.GAME_DETAILS),
     customBuilds: db.collection(COLLECTIONS.CUSTOM_BUILDS),
+    customBuildJobs: db.collection(COLLECTIONS.CUSTOM_BUILD_JOBS),
     devicePairings: db.collection(COLLECTIONS.DEVICE_PAIRINGS),
     deviceTokens: db.collection(COLLECTIONS.DEVICE_TOKENS),
     overlayTokens: db.collection(COLLECTIONS.OVERLAY_TOKENS),
@@ -307,6 +309,8 @@ async function ensureIndexes(ctx) {
 
   await ctx.customBuilds.createIndex({ userId: 1, slug: 1 }, { unique: true });
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });
+  await ctx.customBuildJobs.createIndex({ userId: 1 }, { unique: true });
+  await ctx.customBuildJobs.createIndex({ status: 1, leaseUntil: 1 });
 
   await ctx.devicePairings.createIndex({ code: 1 }, { unique: true });
   await ctx.devicePairings.createIndex(

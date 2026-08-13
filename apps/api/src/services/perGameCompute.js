@@ -1,8 +1,19 @@
 "use strict";
 
+const { randomUUID } = require("crypto");
 const { COLLECTIONS, LIMITS } = require("../config/constants");
-const { stampVersion } = require("../db/schemaVersioning");
+const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
+const {
+  OPPONENT_BUILD_ORDER_WRITE_LEASE_FIELD,
+  OPPONENT_BUILD_ORDER_WRITE_LEASE_MS,
+  OPPONENT_BUILD_ORDER_WRITE_RENEW_MS,
+  OPPONENT_BUILD_ORDER_WRITE_RETRY_MS,
+  OPPONENT_BUILD_ORDER_WRITE_ACQUIRE_TIMEOUT_MS,
+  CLASSIFIER_WRITE_SENTINEL,
+  opponentBuildOrderBusyError,
+  opponentBuildOrderClassificationQueueError,
+} = require("./opponentBuildOrderFence");
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 const { gamesMatchStage } = require("../util/parseQuery");
 
@@ -14,6 +25,17 @@ const {
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
+
+/** @param {number} ms */
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function requestAbortError() {
+  const err = new Error("request_aborted");
+  err.name = "AbortError";
+  return err;
+}
 
 /**
  * Cutoff (inclusive, in seconds) the agent used when it shipped a
@@ -104,6 +126,8 @@ class PerGameComputeService {
    * @param {{
    *   catalog?: { lookup: (name: string) => object | null },
    *   gameDetails?: import('./gameDetails').GameDetailsService,
+   *   onOpponentBuildOrderWritten?: (userId: string, gameId: string) => void|Promise<void>,
+   *   users?: import('mongodb').Collection,
    * }} [opts]
    */
   constructor(db, opts = {}) {
@@ -113,6 +137,8 @@ class PerGameComputeService {
     // care about the catalog lookup or the rule-preview cursor.
     // Production wiring (see ``app.js``) always provides it.
     this.gameDetails = opts.gameDetails || null;
+    this.onOpponentBuildOrderWritten = opts.onOpponentBuildOrderWritten || null;
+    this.users = opts.users || null;
   }
 
   /**
@@ -407,35 +433,191 @@ class PerGameComputeService {
    * @param {string} userId
    * @param {string} gameId
    * @param {{ oppBuildLog: string[], oppEarlyBuildLog?: string[] }} payload
+   * @param {{signal?: AbortSignal}} [opts]
    */
-  async writeOpponentBuildOrder(userId, gameId, payload) {
+  async writeOpponentBuildOrder(userId, gameId, payload, opts = {}) {
     if (!payload || !Array.isArray(payload.oppBuildLog)) {
       throw new Error("oppBuildLog required");
     }
     const oppBuildLog = payload.oppBuildLog.slice(0, 5000);
-    // Slim row keeps only metadata + the version stamp. The
-    // ``oppBuildLog`` array moves to the detail store; legacy
-    // inline copies (and the deprecated ``oppEarlyBuildLog``) are
-    // $unset so each recompute incrementally trims the games doc.
-    /** @type {Record<string, any>} */
-    const set = {};
-    stampVersion(set, COLLECTIONS.GAMES);
-    await this.db.games.updateOne(
-      { userId, gameId },
-      {
-        $set: set,
-        $unset: { oppBuildLog: "", oppEarlyBuildLog: "" },
-      },
-    );
-    if (this.gameDetails) {
-      const slim = await this.db.games.findOne(
-        { userId, gameId },
-        { projection: { _id: 0, date: 1 } },
+    const writeToken = randomUUID();
+    const leasePath = OPPONENT_BUILD_ORDER_WRITE_LEASE_FIELD;
+    const acquireDeadline = Date.now()
+      + OPPONENT_BUILD_ORDER_WRITE_ACQUIRE_TIMEOUT_MS;
+    let acquired = null;
+    // Serialize writers for one game across every API process. Waiting here
+    // avoids two R2 optimistic merges racing to replace the same field, while
+    // the expiry lets a later request recover a process that died mid-write.
+    while (!acquired) {
+      if (this.users) {
+        const user = await this.users.findOne(
+          { userId, _gdprMutation: { $exists: false } },
+          { projection: { _id: 1 } },
+        );
+        if (!user) throw opponentBuildOrderBusyError();
+      }
+      const now = new Date();
+      acquired = await this.db.games.findOneAndUpdate(
+        {
+          userId,
+          gameId,
+          $or: [
+            { [leasePath]: { $exists: false } },
+            { [`${leasePath}.leaseUntil`]: { $lte: now } },
+            { [`${leasePath}.leaseUntil`]: { $exists: false } },
+          ],
+        },
+        {
+          $set: {
+            _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+            _customBuildRevision: randomUUID(),
+            _customBuildClassificationSequence: CLASSIFIER_WRITE_SENTINEL,
+            [leasePath]: {
+              id: writeToken,
+              leaseUntil: new Date(
+                now.getTime() + OPPONENT_BUILD_ORDER_WRITE_LEASE_MS,
+              ),
+            },
+          },
+          $unset: {
+            oppBuildLog: "",
+            oppEarlyBuildLog: "",
+            _customBuildReclassify: "",
+          },
+        },
+        {
+          projection: { _id: 0, date: 1 },
+          returnDocument: "after",
+        },
       );
-      const date = slim && slim.date instanceof Date
-        ? slim.date
-        : new Date();
-      await this.gameDetails.upsert(userId, gameId, date, { oppBuildLog });
+      if (acquired) break;
+      if (opts.signal && opts.signal.aborted) throw requestAbortError();
+      const existing = await this.db.games.findOne(
+        { userId, gameId },
+        { projection: { _id: 1 } },
+      );
+      if (!existing) throw new Error("game_not_found");
+      if (Date.now() >= acquireDeadline) throw opponentBuildOrderBusyError();
+      await wait(OPPONENT_BUILD_ORDER_WRITE_RETRY_MS);
+    }
+
+    // Close the check/acquire race: a GDPR operation may claim its durable
+    // user fence immediately after our first lookup. Release this lease and
+    // refuse external detail I/O in that case.
+    if (this.users) {
+      const stillAllowed = await this.users.findOne(
+        { userId, _gdprMutation: { $exists: false } },
+        { projection: { _id: 1 } },
+      );
+      if (!stillAllowed) {
+        await this.db.games.updateOne(
+          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          { $set: { _customBuildRevision: randomUUID() }, $unset: {
+            [leasePath]: "",
+            _customBuildClassificationSequence: "",
+            _customBuildReclassify: "",
+          } },
+        );
+        throw opponentBuildOrderBusyError();
+      }
+    }
+
+    const detailController = new AbortController();
+    const abortDetails = () => detailController.abort();
+    if (opts.signal) opts.signal.addEventListener("abort", abortDetails, { once: true });
+    /** @type {Promise<void>|null} */
+    let renewalPromise = null;
+    let leaseLost = false;
+    const renew = () => {
+      if (renewalPromise) return renewalPromise;
+      renewalPromise = (async () => {
+        const renewed = await this.db.games.updateOne(
+          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          {
+            $set: {
+              [`${leasePath}.leaseUntil`]: new Date(
+                Date.now() + OPPONENT_BUILD_ORDER_WRITE_LEASE_MS,
+              ),
+            },
+          },
+        );
+        if (renewed.matchedCount === 0) {
+          leaseLost = true;
+          detailController.abort();
+        }
+      })().finally(() => {
+        renewalPromise = null;
+      });
+      return renewalPromise;
+    };
+    const assertDetailLease = async () => {
+      await renew();
+      if (leaseLost || detailController.signal.aborted) {
+        throw opponentBuildOrderBusyError();
+      }
+    };
+    const renewTimer = setInterval(() => {
+      void renew().catch(() => {
+        // External detail I/O is allowed only while ownership is provable.
+        // Aborting on a transient Mongo failure is safer than letting an old
+        // writer outlive its lease and overwrite a successor's R2 object.
+        leaseLost = true;
+        detailController.abort();
+      });
+    }, OPPONENT_BUILD_ORDER_WRITE_RENEW_MS);
+    if (typeof renewTimer.unref === "function") renewTimer.unref();
+    try {
+      if (this.gameDetails) {
+        const date = acquired.date instanceof Date
+          ? acquired.date
+          : new Date();
+        await this.gameDetails.upsert(
+          userId,
+          gameId,
+          date,
+          { oppBuildLog },
+          { signal: detailController.signal, assertLease: assertDetailLease },
+        );
+        if (leaseLost) throw opponentBuildOrderBusyError();
+        const stillOwner = await this.db.games.findOne(
+          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          { projection: { _id: 1 } },
+        );
+        if (!stillOwner) throw opponentBuildOrderBusyError();
+      }
+    } finally {
+      clearInterval(renewTimer);
+      if (opts.signal) opts.signal.removeEventListener("abort", abortDetails);
+      // Owner-CAS is critical after expiry: a delayed old writer may finish
+      // after another process has acquired the row, but it cannot release the
+      // new owner's fence or rotate its revision.
+      const released = await this.db.games.updateOne(
+        { userId, gameId, [`${leasePath}.id`]: writeToken },
+        {
+          $set: {
+            _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+            _customBuildRevision: randomUUID(),
+          },
+          $unset: {
+            oppBuildLog: "",
+            oppEarlyBuildLog: "",
+            _customBuildReclassify: "",
+            _customBuildClassificationSequence: "",
+            [leasePath]: "",
+          },
+        },
+      );
+      if (released.matchedCount === 0) throw opponentBuildOrderBusyError();
+    }
+    if (this.onOpponentBuildOrderWritten) {
+      try {
+        await this.onOpponentBuildOrderWritten(userId, gameId);
+      } catch (err) {
+        // Detail upserts are idempotent. Tell the agent to retry until the
+        // durable all-build job is successfully coalesced; returning success
+        // here could leave the new opponent log classified with stale rules.
+        throw opponentBuildOrderClassificationQueueError(err);
+      }
     }
   }
 
@@ -572,8 +754,13 @@ class PerGameComputeService {
         needDetails.push(String(g.gameId || ""));
       }
     }
+    const detailFields = ["buildLog", "oppBuildLog"];
+    if (includeMacroBreakdown) detailFields.push("macroBreakdown");
     const blobs = this.gameDetails && needDetails.length > 0
-      ? await this.gameDetails.findMany(userId, needDetails.filter(Boolean))
+      ? await this.gameDetails.findMany(userId, needDetails.filter(Boolean), {
+        fields: detailFields,
+        concurrency: 4,
+      })
       : new Map();
     return games.map(
       /** @param {any} g @returns {any} */ (g) => {
@@ -619,6 +806,200 @@ class PerGameComputeService {
       },
     );
   }
+
+  /**
+   * Cursor-page rule-evaluation inputs while retaining only one small detail
+   * page. The metadata predicate runs before detail hydration; perspective
+   * selects the sole build-log side a caller needs.
+   *
+   * @param {string} userId
+   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean}} [opts]
+   * @returns {AsyncGenerator<{games: any[], candidates: number, hasMore: boolean}>}
+   */
+  async *iterateRulePreviewPages(userId, opts = {}) {
+    const requestedLimit = Number(opts.limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.floor(requestedLimit)
+      : Number.POSITIVE_INFINITY;
+    const pageSize = Math.max(10, Math.min(100, Number(opts.pageSize) || 50));
+    const perspective = opts.perspective === "opponent"
+      ? "opponent"
+      : opts.perspective === "both" ? "both" : "you";
+    const includeMacroBreakdown = !!opts.includeMacroBreakdown;
+    const baseMatch = opts.filters
+      ? gamesMatchStage(userId, opts.filters)
+      : { userId, isResumedFromReplay: { $ne: true } };
+    const extraMatch = opts.match && typeof opts.match === "object"
+      && !Array.isArray(opts.match) ? opts.match : null;
+    const filter = extraMatch
+      ? { ...baseMatch, ...extraMatch, isResumedFromReplay: { $ne: true } }
+      : baseMatch;
+    const logFields = perspective === "both"
+      ? ["buildLog", "oppBuildLog"]
+      : [perspective === "opponent" ? "oppBuildLog" : "buildLog"];
+    /** @type {Record<string, number>} */
+    const projection = {
+      _id: 1,
+      gameId: 1,
+      myBuild: 1,
+      _customBuildRevision: 1,
+      _customBuildSlug: 1,
+      _opponentBuildOrderWriteLease: 1,
+      myRace: 1,
+      opponent: 1,
+      result: 1,
+      date: 1,
+      map: 1,
+      durationSec: 1,
+      macroScore: 1,
+      apm: 1,
+      spq: 1,
+    };
+    for (const field of logFields) projection[field] = 1;
+    if (includeMacroBreakdown) projection.macroBreakdown = 1;
+
+    let consumed = 0;
+    /** @type {{date: Date|null, id: any}|null} */
+    let cursor = null;
+    while (consumed < limit) {
+      if (opts.signal && opts.signal.aborted) return;
+      const take = Math.min(pageSize, limit - consumed);
+      /** @type {Record<string, any>} */
+      let pageFilter = filter;
+      if (cursor) {
+        const before = cursor.date !== null
+          ? { $or: [
+            { date: { $lt: cursor.date } },
+            { date: cursor.date, _id: { $lt: cursor.id } },
+            ...lowerLegacyDateTypeBranches(cursor.date),
+            { date: null },
+          ] }
+          : { date: null, _id: { $lt: cursor.id } };
+        pageFilter = { $and: [filter, before] };
+      }
+      const fetched = await this.db.games
+        .find(pageFilter, { projection })
+        .sort({ date: -1, _id: -1 })
+        .limit(take + 1)
+        .toArray();
+      if (opts.signal && opts.signal.aborted) return;
+      const hasMore = fetched.length > take;
+      const rows = fetched.slice(0, take);
+      if (rows.length === 0) return;
+      consumed += rows.length;
+      const tail = rows[rows.length - 1];
+      cursor = {
+        // Preserve the raw BSON value. Old imports may carry an ISO string;
+        // Mongo's comparison order is deterministic across BSON types, while
+        // coercing a string to null would skip the rest of that cohort.
+        date: tail.date === undefined ? null : tail.date,
+        id: tail._id,
+      };
+      const metadataFilter = opts.metadataFilter;
+      const gated = typeof metadataFilter === "function"
+        ? rows.filter((g) => metadataFilter(g))
+        : rows;
+      const detailFields = [...logFields];
+      if (includeMacroBreakdown) detailFields.push("macroBreakdown");
+      const needDetails = gated
+        .filter((g) => detailFields.some((field) =>
+          field === "macroBreakdown"
+            ? !g.macroBreakdown || typeof g.macroBreakdown !== "object"
+            : !Array.isArray(g[field])))
+        .map((g) => String(g.gameId || ""))
+        .filter(Boolean);
+      if (opts.signal && opts.signal.aborted) return;
+      const blobs = this.gameDetails && needDetails.length > 0
+        ? await this.gameDetails.findMany(userId, needDetails, {
+          fields: detailFields,
+          concurrency: Math.min(8, pageSize),
+          strict: opts.strictDetails === true,
+          signal: opts.signal,
+        })
+        : new Map();
+      if (opts.signal && opts.signal.aborted) return;
+      const mapped = gated.map((g) => {
+        const gid = String(g.gameId || "");
+        const blob = blobs.get(gid) || {};
+        const buildLog = Array.isArray(g.buildLog)
+          ? g.buildLog
+          : Array.isArray(blob.buildLog) ? blob.buildLog : [];
+        const oppBuildLog = Array.isArray(g.oppBuildLog)
+          ? g.oppBuildLog
+          : Array.isArray(blob.oppBuildLog) ? blob.oppBuildLog : [];
+        /** @type {Record<string, any>} */
+        const out = {
+          gameId: gid,
+          myBuild: g.myBuild || null,
+          customBuildRevision: typeof g._customBuildRevision === "string"
+            ? g._customBuildRevision
+            : null,
+          customBuildSlug: typeof g._customBuildSlug === "string"
+            ? g._customBuildSlug
+            : null,
+          opponentBuildOrderWriteLease:
+            g._opponentBuildOrderWriteLease
+              && typeof g._opponentBuildOrderWriteLease === "object"
+              ? {
+                  id: String(g._opponentBuildOrderWriteLease.id || ""),
+                  leaseUntil: g._opponentBuildOrderWriteLease.leaseUntil || null,
+                }
+              : null,
+          myRace: g.myRace || null,
+          oppRace: g.opponent ? g.opponent.race || null : null,
+          opponent: g.opponent || null,
+          durationSec: typeof g.durationSec === "number" ? g.durationSec : null,
+          macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+          apm: typeof g.apm === "number" ? g.apm : null,
+          spq: typeof g.spq === "number" ? g.spq : null,
+          buildLog,
+          oppBuildLog,
+          events: perspective === "opponent" ? []
+            : eventsToStartTime(parseBuildLogLines(buildLog, this.catalog)),
+          oppEvents: perspective === "you" ? []
+            : eventsToStartTime(parseBuildLogLines(oppBuildLog, this.catalog)),
+          result: g.result || null,
+          date: g.date || null,
+          map: g.map || null,
+          detailAvailableYou: Array.isArray(g.buildLog) || Array.isArray(blob.buildLog),
+          detailAvailableOpponent: Array.isArray(g.oppBuildLog)
+            || Array.isArray(blob.oppBuildLog),
+        };
+        out.detailAvailable = perspective === "both"
+          ? out.detailAvailableYou && out.detailAvailableOpponent
+          : perspective === "you"
+            ? out.detailAvailableYou
+            : out.detailAvailableOpponent;
+        if (includeMacroBreakdown) {
+          out.macroBreakdown = g.macroBreakdown || blob.macroBreakdown || null;
+        }
+        return out;
+      });
+      yield { games: mapped, candidates: rows.length, hasMore };
+      if (!hasMore) return;
+    }
+  }
+}
+
+/**
+ * Mongo range predicates compare only within the cursor value's BSON type.
+ * Historical imports may store ISO date strings (or numeric epochs), while
+ * current rows use BSON Date. Descending scans therefore need explicit lower
+ * BSON-type branches when crossing from Date -> string -> number -> null.
+ * @param {unknown} value
+ * @returns {Array<Record<string, any>>}
+ */
+function lowerLegacyDateTypeBranches(value) {
+  if (value instanceof Date) {
+    return [
+      { date: { $type: "string" } },
+      { date: { $type: ["double", "int", "long", "decimal"] } },
+    ];
+  }
+  if (typeof value === "string") {
+    return [{ date: { $type: ["double", "int", "long", "decimal"] } }];
+  }
+  return [];
 }
 
 /**

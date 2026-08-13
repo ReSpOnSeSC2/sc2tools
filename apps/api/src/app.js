@@ -439,8 +439,33 @@ function makeServices(deps) {
   const perGame = new PerGameComputeService(deps.db, {
     catalog: catalog.catalogLookup(),
     gameDetails,
+    users: deps.db.users,
   });
-  const customBuilds = new CustomBuildsService(deps.db, { perGame });
+  const customBuilds = new CustomBuildsService(deps.db, {
+    perGame,
+    logger: deps.logger,
+    onReclassified: (userId, result) => {
+      if (!deps.io) return;
+      const changed = Number(result?.tagged || 0) + Number(result?.cleared || 0);
+      if (changed > 0) {
+        deps.io.to(`user:${userId}`).emit("games:changed", { count: changed });
+      }
+    },
+  });
+  // Opponent-log recomputes replace data consumed by opponent-perspective
+  // custom rules. Coalesce a fresh all-build pass after the detail write so a
+  // scan that overlapped the write cannot silently complete on old details.
+  perGame.onOpponentBuildOrderWritten = async (userId) => {
+    const hasCustomBuilds = await deps.db.customBuilds.findOne(
+      { userId, deletedAt: { $exists: false } },
+      { projection: { _id: 1 } },
+    );
+    if (hasCustomBuilds) {
+      await customBuilds.enqueueReclassifyAll(userId, {
+        clearUnmatched: true,
+      });
+    }
+  };
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
@@ -478,6 +503,7 @@ function makeServices(deps) {
     // wipe-history leave R2 objects behind when GAME_DETAILS_STORE=r2.
     gameDetails,
     replayFiles,
+    customBuilds,
   });
   const community = new CommunityService(deps.db);
   // Opt-in public player pages (/p/:handle). Derives entirely from
