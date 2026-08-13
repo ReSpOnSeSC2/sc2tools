@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Build authors can safely remove their own builds from Community** — owner-
+  only controls now appear on Community cards and build pages, with an impact
+  review followed by a separate acknowledgement confirmation. Unpublishing
+  keeps the private build, rules, notes, replay matches, public URL, and vote
+  history available for a later republish; deleting the private source also
+  removes its public listing so orphaned Community builds cannot remain live.
+
 - **Full Re-sync is substantially faster without relaxing its safety limits**
   â€” agent 0.15.18 caches the replay inventory, refills parser capacity from a
   newest-first backlog, forms fuller historical API batches, skips redundant

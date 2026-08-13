@@ -190,6 +190,168 @@ describe("community + gdpr integration", () => {
     });
   });
 
+  describe("owner community removal", () => {
+    async function publishRemovalFixture(sourceSlug) {
+      await services.customBuilds.upsert("u_a", {
+        slug: sourceSlug,
+        name: "Owner Removal Test",
+        matchup: "PvZ",
+        notes: "keep this private source build",
+        steps: [{ supply: 14, time: "0:18", action: "Pylon" }],
+      });
+      const pub = await services.community.publish("u_a", sourceSlug, {
+        title: "Owner Removal Test",
+      });
+      return pub.slug;
+    }
+
+    test("hides ownership and leaves the listing live when another user tries to remove it", async () => {
+      const sourceSlug = "owner-removal-authz";
+      const publicSlug = await publishRemovalFixture(sourceSlug);
+
+      const denied = await request(app)
+        .delete(`/v1/community/builds/${publicSlug}`)
+        .set("authorization", "Bearer user-b");
+      expect(denied.status).toBe(404);
+      expect(denied.body.error.code).toBe("not_found");
+
+      const publicDetail = await request(app).get(
+        `/v1/community/builds/${publicSlug}`,
+      );
+      expect(publicDetail.status).toBe(200);
+      const privateBuild = await db.customBuilds.findOne({
+        userId: "u_a",
+        slug: sourceSlug,
+      });
+      expect(privateBuild.isPublic).toBe(true);
+    });
+
+    test("owner removal is idempotent and preserves the private source build", async () => {
+      const sourceSlug = "owner-removal-idempotent";
+      const publicSlug = await publishRemovalFixture(sourceSlug);
+      await db.communityBuilds.updateOne(
+        { slug: publicSlug },
+        {
+          $set: { votes: 7 },
+          $addToSet: { upvotes: "u_existing_voter" },
+        },
+      );
+
+      const first = await request(app)
+        .delete(`/v1/community/builds/${publicSlug}`)
+        .set("authorization", "Bearer user-a");
+      expect(first.status).toBe(204);
+
+      expect(
+        (await request(app).get(`/v1/community/builds/${publicSlug}`)).status,
+      ).toBe(404);
+      const removed = await db.communityBuilds.findOne({ slug: publicSlug });
+      expect(removed.removed).toBe(true);
+      expect(removed.removedBy).toBe("u_a");
+      expect(removed.removalReason).toBe("owner_unpublish");
+      expect(removed.removedAt).toBeInstanceOf(Date);
+
+      const privateBuild = await db.customBuilds.findOne({
+        userId: "u_a",
+        slug: sourceSlug,
+      });
+      expect(privateBuild).not.toBeNull();
+      expect(privateBuild.deletedAt).toBeUndefined();
+      expect(privateBuild.notes).toBe("keep this private source build");
+      expect(privateBuild.isPublic).toBe(false);
+
+      const removedAtMs = removed.removedAt.getTime();
+      const second = await request(app)
+        .delete(`/v1/community/builds/${publicSlug}`)
+        .set("authorization", "Bearer user-a");
+      expect(second.status).toBe(204);
+      const afterSecond = await db.communityBuilds.findOne({
+        slug: publicSlug,
+      });
+      expect(afterSecond.removedAt.getTime()).toBe(removedAtMs);
+
+      const missing = await request(app)
+        .delete("/v1/community/builds/does-not-exist")
+        .set("authorization", "Bearer user-a");
+      expect(missing.status).toBe(404);
+      expect(missing.body.error.code).toBe("not_found");
+
+      const republished = await services.community.publish(
+        "u_a",
+        sourceSlug,
+        { title: "Owner Removal Test (restored)" },
+      );
+      expect(republished).toEqual({ slug: publicSlug, created: false });
+      const restored = await db.communityBuilds.findOne({
+        slug: publicSlug,
+      });
+      expect(restored.removed).toBe(false);
+      expect(restored.votes).toBe(7);
+      expect(restored.upvotes).toEqual(["u_existing_voter"]);
+      const restoredPrivate = await db.customBuilds.findOne({
+        userId: "u_a",
+        slug: sourceSlug,
+      });
+      expect(restoredPrivate.isPublic).toBe(true);
+    });
+
+    test("moderation removal mirrors only the actual owner's private build", async () => {
+      const ownerSourceSlug = "moderation-owner-build";
+      const ownerPublicSlug = await publishRemovalFixture(ownerSourceSlug);
+      const unrelatedUserId = "u_unrelated_owner";
+      const unrelatedSourceSlug = "moderation-unrelated-build";
+      await services.customBuilds.upsert(unrelatedUserId, {
+        slug: unrelatedSourceSlug,
+        name: "Unrelated Public Build",
+        matchup: "TvP",
+        notes: "must remain published",
+        steps: [{ supply: 14, time: "0:18", action: "Supply Depot" }],
+      });
+      const unrelatedPublic = await services.community.publish(
+        unrelatedUserId,
+        unrelatedSourceSlug,
+        { title: "Unrelated Public Build" },
+      );
+      const reportId = "report-moderation-owner-removal";
+      await db.communityReports.insertOne({
+        id: reportId,
+        reporterUserId: "u_reporter",
+        targetType: "build",
+        targetId: ownerPublicSlug,
+        reason: "moderation test",
+        createdAt: new Date(),
+        resolvedAt: null,
+      });
+
+      await services.community.resolveReport("u_admin", reportId, {
+        action: "remove",
+        note: "moderator_action",
+      });
+
+      const removedPublic = await db.communityBuilds.findOne({
+        slug: ownerPublicSlug,
+      });
+      expect(removedPublic.removed).toBe(true);
+      expect(removedPublic.removedBy).toBe("u_admin");
+      expect(removedPublic.removalReason).toBe("moderator_action");
+      const ownerPrivate = await db.customBuilds.findOne({
+        userId: "u_a",
+        slug: ownerSourceSlug,
+      });
+      expect(ownerPrivate.isPublic).toBe(false);
+
+      const unrelatedPrivate = await db.customBuilds.findOne({
+        userId: unrelatedUserId,
+        slug: unrelatedSourceSlug,
+      });
+      expect(unrelatedPrivate.isPublic).toBe(true);
+      const unrelatedCommunity = await db.communityBuilds.findOne({
+        slug: unrelatedPublic.slug,
+      });
+      expect(unrelatedCommunity.removed).toBe(false);
+    });
+  });
+
   describe("public author profile (Phase 10)", () => {
     test("404 when the author has no public name on any build", async () => {
       // u_a's only published build above carries no authorName, so the

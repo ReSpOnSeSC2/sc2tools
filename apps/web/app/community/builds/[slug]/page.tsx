@@ -11,6 +11,7 @@ import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
+import { CommunityBuildOwnerControls } from "@/components/community/CommunityBuildOwnerControls";
 import { RelatedBuilds } from "@/components/community/RelatedBuilds";
 import { SaveToLibraryButton } from "@/components/community/SaveToLibraryButton";
 import { ShareLinkButton } from "@/components/community/ShareLinkButton";
@@ -181,6 +182,12 @@ export default async function CommunityBuildPage({
             <div className="space-y-3">
               <SaveToLibraryButton build={data.build} title={data.title} />
               <ShareLinkButton path={`/community/builds/${data.slug}`} />
+              <CommunityBuildOwnerControls
+                slug={data.slug}
+                title={data.title}
+                ownerUserId={data.ownerUserId}
+                redirectAfterRemove
+              />
             </div>
           </Card>
           <Card>

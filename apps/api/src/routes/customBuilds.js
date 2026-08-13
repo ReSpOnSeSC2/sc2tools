@@ -988,6 +988,13 @@ function buildCustomBuildsRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const slug = String(req.params.slug);
+      // Remove the public snapshot before soft-deleting its private source.
+      // If the community write fails, leave the private row live so the same
+      // DELETE can be retried safely. If softDelete fails after this succeeds,
+      // unpublishBySource is idempotent and the retry can finish cleanup.
+      if (deps.community) {
+        await deps.community.unpublishBySource(auth.userId, slug);
+      }
       await deps.customBuilds.softDelete(auth.userId, slug);
       phaseCacheBust(auth.userId, slug);
       res.status(204).end();

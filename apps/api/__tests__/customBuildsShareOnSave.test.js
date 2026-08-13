@@ -214,6 +214,92 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
     expect(priv.body.isPublic).toBe(false);
   });
 
+  test("deleting a private build also removes its community listing", async () => {
+    const userId = await bootstrapUserId();
+    const sourceSlug = "pvt-delete-shared";
+    const pub = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "PvT Delete Shared",
+        race: "Protoss",
+        vsRace: "Terran",
+        notes: "private source survives as a soft-delete tombstone",
+        rules: [{ type: "before", name: "BuildNexus", time_lt: 240 }],
+        shareWithCommunity: true,
+        schemaVersion: 3,
+      }),
+    );
+    expect(pub.status).toBe(200);
+    const publicSlug = pub.body.community.slug;
+    expect((await request(app).get(`/v1/community/builds/${publicSlug}`)).status)
+      .toBe(200);
+
+    const deleted = await withAuth(
+      request(app).delete(`/v1/custom-builds/${sourceSlug}`),
+    );
+    expect(deleted.status).toBe(204);
+    expect((await request(app).get(`/v1/community/builds/${publicSlug}`)).status)
+      .toBe(404);
+
+    const publicRow = await db.communityBuilds.findOne({ slug: publicSlug });
+    expect(publicRow.removed).toBe(true);
+    expect(publicRow.removalReason).toBe("owner_unpublish");
+    const privateRow = await db.customBuilds.findOne({
+      userId,
+      slug: sourceSlug,
+    });
+    expect(privateRow.deletedAt).toBeInstanceOf(Date);
+    expect(privateRow.isPublic).toBe(false);
+    expect(privateRow.notes).toBe(
+      "private source survives as a soft-delete tombstone",
+    );
+  });
+
+  test("a failed community unpublish leaves private deletion retryable", async () => {
+    const userId = await bootstrapUserId();
+    const sourceSlug = "zvp-delete-retry";
+    const pub = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "ZvP Delete Retry",
+        race: "Zerg",
+        vsRace: "Protoss",
+        rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 180 }],
+        shareWithCommunity: true,
+        schemaVersion: 3,
+      }),
+    );
+    expect(pub.status).toBe(200);
+    const publicSlug = pub.body.community.slug;
+    jest.spyOn(services.community, "unpublishBySource")
+      .mockRejectedValueOnce(new Error("transient_community_failure"));
+
+    const failed = await withAuth(
+      request(app).delete(`/v1/custom-builds/${sourceSlug}`),
+    );
+    expect(failed.status).toBe(500);
+    const privateAfterFailure = await db.customBuilds.findOne({
+      userId,
+      slug: sourceSlug,
+    });
+    expect(privateAfterFailure.deletedAt).toBeUndefined();
+    expect(privateAfterFailure.isPublic).toBe(true);
+    expect((await request(app).get(`/v1/community/builds/${publicSlug}`)).status)
+      .toBe(200);
+
+    const retried = await withAuth(
+      request(app).delete(`/v1/custom-builds/${sourceSlug}`),
+    );
+    expect(retried.status).toBe(204);
+    expect((await request(app).get(`/v1/community/builds/${publicSlug}`)).status)
+      .toBe(404);
+    const privateAfterRetry = await db.customBuilds.findOne({
+      userId,
+      slug: sourceSlug,
+    });
+    expect(privateAfterRetry.deletedAt).toBeInstanceOf(Date);
+  });
+
   test("saving without a share flag never touches community state", async () => {
     await bootstrapUserId();
 

@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/Icon";
 import { fmtAgo } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "./AuthorChip";
+import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
 import type { CommunityBuildListItem } from "./types";
 
 export interface CommunityBuildCardProps {
@@ -43,6 +44,14 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
       <div className="absolute right-3 top-3 z-10">
         <AuthorChip build={build} size="sm" />
       </div>
+      <div className="absolute bottom-3 right-3 z-10">
+        <CommunityBuildOwnerControls
+          slug={build.slug}
+          title={build.title}
+          ownerUserId={build.ownerUserId}
+          compact
+        />
+      </div>
       <Link
         href={`/community/builds/${encodeURIComponent(build.slug)}`}
         className="flex h-full flex-col gap-3 p-5 pl-6 pr-3 focus-visible:bg-bg-elevated focus-visible:outline-none"
@@ -75,7 +84,7 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
             {description}
           </p>
         ) : null}
-        <div className="mt-auto flex items-baseline justify-between pt-2">
+        <div className="mt-auto flex items-baseline justify-between pr-24 pt-2">
           <VoteScore votes={votes} />
           <span className="inline-flex items-center gap-1 text-micro text-text-dim">
             <MessageSquare className="h-3 w-3" aria-hidden />

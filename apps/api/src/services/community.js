@@ -247,27 +247,64 @@ class CommunityService {
    * Unpublish (soft) by setting removed=true. The owner OR an admin
    * can call this; admin path adds a moderation note in the report.
    *
+   * Owner removals are deliberately idempotent: a second DELETE succeeds
+   * without rewriting the original removal audit fields. Missing builds and
+   * builds owned by somebody else both return the same 404 so this write
+   * endpoint cannot be used to probe ownership. The private source build is
+   * retained and only has its `isPublic` mirror switched off.
+   *
    * @param {string} userId
    * @param {string} slug
    * @param {{adminUserId?: string, reason?: string}} [opts]
+   * @returns {Promise<boolean>} true only when this call removed a live copy
    */
   async unpublish(userId, slug, opts = {}) {
-    const filter = opts.adminUserId
+    const lookupFilter = opts.adminUserId
       ? { slug }
       : { slug, ownerUserId: userId };
-    const res = await this.db.communityBuilds.updateOne(filter, {
-      $set: {
-        removed: true,
-        removedAt: new Date(),
-        removedBy: opts.adminUserId || userId,
-        removalReason: opts.reason || "owner_unpublish",
+    const existing = await this.db.communityBuilds.findOne(lookupFilter, {
+      projection: {
+        _id: 1,
+        ownerUserId: 1,
+        sourceSlug: 1,
+        "build.slug": 1,
+        removed: 1,
       },
     });
-    if (res.matchedCount === 0) {
+    if (!existing) {
       const err = new Error("not_found");
       /** @type {any} */ (err).status = 404;
       throw err;
     }
+
+    let removed = false;
+    if (existing.removed !== true) {
+      const res = await this.db.communityBuilds.updateOne(
+        {
+          _id: existing._id,
+          removed: { $ne: true },
+        },
+        {
+          $set: {
+            removed: true,
+            removedAt: new Date(),
+            removedBy: opts.adminUserId || userId,
+            removalReason: opts.reason || "owner_unpublish",
+          },
+        },
+      );
+      removed = res.modifiedCount > 0;
+    }
+
+    const sourceSlug = typeof existing.sourceSlug === "string"
+      ? existing.sourceSlug
+      : typeof existing.build?.slug === "string"
+        ? existing.build.slug
+        : "";
+    if (sourceSlug) {
+      await this._setPrivateIsPublic(existing.ownerUserId, sourceSlug, false);
+    }
+    return removed;
   }
 
   /**
