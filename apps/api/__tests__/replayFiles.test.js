@@ -568,6 +568,7 @@ function fakeCollection(overrides = {}) {
     find: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
     deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
     deleteOne: jest.fn(async () => ({ deletedCount: 0 })),
+    updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
     updateMany: jest.fn(async () => ({ modifiedCount: 0 })),
     insertMany: jest.fn(async () => ({})),
     ...overrides,
@@ -592,7 +593,11 @@ function fakeGdprDb() {
 describe("GDPR replay object integration", () => {
   test("fails closed when archived games exist but R2 is disabled", async () => {
     const db = fakeGdprDb();
-    db.games.findOne.mockResolvedValue({ _id: "archived-game" });
+    db.games.findOne.mockImplementation(async (filter) => (
+      filter["_opponentBuildOrderWriteLease.leaseUntil"]
+        ? null
+        : { _id: "archived-game" }
+    ));
     const gdpr = new GdprService(db);
     await expect(gdpr.deleteAll("u1")).rejects.toMatchObject({
       status: 503,
