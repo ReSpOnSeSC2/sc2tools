@@ -163,7 +163,7 @@ class CustomBuildsService {
    */
   async latestGameDateMs(userId) {
     const doc = await this._gamesCollection().findOne(
-      { userId },
+      { userId, isResumedFromReplay: { $ne: true } },
       { projection: { _id: 0, date: 1 }, sort: { date: -1 } },
     );
     if (!doc || !doc.date) return 0;
@@ -432,6 +432,7 @@ class CustomBuildsService {
       const clearRes = await this._gamesCollection().updateMany(
         {
           userId,
+          isResumedFromReplay: { $ne: true },
           myBuild: buildName,
           ...(stillMatching.length > 0
             ? { gameId: { $nin: stillMatching } }
@@ -558,6 +559,7 @@ class CustomBuildsService {
       const clearRes = await games_.updateMany(
         {
           userId,
+          isResumedFromReplay: { $ne: true },
           myBuild: { $in: namesArr },
           ...(taggedIds.length > 0 ? { gameId: { $nin: taggedIds } } : {}),
         },

@@ -15,7 +15,11 @@ describe("GamesService.findMany", () => {
     const result = await service.findMany("u1", ["b", "a", "missing"]);
 
     expect(find).toHaveBeenCalledWith(
-      { userId: "u1", gameId: { $in: ["b", "a", "missing"] } },
+      {
+        userId: "u1",
+        gameId: { $in: ["b", "a", "missing"] },
+        isResumedFromReplay: { $ne: true },
+      },
       { projection: { _id: 0, replayUpload: 0 } },
     );
     expect(result.map((row) => row.gameId)).toEqual(["b", "a"]);
@@ -32,7 +36,11 @@ describe("GamesService.findMany", () => {
     const result = await service.findMany("u1", [" g1 ", "g1", ""]);
     expect(result.map((row) => row.gameId)).toEqual(["g1"]);
     expect(find).toHaveBeenCalledWith(
-      { userId: "u1", gameId: { $in: ["g1"] } },
+      {
+        userId: "u1",
+        gameId: { $in: ["g1"] },
+        isResumedFromReplay: { $ne: true },
+      },
       { projection: { _id: 0, replayUpload: 0 } },
     );
   });

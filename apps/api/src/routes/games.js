@@ -32,6 +32,7 @@ const {
  *   opponents: import('../services/types').OpponentsService,
  *   users?: {
  *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
+ *     repairLastKnownMmrAfterResumedReplay?: (userId: string) => Promise<boolean>,
  *   },
  *   customBuilds?: import('../services/types').CustomBuildsService,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
@@ -254,7 +255,12 @@ function buildGamesRouter(deps) {
       const incoming = Array.isArray(req.body?.games)
         ? req.body.games
         : [req.body];
+      /** @type {Array<{gameId: string, created: boolean, quarantined?: boolean}>} */
       const accepted = [];
+      const competitiveAccepted = [];
+      const competitiveIncoming = [];
+      /** @type {Array<{gameId: string, created: boolean, quarantined?: boolean}>} */
+      const quarantinedAccepted = [];
       const rejected = [];
       // Build the historical map classifier once per batch for the
       // legacy ``isLadderMap`` compatibility stamp. The analyzer's
@@ -304,6 +310,45 @@ function buildGamesRouter(deps) {
         // to remember to strip them.
         if ("earlyBuildLog" in game) delete game.earlyBuildLog;
         if ("oppEarlyBuildLog" in game) delete game.oppEarlyBuildLog;
+        // SC2's resume-from-replay feature writes a new replay whose result
+        // is synthetic. Quarantine it before classification and every
+        // competitive side effect. The marker remains queryable for the
+        // build dossier's opt-in audit view, but cannot affect W/L, session,
+        // opponent, custom-build, or overlay state.
+        if (game.isResumedFromReplay === true) {
+          try {
+            const marked = await deps.games.quarantineResumedReplay(
+              userId,
+              game,
+            );
+            const outcome = {
+              gameId: game.gameId,
+              created: marked.created,
+              quarantined: true,
+            };
+            accepted.push(outcome);
+            quarantinedAccepted.push(outcome);
+          } catch (err) {
+            const e = /** @type {{ message?: unknown }} */ (err);
+            if (req.log) {
+              req.log.warn(
+                { err, gameId: game.gameId, userId },
+                "ingest_resume_quarantine_failed",
+              );
+            }
+            rejected.push({
+              gameId: game.gameId || null,
+              retryable: true,
+              errors: [
+                `quarantine_failed: ${
+                  e && e.message ? e.message : String(err)
+                }`,
+              ],
+            });
+          }
+          continue;
+        }
+        competitiveIncoming.push(game);
         // Maintain the legacy ``isLadderMap`` compatibility field. Mirror
         // the agent's authoritative matchmaking flag when present;
         // otherwise use the historical map-name proxy for old readers.
@@ -487,7 +532,55 @@ function buildGamesRouter(deps) {
             }
           }
         }
-        accepted.push({ gameId: game.gameId, created });
+        const outcome = { gameId: game.gameId, created };
+        accepted.push(outcome);
+        competitiveAccepted.push(outcome);
+      }
+      // Always finish durable quarantine repairs after a stored marker,
+      // including on a retry where the rows were already sticky-flagged.
+      // Counter reversals are targeted and exactly-once; sticky MMR repair is
+      // journaled on the quarantined rows and compare-and-swapped so it cannot
+      // roll back a concurrently uploaded legitimate game.
+      if (quarantinedAccepted.length > 0) {
+        try {
+          if (
+            !deps.opponents
+            || typeof deps.opponents.repairResumedReplayCountersForUser !== "function"
+          ) {
+            throw new Error("opponent quarantine repair unavailable");
+          }
+          await deps.opponents.repairResumedReplayCountersForUser(userId);
+          if (
+            !deps.users
+            || typeof deps.users.repairLastKnownMmrAfterResumedReplay !== "function"
+          ) {
+            throw new Error("sticky MMR quarantine repair unavailable");
+          }
+          await deps.users.repairLastKnownMmrAfterResumedReplay(userId);
+        } catch (err) {
+          if (req.log) {
+            req.log.warn(
+              { err, userId },
+              "ingest_resume_repair_failed",
+            );
+          }
+          const quarantineOutcomes = new Set(quarantinedAccepted);
+          for (let i = accepted.length - 1; i >= 0; i -= 1) {
+            if (quarantineOutcomes.has(accepted[i])) accepted.splice(i, 1);
+          }
+          const e = /** @type {{ message?: unknown }} */ (err);
+          for (const item of quarantinedAccepted) {
+            rejected.push({
+              gameId: item.gameId,
+              retryable: true,
+              errors: [
+                `quarantine_repair_failed: ${
+                  e && e.message ? e.message : String(err)
+                }`,
+              ],
+            });
+          }
+        }
       }
       // Realtime nudge so an open SPA tab refreshes without polling.
       if (deps.io && accepted.length > 0) {
@@ -495,7 +588,10 @@ function buildGamesRouter(deps) {
         // the post-game overlay fan-out. Historical resync batches must
         // not bypass the Pulse cache, while a genuinely new match must
         // not inherit the pre-game rating for another five minutes.
-        const freshGame = pickFreshOverlayGame(incoming, accepted);
+        const freshGame = pickFreshOverlayGame(
+          competitiveIncoming,
+          competitiveAccepted,
+        );
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
         });
@@ -505,16 +601,18 @@ function buildGamesRouter(deps) {
         // ``socket.data.timezone`` — "today" depends on the streamer's
         // wall clock, not on UTC. Best-effort: a transient resolveSocket
         // failure for one overlay must not block the ingest response.
-        emitSessionUpdate(deps.io, deps.games, userId, {
-          refreshCurrentMmr: !!freshGame,
-        }).catch((err) => {
-          if (req.log) {
-            req.log.warn(
-              { err, userId },
-              "overlay_session_emit_failed",
-            );
-          }
-        });
+        if (competitiveAccepted.length > 0) {
+          emitSessionUpdate(deps.io, deps.games, userId, {
+            refreshCurrentMmr: !!freshGame,
+          }).catch((err) => {
+            if (req.log) {
+              req.log.warn(
+                { err, userId },
+                "overlay_session_emit_failed",
+              );
+            }
+          });
+        }
         // Derive and broadcast the full LiveGamePayload for every
         // widget that depends on ``overlay:live`` — but ONLY for a
         // game the streamer just finished. Re-uploads of historical
@@ -570,7 +668,7 @@ function buildGamesRouter(deps) {
           // the very next envelope tick on either keying scheme.
           if (typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function") {
             const seen = new Set();
-            for (const g of incoming) {
+            for (const g of competitiveIncoming) {
               const name = g?.opponent?.displayName;
               if (typeof name !== "string" || !name) continue;
               const key = name.toLowerCase();

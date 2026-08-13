@@ -159,4 +159,131 @@ describe("POST /games ladder-map + player-count stamping", () => {
       }),
     ]);
   });
+
+  test("quarantines resume markers before competitive ingest side effects", async () => {
+    const games = {
+      upsert: jest.fn(),
+      quarantineResumedReplay: jest
+        .fn()
+        .mockResolvedValueOnce({
+          created: false,
+          newlyFlaggedExisting: 3,
+          gameIds: ["resume-3", "resume-1", "resume-2"],
+        })
+        .mockResolvedValueOnce({
+          created: false,
+          newlyFlaggedExisting: 0,
+          gameIds: ["resume-3", "resume-1", "resume-2"],
+        }),
+    };
+    const opponents = {
+      recordGame: jest.fn(),
+      refreshMetadata: jest.fn(),
+      repairResumedReplayCountersForUser: jest.fn(async () => 3),
+    };
+    const users = {
+      addPulseId: jest.fn(),
+      repairLastKnownMmrAfterResumedReplay: jest.fn(async () => true),
+    };
+    const customBuilds = { tagSingleGame: jest.fn() };
+    const roomEmit = jest.fn();
+    const io = {
+      to: jest.fn(() => ({ emit: roomEmit })),
+      in: jest.fn(() => ({ fetchSockets: jest.fn(async () => []) })),
+    };
+    const auth = (req, _res, next) => {
+      req.auth = { userId: "u1" };
+      next();
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(buildGamesRouter({
+      games,
+      opponents,
+      users,
+      customBuilds,
+      io,
+      auth,
+    }));
+    const marker = {
+      ...baseGame,
+      gameId: "resume-3",
+      map: "Old Sun Temple LE",
+      opponent: { pulseId: "zulrah", displayName: "Zulrah", race: "Zerg" },
+      myToonHandle: "1-S2-1-123",
+      isResumedFromReplay: true,
+      resumedReplayGameIds: ["resume-1", "resume-2"],
+    };
+
+    for (let i = 0; i < 2; i += 1) {
+      const res = await request(app).post("/games").send(marker);
+      expect(res.status).toBe(202);
+      expect(res.body.accepted).toEqual([
+        expect.objectContaining({ gameId: "resume-3", quarantined: true }),
+      ]);
+    }
+    expect(games.quarantineResumedReplay).toHaveBeenCalledTimes(2);
+    expect(opponents.repairResumedReplayCountersForUser).toHaveBeenCalledTimes(2);
+    expect(users.repairLastKnownMmrAfterResumedReplay).toHaveBeenCalledTimes(2);
+    expect(users.repairLastKnownMmrAfterResumedReplay).toHaveBeenCalledWith("u1");
+    expect(games.upsert).not.toHaveBeenCalled();
+    expect(opponents.recordGame).not.toHaveBeenCalled();
+    expect(opponents.refreshMetadata).not.toHaveBeenCalled();
+    expect(users.addPulseId).not.toHaveBeenCalled();
+    expect(customBuilds.tagSingleGame).not.toHaveBeenCalled();
+    expect(roomEmit).toHaveBeenCalledWith("games:changed", { count: 1 });
+    expect(io.in).not.toHaveBeenCalled();
+  });
+
+  test("a failed quarantine counter rebuild is retryable and heals on retry", async () => {
+    const games = {
+      upsert: jest.fn(),
+      quarantineResumedReplay: jest.fn(async () => ({
+        created: false,
+        newlyFlaggedExisting: 0,
+        gameIds: ["resume-retry"],
+      })),
+    };
+    const opponents = {
+      refreshMetadata: jest.fn(),
+      repairResumedReplayCountersForUser: jest
+        .fn()
+        .mockRejectedValueOnce(new Error("mongo temporarily unavailable"))
+        .mockResolvedValueOnce(1),
+    };
+    const users = {
+      repairLastKnownMmrAfterResumedReplay: jest.fn(async () => false),
+    };
+    const auth = (req, _res, next) => {
+      req.auth = { userId: "u1" };
+      next();
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(buildGamesRouter({ games, opponents, users, auth }));
+    const marker = {
+      ...baseGame,
+      gameId: "resume-retry",
+      map: "Old Sun Temple LE",
+      isResumedFromReplay: true,
+    };
+
+    const failed = await request(app).post("/games").send(marker);
+    expect(failed.body.accepted).toEqual([]);
+    expect(failed.body.rejected).toEqual([
+      expect.objectContaining({
+        gameId: "resume-retry",
+        retryable: true,
+        errors: [expect.stringMatching(/quarantine_repair_failed/)],
+      }),
+    ]);
+
+    const retried = await request(app).post("/games").send(marker);
+    expect(retried.body.rejected).toEqual([]);
+    expect(retried.body.accepted).toEqual([
+      expect.objectContaining({ gameId: "resume-retry", quarantined: true }),
+    ]);
+    expect(opponents.repairResumedReplayCountersForUser).toHaveBeenCalledTimes(2);
+    expect(users.repairLastKnownMmrAfterResumedReplay).toHaveBeenCalledTimes(1);
+  });
 });

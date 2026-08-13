@@ -285,6 +285,7 @@ function buildCandidateFilter(nowMs, windowDays) {
   const cutoff = new Date(nowMs - windowDays * DAY_MS);
   return {
     createdAt: { $gte: cutoff, $lte: now },
+    isResumedFromReplay: { $ne: true },
     "opponent.pulseCharacterId": { $type: "string", $ne: "" },
     "opponent.race": { $regex: /^(?:p|protoss|t|terran|z|zerg)$/i },
     $and: [

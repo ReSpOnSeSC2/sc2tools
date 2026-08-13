@@ -163,7 +163,13 @@ class PublicProfileService {
   async _mainRace(userId) {
     const rows = await this.db.games
       .aggregate([
-        { $match: { userId, myRace: { $type: "string", $ne: "" } } },
+        {
+          $match: {
+            userId,
+            isResumedFromReplay: { $ne: true },
+            myRace: { $type: "string", $ne: "" },
+          },
+        },
         {
           $group: {
             _id: { $toUpper: { $substrCP: ["$myRace", 0, 1] } },

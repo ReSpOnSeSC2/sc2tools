@@ -90,6 +90,11 @@ class BuildsService {
   async detail(userId, name, filters) {
     if (!name) return null;
     const baseMatch = { ...gamesMatchStage(userId, filters), myBuild: name };
+    const resumedMatch = {
+      ...gamesMatchStage(userId, filters),
+      isResumedFromReplay: true,
+      myBuild: name,
+    };
     const cursor = this.db.games.aggregate([
       { $match: baseMatch },
       { $addFields: { _bucket: bucketSwitch() } },
@@ -201,20 +206,37 @@ class BuildsService {
       },
     ]);
     const [doc] = await cursor.toArray();
-    const totals = doc?.totals?.[0];
-    if (!totals || !totals.total) return null;
-    const dossierGames = await this.db.games
-      .find(baseMatch, { projection: DOSSIER_PROJECTION })
-      .sort({ date: -1 })
-      .toArray();
+    const [resumedCount, resumedGames] = await Promise.all([
+      this.db.games.countDocuments(resumedMatch),
+      this.db.games
+        .find(resumedMatch, { projection: DOSSIER_PROJECTION })
+        .sort({ date: -1 })
+        .limit(50)
+        .toArray(),
+    ]);
+    const totals = doc?.totals?.[0] || {
+      wins: 0,
+      losses: 0,
+      total: 0,
+      lastPlayed: null,
+    };
+    if (!totals.total && !resumedCount) return null;
+    const dossierGames = totals.total
+      ? await this.db.games
+        .find(baseMatch, { projection: DOSSIER_PROJECTION })
+        .sort({ date: -1 })
+        .toArray()
+      : [];
     const extras = computeDossierExtras(dossierGames);
     return {
       name,
       totals: { ...totals, winRate: totals.total ? totals.wins / totals.total : 0 },
-      byMatchup: addWinRates(doc.byMatchup || []),
-      byMap: addWinRates(doc.byMap || []),
-      byStrategy: addWinRates(doc.byStrategy || []),
-      recent: doc.recent || [],
+      byMatchup: addWinRates(doc?.byMatchup || []),
+      byMap: addWinRates(doc?.byMap || []),
+      byStrategy: addWinRates(doc?.byStrategy || []),
+      recent: doc?.recent || [],
+      resumedCount,
+      resumedRecent: resumedGames.map(toResumedRecent),
       ...extras,
     };
   }
@@ -269,6 +291,22 @@ function addWinRates(rows) {
       winRate: row.total ? row.wins / row.total : 0,
     }),
   );
+}
+
+/** @param {Record<string, any>} game */
+function toResumedRecent(game) {
+  return {
+    gameId: game.gameId,
+    date: game.date,
+    map: game.map || "",
+    opponent: game.opponent?.displayName || "",
+    opp_race: game.opponent?.race || "",
+    opp_strategy: game.opponent?.strategy || null,
+    result: game.result,
+    duration: game.durationSec || 0,
+    macroScore: game.macroScore ?? null,
+    isResumedFromReplay: true,
+  };
 }
 
 module.exports = { BuildsService };

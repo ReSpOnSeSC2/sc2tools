@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -11,7 +12,10 @@ const { stampVersion } = require("../db/schemaVersioning");
  */
 class UsersService {
   /**
-   * @param {{users: import('mongodb').Collection}} db
+   * @param {{
+   *   users: import('mongodb').Collection,
+   *   games: import('mongodb').Collection,
+   * }} db
    * @param {{
    *   adminEvents?: {
    *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
@@ -560,6 +564,7 @@ class UsersService {
    *   mmr: number,
    *   capturedAt?: string,
    *   region?: string,
+   *   gameId?: string,
    * }} update
    * @returns {Promise<boolean>} true when the document was actually written.
    */
@@ -575,11 +580,69 @@ class UsersService {
         : null;
     const hasExplicitCapturedAt =
       captured !== null && !Number.isNaN(captured.getTime());
-    set.lastKnownMmrAt = hasExplicitCapturedAt
-      ? captured.toISOString()
+    if (typeof update.capturedAt === "string" && !hasExplicitCapturedAt) {
+      return false;
+    }
+    const gameId = typeof update.gameId === "string"
+      ? update.gameId.trim().slice(0, 200)
+      : "";
+    let sourceDate = hasExplicitCapturedAt ? captured : null;
+    if (gameId) {
+      const source = await this.db.games.findOne(
+        { userId, gameId },
+        {
+          projection: {
+            _id: 0,
+            date: 1,
+            isResumedFromReplay: 1,
+          },
+        },
+      );
+      if (!source || source.isResumedFromReplay === true) return false;
+      const storedGameDate = source.date instanceof Date
+        ? source.date
+        : new Date(source.date);
+      if (Number.isNaN(storedGameDate.getTime())) return false;
+      if (
+        sourceDate
+        && sourceDate.toISOString() !== storedGameDate.toISOString()
+      ) {
+        return false;
+      }
+      sourceDate = storedGameDate;
+    }
+    set.lastKnownMmrAt = sourceDate
+      ? sourceDate.toISOString()
       : new Date().toISOString();
     if (typeof update.region === "string" && update.region) {
       set.lastKnownMmrRegion = update.region.slice(0, 8);
+    }
+    // Backwards-compatible protection for agents that do not yet send a
+    // gameId. Their replay timestamp is still enough to reject a sticky-MMR
+    // ping sourced from a quarantined Resume-from-Replay row.
+    const sourceInstant = new Date(set.lastKnownMmrAt);
+    // New agents identify the exact replay that supplied the rating. Keep
+    // that check game-id scoped: two games can legitimately share a replay
+    // timestamp. Date matching is only the conservative compatibility path
+    // for old agents that have not learned to send gameId yet.
+    const resumedSourceFilter = gameId
+      ? { userId, gameId, isResumedFromReplay: true }
+      : {
+          userId,
+          isResumedFromReplay: true,
+          $or: [
+            { date: sourceInstant },
+            { date: set.lastKnownMmrAt },
+          ],
+        };
+    if (
+      (sourceDate || gameId)
+      && await this.db.games.findOne(
+        resumedSourceFilter,
+        { projection: { _id: 1 } },
+      )
+    ) {
+      return false;
     }
     // Skip the write if nothing changed — most replays in a backfill
     // produce the same MMR as the prior one, so the unconditional
@@ -632,7 +695,176 @@ class UsersService {
       },
       { $set: set },
     );
-    return wrote.modifiedCount > 0;
+    const changed = wrote.modifiedCount > 0;
+    // Close the cross-collection race where quarantine lands after the
+    // source-game check but before the profile CAS. If that happened, make
+    // the cleanup durable again and run the same idempotent repair now. A
+    // failure propagates, leaving the pending bit for the agent's retry.
+    if (sourceDate || gameId) {
+      const becameResumed = await this.db.games.find(
+        resumedSourceFilter,
+        { projection: { _id: 1 } },
+      ).toArray();
+      if (becameResumed.length > 0) {
+        await this.db.games.updateMany(
+          { _id: { $in: becameResumed.map((row) => row._id) }, userId },
+          {
+            $set: {
+              resumedReplayMmrRepairPending: true,
+              resumedReplayMmrRepairToken: crypto.randomUUID(),
+            },
+            $unset: { resumedReplayMmrRepairedAt: "" },
+          },
+        );
+        await this.repairLastKnownMmrAfterResumedReplay(userId);
+        return false;
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * Consume durable sticky-MMR repair work left by replay quarantine.
+   *
+   * The game rows, not the request, are the repair journal. The profile CAS
+   * prevents cleanup from rolling back a concurrently uploaded real game;
+   * pending rows are cleared only after that CAS (or after proving no profile
+   * change is needed). A failure at any earlier point leaves them retryable.
+   *
+   * @param {string} userId
+   * @returns {Promise<boolean>} true when the sticky fields changed
+   */
+  async repairLastKnownMmrAfterResumedReplay(userId) {
+    const pending = await this.db.games
+      .find(
+        {
+          userId,
+          isResumedFromReplay: true,
+          resumedReplayMmrRepairPending: true,
+        },
+        {
+          projection: {
+            _id: 1,
+            date: 1,
+            resumedReplayMmrRepairToken: 1,
+          },
+        },
+      )
+      .toArray();
+    if (pending.length === 0) return false;
+
+    const badDates = new Set(
+      pending
+        .map((row) => row && row.date)
+        .map((value) => {
+          const parsed = new Date(value);
+          return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+        })
+        .filter((value) => typeof value === "string"),
+    );
+    const profile = await this.db.users.findOne(
+      { userId },
+      {
+        projection: {
+          _id: 0,
+          lastKnownMmrAt: 1,
+        },
+      },
+    );
+    const storedRaw = profile && profile.lastKnownMmrAt;
+    const storedDate = typeof storedRaw === "string"
+      ? new Date(storedRaw)
+      : null;
+    const stickyNeedsRepair = Boolean(
+      storedDate
+      && !Number.isNaN(storedDate.getTime())
+      && badDates.has(storedDate.toISOString()),
+    );
+    let changed = false;
+    if (stickyNeedsRepair) {
+      const latest = await this.db.games.findOne(
+        {
+          userId,
+          isResumedFromReplay: { $ne: true },
+          date: { $type: "date" },
+          myMmr: { $type: "number", $gte: 500, $lte: 9999 },
+        },
+        {
+          projection: {
+            _id: 0,
+            date: 1,
+            myMmr: 1,
+            myToonHandle: 1,
+          },
+          sort: { date: -1 },
+        },
+      );
+      const guard = { userId, lastKnownMmrAt: storedRaw };
+      if (!latest) {
+        const cleared = await this.db.users.updateOne(guard, {
+          $unset: {
+            lastKnownMmr: "",
+            lastKnownMmrAt: "",
+            lastKnownMmrRegion: "",
+          },
+        });
+        changed = cleared.modifiedCount > 0;
+      } else {
+        const latestAt = latest.date instanceof Date
+          ? latest.date
+          : new Date(latest.date);
+        const mmr = Math.round(Number(latest.myMmr));
+        if (
+          Number.isNaN(latestAt.getTime())
+          || !Number.isInteger(mmr)
+          || mmr < 500
+          || mmr > 9999
+        ) {
+          throw new Error("invalid competitive MMR replacement");
+        }
+        /** @type {Record<string, any>} */
+        const replacement = {
+          lastKnownMmr: mmr,
+          lastKnownMmrAt: latestAt.toISOString(),
+        };
+        const region = regionFromToonHandle(latest.myToonHandle);
+        if (region) replacement.lastKnownMmrRegion = region;
+        stampVersion(replacement, COLLECTIONS.USERS);
+        /** @type {Record<string, any>} */
+        const update = { $set: replacement };
+        if (!region) update.$unset = { lastKnownMmrRegion: "" };
+        const repaired = await this.db.users.updateOne(guard, update);
+        changed = repaired.modifiedCount > 0;
+      }
+    }
+
+    // No profile, malformed/nonmatching sticky timestamp, and a lost CAS all
+    // mean no further repair is necessary. They are successful no-ops, so
+    // consume exactly the rows captured at the start; newer work stays pending.
+    const repairedAt = new Date();
+    await this.db.games.bulkWrite(
+      pending.map((row) => ({
+        updateOne: {
+          filter: {
+            _id: row._id,
+            userId,
+            resumedReplayMmrRepairPending: true,
+            resumedReplayMmrRepairToken:
+              typeof row.resumedReplayMmrRepairToken === "string"
+                ? row.resumedReplayMmrRepairToken
+                : { $exists: false },
+          },
+          update: {
+            $set: {
+              resumedReplayMmrRepairPending: false,
+              resumedReplayMmrRepairedAt: repairedAt,
+            },
+            $unset: { resumedReplayMmrRepairToken: "" },
+          },
+        },
+      })),
+    );
+    return changed;
   }
 }
 

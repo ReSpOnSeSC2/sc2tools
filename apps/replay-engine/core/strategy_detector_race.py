@@ -137,7 +137,11 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
                 if first_gas_time < first_hatch_time + 15
                 else "Zerg - Hatch First"
             )
-            if base_count_at(buildings, "Hatchery", 200) >= 3:
+            # This label is specifically about the THIRD Hatchery starting
+            # before the Pool. Counting three bases by an arbitrary 3:20
+            # cutoff mislabeled ordinary Hatch/Pool builds whose third went
+            # down later (for example 1:12 Hatch, 1:36 Pool, 3:12 third).
+            if nth_base_start(buildings, "Hatchery", 3) < pool_time:
                 return "Zerg - 3 Hatch Before Pool"
 
             if (

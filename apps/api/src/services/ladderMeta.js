@@ -489,6 +489,7 @@ function buildGamesMatch(bandType, era) {
     // shared games collection across every account. User-scoped analytics
     // add userId in their service layer; this public aggregate must not.
     ...bandMatch,
+    isResumedFromReplay: { $ne: true },
     myRace: { $type: "string" },
     "opponent.race": { $type: "string" },
     myBuild: { $type: "string", $ne: "", $not: /Game Too Short$/ },

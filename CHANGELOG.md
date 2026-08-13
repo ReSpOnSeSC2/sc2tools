@@ -39,6 +39,30 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Full Re-sync now repairs old Resume-from-Replay results** — StarCraft II's
+  definitive Take Command marker is uploaded as a non-competitive quarantine
+  record, including legacy IDs previously tied to the same local replay. These
+  sessions are excluded from builds, opponents, session records, and public
+  Ladder Meta by default. Build history offers an optional **Show
+  replay-resume tests** audit view without adding their synthetic outcomes back
+  to any totals. Ships with **agent 0.15.17** (`agent-v0.15.17`) and bundled
+  replay engine 1.5.8.
+
+- **Zerg Hatch/Pool openers no longer count a later third as "3 Hatch Before
+  Pool"** — opener detection now compares the third Hatchery's actual start
+  directly with the Spawning Pool instead of using a loose early-game cutoff.
+  Recomputing a replay's Macro Breakdown refreshes the corrected opponent
+  strategy after installing agent 0.15.17.
+
+- **Ladder Pulse no longer presents Mineral Float's ranking weight as a bank
+  balance** — the signal now reports the observed number of readings over 800
+  minerals, so 20 readings are not mislabeled as a 2,000-mineral float.
+
+- **Queue Thought map advice is limited to a verified current ladder pool** —
+  edition suffixes such as `LE` are normalized without conflating numbered
+  maps, and stale or emergency fallback pools suppress this one card. Older
+  map-pool games remain available to every other history and analysis view.
+
 - **Analyzer game filters now default to ranked 1v1 and stay applied** —
   fresh and legacy sessions start with Ladder + 1v1 selected, explicit All
   choices persist, and opening an opponent profile or reading dashboard KPIs

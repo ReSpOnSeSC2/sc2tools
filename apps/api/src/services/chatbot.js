@@ -444,7 +444,7 @@ class ChatbotService {
     }
     try {
       return await this.db.games.findOne(
-        { userId },
+        { userId, isResumedFromReplay: { $ne: true } },
         { projection: { _id: 0 }, sort: { date: -1 } },
       );
     } catch (err) {
@@ -531,7 +531,11 @@ class ChatbotService {
   async _lastTaggedBuildRow(userId) {
     try {
       return await this.db.games.findOne(
-        { userId, myBuild: { $type: "string", $ne: "" } },
+        {
+          userId,
+          isResumedFromReplay: { $ne: true },
+          myBuild: { $type: "string", $ne: "" },
+        },
         {
           projection: {
             _id: 0,

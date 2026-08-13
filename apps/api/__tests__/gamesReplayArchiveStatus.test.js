@@ -17,9 +17,13 @@ describe("GamesService.replayArchiveStatus", () => {
       missingGames: 7,
       archiveComplete: false,
     });
-    expect(countDocuments).toHaveBeenNthCalledWith(1, { userId: "u1" });
+    expect(countDocuments).toHaveBeenNthCalledWith(1, {
+      userId: "u1",
+      isResumedFromReplay: { $ne: true },
+    });
     expect(countDocuments).toHaveBeenNthCalledWith(2, {
       userId: "u1",
+      isResumedFromReplay: { $ne: true },
       "replayFile.storedAt": { $exists: true },
     });
   });

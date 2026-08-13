@@ -44,8 +44,14 @@ export interface UsersService {
   ): Promise<Record<string, unknown>>;
   patchLastKnownMmr(
     userId: string,
-    update: { mmr: number; capturedAt?: string; region?: string },
+    update: {
+      mmr: number;
+      capturedAt?: string;
+      region?: string;
+      gameId?: string;
+    },
   ): Promise<boolean>;
+  repairLastKnownMmrAfterResumedReplay(userId: string): Promise<boolean>;
 }
 
 export interface OpponentsService {
@@ -161,6 +167,7 @@ export interface OpponentsService {
     topRace: string | null;
     topMmr: number | null;
   } | null>;
+  repairResumedReplayCountersForUser(userId: string): Promise<number>;
 }
 
 export interface GamesService {
@@ -171,6 +178,18 @@ export interface GamesService {
   get(userId: string, gameId: string): Promise<object | null>;
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
+  quarantineResumedReplay(
+    userId: string,
+    game: object & {
+      gameId: string;
+      date: string | Date;
+      resumedReplayGameIds?: string[];
+    },
+  ): Promise<{
+    created: boolean;
+    newlyFlaggedExisting: number;
+    gameIds: string[];
+  }>;
   stats(userId: string): Promise<{ total: number; latest: Date | null }>;
   replayArchiveStatus(userId: string): Promise<{
     totalGames: number;

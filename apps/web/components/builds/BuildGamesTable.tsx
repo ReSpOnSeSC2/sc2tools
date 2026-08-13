@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
+import { Toggle } from "@/components/ui/Toggle";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { useApi } from "@/lib/clientApi";
@@ -37,16 +38,22 @@ interface BuildOrderResp {
  */
 export function BuildGamesTable({
   games,
+  resumedGames = [],
+  resumedCount = 0,
   filterGameIds,
   filterLabel,
   onClearFilter,
 }: {
   games: BuildRecentGame[];
+  resumedGames?: BuildRecentGame[];
+  resumedCount?: number;
   filterGameIds?: string[];
   filterLabel?: string;
   onClearFilter?: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showResumedGames, setShowResumedGames] = useState(false);
+  const resumeNoteId = useId();
   const filterSet = useMemo(
     () =>
       filterGameIds && filterGameIds.length > 0
@@ -54,11 +61,64 @@ export function BuildGamesTable({
         : null,
     [filterGameIds],
   );
-  const filtered = useMemo(
-    () => (filterSet ? games.filter((g) => filterSet.has(g.gameId)) : games),
-    [games, filterSet],
+  const groupedGames = useMemo(() => {
+    const resumedById = new Map<string, BuildRecentGame>();
+
+    for (const game of games) {
+      if (game.isResumedFromReplay) {
+        resumedById.set(game.gameId, {
+          ...game,
+          isResumedFromReplay: true,
+        });
+      }
+    }
+    for (const game of resumedGames) {
+      resumedById.set(game.gameId, {
+        ...game,
+        isResumedFromReplay: true,
+      });
+    }
+
+    return {
+      competitive: games.filter(
+        (game) =>
+          !game.isResumedFromReplay && !resumedById.has(game.gameId),
+      ),
+      resumed: Array.from(resumedById.values()),
+    };
+  }, [games, resumedGames]);
+  const filteredCompetitive = useMemo(
+    () =>
+      filterSet
+        ? groupedGames.competitive.filter((game) =>
+            filterSet.has(game.gameId),
+          )
+        : groupedGames.competitive,
+    [filterSet, groupedGames.competitive],
   );
-  if (games.length === 0) {
+  const filteredResumed = useMemo(
+    () =>
+      filterSet
+        ? groupedGames.resumed.filter((game) => filterSet.has(game.gameId))
+        : groupedGames.resumed,
+    [filterSet, groupedGames.resumed],
+  );
+  const displayedGames = useMemo(
+    () =>
+      [
+        ...filteredCompetitive,
+        ...(showResumedGames ? filteredResumed : []),
+      ].sort(compareNewestFirst),
+    [filteredCompetitive, filteredResumed, showResumedGames],
+  );
+  const totalResumed = Math.max(
+    0,
+    resumedCount,
+    groupedGames.resumed.length,
+  );
+  const hasResumedGames = totalResumed > 0;
+
+  if (groupedGames.competitive.length === 0 && !hasResumedGames) {
     return (
       <Card title="Recent games">
         <EmptyState sub="No games using this build yet. Once you play some, they list here newest-first." />
@@ -66,58 +126,105 @@ export function BuildGamesTable({
     );
   }
   const chip =
-    filterSet && filtered.length > 0 ? (
+    filterSet ? (
       <FilterChip
         label={filterLabel}
-        count={filtered.length}
+        count={filteredCompetitive.length}
         onClear={onClearFilter}
       />
     ) : null;
   return (
-    <Card title={`Recent games · ${filtered.length}`}>
+    <Card
+      title={`Recent games · ${filteredCompetitive.length}${hasResumedGames ? " counted" : ""}`}
+    >
       {chip}
-      <div className="hidden md:block">
-        <table className="w-full text-caption">
-          <thead className="bg-bg-elevated text-micro uppercase tracking-wider text-text-muted">
-            <tr>
-              <th className="w-6 px-2 py-1 text-left" aria-hidden />
-              <th className="px-2 py-1 text-left">Date</th>
-              <th className="px-2 py-1 text-left">Map</th>
-              <th className="px-2 py-1 text-left">Opponent</th>
-              <th className="px-2 py-1 text-left">Strategy</th>
-              <th className="px-2 py-1 text-right">Macro</th>
-              <th className="px-2 py-1 text-right">Length</th>
-              <th className="px-2 py-1 text-right">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((g) => (
-              <GameRow
+      {hasResumedGames ? (
+        <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <p id={resumeNoteId} className="text-micro text-text-muted">
+            {totalResumed} replay-resume test
+            {totalResumed === 1 ? " is" : "s are"} excluded from all
+            statistics.
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-caption text-text">
+              Show replay-resume tests
+            </span>
+            <Toggle
+              checked={showResumedGames}
+              onChange={setShowResumedGames}
+              label="Show replay-resume tests"
+              aria-describedby={resumeNoteId}
+            />
+          </div>
+        </div>
+      ) : null}
+      {displayedGames.length === 0 ? (
+        <EmptyState
+          sub={
+            filterSet
+              ? "No counted games match this phase filter."
+              : "No counted games using this build yet."
+          }
+        />
+      ) : (
+        <>
+          <div className="hidden md:block">
+            <table className="w-full text-caption">
+              <thead className="bg-bg-elevated text-micro uppercase tracking-wider text-text-muted">
+                <tr>
+                  <th className="w-6 px-2 py-1 text-left" aria-hidden />
+                  <th className="px-2 py-1 text-left">Date</th>
+                  <th className="px-2 py-1 text-left">Map</th>
+                  <th className="px-2 py-1 text-left">Opponent</th>
+                  <th className="px-2 py-1 text-left">Strategy</th>
+                  <th className="px-2 py-1 text-right">Macro</th>
+                  <th className="px-2 py-1 text-right">Length</th>
+                  <th className="px-2 py-1 text-right">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedGames.map((g) => (
+                  <GameRow
+                    key={g.gameId}
+                    game={g}
+                    expanded={expanded === g.gameId}
+                    onToggle={() =>
+                      setExpanded((cur) =>
+                        cur === g.gameId ? null : g.gameId,
+                      )
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <ul className="space-y-2 md:hidden">
+            {displayedGames.map((g) => (
+              <GameMobile
                 key={g.gameId}
                 game={g}
                 expanded={expanded === g.gameId}
                 onToggle={() =>
-                  setExpanded((cur) => (cur === g.gameId ? null : g.gameId))
+                  setExpanded((cur) =>
+                    cur === g.gameId ? null : g.gameId,
+                  )
                 }
               />
             ))}
-          </tbody>
-        </table>
-      </div>
-      <ul className="space-y-2 md:hidden">
-        {filtered.map((g) => (
-          <GameMobile
-            key={g.gameId}
-            game={g}
-            expanded={expanded === g.gameId}
-            onToggle={() =>
-              setExpanded((cur) => (cur === g.gameId ? null : g.gameId))
-            }
-          />
-        ))}
-      </ul>
+          </ul>
+        </>
+      )}
     </Card>
   );
+}
+
+function compareNewestFirst(a: BuildRecentGame, b: BuildRecentGame): number {
+  const aTime = Date.parse(a.date);
+  const bTime = Date.parse(b.date);
+  if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+    return bTime - aTime;
+  }
+  return b.date.localeCompare(a.date) || a.gameId.localeCompare(b.gameId);
 }
 
 function FilterChip({
@@ -161,8 +268,6 @@ function GameRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const result = (game.result || "").toString();
-  const isWin = ["win", "victory"].includes(result.toLowerCase());
   return (
     <>
       <tr
@@ -171,6 +276,8 @@ function GameRow({
           expanded ? "bg-bg-elevated/40" : "hover:bg-bg-elevated/40",
         ].join(" ")}
         onClick={onToggle}
+        data-game-row-id={game.gameId}
+        data-replay-resume={game.isResumedFromReplay ? "true" : undefined}
       >
         <td className="px-2 py-1.5 text-text-dim" aria-hidden>
           {expanded ? (
@@ -209,9 +316,7 @@ function GameRow({
           {game.duration ? fmtMinutes(game.duration) : "—"}
         </td>
         <td className="px-2 py-1.5 text-right">
-          <Badge size="sm" variant={isWin ? "success" : "danger"}>
-            {isWin ? "Win" : "Loss"}
-          </Badge>
+          <GameResultBadge game={game} />
         </td>
       </tr>
       {expanded ? (
@@ -234,8 +339,6 @@ function GameMobile({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const result = (game.result || "").toString();
-  const isWin = ["win", "victory"].includes(result.toLowerCase());
   return (
     <li
       className={[
@@ -244,6 +347,8 @@ function GameMobile({
       ]
         .filter(Boolean)
         .join(" ")}
+      data-game-card-id={game.gameId}
+      data-replay-resume={game.isResumedFromReplay ? "true" : undefined}
     >
       <button
         type="button"
@@ -253,9 +358,7 @@ function GameMobile({
       >
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2 text-caption">
-            <Badge size="sm" variant={isWin ? "success" : "danger"}>
-              {isWin ? "Win" : "Loss"}
-            </Badge>
+            <GameResultBadge game={game} />
             <span className="font-mono text-text-dim">{fmtDate(game.date)}</span>
             <MacroCell value={game.macroScore ?? null} />
           </div>
@@ -291,6 +394,28 @@ function GameMobile({
         </div>
       ) : null}
     </li>
+  );
+}
+
+function GameResultBadge({ game }: { game: BuildRecentGame }) {
+  if (game.isResumedFromReplay) {
+    return (
+      <Badge
+        size="sm"
+        variant="neutral"
+        aria-label="Replay resume test; excluded from all statistics"
+      >
+        Replay resume
+      </Badge>
+    );
+  }
+
+  const result = (game.result || "").toString();
+  const isWin = ["win", "victory"].includes(result.toLowerCase());
+  return (
+    <Badge size="sm" variant={isWin ? "success" : "danger"}>
+      {isWin ? "Win" : "Loss"}
+    </Badge>
   );
 }
 

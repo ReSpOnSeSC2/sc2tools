@@ -45,6 +45,8 @@ describe("SeasonsService.list — mapPool wiring", () => {
     });
     const out = await svc.list();
     expect(out.mapPool).toEqual(["Atlas", "Border"]);
+    expect(out.mapPoolSource).toBe("liquipedia");
+    expect(out.mapPoolFetchedAt).toBe(1);
     expect(out.items.length).toBe(1);
     expect(out.current).toBe(60);
   });
@@ -63,6 +65,8 @@ describe("SeasonsService.list — mapPool wiring", () => {
     const out = await svc.list();
     expect(Array.isArray(out.mapPool)).toBe(true);
     expect(out.mapPool.length).toBeGreaterThan(0); // baked fallback present
+    expect(out.mapPoolSource).toBe("fallback");
+    expect(out.mapPoolFetchedAt).toBeNull();
   });
 
   test("returns mapPool even when SC2Pulse season fetch fails", async () => {
@@ -77,5 +81,25 @@ describe("SeasonsService.list — mapPool wiring", () => {
     expect(out.items).toEqual([]);
     expect(out.source).toBe("fallback");
     expect(out.mapPool).toEqual(["OnlyMap"]);
+    expect(out.mapPoolSource).toBe("liquipedia");
+  });
+
+  test("preserves persisted source metadata for current-pool consumers", async () => {
+    const fetchImpl = jest.fn(async () => pulseResponse(SAMPLE_PULSE_RESPONSE));
+    const persistedPool = {
+      async get() {
+        return {
+          maps: ["CurrentMap"],
+          source: "persisted",
+          fetchedAt: 12345,
+        };
+      },
+    };
+    const svc = new SeasonsService({ fetchImpl, ladderMapPool: persistedPool });
+
+    const out = await svc.list();
+    expect(out.mapPool).toEqual(["CurrentMap"]);
+    expect(out.mapPoolSource).toBe("persisted");
+    expect(out.mapPoolFetchedAt).toBe(12345);
   });
 });

@@ -39,6 +39,7 @@ import {
   type PersonalForm,
   type PulseGame,
   type PulseGamesPage,
+  type PulseLeak,
   type PulseResult,
   type VerifiedMmrDelta,
 } from "@/lib/ladderPulse";
@@ -243,6 +244,7 @@ function LatestDispatch({
   const opponent = clean(game.opponent?.displayName) || "Unknown opponent";
   const matchup = pulseMatchup(game);
   const leak = bestNamedLeak(game);
+  const leakSignal = leak ? formatLeakSignal(leak) : null;
   const recent = games
     .filter((row) => pulseResult(row.result) !== "unknown")
     .slice(0, RECENT_RAIL_SIZE);
@@ -311,16 +313,10 @@ function LatestDispatch({
             tone="cyan"
           />
         ) : null}
-        {leak ? (
+        {leakSignal ? (
           <SignalChip
-            label={[
-              leak.name,
-              finite(leak.mineral_cost)
-                ? `${Math.round(leak.mineral_cost!)} minerals`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+            label={leakSignal.label}
+            title={leakSignal.title}
             tone="warning"
           />
         ) : null}
@@ -686,6 +682,49 @@ function bestNamedLeak(game: PulseGame) {
         (finite(b.mineral_cost) ? b.mineral_cost! : -1) -
         (finite(a.mineral_cost) ? a.mineral_cost! : -1),
     )[0] ?? null;
+}
+
+/**
+ * `mineral_cost` is normally an estimated opportunity cost. For Mineral
+ * Float, however, the scorer uses it only as a ranking weight (high-bank
+ * sample count × 100). Presenting that weight as a literal mineral balance
+ * makes a 20-sample float look like a 2,000-mineral bank, so this signal uses
+ * the observed sample count instead.
+ */
+function formatLeakSignal(leak: PulseLeak): {
+  label: string;
+  title?: string;
+} {
+  const name = clean(leak.name) || "Macro leak";
+  const detail = clean(leak.detail) || undefined;
+
+  if (name.toLowerCase() === "mineral float") {
+    const samples =
+      finite(leak.quantity) && leak.quantity! >= 0
+        ? Math.round(leak.quantity!)
+        : null;
+    return {
+      label:
+        samples == null
+          ? name
+          : `${name} · ${samples.toLocaleString()} ${
+              samples === 1 ? "reading" : "readings"
+            } over 800 minerals`,
+      title: detail,
+    };
+  }
+
+  return {
+    label: [
+      name,
+      finite(leak.mineral_cost)
+        ? `${Math.round(leak.mineral_cost!)} minerals`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    title: detail,
+  };
 }
 
 function resultVariant(result: PulseResult): BadgeVariant {

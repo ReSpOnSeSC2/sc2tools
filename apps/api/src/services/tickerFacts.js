@@ -87,7 +87,7 @@ class TickerFactsService {
     try {
       rows = await this.db.games
         .find(
-          { userId },
+          { userId, isResumedFromReplay: { $ne: true } },
           {
             projection: {
               _id: 0,
@@ -538,7 +538,9 @@ class TickerFactsService {
     try {
       const agg = await this.db.games
         .aggregate([
-          { $match: { userId } },
+          {
+            $match: { userId, isResumedFromReplay: { $ne: true } },
+          },
           {
             $group: {
               _id: null,

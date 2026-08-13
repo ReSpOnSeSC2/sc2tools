@@ -38,9 +38,13 @@ interface ApiGamesPage {
 
 interface ApiSeasons {
   mapPool?: string[];
+  /** Emergency baked fallback is useful for games, but not current-veto advice. */
+  mapPoolSource?: "liquipedia" | "persisted" | "fallback";
+  mapPoolFetchedAt?: number | null;
 }
 
 const LS_COLLAPSED_KEY = "analyzer.pulse.collapsed";
+const CURRENT_POOL_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 
 function readCollapsed(): boolean {
   if (typeof window === "undefined") return false;
@@ -113,8 +117,25 @@ export function DailyPulse({
     [gamesRes.data],
   );
   const mapPool = useMemo(
-    () =>
-      Array.isArray(seasonsRes.data?.mapPool) ? seasonsRes.data!.mapPool : [],
+    () => {
+      const source = seasonsRes.data?.mapPoolSource;
+      if (source === "fallback") return [];
+      if (source === "persisted") {
+        const fetchedAt = seasonsRes.data?.mapPoolFetchedAt;
+        if (
+          typeof fetchedAt !== "number" ||
+          !Number.isFinite(fetchedAt) ||
+          Date.now() - fetchedAt > CURRENT_POOL_MAX_AGE_MS
+        ) {
+          return [];
+        }
+      } else if (source !== "liquipedia") {
+        return [];
+      }
+      return Array.isArray(seasonsRes.data?.mapPool)
+        ? seasonsRes.data!.mapPool
+        : [];
+    },
     [seasonsRes.data],
   );
 

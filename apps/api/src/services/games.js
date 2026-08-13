@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
@@ -89,6 +90,14 @@ class GamesService {
     const doc = { ...game, userId, date };
     delete doc._id;
     delete doc._schemaVersion;
+    // Resume markers are sticky, server-owned quarantine state. A normal
+    // replay upload (including an old client that explicitly sends false)
+    // must never clear a marker that was set by the resume detector.
+    for (const key of Object.keys(doc)) {
+      if (key === "isResumedFromReplay" || key.startsWith("resumedReplay")) {
+        delete doc[key];
+      }
+    }
     // ``replayFile`` is server-owned proof that the private object store
     // contains a verified original replay; ``replayUpload`` is its short-
     // lived signed-upload intent. Agent JSON is intentionally patch-like, so
@@ -186,6 +195,114 @@ class GamesService {
   }
 
   /**
+   * Quarantine a replay produced by SC2's "resume from replay" feature.
+   * Existing rows are patched in place so their original display metadata is
+   * preserved. Alias ids are marked only when they already belong to this
+   * user; the current marker row is the sole id that may be inserted.
+   *
+   * @param {string} userId
+   * @param {{gameId: string, date: string | Date, resumedReplayGameIds?: string[]} & Record<string, any>} game
+   * @returns {Promise<{
+   *   created: boolean,
+   *   newlyFlaggedExisting: number,
+   *   gameIds: string[],
+   * }>}
+   */
+  async quarantineResumedReplay(userId, game) {
+    if (!game || !game.gameId) throw new Error("gameId required");
+    const date = game.date instanceof Date ? game.date : new Date(game.date);
+    if (Number.isNaN(date.getTime())) throw new Error("invalid game.date");
+
+    const currentId = String(game.gameId);
+    const aliases = Array.isArray(game.resumedReplayGameIds)
+      ? game.resumedReplayGameIds
+      : [];
+    const gameIds = Array.from(
+      new Set(
+        [currentId, ...aliases]
+          .map((id) => String(id || "").trim().slice(0, 200))
+          .filter(Boolean),
+      ),
+    ).slice(0, 51);
+
+    /** @type {Record<string, any>} */
+    const insert = { userId, gameId: currentId, date };
+    for (const key of [
+      "startedAt",
+      "result",
+      "myRace",
+      "myLadderRace",
+      "myBuild",
+      "map",
+      "durationSec",
+      "macroScore",
+      "apm",
+      "spq",
+      "myToonHandle",
+      "playerCount",
+      "matchFormat",
+      "isLadderGame",
+      "gameVersion",
+      "gameBuild",
+      "opponent",
+    ]) {
+      if (game[key] !== undefined) insert[key] = game[key];
+    }
+    // A brand-new marker was never counted competitively, so it must not
+    // generate a compensating decrement. Existing rows were marked pending
+    // by the transition below and $setOnInsert leaves that state untouched.
+    insert.isResumedFromReplay = true;
+    insert.resumedReplayCounterRepairPending = false;
+    insert.resumedReplayMmrRepairPending = false;
+    insert.resumedReplayBoundaryRepairPending = false;
+    stampVersion(insert, COLLECTIONS.GAMES);
+    // Ensure the current id exists before transitioning competitive rows. If
+    // an old agent races this marker and inserts the same id first, its row is
+    // now visible to the transition below. If this upsert wins, the inserted
+    // audit-only row is already quarantined and correctly has no repair work.
+    const ensured = await this.db.games.updateOne(
+      { userId, gameId: currentId },
+      {
+        $setOnInsert: { ...insert, createdAt: new Date() },
+      },
+      { upsert: true },
+    );
+
+    // Existing competitive rows need durable repair work for three cached
+    // surfaces. Persist every work item on the game in the SAME transition
+    // that makes the quarantine flag sticky. A retry can therefore finish a
+    // partially-completed repair without relying on an in-memory date list.
+    const mmrRepairToken = crypto.randomUUID();
+    const marked = await this.db.games.updateMany(
+      {
+        userId,
+        gameId: { $in: gameIds },
+        isResumedFromReplay: { $ne: true },
+      },
+      {
+        $set: {
+          isResumedFromReplay: true,
+          resumedReplayCounterRepairPending: true,
+          resumedReplayMmrRepairPending: true,
+          resumedReplayMmrRepairToken: mmrRepairToken,
+          resumedReplayBoundaryRepairPending: true,
+        },
+        $unset: {
+          resumedReplayCounterRepairedAt: "",
+          resumedReplayMmrRepairedAt: "",
+          resumedReplayBoundaryRepairedAt: "",
+        },
+      },
+    );
+
+    return {
+      created: ensured.upsertedCount === 1,
+      newlyFlaggedExisting: Number(marked.matchedCount || 0),
+      gameIds,
+    };
+  }
+
+  /**
    * Page games by date, newest first. Optional opponent filter.
    *
    * @param {string} userId
@@ -194,7 +311,7 @@ class GamesService {
   async list(userId, opts = {}) {
     const limit = clampLimit(opts.limit, LIMITS.GAMES_LIST_DEFAULT);
     /** @type {Record<string, any>} */
-    const filter = { userId };
+    const filter = { userId, isResumedFromReplay: { $ne: true } };
     if (opts.oppPulseId) filter.oppPulseId = opts.oppPulseId;
     if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
       filter.date = { $lt: opts.before };
@@ -245,7 +362,11 @@ class GamesService {
 
     const rows = await this.db.games
       .find(
-        { userId, gameId: { $in: ids } },
+        {
+          userId,
+          gameId: { $in: ids },
+          isResumedFromReplay: { $ne: true },
+        },
         { projection: { _id: 0, replayUpload: 0 } },
       )
       .toArray();
@@ -264,9 +385,10 @@ class GamesService {
    * @returns {Promise<{total: number, latest: Date|null}>}
    */
   async stats(userId) {
-    const total = await this.db.games.countDocuments({ userId });
+    const competitive = { userId, isResumedFromReplay: { $ne: true } };
+    const total = await this.db.games.countDocuments(competitive);
     const latest = await this.db.games
-      .find({ userId }, { projection: { date: 1, _id: 0 } })
+      .find(competitive, { projection: { date: 1, _id: 0 } })
       .sort({ date: -1 })
       .limit(1)
       .toArray();
@@ -293,9 +415,13 @@ class GamesService {
    */
   async replayArchiveStatus(userId) {
     const [totalGames, archivedGames] = await Promise.all([
-      this.db.games.countDocuments({ userId }),
       this.db.games.countDocuments({
         userId,
+        isResumedFromReplay: { $ne: true },
+      }),
+      this.db.games.countDocuments({
+        userId,
+        isResumedFromReplay: { $ne: true },
         "replayFile.storedAt": { $exists: true },
       }),
     ]);
@@ -329,6 +455,7 @@ class GamesService {
       {
         $match: {
           userId,
+          isResumedFromReplay: { $ne: true },
           myToonHandle: { $exists: true, $type: "string", $ne: "" },
         },
       },
@@ -401,7 +528,11 @@ class GamesService {
     const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.db.games
       .find(
-        { userId, date: { $gte: cutoff } },
+        {
+          userId,
+          date: { $gte: cutoff },
+          isResumedFromReplay: { $ne: true },
+        },
         {
           projection: {
             _id: 0,
@@ -619,7 +750,11 @@ class GamesService {
     if (mmrCurrent === undefined) {
       try {
         const newest = await this.db.games.findOne(
-          { userId, myMmr: { $exists: true, $type: "number" } },
+          {
+            userId,
+            isResumedFromReplay: { $ne: true },
+            myMmr: { $exists: true, $type: "number" },
+          },
           {
             projection: { _id: 0, myMmr: 1 },
             sort: { date: -1 },

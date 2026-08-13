@@ -132,6 +132,14 @@ describe("ladder meta radar", () => {
       ...bucket({ build: A, count: 10, wins: 10, extra: { playerCount: 4 } }),
       ...bucket({ build: A, count: 8, wins: 8, myRace: "Random" }),
       ...bucket({ build: A, count: 8, wins: 8, leagueId: null }),
+      // Resume-from-replay results are synthetic; they remain stored for an
+      // opt-in audit view but must never enter the cross-user meta corpus.
+      ...bucket({
+        build: A,
+        count: 3,
+        wins: 3,
+        extra: { isResumedFromReplay: true },
+      }),
       // separate band, below the games floor -> suppressed
       ...bucket({ build: B, count: 20, wins: 10, leagueId: MASTER }),
     ];

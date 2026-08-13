@@ -229,7 +229,7 @@ class StrategyPhasesService {
    */
   async latestGameDateMs(userId) {
     const doc = await /** @type {any} */ (this.db).games.findOne(
-      { userId },
+      { userId, isResumedFromReplay: { $ne: true } },
       { projection: { _id: 0, date: 1 }, sort: { date: -1 } },
     );
     if (!doc || !doc.date) return 0;

@@ -260,6 +260,35 @@ export function decidedWinrate(wins: number, losses: number): number {
   return decided > 0 ? wins / decided : 0;
 }
 
+/**
+ * Comparison key for live-pool names and replay-authored map names.
+ * Liquipedia serves names such as "Fear and Faith", while replays commonly
+ * append edition tags such as "LE". Roman numerals and the rest of the map
+ * name remain significant, so Sanctuary II never aliases Sanctuary III.
+ */
+function currentMapPoolKey(value: unknown): string {
+  const tokens = String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['\u2019]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (tokens.length >= 3 && tokens.slice(-2).join(" ") === "ladder edition") {
+    tokens.splice(-2);
+  } else if (
+    tokens.length >= 2 &&
+    ["le", "te", "ce", "re"].includes(tokens.at(-1)!)
+  ) {
+    tokens.pop();
+  }
+  return tokens.join("");
+}
+
 /** Shift a "YYYY-MM-DD" key by whole days (keys are tz-local already). */
 export function shiftDateKey(dateKey: string, days: number): string {
   const anchor = Date.parse(`${dateKey}T00:00:00Z`);
@@ -627,18 +656,26 @@ function buildBestMap(
   mapPool: ReadonlyArray<string>,
 ): PulseMapStat | null {
   const mapCutoff = cutoff(MAP_WINDOW_DAYS);
-  const poolLower = new Set(mapPool.map((m) => m.trim().toLowerCase()));
+  const poolKeys = new Set(
+    mapPool.map(currentMapPoolKey).filter((key) => key.length > 0),
+  );
+  // Queue advice must be actionable. If the current pool is unavailable,
+  // fail closed instead of crowning a retired map from recent history.
+  if (poolKeys.size === 0) return null;
+
   const byMap = new Map<string, { name: string; wins: number; losses: number }>();
   for (const r of ordered) {
     if (r.t < mapCutoff) continue;
     const name = typeof r.g.map === "string" ? r.g.map.trim() : "";
     if (!name) continue;
+    const mapKey = currentMapPoolKey(name);
+    if (!mapKey || !poolKeys.has(mapKey)) continue;
     const o = outcome(r.g);
     if (o === "U") continue;
-    let rec = byMap.get(name.toLowerCase());
+    let rec = byMap.get(mapKey);
     if (!rec) {
       rec = { name, wins: 0, losses: 0 };
-      byMap.set(name.toLowerCase(), rec);
+      byMap.set(mapKey, rec);
     }
     if (o === "W") rec.wins += 1;
     else rec.losses += 1;
@@ -651,16 +688,18 @@ function buildBestMap(
     if (decided < MAP_EDGE_MIN_DECIDED) continue;
     const winRate = decidedWinrate(rec.wins, rec.losses);
     if (winRate < MAP_EDGE_MIN_WINRATE) continue;
-    const inPool = poolLower.has(rec.name.toLowerCase());
-    const candidate: PulseMapStat = { name: rec.name, decided, winRate, inPool };
-    // Prefer maps in the live pool ("queue thought" must be actionable),
-    // then higher winrate, then more games.
+    const candidate: PulseMapStat = {
+      name: rec.name,
+      decided,
+      winRate,
+      inPool: true,
+    };
+    // Every candidate is in the live pool; choose the strongest supported
+    // edge, then the one backed by more games.
     if (
       !best ||
-      (candidate.inPool && !best.inPool) ||
-      (candidate.inPool === best.inPool &&
-        (candidate.winRate > best.winRate ||
-          (candidate.winRate === best.winRate && candidate.decided > best.decided)))
+      candidate.winRate > best.winRate ||
+      (candidate.winRate === best.winRate && candidate.decided > best.decided)
     ) {
       best = candidate;
     }

@@ -150,7 +150,12 @@ describe("services/streak", () => {
       });
       const svc = new StreakService({ games });
       await svc.current("u1", {});
-      expect(captured[0]).toEqual({ $match: { userId: "u1" } });
+      expect(captured[0]).toEqual({
+        $match: {
+          userId: "u1",
+          isResumedFromReplay: { $ne: true },
+        },
+      });
       expect(captured[1]).toEqual({ $sort: { date: -1 } });
       expect(captured[2]).toEqual({ $limit: STREAK_SCAN_LIMIT });
     });

@@ -146,7 +146,7 @@ function parseRegionList(raw) {
  */
 function gamesMatchStage(userId, filters) {
   /** @type {Record<string, any>} */
-  const match = { userId };
+  const match = { userId, isResumedFromReplay: { $ne: true } };
   const f = filters || {};
   if (f.since || f.until) {
     /** @type {Record<string, Date>} */

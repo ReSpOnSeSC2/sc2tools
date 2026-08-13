@@ -212,6 +212,49 @@ describe("/v1/me/profile", () => {
     expect(got.body.lastKnownMmrRegion).toBe("NA");
   });
 
+  test("POST /v1/me/last-mmr validates the exact source game when gameId is sent", async () => {
+    const user = await db.users.findOne({ clerkUserId: "clerk_user_a" });
+    const sharedDate = new Date("2026-05-08T10:00:00.000Z");
+    await db.games.insertMany([
+      {
+        userId: user.userId,
+        gameId: "mmr-source-real",
+        date: sharedDate,
+      },
+      {
+        userId: user.userId,
+        gameId: "mmr-source-resumed",
+        date: sharedDate,
+        isResumedFromReplay: true,
+      },
+    ]);
+
+    const accepted = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({
+        mmr: 4730,
+        capturedAt: sharedDate.toISOString(),
+        region: "NA",
+        gameId: "mmr-source-real",
+      })
+      .set("content-type", "application/json");
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.wrote).toBe(true);
+
+    const rejected = await withAuth(request(app).post("/v1/me/last-mmr"))
+      .send({
+        mmr: 4999,
+        capturedAt: sharedDate.toISOString(),
+        region: "EU",
+        gameId: "mmr-source-resumed",
+      })
+      .set("content-type", "application/json");
+    expect(rejected.status).toBe(200);
+    expect(rejected.body.wrote).toBe(false);
+    const profile = await withAuth(request(app).get("/v1/me/profile"));
+    expect(profile.body.lastKnownMmr).toBe(4730);
+    expect(profile.body.lastKnownMmrRegion).toBe("NA");
+  });
+
   test("POST /v1/me/last-mmr is idempotent when the value hasn't changed", async () => {
     // First push lands the value.
     await withAuth(request(app).post("/v1/me/last-mmr"))

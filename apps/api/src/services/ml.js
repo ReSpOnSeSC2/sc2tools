@@ -323,6 +323,7 @@ class MLService {
       .find(
         {
           userId,
+          isResumedFromReplay: { $ne: true },
           myRace: { $exists: true },
           "opponent.race": { $exists: true },
         },

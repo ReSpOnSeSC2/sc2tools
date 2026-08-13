@@ -311,7 +311,9 @@ function buildMeRouter(deps) {
    * focused route is cleaner and lets the validation schema reject
    * any extra fields outright.
    *
-   * Body: ``{ mmr: number, capturedAt?: string, region?: string }``.
+   * Body: ``{ mmr: number, capturedAt?: string, region?: string,
+   * gameId?: string }``. New agents send the source replay id so a
+   * quarantined replay can never republish its synthetic MMR.
    * The service drops the request silently when ``mmr`` is outside the
    * [500, 9999] band so a pasted-by-mistake league enum (Bronze=0..GM=7)
    * can't poison the cache.
@@ -326,12 +328,15 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_mmr" } });
         return;
       }
-      /** @type {{mmr: number, capturedAt?: string, region?: string}} */
+      /** @type {{mmr: number, capturedAt?: string, region?: string, gameId?: string}} */
       const update = { mmr };
       if (typeof body.capturedAt === "string") {
         update.capturedAt = body.capturedAt;
       }
       if (typeof body.region === "string") update.region = body.region;
+      if (typeof body.gameId === "string" && body.gameId.trim()) {
+        update.gameId = body.gameId.trim().slice(0, 200);
+      }
       const wrote = await deps.users.patchLastKnownMmr(auth.userId, update);
       res.json({ ok: true, wrote });
     } catch (err) {

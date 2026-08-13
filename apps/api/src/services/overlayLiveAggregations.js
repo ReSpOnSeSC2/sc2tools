@@ -94,7 +94,10 @@ function escapeRegex(s) {
  */
 async function computeStreak(games, userId) {
   const recent = await games
-    .find({ userId }, { projection: { _id: 0, result: 1, date: 1 } })
+    .find(
+      { userId, isResumedFromReplay: { $ne: true } },
+      { projection: { _id: 0, result: 1, date: 1 } },
+    )
     .sort({ date: -1 })
     .limit(20)
     .toArray()
@@ -144,6 +147,7 @@ async function previousGameMmr(games, userId, excludeGameId, beforeDate, context
   /** @type {Record<string, any>} */
   const filter = {
     userId,
+    isResumedFromReplay: { $ne: true },
     myMmr: { $type: "number" },
     // Only replay-verified ratings may anchor a delta — quarantined
     // legacy numerics (retired current-Pulse pollution) are excluded
@@ -205,7 +209,7 @@ async function previousGameMmr(games, userId, excludeGameId, beforeDate, context
 async function recentGamesForOpponent(games, userId, opp, myRace, oppRace, excludeGameId) {
   if (!opp) return [];
   /** @type {Record<string, any>} */
-  const filter = { userId };
+  const filter = { userId, isResumedFromReplay: { $ne: true } };
   const attached = attachOpponentIdsToFilter(filter, {
     pulseId: opp.pulseId,
     pulseCharacterId: opp.pulseCharacterId,
@@ -282,6 +286,7 @@ async function topBuildsForMatchup(games, userId, myRace, oppRace) {
     {
       $match: {
         userId,
+        isResumedFromReplay: { $ne: true },
         myBuild: { $type: "string", $ne: "" },
         $expr: {
           $and: [
@@ -336,6 +341,7 @@ async function bestAnswerVsStrategy(games, userId, myRace, oppRace, strategy) {
     {
       $match: {
         userId,
+        isResumedFromReplay: { $ne: true },
         myBuild: { $type: "string", $ne: "" },
         "opponent.strategy": strategy,
         $expr: {
@@ -394,6 +400,7 @@ async function metaForMatchup(games, userId, myRace, oppRace) {
     {
       $match: {
         userId,
+        isResumedFromReplay: { $ne: true },
         "opponent.strategy": { $type: "string", $ne: "" },
         $expr: {
           $and: [
@@ -450,7 +457,7 @@ async function metaForMatchup(games, userId, myRace, oppRace) {
 async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, oppRace) {
   if (!opp) return null;
   /** @type {Record<string, any>} */
-  const filter = { userId };
+  const filter = { userId, isResumedFromReplay: { $ne: true } };
   const attached = attachOpponentIdsToFilter(filter, {
     pulseId: opp.pulseId,
     pulseCharacterId: opp.pulseCharacterId,
@@ -604,7 +611,7 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
 async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRace) {
   if (!opp) return [];
   /** @type {Record<string, any>} */
-  const filter = { userId };
+  const filter = { userId, isResumedFromReplay: { $ne: true } };
   const attached = attachOpponentIdsToFilter(filter, {
     pulseId: opp.pulseId,
     pulseCharacterId: opp.pulseCharacterId,

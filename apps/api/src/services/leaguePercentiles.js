@@ -248,6 +248,7 @@ function buildRecomputePipeline() {
   return [
     {
       $match: {
+        isResumedFromReplay: { $ne: true },
         "opponent.leagueId": { $type: "number" },
         myRace: { $type: "string" },
         "opponent.race": { $type: "string" },

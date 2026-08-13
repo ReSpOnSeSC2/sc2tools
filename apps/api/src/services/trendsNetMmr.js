@@ -83,7 +83,7 @@ function netMmrPairStages(deps, userId, filters) {
     // Window over complete per-user history. Applying opponent, map,
     // build, or date filters here would make non-consecutive rows look
     // consecutive and attribute their combined drift to one game.
-    { $match: { userId } },
+    { $match: { userId, isResumedFromReplay: { $ne: true } } },
     {
       $addFields: {
         _bucket: deps.bucketSwitch(),

@@ -292,6 +292,7 @@ function loadWindow(games, userId, mu) {
     .find(
       {
         userId,
+        isResumedFromReplay: { $ne: true },
         myRace: { $regex: `^${mu[0]}`, $options: "i" },
         "opponent.race": { $regex: `^${mu[2]}`, $options: "i" },
         $or: [{ playerCount: { $exists: false } }, { playerCount: 2 }],

@@ -194,6 +194,39 @@ function pulseFake(responses = {}) {
     expect(row.opponent).not.toHaveProperty("mmr");
   });
 
+  test("does not enrich quarantined resume-from-replay rows", async () => {
+    await db.games.insertMany([
+      game("competitive-521", { pulseCharacterId: "521" }),
+      game(
+        "resumed-522",
+        { pulseCharacterId: "522" },
+        { isResumedFromReplay: true },
+      ),
+    ]);
+    const pulse = pulseFake({
+      521: [{ race: "PROTOSS", mmr: 4521, league: "Master" }],
+      522: [{ race: "PROTOSS", mmr: 4522, league: "Master" }],
+    });
+
+    await build(pulse).runOnce();
+
+    expect(pulse.calls).toEqual(["521"]);
+    expect(await db.games.findOne({ gameId: "competitive-521" }))
+      .toMatchObject({
+        opponent: {
+          mmr: 4521,
+          mmrLookupAttempted: true,
+          leagueLookupAttempted: true,
+        },
+      });
+    expect(await db.games.findOne({ gameId: "resumed-522" }))
+      .toMatchObject({
+        opponent: { pulseCharacterId: "522" },
+      });
+    expect(await db.games.findOne({ gameId: "resumed-522" }))
+      .not.toHaveProperty("opponent.mmrLookupAttempted");
+  });
+
   test("server-owned MMR and league fields survive an agent re-upload", async () => {
     const games = new GamesService(db);
     await games.upsert("user-1", {

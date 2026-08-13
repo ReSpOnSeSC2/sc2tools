@@ -345,61 +345,7 @@ class GdprService {
    */
   async rebuildOpponentsForUser(userId) {
     const dropped = await this.db.opponents.deleteMany({ userId });
-    const cursor = this.db.games.find(
-      { userId, "opponent.pulseId": { $exists: true, $ne: "" } },
-      {
-        projection: {
-          _id: 0,
-          gameId: 1,
-          date: 1,
-          result: 1,
-          opponent: 1,
-        },
-      },
-    );
-    /** @type {Map<string, any>} */
-    const buckets = new Map();
-    for await (const g of cursor) {
-      const opp = g.opponent || {};
-      const pulseId = opp.pulseId;
-      if (typeof pulseId !== "string" || !pulseId) continue;
-      const playedAt = g.date instanceof Date ? g.date : new Date(g.date);
-      let bucket = buckets.get(pulseId);
-      if (!bucket) {
-        bucket = {
-          userId,
-          pulseId,
-          displayNameSample: opp.displayName || "",
-          race: opp.race || "U",
-          firstSeen: playedAt,
-          lastSeen: playedAt,
-          gameCount: 0,
-          wins: 0,
-          losses: 0,
-          openings: /** @type {Record<string, number>} */ ({}),
-          mmr: typeof opp.mmr === "number" ? opp.mmr : undefined,
-          leagueId: typeof opp.leagueId === "number" ? opp.leagueId : undefined,
-          toonHandle: typeof opp.toonHandle === "string" ? opp.toonHandle : undefined,
-          pulseCharacterId:
-            typeof opp.pulseCharacterId === "string" ? opp.pulseCharacterId : undefined,
-        };
-        buckets.set(pulseId, bucket);
-      }
-      bucket.gameCount += 1;
-      if (g.result === "Victory") bucket.wins += 1;
-      else if (g.result === "Defeat") bucket.losses += 1;
-      if (playedAt < bucket.firstSeen) bucket.firstSeen = playedAt;
-      if (playedAt > bucket.lastSeen) {
-        bucket.lastSeen = playedAt;
-        // Keep the most recent display-name sample.
-        if (opp.displayName) bucket.displayNameSample = opp.displayName;
-        if (opp.race) bucket.race = opp.race;
-      }
-      if (opp.opening) {
-        const k = String(opp.opening).replace(/[.$ ]/g, "_");
-        bucket.openings[k] = (bucket.openings[k] || 0) + 1;
-      }
-    }
+    const buckets = await this._competitiveOpponentBuckets(userId);
     if (buckets.size > 0) {
       const docs = [];
       for (const b of buckets.values()) {
@@ -445,6 +391,80 @@ class GdprService {
       await this.db.opponents.insertMany(docs, { ordered: false });
     }
     return dropped.deletedCount || 0;
+  }
+
+  /**
+   * @private
+   * @param {string} userId
+   * @returns {Promise<Map<string, any>>}
+   */
+  async _competitiveOpponentBuckets(userId) {
+    const cursor = this.db.games.find(
+      {
+        userId,
+        isResumedFromReplay: { $ne: true },
+        "opponent.pulseId": { $exists: true, $ne: "" },
+      },
+      {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          date: 1,
+          result: 1,
+          opponent: 1,
+        },
+      },
+    );
+    /** @type {Map<string, any>} */
+    const buckets = new Map();
+    for await (const g of cursor) {
+      const opp = g.opponent || {};
+      const pulseId = opp.pulseId;
+      if (typeof pulseId !== "string" || !pulseId) continue;
+      const playedAt = g.date instanceof Date ? g.date : new Date(g.date);
+      if (Number.isNaN(playedAt.getTime())) continue;
+      let bucket = buckets.get(pulseId);
+      if (!bucket) {
+        bucket = {
+          userId,
+          pulseId,
+          displayNameSample: opp.displayName || "",
+          race: opp.race || "U",
+          firstSeen: playedAt,
+          lastSeen: playedAt,
+          gameCount: 0,
+          wins: 0,
+          losses: 0,
+          openings: /** @type {Record<string, number>} */ ({}),
+          mmr: typeof opp.mmr === "number" ? opp.mmr : undefined,
+          leagueId: typeof opp.leagueId === "number" ? opp.leagueId : undefined,
+          toonHandle: typeof opp.toonHandle === "string" ? opp.toonHandle : undefined,
+          pulseCharacterId:
+            typeof opp.pulseCharacterId === "string" ? opp.pulseCharacterId : undefined,
+        };
+        buckets.set(pulseId, bucket);
+      }
+      bucket.gameCount += 1;
+      if (g.result === "Victory") bucket.wins += 1;
+      else if (g.result === "Defeat") bucket.losses += 1;
+      if (playedAt < bucket.firstSeen) bucket.firstSeen = playedAt;
+      if (playedAt > bucket.lastSeen) {
+        bucket.lastSeen = playedAt;
+        if (opp.displayName) bucket.displayNameSample = opp.displayName;
+        if (opp.race) bucket.race = opp.race;
+        if (typeof opp.mmr === "number") bucket.mmr = opp.mmr;
+        if (typeof opp.leagueId === "number") bucket.leagueId = opp.leagueId;
+        if (typeof opp.toonHandle === "string") bucket.toonHandle = opp.toonHandle;
+        if (typeof opp.pulseCharacterId === "string") {
+          bucket.pulseCharacterId = opp.pulseCharacterId;
+        }
+      }
+      if (opp.opening) {
+        const k = String(opp.opening).replace(/[.$ ]/g, "_");
+        bucket.openings[k] = (bucket.openings[k] || 0) + 1;
+      }
+    }
+    return buckets;
   }
 
   /**

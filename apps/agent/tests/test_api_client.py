@@ -61,6 +61,30 @@ def test_upload_game_sends_bearer() -> None:
     assert kwargs["headers"]["authorization"] == "Bearer tok"
 
 
+def test_patch_last_mmr_identifies_source_game() -> None:
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch(
+        "requests.request",
+        return_value=_mock_response(200, {"ok": True, "wrote": True}),
+    ) as request_mock:
+        api.patch_last_mmr(
+            mmr=4730,
+            captured_at="2026-05-07T10:00:00Z",
+            region="NA",
+            game_id="2026-05-07T10:00:00|Opponent|Map|600",
+        )
+
+    args, kwargs = request_mock.call_args
+    assert args[:2] == ("POST", "http://x/v1/me/last-mmr")
+    assert kwargs["json"] == {
+        "mmr": 4730,
+        "capturedAt": "2026-05-07T10:00:00Z",
+        "region": "NA",
+        "gameId": "2026-05-07T10:00:00|Opponent|Map|600",
+    }
+    assert kwargs["headers"]["authorization"] == "Bearer tok"
+
+
 def test_upload_replay_file_uses_signed_put_and_completes(
     tmp_path: Path,
 ) -> None:

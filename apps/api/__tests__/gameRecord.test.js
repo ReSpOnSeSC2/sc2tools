@@ -14,6 +14,36 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  test("accepts a bounded resume marker with unique game-id aliases", () => {
+    const r = validateGameRecord({
+      gameId: "resume-3",
+      date: "2026-08-10T03:57:19.000Z",
+      result: "Victory",
+      myRace: "Zerg",
+      map: "Old Sun Temple LE",
+      isResumedFromReplay: true,
+      resumedReplayGameIds: ["resume-1", "resume-2"],
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  test.each([
+    { isResumedFromReplay: "true" },
+    { resumedReplayGameIds: ["same", "same"] },
+    { resumedReplayGameIds: Array.from({ length: 51 }, (_, i) => `g-${i}`) },
+    { resumedReplayGameIds: [""] },
+  ])("rejects malformed resume marker fields: %j", (fields) => {
+    const r = validateGameRecord({
+      gameId: "resume-invalid",
+      date: "2026-08-10T03:57:19.000Z",
+      result: "Victory",
+      myRace: "Zerg",
+      map: "Old Sun Temple LE",
+      ...fields,
+    });
+    expect(r.valid).toBe(false);
+  });
+
   test.each(["1v1", "team", "ffa", "other"])(
     "accepts and preserves matchFormat=%s",
     (matchFormat) => {

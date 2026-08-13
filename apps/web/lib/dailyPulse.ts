@@ -417,7 +417,7 @@ export const PULSE_POOL: PulseSpec[] = [
   {
     id: "map-edge",
     category: "map",
-    requires: `A map with ≥${MAP_EDGE_MIN_DECIDED} decided games at ≥${Math.round(MAP_EDGE_MIN_WINRATE * 100)}% in ${MAP_WINDOW_DAYS} days.`,
+    requires: `A current-pool map with ≥${MAP_EDGE_MIN_DECIDED} decided games at ≥${Math.round(MAP_EDGE_MIN_WINRATE * 100)}% in ${MAP_WINDOW_DAYS} days.`,
     timely: false,
     weight: 50,
     eligible: (ctx) => ctx.bestMap !== null,
@@ -429,7 +429,7 @@ export const PULSE_POOL: PulseSpec[] = [
         tone: "positive",
         kicker: "Queue thought",
         title: `${m.name} is your happy place`,
-        body: `${pctLabel(m.winRate)} over ${m.decided} recent games${m.inPool ? " — and it's in the current pool, so spend your vetoes elsewhere" : ""}.`,
+        body: `${pctLabel(m.winRate)} over ${m.decided} recent games — and it's in the current pool, so spend your vetoes elsewhere.`,
         stat: pctLabel(m.winRate),
         statLabel: `${m.decided} recent decided`,
         targetTab: "battlefield",

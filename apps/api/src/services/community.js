@@ -598,12 +598,16 @@ class CommunityService {
     /** @type {Record<string, any>} */
     const filter = pulseCharacterId
       ? {
+          isResumedFromReplay: { $ne: true },
           $or: [
             { "opponent.pulseId": pulseId },
             { "opponent.pulseCharacterId": pulseCharacterId },
           ],
         }
-      : { "opponent.pulseId": pulseId };
+      : {
+          isResumedFromReplay: { $ne: true },
+          "opponent.pulseId": pulseId,
+        };
     // Check the k-anonymity floor BEFORE materializing rows. This is a
     // public, unauthenticated endpoint: for a heavily-faced opponent
     // (a pro / streamer) the old load-then-count shape let any

@@ -263,6 +263,7 @@ class OpponentsService {
     // ``lastSeen`` so pagination is consistent with the
     // ``{ lastSeen: -1 }`` sort above.
     const nextBefore = hasMore ? page[page.length - 1].lastSeen : null;
+    for (const row of page) delete row._resumeReplayCounterRepairIds;
     // Self-heal ``displayNameSample`` and ``lastSeen`` from the games
     // collection. The row's stored values are whatever the most recent
     // ingest wrote — which the May-2026 write guard now keeps in sync,
@@ -557,6 +558,7 @@ class OpponentsService {
       {
         $match: {
           userId,
+          isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
           "opponent.displayName": { $type: "string", $ne: "" },
         },
@@ -645,7 +647,13 @@ class OpponentsService {
     /** @type {Map<string, string>} */
     const latestRaceByPulse = new Map();
     const raceCursor = this.db.games.aggregate([
-      { $match: { userId, "opponent.pulseId": { $in: pulseIds } } },
+      {
+        $match: {
+          userId,
+          isResumedFromReplay: { $ne: true },
+          "opponent.pulseId": { $in: pulseIds },
+        },
+      },
       { $sort: { date: -1 } },
       {
         $group: {
@@ -671,6 +679,7 @@ class OpponentsService {
       {
         $match: {
           userId,
+          isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
           "opponent.mmr": { $type: "number" },
         },
@@ -833,6 +842,7 @@ class OpponentsService {
       {
         $match: {
           userId,
+          isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
         },
       },
@@ -1089,6 +1099,7 @@ class OpponentsService {
       { projection: { _id: 0 } },
     );
     if (!doc) return null;
+    delete doc._resumeReplayCounterRepairIds;
     // Match games against either identity field. The opponents row
     // stores the canonical SC2Pulse character id; if a player ever
     // rebound their Battle.net (rotating the toon_handle while
@@ -1107,6 +1118,7 @@ class OpponentsService {
     const linked = opts.mergeLinked
       ? await this._resolveLinkedIdentities(userId, doc)
       : null;
+    /** @type {Record<string, any>} */
     const gamesFilter = linked
       ? {
           userId,
@@ -1118,6 +1130,7 @@ class OpponentsService {
       : idsFilter
         ? { userId, ...idsFilter }
         : { userId, "opponent.pulseId": pulseId };
+    gamesFilter.isResumedFromReplay = { $ne: true };
     /** @type {Array<any>} */
     const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
@@ -1570,7 +1583,11 @@ class OpponentsService {
     }
     await this.db.opponents.updateOne(
       { userId, pulseId: game.pulseId },
-      { $setOnInsert: setOnInsert, $set: set, $inc: inc },
+      {
+        $setOnInsert: setOnInsert,
+        $set: set,
+        $inc: inc,
+      },
       { upsert: true },
     );
     if (pulseCharIdChange) {
@@ -1594,6 +1611,239 @@ class OpponentsService {
       mmr: typeof set.mmr === "number" ? set.mmr : null,
       region: typeof set.region === "string" ? set.region : null,
     };
+  }
+
+  /**
+   * Reverse cached opponent counters for legacy games that were newly
+   * quarantined as Resume-from-Replay artifacts.
+   *
+   * Counter reversal and first/last-seen cleanup carry separate durable
+   * pending bits. The opponent row receives a game-id token in the same
+   * atomic update as its decrement, making counter retries exactly-once.
+   * Boundary cleanup remains retryable until every derived metadata write
+   * succeeds, so a failure after the decrement cannot leave a synthetic
+   * lastSeen/name behind permanently.
+   *
+   * @param {string} userId
+   * @returns {Promise<number>} number of pending game repairs completed
+   */
+  async repairResumedReplayCountersForUser(userId) {
+    const pending = await this.db.games
+      .find(
+        {
+          userId,
+          isResumedFromReplay: true,
+          $or: [
+            { resumedReplayCounterRepairPending: true },
+            { resumedReplayBoundaryRepairPending: true },
+          ],
+        },
+        {
+          projection: {
+            _id: 1,
+            gameId: 1,
+            date: 1,
+            result: 1,
+            oppPulseId: 1,
+            opponent: 1,
+            resumedReplayCounterRepairPending: 1,
+            resumedReplayBoundaryRepairPending: 1,
+          },
+        },
+      )
+      .toArray();
+    if (pending.length === 0) return 0;
+
+    /** @type {Map<string, {dates: Date[], rowIds: any[]}>} */
+    const boundaryByPulseId = new Map();
+    /** @type {any[]} */
+    const boundaryNoopRowIds = [];
+    const completedRowIds = new Set();
+    for (const game of pending) {
+      const nestedPulseId = game?.opponent?.pulseId;
+      const pulseId =
+        typeof nestedPulseId === "string" && nestedPulseId
+          ? nestedPulseId
+          : (typeof game.oppPulseId === "string" && game.oppPulseId
+            ? game.oppPulseId
+            : null);
+      const gameId =
+        typeof game.gameId === "string" && game.gameId
+          ? game.gameId
+          : String(game._id);
+
+      if (game.resumedReplayCounterRepairPending === true && pulseId) {
+        /** @type {Record<string, any>} */
+        const corrected = {
+          gameCount: decrementFloorExpr("$gameCount", 1),
+          _resumeReplayCounterRepairIds: {
+            $setUnion: [
+              { $ifNull: ["$_resumeReplayCounterRepairIds", []] },
+              [gameId],
+            ],
+          },
+        };
+        const result = String(game.result || "").toLowerCase();
+        if (result === "victory" || result === "win") {
+          corrected.wins = decrementFloorExpr("$wins", 1);
+        } else if (result === "defeat" || result === "loss") {
+          corrected.losses = decrementFloorExpr("$losses", 1);
+        }
+        const opening = game?.opponent?.opening;
+        if (typeof opening === "string" && opening) {
+          const openingPath = `openings.${sanitizeKey(opening)}`;
+          corrected[openingPath] = decrementFloorExpr(`$${openingPath}`, 1);
+        }
+
+        await this.db.opponents.updateOne(
+          {
+            userId,
+            pulseId,
+            _resumeReplayCounterRepairIds: { $ne: gameId },
+          },
+          [{ $set: corrected }],
+        );
+      }
+
+      // Marking the game after the atomic opponent update makes an ambiguous
+      // network failure safe: the retained opponent token suppresses a second
+      // decrement on retry, then this completion write can finish normally.
+      if (game.resumedReplayCounterRepairPending === true) {
+        await this.db.games.updateOne(
+          {
+            _id: game._id,
+            userId,
+            resumedReplayCounterRepairPending: true,
+          },
+          {
+            $set: {
+              resumedReplayCounterRepairPending: false,
+              resumedReplayCounterRepairedAt: new Date(),
+            },
+          },
+        );
+        completedRowIds.add(String(game._id));
+      }
+
+      if (game.resumedReplayBoundaryRepairPending === true) {
+        const playedAt = game.date instanceof Date
+          ? game.date
+          : new Date(game.date);
+        if (!pulseId || Number.isNaN(playedAt.getTime())) {
+          // No opponent identity/date means this game could not have supplied
+          // a cached first/last-seen boundary. Complete that independent work
+          // item without blocking counter repair.
+          boundaryNoopRowIds.push(game._id);
+          continue;
+        }
+        const group = boundaryByPulseId.get(pulseId) || {
+          dates: [],
+          rowIds: [],
+        };
+        group.dates.push(playedAt);
+        group.rowIds.push(game._id);
+        boundaryByPulseId.set(pulseId, group);
+      }
+    }
+
+    if (boundaryNoopRowIds.length > 0) {
+      await this.db.games.updateMany(
+        {
+          _id: { $in: boundaryNoopRowIds },
+          userId,
+          resumedReplayBoundaryRepairPending: true,
+        },
+        {
+          $set: {
+            resumedReplayBoundaryRepairPending: false,
+            resumedReplayBoundaryRepairedAt: new Date(),
+          },
+        },
+      );
+      for (const rowId of boundaryNoopRowIds) {
+        completedRowIds.add(String(rowId));
+      }
+    }
+
+    // Repair first/last-seen only when the cached boundary still points at a
+    // removed session. Conditional writes preserve a concurrent real game's
+    // newer metadata. A resume-only identity is removed with a gameCount
+    // guard; a concurrent real ingest either prevents that delete or safely
+    // recreates the row with its own metadata and counter. Clear the boundary
+    // work item only AFTER these writes succeed; retrying the whole group is
+    // idempotent if a previous attempt failed part-way through.
+    for (const [pulseId, boundary] of boundaryByPulseId) {
+      const competitive = {
+        userId,
+        isResumedFromReplay: { $ne: true },
+        $or: [
+          { "opponent.pulseId": pulseId },
+          { oppPulseId: pulseId },
+        ],
+      };
+      const [oldest, newest] = await Promise.all([
+        this.db.games.findOne(competitive, {
+          projection: { _id: 0, date: 1, opponent: 1 },
+          sort: { date: 1 },
+        }),
+        this.db.games.findOne(competitive, {
+          projection: { _id: 0, date: 1, opponent: 1 },
+          sort: { date: -1 },
+        }),
+      ]);
+      if (!newest) {
+        await this.db.opponents.deleteOne(
+          { userId, pulseId, gameCount: { $lte: 0 } },
+        );
+      } else {
+        const newestAt = newest.date instanceof Date
+          ? newest.date
+          : new Date(newest.date);
+        if (!Number.isNaN(newestAt.getTime())) {
+          /** @type {Record<string, any>} */
+          const latestDerived = { lastSeen: newestAt };
+          if (newest?.opponent?.displayName) {
+            latestDerived.displayNameSample = newest.opponent.displayName;
+            latestDerived.displayNameHash = hmac(
+              this.pepper,
+              newest.opponent.displayName,
+            );
+          }
+          if (newest?.opponent?.race) latestDerived.race = newest.opponent.race;
+          await this.db.opponents.updateOne(
+            { userId, pulseId, lastSeen: { $in: boundary.dates } },
+            { $set: latestDerived },
+          );
+        }
+        const oldestAt = oldest?.date instanceof Date
+          ? oldest.date
+          : new Date(oldest?.date);
+        if (!Number.isNaN(oldestAt.getTime())) {
+          await this.db.opponents.updateOne(
+            { userId, pulseId, firstSeen: { $in: boundary.dates } },
+            { $set: { firstSeen: oldestAt } },
+          );
+        }
+      }
+
+      await this.db.games.updateMany(
+        {
+          _id: { $in: boundary.rowIds },
+          userId,
+          resumedReplayBoundaryRepairPending: true,
+        },
+        {
+          $set: {
+            resumedReplayBoundaryRepairPending: false,
+            resumedReplayBoundaryRepairedAt: new Date(),
+          },
+        },
+      );
+      for (const rowId of boundary.rowIds) {
+        completedRowIds.add(String(rowId));
+      }
+    }
+    return completedRowIds.size;
   }
 
   /**
@@ -1624,6 +1874,30 @@ class OpponentsService {
    */
   async refreshMetadata(userId, game) {
     if (!game.pulseId) throw new Error("pulseId required");
+    // A legacy agent may re-upload an already-quarantined resume artifact
+    // without sending the newer resume metadata. GamesService preserves the
+    // server-owned quarantine flag, so consult that durable row before this
+    // advisory refresh can restore its synthetic name/lastSeen/MMR onto the
+    // competitive opponent aggregate.
+    if (typeof game.gameId === "string" && game.gameId) {
+      const quarantined = await this.db.games.findOne(
+        {
+          userId,
+          gameId: game.gameId,
+          isResumedFromReplay: true,
+        },
+        { projection: { _id: 1 } },
+      );
+      if (quarantined) {
+        return {
+          matched: 0,
+          modified: 0,
+          upgraded: false,
+          mmr: null,
+          region: null,
+        };
+      }
+    }
     const prior = await this.db.opponents.findOne(
       { userId, pulseId: game.pulseId },
       {
@@ -2350,6 +2624,7 @@ class OpponentsService {
     if (!row) return null;
     const inReplayMmrCount = await this.db.games.countDocuments({
       userId,
+      isResumedFromReplay: { $ne: true },
       "opponent.pulseId": pulseId,
       "opponent.mmr": { $type: "number" },
     });
@@ -2832,6 +3107,23 @@ const NOOP_LOGGER = {
   fatal: () => {},
   child: () => NOOP_LOGGER,
 };
+
+/**
+ * Mongo update-pipeline expression for subtracting a cached counter without
+ * allowing legacy inconsistencies to produce a negative value.
+ *
+ * @param {string} fieldPath aggregation field reference (for example "$wins")
+ * @param {number} amount
+ * @returns {Record<string, any>}
+ */
+function decrementFloorExpr(fieldPath, amount) {
+  return {
+    $max: [
+      0,
+      { $subtract: [{ $ifNull: [fieldPath, 0] }, amount] },
+    ],
+  };
+}
 
 /**
  * Mongo field paths cannot contain '.', '$', or null bytes. Strip.

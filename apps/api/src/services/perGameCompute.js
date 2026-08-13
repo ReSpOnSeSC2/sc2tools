@@ -507,7 +507,7 @@ class PerGameComputeService {
     // the StrategiesTab build × strategy comparison view needs.
     const baseMatch = opts.filters
       ? gamesMatchStage(userId, opts.filters)
-      : { userId };
+      : { userId, isResumedFromReplay: { $ne: true } };
     const extraMatch =
       opts.match && typeof opts.match === "object" && !Array.isArray(opts.match)
         ? opts.match
@@ -545,7 +545,13 @@ class PerGameComputeService {
     // always the most selective predicate; extra match keys are merged
     // on top so a downstream {myBuild, "opponent.strategy"} pair gets
     // pushed into the same indexed find rather than filtered in memory.
-    const filter = extraMatch ? { ...baseMatch, ...extraMatch } : baseMatch;
+    const filter = extraMatch
+      ? {
+        ...baseMatch,
+        ...extraMatch,
+        isResumedFromReplay: { $ne: true },
+      }
+      : baseMatch;
     const games = await this.db.games
       .find(filter, { projection })
       .sort({ date: -1 })
@@ -644,7 +650,7 @@ class MacroBackfillService {
     const force = !!opts.force;
     const limit = clampPositive(opts.limit, 0);
     /** @type {Record<string, any>} */
-    const filter = { userId };
+    const filter = { userId, isResumedFromReplay: { $ne: true } };
     // "Needs macro" is detected via the slim row's macroScore — score
     // and breakdown travel together, and post-v0.4.3 the breakdown
     // blob never sits on the slim row (it's $unset on every upsert),

@@ -303,9 +303,9 @@ describe("buildPulseContext", () => {
     expect(nemesisSpec.build(ctx).targetOpponentId).toBe("opp-1");
   });
 
-  test("best map prefers the live pool and honours thresholds", () => {
+  test("best map only uses the live pool and normalises replay edition suffixes", () => {
     const strong = spread(MAP_EDGE_MIN_DECIDED + 2, 2, () => ({
-      map: "El Dorado",
+      map: "El Dorado LE",
     }));
     const stronger = spread(MAP_EDGE_MIN_DECIDED + 4, 2, () => ({
       map: "Retired Map",
@@ -313,7 +313,40 @@ describe("buildPulseContext", () => {
     const ctx = buildPulseContext([...strong, ...stronger], DAY, TZ, [
       "El Dorado",
     ]);
-    expect(ctx.bestMap?.name).toBe("El Dorado");
+    expect(ctx.bestMap?.name).toBe("El Dorado LE");
+    expect(ctx.bestMap?.decided).toBe(MAP_EDGE_MIN_DECIDED + 2);
+    expect(ctx.bestMap?.inPool).toBe(true);
+  });
+
+  test("retired-map history cannot produce current queue advice", () => {
+    const sanctuaryTwo = spread(86, 2, (i) => ({
+      map: "Sanctuary II LE",
+      result: i < 59 ? "Victory" : "Defeat",
+    }));
+    const ctx = buildPulseContext(sanctuaryTwo, DAY, TZ, [
+      "Sanctuary III",
+      "Fear and Faith",
+    ]);
+
+    expect(ctx.bestMap).toBeNull();
+    const mapEdge = PULSE_POOL.find((spec) => spec.id === "map-edge")!;
+    expect(mapEdge.eligible(ctx)).toBe(false);
+  });
+
+  test("missing live-pool data fails closed instead of using recent retired maps", () => {
+    const rows = spread(MAP_EDGE_MIN_DECIDED + 3, 2, () => ({
+      map: "Sanctuary II LE",
+    }));
+    expect(buildPulseContext(rows, DAY, TZ, []).bestMap).toBeNull();
+  });
+
+  test("current-map aliases combine into one supported record", () => {
+    const rows = spread(MAP_EDGE_MIN_DECIDED, 2, (i) => ({
+      map: i % 2 === 0 ? "At Eternity's Edge LE" : "At Eternity’s Edge",
+    }));
+    const ctx = buildPulseContext(rows, DAY, TZ, ["At Eternity's Edge"]);
+
+    expect(ctx.bestMap?.decided).toBe(MAP_EDGE_MIN_DECIDED);
     expect(ctx.bestMap?.inPool).toBe(true);
   });
 

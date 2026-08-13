@@ -80,7 +80,12 @@ describe("services/recentResults", () => {
         {},
         [{ name: "Goldenaura LE" }],
       );
-      expect(captured[0]).toEqual({ $match: { userId: "u1" } });
+      expect(captured[0]).toEqual({
+        $match: {
+          userId: "u1",
+          isResumedFromReplay: { $ne: true },
+        },
+      });
       expect(captured[1]).toEqual({ $sort: { date: -1 } });
       expect(captured[2].$project.mapName).toEqual({
         $ifNull: ["$map", "Unknown"],

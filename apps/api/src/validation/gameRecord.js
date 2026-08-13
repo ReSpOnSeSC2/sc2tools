@@ -32,6 +32,13 @@ const GAME_SCHEMA = {
   ],
   properties: {
     gameId: { type: "string", minLength: 1, maxLength: 200 },
+    isResumedFromReplay: { type: "boolean" },
+    resumedReplayGameIds: {
+      type: "array",
+      maxItems: 50,
+      uniqueItems: true,
+      items: { type: "string", minLength: 1, maxLength: 200 },
+    },
     date: { type: "string", format: "date-time" },
     // Exact replay start time from sc2reader. ``date`` remains the replay
     // end time for backwards compatibility with existing rows/clients.

@@ -43,9 +43,16 @@ function game(overrides: Partial<ArcadeGame> = {}): ArcadeGame {
   };
 }
 
-function primeGames(items: ArcadeGame[]) {
+function primeGames(
+  items: ArcadeGame[],
+  seasons: {
+    mapPool?: string[];
+    mapPoolSource?: "liquipedia" | "persisted" | "fallback";
+    mapPoolFetchedAt?: number | null;
+  } = { mapPool: [], mapPoolSource: "fallback" },
+) {
   apiData.set("/v1/games?limit=20000", { items });
-  apiData.set("/v1/seasons", { mapPool: [] });
+  apiData.set("/v1/seasons", seasons);
 }
 
 /** Yesterday session (3 games) + a 3-win streak → ≥1 timely card. */
@@ -92,5 +99,46 @@ describe("DailyPulse", () => {
     fireEvent.click(screen.getByText("Daily Pulse"));
     expect(screen.queryByText("You banked a winning session")).toBeNull();
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("1");
+  });
+
+  it("uses the verified current pool only for Queue Thought map advice", () => {
+    const currentMapGames = Array.from({ length: 6 }, (_, index) =>
+      game({
+        date: `2026-07-${String(8 + index).padStart(2, "0")}T12:00:00Z`,
+        map: "Sanctuary III LE",
+      }),
+    );
+    primeGames(currentMapGames, {
+      mapPool: ["Sanctuary III"],
+      mapPoolSource: "persisted",
+      mapPoolFetchedAt: Date.now(),
+    });
+    render(<DailyPulse />);
+
+    expect(screen.getByText("Sanctuary III LE is your happy place")).toBeTruthy();
+    expect(screen.getByText(/100% over 6 recent games/)).toBeTruthy();
+
+    cleanup();
+    primeGames(currentMapGames, {
+      mapPool: ["Sanctuary III"],
+      mapPoolSource: "fallback",
+    });
+    render(<DailyPulse />);
+
+    expect(
+      screen.queryByText("Sanctuary III LE is your happy place"),
+    ).toBeNull();
+
+    cleanup();
+    primeGames(currentMapGames, {
+      mapPool: ["Sanctuary III"],
+      mapPoolSource: "persisted",
+      mapPoolFetchedAt: Date.now() - 9 * 24 * 60 * 60 * 1000,
+    });
+    render(<DailyPulse />);
+
+    expect(
+      screen.queryByText("Sanctuary III LE is your happy place"),
+    ).toBeNull();
   });
 });

@@ -77,8 +77,8 @@ class ReplayContext:
     length_seconds: int = 0
     is_ai_game: bool = False
     # True when this file was created by taking control/resuming from an
-    # existing replay. SC2 retains the source game's result metadata in
-    # these files, so they must not be treated as newly played matches.
+    # existing replay. Its branch result is synthetic replay-session metadata,
+    # so it must not be treated as a newly played match.
     is_resumed_from_replay: bool = False
     # Exact client provenance from the replay header. ``game_version``
     # keeps sc2reader's full release string (for example
@@ -270,8 +270,15 @@ def _player_to_info(p) -> PlayerInfo:
 # =========================================================
 def _load_replay(file_path: str, load_level: int):
     """
-    Load a replay, tolerating the well-known load_level=4 crashes on
-    some replays by falling back to level 3, then level 2.
+    Load a replay without losing resume-from-replay evidence.
+
+    A requested deep parse must stay at level 4 because the definitive
+    ``HijackReplayGameEvent`` is absent at levels 3/2. Generic deep-parse
+    failures therefore fail closed instead of returning a lower-level object
+    that could upload a synthetic branch result as a real match. The one
+    supported compatibility retry is the known legacy resumed-replay tracker
+    corruption: retry level 4 with tracker events disabled, preserving game
+    events and their hijack marker.
     """
     last_exc = None
     for lvl in (load_level, 3, 2):
@@ -295,13 +302,50 @@ def _load_replay(file_path: str, load_level: int):
                     # The first exception is itself definitive evidence of
                     # a resumed replay. Never fall through to level 3/2:
                     # those levels omit game events, lose the resume marker,
-                    # and could let the inherited result upload as a match.
+                    # and could let the synthetic result upload as a match.
                     raise retry_exc from exc
             continue
         except Exception as exc:
+            if load_level >= 4:
+                raise
             last_exc = exc
             continue
     raise last_exc if last_exc else RuntimeError("sc2reader load failed")
+
+
+def _is_resumed_replay(replay: Any) -> bool:
+    """Return whether SC2 created ``replay`` via Take Command/Resume.
+
+    sc2reader normally promotes ``HijackReplayGameEvent`` to its
+    ``resume_from_replay`` convenience flag through ``ContextLoader``. Treat
+    the event stream as the source of truth as well: a plugin/configuration
+    regression must not let synthetic result metadata through as a newly played
+    match merely because that convenience assignment did not run.
+
+    ``game_events`` is canonical at load level 4. ``events`` is included as
+    a defensive compatibility source for small sc2reader substitutes and
+    versions that expose only their merged event stream.
+    """
+    if bool(getattr(replay, "resume_from_replay", False)):
+        return True
+
+    seen_streams: set[int] = set()
+    for stream_name in ("game_events", "events"):
+        events = getattr(replay, stream_name, None)
+        if not events or id(events) in seen_streams:
+            continue
+        seen_streams.add(id(events))
+        for event in events:
+            event_name = getattr(event, "name", None)
+            class_name = getattr(
+                getattr(event, "__class__", None), "__name__", None
+            )
+            if (
+                event_name == "HijackReplayGameEvent"
+                or class_name == "HijackReplayGameEvent"
+            ):
+                return True
+    return False
 
 
 def _resolve_me_opp(replay, my_handle: str) -> Tuple[Optional[Any], Optional[Any]]:
@@ -389,9 +433,7 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     replay = _load_replay(file_path, load_level)
 
     ctx = ReplayContext(file_path=os.path.abspath(file_path), depth=depth, raw=replay)
-    ctx.is_resumed_from_replay = bool(
-        getattr(replay, "resume_from_replay", False)
-    )
+    ctx.is_resumed_from_replay = _is_resumed_replay(replay)
     ctx.map_name = getattr(replay, "map_name", "") or ""
     ctx.date_iso = replay.date.isoformat() if getattr(replay, "date", None) else "unknown"
     start_time = getattr(replay, "start_time", None)
@@ -423,8 +465,8 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
         )
 
     # Live depth stops here. Resumed files also stop before deep analysis:
-    # the importer will intentionally skip the artifact instead of trusting
-    # its inherited win/loss metadata.
+    # the importer only needs shallow identity/date metadata to upload a
+    # quarantine marker for the synthetic replay-branch result.
     if depth == "live" or ctx.is_resumed_from_replay:
         return ctx
 

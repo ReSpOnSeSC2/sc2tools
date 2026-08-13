@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.17
+
+### Fixed — replay-resume results are retroactively quarantined
+
+- **Resume from Replay / Take Command** files now upload an explicit
+  non-competitive marker instead of stopping at a local skip. Running **Full
+  Re-sync** therefore repairs synthetic wins/losses that an older agent had
+  already added to cloud history, while preserving the sessions for the
+  optional resumed-session history view.
+- Reconciliation includes any prior game IDs already associated with the same
+  local replay file, so parser-era ID drift cannot strand a legacy false row.
+- Deep parsing now fails closed rather than falling back to a level that omits
+  StarCraft II's hijack event, and direct event recognition protects against
+  sc2reader failing to promote its convenience flag. Ships bundled replay
+  engine 1.5.8.
+- Zerg opener detection now labels **3 Hatch Before Pool** only when the third
+  Hatchery actually starts before the Spawning Pool. A normal Hatch/Pool build
+  with a later third can be corrected with **Macro Breakdown → Recompute**.
+
 ## 0.15.16
 
 ### Added — private replay archive and one-time library re-sync
@@ -41,7 +60,7 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 - Replays created by **Resume from Replay / Take Command** are now detected
   from StarCraft II's own replay marker and intentionally skipped. Their
-  inherited source-game result can no longer create duplicate wins/losses or
+  synthetic replay-branch result can no longer create duplicate wins/losses or
   pollute opponent records.
 - Resume artifacts are reported as an intentional import skip, not a parse
   failure. Legacy resumed replay formats retain the marker even when their

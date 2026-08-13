@@ -457,6 +457,16 @@ class CloudGame:
     # though both have more than two players. Added last for positional
     # CloudGame constructor compatibility.
     match_format: Optional[str] = None
+    # Take Command / Resume from Replay artifacts carry synthetic branch
+    # result metadata. They still need to reach the cloud so a full
+    # Re-sync can mark rows that an older agent uploaded as ordinary games,
+    # but competitive consumers must exclude them. Kept last for positional
+    # constructor compatibility.
+    is_resumed_from_replay: bool = False
+    # Older agent versions may have derived a different gameId for this same
+    # local file. The upload queue augments this list from its persistent
+    # path_by_game_id reverse index during a full Re-sync.
+    resumed_replay_game_ids: Optional[List[str]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -486,10 +496,10 @@ class CloudGame:
             out["apm"] = round(float(self.apm), 2)
         if self.spq is not None:
             out["spq"] = round(float(self.spq), 2)
-        if self.my_mmr is not None:
+        if self.my_mmr is not None and not self.is_resumed_from_replay:
             out["myMmr"] = int(self.my_mmr)
             out["myMmrSource"] = "replay"
-        else:
+        elif not self.is_resumed_from_replay:
             # Explicit absence lets a resync repair legacy cloud rows
             # that were incorrectly filled with SC2Pulse's current MMR.
             out["myMmrSource"] = "unavailable"
@@ -517,7 +527,39 @@ class CloudGame:
             out["mapPlayback"] = self.map_playback
         if self.started_at:
             out["startedAt"] = self.started_at
+        if self.is_resumed_from_replay:
+            out["isResumedFromReplay"] = True
+            aliases = _sanitize_resumed_replay_game_ids(
+                self.resumed_replay_game_ids,
+                current_game_id=self.game_id,
+            )
+            if aliases:
+                out["resumedReplayGameIds"] = aliases
         return out
+
+
+def _sanitize_resumed_replay_game_ids(
+    values: Any,
+    *,
+    current_game_id: str,
+) -> List[str]:
+    """Normalize bounded legacy aliases for a resumed-replay marker."""
+    if not isinstance(values, (list, tuple, set)):
+        return []
+    current = str(current_game_id or "").strip()
+    seen = {current} if current else set()
+    aliases: List[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        game_id = value.strip()
+        if not game_id or len(game_id) > 200 or game_id in seen:
+            continue
+        seen.add(game_id)
+        aliases.append(game_id)
+        if len(aliases) >= 50:
+            break
+    return aliases
 
 
 def _player_count(ctx: Any) -> Optional[int]:
@@ -621,10 +663,80 @@ def _is_ladder_game(ctx: Any) -> Optional[bool]:
 # with the cloud import-progress UI (apps/web ImportProgressCard maps
 # each code to human copy), so changes here are wire-format changes.
 SKIP_AI_GAME = "ai_game"
+# Retained for state/import-progress compatibility with agents <= 0.15.16.
+# New resumed artifacts upload a quarantine marker instead of taking this
+# local-only skip path.
 SKIP_RESUMED_REPLAY = "resumed_replay"
 SKIP_PLAYER_UNRESOLVED = "player_unresolved"
 SKIP_NO_RESULT = "no_result"
 SKIP_PARSE_FAILED = "parse_failed"
+
+
+def _build_resumed_cloud_game(ctx: Any, me: Any, opp: Any) -> CloudGame:
+    """Build the shallow reconciliation marker for a replay-resume session.
+
+    The replay branch's apparent result is retained only so an opt-in history
+    view has useful context. ``is_resumed_from_replay`` is authoritative: the
+    API excludes the row from competitive statistics and can use this upsert
+    to quarantine a false result written by an older desktop agent.
+    """
+    branch_result = _result_str(getattr(me, "result", None)) or "Tie"
+    opponent: Dict[str, Any] = {
+        "displayName": _sanitize_name(str(getattr(opp, "name", "") or "")),
+        "race": str(getattr(opp, "race", None) or "U"),
+    }
+    opp_handle = getattr(opp, "handle", None)
+    if opp_handle:
+        # Keep the stable replay identity, but deliberately do not make the
+        # network SC2Pulse lookup used by real games.
+        opponent["toonHandle"] = str(opp_handle)
+        opponent["pulseId"] = str(opp_handle)
+        opponent["pulseLookupAttempted"] = False
+
+    raw_game_id = str(getattr(ctx, "game_id", "") or "")
+    if not raw_game_id:
+        raw_game_id = (
+            f"{getattr(ctx, 'date_iso', 'unknown')}|"
+            f"{getattr(opp, 'name', '')}|"
+            f"{getattr(ctx, 'map_name', None) or 'unknown'}|"
+            f"{int(getattr(ctx, 'length_seconds', 0) or 0)}"
+        )
+
+    my_race = str(getattr(me, "race", None) or "Unknown")
+    my_ladder_race_raw = getattr(me, "selected_race", None) or my_race
+    my_handle = getattr(me, "handle", None)
+    started_at_raw = getattr(ctx, "started_at_iso", None)
+    return CloudGame(
+        game_id=raw_game_id,
+        date_iso=_to_iso(getattr(ctx, "date_iso", None)),
+        result=branch_result,
+        my_race=my_race,
+        my_ladder_race=str(my_ladder_race_raw) if my_ladder_race_raw else None,
+        my_build=None,
+        map_name=str(getattr(ctx, "map_name", None) or "unknown"),
+        duration_sec=int(getattr(ctx, "length_seconds", 0) or 0),
+        macro_score=None,
+        apm=None,
+        spq=None,
+        my_mmr=None,
+        my_toon_handle=str(my_handle) if my_handle else None,
+        player_count=_player_count(ctx),
+        match_format=_match_format(ctx),
+        is_ladder_game=_is_ladder_game(ctx),
+        game_version=getattr(ctx, "game_version", None),
+        game_build=getattr(ctx, "game_build", None),
+        opponent=opponent,
+        build_log=[],
+        early_build_log=[],
+        opp_early_build_log=[],
+        opp_build_log=[],
+        started_at=(
+            _to_iso(started_at_raw)
+            if started_at_raw not in (None, "", "unknown")
+            else None
+        ),
+        is_resumed_from_replay=True,
+    )
 
 
 def parse_replay_for_cloud(
@@ -688,18 +800,14 @@ def parse_replay_for_cloud_ex(
         log.warning("parse_deep_failed for %s: %s", file_path.name, exc)
         return None, SKIP_PARSE_FAILED
 
-    # Taking control of a replay writes a new .SC2Replay file, but SC2 keeps
-    # the source replay's player results in its details block. Trusting those
-    # values records the resumed branch as another copy of the source result
-    # (and a synthetic-id collision can overwrite the source row). sc2reader
-    # detects the HijackReplayGameEvent for us; skip before identity cache
-    # repair or any upload payload is produced.
-    if bool(getattr(ctx, "is_resumed_from_replay", False)) or bool(
+    # Capture this before identity recovery. A resumed artifact still needs
+    # the same deterministic "who is me?" fallback as an ordinary replay so
+    # we can produce the exact gameId an older agent used for this local file.
+    is_resumed = bool(getattr(ctx, "is_resumed_from_replay", False)) or bool(
         getattr(getattr(ctx, "raw", None), "resume_from_replay", False)
-    ):
-        return None, SKIP_RESUMED_REPLAY
+    )
 
-    if ctx.is_ai_game:
+    if ctx.is_ai_game and not is_resumed:
         return None, SKIP_AI_GAME
 
     # The configured handle didn't substring-match any player name in
@@ -756,11 +864,30 @@ def parse_replay_for_cloud_ex(
                                 "player_handle_cache_repair_failed",
                             )
 
+                # The second parse is normally identical apart from player
+                # identity, but recompute defensively in case a parser version
+                # only surfaces its direct hijack-event evidence on this pass.
+                is_resumed = is_resumed or bool(
+                    getattr(ctx, "is_resumed_from_replay", False)
+                ) or bool(
+                    getattr(getattr(ctx, "raw", None),
+                            "resume_from_replay", False)
+                )
+
     if not ctx.me or not ctx.opponent:
         return None, SKIP_PLAYER_UNRESOLVED
 
     me = ctx.me
     opp = ctx.opponent
+    if is_resumed:
+        # Do not discard this locally. Older agents uploaded Resume/Take
+        # Command artifacts as real wins/losses; Full Re-sync must send an
+        # explicit marker for the same gameId so the cloud can quarantine the
+        # already-stored row. Keep this payload deliberately shallow: no Pulse
+        # lookup, MMR, macro, build, or spatial work is meaningful for a
+        # synthetic replay branch.
+        return _build_resumed_cloud_game(ctx, me, opp), None
+
     result = _result_str(me.result)
     if result is None:
         return None, SKIP_NO_RESULT
@@ -904,9 +1031,9 @@ def parse_replay_for_cloud_ex(
     # surfaces ``mmr``, never ``scaled_rating`` — so it always fell
     # through to the original ``me.mmr`` path and the streamer kept
     # seeing ``— MMR`` on the overlay. The new helper walks
-    # ``ctx.raw.players`` directly so we still get a value even when
-    # the analyzer silently fell back from load_level=4 to 3 (which
-    # leaves ``scaled_rating`` unset on the PlayerInfo wrapper). One
+    # ``ctx.raw.players`` directly so every supported sc2reader player
+    # shape is covered while deep parsing stays at load_level=4 for
+    # definitive Resume-from-Replay detection. One
     # INFO line per parse documents the resolution path so a streamer
     # grepping their agent log can see exactly which source supplied
     # (or didn't supply) their MMR.
@@ -2228,13 +2355,10 @@ def _resolve_my_mmr(
          sc2reader 1.8.0 stores the decoded value at
          ``player.init_data["scaled_rating"]`` without promoting it to
          ``player.scaled_rating``; patched/newer builds may expose a
-         top-level attribute, so both shapes are supported. The
-         analyzer's ``_load_replay`` falls back from level 4 → 3 → 2
-         when the higher load throws (some replays trip a sc2reader
-         bug at level 4); a level-3 parse leaves ``scaled_rating``
-         unset on the wrapper but may still surface ``mmr`` on the
-         raw object. Probe both attributes directly so the streamer
-         doesn't lose their MMR over a transient analyzer hiccup.
+         top-level attribute, so both shapes are supported. Probe both
+         attributes directly rather than depending on wrapper promotion.
+         Deep parsing remains at level 4 so the game-event stream cannot
+         lose its definitive Resume-from-Replay marker.
 
     A single INFO log line documents which layer hit (or that none did)
     so a streamer grepping their agent log can see exactly why the

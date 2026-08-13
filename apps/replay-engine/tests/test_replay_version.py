@@ -77,6 +77,35 @@ def test_parse_replay_exposes_resumed_replay_marker(monkeypatch):
     assert ctx.is_resumed_from_replay is True
 
 
+def test_parse_replay_detects_hijack_event_when_sc2reader_flag_is_false(
+    monkeypatch,
+):
+    raw = _raw_replay(
+        resume_from_replay=False,
+        game_events=[SimpleNamespace(name="HijackReplayGameEvent")],
+        events=[],
+    )
+    monkeypatch.setattr(parser, "_load_replay", lambda _path, _level: raw)
+
+    ctx = parser.parse_replay("resumed.SC2Replay", "Me", depth="deep")
+
+    assert ctx.is_resumed_from_replay is True
+
+
+def test_parse_replay_detects_hijack_event_by_class_name(monkeypatch):
+    HijackReplayGameEvent = type("HijackReplayGameEvent", (), {})
+    raw = _raw_replay(
+        resume_from_replay=False,
+        game_events=[],
+        events=[HijackReplayGameEvent()],
+    )
+    monkeypatch.setattr(parser, "_load_replay", lambda _path, _level: raw)
+
+    ctx = parser.parse_replay("resumed.SC2Replay", "Me", depth="deep")
+
+    assert ctx.is_resumed_from_replay is True
+
+
 def test_old_resumed_replay_retries_without_tracker_events(monkeypatch):
     calls = []
     recovered = object()
@@ -94,6 +123,37 @@ def test_old_resumed_replay_retries_without_tracker_events(monkeypatch):
         (4, {}),
         (4, {"do_tracker_events": False}),
     ]
+
+
+def test_deep_load_failure_never_falls_back_without_game_events(monkeypatch):
+    calls = []
+
+    def fake_load(_path, *, load_level, **options):
+        calls.append((load_level, options))
+        raise ValueError("unsupported deep event stream")
+
+    monkeypatch.setattr(parser.sc2reader, "load_replay", fake_load)
+
+    with pytest.raises(ValueError, match="unsupported deep event stream"):
+        parser._load_replay("maybe-resumed.SC2Replay", 4)
+
+    assert calls == [(4, {})]
+
+
+def test_metadata_load_can_still_fall_back(monkeypatch):
+    calls = []
+    recovered = object()
+
+    def fake_load(_path, *, load_level, **options):
+        calls.append((load_level, options))
+        if load_level == 2:
+            return recovered
+        raise ValueError("unsupported level")
+
+    monkeypatch.setattr(parser.sc2reader, "load_replay", fake_load)
+
+    assert parser._load_replay("metadata.SC2Replay", 3) is recovered
+    assert calls == [(3, {}), (3, {}), (2, {})]
 
 
 def test_old_resumed_replay_never_falls_back_without_resume_marker(monkeypatch):

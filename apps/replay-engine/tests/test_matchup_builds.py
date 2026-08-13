@@ -374,6 +374,47 @@ def test_zvp_hatch_first_macro():
     assert _classify("Zerg", "Protoss", events) == "ZvP - Hatch First Macro"
 
 
+def test_zvp_normal_hatch_pool_is_not_three_hatch_before_pool():
+    # Real Rorschach LE vs Cal shape: the t=0 Hatchery is the pre-placed
+    # main, the natural starts at 1:12, Pool at 1:36, and the third at 3:12.
+    # The third is early, but it is plainly AFTER the Pool.
+    events = [
+        {
+            "type": "building",
+            "name": "Hatchery",
+            "time": 0,
+            "x": 10.0,
+            "y": 10.0,
+            "subtype": "born",
+        },
+        _b("Hatchery", 72),
+        _b("SpawningPool", 96),
+        _b("Extractor", 102),
+        _b("Hatchery", 192),
+    ]
+    assert _classify("Zerg", "Protoss", events) == (
+        "Zerg - 3 Base Macro (Hatch First)"
+    )
+
+
+def test_zvp_literal_three_hatch_before_pool_still_matches():
+    events = [
+        {
+            "type": "building",
+            "name": "Hatchery",
+            "time": 0,
+            "x": 10.0,
+            "y": 10.0,
+            "subtype": "born",
+        },
+        _b("Hatchery", 72),
+        _b("Hatchery", 90),
+        _b("SpawningPool", 96),
+        _b("Extractor", 102),
+    ]
+    assert _classify("Zerg", "Protoss", events) == "Zerg - 3 Hatch Before Pool"
+
+
 def test_zvz_8_pool_speedling():
     events = [
         _b("Hatchery", 0), _b("SpawningPool", 40),

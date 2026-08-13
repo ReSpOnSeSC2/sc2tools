@@ -153,7 +153,9 @@ class AggregationsService {
   async distinctMaps(userId) {
     const rows = await this.db.games
       .aggregate([
-        { $match: { userId } },
+        {
+          $match: { userId, isResumedFromReplay: { $ne: true } },
+        },
         {
           $group: {
             _id: { $ifNull: ["$map", "Unknown"] },

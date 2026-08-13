@@ -347,6 +347,26 @@ def test_to_payload_omits_replay_start_time_when_unset():
     assert "startedAt" not in _bare_cloud_game().to_payload()
 
 
+def test_to_payload_emits_resumed_marker_and_sanitized_legacy_ids():
+    payload = _bare_cloud_game(
+        is_resumed_from_replay=True,
+        my_mmr=5378,
+        resumed_replay_game_ids=[
+            "legacy-one",
+            "g1",
+            " legacy-two ",
+            "legacy-one",
+            "",
+            123,
+        ],
+    ).to_payload()
+
+    assert payload["isResumedFromReplay"] is True
+    assert payload["resumedReplayGameIds"] == ["legacy-one", "legacy-two"]
+    assert "myMmr" not in payload
+    assert "myMmrSource" not in payload
+
+
 @pytest.mark.parametrize(
     ("real_type", "expected"),
     [
@@ -807,15 +827,40 @@ def test_build_log_from_events_swallows_formatter_exceptions(monkeypatch):
 # -------------------------------------------------------------------------
 
 
-def test_parse_replay_for_cloud_skips_resumed_replay_before_result_upload(
-    monkeypatch, tmp_path,
+def test_parse_replay_for_cloud_uploads_resumed_replay_quarantine_marker(
+    monkeypatch, tmp_path, _stub_pulse_resolver,
 ):
-    """A take-control artifact inherits the source game's result."""
+    """A take-control artifact must reconcile old false cloud results."""
+    me = SimpleNamespace(
+        result="Win",
+        name="Me",
+        race="Protoss",
+        selected_race="Protoss",
+        handle="1-S2-1-100",
+    )
+    opp = SimpleNamespace(
+        name="Zulrah",
+        race="Zerg",
+        handle="1-S2-1-200",
+    )
     fake_ctx = SimpleNamespace(
         is_resumed_from_replay=True,
         is_ai_game=False,
-        me=SimpleNamespace(result="Win"),
-        raw=SimpleNamespace(resume_from_replay=True),
+        me=me,
+        opponent=opp,
+        all_players=[me, opp],
+        game_id="2026-08-09T23:57:19|Zulrah|Old Sun Temple LE|460",
+        date_iso="2026-08-09T23:57:19+00:00",
+        started_at_iso="2026-08-09T23:49:39+00:00",
+        map_name="Old Sun Temple LE",
+        length_seconds=460,
+        game_version="5.0.16.97425",
+        game_build=97425,
+        raw=SimpleNamespace(
+            resume_from_replay=True,
+            category="Ladder",
+            real_type="1v1",
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -823,18 +868,48 @@ def test_parse_replay_for_cloud_skips_resumed_replay_before_result_upload(
         SimpleNamespace(parse_deep=lambda _path, _handle: fake_ctx),
     )
 
-    from sc2tools_agent.replay_pipeline import (
-        SKIP_RESUMED_REPLAY,
-        parse_replay_for_cloud_ex,
-    )
+    from sc2tools_agent.replay_pipeline import parse_replay_for_cloud_ex
 
     game, reason = parse_replay_for_cloud_ex(
         tmp_path / "resumed.SC2Replay",
         player_handle="Me",
     )
 
-    assert game is None
-    assert reason == SKIP_RESUMED_REPLAY
+    assert game is not None
+    assert reason is None
+    payload = game.to_payload()
+    assert payload == {
+        "gameId": "2026-08-09T23:57:19|Zulrah|Old Sun Temple LE|460",
+        "date": "2026-08-09T23:57:19Z",
+        "startedAt": "2026-08-09T23:49:39Z",
+        "result": "Victory",
+        "myRace": "Protoss",
+        "myLadderRace": "Protoss",
+        "map": "Old Sun Temple LE",
+        "durationSec": 460,
+        "buildLog": [],
+        "oppBuildLog": [],
+        "myToonHandle": "1-S2-1-100",
+        "playerCount": 2,
+        "matchFormat": "1v1",
+        "isLadderGame": True,
+        "gameVersion": "5.0.16.97425",
+        "gameBuild": 97425,
+        "opponent": {
+            "displayName": "Zulrah",
+            "race": "Zerg",
+            "toonHandle": "1-S2-1-200",
+            "pulseId": "1-S2-1-200",
+            "pulseLookupAttempted": False,
+        },
+        "isResumedFromReplay": True,
+    }
+    # Synthetic branches must not trigger a Pulse lookup or carry MMR/macro
+    # evidence that competitive consumers could accidentally trust.
+    assert _stub_pulse_resolver == []
+    assert "myMmr" not in payload
+    assert "myMmrSource" not in payload
+    assert "macroBreakdown" not in payload
 
 
 def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(

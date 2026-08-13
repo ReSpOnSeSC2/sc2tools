@@ -63,6 +63,9 @@ export interface BuildDossierData {
   byMap: BuildDetailRow[];
   byStrategy: BuildDetailRow[];
   recent: BuildRecentGame[];
+  /** Replay-resume test games, excluded from every aggregate above. */
+  resumedRecent: BuildRecentGame[];
+  resumedCount: number;
   topStrategies?: StrategyEntry[];
   predictedStrategies?: Prediction[];
   myRace?: string;
@@ -424,6 +427,8 @@ function Last5AndRecent({
       </div>
       <BuildGamesTable
         games={data.recent ?? []}
+        resumedGames={data.resumedRecent ?? []}
+        resumedCount={data.resumedCount ?? 0}
         filterGameIds={filterGameIds}
         filterLabel={filterLabel}
         onClearFilter={onClearFilter}

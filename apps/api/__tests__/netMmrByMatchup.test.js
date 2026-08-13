@@ -793,6 +793,35 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     expect(findRow(out.matchups, "Z").netMmr).toBe(25);
   });
 
+  test("resumed replay artifacts neither count nor break real MMR adjacency", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "ladder1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "resume-test",
+        date: new Date(t0 + MIN_AGO),
+        myMmr: 4510,
+        isResumedFromReplay: true,
+      }),
+      makeGame({
+        gameId: "ladder2",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myMmr: 4525,
+      }),
+      makeGame({
+        gameId: "ladder3",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myMmr: 4550,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {});
+    const z = findRow(out.matchups, "Z");
+    expect(out.totalGames).toBe(3);
+    expect(z.games).toBe(2);
+    expect(z.netMmr).toBe(50);
+  });
+
   test("Random queue pairs by selected race, not spawned race", async () => {
     const t0 = new Date("2026-05-09T12:00:00Z").getTime();
     await db.games.insertMany([

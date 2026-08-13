@@ -482,11 +482,14 @@ describe("services/perGameCompute", () => {
       expect(capture.match.map.source).toBe("ghost river");
     });
 
-    test("no filters keeps the userId-only $match (unchanged legacy behavior)", async () => {
+    test("no filters still excludes resumed replay artifacts", async () => {
       const capture = {};
       const svc = buildSvc([], capture);
       await svc.listForRulePreview("u1", {});
-      expect(capture.match).toEqual({ userId: "u1" });
+      expect(capture.match).toEqual({
+        userId: "u1",
+        isResumedFromReplay: { $ne: true },
+      });
     });
 
     test("returns events at start time so saved rules fire on the right games", async () => {
@@ -547,6 +550,7 @@ describe("services/perGameCompute", () => {
       });
       expect(observedFilter).toEqual({
         userId: "u1",
+        isResumedFromReplay: { $ne: true },
         myBuild: "PvZ - AlphaStar Style (Oracle/Robo)",
         "opponent.strategy": "Zerg - 3 Base Macro (Hatch First)",
       });
@@ -555,7 +559,7 @@ describe("services/perGameCompute", () => {
 
     test("ignores a non-object ``match`` option without throwing", async () => {
       // Defensive: bad ``match`` shapes (null/array/string) fall back
-      // to the legacy unfiltered ``{userId}`` find so a typo in a
+      // to the default competitive-user find so a typo in a
       // future caller can't 404 the user's whole analysis.
       let observedFilter = null;
       const collection = {
@@ -575,12 +579,21 @@ describe("services/perGameCompute", () => {
       const svc = new PerGameComputeService({ games: collection });
       // @ts-expect-error — exercising the defensive path
       await svc.listForRulePreview("u1", { limit: 10, match: "bogus" });
-      expect(observedFilter).toEqual({ userId: "u1" });
+      expect(observedFilter).toEqual({
+        userId: "u1",
+        isResumedFromReplay: { $ne: true },
+      });
       // @ts-expect-error — exercising the defensive path
       await svc.listForRulePreview("u1", { limit: 10, match: [1, 2] });
-      expect(observedFilter).toEqual({ userId: "u1" });
+      expect(observedFilter).toEqual({
+        userId: "u1",
+        isResumedFromReplay: { $ne: true },
+      });
       await svc.listForRulePreview("u1", { limit: 10, match: null });
-      expect(observedFilter).toEqual({ userId: "u1" });
+      expect(observedFilter).toEqual({
+        userId: "u1",
+        isResumedFromReplay: { $ne: true },
+      });
     });
 
     test("a rule saved as 'Lair before 4:30 (start)' matches a game that completed Lair at 5:00", async () => {

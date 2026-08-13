@@ -41,7 +41,15 @@ class SeasonsService {
    * about which seasons we have. Each entry is one season per region —
    * the SPA reduces by `number` to display "Season N" boundaries.
    *
-   * @returns {Promise<{items: SeasonEntry[], current: number | null, source: 'pulse' | 'fallback', fetchedAt: number | null, mapPool: string[]}>}
+   * @returns {Promise<{
+   *   items: SeasonEntry[],
+   *   current: number | null,
+   *   source: 'pulse' | 'fallback',
+   *   fetchedAt: number | null,
+   *   mapPool: string[],
+   *   mapPoolSource: 'liquipedia' | 'persisted' | 'fallback',
+   *   mapPoolFetchedAt: number | null,
+   * }>}
    */
   async list() {
     const now = this.now();
@@ -74,18 +82,43 @@ class SeasonsService {
       }
     }
     const mapPool = await mapPoolPromise;
-    return { ...payload, mapPool };
+    return {
+      ...payload,
+      mapPool: mapPool.maps,
+      mapPoolSource: mapPool.source,
+      mapPoolFetchedAt: mapPool.fetchedAt,
+    };
   }
 
-  /** @returns {Promise<string[]>} */
+  /**
+   * @returns {Promise<{
+   *   maps: string[],
+   *   source: 'liquipedia' | 'persisted' | 'fallback',
+   *   fetchedAt: number | null,
+   * }>}
+   */
   async _safeMapPool() {
     try {
       const res = await this.ladderMapPool.get();
-      if (Array.isArray(res.maps) && res.maps.length > 0) return res.maps;
+      if (Array.isArray(res.maps) && res.maps.length > 0) {
+        return {
+          maps: res.maps,
+          source:
+            res.source === "liquipedia" || res.source === "persisted"
+              ? res.source
+              : "fallback",
+          fetchedAt:
+            typeof res.fetchedAt === "number" ? res.fetchedAt : null,
+        };
+      }
     } catch {
       // Fallthrough to baked constant.
     }
-    return FALLBACK_POOL.slice();
+    return {
+      maps: FALLBACK_POOL.slice(),
+      source: "fallback",
+      fetchedAt: null,
+    };
   }
 
   /**

@@ -219,6 +219,61 @@ describe("LadderPulse", () => {
     );
   });
 
+  it("shows Mineral Float as high-bank readings instead of a literal mineral balance", () => {
+    const detail = "20 sample(s) with >800 minerals on hand after 4:00";
+    const games: PulseGamesPage = {
+      items: GAMES.items?.map((game, index) =>
+        index === 0
+          ? {
+              ...game,
+              top3Leaks: [
+                {
+                  name: "Mineral Float",
+                  detail,
+                  quantity: 20,
+                  mineral_cost: 2000,
+                },
+              ],
+            }
+          : game,
+      ),
+    };
+    wire({ games, meta: META_ROW });
+    render(<LadderPulse />);
+
+    const signal = screen.getByText(
+      "Mineral Float · 20 readings over 800 minerals",
+    );
+    expect(signal.parentElement?.getAttribute("title")).toBe(detail);
+    expect(screen.queryByText("Mineral Float · 2000 minerals")).toBeNull();
+  });
+
+  it("never exposes the Mineral Float ranking weight on legacy rows without a sample count", () => {
+    const detail = "Mineral float detected after 4:00";
+    const games: PulseGamesPage = {
+      items: GAMES.items?.map((game, index) =>
+        index === 0
+          ? {
+              ...game,
+              top3Leaks: [
+                {
+                  name: "Mineral Float",
+                  detail,
+                  mineral_cost: 2000,
+                },
+              ],
+            }
+          : game,
+      ),
+    };
+    wire({ games, meta: META_ROW });
+    render(<LadderPulse />);
+
+    const signal = screen.getByText("Mineral Float");
+    expect(signal.parentElement?.getAttribute("title")).toBe(detail);
+    expect(screen.queryByText(/2000 minerals/i)).toBeNull();
+  });
+
   it("does not call an old imported replay fresh and shows factual personal form when meta is unavailable", () => {
     const stale: PulseGamesPage = {
       items: GAMES.items!.map((row, index) => ({

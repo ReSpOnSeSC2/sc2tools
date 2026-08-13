@@ -135,7 +135,11 @@ class ArcadeService {
     const start = resolveWindowStart(card);
     const games = await this.db.games
       .find(
-        { userId, date: { $gte: start } },
+        {
+          userId,
+          date: { $gte: start },
+          isResumedFromReplay: { $ne: true },
+        },
         { projection: { _id: 0 } },
       )
       .sort({ date: 1 })
@@ -270,7 +274,7 @@ class ArcadeService {
     if (!userId) return empty;
     const games = await this.db.games
       .find(
-        { userId },
+        { userId, isResumedFromReplay: { $ne: true } },
         { projection: { _id: 0, gameId: 1, date: 1 } },
       )
       .sort({ date: -1 })

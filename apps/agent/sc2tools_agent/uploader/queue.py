@@ -44,6 +44,14 @@ log = logging.getLogger(__name__)
 _BACKPRESSURE_TIMEOUT_SEC = 15.0
 
 
+def _path_identity(value: Any) -> str:
+    """Return a case-insensitive stable key for one local replay path."""
+    try:
+        return str(Path(str(value)).resolve(strict=False)).casefold()
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return str(value or "").strip().casefold()
+
+
 class TerminalUploadError(Exception):
     """Base for a FINAL, per-file upload outcome.
 
@@ -873,7 +881,7 @@ class UploadQueue:
         invalid_jobs: List[UploadJob] = []
         missing_game_ids = 0
         for job in batch:
-            payload = job.game.to_payload()
+            payload = self._payload_for_job(job)
             gid = payload.get("gameId")
             if isinstance(gid, str) and gid:
                 aliases = by_id.setdefault(gid, [])
@@ -1041,6 +1049,56 @@ class UploadQueue:
             )
             raise _RetryablePerGameError(summary)
 
+    def _payload_for_job(self, job: UploadJob) -> Dict[str, Any]:
+        """Build one payload and attach legacy IDs for resumed artifacts.
+
+        Full Re-sync intentionally clears ``state.uploaded`` but preserves
+        ``path_by_game_id``. Agents predating resume detection may therefore
+        have one or more cloud gameIds pointing at this exact local file. Send
+        those aliases with the marker so the API can quarantine legacy rows
+        even if parser-version changes caused the newly derived ID to drift.
+        """
+        payload = job.game.to_payload()
+        if payload.get("isResumedFromReplay") is not True:
+            return payload
+
+        game_id = payload.get("gameId")
+        current = game_id.strip() if isinstance(game_id, str) else ""
+        target_path = _path_identity(job.file_path)
+        with self._lock:
+            reverse_index = list(
+                (getattr(self._state, "path_by_game_id", {}) or {}).items()
+            )
+
+        raw_aliases = payload.get("resumedReplayGameIds")
+        candidates = (
+            list(raw_aliases)
+            if isinstance(raw_aliases, (list, tuple, set))
+            else []
+        )
+        candidates.extend(
+            gid
+            for gid, replay_path in reverse_index
+            if _path_identity(replay_path) == target_path
+        )
+        seen = {current} if current else set()
+        aliases: List[str] = []
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            alias = candidate.strip()
+            if not alias or len(alias) > 200 or alias in seen:
+                continue
+            seen.add(alias)
+            aliases.append(alias)
+            if len(aliases) >= 50:
+                break
+        if aliases:
+            payload["resumedReplayGameIds"] = aliases
+        else:
+            payload.pop("resumedReplayGameIds", None)
+        return payload
+
     def _push_last_mmr_for_newest(self, jobs: List[UploadJob]) -> None:
         """Run sticky-MMR push for the newest dated game in ``jobs``.
 
@@ -1055,6 +1113,11 @@ class UploadQueue:
         """
         newest: Optional[UploadJob] = None
         for job in jobs:
+            # Resume-from-replay outcomes are synthetic branch results. A
+            # quarantine marker may carry legacy fields when it was built by
+            # an older caller, but it must never update the user's sticky MMR.
+            if getattr(job.game, "is_resumed_from_replay", False) is True:
+                continue
             my_mmr = getattr(job.game, "my_mmr", None)
             if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
                 continue
@@ -1135,7 +1198,7 @@ class UploadQueue:
             )
             return
         log.info("uploading %s", job.file_path.name)
-        result = self._api.upload_game(job.game.to_payload())
+        result = self._api.upload_game(self._payload_for_job(job))
         accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))
         if not accepted:
             self._release_pending((job,))
@@ -1183,6 +1246,10 @@ class UploadQueue:
         when the HTTP call fails. Failures must never block the upload
         ack — the per-game upload itself has already succeeded.
         """
+        # Keep the legacy single-upload path safe as well as batch uploads.
+        # Resumed sessions are synthetic and cannot establish ladder rating.
+        if getattr(job.game, "is_resumed_from_replay", False) is True:
+            return
         my_mmr = getattr(job.game, "my_mmr", None)
         if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
             return
@@ -1207,6 +1274,7 @@ class UploadQueue:
                     mmr=my_mmr,
                     captured_at=game_date,
                     region=region,
+                    game_id=getattr(job.game, "game_id", None),
                 )
             except Exception as exc:  # noqa: BLE001
                 log.debug(

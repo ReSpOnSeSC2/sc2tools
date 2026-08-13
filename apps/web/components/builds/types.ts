@@ -73,6 +73,8 @@ export interface BuildRecentGame {
   result: "win" | "loss" | "victory" | "defeat" | string;
   duration?: number;
   macroScore?: number | null;
+  /** True when this replay was produced by resuming a prior replay. */
+  isResumedFromReplay?: boolean;
 }
 
 export interface BuildDetailResponse {
@@ -88,4 +90,6 @@ export interface BuildDetailResponse {
   byMap: BuildDetailRow[];
   byStrategy: BuildDetailRow[];
   recent: BuildRecentGame[];
+  resumedRecent: BuildRecentGame[];
+  resumedCount: number;
 }

@@ -343,6 +343,7 @@ class ApiClient:
         mmr: int,
         captured_at: Optional[str] = None,
         region: Optional[str] = None,
+        game_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Ping the cloud with the most-recently-extracted streamer MMR.
 
@@ -356,7 +357,10 @@ class ApiClient:
         ``mmr`` is bounds-checked here so we don't burn an HTTP
         round-trip on a clearly-bogus value (the server would 400 it
         anyway). The 500 floor matches the agent-side
-        ``_MIN_PLAUSIBLE_MMR`` in replay_pipeline.py.
+        ``_MIN_PLAUSIBLE_MMR`` in replay_pipeline.py. ``game_id`` ties
+        the sticky value to the accepted replay that supplied it, allowing
+        the cloud to clear a legacy value later if that exact row is
+        quarantined as a Resume-from-Replay artifact.
         """
         if not self.device_token:
             raise PermissionError("agent_not_paired")
@@ -367,6 +371,8 @@ class ApiClient:
             body["capturedAt"] = captured_at
         if region:
             body["region"] = region
+        if game_id:
+            body["gameId"] = game_id
         return self._post("/v1/me/last-mmr", auth=True, body=body)
 
     # ---------------- bulk import (job visibility) ----------------

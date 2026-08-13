@@ -7,6 +7,7 @@ const { StrategyPhasesService } = require("../src/services/strategyPhases");
 function buildGames(handlers, opts = {}) {
   let i = 0;
   const findRows = opts.find || [];
+  const resumedRows = opts.resumed || [];
   return {
     aggregate(pipeline) {
       const handler = handlers[i++ % handlers.length];
@@ -14,11 +15,20 @@ function buildGames(handlers, opts = {}) {
         toArray: () => Promise.resolve(handler(pipeline)),
       };
     },
-    find() {
+    countDocuments(filter) {
+      return Promise.resolve(
+        filter?.isResumedFromReplay === true ? resumedRows.length : 0,
+      );
+    },
+    find(filter) {
       // Support the dossier-extras follow-up query: find(...).sort(...).toArray().
+      const rows = filter?.isResumedFromReplay === true
+        ? resumedRows
+        : findRows;
       const cursor = {
         sort: () => cursor,
-        toArray: () => Promise.resolve(findRows),
+        limit: () => cursor,
+        toArray: () => Promise.resolve(rows),
       };
       return cursor;
     },
@@ -136,6 +146,40 @@ describe("services/builds", () => {
     expect(out.last5Games).toHaveLength(2);
     expect(out.predictedStrategies.length).toBeGreaterThan(0);
     expect(out.topStrategies.length).toBe(2);
+  });
+
+  test("detail keeps resumed games out of totals and exposes them separately", async () => {
+    const resumed = ["r1", "r2", "r3"].map((gameId) => ({
+      gameId,
+      date: new Date("2026-08-10T03:55:41.000Z"),
+      result: "Victory",
+      map: "Old Sun Temple LE",
+      durationSec: 440,
+      opponent: { displayName: "Zulrah", race: "Zerg" },
+      isResumedFromReplay: true,
+    }));
+    const games = buildGames(
+      [
+        () => [{
+          totals: [{ wins: 0, losses: 1, total: 1, lastPlayed: new Date() }],
+          byMatchup: [],
+          byMap: [],
+          byStrategy: [],
+          recent: [{ gameId: "real-loss", result: "Defeat" }],
+        }],
+      ],
+      { find: [], resumed },
+    );
+    const out = await new BuildsService({ games }).detail(
+      "u1",
+      "Zerg - 3 Hatch Before Pool",
+      {},
+    );
+    expect(out.totals).toMatchObject({ total: 1, wins: 0, losses: 1 });
+    expect(out.recent).toHaveLength(1);
+    expect(out.resumedCount).toBe(3);
+    expect(out.resumedRecent).toHaveLength(3);
+    expect(out.resumedRecent.every((row) => row.isResumedFromReplay)).toBe(true);
   });
 
   test("oppStrategies returns sorted rows with winRate", async () => {

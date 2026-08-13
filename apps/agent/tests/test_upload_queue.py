@@ -62,10 +62,15 @@ class _StubApi:
         return {"accepted": accepted, "rejected": []}
 
     def patch_last_mmr(
-        self, *, mmr: int, captured_at=None, region=None,
+        self, *, mmr: int, captured_at=None, region=None, game_id=None,
     ) -> Dict[str, Any]:
         self.mmr_calls.append(
-            {"mmr": mmr, "captured_at": captured_at, "region": region},
+            {
+                "mmr": mmr,
+                "captured_at": captured_at,
+                "region": region,
+                "game_id": game_id,
+            },
         )
         return {"ok": True, "wrote": True}
 
@@ -686,6 +691,64 @@ def test_same_game_id_sends_one_payload_and_records_both_paths(
     assert q.is_pending(second.file_path) is False
 
 
+def test_resumed_upload_includes_legacy_ids_for_same_local_file(
+    tmp_path: Path,
+) -> None:
+    base = _game(tmp_path, "resumed.SC2Replay")
+    resumed = UploadJob(
+        file_path=base.file_path,
+        game=replace(
+            base.game,
+            is_resumed_from_replay=True,
+            resumed_replay_game_ids=["explicit-alias"],
+        ),
+    )
+    state = AgentState(
+        device_token="t",
+        path_by_game_id={
+            "legacy-uploaded-id": str(resumed.file_path),
+            resumed.game.game_id: str(resumed.file_path),
+            "another-file-id": str(tmp_path / "other.SC2Replay"),
+        },
+    )
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+
+    assert q.submit(resumed) is True
+    q.start()
+    try:
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=3.0)
+    finally:
+        q.stop()
+
+    assert api.calls[0]["isResumedFromReplay"] is True
+    assert api.calls[0]["resumedReplayGameIds"] == [
+        "explicit-alias",
+        "legacy-uploaded-id",
+    ]
+    assert "another-file-id" not in api.calls[0]["resumedReplayGameIds"]
+
+
+def test_legacy_single_upload_also_includes_resumed_aliases(
+    tmp_path: Path,
+) -> None:
+    base = _game(tmp_path, "legacy-single-resumed.SC2Replay")
+    resumed = UploadJob(
+        file_path=base.file_path,
+        game=replace(base.game, is_resumed_from_replay=True),
+    )
+    state = AgentState(
+        device_token="t",
+        path_by_game_id={"old-single-id": str(resumed.file_path)},
+    )
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+
+    q._upload_one(resumed)
+
+    assert api.calls[0]["resumedReplayGameIds"] == ["old-single-id"]
+
+
 # -------------------------------------------------------------------------
 # Sticky-MMR ping. The session widget falls back to the cloud profile's
 # ``lastKnownMmr`` whenever no game in the user's history carries
@@ -718,6 +781,7 @@ def test_successful_upload_pushes_last_mmr(tmp_path: Path) -> None:
     assert api.mmr_calls[0]["mmr"] == 4730
     assert api.mmr_calls[0]["region"] == "NA"
     assert api.mmr_calls[0]["captured_at"] == "2026-05-07T10:00:00Z"
+    assert api.mmr_calls[0]["game_id"] == job.game.game_id
     # The state cache reflects what we pushed so a backfill of older
     # replays after this point doesn't reset the cloud value.
     assert state.last_known_mmr == 4730
@@ -741,6 +805,59 @@ def test_upload_without_mmr_does_not_ping(tmp_path: Path) -> None:
         time.sleep(0.2)
     finally:
         q.stop()
+    assert api.mmr_calls == []
+    assert state.last_known_mmr is None
+
+
+def test_resumed_marker_never_pushes_sticky_mmr(tmp_path: Path) -> None:
+    """Synthetic resume results cannot establish the user's ladder MMR."""
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    base = _game(
+        tmp_path,
+        "resumed-with-legacy-mmr.SC2Replay",
+        my_mmr=4730,
+        my_toon_handle="1-S2-1-267727",
+        date_iso="2026-05-07T10:00:00Z",
+    )
+    resumed = UploadJob(
+        file_path=base.file_path,
+        game=replace(base.game, is_resumed_from_replay=True),
+    )
+    q.start()
+    try:
+        q.submit(resumed)
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
+        time.sleep(0.2)
+    finally:
+        q.stop()
+
+    assert api.calls[0]["isResumedFromReplay"] is True
+    assert "myMmr" not in api.calls[0]
+    assert api.mmr_calls == []
+    assert state.last_known_mmr is None
+
+
+def test_legacy_single_resumed_upload_never_pushes_sticky_mmr(
+    tmp_path: Path,
+) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    base = _game(
+        tmp_path,
+        "legacy-resumed-with-mmr.SC2Replay",
+        my_mmr=4730,
+        my_toon_handle="1-S2-1-267727",
+    )
+    resumed = UploadJob(
+        file_path=base.file_path,
+        game=replace(base.game, is_resumed_from_replay=True),
+    )
+
+    q._upload_one(resumed)
+
     assert api.mmr_calls == []
     assert state.last_known_mmr is None
 
@@ -837,7 +954,7 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
             }
 
         def patch_last_mmr(
-            self, *, mmr: int, captured_at=None, region=None,
+            self, *, mmr: int, captured_at=None, region=None, game_id=None,
         ) -> Dict[str, Any]:
             if captured_at == old_date:
                 old_patch_started.set()
@@ -849,6 +966,7 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
                     "mmr": mmr,
                     "captured_at": captured_at,
                     "region": region,
+                    "game_id": game_id,
                 })
                 self.cloud_last_mmr = mmr
                 self.cloud_last_date = captured_at
@@ -888,6 +1006,10 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
     assert [call["captured_at"] for call in api.mmr_calls] == [
         old_date,
         new_date,
+    ]
+    assert [call["game_id"] for call in api.mmr_calls] == [
+        old.game.game_id,
+        newer.game.game_id,
     ]
     assert api.cloud_last_mmr == new_mmr
     assert api.cloud_last_date == new_date
