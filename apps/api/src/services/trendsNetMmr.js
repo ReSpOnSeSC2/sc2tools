@@ -15,12 +15,16 @@
  */
 
 const {
+  regionFromToonHandleExpr,
   myLadderRaceExpr,
   oppRaceSwitch,
 } = require("./trendsRegionExpr");
 
 /** A single ranked 1v1 result cannot credibly move more than this. */
 const NET_MMR_MAX_DELTA = 150;
+
+/** Stable Battle.net region order shared with the MMR progression chart. */
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "U"];
 
 const DROP_REASON_KEYS = [
   "excludedNonRanked1v1",
@@ -40,6 +44,7 @@ const DROP_REASON_KEYS = [
  *   games: import('mongodb').Collection,
  *   gamesMatchStage: (userId: string, filters: object) => object,
  *   bucketSwitch: () => object,
+ *   pickTimezone: (raw: unknown) => string,
  * }} Deps
  */
 
@@ -87,6 +92,7 @@ function netMmrPairStages(deps, userId, filters) {
     {
       $addFields: {
         _bucket: deps.bucketSwitch(),
+        _myRegion: regionFromToonHandleExpr("$myToonHandle"),
         _myLadderRace: myLadderRaceExpr(),
         _oppRace: oppRaceSwitch(),
         _hasMyAccount: hasNonEmptyString("$myToonHandle"),
@@ -279,8 +285,125 @@ function droppedFromCoverage(row = {}) {
   );
 }
 
-/** @param {Deps} deps @param {string} userId @param {object} filters */
-async function netMmrByMatchup(deps, userId, filters) {
+/**
+ * @param {Record<string, any>} root
+ * @param {string} timezone
+ */
+function dailySwingsFromFacet(root, timezone) {
+  const totals = root.dailyTotals?.[0] || {};
+  const normalizeSwing = (/** @type {Record<string, any> | undefined} */ row) => {
+    if (!row || !row.day) return null;
+    return {
+      day: row.day,
+      netMmr: Math.round(Number(row.netMmr) || 0),
+      measuredGames: Math.max(0, Number(row.measuredGames) || 0),
+      wins: Math.max(0, Number(row.wins) || 0),
+      losses: Math.max(0, Number(row.losses) || 0),
+    };
+  };
+  const regions = (Array.isArray(root.dailyByRegion)
+    ? root.dailyByRegion
+    : [])
+    .map((row) => ({
+      region: String(row.region || "U"),
+      bestGain: normalizeSwing(
+        row.bestGain && Number(row.bestGain.netMmr) > 0
+          ? row.bestGain
+          : undefined,
+      ),
+      biggestLoss: normalizeSwing(
+        row.biggestLoss && Number(row.biggestLoss.netMmr) < 0
+          ? row.biggestLoss
+          : undefined,
+      ),
+      measuredDays: Math.max(0, Number(row.measuredDays) || 0),
+      measuredGames: Math.max(0, Number(row.measuredGames) || 0),
+    }))
+    .sort((a, b) => {
+      const ai = REGION_PRIORITY.indexOf(a.region);
+      const bi = REGION_PRIORITY.indexOf(b.region);
+      const aw = ai === -1 ? REGION_PRIORITY.length : ai;
+      const bw = bi === -1 ? REGION_PRIORITY.length : bi;
+      return aw - bw || a.region.localeCompare(b.region);
+    });
+  return {
+    timezone,
+    bestGain: normalizeSwing(root.dailyBestGain?.[0]),
+    biggestLoss: normalizeSwing(root.dailyBiggestLoss?.[0]),
+    measuredDays: Math.max(0, Number(totals.measuredDays) || 0),
+    measuredGames: Math.max(0, Number(totals.measuredGames) || 0),
+    regions,
+  };
+}
+
+/** @param {string} timezone */
+function dailyMmrGroupStage(timezone) {
+  return {
+    $group: {
+      _id: { $dateTrunc: { date: "$date", unit: "day", timezone } },
+      netMmr: { $sum: "$_delta" },
+      measuredGames: { $sum: 1 },
+      wins: {
+        $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] },
+      },
+      losses: {
+        $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
+      },
+    },
+  };
+}
+
+function dailySwingProjectStage() {
+  return {
+    $project: {
+      _id: 0,
+      day: "$_id",
+      netMmr: 1,
+      measuredGames: 1,
+      wins: 1,
+      losses: 1,
+    },
+  };
+}
+
+/** @param {string} timezone */
+function dailyByRegionGroupStage(timezone) {
+  return {
+    $group: {
+      _id: {
+        region: "$_myRegion",
+        day: { $dateTrunc: { date: "$date", unit: "day", timezone } },
+      },
+      netMmr: { $sum: "$_delta" },
+      measuredGames: { $sum: 1 },
+      wins: {
+        $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] },
+      },
+      losses: {
+        $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
+      },
+    },
+  };
+}
+
+function regionalSwingOutput() {
+  return {
+    day: "$_id.day",
+    netMmr: "$netMmr",
+    measuredGames: "$measuredGames",
+    wins: "$wins",
+    losses: "$losses",
+  };
+}
+
+/**
+ * @param {Deps} deps
+ * @param {string} userId
+ * @param {object} filters
+ * @param {{tz?: string}} [opts]
+ */
+async function netMmrByMatchup(deps, userId, filters, opts = {}) {
+  const timezone = deps.pickTimezone(opts.tz);
   const [root = {}] = await deps.games
     .aggregate([
       ...netMmrPairStages(deps, userId, filters),
@@ -308,6 +431,93 @@ async function netMmrByMatchup(deps, userId, filters) {
               },
             },
             { $sort: { netMmr: -1 } },
+          ],
+          // Daily records reuse the exact accepted replay pairs above.
+          // The delta belongs to the current (anchor) replay's local day;
+          // the next replay may sit outside the active date filter and only
+          // supplies that anchor game's ending MMR. Group across separately
+          // partitioned accounts/races so the result is the user's total
+          // movement on each selected day without ever cross-pairing ladders.
+          dailyTotals: [
+            { $match: { _dropReason: null } },
+            dailyMmrGroupStage(timezone),
+            {
+              $group: {
+                _id: null,
+                measuredDays: { $sum: 1 },
+                measuredGames: { $sum: "$measuredGames" },
+              },
+            },
+            { $project: { _id: 0, measuredDays: 1, measuredGames: 1 } },
+          ],
+          dailyBestGain: [
+            { $match: { _dropReason: null } },
+            dailyMmrGroupStage(timezone),
+            { $match: { netMmr: { $gt: 0 } } },
+            // Deterministic ties: prefer the most recent local day.
+            { $sort: { netMmr: -1, _id: -1 } },
+            { $limit: 1 },
+            dailySwingProjectStage(),
+          ],
+          dailyBiggestLoss: [
+            { $match: { _dropReason: null } },
+            dailyMmrGroupStage(timezone),
+            { $match: { netMmr: { $lt: 0 } } },
+            { $sort: { netMmr: 1, _id: -1 } },
+            { $limit: 1 },
+            dailySwingProjectStage(),
+          ],
+          // One bounded post-window branch derives both extrema for each
+          // OWN ladder region. `$top` selects the latest day on equal net
+          // movement, while the separate positive/negative counters let
+          // response shaping turn an absent direction into null rather than
+          // returning a flat/opposite-sign day.
+          dailyByRegion: [
+            { $match: { _dropReason: null } },
+            dailyByRegionGroupStage(timezone),
+            {
+              $group: {
+                _id: "$_id.region",
+                bestGain: {
+                  $top: {
+                    sortBy: { netMmr: -1, "_id.day": -1 },
+                    output: regionalSwingOutput(),
+                  },
+                },
+                biggestLoss: {
+                  $top: {
+                    sortBy: { netMmr: 1, "_id.day": -1 },
+                    output: regionalSwingOutput(),
+                  },
+                },
+                positiveDays: {
+                  $sum: { $cond: [{ $gt: ["$netMmr", 0] }, 1, 0] },
+                },
+                negativeDays: {
+                  $sum: { $cond: [{ $lt: ["$netMmr", 0] }, 1, 0] },
+                },
+                measuredDays: { $sum: 1 },
+                measuredGames: { $sum: "$measuredGames" },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                region: "$_id",
+                bestGain: {
+                  $cond: [{ $gt: ["$positiveDays", 0] }, "$bestGain", null],
+                },
+                biggestLoss: {
+                  $cond: [
+                    { $gt: ["$negativeDays", 0] },
+                    "$biggestLoss",
+                    null,
+                  ],
+                },
+                measuredDays: 1,
+                measuredGames: 1,
+              },
+            },
           ],
         },
       },
@@ -348,6 +558,7 @@ async function netMmrByMatchup(deps, userId, filters) {
     totalGames: summary.totalGames || 0,
     eligibleGames: summary.eligibleGames || 0,
     dropped: droppedFromCoverage(summary),
+    dailySwings: dailySwingsFromFacet(root, timezone),
   };
 }
 

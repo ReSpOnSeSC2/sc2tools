@@ -656,6 +656,12 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     expect(out.matchups).toEqual([]);
     expect(out.dropped.missingMyMmr).toBe(1);
     expect(out.dropped.nextMissingMyMmr).toBe(1);
+    expect(out.dailySwings).toMatchObject({
+      bestGain: null,
+      biggestLoss: null,
+      measuredDays: 0,
+      measuredGames: 0,
+    });
   });
 
   test("numeric MMR without replay provenance is quarantined", async () => {
@@ -820,6 +826,322 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     expect(out.totalGames).toBe(3);
     expect(z.games).toBe(2);
     expect(z.netMmr).toBe(50);
+  });
+
+  test("daily swings use local anchor days, sum independent ladders, and prefer the latest tie", async () => {
+    const docs = [];
+    const addPair = ({
+      prefix,
+      handle,
+      anchorDate,
+      nextDate,
+      startMmr,
+      delta,
+      map = "Hard Lead LE",
+    }) => {
+      docs.push(
+        makeGame({
+          gameId: `${prefix}-anchor`,
+          date: new Date(anchorDate),
+          myToonHandle: handle,
+          myMmr: startMmr,
+          result: delta < 0 ? "Defeat" : "Victory",
+          map,
+        }),
+        makeGame({
+          gameId: `${prefix}-next`,
+          date: new Date(nextDate),
+          myToonHandle: handle,
+          myMmr: startMmr + delta,
+          map,
+        }),
+      );
+    };
+
+    // America/New_York still sees 03:30Z on May 10 as May 9. Its
+    // next reading crosses local midnight, but the +25 belongs to the
+    // anchor replay's May 9 record.
+    addPair({
+      prefix: "a",
+      handle: "1-S2-1-201",
+      anchorDate: "2026-05-10T03:30:00Z",
+      nextDate: "2026-05-10T04:10:00Z",
+      startMmr: 4000,
+      delta: 25,
+    });
+    // A second account contributes another +25 to the same selected day,
+    // while account-aware partitioning prevents the two ladders pairing.
+    addPair({
+      prefix: "b",
+      handle: "1-S2-1-202",
+      anchorDate: "2026-05-09T20:00:00Z",
+      nextDate: "2026-05-09T20:10:00Z",
+      startMmr: 4300,
+      delta: 25,
+    });
+    addPair({
+      prefix: "c",
+      handle: "1-S2-1-203",
+      anchorDate: "2026-05-10T15:00:00Z",
+      nextDate: "2026-05-10T15:10:00Z",
+      startMmr: 4400,
+      delta: -30,
+    });
+    // This +50 ties May 9. The deterministic record is the newer day.
+    // Its next reading is outside the display time frame but still closes
+    // the selected anchor game's delta.
+    addPair({
+      prefix: "d",
+      handle: "1-S2-1-204",
+      anchorDate: "2026-05-11T15:00:00Z",
+      nextDate: "2026-05-11T17:00:00Z",
+      startMmr: 4500,
+      delta: 50,
+    });
+    // A larger filtered-out day must not become the record.
+    addPair({
+      prefix: "excluded",
+      handle: "1-S2-1-205",
+      anchorDate: "2026-05-11T14:00:00Z",
+      nextDate: "2026-05-11T14:10:00Z",
+      startMmr: 4600,
+      delta: 100,
+      map: "Other Map",
+    });
+    // A resumed replay is ignored before pairing, so it cannot replace
+    // account A's real next observation or create a phantom daily move.
+    docs.push(
+      makeGame({
+        gameId: "a-resumed",
+        date: new Date("2026-05-10T03:50:00Z"),
+        myToonHandle: "1-S2-1-201",
+        myMmr: 4100,
+        isResumedFromReplay: true,
+      }),
+    );
+    await db.games.insertMany(docs);
+
+    const out = await svc.netMmrByMatchup(
+      "u1",
+      {
+        map: "hard lead",
+        until: new Date("2026-05-11T16:00:00Z"),
+      },
+      { tz: "America/New_York" },
+    );
+
+    expect(out.dailySwings).toMatchObject({
+      timezone: "America/New_York",
+      measuredDays: 3,
+      measuredGames: 4,
+      bestGain: {
+        netMmr: 50,
+        measuredGames: 1,
+        wins: 1,
+        losses: 0,
+      },
+      biggestLoss: {
+        netMmr: -30,
+        measuredGames: 1,
+        wins: 0,
+        losses: 1,
+      },
+    });
+    expect(new Date(out.dailySwings.bestGain.day).toISOString()).toBe(
+      "2026-05-11T04:00:00.000Z",
+    );
+    expect(new Date(out.dailySwings.biggestLoss.day).toISOString()).toBe(
+      "2026-05-10T04:00:00.000Z",
+    );
+  });
+
+  test("flat-only measured days report no gain or loss record", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({ gameId: "flat-1", date: new Date(t0), myMmr: 4500 }),
+      makeGame({
+        gameId: "flat-2",
+        date: new Date(t0 + MIN_AGO),
+        myMmr: 4500,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {}, { tz: "bad/timezone" });
+    expect(out.dailySwings).toEqual({
+      timezone: "UTC",
+      bestGain: null,
+      biggestLoss: null,
+      measuredDays: 1,
+      measuredGames: 1,
+      regions: [
+        {
+          region: "NA",
+          bestGain: null,
+          biggestLoss: null,
+          measuredDays: 1,
+          measuredGames: 1,
+        },
+      ],
+    });
+  });
+
+  test("daily regional records stay independent when regions cancel overall and use latest local-day ties", async () => {
+    const docs = [];
+    const addRegionalPair = ({ prefix, handle, date, startMmr, delta }) => {
+      const anchor = new Date(date);
+      docs.push(
+        makeGame({
+          gameId: `${prefix}-anchor`,
+          date: anchor,
+          myToonHandle: handle,
+          myMmr: startMmr,
+          result: delta < 0 ? "Defeat" : "Victory",
+        }),
+        makeGame({
+          gameId: `${prefix}-next`,
+          date: new Date(anchor.getTime() + MIN_AGO),
+          myToonHandle: handle,
+          myMmr: startMmr + delta,
+        }),
+      );
+    };
+
+    // NA +40 and EU -40 cancel in the overall May 10 row. Each own-region
+    // record must remain visible instead of disappearing into the flat sum.
+    addRegionalPair({
+      prefix: "na-tie-old",
+      handle: "1-S2-1-301",
+      date: "2026-05-10T15:00:00Z",
+      startMmr: 4000,
+      delta: 40,
+    });
+    addRegionalPair({
+      prefix: "eu-loss",
+      handle: "2-S2-1-302",
+      date: "2026-05-10T16:00:00Z",
+      startMmr: 4300,
+      delta: -40,
+    });
+    // Equal NA gain on the following local day: latest tie wins.
+    addRegionalPair({
+      prefix: "na-tie-new",
+      handle: "1-S2-1-303",
+      date: "2026-05-11T15:00:00Z",
+      startMmr: 4400,
+      delta: 40,
+    });
+    addRegionalPair({
+      prefix: "na-loss",
+      handle: "1-S2-1-304",
+      date: "2026-05-12T15:00:00Z",
+      startMmr: 4500,
+      delta: -20,
+    });
+    addRegionalPair({
+      prefix: "eu-gain",
+      handle: "2-S2-1-305",
+      date: "2026-05-12T16:00:00Z",
+      startMmr: 4600,
+      delta: 15,
+    });
+    // Unknown but nonempty handle remains a valid, separately reported
+    // ladder region and sorts after every known Blizzard region.
+    addRegionalPair({
+      prefix: "unknown-gain",
+      handle: "9-S2-1-306",
+      date: "2026-05-13T15:00:00Z",
+      startMmr: 4700,
+      delta: 5,
+    });
+    await db.games.insertMany(docs);
+
+    const out = await svc.netMmrByMatchup(
+      "u1",
+      {},
+      { tz: "America/New_York" },
+    );
+    expect(out.dailySwings.regions.map((row) => row.region)).toEqual([
+      "NA",
+      "EU",
+      "U",
+    ]);
+    const [na, eu, unknown] = out.dailySwings.regions;
+    expect(na).toMatchObject({
+      measuredDays: 3,
+      measuredGames: 3,
+      bestGain: { netMmr: 40, measuredGames: 1, wins: 1, losses: 0 },
+      biggestLoss: { netMmr: -20, measuredGames: 1, wins: 0, losses: 1 },
+    });
+    expect(new Date(na.bestGain.day).toISOString()).toBe(
+      "2026-05-11T04:00:00.000Z",
+    );
+    expect(eu).toMatchObject({
+      measuredDays: 2,
+      measuredGames: 2,
+      bestGain: { netMmr: 15 },
+      biggestLoss: { netMmr: -40 },
+    });
+    expect(new Date(eu.biggestLoss.day).toISOString()).toBe(
+      "2026-05-10T04:00:00.000Z",
+    );
+    expect(unknown).toMatchObject({
+      measuredDays: 1,
+      measuredGames: 1,
+      bestGain: { netMmr: 5 },
+      biggestLoss: null,
+    });
+    // The regional May 10 moves cancel, while May 12 nets -5 overall.
+    expect(out.dailySwings.bestGain.netMmr).toBe(40);
+    expect(out.dailySwings.biggestLoss.netMmr).toBe(-5);
+  });
+
+  test("the global region filter scopes opponent region while records label own ladder region", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "own-na-vs-eu",
+        date: new Date(t0),
+        myToonHandle: "1-S2-1-401",
+        myMmr: 4000,
+        opponent: { race: "Zerg", region: "EU", toonHandle: "2-S2-1-1" },
+      }),
+      makeGame({
+        gameId: "own-na-next",
+        date: new Date(t0 + MIN_AGO),
+        myToonHandle: "1-S2-1-401",
+        myMmr: 4020,
+        opponent: { race: "Zerg", region: "NA", toonHandle: "1-S2-1-1" },
+      }),
+      makeGame({
+        gameId: "own-eu-vs-na",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myToonHandle: "2-S2-1-402",
+        myMmr: 4300,
+        opponent: { race: "Zerg", region: "NA", toonHandle: "1-S2-1-2" },
+      }),
+      makeGame({
+        gameId: "own-eu-next",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myToonHandle: "2-S2-1-402",
+        myMmr: 4325,
+        opponent: { race: "Zerg", region: "NA", toonHandle: "1-S2-1-3" },
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup(
+      "u1",
+      { regions: ["EU"] },
+      { tz: "UTC" },
+    );
+    expect(out.dailySwings.regions).toEqual([
+      {
+        region: "NA",
+        bestGain: expect.objectContaining({ netMmr: 20 }),
+        biggestLoss: null,
+        measuredDays: 1,
+        measuredGames: 1,
+      },
+    ]);
   });
 
   test("Random queue pairs by selected race, not spawned race", async () => {

@@ -324,6 +324,31 @@ describe("net MMR by opponent", () => {
 });
 
 describe("GET /v1/mmr-by-matchup/opponents", () => {
+  test("forwards the requested timezone to the shared matchup summary", async () => {
+    const netMmrByMatchup = jest.fn(async () => ({ matchups: [] }));
+    const router = buildAggregationsRouter({
+      auth: (req, _res, next) => {
+        req.auth = { userId: "u-route" };
+        next();
+      },
+      aggregations: { netMmrByMatchup },
+      macroReport: {},
+      streak: {},
+    });
+    const app = express();
+    app.use("/v1", router);
+
+    const res = await request(app).get(
+      "/v1/mmr-by-matchup?since=2026-01-01&tz=America%2FNew_York",
+    );
+    expect(res.status).toBe(200);
+    expect(netMmrByMatchup).toHaveBeenCalledWith(
+      "u-route",
+      expect.objectContaining({ since: expect.any(Date) }),
+      { tz: "America/New_York" },
+    );
+  });
+
   test("normalizes drill-down controls and forwards global filters", async () => {
     const netMmrByOpponent = jest.fn(async () => ({ items: [] }));
     const router = buildAggregationsRouter({

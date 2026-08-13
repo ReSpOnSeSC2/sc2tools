@@ -19,6 +19,11 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { ChartTooltip } from "./ChartTooltip";
+import { MmrDailySwings } from "./MmrDailySwings";
+import {
+  netMmrByMatchupPath,
+  type NetMmrByMatchupResponseBase,
+} from "@/lib/netMmrOpponents";
 
 type MmrPoint = {
   bucket: string;
@@ -215,6 +220,13 @@ export function MmrProgressionChart({
   );
   const { data, isLoading } = useApi<MmrResponse>(
     `/v1/timeseries/mmr${filtersToQuery(params)}#${dbRev}`,
+  );
+  const {
+    data: matchupData,
+    isLoading: dailySwingsLoading,
+    error: dailySwingsError,
+  } = useApi<NetMmrByMatchupResponseBase>(
+    netMmrByMatchupPath(filters, tz, dbRev),
   );
 
   // Per-account series take priority. Fall back to per-region when
@@ -445,6 +457,11 @@ export function MmrProgressionChart({
           )}
         </ResponsiveContainer>
       </div>
+      <MmrDailySwings
+        dailySwings={matchupData?.dailySwings}
+        isLoading={dailySwingsLoading}
+        unavailable={Boolean(dailySwingsError) && !matchupData?.dailySwings}
+      />
     </Card>
   );
 }

@@ -12,10 +12,15 @@ import {
   Cell,
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import { useFilters } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1 } from "@/lib/format";
-import type { NetMmrRace } from "@/lib/netMmrOpponents";
+import {
+  netMmrByMatchupPath,
+  type NetMmrByMatchupResponseBase,
+  type NetMmrRace,
+} from "@/lib/netMmrOpponents";
+import { clientTimezone } from "@/lib/timeseries";
 import { NetMmrRaceOpponentsModal } from "./NetMmrRaceOpponentsModal";
 
 type MatchupRow = {
@@ -50,7 +55,7 @@ type MatchupCoverage = {
   dropped: DroppedCoverage;
 };
 
-type Response = {
+type Response = NetMmrByMatchupResponseBase & {
   matchups: MatchupRow[];
   coverage?: MatchupCoverage[];
   totalGames?: number;
@@ -128,8 +133,9 @@ function compactCoverageReasons(dropped: DroppedCoverage | undefined): string[] 
 export function NetMmrByMatchupChart() {
   const { filters, dbRev } = useFilters();
   const [selectedRace, setSelectedRace] = useState<NetMmrRace | null>(null);
+  const tz = useMemo(() => clientTimezone(), []);
   const { data, isLoading } = useApi<Response>(
-    `/v1/mmr-by-matchup${filtersToQuery(filters)}#${dbRev}`,
+    netMmrByMatchupPath(filters, tz, dbRev),
   );
 
   const rows = useMemo(() => {

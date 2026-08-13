@@ -10,6 +10,41 @@ import {
 
 export type NetMmrRace = "P" | "T" | "Z" | "R" | "U";
 
+/** One local calendar day's accepted, verified MMR movement. */
+export type DailyMmrSwing = {
+  day: string;
+  netMmr: number;
+  measuredGames: number;
+  wins: number;
+  losses: number;
+};
+
+/** Daily records computed from the same accepted pairs as matchup impact. */
+export type DailyMmrSwings = {
+  timezone: string;
+  bestGain: DailyMmrSwing | null;
+  biggestLoss: DailyMmrSwing | null;
+  measuredDays: number;
+  measuredGames: number;
+  /**
+   * Own Battle.net ladder-region records. Optional while responses cached
+   * before the region-aware API revision expire.
+   */
+  regions?: DailyMmrRegionSwings[];
+};
+
+export type DailyMmrRegionSwings = {
+  region: "NA" | "EU" | "KR" | "CN" | "SEA" | "U";
+  bestGain: DailyMmrSwing | null;
+  biggestLoss: DailyMmrSwing | null;
+  measuredDays: number;
+  measuredGames: number;
+};
+
+export type NetMmrByMatchupResponseBase = {
+  dailySwings?: DailyMmrSwings;
+};
+
 export type NetMmrOpponentSort =
   | "net_mmr"
   | "mmr_won"
@@ -89,6 +124,23 @@ export function netMmrOpponentsPath(
   const path = `/v1/mmr-by-matchup/opponents${filtersToQuery({
     ...filters,
     ...controls,
+  })}`;
+  return typeof dbRev === "number" ? `${path}#${dbRev}` : path;
+}
+
+/**
+ * Canonical cache key for the matchup summary. Both the matchup chart and
+ * MMR-progression daily-record strip use this exact path so SWR performs one
+ * request and the server performs one pairing aggregation.
+ */
+export function netMmrByMatchupPath(
+  filters: AnalyzerFilters,
+  timeZone: string,
+  dbRev?: number,
+): string {
+  const path = `/v1/mmr-by-matchup${filtersToQuery({
+    ...filters,
+    tz: timeZone,
   })}`;
   return typeof dbRev === "number" ? `${path}#${dbRev}` : path;
 }

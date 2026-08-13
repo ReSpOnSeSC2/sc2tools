@@ -663,7 +663,11 @@ export interface AggregationsService {
     filters: object,
   ): Promise<object>;
   mapTrend(userId: string, opts: object, filters: object): Promise<object>;
-  netMmrByMatchup(userId: string, filters: object): Promise<object>;
+  netMmrByMatchup(
+    userId: string,
+    filters: object,
+    opts?: { tz?: string },
+  ): Promise<object>;
   netMmrByOpponent(
     userId: string,
     filters: object,

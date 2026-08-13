@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Trends now highlights the strongest and weakest MMR days in the selected
+  view** - a compact, responsive strip beneath MMR progression shows the
+  highest verified daily MMR gain and biggest daily MMR loss, including the
+  local date, measured-game count, and record. The calculation honors every
+  active filter while keeping separate accounts, ladder races, and the user's
+  own Battle.net regions from creating false swings.
+
 - **Build authors can safely remove their own builds from Community** — owner-
   only controls now appear on Community cards and build pages, with an impact
   review followed by a separate acknowledgement confirmation. Unpublishing

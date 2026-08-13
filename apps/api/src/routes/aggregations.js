@@ -330,7 +330,10 @@ function buildAggregationsRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const filters = parseFilters(req.query);
-      res.json(await deps.aggregations.netMmrByMatchup(userId, filters));
+      const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
+      res.json(
+        await deps.aggregations.netMmrByMatchup(userId, filters, { tz }),
+      );
     } catch (err) {
       next(err);
     }
