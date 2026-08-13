@@ -113,6 +113,10 @@ services:
         # batch size. Client-side Retry-After + adaptive batching remain as
         # the belt-and-suspenders bound on server load.
         value: "600"
+      # Fail-fast, per-process replay-ingest admission. Keep one active batch
+      # on Starter; raise only after measuring production RSS under load.
+      - key: REPLAY_INGEST_MAX_ACTIVE
+        value: "1"
       - key: AGENT_RELEASE_ADMIN_TOKEN
         sync: false
       # Admin access. CSV of emails (case-insensitive) — any signed-in

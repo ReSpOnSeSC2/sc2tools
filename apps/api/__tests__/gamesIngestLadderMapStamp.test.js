@@ -27,7 +27,13 @@ function buildTestApp({ ladderMapPool } = {}) {
   };
   const app = express();
   app.use(express.json());
-  app.use(buildGamesRouter({ games, opponents, ladderMapPool, auth }));
+  app.use(buildGamesRouter({
+    games,
+    opponents,
+    ladderMapPool,
+    auth,
+    testOnlyAllowMissingReplayIngestAdmission: true,
+  }));
   return { app, upserts };
 }
 
@@ -143,7 +149,12 @@ describe("POST /games ladder-map + player-count stamping", () => {
     };
     const app = express();
     app.use(express.json());
-    app.use(buildGamesRouter({ games, opponents, auth }));
+    app.use(buildGamesRouter({
+      games,
+      opponents,
+      auth,
+      testOnlyAllowMissingReplayIngestAdmission: true,
+    }));
 
     const res = await request(app)
       .post("/games")
@@ -204,6 +215,7 @@ describe("POST /games ladder-map + player-count stamping", () => {
       customBuilds,
       io,
       auth,
+      testOnlyAllowMissingReplayIngestAdmission: true,
     }));
     const marker = {
       ...baseGame,
@@ -260,7 +272,13 @@ describe("POST /games ladder-map + player-count stamping", () => {
     };
     const app = express();
     app.use(express.json());
-    app.use(buildGamesRouter({ games, opponents, users, auth }));
+    app.use(buildGamesRouter({
+      games,
+      opponents,
+      users,
+      auth,
+      testOnlyAllowMissingReplayIngestAdmission: true,
+    }));
     const marker = {
       ...baseGame,
       gameId: "resume-retry",

@@ -33,6 +33,26 @@ describe("config loader — CORS allowlist fail-fast", () => {
   });
 });
 
+describe("config loader - replay ingest admission", () => {
+  test("defaults to one active memory-heavy replay batch", () => {
+    expect(loadConfig({ ...BASE_ENV }).replayIngestMaxActive).toBe(1);
+  });
+
+  test("accepts an explicit measured-capacity override", () => {
+    expect(loadConfig({
+      ...BASE_ENV,
+      REPLAY_INGEST_MAX_ACTIVE: "2",
+    }).replayIngestMaxActive).toBe(2);
+  });
+
+  test("rejects a disabled admission limit", () => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      REPLAY_INGEST_MAX_ACTIVE: "0",
+    })).toThrow(/REPLAY_INGEST_MAX_ACTIVE/);
+  });
+});
+
 describe("config loader - original replay storage", () => {
   test("is explicitly disabled by default", () => {
     expect(loadConfig({ ...BASE_ENV }).replayFilesStore).toBe("disabled");

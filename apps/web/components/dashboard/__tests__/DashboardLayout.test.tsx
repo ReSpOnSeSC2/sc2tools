@@ -26,6 +26,9 @@ vi.mock("@/components/SyncStatus", () => ({ SyncStatus: () => null }));
 vi.mock("@/components/dashboard/LiveGamePanel", () => ({
   LiveGamePanel: () => null,
 }));
+vi.mock("@/components/dashboard/AgentUpgradeNotice", () => ({
+  AgentUpgradeNotice: () => null,
+}));
 vi.mock("@/components/ui/ErrorBoundary", () => ({
   ErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));

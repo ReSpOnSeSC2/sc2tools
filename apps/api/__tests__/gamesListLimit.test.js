@@ -3,12 +3,10 @@
 
 /**
  * Coverage for GamesService.list's caller-supplied limit. Pre-fix the
- * clamp used GAMES_PAGE_SIZE (100) as both default AND ceiling, so a
- * SPA asking for `?limit=20000` silently got 100 rows back. The arcade
- * modes that aggregate over a user's full corpus (Loss-Pattern Sleuth,
- * Closer's Eye, Macro Memory, Two Truths and a Lie) need the ceiling
- * to be GAMES_LIST_MAX so prolific users actually see meaningful
- * histograms.
+ * clamp used GAMES_PAGE_SIZE (100) as both default AND ceiling. The general
+ * route now allows a useful 2,000-row page but never the old monolithic 20k
+ * response; complete-history Arcade/Daily Pulse data uses the dedicated,
+ * cursor-paged analysis corpus instead.
  */
 
 const { MongoMemoryServer } = require("mongodb-memory-server");
@@ -17,6 +15,8 @@ const { connect } = require("../src/db/connect");
 const { GamesService } = require("../src/services/games");
 const { LIMITS } = require("../src/config/constants");
 
+// One lifecycle-backed Mongo fixture keeps the cap cases fast and isolated.
+// eslint-disable-next-line max-lines-per-function
 describe("GamesService.list — limit clamping", () => {
   let mongo;
   let db;
@@ -89,4 +89,14 @@ describe("GamesService.list — limit clamping", () => {
     expect(out.items.length).toBe(LIMITS.GAMES_LIST_MAX);
     expect(out.nextBefore).toBeTruthy();
   }, 60_000);
+
+  test("a stale limit=20000 client is capped to one safe general page", async () => {
+    const userId = "u-stale-client";
+    await db.games.insertMany(makeGames(userId, LIMITS.GAMES_LIST_MAX + 1));
+    const out = await svc.list(userId, { limit: 20_000 });
+    expect(out.items).toHaveLength(LIMITS.GAMES_LIST_MAX);
+    expect(out.nextBefore).toBeTruthy();
+    expect(LIMITS.GAMES_LIST_MAX).toBeLessThan(20_000);
+    expect(LIMITS.GAMES_ANALYSIS_CORPUS_MAX).toBe(20_000);
+  });
 });

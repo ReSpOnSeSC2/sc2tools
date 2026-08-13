@@ -1,10 +1,41 @@
 "use strict";
 
 const crypto = require("crypto");
+const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+
+// Exact field contract shared by the dashboard Daily Pulse and Arcade.  A
+// normal slim game row is still roughly 3 kB and grows whenever another
+// feature adds metadata.  Keeping this allow-list next to the query prevents
+// those unrelated additions from silently inflating complete-history reads.
+const ANALYSIS_GAME_PROJECTION = Object.freeze({
+  _id: 1,
+  gameId: 1,
+  date: 1,
+  result: 1,
+  myToonHandle: 1,
+  myRace: 1,
+  myMmr: 1,
+  oppMmr: 1,
+  duration: 1,
+  durationSec: 1,
+  map: 1,
+  myBuild: 1,
+  oppRace: 1,
+  opp_strategy: 1,
+  oppPulseId: 1,
+  macro_score: 1,
+  macroScore: 1,
+  "opponent.displayName": 1,
+  "opponent.mmr": 1,
+  "opponent.race": 1,
+  "opponent.pulseCharacterId": 1,
+  "opponent.pulseId": 1,
+  "opponent.strategy": 1,
+});
 
 /**
  * Games service. One document per (userId, gameId). Idempotent on
@@ -325,6 +356,54 @@ class GamesService {
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].date : null;
     return { items: page, nextBefore };
+  }
+
+  /**
+   * Cursor-page the complete-history rows consumed by Daily Pulse and Arcade.
+   *
+   * This intentionally does not reuse `list()`: that endpoint returns every
+   * slim-row field and historically allowed a 20,000-row response. During a
+   * Full Resync, one dashboard visit could therefore make Node hold the Mongo
+   * result, the JSON string and ingest bodies at the same time. Here each
+   * response is capped at 2,000 rows and projected to the exact analysis
+   * fields. The browser follows the opaque cursor up to the existing 20,000
+   * corpus ceiling, preserving every current card/Arcade calculation while
+   * bounding API memory for each concurrent user.
+   *
+   * The cursor includes `_id` as a deterministic tie-breaker, so games with
+   * the same replay timestamp are neither skipped nor duplicated.
+   *
+   * @param {string} userId
+   * @param {{limit?: number, cursor?: string}} [opts]
+   * @returns {Promise<{items: object[], nextCursor: string|null}>}
+   */
+  async listAnalysisCorpus(userId, opts = {}) {
+    const limit = clampAnalysisLimit(opts.limit);
+    const cursor = decodeAnalysisCursor(opts.cursor);
+    /** @type {Record<string, any>} */
+    const filter = { userId, isResumedFromReplay: { $ne: true } };
+    if (cursor) {
+      filter.$or = [
+        { date: { $lt: cursor.date } },
+        { date: cursor.date, _id: { $lt: cursor.id } },
+      ];
+    }
+
+    /** @type {Array<Record<string, any>>} */
+    const rows = await this.db.games
+      .find(filter, { projection: ANALYSIS_GAME_PROJECTION })
+      .sort({ date: -1, _id: -1 })
+      .limit(limit + 1)
+      .toArray();
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    return {
+      items: page.map(serializeAnalysisGame),
+      nextCursor: hasMore && last
+        ? encodeAnalysisCursor(last.date, last._id)
+        : null,
+    };
   }
 
   /**
@@ -1215,11 +1294,9 @@ function formatDayKey(value, timezone) {
 
 /**
  * Clamp a caller-supplied `limit`. Falls back to `fallback` when the
- * input is missing or invalid; otherwise caps at `LIMITS.GAMES_LIST_MAX`
- * (much larger than the historic page-size fallback) so callers with
- * thousands of replays — e.g. the arcade modes that aggregate over a
- * user's full corpus — can request enough rows to compute meaningful
- * histograms in one round-trip.
+ * input is missing or invalid; otherwise caps at `LIMITS.GAMES_LIST_MAX`.
+ * This legacy full-document route is deliberately one safe general page;
+ * complete-history analysis follows the projected cursor route above.
  *
  * @param {unknown} raw
  * @param {number} fallback
@@ -1230,6 +1307,83 @@ function clampLimit(raw, fallback) {
   if (!Number.isFinite(n) || n <= 0) return fallback;
   const ceiling = LIMITS.GAMES_LIST_MAX || fallback;
   return Math.min(n, ceiling);
+}
+
+/** @param {unknown} raw @returns {number} */
+function clampAnalysisLimit(raw) {
+  const fallback = LIMITS.GAMES_ANALYSIS_PAGE_SIZE || 2000;
+  const ceiling = LIMITS.GAMES_ANALYSIS_PAGE_MAX || fallback;
+  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, ceiling);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{date: Date, id: import('mongodb').ObjectId}|null}
+ */
+function decodeAnalysisCursor(raw) {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string" || raw.length > 512) {
+    throw invalidAnalysisCursor();
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!parsed || parsed.v !== 1 || typeof parsed.d !== "string") {
+      throw invalidAnalysisCursor();
+    }
+    const date = new Date(parsed.d);
+    const idText = typeof parsed.i === "string" ? parsed.i.toLowerCase() : "";
+    if (
+      Number.isNaN(date.getTime())
+      || !ObjectId.isValid(idText)
+      || new ObjectId(idText).toHexString() !== idText
+    ) {
+      throw invalidAnalysisCursor();
+    }
+    return { date, id: new ObjectId(idText) };
+  } catch (err) {
+    const known = /** @type {{code?: unknown}|null} */ (err);
+    if (known && known.code === "bad_request") throw err;
+    throw invalidAnalysisCursor();
+  }
+}
+
+/** @param {unknown} date @param {unknown} id @returns {string} */
+function encodeAnalysisCursor(date, id) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    throw new Error("analysis_games_cursor_date_missing");
+  }
+  const objectId = id instanceof ObjectId ? id : new ObjectId(String(id));
+  return Buffer.from(
+    JSON.stringify({ v: 1, d: date.toISOString(), i: objectId.toHexString() }),
+    "utf8",
+  ).toString("base64url");
+}
+
+/** @returns {Error & {status?: number, code?: string}} */
+function invalidAnalysisCursor() {
+  const err = /** @type {Error & {status: number, code: string}} */ (
+    new Error("invalid analysis games cursor")
+  );
+  err.status = 400;
+  err.code = "bad_request";
+  return err;
+}
+
+/**
+ * Drop the internal pagination id and serialize dates explicitly. Everything
+ * else is safe to spread because the Mongo query above uses a strict
+ * projection rather than an exclusion list.
+ *
+ * @param {Record<string, any>} row
+ * @returns {Record<string, any>}
+ */
+function serializeAnalysisGame(row) {
+  const out = { ...row };
+  delete out._id;
+  if (out.date instanceof Date) out.date = out.date.toISOString();
+  return out;
 }
 
 /**

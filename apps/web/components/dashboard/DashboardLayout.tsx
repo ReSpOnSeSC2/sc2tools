@@ -10,6 +10,7 @@ import { MobileSectionPicker } from "@/components/analyzer/MobileSectionPicker";
 import { TABS, type TabId } from "@/components/analyzer/tabs";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
+import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useApi } from "@/lib/clientApi";
 import {
@@ -26,6 +27,7 @@ type Me = ChecklistMe & {
   userId: string;
   source: string;
   games: { total: number; latest: string | null };
+  agentVersion?: string | null;
 };
 
 export function DashboardLayout({
@@ -124,6 +126,14 @@ export function DashboardLayout({
           Get the agent
         </Link>
       </header>
+
+      <AgentUpgradeNotice
+        initialAgent={{
+          paired: me.agentPaired,
+          version: me.agentVersion,
+          lastSeenAt: me.agentLastSeenAt,
+        }}
+      />
 
       {/* Live game card. Hidden by default; mounts a per-user SSE
           subscription and renders only while the desktop agent is

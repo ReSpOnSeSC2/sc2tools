@@ -175,6 +175,10 @@ export interface GamesService {
     userId: string,
     opts?: { limit?: number; before?: Date; oppPulseId?: string },
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
+  listAnalysisCorpus(
+    userId: string,
+    opts?: { limit?: number; cursor?: string },
+  ): Promise<{ items: object[]; nextCursor: string | null }>;
   get(userId: string, gameId: string): Promise<object | null>;
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;

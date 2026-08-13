@@ -10,7 +10,7 @@ const sentry = require("../util/sentry");
  * @returns {import('express').ErrorRequestHandler}
  */
 function buildErrorHandler(logger) {
-  return (err, req, res, _next) => {
+  return (err, req, res, next) => {
     const status = pickStatus(err);
     const code = err && err.code ? String(err.code) : codeFromStatus(status);
     logger.error(
@@ -26,6 +26,13 @@ function buildErrorHandler(logger) {
     // Forward unexpected 5xx to Sentry. 4xx are user errors and noise.
     if (status >= 500) {
       sentry.captureException(err);
+    }
+    // A replay-body deadline may already have sent a bounded 408 before
+    // destroying the slow upload stream. body-parser then reports the abort;
+    // delegate instead of attempting a second JSON response.
+    if (res.headersSent) {
+      next(err);
+      return;
     }
     res.status(status).json({
       error: {

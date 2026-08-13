@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from ..api_client import (
     ApiClient,
     ReplayArchiveSourceUnavailable,
+    ReplayIngestBusy,
     replay_file_matches_archive_marker,
 )
 from ..config import AgentConfig
@@ -1211,6 +1212,22 @@ class UploadQueue:
                     if self.is_pending(job.file_path):
                         self._retry_q.put_nowait(self._queue_item(job))
                 self._ingest_stop.wait(0.1)
+            except ReplayIngestBusy as exc:
+                # Intentional server admission control is neither a broken
+                # payload nor a capacity signal for adaptive batch sizing.
+                # Keep every path reserved, yield for Retry-After once, then
+                # retry the identical batch via the durable retry lane. Do not
+                # emit a failure callback: no upload has actually failed.
+                retry_jobs = [
+                    job for job in batch if self.is_pending(job.file_path)
+                ]
+                log.info(
+                    "upload_batch_deferred size=%d retry_after=%.3f",
+                    len(retry_jobs), exc.retry_after_seconds,
+                )
+                self._ingest_stop.wait(exc.retry_after_seconds)
+                for job in retry_jobs:
+                    self._retry_q.put_nowait(self._queue_item(job))
             except _ServerRejectedError as exc:
                 # Whole-batch envelope rejection (e.g. server returned
                 # a top-level error not per-game). Mark every job in

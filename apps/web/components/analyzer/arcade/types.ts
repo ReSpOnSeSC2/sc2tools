@@ -209,6 +209,8 @@ export interface ArcadeGame {
     displayName?: string;
     mmr?: number;
     race?: string;
+    strategy?: string | null;
+    pulseId?: string;
     /** Canonical numeric sc2pulse character id, when resolved at ingest. */
     pulseCharacterId?: string | null;
   };

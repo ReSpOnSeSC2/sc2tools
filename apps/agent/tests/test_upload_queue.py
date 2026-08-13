@@ -10,7 +10,10 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from sc2tools_agent.api_client import ReplayArchiveSourceUnavailable
+from sc2tools_agent.api_client import (
+    ReplayArchiveSourceUnavailable,
+    ReplayIngestBusy,
+)
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.replay_pipeline import CloudGame
 from sc2tools_agent.state import AgentState
@@ -1928,6 +1931,89 @@ def test_batch_transient_failure_re_enqueues_whole_batch(
             f"flaky-batch-{i}: post-retry marker is {marker!r} — "
             "transient failure path lost a job"
         )
+
+
+def test_two_workers_yield_to_server_admission_without_shrinking_or_skipping(
+    tmp_path: Path,
+) -> None:
+    """A held server slot defers worker two without penalizing its batch."""
+    first_entered = threading.Event()
+    busy_seen = threading.Event()
+    release_first = threading.Event()
+
+    class _SingleSlotApi:
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self._active = False
+            self.calls: list[list[str]] = []
+
+        def upload_games_batch(
+            self, games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            game_ids = [str(game["gameId"]) for game in games]
+            with self._lock:
+                self.calls.append(game_ids)
+                if self._active:
+                    busy_seen.set()
+                    raise ReplayIngestBusy(0.5)
+                self._active = True
+            try:
+                if not first_entered.is_set():
+                    first_entered.set()
+                    assert release_first.wait(timeout=5.0)
+                return {
+                    "accepted": [
+                        {"gameId": game_id, "created": True}
+                        for game_id in game_ids
+                    ],
+                    "rejected": [],
+                }
+            finally:
+                with self._lock:
+                    self._active = False
+
+        def patch_last_mmr(self, **_kwargs: Any) -> Dict[str, Any]:
+            return {"ok": True, "wrote": False}
+
+    state = AgentState(device_token="t")
+    api = _SingleSlotApi()
+    failures: list[tuple[Path, Exception]] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=2, upload_batch_size=4),
+        state=state,
+        api=api,
+        on_failure=lambda path, exc: failures.append((path, exc)),
+    )
+    jobs = [
+        _game(tmp_path, f"server-busy-{i}.SC2Replay")
+        for i in range(8)
+    ]
+    for job in jobs:
+        assert q.submit(job) is True
+    q.start()
+    try:
+        assert first_entered.wait(timeout=3.0)
+        assert busy_seen.wait(timeout=3.0)
+        assert state.uploaded == {}
+        assert all(q.is_pending(job.file_path) for job in jobs)
+        assert q._batch_size == 4
+        assert q._batch_ceiling == 4
+        assert failures == []
+        # The API client yields on the first 503 rather than sending the same
+        # multi-megabyte JSON body through its normal three-attempt loop.
+        assert len(api.calls) == 2
+
+        release_first.set()
+        assert _wait_for(lambda: len(state.uploaded) == 8, timeout=8.0)
+    finally:
+        release_first.set()
+        q.stop()
+
+    assert all(not q.is_pending(job.file_path) for job in jobs)
+    assert q._batch_size == 4
+    assert q._batch_ceiling == 4
+    assert failures == []
+    assert len(api.calls) == 3
 
 
 # --- Hot-swap (set_concurrency / set_batch_size) ---------------------

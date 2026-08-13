@@ -50,6 +50,22 @@ class ReplayArchiveSourceUnavailable(RuntimeError):
     """The accepted replay's local source may become readable later."""
 
 
+class ReplayIngestBusy(RuntimeError):
+    """The API deliberately deferred a replay batch for memory safety.
+
+    This is capacity backpressure, not a failed/oversized batch. The upload
+    queue keeps the complete batch reserved, waits once at the queue lane,
+    and retries without reducing the user's adaptive batch ceiling.
+    """
+
+    def __init__(self, retry_after_seconds: float) -> None:
+        self.retry_after_seconds = max(0.0, float(retry_after_seconds))
+        super().__init__(
+            "replay_ingest_busy; retry after "
+            f"{self.retry_after_seconds:g}s"
+        )
+
+
 def replay_file_matches_archive_marker(
     file_path: Path,
     marker: object,
@@ -572,6 +588,19 @@ class ApiClient:
                 return _safe_json(response)
             if 200 <= response.status_code < 300:
                 return _safe_json(response)
+            if (
+                response.status_code == 503
+                and _error_code(response) == "replay_ingest_busy"
+            ):
+                # The server rejected this body before parsing because another
+                # replay batch owns its bounded ingest slot. Re-posting the
+                # same multi-megabyte body three times here wastes bandwidth;
+                # hand the delay to UploadQueue so it can requeue intact and
+                # avoid treating intentional backpressure as a batch failure.
+                raise ReplayIngestBusy(
+                    _retry_after_seconds(response)
+                    or RETRY_BACKOFF_BASE_SEC
+                )
             if response.status_code in (408, 429) or response.status_code >= 500:
                 last_exc = _ApiError(response.status_code, response.text)
                 # 429 specifically: the server (express-rate-limit
@@ -613,6 +642,16 @@ def _safe_json(response: requests.Response) -> Dict[str, Any]:
     if not isinstance(out, dict):
         return {"_raw": out}
     return out
+
+
+def _error_code(response: requests.Response) -> Optional[str]:
+    """Return a structured API error code without trusting its shape."""
+    payload = _safe_json(response)
+    error = payload.get("error")
+    if isinstance(error, dict):
+        code = error.get("code")
+        return code if isinstance(code, str) else None
+    return None
 
 
 def _backoff(attempt: int) -> None:

@@ -27,6 +27,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   serverPepper: Buffer,
  *   corsAllowedOrigins: string[],
  *   rateLimitPerMinute: number,
+ *   replayIngestMaxActive: number,
  *   agentReleaseAdminToken: string|null,
  *   pythonExe: string|null,
  *   pythonAnalyzerDir: string|null,
@@ -111,6 +112,11 @@ function loadConfig(env = process.env) {
     rateLimitPerMinute: parseInteger(
       env.RATE_LIMIT_PER_MINUTE,
       DEFAULTS.RATE_LIMIT_PER_MINUTE,
+    ),
+    replayIngestMaxActive: parsePositiveInteger(
+      env.REPLAY_INGEST_MAX_ACTIVE,
+      DEFAULTS.REPLAY_INGEST_MAX_ACTIVE,
+      "REPLAY_INGEST_MAX_ACTIVE",
     ),
     agentReleaseAdminToken: env.AGENT_RELEASE_ADMIN_TOKEN || null,
     pythonExe: env.SC2_PY_PYTHON || null,
@@ -421,6 +427,18 @@ function parseInteger(raw, fallback) {
     throw new Error(`Env var must be an integer, got: ${raw}`);
   }
   return parsed;
+}
+
+/**
+ * @param {string|undefined} raw
+ * @param {number} fallback
+ * @param {string} name
+ * @returns {number}
+ */
+function parsePositiveInteger(raw, fallback, name) {
+  const value = parseInteger(raw, fallback);
+  if (value < 1) throw new Error(`${name} must be a positive integer`);
+  return value;
 }
 
 /** @param {string} raw @param {string} name */

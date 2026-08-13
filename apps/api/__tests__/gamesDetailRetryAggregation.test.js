@@ -44,6 +44,7 @@ function buildTestApp(gameDetails, opponents, replayFiles = null) {
     opponents,
     replayFiles: archiveVerifier,
     auth,
+    testOnlyAllowMissingReplayIngestAdmission: true,
   }));
   app.locals.gamesService = games;
   app.locals.replayFiles = archiveVerifier;

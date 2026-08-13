@@ -11,8 +11,8 @@
  * Freshness mechanics:
  *   - useDailySeed re-keys on day rollover (checked once a minute), so
  *     the strip rotates to the new day's mix without a refresh.
- *   - The games fetch shares the Arcade's exact SWR key, so opening
- *     the Arcade tab later costs nothing extra (and vice versa).
+ *   - One analyzer-scoped provider owns the memory-bounded corpus, so the
+ *     dashboard strip and Arcade reuse the same current flat snapshot.
  *   - Cards deep-link into the analyzer tab that owns the full story
  *     (via onNavigate — tab state lives in DashboardLayout, not URLs).
  *
@@ -27,14 +27,9 @@ import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPul
 import {
   normaliseGame,
 } from "@/components/analyzer/arcade/hooks/useArcadeData";
+import { useAnalysisGames } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 import { useDailySeed } from "@/components/analyzer/arcade/hooks/useDailySeed";
-import type { ArcadeGame } from "@/components/analyzer/arcade/types";
 import type { TabId } from "@/components/analyzer/tabs";
-
-interface ApiGamesPage {
-  items: Array<ArcadeGame & { durationSec?: number; macroScore?: number | null }>;
-  nextBefore?: string | null;
-}
 
 interface ApiSeasons {
   mapPool?: string[];
@@ -104,17 +99,18 @@ export function DailyPulse({
 }) {
   const seed = useDailySeed();
 
-  // Shares the Arcade's SWR keys byte-for-byte so the two surfaces
-  // dedupe into a single fetch per session.
-  const gamesRes = useApi<ApiGamesPage>("/v1/games?limit=20000");
+  // Shared with Arcade, but cursor-paged through a strict field projection so
+  // an ordinary dashboard visit never asks the API to materialise/serialize
+  // 20,000 full slim game documents in one response.
+  const gamesRes = useAnalysisGames();
   const seasonsRes = useApi<ApiSeasons>("/v1/seasons");
 
   const games = useMemo(
     () =>
-      Array.isArray(gamesRes.data?.items)
-        ? gamesRes.data!.items.map(normaliseGame)
+      Array.isArray(gamesRes.items)
+        ? gamesRes.items.map(normaliseGame)
         : [],
-    [gamesRes.data],
+    [gamesRes.items],
   );
   const mapPool = useMemo(
     () => {

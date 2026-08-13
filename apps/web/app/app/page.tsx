@@ -8,6 +8,7 @@ type Me = {
   source: string;
   games: { total: number; latest: string | null };
   agentPaired: boolean;
+  agentVersion?: string | null;
   agentLastSeenAt?: string | null;
   onboarding?: { downloadStartedAt?: string; dismissedAt?: string } | null;
 };

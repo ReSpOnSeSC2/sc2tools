@@ -39,7 +39,14 @@ function buildTestApp() {
   app.use(express.json());
   // Pass the retired dependency deliberately: the router must ignore it
   // even if an older app composition still supplies it.
-  app.use(buildGamesRouter({ games, opponents, pulseMmr, users, auth }));
+  app.use(buildGamesRouter({
+    games,
+    opponents,
+    pulseMmr,
+    users,
+    auth,
+    testOnlyAllowMissingReplayIngestAdmission: true,
+  }));
   return { app, pulseMmr, upserts, users };
 }
 

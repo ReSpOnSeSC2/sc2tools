@@ -728,7 +728,12 @@ class AggregationsService {
     const requestedLimit = Number.parseInt(String(opts.limit || LIMITS.GAMES_LIST_DEFAULT), 10);
     const limit = Math.max(
       0,
-      Math.min(LIMITS.GAMES_LIST_MAX, Number.isFinite(requestedLimit) ? requestedLimit : LIMITS.GAMES_LIST_DEFAULT),
+      Math.min(
+        LIMITS.GAMES_FILTERED_LIST_MAX,
+        Number.isFinite(requestedLimit)
+          ? requestedLimit
+          : LIMITS.GAMES_LIST_DEFAULT,
+      ),
     );
     const sort = pickSort(opts.sort);
     /** @type {Array<Record<string, any>>} */

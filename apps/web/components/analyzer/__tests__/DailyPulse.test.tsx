@@ -7,6 +7,8 @@ import { DailyPulse } from "../DailyPulse";
 const DAY = "2026-07-18";
 
 const apiData = new Map<string, unknown>();
+let analysisGames: ArcadeGame[] = [];
+let analysisLoading = true;
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => {
@@ -15,6 +17,16 @@ vi.mock("@/lib/clientApi", () => ({
     }
     return { data: undefined, isLoading: !apiData.size, error: null };
   },
+}));
+
+vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
+  useAnalysisGames: () => ({
+    items: analysisGames,
+    isLoading: analysisLoading,
+    error: null,
+    pagesFetched: analysisLoading ? 0 : 1,
+    hitCorpusLimit: false,
+  }),
 }));
 
 vi.mock("@/components/analyzer/arcade/hooks/useDailySeed", () => ({
@@ -29,6 +41,8 @@ vi.mock("@/components/analyzer/arcade/hooks/useDailySeed", () => ({
 afterEach(cleanup);
 beforeEach(() => {
   apiData.clear();
+  analysisGames = [];
+  analysisLoading = true;
   window.localStorage.clear();
 });
 
@@ -51,7 +65,8 @@ function primeGames(
     mapPoolFetchedAt?: number | null;
   } = { mapPool: [], mapPoolSource: "fallback" },
 ) {
-  apiData.set("/v1/games?limit=20000", { items });
+  analysisGames = items;
+  analysisLoading = false;
   apiData.set("/v1/seasons", seasons);
 }
 

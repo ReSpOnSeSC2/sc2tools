@@ -15,6 +15,10 @@ const { LIMITS, SERVICE } = require("./config/constants");
 const { requestId } = require("./middleware/requestId");
 const { buildErrorHandler } = require("./middleware/errorHandler");
 const { buildAuth } = require("./middleware/auth");
+const {
+  buildReplayIngestAdmission,
+} = require("./middleware/replayIngestAdmission");
+const { captureClerkWebhookRawBody } = require("./middleware/jsonBody");
 
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
@@ -596,27 +600,33 @@ function applyBaseMiddleware(app, deps) {
     }),
   );
   app.use(requestId);
-  // Stash the raw bytes alongside the parsed body so the Clerk webhook
-  // route can verify the Svix HMAC against the exact payload Clerk
-  // signed (re-stringifying req.body would canonicalize whitespace and
-  // break the signature). Cheap — Buffer ref, not a copy.
-  app.use(
-    express.json({
-      limit: JSON_LIMIT,
-      verify: (req, _res, buf) => {
-        /** @type {any} */ (req).rawBody = buf;
-      },
-    }),
-  );
+  // Reject request-rate bursts before allocating/parsing JSON bodies. The
+  // replay-specific gate below separately bounds expensive in-flight work.
   app.use(
     rateLimit({
       windowMs: 60 * 1000,
       max: deps.config.rateLimitPerMinute,
       standardHeaders: true,
       legacyHeaders: false,
-      // Per-IP for unauth, per-user once auth runs (we install this
-      // before auth, so per-IP is the practical bound for /start polling
-      // — acceptable since pairing codes expire in 10min anyway).
+    }),
+  );
+  // Admit memory-heavy replay ingestion BEFORE parsing its multi-megabyte
+  // JSON body. Excess batches get a retryable 503 and are durably requeued by
+  // the agent instead of waiting here with parsed payloads retained in RAM.
+  app.use(
+    buildReplayIngestAdmission({
+      maxActive: deps.config.replayIngestMaxActive,
+      maxBodyBytes: LIMITS.REQUEST_BODY_BYTES,
+      logger: deps.logger,
+    }),
+  );
+  // Stash exact raw bytes only for the Clerk webhook's Svix signature.
+  // Replay ingest never needs them; retaining a multi-megabyte raw Buffer
+  // beside its parsed body for the full R2 transaction wastes memory.
+  app.use(
+    express.json({
+      limit: JSON_LIMIT,
+      verify: captureClerkWebhookRawBody,
     }),
   );
 }

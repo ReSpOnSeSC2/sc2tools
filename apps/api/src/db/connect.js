@@ -213,6 +213,10 @@ async function ensureIndexes(ctx) {
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });
+  // Complete-history analysis is cursor-paged by (date, _id).  The _id
+  // tie-breaker prevents replay rows with identical timestamps from being
+  // skipped between pages while this compound order avoids a blocking sort.
+  await ctx.games.createIndex({ userId: 1, date: -1, _id: -1 });
   // Public infrastructure usage counts only completed original-replay
   // markers. A partial index keeps that global count index-only without
   // allocating entries for the much larger set of pre-archive game rows.

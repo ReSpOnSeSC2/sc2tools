@@ -13,6 +13,7 @@ import {
   type LogicalSeason,
 } from "@/lib/useSeasons";
 import { useUserSocket } from "@/lib/useUserSocket";
+import { AnalysisGamesProvider } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
 
 const LS_KEY = "analyzer.filters";
 
@@ -201,6 +202,8 @@ export function AnalyzerProvider({ children }: { children: ReactNode }) {
     [filters, setFilters, dbRev, bumpRev, logicalSeasons],
   );
   return (
-    <FiltersContext.Provider value={value}>{children}</FiltersContext.Provider>
+    <FiltersContext.Provider value={value}>
+      <AnalysisGamesProvider>{children}</AnalysisGamesProvider>
+    </FiltersContext.Provider>
   );
 }

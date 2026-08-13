@@ -59,6 +59,16 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Full Re-sync no longer exhausts the production API's memory** — replay
+  ingestion now admits one memory-heavy batch per API process and safely asks
+  additional agents to retry without losing files. Validation no longer
+  duplicates full replay payloads in memory, processed batch entries are
+  released incrementally, historical reuploads no longer launch live-session
+  refresh work, and dashboard/Arcade history is served as narrow 2,000-row
+  cursor pages instead of one 20,000-row response. Agent 0.15.20 treats this
+  backpressure as an ordinary capacity delay without shrinking its batch size
+  or reporting false upload failures.
+
 - **Full Re-sync now repairs old Resume-from-Replay results** — StarCraft II's
   definitive Take Command marker is uploaded as a non-competitive quarantine
   record, including legacy IDs previously tied to the same local replay. These

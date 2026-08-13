@@ -16,6 +16,7 @@ from sc2tools_agent.api_client import (
     ApiClient,
     REPLAY_FILE_MAX_BYTES,
     ReplayArchiveSourceUnavailable,
+    ReplayIngestBusy,
     replay_file_matches_archive_marker,
 )
 
@@ -442,6 +443,32 @@ def test_429_response_honors_retry_after_seconds() -> None:
         f"got {sleeps!r}"
     )
     assert result == {"accepted": [{"gameId": "g1"}]}
+
+
+def test_503_ingest_backpressure_yields_complete_batch_to_queue() -> None:
+    """A full-sync batch rejected before parsing must remain retryable.
+
+    The API's replay admission guard uses 503 + Retry-After instead of
+    accepting work it cannot safely hold in memory. The client must return
+    control after one response so the queue can retain the whole batch without
+    posting the same large JSON three times or shrinking its adaptive ceiling.
+    """
+    api = ApiClient(base_url="http://x", device_token="tok")
+    games = [{"gameId": "g1"}, {"gameId": "g2"}]
+    busy = _mock_response(
+        503,
+        {"error": {"code": "replay_ingest_busy", "retryable": True}},
+        headers={"Retry-After": "1"},
+    )
+    request_mock = MagicMock(return_value=busy)
+
+    with patch("requests.request", request_mock):
+        with pytest.raises(ReplayIngestBusy) as raised:
+            api.upload_games_batch(games)
+
+    assert raised.value.retry_after_seconds == 1.0
+    assert request_mock.call_count == 1
+    assert request_mock.call_args_list[0].kwargs["json"] == {"games": games}
 
 
 def test_429_without_retry_after_falls_back_to_exponential_backoff() -> None:

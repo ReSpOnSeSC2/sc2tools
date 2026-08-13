@@ -1657,6 +1657,31 @@ describe("POST /v1/games re-emits overlay:session", () => {
     }
   });
 
+  test("a large historical resync batch does not schedule session work", async () => {
+    const sessionSpy = jest.spyOn(services.games, "todaySession");
+    const historical = Array.from({ length: 25 }, (_, index) => ({
+      ...makeGame(`g-resync-${index}`, index % 2 ? "Victory" : "Defeat"),
+      date: new Date(`2024-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`).toISOString(),
+    }));
+
+    const post = await request(app)
+      .post("/v1/games")
+      .set("authorization", "Bearer test-clerk-token")
+      .send({ games: historical })
+      .set("content-type", "application/json");
+
+    expect(post.status).toBe(202);
+    expect(post.body.accepted).toHaveLength(25);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    // Historical rows cannot affect the active four-hour session. They still
+    // emit one cheap games:changed nudge, but must not start Mongo/Pulse
+    // session resolution for this batch.
+    expect(captured.gamesChangedEmits).toEqual([{ count: 25 }]);
+    expect(sessionSpy).not.toHaveBeenCalled();
+    expect(captured.sessionEmits).toHaveLength(0);
+  });
+
   test("validation reject path does not trigger an overlay:session emit", async () => {
     const post = await request(app)
       .post("/v1/games")

@@ -7,6 +7,10 @@ const {
   isLadderMap,
   LADDER_CLASSIFY_VERSION,
 } = require("../util/isLadderMap");
+const {
+  claimReplayIngestAdmission,
+  releaseReplayIngestAdmission,
+} = require("../middleware/replayIngestAdmission");
 
 /**
  * /v1/games — list, get, ingest from agent.
@@ -55,6 +59,7 @@ const {
  *   },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
+ *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
  * }} deps
  */
 function buildGamesRouter(deps) {
@@ -76,6 +81,14 @@ function buildGamesRouter(deps) {
   }
   const router = express.Router();
   router.use(deps.auth);
+  // Skip stale Full Resync batches at the call site below, then keep one
+  // worker per user and collapse any burst of genuinely fresh uploads into
+  // at most one trailing refresh. Session aggregation may refresh SC2Pulse
+  // MMR, so overlapping fire-and-forget calls must remain bounded.
+  const scheduleSessionUpdate = createSessionUpdateScheduler(
+    deps.io,
+    deps.games,
+  );
   // Within a single batch the same myToonHandle will repeat for every
   // game; track which ones we've already attempted to merge so a
   // 200-replay Resync doesn't generate 200 ``users.findOne`` round
@@ -101,6 +114,30 @@ function buildGamesRouter(deps) {
         oppPulseId,
       });
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * Memory-bounded complete-history feed for Daily Pulse and Arcade. Unlike
+   * the general games list, each response is a strict analysis projection and
+   * has a small per-page ceiling; the opaque cursor safely continues through
+   * identical replay timestamps.
+   */
+  router.get("/games/analysis-corpus", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      res.json(
+        await deps.games.listAnalysisCorpus(auth.userId, {
+          limit: parseLimit(req.query.limit),
+          cursor:
+            typeof req.query.cursor === "string"
+              ? req.query.cursor
+              : undefined,
+        }),
+      );
     } catch (err) {
       next(err);
     }
@@ -255,6 +292,26 @@ function buildGamesRouter(deps) {
   });
 
   router.post("/games", async (req, res, next) => {
+    // A client can disconnect while asynchronous auth is resolving. The
+    // pre-route close handler then releases its slot; never start heavy ingest
+    // work after that release or concurrency would become unbounded again.
+    if (!claimReplayIngestAdmission(res, {
+      allowMissing: deps.testOnlyAllowMissingReplayIngestAdmission === true,
+    })) {
+      // A closed socket needs no response. A live request with no admission
+      // state means this router was mounted unsafely; fail visibly instead of
+      // running unbounded or leaving the caller hanging.
+      if (!res.headersSent && !res.destroyed) {
+        res.status(503).json({
+          error: {
+            code: "replay_ingest_admission_unavailable",
+            message: "Replay ingest admission is unavailable.",
+            retryable: true,
+          },
+        });
+      }
+      return;
+    }
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
@@ -262,6 +319,10 @@ function buildGamesRouter(deps) {
       const incoming = Array.isArray(req.body?.games)
         ? req.body.games
         : [req.body];
+      // ``incoming`` now owns the only references the ingest loop needs.
+      // Drop Express's wrapper immediately so singleton uploads do not retain
+      // a second request-level reference to their heavy object.
+      req.body = undefined;
       /** @type {Array<{
        *   gameId: string,
        *   created: boolean,
@@ -318,7 +379,16 @@ function buildGamesRouter(deps) {
         }
       }
       const ladderMapSet = buildClassifierSet(livePoolMaps);
-      for (const raw of incoming) {
+      // Consume by index and clear each heavy parsed item after it is durably
+      // handled. This lets V8 reclaim earlier build/macro/playback arrays while
+      // later games are still doing sequential R2/Mongo work, instead of
+      // pinning the whole 5 MB body until the response.
+      for (let incomingIndex = 0; incomingIndex < incoming.length; incomingIndex += 1) {
+        const raw = incoming[incomingIndex];
+        // Clear the body-array reference immediately. ``raw``/``game`` owns
+        // this one item until the loop advances; compact realtime metadata is
+        // copied separately before then.
+        incoming[incomingIndex] = undefined;
         const validation = validateGameRecord(raw);
         if (!validation.valid) {
           rejected.push({
@@ -375,7 +445,10 @@ function buildGamesRouter(deps) {
           }
           continue;
         }
-        competitiveIncoming.push(game);
+        // Realtime work needs only a few scalar identity/result fields. Never
+        // retain another reference to this game's heavy build/macro/playback
+        // arrays for the rest of the batch: req.body is already holding them.
+        competitiveIncoming.push(compactGameForRealtime(game));
         // Maintain the legacy ``isLadderMap`` compatibility field. Mirror
         // the agent's authoritative matchmaking flag when present;
         // otherwise use the historical map-name proxy for old readers.
@@ -685,23 +758,31 @@ function buildGamesRouter(deps) {
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
         });
-        // Recompute the session card per connected overlay socket and
-        // push the fresh aggregate. We can't broadcast to the whole
-        // user room because each overlay carries its own timezone in
-        // ``socket.data.timezone`` — "today" depends on the streamer's
-        // wall clock, not on UTC. Best-effort: a transient resolveSocket
-        // failure for one overlay must not block the ingest response.
-        if (competitiveAccepted.length > 0) {
-          emitSessionUpdate(deps.io, deps.games, userId, {
-            refreshCurrentMmr: !!freshGame,
-          }).catch((err) => {
-            if (req.log) {
-              req.log.warn(
-                { err, userId },
-                "overlay_session_emit_failed",
-              );
-            }
-          });
+        // Recompute the session card immediately only for a genuinely new,
+        // just-finished match. Existing-row reuploads do not change W-L, and
+        // historical inserts from Full Resync cannot belong to the active
+        // four-hour session. Scheduling every stale batch used to launch
+        // overlapping Mongo/Pulse work until the small production instance
+        // ran out of memory. The periodic session refresher remains the
+        // safety net for an unusually delayed fresh upload.
+        //
+        // We can't broadcast to the whole user room because each overlay
+        // carries its own timezone in ``socket.data.timezone`` — "today"
+        // depends on the streamer's wall clock, not UTC. Best-effort: a
+        // transient socket lookup failure must not block the ingest response.
+        if (freshGame) {
+          scheduleSessionUpdate(
+            userId,
+            { refreshCurrentMmr: true },
+            (err) => {
+              if (req.log) {
+                req.log.warn(
+                  { err, userId },
+                  "overlay_session_emit_failed",
+                );
+              }
+            },
+          );
         }
         // Derive and broadcast the full LiveGamePayload for every
         // widget that depends on ``overlay:live`` — but ONLY for a
@@ -786,10 +867,108 @@ function buildGamesRouter(deps) {
       res.status(202).json({ accepted, rejected });
     } catch (err) {
       next(err);
+    } finally {
+      // Fire-and-forget realtime callbacks may outlive this response. They use
+      // compact payloads above, so drop the large parsed batch from the request
+      // before handing control back to Express rather than retaining it via a
+      // request-scoped logger closure.
+      req.body = undefined;
+      // The global admission gate is acquired before JSON parsing. Release it
+      // only after every Mongo/R2 operation above has stopped; disconnecting a
+      // client does not cancel this handler's async work.
+      releaseReplayIngestAdmission(res);
     }
   });
 
   return router;
+}
+
+/**
+ * Build a per-user single-flight scheduler around ``emitSessionUpdate``.
+ *
+ * Ingest requests deliberately do not await overlay work, so a resync may
+ * enqueue another batch while the previous session aggregate is still
+ * resolving. For each user this scheduler permits exactly one active run and
+ * one coalesced trailing run. Calls received during either active run only
+ * mark that one trailing slot; memory and Mongo/Pulse concurrency therefore
+ * stay bounded no matter how long the resync lasts.
+ *
+ * A fresh post-game upload must still invalidate the cached current MMR. The
+ * trailing slot promotes ``refreshCurrentMmr`` with boolean OR, ensuring one
+ * fresh update cannot dilute another queued fresh update.
+ *
+ * Different users retain independent workers so one user's long refresh does
+ * not delay another user's live session update.
+ *
+ * @param {import('socket.io').Server|undefined} io
+ * @param {import('../services/types').GamesService} games
+ * @returns {(
+ *   userId: string,
+ *   opts?: {refreshCurrentMmr?: boolean},
+ *   onError?: (err: unknown) => void,
+ * ) => Promise<void>}
+ */
+function createSessionUpdateScheduler(io, games) {
+  /** @type {Map<string, {
+   *   trailing: boolean,
+   *   trailingRefreshCurrentMmr: boolean,
+   *   onError?: (err: unknown) => void,
+   *   done?: Promise<void>,
+   * }>} */
+  const activeByUser = new Map();
+
+  return function scheduleSessionUpdate(userId, opts = {}, onError) {
+    if (!io || !games || !userId) return Promise.resolve();
+    const refreshCurrentMmr = !!opts.refreshCurrentMmr;
+    const active = activeByUser.get(userId);
+    if (active) {
+      active.trailing = true;
+      active.trailingRefreshCurrentMmr =
+        active.trailingRefreshCurrentMmr || refreshCurrentMmr;
+      // Retain only the latest request logger instead of every request
+      // closure in a long resync burst.
+      if (onError) active.onError = onError;
+      return active.done || Promise.resolve();
+    }
+
+    const state = {
+      trailing: false,
+      trailingRefreshCurrentMmr: false,
+      onError,
+      /** @type {Promise<void>|undefined} */
+      done: undefined,
+    };
+    activeByUser.set(userId, state);
+
+    state.done = (async () => {
+      let refresh = refreshCurrentMmr;
+      while (true) {
+        try {
+          await emitSessionUpdate(io, games, userId, {
+            refreshCurrentMmr: refresh,
+          });
+        } catch (err) {
+          try {
+            if (state.onError) state.onError(err);
+          } catch {
+            // Logging is advisory; a broken request logger cannot wedge the
+            // user's single-flight state forever.
+          }
+        }
+
+        if (!state.trailing) return;
+        refresh = state.trailingRefreshCurrentMmr;
+        state.trailing = false;
+        state.trailingRefreshCurrentMmr = false;
+      }
+    })().finally(() => {
+      if (activeByUser.get(userId) === state) {
+        activeByUser.delete(userId);
+      }
+    });
+
+    return state.done;
+  };
 }
 
 /**
@@ -864,6 +1043,39 @@ async function emitSessionUpdate(io, games, userId, opts = {}) {
 // slow parse queue on a potato PC, tight enough that backfill batches
 // (whole ladder histories) never qualify.
 const OVERLAY_LIVE_FRESHNESS_MS = 15 * 60 * 1000;
+
+/**
+ * Copy only fields consumed by OverlayLiveService and cache invalidation.
+ * Keeping full validated objects here used to retain every batch member's
+ * heavy analysis arrays until the final game and archive checks completed.
+ *
+ * @param {Record<string, any>} game
+ * @returns {Record<string, any>}
+ */
+function compactGameForRealtime(game) {
+  const opponent = game?.opponent;
+  return {
+    gameId: game.gameId,
+    date: game.date,
+    result: game.result,
+    myRace: game.myRace,
+    myLadderRace: game.myLadderRace,
+    myMmr: game.myMmr,
+    myToonHandle: game.myToonHandle,
+    map: game.map,
+    durationSec: game.durationSec,
+    opponent: opponent && typeof opponent === "object"
+      ? {
+          pulseId: opponent.pulseId,
+          pulseCharacterId: opponent.pulseCharacterId,
+          displayName: opponent.displayName,
+          race: opponent.race,
+          mmr: opponent.mmr,
+          strategy: opponent.strategy,
+        }
+      : undefined,
+  };
+}
 
 /**
  * Pick the game whose ingest should drive the ``overlay:live``
@@ -1073,4 +1285,4 @@ function parseDate(raw) {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-module.exports = { buildGamesRouter };
+module.exports = { buildGamesRouter, createSessionUpdateScheduler };

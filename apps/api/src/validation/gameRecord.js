@@ -7,7 +7,11 @@ const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
 const addFormats =
   /** @type {any} */ (addFormatsModule).default || addFormatsModule;
 
-const ajv = new Ajv({ allErrors: true, removeAdditional: "failing" });
+// Every object level deliberately allows forward-compatible properties, so
+// validation is read-only. Avoid JSON stringify/parse cloning here: replay
+// batches already live in req.body and a second deep copy of each heavy game
+// (build logs, macro timelines, map playback) doubled peak ingest memory.
+const ajv = new Ajv({ allErrors: true });
 addFormats(ajv);
 
 const GAME_SCHEMA = {
@@ -228,7 +232,7 @@ function validateGameRecord(raw) {
   if (!raw || typeof raw !== "object") {
     return { valid: false, errors: ["body must be an object"] };
   }
-  const value = JSON.parse(JSON.stringify(raw));
+  const value = /** @type {Record<string, any>} */ (raw);
   if (!validate(value)) {
     const errs = (validate.errors || []).map(
       /** @param {any} e */

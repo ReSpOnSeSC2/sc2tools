@@ -66,6 +66,7 @@ function buildTestApp({ created = true } = {}) {
       liveGameBroker,
       io,
       auth,
+      testOnlyAllowMissingReplayIngestAdmission: true,
     }),
   );
   return { app, emitted, builtFrom, cachedPayloads };

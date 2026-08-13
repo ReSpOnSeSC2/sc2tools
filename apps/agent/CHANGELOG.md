@@ -2,6 +2,17 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.20
+
+### Fixed - lossless server backpressure during concurrent re-syncs
+
+- When the API safely defers a replay batch because another user's ingest is
+  already using the server's bounded memory slot, the agent now yields after
+  one response and requeues the complete batch after `Retry-After`.
+- Capacity deferrals no longer look like failed or oversized payloads: they do
+  not reduce adaptive batch size, advance the uploaded cursor, drop pending
+  replay paths, or emit misleading upload-failure telemetry.
+
 ## 0.15.19
 
 ### Fixed — reliable Windows updates and replay discovery

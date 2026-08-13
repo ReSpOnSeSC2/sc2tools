@@ -2,6 +2,10 @@
 
 import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
+import {
+  useAnalysisGames,
+  type AnalysisApiGame,
+} from "./useAnalysisGames";
 import type {
   ArcadeBuild,
   ArcadeCommunityBuild,
@@ -45,15 +49,7 @@ interface ApiOppPage {
  * ArcadeGame type). We normalise on read so the arcade modes don't
  * have to know about either naming.
  */
-interface ApiGame extends ArcadeGame {
-  durationSec?: number;
-  macroScore?: number | null;
-}
-
-interface ApiGamesPage {
-  items: ApiGame[];
-  nextBefore?: string | null;
-}
+type ApiGame = AnalysisApiGame;
 
 export function normaliseGame(g: ApiGame): ArcadeGame {
   const duration =
@@ -140,9 +136,9 @@ export function normaliseMap(row: ApiMap): ArcadeDataset["maps"][number] {
 
 /**
  * useArcadeData — fans out the bundle of GETs every Arcade surface
- * needs and folds them into a single ArcadeDataset. SWR keeps each
- * request memoised so QuickPlay → Today → Collection navigation
- * doesn't refetch.
+ * needs and folds them into a single ArcadeDataset. Ordinary API reads
+ * remain memoised, while the analyzer-scoped replay provider keeps exactly
+ * one current flattened snapshot for Daily Pulse and Arcade.
  *
  * Every consumer of an array-shaped field is guarded by
  * `Array.isArray()`: the analyzer SPA spans many API versions and a
@@ -157,11 +153,10 @@ export function useArcadeData(): {
 } {
   // /v1/opponents returns { items, nextBefore }, not a bare array.
   const opp = useApi<ApiOppPage>("/v1/opponents?limit=500");
-  // /v1/games returns { items, nextBefore }. Request the full corpus
-  // up to the server-side GAMES_LIST_MAX ceiling (20 000) — arcade
-  // modes aggregate histograms over the user's full history, and a
-  // 200-row window was effectively useless for prolific users.
-  const gamesA = useApi<ApiGamesPage>("/v1/games?limit=20000");
+  // Arcade modes aggregate histograms over the user's complete history, up
+  // to the established 20k ceiling. The shared hook obtains it as narrowly
+  // projected cursor pages instead of one enormous general-games response.
+  const gamesA = useAnalysisGames();
   // /v1/builds, /v1/matchups, /v1/maps return bare arrays.
   const builds = useApi<ArcadeBuild[]>("/v1/builds");
   // /v1/matchups returns rows of shape `{ name: "vs P", wins, losses,
@@ -267,8 +262,8 @@ export function useArcadeData(): {
         }))
       : [];
     return {
-      games: Array.isArray(gamesA.data?.items)
-        ? gamesA.data!.items.map(normaliseGame)
+      games: Array.isArray(gamesA.items)
+        ? gamesA.items.map(normaliseGame)
         : [],
       opponents: opps,
       builds: buildsList,
@@ -323,7 +318,7 @@ export function useArcadeData(): {
     loading,
     error,
     opp.data,
-    gamesA.data,
+    gamesA.items,
     builds.data,
     matchups.data,
     maps.data,

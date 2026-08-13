@@ -12,6 +12,10 @@ const DEFAULTS = Object.freeze({
   // which also shrank the agent's adaptive upload batch size. The agent's
   // Retry-After handling still bounds worst-case load.
   RATE_LIMIT_PER_MINUTE: 600,
+  // Per-process replay-ingest admission. One active batch is conservative on
+  // Render Starter: excess requests receive a retryable 503 before their
+  // multi-megabyte JSON bodies are parsed.
+  REPLAY_INGEST_MAX_ACTIVE: 1,
   // Keep-alive heartbeat for Render's "starter" idle timeout (15min). 13min
   // gives a healthy safety margin and stays just below typical CDN cache
   // windows so the upstream actually sees the request.
@@ -82,8 +86,25 @@ const LIMITS = Object.freeze({
   // ceiling. Matches the established public replay-preview limit.
   REPLAY_FILE_MAX_BYTES: 5 * 1024 * 1024,
   GAMES_PAGE_SIZE: 100,
-  GAMES_LIST_MAX: 20000,
+  // General replay history is a single JSON response. Keep it bounded even
+  // when a stale client asks for the old 20k Arcade payload; complete-history
+  // analysis now uses the cursor-paged route below.
+  GAMES_LIST_MAX: 2000,
   GAMES_LIST_DEFAULT: 2000,
+  // The filtered /games-list aggregation already projects compact display
+  // rows and powers a 5,000-row strategy drill-down. Keep its established
+  // ceiling independent from the full-document /games route above.
+  // Compact filtered replay rows used by the Strategies drill-down. The
+  // largest production consumer requests 5,000; do not let a crafted query
+  // materialise four times that many rows in one Mongo facet/JSON response.
+  GAMES_FILTERED_LIST_MAX: 5000,
+  // Dashboard Daily Pulse + Arcade need a complete (up to 20k) history,
+  // but no single API response should materialise that whole corpus.  The
+  // dedicated analysis-corpus route cursor-pages this many narrowly
+  // projected rows at a time.
+  GAMES_ANALYSIS_PAGE_SIZE: 2000,
+  GAMES_ANALYSIS_PAGE_MAX: 2000,
+  GAMES_ANALYSIS_CORPUS_MAX: 20000,
   OPPONENTS_PAGE_SIZE: 100,
   // The analyzer SPA can request up to this many opponents in one
   // call so users with thousands of replays don't have to flip

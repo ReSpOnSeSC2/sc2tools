@@ -3,6 +3,20 @@
 const { validateGameRecord } = require("../src/validation/gameRecord");
 
 describe("validateGameRecord", () => {
+  test("validates in place instead of cloning heavy replay payloads", () => {
+    const raw = {
+      gameId: "memory-bounded",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      buildLog: ["[0:00] Nexus"],
+    };
+    const r = validateGameRecord(raw);
+    expect(r.valid).toBe(true);
+    if (r.valid) expect(r.value).toBe(raw);
+  });
+
   test("accepts a minimal real-shaped record", () => {
     const r = validateGameRecord({
       gameId: "abc-123",
