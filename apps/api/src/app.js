@@ -906,6 +906,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       liveGameBroker: services.liveGameBroker,
       engagement: services.multichatEngagement,
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
+      replayFiles: services.replayFiles || undefined,
       io: deps.io,
       auth,
     }),

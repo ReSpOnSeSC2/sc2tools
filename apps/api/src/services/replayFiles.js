@@ -374,6 +374,41 @@ class ReplayFilesService {
     return { url, filename, expiresIn: this.downloadExpiresSec };
   }
 
+  /**
+   * Verify a projected, owner-scoped replay marker before an ingest response
+   * tells the agent it may skip the normal prepare/upload repair path.
+   *
+   * A Mongo marker alone is not proof that the private object still exists:
+   * an operator-side object deletion or interrupted migration can leave stale
+   * metadata behind. Keep this check equivalent to ``prepareUpload``'s HEAD
+   * validation and clear a stale marker with the same compare-and-set guard
+   * used by downloads. Callers deliberately treat thrown storage errors as
+   * "unknown" and omit the optimization, so the agent falls back to the
+   * idempotent prepare flow instead of falsely acknowledging a backup.
+   *
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {{available?: boolean, sizeBytes?: number, sha256?: string, storedAt?: Date|string}} marker
+   */
+  async verifyAvailableMarker(userId, gameId, marker) {
+    if (
+      !marker
+      || marker.available !== true
+      || !marker.storedAt
+      || !Number.isSafeInteger(Number(marker.sizeBytes))
+      || !SHA256_HEX.test(String(marker.sha256 || "").toLowerCase())
+    ) {
+      return false;
+    }
+    const matches = await this._objectMatchesMarker(
+      this.keyFor(userId, gameId),
+      marker,
+    );
+    if (matches) return true;
+    await this._clearMarker(userId, gameId, marker.storedAt);
+    return false;
+  }
+
   /** @param {string} userId @param {string} gameId */
   async delete(userId, gameId) {
     await this._deleteKey(this.keyFor(userId, gameId));

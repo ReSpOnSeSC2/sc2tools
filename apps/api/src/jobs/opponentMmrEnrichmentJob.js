@@ -285,6 +285,10 @@ function buildCandidateFilter(nowMs, windowDays) {
   const cutoff = new Date(nowMs - windowDays * DAY_MS);
   return {
     createdAt: { $gte: cutoff, $lte: now },
+    // ``createdAt`` bounds indexed work admitted by a fresh ingest. The
+    // replay's own date independently prevents a newly re-synced old match
+    // from receiving today's SC2Pulse MMR and flattening historical charts.
+    date: { $gte: cutoff, $lte: now },
     isResumedFromReplay: { $ne: true },
     "opponent.pulseCharacterId": { $type: "string", $ne: "" },
     "opponent.race": { $regex: /^(?:p|protoss|t|terran|z|zerg)$/i },

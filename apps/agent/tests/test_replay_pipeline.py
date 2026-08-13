@@ -913,7 +913,7 @@ def test_parse_replay_for_cloud_uploads_resumed_replay_quarantine_marker(
 
 
 def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
-    monkeypatch, tmp_path,
+    monkeypatch, tmp_path, _stub_pulse_resolver,
 ):
     import sys
     from types import SimpleNamespace
@@ -1157,6 +1157,24 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     assert payload["gameVersion"] == "5.0.16.97425"
     assert payload["gameBuild"] == 97425
     assert payload["startedAt"] == "2026-05-06T17:38:32Z"
+
+    # Full-history workers defer SC2Pulse resolution to the cloud backfill.
+    # Every analytical field is still computed; only the external lookup is
+    # removed from the critical path.
+    _stub_pulse_resolver.clear()
+    deferred = parse_replay_for_cloud(
+        fake_path,
+        player_handle="Me",
+        resolve_pulse=False,
+    )
+    assert deferred is not None
+    deferred_payload = deferred.to_payload()
+    assert _stub_pulse_resolver == []
+    assert deferred_payload["opponent"]["toonHandle"] == "1-S2-2-690921"
+    assert deferred_payload["opponent"]["pulseId"] == "1-S2-2-690921"
+    assert deferred_payload["opponent"]["pulseLookupAttempted"] is False
+    assert "pulseCharacterId" not in deferred_payload["opponent"]
+    assert deferred_payload["macroBreakdown"] == payload["macroBreakdown"]
 
 
 def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(

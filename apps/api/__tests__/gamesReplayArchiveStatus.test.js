@@ -55,3 +55,66 @@ describe("GamesService.replayArchiveStatus", () => {
     });
   });
 });
+
+describe("GamesService.replayArchiveMarkers", () => {
+  test("returns safe marker identities from one projected batch query", async () => {
+    const storedAt = new Date("2026-08-11T12:00:00.000Z");
+    const toArray = jest.fn(async () => [
+      {
+        gameId: "archived",
+        replayFile: {
+          storedAt,
+          sizeBytes: 98765,
+          sha256: "A".repeat(64),
+          uploadId: "must-not-leak",
+        },
+      },
+      {
+        gameId: "malformed",
+        replayFile: { storedAt, sizeBytes: 10, sha256: "not-a-hash" },
+      },
+    ]);
+    const find = jest.fn(() => ({ toArray }));
+    const service = new GamesService({ games: { find } });
+
+    const markers = await service.replayArchiveMarkers("u1", [
+      "archived",
+      "missing",
+      "malformed",
+      "archived",
+    ]);
+
+    expect(find).toHaveBeenCalledTimes(1);
+    expect(find).toHaveBeenCalledWith(
+      { userId: "u1", gameId: { $in: ["archived", "missing", "malformed"] } },
+      {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          "replayFile.storedAt": 1,
+          "replayFile.sizeBytes": 1,
+          "replayFile.sha256": 1,
+        },
+      },
+    );
+    expect(markers.get("archived")).toEqual({
+      available: true,
+      sizeBytes: 98765,
+      sha256: "a".repeat(64),
+      storedAt,
+    });
+    expect(markers.get("missing")).toEqual({ available: false });
+    expect(markers.get("malformed")).toEqual({ available: false });
+    expect(markers.get("archived")).not.toHaveProperty("uploadId");
+  });
+
+  test("empty input avoids a database query", async () => {
+    const find = jest.fn();
+    const service = new GamesService({ games: { find } });
+
+    await expect(service.replayArchiveMarkers("u1", [])).resolves.toEqual(
+      new Map(),
+    );
+    expect(find).not.toHaveBeenCalled();
+  });
+});

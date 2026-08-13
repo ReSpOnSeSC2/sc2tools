@@ -196,6 +196,44 @@ describe("ReplayFilesService", () => {
       .toEqual(["HeadObjectCommand"]);
   });
 
+  test("verifies ingest fast-path markers against R2 and clears stale metadata", async () => {
+    const storedAt = new Date("2026-08-01T10:00:00Z");
+    const marker = {
+      available: true,
+      storedAt,
+      sizeBytes: 8,
+      sha256: SHA,
+    };
+    const { store, games, client } = makeStore([
+      { userId: "u1", gameId: "present", replayFile: { ...marker } },
+      { userId: "u1", gameId: "missing", replayFile: { ...marker } },
+    ]);
+    client.put(store.keyFor("u1", "present"));
+
+    await expect(
+      store.verifyAvailableMarker("u1", "present", marker),
+    ).resolves.toBe(true);
+    await expect(
+      store.verifyAvailableMarker("u1", "missing", marker),
+    ).resolves.toBe(false);
+
+    expect(games.rows[0].replayFile).toBeDefined();
+    expect(games.rows[1].replayFile).toBeUndefined();
+    expect(client.commands.map((command) => command.constructor.name))
+      .toEqual(["HeadObjectCommand", "HeadObjectCommand"]);
+  });
+
+  test("rejects malformed ingest fast-path markers without touching R2", async () => {
+    const { store, client } = makeStore([]);
+    await expect(store.verifyAvailableMarker("u1", "g1", {
+      available: true,
+      storedAt: new Date(),
+      sizeBytes: 8,
+      sha256: "not-a-hash",
+    })).resolves.toBe(false);
+    expect(client.commands).toEqual([]);
+  });
+
   test("prepares an owner-scoped pending PUT without replacing the old marker", async () => {
     const old = { storedAt: new Date(), sizeBytes: 8, sha256: SHA, md5: MD5 };
     const { store, games, signed } = makeStore([

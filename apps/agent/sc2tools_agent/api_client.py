@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,8 +41,51 @@ REPLAY_PUT_READ_TIMEOUT_SEC = 120.0
 # this ceiling still sync their parsed stats; only the original download is
 # unavailable. Rejecting locally avoids an unrecoverable 413 retry loop.
 REPLAY_FILE_MAX_BYTES = 5 * 1024 * 1024
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 _USER_AGENT = "sc2tools-agent/0.1"
+
+
+class ReplayArchiveSourceUnavailable(RuntimeError):
+    """The accepted replay's local source may become readable later."""
+
+
+def replay_file_matches_archive_marker(
+    file_path: Path,
+    marker: object,
+) -> bool:
+    """Verify that an accepted server marker describes this exact file.
+
+    The marker is ownership-scoped by ``POST /v1/games``, but it is still
+    network input. Never skip a backup merely because ``available`` is true:
+    require a valid size/SHA-256 identity and compare it with local bytes.
+    """
+    if not isinstance(marker, dict) or marker.get("available") is not True:
+        return False
+    raw_size = marker.get("sizeBytes")
+    raw_sha = marker.get("sha256")
+    if isinstance(raw_size, bool) or not isinstance(raw_size, int):
+        return False
+    if (
+        raw_size <= 0
+        or raw_size > REPLAY_FILE_MAX_BYTES
+        or not isinstance(raw_sha, str)
+    ):
+        return False
+    expected_sha = raw_sha.strip().lower()
+    if not _SHA256_RE.fullmatch(expected_sha):
+        return False
+    path = Path(file_path)
+    try:
+        if not path.is_file() or path.stat().st_size != raw_size:
+            return False
+        digest = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return False
+    return hmac.compare_digest(digest.hexdigest(), expected_sha)
 
 
 @dataclass(frozen=True)
@@ -99,6 +144,37 @@ class ApiClient:
         )
 
     def upload_replay_file(self, game_id: str, file_path: Path) -> bool:
+        """Compatibility archive path for optional/rolling deployments."""
+        return self._upload_replay_file(
+            game_id,
+            file_path,
+            retry_optional_unavailable=False,
+        )
+
+    def upload_replay_file_durable(
+        self,
+        game_id: str,
+        file_path: Path,
+    ) -> bool:
+        """Archive a replay while preserving temporary failures for retry.
+
+        The durable background queue calls this variant. ``False`` means a
+        terminal local/per-file outcome; transport errors plus rolling-deploy
+        404/503 responses raise so the on-disk task remains pending.
+        """
+        return self._upload_replay_file(
+            game_id,
+            file_path,
+            retry_optional_unavailable=True,
+        )
+
+    def _upload_replay_file(
+        self,
+        game_id: str,
+        file_path: Path,
+        *,
+        retry_optional_unavailable: bool,
+    ) -> bool:
         """Archive the original ``.SC2Replay`` for an accepted game.
 
         The API first verifies that the paired device owns ``game_id``
@@ -109,26 +185,36 @@ class ApiClient:
         to confirm R2's Content-MD5 check, the declared SHA-256 metadata,
         size, and MPQ magic before exposing the download action.
 
-        ``False`` means this file cannot be archived (missing, oversized, or
-        permanently rejected) or the deployed API has not enabled archival.
+        ``False`` means this file cannot be archived (oversized or permanently
+        rejected) or the deployed API has not enabled archival.
         Parsed-stat syncing must continue in those cases. Transport and
         retryable object-store failures raise so the queue tries again.
         """
         if not self.device_token:
             raise PermissionError("agent_not_paired")
         path = Path(file_path)
-        if not path.is_file():
+        try:
+            if not path.is_file():
+                if retry_optional_unavailable:
+                    raise ReplayArchiveSourceUnavailable(
+                        f"replay_source_missing: {path}",
+                    )
+                return False
+            size_bytes = path.stat().st_size
+            if size_bytes <= 0 or size_bytes > REPLAY_FILE_MAX_BYTES:
+                return False
+            digest = hashlib.sha256()
+            md5 = hashlib.md5(usedforsecurity=False)
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                    md5.update(chunk)
+        except OSError as exc:
+            if retry_optional_unavailable:
+                raise ReplayArchiveSourceUnavailable(
+                    f"replay_source_inaccessible: {path}",
+                ) from exc
             return False
-
-        size_bytes = path.stat().st_size
-        if size_bytes <= 0 or size_bytes > REPLAY_FILE_MAX_BYTES:
-            return False
-        digest = hashlib.sha256()
-        md5 = hashlib.md5(usedforsecurity=False)
-        with path.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                digest.update(chunk)
-                md5.update(chunk)
         metadata = {
             "filename": path.name,
             "sizeBytes": size_bytes,
@@ -144,7 +230,15 @@ class ApiClient:
                 body=metadata,
             )
         except _ApiError as exc:
-            if exc.status in (400, 404, 413, 503):
+            if exc.status in (400, 413):
+                return False
+            if (
+                exc.status == 404
+                and retry_optional_unavailable
+                and "game_not_found" in exc.body
+            ):
+                return False
+            if exc.status in (404, 503) and not retry_optional_unavailable:
                 return False
             raise
 
@@ -189,6 +283,14 @@ class ApiClient:
                             REPLAY_PUT_READ_TIMEOUT_SEC,
                         ),
                     )
+            except OSError as exc:
+                # Cloud-backed files can be evicted between prepare and PUT.
+                # Keep durable work queued so a later hydration can succeed.
+                if retry_optional_unavailable:
+                    raise ReplayArchiveSourceUnavailable(
+                        f"replay_source_inaccessible: {path}",
+                    ) from exc
+                return False
             except requests.RequestException as exc:
                 last_exc = exc
                 _backoff(attempt)
@@ -217,10 +319,21 @@ class ApiClient:
                 body={"uploadId": upload_id},
             )
         except _ApiError as exc:
-            if exc.status in (400, 404, 413, 503):
+            if exc.status in (400, 413):
+                return False
+            if (
+                exc.status == 404
+                and retry_optional_unavailable
+                and "game_not_found" in exc.body
+            ):
+                return False
+            if exc.status in (404, 503) and not retry_optional_unavailable:
                 return False
             raise
-        return complete.get("replayAvailable") is True
+        stored = complete.get("replayAvailable") is True
+        if not stored and retry_optional_unavailable:
+            raise RuntimeError("replay_archive_not_confirmed")
+        return stored
 
     def get_replay_archive_status(self) -> Optional[Dict[str, Any]]:
         """Return progress for the one-time original-replay backfill.

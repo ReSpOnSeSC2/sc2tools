@@ -135,12 +135,16 @@ class FakeS3Client {
     this.version = 0;
     this.forcedConflicts = 0;
     this.deleteErrors = [];
+    this.headCalls = 0;
+    this.headError = null;
+    this.putCalls = 0;
   }
 
   async send(command) {
     const name = command.constructor.name;
     const input = command.input;
     if (name === "PutObjectCommand") {
+      this.putCalls += 1;
       const previous = this.objects.get(input.Key);
       const forceConflict = this.forcedConflicts > 0;
       if (forceConflict) this.forcedConflicts -= 1;
@@ -166,6 +170,25 @@ class FakeS3Client {
         CacheControl: input.CacheControl,
       });
       return { ETag: etag };
+    }
+    if (name === "HeadObjectCommand") {
+      this.headCalls += 1;
+      if (this.headError) throw this.headError;
+      const stored = this.objects.get(input.Key);
+      if (!stored) {
+        const err = new Error("NoSuchKey");
+        err.name = "NoSuchKey";
+        err.$metadata = { httpStatusCode: 404 };
+        throw err;
+      }
+      if (input.IfMatch && stored.etag !== input.IfMatch) {
+        this.preconditionFailures += 1;
+        const err = new Error("PreconditionFailed");
+        err.name = "PreconditionFailed";
+        err.$metadata = { httpStatusCode: 412 };
+        throw err;
+      }
+      return { ETag: stored.etag };
     }
     if (name === "GetObjectCommand") {
       const stored = this.objects.get(input.Key);
@@ -313,6 +336,33 @@ describe("R2DetailsStore", () => {
       ...SAMPLE_BLOB,
       apmCurve: replacementCurve,
     });
+  });
+
+  test("unchanged writes validate the ETag without rewriting the R2 object", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+    const storedBefore = s3.objects.get(store.keyFor("u1", "g1"));
+
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+
+    expect(s3.putCalls).toBe(1);
+    expect(s3.headCalls).toBe(1);
+    expect(s3.objects.get(store.keyFor("u1", "g1"))).toBe(storedBefore);
+    expect(await store.read("u1", "g1")).toEqual(SAMPLE_BLOB);
+  });
+
+  test("failed unchanged-object validation never stamps successful metadata", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "g1", date, SAMPLE_BLOB);
+    await collection.deleteOne({ userId: "u1", gameId: "g1" });
+    s3.headError = new Error("R2 temporarily unavailable");
+
+    await expect(
+      store.write("u1", "g1", date, SAMPLE_BLOB),
+    ).rejects.toThrow("R2 temporarily unavailable");
+
+    expect(s3.putCalls).toBe(1);
+    expect(await collection.findOne({ userId: "u1", gameId: "g1" })).toBeNull();
   });
 
   test("concurrent writes from separate instances retry without losing fields", async () => {

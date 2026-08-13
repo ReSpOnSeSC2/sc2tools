@@ -744,11 +744,15 @@ def parse_replay_for_cloud(
     *,
     player_handle: Optional[str] = None,
     state_dir: Optional[Path] = None,
+    resolve_pulse: bool = True,
 ) -> Optional[CloudGame]:
     """Back-compat wrapper around :func:`parse_replay_for_cloud_ex`
     for callers that don't care WHY a replay was unusable."""
     game, _reason = parse_replay_for_cloud_ex(
-        file_path, player_handle=player_handle, state_dir=state_dir,
+        file_path,
+        player_handle=player_handle,
+        state_dir=state_dir,
+        resolve_pulse=resolve_pulse,
     )
     return game
 
@@ -758,6 +762,7 @@ def parse_replay_for_cloud_ex(
     *,
     player_handle: Optional[str] = None,
     state_dir: Optional[Path] = None,
+    resolve_pulse: bool = True,
 ) -> tuple[Optional[CloudGame], Optional[str]]:
     """Parse one .SC2Replay and return ``(CloudGame, None)``, or
     ``(None, reason)`` when the replay is unusable — reason is one of
@@ -767,7 +772,11 @@ def parse_replay_for_cloud_ex(
 
     ``player_handle`` is an optional explicit override (e.g. tests).
     Otherwise we resolve through ``state_dir``'s cached cloud value
-    or the legacy env-var fallback.
+    or the legacy env-var fallback. ``resolve_pulse=False`` is used by
+    full-history workers: the stable toon handle still reaches the cloud,
+    whose durable backfill resolves SC2Pulse identity later, without making
+    every replay wait on an external network lookup. Fresh replay uploads
+    keep the default ``True`` for immediate opponent enrichment.
     """
     try:
         # Lazy import: the analyzer package is only imported when we
@@ -937,19 +946,24 @@ def parse_replay_for_cloud_ex(
     # Identity: keep the in-replay toon_handle as the storage key
     # (`pulseId`) so the existing per-opponent record stays stable even
     # when SC2Pulse is offline or the lookup misses. Always emit the
-    # raw toon under `toonHandle`. Always attempt the SC2Pulse lookup
-    # when we have a handle — the agent has no opinion on whether the
-    # cloud already knows this opponent; the server is authoritative
-    # on whether to overwrite the stored pulseCharacterId. Emit
-    # ``pulseLookupAttempted`` so the API/cron can distinguish "agent
-    # didn't try" from "agent tried and Pulse said no".
+    # raw toon under `toonHandle`. Fresh uploads attempt SC2Pulse here;
+    # full-history workers defer it to the cloud's durable backfill. The
+    # server remains authoritative on whether to overwrite a stored
+    # pulseCharacterId. Emit ``pulseLookupAttempted`` so the API/cron can
+    # distinguish "agent didn't try" from "agent tried and Pulse said no".
     if opp.handle:
         opponent["toonHandle"] = str(opp.handle)
         opponent["pulseId"] = str(opp.handle)
-        pulse_character_id = _resolve_pulse_character_id(opp, file_path=file_path)
-        opponent["pulseLookupAttempted"] = True
-        if pulse_character_id is not None:
-            opponent["pulseCharacterId"] = pulse_character_id
+        if resolve_pulse:
+            pulse_character_id = _resolve_pulse_character_id(
+                opp,
+                file_path=file_path,
+            )
+            opponent["pulseLookupAttempted"] = True
+            if pulse_character_id is not None:
+                opponent["pulseCharacterId"] = pulse_character_id
+        else:
+            opponent["pulseLookupAttempted"] = False
     else:
         opponent["pulseLookupAttempted"] = False
     if getattr(ctx, "opp_strategy", None):

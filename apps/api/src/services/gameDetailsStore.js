@@ -38,7 +38,7 @@
  */
 
 const zlib = require("zlib");
-const { promisify } = require("util");
+const { isDeepStrictEqual, promisify } = require("util");
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -250,6 +250,32 @@ class R2DetailsStore {
       // Render instances update different fields on the same replay.
       const current = await this._readVersioned(userId, gameId);
       const merged = { ...(current?.blob || {}), ...blob };
+      if (current && isDeepStrictEqual(current.blob, merged)) {
+        // A Full Re-sync commonly sends a byte-for-byte equivalent analysis
+        // blob. Preserve the optimistic-write contract without paying for
+        // another gzip + R2 PUT: a conditional HEAD proves the ETag observed
+        // by _readVersioned is still current. A concurrent writer produces a
+        // 412 and retries the merge just like the conditional PUT path.
+        try {
+          await this.client.send(
+            new this._sdk.HeadObjectCommand({
+              Bucket: this.bucket,
+              Key: key,
+              IfMatch: current.etag,
+            }),
+          );
+        } catch (err) {
+          if (
+            (isConditionalWriteConflict(err) || isNotFoundError(err))
+            && attempt + 1 < R2_WRITE_MAX_ATTEMPTS
+          ) {
+            continue;
+          }
+          throw err;
+        }
+        await this._writeMetadata(userId, gameId, date);
+        return;
+      }
       const body = await gzip(Buffer.from(JSON.stringify(merged), "utf8"));
       /** @type {import('@aws-sdk/client-s3').PutObjectCommandInput} */
       const put = {
@@ -280,21 +306,26 @@ class R2DetailsStore {
       // Maintain the slim metadata row in Mongo so GDPR delete and
       // any future $lookup-style queries still have an authoritative
       // (userId, gameId, date) tuple per game.
-      /** @type {Record<string, any>} */
-      const meta = { userId, gameId, date, storedIn: STORE_KINDS.R2 };
-      stampVersion(meta, COLLECTIONS.GAME_DETAILS);
-      await this.gameDetailsCollection.updateOne(
-        { userId, gameId },
-        {
-          $setOnInsert: { createdAt: new Date() },
-          $set: meta,
-          $unset: UNSET_HEAVY_FIELDS,
-        },
-        { upsert: true },
-      );
+      await this._writeMetadata(userId, gameId, date);
       return;
     }
     throw new Error("r2_details_write_conflict");
+  }
+
+  /** @param {string} userId @param {string} gameId @param {Date} date */
+  async _writeMetadata(userId, gameId, date) {
+    /** @type {Record<string, any>} */
+    const meta = { userId, gameId, date, storedIn: STORE_KINDS.R2 };
+    stampVersion(meta, COLLECTIONS.GAME_DETAILS);
+    await this.gameDetailsCollection.updateOne(
+      { userId, gameId },
+      {
+        $setOnInsert: { createdAt: new Date() },
+        $set: meta,
+        $unset: UNSET_HEAVY_FIELDS,
+      },
+      { upsert: true },
+    );
   }
 
   /**

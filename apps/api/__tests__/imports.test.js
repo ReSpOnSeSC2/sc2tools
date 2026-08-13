@@ -135,6 +135,21 @@ describe("services/import", () => {
     await expect(svc.start("user-1", { folder: "C:\\Replays" })).rejects.toThrow(/import_already_running/);
   });
 
+  test("stalled background work still blocks a second import", async () => {
+    const mocks = makeMockJobs();
+    const svc = new ImportService({ importJobs: mocks.collection });
+    mocks.docs.push({
+      _id: "stalled-job",
+      userId: "user-1",
+      status: "stalled",
+      startedAt: new Date(),
+    });
+
+    await expect(svc.start("user-1", {})).rejects.toThrow(
+      /import_already_running/,
+    );
+  });
+
   test("status returns the latest job in serialised form", async () => {
     const mocks = makeMockJobs();
     const svc = new ImportService({ importJobs: mocks.collection });
@@ -173,6 +188,24 @@ describe("services/import", () => {
     const out = await svc.cancel("user-1");
     expect(out.cancelled).toBe(1);
     expect(events).toContain("import:cancel_request");
+  });
+
+  test("cancel also stops a stalled background import", async () => {
+    const mocks = makeMockJobs();
+    const svc = new ImportService({ importJobs: mocks.collection });
+    mocks.docs.push({
+      _id: "stalled-job",
+      userId: "user-1",
+      status: "stalled",
+      startedAt: new Date(),
+    });
+
+    const out = await svc.cancel("user-1");
+
+    expect(out.cancelled).toBe(1);
+    expect(out.jobId).toBe("stalled-job");
+    expect(mocks.docs[0].status).toBe("cancelled");
+    expect(mocks.docs[0].lastMessage).toBe("cancelled_by_user");
   });
 
   test("start works without a folder (agent resolves its own roots)", async () => {
@@ -227,19 +260,158 @@ describe("services/import", () => {
     };
     const svc = new ImportService({ importJobs: mocks.collection }, { io });
     const { jobId } = await svc.agentStart("user-1", { total: 100 });
-    await svc.reportProgress("user-1", jobId, { completed: 60, errors: 2 });
-    await svc.reportProgress("user-1", jobId, { completed: 3, errors: 0 });
+    await svc.reportProgress("user-1", jobId, {
+      completed: 60,
+      errors: 2,
+      total: 100,
+      remaining: 38,
+    });
+    await svc.reportProgress("user-1", jobId, {
+      completed: 3,
+      errors: 0,
+      total: 4,
+      remaining: 1,
+    });
     const job = mocks.docs.find((d) => String(d._id) === String(jobId));
     expect(job.completed).toBe(60);
     expect(job.errors).toBe(2);
+    expect(job.total).toBe(100);
     // The socket event for the low report carries the stored
     // high-water mark, not the stale absolute values.
     const last = events.filter((e) => e.event === "import:progress").pop();
     expect(last.payload.completed).toBe(60);
     expect(last.payload.errors).toBe(2);
+    expect(last.payload.total).toBe(100);
+    expect(last.payload.remaining).toBe(38);
+    expect((await svc.status("user-1")).remaining).toBe(38);
     // Forward movement still flows through.
     await svc.reportProgress("user-1", jobId, { completed: 75 });
     expect(mocks.docs.find((d) => String(d._id) === String(jobId)).completed).toBe(75);
+  });
+
+  test("stalled progress stays unfinished, preserves remaining, and can recover", async () => {
+    const mocks = makeMockJobs();
+    const events = [];
+    const io = {
+      to: () => ({
+        emit: (event, payload) => events.push({ event, payload }),
+      }),
+    };
+    const svc = new ImportService({ importJobs: mocks.collection }, { io });
+    const { jobId } = await svc.agentStart("user-1", { total: 100 });
+
+    await svc.reportProgress("user-1", jobId, {
+      completed: 20,
+      errors: 1,
+      remaining: 79,
+      phase: "import",
+      stalled: true,
+      message: "import_stalled_background_continues",
+    });
+    let status = await svc.status("user-1");
+    expect(status).toMatchObject({
+      status: "stalled",
+      completed: 20,
+      errors: 1,
+      remaining: 79,
+      finishedAt: null,
+    });
+    expect(status.status).not.toBe("done");
+    expect((await svc.activeJob("user-1")).status).toBe("stalled");
+
+    // A restarted agent reattaches to the same unfinished tracker.
+    const adopted = await svc.agentStart("user-1", { total: 79 });
+    expect(adopted).toMatchObject({
+      existing: true,
+      jobId,
+      status: "stalled",
+    });
+
+    // Only the reporter's explicit recovery flag restores running; a
+    // generic late progress packet cannot resurrect terminal jobs.
+    await svc.reportProgress("user-1", jobId, {
+      completed: 21,
+      remaining: 78,
+      phase: "import",
+      stalled: false,
+      message: "import_progress_resumed",
+    });
+    status = await svc.status("user-1");
+    expect(status).toMatchObject({
+      status: "running",
+      completed: 21,
+      remaining: 78,
+      finishedAt: null,
+    });
+
+    const last = events.filter((e) => e.event === "import:progress").pop();
+    expect(last.payload).toMatchObject({
+      status: "running",
+      completed: 21,
+      remaining: 78,
+    });
+
+    // Completion is the only state that forces remaining to zero.
+    await svc.reportProgress("user-1", jobId, {
+      completed: 21,
+      remaining: 78,
+      done: true,
+    });
+    status = await svc.status("user-1");
+    expect(status.status).toBe("done");
+    expect(status.remaining).toBe(0);
+  });
+
+  test("legacy agents' stalled done packet is not treated as complete", async () => {
+    const mocks = makeMockJobs();
+    const svc = new ImportService({ importJobs: mocks.collection });
+    const { jobId } = await svc.agentStart("user-1", { total: 100 });
+
+    await svc.reportProgress("user-1", jobId, {
+      total: 100,
+      completed: 20,
+      errors: 1,
+      done: true,
+      message: "import_stalled_card_closed",
+    });
+
+    expect(await svc.status("user-1")).toMatchObject({
+      status: "stalled",
+      completed: 20,
+      errors: 1,
+      remaining: 79,
+      finishedAt: null,
+    });
+  });
+
+  test("late stall/recovery/completion packets cannot revive a cancelled job", async () => {
+    const mocks = makeMockJobs();
+    const events = [];
+    const io = {
+      to: () => ({
+        emit: (event, payload) => events.push({ event, payload }),
+      }),
+    };
+    const svc = new ImportService({ importJobs: mocks.collection }, { io });
+    const { jobId } = await svc.agentStart("user-1", { total: 10 });
+    await svc.cancel("user-1");
+    const eventCountAfterCancel = events.length;
+
+    for (const payload of [
+      { completed: 1, remaining: 9 },
+      { stalled: true, remaining: 10 },
+      { stalled: false, completed: 1, remaining: 9 },
+      { done: true, completed: 10, remaining: 0 },
+    ]) {
+      const out = await svc.reportProgress("user-1", jobId, payload);
+      expect(out).toMatchObject({ ok: true, ignored: true });
+    }
+
+    const status = await svc.status("user-1");
+    expect(status.status).toBe("cancelled");
+    expect(status.finishedAt).not.toBeNull();
+    // Rejected transitions do not leak misleading socket updates.
+    expect(events).toHaveLength(eventCountAfterCancel);
   });
 
   test("agentStart reuse returns the job's prior counters for seeding", async () => {

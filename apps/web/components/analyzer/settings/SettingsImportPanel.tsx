@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import {
+  importJobBlocksStart,
   useImportStatus,
   type ImportJob,
 } from "@/components/imports/useImportStatus";
@@ -41,6 +42,7 @@ const STATUS_VARIANT: Record<
   pending: "neutral",
   scanning: "cyan",
   running: "accent",
+  stalled: "warning",
   done: "success",
   error: "danger",
   cancelled: "warning",
@@ -50,6 +52,7 @@ const STATUS_ICON: Record<string, typeof Clock> = {
   pending: Clock,
   scanning: RefreshCw,
   running: Play,
+  stalled: Pause,
   done: CheckCircle2,
   error: AlertCircle,
   cancelled: Pause,
@@ -85,6 +88,7 @@ export function SettingsImportPanel() {
   if (importStatus.isLoading) return <Skeleton rows={3} />;
   const job = importStatus.job;
   const isRunning = importStatus.active;
+  const importBlocked = importJobBlocksStart(job?.status);
   const items = jobs.data?.items ?? [];
 
   return (
@@ -98,7 +102,7 @@ export function SettingsImportPanel() {
             <Button
               variant="primary"
               onClick={() => call("/v1/import/start", "Import started")}
-              disabled={busy || isRunning}
+              disabled={busy || importBlocked}
               loading={busy && !isRunning}
               iconLeft={<Play className="h-4 w-4" aria-hidden />}
             >
@@ -114,7 +118,7 @@ export function SettingsImportPanel() {
             </Button>
           </div>
           <ImportDropZone
-            disabled={busy || isRunning}
+            disabled={busy || importBlocked}
             onActivate={() =>
               call(
                 "/v1/import/pick-folder",

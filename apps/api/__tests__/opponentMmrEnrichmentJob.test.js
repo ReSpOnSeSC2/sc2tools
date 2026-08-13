@@ -175,6 +175,29 @@ function pulseFake(responses = {}) {
     expect(pulse.calls).toEqual(["401"]);
   });
 
+  test("does not stamp current Pulse MMR onto an old replay imported today", async () => {
+    await db.games.insertOne(
+      game(
+        "historical-450",
+        { pulseCharacterId: "450" },
+        {
+          date: new Date(NOW_MS - WINDOW_MS - 1),
+          createdAt: new Date(NOW_MS - 1),
+        },
+      ),
+    );
+    const pulse = pulseFake({
+      450: [{ race: "PROTOSS", mmr: 4450, league: "Master" }],
+    });
+
+    await build(pulse).runOnce();
+
+    const row = await db.games.findOne({ gameId: "historical-450" });
+    expect(row.opponent).not.toHaveProperty("mmr");
+    expect(row.opponent).not.toHaveProperty("mmrLookupAttempted");
+    expect(pulse.calls).toEqual([]);
+  });
+
   test("an attempted row is not selected again", async () => {
     await db.games.insertOne(
       game("attempted-501", {

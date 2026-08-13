@@ -6,10 +6,11 @@ Two modes — both ALWAYS run:
      replay, watchdog fires on_created, we wait for the file to settle,
      parse, and enqueue an upload.
 
-  2. Periodic sweep (the ``poll_interval_sec`` thread). Every N seconds
-     we scan all configured Multiplayer dirs for files newer than our
-     dedupe cursor. Catches the OneDrive / cloud-sync case where the
-     filesystem event never fires.
+  2. Periodic sweep (the ``poll_interval_sec`` thread). It drains a cached
+     newest-first inventory every N seconds and refreshes the filesystem
+     snapshot once per minute. Catches OneDrive / cloud-sync cases where the
+     filesystem event never fires without re-statting a 10k-file library on
+     every parser wave.
 
 Both code paths funnel into ``_handle_replay`` which is idempotent on
 the dedupe set in ``state.uploaded``.
@@ -50,6 +51,7 @@ import multiprocessing
 import os
 import threading
 import time
+from collections import deque
 from concurrent.futures import (
     CancelledError,
     Executor,
@@ -137,6 +139,14 @@ _LIVE_REPLAY_MAX_AGE_SEC = 30 * 60
 # events still bypass this cap immediately. This prevents a mass cloud
 # restore from rebuilding an unbounded FIFO in the one-thread live lane.
 _SWEEP_LIVE_PER_ROOT_LIMIT = 1
+
+# The full replay inventory is expensive on large OneDrive libraries (several
+# seconds for 10k+ files). Keep a reusable, newest-first backlog and refresh it
+# periodically for missed filesystem events. Worker completions refill from
+# this backlog immediately, so parser capacity no longer waits for the next
+# 10-second filesystem walk. Watchdog remains the authoritative fast path for
+# genuinely new games.
+_HISTORY_INVENTORY_REFRESH_SEC = 60.0
 
 
 def _child_smoke_test() -> Tuple[str, str]:
@@ -352,7 +362,11 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
     if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
         return ("settle_failed", path_str, None)
     try:
-        game, reason = _parse_ex(path, state_dir=state_dir)
+        game, reason = _parse_ex(
+            path,
+            state_dir=state_dir,
+            resolve_pulse=False,
+        )
     except _AnalyzerImportError as exc:
         return ("analyzer_error", path_str, str(exc))
     if not game:
@@ -414,6 +428,15 @@ class ReplayWatcher:
         )
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
+        self._history_backlog: deque[tuple[Path, float]] = deque()
+        self._history_lock = threading.Lock()
+        self._history_drain_lock = threading.Lock()
+        self._sweep_lock = threading.Lock()
+        self._history_last_refresh = 0.0
+        self._history_refresh_generation = 0
+        self._history_completed_generation = -1
+        self._history_root_signatures: dict[str, int | None] = {}
+        self._history_pause_invalidated = False
         self._sweep_live_lock = threading.Lock()
         self._sweep_live_paths: dict[str, str] = {}
         self._sweep_live_roots: set[str] = set()
@@ -571,6 +594,10 @@ class ReplayWatcher:
         ``_roots_lock`` keep concurrent sweeps from doubling work or
         racing on the roots list.
         """
+        with self._history_lock:
+            # Filter/root changes must replace, rather than reuse, an
+            # inventory built under the previous eligibility rules.
+            self._history_refresh_generation += 1
         threading.Thread(
             target=self._sweep_once,
             name="sc2tools-immediate-sweep",
@@ -707,96 +734,184 @@ class ReplayWatcher:
         # mirrors it but the watcher reads state directly to avoid
         # taking the upload queue's lock in a hot path.
         if getattr(self._state, "paused", False):
+            with self._history_lock:
+                if not self._history_pause_invalidated:
+                    self._history_refresh_generation += 1
+                    self._history_pause_invalidated = True
             return
-        # If the runner triggered a "Re-sync from scratch" via the tray,
-        # rediscover the roots (in case the override changed too) and
-        # walk every file again. The state.uploaded dict was already
-        # cleared by the runner before signalling, so keys that match
-        # below would be re-enqueued anyway — but we still want fresh
-        # roots in case the override changed since the agent started.
-        # Take ``_roots_lock`` so a concurrent
-        # ``request_immediate_sweep`` (v0.5.8+) doesn't race the
-        # periodic sweep into a duplicated rediscovery — the second
-        # to acquire the lock sees a fresh ``_roots`` and the matching
-        # ``acknowledge_resync`` already happened, so the second
-        # branch falls through cheaply.
-        if self._upload.is_resync_requested():
-            with self._roots_lock:
-                if self._upload.is_resync_requested():
-                    self._roots = self._discover_roots()
-                    self._upload.acknowledge_resync()
-        if not self._roots:
-            with self._roots_lock:
-                if not self._roots:
-                    self._roots = self._discover_roots()
+        with self._history_lock:
+            self._history_pause_invalidated = False
+        # Startup, periodic, and user-requested sweeps share a single
+        # expensive inventory refresh. Parsing remains concurrent.
+        with self._sweep_lock:
+            if self._upload.is_resync_requested():
+                with self._roots_lock:
+                    if self._upload.is_resync_requested():
+                        self._roots = self._discover_roots()
+                        self._upload.acknowledge_resync()
+                with self._history_lock:
+                    self._history_refresh_generation += 1
             if not self._roots:
-                return
-        # Resolve the user's date-range filter once per sweep so the
-        # mtime pre-check is a single object lookup per file rather
-        # than re-parsing the preset string for every replay during a
-        # 12k-replay backfill.
-        sync_filter = self._sync_filter()
-        for root in self._roots:
-            sweep_live_submitted = 0
-            for path, mtime in _walk_replays(root):
-                live_candidate = (
-                    sweep_live_submitted < _SWEEP_LIVE_PER_ROOT_LIMIT
-                    and _is_fresh_replay_mtime(mtime)
+                with self._roots_lock:
+                    if not self._roots:
+                        self._roots = self._discover_roots()
+                if not self._roots:
+                    return
+                with self._history_lock:
+                    self._history_refresh_generation += 1
+
+            now = time.monotonic()
+            root_signatures = self._root_inventory_signatures()
+            with self._history_lock:
+                refresh = (
+                    self._history_completed_generation
+                    != self._history_refresh_generation
+                    or root_signatures != self._history_root_signatures
+                    or (now - self._history_last_refresh)
+                    >= _HISTORY_INVENTORY_REFRESH_SEC
                 )
+            if refresh:
+                self._refresh_history_inventory()
+
+        # Worker completions also call this method, so free parse slots refill
+        # immediately instead of waiting for another full filesystem walk.
+        self._drain_history_inventory()
+
+    def _refresh_history_inventory(self) -> None:
+        """Rebuild the eligible historical replay backlog newest-first."""
+        with self._history_lock:
+            refresh_generation = self._history_refresh_generation
+        # Snapshot directory mtimes before walking. If a replay appears while
+        # the walk is in progress, the next poll observes a different mtime
+        # and refreshes again rather than missing it for the cache TTL.
+        root_signatures = self._root_inventory_signatures()
+        sync_filter = self._sync_filter()
+        historical: list[tuple[float, Path]] = []
+        live_candidates: list[tuple[Path, Path]] = []
+
+        for root in list(self._roots):
+            sweep_live_staged = 0
+            for path, mtime in _walk_replays(root):
                 key = str(path)
                 if key in self._state.uploaded:
                     continue
                 if self._upload.is_pending(path):
                     continue
                 if not sync_filter.mtime_in_range(mtime):
-                    # Pre-filter: file mtime is well outside the user's
-                    # window. Mark "filtered" so the next sweep skips
-                    # it without another stat call. The runner clears
-                    # these entries when the user changes the filter.
-                    self._state.uploaded[key] = "filtered"
                     continue
-                live = False
-                if live_candidate:
-                    live = self._reserve_sweep_live(path, root)
-                # Congestion gate: ordinary history waits, while one
-                # bounded mtime-fallback candidate per account may use
-                # the separate sweep-live lane. Roots remain independent,
-                # so a historical root cannot hide a fresh replay in the
-                # next account folder.
-                if (
-                    not live
-                    and self._upload.pending_count()
-                    >= _UPLOAD_QUEUE_SOFT_LIMIT
-                ):
-                    log.info(
-                        "sweep_paused_upload_queue_congested depth=%d "
-                        "limit=%d (deferring this folder)",
-                        self._upload.pending_count(),
-                        _UPLOAD_QUEUE_SOFT_LIMIT,
-                    )
-                    break
                 with self._inflight_lock:
                     if key in self._inflight:
-                        if live:
-                            self._release_sweep_live(path)
                         continue
-                    if (
-                        not live
-                        and len(self._inflight) >= self._parse_inflight_limit
-                    ):
-                        log.info(
-                            "sweep_paused_parse_backlog depth=%d limit=%d "
-                            "(deferring this folder)",
-                            len(self._inflight),
-                            self._parse_inflight_limit,
-                        )
-                        # As above, keep looking through the other roots
-                        # for a fresh replay even while history is capped.
-                        break
-                    self._inflight.add(key)
+
+                live = False
+                if (
+                    sweep_live_staged < _SWEEP_LIVE_PER_ROOT_LIMIT
+                    and _is_fresh_replay_mtime(mtime)
+                ):
+                    live = True
                 if live:
-                    sweep_live_submitted += 1
-                self._submit_parse(path, live=live)
+                    live_candidates.append((path, root))
+                    sweep_live_staged += 1
+                    continue
+                historical.append((mtime, path))
+
+        historical.sort(key=lambda pair: pair[0], reverse=True)
+        with self._history_lock:
+            if refresh_generation != self._history_refresh_generation:
+                # Filter/roots changed while the filesystem walk was in
+                # progress. Discard the stale snapshot and all staged live
+                # work; the generation owner has already requested another
+                # immediate sweep.
+                return
+            self._history_backlog = deque(
+                (path, mtime) for mtime, path in historical
+            )
+            self._history_last_refresh = time.monotonic()
+            self._history_completed_generation = refresh_generation
+            self._history_root_signatures = root_signatures
+
+        for path, root in live_candidates:
+            key = str(path)
+            if key in self._state.uploaded or self._upload.is_pending(path):
+                continue
+            if not self._reserve_sweep_live(path, root):
+                continue
+            with self._inflight_lock:
+                if key in self._inflight:
+                    self._release_sweep_live(path)
+                    continue
+                self._inflight.add(key)
+            self._submit_parse(path, live=True)
+
+    def _root_inventory_signatures(self) -> dict[str, int | None]:
+        """Cheap change detector for replay-folder additions.
+
+        Auto-discovered roots normally are Multiplayer directories already.
+        A user override can point at an Accounts parent, so include every
+        nested Multiplayer directory we can cheaply identify; Windows does
+        not guarantee a descendant creation updates the top parent's mtime.
+        """
+        signatures: dict[str, int | None] = {}
+        for root in list(self._roots):
+            dirs = all_multiplayer_dirs(root)
+            for candidate in dirs or [root]:
+                try:
+                    signatures[str(candidate)] = candidate.stat().st_mtime_ns
+                except OSError:
+                    signatures[str(candidate)] = None
+        return signatures
+
+    def _ingest_pending_count(self) -> int:
+        """Return only server-ingest pressure when the queue exposes it."""
+        counter = getattr(self._upload, "ingest_pending_count", None)
+        if callable(counter):
+            return int(counter())
+        return int(self._upload.pending_count())
+
+    def _drain_history_inventory(self) -> None:
+        """Fill free parse slots while retaining all pressure ceilings."""
+        if not self._history_drain_lock.acquire(blocking=False):
+            return
+        try:
+            while not self._stop.is_set():
+                if getattr(self._state, "paused", False):
+                    return
+                pending_depth = self._ingest_pending_count()
+                if pending_depth >= _UPLOAD_QUEUE_SOFT_LIMIT:
+                    log.info(
+                        "history_refill_paused_upload_queue_congested "
+                        "depth=%d limit=%d",
+                        pending_depth,
+                        _UPLOAD_QUEUE_SOFT_LIMIT,
+                    )
+                    return
+                with self._inflight_lock:
+                    if len(self._inflight) >= self._parse_inflight_limit:
+                        return
+                with self._history_lock:
+                    if not self._history_backlog:
+                        return
+                    path, mtime = self._history_backlog.popleft()
+                    key = str(path)
+
+                if key in self._state.uploaded:
+                    continue
+                if self._upload.is_pending(path):
+                    continue
+                if not self._sync_filter().mtime_in_range(mtime):
+                    self._state.uploaded[key] = "filtered"
+                    continue
+                with self._inflight_lock:
+                    if key in self._inflight:
+                        continue
+                    if len(self._inflight) >= self._parse_inflight_limit:
+                        with self._history_lock:
+                            self._history_backlog.appendleft((path, mtime))
+                        return
+                    self._inflight.add(key)
+                self._submit_parse(path, live=False)
+        finally:
+            self._history_drain_lock.release()
 
     def _reserve_sweep_live(self, path: Path, root: Path) -> bool:
         """Reserve one outstanding mtime-fallback parse for ``root``."""
@@ -1136,6 +1251,14 @@ class ReplayWatcher:
         finally:
             with self._inflight_lock:
                 self._inflight.discard(submitted_path_str)
+            retry_path = Path(submitted_path_str)
+            if (
+                submitted_path_str not in self._state.uploaded
+                and not self._upload.is_pending(retry_path)
+            ):
+                with self._history_lock:
+                    self._history_refresh_generation += 1
+            self._drain_history_inventory()
 
     def _handle_replay(self, path: Path, *, priority: bool = False) -> None:
         try:
@@ -1144,7 +1267,13 @@ class ReplayWatcher:
                 return
             try:
                 game, skip_reason = parse_replay_for_cloud_ex(
-                    path, state_dir=self._cfg.state_dir,
+                    path,
+                    state_dir=self._cfg.state_dir,
+                    # Fresh games benefit from immediate opponent identity.
+                    # Full-history work leaves the stable toon handle for the
+                    # cloud backfill instead of blocking every replay on an
+                    # external SC2Pulse request.
+                    resolve_pulse=priority,
                 )
             except AnalyzerImportError:
                 # Systemic failure (bundled analyzer can't be loaded).
@@ -1204,6 +1333,13 @@ class ReplayWatcher:
             with self._inflight_lock:
                 self._inflight.discard(str(path))
             self._release_sweep_live(path)
+            if (
+                str(path) not in self._state.uploaded
+                and not self._upload.is_pending(path)
+            ):
+                with self._history_lock:
+                    self._history_refresh_generation += 1
+            self._drain_history_inventory()
 
     # Called by _Handler on a watchdog event.
     def on_replay_created(self, path: Path) -> None:
@@ -1217,6 +1353,9 @@ class ReplayWatcher:
         # log replay_parsed lines for several seconds while the
         # process pool drains.
         if getattr(self._state, "paused", False):
+            with self._history_lock:
+                self._history_refresh_generation += 1
+                self._history_pause_invalidated = True
             return
         key = str(path)
         if key in self._state.uploaded:

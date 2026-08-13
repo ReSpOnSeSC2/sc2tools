@@ -4,6 +4,8 @@ import {
   foldEtaSample,
   ERROR_CODE_COPY,
   isBenignImportSkip,
+  importJobBlocksStart,
+  importStatusRefreshInterval,
   mergeProgressEvent,
   type ProgressSample,
 } from "../useImportStatus";
@@ -90,6 +92,17 @@ describe("foldEtaSample (rolling-rate ETA)", () => {
     expect(etaSeconds).toBeNull();
   });
 
+  it("includes quiet backoff time instead of keeping an optimistic burst rate", () => {
+    const { etaSeconds } = run([
+      { t: 0, processed: 0, total: 1000 },
+      { t: 10_000, processed: 100, total: 1000 },
+      { t: 60_000, processed: 100, total: 1000 },
+    ]);
+    // 100 files over the full observed minute, not only the 10-second
+    // burst: 900 remaining / (100 / 60s) = 540s.
+    expect(etaSeconds).toBe(540);
+  });
+
   it("survives an agent counter reset without an absurd ETA", () => {
     // Original run reaches 2500/10000 at a healthy clip...
     let samples: ProgressSample[] = [];
@@ -174,7 +187,22 @@ describe("ERROR_CODE_COPY", () => {
   it("classifies replay resumes as intentional skips", () => {
     expect(isBenignImportSkip("ai_game")).toBe(true);
     expect(isBenignImportSkip("resumed_replay")).toBe(true);
+    expect(isBenignImportSkip("filtered")).toBe(true);
     expect(isBenignImportSkip("parse_failed")).toBe(false);
+  });
+});
+
+describe("current import status", () => {
+  it("keeps stalled work polled and blocks duplicate starts", () => {
+    expect(importJobBlocksStart("stalled")).toBe(true);
+    expect(importStatusRefreshInterval({ status: "stalled" })).toBe(5000);
+  });
+
+  it("stops polling and permits a new import after terminal outcomes", () => {
+    for (const status of ["done", "cancelled", "error", "idle"]) {
+      expect(importJobBlocksStart(status)).toBe(false);
+      expect(importStatusRefreshInterval({ status })).toBe(0);
+    }
   });
 });
 

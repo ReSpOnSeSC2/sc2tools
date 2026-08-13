@@ -66,8 +66,8 @@ class ConsoleUI:
         print(
             "[agent] Original replay downloads need one full Re-sync with "
             f"this latest agent ({progress} not archived yet). Only files "
-            "still on this PC can "
-            "be archived.",
+            "still on this PC can be archived; unfinished private backups "
+            "resume automatically after an agent restart.",
         )
 
     def wait_for_exit(self) -> None:

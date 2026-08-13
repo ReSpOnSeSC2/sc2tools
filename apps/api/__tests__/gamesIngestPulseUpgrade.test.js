@@ -33,6 +33,7 @@ describe("/v1/games re-upload upgrades pulseCharacterId on the opponents row", (
   let mongo;
   let db;
   let app;
+  let services;
 
   const config = {
     port: 0,
@@ -84,6 +85,7 @@ describe("/v1/games re-upload upgrades pulseCharacterId on the opponents row", (
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
     const built = buildApp({ db, logger: pino({ level: "silent" }), config });
     app = built.app;
+    services = built.services;
   });
 
   afterAll(async () => {
@@ -156,5 +158,43 @@ describe("/v1/games re-upload upgrades pulseCharacterId on the opponents row", (
       pulseId: FIRST_UPLOAD.opponent.pulseId,
     });
     expect(row.pulseCharacterId).toBe("340543107");
+  });
+
+  test("historical false defers Pulse while an omitted legacy signal keeps prior behavior", async () => {
+    const fetchSpy = jest.spyOn(
+      services.opponents,
+      "_fetchOpponentMmrFromPulse",
+    ).mockResolvedValue(null);
+    try {
+      const historical = {
+        ...FIRST_UPLOAD,
+        gameId: `${FIRST_UPLOAD.gameId}|historical`,
+        opponent: {
+          ...FIRST_UPLOAD.opponent,
+          pulseId: "1-S2-1-437580",
+          toonHandle: "1-S2-1-437580",
+          pulseLookupAttempted: false,
+        },
+      };
+      const deferred = await postGame(historical);
+      expect(deferred.status).toBe(202);
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      const legacy = {
+        ...FIRST_UPLOAD,
+        gameId: `${FIRST_UPLOAD.gameId}|legacy`,
+        opponent: {
+          pulseId: "1-S2-1-437581",
+          toonHandle: "1-S2-1-437581",
+          displayName: "Legacy",
+          race: "Terran",
+        },
+      };
+      const preserved = await postGame(legacy);
+      expect(preserved.status).toBe(202);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

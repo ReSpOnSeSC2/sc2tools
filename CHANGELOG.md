@@ -13,6 +13,26 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Full Re-sync is substantially faster without relaxing its safety limits**
+  â€” agent 0.15.18 caches the replay inventory, refills parser capacity from a
+  newest-first backlog, forms fuller historical API batches, skips redundant
+  detail writes, and defers historical SC2Pulse enrichment to the existing
+  bounded cloud backfill. The 500-item ingest backpressure gate, bounded parse
+  and upload queues, two-request network ceiling, adaptive batch reduction,
+  Retry-After handling, and live-game priority remain in place.
+- **Private original replay backups now drain independently and survive agent
+  restarts** â€” accepted analysis records durably enqueue their exact
+  `.SC2Replay` backup before advancing the local sync cursor. One background
+  archive worker resumes unfinished tasks after restart, shares the same
+  network ceiling as ingest, and removes work only after a stored,
+  already-stored, or terminal per-file acknowledgement. Server object checks
+  plus local size/SHA-256 matching preserve stale-marker self-repair.
+- **Long-running import progress is truthful and controllable** â€” quiet or
+  rate-limited work is shown as background sync with its remaining count,
+  never as a false completion. Inventory failures remain unknown instead of
+  becoming zero, stalled jobs recover on real movement, and they can still be
+  cancelled without starting a duplicate import.
+
 - Simplified the public infrastructure-cost page by removing internal growth
   scenarios, tightening MongoDB cost wording, and improving mobile spacing.
 

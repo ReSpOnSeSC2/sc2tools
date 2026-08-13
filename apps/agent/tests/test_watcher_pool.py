@@ -129,6 +129,66 @@ def _make_watcher(tmp_path: Path) -> Any:
     return watcher
 
 
+def test_process_worker_defers_pulse_lookup_for_history(
+    monkeypatch, tmp_path,
+) -> None:
+    """Process-pool backfills must not block on external SC2Pulse calls."""
+    from sc2tools_agent import replay_pipeline
+    from sc2tools_agent import watcher as watcher_module
+
+    replay = tmp_path / "Historical.SC2Replay"
+    replay.write_bytes(b"replay")
+    calls: List[Dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        watcher_module,
+        "_wait_for_file_ready",
+        lambda _path, _timeout: True,
+    )
+
+    def _parse(_path, **kwargs):
+        calls.append(kwargs)
+        return _make_cloud_game(), None
+
+    monkeypatch.setattr(replay_pipeline, "parse_replay_for_cloud_ex", _parse)
+
+    kind, path_str, _payload = watcher_module._parse_in_worker(str(replay), "")
+
+    assert kind == "game"
+    assert path_str == str(replay)
+    assert calls == [{"state_dir": None, "resolve_pulse": False}]
+
+
+def test_thread_parser_resolves_pulse_only_for_priority_live_game(
+    monkeypatch, watcher_factory,
+) -> None:
+    """Thread fallback preserves immediate identity for fresh games only."""
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    calls: List[bool] = []
+    monkeypatch.setattr(
+        watcher_module,
+        "_wait_for_file_ready",
+        lambda _path, _timeout: True,
+    )
+
+    def _parse(_path, **kwargs):
+        calls.append(kwargs["resolve_pulse"])
+        return _make_cloud_game(), None
+
+    monkeypatch.setattr(watcher_module, "parse_replay_for_cloud_ex", _parse)
+
+    watcher._handle_replay(watcher._cfg.state_dir / "old.SC2Replay")
+    watcher._handle_replay(
+        watcher._cfg.state_dir / "fresh.SC2Replay",
+        priority=True,
+    )
+
+    assert calls == [False, True]
+
+
 @pytest.fixture
 def watcher_factory(tmp_path: Path):
     """Yield a callable that builds a ReplayWatcher; clean up afterwards.
@@ -637,6 +697,152 @@ def test_historical_sweep_respects_parse_inflight_cap(
     assert all(live is False for _path, live in submit_calls)
     assert len(watcher._inflight) == 2
     assert {path for path, _live in submit_calls} == set(replays[-2:])
+
+
+def test_history_inventory_refills_immediately_after_worker_completion(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A free parser slot must not wait for the next periodic sweep."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Refill" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    replays = []
+    for index in range(3):
+        replay = root / f"Refill {index}.SC2Replay"
+        replay.write_bytes(b"historical")
+        os.utime(replay, (1_600_000_000 + index,) * 2)
+        replays.append(replay)
+
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+    watcher._parse_inflight_limit = 2
+    submitted: List[Path] = []
+
+    def _record(path: Path, *, live: bool = False) -> None:
+        assert live is False
+        submitted.append(path)
+
+    watcher._submit_parse = _record  # type: ignore[assignment]
+    watcher._sweep_once()
+
+    assert submitted == [replays[2], replays[1]]
+    assert len(watcher._history_backlog) == 1
+
+    finished = Future()
+    finished.set_result(("skipped", str(replays[2]), "parse_failed"))
+    watcher._on_worker_done(finished, str(replays[2]))
+
+    assert submitted == [replays[2], replays[1], replays[0]]
+    assert len(watcher._history_backlog) == 0
+
+
+def test_history_inventory_avoids_rewalking_library_every_poll(
+    monkeypatch, watcher_factory,
+) -> None:
+    """Backfill polling reuses its inventory between bounded refreshes."""
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Cached" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    replay = root / "Cached.SC2Replay"
+    replay.write_bytes(b"historical")
+    os.utime(replay, (1_600_000_000,) * 2)
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+
+    real_walk = watcher_module._walk_replays
+    walks = 0
+
+    def _counted_walk(path: Path):
+        nonlocal walks
+        walks += 1
+        yield from real_walk(path)
+
+    monkeypatch.setattr(watcher_module, "_walk_replays", _counted_walk)
+    watcher._submit_parse = lambda _path, *, live=False: None  # type: ignore[assignment]
+
+    watcher._sweep_once()
+    watcher._sweep_once()
+
+    assert walks == 1
+
+
+def test_cached_inventory_detects_replay_added_after_first_sweep(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A missed watchdog event is found on the next normal poll."""
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Missed Watchdog" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    first = root / "First.SC2Replay"
+    first.write_bytes(b"historical")
+    os.utime(first, (1_600_000_000,) * 2)
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "all"
+    submitted: List[Path] = []
+    watcher._submit_parse = (  # type: ignore[assignment]
+        lambda path, *, live=False: submitted.append(path)
+    )
+
+    watcher._sweep_once()
+    second = root / "Second.SC2Replay"
+    second.write_bytes(b"historical")
+    os.utime(second, (1_600_000_001,) * 2)
+    with watcher._inflight_lock:
+        watcher._inflight.discard(str(first))
+    watcher._sweep_once()
+
+    assert first in submitted
+    assert second in submitted
+
+
+def test_filter_change_during_inventory_walk_discards_stale_snapshot(
+    monkeypatch, watcher_factory,
+) -> None:
+    """A widened filter cannot lose a replay to a stale concurrent scan."""
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    root = watcher._cfg.state_dir / "Filter Race" / "Multiplayer"
+    root.mkdir(parents=True, exist_ok=True)
+    replay = root / "Old.SC2Replay"
+    replay.write_bytes(b"historical")
+    old_mtime = 1_600_000_000.0
+    os.utime(replay, (old_mtime, old_mtime))
+    watcher._roots = [root]
+    watcher._test_state.sync_filter_preset = "custom"
+    watcher._test_state.sync_filter_since = "2026-01-01T00:00:00Z"
+    submitted: List[Path] = []
+    watcher._submit_parse = (  # type: ignore[assignment]
+        lambda path, *, live=False: submitted.append(path)
+    )
+    real_walk = watcher_module._walk_replays
+    changed = False
+
+    def _changing_walk(path: Path):
+        nonlocal changed
+        for item in real_walk(path):
+            yield item
+            if not changed:
+                changed = True
+                watcher._test_state.sync_filter_preset = "all"
+                watcher._test_state.sync_filter_since = None
+                with watcher._history_lock:
+                    watcher._history_refresh_generation += 1
+
+    monkeypatch.setattr(watcher_module, "_walk_replays", _changing_walk)
+
+    watcher._sweep_once()
+    assert submitted == []
+    assert str(replay) not in watcher._test_state.uploaded
+
+    watcher._sweep_once()
+    assert submitted == [replay]
 
 
 def test_n_strikes_done_callback_failures_trigger_fallback(

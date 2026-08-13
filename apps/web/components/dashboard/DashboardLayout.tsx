@@ -169,7 +169,10 @@ export function DashboardLayout({
  */
 function ActiveImportCard() {
   const importStatus = useImportStatus();
-  if (!importStatus.active || !importStatus.job) return null;
+  if (
+    !importStatus.job ||
+    (!importStatus.active && importStatus.job.status !== "stalled")
+  ) return null;
   return (
     <Card>
       <ImportProgressCard

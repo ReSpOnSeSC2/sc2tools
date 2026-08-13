@@ -15,9 +15,10 @@ counts it and reports it:
     ``UploadQueue.on_success`` / ``on_failure`` and the watcher's new
     ``on_replay_skipped`` — so the numbers reflect exactly what the
     real pipeline did;
-  * a throttled reporter thread POSTs ``/v1/import/progress`` (~2 s
-    cadence) while a job is active; the cloud re-emits each report to
-    the user's sockets as ``import:progress`` for the live card;
+  * a throttled reporter thread POSTs ``/v1/import/progress`` after
+    counters move or the job changes state; the cloud re-emits each
+    report to the user's sockets as ``import:progress`` for the live
+    card;
   * ``maybe_start_auto_backfill()`` (called once after the watcher
     starts) registers the organic startup sweep as a visible job via
     ``POST /v1/import/agent-start`` when enough un-uploaded replays
@@ -53,8 +54,8 @@ _BENIGN_REASONS = {"ai_game", "resumed_replay"}
 AUTO_BACKFILL_MIN = 25
 
 _REPORT_INTERVAL_SEC = 2.0
-_IDLE_HEARTBEAT_SEC = 10.0
 _MAX_SAMPLES = 25
+_INVENTORY_RETRY_SEC = 60.0
 
 # Stall guard. ``total`` is a point-in-time estimate from
 # ``count_pending()``; files that settle_fail, get dropped by queue
@@ -65,10 +66,11 @@ _MAX_SAMPLES = 25
 # to sync (observed 2026-06-10/11: job total=12661 outlived the
 # session). After this long with zero counter movement we re-check
 # the disk; if nothing is actually pending the job is done, and if
-# something is pending but nothing has moved the pipeline is wedged —
-# either way we close the job card and stop narrating. Background
-# sync itself is unaffected (cancel semantics: the card stops, the
-# watcher keeps sweeping).
+# something is pending but nothing has moved the pipeline is wedged.
+# A non-empty inventory is reported as ``stalled`` rather than ``done``.
+# The reporter then stays attached but silent: no repeated API writes,
+# while a later callback can immediately restore the job to ``running``.
+# Background sync itself is unaffected.
 _STALL_TIMEOUT_SEC = 600.0
 
 
@@ -96,6 +98,7 @@ class ImportController:
         self._samples: List[Dict[str, str]] = []
         self._dirty = False
         self._cancelled = False
+        self._resume_from_stalled = False
         self._reporter: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
@@ -161,7 +164,16 @@ class ImportController:
         job_id = _job_id_of(payload)
         if not job_id:
             return
-        total = self._safe_count_pending()
+        total = self._try_count_pending()
+        if total is None:
+            self._post_progress({
+                "jobId": job_id,
+                "total": 0,
+                "phase": "scan",
+                "message": "inventory_unavailable",
+                "stalled": True,
+            })
+            return
         log.info("import_scan jobId=%s candidates=%d", job_id, total)
         self._post_progress({
             "jobId": job_id,
@@ -188,7 +200,27 @@ class ImportController:
                 self._full_resync()
             except Exception:  # noqa: BLE001
                 log.exception("import_start_force_resync_failed")
-        total = self._safe_count_pending()
+        total = self._try_count_pending()
+        if total is None:
+            log.warning(
+                "import_start_inventory_unavailable jobId=%s force=%s",
+                job_id, force,
+            )
+            # Zero here means "unknown", never "nothing to import".
+            # Keep the job unfinished while the reporter retries discovery.
+            self._activate(job_id, 0, resume_from_stalled=True)
+            self._post_progress({
+                "jobId": job_id,
+                "total": 0,
+                "phase": "import",
+                "message": "inventory_unavailable",
+                "stalled": True,
+            })
+            try:
+                self._watcher.request_immediate_sweep()
+            except Exception:  # noqa: BLE001
+                log.exception("import_start_sweep_failed")
+            return
         log.info(
             "import_start jobId=%s total=%d force=%s", job_id, total, force,
         )
@@ -292,7 +324,13 @@ class ImportController:
             "seeded_errors=%d existing=%s",
             job_id, total, completed, errors, bool(out.get("existing")),
         )
-        self._activate(str(job_id), total, completed=completed, errors=errors)
+        self._activate(
+            str(job_id),
+            total,
+            completed=completed,
+            errors=errors,
+            resume_from_stalled=(out.get("status") == "stalled"),
+        )
 
     # ---------------- internals ----------------
 
@@ -309,7 +347,13 @@ class ImportController:
             self._samples.append(sample)
 
     def _activate(
-        self, job_id: str, total: int, *, completed: int = 0, errors: int = 0,
+        self,
+        job_id: str,
+        total: int,
+        *,
+        completed: int = 0,
+        errors: int = 0,
+        resume_from_stalled: bool = False,
     ) -> None:
         with self._lock:
             self._job_id = job_id
@@ -320,6 +364,7 @@ class ImportController:
             self._samples = []
             self._dirty = False
             self._cancelled = False
+            self._resume_from_stalled = resume_from_stalled
         self._stop.clear()
         if self._reporter is None or not self._reporter.is_alive():
             self._reporter = threading.Thread(
@@ -332,6 +377,7 @@ class ImportController:
     def _deactivate(self) -> None:
         with self._lock:
             self._job_id = None
+            self._resume_from_stalled = False
         self._stop.set()
 
     def stop(self) -> None:
@@ -341,9 +387,13 @@ class ImportController:
             thr.join(timeout=3.0)
 
     def _report_loop(self) -> None:
-        last_post = 0.0
         last_processed = -1
         last_movement = time.monotonic()
+        last_inventory_check = last_movement
+        stalled = False
+        stalled_remaining: Optional[int] = None
+        tracked_job_id: Optional[str] = None
+        completion_recount_after = 0.0
         while not self._stop.wait(_REPORT_INTERVAL_SEC):
             with self._lock:
                 job_id = self._job_id
@@ -352,38 +402,166 @@ class ImportController:
                 processed = self._completed + self._errors
                 done = self._total > 0 and processed >= self._total
                 dirty = self._dirty
+                resume_from_stalled = self._resume_from_stalled
                 body = self._snapshot_body(job_id, done)
                 if dirty or done:
                     self._dirty = False
             now = time.monotonic()
-            if processed != last_processed:
+            new_job = job_id != tracked_job_id
+            if new_job:
+                # A new cloud job can replace a silently-attached stalled
+                # tracker without starting a second reporter thread. Reset
+                # every per-job clock/state value before interpreting its
+                # counters. Seed ``last_processed`` from the first snapshot:
+                # adopting an existing stalled job is observation, not real
+                # movement, and must not clear the warning by itself.
+                tracked_job_id = job_id
                 last_processed = processed
                 last_movement = now
-            elif not done and (now - last_movement) >= _STALL_TIMEOUT_SEC:
+                last_inventory_check = now
+                completion_recount_after = 0.0
+                stalled = resume_from_stalled
+                stalled_remaining = None
+            if resume_from_stalled and self._total == 0:
+                # Initial inventory discovery failed. Retry at a bounded
+                # cadence and finish only after a successful zero recount.
+                if (now - last_inventory_check) >= _INVENTORY_RETRY_SEC:
+                    remaining = self._try_count_pending()
+                    last_inventory_check = now
+                    if remaining is not None:
+                        if remaining == 0:
+                            body = self._snapshot_body(job_id, True)
+                            body["remaining"] = 0
+                            body["message"] = "nothing_to_import"
+                            done = True
+                            dirty = True
+                        else:
+                            with self._lock:
+                                if self._job_id != job_id:
+                                    continue
+                                self._total = remaining
+                                self._resume_from_stalled = False
+                                body = self._snapshot_body(job_id, False)
+                            body["stalled"] = False
+                            body["message"] = "import_inventory_recovered"
+                            stalled = False
+                            stalled_remaining = None
+                            last_movement = now
+                            dirty = True
+            if done and now < completion_recount_after:
+                done = False
+                body.pop("done", None)
+                body.pop("remaining", None)
+            elif done:
+                # ``total`` is only the inventory observed when tracking
+                # began. A live game can arrive during a multi-day resync
+                # and reach its terminal callback before older history;
+                # processed == original total is therefore not proof that
+                # the original backlog is empty. Recount only at this
+                # apparent finish line (not on every progress tick).
+                remaining = self._try_count_pending()
+                last_inventory_check = now
+                if remaining is None:
+                    completion_recount_after = now + _INVENTORY_RETRY_SEC
+                    done = False
+                    body.pop("done", None)
+                    body.pop("remaining", None)
+                    log.warning(
+                        "import_completion_inventory_unavailable "
+                        "jobId=%s processed=%d total=%d",
+                        job_id, processed, self._total,
+                    )
+                elif remaining > 0:
+                    completion_recount_after = 0.0
+                    with self._lock:
+                        if self._job_id != job_id:
+                            continue
+                        processed = self._completed + self._errors
+                        self._total = max(
+                            self._total,
+                            processed + remaining,
+                        )
+                        body = self._snapshot_body(job_id, False)
+                        self._dirty = False
+                    done = False
+                    dirty = True
+                    log.info(
+                        "import_total_reconciled jobId=%s processed=%d "
+                        "remaining_on_disk=%d total=%d",
+                        job_id, processed, remaining, self._total,
+                    )
+                else:
+                    completion_recount_after = 0.0
+                    # Refresh after the inventory walk so callbacks that
+                    # landed during it are included in the final payload.
+                    with self._lock:
+                        if self._job_id != job_id:
+                            continue
+                        processed = self._completed + self._errors
+                        body = self._snapshot_body(job_id, True)
+                    body["remaining"] = 0
+            if not new_job and processed != last_processed:
+                last_processed = processed
+                last_movement = now
+                if stalled:
+                    # The watcher recovered after a stalled inventory
+                    # report. Explicitly restore this same job to running;
+                    # an ordinary stale report must never resurrect a
+                    # cancelled job.
+                    stalled = False
+                    stalled_remaining = None
+                    body["stalled"] = False
+                    body["message"] = "import_progress_resumed"
+                    dirty = True
+            elif (
+                not done
+                and (now - last_movement) >= _STALL_TIMEOUT_SEC
+                and (
+                    not stalled
+                    or (now - last_inventory_check) >= _STALL_TIMEOUT_SEC
+                )
+            ):
                 # No counter movement for the full stall window. Check
-                # what's actually left on disk before deciding how to
-                # word the close-out — but close out either way so the
-                # cloud stops fanning ``import:progress`` to the web.
-                remaining = self._safe_count_pending()
+                # what's actually left on disk. A failed inventory read
+                # is UNKNOWN, never zero: it must not manufacture a
+                # successful completion.
+                remaining = self._try_count_pending()
+                last_inventory_check = now
+                if remaining is None:
+                    log.warning(
+                        "import_job_inventory_unavailable jobId=%s "
+                        "processed=%d total=%d",
+                        job_id, processed, self._total,
+                    )
+                    # Avoid rescanning every reporter tick. Retain the
+                    # truthful current state and retry after one stall
+                    # window, or sooner if a callback moves the count.
+                    last_movement = now
+                    continue
                 log.warning(
                     "import_job_stalled jobId=%s processed=%d total=%d "
-                    "remaining_on_disk=%d stall_sec=%.0f — closing job "
-                    "card (background sync continues)",
+                    "remaining_on_disk=%d stall_sec=%.0f "
+                    "(background sync continues)",
                     job_id, processed, self._total, remaining,
                     now - last_movement,
                 )
-                body["done"] = True
-                body["message"] = (
-                    "import_complete"
-                    if remaining == 0
-                    else "import_stalled_card_closed"
-                )
+                body["remaining"] = remaining
+                if remaining == 0:
+                    done = True
+                    body["done"] = True
+                    body["message"] = "import_complete"
+                elif not stalled or remaining != stalled_remaining:
+                    stalled = True
+                    stalled_remaining = remaining
+                    body["stalled"] = True
+                    body["message"] = "import_stalled_background_continues"
+                    dirty = True
+            # No unchanged heartbeat: movement and state transitions are
+            # enough for the socket card, while REST polling remains the
+            # fallback. This avoids one database write and fan-out every
+            # ten seconds for a backlog that may run for days.
+            if dirty or done:
                 self._post_progress(body)
-                self._deactivate()
-                break
-            if dirty or done or (now - last_post) >= _IDLE_HEARTBEAT_SEC:
-                self._post_progress(body)
-                last_post = now
             if done:
                 log.info(
                     "import_job_done jobId=%s completed=%d errors=%d total=%d",
@@ -402,6 +580,9 @@ class ImportController:
             "total": self._total,
             "completed": self._completed,
             "errors": self._errors,
+            "remaining": max(
+                0, self._total - self._completed - self._errors,
+            ),
             "phase": "import",
         }
         if self._breakdown:
@@ -421,11 +602,21 @@ class ImportController:
             log.debug("import_progress_post_failed: %s", exc)
 
     def _safe_count_pending(self) -> int:
+        remaining = self._try_count_pending()
+        return remaining if remaining is not None else 0
+
+    def _try_count_pending(self) -> Optional[int]:
+        """Return the pending inventory, or ``None`` when it is unknown.
+
+        Inventory failures must never be interpreted as an empty disk and a
+        successful job. Start, scan, and completion all use this strict form;
+        the auto-backfill prompt alone may safely decline to mount on unknown.
+        """
         try:
-            return int(self._watcher.count_pending())
+            return max(0, int(self._watcher.count_pending()))
         except Exception:  # noqa: BLE001
             log.exception("count_pending_failed")
-            return 0
+            return None
 
 
 def _as_count(value: Any) -> int:

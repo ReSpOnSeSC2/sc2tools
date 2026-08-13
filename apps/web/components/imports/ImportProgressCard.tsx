@@ -41,14 +41,26 @@ export function ImportProgressCard({
   const [showErrors, setShowErrors] = useState(false);
 
   const processed = (job.completed || 0) + (job.errors || 0);
+  const remaining =
+    typeof job.remaining === "number" && Number.isFinite(job.remaining)
+      ? Math.max(0, job.remaining)
+      : Math.max(0, (job.total || 0) - processed);
+  const displayTotal = Math.max(job.total || 0, processed + remaining);
+  const handled = Math.max(processed, displayTotal - remaining);
   const eta = fmtEta(etaSeconds);
   const isDone = job.status === "done";
+  const isStalled = job.status === "stalled";
   const breakdown = job.errorBreakdown || {};
   const aiGameSkips = breakdown.ai_game || 0;
   const resumedReplaySkips = breakdown.resumed_replay || 0;
-  const importedCount = Math.max(
+  const filteredSkips = breakdown.filtered || 0;
+  const intentionalSkipCount = Object.entries(breakdown).reduce(
+    (sum, [code, count]) => sum + (isBenignImportSkip(code) ? count : 0),
     0,
-    (job.completed || 0) - aiGameSkips - resumedReplaySkips,
+  );
+  const acceptedCount = Math.max(
+    0,
+    (job.completed || 0) - intentionalSkipCount,
   );
   const failureCount = Math.max(0, job.errors || 0);
   const samples = job.errorSamples || [];
@@ -81,17 +93,19 @@ export function ImportProgressCard({
           >
             {isDone
               ? "Import complete"
+              : isStalled
+                ? "Background sync continuing"
               : active
                 ? "Importing your history"
                 : job.status}
           </Badge>
-          {eta && active ? (
+          {eta && active && !isStalled ? (
             <span className="text-text-dim">{eta}</span>
           ) : null}
         </div>
         <span className="tabular-nums text-caption text-text-muted">
-          {processed.toLocaleString()} / {(job.total || 0).toLocaleString()}{" "}
-          replays
+          {handled.toLocaleString()} / {displayTotal.toLocaleString()} replay
+          files checked
         </span>
       </div>
 
@@ -109,10 +123,14 @@ export function ImportProgressCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-caption text-text-dim">
-        <span>imported: {importedCount.toLocaleString()}</span>
+        <span>accepted: {acceptedCount.toLocaleString()}</span>
+        <span>remaining: {remaining.toLocaleString()}</span>
         {aiGameSkips > 0 ? <span>vs AI skipped: {aiGameSkips}</span> : null}
         {resumedReplaySkips > 0 ? (
           <span>replay-resume sessions skipped: {resumedReplaySkips}</span>
+        ) : null}
+        {filteredSkips > 0 ? (
+          <span>outside date range skipped: {filteredSkips}</span>
         ) : null}
         {failureCount > 0 ? (
           <button
@@ -130,7 +148,7 @@ export function ImportProgressCard({
             {failureCount === 1 ? "" : "s"} couldn&apos;t be imported
           </button>
         ) : null}
-        {active ? (
+        {active || isStalled ? (
           <Button
             variant="ghost"
             size="sm"
@@ -179,8 +197,15 @@ export function ImportProgressCard({
 
       {isDone ? (
         <p className="text-caption text-success">
-          {importedCount.toLocaleString()} replays imported. Live sync
+          {acceptedCount.toLocaleString()} replay files accepted. Live sync
           keeps things current from here — just play.
+        </p>
+      ) : null}
+      {isStalled ? (
+        <p className="text-caption text-warning">
+          Progress paused after no confirmed outcomes. {remaining.toLocaleString()} replay
+          {remaining === 1 ? " file remains" : " files remain"}. Background sync is
+          still checking them; waiting or rate-limited files are not counted as accepted.
         </p>
       ) : null}
       {cancelError ? (

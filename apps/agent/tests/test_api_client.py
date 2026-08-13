@@ -12,7 +12,12 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from sc2tools_agent.api_client import ApiClient
+from sc2tools_agent.api_client import (
+    ApiClient,
+    REPLAY_FILE_MAX_BYTES,
+    ReplayArchiveSourceUnavailable,
+    replay_file_matches_archive_marker,
+)
 
 
 def _mock_response(
@@ -187,6 +192,72 @@ def test_upload_replay_file_accepts_already_verified_object(
     put.assert_not_called()
 
 
+def test_archive_marker_requires_exact_local_size_and_sha256(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "identity.SC2Replay"
+    payload = b"MPQ\x1bidentity"
+    replay.write_bytes(payload)
+    marker = {
+        "available": True,
+        "sizeBytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest().upper(),
+    }
+
+    assert replay_file_matches_archive_marker(replay, marker)
+    assert not replay_file_matches_archive_marker(
+        replay,
+        {**marker, "sizeBytes": len(payload) + 1},
+    )
+    assert not replay_file_matches_archive_marker(
+        replay,
+        {**marker, "sizeBytes": REPLAY_FILE_MAX_BYTES + 1},
+    )
+    assert not replay_file_matches_archive_marker(
+        replay,
+        {**marker, "sha256": "0" * 64},
+    )
+    assert not replay_file_matches_archive_marker(
+        replay,
+        {"available": True},
+    )
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_durable_archive_keeps_rollout_failures_retryable(
+    tmp_path: Path,
+    status: int,
+) -> None:
+    replay = tmp_path / "retry.SC2Replay"
+    replay.write_bytes(b"MPQ\x1bdata")
+    unavailable = _mock_response(status, {"error": {"code": "unavailable"}})
+    api = ApiClient(base_url="http://x", device_token="tok")
+    with patch("requests.request", return_value=unavailable), patch(
+        "requests.put",
+    ), patch("time.sleep"):
+        with pytest.raises(Exception, match=f"http_{status}"):
+            api.upload_replay_file_durable("g1", replay)
+
+
+def test_durable_archive_treats_owned_game_deletion_as_terminal(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "deleted-game.SC2Replay"
+    replay.write_bytes(b"MPQ\x1bdata")
+    missing = _mock_response(
+        404,
+        {"error": {"code": "game_not_found"}},
+    )
+    api = ApiClient(base_url="http://x", device_token="tok")
+
+    with patch("requests.request", return_value=missing), patch(
+        "requests.put",
+    ) as put:
+        assert api.upload_replay_file_durable("gone", replay) is False
+
+    put.assert_not_called()
+
+
 def test_upload_replay_file_skips_oversized_original(
     tmp_path: Path,
 ) -> None:
@@ -202,6 +273,22 @@ def test_upload_replay_file_skips_oversized_original(
 
     request_mock.assert_not_called()
     put.assert_not_called()
+
+
+def test_durable_archive_retries_missing_cloud_backed_local_file(
+    tmp_path: Path,
+) -> None:
+    replay = tmp_path / "gone.SC2Replay"
+    api = ApiClient(base_url="http://x", device_token="tok")
+
+    with patch("requests.request") as request_mock:
+        with pytest.raises(
+            ReplayArchiveSourceUnavailable,
+            match="replay_source_missing",
+        ):
+            api.upload_replay_file_durable("g-gone", replay)
+
+    request_mock.assert_not_called()
 
 
 @pytest.mark.parametrize("status", [400, 413])

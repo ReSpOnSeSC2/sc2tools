@@ -435,6 +435,82 @@ class GamesService {
   }
 
   /**
+   * Return the server-owned original-replay marker for a bounded set of
+   * accepted game IDs. The ingest route attaches these identities to its
+   * response so an agent performing a Full Re-sync can skip the per-file
+   * prepare round trip after the route verifies that the R2 object exists.
+   *
+   * This is deliberately one projected query for the whole accepted batch.
+   * Object keys, upload nonces, and credentials never leave the service; the
+   * hash and size are the same safe identity fields used by prepareUpload.
+   * A malformed legacy marker is treated as unavailable so the normal
+   * prepare/verify flow repairs it.
+   *
+   * @param {string} userId
+   * @param {string[]} gameIds
+   * @returns {Promise<Map<string, {
+   *   available: boolean,
+   *   sizeBytes?: number,
+   *   sha256?: string,
+   *   storedAt?: Date|string,
+   * }>>}
+   */
+  async replayArchiveMarkers(userId, gameIds) {
+    const ids = Array.from(
+      new Set(
+        (Array.isArray(gameIds) ? gameIds : [])
+          .filter((gameId) => typeof gameId === "string" && gameId),
+      ),
+    );
+    /** @type {Map<string, {
+     *   available: boolean,
+     *   sizeBytes?: number,
+     *   sha256?: string,
+     *   storedAt?: Date|string,
+     * }>} */
+    const markers = new Map(
+      ids.map((gameId) => [gameId, { available: false }]),
+    );
+    if (ids.length === 0) return markers;
+
+    const rows = await this.db.games.find(
+      { userId, gameId: { $in: ids } },
+      {
+        projection: {
+          _id: 0,
+          gameId: 1,
+          "replayFile.storedAt": 1,
+          "replayFile.sizeBytes": 1,
+          "replayFile.sha256": 1,
+        },
+      },
+    ).toArray();
+    for (const row of rows) {
+      const marker = row && row.replayFile;
+      const sizeBytes = Number(marker && marker.sizeBytes);
+      const sha256 = String((marker && marker.sha256) || "").toLowerCase();
+      if (
+        !row
+        || typeof row.gameId !== "string"
+        || !marker
+        || !marker.storedAt
+        || !Number.isSafeInteger(sizeBytes)
+        || sizeBytes < 4
+        || !/^[0-9a-f]{64}$/.test(sha256)
+      ) {
+        continue;
+      }
+      markers.set(row.gameId, {
+        available: true,
+        sizeBytes,
+        sha256,
+        storedAt: marker.storedAt,
+      });
+    }
+    return markers;
+  }
+
+  /**
    * Distinct ``myToonHandle`` values across every game the user has
    * uploaded — i.e. every SC2 ladder identity the agent has seen them
    * play on. Used by the Settings → Profile UI to surface "auto-

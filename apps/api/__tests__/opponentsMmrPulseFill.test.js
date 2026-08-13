@@ -223,6 +223,39 @@ describe("OpponentsService MMR + region from SC2Pulse", () => {
     expect(row.region).toBe("NA");
   });
 
+  test("historical backfill explicitly defers Pulse network work to the cron", async () => {
+    const pulseMmr = makePulseStub(async () => ({ mmr: 4321, region: "EU" }));
+    const opponents = new OpponentsService(db, Buffer.alloc(32, 1), {
+      pulseMmr,
+    });
+    await opponents.recordGame("u1", {
+      ...baseGame,
+      pulseLookupAttempted: false,
+    });
+    expect(pulseMmr.calls).toEqual([]);
+    let row = await db.opponents.findOne({
+      userId: "u1",
+      pulseId: baseGame.pulseId,
+    });
+    // Cheap replay identity/region still land immediately. The existing
+    // bounded Pulse backfill job owns the deferred character/MMR lookup.
+    expect(row.toonHandle).toBe(baseGame.toonHandle);
+    expect(row.region).toBe("NA");
+    expect(row.mmr).toBeUndefined();
+
+    await opponents.refreshMetadata("u1", {
+      ...baseGame,
+      gameId: "history-1",
+      pulseLookupAttempted: false,
+    });
+    expect(pulseMmr.calls).toEqual([]);
+    row = await db.opponents.findOne({
+      userId: "u1",
+      pulseId: baseGame.pulseId,
+    });
+    expect(row.toonHandle).toBe(baseGame.toonHandle);
+  });
+
   test("toon-only fallback is skipped when the client lacks getCurrentMmrByToon", async () => {
     // An older / partial pulseMmr without toon support must still be
     // safe: no character id and no toon method → no fetch, no throw.

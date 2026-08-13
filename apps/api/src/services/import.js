@@ -19,9 +19,9 @@ const VALID_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.\-+Z]+)?$/;
  * Job document shape (stored in `import_jobs`):
  *   {
  *     userId,
- *     status: 'pending' | 'scanning' | 'running' | 'done' | 'cancelled' | 'error',
+ *     status: 'pending' | 'scanning' | 'running' | 'stalled' | 'done' | 'cancelled' | 'error',
  *     phase, folder,
- *     total, completed, errors,
+ *     total, completed, errors, remaining,
  *     workers, since_iso, until_iso,
  *     startedAt, finishedAt, lastMessage,
  *     errorBreakdown, errorSamples,
@@ -78,7 +78,7 @@ class ImportService {
     if (validation.error) throw httpError(400, validation.error);
     const running = await this.db.importJobs.findOne({
       userId,
-      status: { $in: ["scanning", "running"] },
+      status: { $in: ["scanning", "running", "stalled"] },
     });
     if (running) {
       throw httpError(409, "import_already_running", { jobId: String(running._id) });
@@ -116,7 +116,7 @@ class ImportService {
    */
   async agentStart(userId, body) {
     const running = await this.db.importJobs.findOne(
-      { userId, status: { $in: ["scanning", "running"] } },
+      { userId, status: { $in: ["scanning", "running", "stalled"] } },
       { sort: { startedAt: -1 } },
     );
     if (running) {
@@ -129,6 +129,7 @@ class ImportService {
         ok: true,
         jobId: String(running._id),
         existing: true,
+        status: running.status || "running",
         total: typeof running.total === "number" ? running.total : 0,
         completed: typeof running.completed === "number" ? running.completed : 0,
         errors: typeof running.errors === "number" ? running.errors : 0,
@@ -138,6 +139,7 @@ class ImportService {
     job.status = "running";
     if (typeof body?.total === "number" && body.total >= 0) {
       job.total = Math.floor(body.total);
+      job.remaining = job.total;
     }
     const res = await this.db.importJobs.insertOne(job);
     const jobId = String(res.insertedId);
@@ -148,13 +150,15 @@ class ImportService {
       total: job.total,
       completed: 0,
       errors: 0,
+      remaining: job.remaining,
       phase: "import",
     });
     return { ok: true, jobId, existing: false };
   }
 
   /**
-   * The user's currently-active job (scanning/running), or null.
+   * The user's current job (scanning/running, or a stalled tracker whose
+   * background watcher can still recover), or null.
    * Surfaced on /v1/me so the dashboard can mount the progress card
    * on first paint without an extra round trip.
    *
@@ -162,7 +166,7 @@ class ImportService {
    */
   async activeJob(userId) {
     const job = await this.db.importJobs.findOne(
-      { userId, status: { $in: ["scanning", "running"] } },
+      { userId, status: { $in: ["scanning", "running", "stalled"] } },
       { sort: { startedAt: -1 } },
     );
     return job ? serialiseJob(job) : null;
@@ -175,7 +179,7 @@ class ImportService {
    */
   async cancel(userId) {
     const running = await this.db.importJobs.findOne(
-      { userId, status: { $in: ["scanning", "running"] } },
+      { userId, status: { $in: ["scanning", "running", "stalled"] } },
       { sort: { startedAt: -1 } },
     );
     if (!running) return { ok: true, cancelled: 0 };
@@ -234,6 +238,8 @@ class ImportService {
    *   message?: string,
    *   phase?: string,
    *   done?: boolean,
+   *   stalled?: boolean,
+   *   remaining?: number,
    *   errorBreakdown?: object,
    *   errorSamples?: object[],
    * }} payload
@@ -248,6 +254,15 @@ class ImportService {
     }
     /** @type {Record<string, any>} */
     const set = {};
+    // v0.15.17 and older closed a quiet card with `done:true` even when
+    // files remained, distinguished only by this message. Normalize that
+    // legacy wire shape so a staggered API/agent rollout cannot manufacture
+    // a successful completion while desktops are still updating.
+    const legacyStalled =
+      payload.done === true &&
+      payload.message === "import_stalled_card_closed";
+    const reportsDone = payload.done === true && !legacyStalled;
+    const reportsStalled = payload.stalled === true || legacyStalled;
     // Counters are MONOTONIC per job ($max, not $set). Two real-world
     // writers regress absolute counters: an agent that restarted
     // mid-backfill (auto-update) re-adopts the running job via
@@ -260,7 +275,23 @@ class ImportService {
     const max = {};
     if (typeof payload.completed === "number") max.completed = payload.completed;
     if (typeof payload.errors === "number") max.errors = payload.errors;
-    if (typeof payload.total === "number") set.total = payload.total;
+    if (typeof payload.total === "number") max.total = payload.total;
+    let reportedRemaining =
+      typeof payload.remaining === "number" && Number.isFinite(payload.remaining)
+        ? Math.max(0, Math.floor(payload.remaining))
+        : null;
+    if (
+      legacyStalled &&
+      reportedRemaining === null &&
+      typeof payload.total === "number"
+    ) {
+      reportedRemaining = Math.max(
+        0,
+        Math.floor(payload.total) -
+          Math.max(0, Math.floor(payload.completed || 0)) -
+          Math.max(0, Math.floor(payload.errors || 0)),
+      );
+    }
     if (typeof payload.phase === "string") set.phase = payload.phase;
     if (typeof payload.message === "string") set.lastMessage = payload.message.slice(0, 1000);
     if (payload.errorBreakdown && typeof payload.errorBreakdown === "object") {
@@ -269,21 +300,59 @@ class ImportService {
     if (Array.isArray(payload.errorSamples)) {
       set.errorSamples = payload.errorSamples.slice(0, 25);
     }
-    if (payload.done) {
+    if (reportsDone) {
       set.status = "done";
+      set.remaining = 0;
       set.finishedAt = new Date();
+    } else if (reportsStalled) {
+      // Tracking is paused because counters have not moved, but the
+      // desktop watcher is deliberately still running. Never collapse
+      // this into `done`: the web must not claim a completed import.
+      set.status = "stalled";
+      if (reportedRemaining !== null) set.remaining = reportedRemaining;
+      set.finishedAt = null;
+    } else if (payload.stalled === false) {
+      // Only an agent that previously emitted the explicit stalled state
+      // sends this recovery flag. Ordinary stale progress cannot revive
+      // a cancelled or completed job.
+      set.status = payload.phase === "scan" ? "scanning" : "running";
+      if (reportedRemaining !== null) set.remaining = reportedRemaining;
+      set.finishedAt = null;
     }
     /** @type {Record<string, any>} */
     const update = {};
     if (Object.keys(set).length > 0) update.$set = set;
     if (Object.keys(max).length > 0) update.$max = max;
     if (Object.keys(update).length === 0) return { ok: true, noop: true };
+    /** @type {Record<string, any>} */
+    const transitionFilter = { _id, userId };
+    if (reportsDone) {
+      // A late agent reporter must not overwrite an explicit user cancel
+      // (or an error terminal state) with a manufactured completion.
+      transitionFilter.status = {
+        $in: ["pending", "scanning", "running", "stalled", "done"],
+      };
+    } else if (reportsStalled) {
+      transitionFilter.status = {
+        $in: ["scanning", "running", "stalled"],
+      };
+    } else if (payload.stalled === false) {
+      // Recovery is a strict state transition. This is what makes a late
+      // recovery packet harmless after cancel/completion.
+      transitionFilter.status = "stalled";
+    } else {
+      // Ordinary progress only belongs to a nonterminal tracker. This
+      // suppresses late callback packets after cancel/error/completion.
+      transitionFilter.status = {
+        $in: ["pending", "scanning", "running", "stalled"],
+      };
+    }
     const doc = await this.db.importJobs.findOneAndUpdate(
-      { _id, userId },
+      transitionFilter,
       update,
       { returnDocument: "after" },
     );
-    if (this.io) {
+    if (this.io && doc) {
       // Emit the POST-update counters, not the raw report: after a
       // $max no-op the stored value is higher than the report's, and
       // sockets must carry the authoritative (monotonic) numbers.
@@ -293,6 +362,7 @@ class ImportService {
         if (typeof doc.completed === "number") authoritative.completed = doc.completed;
         if (typeof doc.errors === "number") authoritative.errors = doc.errors;
         if (typeof doc.total === "number") authoritative.total = doc.total;
+        authoritative.remaining = remainingForJob(doc);
       }
       this.io.to(`user:${userId}`).emit("import:progress", {
         jobId,
@@ -301,7 +371,7 @@ class ImportService {
         ...authoritative,
       });
     }
-    return { ok: true };
+    return doc ? { ok: true } : { ok: true, ignored: true };
   }
 
   /**
@@ -414,6 +484,7 @@ function makeJobDoc(userId, body, kind) {
     total: 0,
     completed: 0,
     errors: 0,
+    remaining: 0,
     workers: 0,
     since_iso: (body && body.since_iso) || null,
     until_iso: (body && body.until_iso) || null,
@@ -440,6 +511,7 @@ function serialiseJob(job) {
     total: job.total || 0,
     completed: job.completed || 0,
     errors: job.errors || 0,
+    remaining: remainingForJob(job),
     workers: job.workers || 0,
     since_iso: job.since_iso || null,
     until_iso: job.until_iso || null,
@@ -449,6 +521,25 @@ function serialiseJob(job) {
     errorBreakdown: job.errorBreakdown || null,
     errorSamples: job.errorSamples || null,
   };
+}
+
+/**
+ * Best-known files that have not reached a terminal ingest outcome.
+ * Active jobs derive this from authoritative monotonic counters so a
+ * stale agent report cannot regress `remaining`. Stalled jobs use the
+ * agent's explicit filesystem recount, which also covers outcomes whose
+ * callback was missed.
+ * @param {Record<string, any>} job
+ */
+function remainingForJob(job) {
+  if (job.status === "done") return 0;
+  if (job.status === "stalled" && typeof job.remaining === "number") {
+    return Math.max(0, job.remaining);
+  }
+  return Math.max(
+    0,
+    (job.total || 0) - (job.completed || 0) - (job.errors || 0),
+  );
 }
 
 /**

@@ -197,6 +197,15 @@ export interface GamesService {
     missingGames: number;
     archiveComplete: boolean;
   }>;
+  replayArchiveMarkers(
+    userId: string,
+    gameIds: string[],
+  ): Promise<Map<string, {
+    available: boolean;
+    sizeBytes?: number;
+    sha256?: string;
+    storedAt?: Date | string;
+  }>>;
   todaySession(
     userId: string,
     timezone?: string,

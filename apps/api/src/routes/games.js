@@ -46,6 +46,13 @@ const {
  *     }>,
  *   },
  *   ladderMapPool?: { get(): Promise<{ maps: string[], teamMaps?: string[] }> },
+ *   replayFiles?: {
+ *     verifyAvailableMarker: (
+ *       userId: string,
+ *       gameId: string,
+ *       marker: Record<string, any>,
+ *     ) => Promise<boolean>,
+ *   },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  * }} deps
@@ -255,11 +262,31 @@ function buildGamesRouter(deps) {
       const incoming = Array.isArray(req.body?.games)
         ? req.body.games
         : [req.body];
-      /** @type {Array<{gameId: string, created: boolean, quarantined?: boolean}>} */
+      /** @type {Array<{
+       *   gameId: string,
+       *   created: boolean,
+       *   quarantined?: boolean,
+       *   replayArchive?: {
+       *     available: boolean,
+       *     sizeBytes?: number,
+       *     sha256?: string,
+       *     storedAt?: Date|string,
+       *   },
+       * }>} */
       const accepted = [];
       const competitiveAccepted = [];
       const competitiveIncoming = [];
-      /** @type {Array<{gameId: string, created: boolean, quarantined?: boolean}>} */
+      /** @type {Array<{
+       *   gameId: string,
+       *   created: boolean,
+       *   quarantined?: boolean,
+       *   replayArchive?: {
+       *     available: boolean,
+       *     sizeBytes?: number,
+       *     sha256?: string,
+       *     storedAt?: Date|string,
+       *   },
+       * }>} */
       const quarantinedAccepted = [];
       const rejected = [];
       // Build the historical map classifier once per batch for the
@@ -434,7 +461,10 @@ function buildGamesRouter(deps) {
             pulseId: game.opponent.pulseId,
             toonHandle: game.opponent.toonHandle,
             pulseCharacterId: game.opponent.pulseCharacterId,
-            pulseLookupAttempted: game.opponent.pulseLookupAttempted === true,
+            // Preserve the tri-state contract: true = fresh agent already
+            // tried, false = historical agent deliberately deferred to the
+            // bounded cloud backfill, undefined = legacy client behavior.
+            pulseLookupAttempted: game.opponent.pulseLookupAttempted,
             displayName: game.opponent.displayName || "",
             race: game.opponent.race || "U",
             mmr: game.opponent.mmr,
@@ -579,6 +609,66 @@ function buildGamesRouter(deps) {
                 }`,
               ],
             });
+          }
+        }
+      }
+      // Full Re-sync used to follow every accepted game with a replay-upload
+      // prepare call. Fetch all marker identities in one Mongo query, then
+      // verify each candidate object with a bounded, sequential HEAD before a
+      // current agent is allowed to skip its normal repair path. Sequential
+      // verification preserves the existing per-request R2 pressure ceiling.
+      // On any uncertainty we omit the additive field, which makes the agent
+      // fall back to the idempotent prepare/upload flow instead of falsely
+      // acknowledging a missing private backup.
+      if (
+        accepted.length > 0
+        && typeof deps.games.replayArchiveMarkers === "function"
+        && deps.replayFiles
+        && typeof deps.replayFiles.verifyAvailableMarker === "function"
+      ) {
+        try {
+          const markers = await deps.games.replayArchiveMarkers(
+            userId,
+            accepted.map((item) => item.gameId),
+          );
+          let archiveVerificationAvailable = true;
+          for (const item of accepted) {
+            const marker = markers.get(item.gameId) || { available: false };
+            if (marker.available !== true) {
+              item.replayArchive = marker;
+              continue;
+            }
+            if (!archiveVerificationAvailable) continue;
+            try {
+              const verified = await deps.replayFiles.verifyAvailableMarker(
+                userId,
+                item.gameId,
+                marker,
+              );
+              item.replayArchive = verified
+                ? marker
+                : { available: false };
+            } catch (err) {
+              // A thrown HEAD error is normally an object-store outage, not
+              // a per-game absence (missing objects return false). Stop the
+              // batch here so one R2 incident cannot multiply SDK retries by
+              // 50 and hold the ingest request open for minutes. Omitted
+              // fields make the durable archive lane repair these later.
+              archiveVerificationAvailable = false;
+              if (req.log) {
+                req.log.warn(
+                  { err, userId, gameId: item.gameId },
+                  "ingest_replay_archive_verify_failed",
+                );
+              }
+            }
+          }
+        } catch (err) {
+          if (req.log) {
+            req.log.warn(
+              { err, userId, accepted: accepted.length },
+              "ingest_replay_archive_markers_failed",
+            );
           }
         }
       }

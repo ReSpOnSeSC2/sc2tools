@@ -108,6 +108,36 @@ describe("OpponentsService current-name invariant", () => {
       expect(row.wins).toBe(2);
     });
 
+    test("newest-first backfill preserves current race, MMR, league, and true firstSeen", async () => {
+      await opponents.recordGame("u1", {
+        ...baseGame,
+        displayName: "Current",
+        race: "T",
+        mmr: 5100,
+        leagueId: 5,
+        playedAt: new Date("2026-04-18T00:00:00Z"),
+      });
+      await opponents.recordGame("u1", {
+        ...baseGame,
+        displayName: "Historical",
+        race: "P",
+        mmr: 3200,
+        leagueId: 3,
+        playedAt: new Date("2024-11-01T00:00:00Z"),
+      });
+
+      const row = await db.opponents.findOne({
+        userId: "u1",
+        pulseId: baseGame.pulseId,
+      });
+      expect(row.displayNameSample).toBe("Current");
+      expect(row.race).toBe("T");
+      expect(row.mmr).toBe(5100);
+      expect(row.leagueId).toBe(5);
+      expect(row.firstSeen).toEqual(new Date("2024-11-01T00:00:00Z"));
+      expect(row.lastSeen).toEqual(new Date("2026-04-18T00:00:00Z"));
+    });
+
     test("equal-date ingest takes the latest write (>= comparator)", async () => {
       // Two games with the same playedAt timestamp — exact ties go to
       // the newer write. This matches the simulator-friendly
@@ -149,6 +179,36 @@ describe("OpponentsService current-name invariant", () => {
       const row = await db.opponents.findOne({ userId: "u1", pulseId: baseGame.pulseId });
       expect(row.displayNameSample).toBe("RekcOr");
       expect(row.lastSeen).toEqual(new Date("2026-04-18T00:00:00Z"));
+    });
+
+    test("older-date refresh preserves current race, MMR, and league", async () => {
+      await opponents.recordGame("u1", {
+        ...baseGame,
+        displayName: "Current",
+        race: "T",
+        mmr: 5100,
+        leagueId: 5,
+        playedAt: new Date("2026-04-18T00:00:00Z"),
+      });
+      await opponents.refreshMetadata("u1", {
+        pulseId: baseGame.pulseId,
+        toonHandle: baseGame.toonHandle,
+        displayName: "Historical",
+        race: "P",
+        mmr: 3200,
+        leagueId: 3,
+        playedAt: new Date("2024-11-01T00:00:00Z"),
+        pulseLookupAttempted: false,
+      });
+
+      const row = await db.opponents.findOne({
+        userId: "u1",
+        pulseId: baseGame.pulseId,
+      });
+      expect(row.displayNameSample).toBe("Current");
+      expect(row.race).toBe("T");
+      expect(row.mmr).toBe(5100);
+      expect(row.leagueId).toBe(5);
     });
 
     test("newer-date refresh overwrites the current name", async () => {

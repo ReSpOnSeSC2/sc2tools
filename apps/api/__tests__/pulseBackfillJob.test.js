@@ -97,6 +97,7 @@ describe("pulseBackfillJob — heals a stuck row in one cycle", () => {
 
   beforeEach(async () => {
     await db.opponents.deleteMany({});
+    await db.games.deleteMany({});
     await db.db.collection("jobLocks").deleteMany({});
   });
 
@@ -125,6 +126,40 @@ describe("pulseBackfillJob — heals a stuck row in one cycle", () => {
     const row = await db.opponents.findOne({ userId: "u_jmac" });
     expect(row.pulseCharacterId).toBe("340543107");
     expect(row.pulseResolveAttemptedAt).toBeInstanceOf(Date);
+  });
+
+  test("resolved identity reaches historical games that already have replay MMR", async () => {
+    await db.opponents.insertOne({
+      userId: "u_jmac",
+      pulseId: "1-S2-1-437579",
+      toonHandle: "1-S2-1-437579",
+      displayNameSample: "JmaC",
+      race: "T",
+      gameCount: 1,
+      wins: 1,
+      losses: 0,
+      firstSeen: new Date("2026-01-01"),
+      lastSeen: new Date("2026-05-09"),
+    });
+    await db.games.insertOne({
+      userId: "u_jmac",
+      gameId: "historical-with-replay-mmr",
+      date: new Date("2026-01-01"),
+      opponent: {
+        pulseId: "1-S2-1-437579",
+        mmr: 4321,
+      },
+    });
+
+    await job.runOnce();
+
+    const game = await db.games.findOne({
+      userId: "u_jmac",
+      gameId: "historical-with-replay-mmr",
+    });
+    expect(game.opponent.mmr).toBe(4321);
+    expect(game.opponent.pulseCharacterId).toBe("340543107");
+    expect(game.opponent.region).toBe("NA");
   });
 
   test("a second concurrent run does not double-acquire the lock", async () => {

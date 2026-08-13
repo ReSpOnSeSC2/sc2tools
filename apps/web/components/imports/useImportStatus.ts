@@ -12,12 +12,14 @@ import { useUserSocket } from "@/lib/useUserSocket";
 export type ImportJob = {
   jobId: string;
   kind: string | null;
-  status: "pending" | "scanning" | "running" | "done" | "cancelled" | "error" | "idle" | string;
+  status: "pending" | "scanning" | "running" | "stalled" | "done" | "cancelled" | "error" | "idle" | string;
   phase: string | null;
   folder: string | null;
   total: number;
   completed: number;
   errors: number;
+  /** Best-known files still awaiting a terminal pipeline outcome. */
+  remaining: number | null;
   workers: number;
   startedAt: string | null;
   finishedAt: string | null;
@@ -50,7 +52,11 @@ export const ERROR_CODE_COPY: Record<string, string> = {
 };
 
 /** Skip reasons that mean the importer deliberately ignored a file. */
-export const BENIGN_SKIP_CODES = new Set(["ai_game", "resumed_replay"]);
+export const BENIGN_SKIP_CODES = new Set([
+  "ai_game",
+  "resumed_replay",
+  "filtered",
+]);
 
 export function isBenignImportSkip(code: string): boolean {
   return BENIGN_SKIP_CODES.has(code);
@@ -63,13 +69,27 @@ export type ImportStatusState = {
   active: boolean;
   /** 0–100, counting errors as processed so the bar always finishes. */
   pct: number;
-  /** Seconds remaining, null until the rate stabilises (≥20 files). */
+  /** Seconds remaining, null until recent forward movement is measurable. */
   etaSeconds: number | null;
   isLoading: boolean;
   refresh: () => void;
 };
 
 const ACTIVE_STATUSES = new Set(["scanning", "running", "pending"]);
+const CURRENT_JOB_STATUSES = new Set([
+  ...ACTIVE_STATUSES,
+  "stalled",
+]);
+
+/** A stalled reporter still owns the import and may resume in the background. */
+export function importJobBlocksStart(status: unknown): boolean {
+  return CURRENT_JOB_STATUSES.has(String(status));
+}
+
+/** Keep a slow REST fallback alive even when the progress socket is quiet. */
+export function importStatusRefreshInterval(latest?: StatusResp): number {
+  return latest && importJobBlocksStart(latest.status) ? 5000 : 0;
+}
 
 /**
  * Merge one `import:progress` socket event into the accumulated live
@@ -116,8 +136,7 @@ export function useImportStatus(): ImportStatusState {
   const { data, isLoading, mutate } = useApi<StatusResp>("/v1/import/status", {
     // Poll slowly as the socket fallback; the socket path delivers the
     // real-time feel.
-    refreshInterval: (latest?: StatusResp) =>
-      latest && ACTIVE_STATUSES.has(String(latest.status)) ? 5000 : 0,
+    refreshInterval: importStatusRefreshInterval,
   });
   const [live, setLive] = useState<Partial<ImportJob> | null>(null);
 
@@ -146,7 +165,7 @@ export function useImportStatus(): ImportStatusState {
           return;
         }
         setLive((prev) => mergeProgressEvent(prev, p, jobIdRef.current));
-        if ((p as { done?: boolean }).done) void mutate();
+        if (typeof p.status === "string") void mutate();
       },
     }),
     [mutate],
@@ -170,9 +189,19 @@ export function useImportStatus(): ImportStatusState {
   const active = !!job && ACTIVE_STATUSES.has(String(job.status));
 
   const pct = useMemo(() => {
-    if (!job || !job.total) return 0;
+    if (!job) return 0;
     const processed = (job.completed || 0) + (job.errors || 0);
-    return Math.max(0, Math.min(100, Math.round((processed / job.total) * 100)));
+    const remaining =
+      typeof job.remaining === "number" && Number.isFinite(job.remaining)
+        ? Math.max(0, job.remaining)
+        : Math.max(0, (job.total || 0) - processed);
+    const total = Math.max(job.total || 0, processed + remaining);
+    if (!total) return job.status === "done" ? 100 : 0;
+    // An inventory recount can know that files were handled even when a
+    // callback was missed. Use that resolved count for the bar, while the
+    // card keeps accepted/errors as separately labelled confirmed counts.
+    const resolved = Math.max(processed, total - remaining);
+    return Math.max(0, Math.min(100, Math.round((resolved / total) * 100)));
   }, [job]);
 
   // Rolling recent-rate ETA. We deliberately do NOT divide processed by
@@ -185,22 +214,54 @@ export function useImportStatus(): ImportStatusState {
   // see `foldEtaSample`. (The 0.13.6 count-guard keeps the numbers
   // monotonic; this keeps the estimate sane.)
   const etaSamplesRef = useRef<ProgressSample[]>([]);
+  const etaJobIdRef = useRef<string | null>(null);
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  const etaJobId = job?.jobId ?? null;
+  const etaProcessed = (job?.completed || 0) + (job?.errors || 0);
+  const etaReportedTotal = job?.total || 0;
+  const etaRemaining =
+    typeof job?.remaining === "number" && Number.isFinite(job.remaining)
+      ? Math.max(0, job.remaining)
+      : Math.max(0, etaReportedTotal - etaProcessed);
+  const etaEffectiveTotal = Math.max(
+    etaReportedTotal,
+    etaProcessed + etaRemaining,
+  );
   useEffect(() => {
-    if (!job || !active || !job.total) {
+    if (!etaJobId || !active || !etaEffectiveTotal) {
       etaSamplesRef.current = [];
+      etaJobIdRef.current = null;
       setEtaSeconds(null);
       return;
     }
-    const processed = (job.completed || 0) + (job.errors || 0);
-    const { samples, etaSeconds: next } = foldEtaSample(etaSamplesRef.current, {
-      t: Date.now(),
-      processed,
-      total: job.total,
-    });
-    etaSamplesRef.current = samples;
-    setEtaSeconds(next);
-  }, [job, active]);
+    if (etaJobIdRef.current !== etaJobId) {
+      etaSamplesRef.current = [];
+      etaJobIdRef.current = etaJobId;
+    }
+    const sample = () => {
+      const { samples, etaSeconds: next } = foldEtaSample(
+        etaSamplesRef.current,
+        {
+          t: Date.now(),
+          processed: etaProcessed,
+          total: etaEffectiveTotal,
+        },
+      );
+      etaSamplesRef.current = samples;
+      setEtaSeconds(next);
+    };
+    sample();
+    // The agent intentionally sends no unchanged heartbeats. Sample the
+    // wall clock locally so upload backoff/quiet time slows (and eventually
+    // hides) the ETA instead of preserving a stale burst rate forever.
+    const timer = window.setInterval(sample, 5000);
+    return () => window.clearInterval(timer);
+  }, [
+    active,
+    etaEffectiveTotal,
+    etaJobId,
+    etaProcessed,
+  ]);
 
   return {
     job,
@@ -216,8 +277,8 @@ export function useImportStatus(): ImportStatusState {
  * rolling-rate ETA window. */
 export type ProgressSample = { t: number; processed: number };
 
-const ETA_WINDOW_MS = 60_000; // measure the rate over the last ~minute
-const ETA_MAX_SAMPLES = 8;
+const ETA_WINDOW_MS = 5 * 60_000; // smooth bursty uploads over ~5 minutes
+const ETA_MAX_SAMPLES = 60;
 
 /**
  * Fold a fresh progress reading into the rolling ETA window and derive
@@ -256,7 +317,9 @@ export function foldEtaSample(
     samples.length = 0;
   }
   const tail = samples[samples.length - 1];
-  if (!tail || reading.processed !== tail.processed) {
+  if (!tail || reading.t > tail.t) {
+    // Keep quiet polls too. Otherwise a long upload backoff is omitted
+    // from the rate calculation and the ETA stays falsely optimistic.
     samples.push({ t: reading.t, processed: reading.processed });
   }
   // Age out samples older than the window, but always keep the two most

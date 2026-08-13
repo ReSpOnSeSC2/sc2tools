@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import queue
 import threading
 import time
@@ -9,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
+from sc2tools_agent.api_client import ReplayArchiveSourceUnavailable
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.replay_pipeline import CloudGame
 from sc2tools_agent.state import AgentState
@@ -16,6 +18,11 @@ from sc2tools_agent.uploader.queue import (
     TerminalUploadError,
     UploadJob,
     UploadQueue,
+)
+from sc2tools_agent.uploader.archive_journal import (
+    ReplayArchiveJournal,
+    ReplayArchiveJournalError,
+    ReplayArchiveTask,
 )
 
 
@@ -158,7 +165,7 @@ def test_set_paused_persists_state_and_skips_uploads(tmp_path: Path) -> None:
         q.stop()
 
 
-def test_accepted_game_archives_original_before_success_callback(
+def test_accepted_game_journals_original_before_success_callback(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -171,23 +178,36 @@ def test_accepted_game_archives_original_before_success_callback(
 
     state = AgentState(device_token="t")
     api = _ArchiveApi()
+
+    def _success(path: Path) -> None:
+        durable = ReplayArchiveJournal(tmp_path)
+        assert durable.contains(
+            ReplayArchiveTask(path, f"id-{path.name}"),
+        )
+        events.append(f"success:{path.name}")
+
     q = UploadQueue(
         cfg=_cfg(tmp_path),
         state=state,
         api=api,
-        on_success=lambda path: events.append(f"success:{path.name}"),
+        on_success=_success,
     )
     job = _game(tmp_path, "archive.SC2Replay")
     q.start()
     try:
         assert q.submit(job)
         assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(
+            lambda: f"archive:{job.game.game_id}" in events,
+            timeout=5.0,
+        )
+        assert q.archive_pending_count() == 0
     finally:
         q.stop()
 
     assert events == [
-        "archive:id-archive.SC2Replay",
         "success:archive.SC2Replay",
+        "archive:id-archive.SC2Replay",
     ]
 
 
@@ -214,13 +234,409 @@ def test_permanently_unarchivable_file_does_not_block_parsed_sync(
     try:
         assert q.submit(job)
         assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(
+            lambda: any(event.startswith("unavailable:") for event in events),
+            timeout=5.0,
+        )
+        assert q.archive_pending_count() == 0
     finally:
         q.stop()
 
     assert events == [
-        "unavailable:id-too-large.SC2Replay:too-large.SC2Replay",
         "success:too-large.SC2Replay",
+        "unavailable:id-too-large.SC2Replay:too-large.SC2Replay",
     ]
+
+
+def test_accepted_archive_marker_skips_local_hash_and_upload(
+    tmp_path: Path,
+) -> None:
+    """A verified ownership-scoped marker makes Full Re-sync cheap.
+
+    The queue must not call the archive client at all: that call hashes the
+    local file before the prepare endpoint can return ``alreadyStored``.
+    """
+
+    replay_bytes = b"exact archived replay identity"
+    marker = {
+        "available": True,
+        "sizeBytes": len(replay_bytes),
+        "sha256": hashlib.sha256(replay_bytes).hexdigest(),
+        "storedAt": "2026-08-13T00:00:00Z",
+    }
+
+    class _AlreadyArchivedApi(_StubApi):
+        def upload_games_batch(
+            self,
+            games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            self.batch_calls.append(len(games))
+            self.calls.extend(games)
+            return {
+                "accepted": [
+                    {
+                        "gameId": game["gameId"],
+                        "created": False,
+                        "replayArchive": marker,
+                    }
+                    for game in games
+                ],
+                "rejected": [],
+            }
+
+        def upload_replay_file(self, game_id: str, path: Path) -> bool:
+            raise AssertionError(
+                f"already archived game was re-read: {game_id} {path}",
+            )
+
+    state = AgentState(device_token="t")
+    api = _AlreadyArchivedApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(tmp_path, "already-archived.SC2Replay")
+    job.file_path.write_bytes(replay_bytes)
+    stale = ReplayArchiveTask(job.file_path, job.game.game_id)
+    q._archive_journal.enqueue_many([stale])
+    assert q.submit(job)
+    q.start()
+    try:
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(lambda: q.archive_pending_count() == 0)
+    finally:
+        q.stop()
+
+    assert len(api.calls) == 1
+
+
+def test_missing_archive_marker_preserves_existing_archive_flow(
+    tmp_path: Path,
+) -> None:
+    archived: list[tuple[str, str]] = []
+
+    class _MissingArchiveApi(_StubApi):
+        def upload_games_batch(
+            self,
+            games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            result = super().upload_games_batch(games)
+            for accepted in result["accepted"]:
+                accepted["replayArchive"] = {"available": False}
+            return result
+
+        def upload_replay_file(self, game_id: str, path: Path) -> bool:
+            archived.append((game_id, path.name))
+            return True
+
+    state = AgentState(device_token="t")
+    api = _MissingArchiveApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(tmp_path, "missing-archive.SC2Replay")
+    q.start()
+    try:
+        assert q.submit(job)
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(lambda: len(archived) == 1, timeout=5.0)
+    finally:
+        q.stop()
+
+    assert archived == [(job.game.game_id, job.file_path.name)]
+
+
+def test_archive_restart_hydration_is_fair_to_later_available_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_ARCHIVE_READY_LIMIT", 2)
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    monkeypatch.setattr(queue_module, "_ARCHIVE_RETRY_BASE_SEC", 5.0)
+    missing = [
+        ReplayArchiveTask(tmp_path / f"missing-{i}.SC2Replay", f"missing-{i}")
+        for i in range(2)
+    ]
+    available = ReplayArchiveTask(tmp_path / "available.SC2Replay", "ready")
+    available.file_path.write_bytes(b"MPQ\x1bready")
+    journal = ReplayArchiveJournal(tmp_path)
+    journal.enqueue_many([*missing, available])
+    archived: list[str] = []
+
+    class _ArchiveApi(_StubApi):
+        def upload_replay_file_durable(
+            self,
+            game_id: str,
+            path: Path,
+        ) -> bool:
+            if not path.is_file():
+                raise ReplayArchiveSourceUnavailable("source offline")
+            archived.append(game_id)
+            return True
+
+    q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=_ArchiveApi())
+    q.start()
+    try:
+        assert _wait_for(lambda: archived == ["ready"], timeout=4.0)
+        assert q.archive_pending_count() == 2
+    finally:
+        q.stop()
+
+    # The missing sources remain durable across restart. Once they reappear,
+    # a fresh queue hydrates and finishes them without another analysis sync.
+    for task in missing:
+        task.file_path.write_bytes(b"MPQ\x1brestored")
+    restarted_api = _ArchiveApi()
+    restarted = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=AgentState(),
+        api=restarted_api,
+    )
+    restarted.start()
+    try:
+        assert _wait_for(
+            lambda: restarted.archive_pending_count() == 0,
+            timeout=4.0,
+        )
+    finally:
+        restarted.stop()
+
+
+def test_archive_lane_circuit_breaker_bounds_calls_during_outage(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    monkeypatch.setattr(queue_module, "_ARCHIVE_RETRY_BASE_SEC", 1.0)
+    tasks = []
+    for index in range(20):
+        path = tmp_path / f"outage-{index}.SC2Replay"
+        path.write_bytes(b"MPQ\x1bdata")
+        tasks.append(ReplayArchiveTask(path, f"g-{index}"))
+    ReplayArchiveJournal(tmp_path).enqueue_many(tasks)
+
+    class _OutageApi(_StubApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.archive_calls = 0
+
+        def upload_replay_file_durable(
+            self,
+            _game_id: str,
+            _path: Path,
+        ) -> bool:
+            self.archive_calls += 1
+            raise RuntimeError("storage unavailable")
+
+    api = _OutageApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=api)
+    q.start()
+    try:
+        assert _wait_for(lambda: api.archive_calls == 1, timeout=2.0)
+        time.sleep(0.3)
+        assert api.archive_calls == 1
+        assert q.archive_pending_count() == len(tasks)
+    finally:
+        q.stop()
+
+
+def test_archive_journal_checkpoint_failure_suspends_before_next_upload(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    tasks = []
+    for index in range(2):
+        path = tmp_path / f"checkpoint-{index}.SC2Replay"
+        path.write_bytes(b"MPQ\x1bdata")
+        tasks.append(ReplayArchiveTask(path, f"checkpoint-{index}"))
+    ReplayArchiveJournal(tmp_path).enqueue_many(tasks)
+
+    class _ArchiveApi(_StubApi):
+        def __init__(self) -> None:
+            super().__init__()
+            self.archive_calls = 0
+
+        def upload_replay_file_durable(
+            self,
+            _game_id: str,
+            _path: Path,
+        ) -> bool:
+            self.archive_calls += 1
+            return True
+
+    api = _ArchiveApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=api)
+
+    def _fail_ack(*_args: Any, **_kwargs: Any) -> int:
+        raise ReplayArchiveJournalError("checkpoint poisoned")
+
+    monkeypatch.setattr(q._archive_journal, "acknowledge_many", _fail_ack)
+    q.start()
+    try:
+        assert _wait_for(lambda: api.archive_calls == 1, timeout=2.0)
+        assert _wait_for(lambda: q._archive_journal_error is not None)
+        time.sleep(0.3)
+        assert api.archive_calls == 1
+        assert q.archive_pending_count() == len(tasks)
+    finally:
+        q.stop()
+
+
+def test_pause_holds_durable_archive_worker(tmp_path: Path, monkeypatch) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    task = ReplayArchiveTask(tmp_path / "paused.SC2Replay", "paused")
+    task.file_path.write_bytes(b"MPQ\x1bpaused")
+    ReplayArchiveJournal(tmp_path).enqueue_many([task])
+    archived = threading.Event()
+
+    class _ArchiveApi(_StubApi):
+        def upload_replay_file_durable(
+            self,
+            _game_id: str,
+            _path: Path,
+        ) -> bool:
+            archived.set()
+            return True
+
+    q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=_ArchiveApi())
+    q.set_paused(True)
+    q.start()
+    try:
+        assert not archived.wait(0.3)
+        assert q.archive_pending_count() == 1
+        q.set_paused(False)
+        assert archived.wait(2.0)
+        assert _wait_for(lambda: q.archive_pending_count() == 0)
+    finally:
+        q.stop()
+
+
+def test_history_jobs_coalesce_during_short_callback_wave(
+    tmp_path: Path,
+) -> None:
+    api = _StubApi()
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_batch_size=5),
+        state=state,
+        api=api,
+    )
+    jobs = [_game(tmp_path, f"wave-{i}.SC2Replay") for i in range(5)]
+    q.start()
+    try:
+        assert q.submit(jobs[0])
+        # Simulate process-pool callbacks landing just after the first worker
+        # wake-up instead of being preloaded in the queue.
+        time.sleep(0.05)
+        for job in jobs[1:]:
+            assert q.submit(job)
+        assert _wait_for(lambda: len(api.calls) == len(jobs))
+    finally:
+        q.stop()
+
+    assert api.batch_calls == [5]
+
+
+def test_live_job_ends_history_coalescing_wait(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    # A long test-only window makes it unambiguous that the live arrival,
+    # rather than the deadline, wakes the history worker.
+    monkeypatch.setattr(queue_module, "_BATCH_COALESCE_SEC", 1.0)
+    first_request = threading.Event()
+
+    class _SignallingApi(_StubApi):
+        def upload_games_batch(
+            self,
+            games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            first_request.set()
+            return super().upload_games_batch(games)
+
+    api = _SignallingApi()
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_batch_size=5),
+        state=state,
+        api=api,
+    )
+    history = _game(tmp_path, "history.SC2Replay")
+    live = replace(_game(tmp_path, "live.SC2Replay"), priority=True)
+    q.start()
+    try:
+        assert q.submit(history)
+        time.sleep(0.05)
+        assert q.submit(live)
+        assert first_request.wait(0.5), "live arrival did not end batch wait"
+        assert _wait_for(lambda: len(api.calls) == 2)
+    finally:
+        q.stop()
+
+    assert api.batch_calls == [1, 1]
+    assert [call["gameId"] for call in api.calls] == [
+        history.game.game_id,
+        live.game.game_id,
+    ]
+
+
+def test_pause_during_history_coalescing_prevents_network_call(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_BATCH_COALESCE_SEC", 0.5)
+    api = _StubApi()
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_batch_size=5),
+        state=state,
+        api=api,
+    )
+    job = _game(tmp_path, "pause-during-coalesce.SC2Replay")
+    q.start()
+    try:
+        assert q.submit(job)
+        time.sleep(0.05)
+        q.set_paused(True)
+        time.sleep(0.6)
+        assert api.calls == []
+        assert q.pending_count() == 1
+        q.set_paused(False)
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=3.0)
+    finally:
+        q.stop()
+
+
+def test_pause_while_waiting_for_shared_network_slot_prevents_call(
+    tmp_path: Path,
+) -> None:
+    api = _StubApi()
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1),
+        state=AgentState(),
+        api=api,
+    )
+    try:
+        with q._network_gate.hold(0), q._network_gate.hold(0):
+            q.start()
+            assert q.submit(_game(tmp_path, "gate-pause.SC2Replay"))
+            time.sleep(0.1)
+            q.set_paused(True)
+        time.sleep(0.2)
+        assert api.calls == []
+        assert q.pending_count() == 1
+        q.set_paused(False)
+        assert _wait_for(lambda: len(api.calls) == 1)
+    finally:
+        q.stop()
 
 
 def test_resync_event_can_be_acknowledged(tmp_path: Path) -> None:
@@ -1156,10 +1572,9 @@ class _BarrierApi:
 
 
 def test_upload_workers_run_in_parallel(tmp_path: Path) -> None:
-    """With ``upload_concurrency=4``, four jobs submitted at once must
-    run concurrently — all four calls must overlap inside the stub."""
+    """Extra ingest workers remain inside the global two-request ceiling."""
     state = AgentState(device_token="t")
-    api = _BarrierApi(target=4)
+    api = _BarrierApi(target=2)
     q = UploadQueue(cfg=_cfg(tmp_path, upload_concurrency=4), state=state, api=api)
     # Queue all four before starting so no worker can finish one job
     # and steal a second before its siblings have work to claim.
@@ -1173,10 +1588,9 @@ def test_upload_workers_run_in_parallel(tmp_path: Path) -> None:
     finally:
         q.stop()
 
-    assert api.in_flight_peak >= 4, (
-        f"expected concurrent in-flight uploads to reach 4 with "
-        f"upload_concurrency=4, peak was {api.in_flight_peak} — workers "
-        "are running serially despite the config setting"
+    assert api.in_flight_peak == 2, (
+        f"expected global request ceiling 2 with upload_concurrency=4, "
+        f"peak was {api.in_flight_peak}"
     )
 
 
@@ -1586,6 +2000,101 @@ def test_set_concurrency_shrinks_worker_count_at_runtime(
             q.submit(_game(tmp_path, f"shrink-{i}.SC2Replay"))
         assert _wait_for(lambda: len(api.calls) == 3)
     finally:
+        q.stop()
+
+
+def test_set_concurrency_waits_for_old_long_request_before_replacement(
+    tmp_path: Path,
+) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _LongApi(_StubApi):
+        def upload_games_batch(
+            self,
+            games: List[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            entered.set()
+            assert release.wait(3.0)
+            return super().upload_games_batch(games)
+
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_concurrency=1),
+        state=AgentState(),
+        api=_LongApi(),
+    )
+    q.start()
+    changer = threading.Thread(target=lambda: q.set_concurrency(2))
+    try:
+        assert q.submit(_game(tmp_path, "long-generation.SC2Replay"))
+        assert entered.wait(1.0)
+        changer.start()
+        time.sleep(0.1)
+        assert changer.is_alive()
+        assert len([thread for thread in q._threads if thread.is_alive()]) == 1
+        release.set()
+        changer.join(timeout=2.0)
+        assert not changer.is_alive()
+        assert _wait_for(
+            lambda: len([t for t in q._threads if t.is_alive()]) == 2,
+        )
+        assert q._network_gate.peak_active <= 2
+    finally:
+        release.set()
+        changer.join(timeout=2.0)
+        q.stop()
+
+
+def test_stop_then_start_retires_long_archive_worker_before_restart(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import sc2tools_agent.uploader.queue as queue_module
+
+    monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
+    entered = threading.Event()
+    release = threading.Event()
+    calls: list[str] = []
+    task = ReplayArchiveTask(tmp_path / "long-archive.SC2Replay", "long")
+    task.file_path.write_bytes(b"MPQ\x1blong")
+    ReplayArchiveJournal(tmp_path).enqueue_many([task])
+
+    class _LongArchiveApi(_StubApi):
+        def upload_replay_file_durable(
+            self,
+            game_id: str,
+            _path: Path,
+        ) -> bool:
+            calls.append(game_id)
+            entered.set()
+            assert release.wait(3.0)
+            return True
+
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=AgentState(),
+        api=_LongArchiveApi(),
+    )
+    q.start()
+    stopper = threading.Thread(target=q.stop)
+    try:
+        assert entered.wait(2.0)
+        stopper.start()
+        time.sleep(0.1)
+        assert stopper.is_alive()
+        release.set()
+        stopper.join(timeout=2.0)
+        assert not stopper.is_alive()
+        assert q._archive_thread is None
+        q.start()
+        assert _wait_for(lambda: q.archive_pending_count() == 0)
+        assert q._archive_thread is not None
+        assert q._archive_thread.is_alive()
+        assert calls == ["long"]
+        assert q._network_gate.peak_active <= 2
+    finally:
+        release.set()
+        stopper.join(timeout=2.0)
         q.stop()
 
 

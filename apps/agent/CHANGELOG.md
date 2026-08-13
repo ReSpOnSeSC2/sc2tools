@@ -2,6 +2,35 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.18
+
+### Changed â€” faster, crash-safe Full Re-sync
+
+- Parsed replay analysis and private original-file archival now use separate,
+  durable work lanes. Analysis can advance without waiting on each R2 upload;
+  unfinished `.SC2Replay` backups survive an agent restart and resume through
+  one bounded archive worker until storage acknowledges them.
+- The archive lane shares the existing two-request network ceiling with game
+  ingest, retains the 500-item ingest backpressure gate, adaptive batch
+  reduction, retry/backoff behavior, and live-game priority. It does not trade
+  reliability or server stability for raw concurrency.
+- Historical parser callbacks coalesce briefly into fuller API batches, and a
+  cached newest-first replay inventory refills parser slots without repeatedly
+  walking and sorting a large OneDrive library. Pause, filter, resync, missed
+  filesystem-event, and worker-failure paths invalidate or rebuild the cache
+  safely.
+- Full-history parsing defers slow SC2Pulse lookups while preserving toon
+  identity for the bounded cloud backfill. Fresh games still resolve
+  immediately, and historical game-time MMR is never replaced with today's
+  rating.
+- Existing private archives are skipped only after the server verifies the R2
+  object and the agent confirms the returned size and SHA-256 match the local
+  replay. Missing or stale objects automatically fall back to the normal
+  idempotent repair/upload flow.
+- Import progress no longer sends idle heartbeats or reports a quiet/rate-
+  limited backlog as complete. It shows accepted and remaining files,
+  recovers from a stalled state when work moves again, and remains cancellable.
+
 ## 0.15.17
 
 ### Fixed — replay-resume results are retroactively quarantined

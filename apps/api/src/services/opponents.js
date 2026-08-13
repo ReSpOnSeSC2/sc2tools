@@ -1483,20 +1483,17 @@ class OpponentsService {
     const setOnInsert = {
       userId,
       pulseId: game.pulseId,
-      firstSeen: game.playedAt,
     };
     /** @type {Record<string, any>} */
-    const set = {
-      race: game.race,
-      _schemaVersion: OPPONENTS_VERSION,
-    };
+    const set = { _schemaVersion: OPPONENTS_VERSION };
     if (isLatestByDate) {
       set.displayNameHash = displayHash;
       set.displayNameSample = game.displayName || "";
       set.lastSeen = game.playedAt;
+      set.race = game.race;
+      if (typeof game.mmr === "number") set.mmr = game.mmr;
+      if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     }
-    if (typeof game.mmr === "number") set.mmr = game.mmr;
-    if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     // Region: derived from the toon_handle's leading byte (always
     // present from sc2reader). Cheap, no network. Pulse fetch below
     // may overwrite with the authoritative region from SC2Pulse's
@@ -1523,12 +1520,20 @@ class OpponentsService {
         : (prior && typeof prior.toonHandle === "string"
           ? prior.toonHandle
           : null);
-    const pulseFetched = await this._fetchOpponentMmrFromPulse(
-      pulseCharIdForMmr,
-      prior,
-      derivedRegion,
-      toonForMmr,
-    );
+    // ``pulseLookupAttempted:false`` is the agent's explicit historical
+    // backfill signal. Keep the cheap region/identity write, but leave live
+    // SC2Pulse network work to the bounded cloud cron instead of multiplying
+    // external calls inside a large /games batch. Fresh games send true and
+    // retain immediate opponent enrichment; older agents omit the field and
+    // retain their previous behavior.
+    const pulseFetched = game.pulseLookupAttempted === false
+      ? null
+      : await this._fetchOpponentMmrFromPulse(
+        pulseCharIdForMmr,
+        prior,
+        derivedRegion,
+        toonForMmr,
+      );
     if (pulseFetched) {
       set.mmr = pulseFetched.mmr;
       set.mmrFetchedAt = new Date();
@@ -1586,6 +1591,7 @@ class OpponentsService {
       {
         $setOnInsert: setOnInsert,
         $set: set,
+        $min: { firstSeen: game.playedAt },
         $inc: inc,
       },
       { upsert: true },
@@ -1920,17 +1926,15 @@ class OpponentsService {
       : null;
     const isLatestByDate = !priorLastSeen || game.playedAt >= priorLastSeen;
     /** @type {Record<string, any>} */
-    const set = {
-      race: game.race,
-      _schemaVersion: OPPONENTS_VERSION,
-    };
+    const set = { _schemaVersion: OPPONENTS_VERSION };
     if (isLatestByDate) {
       set.displayNameHash = hmac(this.pepper, game.displayName || "");
       set.displayNameSample = game.displayName || "";
       set.lastSeen = game.playedAt;
+      set.race = game.race;
+      if (typeof game.mmr === "number") set.mmr = game.mmr;
+      if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     }
-    if (typeof game.mmr === "number") set.mmr = game.mmr;
-    if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     // Region + Pulse-current MMR. Same contract as recordGame: derive
     // region cheaply from the toon_handle leading byte and try one
     // rate-limited SC2Pulse fetch for the up-to-date MMR.
@@ -1950,12 +1954,14 @@ class OpponentsService {
         : (prior && typeof prior.toonHandle === "string"
           ? prior.toonHandle
           : null);
-    const refreshPulseFetched = await this._fetchOpponentMmrFromPulse(
-      refreshPulseCharId,
-      prior,
-      refreshDerivedRegion,
-      refreshToonForMmr,
-    );
+    const refreshPulseFetched = game.pulseLookupAttempted === false
+      ? null
+      : await this._fetchOpponentMmrFromPulse(
+        refreshPulseCharId,
+        prior,
+        refreshDerivedRegion,
+        refreshToonForMmr,
+      );
     if (refreshPulseFetched) {
       set.mmr = refreshPulseFetched.mmr;
       set.mmrFetchedAt = new Date();
@@ -2071,7 +2077,6 @@ class OpponentsService {
         {
           userId,
           "opponent.pulseId": pulseId,
-          "opponent.mmr": { $not: { $type: "number" } },
         },
         { $set: update },
       );

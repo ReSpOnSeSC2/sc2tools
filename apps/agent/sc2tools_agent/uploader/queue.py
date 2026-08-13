@@ -14,16 +14,26 @@ import logging
 import queue
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from ..api_client import ApiClient
+from ..api_client import (
+    ApiClient,
+    ReplayArchiveSourceUnavailable,
+    replay_file_matches_archive_marker,
+)
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
 from ..state import AgentState, save_state
 from ..sync_filter import SyncFilter
+from .archive_journal import (
+    ReplayArchiveJournal,
+    ReplayArchiveJournalError,
+    ReplayArchiveTask,
+)
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +52,64 @@ log = logging.getLogger(__name__)
 # ``watcher._sweep_once`` keeps re-parse churn rare by not
 # submitting new parses while the queue is congested.
 _BACKPRESSURE_TIMEOUT_SEC = 15.0
+
+# A process parse pool completes jobs in small, slightly staggered waves.  An
+# immediate non-blocking drain therefore produced a median batch of only two
+# games even when the user selected 50.  Historical work may wait briefly for
+# its neighbours; rank-0 live games are never held for this window.
+_BATCH_COALESCE_SEC = 0.2
+
+# Ingest previously peaked at two server-facing calls for the production
+# default. The archive lane shares these same slots; it never adds a third
+# request even if a stale/hand-edited setting starts more ingest threads.
+_NETWORK_CONCURRENCY_LIMIT = 2
+
+# Only this many durable tasks are hydrated into the ready queue. The journal
+# may safely hold tens of thousands without constructing an equally large
+# in-memory work queue.
+_ARCHIVE_READY_LIMIT = 256
+_ARCHIVE_RETRY_BASE_SEC = 2.0
+_ARCHIVE_RETRY_MAX_SEC = 60.0
+_ARCHIVE_IDLE_GRACE_SEC = 1.0
+
+
+class _NetworkRequestGate:
+    """Bound all queue-owned cloud work and favor parsed-game ingest.
+
+    Priority 0 is a newly finished live game, priority 1 is historical
+    ingest, and priority 2 is original-replay archival. Archive work is
+    deliberately the lowest priority: it is durable and may finish later,
+    while parsed-game progress is what the user is actively waiting on.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = max(1, int(limit))
+        self._condition = threading.Condition()
+        self._active = 0
+        self._waiters = [0, 0, 0]
+        # Kept observable for focused concurrency tests and diagnostics.
+        self.peak_active = 0
+
+    @contextmanager
+    def hold(self, priority: int):
+        rank = min(2, max(0, int(priority)))
+        with self._condition:
+            self._waiters[rank] += 1
+            try:
+                while self._active >= self._limit or any(
+                    self._waiters[higher] > 0 for higher in range(rank)
+                ):
+                    self._condition.wait(timeout=0.5)
+                self._active += 1
+                self.peak_active = max(self.peak_active, self._active)
+            finally:
+                self._waiters[rank] -= 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._active -= 1
+                self._condition.notify_all()
 
 
 def _path_identity(value: Any) -> str:
@@ -104,6 +172,10 @@ class _RetryablePerGameError(Exception):
     """
 
 
+class _PausedBeforeNetwork(Exception):
+    """Pause won the race while an ingest worker waited for a shared slot."""
+
+
 class _FilteredOutError(TerminalUploadError):
     """Job dropped at upload time because the active sync filter
     excludes it. Distinct from a transport failure or a server-side
@@ -140,6 +212,7 @@ class UploadQueue:
         on_success: Optional[Callable[[Path], None]] = None,
         on_failure: Optional[Callable[[Path, Exception], None]] = None,
         on_pending_changed: Optional[Callable[[int], None]] = None,
+        on_archive_pending_changed: Optional[Callable[[int], None]] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
@@ -156,7 +229,25 @@ class UploadQueue:
             queue.PriorityQueue()
         )
         self._queue_sequence = itertools.count()
-        self._stop = threading.Event()
+        self._network_gate = _NetworkRequestGate(
+            _NETWORK_CONCURRENCY_LIMIT,
+        )
+        self._archive_journal = ReplayArchiveJournal(cfg.state_dir)
+        self._archive_q: queue.PriorityQueue[
+            Tuple[float, int, ReplayArchiveTask, int]
+        ] = queue.PriorityQueue(maxsize=_ARCHIVE_READY_LIMIT)
+        self._archive_sequence = itertools.count()
+        self._archive_scheduled: set[tuple[str, str]] = set()
+        self._archive_lane_not_before = 0.0
+        self._archive_lane_failures = 0
+        self._archive_journal_error: Optional[ReplayArchiveJournalError] = None
+        self._archive_lock = threading.Lock()
+        self._archive_thread: Optional[threading.Thread] = None
+        self._archive_wake = threading.Event()
+        self._archive_idle_since: Optional[float] = None
+        self._archive_stop = threading.Event()
+        self._ingest_stop = threading.Event()
+        self._ingest_generation = 0
         # Upload workers. Pre-v0.5.8 there was a single thread; v0.5.8
         # parallelises uploads to ``cfg.upload_concurrency`` threads so
         # the cloud-side bottleneck stops gating the user's "synced"
@@ -194,6 +285,9 @@ class UploadQueue:
         self._on_success = on_success or (lambda _p: None)
         self._on_failure = on_failure or (lambda _p, _e: None)
         self._on_pending_changed = on_pending_changed or (lambda _n: None)
+        self._on_archive_pending_changed = (
+            on_archive_pending_changed or (lambda _n: None)
+        )
         self._lock = threading.Lock()
         # Preserve notification order across parser + uploader threads.
         # The callback itself stays outside ``_lock`` so UI work cannot
@@ -221,36 +315,73 @@ class UploadQueue:
 
     def start(self) -> None:
         with self._lifecycle_lock:
-            if any(t.is_alive() for t in self._threads):
-                return
-            self._stop.clear()
-            self._threads = []
-            # ``self._worker_count`` is validated to >=1 in __init__
-            # and again on each ``set_concurrency`` call, but
-            # belt-and-suspenders ``max(1, …)`` here so a corrupt
-            # state file can't ship 0 worker threads.
-            worker_count = max(1, self._worker_count)
-            for i in range(worker_count):
-                t = threading.Thread(
-                    target=self._run,
-                    name=f"sc2tools-upload-{i}",
+            if not any(t.is_alive() for t in self._threads):
+                self._start_ingest_workers_locked()
+            if self._archive_thread is None or not self._archive_thread.is_alive():
+                self._archive_stop.clear()
+                self._hydrate_archive_ready()
+                self._archive_thread = threading.Thread(
+                    target=self._run_archive,
+                    name="sc2tools-replay-archive",
                     daemon=True,
                 )
-                t.start()
-                self._threads.append(t)
-            log.info("upload_workers_started count=%d", worker_count)
+                self._archive_thread.start()
+                self._notify_archive_pending()
+                log.info(
+                    "replay_archive_worker_started pending=%d",
+                    self._archive_journal.pending_count(),
+                )
 
     def stop(self) -> None:
         with self._lifecycle_lock:
-            self._stop.set()
+            self._ingest_generation += 1
+            self._ingest_stop.set()
+            self._archive_stop.set()
+            self._archive_wake.set()
             # Join in order; any thread already idle inside the
             # ``q.get(timeout=1.0)`` will exit on its next iteration.
             # A thread mid-upload finishes the in-flight request
             # first so we never abandon a successful API write
             # without recording it in state.uploaded.
             for t in self._threads:
-                t.join(timeout=5)
+                # Cloud calls have explicit finite timeouts (up to 150 s for
+                # a size-50 ingest and 120 s per replay PUT). Never detach a
+                # still-live worker after an arbitrary 5 s: an immediate
+                # restart could otherwise overlap generations and strand the
+                # archive successor. Shutdown waits for the bounded request
+                # to finish and its local cursor/journal commit to land.
+                t.join()
             self._threads = []
+            archive_thread = self._archive_thread
+            if archive_thread is not None:
+                archive_thread.join()
+                self._archive_thread = None
+            try:
+                self._archive_journal.flush()
+            except Exception:  # noqa: BLE001
+                # The durable enqueue records remain intact. Surface the
+                # checkpoint problem, but never turn shutdown into task loss.
+                log.exception("replay_archive_journal_flush_failed")
+
+    def _start_ingest_workers_locked(self) -> None:
+        """Start only parsed-game workers; caller holds lifecycle lock."""
+        self._ingest_generation += 1
+        generation = self._ingest_generation
+        self._ingest_stop.clear()
+        self._threads = []
+        # ``self._worker_count`` is validated to >=1 in __init__ and again on
+        # each runtime change. Keep the floor here for hand-edited state.
+        worker_count = max(1, self._worker_count)
+        for i in range(worker_count):
+            thread = threading.Thread(
+                target=self._run,
+                args=(generation,),
+                name=f"sc2tools-upload-{i}",
+                daemon=True,
+            )
+            thread.start()
+            self._threads.append(thread)
+        log.info("upload_workers_started count=%d", worker_count)
 
     def set_concurrency(self, new_count: int) -> None:
         """Hot-swap the worker count without losing in-flight uploads.
@@ -259,10 +390,9 @@ class UploadQueue:
         group (1 / 2) — a click should take effect immediately, not
         require an agent restart.
 
-        Approach: stop the current workers (each one finishes its
-        in-flight HTTPS POST first because ``stop()`` joins with a
-        5-second timeout, plenty for a typical request), then
-        ``start()`` again with the new count. The internal
+        Approach: retire the current generation (each worker finishes its
+        bounded in-flight HTTPS request and commits its cursor), then start
+        the replacement generation with the new count. The internal
         ``Queue`` of pending jobs is untouched across the swap, so
         anything not yet picked up by an old worker gets drained by
         the new ones. Anything picked up but not finished gets
@@ -288,13 +418,19 @@ class UploadQueue:
         log.info(
             "upload_concurrency_change from=%d to=%d", old_count, new_count,
         )
-        # Order matters: ``stop()`` then ``start()``. Both take the
-        # ``_lifecycle_lock``; we released it above so they can each
-        # acquire it cleanly. The ``_worker_count`` mutation under
-        # the lock above is what governs how many threads ``start()``
-        # spawns next.
-        self.stop()
-        self.start()
+        # Restart parsed-game workers only. The single durable archive worker
+        # must survive this settings change; restarting it could briefly run
+        # two original-file uploads if the old thread was inside a long PUT.
+        with self._lifecycle_lock:
+            self._ingest_generation += 1
+            self._ingest_stop.set()
+            for thread in self._threads:
+                # Retire the old generation completely before clearing its
+                # shared stop event for replacement workers. Requests are
+                # bounded by ApiClient timeouts, so this cannot wait forever.
+                thread.join()
+            self._threads = []
+            self._start_ingest_workers_locked()
 
     def set_batch_size(self, new_size: int) -> None:
         """Hot-swap the per-request batch size at runtime.
@@ -366,6 +502,9 @@ class UploadQueue:
                 log.debug("dedupe_skip_pending %s", job.file_path.name)
                 return False
             self._pending_paths.add(path_key)
+        with self._archive_lock:
+            self._archive_idle_since = None
+        self._archive_wake.set()
         self._notify_pending()
         try:
             self._q.put(
@@ -392,6 +531,320 @@ class UploadQueue:
         # card; qsize() alone misleadingly drops them to zero mid-flight.
         with self._lock:
             return len(self._pending_paths)
+
+    def archive_pending_count(self) -> int:
+        """Number of accepted originals still awaiting private storage."""
+        return self._archive_journal.pending_count()
+
+    def _notify_archive_pending(self) -> None:
+        count = self._archive_journal.pending_count()
+        try:
+            self._on_archive_pending_changed(count)
+        except Exception:  # noqa: BLE001
+            log.exception(
+                "replay_archive_pending_callback_failed count=%d",
+                count,
+            )
+
+    def _hydrate_archive_ready(self) -> None:
+        """Page durable tasks into the bounded in-memory ready queue."""
+        with self._archive_lock:
+            available = max(0, _ARCHIVE_READY_LIMIT - self._archive_q.qsize())
+            if available <= 0:
+                return
+            tasks = self._archive_journal.next_tasks(
+                excluded=set(self._archive_scheduled),
+                limit=available,
+            )
+            now = time.monotonic()
+            for task in tasks:
+                attempt = self._archive_journal.retry_attempt(task)
+                try:
+                    self._archive_q.put_nowait(
+                        (now, next(self._archive_sequence), task, attempt),
+                    )
+                except queue.Full:
+                    break
+                self._archive_scheduled.add(task.key)
+
+    def _schedule_archive_task(self, task: ReplayArchiveTask) -> None:
+        """Make one already-durable task runnable without duplicating it."""
+        with self._archive_lock:
+            if task.key in self._archive_scheduled:
+                return
+            try:
+                self._archive_q.put_nowait(
+                    (
+                        time.monotonic(),
+                        next(self._archive_sequence),
+                        task,
+                        0,
+                    ),
+                )
+            except queue.Full:
+                # It remains in the durable journal and will be paged in as
+                # soon as the worker acknowledges another ready task.
+                return
+            self._archive_scheduled.add(task.key)
+        self._archive_wake.set()
+
+    def _requeue_archive_task(
+        self,
+        task: ReplayArchiveTask,
+        *,
+        attempt: int,
+        ready_at: float,
+    ) -> None:
+        try:
+            self._archive_q.put_nowait(
+                (
+                    ready_at,
+                    next(self._archive_sequence),
+                    task,
+                    attempt,
+                ),
+            )
+        except queue.Full:
+            # A concurrently accepted task may have claimed the freed ready
+            # slot. Drop only the in-memory reservation: the journal remains
+            # authoritative and hydration will recover this task later.
+            with self._archive_lock:
+                self._archive_scheduled.discard(task.key)
+        self._archive_wake.set()
+
+    def _run_archive(self) -> None:
+        """Drain one crash-safe, low-priority original-replay lane."""
+        while not self._archive_stop.is_set():
+            with self._archive_lock:
+                journal_error = self._archive_journal_error
+            if journal_error is not None:
+                # A failed append/fsync poisons this journal instance to avoid
+                # concatenating onto an uncertain tail. No network operation
+                # can make progress safely until restart reloads/repairs it.
+                self._archive_stop.wait(1.0)
+                continue
+            try:
+                self._hydrate_archive_ready()
+            except ReplayArchiveJournalError as exc:
+                with self._archive_lock:
+                    self._archive_journal_error = exc
+                log.exception("replay_archive_journal_suspended")
+                continue
+            try:
+                ready_at, _sequence, task, attempt = self._archive_q.get(
+                    timeout=0.5,
+                )
+            except queue.Empty:
+                continue
+            try:
+                now = time.monotonic()
+                if ready_at > now:
+                    self._archive_stop.wait(min(0.5, ready_at - now))
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt,
+                        ready_at=ready_at,
+                    )
+                    continue
+                if self.is_paused():
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt,
+                        ready_at=now + 1.0,
+                    )
+                    self._archive_stop.wait(0.5)
+                    continue
+                with self._archive_lock:
+                    lane_not_before = self._archive_lane_not_before
+                if lane_not_before > now:
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt,
+                        ready_at=lane_not_before,
+                    )
+                    self._archive_stop.wait(
+                        min(0.5, lane_not_before - now),
+                    )
+                    continue
+
+                # Analysis owns the foreground. Do not even claim a shared
+                # network slot until its queue has stayed empty for a short
+                # grace window; this prevents archive PUTs from slowing a
+                # large Full Re-sync while retaining one spare slot for a
+                # live game that arrives during an already-started PUT.
+                if self.pending_count() > 0:
+                    with self._archive_lock:
+                        self._archive_idle_since = None
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt,
+                        ready_at=now + 0.5,
+                    )
+                    continue
+                with self._archive_lock:
+                    if self._archive_idle_since is None:
+                        self._archive_idle_since = now
+                    idle_for = now - self._archive_idle_since
+                if idle_for < _ARCHIVE_IDLE_GRACE_SEC:
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt,
+                        ready_at=now + (_ARCHIVE_IDLE_GRACE_SEC - idle_for),
+                    )
+                    continue
+
+                upload = getattr(
+                    self._api,
+                    "upload_replay_file_durable",
+                    None,
+                )
+                if not callable(upload):
+                    upload = getattr(self._api, "upload_replay_file", None)
+                try:
+                    if not callable(upload):
+                        raise RuntimeError(
+                            "replay_archive_api_unavailable",
+                        )
+                    else:
+                        with self._network_gate.hold(2):
+                            # A fresh replay can become pending while this
+                            # worker waits behind an ingest request. Give it
+                            # the slot instead and defer archival again.
+                            if self.pending_count() > 0 or self.is_paused():
+                                self._requeue_archive_task(
+                                    task,
+                                    attempt=attempt,
+                                    ready_at=time.monotonic() + 0.5,
+                                )
+                                continue
+                            # An exact server marker may have acknowledged this
+                            # journal row while it waited for the low-priority
+                            # slot. Do not perform stale network work.
+                            if not self._archive_journal.contains(task):
+                                with self._archive_lock:
+                                    self._archive_scheduled.discard(task.key)
+                                continue
+                            stored = bool(upload(task.game_id, task.file_path))
+                except ReplayArchiveJournalError:
+                    # The outer boundary suspends the lane until restart.
+                    # Never misclassify poisoned local durability as a cloud
+                    # outage and continue probing the unhealthy journal.
+                    raise
+                except ReplayArchiveSourceUnavailable as exc:
+                    next_attempt = attempt + 1
+                    delay = min(
+                        _ARCHIVE_RETRY_MAX_SEC,
+                        _ARCHIVE_RETRY_BASE_SEC
+                        * (2 ** min(attempt, 20)),
+                    )
+                    log.warning(
+                        "replay_archive_retry file=%s gameId=%s "
+                        "attempt=%d delay=%.1fs: %s",
+                        task.file_path.name,
+                        task.game_id,
+                        next_attempt,
+                        delay,
+                        exc,
+                    )
+                    # Rotate this file out of the bounded ready capacity. The
+                    # durable journal remains authoritative; hydration skips
+                    # it until the cooldown expires, allowing later valid
+                    # tasks to make progress in the meantime.
+                    with self._archive_lock:
+                        self._archive_scheduled.discard(task.key)
+                    self._archive_journal.defer(
+                        task,
+                        not_before=time.monotonic() + delay,
+                        attempt=next_attempt,
+                    )
+                    continue
+                except Exception as exc:  # noqa: BLE001
+                    # Transport/429/5xx/rolling-route failures affect the
+                    # entire archival capability, not one replay. Open a
+                    # lane-wide circuit breaker so an outage causes one probe
+                    # per backoff window instead of walking all 256 files.
+                    with self._archive_lock:
+                        self._archive_lane_failures += 1
+                        delay = min(
+                            _ARCHIVE_RETRY_MAX_SEC,
+                            _ARCHIVE_RETRY_BASE_SEC
+                            * (2 ** min(self._archive_lane_failures - 1, 20)),
+                        )
+                        self._archive_lane_not_before = (
+                            time.monotonic() + delay
+                        )
+                    log.warning(
+                        "replay_archive_lane_backoff attempt=%d delay=%.1fs: %s",
+                        self._archive_lane_failures,
+                        delay,
+                        exc,
+                    )
+                    self._requeue_archive_task(
+                        task,
+                        attempt=attempt + 1,
+                        ready_at=self._archive_lane_not_before,
+                    )
+                    continue
+
+                # True is confirmed stored/alreadyStored. False is the API
+                # client's terminal local/per-file result (empty/over-size,
+                # 400, 413, or an explicitly deleted owned game). Both are
+                # final; missing/inaccessible local sources and transient
+                # cloud failures raise above and leave the task intact.
+                self._archive_journal.acknowledge_many(
+                    [task],
+                    durable=True,
+                )
+                with self._archive_lock:
+                    self._archive_scheduled.discard(task.key)
+                    self._archive_lane_failures = 0
+                    self._archive_lane_not_before = 0.0
+                if stored:
+                    log.info(
+                        "replay_archived %s gameId=%s",
+                        task.file_path.name,
+                        task.game_id,
+                    )
+                else:
+                    log.warning(
+                        "replay_archive_terminal_unavailable %s gameId=%s",
+                        task.file_path.name,
+                        task.game_id,
+                    )
+                self._notify_archive_pending()
+            except ReplayArchiveJournalError as exc:
+                # Do not upload another byte while acknowledgements cannot be
+                # made durable. The current task remains in the journal and
+                # restart is the safe recovery boundary.
+                with self._archive_lock:
+                    self._archive_scheduled.discard(task.key)
+                    self._archive_journal_error = exc
+                log.exception("replay_archive_journal_suspended")
+            except Exception as exc:  # noqa: BLE001
+                # A non-poisoning checkpoint error is still lane-wide: until
+                # acknowledgements work, uploading another file can only
+                # repeat bytes without making durable progress. Back off the
+                # whole lane; the journal restored this pending task first.
+                with self._archive_lock:
+                    self._archive_lane_failures += 1
+                    delay = min(
+                        _ARCHIVE_RETRY_MAX_SEC,
+                        _ARCHIVE_RETRY_BASE_SEC
+                        * (2 ** min(self._archive_lane_failures - 1, 20)),
+                    )
+                    self._archive_lane_not_before = time.monotonic() + delay
+                log.exception(
+                    "replay_archive_worker_retry file=%s gameId=%s",
+                    task.file_path.name,
+                    task.game_id,
+                )
+                self._requeue_archive_task(
+                    task,
+                    attempt=attempt + 1,
+                    ready_at=self._archive_lane_not_before,
+                )
+            finally:
+                self._archive_q.task_done()
 
     def _queue_item(self, job: UploadJob) -> Tuple[int, int, UploadJob]:
         """Wrap a job for newest-live-first, stable FIFO ordering."""
@@ -639,7 +1092,7 @@ class UploadQueue:
         if self._batch_size < self._batch_ceiling:
             self._batch_size = min(self._batch_ceiling, self._batch_size + 1)
 
-    def _run(self) -> None:
+    def _run(self, generation: int) -> None:
         """Worker loop: drain a batch, post via ``upload_games_batch``.
 
         Per-batch behaviour:
@@ -648,9 +1101,9 @@ class UploadQueue:
              s timeout is short enough that ``stop()`` is responsive.
           2. If paused, re-enqueue the first job and sleep — same
              non-loss semantics the pre-batching worker had.
-          3. Greedy-drain up to ``cfg.upload_batch_size - 1`` more
-             ready jobs via ``q.get_nowait()`` (so we don't block
-             waiting for a full batch when only a few are ready).
+          3. Greedy-drain up to ``cfg.upload_batch_size - 1`` more jobs.
+             Historical work gets a 200 ms coalescing window so staggered
+             parser callbacks form useful batches; live work never waits.
           4. POST the batch to ``/v1/games``. Per-game ``accepted`` /
              ``rejected`` results are processed individually inside
              ``_upload_batch`` so partial-success batches (some
@@ -663,7 +1116,10 @@ class UploadQueue:
         call propagates to the next batch the worker assembles —
         same hot-swap semantics as ``set_concurrency``.
         """
-        while not self._stop.is_set():
+        while (
+            not self._ingest_stop.is_set()
+            and generation == self._ingest_generation
+        ):
             batch_cap = max(1, self._batch_size)
             try:
                 source_q, first_item = self._next_queue_item()
@@ -675,24 +1131,41 @@ class UploadQueue:
                 try:
                     source_q.put_nowait(self._queue_item(first_job))
                 except queue.Full:
-                    log.error("upload_queue_full_during_pause; dropping")
-                    self._release_pending((first_job,))
+                    # A producer may claim the bounded slot after this worker
+                    # removes the item. Keep the reservation in the existing
+                    # unbounded retry lane; pause must never become data loss.
+                    self._retry_q.put_nowait(self._queue_item(first_job))
                 source_q.task_done()
                 time.sleep(1.0)
                 continue
-            # Drain additional ready jobs into the batch — but DON'T
-            # block waiting for them. If the queue was empty after
-            # ``first_job`` we send a 1-element batch immediately
-            # rather than dawdling on the off-chance more arrive.
+            # Drain additional ready jobs into the batch. Historical jobs
+            # from the primary lane get one small coalescing window because
+            # process-pool callbacks arrive a few milliseconds apart; without
+            # it a configured size-50 queue routinely sent batches of 1–2.
+            # A live rank-0 arrival wakes ``get`` immediately, is returned to
+            # the head of the queue, and ends the wait. Retry-lane work is not
+            # coalesced because a newly-arrived live job lives in the primary
+            # queue and therefore could not wake a retry-queue wait.
             batch: List[UploadJob] = [first_job]
             # A just-finished game travels alone. Coupling it to up to
             # 39 historical payloads makes its acknowledgment inherit a
             # slow/timeout-prone backfill request, defeating the priority
             # lane before it reaches the API.
             if not first_job.priority:
+                coalesce_deadline = (
+                    time.monotonic() + _BATCH_COALESCE_SEC
+                    if source_q is self._q and batch_cap > 1
+                    else None
+                )
                 while len(batch) < batch_cap:
                     try:
-                        item = source_q.get_nowait()
+                        if coalesce_deadline is None:
+                            item = source_q.get_nowait()
+                        else:
+                            remaining = coalesce_deadline - time.monotonic()
+                            if remaining <= 0:
+                                break
+                            item = source_q.get(timeout=remaining)
                         _rank, _sequence, job = item
                         if _rank == 0:
                             # A live replay arrived after this normal batch
@@ -709,9 +1182,35 @@ class UploadQueue:
                         batch.append(job)
                     except queue.Empty:
                         break
+            # Pause can be clicked while a history worker is inside the
+            # coalescing wait. Re-check immediately before the network call;
+            # every assembled item remains reserved and returns to its source
+            # lane without being reported as failed or uploaded.
+            if self.is_paused():
+                for job in batch:
+                    try:
+                        source_q.put_nowait(self._queue_item(job))
+                    except queue.Full:
+                        # A producer may have claimed a primary-queue slot
+                        # during coalescing. The unbounded retry lane safely
+                        # retains the already-reserved job instead of dropping
+                        # it or blocking this worker.
+                        self._retry_q.put_nowait(self._queue_item(job))
+                for _ in batch:
+                    source_q.task_done()
+                self._ingest_stop.wait(1.0)
+                continue
             try:
                 self._upload_batch(batch)
                 self._grow_batch_size_after_success(len(batch))
+            except _PausedBeforeNetwork:
+                # Pause was clicked after batch assembly while this worker
+                # waited for the global request gate. Retain every still-live
+                # reservation without a failure callback or adaptive shrink.
+                for job in batch:
+                    if self.is_pending(job.file_path):
+                        self._retry_q.put_nowait(self._queue_item(job))
+                self._ingest_stop.wait(0.1)
             except _ServerRejectedError as exc:
                 # Whole-batch envelope rejection (e.g. server returned
                 # a top-level error not per-game). Mark every job in
@@ -925,20 +1424,59 @@ class UploadQueue:
         # path uniform. Tests that pin to ``upload_concurrency=1``
         # and ``upload_batch_size=1`` to assert single-game behaviour
         # see one ``upload_games_batch`` call with a 1-element list.
-        result = self._api.upload_games_batch(payloads)
+        ingest_priority = 0 if any(job.priority for job in batch) else 1
+        with self._network_gate.hold(ingest_priority):
+            if self.is_paused():
+                raise _PausedBeforeNetwork()
+            result = self._api.upload_games_batch(payloads)
         accepted = result.get("accepted") or []
         rejected = result.get("rejected") or []
 
-        # Parsed stats and the exact replay file form one user-visible
-        # sync. Archive one local file per accepted gameId before the
-        # durable ``state.uploaded`` cursor advances. A transient R2 or
-        # network failure therefore follows the queue's existing retry
-        # path; replay/game upserts are both idempotent.
+        # Parsed stats and the exact replay file form one durable operation:
+        # accepted originals enter the fsync'd archive journal before the
+        # parsed-game cursor advances. Actual object storage is handled by a
+        # single restart-safe background worker so it cannot serialize every
+        # history ingest request behind a large file PUT.
+        archive_tasks: list[ReplayArchiveTask] = []
         for acc in accepted:
             gid = acc.get("gameId") if isinstance(acc, dict) else None
             jobs = by_id.get(gid) if isinstance(gid, str) else None
             if jobs and isinstance(gid, str):
-                self._archive_original_replay(jobs[0], gid)
+                archive = acc.get("replayArchive")
+                already_available = replay_file_matches_archive_marker(
+                    jobs[0].file_path,
+                    archive,
+                )
+                if already_available:
+                    # Current APIs attach this ownership-scoped marker after
+                    # ingest. Skip prepare only after the local size + SHA-256
+                    # match its verified object identity; malformed/stale
+                    # metadata safely falls through to the archive flow.
+                    log.info(
+                        "replay_archive_already_available %s gameId=%s",
+                        jobs[0].file_path.name,
+                        gid,
+                    )
+                    archived_task = ReplayArchiveTask(jobs[0].file_path, gid)
+                    if self._archive_journal.contains(archived_task):
+                        self._archive_journal.acknowledge_many(
+                            [archived_task],
+                            durable=True,
+                        )
+                        with self._archive_lock:
+                            self._archive_scheduled.discard(
+                                archived_task.key,
+                            )
+                else:
+                    archive_tasks.append(
+                        ReplayArchiveTask(jobs[0].file_path, gid),
+                    )
+        if archive_tasks:
+            # If this raises (disk full, permission failure, corrupt journal),
+            # the upload batch stays reserved and retries. The server upsert
+            # is idempotent, so accepted analysis can never outrun its durable
+            # private-backup obligation.
+            self._archive_journal.enqueue_many(archive_tasks)
 
         accepted_jobs: List[UploadJob] = []
         rejected_jobs: List[Tuple[UploadJob, str]] = []
@@ -989,6 +1527,11 @@ class UploadQueue:
             if accepted_jobs or rejected_jobs:
                 save_state(self._cfg.state_dir, self._state)
                 self._pending_paths.difference_update(terminal_paths)
+
+        for task in archive_tasks:
+            self._schedule_archive_task(task)
+        if archive_tasks:
+            self._notify_archive_pending()
 
         # User-facing callbacks + the sticky-MMR push happen OUTSIDE
         # the lock — they may take a network round-trip and we don't
@@ -1133,33 +1676,6 @@ class UploadQueue:
         if newest is not None:
             self._maybe_push_last_mmr(newest)
 
-    def _archive_original_replay(self, job: UploadJob, game_id: str) -> None:
-        """Upload the exact replay when this API deployment supports it.
-
-        Focused queue tests and older ApiClient stand-ins are deliberately
-        duck typed, so a missing method means "archive unavailable" rather
-        than a crash. The real client returns False for a rolling-deploy
-        404/503 or a local file that disappeared after parsing; parsed
-        analysis still syncs and the web UI keeps the download disabled.
-        Other failures raise and are retried by the normal queue loop.
-        """
-        upload = getattr(self._api, "upload_replay_file", None)
-        if not callable(upload):
-            return
-        stored = bool(upload(game_id, job.file_path))
-        if stored:
-            log.info(
-                "replay_archived %s gameId=%s",
-                job.file_path.name,
-                game_id,
-            )
-            return
-        log.warning(
-            "replay_archive_unavailable %s gameId=%s",
-            job.file_path.name,
-            game_id,
-        )
-
     def _upload_one(self, job: UploadJob) -> None:
         """Legacy single-game upload path. v0.5.8 routes everything
         through ``_upload_batch`` (with size-1 batches when
@@ -1198,14 +1714,39 @@ class UploadQueue:
             )
             return
         log.info("uploading %s", job.file_path.name)
-        result = self._api.upload_game(self._payload_for_job(job))
-        accepted = bool((result.get("accepted") or [{}])[0].get("gameId"))
+        with self._network_gate.hold(0 if job.priority else 1):
+            if self.is_paused():
+                raise _PausedBeforeNetwork()
+            result = self._api.upload_game(self._payload_for_job(job))
+        accepted_rows = result.get("accepted") or []
+        accepted_row = accepted_rows[0] if accepted_rows else {}
+        accepted = bool(
+            accepted_row.get("gameId")
+            if isinstance(accepted_row, dict)
+            else None
+        )
         if not accepted:
             self._release_pending((job,))
             raise _ServerRejectedError(f"server_rejected: {result!r}")
         game_id = getattr(job.game, "game_id", None)
         if isinstance(game_id, str) and game_id:
-            self._archive_original_replay(job, game_id)
+            task = ReplayArchiveTask(job.file_path, game_id)
+            marker = (
+                accepted_row.get("replayArchive")
+                if isinstance(accepted_row, dict)
+                else None
+            )
+            if replay_file_matches_archive_marker(job.file_path, marker):
+                if self._archive_journal.contains(task):
+                    self._archive_journal.acknowledge_many(
+                        [task],
+                        durable=True,
+                    )
+                task = None
+            else:
+                self._archive_journal.enqueue_many([task])
+        else:
+            task = None
         path_str = str(job.file_path)
         with self._lock:
             self._state.uploaded[path_str] = (
@@ -1221,6 +1762,9 @@ class UploadQueue:
                 self._state.path_by_game_id[game_id] = path_str
             save_state(self._cfg.state_dir, self._state)
             self._pending_paths.discard(path_str)
+        if task is not None:
+            self._schedule_archive_task(task)
+            self._notify_archive_pending()
         try:
             self._on_success(job.file_path)
         finally:
@@ -1270,12 +1814,13 @@ class UploadQueue:
                 getattr(job.game, "my_toon_handle", None)
             )
             try:
-                self._api.patch_last_mmr(
-                    mmr=my_mmr,
-                    captured_at=game_date,
-                    region=region,
-                    game_id=getattr(job.game, "game_id", None),
-                )
+                with self._network_gate.hold(0 if job.priority else 1):
+                    self._api.patch_last_mmr(
+                        mmr=my_mmr,
+                        captured_at=game_date,
+                        region=region,
+                        game_id=getattr(job.game, "game_id", None),
+                    )
             except Exception as exc:  # noqa: BLE001
                 log.debug(
                     "last_mmr_push_failed file=%s: %s",

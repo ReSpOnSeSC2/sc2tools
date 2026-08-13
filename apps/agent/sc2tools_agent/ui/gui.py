@@ -2453,8 +2453,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if not self._confirm_and_request_resync():
                 return
             self._replay_archive_text.setText(
-                "Full Re-sync started. Keep the agent open while it archives "
-                "every replay file still available on this PC.",
+                "Full Re-sync started. Replay analysis continues first while "
+                "private original-file backups drain safely in the "
+                "background. If the agent restarts, unfinished backups "
+                "resume automatically.",
             )
             self._replay_archive_button.setText("Re-sync started")
             self._replay_archive_button.setEnabled(False)
@@ -2466,8 +2468,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "This clears the local upload cursor and re-uploads every "
                 "replay file still on this PC. Existing games are matched "
                 "by game ID instead of duplicated, and their original replay "
-                "files are archived privately for download. This can take a "
-                "while if you have hundreds or thousands of replays.\n\n"
+                "files are archived privately for download. Unfinished "
+                "backups resume automatically after an agent restart. This "
+                "can take a while if you have hundreds or thousands of "
+                "replays.\n\n"
                 "Proceed?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                 QtWidgets.QMessageBox.No,
