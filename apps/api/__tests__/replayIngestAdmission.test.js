@@ -361,9 +361,17 @@ describe("replay ingest admission", () => {
     const auth = deferred();
     const authEntered = deferred();
     const authFinished = deferred();
+    const serverSawClose = deferred();
     let routeStarts = 0;
     const app = testApp({
-      beforeRoute: async (_req, _res, next) => {
+      beforeRoute: async (_req, res, next) => {
+        // The client request's ``close`` event only proves the local socket
+        // was destroyed; on a loaded Windows/GitHub runner, Express may not
+        // have processed the peer close yet. Synchronize on the server-side
+        // response event so this test exercises the intended invariant:
+        // once admission released a pre-route disconnect, delayed auth cannot
+        // subsequently claim that released slot and start heavy work.
+        res.once("close", serverSawClose.resolve);
         authEntered.resolve();
         await auth.promise;
         next();
@@ -389,6 +397,7 @@ describe("replay ingest admission", () => {
       await authEntered.promise;
       aborted.destroy();
       await abortedClosed.promise;
+      await serverSawClose.promise;
       auth.resolve();
       await authFinished.promise;
       expect(routeStarts).toBe(0);
