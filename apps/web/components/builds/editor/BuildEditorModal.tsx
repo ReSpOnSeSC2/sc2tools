@@ -8,8 +8,10 @@ import {
   type RaceLite,
   type VsRaceLite,
 } from "@/lib/build-rules";
+import type { BuildEditorSaveResult } from "./BuildEditor.types";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import { Modal } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
 import { useBuildEditorState } from "./useBuildEditorState";
 import { BuildEditorBasics } from "./BuildEditorBasics";
 import { BuildEditorRules } from "./BuildEditorRules";
@@ -32,7 +34,11 @@ export interface BuildEditorModalProps {
   /** Pre-fill the name field. */
   defaultName?: string;
   /** Called when a save succeeds with the persisted slug + draft. */
-  onSaved?: (slug: string, draft: BuildEditorDraft) => void;
+  onSaved?: (
+    slug: string,
+    draft: BuildEditorDraft,
+    result: BuildEditorSaveResult,
+  ) => void;
   /**
    * Optional initial draft override. The edit-existing-build entry
    * point seeds this from a fetched custom-build doc so name, rules,
@@ -84,6 +90,7 @@ export function BuildEditorModal({
   mode = "create",
   demoMode = false,
 }: BuildEditorModalProps) {
+  const { toast } = useToast();
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
 
   const computedDefaultName = useMemo(
@@ -138,8 +145,13 @@ export function BuildEditorModal({
       perspective,
       surface: "buildEditor",
     },
-    onSaved: (slug, draft) => {
-      onSaved?.(slug, draft);
+    onSaved: (slug, draft, result) => {
+      if (result.reclassifyError) {
+        toast.error("Build saved, but replay matching couldn't start", {
+          description: friendlyReclassifyError(result.reclassifyError),
+        });
+      }
+      onSaved?.(slug, draft, result);
       // Auto-close shortly after a successful save so the user sees
       // the toast confirm before the modal disappears.
       window.setTimeout(() => onClose(), 700);
@@ -184,7 +196,6 @@ export function BuildEditorModal({
           <BuildEditorSaveBar
             ruleCount={editor.draft.rules.length}
             saving={editor.saving}
-            previewLoading={editor.previewLoading}
             saveError={editor.saveError}
             onCancel={onClose}
             onSave={editor.save}
@@ -241,4 +252,11 @@ export function BuildEditorModal({
       <BuildEditorToasts toasts={editor.toasts} dismiss={editor.dismissToast} />
     </>
   );
+}
+
+function friendlyReclassifyError(error: string): string {
+  if (error === "reclassify_queue_failed" || error === "reclassify_unavailable") {
+    return "Replay matching is temporarily unavailable. Try again in a moment.";
+  }
+  return error || "Replay matching is temporarily unavailable. Try again in a moment.";
 }

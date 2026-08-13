@@ -115,6 +115,13 @@ export interface BuildEditorState {
   dismissToast: (id: string) => void;
 }
 
+export interface BuildEditorSaveResult {
+  reclassifyRequested: boolean;
+  reclassifyStatus?: "queued" | "running" | "retry" | "complete";
+  reclassifyGeneration?: string;
+  reclassifyError?: string;
+}
+
 export type BuildEditorToastKind = "success" | "error" | "warn";
 
 export interface BuildEditorToast {

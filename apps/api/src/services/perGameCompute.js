@@ -813,7 +813,7 @@ class PerGameComputeService {
    * selects the sole build-log side a caller needs.
    *
    * @param {string} userId
-   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean}} [opts]
+   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean, tolerateCorruptDetails?: boolean}} [opts]
    * @returns {AsyncGenerator<{games: any[], candidates: number, hasMore: boolean}>}
    */
   async *iterateRulePreviewPages(userId, opts = {}) {
@@ -914,6 +914,7 @@ class PerGameComputeService {
           fields: detailFields,
           concurrency: Math.min(8, pageSize),
           strict: opts.strictDetails === true,
+          tolerateCorruptObjects: opts.tolerateCorruptDetails === true,
           signal: opts.signal,
         })
         : new Map();

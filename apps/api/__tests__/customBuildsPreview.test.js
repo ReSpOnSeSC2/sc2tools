@@ -149,7 +149,7 @@ describe("POST /v1/custom-builds/preview-matches", () => {
     expect(ids).toContain("g-vs-bunker-rush");
   });
 
-  test("does not crash and still scans games when myRace is missing", async () => {
+  test("uses a trusted PvT bucket when legacy race fields are missing", async () => {
     const userId = await bootstrap();
     await seedGame(userId, {
       gameId: "g-legacy-no-race",
@@ -170,6 +170,32 @@ describe("POST /v1/custom-builds/preview-matches", () => {
     );
     expect(res.status).toBe(200);
     expect(res.body.scanned_games).toBeGreaterThanOrEqual(1);
+    expect(res.body.matches.map((match) => match.game_id))
+      .toContain("g-legacy-no-race");
+  });
+
+  test("does not preview an unverifiable matchup that cannot be classified", async () => {
+    const userId = await bootstrap();
+    await seedGame(userId, {
+      gameId: "g-legacy-unknown-matchup",
+      myRace: undefined,
+      myBuild: "Legacy opener",
+      opponent: { displayName: "?", race: undefined },
+    });
+
+    const res = await withAuth(
+      request(app)
+        .post("/v1/custom-builds/preview-matches")
+        .send({
+          rules: [{ type: "before", name: "BuildOracle", time_lt: 418 }],
+          race: "Protoss",
+          vsRace: "Terran",
+          perspective: "you",
+        }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.matches.map((match) => match.game_id))
+      .not.toContain("g-legacy-unknown-matchup");
   });
 
   test("returns 200 with 0 matches when no rules are supplied", async () => {

@@ -92,8 +92,8 @@ export const RULE_TYPE_ICON: Record<RuleType, string> = {
 };
 
 export const RULE_TYPE_LABEL: Record<RuleType, string> = {
-  before: "built by",
-  not_before: "NOT by",
+  before: "Must be built by",
+  not_before: "Must not be built before",
   count_max: "",
   count_exact: "",
   count_min: "",
@@ -337,11 +337,11 @@ export function formatTime(t: number): string {
  *     → { prefix: "≤ 2 ",    entity: "Phoenix",    connector: "by",     time: "5:00" }
  */
 export interface FormattedRule {
-  /** Lead-in phrase: "", "no ", "≤ 2 ", "= 1 ", "≥ 3 ". */
+  /** Lead-in phrase: "", "≤ 2 ", "= 1 ", "≥ 3 ". */
   prefix: string;
   /** Humanised entity name, "Stargate" / "Robotics Facility". */
   entity: string;
-  /** Connector word — "before" for time gates, "by" for count gates. */
+  /** Connector phrase describing the rule's time gate. */
   connector: string;
   /** Pre-formatted `m:ss` — render with `font-mono tabular-nums`. */
   time: string;
@@ -354,7 +354,12 @@ export function formatRule(rule: BuildRule): FormattedRule {
     case "before":
       return { prefix: "", entity, connector: "before", time };
     case "not_before":
-      return { prefix: "no ", entity, connector: "before", time };
+      return {
+        prefix: "",
+        entity,
+        connector: "must not be built before",
+        time,
+      };
     case "count_max":
       return {
         prefix: `≤ ${rule.count} `,

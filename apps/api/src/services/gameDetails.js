@@ -128,7 +128,7 @@ class GameDetailsService {
    *
    * @param {string} userId
    * @param {string[]} gameIds
-   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, tolerateCorruptObjects?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
   async findMany(userId, gameIds, opts = {}) {

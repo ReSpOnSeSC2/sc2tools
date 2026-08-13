@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { BuildEditorModal } from "@/components/builds/editor";
+import type { BuildEditorSaveResult } from "@/components/builds/editor/BuildEditor.types";
 import {
   RACE_OPTIONS,
   VS_RACE_OPTIONS,
@@ -27,7 +28,7 @@ export interface EditCustomBuildLauncherProps {
   /** Build the user clicked Edit on. Modal is shown when this is non-null. */
   build: CustomBuild | null;
   onClose: () => void;
-  onSaved: (saved: CustomBuild) => void;
+  onSaved: (saved: CustomBuild, result: BuildEditorSaveResult) => void;
 }
 
 interface SavedBuildDoc extends Record<string, unknown> {
@@ -262,7 +263,7 @@ export function EditCustomBuildLauncher({
       perspective={doc.perspective === "opponent" ? "opponent" : "you"}
       defaultName={initialDraft.name}
       initialDraft={initialDraft}
-      onSaved={(savedSlug, draft) => {
+      onSaved={(savedSlug, draft, result) => {
         const saved: CustomBuild = {
           ...(build as CustomBuild),
           slug: savedSlug,
@@ -273,7 +274,7 @@ export function EditCustomBuildLauncher({
           isPublic: draft.shareWithCommunity,
           updatedAt: new Date().toISOString(),
         };
-        onSaved(saved);
+        onSaved(saved, result);
       }}
     />
   );

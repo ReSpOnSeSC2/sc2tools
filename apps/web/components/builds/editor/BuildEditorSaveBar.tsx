@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 export interface BuildEditorSaveBarProps {
   ruleCount: number;
   saving: boolean;
-  previewLoading: boolean;
   saveError: string | null;
   onCancel: () => void;
   onSave: (andReclassify: boolean) => void;
@@ -24,14 +23,12 @@ export interface BuildEditorSaveBarProps {
  * BuildEditorSaveBar — sticky save footer for the BuildEditor modal.
  *
  * Hosts Cancel + Save build + Save & Reclassify buttons. Save is
- * disabled when there are no rules or while a preview / save call
- * is in flight. The "Save & Reclassify" hint surfaces when a save
- * has been queued for agent-side reclassification.
+ * disabled when there are no rules or while a save call is in flight.
+ * Preview is advisory and either save action may cancel it.
  */
 export function BuildEditorSaveBar({
   ruleCount,
   saving,
-  previewLoading,
   saveError,
   onCancel,
   onSave,
@@ -64,8 +61,7 @@ export function BuildEditorSaveBar({
   // gate save on having at least one rule. Create mode still requires
   // a rule, otherwise the saved build is non-functional from the start.
   const requiresRule = mode !== "edit";
-  const saveDisabled =
-    saving || previewLoading || (requiresRule && ruleCount === 0);
+  const saveDisabled = saving || (requiresRule && ruleCount === 0);
   return (
     <div className="flex flex-wrap items-center gap-3">
       {saveError ? (
@@ -90,11 +86,9 @@ export function BuildEditorSaveBar({
           disabled={saveDisabled}
           loading={saving}
           title={
-            previewLoading
-              ? "Wait for the preview to settle…"
-              : requiresRule && ruleCount === 0
-                ? "Add at least one rule to enable saving."
-                : undefined
+            requiresRule && ruleCount === 0
+              ? "Add at least one rule to enable saving."
+              : undefined
           }
         >
           {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Save build"}
@@ -103,7 +97,7 @@ export function BuildEditorSaveBar({
           variant="secondary"
           onClick={() => onSave(true)}
           disabled={saveDisabled}
-          title="Save and request the agent to re-bucket past games against this rule set."
+          title="Save and match your replay history against this rule set in the background."
         >
           Save & Reclassify
         </Button>

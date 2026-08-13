@@ -31,6 +31,7 @@ export interface BuildCardProps {
   onPublish: (slug: string) => void;
   onReclassify?: (slug: string) => void;
   reclassifying?: boolean;
+  reclassifyDisabled?: boolean;
 }
 
 /**
@@ -47,6 +48,7 @@ export function BuildCard({
   onPublish,
   onReclassify,
   reclassifying = false,
+  reclassifyDisabled = false,
 }: BuildCardProps) {
   const tint = raceTint(build.race);
   const matchup = matchupLabel(build.race, (build.vsRace as VsRace) ?? "Any");
@@ -138,6 +140,7 @@ export function BuildCard({
               onPublish={onPublish}
               onReclassify={onReclassify}
               reclassifying={reclassifying}
+              reclassifyDisabled={reclassifyDisabled}
             />
           </div>
         </div>
@@ -215,6 +218,7 @@ interface BuildKebabProps {
   onPublish: (slug: string) => void;
   onReclassify?: (slug: string) => void;
   reclassifying?: boolean;
+  reclassifyDisabled?: boolean;
 }
 
 function BuildKebab({
@@ -225,6 +229,7 @@ function BuildKebab({
   onPublish,
   onReclassify,
   reclassifying = false,
+  reclassifyDisabled = false,
 }: BuildKebabProps) {
   const [open, setOpen] = useState(false);
 
@@ -290,7 +295,7 @@ function BuildKebab({
                   )
                 }
                 label={reclassifying ? "Reclassifying…" : "Reclassify replays"}
-                disabled={reclassifying}
+                disabled={reclassifying || reclassifyDisabled}
                 onClick={() => {
                   setOpen(false);
                   onReclassify(slug);

@@ -138,7 +138,7 @@ class MongoDetailsStore {
    *
    * @param {string} userId
    * @param {string[]} gameIds
-   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, tolerateCorruptObjects?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
   async readMany(userId, gameIds, opts = {}) {
@@ -157,6 +157,12 @@ class MongoDetailsStore {
       if (opts.signal && opts.signal.aborted) throw detailsAbortError();
       if (!doc || !doc.gameId) continue;
       const { gameId, ...rest } = doc;
+      if (
+        opts.tolerateCorruptObjects === true
+        && hasCorruptProjectedFields(rest, fields)
+      ) {
+        continue;
+      }
       out.set(gameId, rest);
     }
     return out;
@@ -460,10 +466,21 @@ class R2DetailsStore {
       throw err;
     }
     const etag = typeof resp.ETag === "string" ? resp.ETag.trim() : "";
-    if (!etag) throw new Error("r2_details_etag_missing");
+    if (!etag) throw corruptDetailsObjectError(
+      new Error("r2_details_etag_missing"),
+    );
     const buf = await streamToBuffer(/** @type {any} */ (resp.Body));
-    const json = (await gunzip(buf)).toString("utf8");
-    return { blob: JSON.parse(json), etag };
+    let blob;
+    try {
+      const json = (await gunzip(buf)).toString("utf8");
+      blob = JSON.parse(json);
+      if (!blob || typeof blob !== "object" || Array.isArray(blob)) {
+        throw new TypeError("detail object must be a JSON object");
+      }
+    } catch (err) {
+      throw corruptDetailsObjectError(err);
+    }
+    return { blob, etag };
   }
 
   /**
@@ -476,7 +493,7 @@ class R2DetailsStore {
    *
    * @param {string} userId
    * @param {string[]} gameIds
-   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, signal?: AbortSignal }} [opts]
+   * @param {{ fields?: string[], concurrency?: number, strict?: boolean, tolerateCorruptObjects?: boolean, signal?: AbortSignal }} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
   async readMany(userId, gameIds, opts = {}) {
@@ -509,7 +526,16 @@ class R2DetailsStore {
         }
         try {
           const blob = await this.read(userId, gid, { signal: opts.signal });
-          if (blob !== null) out.set(gid, selectReadFields(blob, fields));
+          if (blob !== null) {
+            const selected = selectReadFields(blob, fields);
+            if (
+              opts.tolerateCorruptObjects === true
+              && hasCorruptProjectedFields(selected, fields)
+            ) {
+              continue;
+            }
+            out.set(gid, selected);
+          }
         } catch (/** @type {any} */ err) {
           // One failed object shouldn't fail the whole batch — the
           // caller's per-game logic empty-states for missing details.
@@ -518,9 +544,18 @@ class R2DetailsStore {
             strictError = detailsAbortError();
             return;
           }
-          if (strict) {
+          if (strict && !(
+            opts.tolerateCorruptObjects === true
+            && isCorruptDetailsObjectError(err)
+          )) {
             strictError = err;
             return;
+          }
+          if (
+            opts.tolerateCorruptObjects === true
+            && isCorruptDetailsObjectError(err)
+          ) {
+            continue;
           }
           // eslint-disable-next-line no-console
           console.warn(
@@ -620,6 +655,50 @@ function selectReadFields(blob, fields) {
     if (blob[field] !== undefined) out[field] = blob[field];
   }
   return out;
+}
+
+/**
+ * Validate only explicitly projected fields. A missing field is a legitimate
+ * legacy/no-detail case; a present field with an impossible top-level type is
+ * permanent object-specific corruption and can be omitted by opted-in scans.
+ * @param {Record<string, any>} blob
+ * @param {string[]|null} fields
+ */
+function hasCorruptProjectedFields(blob, fields) {
+  if (!fields || !blob || typeof blob !== "object" || Array.isArray(blob)) {
+    return false;
+  }
+  for (const field of fields) {
+    if (blob[field] === undefined) continue;
+    if (field === "buildLog" || field === "oppBuildLog") {
+      if (!Array.isArray(blob[field])) return true;
+      continue;
+    }
+    if (
+      !blob[field]
+      || typeof blob[field] !== "object"
+      || Array.isArray(blob[field])
+    ) return true;
+  }
+  return false;
+}
+
+/** @param {unknown} cause */
+function corruptDetailsObjectError(cause) {
+  const err = new Error("game_details_object_corrupt");
+  err.name = "CorruptGameDetailsObjectError";
+  // @ts-expect-error application error metadata
+  err.code = "game_details_object_corrupt";
+  err.cause = cause;
+  return err;
+}
+
+/** @param {unknown} err */
+function isCorruptDetailsObjectError(err) {
+  return !!(
+    err && typeof err === "object" && "code" in err
+    && /** @type {{code?: unknown}} */ (err).code === "game_details_object_corrupt"
+  );
 }
 
 /**

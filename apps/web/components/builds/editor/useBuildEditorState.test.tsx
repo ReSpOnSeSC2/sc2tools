@@ -151,6 +151,30 @@ describe("useBuildEditorState preview requests", () => {
 });
 
 describe("useBuildEditorState save", () => {
+  it("cancels an active preview and saves without waiting for it", async () => {
+    const pendingPreview = deferred<BuildEditorPreviewResult>();
+    harness.apiCall
+      .mockImplementationOnce(() => pendingPreview.promise)
+      .mockResolvedValueOnce({ ok: true, reclassify: { status: "queued" } });
+
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft }),
+    );
+    await startDebouncedPreview();
+    const previewInit = harness.apiCall.mock.calls[0]?.[2] as RequestInit;
+    expect(previewInit.signal?.aborted).toBe(false);
+
+    await act(async () => {
+      await result.current.save(true);
+    });
+
+    expect(previewInit.signal?.aborted).toBe(true);
+    expect(harness.apiCall).toHaveBeenCalledTimes(2);
+    const saveInit = harness.apiCall.mock.calls[1]?.[2] as RequestInit;
+    expect(JSON.parse(String(saveInit.body))).toMatchObject({ reclassify: true });
+    expect(result.current.savedOk).toBe(true);
+  });
+
   it("explains that queued replay matching continues after the build is saved", async () => {
     harness.apiCall.mockResolvedValueOnce({
       ok: true,
@@ -171,6 +195,61 @@ describe("useBuildEditorState save", () => {
     );
     expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
       "Saved — no games matched yet.",
+    );
+    const request = harness.apiCall.mock.calls[0]?.[2] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({ reclassify: true });
+  });
+
+  it("keeps ordinary Save distinct and does not request replay matching", async () => {
+    harness.apiCall.mockResolvedValueOnce({
+      ok: true,
+      reclassify: null,
+    });
+
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft }),
+    );
+
+    await act(async () => {
+      await result.current.save(false);
+    });
+
+    const request = harness.apiCall.mock.calls[0]?.[2] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({ reclassify: false });
+    expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
+      "Saved — replay matching continues in the background.",
+    );
+  });
+
+  it("keeps the build saved and reports a background queue failure", async () => {
+    const onSaved = vi.fn();
+    harness.apiCall.mockResolvedValueOnce({
+      ok: false,
+      saved: true,
+      reclassify: null,
+      reclassifyError: "The replay worker is temporarily unavailable.",
+    });
+
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft, onSaved }),
+    );
+
+    await act(async () => {
+      await result.current.save(true);
+    });
+
+    expect(result.current.savedOk).toBe(true);
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
+      expect.stringContaining("replay matching couldn't start"),
+    );
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.objectContaining({
+        reclassifyRequested: true,
+        reclassifyError: "The replay worker is temporarily unavailable.",
+      }),
     );
   });
 });

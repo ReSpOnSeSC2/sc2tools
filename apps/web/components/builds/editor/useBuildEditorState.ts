@@ -20,6 +20,7 @@ import type {
   BuildEditorContext,
   BuildEditorPreviewResult,
   BuildEditorState,
+  BuildEditorSaveResult,
   BuildEditorToast,
   BuildEditorToastKind,
 } from "./BuildEditor.types";
@@ -37,7 +38,11 @@ export interface UseBuildEditorStateOptions {
    */
   lockedSlug?: string;
   /** Notified after a successful save with the persisted slug + payload. */
-  onSaved?: (slug: string, payload: BuildEditorDraft) => void;
+  onSaved?: (
+    slug: string,
+    payload: BuildEditorDraft,
+    result: BuildEditorSaveResult,
+  ) => void;
   /**
    * Demo mode (landing-page replay preview). The editor is fully
    * interactive but skips authenticated network calls: the
@@ -54,7 +59,8 @@ interface BuildOrderApiResp {
 }
 
 interface ReclassifyResponseSummary {
-  status?: "queued" | "complete";
+  status?: "queued" | "running" | "retry" | "complete";
+  generation?: string;
   tagged?: number;
   cleared?: number;
   matched?: number;
@@ -70,7 +76,9 @@ interface ShareStateSummary {
 
 interface SaveBuildResponse {
   ok: boolean;
+  saved?: boolean;
   reclassify: ReclassifyResponseSummary | null;
+  reclassifyError?: string;
   /** Result of reconciling the "Share with community" toggle on save. */
   community?: ShareStateSummary | null;
 }
@@ -112,6 +120,7 @@ export function useBuildEditorState(
 
   const pristineRef = useRef<string>(JSON.stringify(initialDraft));
   const previewGenerationRef = useRef(0);
+  const previewAbortRef = useRef<AbortController | null>(null);
 
   // Reset state every time the modal opens with a new context.
   useEffect(() => {
@@ -172,6 +181,7 @@ export function useBuildEditorState(
     const handle = window.setTimeout(async () => {
       const controller = new AbortController();
       activeController = controller;
+      previewAbortRef.current = controller;
       try {
         const result = await apiCall<BuildEditorPreviewResult>(
           getToken,
@@ -206,6 +216,9 @@ export function useBuildEditorState(
         }
         setPreviewError(previewFailureMessage(err));
       } finally {
+        if (previewAbortRef.current === controller) {
+          previewAbortRef.current = null;
+        }
         if (
           !disposed &&
           generation === previewGenerationRef.current
@@ -220,6 +233,9 @@ export function useBuildEditorState(
       // A rule edit, perspective change, modal close, or unmount must stop
       // the prior browser request before another heavyweight preview starts.
       activeController?.abort();
+      if (previewAbortRef.current === activeController) {
+        previewAbortRef.current = null;
+      }
     };
   }, [open, demoMode, draft.rules, draft.race, draft.vsRace, context.perspective, getToken]);
 
@@ -395,6 +411,11 @@ export function useBuildEditorState(
       }
       setSaving(true);
       setSaveError(null);
+      // Preview is advisory. Do not keep this heavyweight request alive
+      // while the save queues a full replay-history classification pass.
+      previewAbortRef.current?.abort();
+      previewAbortRef.current = null;
+      setPreviewLoading(false);
       const slug = lockedSlug || slugifyRuleName(sanitised.payload.name);
       const body = {
         name: sanitised.payload.name,
@@ -411,6 +432,7 @@ export function useBuildEditorState(
           sanitised.payload.sourceReplayId || context.gameId || undefined,
         perspective: context.perspective === "opponent" ? "opponent" : "you",
         schemaVersion: 3,
+        reclassify: andReclassify,
       };
       try {
         const resp = await apiCall<SaveBuildResponse | null>(
@@ -429,17 +451,18 @@ export function useBuildEditorState(
           `Saved "${sanitised.payload.name}".`,
           { label: "View build", href: `/builds/${slug}` },
         );
-        // Server now reclassifies cloud-side on every save so the stored
-        // game.myBuild stays in sync with the saved rules. Surface the
-        // counts when present (when perGame is wired) so the user knows
-        // their opponent profile / Recent games view will reflect the
-        // build name immediately. The `andReclassify` flag is preserved
-        // for backwards-compat with the "Save & Reclassify" button but no
-        // longer changes server behavior.
+        // Save-only and Save & Reclassify are distinct server actions.
+        // A save can still succeed when the background queue cannot start,
+        // so report that partial outcome without pretending the build failed.
+        const reclassifyError = resp?.reclassifyError;
         const summary = describeReclassifySummary(resp?.reclassify);
-        if (summary) pushToast("success", summary);
+        if (reclassifyError) {
+          // The modal promotes this partial failure into the app-wide toast
+          // layer so it remains visible after the successfully saved editor
+          // closes. Do not emit a second short-lived local error here.
+        } else if (summary) pushToast("success", summary);
         else if (andReclassify) {
-          pushToast("success", "Saved — no games matched yet.");
+          pushToast("warn", "Saved, but replay matching status is unavailable.");
         }
         // Reflect what the "Share with community" toggle actually did.
         // The private save already succeeded above, so a share failure is
@@ -466,7 +489,12 @@ export function useBuildEditorState(
         } else if (community?.action === "unpublished") {
           pushToast("success", "Removed from the community.");
         }
-        onSaved?.(slug, draft);
+        onSaved?.(slug, draft, {
+          reclassifyRequested: andReclassify,
+          reclassifyStatus: resp?.reclassify?.status,
+          reclassifyGeneration: resp?.reclassify?.generation,
+          reclassifyError,
+        });
       } catch (err: unknown) {
         setSaving(false);
         const message = extractMessage(err) || "Save failed.";

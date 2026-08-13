@@ -39,7 +39,7 @@ const CUSTOM_RULE_BUTTONS: Array<{
   label: string;
 }> = [
   { type: "before", label: "✓ built by" },
-  { type: "not_before", label: "✗ NOT by" },
+  { type: "not_before", label: "✗ Not built before" },
   { type: "count_max", label: "≤ count" },
   { type: "count_exact", label: "= count" },
   { type: "count_min", label: "≥ count" },
@@ -112,6 +112,11 @@ export function BuildEditorRules({
             type="button"
             onClick={() => addCustomRule(b.type)}
             disabled={ruleCap}
+            title={
+              b.type === "not_before"
+                ? "Match only replays where this event does not happen before the selected time."
+                : undefined
+            }
             className={[
               "rounded-md px-2 py-1 text-caption font-medium transition-colors",
               "disabled:cursor-not-allowed disabled:opacity-50",
@@ -267,8 +272,9 @@ function RulesListPanel({
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No rules yet. Click + on a ★ tech-defining event in the left
-            column, or use the ✓ / ✗ / ≤ / ≥ buttons below to add a
-            custom rule.
+            column, or add a custom rule below. “Not built before” means the
+            event must not happen earlier than the selected time; it may happen
+            at or after that time.
           </p>
         ) : (
           <ul role="list" className="divide-y divide-border">
@@ -319,10 +325,23 @@ function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
         onChange={(e) => onUpdate({ name: e.target.value.trim() })}
         className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
       />
-      <span className="text-micro text-text-dim">by</span>
+      {isCount ? (
+        <span className="text-micro text-text-dim">by</span>
+      ) : rule.type === "not_before" ? (
+        <span className="text-micro text-text-dim">
+          <span className="sm:hidden">not before</span>
+          <span className="hidden sm:inline">must not be built before</span>
+        </span>
+      ) : (
+        <span className="text-micro text-text-dim">
+          <span className="sm:hidden">by</span>
+          <span className="hidden sm:inline">must be built by</span>
+        </span>
+      )}
       <TimeField
         valueSec={rule.time_lt}
         onChange={(next) => onUpdate({ time_lt: next })}
+        notBefore={rule.type === "not_before"}
       />
       <button
         type="button"
@@ -355,7 +374,7 @@ function CycleBadge({
 }) {
   const icon = RULE_TYPE_ICON[rule.type];
   const label = RULE_TYPE_LABEL[rule.type];
-  const tooltip = `Click to cycle rule type (currently: ${rule.type.replace("_", " ")})`;
+  const tooltip = `Click to change rule type. Current rule: ${label || rule.type}.`;
   if (isCount) {
     const minCount = rule.type === "count_min" ? 1 : 0;
     return (
@@ -403,14 +422,14 @@ function CycleBadge({
       type="button"
       onClick={onCycle}
       title={tooltip}
-      aria-label="Cycle rule type"
+      aria-label={`Change rule type. Current rule: ${label}`}
       className={[
         "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-medium",
         TONE_BADGE_CLASSES[tone],
       ].join(" ")}
     >
       <span className="font-semibold leading-none">{icon}</span>
-      <span className="text-micro">{label}</span>
+      <span className="sr-only">{label}</span>
     </button>
   );
 }
@@ -418,9 +437,11 @@ function CycleBadge({
 function TimeField({
   valueSec,
   onChange,
+  notBefore = false,
 }: {
   valueSec: number;
   onChange: (nextSec: number) => void;
+  notBefore?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(formatTime(valueSec));
@@ -434,7 +455,11 @@ function TimeField({
           setEditing(true);
         }}
         className="font-mono text-caption tabular-nums text-accent-cyan underline decoration-dotted underline-offset-2 hover:text-accent"
-        title="Click to edit (type 3:30 or 210)"
+        title={
+          notBefore
+            ? "Earliest allowed time. Click to edit (type 3:30 or 210)."
+            : "Deadline. Click to edit (type 3:30 or 210)."
+        }
       >
         {formatTime(valueSec)}
       </button>
@@ -452,6 +477,7 @@ function TimeField({
       type="text"
       autoFocus
       value={draft}
+      aria-label={notBefore ? "Earliest allowed time" : "Rule deadline"}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

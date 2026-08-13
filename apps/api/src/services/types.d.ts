@@ -380,6 +380,24 @@ export interface CustomBuildsService {
       previousNamesBySlug?: Record<string, string[]>;
     },
   ): Promise<ReclassifyQueueResult & { builds: number }>;
+  getReclassifyStatus(userId: string): Promise<{
+    status: "idle" | "queued" | "running" | "retry" | "complete" | "failed";
+    generation?: string;
+    requestedAt?: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+    failedAt?: Date;
+    retryAt?: Date;
+    attempts?: number;
+    progress: {
+      builds: number;
+      scanned: number;
+      tagged: number;
+      cleared: number;
+      deferred: number;
+    };
+    error?: string;
+  }>;
   recoverQueuedReclassifications(): Promise<void>;
   stopReclassifications(): Promise<void>;
   cancelUserReclassifications(userId: string): Promise<void>;
@@ -410,12 +428,20 @@ export interface CustomBuildsService {
       previousNamesBySlug?: Record<string, string[]>;
       assertLease?: () => Promise<void>;
       jobSequence?: number;
+      onProgress?: (progress: {
+        builds: number;
+        scanned: number;
+        tagged: number;
+        cleared: number;
+        deferred: number;
+      }) => void | Promise<void>;
     },
   ): Promise<{
     builds: number;
     scanned: number;
     tagged: number;
     cleared: number;
+    deferred: number;
     perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
   }>;
   tagSingleGame(
@@ -808,6 +834,7 @@ export interface PerGameComputeService {
         } | null;
       }) => boolean;
       strictDetails?: boolean;
+      tolerateCorruptDetails?: boolean;
     },
   ): AsyncGenerator<{
     games: PerGameComputeServiceListedGame[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Plus, Library, BookOpen, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +20,7 @@ import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPublishModal } from "./BuildPublishModal";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
+import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 
 type ListResponse = { items: CustomBuild[] };
 
@@ -28,12 +29,34 @@ type ReclassifyResult = {
   slug: string;
   name: string;
   status: "queued" | "complete";
+  generation?: string;
 };
 
 type ReclassifyAllResult = {
   ok: true;
   status: "queued" | "complete";
   builds: number;
+  generation?: string;
+  job?: { generation?: string };
+};
+
+type ReclassifyStatus = {
+  status: "idle" | "queued" | "running" | "retry" | "complete" | "failed";
+  generation?: string;
+  requestedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  retryAt?: string;
+  attempts?: number;
+  progress?: {
+    builds?: number;
+    scanned?: number;
+    tagged?: number;
+    cleared?: number;
+    deferred?: number;
+  };
+  error?: string;
 };
 
 const DEFAULT_FILTERS: BuildFilterState = {
@@ -60,6 +83,13 @@ function BuildsLibraryInner() {
   // build's W/L appears immediately, instead of waiting for the agent
   // to reclassify games and tag `myBuild`.
   const stats = useApi<BuildStats[]>("/v1/custom-builds/stats");
+  const reclassifyStatus = useApi<ReclassifyStatus>(
+    "/v1/custom-builds/reclassify-status",
+    {
+      refreshInterval: (latest) => isReclassifyActive(latest) ? 1500 : 0,
+      dedupingInterval: 500,
+    },
+  );
 
   const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -72,6 +102,56 @@ function BuildsLibraryInner() {
   const [deletePending, setDeletePending] = useState(false);
   const [reclassifyingSlug, setReclassifyingSlug] = useState<string | null>(null);
   const [reclassifyAllPending, setReclassifyAllPending] = useState(false);
+  const [showReclassifyFailure, setShowReclassifyFailure] = useState(false);
+  const lastTerminalRef = useRef<string | null>(null);
+  const observedActiveGenerationsRef = useRef(new Set<string>());
+  const initiatedReclassifyRef = useRef(false);
+
+  const replayMatchingActive = isReclassifyActive(reclassifyStatus.data);
+
+  // A queued request outlives the POST that created it. Keep polling until
+  // the durable worker reaches a terminal state, then refresh every library
+  // number that depends on replay tags.
+  useEffect(() => {
+    const current = reclassifyStatus.data;
+    if (!current) return;
+    if (isReclassifyActive(current)) {
+      setShowReclassifyFailure(false);
+      if (current.generation) {
+        observedActiveGenerationsRef.current.add(current.generation);
+      }
+      return;
+    }
+    if (current.status !== "complete" && current.status !== "failed") return;
+    const terminalKey = [
+      current.generation || "none",
+      current.status,
+      current.completedAt || current.failedAt || "",
+    ].join(":");
+    if (lastTerminalRef.current === terminalKey) return;
+    const observedThisRun = initiatedReclassifyRef.current
+      || (!!current.generation
+        && observedActiveGenerationsRef.current.has(current.generation));
+    lastTerminalRef.current = terminalKey;
+    if (!observedThisRun) return;
+    initiatedReclassifyRef.current = false;
+    setReclassifyingSlug(null);
+    setReclassifyAllPending(false);
+    if (current.status === "complete") {
+      setShowReclassifyFailure(false);
+      const progress = current.progress || {};
+      toast.success("Replay matching complete.", {
+        description: describeCompletedReclassify(progress),
+        duration: progress.deferred ? null : undefined,
+      });
+      void Promise.all([builds.mutate(), stats.mutate()]).catch(() => undefined);
+    } else {
+      setShowReclassifyFailure(true);
+      toast.error("Replay matching stopped", {
+        description: describeReclassifyFailure(current.error),
+      });
+    }
+  }, [reclassifyStatus.data, builds, stats, toast]);
 
   const items = builds.data?.items ?? [];
   const decorated = useMemo<DecoratedBuild[]>(
@@ -147,13 +227,32 @@ function BuildsLibraryInner() {
   }, [deletingSlug, getToken, builds, toast]);
 
   const handleSaved = useCallback(
-    async (saved: CustomBuild) => {
+    async (saved: CustomBuild, result?: BuildEditorSaveResult) => {
       toast.success(
         editorBuild ? `Saved “${saved.name}”.` : `Created “${saved.name}”.`,
       );
-      await builds.mutate();
+      if (!result?.reclassifyError && result?.reclassifyRequested) {
+        initiatedReclassifyRef.current = true;
+        if (result.reclassifyStatus === "queued"
+          || result.reclassifyStatus === "running"
+          || result.reclassifyStatus === "retry") {
+          void reclassifyStatus.mutate(
+            {
+              status: result.reclassifyStatus,
+              generation: result.reclassifyGeneration,
+            },
+            { revalidate: true },
+          ).catch(() => undefined);
+          toast.success("Replay matching is running in the background.");
+        } else {
+          void reclassifyStatus.mutate().catch(() => undefined);
+        }
+      }
+      // The save/queue response is authoritative. A secondary list refresh
+      // must never hide confirmed background work or reject the save callback.
+      void builds.mutate().catch(() => undefined);
     },
-    [editorBuild, builds, toast],
+    [editorBuild, builds, reclassifyStatus, toast],
   );
 
   const handlePublished = useCallback(
@@ -168,6 +267,8 @@ function BuildsLibraryInner() {
     async (slug: string) => {
       const target = items.find((b) => b.slug === slug);
       if (!target) return;
+      initiatedReclassifyRef.current = true;
+      setShowReclassifyFailure(false);
       setReclassifyingSlug(slug);
       try {
         const res = await apiCall<ReclassifyResult>(
@@ -178,18 +279,24 @@ function BuildsLibraryInner() {
         toast.success(`Replay matching queued for “${res.name}”.`, {
           description: "Your full replay history will update safely in the background.",
         });
+        void reclassifyStatus.mutate(
+          { status: "queued", generation: res.generation },
+          { revalidate: true },
+        ).catch(() => undefined);
       } catch (err) {
+        initiatedReclassifyRef.current = false;
         toast.error("Couldn’t reclassify replays", {
           description: extractErr(err),
         });
-      } finally {
         setReclassifyingSlug(null);
       }
     },
-    [getToken, items, toast],
+    [getToken, items, reclassifyStatus, toast],
   );
 
   const reclassifyAll = useCallback(async () => {
+    initiatedReclassifyRef.current = true;
+    setShowReclassifyFailure(false);
     setReclassifyAllPending(true);
     try {
       const res = await apiCall<ReclassifyAllResult>(
@@ -200,14 +307,21 @@ function BuildsLibraryInner() {
       toast.success(`Replay matching queued for ${res.builds} build${res.builds === 1 ? "" : "s"}.`, {
         description: "Your full replay history will update safely in the background.",
       });
+      void reclassifyStatus.mutate(
+        {
+          status: "queued",
+          generation: res.generation || res.job?.generation,
+        },
+        { revalidate: true },
+      ).catch(() => undefined);
     } catch (err) {
+      initiatedReclassifyRef.current = false;
       toast.error("Couldn’t reclassify replays", {
         description: extractErr(err),
       });
-    } finally {
       setReclassifyAllPending(false);
     }
-  }, [getToken, toast]);
+  }, [getToken, reclassifyStatus, toast]);
 
   const isInitialLoad = !builds.data && builds.isLoading;
   const totalCount = decorated.length;
@@ -234,11 +348,12 @@ function BuildsLibraryInner() {
               <Button
                 variant="secondary"
                 onClick={reclassifyAll}
-                loading={reclassifyAllPending}
+                loading={reclassifyAllPending || replayMatchingActive}
+                disabled={replayMatchingActive}
                 iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
                 title="Re-evaluate every saved build's rules against your stored replays and update build tags. Runs in the cloud — no agent required."
               >
-                Reclassify replays
+                {replayMatchingActive ? "Matching replays…" : "Reclassify replays"}
               </Button>
             ) : null}
             <Button
@@ -250,6 +365,10 @@ function BuildsLibraryInner() {
           </div>
         }
       />
+
+      {replayMatchingActive || showReclassifyFailure ? (
+        <ReclassifyStatusPanel status={reclassifyStatus.data} />
+      ) : null}
 
       {isInitialLoad ? (
         <div className="space-y-4">
@@ -285,6 +404,9 @@ function BuildsLibraryInner() {
                     onPublish={openPublish}
                     onReclassify={reclassifyOne}
                     reclassifying={reclassifyingSlug === b.slug}
+                    reclassifyDisabled={
+                      replayMatchingActive || reclassifyAllPending || !!reclassifyingSlug
+                    }
                   />
                 </li>
               ))}
@@ -311,8 +433,8 @@ function BuildsLibraryInner() {
       <EditCustomBuildLauncher
         build={richEditBuild}
         onClose={() => setRichEditBuild(null)}
-        onSaved={async (saved) => {
-          await handleSaved(saved);
+        onSaved={async (saved, result) => {
+          await handleSaved(saved, result);
           setRichEditBuild(null);
         }}
       />
@@ -359,6 +481,81 @@ function describeReclassify({
   if (cleared > 0)
     parts.push(`cleared ${cleared} stale tag${cleared === 1 ? "" : "s"}`);
   return parts.join(" · ");
+}
+
+function isReclassifyActive(
+  status: ReclassifyStatus | undefined,
+): boolean {
+  return status?.status === "queued"
+    || status?.status === "running"
+    || status?.status === "retry";
+}
+
+function describeCompletedReclassify(
+  progress: NonNullable<ReclassifyStatus["progress"]>,
+): string {
+  const scanned = Math.max(0, Number(progress.scanned) || 0);
+  const tagged = Math.max(0, Number(progress.tagged) || 0);
+  const cleared = Math.max(0, Number(progress.cleared) || 0);
+  const deferred = Math.max(0, Number(progress.deferred) || 0);
+  const applied = `${scanned.toLocaleString()} replay${scanned === 1 ? "" : "s"} checked · ${tagged.toLocaleString()} tagged · ${cleared.toLocaleString()} stale tag${cleared === 1 ? "" : "s"} cleared.`;
+  return deferred > 0
+    ? `${applied} ${deferred.toLocaleString()} replay${deferred === 1 ? " was" : "s were"} left unchanged because analysis data was unavailable; re-sync the agent to repair ${deferred === 1 ? "it" : "them"}.`
+    : applied;
+}
+
+function ReclassifyStatusPanel({
+  status,
+}: {
+  status: ReclassifyStatus | undefined;
+}) {
+  if (!status) return null;
+  const progress = status.progress || {};
+  const scanned = Math.max(0, Number(progress.scanned) || 0);
+  const tagged = Math.max(0, Number(progress.tagged) || 0);
+  const cleared = Math.max(0, Number(progress.cleared) || 0);
+  const deferred = Math.max(0, Number(progress.deferred) || 0);
+  const failed = status.status === "failed";
+  const retrying = status.status === "retry"
+    || (status.status === "queued" && (status.attempts || 0) > 0);
+  return (
+    <section
+      aria-live="polite"
+      aria-busy={isReclassifyActive(status) || undefined}
+      className={[
+        "mb-4 flex flex-wrap items-center gap-3 rounded-xl border-2 px-4 py-3 shadow-hard",
+        failed
+          ? "border-danger/50 bg-danger/10"
+          : "border-line bg-bg-surface",
+      ].join(" ")}
+    >
+      {failed ? (
+        <RefreshCw className="h-5 w-5 text-danger" aria-hidden />
+      ) : (
+        <RefreshCw className="h-5 w-5 animate-spin text-accent" aria-hidden />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="font-display text-body font-bold text-text">
+          {failed
+            ? "Replay matching stopped"
+            : retrying
+              ? "Retrying replay matching safely…"
+              : status.status === "queued"
+                ? "Replay matching is queued…"
+                : "Matching replay history…"}
+        </p>
+        <p className="text-caption text-text-muted">
+          {failed
+            ? describeReclassifyFailure(status.error)
+            : `${scanned.toLocaleString()} checked · ${tagged.toLocaleString()} tag changes found · ${cleared.toLocaleString()} stale removals planned${deferred > 0 ? ` · ${deferred.toLocaleString()} awaiting replay data` : ""}`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function describeReclassifyFailure(_error?: string): string {
+  return "Your saved builds and existing replay tags are safe. Try reclassifying again in a moment.";
 }
 
 function extractErr(err: unknown): string {

@@ -731,6 +731,201 @@ describe("custom-build rule scan memory safety", () => {
     );
   });
 
+  test("PUT reclassify=false saves without queueing while legacy omission still queues", async () => {
+    const customBuilds = {
+      get: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue(undefined),
+      enqueueReclassify: jest.fn().mockResolvedValue({ status: "queued" }),
+    };
+    const app = express();
+    app.use(express.json());
+    app.use("/v1", buildCustomBuildsRouter({
+      customBuilds,
+      perGame: {},
+      auth: (req_, _res, next) => {
+        req_.auth = { userId: "u-save-only" };
+        next();
+      },
+    }));
+    const build = {
+      name: "Save only",
+      race: "Protoss",
+      rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
+    };
+
+    const saveOnly = await request(app)
+      .put("/v1/custom-builds/save-only")
+      .send({ ...build, reclassify: false });
+    expect(saveOnly.status).toBe(200);
+    expect(saveOnly.body).toEqual(expect.objectContaining({
+      ok: true,
+      saved: true,
+      reclassifyRequested: false,
+      reclassify: null,
+    }));
+    expect(customBuilds.enqueueReclassify).not.toHaveBeenCalled();
+
+    await request(app).put("/v1/custom-builds/legacy-save").send(build);
+    expect(customBuilds.enqueueReclassify).toHaveBeenCalledTimes(1);
+  });
+
+  test("explicit Save & Reclassify reports partial success when queueing fails", async () => {
+    const customBuilds = {
+      get: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue(undefined),
+      enqueueReclassify: jest.fn().mockRejectedValue(new Error("mongo down")),
+    };
+    const app = express();
+    app.use(express.json());
+    app.use("/v1", buildCustomBuildsRouter({
+      customBuilds,
+      perGame: {},
+      auth: (req_, _res, next) => {
+        req_.auth = { userId: "u-save-partial" };
+        next();
+      },
+    }));
+
+    const response = await request(app)
+      .put("/v1/custom-builds/save-partial")
+      .send({
+        name: "Saved despite queue failure",
+        race: "Protoss",
+        rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
+        reclassify: true,
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      ok: false,
+      saved: true,
+      reclassifyRequested: true,
+      reclassify: null,
+      reclassifyError: "reclassify_queue_failed",
+    }));
+    expect(customBuilds.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  test("status route exposes safe lifecycle fields and live page progress", async () => {
+    const jobs = db.collection("custom_build_jobs");
+    await jobs.insertOne({
+      userId: "u-status-other-user",
+      status: "failed",
+      generation: "private-other-generation",
+      error: "must_not_leak",
+      progress: { scanned: 999 },
+    });
+    const service = new CustomBuildsService({
+      games: db.collection("games"),
+      customBuilds: db.collection("custom_builds"),
+      customBuildJobs: jobs,
+    }, { perGame: {} });
+    const progressWritten = deferred();
+    const releaseScan = deferred();
+    service.reclassifyAll = jest.fn(async (_userId, opts) => {
+      await opts.onProgress({
+        builds: 2,
+        scanned: 50,
+        tagged: 4,
+        cleared: 1,
+        deferred: 3,
+      });
+      progressWritten.resolve();
+      await releaseScan.promise;
+      return { builds: 2, scanned: 75, tagged: 6, cleared: 1, perBuild: [] };
+    });
+    await service.enqueueReclassifyAll("u-status-progress");
+    await progressWritten.promise;
+
+    const app = express();
+    app.use(express.json());
+    app.use("/v1", buildCustomBuildsRouter({
+      customBuilds: service,
+      perGame: {},
+      auth: (req_, _res, next) => {
+        req_.auth = { userId: "u-status-progress" };
+        next();
+      },
+    }));
+    const response = await request(app)
+      .get("/v1/custom-builds/reclassify-status");
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      status: "running",
+      progress: {
+        builds: 2,
+        scanned: 50,
+        tagged: 4,
+        cleared: 1,
+        deferred: 3,
+      },
+    }));
+    expect(response.body.leaseToken).toBeUndefined();
+    expect(response.body.previousNamesBySlug).toBeUndefined();
+
+    releaseScan.resolve();
+    expect(await waitForCondition(async () =>
+      (await service.getReclassifyStatus("u-status-progress")).status === "complete"))
+      .toBe(true);
+  });
+
+  test("ordinary storage transients enter bounded retry without exhausting immediately", async () => {
+    const jobs = db.collection("custom_build_jobs");
+    const service = new CustomBuildsService({
+      games: db.collection("games"),
+      customBuilds: db.collection("custom_builds"),
+      customBuildJobs: jobs,
+    }, { perGame: {} });
+    const transient = new Error("upstream unavailable");
+    transient.$metadata = { httpStatusCode: 503 };
+    service.reclassifyAll = jest.fn().mockRejectedValue(transient);
+
+    await service.enqueueReclassifyAll("u-storage-retry");
+    expect(await waitForCondition(async () =>
+      (await service.getReclassifyStatus("u-storage-retry")).status === "retry"))
+      .toBe(true);
+    const status = await service.getReclassifyStatus("u-storage-retry");
+    expect(status.attempts).toBe(1);
+    expect(status.retryAt).toBeInstanceOf(Date);
+    expect(status.progress).toEqual({
+      builds: 0,
+      scanned: 0,
+      tagged: 0,
+      cleared: 0,
+      deferred: 0,
+    });
+    await service.stopReclassifications();
+  });
+
+  test("failed status sanitizes its error and never exposes durable job inputs", async () => {
+    const jobs = db.collection("custom_build_jobs");
+    const service = new CustomBuildsService({
+      games: db.collection("games"),
+      customBuilds: db.collection("custom_builds"),
+      customBuildJobs: jobs,
+    }, { perGame: {} });
+    await jobs.insertOne({
+      userId: "u-status-failed",
+      status: "failed",
+      generation: "failed-generation",
+      attempts: 3,
+      failedAt: new Date("2026-08-13T21:00:00.000Z"),
+      error: "GET https://private.example/object C:\\secret\\replay.json",
+      leaseToken: "private-token",
+      previousNamesBySlug: { secret: ["Old"] },
+    });
+
+    const status = await service.getReclassifyStatus("u-status-failed");
+    expect(status).toEqual(expect.objectContaining({
+      status: "failed",
+      generation: "failed-generation",
+      attempts: 3,
+      error: "GET [upstream] [path]",
+    }));
+    expect(status.leaseToken).toBeUndefined();
+    expect(status.previousNamesBySlug).toBeUndefined();
+  });
+
   test("recovery resumes both queued and interrupted running jobs", async () => {
     const jobs = db.collection("custom_build_jobs");
     const service = new CustomBuildsService(
@@ -1768,6 +1963,86 @@ describe("custom-build rule scan memory safety", () => {
     expect(result.perBuild.find(
       (row) => row.name === "Unknown opponent depot equal",
     )).toEqual(expect.objectContaining({ matched: 0, tagged: 0 }));
+  });
+
+  test("a corrupt detail is deferred while valid siblings commit and the job completes", async () => {
+    const userId = "u-deferred-missing-detail";
+    const games = db.collection("games");
+    const jobs = db.collection("custom_build_jobs");
+    await games.insertMany([
+      {
+        userId,
+        gameId: "deferred-valid",
+        date: new Date("2026-08-13T21:42:00.000Z"),
+        myRace: "Protoss",
+        opponent: { race: "Terran" },
+        myBuild: "Old valid label",
+      },
+      {
+        userId,
+        gameId: "deferred-missing",
+        date: new Date("2026-08-13T21:41:00.000Z"),
+        myRace: "Protoss",
+        opponent: { race: "Terran" },
+        // Its external object is corrupt and omitted by the opted-in bulk
+        // reader. That is unavailable, not a nonmatch, so its tag survives.
+        myBuild: "Preserved missing label",
+        _customBuildSlug: "deferred-pylon",
+      },
+    ]);
+    const findMany = jest.fn(async (_uid, ids, opts) => {
+      expect(ids).toEqual(expect.arrayContaining([
+        "deferred-valid",
+        "deferred-missing",
+      ]));
+      expect(opts).toEqual(expect.objectContaining({
+        strict: true,
+        tolerateCorruptObjects: true,
+      }));
+      return new Map([["deferred-valid", {
+        buildLog: ["[0:17] Pylon"],
+      }]]);
+    });
+    const perGame = new PerGameComputeService(
+      { games },
+      { gameDetails: { findMany } },
+    );
+    const service = new CustomBuildsService({
+      games,
+      customBuilds: db.collection("custom_builds"),
+      customBuildJobs: jobs,
+    }, { perGame });
+    await service.upsert(userId, {
+      slug: "deferred-pylon",
+      name: "Deferred Pylon",
+      race: "Protoss",
+      vsRace: "Terran",
+      perspective: "you",
+      rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
+    });
+
+    await service.enqueueReclassifyAll(userId, { clearUnmatched: true });
+    expect(await waitForCondition(async () =>
+      (await service.getReclassifyStatus(userId)).status === "complete"))
+      .toBe(true);
+    const [valid, missing, status] = await Promise.all([
+      games.findOne({ userId, gameId: "deferred-valid" }),
+      games.findOne({ userId, gameId: "deferred-missing" }),
+      service.getReclassifyStatus(userId),
+    ]);
+    expect(valid.myBuild).toBe("Deferred Pylon");
+    expect(valid._customBuildSlug).toBe("deferred-pylon");
+    expect(missing.myBuild).toBe("Preserved missing label");
+    expect(missing._customBuildSlug).toBe("deferred-pylon");
+    expect(status).toEqual(expect.objectContaining({
+      status: "complete",
+      progress: expect.objectContaining({
+        scanned: 2,
+        tagged: 1,
+        cleared: 0,
+        deferred: 1,
+      }),
+    }));
   });
 
   test("cancelUserReclassifications clears queued work and awaits the active page", async () => {

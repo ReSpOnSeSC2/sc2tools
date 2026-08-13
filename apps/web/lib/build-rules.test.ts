@@ -16,16 +16,16 @@ describe("formatRule", () => {
     });
   });
 
-  test("prefixes not_before rules with 'no'", () => {
+  test("describes not_before rules without the ambiguous 'NOT by' wording", () => {
     const r: BuildRule = {
       type: "not_before",
       name: "BuildRoboticsFacility",
       time_lt: 240,
     };
     expect(formatRule(r)).toEqual({
-      prefix: "no ",
+      prefix: "",
       entity: "Robotics Facility",
-      connector: "before",
+      connector: "must not be built before",
       time: "4:00",
     });
   });

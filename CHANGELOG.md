@@ -66,6 +66,15 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Custom-build replay matching now shows real progress and completion** -
+  Save and Save & Reclassify are distinct actions, background matching remains
+  visible after the request is queued, completed results refresh automatically,
+  and failures or unavailable replay analyses are reported without discarding
+  existing build tags. Reclassification retries temporary storage interruptions
+  with bounded backoff instead of silently appearing to do nothing. The
+  ambiguous "NOT by" timing rule is now labeled "Not built before" and explains
+  that the event may happen at or after the selected time.
+
 - **Creating or reclassifying a custom build no longer exhausts API memory** -
   live rule previews now scan a bounded recent sample in small pages, hydrate
   only the build-log side being evaluated, cancel superseded editor requests,

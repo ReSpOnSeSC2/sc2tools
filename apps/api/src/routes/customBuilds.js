@@ -70,9 +70,10 @@ function raceMatches(actual, requested, buildName, bucketPos) {
       const letter = requested.charAt(0).toUpperCase();
       if (buildName.charAt(bucketPos) === letter) return true;
     }
-    // Legacy import without race info — be permissive so the user
-    // doesn't see "0 games scanned" on a brand new build.
-    return true;
+    // Without race metadata or a trustworthy PvX bucket prefix, the replay
+    // cannot be assigned to a matchup safely. Keep preview and durable
+    // classification aligned instead of showing a match that cannot persist.
+    return false;
   }
   const a = actual.charAt(0).toUpperCase();
   const r = requested.charAt(0).toUpperCase();
@@ -691,6 +692,18 @@ function buildCustomBuildsRouter(deps) {
     }
   });
 
+  /** Pollable, user-scoped lifecycle for durable replay matching. */
+  router.get("/custom-builds/reclassify-status", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const status = await deps.customBuilds.getReclassifyStatus(auth.userId);
+      res.json(status);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   /**
    * GET /v1/custom-builds/:slug/matches
    *
@@ -911,7 +924,14 @@ function buildCustomBuildsRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const slug = String(req.params.slug);
-      const validation = validateCustomBuild({ ...req.body, slug });
+      const rawBody = req.body && typeof req.body === "object" ? req.body : {};
+      const reclassifyExplicit = rawBody.reclassify === true;
+      // Older clients omitted this flag and expected save-time matching. New
+      // clients send false for Save and true for Save & Reclassify.
+      const reclassifyRequested = rawBody.reclassify !== false;
+      const candidate = { ...rawBody, slug };
+      delete candidate.reclassify;
+      const validation = validateCustomBuild(candidate);
       if (!validation.valid) {
         res.status(400).json({
           error: { code: "bad_request", details: validation.errors },
@@ -937,7 +957,8 @@ function buildCustomBuildsRouter(deps) {
       // wired (e.g. tests bootstrapping without it) so the save itself
       // never fails on a missing dependency.
       let reclassify = null;
-      if (deps.perGame) {
+      let reclassifyError = null;
+      if (reclassifyRequested && deps.perGame) {
         try {
           reclassify = await deps.customBuilds.enqueueReclassify(auth.userId, slug, {
             replace: true,
@@ -946,6 +967,7 @@ function buildCustomBuildsRouter(deps) {
               : [],
           });
         } catch (e) {
+          reclassifyError = "reclassify_queue_failed";
           if (req.log) {
             req.log.warn(
               { err: e, slug, userId: auth.userId },
@@ -953,6 +975,8 @@ function buildCustomBuildsRouter(deps) {
             );
           }
         }
+      } else if (reclassifyRequested && reclassifyExplicit) {
+        reclassifyError = "reclassify_unavailable";
       }
       // Honour the build's community-share state on every save. This is
       // what makes the editor's "Share with community" toggle (and the
@@ -977,7 +1001,18 @@ function buildCustomBuildsRouter(deps) {
         description: validated.description,
         log: req.log,
       });
-      res.status(200).json({ ok: true, reclassify, community });
+      const payload = {
+        ok: reclassifyError === null,
+        saved: true,
+        reclassifyRequested,
+        reclassify,
+        reclassifyError,
+        community,
+      };
+      // The private build is already durable. Keep this a 200 partial-success
+      // contract so clients do not tell the user their save failed; `ok:false`
+      // and `reclassifyError` make the matching failure explicit and retryable.
+      res.status(200).json(payload);
     } catch (err) {
       next(err);
     }

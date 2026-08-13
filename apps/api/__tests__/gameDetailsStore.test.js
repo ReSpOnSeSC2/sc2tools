@@ -32,6 +32,7 @@ const {
 const { COLLECTIONS } = require("../src/config/constants");
 
 const gunzip = promisify(zlib.gunzip);
+const gzip = promisify(zlib.gzip);
 
 const SAMPLE_BLOB = {
   buildLog: ["[0:00] Nexus", "[0:17] Pylon"],
@@ -100,6 +101,31 @@ describe("MongoDetailsStore", () => {
     expect(out.size).toBe(0);
   });
 
+  test("opt-in bulk tolerance omits a malformed Mongo detail sibling", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "valid", date, { buildLog: ["[0:17] Pylon"] });
+    await collection.insertOne({
+      userId: "u1",
+      gameId: "corrupt",
+      date,
+      buildLog: "not-an-array",
+    });
+
+    const tolerant = await store.readMany("u1", ["valid", "corrupt"], {
+      fields: ["buildLog"],
+      strict: true,
+      tolerateCorruptObjects: true,
+    });
+    expect(tolerant.get("valid").buildLog).toEqual(["[0:17] Pylon"]);
+    expect(tolerant.has("corrupt")).toBe(false);
+
+    const unchangedDefault = await store.readMany("u1", ["corrupt"], {
+      fields: ["buildLog"],
+      strict: true,
+    });
+    expect(unchangedDefault.get("corrupt").buildLog).toBe("not-an-array");
+  });
+
   test("delete removes one row, leaves siblings intact", async () => {
     const date = new Date("2026-05-04T12:00:00Z");
     await store.write("u1", "g1", date, { buildLog: ["a"] });
@@ -138,6 +164,7 @@ class FakeS3Client {
     this.headCalls = 0;
     this.headError = null;
     this.putCalls = 0;
+    this.getErrors = new Map();
   }
 
   async send(command) {
@@ -191,6 +218,7 @@ class FakeS3Client {
       return { ETag: stored.etag };
     }
     if (name === "GetObjectCommand") {
+      if (this.getErrors.has(input.Key)) throw this.getErrors.get(input.Key);
       const stored = this.objects.get(input.Key);
       if (!stored) {
         const err = new Error("NoSuchKey");
@@ -425,6 +453,53 @@ describe("R2DetailsStore", () => {
     expect(out.size).toBe(2);
     expect(out.get("g1").buildLog).toEqual(["a"]);
     expect(out.get("g3").buildLog).toEqual(["c"]);
+  });
+
+  test("opt-in strict bulk read omits only corrupt objects and keeps valid siblings", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    await store.write("u1", "valid", date, { buildLog: ["[0:17] Pylon"] });
+    const corruptGzipKey = store.keyFor("u1", "corrupt-gzip");
+    s3.objects.set(corruptGzipKey, {
+      body: Buffer.from("not-gzip"),
+      etag: '"corrupt-etag"',
+      ContentEncoding: "gzip",
+    });
+    const corruptJsonKey = store.keyFor("u1", "corrupt-json");
+    s3.objects.set(corruptJsonKey, {
+      body: await gzip(Buffer.from("{not-json", "utf8")),
+      etag: '"corrupt-json-etag"',
+      ContentEncoding: "gzip",
+    });
+
+    const tolerant = await store.readMany(
+      "u1",
+      ["valid", "corrupt-gzip", "corrupt-json"],
+      {
+        fields: ["buildLog"],
+        strict: true,
+        tolerateCorruptObjects: true,
+      },
+    );
+    expect(tolerant.get("valid").buildLog).toEqual(["[0:17] Pylon"]);
+    expect(tolerant.has("corrupt-gzip")).toBe(false);
+    expect(tolerant.has("corrupt-json")).toBe(false);
+
+    await expect(store.readMany("u1", ["corrupt-gzip"], {
+      fields: ["buildLog"],
+      strict: true,
+    })).rejects.toMatchObject({ code: "game_details_object_corrupt" });
+  });
+
+  test("corruption tolerance never swallows transient object-store failures", async () => {
+    const transient = new Error("R2 unavailable");
+    transient.name = "ServiceUnavailable";
+    transient.$metadata = { httpStatusCode: 503 };
+    s3.getErrors.set(store.keyFor("u1", "transient"), transient);
+
+    await expect(store.readMany("u1", ["transient"], {
+      strict: true,
+      tolerateCorruptObjects: true,
+    })).rejects.toBe(transient);
   });
 
   test("concurrent bulk readers share the global four-object memory ceiling", async () => {

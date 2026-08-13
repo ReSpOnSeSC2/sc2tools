@@ -18,6 +18,7 @@ const {
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
 const RECLASSIFY_MAX_ATTEMPTS = 3;
+const RECLASSIFY_TRANSIENT_MAX_ATTEMPTS = 8;
 const RECLASSIFY_RETRY_BASE_MS = 250;
 const RECLASSIFY_WORKER_RETRY_MS = 1000;
 const RECLASSIFY_LEASE_MS = 60 * 1000;
@@ -126,6 +127,7 @@ class CustomBuildsService {
    *   }) => boolean,
    *   signal?: AbortSignal,
    *   strictDetails?: boolean,
+   *   tolerateCorruptDetails?: boolean,
    * }} [opts]
    * @returns {AsyncGenerator<{games: import('./types').PerGameComputeServiceListedGame[], candidates: number, hasMore: boolean}>}
    * @private
@@ -263,6 +265,67 @@ class CustomBuildsService {
     this._abortSupersededReclassification(userId, null);
     this._startReclassifyWorker(userId);
     return { ...queued, builds };
+  }
+
+  /**
+   * Return the caller's durable reclassification state without exposing
+   * worker ownership tokens, rename history, or other server-private fields.
+   * A queued job whose retry delay has not elapsed is reported as `retry` so
+   * the UI can distinguish healthy backoff from a button that did nothing.
+   * @param {string} userId
+   * @returns {Promise<{
+   *   status: "idle"|"queued"|"running"|"retry"|"complete"|"failed",
+   *   generation?: string,
+   *   requestedAt?: Date,
+   *   startedAt?: Date,
+   *   completedAt?: Date,
+   *   failedAt?: Date,
+   *   retryAt?: Date,
+   *   attempts?: number,
+   *   progress: {builds: number, scanned: number, tagged: number, cleared: number, deferred: number},
+   *   error?: string,
+   * }>}
+   */
+  async getReclassifyStatus(userId) {
+    const job = await this.reclassifyJobs.findOne(
+      { userId },
+      {
+        projection: {
+          _id: 0,
+          status: 1,
+          generation: 1,
+          requestedAt: 1,
+          startedAt: 1,
+          completedAt: 1,
+          failedAt: 1,
+          notBefore: 1,
+          attempts: 1,
+          progress: 1,
+          error: 1,
+        },
+      },
+    );
+    if (!job) return {
+      status: /** @type {const} */ ("idle"),
+      progress: emptyReclassifyProgress(),
+    };
+    const retrying = job.status === "queued"
+      && job.notBefore instanceof Date
+      && job.notBefore.getTime() > Date.now();
+    return {
+      status: retrying ? "retry" : normaliseReclassifyStatus(job.status),
+      generation: typeof job.generation === "string" ? job.generation : undefined,
+      requestedAt: validDateOrUndefined(job.requestedAt),
+      startedAt: validDateOrUndefined(job.startedAt),
+      completedAt: validDateOrUndefined(job.completedAt),
+      failedAt: validDateOrUndefined(job.failedAt),
+      retryAt: retrying ? validDateOrUndefined(job.notBefore) : undefined,
+      attempts: Math.max(0, Number(job.attempts) || 0),
+      progress: sanitiseReclassifyProgress(job.progress),
+      error: job.status === "failed" && typeof job.error === "string"
+        ? safeReclassifyError(job.error)
+        : undefined,
+    };
   }
 
   /**
@@ -416,6 +479,7 @@ class CustomBuildsService {
           startedAt: now,
           leaseToken,
           leaseUntil: new Date(now.getTime() + RECLASSIFY_LEASE_MS),
+          progress: emptyReclassifyProgress(),
         }, $inc: { sequence: 1 }, $unset: { notBefore: "" } },
         {
           projection: { _id: 0 },
@@ -503,6 +567,17 @@ class CustomBuildsService {
           signal: controller.signal,
           assertLease,
           jobSequence: Number(job.sequence) || 0,
+          onProgress: async (progress) => {
+            const checkpoint = await this.reclassifyJobs.updateOne(
+              { userId, generation, leaseToken, status: "running" },
+              { $set: { progress: sanitiseReclassifyProgress(progress) } },
+            );
+            if (checkpoint.matchedCount === 0) {
+              leaseLost = true;
+              controller.abort();
+              throw abortError();
+            }
+          },
         });
         await assertLease();
         const completed = await this.reclassifyJobs.updateOne(
@@ -547,22 +622,30 @@ class CustomBuildsService {
           if (this._reclassifyStopping) return;
           break;
         }
-        const retryDetailWrite = isRetryableReclassificationError(err);
-        const attempts = retryDetailWrite
+        const writerBusy = isRetryableReclassificationError(err);
+        const transientStorage = !writerBusy
+          && isTransientReclassificationError(err);
+        const attempts = writerBusy
           ? Number(job.attempts || 0)
           : Number(job.attempts || 0) + 1;
-        const requestedRetryDelay = retryDetailWrite
+        const requestedRetryDelay = writerBusy
           && err && typeof err === "object" && "retryAfterMs" in err
           ? Number(/** @type {{retryAfterMs?: unknown}} */ (err).retryAfterMs)
           : 0;
-        const retryDelayMs = retryDetailWrite
+        const retryDelayMs = writerBusy
           ? Math.max(1_000, Math.min(15_000, requestedRetryDelay || 5_000))
-          : RECLASSIFY_RETRY_BASE_MS * attempts;
+          : transientStorage
+            ? Math.min(60_000, 1_000 * (2 ** Math.max(0, attempts - 1)))
+            : RECLASSIFY_RETRY_BASE_MS * attempts;
+        const canRetry = writerBusy
+          || (transientStorage && attempts < RECLASSIFY_TRANSIENT_MAX_ATTEMPTS)
+          || (!transientStorage && attempts < RECLASSIFY_MAX_ATTEMPTS);
         const queuedState = {
           status: "queued",
           attempts,
           error: errorMessage(err),
-          ...(retryDetailWrite
+          progress: emptyReclassifyProgress(),
+          ...(writerBusy || transientStorage
             ? { notBefore: new Date(Date.now() + retryDelayMs) }
             : {}),
         };
@@ -578,7 +661,7 @@ class CustomBuildsService {
             generation,
             leaseToken,
           },
-          { $set: retryDetailWrite || attempts < RECLASSIFY_MAX_ATTEMPTS
+          { $set: canRetry
             ? queuedState : {
             status: "failed",
             attempts,
@@ -586,12 +669,13 @@ class CustomBuildsService {
             error: errorMessage(err),
           } },
         );
-        if (retryDetailWrite) {
+        if (writerBusy || transientStorage) {
+          if (!canRetry) continue;
           const wakeTimer = setTimeout(() => {
             this._startReclassifyWorker(userId);
           }, retryDelayMs);
           if (typeof wakeTimer.unref === "function") wakeTimer.unref();
-        } else if (attempts < RECLASSIFY_MAX_ATTEMPTS) {
+        } else if (canRetry) {
           await delay(
             retryDelayMs,
           );
@@ -1094,6 +1178,7 @@ class CustomBuildsService {
       pageSize: 50,
       perspective,
       strictDetails: true,
+      tolerateCorruptDetails: true,
       signal: opts.signal,
       metadataFilter: (g) => gameMatchesBuildMatchup(
         normaliseGameRaces(g), build, perspective,
@@ -1225,6 +1310,7 @@ class CustomBuildsService {
    *   previousNamesBySlug?: Record<string, string[]>,
    *   assertLease?: () => Promise<void>,
    *   jobSequence?: number,
+   *   onProgress?: (progress: {builds: number, scanned: number, tagged: number, cleared: number, deferred: number}) => void|Promise<void>,
    * }} [opts]
    */
   async reclassifyAll(userId, opts = {}) {
@@ -1260,11 +1346,13 @@ class CustomBuildsService {
     let scanned = 0;
     let tagged = 0;
     let cleared = 0;
+    let deferred = 0;
     try {
       for await (const page of this._rulePages(userId, {
         pageSize: 50,
         perspective: "both",
         strictDetails: true,
+        tolerateCorruptDetails: true,
         signal: opts.signal,
       })) {
         if (opts.signal && opts.signal.aborted) throw abortError();
@@ -1315,6 +1403,7 @@ class CustomBuildsService {
             (candidate) => descriptorOutranks(candidate, best),
           );
           if (winnerIsUncertain || (!best && unknownContenders.length > 0)) {
+            deferred += 1;
             continue;
           }
 
@@ -1410,6 +1499,15 @@ class CustomBuildsService {
           );
           cleared += staged.matchedCount || 0;
         }
+        if (opts.onProgress) {
+          await opts.onProgress({
+            builds: builds.length,
+            scanned,
+            tagged,
+            cleared,
+            deferred,
+          });
+        }
       }
       // The iterator treats cancellation as a normal return so previews can
       // disappear quietly. A destructive classifier must distinguish that
@@ -1432,7 +1530,7 @@ class CustomBuildsService {
       );
       throw err;
     }
-    return { builds: builds.length, scanned, tagged, cleared, perBuild };
+    return { builds: builds.length, scanned, tagged, cleared, deferred, perBuild };
   }
 
   /**
@@ -1834,6 +1932,88 @@ function abortError() {
 function errorMessage(err) {
   if (err instanceof Error && err.message) return err.message;
   return String(err || "failed");
+}
+
+function emptyReclassifyProgress() {
+  return { builds: 0, scanned: 0, tagged: 0, cleared: 0, deferred: 0 };
+}
+
+/** @param {unknown} value */
+function sanitiseReclassifyProgress(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  return {
+    builds: Math.max(0, Number(/** @type {any} */ (raw).builds) || 0),
+    scanned: Math.max(0, Number(/** @type {any} */ (raw).scanned) || 0),
+    tagged: Math.max(0, Number(/** @type {any} */ (raw).tagged) || 0),
+    cleared: Math.max(0, Number(/** @type {any} */ (raw).cleared) || 0),
+    deferred: Math.max(0, Number(/** @type {any} */ (raw).deferred) || 0),
+  };
+}
+
+/**
+ * @param {unknown} status
+ * @returns {"idle"|"queued"|"running"|"complete"|"failed"}
+ */
+function normaliseReclassifyStatus(status) {
+  const value = String(status);
+  if (value === "queued" || value === "running"
+    || value === "complete" || value === "failed") return value;
+  return "idle";
+}
+
+/** @param {unknown} value */
+function validDateOrUndefined(value) {
+  return value instanceof Date && Number.isFinite(value.getTime())
+    ? value
+    : undefined;
+}
+
+/**
+ * Job errors are an operational hint, not a raw exception surface. Keep the
+ * stable code/message but strip paths, query strings, and unbounded payloads.
+ * @param {string} value
+ */
+function safeReclassifyError(value) {
+  const compact = String(value || "reclassification_failed")
+    .replace(/[A-Za-z]:\\[^\s]+/g, "[path]")
+    .replace(/https?:\/\/[^\s]+/g, "[upstream]")
+    .slice(0, 160);
+  return compact || "reclassification_failed";
+}
+
+/**
+ * R2/S3 and Mongo drivers surface ordinary network/storage interruptions with
+ * different names. Treat only well-known transient signals as retryable;
+ * malformed replay JSON and evaluator bugs must still consume the finite
+ * attempt budget and become visible as failed.
+ * @param {unknown} err
+ */
+function isTransientReclassificationError(err) {
+  if (!err || typeof err !== "object") return false;
+  const value = /** @type {any} */ (err);
+  const status = Number(
+    value.statusCode || value.status || value.$metadata?.httpStatusCode,
+  );
+  if ([408, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  const code = String(value.code || value.name || "").toUpperCase();
+  return [
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "EPIPE",
+    "ETIMEDOUT",
+    "ESOCKETTIMEDOUT",
+    "EAI_AGAIN",
+    "TIMEOUTERROR",
+    "REQUESTTIMEOUT",
+    "REQUESTTIMEOUTEXCEPTION",
+    "SLOWDOWN",
+    "THROTTLING",
+    "THROTTLINGEXCEPTION",
+    "SERVICEUNAVAILABLE",
+    "INTERNALERROR",
+    "MONGONETWORKERROR",
+    "MONGOSERVERSELECTIONERROR",
+  ].includes(code);
 }
 
 /**
