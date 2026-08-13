@@ -245,10 +245,13 @@ def test_permanently_unarchivable_file_does_not_block_parsed_sync(
     finally:
         q.stop()
 
-    assert events == [
-        "success:too-large.SC2Replay",
-        "unavailable:id-too-large.SC2Replay:too-large.SC2Replay",
-    ]
+    assert events[0] == "success:too-large.SC2Replay"
+    prefix, archived_name = events[1].rsplit(":", 1)
+    assert prefix == "unavailable:id-too-large.SC2Replay"
+    # The durable journal uses the host OS's path identity. Windows may
+    # hydrate its normalized lowercase spelling while the immediate lane
+    # retains the original display casing; both resolve to the same file.
+    assert Path(archived_name) == Path("too-large.SC2Replay")
 
 
 def test_accepted_archive_marker_skips_local_hash_and_upload(
@@ -341,7 +344,9 @@ def test_missing_archive_marker_preserves_existing_archive_flow(
     finally:
         q.stop()
 
-    assert archived == [(job.game.game_id, job.file_path.name)]
+    assert len(archived) == 1
+    assert archived[0][0] == job.game.game_id
+    assert Path(archived[0][1]) == Path(job.file_path.name)
 
 
 def test_archive_restart_hydration_is_fair_to_later_available_file(
