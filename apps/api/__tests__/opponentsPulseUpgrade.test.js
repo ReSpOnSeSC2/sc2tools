@@ -334,15 +334,18 @@ describe("OpponentsService.backfillPulseCharacterId", () => {
     expect(oppRow.region).toBe("NA");
     expect(oppRow.mmrFetchedAt).toBeInstanceOf(Date);
     expect(pulseMmr.getRaceBreakdown).not.toHaveBeenCalled();
-    // Metadata may be healed, but SC2Pulse MMR is not written here.
+    // Stable identity metadata is healed on every matching game, but
+    // SC2Pulse MMR is not written here.
     const g1 = await db.games.findOne({ userId: "u1", gameId: "g1" });
     expect(g1.opponent.mmr).toBeUndefined();
     expect(g1.opponent.region).toBe("NA");
     expect(g1.opponent.pulseCharacterId).toBe("452727");
-    // g2 already had the agent's in-replay MMR (3000), so it survives.
+    // g2 already had the agent's in-replay MMR (3000), so it survives while
+    // the newly resolved stable identity and region are still attached.
     const g2 = await db.games.findOne({ userId: "u1", gameId: "g2" });
     expect(g2.opponent.mmr).toBe(3000);
-    expect(g2.opponent.region).toBeUndefined();
+    expect(g2.opponent.region).toBe("NA");
+    expect(g2.opponent.pulseCharacterId).toBe("452727");
     // Untouched opponent's game keeps its own values.
     const g3 = await db.games.findOne({ userId: "u1", gameId: "g3" });
     expect(g3.opponent.mmr).toBe(4000);

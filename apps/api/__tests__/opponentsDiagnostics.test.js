@@ -178,7 +178,9 @@ describe("OpponentsService.retryPulseResolution", () => {
     expect(res.resolvedPulseCharacterId).toBe(true);
     expect(res.pulseCharacterId).toBe("452727");
     expect(res.mmr).toBe(4800);
-    expect(res.gamesRestamped).toBe(1); // metadata updated on the missing-MMR game
+    // Stable identity metadata is repaired on both games; neither replay MMR
+    // is filled or overwritten by this current-rating lookup.
+    expect(res.gamesRestamped).toBe(2);
 
     const row = await db.opponents.findOne({ userId: "u1", pulseId: "1-S2-1-4" });
     expect(row.pulseCharacterId).toBe("452727");
@@ -191,6 +193,8 @@ describe("OpponentsService.retryPulseResolution", () => {
     expect(g1.opponent.pulseCharacterId).toBe("452727");
     expect(g1.opponent.region).toBe("NA");
     expect(g2.opponent.mmr).toBe(4000); // in-replay value preserved
+    expect(g2.opponent.pulseCharacterId).toBe("452727");
+    expect(g2.opponent.region).toBe("NA");
   });
 
   test("already-resolved id only refetches MMR (no resolver call)", async () => {
