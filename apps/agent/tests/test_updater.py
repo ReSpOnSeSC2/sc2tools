@@ -276,12 +276,35 @@ def test_windows_launcher_waits_for_agent_exit_without_cmd_shell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[list[str], dict]] = []
+    detached_process = 0x00000008
+    create_new_process_group = 0x00000200
+    create_no_window = 0x08000000
 
     def fake_popen(args, **kwargs):
         calls.append((args, kwargs))
         return object()
 
     monkeypatch.setattr(updater_module.subprocess, "Popen", fake_popen)
+    # Define the Windows-only constants even when this unit test runs on a
+    # non-Windows CI worker so the exact launcher contract is portable.
+    monkeypatch.setattr(
+        updater_module.subprocess,
+        "DETACHED_PROCESS",
+        detached_process,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        updater_module.subprocess,
+        "CREATE_NEW_PROCESS_GROUP",
+        create_new_process_group,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        updater_module.subprocess,
+        "CREATE_NO_WINDOW",
+        create_no_window,
+        raising=False,
+    )
     monkeypatch.setenv("SystemRoot", r"C:\Windows")
     installer = Path(r"C:\Temp\SC2 installer & verified.exe")
 
@@ -298,6 +321,10 @@ def test_windows_launcher_waits_for_agent_exit_without_cmd_shell(
     assert "cmd.exe" not in " ".join(args).lower()
     assert "timeout /t" not in " ".join(args).lower()
     assert kwargs["shell"] is False
+    creationflags = kwargs["creationflags"]
+    assert creationflags & create_no_window
+    assert creationflags & create_new_process_group
+    assert not creationflags & detached_process
     assert kwargs["env"]["SC2TOOLS_UPDATE_INSTALLER_PATH"] == str(installer)
     assert kwargs["env"]["SC2TOOLS_UPDATE_PARENT_PID"] == "4321"
     assert kwargs["env"]["SC2TOOLS_UPDATE_EXIT_TIMEOUT_SEC"] == "37"

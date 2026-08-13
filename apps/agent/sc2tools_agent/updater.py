@@ -449,10 +449,11 @@ def _sha256_file(path: Path) -> str:
 
 
 def _spawn_installer_detached(installer_path: Path) -> None:
-    """Launch the installer with a short delay and detach so this
-    process can exit immediately. Windows-only path uses
-    ``DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`` so the installer
-    survives our SIGTERM."""
+    """Launch the installer with a short delay in a background helper.
+
+    The Windows helper uses ``CREATE_NO_WINDOW`` to stay invisible and a
+    separate process group so it survives the agent's orderly exit.
+    """
     delay = INSTALLER_LAUNCH_DELAY_SEC
     if os.name == "nt":
         _spawn_windows_installer_detached(
@@ -487,9 +488,15 @@ def _spawn_windows_installer_detached(
     input and can therefore make ``&&`` skip the installer completely. Use
     a fixed PowerShell program with ``shell=False``. The helper waits until
     this agent process has exited so orderly uploader shutdown can finish;
-    a bounded timeout still launches NSIS if shutdown gets stuck. Untrusted
-    values are passed only through the child environment, never interpolated
-    into the program text.
+    a bounded timeout still launches NSIS if shutdown gets stuck.
+
+    ``DETACHED_PROCESS`` is deliberately not used here. It proved unreliable
+    for the frozen agent's PowerShell hand-off: the agent could close after a
+    successful ``Popen`` while the helper disappeared before starting NSIS.
+    ``CREATE_NO_WINDOW`` keeps normal child-process semantics without flashing
+    a console, and ``CREATE_NEW_PROCESS_GROUP`` isolates the helper from the
+    agent's control events. Untrusted values are passed only through the child
+    environment, never interpolated into the program text.
     """
     system_root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
     powershell = (
@@ -521,8 +528,8 @@ def _spawn_windows_installer_detached(
         "-WindowStyle Hidden"
     )
     creationflags = 0
-    if hasattr(subprocess, "DETACHED_PROCESS"):
-        creationflags = subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        creationflags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
     if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
         creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(

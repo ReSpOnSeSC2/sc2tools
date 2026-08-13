@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.21
+
+### Fixed - Windows installer handoff after automatic updates
+
+- The hidden Windows updater helper now uses a no-window child process instead
+  of `DETACHED_PROCESS`, which could make PowerShell exit before it launched
+  the verified installer.
+- Automatic updates still wait for orderly replay-upload shutdown and keep the
+  installer hidden, but now reliably install and relaunch the new agent.
+
 ## 0.15.20
 
 ### Fixed - lossless server backpressure during concurrent re-syncs
