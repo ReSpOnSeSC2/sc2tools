@@ -7,10 +7,11 @@ Two modes — both ALWAYS run:
      parse, and enqueue an upload.
 
   2. Periodic sweep (the ``poll_interval_sec`` thread). It drains a cached
-     newest-first inventory every N seconds and refreshes the filesystem
-     snapshot once per minute. Catches OneDrive / cloud-sync cases where the
-     filesystem event never fires without re-statting a 10k-file library on
-     every parser wave.
+     newest-first inventory every N seconds, checks a lightweight directory
+     fingerprint for missed filesystem events, and refreshes the full
+     filesystem snapshot at most once per minute when nothing changed. This
+     catches OneDrive / cloud-sync cases without re-statting and sorting a
+     10k-file library on every parser wave.
 
 Both code paths funnel into ``_handle_replay`` which is idempotent on
 the dedupe set in ``state.uploaded``.
@@ -435,7 +436,10 @@ class ReplayWatcher:
         self._history_last_refresh = 0.0
         self._history_refresh_generation = 0
         self._history_completed_generation = -1
-        self._history_root_signatures: dict[str, int | None] = {}
+        self._history_root_signatures: dict[
+            str,
+            tuple[int | None, tuple[int, int, int] | None],
+        ] = {}
         self._history_pause_invalidated = False
         self._sweep_live_lock = threading.Lock()
         self._sweep_live_paths: dict[str, str] = {}
@@ -843,22 +847,44 @@ class ReplayWatcher:
                 self._inflight.add(key)
             self._submit_parse(path, live=True)
 
-    def _root_inventory_signatures(self) -> dict[str, int | None]:
+    def _root_inventory_signatures(
+        self,
+    ) -> dict[str, tuple[int | None, tuple[int, int, int] | None]]:
         """Cheap change detector for replay-folder additions.
 
         Auto-discovered roots normally are Multiplayer directories already.
         A user override can point at an Accounts parent, so include every
         nested Multiplayer directory we can cheaply identify; Windows does
         not guarantee a descendant creation updates the top parent's mtime.
+
+        NTFS may also coalesce two directory timestamp updates that happen in
+        the same clock tick. Directory mtime alone could therefore miss a new
+        replay when watchdog also misses the creation event. Pair it with a
+        direct-entry fingerprint (count plus two order-independent name hash
+        accumulators). ``os.scandir`` reads directory entries without the
+        per-replay ``stat`` calls and mtime sort required by a full inventory
+        refresh, so the normal poll remains inexpensive even for large replay
+        libraries.
         """
-        signatures: dict[str, int | None] = {}
+        signatures: dict[
+            str,
+            tuple[int | None, tuple[int, int, int] | None],
+        ] = {}
         for root in list(self._roots):
-            dirs = all_multiplayer_dirs(root)
-            for candidate in dirs or [root]:
-                try:
-                    signatures[str(candidate)] = candidate.stat().st_mtime_ns
-                except OSError:
-                    signatures[str(candidate)] = None
+            # Auto-discovery already returns Multiplayer directories. Passing
+            # one back through ``all_multiplayer_dirs`` would call ``is_dir``
+            # on every replay file during every poll, defeating this cheap
+            # signature path. Only descend when a user override points above
+            # the normal Multiplayer level.
+            if root.name.casefold() == "multiplayer":
+                candidates = [root]
+            else:
+                candidates = all_multiplayer_dirs(root) or [root]
+            for candidate in candidates:
+                signatures[str(candidate)] = (
+                    _directory_mtime_ns(candidate),
+                    _direct_replay_name_fingerprint(candidate),
+                )
         return signatures
 
     def _ingest_pending_count(self) -> int:
@@ -1384,6 +1410,42 @@ class _Handler(FileSystemEventHandler):
             return
         log.info("watchdog_seen %s", path.name)
         self._parent.on_replay_created(path)
+
+
+def _directory_mtime_ns(path: Path) -> int | None:
+    """Read a directory timestamp without breaking sweeps on transient I/O."""
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _direct_replay_name_fingerprint(path: Path) -> tuple[int, int, int] | None:
+    """Fingerprint replay names in one directory without statting the files.
+
+    The count detects the normal add/remove case. XOR and modular sum make a
+    same-count replacement visible while remaining independent of filesystem
+    enumeration order. Python's process-local string hashes are sufficient:
+    signatures are compared only within this watcher process and are never
+    persisted or sent over the network.
+    """
+    count = 0
+    name_xor = 0
+    name_sum = 0
+    hash_mask = (1 << 64) - 1
+    try:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                normalized_name = entry.name.casefold()
+                if not normalized_name.endswith(".sc2replay"):
+                    continue
+                value = hash(normalized_name) & hash_mask
+                count += 1
+                name_xor ^= value
+                name_sum = (name_sum + value) & hash_mask
+    except OSError:
+        return None
+    return count, name_xor, name_sum
 
 
 def _walk_replays(root: Path) -> Iterable[tuple[Path, float]]:

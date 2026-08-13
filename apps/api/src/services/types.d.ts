@@ -517,7 +517,35 @@ export interface AggregationsService {
     filters: object,
   ): Promise<object>;
   dayHourHeatmap(userId: string, opts: object, filters: object): Promise<object>;
-  lengthBuckets(userId: string, filters: object): Promise<object>;
+  lengthBuckets(userId: string, filters: object): Promise<{
+    buckets: Array<{
+      bucket: string;
+      wins: number;
+      losses: number;
+      total: number;
+      winRate: number;
+      avgSec: number;
+    }>;
+    summary: {
+      games: number;
+      avgSec: number | null;
+      medianSec: number | null;
+      longGameRate: number;
+    };
+    matchups: Array<{
+      matchup: string;
+      myRace: "P" | "T" | "Z" | "R" | "U";
+      opponentRace: "P" | "T" | "Z" | "R" | "U";
+      games: number;
+      wins: number;
+      losses: number;
+      avgSec: number | null;
+      medianSec: number | null;
+      avgWinSec: number | null;
+      avgLossSec: number | null;
+      longGameRate: number;
+    }>;
+  }>;
   activityCalendar(
     userId: string,
     opts: object,

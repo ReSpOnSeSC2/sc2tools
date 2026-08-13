@@ -189,4 +189,80 @@ describe("analyzer tabs honour map_pool / game_size", () => {
     expect(sum(await get("/v1/timeseries?game_size=team"))).toBe(1);
     expect(sum(await get("/v1/timeseries?game_size=1v1"))).toBe(1);
   });
+
+  test("/v1/length-buckets returns filtered real matchup durations", async () => {
+    // A missing/zero duration must not become a fake 0–3m sample. A valid
+    // duration with unknown own race still belongs in the overall/buckets,
+    // but cannot form a meaningful matchup card.
+    await db.games.insertMany([
+      {
+        userId,
+        gameId: "duration-zero",
+        date: new Date("2026-05-13T12:00:00.000Z"),
+        result: "Victory",
+        myRace: "Zerg",
+        map: "Acro Ladder",
+        durationSec: 0,
+        isLadderGame: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+        opponent: { race: "Terran" },
+      },
+      {
+        userId,
+        gameId: "duration-unknown-race",
+        date: new Date("2026-05-14T12:00:00.000Z"),
+        result: "Defeat",
+        myRace: "",
+        map: "Acro Ladder",
+        durationSec: 500,
+        isLadderGame: true,
+        matchFormat: "1v1",
+        playerCount: 2,
+        opponent: { race: "Terran" },
+      },
+    ]);
+
+    try {
+      const all = await get("/v1/length-buckets");
+      expect(all.summary).toMatchObject({ games: 4, avgSec: 650 });
+      expect(all.buckets.reduce((n, row) => n + row.total, 0)).toBe(4);
+      expect(all.matchups.map((row) => row.matchup)).toEqual([
+        "ZvP",
+        "ZvT",
+        "ZvZ",
+      ]);
+      expect(all.matchups.reduce((n, row) => n + row.games, 0)).toBe(3);
+
+      const ladder = await get("/v1/length-buckets?map_pool=ladder");
+      expect(ladder.summary.games).toBe(2);
+      expect(ladder.matchups).toHaveLength(1);
+      expect(ladder.matchups[0]).toMatchObject({
+        matchup: "ZvT",
+        games: 1,
+        avgSec: 600,
+      });
+
+      const team = await get("/v1/length-buckets?game_size=team");
+      expect(team.summary.games).toBe(1);
+      expect(team.matchups[0]).toMatchObject({
+        matchup: "ZvP",
+        games: 1,
+        avgSec: 700,
+      });
+
+      const zvp = await get("/v1/length-buckets?race=Z&opp_race=P");
+      expect(zvp.summary.games).toBe(1);
+      expect(zvp.matchups[0]).toMatchObject({
+        matchup: "ZvP",
+        games: 1,
+        avgSec: 700,
+      });
+    } finally {
+      await db.games.deleteMany({
+        userId,
+        gameId: { $in: ["duration-zero", "duration-unknown-race"] },
+      });
+    }
+  });
 });

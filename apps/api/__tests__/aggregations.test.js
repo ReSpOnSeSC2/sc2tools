@@ -374,15 +374,38 @@ describe("services/aggregations", () => {
     expect(out.cells[1].winRate).toBe(0);
   });
 
-  test("lengthBuckets orders rows 0–3m → 25m+ and computes winRate + avgSec", async () => {
+  test("lengthBuckets returns buckets + real matchup duration insights from one facet", async () => {
+    let captured;
     const games = buildGames([
-      () => [
-        { bucket: "25m+", wins: 1, losses: 1, total: 2, avgSec: 1800 },
-        { bucket: "0–3m", wins: 4, losses: 1, total: 5, avgSec: 90 },
-        { bucket: "12–15m", wins: 3, losses: 2, total: 5, avgSec: 780 },
-        { bucket: "6–9m", wins: 2, losses: 1, total: 3, avgSec: 450 },
-        { bucket: "20–25m", wins: 1, losses: 0, total: 1, avgSec: 1380 },
-      ],
+      (pipeline) => {
+        captured = pipeline;
+        return [{
+          buckets: [
+            { bucket: "25m+", wins: 1, losses: 1, total: 2, avgSec: 1800 },
+            { bucket: "0–3m", wins: 4, losses: 1, total: 5, avgSec: 90 },
+            { bucket: "12–15m", wins: 3, losses: 2, total: 5, avgSec: 780 },
+            { bucket: "6–9m", wins: 2, losses: 1, total: 3, avgSec: 450 },
+            { bucket: "20–25m", wins: 1, losses: 0, total: 1, avgSec: 1380 },
+          ],
+          summary: [{
+            games: 16,
+            avgSec: 750.4,
+            medianSec: [720.2],
+            longGames: 3,
+          }],
+          matchups: [{
+            _id: { myRace: "P", opponentRace: "T" },
+            games: 3,
+            wins: 2,
+            losses: 1,
+            avgSec: 630.4,
+            medianSec: [620.2],
+            avgWinSec: 600.4,
+            avgLossSec: 690.2,
+            longGames: 1,
+          }],
+        }];
+      },
     ]);
     const svc = new AggregationsService({ games });
     const out = /** @type {any} */ (await svc.lengthBuckets("u1", {}));
@@ -395,6 +418,38 @@ describe("services/aggregations", () => {
     ]);
     expect(out.buckets[0].winRate).toBeCloseTo(0.8);
     expect(out.buckets[0].avgSec).toBe(90);
+    expect(out.summary).toEqual({
+      games: 16,
+      avgSec: 750,
+      medianSec: 720,
+      longGameRate: 3 / 16,
+    });
+    expect(out.matchups).toEqual([{
+      matchup: "PvT",
+      myRace: "P",
+      opponentRace: "T",
+      games: 3,
+      wins: 2,
+      losses: 1,
+      avgSec: 630,
+      medianSec: 620,
+      avgWinSec: 600,
+      avgLossSec: 690,
+      longGameRate: 1 / 3,
+    }]);
+
+    // Invalid/nonpositive durations are excluded before the facet, and
+    // unknown races are excluded only from the matchup branch.
+    expect(captured[1]).toEqual({
+      $match: { durationSec: { $type: "number", $gt: 0 } },
+    });
+    const facet = captured.find((stage) => stage.$facet).$facet;
+    expect(facet.matchups[0]).toEqual({
+      $match: {
+        _myRace: { $in: ["P", "T", "Z", "R"] },
+        _oppRace: { $in: ["P", "T", "Z", "R"] },
+      },
+    });
   });
 
   test("activityCalendar returns one row per day with computed winRate", async () => {

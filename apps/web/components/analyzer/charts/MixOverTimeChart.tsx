@@ -661,6 +661,18 @@ function fillTimeline(
 }
 
 /**
+ * API mix buckets can be either absolute ISO timestamps (Mongo date
+ * buckets) or date-only calendar keys. A date-only value has no timezone:
+ * parsing it as midnight UTC and then formatting it in a western timezone
+ * would incorrectly move the bucket to the previous day. Preserve calendar
+ * keys verbatim, while continuing to localize real timestamps.
+ */
+function bucketDateKey(value: string, timeZone: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return localDateKey(value, timeZone);
+}
+
+/**
  * Collapse the raw (bucket, key, count) point cloud into the matrix
  * shape. Steps: collect totals per key, pick the top N, fold the
  * rest into "Other", build the continuous column timeline, then
@@ -702,7 +714,7 @@ function shapeMatrix(
 
   const playedDates = new Set<string>();
   for (const p of points) {
-    const d = localDateKey(p.bucket, tz);
+    const d = bucketDateKey(p.bucket, tz);
     if (d) playedDates.add(d);
   }
   const columnDates = fillTimeline([...playedDates].sort(), bucket);
@@ -714,7 +726,7 @@ function shapeMatrix(
   }
   let maxCellCount = 0;
   for (const p of points) {
-    const date = localDateKey(p.bucket, tz);
+    const date = bucketDateKey(p.bucket, tz);
     if (!date) continue;
     const seriesKey = topSet.has(p.key) ? p.key : OTHER_KEY;
     const key = cellKey(date, seriesKey);

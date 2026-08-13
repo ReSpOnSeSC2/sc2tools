@@ -156,8 +156,8 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // WR by game-length bucket. Powers the Trends tab's "WR by game
-  // length" card.
+  // One filtered game-length response: WR buckets plus overall and
+  // my-race-vs-opponent-race duration summaries for the Trends cards.
   router.get("/length-buckets", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;

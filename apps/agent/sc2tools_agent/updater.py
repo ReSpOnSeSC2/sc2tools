@@ -28,7 +28,6 @@ import logging
 import os
 import platform
 import re
-import shutil
 import ssl
 import subprocess
 import sys
@@ -53,6 +52,19 @@ USER_AGENT = f"sc2tools-agent/{__version__} updater"
 HTTP_TIMEOUT_SEC = 30
 DOWNLOAD_CHUNK = 1024 * 256
 INSTALLER_LAUNCH_DELAY_SEC = 3
+# UploadQueue deliberately lets a throttled/in-flight cloud request finish
+# during shutdown (its longest bounded request is 150 seconds).  Keep the
+# installer helper comfortably beyond that envelope so NSIS's taskkill
+# backstop cannot cut off an accepted replay/archive write.
+INSTALLER_PARENT_EXIT_TIMEOUT_SEC = 300
+
+# A startup poll and a user-initiated "Check for updates" can overlap.
+# Serialise the whole cache/download/launch transaction so two threads in
+# one agent process never write the same installer (or staging file)
+# concurrently. Unique staging paths below also protect against a stale
+# competing agent process during an upgrade.
+_INSTALL_LOCK = threading.Lock()
+_LAUNCHED_ARTIFACTS: set[str] = set()
 
 # Hosts an installer may be downloaded from when the caller doesn't
 # extend the allowlist. Releases ship via GitHub Releases; the
@@ -279,30 +291,48 @@ def install_release(
         raise UpdateError("no artifact for current platform")
     artifact = release.artifact
     _assert_trusted_download(artifact, trusted_hosts)
-    target = (download_dir or Path(tempfile.gettempdir())) / _artifact_filename(artifact)
-    _download_with_progress(artifact, target)
-    digest = _sha256_file(target)
-    if digest.lower() != artifact.sha256.lower():
-        try:
-            target.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise UpdateError(
-            f"sha256_mismatch: expected={artifact.sha256[:8]}…"
-            f" got={digest[:8]}…",
-        )
-    if launch_installer and _running_frozen():
-        _spawn_installer_detached(target)
-    return target
+    target = (
+        download_dir or Path(tempfile.gettempdir())
+    ) / _artifact_filename(artifact)
+
+    with _INSTALL_LOCK:
+        # Reusing a fully verified cached installer is both faster and
+        # essential on Windows: an already-running installer (or an AV
+        # scanner) may temporarily hold the .exe open, making unlink or
+        # replacement fail with WinError 32. Never trust the filename
+        # alone; both the advertised size and SHA-256 must match.
+        selected = target if _artifact_matches(target, artifact) else None
+        if selected is None:
+            staged = _download_to_staging(artifact, target)
+            try:
+                _validate_artifact(staged, artifact)
+                selected = _publish_staged_artifact(staged, target, artifact)
+            except Exception:
+                _remove_quietly(staged)
+                raise
+
+        if launch_installer and _running_frozen():
+            launch_key = artifact.sha256.strip().lower()
+            if launch_key not in _LAUNCHED_ARTIFACTS:
+                _spawn_installer_detached(selected)
+                # Only mark it after the detached helper was created. A
+                # synchronous launch error must remain retryable.
+                _LAUNCHED_ARTIFACTS.add(launch_key)
+        return selected
 
 
-def _download_with_progress(artifact: ReleaseArtifact, target: Path) -> None:
+def _download_to_staging(
+    artifact: ReleaseArtifact,
+    target: Path,
+) -> Path:
+    """Download into an exclusively-created sibling staging file."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        try:
-            target.unlink()
-        except OSError:
-            pass
+    fd, raw_staged = tempfile.mkstemp(
+        prefix=f".{target.stem}-",
+        suffix=f"{target.suffix}.part",
+        dir=str(target.parent),
+    )
+    staged = Path(raw_staged)
     req = urllib.request.Request(
         artifact.download_url,
         headers={"User-Agent": USER_AGENT, "Accept": "application/octet-stream"},
@@ -310,16 +340,101 @@ def _download_with_progress(artifact: ReleaseArtifact, target: Path) -> None:
     ctx = ssl.create_default_context()
     try:
         with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_SEC, context=ctx) as resp:
-            tmp_target = target.with_suffix(target.suffix + ".part")
-            with tmp_target.open("wb") as fh:
+            with os.fdopen(fd, "wb") as fh:
+                fd = -1
                 while True:
                     chunk = resp.read(DOWNLOAD_CHUNK)
                     if not chunk:
                         break
                     fh.write(chunk)
-            shutil.move(str(tmp_target), str(target))
+                fh.flush()
+                os.fsync(fh.fileno())
     except urllib.error.URLError as exc:
+        if fd >= 0:
+            os.close(fd)
+        _remove_quietly(staged)
         raise UpdateError(f"download_failed: {exc}") from exc
+    except OSError as exc:
+        if fd >= 0:
+            os.close(fd)
+        _remove_quietly(staged)
+        raise UpdateError(f"download_io_failed: {exc}") from exc
+    return staged
+
+
+def _validate_artifact(path: Path, artifact: ReleaseArtifact) -> None:
+    try:
+        actual_size = path.stat().st_size
+    except OSError as exc:
+        raise UpdateError(f"artifact_unreadable: {exc}") from exc
+    if artifact.size_bytes is not None and actual_size != artifact.size_bytes:
+        raise UpdateError(
+            f"size_mismatch: expected={artifact.size_bytes} got={actual_size}",
+        )
+    try:
+        digest = _sha256_file(path)
+    except OSError as exc:
+        raise UpdateError(f"artifact_unreadable: {exc}") from exc
+    if digest.lower() != artifact.sha256.lower():
+        raise UpdateError(
+            f"sha256_mismatch: expected={artifact.sha256[:8]}…"
+            f" got={digest[:8]}…",
+        )
+
+
+def _artifact_matches(path: Path, artifact: ReleaseArtifact) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        _validate_artifact(path, artifact)
+    except UpdateError:
+        return False
+    return True
+
+
+def _publish_staged_artifact(
+    staged: Path,
+    target: Path,
+    artifact: ReleaseArtifact,
+) -> Path:
+    """Atomically publish a verified download, with a lock-safe fallback."""
+    # A separate agent process may have completed the same download.
+    if _artifact_matches(target, artifact):
+        _remove_quietly(staged)
+        return target
+    try:
+        os.replace(staged, target)
+        return target
+    except OSError as exc:
+        # The target can become valid between the pre-check and replace.
+        if _artifact_matches(target, artifact):
+            _remove_quietly(staged)
+            return target
+
+        # An invalid target may be temporarily locked by a scanner or a
+        # previous installer. The staging name is already unique; remove
+        # only its `.part` suffix and launch the verified copy from there.
+        fallback = staged.with_suffix("")
+        try:
+            os.replace(staged, fallback)
+        except OSError as fallback_exc:
+            raise UpdateError(
+                f"artifact_publish_failed: {fallback_exc}",
+            ) from fallback_exc
+        log.warning(
+            "installer_cache_target_locked target=%s fallback=%s err=%s",
+            target,
+            fallback,
+            exc,
+        )
+        return fallback
+
+
+def _remove_quietly(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _sha256_file(path: Path) -> str:
@@ -340,26 +455,10 @@ def _spawn_installer_detached(installer_path: Path) -> None:
     survives our SIGTERM."""
     delay = INSTALLER_LAUNCH_DELAY_SEC
     if os.name == "nt":
-        # `cmd /c timeout & path-to-installer` runs the timeout
-        # synchronously then launches the installer. We start cmd in a
-        # detached process group.
-        cmd = (
-            f'cmd.exe /c timeout /t {delay} > NUL && '
-            f'start "" /B "{installer_path}" /S'
-        )
-        creationflags = 0
-        if hasattr(subprocess, "DETACHED_PROCESS"):
-            creationflags = subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
-            creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
-        subprocess.Popen(
-            cmd,
-            shell=True,
-            close_fds=True,
-            creationflags=creationflags,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        _spawn_windows_installer_detached(
+            installer_path,
+            parent_pid=os.getpid(),
+            timeout_sec=INSTALLER_PARENT_EXIT_TIMEOUT_SEC,
         )
     else:
         # Generic POSIX path used by macOS / Linux dev installs. Sleeps
@@ -373,6 +472,78 @@ def _spawn_installer_detached(installer_path: Path) -> None:
             start_new_session=True,
             close_fds=True,
         )
+
+
+def _spawn_windows_installer_detached(
+    installer_path: Path,
+    *,
+    parent_pid: int,
+    timeout_sec: int,
+) -> None:
+    """Start a detached, delayed Windows installer helper safely.
+
+    The former ``cmd /c timeout ... && start`` command was launched with
+    stdin redirected to ``DEVNULL``. Windows ``timeout`` rejects redirected
+    input and can therefore make ``&&`` skip the installer completely. Use
+    a fixed PowerShell program with ``shell=False``. The helper waits until
+    this agent process has exited so orderly uploader shutdown can finish;
+    a bounded timeout still launches NSIS if shutdown gets stuck. Untrusted
+    values are passed only through the child environment, never interpolated
+    into the program text.
+    """
+    system_root = Path(os.environ.get("SystemRoot") or r"C:\Windows")
+    powershell = (
+        system_root
+        / "System32"
+        / "WindowsPowerShell"
+        / "v1.0"
+        / "powershell.exe"
+    )
+    helper_env = os.environ.copy()
+    helper_env["SC2TOOLS_UPDATE_INSTALLER_PATH"] = str(installer_path)
+    helper_env["SC2TOOLS_UPDATE_PARENT_PID"] = str(int(parent_pid))
+    helper_env["SC2TOOLS_UPDATE_EXIT_TIMEOUT_SEC"] = str(
+        max(1, int(timeout_sec)),
+    )
+    program = (
+        "$ErrorActionPreference = 'Stop'; "
+        "$agentProcessId = [int][Environment]::GetEnvironmentVariable("
+        "'SC2TOOLS_UPDATE_PARENT_PID', 'Process'); "
+        "$timeoutSeconds = [int][Environment]::GetEnvironmentVariable("
+        "'SC2TOOLS_UPDATE_EXIT_TIMEOUT_SEC', 'Process'); "
+        "$deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds); "
+        "while ([DateTime]::UtcNow -lt $deadline -and "
+        "(Get-Process -Id $agentProcessId -ErrorAction SilentlyContinue)) { "
+        "Start-Sleep -Milliseconds 250 }; "
+        "$installer = [Environment]::GetEnvironmentVariable("
+        "'SC2TOOLS_UPDATE_INSTALLER_PATH', 'Process'); "
+        "Start-Process -FilePath $installer -ArgumentList @('/S') "
+        "-WindowStyle Hidden"
+    )
+    creationflags = 0
+    if hasattr(subprocess, "DETACHED_PROCESS"):
+        creationflags = subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+    if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+        creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(
+        [
+            str(powershell),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            program,
+        ],
+        shell=False,
+        close_fds=True,
+        creationflags=creationflags,
+        env=helper_env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _coerce_release(payload: Dict[str, Any], *, fallback_current: str) -> ReleaseInfo:

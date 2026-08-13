@@ -24,6 +24,16 @@ vi.mock("@/lib/filterContext", async (importOriginal) => {
   };
 });
 
+// Pin a western-hemisphere browser timezone so a date-only API bucket would
+// expose the previous-day bug even when the test runner itself uses UTC.
+vi.mock("@/lib/timeseries", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/timeseries")>();
+  return {
+    ...actual,
+    clientTimezone: () => "America/New_York",
+  };
+});
+
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
@@ -163,8 +173,8 @@ function mixPoint(
 describe("MixOverTimeChart cadence matrix", () => {
   it("renders a labelled row per build, folds extras into Other, and shows counts", () => {
     useFiltersMock.mockReturnValue({ filters: {}, dbRev: 0 });
-    const week1 = "2026-07-05T00:00:00.000Z";
-    const week2 = "2026-07-12T00:00:00.000Z";
+    const week1 = "2026-07-05";
+    const week2 = "2026-07-12";
     // 7 distinct keys with default topN=6 → the least-played key
     // ("Build G") must fold into an "Other" row.
     const points = [
@@ -204,14 +214,14 @@ describe("MixOverTimeChart cadence matrix", () => {
     ).toBeTruthy();
   });
 
-  it("defaults the breakdown to the latest period and pins a clicked column", () => {
+  it("keeps date-only buckets on their calendar day and pins a clicked column", () => {
     useFiltersMock.mockReturnValue({ filters: {}, dbRev: 0 });
     useApiMock.mockReturnValue({
       data: {
         interval: "week",
         points: [
-          mixPoint("2026-07-05T00:00:00.000Z", "Build A", 2, 1),
-          mixPoint("2026-07-12T00:00:00.000Z", "Build B", 1, 0),
+          mixPoint("2026-07-05", "Build A", 2, 1),
+          mixPoint("2026-07-12", "Build B", 1, 0),
         ],
       },
       isLoading: false,
@@ -236,8 +246,8 @@ describe("MixOverTimeChart cadence matrix", () => {
       data: {
         interval: "day",
         points: [
-          mixPoint("2026-07-01T00:00:00.000Z", "Build A", 1, 0),
-          mixPoint("2026-07-04T00:00:00.000Z", "Build A", 0, 1),
+          mixPoint("2026-07-01", "Build A", 1, 0),
+          mixPoint("2026-07-04", "Build A", 0, 1),
         ],
       },
       isLoading: false,

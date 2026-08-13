@@ -220,7 +220,9 @@ describe("services/catalog", () => {
       expect(svc.mapImagePath("Alcyone LE")?.path).toContain("alcyone_le.webp");
       // Layout lookup returns the full top-down render instead.
       const layout = svc.mapImagePath("Alcyone LE", { variant: "layout" });
-      expect(layout?.path).toContain("alcyone_le.jpg");
+      // On Windows the first case-insensitive candidate can resolve to the
+      // same lowercase fixture while retaining that candidate's casing.
+      expect(layout?.path.toLowerCase()).toContain("alcyone_le.jpg");
       expect(layout?.contentType).toBe("image/jpeg");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

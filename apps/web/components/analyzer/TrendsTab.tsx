@@ -26,6 +26,7 @@ import {
 } from "@/lib/timeseries";
 import { FingerprintCard } from "./FingerprintCard";
 import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
+import { MatchupGameLengthCard } from "./charts/MatchupGameLengthCard";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
 import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
@@ -455,6 +456,9 @@ export function TrendsTab() {
            */}
           <div className="md:col-span-2">
             <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
+          <div className="md:col-span-2">
+            <MatchupGameLengthCard />
           </div>
           <TimeOfDayHeatmap />
           <GameLengthWrChart />

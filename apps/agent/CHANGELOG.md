@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.19
+
+### Fixed — reliable Windows updates and replay discovery
+
+- Automatic updates now serialize overlapping startup/manual checks, reuse an
+  existing installer only after exact size and SHA-256 verification, and use
+  unique staging files when another process is holding the normal temp path.
+- The detached Windows launcher no longer relies on `cmd timeout` with
+  redirected input. It waits for graceful agent shutdown, with a fallback
+  timeout beyond the full bounded upload window, before invoking the silent
+  installer so an update cannot cut off an in-flight replay upload.
+- Cached replay discovery now detects a newly added `.SC2Replay` even when
+  NTFS reports the same directory timestamp for rapid consecutive writes. The
+  lightweight filename fingerprint keeps the large-library resync cache fast
+  without waiting for its one-minute safety refresh.
+
 ## 0.15.18
 
 ### Changed â€” faster, crash-safe Full Re-sync

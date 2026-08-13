@@ -160,53 +160,145 @@ async function dayHourHeatmap(deps, userId, opts, filters) {
  */
 async function lengthBuckets(deps, userId, filters) {
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games
-    .aggregate([
-      { $match: match },
-      { $addFields: { _bucket: deps.bucketSwitch() } },
-      {
-        $addFields: {
-          // Eight finer-grained buckets: short games (cheese, all-ins,
-          // GG-outs) are split from "first push" 6-9m timing wars, and
-          // the long-game tail is split into 15-20 / 20-25 / 25m+ so
-          // the macro-vs-late-macro signal isn't crushed into one bar.
-          _len: {
-            $switch: {
-              branches: [
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 3 * 60] }, then: "0–3m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 6 * 60] }, then: "3–6m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 9 * 60] }, then: "6–9m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 12 * 60] }, then: "9–12m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 15 * 60] }, then: "12–15m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 20 * 60] }, then: "15–20m" },
-                { case: { $lt: [{ $ifNull: ["$durationSec", 0] }, 25 * 60] }, then: "20–25m" },
-              ],
-              default: "25m+",
-            },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$_len",
-          wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-          losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-          total: { $sum: 1 },
-          avgSec: { $avg: { $ifNull: ["$durationSec", 0] } },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          bucket: "$_id",
-          wins: 1,
-          losses: 1,
-          total: 1,
-          avgSec: 1,
-        },
-      },
-    ])
+  const docs = await deps.games
+    .aggregate(lengthBucketsPipeline(match, deps.bucketSwitch()))
     .toArray();
+  return shapeLengthBuckets(docs[0]);
+}
+
+/** @param {Record<string, any>} match @param {object} resultBucket */
+function lengthBucketsPipeline(match, resultBucket) {
+  return [
+    { $match: match },
+    // Old/incomplete rows may not carry a trustworthy replay duration.
+    // Exclude them instead of fabricating a zero-minute game.
+    { $match: { durationSec: { $type: "number", $gt: 0 } } },
+    {
+      $addFields: {
+        _bucket: resultBucket,
+        _myRace: raceLetterExpr("$myRace"),
+        _oppRace: raceLetterExpr("$opponent.race"),
+        _len: lengthBucketExpr(),
+      },
+    },
+    {
+      // One filtered scan powers all three views.
+      $facet: {
+        buckets: lengthDistributionFacet(),
+        summary: lengthSummaryFacet(),
+        matchups: lengthMatchupsFacet(),
+      },
+    },
+  ];
+}
+
+function lengthBucketExpr() {
+  return {
+    $switch: {
+      branches: [
+        { case: { $lt: ["$durationSec", 3 * 60] }, then: "0–3m" },
+        { case: { $lt: ["$durationSec", 6 * 60] }, then: "3–6m" },
+        { case: { $lt: ["$durationSec", 9 * 60] }, then: "6–9m" },
+        { case: { $lt: ["$durationSec", 12 * 60] }, then: "9–12m" },
+        { case: { $lt: ["$durationSec", 15 * 60] }, then: "12–15m" },
+        { case: { $lt: ["$durationSec", 20 * 60] }, then: "15–20m" },
+        { case: { $lt: ["$durationSec", 25 * 60] }, then: "20–25m" },
+      ],
+      default: "25m+",
+    },
+  };
+}
+
+function lengthDistributionFacet() {
+  return [
+    {
+      $group: {
+        _id: "$_len",
+        wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+        losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+        total: { $sum: 1 },
+        avgSec: { $avg: "$durationSec" },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        bucket: "$_id",
+        wins: 1,
+        losses: 1,
+        total: 1,
+        avgSec: 1,
+      },
+    },
+  ];
+}
+
+function lengthSummaryFacet() {
+  return [{
+    $group: {
+      _id: null,
+      games: { $sum: 1 },
+      avgSec: { $avg: "$durationSec" },
+      medianSec: percentileAccumulator(),
+      longGames: longGameAccumulator(),
+    },
+  }];
+}
+
+function lengthMatchupsFacet() {
+  return [
+    {
+      // Unknown race metadata cannot form a meaningful SC2 matchup.
+      // Keep those games in buckets/summary, but not in this facet.
+      $match: {
+        _myRace: { $in: ["P", "T", "Z", "R"] },
+        _oppRace: { $in: ["P", "T", "Z", "R"] },
+      },
+    },
+    {
+      $group: {
+        _id: { myRace: "$_myRace", opponentRace: "$_oppRace" },
+        games: { $sum: 1 },
+        wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+        losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+        avgSec: { $avg: "$durationSec" },
+        medianSec: percentileAccumulator(),
+        avgWinSec: outcomeDurationAccumulator("win"),
+        avgLossSec: outcomeDurationAccumulator("loss"),
+        longGames: longGameAccumulator(),
+      },
+    },
+    { $sort: { "_id.myRace": 1, "_id.opponentRace": 1 } },
+  ];
+}
+
+function percentileAccumulator() {
+  return {
+    $percentile: {
+      input: "$durationSec",
+      p: [0.5],
+      method: "approximate",
+    },
+  };
+}
+
+function longGameAccumulator() {
+  return { $sum: { $cond: [{ $gte: ["$durationSec", 15 * 60] }, 1, 0] } };
+}
+
+/** @param {'win' | 'loss'} outcome */
+function outcomeDurationAccumulator(outcome) {
+  return {
+    $avg: {
+      $cond: [{ $eq: ["$_bucket", outcome] }, "$durationSec", null],
+    },
+  };
+}
+
+/** @param {Record<string, any> | undefined} raw */
+function shapeLengthBuckets(raw) {
+  const doc = raw || { buckets: [], summary: [], matchups: [] };
+  const rows = Array.isArray(doc.buckets) ? doc.buckets : [];
   /** @type {Record<string, number>} */
   const order = {
     "0–3m": 0,
@@ -219,13 +311,81 @@ async function lengthBuckets(deps, userId, filters) {
     "25m+": 7,
   };
   rows.sort((a, b) => (order[a.bucket] ?? 99) - (order[b.bucket] ?? 99));
+  const summary = Array.isArray(doc.summary) ? doc.summary[0] : null;
+  const games = positiveInt(summary && summary.games);
   return {
     buckets: rows.map((r) => ({
       ...r,
       winRate: r.total ? r.wins / r.total : 0,
-      avgSec: Math.round(r.avgSec || 0),
+      avgSec: roundedDuration(r.avgSec) || 0,
     })),
+    summary: {
+      games,
+      avgSec: roundedDuration(summary && summary.avgSec),
+      medianSec: percentileDuration(summary && summary.medianSec),
+      longGameRate:
+        games > 0 ? positiveInt(summary && summary.longGames) / games : 0,
+    },
+    matchups: (Array.isArray(doc.matchups) ? doc.matchups : []).map((r) => {
+      const matchupGames = positiveInt(r.games);
+      const myRace = raceLetter(r && r._id && r._id.myRace);
+      const opponentRace = raceLetter(r && r._id && r._id.opponentRace);
+      return {
+        matchup: `${myRace}v${opponentRace}`,
+        myRace,
+        opponentRace,
+        games: matchupGames,
+        wins: positiveInt(r.wins),
+        losses: positiveInt(r.losses),
+        avgSec: roundedDuration(r.avgSec),
+        medianSec: percentileDuration(r.medianSec),
+        avgWinSec: roundedDuration(r.avgWinSec),
+        avgLossSec: roundedDuration(r.avgLossSec),
+        longGameRate:
+          matchupGames > 0 ? positiveInt(r.longGames) / matchupGames : 0,
+      };
+    }),
   };
+}
+
+/**
+ * Mongo expression: canonical first race letter, or U for missing/unknown.
+ * @param {string} path
+ * @returns {object}
+ */
+function raceLetterExpr(path) {
+  const upper = { $toUpper: { $substrCP: [{ $ifNull: [path, ""] }, 0, 1] } };
+  return {
+    $cond: [{ $in: [upper, ["P", "T", "Z", "R"]] }, upper, "U"],
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {'P' | 'T' | 'Z' | 'R' | 'U'}
+ */
+function raceLetter(raw) {
+  const letter = String(raw || "").trim().charAt(0).toUpperCase();
+  return letter === "P" || letter === "T" || letter === "Z" || letter === "R"
+    ? letter
+    : "U";
+}
+
+/** @param {unknown} raw */
+function roundedDuration(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+
+/** @param {unknown} raw */
+function percentileDuration(raw) {
+  return roundedDuration(Array.isArray(raw) ? raw[0] : raw);
+}
+
+/** @param {unknown} raw */
+function positiveInt(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
 /**

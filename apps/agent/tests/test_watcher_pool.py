@@ -773,8 +773,21 @@ def test_history_inventory_avoids_rewalking_library_every_poll(
 def test_cached_inventory_detects_replay_added_after_first_sweep(
     monkeypatch, watcher_factory,
 ) -> None:
-    """A missed watchdog event is found on the next normal poll."""
+    """A missed watchdog event is found even when NTFS mtime is unchanged."""
+    from sc2tools_agent import watcher as watcher_module
+
     monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    # Deterministically reproduce the Windows CI failure: two creations can
+    # share one directory timestamp tick, so mtime alone must not control the
+    # cached inventory refresh.
+    monkeypatch.setattr(watcher_module, "_directory_mtime_ns", lambda _path: 1)
+    monkeypatch.setattr(
+        watcher_module,
+        "all_multiplayer_dirs",
+        lambda _path: pytest.fail(
+            "a direct Multiplayer root must not be recursively rediscovered"
+        ),
+    )
     watcher = watcher_factory()
     root = watcher._cfg.state_dir / "Missed Watchdog" / "Multiplayer"
     root.mkdir(parents=True, exist_ok=True)
