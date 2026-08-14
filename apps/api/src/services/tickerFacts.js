@@ -691,7 +691,16 @@ class TickerFactsService {
         const mu = mostPlayedMatchup(games);
         if (mu) {
           const fp = await this.skillFingerprint.compute(userId, { matchup: mu });
-          if (fp && typeof fp.playstyle === "string" && fp.playstyle) {
+          // Partial profiles became reachable once a thin cohort started
+          // returning 200 instead of 404. "Profile Still Forming" is honest on
+          // the card, but it is not a fact worth scrolling past on stream.
+          // Only an explicit `complete: false` suppresses the fact — a payload
+          // with no archetype block at all is a pre-rename fingerprint from a
+          // stale mock or a rolling worker, and stays readable.
+          const incomplete = Boolean(
+            fp && fp.archetype && fp.archetype.complete === false,
+          );
+          if (!incomplete && typeof fp.playstyle === "string" && fp.playstyle) {
             add(
               "playstyle",
               `PLAYSTYLE (${mu}): ${fp.playstyle}${playstyleDetail(fp, mu)}`,
@@ -938,9 +947,13 @@ function playstyleDetail(fp, matchup) {
   const axes = Array.isArray(fp.axes) ? fp.axes : [];
   const repertoire = axes.find((axis) => axis && axis.key === "repertoire");
   const pace = axes.find((axis) => axis && axis.key === "pace");
-  const matchupBalance = axes.find(
-    (axis) => axis && axis.key === "matchup_balance",
-  );
+  // The matchup track was renamed matchup_balance -> matchup_edge when it
+  // became matchup-specific. Accept both: ticker facts may be served from a
+  // stale mock or a rolling worker mid-deploy, and an old fingerprint should
+  // stay readable rather than dropping the fact.
+  const matchupBalance =
+    axes.find((axis) => axis && axis.key === "matchup_edge") ||
+    axes.find((axis) => axis && axis.key === "matchup_balance");
   const hasCurrentShape = Boolean(
     repertoire ||
       pace ||
@@ -1008,12 +1021,17 @@ function matchupDetail(summary, rawRates, axis) {
   // not met. Do not bypass that decision by recomputing from provisional
   // rows; derivation is only a compatibility path for summary-less mocks.
   const derived = hasSummary ? null : deriveMatchupGaps(rawRates);
+  // `axis.value` is only a spread on the legacy matchup_balance axis. On
+  // matchup_edge it is a signed delta against the player's other matchups, so
+  // it must not stand in for a spread here.
+  const legacySpreadAxis =
+    axis && axis.key !== "matchup_edge" ? axis.value : null;
   const spread = firstFiniteNumber(
     data.spreadPp,
     data.spread,
     data.winRateSpreadPp,
     derived && derived.spread,
-    axis && axis.value,
+    legacySpreadAxis,
   );
   const lead = firstFiniteNumber(
     data.leaderGap,
@@ -1043,6 +1061,21 @@ function matchupDetail(summary, rawRates, axis) {
   );
   const category = firstNonEmptyString(axis && axis.category);
 
+  // Current matchup-edge vocabulary: the axis describes the selected matchup
+  // against the player's other two, so the fact names that matchup directly.
+  const edgeDelta = firstFiniteNumber(axis && axis.value);
+  if (category === "edge_strong" && edgeDelta !== null) {
+    return `you win this matchup ${formatPercentValue(Math.abs(edgeDelta))}% more often than your other two`;
+  }
+  if (category === "edge_weak" && edgeDelta !== null) {
+    return `you win this matchup ${formatPercentValue(Math.abs(edgeDelta))}% less often than your other two`;
+  }
+  if (category === "edge_on_par" && spread !== null && spread >= 0) {
+    return `your three matchup win rates sit within ${formatPercentValue(spread)}% of each other`;
+  }
+
+  // Legacy matchup_balance vocabulary, retained for stale mocks and rolling
+  // workers mid-deploy.
   if (category === "specialist" && lead !== null && lead >= 0) {
     return leader
       ? `${leader} is your strongest matchup, with a win rate at least ${formatPercentValue(lead)}% higher than your other two`
