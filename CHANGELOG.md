@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Matchup performance numbers no longer spill out of their boxes** — the
+  card shared a three-column row with the other two evidence panels, leaving
+  roughly 110px per matchup on a wide screen, and a three-decimal win rate did
+  not fit. Matchup performance now takes a full-width row of its own, stacks
+  one matchup per row on phones, and shows win rates and point gaps to one
+  decimal.
+
 - **The Skill Fingerprint now follows the dashboard date range** — the card
   previously read a fixed window of your 50 most recent games in a matchup and
   ignored the filter bar entirely, so changing the time frame did nothing.
@@ -26,6 +33,21 @@ corresponding GitHub Release.
   end.
 
 ### Changed
+
+- **Skill Fingerprint game-length bands now match how 1v1 games actually end**
+  — Timing Attacker covers 5:00 through 10:00 rather than 5:00 through 7:00,
+  Mid/Late-Game Master starts above 10:00, and Long-Game Lean now applies to
+  averages over 10:00 instead of over 15:00, so Flexible Pacer no longer
+  swallows every ten-to-fifteen-minute player. Late-Game Master still needs 80%
+  of games past 15:00, and the distribution card reports the new
+  under-5:00 / 5:00–10:00 / 10:00–15:00 / over-15:00 bands. Existing pace labels
+  and some archetype names will change.
+- **Matchup edge is written in plain language** — the five tier descriptions
+  said things like "strength-side result below the 10-point endpoint"; they now
+  say "up to 10 points better". The evidence line under the track is two short
+  sentences instead of a paragraph about anchors and tie-breaks, win rates and
+  point gaps display to one decimal instead of three, and the endpoint
+  mechanics stay in the methodology panel where they belong.
 
 - **Skill Fingerprints now explain and reward practiced variety, timing shape,
   and matchup balance** — build repertoire separates detected names from an
