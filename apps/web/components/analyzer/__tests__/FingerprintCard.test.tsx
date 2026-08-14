@@ -128,17 +128,22 @@ const MATCHUP_RATES = [
   { matchup: "PvZ", games: 32, decidedGames: 31, wins: 22, losses: 9, ties: 1, winRate: 70.968 },
 ];
 
-function axis(overrides: Record<string, unknown> = {}) {
+/**
+ * Generic over the overrides so their literal keys survive into the return
+ * type — a plain `Record<string, unknown>` parameter erases them, and then
+ * `axis.key` is untyped at every call site.
+ */
+function axis<T extends Record<string, unknown>>(overrides: T) {
   return {
-    position: 50,
-    value: 1,
-    category: null,
-    categoryLabel: null,
+    position: 50 as number | null,
+    value: 1 as number | null,
+    category: null as string | null,
+    categoryLabel: null as string | null,
     sampleSize: 0,
-    detail: null,
-    reason: null,
-    have: null,
-    needed: null,
+    detail: null as Record<string, unknown> | null,
+    reason: null as string | null,
+    have: null as number | null,
+    needed: null as number | null,
     ...overrides,
   };
 }
