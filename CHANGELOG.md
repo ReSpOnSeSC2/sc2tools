@@ -78,6 +78,15 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Community builds now publish under the owner's chosen name by default** -
+  profile display name (or BattleTag name) is used unless the author explicitly
+  selects **Post anonymously**. Both publish dialogs and save-time build editors
+  preview and preserve the current choice, legacy anonymous listings remain
+  anonymous, and failed or still-syncing visibility updates no longer show a
+  false Published/private state. Anonymous rows omit stable owner identifiers
+  and stay out of later named author profiles while retaining owner-only replay
+  counts and removal controls.
+
 - **Custom-build replay totals now agree everywhere** - My Builds and an
   author's Community cards read the same durable classification stored on each
   replay, rather than re-running a smaller recent sample. Community cards now

@@ -2,7 +2,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  me: { userId: "owner-1" } as { userId: string } | undefined,
   statsError: null as { status: number; message: string } | null,
   statsLoading: false,
   stats: {
@@ -16,7 +15,6 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null, config?: unknown) => {
     harness.paths.push(path);
     harness.configs.push(config);
-    if (path === "/v1/me") return { data: harness.me };
     if (path === "/v1/community/my-build-stats") {
       return {
         data: harness.stats,
@@ -32,7 +30,6 @@ import { CommunityOwnerReplayCount } from "../CommunityOwnerReplayCount";
 
 afterEach(() => {
   cleanup();
-  harness.me = { userId: "owner-1" };
   harness.statsError = null;
   harness.statsLoading = false;
   harness.stats = {
@@ -59,7 +56,7 @@ describe("CommunityOwnerReplayCount", () => {
     });
   });
 
-  it("shows a compact loading state only after ownership is confirmed", () => {
+  it("hides private state until owner membership resolves", () => {
     harness.stats = undefined;
     harness.statsLoading = true;
 
@@ -70,11 +67,11 @@ describe("CommunityOwnerReplayCount", () => {
       />,
     );
 
-    expect(screen.getByRole("status").textContent).toBe("Loading…");
+    expect(screen.queryByRole("status")).toBeNull();
     expect(harness.paths).toContain("/v1/community/my-build-stats");
   });
 
-  it("shows a temporary-unavailable state when owner stats fail", () => {
+  it("hides private state when owner stats fail", () => {
     harness.stats = undefined;
     harness.statsError = { status: 503, message: "Busy" };
 
@@ -85,11 +82,13 @@ describe("CommunityOwnerReplayCount", () => {
       />,
     );
 
-    expect(screen.getByText("Temporarily unavailable")).toBeTruthy();
+    expect(screen.queryByText("Temporarily unavailable")).toBeNull();
   });
 
-  it("shows an explicit zero when the owner's response has no matching row", () => {
-    harness.stats = { items: [] };
+  it("shows an explicit zero for a matching owner row", () => {
+    harness.stats = {
+      items: [{ publicSlug: "public-build", total: 0, wins: 0, losses: 0 }],
+    };
 
     render(
       <CommunityOwnerReplayCount
@@ -101,8 +100,8 @@ describe("CommunityOwnerReplayCount", () => {
     expect(screen.getByText("0 classified replays")).toBeTruthy();
   });
 
-  it("does not request or expose replay totals to another viewer", () => {
-    harness.me = { userId: "viewer-2" };
+  it("uses owner-only membership and exposes no total to another viewer", () => {
+    harness.stats = { items: [] };
     render(
       <CommunityOwnerReplayCount
         publicSlug="public-build"
@@ -113,7 +112,7 @@ describe("CommunityOwnerReplayCount", () => {
     expect(screen.queryByText(/classified replay/)).toBeNull();
     expect(screen.queryByText("Loading…")).toBeNull();
     expect(screen.queryByText("Temporarily unavailable")).toBeNull();
-    expect(harness.paths).not.toContain("/v1/community/my-build-stats");
+    expect(harness.paths).toContain("/v1/community/my-build-stats");
   });
 
   it("hides user A's private total immediately when the account changes", () => {
@@ -126,7 +125,7 @@ describe("CommunityOwnerReplayCount", () => {
     expect(screen.getByText("41 classified replays")).toBeTruthy();
 
     harness.paths.length = 0;
-    harness.me = { userId: "viewer-2" };
+    harness.stats = { items: [] };
     view.rerender(
       <CommunityOwnerReplayCount
         publicSlug="public-build"
@@ -135,11 +134,10 @@ describe("CommunityOwnerReplayCount", () => {
     );
 
     expect(screen.queryByText("41 classified replays")).toBeNull();
-    expect(harness.paths).not.toContain("/v1/community/my-build-stats");
+    expect(harness.paths).toContain("/v1/community/my-build-stats");
   });
 
   it("does not expose private states while the current viewer is unresolved", () => {
-    harness.me = undefined;
     harness.stats = undefined;
 
     render(
@@ -151,6 +149,6 @@ describe("CommunityOwnerReplayCount", () => {
 
     expect(screen.queryByText(/classified replay/)).toBeNull();
     expect(screen.queryByText("Loading…")).toBeNull();
-    expect(harness.paths).not.toContain("/v1/community/my-build-stats");
+    expect(harness.paths).toContain("/v1/community/my-build-stats");
   });
 });

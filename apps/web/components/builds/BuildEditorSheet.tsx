@@ -10,6 +10,8 @@ import { Modal, ModalActions } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
 import { apiCall } from "@/lib/clientApi";
+import { useMyDisplayName } from "@/lib/useMyDisplayName";
+import { useToast } from "@/components/ui/Toast";
 import { slugifyBuildName, type BuildSignatureItem } from "@/lib/build-events";
 import {
   RACES,
@@ -31,6 +33,13 @@ interface EditableSignatureRow extends BuildSignatureItem {
   rowKey: string;
 }
 
+interface OwnerPublicationSettings {
+  published: boolean;
+  authorName: string;
+  publishAnonymously: boolean;
+  mirrorPending: boolean;
+}
+
 const DEFAULT_RACE: Race = "Protoss";
 const DEFAULT_VS_RACE: VsRace = "Any";
 
@@ -45,6 +54,8 @@ function fromBuild(build: CustomBuild | null): {
   description: string;
   notes: string;
   isPublic: boolean;
+  communityAuthorName: string;
+  publishAnonymously: boolean;
   signature: EditableSignatureRow[];
 } {
   return {
@@ -54,6 +65,8 @@ function fromBuild(build: CustomBuild | null): {
     description: build?.description ?? "",
     notes: build?.notes ?? "",
     isPublic: !!build?.isPublic,
+    communityAuthorName: build?.communityAuthorName ?? "",
+    publishAnonymously: !!build?.publishAnonymously,
     signature: (build?.signature ?? []).map((s) => ({
       ...s,
       rowKey: makeRowKey(),
@@ -103,18 +116,74 @@ export function BuildEditorSheet({
   onSaved,
 }: BuildEditorSheetProps) {
   const { getToken } = useAuth();
+  const { toast } = useToast();
+  const profileDisplayName = useMyDisplayName();
   const isEdit = !!build;
   const [state, setState] = useState(() => fromBuild(build));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [identityUnavailable, setIdentityUnavailable] = useState(false);
+  const [authoritativePublished, setAuthoritativePublished] = useState(
+    !!build?.isPublic,
+  );
   const formId = useId();
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     setState(fromBuild(build));
     setError(null);
     setSaving(false);
-  }, [open, build]);
+    setIdentityUnavailable(false);
+    setIdentityLoading(!!build);
+    setAuthoritativePublished(!!build?.isPublic);
+    if (build) {
+      void apiCall<OwnerPublicationSettings>(
+        getToken,
+        `/v1/community/my-build-publication/${encodeURIComponent(build.slug)}`,
+      )
+        .then((settings) => {
+          if (cancelled) return;
+          setState((current) => ({
+            ...current,
+            isPublic: settings.published,
+            communityAuthorName: settings.authorName || "",
+            publishAnonymously: settings.publishAnonymously,
+          }));
+          setAuthoritativePublished(settings.published);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setIdentityUnavailable(true);
+          setError(
+            "Couldn't load the current Community author setting. Close this editor and try again before changing a published build.",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) setIdentityLoading(false);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+    // A parent SWR refresh may replace the build object while this sheet is
+    // open. The source slug is the stable editor identity; object identity is
+    // not a reason to erase inline partial-success/error state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, build?.slug, getToken]);
+
+  useEffect(() => {
+    if (!open || !profileDisplayName) return;
+    setState((current) =>
+      current.communityAuthorName
+        ? current
+        : {
+            ...current,
+            communityAuthorName: profileDisplayName.slice(0, 80),
+          },
+    );
+  }, [open, profileDisplayName]);
 
   const slugPreview = useMemo(() => {
     if (build?.slug) return build.slug;
@@ -173,6 +242,20 @@ export function BuildEditorSheet({
       setError("Name is required.");
       return;
     }
+    if (build && (identityLoading || identityUnavailable)) {
+      setError(
+        "Wait for the current Community author setting to load, then try again.",
+      );
+      return;
+    }
+    if (
+      state.isPublic &&
+      !state.publishAnonymously &&
+      !state.communityAuthorName.trim()
+    ) {
+      setError("Enter the public author name, or choose Post anonymously.");
+      return;
+    }
     const slug = build?.slug || slugifyBuildName(trimmedName);
     if (!slug) {
       setError("Pick a name with at least one letter or number.");
@@ -196,6 +279,8 @@ export function BuildEditorSheet({
       description: state.description.trim().slice(0, 4000) || undefined,
       notes: state.notes.trim().slice(0, 8000) || undefined,
       isPublic: state.isPublic,
+      communityAuthorName: state.communityAuthorName.trim().slice(0, 80),
+      publishAnonymously: state.publishAnonymously,
       signature: cleanSignature,
       perspective: build?.perspective,
       sourceGameId: build?.sourceGameId,
@@ -203,17 +288,101 @@ export function BuildEditorSheet({
     };
     setSaving(true);
     try {
-      await apiCall<void>(getToken, `/v1/custom-builds/${encodeURIComponent(slug)}`, {
+      const result = await apiCall<{
+        community?: {
+          action?: "published" | "updated" | "unpublished";
+          error?: string;
+          mirrorPending?: boolean;
+        } | null;
+      }>(getToken, `/v1/custom-builds/${encodeURIComponent(slug)}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+      let repairedSettings: OwnerPublicationSettings | null = null;
+      if (result?.community?.mirrorPending || result?.community?.error) {
+        try {
+          repairedSettings = await apiCall<OwnerPublicationSettings>(
+            getToken,
+            `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
+          );
+        } catch {
+          // Community already has the requested state. Keep the durable
+          // warning below because only the private-library badge may lag.
+        }
+      }
+      const actualIsPublic = result?.community?.error
+        ? (repairedSettings?.published ?? authoritativePublished)
+        : state.isPublic;
+      if (repairedSettings) {
+        setAuthoritativePublished(repairedSettings.published);
+      }
       const saved: CustomBuild = {
         ...(build ?? {}),
         ...payload,
+        isPublic: actualIsPublic,
         signature: cleanSignature,
         updatedAt: new Date().toISOString(),
       };
       onSaved(saved);
+      if (result?.community?.error) {
+        setState((current) => ({ ...current, isPublic: actualIsPublic }));
+        const visibilityChangeVerified =
+          !!repairedSettings &&
+          authoritativePublished !== state.isPublic &&
+          repairedSettings.published === state.isPublic;
+        if (visibilityChangeVerified) {
+          setError(null);
+          toast.warning(
+            state.isPublic
+              ? "Build saved; Community listing is live"
+              : "Build saved; Community listing was removed",
+            {
+              description:
+                "Current Community visibility was verified even though the original confirmation was interrupted.",
+            },
+          );
+          onClose();
+        } else if (actualIsPublic && !state.isPublic) {
+          setError(
+            "Build saved, but removal from Community failed. The existing listing is still public. Try again.",
+          );
+          toast.error("Build saved; Community listing is still public", {
+            description:
+              "Removal failed, so the existing listing remains visible. Try again.",
+          });
+        } else if (state.isPublic) {
+          setError(
+            result.community.error === "public_author_name_required"
+              ? "Build saved; the Community listing wasn't updated. Add a public name or choose Post anonymously, then save again."
+              : "Build saved, but the Community listing could not be updated. Try again.",
+          );
+          toast.error("Build saved; Community listing wasn't updated", {
+            description:
+              result.community.error === "public_author_name_required"
+                ? "Add a public name or explicitly choose Post anonymously, then save again."
+                : "Your prior Community visibility is unchanged. Try the update again.",
+          });
+        } else {
+          setError(
+            "Build saved, but Community removal could not be confirmed. Reopen the editor to check the current listing.",
+          );
+          toast.error("Build saved; Community removal wasn't confirmed", {
+            description:
+              "Reopen the editor to load the current authoritative visibility before trying again.",
+          });
+        }
+        return;
+      }
+      setAuthoritativePublished(state.isPublic);
+      if (
+        result?.community?.mirrorPending &&
+        (!repairedSettings || repairedSettings.mirrorPending)
+      ) {
+        toast.warning("Community change is live; library badge is syncing", {
+          description:
+            "The listing already has the requested state. Reopen the editor to retry the library badge sync.",
+        });
+      }
       onClose();
     } catch (err: unknown) {
       const message =
@@ -252,6 +421,7 @@ export function BuildEditorSheet({
           <Button
             onClick={handleSave}
             loading={saving}
+            disabled={identityLoading}
             type="submit"
             form={formId}
           >
@@ -354,16 +524,61 @@ export function BuildEditorSheet({
           <Toggle
             checked={state.isPublic}
             onChange={(next) => update("isPublic", next)}
-            label={state.isPublic ? "Build is public" : "Build is private"}
+            label={state.isPublic ? "Shared with Community" : "Private build"}
           />
           <span className="text-caption text-text-muted">
-            <span className="font-medium text-text">Mark as public</span>
+            <span className="font-medium text-text">Share with Community</span>
             <span className="block">
-              Public builds can be published to the community library. Toggle it off
-              and the build stays private to your account.
+              Publishes this build when you save. Turn it off and save to
+              remove the Community listing while keeping your private build.
             </span>
           </span>
         </label>
+        {state.isPublic ? (
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-bg-elevated/40 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            {identityLoading ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="text-caption text-text-muted sm:col-span-2"
+              >
+                Loading your current Community author settingâ€¦
+              </div>
+            ) : null}
+            <Field
+              label="Name shown publicly"
+              hint={
+                state.publishAnonymously
+                  ? "Hidden while Post anonymously is selected."
+                  : "Your profile name is used by default."
+              }
+            >
+              <Input
+                value={state.communityAuthorName}
+                onChange={(e) => update("communityAuthorName", e.target.value)}
+                maxLength={80}
+                disabled={
+                  state.publishAnonymously ||
+                  identityLoading ||
+                  identityUnavailable
+                }
+                placeholder="Your community handle"
+              />
+            </Field>
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2">
+              <input
+                type="checkbox"
+                checked={state.publishAnonymously}
+                onChange={(e) => update("publishAnonymously", e.target.checked)}
+                disabled={identityLoading || identityUnavailable}
+                className="h-4 w-4 accent-accent-cyan"
+              />
+              <span className="text-caption font-medium text-text">
+                Post anonymously
+              </span>
+            </label>
+          </div>
+        ) : null}
         {error ? (
           <div
             role="alert"

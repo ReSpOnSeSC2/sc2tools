@@ -39,6 +39,8 @@ const BUILD_FIELDS = Object.freeze([
   "losesTo",
   "transitionsInto",
   "shareWithCommunity",
+  "communityAuthorName",
+  "publishAnonymously",
   "schemaVersion",
   "source",
 ]);
@@ -170,6 +172,11 @@ const BUILD_SCHEMA = {
       items: { type: "string", maxLength: 280 },
     },
     shareWithCommunity: { type: "boolean" },
+    // Owner-only community identity preferences. These mirror the
+    // authoritative community publication so every save-time editor can
+    // preview exactly how the author will be attributed.
+    communityAuthorName: { type: "string", maxLength: 80 },
+    publishAnonymously: { type: "boolean" },
     /** Schema version — server stores 3 for new editor saves. */
     schemaVersion: { type: "integer", minimum: 1, maximum: 10 },
     /**

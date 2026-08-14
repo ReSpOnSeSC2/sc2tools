@@ -1,6 +1,18 @@
 "use client";
 
-import { useState, type MouseEvent, type SyntheticEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   Eye,
   Loader2,
@@ -134,6 +146,7 @@ export function BuildCard({
           <div className="pointer-events-auto">
             <BuildKebab
               slug={build.slug}
+              name={build.name || "Untitled build"}
               isPublic={!!build.isPublic}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -204,7 +217,7 @@ function BuildStatsRow({
       <div className="text-right">
         {total > 0 ? (
           <Badge variant="neutral" size="sm">
-            n = {total}
+            Total games: {total}
           </Badge>
         ) : null}
         {updated ? (
@@ -219,6 +232,7 @@ function BuildStatsRow({
 
 interface BuildKebabProps {
   slug: string;
+  name: string;
   isPublic: boolean;
   onEdit: (slug: string) => void;
   onDelete: (slug: string) => void;
@@ -228,8 +242,46 @@ interface BuildKebabProps {
   reclassifyDisabled?: boolean;
 }
 
+type MenuPlacement = "top" | "bottom";
+
+interface MenuPosition {
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+  placement: MenuPlacement;
+}
+
+const MENU_WIDTH_PX = 208;
+const MENU_ITEM_HEIGHT_PX = 44;
+const MENU_CHROME_HEIGHT_PX = 10;
+const MENU_GAP_PX = 8;
+const MENU_VIEWPORT_GUTTER_PX = 12;
+
+function clamp(value: number, min: number, max: number): number {
+  if (max <= min) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
+function visibleViewport() {
+  const viewport = window.visualViewport;
+  const left = viewport?.offsetLeft ?? 0;
+  const top = viewport?.offsetTop ?? 0;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+  };
+}
+
 function BuildKebab({
   slug,
+  name,
   isPublic,
   onEdit,
   onDelete,
@@ -239,11 +291,210 @@ function BuildKebab({
   reclassifyDisabled = false,
 }: BuildKebabProps) {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const initialFocusRef = useRef<"first" | "last">("first");
+  const menuId = useId();
+  const menuItemCount = 3 + (onReclassify ? 1 : 0);
 
   function stop<E extends SyntheticEvent>(e: E) {
     e.preventDefault();
     e.stopPropagation();
   }
+
+  const closeMenu = useCallback((restoreTriggerFocus = false) => {
+    setOpen(false);
+    setMenuPosition(null);
+    if (restoreTriggerFocus) {
+      window.requestAnimationFrame(() => {
+        if (triggerRef.current?.isConnected) triggerRef.current.focus();
+      });
+    }
+  }, []);
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+
+    const anchor = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const viewport = visibleViewport();
+    const anchorHasGeometry = anchor.width > 0 || anchor.height > 0;
+    if (
+      anchorHasGeometry
+      && (anchor.bottom <= viewport.top
+        || anchor.top >= viewport.bottom
+        || anchor.right <= viewport.left
+        || anchor.left >= viewport.right)
+    ) {
+      closeMenu(false);
+      return;
+    }
+    const viewportContentWidth = Math.max(
+      0,
+      viewport.width - MENU_VIEWPORT_GUTTER_PX * 2,
+    );
+    const viewportContentHeight = Math.max(
+      0,
+      viewport.height - MENU_VIEWPORT_GUTTER_PX * 2,
+    );
+    const width = Math.min(MENU_WIDTH_PX, viewportContentWidth);
+    const naturalHeight = Math.max(
+      menu.scrollHeight,
+      menuRect.height,
+      menuItemCount * MENU_ITEM_HEIGHT_PX + MENU_CHROME_HEIGHT_PX,
+    );
+    const roomBelow = Math.max(
+      0,
+      viewport.bottom
+        - MENU_VIEWPORT_GUTTER_PX
+        - anchor.bottom
+        - MENU_GAP_PX,
+    );
+    const roomAbove = Math.max(
+      0,
+      anchor.top
+        - viewport.top
+        - MENU_VIEWPORT_GUTTER_PX
+        - MENU_GAP_PX,
+    );
+    const placement: MenuPlacement =
+      naturalHeight > roomBelow && roomAbove > roomBelow ? "top" : "bottom";
+    const availableOnSide = placement === "top" ? roomAbove : roomBelow;
+    const maxHeight = Math.min(
+      naturalHeight,
+      availableOnSide > 0 ? availableOnSide : viewportContentHeight,
+    );
+    const renderedHeight = Math.min(naturalHeight, maxHeight);
+    const left = clamp(
+      anchor.right - width,
+      viewport.left + MENU_VIEWPORT_GUTTER_PX,
+      viewport.right - MENU_VIEWPORT_GUTTER_PX - width,
+    );
+    const preferredTop =
+      placement === "top"
+        ? anchor.top - MENU_GAP_PX - renderedHeight
+        : anchor.bottom + MENU_GAP_PX;
+    const top = clamp(
+      preferredTop,
+      viewport.top + MENU_VIEWPORT_GUTTER_PX,
+      viewport.bottom - MENU_VIEWPORT_GUTTER_PX - renderedHeight,
+    );
+
+    setMenuPosition((current) => {
+      const next = { left, top, width, maxHeight, placement };
+      return current
+        && current.left === next.left
+        && current.top === next.top
+        && current.width === next.width
+        && current.maxHeight === next.maxHeight
+        && current.placement === next.placement
+        ? current
+        : next;
+    });
+  }, [closeMenu, menuItemCount]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let frame = 0;
+    const schedulePositionUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateMenuPosition);
+    };
+    const viewport = window.visualViewport;
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(schedulePositionUpdate);
+    if (triggerRef.current) resizeObserver?.observe(triggerRef.current);
+    if (menuRef.current) resizeObserver?.observe(menuRef.current);
+    window.addEventListener("resize", schedulePositionUpdate);
+    window.addEventListener("scroll", schedulePositionUpdate, true);
+    viewport?.addEventListener("resize", schedulePositionUpdate);
+    viewport?.addEventListener("scroll", schedulePositionUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", schedulePositionUpdate);
+      window.removeEventListener("scroll", schedulePositionUpdate, true);
+      viewport?.removeEventListener("resize", schedulePositionUpdate);
+      viewport?.removeEventListener("scroll", schedulePositionUpdate);
+    };
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]:not(:disabled)',
+      );
+      const item = initialFocusRef.current === "last"
+        ? items?.[items.length - 1]
+        : items?.[0];
+      item?.focus();
+    });
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", onDocumentKeyDown);
+    };
+  }, [closeMenu, open]);
+
+  function moveMenuFocus(event: ReactKeyboardEvent<HTMLUListElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]:not(:disabled)',
+      ) ?? [],
+    );
+    if (items.length === 0) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(
+      document.activeElement as HTMLButtonElement,
+    );
+    if (event.key === "Home") {
+      items[0]?.focus();
+    } else if (event.key === "End") {
+      items[items.length - 1]?.focus();
+    } else if (event.key === "ArrowUp") {
+      items[(currentIndex <= 0 ? items.length : currentIndex) - 1]?.focus();
+    } else {
+      items[(currentIndex + 1) % items.length]?.focus();
+    }
+  }
+
+  const menuStyle: CSSProperties = menuPosition
+    ? {
+        left: menuPosition.left,
+        top: menuPosition.top,
+        width: menuPosition.width,
+        maxHeight: menuPosition.maxHeight,
+        visibility: "visible",
+        transformOrigin:
+          menuPosition.placement === "top" ? "bottom right" : "top right",
+        paddingBottom: "max(0.25rem, env(safe-area-inset-bottom, 0px))",
+      }
+    : {
+        left: -10_000,
+        top: -10_000,
+        width: MENU_WIDTH_PX,
+        visibility: "hidden",
+      };
 
   return (
     <div
@@ -251,13 +502,30 @@ function BuildKebab({
       onClick={(e: MouseEvent<HTMLDivElement>) => stop(e)}
     >
       <button
+        ref={triggerRef}
         type="button"
-        aria-label="Build options"
+        aria-label={`Build options for ${name}`}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls={open ? menuId : undefined}
         onClick={(e) => {
           stop(e);
-          setOpen((v) => !v);
+          if (open) {
+            closeMenu(false);
+          } else {
+            initialFocusRef.current = "first";
+            setMenuPosition(null);
+            setOpen(true);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          if (!open) {
+            initialFocusRef.current = event.key === "ArrowUp" ? "last" : "first";
+            setMenuPosition(null);
+            setOpen(true);
+          }
         }}
         className={[
           "inline-flex h-11 w-11 items-center justify-center rounded-md",
@@ -267,68 +535,89 @@ function BuildKebab({
       >
         <MoreVertical className="h-5 w-5" aria-hidden />
       </button>
-      {open ? (
-        <>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            onClick={(e) => {
-              stop(e);
-              setOpen(false);
-            }}
-            className="fixed inset-0 z-30 cursor-default bg-transparent"
-          />
-          <ul
-            role="menu"
-            className={[
-              "absolute right-0 top-12 z-40 w-52 overflow-hidden rounded-md border border-border bg-bg-surface shadow-[var(--shadow-card)]",
-            ].join(" ")}
-          >
-            <KebabItem
-              icon={<Pencil className="h-4 w-4" aria-hidden />}
-              label="Edit"
-              onClick={() => {
-                setOpen(false);
-                onEdit(slug);
+      {open && typeof document !== "undefined"
+        ? createPortal(
+          <>
+            <div
+              aria-hidden
+              data-testid="build-menu-scrim"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                closeMenu(true);
               }}
+              className="fixed inset-0 z-[60] cursor-default bg-transparent"
             />
-            {onReclassify ? (
+            <ul
+              ref={menuRef}
+              id={menuId}
+              role="menu"
+              aria-label={`Build actions for ${name}`}
+              aria-orientation="vertical"
+              data-placement={menuPosition?.placement}
+              onKeyDown={moveMenuFocus}
+              onBlur={(event) => {
+                const next = event.relatedTarget;
+                if (
+                  next instanceof Node
+                  && (menuRef.current?.contains(next)
+                    || next === triggerRef.current)
+                ) return;
+                closeMenu(false);
+              }}
+              style={menuStyle}
+              className={[
+                "fixed z-[70] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md",
+                "border border-border bg-bg-surface py-1 shadow-[var(--shadow-card)]",
+                "motion-safe:animate-[fadeIn_120ms_ease-out]",
+              ].join(" ")}
+            >
               <KebabItem
-                icon={
-                  reclassifying ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" aria-hidden />
-                  )
-                }
-                label={reclassifying ? "Reclassifying…" : "Reclassify replays"}
-                disabled={reclassifying || reclassifyDisabled}
+                icon={<Pencil className="h-4 w-4" aria-hidden />}
+                label="Edit"
                 onClick={() => {
-                  setOpen(false);
-                  onReclassify(slug);
+                  closeMenu(false);
+                  onEdit(slug);
                 }}
               />
-            ) : null}
-            <KebabItem
-              icon={<Send className="h-4 w-4" aria-hidden />}
-              label={isPublic ? "Publish update" : "Publish"}
-              onClick={() => {
-                setOpen(false);
-                onPublish(slug);
-              }}
-            />
-            <KebabItem
-              icon={<Trash2 className="h-4 w-4 text-danger" aria-hidden />}
-              label="Delete"
-              tone="danger"
-              onClick={() => {
-                setOpen(false);
-                onDelete(slug);
-              }}
-            />
-          </ul>
-        </>
-      ) : null}
+              {onReclassify ? (
+                <KebabItem
+                  icon={
+                    reclassifying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" aria-hidden />
+                    )
+                  }
+                  label={reclassifying ? "Reclassifying…" : "Reclassify replays"}
+                  disabled={reclassifying || reclassifyDisabled}
+                  onClick={() => {
+                    closeMenu(true);
+                    onReclassify(slug);
+                  }}
+                />
+              ) : null}
+              <KebabItem
+                icon={<Send className="h-4 w-4" aria-hidden />}
+                label={isPublic ? "Publish update" : "Publish"}
+                onClick={() => {
+                  closeMenu(false);
+                  onPublish(slug);
+                }}
+              />
+              <KebabItem
+                icon={<Trash2 className="h-4 w-4 text-danger" aria-hidden />}
+                label="Delete"
+                tone="danger"
+                onClick={() => {
+                  closeMenu(false);
+                  onDelete(slug);
+                }}
+              />
+            </ul>
+          </>,
+          document.body,
+        )
+        : null}
     </div>
   );
 }
@@ -347,14 +636,15 @@ function KebabItem({
   disabled?: boolean;
 }) {
   return (
-    <li>
+    <li role="none">
       <button
         type="button"
         role="menuitem"
+        tabIndex={-1}
         onClick={onClick}
         disabled={disabled}
         className={[
-          "flex w-full items-center gap-2 px-3 py-2 text-left text-caption",
+          "flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-caption",
           "focus-visible:outline-none focus-visible:bg-bg-elevated",
           "disabled:cursor-not-allowed disabled:opacity-60",
           tone === "danger"

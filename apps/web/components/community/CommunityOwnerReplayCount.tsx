@@ -18,15 +18,12 @@ interface OwnerStatsResponse {
  */
 export function CommunityOwnerReplayCount({
   publicSlug,
-  ownerUserId,
 }: {
   publicSlug: string;
-  ownerUserId: string;
+  ownerUserId?: string;
 }) {
-  const me = useApi<{ userId: string }>("/v1/me");
-  const isOwner = Boolean(me.data?.userId) && me.data?.userId === ownerUserId;
   const stats = useApi<OwnerStatsResponse>(
-    isOwner ? "/v1/community/my-build-stats" : null,
+    "/v1/community/my-build-stats",
     {
       // Every owner card shares this SWR key, so one modest refresh keeps all
       // published-build counts current after a background reclassification.
@@ -34,8 +31,11 @@ export function CommunityOwnerReplayCount({
       revalidateOnFocus: true,
     },
   );
+  const isOwner = !!stats.data?.items.some(
+    (item) => item.publicSlug === publicSlug,
+  );
 
-  // Ownership must be confirmed before rendering or requesting private stats.
+  // Ownership is confirmed by the owner-only slug list, not a public user id.
   if (!isOwner) return null;
 
   if (stats.error) {

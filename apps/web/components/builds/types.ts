@@ -27,6 +27,10 @@ export interface CustomBuild {
   description?: string;
   notes?: string;
   isPublic?: boolean;
+  /** Owner-only name mirrored from the Community publication. */
+  communityAuthorName?: string;
+  /** Anonymous publication is an explicit opt-in. */
+  publishAnonymously?: boolean;
   signature?: BuildSignatureItem[];
   /** ISO timestamp of the last write. */
   updatedAt?: string;

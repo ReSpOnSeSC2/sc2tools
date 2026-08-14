@@ -49,7 +49,6 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
         <CommunityBuildOwnerControls
           slug={build.slug}
           title={build.title}
-          ownerUserId={build.ownerUserId}
           compact
         />
       </div>
@@ -90,7 +89,6 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
             <VoteScore votes={votes} />
             <CommunityOwnerReplayCount
               publicSlug={build.slug}
-              ownerUserId={build.ownerUserId}
             />
           </div>
           <span className="inline-flex items-center gap-1 text-micro text-text-dim">

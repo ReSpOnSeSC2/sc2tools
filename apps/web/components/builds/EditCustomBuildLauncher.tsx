@@ -40,6 +40,8 @@ interface SavedBuildDoc extends Record<string, unknown> {
   skillLevel?: string | null;
   shareWithCommunity?: boolean;
   isPublic?: boolean;
+  communityAuthorName?: string;
+  publishAnonymously?: boolean;
   rules?: BuildRule[];
   signature?: BuildSignatureItem[];
   winConditions?: string[];
@@ -48,6 +50,13 @@ interface SavedBuildDoc extends Record<string, unknown> {
   sourceGameId?: string;
   sourceReplayId?: string;
   perspective?: "you" | "opponent";
+}
+
+interface OwnerPublicationSettings {
+  published: boolean;
+  authorName: string;
+  publishAnonymously: boolean;
+  mirrorPending: boolean;
 }
 
 const RACE_SET = new Set<string>(RACE_OPTIONS);
@@ -81,7 +90,10 @@ function toRules(value: unknown): BuildRule[] {
   return value as BuildRule[];
 }
 
-function toInitialDraft(doc: SavedBuildDoc): Partial<BuildEditorDraft> {
+function toInitialDraft(
+  doc: SavedBuildDoc,
+  publication: OwnerPublicationSettings | null,
+): Partial<BuildEditorDraft> {
   const sourceReplayId =
     typeof doc.sourceReplayId === "string"
       ? doc.sourceReplayId
@@ -94,14 +106,21 @@ function toInitialDraft(doc: SavedBuildDoc): Partial<BuildEditorDraft> {
     race: coerceRace(doc.race),
     vsRace: coerceVsRace(doc.vsRace),
     skillLevel: coerceSkillLevel(doc.skillLevel),
-    // `isPublic` is the server-synced source of truth for community
-    // state (kept in lock-step by community.publish / unpublishBySource);
-    // prefer it, falling back to the legacy `shareWithCommunity` field
-    // for docs saved before the two were reconciled.
+    // Community is authoritative. The owner-only endpoint also performs
+    // read repair when the private badge mirror was interrupted, so always
+    // prefer its visibility over the potentially stale private document.
     shareWithCommunity:
-      typeof doc.isPublic === "boolean"
+      publication?.published ??
+      (typeof doc.isPublic === "boolean"
         ? doc.isPublic
-        : !!doc.shareWithCommunity,
+        : !!doc.shareWithCommunity),
+    communityAuthorName:
+      publication?.authorName ??
+      (typeof doc.communityAuthorName === "string"
+        ? doc.communityAuthorName
+        : ""),
+    publishAnonymously:
+      publication?.publishAnonymously ?? !!doc.publishAnonymously,
     winConditions: toStringArray(doc.winConditions),
     losesTo: toStringArray(doc.losesTo),
     transitionsInto: toStringArray(doc.transitionsInto),
@@ -174,6 +193,8 @@ export function EditCustomBuildLauncher({
 }: EditCustomBuildLauncherProps) {
   const { getToken } = useAuth();
   const [doc, setDoc] = useState<SavedBuildDoc | null>(null);
+  const [publication, setPublication] =
+    useState<OwnerPublicationSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -182,6 +203,7 @@ export function EditCustomBuildLauncher({
   useEffect(() => {
     if (!slug) {
       setDoc(null);
+      setPublication(null);
       setLoadError(null);
       return;
     }
@@ -189,14 +211,22 @@ export function EditCustomBuildLauncher({
     setLoading(true);
     setLoadError(null);
     setDoc(null);
+    setPublication(null);
     (async () => {
       try {
-        const fetched = await apiCall<SavedBuildDoc>(
-          getToken,
-          `/v1/custom-builds/${encodeURIComponent(slug)}`,
-        );
+        const [fetched, publicationSettings] = await Promise.all([
+          apiCall<SavedBuildDoc>(
+            getToken,
+            `/v1/custom-builds/${encodeURIComponent(slug)}`,
+          ),
+          apiCall<OwnerPublicationSettings>(
+            getToken,
+            `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
+          ),
+        ]);
         if (cancelled) return;
         setDoc(fetched);
+        setPublication(publicationSettings);
       } catch (err) {
         if (cancelled) return;
         const message =
@@ -213,8 +243,8 @@ export function EditCustomBuildLauncher({
   }, [slug, getToken]);
 
   const initialDraft = useMemo(
-    () => (doc ? toInitialDraft(doc) : null),
-    [doc],
+    () => (doc ? toInitialDraft(doc, publication) : null),
+    [doc, publication],
   );
 
   // Source-timeline events synthesised from the saved doc (rules first,
@@ -227,7 +257,7 @@ export function EditCustomBuildLauncher({
   const open = !!build;
   if (!open) return null;
 
-  if (loading || !doc || !initialDraft) {
+  if (loading || !doc || !publication || !initialDraft) {
     return (
       <div
         role="dialog"
@@ -271,7 +301,11 @@ export function EditCustomBuildLauncher({
           race: draft.race,
           vsRace: draft.vsRace,
           description: draft.description || undefined,
-          isPublic: draft.shareWithCommunity,
+          isPublic: result.communityError
+            ? (result.communityPublished ?? publication.published)
+            : draft.shareWithCommunity,
+          communityAuthorName: draft.communityAuthorName,
+          publishAnonymously: draft.publishAnonymously,
           updatedAt: new Date().toISOString(),
         };
         onSaved(saved, result);

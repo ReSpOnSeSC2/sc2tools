@@ -365,7 +365,7 @@ function MacroAggregate({ macro }: { macro?: BuildDossierData["macro"] }) {
           <div className="flex items-baseline justify-between text-micro text-text-dim">
             <span>Macro score distribution</span>
             <span className="tabular-nums">
-              n = {m!.gamesWithScore}
+              Games with scores: {m!.gamesWithScore}
             </span>
           </div>
           <div className="flex h-2.5 w-full overflow-hidden rounded bg-bg-elevated">

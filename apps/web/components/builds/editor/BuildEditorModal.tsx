@@ -117,6 +117,8 @@ export function BuildEditorModal({
       // seeds this from the saved doc so an already-public build keeps
       // its toggle on.
       shareWithCommunity: initialDraft?.shareWithCommunity ?? false,
+      communityAuthorName: initialDraft?.communityAuthorName ?? "",
+      publishAnonymously: initialDraft?.publishAnonymously ?? false,
       winConditions: initialDraft?.winConditions ?? [],
       losesTo: initialDraft?.losesTo ?? [],
       transitionsInto: initialDraft?.transitionsInto ?? [],
@@ -149,6 +151,37 @@ export function BuildEditorModal({
       if (result.reclassifyError) {
         toast.error("Build saved, but replay matching couldn't start", {
           description: friendlyReclassifyError(result.reclassifyError),
+        });
+      }
+      if (result.communityError) {
+        if (result.communityPublished === false && !draft.shareWithCommunity) {
+          toast.warning("Build saved; Community listing was removed", {
+            description:
+              "Current Community visibility was verified even though the original confirmation was interrupted.",
+          });
+        } else if (result.communityPublished === true && draft.shareWithCommunity) {
+          toast.warning("Build saved; Community listing remains public", {
+            description:
+              "Its visibility was verified, but the listing update was not fully confirmed. Review it before retrying.",
+          });
+        } else if (!draft.shareWithCommunity) {
+          toast.error("Build saved; Community listing is still public", {
+            description:
+              "Removal failed, so the existing listing remains visible. Try again.",
+          });
+        } else {
+          toast.error("Build saved; Community listing wasn't updated", {
+            description:
+              result.communityError === "public_author_name_required"
+                ? "Add a profile or community name, or explicitly choose Post anonymously, then save again."
+                : "Your prior Community listing is unchanged. Try the update again.",
+          });
+        }
+      }
+      if (result.communityMirrorPending) {
+        toast.warning("Community change is live; library badge is syncing", {
+          description:
+            "The public listing already has the requested state. Reopen the editor to retry the library badge sync.",
         });
       }
       onSaved?.(slug, draft, result);

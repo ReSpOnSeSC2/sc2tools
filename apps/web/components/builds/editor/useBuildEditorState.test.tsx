@@ -252,4 +252,60 @@ describe("useBuildEditorState save", () => {
       }),
     );
   });
+
+  it("does not claim a failed Community removal made the build private", async () => {
+    harness.apiCall
+      .mockResolvedValueOnce({
+        ok: true,
+        reclassify: null,
+        community: { error: "community_unavailable" },
+      })
+      .mockResolvedValueOnce({ published: true, mirrorPending: false });
+    const publishedDraft: BuildEditorDraft = {
+      ...initialDraft,
+      shareWithCommunity: false,
+    };
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft: publishedDraft }),
+    );
+
+    await act(async () => {
+      await result.current.save(false);
+    });
+
+    expect(result.current.toasts.map((toast) => toast.text)).toContain(
+      "Build saved; Community listing is still public: community_unavailable",
+    );
+    expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
+      expect.stringContaining("Saved privately"),
+    );
+  });
+
+  it("reports a committed removal truthfully after an interrupted response", async () => {
+    harness.apiCall
+      .mockResolvedValueOnce({
+        ok: true,
+        reclassify: null,
+        community: { error: "confirmation_interrupted" },
+      })
+      .mockResolvedValueOnce({ published: false, mirrorPending: false });
+    const { result } = renderHook(() =>
+      useBuildEditorState({
+        open: true,
+        context,
+        initialDraft: { ...initialDraft, shareWithCommunity: false },
+      }),
+    );
+
+    await act(async () => {
+      await result.current.save(false);
+    });
+
+    expect(result.current.toasts.map((toast) => toast.text)).toContain(
+      "Build saved; Community removal is live, but confirmation was interrupted.",
+    );
+    expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
+      expect.stringContaining("still public"),
+    );
+  });
 });

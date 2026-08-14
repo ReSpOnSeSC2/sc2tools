@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -20,6 +20,7 @@ import {
   type VsRaceLite,
 } from "@/lib/build-rules";
 import type { BuildEditorBasicsProps } from "./BuildEditor.types";
+import { useMyDisplayName } from "@/lib/useMyDisplayName";
 
 /**
  * BuildEditorBasics — Section 1 of the BuildEditor modal.
@@ -34,6 +35,15 @@ export function BuildEditorBasics({
   errors,
 }: BuildEditorBasicsProps) {
   const [showStrategyNotes, setShowStrategyNotes] = useState(false);
+  const profileDisplayName = useMyDisplayName();
+
+  useEffect(() => {
+    if (!profileDisplayName) return;
+    setDraft((current) => {
+      if (current.communityAuthorName) return current;
+      return { ...current, communityAuthorName: profileDisplayName.slice(0, 80) };
+    });
+  }, [profileDisplayName, setDraft]);
 
   return (
     <section aria-label="Basics" className="space-y-2.5">
@@ -142,6 +152,49 @@ export function BuildEditorBasics({
           Strategy notes (optional)
         </button>
       </div>
+
+      {draft.shareWithCommunity ? (
+        <div className="grid grid-cols-1 gap-2 rounded-lg border border-border bg-bg-elevated/40 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <Field
+            label="Name shown publicly"
+            error={errors.communityAuthorName}
+            hint={
+              draft.publishAnonymously
+                ? "Hidden while Post anonymously is selected."
+                : "Your profile name is used by default."
+            }
+          >
+            <Input
+              value={draft.communityAuthorName ?? ""}
+              maxLength={80}
+              disabled={!!draft.publishAnonymously}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  communityAuthorName: e.target.value,
+                }))
+              }
+              placeholder="Your community handle"
+            />
+          </Field>
+          <label className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2">
+            <input
+              type="checkbox"
+              checked={!!draft.publishAnonymously}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  publishAnonymously: e.target.checked,
+                }))
+              }
+              className="h-5 w-5 accent-accent-cyan"
+            />
+            <span className="text-caption font-medium text-text">
+              Post anonymously
+            </span>
+          </label>
+        </div>
+      ) : null}
 
       {showStrategyNotes ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">

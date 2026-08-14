@@ -49,6 +49,8 @@ describe("community + gdpr integration", () => {
     const aRes = await db.users.insertOne({
       userId: "u_a",
       clerkUserId: "clerk_user_a",
+      displayName: "Profile Default",
+      battleTag: "ProfileBattle#1234",
       createdAt: new Date(),
       lastSeenAt: new Date(),
     });
@@ -123,6 +125,381 @@ describe("community + gdpr integration", () => {
       expect(detail.body.sourceSlug).toBeUndefined();
     });
 
+    test("publishes under the profile name by default and only anonymizes on explicit opt-in", async () => {
+      await services.customBuilds.upsert("u_a", {
+        slug: "identity-default-named",
+        name: "Identity Default Named",
+        race: "Protoss",
+        vsRace: "Terran",
+      });
+      const named = await request(app)
+        .post("/v1/community/builds")
+        .set("authorization", "Bearer user-a")
+        .send({ slug: "identity-default-named" });
+      expect(named.status).toBe(201);
+      const namedDetail = await request(app).get(
+        `/v1/community/builds/${named.body.slug}`,
+      );
+      expect(namedDetail.body.authorName).toBe("Profile Default");
+      expect(namedDetail.body.ownerUserId).toBe("u_a");
+
+      await services.customBuilds.upsert("u_a", {
+        slug: "identity-explicit-anonymous",
+        name: "Identity Explicit Anonymous",
+        race: "Zerg",
+        vsRace: "Protoss",
+      });
+      const anonymous = await request(app)
+        .post("/v1/community/builds")
+        .set("authorization", "Bearer user-a")
+        .send({
+          slug: "identity-explicit-anonymous",
+          publishAnonymously: true,
+        });
+      expect(anonymous.status).toBe(201);
+      const anonymousDetail = await request(app).get(
+        `/v1/community/builds/${anonymous.body.slug}`,
+      );
+      expect(anonymousDetail.body.authorName).toBe("");
+      expect(anonymousDetail.body.ownerUserId).toBeUndefined();
+
+      const settings = await request(app)
+        .get("/v1/community/my-build-publication/identity-explicit-anonymous")
+        .set("authorization", "Bearer user-a");
+      expect(settings.status).toBe(200);
+      expect(settings.body).toMatchObject({
+        published: true,
+        publicSlug: anonymous.body.slug,
+        authorName: "Profile Default",
+        publishAnonymously: true,
+      });
+
+      // A lightweight save/update that omits identity must preserve the
+      // existing anonymous choice. The owner can explicitly switch it off.
+      await services.community.publish("u_a", "identity-explicit-anonymous", {
+        title: "Anonymous update",
+      });
+      expect(
+        (await request(app).get(`/v1/community/builds/${anonymous.body.slug}`))
+          .body.ownerUserId,
+      ).toBeUndefined();
+      await services.community.publish("u_a", "identity-explicit-anonymous", {
+        publishAnonymously: false,
+      });
+      const switched = await request(app).get(
+        `/v1/community/builds/${anonymous.body.slug}`,
+      );
+      expect(switched.body.authorName).toBe("Profile Default");
+      expect(switched.body.ownerUserId).toBe("u_a");
+    });
+
+    test("retries a transient private Published-badge mirror after the public commit", async () => {
+      const sourceSlug = "identity-mirror-rollback";
+      await services.customBuilds.upsert("u_a", {
+        slug: sourceSlug,
+        name: "Identity Mirror Rollback",
+        race: "Terran",
+        vsRace: "Zerg",
+      });
+      jest
+        .spyOn(services.community, "_setPrivateIsPublic")
+        .mockRejectedValueOnce(new Error("private_mirror_failed"));
+
+      const publish = await request(app)
+        .post("/v1/community/builds")
+        .set("authorization", "Bearer user-a")
+        .send({ slug: sourceSlug });
+      expect(publish.status).toBe(201);
+      expect(
+        await db.communityBuilds.countDocuments({
+          ownerUserId: "u_a",
+          sourceSlug,
+        }),
+      ).toBe(1);
+      const privateBuild = await db.customBuilds.findOne({
+        userId: "u_a",
+        slug: sourceSlug,
+      });
+      expect(privateBuild.isPublic).toBe(true);
+    });
+
+    test("serializes concurrent first publishes on one opaque source reservation", async () => {
+      const sourceSlug = "private-source-must-not-leak";
+      await services.customBuilds.upsert("u_a", {
+        slug: sourceSlug,
+        name: "Concurrent source",
+        race: "Protoss",
+        vsRace: "Zerg",
+      });
+      const [first, second] = await Promise.all([
+        services.community.publish("u_a", sourceSlug, {
+          title: "First public title",
+          description: "Initial description",
+        }),
+        services.community.publish("u_a", sourceSlug, {
+          title: "Different concurrent title",
+        }),
+      ]);
+      expect(first.slug).toBe(second.slug);
+      expect(first.slug).toMatch(/^build-[a-f0-9]{32}(?:-\d+)?$/);
+      expect(first.slug).not.toContain(sourceSlug);
+      expect(
+        await db.communityBuilds.countDocuments({ ownerUserId: "u_a", sourceSlug }),
+      ).toBe(1);
+
+      const renamed = await services.community.publish("u_a", sourceSlug, {
+        title: "Renamed later",
+        description: "",
+      });
+      expect(renamed.slug).toBe(first.slug);
+      expect((await services.community.getPublic(first.slug)).description).toBe("");
+    });
+
+    test("reports committed-public success when the private mirror stays pending", async () => {
+      const sourceSlug = "identity-mirror-compensation-failure";
+      await services.customBuilds.upsert("u_a", {
+        slug: sourceSlug,
+        name: "Identity Mirror Compensation Failure",
+        race: "Zerg",
+        vsRace: "Terran",
+      });
+      const mirrorSpy = jest
+        .spyOn(services.community, "_setPrivateIsPublic")
+        .mockRejectedValue(new Error("private_mirror_failed"));
+
+      const publish = await request(app)
+        .post("/v1/community/builds")
+        .set("authorization", "Bearer user-a")
+        .send({ slug: sourceSlug });
+      expect(publish.status).toBe(201);
+      expect(publish.body).toMatchObject({
+        created: true,
+        mirrorPending: true,
+      });
+      const live = await request(app).get(
+        `/v1/community/builds/${publish.body.slug}`,
+      );
+      expect(live.status).toBe(200);
+      expect(live.body.authorName).toBe("Profile Default");
+      const settings = await request(app)
+        .get(`/v1/community/my-build-publication/${sourceSlug}`)
+        .set("authorization", "Bearer user-a");
+      expect(settings.body.mirrorPending).toBe(true);
+      mirrorSpy.mockRestore();
+    });
+
+    test("recognizes publish and removal commits when Mongo reports a late error", async () => {
+      const sourceSlug = "late-commit-confirmation";
+      await services.customBuilds.upsert("u_a", {
+        slug: sourceSlug,
+        name: "Late commit confirmation",
+        race: "Terran",
+        vsRace: "Protoss",
+      });
+      const originalUpdateOne = db.communityBuilds.updateOne.bind(
+        db.communityBuilds,
+      );
+      const publishWrite = jest
+        .spyOn(db.communityBuilds, "updateOne")
+        .mockImplementationOnce(async (...args) => {
+          await originalUpdateOne(...args);
+          throw new Error("network_closed_after_commit");
+        });
+      const published = await services.community.publish("u_a", sourceSlug, {});
+      publishWrite.mockRestore();
+      expect((await services.community.getPublic(published.slug)).slug).toBe(
+        published.slug,
+      );
+
+      const originalUpdateMany = db.communityBuilds.updateMany.bind(
+        db.communityBuilds,
+      );
+      const removeWrite = jest
+        .spyOn(db.communityBuilds, "updateMany")
+        .mockImplementationOnce(async (...args) => {
+          await originalUpdateMany(...args);
+          throw new Error("network_closed_after_commit");
+        });
+      const removed = await services.community.unpublishBySource(
+        "u_a",
+        sourceSlug,
+      );
+      removeWrite.mockRestore();
+      expect(removed.removed).toBe(true);
+      expect(await services.community.getPublic(published.slug)).toBeNull();
+    });
+
+    test("preserves legacy identity rows with no mode flag and falls back to BattleTag safely", async () => {
+      const ownerUserId = "u_legacy_identity_modes";
+      const anonymousSource = "legacy-anonymous-source";
+      const namedSource = "legacy-named-source";
+      const nestedAnonymousSource = "legacy-nested-anonymous-source";
+      await db.users.insertOne({
+        userId: ownerUserId,
+        displayName: "Legacy Profile",
+        createdAt: new Date(),
+      });
+      await services.customBuilds.upsert(ownerUserId, {
+        slug: anonymousSource,
+        name: "Legacy anonymous",
+        race: "Protoss",
+      });
+      await services.customBuilds.upsert(ownerUserId, {
+        slug: namedSource,
+        name: "Legacy named",
+        race: "Terran",
+      });
+      await services.customBuilds.upsert(ownerUserId, {
+        slug: nestedAnonymousSource,
+        name: "Legacy nested anonymous",
+        race: "Zerg",
+      });
+      await db.communityBuilds.insertMany([
+        {
+          slug: "legacy-anonymous-public",
+          ownerUserId,
+          sourceSlug: anonymousSource,
+          title: "Legacy anonymous",
+          authorName: "",
+          votes: 0,
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+          removed: false,
+          build: { name: "Legacy anonymous", race: "Protoss" },
+        },
+        {
+          slug: "legacy-named-public",
+          ownerUserId,
+          sourceSlug: namedSource,
+          title: "Legacy named",
+          authorName: "Old Handle",
+          votes: 0,
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+          removed: false,
+          build: { name: "Legacy named", race: "Terran" },
+        },
+        {
+          slug: "legacy-nested-anonymous-public",
+          ownerUserId,
+          title: "Legacy nested anonymous",
+          authorName: "",
+          votes: 0,
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+          removed: false,
+          build: {
+            slug: nestedAnonymousSource,
+            name: "Legacy nested anonymous",
+            race: "Zerg",
+          },
+        },
+      ]);
+      try {
+        expect(
+          await services.community.getOwnerPublicationSettings(
+            ownerUserId,
+            anonymousSource,
+          ),
+        ).toMatchObject({
+          authorName: "Legacy Profile",
+          publishAnonymously: true,
+        });
+        expect(
+          await services.community.getOwnerPublicationSettings(
+            ownerUserId,
+            namedSource,
+          ),
+        ).toMatchObject({
+          authorName: "Old Handle",
+          publishAnonymously: false,
+        });
+        await services.community.publish(ownerUserId, anonymousSource, {
+          title: "Legacy anonymous updated",
+        });
+        const anonymousPublic = await services.community.getPublic(
+          "legacy-anonymous-public",
+        );
+        expect(anonymousPublic.authorName).toBe("");
+        expect(anonymousPublic.ownerUserId).toBeUndefined();
+
+        expect(
+          await services.community.getOwnerPublicationSettings(
+            ownerUserId,
+            nestedAnonymousSource,
+          ),
+        ).toMatchObject({
+          published: true,
+          publishAnonymously: true,
+        });
+        const ownerStats = await services.community.listOwnerReplayStats(ownerUserId);
+        expect(ownerStats).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              publicSlug: "legacy-nested-anonymous-public",
+              total: 0,
+            }),
+          ]),
+        );
+        const nestedRepublished = await services.community.publish(
+          ownerUserId,
+          nestedAnonymousSource,
+          { title: "Legacy nested anonymous updated" },
+        );
+        expect(nestedRepublished.slug).toBe("legacy-nested-anonymous-public");
+        expect(
+          (await services.community.getPublic(nestedRepublished.slug)).ownerUserId,
+        ).toBeUndefined();
+        expect(
+          await db.communityBuilds.countDocuments({
+            ownerUserId,
+            $or: [
+              { sourceSlug: nestedAnonymousSource },
+              { "build.slug": nestedAnonymousSource },
+            ],
+          }),
+        ).toBe(1);
+        await services.community.unpublishBySource(ownerUserId, nestedAnonymousSource);
+        expect(
+          await db.communityBuilds.countDocuments({
+            ownerUserId,
+            sourceSlug: nestedAnonymousSource,
+            removed: false,
+          }),
+        ).toBe(0);
+      } finally {
+        await db.communityBuilds.deleteMany({ ownerUserId });
+        await db.customBuilds.deleteMany({ userId: ownerUserId });
+        await db.users.deleteOne({ userId: ownerUserId });
+      }
+
+      const battleOwner = "u_battle_tag_fallback";
+      await db.users.insertOne({
+        userId: battleOwner,
+        battleTag: "BattleFallback#9876",
+        createdAt: new Date(),
+      });
+      await services.customBuilds.upsert(battleOwner, {
+        slug: "battle-fallback-source",
+        name: "Battle fallback build",
+        race: "Zerg",
+      });
+      try {
+        const published = await services.community.publish(
+          battleOwner,
+          "battle-fallback-source",
+          {},
+        );
+        expect(
+          (await services.community.getPublic(published.slug)).authorName,
+        ).toBe("BattleFallback");
+      } finally {
+        await db.communityBuilds.deleteMany({ ownerUserId: battleOwner });
+        await db.customBuilds.deleteMany({ userId: battleOwner });
+        await db.users.deleteOne({ userId: battleOwner });
+      }
+    });
+
     test("list supports sort=new and q= search", async () => {
       // Newest-first sort: the previously published build is the only
       // one in the collection, so it must appear regardless of sort.
@@ -168,8 +545,10 @@ describe("community + gdpr integration", () => {
           { $set: { votes } },
         );
       };
-      // 15 PvX builds with high vote counts
-      for (let i = 0; i < 15; i++) {
+      // Eight PvX builds with high vote counts are enough to exercise the
+      // per-matchup cap without exhausting the per-user publish limiter used
+      // by the identity-route regressions in this same integration app.
+      for (let i = 0; i < 8; i++) {
         await seed(`pvx-flood-${i}`, `PvX Flood ${i}`, "PvT", 1000 - i);
       }
       // One ZvP, one TvZ — both with low votes so they'd lose any global
@@ -504,7 +883,10 @@ describe("community + gdpr integration", () => {
       const unrelatedPublic = await services.community.publish(
         unrelatedUserId,
         unrelatedSourceSlug,
-        { title: "Unrelated Public Build" },
+        {
+          title: "Unrelated Public Build",
+          authorName: "Unrelated Author",
+        },
       );
       const reportId = "report-moderation-owner-removal";
       await db.communityReports.insertOne({
@@ -548,11 +930,78 @@ describe("community + gdpr integration", () => {
 
   describe("public author profile (Phase 10)", () => {
     test("404 when the author has no public name on any build", async () => {
-      // u_a's only published build above carries no authorName, so the
-      // implicit anonymization rule yields a 404.
-      const res = await request(app).get("/v1/community/authors/u_a");
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe("author_not_found");
+      const anonymousOwner = "u_only_anonymous";
+      await db.communityBuilds.insertOne({
+        slug: "only-anonymous-profile-fixture",
+        ownerUserId: anonymousOwner,
+        sourceSlug: "only-anonymous-source",
+        title: "Anonymous only",
+        authorName: "",
+        publishAnonymously: true,
+        votes: 3,
+        publishedAt: new Date(),
+        removed: false,
+        build: { name: "Anonymous only", race: "Terran" },
+      });
+      try {
+        const res = await request(app).get(
+          `/v1/community/authors/${anonymousOwner}`,
+        );
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("author_not_found");
+      } finally {
+        await db.communityBuilds.deleteOne({
+          slug: "only-anonymous-profile-fixture",
+        });
+      }
+    });
+
+    test("a named profile never includes the same owner's anonymous builds or stats", async () => {
+      const ownerUserId = "u_mixed_identity";
+      await db.communityBuilds.insertMany([
+        {
+          slug: "mixed-named-build",
+          ownerUserId,
+          sourceSlug: "mixed-named-source",
+          title: "Mixed named build",
+          authorName: "Named Author",
+          publishAnonymously: false,
+          votes: 4,
+          publishedAt: new Date("2026-08-10T00:00:00Z"),
+          removed: false,
+          build: { name: "Mixed named build", race: "Protoss" },
+        },
+        {
+          slug: "mixed-anonymous-build",
+          ownerUserId,
+          sourceSlug: "mixed-anonymous-source",
+          title: "Mixed anonymous build",
+          authorName: "",
+          publishAnonymously: true,
+          votes: 999,
+          publishedAt: new Date("2026-08-11T00:00:00Z"),
+          removed: false,
+          build: { name: "Mixed anonymous build", race: "Zerg" },
+        },
+      ]);
+      try {
+        const res = await request(app).get(
+          `/v1/community/authors/${ownerUserId}`,
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.displayName).toBe("Named Author");
+        expect(res.body.totalBuilds).toBe(1);
+        expect(res.body.totalVotes).toBe(4);
+        expect(res.body.builds.map((build) => build.slug)).toEqual([
+          "mixed-named-build",
+        ]);
+        expect(res.body.topBuild.slug).toBe("mixed-named-build");
+        expect(res.body.recent.map((build) => build.slug)).not.toContain(
+          "mixed-anonymous-build",
+        );
+      } finally {
+        await db.communityBuilds.deleteMany({ ownerUserId });
+      }
     });
 
     test("returns aggregate after the author publishes with a name", async () => {

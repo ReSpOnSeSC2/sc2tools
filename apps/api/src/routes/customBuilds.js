@@ -1002,21 +1002,27 @@ function buildCustomBuildsRouter(deps) {
       // it the flag was stored on the doc and silently ignored, so a
       // build "shared" from a replay never reached the community tab.
       //
-      // `isPublic` on the private doc is the single source of truth and
-      // is kept in lock-step with the community collection here. A
-      // publish hiccup is reported in the response but never fails the
-      // save itself (the private build is already persisted).
+      // Community is authoritative; `isPublic` on the private document is a
+      // library-display mirror. A publish hiccup is reported in the response
+      // but never fails the save itself (the private build is already durable).
       // validateCustomBuild types ``value`` as plain ``object``;
       // BUILD_SCHEMA guarantees ``name`` (required string) and
       // ``description`` (optional string), so narrow the two fields
       // the share payload reads.
-      const validated = /** @type {{ name: string, description?: string }} */ (
+      const validated = /** @type {{
+       *   name: string,
+       *   description?: string,
+       *   communityAuthorName?: string,
+       *   publishAnonymously?: boolean,
+       * }} */ (
         validation.value
       );
       const community = await applyShareState(deps, auth.userId, slug, {
         wantPublic: desiredShareState(req.body),
         title: validated.name,
         description: validated.description,
+        authorName: validated.communityAuthorName,
+        publishAnonymously: validated.publishAnonymously,
         log: req.log,
       });
       const payload = {
@@ -1182,12 +1188,14 @@ function desiredShareState(body) {
  *   wantPublic: boolean | undefined,
  *   title?: string,
  *   description?: string,
+ *   authorName?: string,
+ *   publishAnonymously?: boolean,
  *   log?: { warn: Function } | undefined,
  * }} opts
  * @returns {Promise<
  *   | null
  *   | { action: 'published' | 'updated' | 'unpublished', slug?: string }
- *   | { error: string }
+ *   | { error: string, mirrorPending?: boolean }
  * >}
  */
 async function applyShareState(deps, userId, slug, opts) {
@@ -1196,16 +1204,53 @@ async function applyShareState(deps, userId, slug, opts) {
   if (!deps.community || opts.wantPublic === undefined) return null;
   try {
     if (opts.wantPublic) {
-      const { slug: publicSlug, created } = await deps.community.publish(
+      const { slug: publicSlug, created, mirrorPending } = await deps.community.publish(
         userId,
         slug,
-        { title: opts.title, description: opts.description },
+        {
+          title: opts.title,
+          ...(typeof opts.description === "string"
+            ? { description: opts.description }
+            : {}),
+          ...(typeof opts.authorName === "string"
+            ? { authorName: opts.authorName }
+            : {}),
+          ...(typeof opts.publishAnonymously === "boolean"
+            ? { publishAnonymously: opts.publishAnonymously }
+            : {}),
+        },
       );
-      return { action: created ? "published" : "updated", slug: publicSlug };
+      return {
+        action: created ? "published" : "updated",
+        slug: publicSlug,
+        ...(mirrorPending ? { mirrorPending: true } : {}),
+      };
     }
-    await deps.community.unpublishBySource(userId, slug);
-    return { action: "unpublished" };
+    const result = await deps.community.unpublishBySource(userId, slug);
+    return {
+      action: "unpublished",
+      ...(result.mirrorPending ? { mirrorPending: true } : {}),
+    };
   } catch (e) {
+    // The private save happens first. Reconcile its display badge from the
+    // current Community row instead of blindly restoring a stale prior flag:
+    // another device may have published or removed the same build meanwhile.
+    let mirrorPending = false;
+    try {
+      const mirrored = await deps.community.reconcilePrivatePublicationState(
+        userId,
+        slug,
+      );
+      mirrorPending = !mirrored;
+    } catch (restoreError) {
+      mirrorPending = true;
+      if (opts.log) {
+        opts.log.warn(
+          { err: restoreError, slug, userId },
+          "custom_build_share_flag_reconcile_failed",
+        );
+      }
+    }
     if (opts.log) {
       opts.log.warn(
         { err: e, slug, userId, wantPublic: opts.wantPublic },
@@ -1216,7 +1261,7 @@ async function applyShareState(deps, userId, slug, opts) {
       e && typeof e === "object" && "message" in e
         ? String(/** @type {any} */ (e).message)
         : "share_failed";
-    return { error: message };
+    return { error: message, ...(mirrorPending ? { mirrorPending: true } : {}) };
   }
 }
 

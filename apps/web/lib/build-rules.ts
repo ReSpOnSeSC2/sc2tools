@@ -149,6 +149,10 @@ export interface BuildEditorDraft {
   vsRace: VsRaceLite;
   skillLevel: SkillLevelId | null;
   shareWithCommunity: boolean;
+  /** Public attribution used only when sharing this build. */
+  communityAuthorName?: string;
+  /** Anonymous publishing is an explicit opt-in; false/absent is named. */
+  publishAnonymously?: boolean;
   winConditions: string[];
   losesTo: string[];
   transitionsInto: string[];
@@ -159,6 +163,7 @@ export interface BuildEditorDraft {
 export interface BuildEditorErrors {
   name?: string;
   rules?: string;
+  communityAuthorName?: string;
 }
 
 export interface SanitisedDraft {
@@ -171,6 +176,8 @@ export interface SanitisedDraft {
     vsRace: VsRaceLite;
     skillLevel: SkillLevelId | null;
     shareWithCommunity: boolean;
+    communityAuthorName: string;
+    publishAnonymously: boolean;
     winConditions: string[];
     losesTo: string[];
     transitionsInto: string[];
@@ -488,6 +495,18 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
     draft.skillLevel && SKILL_LEVEL_IDS.has(draft.skillLevel)
       ? draft.skillLevel
       : null;
+  const communityAuthorName = String(draft.communityAuthorName || "")
+    .trim()
+    .slice(0, 80);
+  const publishAnonymously = !!draft.publishAnonymously;
+  if (
+    draft.shareWithCommunity &&
+    !publishAnonymously &&
+    !communityAuthorName
+  ) {
+    errors.communityAuthorName =
+      "Enter the public author name, or choose Post anonymously.";
+  }
   return {
     ok: Object.keys(errors).length === 0,
     errors,
@@ -498,6 +517,8 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
       vsRace: draft.vsRace || "Random",
       skillLevel,
       shareWithCommunity: !!draft.shareWithCommunity,
+      communityAuthorName,
+      publishAnonymously,
       winConditions: clipStrings(draft.winConditions),
       losesTo: clipStrings(draft.losesTo),
       transitionsInto: clipStrings(draft.transitionsInto),

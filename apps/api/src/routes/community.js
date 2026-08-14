@@ -134,6 +134,24 @@ function buildCommunityRouter(deps) {
     },
   );
 
+  router.get(
+    "/community/my-build-publication/:sourceSlug",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const result = await deps.community.getOwnerPublicationSettings(
+          auth.userId,
+          String(req.params.sourceSlug),
+        );
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.get("/community/builds/:slug", async (req, res, next) => {
     try {
       const row = await deps.community.getPublic(String(req.params.slug));
@@ -210,15 +228,27 @@ function buildCommunityRouter(deps) {
           });
           return;
         }
+        /** @type {{
+         *   title: string,
+         *   description?: string,
+         *   authorName?: string,
+         *   publishAnonymously?: boolean,
+         * }} */
         const meta = {
           title: req.body?.title ? String(req.body.title).slice(0, 200) : "",
-          description: req.body?.description
-            ? String(req.body.description).slice(0, 4000)
-            : "",
-          authorName: req.body?.authorName
-            ? String(req.body.authorName).slice(0, 80)
-            : "",
         };
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, "description")) {
+          meta.description = String(req.body.description || "").slice(0, 4000);
+        }
+        // Keep identity presence-aware. Omission means named-by-default on a
+        // first publish and preserve-current-choice on an update; it must not
+        // be collapsed into an empty (anonymous) author name.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, "authorName")) {
+          meta.authorName = String(req.body.authorName || "").slice(0, 80);
+        }
+        if (typeof req.body?.publishAnonymously === "boolean") {
+          meta.publishAnonymously = req.body.publishAnonymously;
+        }
         const result = await deps.community.publish(
           auth.userId,
           userSlug,

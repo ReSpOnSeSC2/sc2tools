@@ -14,7 +14,8 @@ import type { CustomBuild } from "@/components/builds/types";
  */
 export interface CommunityBuildListItem {
   slug: string;
-  ownerUserId: string;
+  /** Present only for named authors; anonymous rows are intentionally unlinkable. */
+  ownerUserId?: string;
   title: string;
   description: string;
   matchup?: string;

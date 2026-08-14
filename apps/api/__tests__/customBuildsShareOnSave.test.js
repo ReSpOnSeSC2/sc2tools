@@ -74,6 +74,10 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
   async function bootstrapUserId() {
     const me = await withAuth(request(app).get("/v1/me"));
     expect(me.status).toBe(200);
+    await db.users.updateOne(
+      { userId: me.body.userId },
+      { $set: { displayName: "Save Toggle Author" } },
+    );
     return me.body.userId;
   }
 
@@ -107,6 +111,7 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
     expect(row.title).toBe("PvT Macro");
     expect(row.matchup).toBe("PvT");
     expect(row.ownerUserId).toBe(userId);
+    expect(row.authorName).toBe("Save Toggle Author");
 
     // The public snapshot must NOT carry the author's private notes.
     const detail = await request(app).get(
@@ -319,5 +324,108 @@ describe("PUT /v1/custom-builds/:slug — community share on save", () => {
 
     const list = await request(app).get("/v1/community/builds?q=PvP Blink");
     expect(list.body.items.length).toBe(0);
+  });
+
+  test("save-time sharing supports explicit anonymous opt-in without exposing owner id", async () => {
+    await bootstrapUserId();
+    const sourceSlug = "pvp-explicit-anonymous";
+    const put = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "PvP Explicit Anonymous",
+        race: "Protoss",
+        vsRace: "Protoss",
+        rules: [{ type: "before", name: "ResearchBlink", time_lt: 400 }],
+        shareWithCommunity: true,
+        communityAuthorName: "Save Toggle Author",
+        publishAnonymously: true,
+        schemaVersion: 3,
+      }),
+    );
+    expect(put.status).toBe(200);
+    const detail = await request(app).get(
+      `/v1/community/builds/${put.body.community.slug}`,
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.body.authorName).toBe("");
+    expect(detail.body.ownerUserId).toBeUndefined();
+    const privateBuild = await withAuth(
+      request(app).get(`/v1/custom-builds/${sourceSlug}`),
+    );
+    expect(privateBuild.body.publishAnonymously).toBe(true);
+  });
+
+  test("failed named publish stays private instead of showing a false Published badge", async () => {
+    const userId = await bootstrapUserId();
+    await db.users.updateOne(
+      { userId },
+      { $unset: { displayName: "", battleTag: "" } },
+    );
+    const sourceSlug = "pvt-missing-public-name";
+    const put = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "PvT Missing Public Name",
+        race: "Protoss",
+        vsRace: "Terran",
+        rules: [{ type: "before", name: "BuildGateway", time_lt: 120 }],
+        shareWithCommunity: true,
+        publishAnonymously: false,
+        schemaVersion: 3,
+      }),
+    );
+    expect(put.status).toBe(200);
+    expect(put.body.community.error).toBe("public_author_name_required");
+    const privateBuild = await withAuth(
+      request(app).get(`/v1/custom-builds/${sourceSlug}`),
+    );
+    expect(privateBuild.body.isPublic).toBe(false);
+    const list = await request(app).get(
+      "/v1/community/builds?q=PvT%20Missing%20Public%20Name",
+    );
+    expect(list.body.items).toHaveLength(0);
+  });
+
+  test("failed unpublish restores the prior public badge while the listing remains live", async () => {
+    await bootstrapUserId();
+    const sourceSlug = "tvp-unpublish-reconcile-failure";
+    const published = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "TvP Unpublish Reconcile Failure",
+        race: "Terran",
+        vsRace: "Protoss",
+        rules: [{ type: "before", name: "BuildFactory", time_lt: 200 }],
+        shareWithCommunity: true,
+        communityAuthorName: "Save Toggle Author",
+        publishAnonymously: false,
+        schemaVersion: 3,
+      }),
+    );
+    const publicSlug = published.body.community.slug;
+    jest
+      .spyOn(services.community, "unpublishBySource")
+      .mockRejectedValueOnce(new Error("temporary_unpublish_failure"));
+
+    const failed = await withAuth(
+      request(app).put(`/v1/custom-builds/${sourceSlug}`).send({
+        slug: sourceSlug,
+        name: "TvP Unpublish Reconcile Failure",
+        race: "Terran",
+        vsRace: "Protoss",
+        rules: [{ type: "before", name: "BuildFactory", time_lt: 200 }],
+        shareWithCommunity: false,
+        schemaVersion: 3,
+      }),
+    );
+    expect(failed.status).toBe(200);
+    expect(failed.body.community.error).toBe("temporary_unpublish_failure");
+    expect(
+      (await withAuth(request(app).get(`/v1/custom-builds/${sourceSlug}`))).body
+        .isPublic,
+    ).toBe(true);
+    expect(
+      (await request(app).get(`/v1/community/builds/${publicSlug}`)).status,
+    ).toBe(200);
   });
 });

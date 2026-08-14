@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { CommunityBuildOwnerControls } from "../CommunityBuildOwnerControls";
 
 const harness = vi.hoisted(() => ({
-  me: { userId: "owner-1" } as { userId: string } | undefined,
+  ownerStats: { items: [{ publicSlug: "blink-pressure" }] } as
+    | { items: Array<{ publicSlug: string }> }
+    | undefined,
   apiCall: vi.fn(),
   getToken: vi.fn(async () => "test-token"),
   refresh: vi.fn(),
@@ -28,7 +30,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
-  useApi: () => ({ data: harness.me }),
+  useApi: () => ({ data: harness.ownerStats }),
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
@@ -37,7 +39,7 @@ vi.mock("@/components/ui/Toast", () => ({
 
 describe("CommunityBuildOwnerControls", () => {
   beforeEach(() => {
-    harness.me = { userId: "owner-1" };
+    harness.ownerStats = { items: [{ publicSlug: "blink-pressure" }] };
     harness.apiCall.mockReset();
     harness.apiCall.mockResolvedValue(undefined);
     harness.getToken.mockClear();
@@ -49,7 +51,7 @@ describe("CommunityBuildOwnerControls", () => {
   afterEach(() => cleanup());
 
   test("does not expose removal controls to another user", () => {
-    harness.me = { userId: "someone-else" };
+    harness.ownerStats = { items: [] };
     render(
       <CommunityBuildOwnerControls
         slug="blink-pressure"

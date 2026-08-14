@@ -72,6 +72,7 @@ interface ShareStateSummary {
   action?: "published" | "updated" | "unpublished";
   slug?: string;
   error?: string;
+  mirrorPending?: boolean;
 }
 
 interface SaveBuildResponse {
@@ -428,6 +429,8 @@ export function useBuildEditorState(
         losesTo: sanitised.payload.losesTo,
         transitionsInto: sanitised.payload.transitionsInto,
         shareWithCommunity: sanitised.payload.shareWithCommunity,
+        communityAuthorName: sanitised.payload.communityAuthorName,
+        publishAnonymously: sanitised.payload.publishAnonymously,
         sourceGameId:
           sanitised.payload.sourceReplayId || context.gameId || undefined,
         perspective: context.perspective === "opponent" ? "opponent" : "you",
@@ -443,6 +446,28 @@ export function useBuildEditorState(
             body: JSON.stringify(body),
           },
         );
+        const community = resp?.community;
+        let communityMirrorPending = !!community?.mirrorPending;
+        let communityPublished: boolean | undefined;
+        if (communityMirrorPending || !!community?.error) {
+          try {
+            // This owner-only read performs server-side repair from the
+            // authoritative Community row before the parent refreshes its
+            // private-library data.
+            const settings = await apiCall<{
+              published: boolean;
+              mirrorPending: boolean;
+            }>(
+              getToken,
+              `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
+            );
+            communityPublished = settings.published;
+            communityMirrorPending = settings.mirrorPending;
+          } catch {
+            // The public mutation is already committed. Keep the warning so
+            // the user knows only the private-library badge may be stale.
+          }
+        }
         pristineRef.current = JSON.stringify(draft);
         setSaving(false);
         setSavedOk(true);
@@ -467,11 +492,20 @@ export function useBuildEditorState(
         // Reflect what the "Share with community" toggle actually did.
         // The private save already succeeded above, so a share failure is
         // a soft warning, not a hard error.
-        const community = resp?.community;
         if (community?.error) {
           pushToast(
             "warn",
-            `Saved privately — couldn't share to community: ${community.error}`,
+            communityPublished === false
+              ? sanitised.payload.shareWithCommunity
+                ? `Build saved; Community listing wasn't updated: ${community.error}`
+                : "Build saved; Community removal is live, but confirmation was interrupted."
+              : communityPublished === true
+                ? sanitised.payload.shareWithCommunity
+                  ? `Build saved; Community listing is public, but its update wasn't confirmed: ${community.error}`
+                  : `Build saved; Community listing is still public: ${community.error}`
+                : sanitised.payload.shareWithCommunity
+                  ? `Build saved; Community listing wasn't updated: ${community.error}`
+                  : `Build saved; Community removal couldn't be confirmed: ${community.error}`,
           );
         } else if (
           community?.action === "published" ||
@@ -494,6 +528,11 @@ export function useBuildEditorState(
           reclassifyStatus: resp?.reclassify?.status,
           reclassifyGeneration: resp?.reclassify?.generation,
           reclassifyError,
+          communityAction: community?.action,
+          communitySlug: community?.slug,
+          communityError: community?.error,
+          communityMirrorPending,
+          communityPublished,
         });
       } catch (err: unknown) {
         setSaving(false);

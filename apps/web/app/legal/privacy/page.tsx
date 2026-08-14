@@ -5,7 +5,7 @@ export const metadata = {
     "How SC2 Tools processes replay data and stores private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "August 11, 2026";
+const LAST_UPDATED = "August 14, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -106,13 +106,24 @@ export default function PrivacyPage() {
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Community publishing</h2>
+        <p>
+          Publishing a build is optional and user-controlled. Community builds
+          show your profile or chosen community name by default; you can
+          explicitly choose <strong>Post anonymously</strong> for an individual
+          build. We publish its title, description, build metadata, and
+          signature, but not source replays, opponent identities, or personal
+          notes. You can remove the listing from Community at any time.
+        </p>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-xl font-semibold">Aggregated opponent data</h2>
         <p>
-          When you publish a build to the community, or when we display
-          aggregated opponent stats on a public profile, we strip names and
-          apply k-anonymity (we never publish a row that fewer than 5 unique
-          users have contributed to). Pulse IDs are public information from
-          Blizzard&apos;s ladder.
+          Public aggregated opponent statistics are a separate feature. We
+          strip contributor names and apply k-anonymity: we never publish an
+          aggregate row that fewer than 5 unique users have contributed to.
+          Pulse IDs are public information from Blizzard&apos;s ladder.
         </p>
       </section>
 
@@ -174,8 +185,9 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Changes to this policy</h2>
         <p>
-          When we make material changes, we&apos;ll bump the &quot;last
-          updated&quot; date and surface a banner on next sign-in.
+          When we make material changes, we update the &quot;last updated&quot;
+          date and provide additional notice when required by applicable law
+          or when a change materially affects how we use personal data.
         </p>
       </section>
 

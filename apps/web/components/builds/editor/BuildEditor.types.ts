@@ -120,6 +120,12 @@ export interface BuildEditorSaveResult {
   reclassifyStatus?: "queued" | "running" | "retry" | "complete";
   reclassifyGeneration?: string;
   reclassifyError?: string;
+  communityAction?: "published" | "updated" | "unpublished";
+  communitySlug?: string;
+  communityError?: string;
+  communityMirrorPending?: boolean;
+  /** Authoritative visibility re-read after a partial Community failure. */
+  communityPublished?: boolean;
 }
 
 export type BuildEditorToastKind = "success" | "error" | "warn";

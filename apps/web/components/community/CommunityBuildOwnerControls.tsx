@@ -11,14 +11,15 @@ import { apiCall, useApi } from "@/lib/clientApi";
 
 type ConfirmationStep = "closed" | "review" | "final";
 
-type MeOwnerProbe = {
-  userId: string;
+type OwnerStatsResponse = {
+  items: Array<{ publicSlug: string }>;
 };
 
 export interface CommunityBuildOwnerControlsProps {
   slug: string;
   title: string;
-  ownerUserId: string;
+  /** Deprecated public hint; ownership is verified by the owner-only API. */
+  ownerUserId?: string;
   compact?: boolean;
   redirectAfterRemove?: boolean;
 }
@@ -26,21 +27,24 @@ export interface CommunityBuildOwnerControlsProps {
 /**
  * Owner-only control for removing a published build from Community.
  *
- * The API remains the authority for ownership. The /v1/me comparison only
- * keeps the destructive affordance out of sight for everyone else; DELETE
- * /v1/community/builds/:slug performs the definitive owner check.
+ * The API remains the authority for ownership. Membership in the authenticated
+ * owner's build-stat list keeps the affordance out of sight for everyone else
+ * without exposing a stable owner id on anonymous public rows; DELETE still
+ * performs the definitive owner check.
  */
 export function CommunityBuildOwnerControls({
   slug,
   title,
-  ownerUserId,
   compact = false,
   redirectAfterRemove = false,
 }: CommunityBuildOwnerControlsProps) {
   const router = useRouter();
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const { data: me } = useApi<MeOwnerProbe>("/v1/me");
+  const { data: ownerStats } = useApi<OwnerStatsResponse>(
+    "/v1/community/my-build-stats",
+    { revalidateOnFocus: true },
+  );
   const [step, setStep] = useState<ConfirmationStep>("closed");
   const [acknowledged, setAcknowledged] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -65,7 +69,11 @@ export function CommunityBuildOwnerControls({
     setStep("closed");
   }, [removing]);
 
-  if (!me || me.userId !== ownerUserId) return null;
+  // Anonymous rows intentionally omit ownerUserId. Membership in this
+  // authenticated owner-only list keeps the control working without putting
+  // a stable identity key back into the public response.
+  const isOwner = ownerStats?.items?.some((row) => row.publicSlug === slug);
+  if (!isOwner) return null;
 
   function continueToFinal() {
     setError(null);

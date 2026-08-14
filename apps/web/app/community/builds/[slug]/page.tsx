@@ -185,7 +185,6 @@ export default async function CommunityBuildPage({
               <CommunityBuildOwnerControls
                 slug={data.slug}
                 title={data.title}
-                ownerUserId={data.ownerUserId}
                 redirectAfterRemove
               />
             </div>

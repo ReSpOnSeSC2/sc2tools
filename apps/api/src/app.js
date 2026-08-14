@@ -537,7 +537,9 @@ function makeServices(deps) {
     replayFiles,
     customBuilds,
   });
-  const community = new CommunityService(deps.db);
+  const community = new CommunityService(deps.db, {
+    slugSecret: deps.config.serverPepper,
+  });
   // Opt-in public player pages (/p/:handle). Derives entirely from
   // existing services — a public profile exists iff the user published
   // a community build under a public authorName (the community opt-in),

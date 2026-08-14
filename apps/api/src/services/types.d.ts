@@ -323,6 +323,9 @@ export interface CustomBuildRecord {
   vsRace?: string;
   perspective?: "you" | "opponent";
   rules?: object[];
+  isPublic?: boolean;
+  communityAuthorName?: string;
+  publishAnonymously?: boolean;
 }
 
 export interface ReclassifyQueueResult {
