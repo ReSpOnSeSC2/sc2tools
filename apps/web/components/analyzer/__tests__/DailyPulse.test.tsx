@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ArcadeGame } from "@/components/analyzer/arcade/types";
 import { DailyPulse } from "../DailyPulse";
 
@@ -120,11 +126,43 @@ describe("DailyPulse", () => {
     analysisLoading = false;
     render(<DailyPulse />);
 
+    expect(loadAnalysis).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBeNull();
     expect(
       screen.getByText("Replay insights, loaded when you open them"),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /daily pulse/i }));
     expect(loadAnalysis).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("0");
+  });
+
+  it("restores a stored open choice and reloads the real corpus after remount", async () => {
+    window.localStorage.setItem("analyzer.pulse.collapsed", "0");
+    analysisActive = false;
+    analysisLoading = false;
+
+    const view = render(<DailyPulse />);
+    await waitFor(() => expect(loadAnalysis).toHaveBeenCalledTimes(1));
+
+    analysisActive = true;
+    primeGames(corpusWithSession());
+    view.rerender(<DailyPulse />);
+    expect(screen.getByText("You banked a winning session")).toBeTruthy();
+  });
+
+  it("keeps an explicitly closed pulse dormant and exposes an accessible opener", () => {
+    window.localStorage.setItem("analyzer.pulse.collapsed", "1");
+    analysisActive = false;
+    analysisLoading = false;
+    render(<DailyPulse />);
+
+    expect(loadAnalysis).not.toHaveBeenCalled();
+    const opener = screen.getByRole("button", { name: /daily pulse/i });
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(opener);
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("0");
   });
 
   it("offers an in-place retry when corpus loading fails", () => {

@@ -20,7 +20,7 @@
  * state so the loaded corpus can still be collapsed and released.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPulse";
@@ -41,12 +41,17 @@ interface ApiSeasons {
 const LS_COLLAPSED_KEY = "analyzer.pulse.collapsed";
 const CURRENT_POOL_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 
-function readCollapsed(): boolean {
-  if (typeof window === "undefined") return false;
+type PulseIntent = "hydrating" | "dormant" | "open" | "closed";
+
+function readPulseIntent(): Exclude<PulseIntent, "hydrating"> {
+  if (typeof window === "undefined") return "dormant";
   try {
-    return window.localStorage.getItem(LS_COLLAPSED_KEY) === "1";
+    const stored = window.localStorage.getItem(LS_COLLAPSED_KEY);
+    if (stored === "0") return "open";
+    if (stored === "1") return "closed";
+    return "dormant";
   } catch {
-    return false;
+    return "dormant";
   }
 }
 
@@ -103,6 +108,8 @@ export function DailyPulse({
   // The compact gate below activates it only after the user asks to see the
   // pulse; opening Arcade activates the same provider automatically.
   const gamesRes = useAnalysisGames();
+  const gamesActive = gamesRes.isActive;
+  const loadGames = gamesRes.load;
   const seasonsRes = useApi<ApiSeasons>("/v1/seasons");
 
   const games = useMemo(
@@ -145,100 +152,151 @@ export function DailyPulse({
     [seed.day, seed.userId, seed.tz, games, mapPool],
   );
 
-  const [collapsed, setCollapsed] = useState(false);
+  // The absence of a stored choice keeps the expensive corpus dormant. Once
+  // the user opens Daily Pulse, the legacy raw "0" value records that intent;
+  // raw "1" records an explicit close. Keeping those values avoids resetting
+  // the preference for existing users.
+  const [intent, setIntent] = useState<PulseIntent>("hydrating");
   useEffect(() => {
-    setCollapsed(readCollapsed());
+    setIntent(readPulseIntent());
   }, []);
+
+  // Provider activation is intentionally memory-only, so restore a persisted
+  // open choice after every mount. `load` changes identity when Clerk finishes
+  // resolving the account, which also lets an early no-op retry safely then.
+  useEffect(() => {
+    if (intent === "open" && !gamesActive) loadGames();
+  }, [gamesActive, intent, loadGames]);
+
+  const collapsed = intent === "closed";
   const toggle = () => {
     const next = !collapsed;
-    setCollapsed(next);
+    setIntent(next ? "closed" : "open");
     writeCollapsed(next);
     if (next) gamesRes.release();
-    else if (!gamesRes.isActive) gamesRes.load();
   };
 
   const loadPulse = () => {
-    setCollapsed(false);
+    const retryingOpenRequest = intent === "open";
+    setIntent("open");
     writeCollapsed(false);
-    gamesRes.load();
+    // A dormant/closed -> open transition is handled once by the restore
+    // effect. An already-open error gate needs an explicit retry because its
+    // intent value does not change.
+    if (retryingOpenRequest || gamesRes.error) gamesRes.load();
   };
 
-  // Keep the feature discoverable without silently loading the user's full
-  // replay history. Once requested, this same compact row carries loading and
-  // retry feedback instead of flashing an empty card strip.
-  if (!gamesRes.isActive || gamesRes.isLoading || gamesRes.error) {
-    return (
-      <DailyPulseGate
-        loading={gamesRes.isLoading}
-        failed={!!gamesRes.error}
-        onLoad={loadPulse}
-      />
-    );
+  if (intent === "hydrating") {
+    return <DailyPulseFrame pending />;
+  }
+
+  if (collapsed) {
+    return <DailyPulseFrame collapsed onToggle={toggle} />;
+  }
+
+  // A missing preference remains an inexpensive opt-in gate. A stored open
+  // preference instead renders the expanded shell immediately and restores
+  // the live corpus behind an honest loading state.
+  if (!gamesRes.isActive && intent !== "open") {
+    return <DailyPulseGate onLoad={loadPulse} />;
   }
 
   return (
-    <section
-      aria-label="Daily Pulse"
-      className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
-    >
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={!collapsed}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-      >
-        <span className="flex items-center gap-2.5">
-          <span aria-hidden className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-          </span>
-          <span className="text-caption font-semibold text-text">
-            Daily Pulse
-          </span>
-          <span className="hidden text-micro text-text-dim sm:inline">
-            fresh from your replays · rotates daily
-          </span>
+    <DailyPulseFrame collapsed={false} onToggle={toggle}>
+      {!gamesRes.isActive || gamesRes.isLoading ? (
+        <DailyPulseStatus />
+      ) : gamesRes.error ? (
+        <DailyPulseStatus failed onRetry={loadPulse} />
+      ) : selection.cards.length > 0 ? (
+        <div className="flex snap-x gap-3 overflow-x-auto pb-1">
+          {selection.cards.map((card) => (
+            <PulseCardView
+              key={card.id}
+              card={card}
+              onNavigate={onNavigate}
+              onOpenOpponent={onOpenOpponent}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="px-1 py-1 text-xs text-text-dim">
+          No replay insights yet. More games will unlock your daily pulse.
+        </p>
+      )}
+    </DailyPulseFrame>
+  );
+}
+
+function DailyPulseFrame({
+  collapsed = false,
+  onToggle,
+  children,
+  pending = false,
+}: {
+  collapsed?: boolean;
+  onToggle?: () => void;
+  children?: ReactNode;
+  pending?: boolean;
+}) {
+  const headerContent = (
+    <>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span aria-hidden className="relative flex h-2 w-2 flex-shrink-0">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
         </span>
+        <span className="text-caption font-semibold text-text">
+          Daily Pulse
+        </span>
+        <span className="hidden truncate text-micro text-text-dim sm:inline">
+          fresh from your replays · rotates daily
+        </span>
+      </span>
+      {!pending ? (
         <ChevronDown
           aria-hidden
           className={`h-4 w-4 flex-shrink-0 text-text-dim transition-transform ${
             collapsed ? "-rotate-90" : ""
           }`}
         />
-      </button>
-      {!collapsed ? (
-        <div className="border-t border-border p-3">
-          {selection.cards.length > 0 ? (
-            <div className="flex snap-x gap-3 overflow-x-auto pb-1">
-              {selection.cards.map((card) => (
-                <PulseCardView
-                  key={card.id}
-                  card={card}
-                  onNavigate={onNavigate}
-                  onOpenOpponent={onOpenOpponent}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="px-1 py-1 text-xs text-text-dim">
-              No replay insights yet. More games will unlock your daily pulse.
-            </p>
-          )}
+      ) : null}
+    </>
+  );
+  return (
+    <section
+      aria-label="Daily Pulse"
+      className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
+    >
+      {pending ? (
+        <div className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3">
+          {headerContent}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-controls="daily-pulse-content"
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Open" : "Close"} Daily Pulse`}
+          className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        >
+          {headerContent}
+        </button>
+      )}
+      {!pending ? (
+        <div
+          id="daily-pulse-content"
+          hidden={collapsed}
+          className="border-t border-border p-3"
+        >
+          {children}
         </div>
       ) : null}
     </section>
   );
 }
 
-function DailyPulseGate({
-  loading,
-  failed,
-  onLoad,
-}: {
-  loading: boolean;
-  failed: boolean;
-  onLoad: () => void;
-}) {
+function DailyPulseGate({ onLoad }: { onLoad: () => void }) {
   return (
     <section
       aria-label="Daily Pulse"
@@ -247,8 +305,8 @@ function DailyPulseGate({
       <button
         type="button"
         onClick={onLoad}
-        disabled={loading}
-        className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-bg-elevated disabled:cursor-wait disabled:hover:bg-transparent"
+        aria-expanded={false}
+        className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
       >
         <span className="flex min-w-0 items-center gap-2.5">
           <span aria-hidden className="relative flex h-2 w-2 flex-shrink-0">
@@ -259,26 +317,49 @@ function DailyPulseGate({
             Daily Pulse
           </span>
           <span className="truncate text-micro text-text-dim">
-            {loading
-              ? "Loading replay insights…"
-              : failed
-                ? "Replay insights couldn’t load"
-                : "Replay insights, loaded when you open them"}
+            Replay insights, loaded when you open them
           </span>
         </span>
-        {loading ? (
-          <Loader2
-            aria-hidden
-            className="h-4 w-4 flex-shrink-0 animate-spin text-accent"
-          />
-        ) : (
-          <span className="inline-flex flex-shrink-0 items-center gap-1 text-micro font-semibold text-accent">
-            {failed ? "Try again" : "Load"}
-            <ArrowRight aria-hidden className="h-3 w-3" />
-          </span>
-        )}
+        <span className="inline-flex flex-shrink-0 items-center gap-1 text-micro font-semibold text-accent">
+          Load
+          <ArrowRight aria-hidden className="h-3 w-3" />
+        </span>
       </button>
     </section>
+  );
+}
+
+function DailyPulseStatus({
+  failed = false,
+  onRetry,
+}: {
+  failed?: boolean;
+  onRetry?: () => void;
+}) {
+  if (failed) {
+    return (
+      <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-3 px-1 py-1">
+        <span className="text-xs text-text-dim">
+          Replay insights couldn’t load
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex min-h-[36px] items-center justify-center rounded-full border border-line bg-bg-surface px-3 text-micro font-semibold text-accent transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div
+      role="status"
+      className="flex min-h-[44px] items-center gap-2 px-1 py-1 text-xs text-text-dim"
+    >
+      <Loader2 aria-hidden className="h-4 w-4 animate-spin text-accent" />
+      Loading replay insights…
+    </div>
   );
 }
 

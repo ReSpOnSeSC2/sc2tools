@@ -134,12 +134,14 @@ const GAMES: PulseGamesPage = {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-07-18T16:00:00.000Z"));
+  window.localStorage.clear();
   mutateGames.mockReset();
   useApiMock.mockReset();
 });
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.useRealTimers();
 });
 
@@ -173,6 +175,55 @@ function wire(args?: {
 }
 
 describe("LadderPulse", () => {
+  it("stays open by default and persists an explicit close or reopen", () => {
+    wire({ games: GAMES, meta: META_ROW });
+    render(<LadderPulse />);
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Ladder Pulse" }),
+    ).toBeTruthy();
+    const close = screen.getByRole("button", { name: "Close Ladder Pulse" });
+    expect(close.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("vs Alpha")).toBeTruthy();
+
+    fireEvent.click(close);
+    expect(
+      screen.getByRole("button", { name: "Open Ladder Pulse" }).getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("false");
+    expect(screen.queryByText("vs Alpha")).toBeNull();
+    expect(
+      window.localStorage.getItem("analyzer.ladderPulse.collapsed"),
+    ).toBe("1");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Ladder Pulse" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Close Ladder Pulse" }).getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("true");
+    expect(screen.getByText("vs Alpha")).toBeTruthy();
+    expect(
+      window.localStorage.getItem("analyzer.ladderPulse.collapsed"),
+    ).toBe("0");
+  });
+
+  it("restores a closed Ladder Pulse after a remount", () => {
+    window.localStorage.setItem("analyzer.ladderPulse.collapsed", "1");
+    wire({ games: GAMES, meta: META_ROW });
+    render(<LadderPulse />);
+
+    expect(
+      screen.getByRole("button", { name: "Open Ladder Pulse" }).getAttribute(
+        "aria-expanded",
+      ),
+    ).toBe("false");
+    expect(screen.queryByText("vs Alpha")).toBeNull();
+  });
+
   it("renders the newest real replay, verified MMR delta, daily replay, and live meta movement", () => {
     wire({ games: GAMES, meta: META_ROW });
     render(<LadderPulse />);
@@ -305,12 +356,18 @@ describe("LadderPulse", () => {
     wire({ gamesLoading: true });
     render(<LadderPulse />);
     expect(
+      screen.getByRole("button", { name: "Close Ladder Pulse" }),
+    ).toBeTruthy();
+    expect(
       screen.getByLabelText("Loading Ladder Pulse").getAttribute("aria-busy"),
     ).toBe("true");
 
     cleanup();
     wire({ games: { items: [] } });
     render(<LadderPulse />);
+    expect(
+      screen.getByRole("button", { name: "Close Ladder Pulse" }),
+    ).toBeTruthy();
     expect(
       screen.getByText("Your Ladder Pulse starts with a replay"),
     ).toBeTruthy();
@@ -325,6 +382,9 @@ describe("LadderPulse", () => {
     });
     render(<LadderPulse />);
 
+    expect(
+      screen.getByRole("button", { name: "Close Ladder Pulse" }),
+    ).toBeTruthy();
     expect(screen.getByText("Ladder Pulse is temporarily quiet")).toBeTruthy();
     expect(screen.getByText("Replay service unavailable.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));

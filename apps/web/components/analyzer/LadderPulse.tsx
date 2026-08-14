@@ -47,11 +47,12 @@ import { gameAnalysisHref } from "@/lib/opponentNavigation";
 import { useDailySeed } from "./arcade/hooks/useDailySeed";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
-import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { LadderPulseFrame as PulseFrame } from "./LadderPulseFrame";
 
 const RECENT_RAIL_SIZE = 6;
 const META_REFRESH_MS = 60 * 60 * 1000;
+const LS_COLLAPSED_KEY = "analyzer.ladderPulse.collapsed";
 
 /**
  * Persistent replay-fed briefing for the analyzer.
@@ -69,6 +70,19 @@ export function LadderPulse() {
   const { dbRev } = useFilters();
   const daily = useDailySeed();
   const now = useMinuteClock();
+  const [collapsed, setCollapsed] = useState(false);
+  const [preferenceHydrated, setPreferenceHydrated] = useState(false);
+  useEffect(() => {
+    setCollapsed(readCollapsed());
+    setPreferenceHydrated(true);
+  }, []);
+  const toggle = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      writeCollapsed(next);
+      return next;
+    });
+  };
   const gamesReq = useApi<PulseGamesPage>(
     `/v1/games?limit=40#${dbRev}`,
     { keepPreviousData: true },
@@ -107,12 +121,24 @@ export function LadderPulse() {
     [metaReq.data?.row],
   );
 
+  if (!preferenceHydrated) {
+    return <PulseFrame pending updatedAt={latest?.date} />;
+  }
+  if (collapsed) {
+    return (
+      <PulseFrame
+        collapsed
+        onToggle={toggle}
+        updatedAt={latest?.date}
+      />
+    );
+  }
   if (gamesReq.isLoading && !gamesReq.data) {
-    return <PulseLoading />;
+    return <PulseLoading onToggle={toggle} />;
   }
   if (gamesReq.error && !gamesReq.data) {
     return (
-      <PulseFrame>
+      <PulseFrame onToggle={toggle}>
         <EmptyStatePanel
           size="sm"
           icon={<CloudOff className="h-5 w-5" aria-hidden />}
@@ -134,7 +160,7 @@ export function LadderPulse() {
   }
   if (!latest) {
     return (
-      <PulseFrame>
+      <PulseFrame onToggle={toggle}>
         <EmptyStatePanel
           size="sm"
           icon={<Radio className="h-5 w-5" aria-hidden />}
@@ -152,7 +178,7 @@ export function LadderPulse() {
   }
 
   return (
-    <PulseFrame updatedAt={latest.date}>
+    <PulseFrame updatedAt={latest.date} onToggle={toggle}>
       <div className="grid divide-y divide-border lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
         <LatestDispatch
           key={latest.gameId}
@@ -175,57 +201,6 @@ export function LadderPulse() {
         )}
       </div>
     </PulseFrame>
-  );
-}
-
-function PulseFrame({
-  updatedAt,
-  children,
-}: {
-  updatedAt?: string | null;
-  children: ReactNode;
-}) {
-  return (
-    <Card
-      variant="feature"
-      padded={false}
-      aria-labelledby="ladder-pulse-title"
-      data-testid="ladder-pulse"
-    >
-      <Card.Header className="bg-bg-elevated/60">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden
-            className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-cyan/15 text-accent-cyan"
-          >
-            <span className="absolute inset-1 rounded-full border border-accent-cyan/40 motion-safe:animate-pulse" />
-            <Radio className="relative h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h2
-              id="ladder-pulse-title"
-              className="text-body font-bold text-text"
-            >
-              Ladder Pulse
-            </h2>
-            <p className="truncate text-micro text-text-dim">
-              Latest synced replay · daily rediscovery · nightly ladder movement
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <Badge variant="cyan" size="sm">
-            Replay-fed
-          </Badge>
-          {updatedAt ? (
-            <span className="hidden text-micro text-text-dim sm:inline">
-              {fmtAgo(updatedAt)}
-            </span>
-          ) : null}
-        </div>
-      </Card.Header>
-      {children}
-    </Card>
   );
 }
 
@@ -570,9 +545,9 @@ function MetaLoading() {
   );
 }
 
-function PulseLoading() {
+function PulseLoading({ onToggle }: { onToggle: () => void }) {
   return (
-    <PulseFrame>
+    <PulseFrame onToggle={onToggle}>
       <div
         className="grid divide-y divide-border lg:grid-cols-3 lg:divide-x lg:divide-y-0"
         aria-busy="true"
@@ -669,6 +644,24 @@ function useMinuteClock(): number {
     return () => window.clearInterval(id);
   }, []);
   return now;
+}
+
+function readCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(LS_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_COLLAPSED_KEY, value ? "1" : "0");
+  } catch {
+    /* A blocked preference store should never break the live pulse. */
+  }
 }
 
 function bestNamedLeak(game: PulseGame) {
