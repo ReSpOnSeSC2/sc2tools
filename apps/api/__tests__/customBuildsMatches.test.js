@@ -920,6 +920,7 @@ describe("GET /v1/custom-builds/:slug/transitions", () => {
       }),
     );
     expect(putRes.status).toBe(200);
+    return putRes.body?.reclassify?.generation || null;
   }
 
   test("returns only the transitions half of the payload", async () => {
@@ -985,7 +986,17 @@ describe("GET /v1/custom-builds/:slug/transitions", () => {
   test("second call within 60s short-circuits via the cache", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-tx-cache-1", new Date("2026-05-09T00:00:00Z"));
-    await savePhaseBuild();
+    // The PUT queues a reclassification, and the phase cache key carries the
+    // classification revision. Landing that job between the two reads gives
+    // the second one a different key, so it recomputes and labels the build
+    // node from the saved build name instead of the raw myBuild — the source
+    // of an intermittent "PvZ Adept" vs "PvZ — Adept" mismatch here. Settle
+    // the revision first, like the content tests above, so this test measures
+    // the cache and nothing else.
+    const generation = await savePhaseBuild();
+    if (generation) {
+      await waitForReclassification(db, userId, generation);
+    }
 
     const first = await withAuth(
       request(app).get("/v1/custom-builds/pvz-adept/transitions"),
