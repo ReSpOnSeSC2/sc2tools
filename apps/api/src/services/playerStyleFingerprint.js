@@ -23,7 +23,9 @@
  *    the weight that determines the effective-build tier.
  *  - Pace checks distribution signatures before falling back to the mean. A
  *    player with substantial sub-five and post-fifteen-minute tails must not
- *    be averaged into the generic Flexible Pacer label.
+ *    be averaged into the generic Flexible Pacer label. Order matters where
+ *    the bands nest (over-15:00 inside over-10:00); the timing window and the
+ *    mid/late band do not overlap at all.
  *
  * `axis.value` is a stable public contract: repertoire reports a raw build
  * count and pace reports a duration in seconds, because `tickerFacts` renders
@@ -56,7 +58,13 @@ const GRINDER_MAX_EFFECTIVE_BUILDS = 5;
 const CREATIVE_MIN_EFFECTIVE_BUILDS = 10;
 const MIN_VALID_DURATION_SEC = 45;
 const FIVE_MIN_SEC = 5 * 60;
-const SEVEN_MIN_SEC = 7 * 60;
+/**
+ * Upper edge of the timing-attack window and of the flexible average band.
+ * A "timing attack" in 1v1 lands between roughly five and ten minutes, so the
+ * window closes at 10:00 rather than the 7:00 it used to; anything decided
+ * after that is mid-game play, not a timing hit.
+ */
+const TEN_MIN_SEC = 10 * 60;
 const FIFTEEN_MIN_SEC = 15 * 60;
 const TWO_SPEED_MIN_PERCENT = 25;
 const DOMINANT_TIMEFRAME_MIN_PERCENT = 80;
@@ -136,32 +144,32 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Striker",
       adjective: "Clockwork",
       blurb:
-        "At least 80% of your games end from 5:00 through 7:00, revealing a concentrated timing window.",
-      thresholdText: "80%+ of games from 5:00 through 7:00",
+        "At least 80% of your games end from 5:00 through 10:00, revealing a concentrated timing window.",
+      thresholdText: "80%+ of games from 5:00 through 10:00",
     },
     flexible: {
       label: "Flexible Pacer",
       noun: "Operator",
       adjective: "Flexible",
       blurb:
-        "No stronger timing signature dominates, and your average sits inclusively from 5:00 through 15:00.",
-      thresholdText: "average from 5:00 through 15:00",
+        "No stronger timing signature dominates, and your average sits inclusively from 5:00 through 10:00.",
+      thresholdText: "average from 5:00 through 10:00",
     },
     mid_late_master: {
       label: "Mid/Late-Game Master",
       noun: "Navigator",
       adjective: "Transitional",
       blurb:
-        "At least 80% of your games last beyond 7:00, showing repeatable comfort through the mid game and later transitions.",
-      thresholdText: "80%+ of games over 7:00",
+        "At least 80% of your games last beyond 10:00, showing repeatable comfort through the mid game and later transitions.",
+      thresholdText: "80%+ of games over 10:00",
     },
     late_game: {
       label: "Long-Game Lean",
       noun: "Endurer",
       adjective: "Long-Game",
       blurb:
-        "Your average runs beyond 15:00, but the 80% mastery signatures did not fire, so this is a lean rather than a mastery claim.",
-      thresholdText: "average over 15:00",
+        "Your average runs beyond 10:00, but the 80% mastery signatures did not fire, so this is a lean rather than a mastery claim.",
+      thresholdText: "average over 10:00",
     },
     late_game_master: {
       label: "Late-Game Master",
@@ -180,14 +188,20 @@ const AXIS_VOCABULARY = Object.freeze({
       thresholdText: "25%+ under 5:00 and 25%+ over 15:00",
     },
   }),
+  /**
+   * Wording rule for this axis: say what the player did, in points, and stop.
+   * The scoring anchors and endpoint mechanics belong in the methodology
+   * panel, not in a trait blurb — spelling them out here is what made these
+   * five labels unreadable.
+   */
   matchup_edge: Object.freeze({
     specialist: {
       label: "Matchup Specialist",
       noun: "Ace",
       adjective: "Dominant",
       blurb:
-        "This selected matchup wins at least 10 percentage points more often than your qualifying comparison matchups.",
-      thresholdText: "10+ point selected-matchup advantage",
+        "You win this matchup at least 10 points more often than your other matchups.",
+      thresholdText: "10+ points better",
       score: 2,
       trackPosition: 0,
     },
@@ -196,8 +210,8 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Hunter",
       adjective: "Favored",
       blurb:
-        "This selected matchup is on the strength side without reaching the 10-point specialist endpoint; 7.5 points is its scoring anchor.",
-      thresholdText: "strength-side result below the 10-point endpoint",
+        "You win this matchup more often than your other matchups, but by less than 10 points.",
+      thresholdText: "up to 10 points better",
       score: 1,
       trackPosition: 25,
     },
@@ -206,8 +220,8 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Universalist",
       adjective: "Even-Handed",
       blurb:
-        "All three qualifying matchup win rates are within 5 percentage points, so no selected matchup is singled out.",
-      thresholdText: "all three matchup rates within 5 points",
+        "All three of your matchups land within 5 points of each other, so none stands out.",
+      thresholdText: "all 3 within 5 points",
       score: 0,
       trackPosition: 50,
     },
@@ -216,8 +230,8 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Climber",
       adjective: "Battle-Tested",
       blurb:
-        "This selected matchup is on the weakness side without reaching the 10-point blind-spot endpoint; 7.5 points is its scoring anchor.",
-      thresholdText: "weakness-side result below the 10-point endpoint",
+        "You win this matchup less often than your other matchups, but by less than 10 points.",
+      thresholdText: "up to 10 points worse",
       score: -1,
       trackPosition: 75,
     },
@@ -226,8 +240,8 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Underdog",
       adjective: "Fault-Line",
       blurb:
-        "This selected matchup wins at least 10 percentage points less often than your qualifying comparison matchups.",
-      thresholdText: "10+ point selected-matchup deficit",
+        "You win this matchup at least 10 points less often than your other matchups.",
+      thresholdText: "10+ points worse",
       score: -2,
       trackPosition: 100,
     },
@@ -256,7 +270,7 @@ const AXIS_META = Object.freeze({
   matchup_edge: {
     label: "Matchup edge",
     description:
-      "This matchup's win rate against the average of your other two. Unlike the other tracks, this one is about results, not style.",
+      "Your win rate in this matchup minus the average of your other two, in percentage points. Results, not style.",
     leftLabel: "Matchup Specialist",
     centerLabel: "Matchup Universalist",
     rightLabel: "Matchup Blind Spot",
@@ -685,6 +699,8 @@ function paceAxis(rows) {
     sampleSize,
   );
   return {
+    // 5:00 -> 0, 15:00 -> 100, which puts the 10:00 flexible/long-game
+    // boundary exactly at the centre of the track.
     position: linearPosition(
       /** @type {number} */ (rawAverage),
       FIVE_MIN_SEC,
@@ -710,8 +726,8 @@ function paceAxis(rows) {
  */
 function paceCategory(averageSec, summary, sampleSize) {
   const belowFiveGames = summary.belowFive.games;
-  const fiveToSevenGames = summary.fiveToSeven.games;
-  const aboveSevenGames = summary.aboveSeven.games;
+  const fiveToTenGames = summary.fiveToTen.games;
+  const aboveTenGames = summary.aboveTen.games;
   const aboveFifteenGames = summary.aboveFifteen.games;
   if (
     meetsPercentGate(belowFiveGames, sampleSize, TWO_SPEED_MIN_PERCENT) &&
@@ -724,22 +740,24 @@ function paceCategory(averageSec, summary, sampleSize) {
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
   ) return "late_game_master";
+  // Disjoint from the timing gate below: [5:00, 10:00] and (10:00, ∞) cannot
+  // both reach 80%, so neither shadows the other whatever the order.
   if (
     meetsPercentGate(
-      aboveSevenGames,
+      aboveTenGames,
       sampleSize,
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
   ) return "mid_late_master";
   if (
     meetsPercentGate(
-      fiveToSevenGames,
+      fiveToTenGames,
       sampleSize,
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
   ) return "timing_attacker";
   if (averageSec < FIVE_MIN_SEC) return "cheeser";
-  if (averageSec > FIFTEEN_MIN_SEC) return "late_game";
+  if (averageSec > TEN_MIN_SEC) return "late_game";
   return "flexible";
 }
 
@@ -1174,12 +1192,12 @@ function durationBucket(games, total) {
 function durationDistributionSummary(durations, averageSec) {
   const total = durations.length;
   const belowFiveGames = durations.filter((value) => value < FIVE_MIN_SEC).length;
-  const fiveToSevenGames = durations.filter(
-    (value) => value >= FIVE_MIN_SEC && value <= SEVEN_MIN_SEC,
+  const fiveToTenGames = durations.filter(
+    (value) => value >= FIVE_MIN_SEC && value <= TEN_MIN_SEC,
   ).length;
-  const aboveSevenGames = durations.filter((value) => value > SEVEN_MIN_SEC).length;
-  const sevenToFifteenGames = durations.filter(
-    (value) => value > SEVEN_MIN_SEC && value <= FIFTEEN_MIN_SEC,
+  const aboveTenGames = durations.filter((value) => value > TEN_MIN_SEC).length;
+  const tenToFifteenGames = durations.filter(
+    (value) => value > TEN_MIN_SEC && value <= FIFTEEN_MIN_SEC,
   ).length;
   const aboveFifteenGames = durations.filter(
     (value) => value > FIFTEEN_MIN_SEC,
@@ -1193,9 +1211,9 @@ function durationDistributionSummary(durations, averageSec) {
     midShare: total > 0 ? round3(middleGames / total) : null,
     lateShare: total > 0 ? round3(aboveFifteenGames / total) : null,
     belowFive: durationBucket(belowFiveGames, total),
-    fiveToSeven: durationBucket(fiveToSevenGames, total),
-    aboveSeven: durationBucket(aboveSevenGames, total),
-    sevenToFifteen: durationBucket(sevenToFifteenGames, total),
+    fiveToTen: durationBucket(fiveToTenGames, total),
+    aboveTen: durationBucket(aboveTenGames, total),
+    tenToFifteen: durationBucket(tenToFifteenGames, total),
     aboveFifteen: durationBucket(aboveFifteenGames, total),
   };
 }
@@ -1310,7 +1328,7 @@ module.exports = {
   CREATIVE_MIN_EFFECTIVE_BUILDS,
   MIN_VALID_DURATION_SEC,
   FIVE_MIN_SEC,
-  SEVEN_MIN_SEC,
+  TEN_MIN_SEC,
   FIFTEEN_MIN_SEC,
   TWO_SPEED_MIN_PERCENT,
   DOMINANT_TIMEFRAME_MIN_PERCENT,

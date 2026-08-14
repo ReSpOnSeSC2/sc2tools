@@ -37,9 +37,9 @@ type AxisDetail = {
   medianSec?: number | null;
   meanSec?: number;
   belowFive?: CountShare;
-  fiveToSeven?: CountShare;
-  aboveSeven?: CountShare;
-  sevenToFifteen?: CountShare;
+  fiveToTen?: CountShare;
+  aboveTen?: CountShare;
+  tenToFifteen?: CountShare;
   aboveFifteen?: CountShare;
   winRate?: number;
   comparatorWinRate?: number;
@@ -127,9 +127,9 @@ type FingerprintData = {
     midShare?: number | null;
     lateShare?: number | null;
     belowFive: CountShare;
-    fiveToSeven: CountShare;
-    aboveSeven: CountShare;
-    sevenToFifteen: CountShare;
+    fiveToTen: CountShare;
+    aboveTen: CountShare;
+    tenToFifteen: CountShare;
     aboveFifteen: CountShare;
   };
   matchupWinRates: MatchupWinRate[];
@@ -450,12 +450,13 @@ function FingerprintBody({
         </div>
       </section>
 
-      <div
-        className={`grid gap-4 ${
-          fp.paceSummary ? "xl:grid-cols-3" : "lg:grid-cols-2"
-        }`}
-      >
-        <MatchupEvidence fp={fp} />
+      {/* Matchup performance owns a full-width row. Sharing a three-column
+          row with the other two evidence cards left it about 110px per
+          matchup, which is where its win rates spilled out of their boxes. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="lg:col-span-2">
+          <MatchupEvidence fp={fp} />
+        </div>
         <PaceEvidence fp={fp} />
         <BuildEvidence fp={fp} />
       </div>
@@ -688,8 +689,8 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
       className="rounded-xl border border-border bg-bg-elevated/25 p-4"
       aria-labelledby="matchup-evidence-heading"
     >
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
+      <div className="flex flex-col gap-1.5">
+        <div className="min-w-0">
           <h4
             id="matchup-evidence-heading"
             className="text-caption font-semibold text-text"
@@ -700,28 +701,27 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
             Your win rates in all three matchups.
           </p>
         </div>
+        {/* A wrapping row under the heading, not a right-aligned stack: three
+            signed numbers pinned to the right edge crowded the heading on
+            phones and pushed past it in a narrow column. */}
         {signedEdge != null || tierScore != null || allMatchupSpread != null ? (
-          <div className="text-right text-micro font-semibold tabular-nums text-text-muted">
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro font-semibold tabular-nums text-text-muted">
             {signedEdge != null && edge?.category !== "universalist" ? (
-              <span className="block">
-                {formatSignedPoints(signedEdge)} vs comparison
-              </span>
+              <li>{formatSignedPoints(signedEdge)} vs your other matchups</li>
             ) : null}
             {tierScore != null ? (
-              <span className="block">
-                Tier score {formatSignedScore(tierScore)}
-              </span>
+              <li>Score {formatSignedScore(tierScore)}</li>
             ) : null}
             {allMatchupSpread != null ? (
-              <span className="block">
-                {formatPointGap(allMatchupSpread)} best-to-worst
-              </span>
+              <li>{formatPointGap(allMatchupSpread)} best to worst</li>
             ) : null}
-          </div>
+          </ul>
         ) : null}
       </div>
 
       {fp.matchupWinRates.length > 0 ? (
+        // One box per row on phones, three across from `sm` up — safe now
+        // that the section is full width at every breakpoint.
         <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {fp.matchupWinRates.map((row) => {
             const selected = row.matchup === fp.matchup;
@@ -731,7 +731,7 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
               <div
                 key={row.matchup}
                 className={[
-                  "rounded-lg border p-3",
+                  "min-w-0 rounded-lg border p-3",
                   strong
                     ? "border-accent/55 bg-accent/10"
                     : weak
@@ -741,7 +741,7 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
                         : "border-border bg-bg-surface/55",
                 ].join(" ")}
               >
-                <dt className="flex items-center justify-between gap-2">
+                <dt className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                   <span className="font-display text-caption font-bold text-text">
                     {row.matchup}
                   </span>
@@ -749,7 +749,7 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
                     {row.decidedGames} decided
                   </span>
                 </dt>
-                <dd className="mt-2 font-display text-h4 font-bold tabular-nums text-text">
+                <dd className="mt-2 font-display text-h4 font-bold leading-tight tabular-nums text-text">
                   {formatWinRate(row.winRate)}
                 </dd>
                 <dd className="mt-1 text-micro tabular-nums text-text-muted">
@@ -767,9 +767,6 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
                     }`}
                   >
                     Selected matchup
-                    {tierScore != null
-                      ? ` · score ${formatSignedScore(tierScore)}`
-                      : ""}
                   </dd>
                 ) : null}
               </div>
@@ -793,8 +790,8 @@ function PaceEvidence({ fp }: { fp: FingerprintData }) {
 
   const bins = [
     { label: "Under 5:00", value: summary.belowFive },
-    { label: "5:00–7:00", value: summary.fiveToSeven },
-    { label: "Over 7:00–15:00", value: summary.sevenToFifteen },
+    { label: "5:00–10:00", value: summary.fiveToTen },
+    { label: "Over 10:00–15:00", value: summary.tenToFifteen },
     { label: "Over 15:00", value: summary.aboveFifteen },
   ];
 
@@ -1018,14 +1015,14 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
               <p>
                 We use the real duration distribution before falling back to the
                 average. In order: a short/long split, an 80% over-15:00
-                cluster, an 80% over-7:00 cluster, and an 80% 5:00&ndash;7:00 timing
+                cluster, an 80% over-10:00 cluster, and an 80% 5:00&ndash;10:00 timing
                 window get first claim. Only then do the under-5:00,
-                5:00&ndash;15:00, and over-15:00 average profiles apply.
+                5:00&ndash;10:00, and over-10:00 average profiles apply.
               </p>
               <p>
                 Boundaries are deliberate: the split-profile extremes are strictly under
-                5:00 and over 15:00; exact 5:00 and 7:00 belong to the timing
-                window; Flexible includes exact 5:00 and 15:00 averages. A real
+                5:00 and over 15:00; exact 5:00 and 10:00 belong to the timing
+                window; Flexible includes exact 5:00 and 10:00 averages. A real
                 split can therefore override a misleading middle average.
               </p>
               {averageSec != null || medianSec != null ? (
@@ -1051,25 +1048,24 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
             <p className="text-caption font-semibold text-text">3. Selected-matchup edge</p>
             <div className="mt-1 space-y-2 text-micro leading-relaxed text-text-muted">
               <p>
-                We compare the selected {fp.matchup} win rate with the unweighted
-                mean of your other matchups that each have at least eight decided
-                games. Positive means this matchup is stronger; negative means it
-                is harder. One comparator can establish an edge or hurdle, but
-                only all three qualifying matchups can establish Universalist.
+                We compare your {fp.matchup} win rate with the average of your
+                other matchups that each have at least eight decided games.
+                Positive means this matchup is stronger; negative means it is
+                harder. One comparison matchup is enough for an edge or a
+                hurdle; Universalist needs all three.
               </p>
               <p>
-                If all three qualify and their best-to-worst spread is within 5
-                points, the result is Universalist (score 0). Otherwise +10 or
-                more is the +2 endpoint and &minus;10 or less is the &minus;2
-                endpoint; the two inside directions score +1 and &minus;1.
+                Ahead by 10 points or more is Specialist (score +2); behind by
+                10 or more is Blind Spot (score &minus;2). Smaller gaps are Edge
+                (+1) or Hurdle (&minus;1). If all three matchups qualify and
+                their best-to-worst spread is within 5 points, the result is
+                Universalist (score 0) instead.
               </p>
               <p>
-                The &plusmn;7.5 marks are visual anchors for clear moderate edges,
-                not extra categories or eligibility cutoffs. Values within 5
-                points stay near the center; &plusmn;10 reaches an endpoint. An
-                exact zero outside the all-three balanced case resolves to the
-                strength side so every qualifying result has one deterministic
-                label. Ties are displayed but do not enter win rates.
+                The &plusmn;7.5 marks are visual anchors for a clear moderate
+                edge, not extra tiers. An exact tie counts as the strength side,
+                so every qualifying result gets one label. Ties are displayed
+                but do not enter win rates.
               </p>
               {selectedEdge != null ? (
                 <p className="rounded-md border border-accent/20 bg-accent/5 p-2 text-text-muted">
@@ -1351,26 +1347,29 @@ function axisEvidence(
     detail?.allMatchupSpread,
     fp.matchupSummary.spread,
   );
-  const comparison = `You win ${fp.matchup} at ${formatWinRate(detail?.winRate ?? null)}, compared with ${formatWinRate(detail?.comparatorWinRate ?? null)} across ${against}: ${formatSignedPoints(delta)} from ${sample} decided game${plural}.`;
+  // One short sentence of numbers, then one short sentence of reasoning. The
+  // endpoint / anchor / tie-break mechanics live in the methodology panel —
+  // restating them here is what made this paragraph unreadable.
+  const comparison = `You win ${fp.matchup} at ${formatWinRate(detail?.winRate ?? null)}, versus ${formatWinRate(detail?.comparatorWinRate ?? null)} across ${against}. That is ${formatSignedPoints(delta)} from ${sample} decided game${plural}.`;
+  const label = axis.categoryLabel ?? "this tier";
+  const withScore = score != null ? ` (score ${formatSignedScore(score)})` : "";
 
   if (axis.category === "specialist") {
-    return `${comparison} That reaches the +10-point endpoint, selecting ${axis.categoryLabel}${score != null ? ` with score ${formatSignedScore(score)}` : ""}.`;
+    return `${comparison} Ahead by 10 points or more makes it ${label}${withScore}.`;
   }
   if (axis.category === "matchup_edge") {
-    const anchor = Math.abs(delta) >= 7.5 ? "at or beyond" : "inside";
-    const direction =
-      delta > 0 ? "positive, sub-10 result" : "zero-delta strength-side tie-break";
-    return `${comparison} This ${direction} selects ${axis.categoryLabel}${score != null ? ` with score ${formatSignedScore(score)}` : ""}; it sits ${anchor} the +7.5 visual anchor. The 5-point band only becomes Universalist when all three matchups qualify and fit inside it.`;
+    return delta === 0
+      ? `${comparison} Dead level counts as the strength side, so it is ${label}${withScore}.`
+      : `${comparison} Ahead, but by less than 10 points, so it is ${label}${withScore}.`;
   }
   if (axis.category === "blind_spot") {
-    return `${comparison} That reaches the −10-point endpoint, selecting ${axis.categoryLabel}${score != null ? ` with score ${formatSignedScore(score)}` : ""}.`;
+    return `${comparison} Behind by 10 points or more makes it ${label}${withScore}.`;
   }
   if (axis.category === "matchup_hurdle") {
-    const anchor = Math.abs(delta) >= 7.5 ? "at or beyond" : "inside";
-    return `${comparison} This negative result has not reached −10, so it selects ${axis.categoryLabel}${score != null ? ` with score ${formatSignedScore(score)}` : ""}; it sits ${anchor} the −7.5 visual anchor. The 5-point band only becomes Universalist when all three matchups qualify and fit inside it.`;
+    return `${comparison} Behind, but by less than 10 points, so it is ${label}${withScore}.`;
   }
   if (axis.category === "universalist") {
-    return `${comparison} All three matchups qualify and their best-to-worst spread is ${formatPointGap(spread)}, within the 5-point Universalist band${score != null ? ` (score ${formatSignedScore(score)})` : ""}.`;
+    return `${comparison} All three matchups sit within ${formatPointGap(spread)} of each other, so it is ${label}${withScore}.`;
   }
   return comparison;
 }
@@ -1388,19 +1387,19 @@ function paceProfileEvidence(
     return `${summary.aboveFifteen.games}/${sample} (${formatSharePercent(summary.aboveFifteen.percent)}) ran over 15:00, meeting the 80% rule for ${label}.`;
   }
   if (axis.category === "mid_late_master") {
-    return `${summary.aboveSeven.games}/${sample} (${formatSharePercent(summary.aboveSeven.percent)}) reached beyond 7:00, meeting the 80% rule for ${label}.`;
+    return `${summary.aboveTen.games}/${sample} (${formatSharePercent(summary.aboveTen.percent)}) reached beyond 10:00, meeting the 80% rule for ${label}.`;
   }
   if (axis.category === "timing_attacker") {
-    return `${summary.fiveToSeven.games}/${sample} (${formatSharePercent(summary.fiveToSeven.percent)}) finished from 5:00 through 7:00, meeting the 80% rule for ${label}.`;
+    return `${summary.fiveToTen.games}/${sample} (${formatSharePercent(summary.fiveToTen.percent)}) finished from 5:00 through 10:00, meeting the 80% rule for ${label}.`;
   }
   if (axis.category === "cheeser") {
     return `The average is strictly under 5:00, so the server selects ${label}.`;
   }
   if (axis.category === "late_game") {
-    return `The average is over 15:00 without an 80% long-game cluster, so the server selects ${label}.`;
+    return `The average is over 10:00 without an 80% long-game cluster, so the server selects ${label}.`;
   }
   if (axis.category === "flexible") {
-    return `The average is from 5:00 through 15:00 and no stronger distribution pattern overrides it, so the server selects ${label}.`;
+    return `The average is from 5:00 through 10:00 and no stronger distribution pattern overrides it, so the server selects ${label}.`;
   }
   return `The server selected ${label} from the real duration distribution above.`;
 }
@@ -1508,9 +1507,15 @@ function taxonomyCombinationCount(axes: TaxonomyAxis[]): number {
   return axes.reduce((total, axis) => total * axis.categories.length, 1);
 }
 
+/**
+ * Win rates and point gaps render to one decimal, not three. The API keeps
+ * full precision — display precision is a layout decision, and "70.968%" both
+ * overflowed the matchup boxes and read as false precision on a 31-game
+ * sample.
+ */
 function formatWinRate(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 3)}%`;
+  return `${formatNumber(value, 1)}%`;
 }
 
 function formatSharePercent(value: number | null): string {
@@ -1526,13 +1531,13 @@ function formatPercentValue(value: number): string {
 
 function formatPointGap(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 3)} percentage point${Math.abs(value) === 1 ? "" : "s"}`;
+  return `${formatNumber(value, 1)} pts`;
 }
 
 function formatSignedPoints(value: number): string {
   if (!Number.isFinite(value)) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${formatNumber(Math.abs(value), 3)} pts`;
+  return `${sign}${formatNumber(Math.abs(value), 1)} pts`;
 }
 
 function formatSignedScore(value: number): string {

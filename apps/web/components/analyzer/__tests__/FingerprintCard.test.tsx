@@ -126,7 +126,7 @@ const TAXONOMY = {
           "Striker",
           "Clockwork",
           "Your games cluster in a concentrated timing window.",
-          "80%+ of games from 5:00 through 7:00",
+          "80%+ of games from 5:00 through 10:00",
         ),
         trait(
           "flexible",
@@ -134,7 +134,7 @@ const TAXONOMY = {
           "Operator",
           "Flexible",
           "No stronger timing signature dominates.",
-          "average from 5:00 through 15:00",
+          "average from 5:00 through 10:00",
         ),
         trait(
           "mid_late_master",
@@ -142,15 +142,15 @@ const TAXONOMY = {
           "Navigator",
           "Transitional",
           "Your games repeatedly reach the mid game and later.",
-          "80%+ of games over 7:00",
+          "80%+ of games over 10:00",
         ),
         trait(
           "late_game",
           "Long-Game Lean",
           "Endurer",
           "Long-Game",
-          "Your average runs beyond fifteen minutes.",
-          "average over 15:00",
+          "Your average runs beyond ten minutes.",
+          "average over 10:00",
         ),
         trait(
           "late_game_master",
@@ -174,7 +174,7 @@ const TAXONOMY = {
       key: "matchup_edge",
       label: "Matchup edge",
       description:
-        "This matchup's win rate against the average of your other two.",
+        "Your win rate in this matchup minus the average of your other two, in percentage points.",
       leftLabel: "Matchup Specialist",
       centerLabel: "Matchup Universalist",
       rightLabel: "Matchup Blind Spot",
@@ -185,7 +185,7 @@ const TAXONOMY = {
           "Ace",
           "Dominant",
           "This selected matchup is a defining strength.",
-          "10+ point selected-matchup advantage",
+          "10+ points better",
           { score: 2, trackPosition: 0 },
         ),
         trait(
@@ -194,7 +194,7 @@ const TAXONOMY = {
           "Hunter",
           "Favored",
           "This selected matchup is on the strength side.",
-          "strength-side result below the 10-point endpoint",
+          "up to 10 points better",
           { score: 1, trackPosition: 25 },
         ),
         trait(
@@ -203,7 +203,7 @@ const TAXONOMY = {
           "Universalist",
           "Even-Handed",
           "All three matchup rates stay close.",
-          "all three matchup rates within 5 points",
+          "all 3 within 5 points",
           { score: 0, trackPosition: 50 },
         ),
         trait(
@@ -212,7 +212,7 @@ const TAXONOMY = {
           "Climber",
           "Battle-Tested",
           "This selected matchup is on the weakness side.",
-          "weakness-side result below the 10-point endpoint",
+          "up to 10 points worse",
           { score: -1, trackPosition: 75 },
         ),
         trait(
@@ -221,7 +221,7 @@ const TAXONOMY = {
           "Underdog",
           "Fault-Line",
           "This selected matchup is a defining weakness.",
-          "10+ point selected-matchup deficit",
+          "10+ points worse",
           { score: -2, trackPosition: 100 },
         ),
       ],
@@ -286,9 +286,9 @@ const PACE_SUMMARY = {
   averageSec: 489.46,
   medianSec: 480,
   belowFive: { games: 4, percent: 12.5 },
-  fiveToSeven: { games: 6, percent: 18.75 },
-  aboveSeven: { games: 22, percent: 68.75 },
-  sevenToFifteen: { games: 18, percent: 56.25 },
+  fiveToTen: { games: 6, percent: 18.75 },
+  aboveTen: { games: 22, percent: 68.75 },
+  tenToFifteen: { games: 18, percent: 56.25 },
   aboveFifteen: { games: 4, percent: 12.5 },
 };
 
@@ -511,9 +511,10 @@ describe("FingerprintCard", () => {
 
       const row = screen.getByTestId("fingerprint-axis-matchup_edge");
       expect(row.textContent).toMatch(/PvP and PvT/);
-      expect(row.textContent).toMatch(/70\.968%/);
+      // Display precision is one decimal; the API still returns 70.968.
+      expect(row.textContent).toMatch(/71%/);
       expect(row.textContent).toMatch(/55%/);
-      expect(row.textContent).toMatch(/\+15\.968 pts/);
+      expect(row.textContent).toMatch(/\+16 pts/);
       expect(row.textContent).toMatch(/score \+2/i);
     });
 
@@ -636,9 +637,9 @@ describe("FingerprintCard", () => {
         averageSec: 600,
         medianSec: 540,
         belowFive: { games: 8, percent: 25 },
-        fiveToSeven: { games: 6, percent: 18.75 },
-        aboveSeven: { games: 18, percent: 56.25 },
-        sevenToFifteen: { games: 10, percent: 31.25 },
+        fiveToTen: { games: 6, percent: 18.75 },
+        aboveTen: { games: 18, percent: 56.25 },
+        tenToFifteen: { games: 10, percent: 31.25 },
         aboveFifteen: { games: 8, percent: 25 },
       };
       const twoSpeed = {
@@ -807,9 +808,9 @@ describe("FingerprintCard", () => {
         averageSec: null,
         medianSec: null,
         belowFive: { games: 0, percent: null },
-        fiveToSeven: { games: 0, percent: null },
-        aboveSeven: { games: 0, percent: null },
-        sevenToFifteen: { games: 0, percent: null },
+        fiveToTen: { games: 0, percent: null },
+        aboveTen: { games: 0, percent: null },
+        tenToFifteen: { games: 0, percent: null },
         aboveFifteen: { games: 0, percent: null },
       };
       const forming = {
@@ -1039,12 +1040,12 @@ describe("FingerprintCard", () => {
       expect(guide).toContain("five server tiers");
       expect(guide).toContain("short/long split");
       expect(guide).toContain("80% over-15:00 cluster");
-      expect(guide).toContain("80% over-7:00 cluster");
-      expect(guide).toContain("80% 5:00–7:00 timing window");
-      expect(guide).toContain("under-5:00, 5:00–15:00, and over-15:00");
+      expect(guide).toContain("80% over-10:00 cluster");
+      expect(guide).toContain("80% 5:00–10:00 timing window");
+      expect(guide).toContain("under-5:00, 5:00–10:00, and over-10:00");
       expect(guide).toContain("best-to-worst spread is within 5 points");
-      expect(guide).toContain("+10 or more is the +2 endpoint");
-      expect(guide).toContain("−10 or less is the −2 endpoint");
+      expect(guide).toContain("Ahead by 10 points or more is Specialist (score +2)");
+      expect(guide).toContain("behind by 10 or more is Blind Spot (score −2)");
       expect(guide).toContain("±7.5 marks are visual anchors");
       expect(guide).toContain(
         "Ties are displayed but do not enter win rates",

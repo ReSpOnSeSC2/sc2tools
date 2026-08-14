@@ -292,21 +292,21 @@ describe("skill fingerprint pure replay heuristics", () => {
   });
 
   describe("paceAxis", () => {
-    test("uses the exact [5:00, 7:00] timing window and strict outer boundaries", () => {
+    test("uses the exact [5:00, 10:00] timing window and strict outer boundaries", () => {
       const axis = paceAxis([
-        ...repeatedRows(4, { durationSec: 299 }),
+        ...repeatedRows(6, { durationSec: 299 }),
         ...repeatedRows(8, { durationSec: 300 }),
-        ...repeatedRows(8, { durationSec: 420 }),
-        ...repeatedRows(4, { durationSec: 421 }),
+        ...repeatedRows(6, { durationSec: 600 }),
+        ...repeatedRows(4, { durationSec: 601 }),
       ]);
       expect(axis).toMatchObject({
         category: "flexible",
         sampleSize: 24,
         summary: {
-          belowFive: { games: 4, percent: 16.67 },
-          fiveToSeven: { games: 16, percent: 66.67 },
-          aboveSeven: { games: 4, percent: 16.67 },
-          sevenToFifteen: { games: 4, percent: 16.67 },
+          belowFive: { games: 6, percent: 25 },
+          fiveToTen: { games: 14, percent: 58.33 },
+          aboveTen: { games: 4, percent: 16.67 },
+          tenToFifteen: { games: 4, percent: 16.67 },
           aboveFifteen: { games: 0, percent: 0 },
         },
       });
@@ -314,8 +314,8 @@ describe("skill fingerprint pure replay heuristics", () => {
       // 80% sample proves the gate without rounding its 8/10 cross-product.
       const exact = paceAxis([
         ...repeatedRows(4, { durationSec: 300 }),
-        ...repeatedRows(4, { durationSec: 420 }),
-        ...repeatedRows(2, { durationSec: 421 }),
+        ...repeatedRows(4, { durationSec: 600 }),
+        ...repeatedRows(2, { durationSec: 601 }),
       ]);
       expect(exact.category).toBe("timing_attacker");
     });
@@ -356,30 +356,31 @@ describe("skill fingerprint pure replay heuristics", () => {
         categoryLabel: "Late-Game Master",
         summary: {
           aboveFifteen: { games: 8, percent: 80 },
-          sevenToFifteen: { games: 2, percent: 20 },
+          tenToFifteen: { games: 2, percent: 20 },
         },
       });
       expect(below.category).toBe("mid_late_master");
     });
 
-    test("Mid/Late-Game Master wins at exactly 80% strictly above 7:00", () => {
+    test("Mid/Late-Game Master wins at exactly 80% strictly above 10:00", () => {
       const exact = paceAxis([
-        ...repeatedRows(8, { durationSec: 421 }),
-        ...repeatedRows(2, { durationSec: 420 }),
+        ...repeatedRows(8, { durationSec: 601 }),
+        ...repeatedRows(2, { durationSec: 600 }),
       ]);
       const below = paceAxis([
-        ...repeatedRows(7, { durationSec: 421 }),
-        ...repeatedRows(3, { durationSec: 420 }),
+        ...repeatedRows(7, { durationSec: 601 }),
+        ...repeatedRows(3, { durationSec: 600 }),
       ]);
       expect(exact).toMatchObject({
         category: "mid_late_master",
         categoryLabel: "Mid/Late-Game Master",
-        summary: { aboveSeven: { games: 8, percent: 80 } },
+        summary: { aboveTen: { games: 8, percent: 80 } },
       });
-      expect(below.category).toBe("flexible");
+      // 70% over 10:00 clears no 80% gate, and the mean lands past 10:00.
+      expect(below.category).toBe("late_game");
     });
 
-    test("fallback mean categories use <5:00, inclusive 5:00-15:00, and >15:00", () => {
+    test("fallback mean categories use <5:00, inclusive 5:00-10:00, and >10:00", () => {
       const cheeser = paceAxis([
         ...repeatedRows(5, { durationSec: 299 }),
         ...repeatedRows(5, { durationSec: 300 }),
@@ -388,31 +389,31 @@ describe("skill fingerprint pure replay heuristics", () => {
         ...repeatedRows(5, { durationSec: 180 }),
         ...repeatedRows(5, { durationSec: 420 }),
       ]);
-      const exactlyFifteen = paceAxis([
-        ...repeatedRows(5, { durationSec: 420 }),
-        ...repeatedRows(5, { durationSec: 1380 }),
+      const exactlyTen = paceAxis([
+        ...repeatedRows(5, { durationSec: 500 }),
+        ...repeatedRows(5, { durationSec: 700 }),
       ]);
-      const overFifteen = paceAxis([
-        ...repeatedRows(5, { durationSec: 420 }),
-        ...repeatedRows(5, { durationSec: 1382 }),
+      const overTen = paceAxis([
+        ...repeatedRows(5, { durationSec: 500 }),
+        ...repeatedRows(5, { durationSec: 702 }),
       ]);
       expect(cheeser).toMatchObject({ category: "cheeser", value: 299.5 });
       expect(exactlyFive).toMatchObject({ category: "flexible", value: 300 });
-      expect(exactlyFifteen).toMatchObject({ category: "flexible", value: 900 });
-      expect(overFifteen).toMatchObject({ category: "late_game", value: 901 });
+      expect(exactlyTen).toMatchObject({ category: "flexible", value: 600 });
+      expect(overTen).toMatchObject({ category: "late_game", value: 601 });
     });
 
     test("a mostly-late distribution clears the broader mid/late mastery gate", () => {
       const axis = paceAxis(
-        durationRows([...Array(9).fill(1200), ...Array(3).fill(600)]),
+        durationRows([...Array(9).fill(1200), ...Array(3).fill(700)]),
       );
       expect(axis.category).toBe("mid_late_master");
       expect(axis.position).toBeGreaterThan(50);
     });
 
-    test("a uniformly ten-minute distribution is a mid/late master", () => {
+    test("a uniformly ten-minute distribution sits inside the timing window", () => {
       const axis = paceAxis(durationRows(Array(12).fill(600)));
-      expect(axis.category).toBe("mid_late_master");
+      expect(axis.category).toBe("timing_attacker");
       expect(axis.position).toBe(50);
     });
 
@@ -439,10 +440,11 @@ describe("skill fingerprint pure replay heuristics", () => {
       expect(axis.detail.medianSec).toBe(240);
     });
 
-    test("5:00 and 7:00 are both inside the timing-attacker window", () => {
-      const atEdges = paceAxis(durationRows(Array(12).fill(420)));
+    test("5:00 and 10:00 are both inside the timing-attacker window", () => {
+      const atEdges = paceAxis(durationRows(Array(12).fill(600)));
       expect(atEdges.category).toBe("timing_attacker");
-      expect(atEdges.detail.fiveToSeven.percent).toBe(100);
+      expect(atEdges.detail.fiveToTen.percent).toBe(100);
+      expect(atEdges.detail.aboveTen.percent).toBe(0);
       const atFive = paceAxis(durationRows(Array(12).fill(300)));
       expect(atFive.category).toBe("timing_attacker");
       expect(atFive.detail.belowFive.percent).toBe(0);
@@ -467,9 +469,9 @@ describe("skill fingerprint pure replay heuristics", () => {
           averageSec: 600,
           medianSec: 600,
           belowFive: { games: 0, percent: 0 },
-          fiveToSeven: { games: 0, percent: 0 },
-          aboveSeven: { games: 9, percent: 100 },
-          sevenToFifteen: { games: 9, percent: 100 },
+          fiveToTen: { games: 9, percent: 100 },
+          aboveTen: { games: 0, percent: 0 },
+          tenToFifteen: { games: 0, percent: 0 },
           aboveFifteen: { games: 0, percent: 0 },
         },
       });
@@ -486,9 +488,9 @@ describe("skill fingerprint pure replay heuristics", () => {
           averageSec: null,
           medianSec: null,
           belowFive: { games: 0, percent: null },
-          fiveToSeven: { games: 0, percent: null },
-          aboveSeven: { games: 0, percent: null },
-          sevenToFifteen: { games: 0, percent: null },
+          fiveToTen: { games: 0, percent: null },
+          aboveTen: { games: 0, percent: null },
+          tenToFifteen: { games: 0, percent: null },
           aboveFifteen: { games: 0, percent: null },
         },
       });
@@ -501,7 +503,7 @@ describe("skill fingerprint pure replay heuristics", () => {
       ]);
       expect(axis).toMatchObject({
         value: 500.1,
-        category: "mid_late_master",
+        category: "timing_attacker",
         sampleSize: 10,
         summary: { averageSec: 500.1, medianSec: 500 },
       });
@@ -1106,8 +1108,8 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     });
     expect(axes.pace).toMatchObject({
       value: 600,
-      category: "mid_late_master",
-      categoryLabel: "Mid/Late-Game Master",
+      category: "timing_attacker",
+      categoryLabel: "Timing Attacker",
       sampleSize: 10,
     });
     expect(axes.matchup_edge).toMatchObject({
@@ -1391,9 +1393,9 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       midShare: 1,
       lateShare: 0,
       belowFive: { games: 0, percent: 0 },
-      fiveToSeven: { games: 0, percent: 0 },
-      aboveSeven: { games: 50, percent: 100 },
-      sevenToFifteen: { games: 50, percent: 100 },
+      fiveToTen: { games: 0, percent: 0 },
+      aboveTen: { games: 50, percent: 100 },
+      tenToFifteen: { games: 50, percent: 100 },
       aboveFifteen: { games: 0, percent: 0 },
     });
     expect(fingerprint.windowTruncated).toBe(true);
