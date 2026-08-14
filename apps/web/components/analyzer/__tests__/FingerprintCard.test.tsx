@@ -28,7 +28,7 @@ const FP = {
     {
       key: "repertoire",
       label: "Build repertoire",
-      position: 75,
+      position: 38,
       value: 5,
       category: "adaptive",
       categoryLabel: "Adaptive Strategist",
@@ -37,7 +37,7 @@ const FP = {
     {
       key: "pace",
       label: "Game horizon",
-      position: 45,
+      position: 32,
       value: 489.46,
       category: "standard",
       categoryLabel: "Flexible Pacer",
@@ -46,8 +46,8 @@ const FP = {
     {
       key: "matchup_balance",
       label: "Matchup shape",
-      position: 12,
-      value: 14,
+      position: 0,
+      value: 20.968,
       category: "specialist",
       categoryLabel: "Matchup Specialist",
       sampleSize: 91,
@@ -58,7 +58,7 @@ const FP = {
     key: "adaptive|standard|specialist",
     name: "Strategic Specialist",
     description:
-      "A flexible build repertoire with standard pacing and one standout matchup.",
+      "You use 3-9 build orders in this matchup, giving you options without changing plans every game. Your average game is longer than 5:00 but shorter than 15:00, mixing early pressure, mid-game play, and transitions. One matchup is at least 10% stronger than both of your other matchups.",
     complete: true,
   },
   buildOrders: [
@@ -76,7 +76,7 @@ const FP = {
       wins: 18,
       losses: 12,
       ties: 1,
-      winRate: 0.6,
+      winRate: 60,
     },
     {
       matchup: "PvT",
@@ -85,7 +85,7 @@ const FP = {
       wins: 15,
       losses: 15,
       ties: 0,
-      winRate: 0.5,
+      winRate: 50,
     },
     {
       matchup: "PvZ",
@@ -94,13 +94,13 @@ const FP = {
       wins: 22,
       losses: 9,
       ties: 1,
-      winRate: 0.71024,
+      winRate: 70.968,
     },
   ],
   matchupSummary: {
-    spread: 21,
-    leaderGap: 11.004,
-    weakGap: 9.996,
+    spread: 20.968,
+    leaderGap: 10.968,
+    weakGap: 10,
     strongestMatchup: "PvZ",
     weakestMatchup: "PvT",
   },
@@ -130,17 +130,23 @@ describe("FingerprintCard", () => {
       screen.getByRole("heading", { name: "Strategic Specialist" }),
     ).toBeTruthy();
     expect(screen.getByText("Complete profile")).toBeTruthy();
-    expect(screen.getByText(/32 recent PvZ 1v1 replays in a 50-game window/)).toBeTruthy();
-    expect(screen.getByText("3 of 3 available")).toBeTruthy();
+    expect(
+      screen.getByText(/32 recent PvZ 1v1 replays, using up to your latest 50/),
+    ).toBeTruthy();
+    expect(screen.getByText("3 of 3 tracks ready")).toBeTruthy();
     expect(screen.getAllByTestId(/^fingerprint-axis-/)).toHaveLength(3);
     expect(screen.queryByTestId("fingerprint-axis-blind_spot")).toBeNull();
 
     const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
     expect(within(repertoire).getAllByText("Adaptive Strategist")).toHaveLength(2);
     expect(within(repertoire).getByText("5 builds")).toBeTruthy();
-    expect(within(repertoire).getByText(/5 distinct classified build orders/)).toBeTruthy();
+    expect(
+      within(repertoire).getByText(
+        /We recognized 5 different builds across 30 recent PvZ replays/,
+      ),
+    ).toBeTruthy();
     expect(screen.getByTestId("fingerprint-marker-repertoire").getAttribute("style"))
-      .toContain("left: 75%");
+      .toContain("left: 38%");
 
     const pace = screen.getByTestId("fingerprint-axis-pace");
     expect(within(pace).getAllByText("Flexible Pacer")).toHaveLength(2);
@@ -152,12 +158,14 @@ describe("FingerprintCard", () => {
     expect(within(matchup).getByText("Matchup Blind Spot")).toBeTruthy();
     expect(
       within(matchup).getByText(
-        /PvZ is the standout strength, leading both other matchups by at least 11.004 pp/,
+        /You win PvZ at least 10.968% more often than either of your other matchups/,
       ),
     ).toBeTruthy();
 
     expect(screen.getByText("PvZ - Stargate into Glaives")).toBeTruthy();
-    expect(screen.getByText("71.024%")).toBeTruthy();
+    expect(screen.getByText("70.968%")).toBeTruthy();
+    expect(screen.getByText("20.968% between best and worst")).toBeTruthy();
+    expect(screen.queryByText(/\bpp\b/i)).toBeNull();
     expect(screen.queryByText(/MMR percentile/)).toBeNull();
   });
 
@@ -189,10 +197,10 @@ describe("FingerprintCard", () => {
     });
     render(<FingerprintCard />);
 
-    expect(screen.getAllByText("2 of 3 signals").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2 of 3 tracks ready").length).toBeGreaterThan(0);
     const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
     expect(within(matchup).getByText("Not enough data")).toBeTruthy();
-    expect(within(matchup).getByText(/Missing data never counts as zero/)).toBeTruthy();
+    expect(within(matchup).getByText(/this track stays unranked/)).toBeTruthy();
     expect(screen.queryByTestId("fingerprint-marker-matchup_balance")).toBeNull();
     expect(screen.getByTestId("fingerprint-marker-repertoire")).toBeTruthy();
   });
@@ -241,14 +249,26 @@ describe("FingerprintCard", () => {
       archetype: {
         key: "adaptive|standard|blind_spot",
         name: "Strategic Soft Spot",
-        description: "Flexible plans with one matchup that trails the other two.",
+        description:
+          "You use 3-9 build orders in this matchup, giving you options without changing plans every game. Your average game is longer than 5:00 but shorter than 15:00, mixing early pressure, mid-game play, and transitions. One matchup is at least 10% weaker than both of your other matchups.",
         complete: true,
       },
+      matchupWinRates: FP.matchupWinRates.map((row) =>
+        row.matchup === "PvZ"
+          ? {
+              ...row,
+              decidedGames: 30,
+              wins: 18,
+              losses: 12,
+              winRate: 60,
+            }
+          : row,
+      ),
       matchupSummary: {
         ...FP.matchupSummary,
-        spread: 11.006,
-        leaderGap: 1.002,
-        weakGap: 10.004,
+        spread: 10,
+        leaderGap: 0,
+        weakGap: 10,
       },
     };
     useApiMock.mockReturnValue({
@@ -264,7 +284,7 @@ describe("FingerprintCard", () => {
     expect(within(matchup).getAllByText("Matchup Blind Spot")).toHaveLength(2);
     expect(
       within(matchup).getByText(
-        /PvT is the standout weakness, trailing both other matchups by at least 10.004 pp/,
+        /You win PvT at least 10% less often than either of your other matchups/,
       ),
     ).toBeTruthy();
     expect(
@@ -284,22 +304,35 @@ describe("FingerprintCard", () => {
     expect(details!.open).toBe(true);
 
     const guide = within(details!);
-    expect(guide.getByText(/One or two is a Consistent Grinder/)).toBeTruthy();
-    expect(guide.getByText(/Five minutes or less is Cheeser/)).toBeTruthy();
+    expect(guide.getByText(/One or two makes you a Consistent Grinder/)).toBeTruthy();
     expect(
-      guide.getByText(/5 percentage points or less stays in the 40–60 near-balanced band/),
+      guide.getByText(/three to nine makes you an Adaptive Strategist/),
+    ).toBeTruthy();
+    expect(guide.getByText(/10 or more makes you a Creative Genius/)).toBeTruthy();
+    expect(guide.getByText(/Five minutes or less makes you a Cheeser/)).toBeTruthy();
+    expect(
+      guide.getByText(/15 minutes or more makes you a Late-Game Specialist/),
     ).toBeTruthy();
     expect(
-      guide.getByText(/within 1 point is Matchup Universalist at dead center/),
+      guide.getByText(/within 5% of each other, your marker stays near the middle/),
     ).toBeTruthy();
-    expect(guide.getByText(/dominant 10\+ point lead over both/)).toBeTruthy();
-    expect(guide.getByText(/dominant 10\+ point deficit to both/)).toBeTruthy();
+    expect(
+      guide.getByText(/within 1% is Completely Balanced/),
+    ).toBeTruthy();
+    expect(
+      guide.getByText(/at least 10% better than each of the other two/),
+    ).toBeTruthy();
+    expect(
+      guide.getByText(/at least 10% worse than each of the other two/),
+    ).toBeTruthy();
     expect(
       guide.getByText(
-        /larger adjacent gap wins; an exact gap tie resolves to the original Matchup Specialist side/,
+        /larger gap decides; an exact tie goes to Matchup Specialist/,
       ),
     ).toBeTruthy();
-    expect(guide.getByText(/only wins and losses form the win-rate denominator/)).toBeTruthy();
+    expect(
+      guide.getByText(/only wins and losses count toward win rate/),
+    ).toBeTruthy();
 
     const catalogSummary = screen.getByText("All 36 archetypes");
     const catalog = catalogSummary.closest("details");

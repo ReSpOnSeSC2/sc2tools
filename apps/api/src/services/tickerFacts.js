@@ -803,7 +803,7 @@ function fmtDur(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Preserve fingerprint precision at the 5:00 / 12:00 average-time edges. */
+/** Preserve fingerprint precision at the 5:00 / 15:00 average-time edges. */
 /** @param {number} sec @returns {string} */
 function fmtAverageDur(sec) {
   const totalHundredths = Math.round(sec * 100);
@@ -922,8 +922,8 @@ function mostPlayedMatchup(games) {
  * Explain the current playstyle fingerprint with the raw replay measures that
  * actually selected it. Repertoire and pace describe the requested matchup;
  * matchup balance compares that race's three matchups. These are tendencies,
- * not skill percentiles, so the ticker reports counts, time, and percentage-
- * point gaps without benchmark language.
+ * not skill percentiles, so the ticker reports counts, time, and matchup
+ * win-rate gaps with familiar % notation rather than benchmark language.
  *
  * The legacy branch is deliberately retained for a short compatibility
  * window. Ticker facts are decorative and may be fed by a stale mock or a
@@ -1045,22 +1045,25 @@ function matchupDetail(summary, rawRates, axis) {
 
   if (category === "specialist" && lead !== null && lead >= 0) {
     return leader
-      ? `${leader} leads both other matchups by at least ${formatPointValue(lead)} points`
-      : `${formatPointValue(lead)}-point specialist lead`;
+      ? `${leader} is your strongest matchup, with a win rate at least ${formatPercentValue(lead)}% higher than your other two`
+      : `your best matchup has at least a ${formatPercentValue(lead)}% win-rate edge over the other two`;
   }
   if (category === "blind_spot" && weakGap !== null && weakGap >= 0) {
     return weakest
-      ? `${weakest} trails both other matchups by at least ${formatPointValue(weakGap)} points`
-      : `${formatPointValue(weakGap)}-point weakest-matchup gap`;
+      ? `${weakest} is your toughest matchup, with a win rate at least ${formatPercentValue(weakGap)}% lower than your other two`
+      : `your toughest matchup has at least a ${formatPercentValue(weakGap)}% win-rate gap from the other two`;
+  }
+  if (category === "universalist" && spread !== null && spread >= 0) {
+    return `all three matchup win rates are within ${formatPercentValue(spread)}%`;
   }
   return spread !== null && spread >= 0
-    ? `${formatPointValue(spread)}-point matchup spread`
+    ? `there is a ${formatPercentValue(spread)}% win-rate gap between your best and toughest matchups`
     : "";
 }
 
 /** Keep one decimal for whole values and reveal meaningful thousandths. */
 /** @param {number} value @returns {string} */
-function formatPointValue(value) {
+function formatPercentValue(value) {
   return value
     .toFixed(3)
     .replace(/0+$/, "")

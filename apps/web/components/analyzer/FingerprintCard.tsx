@@ -93,33 +93,33 @@ const AXIS_ORDER: ReadonlyArray<AxisKey> = [
 
 const AXIS_META: Record<AxisKey, AxisMeta> = {
   repertoire: {
-    title: "Build repertoire",
-    description:
-      "How many distinct, classified build orders you use in this matchup.",
+    title: "Build variety",
+    description: "How many different build orders you use in this matchup.",
     leftLabel: "Consistent Grinder",
     centerLabel: "Adaptive Strategist",
     rightLabel: "Creative Genius",
-    scale: "1–2 builds · 3–5 builds · 6+ builds",
+    scale: "1–2 builds · 3–9 builds · 10+ builds",
     trackClass: "from-text-dim/45 via-accent/45 to-accent-cyan/70",
   },
   pace: {
-    title: "Game horizon",
-    description: "Where your average game length sits in this matchup.",
+    title: "Average game length",
+    description:
+      "Whether your games usually end early, in the mid game, or in the late game.",
     leftLabel: "Cheeser",
     centerLabel: "Flexible Pacer",
     rightLabel: "Late-Game Specialist",
-    scale: "5:00 or less · middle ground · 12:00 or more",
+    scale: "5:00 or less · over 5:00 and under 15:00 · 15:00 or more",
     trackClass: "from-warning/60 via-accent/40 to-accent-cyan/70",
   },
   matchup_balance: {
-    title: "Matchup shape",
+    title: "Matchup strengths",
     description:
-      "One spectrum: a standout strength pulls left, a standout weakness pulls right, and balanced results stay near the center.",
+      "Compares your win rates across all three matchups. A clear strength pulls left; one weak matchup pulls right.",
     leftLabel: "Matchup Specialist",
     centerLabel: "Completely Balanced",
     rightLabel: "Matchup Blind Spot",
     scale:
-      "10+ pp strength · near-balanced ≤5 pp (Universalist ≤1 pp) · 10+ pp weakness",
+      "10%+ strength · all three within 5% (within 1% = balanced) · 10%+ weakness",
     trackClass: "from-accent-cyan/70 via-accent/30 to-danger/65",
   },
 };
@@ -247,7 +247,7 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
               >
                 {fp.archetype.complete
                   ? "Complete profile"
-                  : `${availableAxes.length} of 3 signals`}
+                  : `${availableAxes.length} of 3 tracks ready`}
               </span>
             </div>
             <h4
@@ -261,7 +261,7 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
             </p>
             <p className="mt-3 text-micro leading-relaxed text-text-dim">
               Based on {fp.games.toLocaleString()} recent {fp.matchup} 1v1 replay
-              {fp.games === 1 ? "" : "s"} in a {fp.windowGames}-game window.
+              {fp.games === 1 ? "" : "s"}, using up to your latest {fp.windowGames}.
             </p>
           </div>
 
@@ -280,7 +280,7 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
               value={axisAvailable(pace) ? formatDuration(pace.value) : "Still forming"}
             />
             <HeroStat
-              label="Matchup shape"
+              label="Matchup profile"
               value={
                 axisAvailable(matchupShape)
                   ? matchupShape.categoryLabel ?? "Still forming"
@@ -298,11 +298,11 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
               Your three playstyle spectra
             </h4>
             <p className="mt-0.5 text-micro text-text-dim">
-              Every marker is backed by the replay sample shown beneath it.
+              Each marker comes directly from the recent replays shown below it.
             </p>
           </div>
           <span className="rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-micro font-semibold text-text-muted">
-            {availableAxes.length} of 3 available
+            {availableAxes.length} of 3 tracks ready
           </span>
         </div>
         <div className="mt-3 space-y-3">
@@ -355,7 +355,7 @@ function SpectrumRow({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h5 className="text-caption font-semibold text-text">
-            {axis?.label || meta.title}
+            {meta.title}
           </h5>
           <p className="mt-0.5 text-micro leading-relaxed text-text-muted">
             {meta.description}
@@ -406,8 +406,8 @@ function SpectrumRow({
         </>
       ) : (
         <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-4 text-caption leading-relaxed text-text-dim">
-          {missingAxisEvidence(axisKey, axis, fp)} Missing data never counts as
-          zero.
+          {missingAxisEvidence(axisKey, axis, fp)} Until then, this track stays
+          unranked.
         </div>
       )}
     </article>
@@ -429,12 +429,12 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
             Matchup performance
           </h4>
           <p className="mt-0.5 text-micro text-text-dim">
-            The win-rate evidence behind your matchup shape.
+            Your recent win rates in all three matchups.
           </p>
         </div>
         {fp.matchupSummary.spread != null ? (
           <span className="text-micro font-semibold tabular-nums text-text-muted">
-            {formatPoints(fp.matchupSummary.spread)} spread
+            {formatPercentGap(fp.matchupSummary.spread)} between best and worst
           </span>
         ) : null}
       </div>
@@ -499,10 +499,10 @@ function BuildEvidence({ fp }: { fp: FingerprintData }) {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h4 id="build-evidence-heading" className="text-caption font-semibold text-text">
-            Build orders observed
+            Your recent builds
           </h4>
           <p className="mt-0.5 text-micro text-text-dim">
-            Classified builds in this {fp.matchup} window.
+            Builds detected in your recent {fp.matchup} replays.
           </p>
         </div>
         <span className="text-micro font-semibold tabular-nums text-text-muted">
@@ -531,8 +531,8 @@ function BuildEvidence({ fp }: { fp: FingerprintData }) {
         </ul>
       ) : (
         <p className="mt-3 rounded-lg border border-dashed border-border p-4 text-caption leading-relaxed text-text-dim">
-          No classified build orders were found in this window. Unknown and
-          too-short classifications are intentionally excluded.
+          We could not identify a named build in these replays. Unclassified
+          games and games that ended too quickly are left out.
         </p>
       )}
     </section>
@@ -553,52 +553,55 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
 
       <div className="border-t border-border px-3 py-4 sm:px-4">
         <p className="text-caption leading-relaxed text-text-muted">
-          The selected-matchup signals use your latest {fp.games} qualifying{" "}
-          {fp.matchup} 1v1 replays, capped at {fp.windowGames}. At least 10 are
-          required. This fixed recent-game window is independent of dashboard
-          filters.
+          Build variety and average game length use your latest {fp.games}{" "}
+          {fp.matchup} 1v1 replays, up to {fp.windowGames}. The matchup-strength
+          track compares separate recent windows against Protoss, Terran, and Zerg.
+          Each track needs enough games before it receives a rating. Dashboard
+          filters do not change these replay windows.
         </p>
 
         <ol className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
-            <p className="text-caption font-semibold text-text">1. Build repertoire</p>
+            <p className="text-caption font-semibold text-text">1. Build variety</p>
             <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              Counts distinct classified build-order labels. One or two is a
-              Consistent Grinder, three to five is an Adaptive Strategist, and six
-              or more is a Creative Genius. Unknown, Unclassified, and Game Too
-              Short labels never count as builds.
+              We count how many different named builds you played. One or two
+              makes you a Consistent Grinder, three to nine makes you an
+              Adaptive Strategist, and 10 or more makes you a Creative Genius.
+              Repeating the same build still counts as one build. Replays we
+              cannot classify are left out.
             </p>
           </li>
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
-            <p className="text-caption font-semibold text-text">2. Game horizon</p>
+            <p className="text-caption font-semibold text-text">2. Average game length</p>
             <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              Averages the duration of the qualifying games. Five minutes or
-              less is Cheeser; twelve minutes or more is Late-Game Specialist;
-              everything between is Flexible Pacer. Wins and losses both count;
-              games shorter than 45 seconds are treated as aborted starts.
+              We average how long your games last. Five minutes or less makes
+              you a Cheeser, 15 minutes or more makes you a Late-Game
+              Specialist, and anything between those marks makes you a Flexible
+              Pacer. Wins and losses both count. Games under 45 seconds are
+              ignored as likely quits or restarts.
             </p>
           </li>
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
-            <p className="text-caption font-semibold text-text">3. Matchup shape</p>
+            <p className="text-caption font-semibold text-text">3. Matchup strengths</p>
             <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              This is one strength-to-weakness spectrum. A best-to-worst spread
-              of 5 percentage points or less stays in the 40–60 near-balanced
-              band; within 1 point is Matchup Universalist at dead center. Above
-              that band, the marker moves continuously toward the dominant side.
-              A dominant 10+ point lead over both other matchups reaches the
-              Matchup Specialist endpoint; a dominant 10+ point deficit to both
-              reaches Matchup Blind Spot. If both outlier rules qualify, the
-              larger adjacent gap wins; an exact gap tie resolves to the
-              original Matchup Specialist side. Game-result ties are shown, but
-              only wins and losses form the win-rate denominator.
+              We compare your win rates in all three matchups on one track. If
+              they are within 5% of each other, your marker stays near the
+              middle; within 1% is Completely Balanced. If one matchup is at
+              least 10% better than each of the other two, you reach Matchup
+              Specialist. If one is at least 10% worse than each of the other
+              two, you reach Matchup Blind Spot. Between those marks, the marker
+              leans toward your larger strength or weakness. If both ends
+              qualify, the larger gap decides; an exact tie goes to Matchup
+              Specialist. Replay ties are shown, but only wins and losses count
+              toward win rate.
             </p>
           </li>
         </ol>
 
         <p className="mt-4 rounded-lg border border-accent/25 bg-accent/5 p-3 text-micro leading-relaxed text-text-muted">
-          The archetype name is deterministic: one repertoire category × one
-          pace category × one matchup-shape category. If a signal lacks enough
-          data, the profile is marked incomplete instead of inventing a value.
+          Your archetype name combines your build pool, average game length, and
+          matchup strengths. If one track needs more games, your profile stays
+          incomplete until the replay data is there.
         </p>
       </div>
     </details>
@@ -707,12 +710,12 @@ function axisValueLabel(
   }
   if (key === "pace") return `${formatDuration(axis.value)} avg`;
   if (axis.category === "specialist") {
-    return `${formatPoints(fp.matchupSummary.leaderGap)} edge`;
+    return `${formatPercentGap(fp.matchupSummary.leaderGap)} stronger`;
   }
   if (axis.category === "blind_spot") {
-    return `${formatPoints(fp.matchupSummary.weakGap)} gap`;
+    return `${formatPercentGap(fp.matchupSummary.weakGap)} weaker`;
   }
-  return `${formatPoints(fp.matchupSummary.spread)} spread`;
+  return `${formatPercentGap(fp.matchupSummary.spread)} range`;
 }
 
 function missingAxisEvidence(
@@ -721,15 +724,15 @@ function missingAxisEvidence(
   fp: FingerprintData,
 ): string {
   if (key === "repertoire") {
-    return `${axis?.sampleSize ?? 0} of 10 required replays have a usable classified build order.`;
+    return `We need 10 recent replays with a recognized build. We have ${axis?.sampleSize ?? 0}.`;
   }
   if (key === "pace") {
-    return `${axis?.sampleSize ?? 0} of 10 required replays have a valid game length.`;
+    return `We need 10 recent replays with a valid game time. We have ${axis?.sampleSize ?? 0}.`;
   }
   const counts = fp.matchupWinRates
     .map((row) => `${row.matchup} ${row.decidedGames}/10`)
     .join(" · ");
-  return `This comparison needs 10 decided games in each matchup${counts ? `. Current: ${counts}.` : "."}`;
+  return `We need 10 wins or losses in each matchup${counts ? `. Right now: ${counts}.` : "."}`;
 }
 
 function axisEvidence(
@@ -740,29 +743,29 @@ function axisEvidence(
   const sample = axis.sampleSize.toLocaleString();
   if (key === "repertoire") {
     const count = Math.round(axis.value as number);
-    return `${count} distinct classified build order${count === 1 ? "" : "s"} appeared across ${sample} usable ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
+    return `We recognized ${count} different build${count === 1 ? "" : "s"} across ${sample} recent ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
   }
   if (key === "pace") {
-    return `Average game length: ${formatDuration(axis.value as number)} across ${sample} timed ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
+    return `Your ${sample} timed ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"} averaged ${formatDuration(axis.value as number)}.`;
   }
   const { leaderGap, spread, strongestMatchup, weakGap, weakestMatchup } =
     fp.matchupSummary;
   if (axis.category === "specialist") {
-    return `${strongestMatchup ?? "Your strongest matchup"} is the standout strength, leading both other matchups by at least ${formatPoints(leaderGap)} across ${sample} decided games. That places it at the Matchup Specialist endpoint.`;
+    return `You win ${strongestMatchup ?? "your strongest matchup"} at least ${formatPercentGap(leaderGap)} more often than either of your other matchups. That makes it your Matchup Specialist side, based on ${sample} wins and losses.`;
   }
   if (axis.category === "blind_spot") {
-    return `${weakestMatchup ?? "Your weakest matchup"} is the standout weakness, trailing both other matchups by at least ${formatPoints(weakGap)} across ${sample} decided games. That places it at the Matchup Blind Spot endpoint.`;
+    return `You win ${weakestMatchup ?? "your weakest matchup"} at least ${formatPercentGap(weakGap)} less often than either of your other matchups. That makes it your Matchup Blind Spot side, based on ${sample} wins and losses.`;
   }
   if (axis.category === "universalist") {
-    return `All three matchup win rates are within ${formatPoints(spread)} across ${sample} decided games: Matchup Universalist at dead center.`;
+    return `Your three matchup win rates are only ${formatPercentGap(spread)} apart, putting you at Completely Balanced. This uses ${sample} wins and losses.`;
   }
   const direction =
     (axis.position as number) < 50
       ? "toward Matchup Specialist"
       : (axis.position as number) > 50
         ? "toward Matchup Blind Spot"
-        : "at the midpoint";
-  return `This Matchup Flex result sits ${direction} on the same spectrum, based on a ${formatPoints(spread)} best-to-worst spread across ${sample} decided games.`;
+        : "right in the middle";
+  return `Your best and worst matchup are ${formatPercentGap(spread)} apart, so your marker sits ${direction}. This uses ${sample} wins and losses.`;
 }
 
 function clampPosition(value: number): number {
@@ -778,9 +781,9 @@ function formatWinRate(value: number | null): string {
   return `${formatNumber(normalizeWinRate(value), 3)}%`;
 }
 
-function formatPoints(value: number | null): string {
+function formatPercentGap(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 3)} pp`;
+  return `${formatNumber(value, 3)}%`;
 }
 
 function formatDuration(seconds: number): string {

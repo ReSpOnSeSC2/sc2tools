@@ -19,10 +19,10 @@ const MIN_DURATION_SAMPLE = 10;
 const MIN_MATCHUP_GAMES = 10;
 
 const GRINDER_MAX_BUILDS = 2;
-const CREATIVE_MIN_BUILDS = 6;
+const CREATIVE_MIN_BUILDS = 10;
 const MIN_VALID_DURATION_SEC = 45;
 const CHEESE_MAX_SEC = 5 * 60;
-const LATE_GAME_MIN_SEC = 12 * 60;
+const LATE_GAME_MIN_SEC = 15 * 60;
 const BALANCED_MAX_SPREAD = 1;
 const NEAR_BALANCED_MAX_SPREAD = 5;
 const SPECIALIST_MIN_LEAD = 10;
@@ -88,16 +88,25 @@ const TRAIT_LABELS = Object.freeze({
 });
 
 const TRAIT_DESCRIPTIONS = Object.freeze({
-  grinder: "You repeat a compact repertoire and refine it through volume.",
-  adaptive: "You rotate through a focused but adaptable set of builds.",
-  creative: "You bring a wide build repertoire and regularly change the plan.",
-  cheeser: "Your games usually resolve inside the five-minute pressure window.",
-  standard: "Your average game sits between early pressure and late-game play.",
-  late_game: "Your games regularly reach the twelve-minute late-game threshold.",
-  specialist: "One matchup clearly outperforms both of the others.",
-  matchup_flex: "Your matchup results lean, but have no single ten-point outlier.",
-  universalist: "Your win rates stay virtually even across all three matchups.",
-  blind_spot: "One matchup trails both of the others by at least ten points.",
+  grinder:
+    "You use 1-2 build orders in this matchup and sharpen them through repetition.",
+  adaptive:
+    "You use 3-9 build orders in this matchup, giving you options without changing plans every game.",
+  creative:
+    "You use 10 or more build orders in this matchup and regularly show opponents something different.",
+  cheeser:
+    "Your average game ends in 5:00 or less, so your games are usually decided by early aggression.",
+  standard:
+    "Your average game is longer than 5:00 but shorter than 15:00, mixing early pressure, mid-game play, and transitions.",
+  late_game:
+    "Your average game lasts 15:00 or longer, showing that you are comfortable with late-game armies and upgrades.",
+  specialist:
+    "One matchup is at least 10% stronger than both of your other matchups.",
+  matchup_flex:
+    "Your matchup win rates are not perfectly even, but no matchup stands 10% above or below both others.",
+  universalist: "All three matchup win rates are within 1% of each other.",
+  blind_spot:
+    "One matchup is at least 10% weaker than both of your other matchups.",
 });
 
 class SkillFingerprintService {

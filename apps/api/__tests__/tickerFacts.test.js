@@ -245,10 +245,10 @@ describe("services/tickerFacts", () => {
     const skillFingerprint = {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
-        playstyle: "PvZ Creative Tactician",
+        playstyle: "Matchup Inventor",
         axes: [
-          { key: "repertoire", position: 100, value: 6, category: "creative" },
-          { key: "pace", position: 34, value: 444.42, category: "standard" },
+          { key: "repertoire", position: 100, value: 10, category: "creative" },
+          { key: "pace", position: 24, value: 444.42, category: "standard" },
           {
             key: "matchup_balance",
             position: 0,
@@ -256,19 +256,19 @@ describe("services/tickerFacts", () => {
             category: "specialist",
           },
         ],
-        buildOrders: Array.from({ length: 6 }, (_, i) => ({
+        buildOrders: Array.from({ length: 10 }, (_, i) => ({
           name: `PvZ build ${i + 1}`,
           games: i + 1,
         })),
         matchupWinRates: [
-          { matchup: "PvP", winRate: 48 },
-          { matchup: "PvT", winRate: 51.5 },
+          { matchup: "PvP", winRate: 47.945 },
+          { matchup: "PvT", winRate: 51.445 },
           { matchup: "PvZ", winRate: 62 },
         ],
         matchupSummary: {
           strongestMatchup: "PvZ",
           weakestMatchup: "PvP",
-          spread: 14,
+          spread: 14.055,
           leaderGap: 10.555,
           weakGap: 3.5,
         },
@@ -295,9 +295,9 @@ describe("services/tickerFacts", () => {
     const play = facts.find((f) => f.id === "playstyle");
     expect(play).toBeTruthy();
     expect(play.text).toBe(
-      "PLAYSTYLE (PvZ): PvZ Creative Tactician — 6 PvZ build orders, 7:24.42 average game; PvZ leads both other matchups by at least 10.555 points",
+      "PLAYSTYLE (PvZ): Matchup Inventor — 10 PvZ build orders, 7:24.42 average game; PvZ is your strongest matchup, with a win rate at least 10.555% higher than your other two",
     );
-    expect(play.text).not.toMatch(/percentile|benchmark|Master/);
+    expect(play.text).not.toMatch(/percentile|benchmark|Master|percentage points|\bpp\b/i);
     expect(skillFingerprint.compute).toHaveBeenCalledWith("u1", { matchup: "PvZ" });
     const unit = facts.find((f) => f.id === "favorite-unit");
     expect(unit.text).toContain("Stalker");
@@ -320,10 +320,10 @@ describe("services/tickerFacts", () => {
     const skillFingerprint = {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
-        playstyle: "Universal Build Perfectionist",
+        playstyle: "Reliable All-Rounder",
         axes: [
           { key: "repertoire", position: 0, value: 2, category: "grinder" },
-          { key: "pace", position: 50, value: 510, category: "standard" },
+          { key: "pace", position: 35, value: 510, category: "standard" },
           { key: "matchup_balance", position: 50, value: 1, category: "universalist" },
         ],
         buildOrders: [{ name: "PvZ build A" }, { name: "PvZ build B" }],
@@ -338,8 +338,9 @@ describe("services/tickerFacts", () => {
     const facts = await svc({ skillFingerprint }).factsFor("u1");
     const play = facts.find((fact) => fact.id === "playstyle");
     expect(play.text).toBe(
-      "PLAYSTYLE (PvZ): Universal Build Perfectionist — 2 PvZ build orders, 8:30 average game; 1.0-point matchup spread",
+      "PLAYSTYLE (PvZ): Reliable All-Rounder — 2 PvZ build orders, 8:30 average game; all three matchup win rates are within 1.0%",
     );
+    expect(play.text).not.toMatch(/percentage points|\bpp\b/i);
   });
 
   test("playstyle detail names a matchup blind spot without calling it a specialty", async () => {
@@ -353,10 +354,10 @@ describe("services/tickerFacts", () => {
     const skillFingerprint = {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
-        playstyle: "PvT Blind Spot · Strategic Architect",
+        playstyle: "Strategic Soft Spot",
         axes: [
-          { key: "repertoire", position: 100, value: 7, category: "creative" },
-          { key: "pace", position: 100, value: 760, category: "late_game" },
+          { key: "repertoire", position: 63, value: 7, category: "adaptive" },
+          { key: "pace", position: 77, value: 760, category: "standard" },
           {
             key: "matchup_balance",
             position: 100,
@@ -386,9 +387,9 @@ describe("services/tickerFacts", () => {
     const facts = await svc({ skillFingerprint }).factsFor("u1");
     const play = facts.find((fact) => fact.id === "playstyle");
     expect(play.text).toBe(
-      "PLAYSTYLE (PvZ): PvT Blind Spot · Strategic Architect — 7 PvZ build orders, 12:40 average game; PvT trails both other matchups by at least 12.0 points",
+      "PLAYSTYLE (PvZ): Strategic Soft Spot — 7 PvZ build orders, 12:40 average game; PvT is your toughest matchup, with a win rate at least 12.0% lower than your other two",
     );
-    expect(play.text).not.toMatch(/specialist|leads both/i);
+    expect(play.text).not.toMatch(/specialist|leads both|percentage points|\bpp\b/i);
   });
 
   test("playstyle detail respects an unavailable matchup summary", async () => {
@@ -402,10 +403,10 @@ describe("services/tickerFacts", () => {
     const skillFingerprint = {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
-        playstyle: "Build Perfectionist",
+        playstyle: "Consistent Grinder · Flexible Pacer",
         axes: [
           { key: "repertoire", position: 0, value: 2, category: "grinder" },
-          { key: "pace", position: 50, value: 510, category: "standard" },
+          { key: "pace", position: 35, value: 510, category: "standard" },
           {
             key: "matchup_balance",
             position: null,
@@ -431,7 +432,7 @@ describe("services/tickerFacts", () => {
     const facts = await svc({ skillFingerprint }).factsFor("u1");
     const play = facts.find((fact) => fact.id === "playstyle");
     expect(play.text).toBe(
-      "PLAYSTYLE (PvZ): Build Perfectionist — 2 PvZ build orders, 8:30 average game",
+      "PLAYSTYLE (PvZ): Consistent Grinder · Flexible Pacer — 2 PvZ build orders, 8:30 average game",
     );
     expect(play.text).not.toContain("matchup spread");
   });

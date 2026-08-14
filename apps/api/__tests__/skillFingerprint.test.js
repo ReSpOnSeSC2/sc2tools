@@ -59,9 +59,9 @@ describe("skill fingerprint pure replay heuristics", () => {
     test.each([
       [1, "grinder", "Consistent Grinder", 0],
       [2, "grinder", "Consistent Grinder", 0],
-      [3, "adaptive", "Adaptive Strategist", 25],
-      [5, "adaptive", "Adaptive Strategist", 75],
-      [6, "creative", "Creative Genius", 100],
+      [3, "adaptive", "Adaptive Strategist", 13],
+      [6, "adaptive", "Adaptive Strategist", 50],
+      [9, "adaptive", "Adaptive Strategist", 88],
       [10, "creative", "Creative Genius", 100],
     ])(
       "%i distinct builds maps to %s at the exact boundary",
@@ -105,9 +105,9 @@ describe("skill fingerprint pure replay heuristics", () => {
     test.each([
       [300, "cheeser", "Cheeser", 0],
       [301, "standard", "Flexible Pacer", 1],
-      [510, "standard", "Flexible Pacer", 50],
-      [719, "standard", "Flexible Pacer", 99],
-      [720, "late_game", "Late-Game Specialist", 100],
+      [600, "standard", "Flexible Pacer", 50],
+      [899, "standard", "Flexible Pacer", 99],
+      [900, "late_game", "Late-Game Specialist", 100],
     ])(
       "%i-second average maps to %s at the exact boundary",
       (durationSec, category, _categoryLabel, exactPosition) => {
@@ -142,7 +142,7 @@ describe("skill fingerprint pure replay heuristics", () => {
 
     test.each([
       [300.4, 300.4, "standard", 1],
-      [719.6, 719.6, "standard", 99],
+      [899.6, 899.6, "standard", 99],
     ])(
       "classifies the raw %s-second mean and displays it as %s",
       (rawMean, displayedValue, category, position) => {
@@ -158,7 +158,7 @@ describe("skill fingerprint pure replay heuristics", () => {
 
     test.each([
       [300, 301, 300.02, 1],
-      [720, 719, 719.98, 99],
+      [900, 899, 899.98, 99],
     ])(
       "preserves the two-decimal mean of integer-second replay durations",
       (commonDuration, outlierDuration, displayedValue, position) => {
@@ -632,6 +632,10 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
         "Build 4",
         "Build 5",
         "Build 6",
+        "Build 7",
+        "Build 8",
+        "Build 9",
+        "Build 10",
       ],
       durationSec: 300,
     });
@@ -658,7 +662,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       key: "repertoire",
       label: "Build repertoire",
       position: 100,
-      value: 6,
+      value: 10,
       category: "creative",
       categoryLabel: "Creative Genius",
       sampleSize: 10,
@@ -683,12 +687,16 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     });
 
     expect(fingerprint.buildOrders).toEqual([
-      { name: "Build 1", games: 2 },
-      { name: "Build 2", games: 2 },
-      { name: "Build 3", games: 2 },
-      { name: "Build 4", games: 2 },
+      { name: "Build 1", games: 1 },
+      { name: "Build 10", games: 1 },
+      { name: "Build 2", games: 1 },
+      { name: "Build 3", games: 1 },
+      { name: "Build 4", games: 1 },
       { name: "Build 5", games: 1 },
       { name: "Build 6", games: 1 },
+      { name: "Build 7", games: 1 },
+      { name: "Build 8", games: 1 },
+      { name: "Build 9", games: 1 },
     ]);
     expect(fingerprint.matchupWinRates).toEqual([
       {
@@ -771,7 +779,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     });
     await seedRows("PvZ", 50, {
       myBuild: "Current Build",
-      durationSec: 720,
+      durationSec: 900,
     });
     await seedMatchup("PvP");
     await seedMatchup("PvT");
@@ -815,7 +823,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     expect(
       fingerprint.axes.find((axis) => axis.key === "pace"),
     ).toMatchObject({
-      value: 720,
+      value: 900,
       category: "late_game",
       categoryLabel: "Late-Game Specialist",
       position: 100,
