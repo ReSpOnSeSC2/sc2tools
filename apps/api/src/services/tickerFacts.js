@@ -803,6 +803,23 @@ function fmtDur(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Preserve fingerprint precision at the 5:00 / 12:00 average-time edges. */
+/** @param {number} sec @returns {string} */
+function fmtAverageDur(sec) {
+  const totalHundredths = Math.round(sec * 100);
+  const minutes = Math.floor(totalHundredths / 6000);
+  const remainder = totalHundredths % 6000;
+  const wholeSeconds = Math.floor(remainder / 100);
+  const hundredths = remainder % 100;
+  const fraction = hundredths === 0
+    ? ""
+    : hundredths % 10 === 0
+      ? `.${hundredths / 10}`
+      : `.${String(hundredths).padStart(2, "0")}`;
+  const rendered = `${String(wholeSeconds).padStart(2, "0")}${fraction}`;
+  return `${minutes}:${rendered}`;
+}
+
 /** @param {number} ts @returns {string} */
 function fmtMonthYear(ts) {
   const d = new Date(ts);
@@ -902,20 +919,226 @@ function mostPlayedMatchup(games) {
 }
 
 /**
- * Explain the fingerprint without mixing unlike scales. Consistency is a
- * personal 0–100 stability score derived from the player's own macro-score
- * spread; it is not a league percentile. The remaining style axes are
- * averages of per-game percentile placements against the matchup's league
- * benchmark, so their copy names that comparison instead of implying an
- * exact rank among players.
+ * Explain the current playstyle fingerprint with the raw replay measures that
+ * actually selected it. Repertoire and pace describe the requested matchup;
+ * matchup balance compares that race's three matchups. These are tendencies,
+ * not skill percentiles, so the ticker reports counts, time, and percentage-
+ * point gaps without benchmark language.
+ *
+ * The legacy branch is deliberately retained for a short compatibility
+ * window. Ticker facts are decorative and may be fed by a stale mock or a
+ * rolling worker while the API deploys, so an old fingerprint should remain
+ * readable rather than dropping the entire fact.
  *
  * @param {Record<string, any>} fp
  * @param {string} matchup
  * @returns {string}
  */
 function playstyleDetail(fp, matchup) {
-  /** @type {Array<{key: string, label: string, percentile: number}>} */
   const axes = Array.isArray(fp.axes) ? fp.axes : [];
+  const repertoire = axes.find((axis) => axis && axis.key === "repertoire");
+  const pace = axes.find((axis) => axis && axis.key === "pace");
+  const matchupBalance = axes.find(
+    (axis) => axis && axis.key === "matchup_balance",
+  );
+  const hasCurrentShape = Boolean(
+    repertoire ||
+      pace ||
+      matchupBalance ||
+      Array.isArray(fp.buildOrders) ||
+      Array.isArray(fp.matchupWinRates) ||
+      (fp.matchupSummary && typeof fp.matchupSummary === "object"),
+  );
+
+  if (hasCurrentShape) {
+    const selected = [];
+    const buildCount = repertoire
+      ? usableFingerprintAxis(repertoire)
+        ? firstFiniteNumber(repertoire.value)
+        : null
+      : firstFiniteNumber(
+          Array.isArray(fp.buildOrders) ? fp.buildOrders.length : null,
+        );
+    if (buildCount !== null && buildCount >= 0) {
+      const count = Math.round(buildCount);
+      selected.push(
+        `${count} ${matchup} build order${count === 1 ? "" : "s"}`,
+      );
+    }
+
+    const averageSec = pace
+      ? usableFingerprintAxis(pace)
+        ? firstFiniteNumber(pace.value)
+        : null
+      : firstFiniteNumber(
+          fp.averageDurationSec,
+          fp.pace && fp.pace.averageSec,
+        );
+    if (averageSec !== null && averageSec >= 0) {
+      selected.push(`${fmtAverageDur(averageSec)} average game`);
+    }
+
+    const balance = matchupDetail(
+      fp.matchupSummary,
+      fp.matchupWinRates,
+      matchupBalance,
+    );
+    const measured = selected.join(", ");
+    if (measured && balance) return ` — ${measured}; ${balance}`;
+    if (measured) return ` — ${measured}`;
+    if (balance) return ` — ${balance}`;
+    return "";
+  }
+
+  return legacyPlaystyleDetail(fp, matchup, axes);
+}
+
+/**
+ * @param {unknown} summary
+ * @param {unknown} rawRates
+ * @param {Record<string, any> | undefined} axis
+ * @returns {string}
+ */
+function matchupDetail(summary, rawRates, axis) {
+  const hasSummary = Boolean(summary && typeof summary === "object");
+  const data = /** @type {Record<string, any>} */ (
+    hasSummary ? summary : {}
+  );
+  // A present summary with null fields means the service's sample gate was
+  // not met. Do not bypass that decision by recomputing from provisional
+  // rows; derivation is only a compatibility path for summary-less mocks.
+  const derived = hasSummary ? null : deriveMatchupGaps(rawRates);
+  const spread = firstFiniteNumber(
+    data.spreadPp,
+    data.spread,
+    data.winRateSpreadPp,
+    derived && derived.spread,
+    axis && axis.value,
+  );
+  const lead = firstFiniteNumber(
+    data.leaderGap,
+    data.leaderMarginPp,
+    data.leadPp,
+    data.bestLeadPp,
+    data.specialistLeadPp,
+    derived && derived.lead,
+  );
+  const weakGap = firstFiniteNumber(
+    data.weakGap,
+    data.weakGapPp,
+    data.blindSpotGap,
+    derived && derived.weakGap,
+  );
+  const leader = firstNonEmptyString(
+    data.strongestMatchup,
+    data.bestMatchup,
+    data.leaderMatchup,
+    data.leadingMatchup,
+    derived && derived.leader,
+  );
+  const weakest = firstNonEmptyString(
+    data.weakestMatchup,
+    data.trailingMatchup,
+    derived && derived.weakest,
+  );
+  const category = firstNonEmptyString(axis && axis.category);
+
+  if (category === "specialist" && lead !== null && lead >= 0) {
+    return leader
+      ? `${leader} leads both other matchups by at least ${formatPointValue(lead)} points`
+      : `${formatPointValue(lead)}-point specialist lead`;
+  }
+  if (category === "blind_spot" && weakGap !== null && weakGap >= 0) {
+    return weakest
+      ? `${weakest} trails both other matchups by at least ${formatPointValue(weakGap)} points`
+      : `${formatPointValue(weakGap)}-point weakest-matchup gap`;
+  }
+  return spread !== null && spread >= 0
+    ? `${formatPointValue(spread)}-point matchup spread`
+    : "";
+}
+
+/** Keep one decimal for whole values and reveal meaningful thousandths. */
+/** @param {number} value @returns {string} */
+function formatPointValue(value) {
+  return value
+    .toFixed(3)
+    .replace(/0+$/, "")
+    .replace(/\.$/, ".0");
+}
+
+/**
+ * Derive spread and leader margin when a caller supplies only the matchup
+ * rows. ``winRate`` follows the fingerprint contract and is already a
+ * percentage in the 0..100 range.
+ *
+ * @param {unknown} raw
+ * @returns {{spread: number, lead: number, weakGap: number, leader: string|null, weakest: string|null} | null}
+ */
+function deriveMatchupGaps(raw) {
+  if (!Array.isArray(raw)) return null;
+  const rates = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const value = firstFiniteNumber(
+      row.winRate,
+      row.winRatePct,
+      row.winRatePercent,
+    );
+    if (value === null || value < 0 || value > 100) continue;
+    rates.push({
+      matchup: firstNonEmptyString(row.matchup, row.name),
+      value,
+    });
+  }
+  if (rates.length < 3) return null;
+  rates.sort((a, b) => b.value - a.value);
+  return {
+    spread: rates[0].value - rates[rates.length - 1].value,
+    lead: rates[0].value - rates[1].value,
+    weakGap:
+      rates[rates.length - 2].value - rates[rates.length - 1].value,
+    leader: rates[0].matchup,
+    weakest: rates[rates.length - 1].matchup,
+  };
+}
+
+/** @param {...unknown} values @returns {number|null} */
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+/** Provisional axis values stay hidden until the service's sample gate passes. */
+/** @param {unknown} raw @returns {boolean} */
+function usableFingerprintAxis(raw) {
+  if (!raw || typeof raw !== "object") return false;
+  const axis = /** @type {Record<string, any>} */ (raw);
+  return Boolean(
+    typeof axis.category === "string" &&
+      axis.category.trim() &&
+      typeof axis.position === "number" &&
+      Number.isFinite(axis.position),
+  );
+}
+
+/** @param {...unknown} values @returns {string|null} */
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/**
+ * @param {Record<string, any>} fp
+ * @param {string} matchup
+ * @param {Array<Record<string, any>>} axes
+ * @returns {string}
+ */
+function legacyPlaystyleDetail(fp, matchup, axes) {
   const valid = axes.filter(
     (axis) =>
       axis &&

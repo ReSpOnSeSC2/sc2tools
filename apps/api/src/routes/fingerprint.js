@@ -5,11 +5,11 @@ const express = require("express");
 /**
  * /v1/me/fingerprint — the Skill Fingerprint.
  *
- * GET /v1/me/fingerprint?matchup=PvZ returns the caller's multi-axis
- * skill radar for that matchup: each axis a percentile against the
- * same-league-band + same-matchup corpus (see
- * services/skillFingerprint.js for the axis formulas and the
- * playstyle decision table).
+ * GET /v1/me/fingerprint?matchup=PvZ returns the caller's replay-derived
+ * build-repertoire and game-length tendencies for that matchup, plus the
+ * shape of their win rates against all three opposing races for the selected
+ * player race. See the fingerprint service for exact thresholds and the
+ * deterministic archetype taxonomy.
  *
  * 400 ``bad_request``       — matchup missing / not two P|T|Z letters.
  * 404 ``not_enough_games``  — fewer than 10 qualifying games; the

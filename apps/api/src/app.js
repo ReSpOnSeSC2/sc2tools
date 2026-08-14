@@ -315,11 +315,9 @@ function makeServices(deps) {
   // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
   // served PUBLICLY by routes/ladderMeta.js for the /meta SEO page.
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
-  // Skill Fingerprint — per-user multi-axis skill radar (percentiles
-  // against the leaguePercentiles band tables + playstyle label),
-  // served by routes/fingerprint.js for the Trends tab.
+  // Skill Fingerprint — replay-derived build, game-length, and matchup
+  // tendencies plus a deterministic player archetype for the Trends tab.
   const skillFingerprint = new SkillFingerprintService(deps.db, {
-    leaguePercentiles,
     logger: deps.logger,
   });
   const opponents = new OpponentsService(

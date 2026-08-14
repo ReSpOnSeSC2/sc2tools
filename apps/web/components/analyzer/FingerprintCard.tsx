@@ -2,55 +2,79 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, CircleHelp, Fingerprint } from "lucide-react";
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-} from "recharts";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 
-/**
- * Skill Fingerprint is intentionally self-explanatory: the radar is a
- * quick visual, while the signal cards and disclosure carry the real
- * meaning. The API still owns the scoring and playstyle decision table;
- * the copy below mirrors that contract in plain language.
- */
-
 type FingerprintAxis = {
-  key: string;
+  key: AxisKey | string;
   label: string;
-  percentile: number | null;
+  position: number | null;
   value: number | null;
+  category: string | null;
+  categoryLabel: string | null;
+  sampleSize: number;
 };
 
 type FingerprintData = {
   matchup: string;
-  band: { leagueId: number; label: string } | null;
+  race: string;
   games: number;
+  windowGames: number;
   axes: FingerprintAxis[];
   playstyle: string;
+  archetype: {
+    key: string;
+    name: string;
+    description: string;
+    complete: boolean;
+  };
+  buildOrders: Array<{ name: string; games: number }>;
+  matchupWinRates: MatchupWinRate[];
+  matchupSummary: {
+    spread: number | null;
+    leaderGap: number | null;
+    weakGap: number | null;
+    strongestMatchup: string | null;
+    weakestMatchup: string | null;
+  };
 };
 
 type FingerprintResp = { fingerprint: FingerprintData };
 
 type RaceLetter = "P" | "T" | "Z";
+type AxisKey = "repertoire" | "pace" | "matchup_balance";
 
-type AxisMeta = {
-  label: string;
-  short: string;
-  detail: string;
-  scale: string;
+type MatchupWinRate = {
+  matchup: string;
+  games: number;
+  decidedGames: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  winRate: number | null;
 };
 
-type PlaystyleDefinition = {
-  name: string;
-  meaning: string;
-  rule: string;
+type AxisMeta = {
+  title: string;
+  description: string;
+  leftLabel: string;
+  centerLabel: string;
+  rightLabel: string;
+  scale: string;
+  trackClass: string;
+};
+
+type MatchupCategory =
+  | "specialist"
+  | "matchup_flex"
+  | "universalist"
+  | "blind_spot";
+
+type CatalogRow = {
+  repertoire: "grinder" | "adaptive" | "creative";
+  pace: "cheeser" | "standard" | "late_game";
+  names: Record<MatchupCategory, string>;
 };
 
 const RACE_LETTERS: ReadonlyArray<RaceLetter> = ["P", "T", "Z"];
@@ -61,109 +85,62 @@ const RACE_NAMES: Record<RaceLetter, string> = {
   Z: "Zerg",
 };
 
-const PROFILE_AXIS_KEYS = [
-  "macro",
-  "mechanics",
-  "spending",
-  "consistency",
-  "aggression",
-] as const;
+const AXIS_ORDER: ReadonlyArray<AxisKey> = [
+  "repertoire",
+  "pace",
+  "matchup_balance",
+];
 
-const AXIS_KEYS = [...PROFILE_AXIS_KEYS, "ladder"] as const;
-
-const AXIS_META: Record<(typeof AXIS_KEYS)[number], AxisMeta> = {
-  macro: {
-    label: "Macro",
-    short: "Economy and production execution from your replay macro score.",
-    detail:
-      "Compares each game's macro score with similar games. The score rewards efficient spending and race-specific macro while accounting for supply blocks and resource float.",
-    scale: "Higher means cleaner economy and production execution.",
+const AXIS_META: Record<AxisKey, AxisMeta> = {
+  repertoire: {
+    title: "Build repertoire",
+    description:
+      "How many distinct, classified build orders you use in this matchup.",
+    leftLabel: "Consistent Grinder",
+    centerLabel: "Adaptive Strategist",
+    rightLabel: "Creative Genius",
+    scale: "1–2 builds · 3–5 builds · 6+ builds",
+    trackClass: "from-text-dim/45 via-accent/45 to-accent-cyan/70",
   },
-  mechanics: {
-    label: "Mechanics",
-    short: "Your actions per minute compared with similar games.",
-    detail:
-      "Uses APM as an activity signal. A higher result means more actions per minute; it does not claim that every action was useful.",
-    scale: "Higher means more in-game activity.",
+  pace: {
+    title: "Game horizon",
+    description: "Where your average game length sits in this matchup.",
+    leftLabel: "Cheeser",
+    centerLabel: "Flexible Pacer",
+    rightLabel: "Late-Game Specialist",
+    scale: "5:00 or less · middle ground · 12:00 or more",
+    trackClass: "from-warning/60 via-accent/40 to-accent-cyan/70",
   },
-  spending: {
-    label: "Spending",
-    short: "How efficiently you turn income into units, tech, and production.",
-    detail:
-      "Uses Spending Quotient (SPQ), which rewards consistently converting available resources instead of leaving a large bank unused.",
-    scale: "Higher means more efficient resource conversion.",
-  },
-  consistency: {
-    label: "Consistency",
-    short: "How steady your macro score stays from game to game.",
-    detail:
-      "This is a personal stability score based on the variation in your macro scores. It compares you with your own recent games, not with the benchmark group.",
-    scale: "100 is most stable. This signal is a score, not a percentile.",
-  },
-  aggression: {
-    label: "Game tempo",
-    short: "How early your games finish compared with similar games.",
-    detail:
-      "Uses game length as a pace signal: shorter games score higher. It cannot tell who attacked first, so an early loss can also raise this result.",
-    scale: "Higher means your games tend to end sooner.",
-  },
-  ladder: {
-    label: "MMR percentile",
-    short:
-      "Your Matchmaking Rating (MMR) compared with this benchmark group.",
-    detail:
-      "MMR is StarCraft II's matchmaking rating. It is shown separately as competitive context because rating describes the level you play at, not how you play.",
-    scale: "It is not a radar signal and does not affect your playstyle label.",
+  matchup_balance: {
+    title: "Matchup shape",
+    description:
+      "One spectrum: a standout strength pulls left, a standout weakness pulls right, and balanced results stay near the center.",
+    leftLabel: "Matchup Specialist",
+    centerLabel: "Completely Balanced",
+    rightLabel: "Matchup Blind Spot",
+    scale:
+      "10+ pp strength · near-balanced ≤5 pp (Universalist ≤1 pp) · 10+ pp weakness",
+    trackClass: "from-accent-cyan/70 via-accent/30 to-danger/65",
   },
 };
 
-/** First-match order mirrors derivePlaystyle in the API service. */
-const PLAYSTYLE_DEFINITIONS: ReadonlyArray<PlaystyleDefinition> = [
-  {
-    name: "Complete Player",
-    meaning: "Strong results across every signal currently available.",
-    rule: "At least 4 playstyle signals are available and every available playstyle signal scores 65 or higher. MMR is ignored.",
-  },
-  {
-    name: "All-in Gambler",
-    meaning: "A fast-game profile paired with lower macro results.",
-    rule: "Game tempo is 70+ and Macro is below 40.",
-  },
-  {
-    name: "Greedy Macro Player",
-    meaning: "A macro-first profile whose games usually run longer.",
-    rule: "Macro is 70+ and Game tempo is below 40.",
-  },
-  {
-    name: "Tempo Attacker",
-    meaning: "Fast games paired with high mechanical activity.",
-    rule: "Game tempo is 65+ and Mechanics is 65+.",
-  },
-  {
-    name: "Economic Engine",
-    meaning: "Strong spending efficiency backed by solid macro.",
-    rule: "Spending is 70+ and Macro is 55+.",
-  },
-  {
-    name: "Busy Hands, Idle Bank",
-    meaning: "High APM, but resources are not converted as efficiently.",
-    rule: "Mechanics is 70+ and Spending is below 40.",
-  },
-  {
-    name: "Metronome",
-    meaning: "Steady macro across games, usually at a measured pace.",
-    rule: "Consistency is 70+ and Game tempo is below 55.",
-  },
-  {
-    name: "Coin-Flip Player",
-    meaning: "Macro results vary substantially from game to game.",
-    rule: "Consistency is below 35.",
-  },
-  {
-    name: "Jack of All Trades",
-    meaning: "A mixed profile without one dominant measured tendency.",
-    rule: "Fallback when none of the rules above matches the available signals.",
-  },
+const MATCHUP_CATEGORY_LABELS: Record<MatchupCategory, string> = {
+  specialist: "Specialist",
+  matchup_flex: "Matchup flex",
+  universalist: "Universalist",
+  blind_spot: "Blind spot",
+};
+
+const ARCHETYPE_CATALOG: ReadonlyArray<CatalogRow> = [
+  { repertoire: "grinder", pace: "cheeser", names: { specialist: "Precision Ambusher", matchup_flex: "Calculated Raider", universalist: "Three-Matchup Punisher", blind_spot: "Two-Front Raider" } },
+  { repertoire: "grinder", pace: "standard", names: { specialist: "Matchup Technician", matchup_flex: "Disciplined Operator", universalist: "Reliable All-Rounder", blind_spot: "Two-Front Technician" } },
+  { repertoire: "grinder", pace: "late_game", names: { specialist: "Fortress Specialist", matchup_flex: "Endurance Engineer", universalist: "Macro Machine", blind_spot: "Fault-Line Fortress" } },
+  { repertoire: "adaptive", pace: "cheeser", names: { specialist: "Counter-Build Hunter", matchup_flex: "Tempo Trickster", universalist: "Opening Opportunist", blind_spot: "Two-Front Trapper" } },
+  { repertoire: "adaptive", pace: "standard", names: { specialist: "Strategic Specialist", matchup_flex: "Adaptive Competitor", universalist: "Versatile Tactician", blind_spot: "Strategic Soft Spot" } },
+  { repertoire: "adaptive", pace: "late_game", names: { specialist: "Endgame Counterpuncher", matchup_flex: "Scaling Strategist", universalist: "Endgame Generalist", blind_spot: "Scaling Soft Spot" } },
+  { repertoire: "creative", pace: "cheeser", names: { specialist: "Lab-Crafted Ambusher", matchup_flex: "Chaos Architect", universalist: "Wildcard Raider", blind_spot: "Two-Front Wildcard" } },
+  { repertoire: "creative", pace: "standard", names: { specialist: "Matchup Inventor", matchup_flex: "Build Lab Explorer", universalist: "Creative All-Rounder", blind_spot: "Creative Soft Spot" } },
+  { repertoire: "creative", pace: "late_game", names: { specialist: "Endgame Innovator", matchup_flex: "Late-Game Visionary", universalist: "Strategic Polymath", blind_spot: "Endgame Soft Spot" } },
 ];
 
 const LS_MATCHUP = "analyzer.fingerprint.matchup";
@@ -175,22 +152,6 @@ function readStoredMatchup(): string {
     return v && /^[PTZ]v[PTZ]$/.test(v) ? v : "PvZ";
   } catch {
     return "PvZ";
-  }
-}
-
-/** 72 -> "72nd", 41 -> "41st", 100 -> "100th". */
-function ordinal(n: number): string {
-  const rem = n % 100;
-  if (rem >= 11 && rem <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
   }
 }
 
@@ -225,13 +186,13 @@ export function FingerprintCard() {
             Skill fingerprint
           </h3>
           <p className="mt-0.5 text-micro text-text-dim">
-            Your recent 1v1 profile
+            Your recent 1v1 playstyle
           </p>
         </div>
         <MatchupPicker
           my={my}
           vs={vs}
-          onChange={(m, v) => setMatchup(`${m}v${v}`)}
+          onChange={(nextMy, nextVs) => setMatchup(`${nextMy}v${nextVs}`)}
         />
       </Card.Header>
 
@@ -260,379 +221,601 @@ export function FingerprintCard() {
 }
 
 function FingerprintBody({ fp }: { fp: FingerprintData }) {
-  const profileAxes = fp.axes.filter((axis) => axis.key !== "ladder");
-  const visible = profileAxes.filter((axis) => axis.percentile != null);
-  const missing = profileAxes.filter((axis) => axis.percentile == null);
-  const mmr = fp.axes.find((axis) => axis.key === "ladder") ?? null;
-  const radarData = visible.map((axis) => ({
-    axis: axisMeta(axis).label,
-    score: axis.percentile as number,
-  }));
-  const style = playstyleDefinition(fp.playstyle);
+  const axes = new Map(fp.axes.map((axis) => [axis.key, axis]));
+  const availableAxes = AXIS_ORDER.filter((key) => axisAvailable(axes.get(key)));
+  const repertoire = axes.get("repertoire");
+  const pace = axes.get("pace");
+  const matchupShape = axes.get("matchup_balance");
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,0.9fr)_minmax(300px,1.25fr)]">
-        <section className="flex flex-col justify-center" aria-labelledby="playstyle-heading">
-          <span className="text-micro uppercase tracking-wider text-text-dim">
-            Estimated playstyle
-          </span>
-          <h4
-            id="playstyle-heading"
-            className="mt-1 font-display text-xl font-bold text-text"
-          >
-            {fp.playstyle}
-          </h4>
-          <p className="mt-1 text-caption leading-relaxed text-text-muted">
-            {style.meaning}
-          </p>
-
-          <div className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3">
-            <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">
-              Why this label
-            </p>
-            <p className="mt-1 text-caption leading-relaxed text-text">
-              {currentPlaystyleReason(fp)}
-            </p>
-          </div>
-
-          <div className="mt-3 space-y-1 text-micro leading-relaxed text-text-dim">
-            <p>
-              Based on your {fp.games} most recent {fp.matchup} 1v1 replay
-              {fp.games === 1 ? "" : "s"}.
-            </p>
-            <p>
-              {fp.band
-                ? `Benchmark: ${fp.matchup} games against mostly ${fp.band.label} opponents.`
-                : "No opponent-league benchmark is available yet."}
-            </p>
-          </div>
-
-          {mmr?.percentile != null ? (
-            <div className="mt-3 border-l-2 border-accent pl-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">
-                  Competitive context
-                </p>
-                <p className="font-display text-caption font-bold tabular-nums text-accent">
-                  {ordinal(mmr.percentile)} MMR percentile
-                </p>
-              </div>
-              <p className="mt-1 text-micro leading-relaxed text-text-muted">
-                Matchmaking Rating shows the level you play at, not how you
-                play. {rawValueLabel(mmr)}. It is kept outside the graph and
-                does not affect your playstyle label.
-              </p>
-            </div>
-          ) : null}
-        </section>
-
-        {radarData.length >= 3 ? (
-          <figure className="mx-auto w-full min-w-0 max-w-lg">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 px-2">
-              <h4 className="text-caption font-semibold text-text">Profile shape</h4>
-              <span className="text-micro font-medium text-text-dim">
-                Center 0 · Edge 100
+      <section
+        className="overflow-hidden rounded-xl border border-accent/35 bg-gradient-to-br from-accent/10 via-bg-surface to-bg-elevated/70 p-4 sm:p-5"
+        aria-labelledby="playstyle-heading"
+      >
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-end">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="overline text-accent-cyan">Your archetype</span>
+              <span
+                className={[
+                  "rounded-full border px-2.5 py-1 text-micro font-semibold",
+                  fp.archetype.complete
+                    ? "border-accent/45 bg-accent/10 text-accent-cyan"
+                    : "border-warning/45 bg-warning/10 text-warning",
+                ].join(" ")}
+              >
+                {fp.archetype.complete
+                  ? "Complete profile"
+                  : `${availableAxes.length} of 3 signals`}
               </span>
             </div>
-            <div
-              aria-hidden="true"
-              data-testid="fingerprint-radar"
-              className="h-[210px] w-full min-w-0 sm:h-[285px]"
+            <h4
+              id="playstyle-heading"
+              className="mt-2 font-display text-h2 font-bold text-text"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart
-                  data={radarData}
-                  outerRadius="74%"
-                  margin={{ top: 24, right: 42, bottom: 24, left: 42 }}
-                >
-                  <PolarGrid stroke="rgb(var(--border-strong))" />
-                  <PolarAngleAxis
-                    dataKey="axis"
-                    tick={{ fill: "rgb(var(--text-muted))", fontSize: 12 }}
-                    tickLine={false}
-                  />
-                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar
-                    dataKey="score"
-                    stroke="rgb(var(--accent-cyan))"
-                    strokeWidth={2}
-                    fill="rgb(var(--accent-cyan))"
-                    fillOpacity={0.25}
-                    isAnimationActive={false}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-            <figcaption className="rounded-lg border border-border bg-bg-elevated/35 px-3 py-2 text-micro leading-relaxed text-text-muted">
-              {radarData.length === 3
-                ? "Three available signals make this a triangle. "
-                : `${radarData.length} available signals make this outline. `}
-              Each corner is one signal: closer to the edge means a higher
-              score. The shape compares tendencies; it is not an overall grade.
-            </figcaption>
-          </figure>
-        ) : (
-          <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-border bg-bg-elevated/30 p-5 text-center text-caption text-text-muted">
-            A radar appears when at least three signals have enough data.
+              {fp.archetype.name || fp.playstyle}
+            </h4>
+            <p className="mt-2 max-w-2xl text-body leading-relaxed text-text-muted">
+              {fp.archetype.description}
+            </p>
+            <p className="mt-3 text-micro leading-relaxed text-text-dim">
+              Based on {fp.games.toLocaleString()} recent {fp.matchup} 1v1 replay
+              {fp.games === 1 ? "" : "s"} in a {fp.windowGames}-game window.
+            </p>
           </div>
-        )}
-      </div>
 
-      <section className="border-t border-border pt-4" aria-labelledby="signals-heading">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <dl className="grid grid-cols-2 gap-2">
+            <HeroStat label="Matchup" value={fp.matchup} />
+            <HeroStat
+              label="Build orders"
+              value={
+                axisAvailable(repertoire)
+                  ? fp.buildOrders.length.toLocaleString()
+                  : "Still forming"
+              }
+            />
+            <HeroStat
+              label="Avg game"
+              value={axisAvailable(pace) ? formatDuration(pace.value) : "Still forming"}
+            />
+            <HeroStat
+              label="Matchup shape"
+              value={
+                axisAvailable(matchupShape)
+                  ? matchupShape.categoryLabel ?? "Still forming"
+                  : "Still forming"
+              }
+            />
+          </dl>
+        </div>
+      </section>
+
+      <section aria-labelledby="spectra-heading">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h4 id="signals-heading" className="text-body font-semibold text-text">
-              What the signals mean
+            <h4 id="spectra-heading" className="text-body font-semibold text-text">
+              Your three playstyle spectra
             </h4>
             <p className="mt-0.5 text-micro text-text-dim">
-              The chart is a summary; these values are the score behind it.
+              Every marker is backed by the replay sample shown beneath it.
             </p>
           </div>
           <span className="rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-micro font-semibold text-text-muted">
-            {visible.length} of {profileAxes.length} available
+            {availableAxes.length} of 3 available
           </span>
         </div>
-
-        <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {visible.map((axis) => (
-            <AxisSummary key={axis.key} axis={axis} />
+        <div className="mt-3 space-y-3">
+          {AXIS_ORDER.map((key) => (
+            <SpectrumRow key={key} axisKey={key} axis={axes.get(key)} fp={fp} />
           ))}
-        </dl>
-
-        {missing.length > 0 ? (
-          <p className="mt-3 text-caption leading-relaxed text-text-dim">
-            <span className="font-semibold text-text-muted">Not shown:</span>{" "}
-            {formatList(missing.map((axis) => axisMeta(axis).label))}. Your recent
-            replays or the comparison group do not have enough usable data yet.
-            Missing signals are ignored, never scored as zero.
-          </p>
-        ) : null}
+        </div>
       </section>
 
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+        <MatchupEvidence fp={fp} />
+        <BuildEvidence fp={fp} />
+      </div>
       <MethodologyDetails fp={fp} />
+      <ArchetypeCatalog currentKey={fp.archetype.key} />
     </div>
   );
 }
 
-function AxisSummary({ axis }: { axis: FingerprintAxis }) {
-  const meta = axisMeta(axis);
-  const percentile = axis.percentile as number;
-  const raw = rawValueLabel(axis);
+function HeroStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated/35 p-3">
-      <dt className="flex items-start justify-between gap-3 font-semibold text-text">
-        <span>{meta.label}</span>
-        <span className="whitespace-nowrap font-display text-body font-bold tabular-nums text-accent">
-          {axis.key === "consistency"
-            ? `${percentile}/100`
-            : `${ordinal(percentile)} percentile`}
-        </span>
+    <div className="min-w-0 rounded-lg border border-border bg-bg-surface/70 px-3 py-2.5">
+      <dt className="text-micro font-semibold uppercase tracking-wider text-text-dim">
+        {label}
       </dt>
-      <dd className="mt-1 text-caption leading-relaxed text-text-muted">
-        {meta.short}
+      <dd className="mt-1 break-words font-display text-caption font-bold leading-tight tabular-nums text-text">
+        {value}
       </dd>
-      {raw ? (
-        <dd className="mt-2 text-micro font-medium tabular-nums text-text-dim">
-          {raw}
-        </dd>
-      ) : null}
     </div>
+  );
+}
+
+function SpectrumRow({
+  axisKey,
+  axis,
+  fp,
+}: {
+  axisKey: AxisKey;
+  axis: FingerprintAxis | undefined;
+  fp: FingerprintData;
+}) {
+  const meta = AXIS_META[axisKey];
+  const available = axisAvailable(axis);
+
+  return (
+    <article
+      data-testid={`fingerprint-axis-${axisKey}`}
+      className="rounded-xl border border-border bg-bg-elevated/35 p-3.5 sm:p-4"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h5 className="text-caption font-semibold text-text">
+            {axis?.label || meta.title}
+          </h5>
+          <p className="mt-0.5 text-micro leading-relaxed text-text-muted">
+            {meta.description}
+          </p>
+        </div>
+        {available && axis ? (
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-micro font-semibold text-accent-cyan">
+              {axis.categoryLabel}
+            </span>
+            <span className="font-display text-caption font-bold tabular-nums text-text">
+              {axisValueLabel(axisKey, axis, fp)}
+            </span>
+          </div>
+        ) : (
+          <span className="self-start rounded-full border border-border bg-bg-surface px-2.5 py-1 text-micro font-semibold text-text-dim">
+            Not enough data
+          </span>
+        )}
+      </div>
+
+      {available && axis ? (
+        <>
+          <div className="mt-4 px-1">
+            <div
+              className={`relative h-2.5 rounded-full bg-gradient-to-r ${meta.trackClass}`}
+              aria-hidden="true"
+            >
+              <span className="absolute left-1/2 top-1/2 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-text/35" />
+              <span
+                data-testid={`fingerprint-marker-${axisKey}`}
+                className="absolute top-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg bg-text shadow-hard"
+                style={{ left: `${clampPosition(axis.position)}%` }}
+              />
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-micro font-medium leading-tight text-text-muted">
+              <span>{meta.leftLabel}</span>
+              <span className="text-center">{meta.centerLabel}</span>
+              <span className="text-right">{meta.rightLabel}</span>
+            </div>
+            <p className="mt-2 text-center text-micro tabular-nums text-text-dim">
+              {meta.scale}
+            </p>
+          </div>
+          <p className="mt-3 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
+            {axisEvidence(axisKey, axis, fp)}
+          </p>
+        </>
+      ) : (
+        <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-4 text-caption leading-relaxed text-text-dim">
+          {missingAxisEvidence(axisKey, axis, fp)} Missing data never counts as
+          zero.
+        </div>
+      )}
+    </article>
+  );
+}
+
+function MatchupEvidence({ fp }: { fp: FingerprintData }) {
+  const matchupCategory = fp.axes.find(
+    (axis) => axis.key === "matchup_balance",
+  )?.category;
+  return (
+    <section
+      className="rounded-xl border border-border bg-bg-elevated/25 p-4"
+      aria-labelledby="matchup-evidence-heading"
+    >
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h4 id="matchup-evidence-heading" className="text-caption font-semibold text-text">
+            Matchup performance
+          </h4>
+          <p className="mt-0.5 text-micro text-text-dim">
+            The win-rate evidence behind your matchup shape.
+          </p>
+        </div>
+        {fp.matchupSummary.spread != null ? (
+          <span className="text-micro font-semibold tabular-nums text-text-muted">
+            {formatPoints(fp.matchupSummary.spread)} spread
+          </span>
+        ) : null}
+      </div>
+
+      {fp.matchupWinRates.length > 0 ? (
+        <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {fp.matchupWinRates.map((row) => {
+            const strongest =
+              matchupCategory === "specialist" &&
+              row.matchup === fp.matchupSummary.strongestMatchup;
+            const weakest =
+              matchupCategory === "blind_spot" &&
+              row.matchup === fp.matchupSummary.weakestMatchup;
+            return (
+              <div
+                key={row.matchup}
+                className={[
+                  "rounded-lg border p-3",
+                  strongest
+                    ? "border-accent/55 bg-accent/10"
+                    : weakest
+                      ? "border-danger/35 bg-danger/5"
+                      : "border-border bg-bg-surface/55",
+                ].join(" ")}
+              >
+                <dt className="flex items-center justify-between gap-2">
+                  <span className="font-display text-caption font-bold text-text">
+                    {row.matchup}
+                  </span>
+                  <span className="text-micro font-semibold tabular-nums text-text-dim">
+                    {row.decidedGames} decided
+                  </span>
+                </dt>
+                <dd className="mt-2 font-display text-h4 font-bold tabular-nums text-text">
+                  {formatWinRate(row.winRate)}
+                </dd>
+                <dd className="mt-1 text-micro tabular-nums text-text-muted">
+                  {row.wins}W · {row.losses}L
+                  {row.ties > 0 ? ` · ${row.ties}T` : ""}
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-border p-4 text-caption text-text-dim">
+          Matchup win rates will appear when qualifying games are available.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function BuildEvidence({ fp }: { fp: FingerprintData }) {
+  const preview = fp.buildOrders.slice(0, 8);
+  const remaining = fp.buildOrders.length - preview.length;
+  return (
+    <section
+      className="rounded-xl border border-border bg-bg-elevated/25 p-4"
+      aria-labelledby="build-evidence-heading"
+    >
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h4 id="build-evidence-heading" className="text-caption font-semibold text-text">
+            Build orders observed
+          </h4>
+          <p className="mt-0.5 text-micro text-text-dim">
+            Classified builds in this {fp.matchup} window.
+          </p>
+        </div>
+        <span className="text-micro font-semibold tabular-nums text-text-muted">
+          {fp.buildOrders.length} distinct
+        </span>
+      </div>
+
+      {fp.buildOrders.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {preview.map((build, index) => (
+            <li
+              key={`${build.name}-${index}`}
+              className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-bg-surface/65 px-2.5 py-1.5 text-caption text-text"
+            >
+              <span className="min-w-0 truncate">{build.name}</span>
+              <span className="flex-none rounded-full bg-bg-elevated px-1.5 py-0.5 text-micro font-semibold tabular-nums text-text-dim">
+                {build.games}
+              </span>
+            </li>
+          ))}
+          {remaining > 0 ? (
+            <li className="inline-flex items-center rounded-lg border border-dashed border-border px-2.5 py-1.5 text-caption font-semibold text-text-dim">
+              +{remaining} more
+            </li>
+          ) : null}
+        </ul>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-border p-4 text-caption leading-relaxed text-text-dim">
+          No classified build orders were found in this window. Unknown and
+          too-short classifications are intentionally excluded.
+        </p>
+      )}
+    </section>
   );
 }
 
 function MethodologyDetails({ fp }: { fp: FingerprintData }) {
   return (
-    <details className="group rounded-lg border border-border bg-bg-elevated/25">
-      <summary className="flex min-h-[48px] cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-caption font-semibold text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
-        <CircleHelp className="h-4 w-4 flex-none text-accent" aria-hidden />
-        <span>Calculation and playstyle guide</span>
+    <details className="group rounded-xl border border-border bg-bg-elevated/25">
+      <summary className="flex min-h-[48px] cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 text-caption font-semibold text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+        <CircleHelp className="h-4 w-4 flex-none text-accent-cyan" aria-hidden />
+        <span>How this fingerprint is calculated</span>
         <ChevronDown
           className="ml-auto h-4 w-4 flex-none text-text-dim transition-transform group-open:rotate-180"
           aria-hidden
         />
       </summary>
 
-      <div className="space-y-5 border-t border-border px-3 py-4 sm:px-4">
-        <section aria-labelledby="calculation-heading">
-          <h5 id="calculation-heading" className="text-caption font-semibold text-text">
-            How the fingerprint is calculated
-          </h5>
-          <p className="mt-1 text-caption leading-relaxed text-text-muted">
-            It uses your latest 10–50 {fp.matchup} 1v1 replays. With the
-            exception of Consistency, each playstyle signal is a percentile
-            built by comparing each replay with comparable {fp.matchup} games
-            against mostly {fp.band?.label ?? "the same league of"} opponents.
-            The fingerprint always uses this recent-game window and is
-            independent of dashboard filters.
-          </p>
+      <div className="border-t border-border px-3 py-4 sm:px-4">
+        <p className="text-caption leading-relaxed text-text-muted">
+          The selected-matchup signals use your latest {fp.games} qualifying{" "}
+          {fp.matchup} 1v1 replays, capped at {fp.windowGames}. At least 10 are
+          required. This fixed recent-game window is independent of dashboard
+          filters.
+        </p>
 
-          <dl className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 md:grid-cols-2">
-            {PROFILE_AXIS_KEYS.map((key) => {
-              const meta = AXIS_META[key];
-              return (
-                <div key={key}>
-                  <dt className="text-caption font-semibold text-text">
-                    {meta.label}
-                  </dt>
-                  <dd className="mt-0.5 text-micro leading-relaxed text-text-muted">
-                    {meta.detail} {meta.scale}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-
-          <div className="mt-4 rounded-lg border border-accent/30 bg-accent/5 p-3">
-            <p className="text-caption font-semibold text-text">
-              Competitive context · {AXIS_META.ladder.label}
-            </p>
+        <ol className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
+            <p className="text-caption font-semibold text-text">1. Build repertoire</p>
             <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              {AXIS_META.ladder.detail} {AXIS_META.ladder.scale}
+              Counts distinct classified build-order labels. One or two is a
+              Consistent Grinder, three to five is an Adaptive Strategist, and six
+              or more is a Creative Genius. Unknown, Unclassified, and Game Too
+              Short labels never count as builds.
             </p>
-          </div>
-        </section>
+          </li>
+          <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
+            <p className="text-caption font-semibold text-text">2. Game horizon</p>
+            <p className="mt-1 text-micro leading-relaxed text-text-muted">
+              Averages the duration of the qualifying games. Five minutes or
+              less is Cheeser; twelve minutes or more is Late-Game Specialist;
+              everything between is Flexible Pacer. Wins and losses both count;
+              games shorter than 45 seconds are treated as aborted starts.
+            </p>
+          </li>
+          <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
+            <p className="text-caption font-semibold text-text">3. Matchup shape</p>
+            <p className="mt-1 text-micro leading-relaxed text-text-muted">
+              This is one strength-to-weakness spectrum. A best-to-worst spread
+              of 5 percentage points or less stays in the 40–60 near-balanced
+              band; within 1 point is Matchup Universalist at dead center. Above
+              that band, the marker moves continuously toward the dominant side.
+              A dominant 10+ point lead over both other matchups reaches the
+              Matchup Specialist endpoint; a dominant 10+ point deficit to both
+              reaches Matchup Blind Spot. If both outlier rules qualify, the
+              larger adjacent gap wins; an exact gap tie resolves to the
+              original Matchup Specialist side. Game-result ties are shown, but
+              only wins and losses form the win-rate denominator.
+            </p>
+          </li>
+        </ol>
 
-        <section className="border-t border-border pt-4" aria-labelledby="labels-heading">
-          <h5 id="labels-heading" className="text-caption font-semibold text-text">
-            What each playstyle label means
-          </h5>
-          <p className="mt-1 text-micro leading-relaxed text-text-dim">
-            Rules are checked in this order; the first match becomes the label.
-            A rule that needs a missing signal is skipped. MMR is never part of
-            these rules.
-          </p>
-          <ol className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-            {PLAYSTYLE_DEFINITIONS.map((definition) => {
-              const current = definition.name === fp.playstyle;
-              return (
-                <li
-                  key={definition.name}
-                  aria-current={current ? "true" : undefined}
-                  className={[
-                    "rounded-lg border p-3",
-                    current
-                      ? "border-accent bg-accent/5"
-                      : "border-border bg-bg-surface/50",
-                  ].join(" ")}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-caption font-semibold text-text">
-                      {definition.name}
-                    </span>
-                    {current ? (
-                      <span className="rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent">
-                        Your label
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 text-micro leading-relaxed text-text-muted">
-                    {definition.meaning}
-                  </p>
-                  <p className="mt-1 text-micro leading-relaxed text-text-dim">
-                    <span className="font-semibold">Rule:</span> {definition.rule}
-                  </p>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
+        <p className="mt-4 rounded-lg border border-accent/25 bg-accent/5 p-3 text-micro leading-relaxed text-text-muted">
+          The archetype name is deterministic: one repertoire category × one
+          pace category × one matchup-shape category. If a signal lacks enough
+          data, the profile is marked incomplete instead of inventing a value.
+        </p>
       </div>
     </details>
   );
 }
 
-function currentPlaystyleReason(fp: FingerprintData): string {
-  const available = fp.axes.filter(
-    (axis) => axis.key !== "ladder" && axis.percentile != null,
-  );
-  const score = (key: string) =>
-    fp.axes.find((axis) => axis.key === key)?.percentile ?? null;
-  const n = (key: string) => score(key) ?? "unavailable";
+function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
+  const matchupCategories: ReadonlyArray<MatchupCategory> = [
+    "specialist",
+    "matchup_flex",
+    "universalist",
+    "blind_spot",
+  ];
 
-  switch (fp.playstyle) {
-    case "Complete Player": {
-      const lowest = available
-        .slice()
-        .sort((a, b) => (a.percentile as number) - (b.percentile as number))[0];
-      return lowest
-        ? `${available.length} signals are available and every one scores 65 or higher; the lowest is ${axisMeta(lowest).label} at ${lowest.percentile}.`
-        : playstyleDefinition(fp.playstyle).rule;
-    }
-    case "All-in Gambler":
-      return `Game tempo scored ${n("aggression")} (70+) while Macro scored ${n("macro")} (below 40).`;
-    case "Greedy Macro Player":
-      return `Macro scored ${n("macro")} (70+) while Game tempo scored ${n("aggression")} (below 40).`;
-    case "Tempo Attacker":
-      return `Game tempo scored ${n("aggression")} and Mechanics scored ${n("mechanics")}; both crossed 65.`;
-    case "Economic Engine":
-      return `Spending scored ${n("spending")} (70+) and Macro scored ${n("macro")} (55+).`;
-    case "Busy Hands, Idle Bank":
-      return `Mechanics scored ${n("mechanics")} (70+) while Spending scored ${n("spending")} (below 40).`;
-    case "Metronome":
-      return `Consistency scored ${n("consistency")} (70+) while Game tempo stayed below 55 at ${n("aggression")}.`;
-    case "Coin-Flip Player":
-      return `Consistency scored ${n("consistency")}, below the 35-point stability threshold.`;
-    case "Jack of All Trades":
-      return `No more specific tendency crossed its rule across the ${available.length} available signal${available.length === 1 ? "" : "s"}.`;
-    default:
-      return playstyleDefinition(fp.playstyle).rule;
-  }
-}
-
-function playstyleDefinition(name: string): PlaystyleDefinition {
   return (
-    PLAYSTYLE_DEFINITIONS.find((definition) => definition.name === name) ?? {
-      name,
-      meaning: "A profile estimated from the available recent-game signals.",
-      rule: "The server selected this label from the available signals.",
-    }
+    <details
+      data-testid="fingerprint-archetype-catalog"
+      className="group rounded-xl border border-border bg-bg-elevated/25"
+    >
+      <summary className="flex min-h-[48px] cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 text-caption font-semibold text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+        <Fingerprint className="h-4 w-4 flex-none text-accent-cyan" aria-hidden />
+        <span>All 36 archetypes</span>
+        <ChevronDown
+          className="ml-auto h-4 w-4 flex-none text-text-dim transition-transform group-open:rotate-180"
+          aria-hidden
+        />
+      </summary>
+
+      <div className="border-t border-border px-3 py-4 sm:px-4">
+        <p className="text-micro leading-relaxed text-text-dim">
+          Nine repertoire-and-pace combinations, each with four possible
+          matchup shapes. The highlighted entry is your current complete
+          archetype.
+        </p>
+        <ol className="mt-3 space-y-3">
+          {ARCHETYPE_CATALOG.map((row) => (
+            <li
+              key={`${row.repertoire}.${row.pace}`}
+              className="rounded-lg border border-border bg-bg-surface/45 p-3"
+            >
+              <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">
+                {repertoireLabel(row.repertoire)} · {paceLabel(row.pace)}
+              </p>
+              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {matchupCategories.map((category) => {
+                  const key = `${row.repertoire}|${row.pace}|${category}`;
+                  const current = key === currentKey;
+                  return (
+                    <li
+                      key={category}
+                      data-testid="archetype-option"
+                      aria-current={current ? "true" : undefined}
+                      className={[
+                        "rounded-lg border px-2.5 py-2",
+                        current
+                          ? "border-accent bg-accent/10"
+                          : "border-border bg-bg-elevated/35",
+                      ].join(" ")}
+                    >
+                      <span className="block text-micro text-text-dim">
+                        {MATCHUP_CATEGORY_LABELS[category]}
+                      </span>
+                      <span className="mt-0.5 block text-caption font-semibold text-text">
+                        {row.names[category]}
+                      </span>
+                      {current ? (
+                        <span className="mt-1 inline-block rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan">
+                          Your archetype
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </details>
   );
 }
 
-function axisMeta(axis: Pick<FingerprintAxis, "key" | "label">): AxisMeta {
-  if (axis.key in AXIS_META) {
-    return AXIS_META[axis.key as keyof typeof AXIS_META];
-  }
-  return {
-    label: axis.label,
-    short: "A recent-game performance signal.",
-    detail: "This signal is calculated from your recent replays.",
-    scale: "Higher values indicate a higher score.",
-  };
+function axisAvailable(
+  axis: FingerprintAxis | undefined,
+): axis is FingerprintAxis & { position: number; value: number } {
+  return Boolean(
+    axis &&
+      typeof axis.position === "number" &&
+      Number.isFinite(axis.position) &&
+      typeof axis.value === "number" &&
+      Number.isFinite(axis.value) &&
+      axis.category &&
+      axis.categoryLabel,
+  );
 }
 
-function rawValueLabel(axis: FingerprintAxis): string | null {
-  if (axis.value == null || !Number.isFinite(axis.value)) return null;
-  switch (axis.key) {
-    case "macro":
-      return `Average macro score ${formatNumber(axis.value, 1)}`;
-    case "mechanics":
-      return `Average ${Math.round(axis.value).toLocaleString()} APM`;
-    case "spending":
-      return `Average SPQ ${formatNumber(axis.value, 1)}`;
-    case "consistency":
-      return `Macro-score spread ${formatNumber(axis.value, 1)} points`;
-    case "aggression":
-      return `${Math.round(axis.value)}% ended before 8:00`;
-    case "ladder":
-      return `Average MMR ${Math.round(axis.value).toLocaleString()}`;
-    default:
-      return `Average ${formatNumber(axis.value, 1)}`;
+function axisValueLabel(
+  key: AxisKey,
+  axis: FingerprintAxis,
+  fp: FingerprintData,
+): string {
+  if (axis.value == null) return "—";
+  if (key === "repertoire") {
+    const count = Math.round(axis.value);
+    return `${count} build${count === 1 ? "" : "s"}`;
   }
+  if (key === "pace") return `${formatDuration(axis.value)} avg`;
+  if (axis.category === "specialist") {
+    return `${formatPoints(fp.matchupSummary.leaderGap)} edge`;
+  }
+  if (axis.category === "blind_spot") {
+    return `${formatPoints(fp.matchupSummary.weakGap)} gap`;
+  }
+  return `${formatPoints(fp.matchupSummary.spread)} spread`;
+}
+
+function missingAxisEvidence(
+  key: AxisKey,
+  axis: FingerprintAxis | undefined,
+  fp: FingerprintData,
+): string {
+  if (key === "repertoire") {
+    return `${axis?.sampleSize ?? 0} of 10 required replays have a usable classified build order.`;
+  }
+  if (key === "pace") {
+    return `${axis?.sampleSize ?? 0} of 10 required replays have a valid game length.`;
+  }
+  const counts = fp.matchupWinRates
+    .map((row) => `${row.matchup} ${row.decidedGames}/10`)
+    .join(" · ");
+  return `This comparison needs 10 decided games in each matchup${counts ? `. Current: ${counts}.` : "."}`;
+}
+
+function axisEvidence(
+  key: AxisKey,
+  axis: FingerprintAxis,
+  fp: FingerprintData,
+): string {
+  const sample = axis.sampleSize.toLocaleString();
+  if (key === "repertoire") {
+    const count = Math.round(axis.value as number);
+    return `${count} distinct classified build order${count === 1 ? "" : "s"} appeared across ${sample} usable ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
+  }
+  if (key === "pace") {
+    return `Average game length: ${formatDuration(axis.value as number)} across ${sample} timed ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
+  }
+  const { leaderGap, spread, strongestMatchup, weakGap, weakestMatchup } =
+    fp.matchupSummary;
+  if (axis.category === "specialist") {
+    return `${strongestMatchup ?? "Your strongest matchup"} is the standout strength, leading both other matchups by at least ${formatPoints(leaderGap)} across ${sample} decided games. That places it at the Matchup Specialist endpoint.`;
+  }
+  if (axis.category === "blind_spot") {
+    return `${weakestMatchup ?? "Your weakest matchup"} is the standout weakness, trailing both other matchups by at least ${formatPoints(weakGap)} across ${sample} decided games. That places it at the Matchup Blind Spot endpoint.`;
+  }
+  if (axis.category === "universalist") {
+    return `All three matchup win rates are within ${formatPoints(spread)} across ${sample} decided games: Matchup Universalist at dead center.`;
+  }
+  const direction =
+    (axis.position as number) < 50
+      ? "toward Matchup Specialist"
+      : (axis.position as number) > 50
+        ? "toward Matchup Blind Spot"
+        : "at the midpoint";
+  return `This Matchup Flex result sits ${direction} on the same spectrum, based on a ${formatPoints(spread)} best-to-worst spread across ${sample} decided games.`;
+}
+
+function clampPosition(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function normalizeWinRate(value: number): number {
+  return Math.abs(value) <= 1 ? value * 100 : value;
+}
+
+function formatWinRate(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${formatNumber(normalizeWinRate(value), 3)}%`;
+}
+
+function formatPoints(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${formatNumber(value, 3)} pp`;
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+  const totalHundredths = Math.round(seconds * 100);
+  const minutes = Math.floor(totalHundredths / 6000);
+  const remainderHundredths = totalHundredths % 6000;
+  const wholeSeconds = Math.floor(remainderHundredths / 100);
+  const hundredths = remainderHundredths % 100;
+  const fraction =
+    hundredths === 0
+      ? ""
+      : hundredths % 10 === 0
+        ? `.${hundredths / 10}`
+        : `.${String(hundredths).padStart(2, "0")}`;
+  return `${minutes}:${String(wholeSeconds).padStart(2, "0")}${fraction}`;
 }
 
 function formatNumber(value: number, places: number): string {
   return value.toLocaleString(undefined, {
-    minimumFractionDigits: Number.isInteger(value) ? 0 : places,
+    minimumFractionDigits: 0,
     maximumFractionDigits: places,
   });
 }
 
-function formatList(labels: string[]): string {
-  if (labels.length <= 1) return labels[0] ?? "None";
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+function repertoireLabel(value: CatalogRow["repertoire"]): string {
+  if (value === "grinder") return "Consistent Grinder";
+  if (value === "creative") return "Creative Genius";
+  return "Adaptive Strategist";
+}
+
+function paceLabel(value: CatalogRow["pace"]): string {
+  if (value === "cheeser") return "Cheeser";
+  if (value === "late_game") return "Late-Game Specialist";
+  return "Flexible Pacer";
 }
 
 /** Compact two-sided matchup picker with visible group labels. */
