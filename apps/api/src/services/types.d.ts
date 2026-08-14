@@ -631,6 +631,7 @@ export interface AggregationsService {
     }>;
     summary: {
       games: number;
+      totalSec: number;
       avgSec: number | null;
       medianSec: number | null;
       longGameRate: number;
@@ -642,6 +643,7 @@ export interface AggregationsService {
       games: number;
       wins: number;
       losses: number;
+      totalSec: number;
       avgSec: number | null;
       medianSec: number | null;
       avgWinSec: number | null;

@@ -238,6 +238,7 @@ function lengthSummaryFacet() {
     $group: {
       _id: null,
       games: { $sum: 1 },
+      totalSec: { $sum: "$durationSec" },
       avgSec: { $avg: "$durationSec" },
       medianSec: percentileAccumulator(),
       longGames: longGameAccumulator(),
@@ -261,6 +262,7 @@ function lengthMatchupsFacet() {
         games: { $sum: 1 },
         wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
         losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+        totalSec: { $sum: "$durationSec" },
         avgSec: { $avg: "$durationSec" },
         medianSec: percentileAccumulator(),
         avgWinSec: outcomeDurationAccumulator("win"),
@@ -321,6 +323,7 @@ function shapeLengthBuckets(raw) {
     })),
     summary: {
       games,
+      totalSec: positiveInt(summary && summary.totalSec),
       avgSec: roundedDuration(summary && summary.avgSec),
       medianSec: percentileDuration(summary && summary.medianSec),
       longGameRate:
@@ -337,6 +340,7 @@ function shapeLengthBuckets(raw) {
         games: matchupGames,
         wins: positiveInt(r.wins),
         losses: positiveInt(r.losses),
+        totalSec: positiveInt(r.totalSec),
         avgSec: roundedDuration(r.avgSec),
         medianSec: percentileDuration(r.medianSec),
         avgWinSec: roundedDuration(r.avgWinSec),

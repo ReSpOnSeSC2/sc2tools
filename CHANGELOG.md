@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Trends now shows filtered total playtime overall and by exact matchup** -
+  the existing game-length view sums real recorded replay time, follows every
+  active analyzer filter, and offers compact weeks, days, hours, hours-and-
+  minutes, or minutes-and-seconds display modes on mobile and desktop.
+
 - **Trends now highlights the strongest and weakest MMR days in the selected
   view** - a compact, responsive strip beneath MMR progression shows the
   highest verified daily MMR gain and biggest daily MMR loss, including the

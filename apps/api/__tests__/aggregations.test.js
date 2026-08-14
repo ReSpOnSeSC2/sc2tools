@@ -389,6 +389,7 @@ describe("services/aggregations", () => {
           ],
           summary: [{
             games: 16,
+            totalSec: 12006,
             avgSec: 750.4,
             medianSec: [720.2],
             longGames: 3,
@@ -398,6 +399,7 @@ describe("services/aggregations", () => {
             games: 3,
             wins: 2,
             losses: 1,
+            totalSec: 1891,
             avgSec: 630.4,
             medianSec: [620.2],
             avgWinSec: 600.4,
@@ -420,6 +422,7 @@ describe("services/aggregations", () => {
     expect(out.buckets[0].avgSec).toBe(90);
     expect(out.summary).toEqual({
       games: 16,
+      totalSec: 12006,
       avgSec: 750,
       medianSec: 720,
       longGameRate: 3 / 16,
@@ -431,6 +434,7 @@ describe("services/aggregations", () => {
       games: 3,
       wins: 2,
       losses: 1,
+      totalSec: 1891,
       avgSec: 630,
       medianSec: 620,
       avgWinSec: 600,
@@ -444,11 +448,17 @@ describe("services/aggregations", () => {
       $match: { durationSec: { $type: "number", $gt: 0 } },
     });
     const facet = captured.find((stage) => stage.$facet).$facet;
+    expect(facet.summary[0].$group.totalSec).toEqual({
+      $sum: "$durationSec",
+    });
     expect(facet.matchups[0]).toEqual({
       $match: {
         _myRace: { $in: ["P", "T", "Z", "R"] },
         _oppRace: { $in: ["P", "T", "Z", "R"] },
       },
+    });
+    expect(facet.matchups[1].$group.totalSec).toEqual({
+      $sum: "$durationSec",
     });
   });
 

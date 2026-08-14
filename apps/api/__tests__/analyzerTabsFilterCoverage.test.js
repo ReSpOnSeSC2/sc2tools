@@ -225,7 +225,11 @@ describe("analyzer tabs honour map_pool / game_size", () => {
 
     try {
       const all = await get("/v1/length-buckets");
-      expect(all.summary).toMatchObject({ games: 4, avgSec: 650 });
+      expect(all.summary).toMatchObject({
+        games: 4,
+        totalSec: 2600,
+        avgSec: 650,
+      });
       expect(all.buckets.reduce((n, row) => n + row.total, 0)).toBe(4);
       expect(all.matchups.map((row) => row.matchup)).toEqual([
         "ZvP",
@@ -233,29 +237,35 @@ describe("analyzer tabs honour map_pool / game_size", () => {
         "ZvZ",
       ]);
       expect(all.matchups.reduce((n, row) => n + row.games, 0)).toBe(3);
+      // The valid unknown-own-race game contributes 500s to the overall
+      // measured total, but cannot form a real matchup row.
+      expect(all.matchups.reduce((n, row) => n + row.totalSec, 0)).toBe(2100);
 
       const ladder = await get("/v1/length-buckets?map_pool=ladder");
-      expect(ladder.summary.games).toBe(2);
+      expect(ladder.summary).toMatchObject({ games: 2, totalSec: 1100 });
       expect(ladder.matchups).toHaveLength(1);
       expect(ladder.matchups[0]).toMatchObject({
         matchup: "ZvT",
         games: 1,
+        totalSec: 600,
         avgSec: 600,
       });
 
       const team = await get("/v1/length-buckets?game_size=team");
-      expect(team.summary.games).toBe(1);
+      expect(team.summary).toMatchObject({ games: 1, totalSec: 700 });
       expect(team.matchups[0]).toMatchObject({
         matchup: "ZvP",
         games: 1,
+        totalSec: 700,
         avgSec: 700,
       });
 
       const zvp = await get("/v1/length-buckets?race=Z&opp_race=P");
-      expect(zvp.summary.games).toBe(1);
+      expect(zvp.summary).toMatchObject({ games: 1, totalSec: 700 });
       expect(zvp.matchups[0]).toMatchObject({
         matchup: "ZvP",
         games: 1,
+        totalSec: 700,
         avgSec: 700,
       });
     } finally {

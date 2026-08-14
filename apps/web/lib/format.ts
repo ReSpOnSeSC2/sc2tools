@@ -163,6 +163,83 @@ export function fmtMinutes(seconds: number | null | undefined): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Display modes offered by the Trends playtime summary. */
+export type PlaytimeFormat =
+  | "weeks"
+  | "days"
+  | "hours"
+  | "hoursMinutes"
+  | "minutesSeconds";
+
+/** Dropdown-ready labels kept beside their stable persisted values. */
+export const PLAYTIME_FORMAT_OPTIONS: ReadonlyArray<{
+  value: PlaytimeFormat;
+  label: string;
+}> = [
+  { value: "weeks", label: "Weeks" },
+  { value: "days", label: "Days" },
+  { value: "hours", label: "Hours" },
+  { value: "hoursMinutes", label: "Hours and minutes" },
+  { value: "minutesSeconds", label: "Minutes and seconds" },
+];
+
+const DECIMAL_PLAYTIME = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 2,
+});
+const INTEGER_PLAYTIME = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Format a total number of in-game seconds in the unit selected on Trends.
+ * Decimal-only modes retain a visible trace for tiny positive totals instead
+ * of rounding them down to zero. Compound modes round at their smallest
+ * displayed unit before splitting, so they never render values such as 60s.
+ */
+export function fmtPlaytime(
+  seconds: number | null | undefined,
+  format: PlaytimeFormat,
+): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "—";
+
+  switch (format) {
+    case "weeks":
+      return fmtDecimalPlaytime(seconds, 7 * 24 * 60 * 60, "week", "weeks");
+    case "days":
+      return fmtDecimalPlaytime(seconds, 24 * 60 * 60, "day", "days");
+    case "hours":
+      return fmtDecimalPlaytime(seconds, 60 * 60, "hour", "hours");
+    case "hoursMinutes": {
+      const totalMinutes = Math.round(seconds / 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${INTEGER_PLAYTIME.format(hours)}h ${minutes}m`;
+    }
+    case "minutesSeconds": {
+      const totalSeconds = Math.round(seconds);
+      const minutes = Math.floor(totalSeconds / 60);
+      const remainderSeconds = totalSeconds % 60;
+      return `${INTEGER_PLAYTIME.format(minutes)}m ${remainderSeconds}s`;
+    }
+    default:
+      return "—";
+  }
+}
+
+function fmtDecimalPlaytime(
+  seconds: number,
+  unitSeconds: number,
+  singular: string,
+  plural: string,
+): string {
+  const value = seconds / unitSeconds;
+  if (value === 0) return `0 ${plural}`;
+  if (value < 0.01) return `<0.01 ${plural}`;
+
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  return `${DECIMAL_PLAYTIME.format(rounded)} ${rounded === 1 ? singular : plural}`;
+}
+
 export function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
