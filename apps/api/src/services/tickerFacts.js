@@ -945,6 +945,7 @@ function playstyleDetail(fp, matchup) {
     repertoire ||
       pace ||
       matchupBalance ||
+      (fp.repertoireSummary && typeof fp.repertoireSummary === "object") ||
       Array.isArray(fp.buildOrders) ||
       Array.isArray(fp.matchupWinRates) ||
       (fp.matchupSummary && typeof fp.matchupSummary === "object"),
@@ -952,19 +953,8 @@ function playstyleDetail(fp, matchup) {
 
   if (hasCurrentShape) {
     const selected = [];
-    const buildCount = repertoire
-      ? usableFingerprintAxis(repertoire)
-        ? firstFiniteNumber(repertoire.value)
-        : null
-      : firstFiniteNumber(
-          Array.isArray(fp.buildOrders) ? fp.buildOrders.length : null,
-        );
-    if (buildCount !== null && buildCount >= 0) {
-      const count = Math.round(buildCount);
-      selected.push(
-        `${count} ${matchup} build order${count === 1 ? "" : "s"}`,
-      );
-    }
+    const builds = repertoireDetail(fp, matchup, repertoire);
+    if (builds) selected.push(builds);
 
     const averageSec = pace
       ? usableFingerprintAxis(pace)
@@ -991,6 +981,68 @@ function playstyleDetail(fp, matchup) {
   }
 
   return legacyPlaystyleDetail(fp, matchup, axes);
+}
+
+/**
+ * Describe repertoire diversity without confusing a frequency-weighted
+ * effective count with the number of distinct build labels. The summary is
+ * the new contract; the axis/build-order branches preserve compatibility with
+ * fingerprints produced before that summary existed.
+ *
+ * @param {Record<string, any>} fp
+ * @param {string} matchup
+ * @param {Record<string, any> | undefined} axis
+ * @returns {string}
+ */
+function repertoireDetail(fp, matchup, axis) {
+  // A present but unranked axis means the fingerprint sample gate was not met.
+  // Do not leak its provisional summary values into a ticker fact.
+  if (axis && !usableFingerprintAxis(axis)) return "";
+
+  const rawSummary = fp.repertoireSummary;
+  const summary = rawSummary && typeof rawSummary === "object"
+    ? /** @type {Record<string, any>} */ (rawSummary)
+    : null;
+  if (summary) {
+    const distinct = firstFiniteNumber(summary.distinctBuilds);
+    const effective = firstFiniteNumber(summary.effectiveBuilds);
+    const validDistinct = distinct !== null && distinct >= 0;
+    const validEffective = effective !== null && effective >= 0;
+
+    if (validDistinct && validEffective) {
+      const distinctCount = Math.round(distinct);
+      const effectiveCount = formatEffectiveBuilds(effective);
+      return `${fmtInt(distinctCount)} distinct ${matchup} build order${distinctCount === 1 ? "" : "s"} (${effectiveCount} effective build${effective === 1 ? "" : "s"})`;
+    }
+    if (validDistinct) {
+      const distinctCount = Math.round(distinct);
+      return `${fmtInt(distinctCount)} distinct ${matchup} build order${distinctCount === 1 ? "" : "s"}`;
+    }
+    if (validEffective) {
+      return `${formatEffectiveBuilds(effective)} effective ${matchup} build order${effective === 1 ? "" : "s"}`;
+    }
+  }
+
+  const legacyCount = axis
+    ? firstFiniteNumber(axis.value)
+    : firstFiniteNumber(
+        Array.isArray(fp.buildOrders) ? fp.buildOrders.length : null,
+      );
+  if (legacyCount === null || legacyCount < 0) return "";
+  const count = Math.round(legacyCount);
+  return `${fmtInt(count)} ${matchup} build order${count === 1 ? "" : "s"}`;
+}
+
+/** @param {number} value @returns {string} */
+function formatEffectiveBuilds(value) {
+  const nearBoundary = [1.5, 2.5, 5, 10].some(
+    (boundary) => Math.abs(value - boundary) > 0
+      && Math.abs(value - boundary) < 0.01,
+  );
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: nearBoundary ? 6 : 2,
+  });
 }
 
 /**
@@ -1048,6 +1100,8 @@ function matchupDetail(summary, rawRates, axis) {
       ? `${leader} is your strongest matchup, with a win rate at least ${formatPercentValue(lead)}% higher than your other two`
       : `your best matchup has at least a ${formatPercentValue(lead)}% win-rate edge over the other two`;
   }
+  const moderate = moderateMatchupDetail(category, lead, weakGap, leader, weakest);
+  if (moderate) return moderate;
   if (category === "blind_spot" && weakGap !== null && weakGap >= 0) {
     return weakest
       ? `${weakest} is your toughest matchup, with a win rate at least ${formatPercentValue(weakGap)}% lower than your other two`
@@ -1059,6 +1113,21 @@ function matchupDetail(summary, rawRates, axis) {
   return spread !== null && spread >= 0
     ? `there is a ${formatPercentValue(spread)}% win-rate gap between your best and toughest matchups`
     : "";
+}
+
+/** Explain the two directional, non-endpoint matchup tiers. */
+function moderateMatchupDetail(category, lead, weakGap, leader, weakest) {
+  if (category === "matchup_edge" && lead !== null && lead >= 0) {
+    return leader
+      ? `${leader} gives you a Matchup Edge, leading your middle matchup by ${formatPercentValue(lead)}%`
+      : `your strongest matchup gives you a Matchup Edge of ${formatPercentValue(lead)}% over your middle matchup`;
+  }
+  if (category === "matchup_hurdle" && weakGap !== null && weakGap >= 0) {
+    return weakest
+      ? `${weakest} is a Matchup Hurdle, trailing your middle matchup by ${formatPercentValue(weakGap)}%`
+      : `your toughest matchup is a Matchup Hurdle, trailing your middle matchup by ${formatPercentValue(weakGap)}%`;
+  }
+  return "";
 }
 
 /** Keep one decimal for whole values and reveal meaningful thousandths. */

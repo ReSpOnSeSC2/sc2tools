@@ -13,6 +13,16 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Skill Fingerprints now explain and reward practiced variety, timing shape,
+  and matchup balance** — build repertoire separates detected names from an
+  inverse-Simpson effective count and adds One-Trick and Signature Pilot tiers;
+  pace classification recognizes timing-window, mid/late mastery, late mastery,
+  and genuine Two-Speed distributions from real replay durations; matchup
+  scoring now has five named states around 5-, 7.5-, and 10-point landmarks.
+  The expanded 175-archetype catalog, signed matchup score, real time-band
+  evidence, and in-product methodology make every label reproducible without
+  estimates or placeholder data.
+
 - **Trends now shows filtered total playtime overall and by exact matchup** -
   the existing game-length view sums real recorded replay time, follows every
   active analyzer filter, and offers compact weeks, days, hours, hours-and-

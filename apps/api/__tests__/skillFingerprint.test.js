@@ -14,12 +14,15 @@ const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { PulseMmrService } = require("../src/services/pulseMmr");
 const {
+  ARCHETYPE_CORE_NAMES,
   ARCHETYPE_NAMES,
-  NEAR_BALANCED_MAX_SPREAD,
+  MATCHUP_ARCHETYPE_PREFIXES,
+  MODERATE_MATCHUP_ANCHOR,
   deriveArchetype,
   matchupBalanceAxis,
   paceAxis,
   repertoireAxis,
+  repertoireCategory,
 } = require("../src/services/skillFingerprint");
 
 jest.mock("@clerk/backend", () => ({
@@ -46,6 +49,12 @@ function rowsWithDistinctBuilds(count, total = 10) {
   }));
 }
 
+function rowsWithBuildCounts(counts) {
+  return counts.flatMap((count, index) =>
+    repeatedRows(count, { myBuild: `Build ${index + 1}` }),
+  );
+}
+
 function outcomeRows(wins, losses, ties = 0) {
   return [
     ...repeatedRows(wins, { result: "Victory" }),
@@ -57,25 +66,67 @@ function outcomeRows(wins, losses, ties = 0) {
 describe("skill fingerprint pure replay heuristics", () => {
   describe("repertoireAxis", () => {
     test.each([
-      [1, "grinder", "Consistent Grinder", 0],
-      [2, "grinder", "Consistent Grinder", 0],
-      [3, "adaptive", "Adaptive Strategist", 13],
-      [6, "adaptive", "Adaptive Strategist", 50],
+      [1, "one_trick", "Build-Order One-Trick", 0],
+      [2, "signature", "Signature Pilot", 6],
+      [3, "grinder", "Consistent Grinder", 18],
+      [5, "grinder", "Consistent Grinder", 41],
+      [6, "adaptive", "Adaptive Strategist", 53],
       [9, "adaptive", "Adaptive Strategist", 88],
       [10, "creative", "Creative Genius", 100],
     ])(
-      "%i distinct builds maps to %s at the exact boundary",
+      "%i equally used builds maps to %s",
       (count, category, _categoryLabel, position) => {
-        const axis = repertoireAxis(rowsWithDistinctBuilds(count));
+        const axis = repertoireAxis(rowsWithBuildCounts(Array(count).fill(10)));
         expect(axis).toMatchObject({
           value: count,
           category,
           position,
-          sampleSize: 10,
+          sampleSize: count * 10,
+          summary: {
+            distinctBuilds: count,
+            effectiveBuilds: count,
+          },
         });
         expect(axis.builds).toHaveLength(count);
       },
     );
+
+    test.each([
+      [1.5, "one_trick"],
+      [1.500001, "signature"],
+      [2.5, "signature"],
+      [2.500001, "grinder"],
+      [5, "grinder"],
+      [5.000001, "adaptive"],
+      [9.999999, "adaptive"],
+      [10, "creative"],
+    ])("classifies the raw effective-count boundary %s as %s", (value, category) => {
+      expect(repertoireCategory(value)).toBe(category);
+    });
+
+    test("reports 14 observed builds as 8.347826 effective for a concentrated distribution", () => {
+      const counts = [13, 5, 4, 4, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2];
+      const axis = repertoireAxis(rowsWithBuildCounts(counts));
+      expect(axis).toMatchObject({
+        value: 8.347826,
+        category: "adaptive",
+        sampleSize: 48,
+        summary: {
+          distinctBuilds: 14,
+          effectiveBuilds: 8.347826,
+        },
+      });
+    });
+
+    test("effective diversity stays between one and the distinct build count", () => {
+      for (const counts of [[10], [9, 1], [8, 4, 2, 1], [5, 5, 5, 5]]) {
+        const axis = repertoireAxis(rowsWithBuildCounts(counts));
+        expect(axis.summary.effectiveBuilds).toBeGreaterThanOrEqual(1);
+        expect(axis.summary.effectiveBuilds).toBeLessThanOrEqual(
+          axis.summary.distinctBuilds,
+        );
+      }
+    });
 
     test("needs 10 usable labels and excludes placeholder buckets", () => {
       const axis = repertoireAxis([
@@ -92,6 +143,7 @@ describe("skill fingerprint pure replay heuristics", () => {
         category: null,
         position: null,
         sampleSize: 9,
+        summary: { distinctBuilds: 3, effectiveBuilds: 3 },
       });
       expect(axis.builds).toEqual([
         { name: "Build 1", games: 3 },
@@ -102,26 +154,115 @@ describe("skill fingerprint pure replay heuristics", () => {
   });
 
   describe("paceAxis", () => {
-    test.each([
-      [300, "cheeser", "Cheeser", 0],
-      [301, "standard", "Flexible Pacer", 1],
-      [600, "standard", "Flexible Pacer", 50],
-      [899, "standard", "Flexible Pacer", 99],
-      [900, "late_game", "Late-Game Specialist", 100],
-    ])(
-      "%i-second average maps to %s at the exact boundary",
-      (durationSec, category, _categoryLabel, exactPosition) => {
-        const axis = paceAxis(repeatedRows(10, { durationSec }));
-        expect(axis).toMatchObject({
-          value: durationSec,
-          category,
-          sampleSize: 10,
-        });
-        expect(axis.position).toBeGreaterThanOrEqual(0);
-        expect(axis.position).toBeLessThanOrEqual(100);
-        if (exactPosition !== null) expect(axis.position).toBe(exactPosition);
-      },
-    );
+    test("uses the exact [5:00, 7:00] timing window and strict outer boundaries", () => {
+      const axis = paceAxis([
+        ...repeatedRows(4, { durationSec: 299 }),
+        ...repeatedRows(8, { durationSec: 300 }),
+        ...repeatedRows(8, { durationSec: 420 }),
+        ...repeatedRows(4, { durationSec: 421 }),
+      ]);
+      expect(axis).toMatchObject({
+        category: "flexible",
+        sampleSize: 24,
+        summary: {
+          belowFive: { games: 4, percent: 16.67 },
+          fiveToSeven: { games: 16, percent: 66.67 },
+          aboveSeven: { games: 4, percent: 16.67 },
+          sevenToFifteen: { games: 4, percent: 16.67 },
+          aboveFifteen: { games: 0, percent: 0 },
+        },
+      });
+      // The mixed boundary probe above is below the 80% timing gate. An exact
+      // 80% sample proves the gate without rounding its 8/10 cross-product.
+      const exact = paceAxis([
+        ...repeatedRows(4, { durationSec: 300 }),
+        ...repeatedRows(4, { durationSec: 420 }),
+        ...repeatedRows(2, { durationSec: 421 }),
+      ]);
+      expect(exact.category).toBe("timing_attacker");
+    });
+
+    test("Two-Speed wins precedence at the exact 25% + 25% cross-product gates", () => {
+      const exact = paceAxis([
+        ...repeatedRows(5, { durationSec: 299 }),
+        ...repeatedRows(10, { durationSec: 420 }),
+        ...repeatedRows(5, { durationSec: 901 }),
+      ]);
+      const below = paceAxis([
+        ...repeatedRows(4, { durationSec: 299 }),
+        ...repeatedRows(11, { durationSec: 420 }),
+        ...repeatedRows(5, { durationSec: 901 }),
+      ]);
+      expect(exact).toMatchObject({
+        category: "two_speed",
+        categoryLabel: "Two-Speed Player",
+        summary: {
+          belowFive: { games: 5, percent: 25 },
+          aboveFifteen: { games: 5, percent: 25 },
+        },
+      });
+      expect(below.category).toBe("flexible");
+    });
+
+    test("Late-Game Master wins at exactly 80% strictly above 15:00", () => {
+      const exact = paceAxis([
+        ...repeatedRows(8, { durationSec: 901 }),
+        ...repeatedRows(2, { durationSec: 900 }),
+      ]);
+      const below = paceAxis([
+        ...repeatedRows(7, { durationSec: 901 }),
+        ...repeatedRows(3, { durationSec: 900 }),
+      ]);
+      expect(exact).toMatchObject({
+        category: "late_game_master",
+        categoryLabel: "Late-Game Master",
+        summary: {
+          aboveFifteen: { games: 8, percent: 80 },
+          sevenToFifteen: { games: 2, percent: 20 },
+        },
+      });
+      expect(below.category).toBe("mid_late_master");
+    });
+
+    test("Mid/Late-Game Master wins at exactly 80% strictly above 7:00", () => {
+      const exact = paceAxis([
+        ...repeatedRows(8, { durationSec: 421 }),
+        ...repeatedRows(2, { durationSec: 420 }),
+      ]);
+      const below = paceAxis([
+        ...repeatedRows(7, { durationSec: 421 }),
+        ...repeatedRows(3, { durationSec: 420 }),
+      ]);
+      expect(exact).toMatchObject({
+        category: "mid_late_master",
+        categoryLabel: "Mid/Late-Game Master",
+        summary: { aboveSeven: { games: 8, percent: 80 } },
+      });
+      expect(below.category).toBe("flexible");
+    });
+
+    test("fallback mean categories use <5:00, inclusive 5:00-15:00, and >15:00", () => {
+      const cheeser = paceAxis([
+        ...repeatedRows(5, { durationSec: 299 }),
+        ...repeatedRows(5, { durationSec: 300 }),
+      ]);
+      const exactlyFive = paceAxis([
+        ...repeatedRows(5, { durationSec: 180 }),
+        ...repeatedRows(5, { durationSec: 420 }),
+      ]);
+      const exactlyFifteen = paceAxis([
+        ...repeatedRows(5, { durationSec: 420 }),
+        ...repeatedRows(5, { durationSec: 1380 }),
+      ]);
+      const overFifteen = paceAxis([
+        ...repeatedRows(5, { durationSec: 420 }),
+        ...repeatedRows(5, { durationSec: 1382 }),
+      ]);
+      expect(cheeser).toMatchObject({ category: "cheeser", value: 299.5 });
+      expect(exactlyFive).toMatchObject({ category: "flexible", value: 300 });
+      expect(exactlyFifteen).toMatchObject({ category: "flexible", value: 900 });
+      expect(overFifteen).toMatchObject({ category: "late_game", value: 901 });
+    });
 
     test("needs 10 valid durations and ignores games shorter than 45 seconds", () => {
       const axis = paceAxis([
@@ -137,47 +278,53 @@ describe("skill fingerprint pure replay heuristics", () => {
         category: null,
         position: null,
         sampleSize: 9,
+        summary: {
+          averageSec: 600,
+          medianSec: 600,
+          belowFive: { games: 0, percent: 0 },
+          fiveToSeven: { games: 0, percent: 0 },
+          aboveSeven: { games: 9, percent: 100 },
+          sevenToFifteen: { games: 9, percent: 100 },
+          aboveFifteen: { games: 0, percent: 0 },
+        },
       });
     });
 
-    test.each([
-      [300.4, 300.4, "standard", 1],
-      [899.6, 899.6, "standard", 99],
-    ])(
-      "classifies the raw %s-second mean and displays it as %s",
-      (rawMean, displayedValue, category, position) => {
-        const axis = paceAxis(repeatedRows(10, { durationSec: rawMean }));
-        expect(axis).toMatchObject({
-          value: displayedValue,
-          category,
-          position,
-          sampleSize: 10,
-        });
-      },
-    );
+    test("keeps an all-invalid duration distribution unavailable instead of inventing zero percentages", () => {
+      const axis = paceAxis(repeatedRows(10, { durationSec: 44 }));
+      expect(axis).toMatchObject({
+        value: null,
+        category: null,
+        position: null,
+        sampleSize: 0,
+        summary: {
+          averageSec: null,
+          medianSec: null,
+          belowFive: { games: 0, percent: null },
+          fiveToSeven: { games: 0, percent: null },
+          aboveSeven: { games: 0, percent: null },
+          sevenToFifteen: { games: 0, percent: null },
+          aboveFifteen: { games: 0, percent: null },
+        },
+      });
+    });
 
-    test.each([
-      [300, 301, 300.02, 1],
-      [900, 899, 899.98, 99],
-    ])(
-      "preserves the two-decimal mean of integer-second replay durations",
-      (commonDuration, outlierDuration, displayedValue, position) => {
-        const axis = paceAxis([
-          ...repeatedRows(49, { durationSec: commonDuration }),
-          { durationSec: outlierDuration },
-        ]);
-        expect(axis).toMatchObject({
-          value: displayedValue,
-          category: "standard",
-          position,
-          sampleSize: 50,
-        });
-      },
-    );
+    test("preserves two-decimal average and median values in the public evidence", () => {
+      const axis = paceAxis([
+        ...repeatedRows(9, { durationSec: 500 }),
+        { durationSec: 501 },
+      ]);
+      expect(axis).toMatchObject({
+        value: 500.1,
+        category: "mid_late_master",
+        sampleSize: 10,
+        summary: { averageSec: 500.1, medianSec: 500 },
+      });
+    });
   });
 
   describe("matchupBalanceAxis", () => {
-    test("a raw total spread within 1 point is a centered universalist", () => {
+    test("a raw total spread within 5 points is a centered universalist", () => {
       const axis = matchupBalanceAxis("P", {
         PvP: outcomeRows(50, 50),
         PvT: outcomeRows(50, 50),
@@ -189,38 +336,44 @@ describe("skill fingerprint pure replay heuristics", () => {
         position: 50,
         leaderGap: 0,
         weakGap: 1,
+        signedEdge: -1,
+        tierScore: 0,
         strongestMatchup: "PvP",
         weakestMatchup: "PvZ",
       });
     });
 
-    test("a raw spread above 1 remains visibly 1.02 and is Matchup Flex", () => {
+    test("a strength-side spread above 5 is Matchup Edge", () => {
       const axis = matchupBalanceAxis("P", {
-        PvP: outcomeRows(25, 24), // 51.0204%
+        PvP: outcomeRows(56, 44),
         PvT: outcomeRows(5, 5),
         PvZ: outcomeRows(5, 5),
       });
       expect(axis).toMatchObject({
-        value: 1.02,
-        category: "matchup_flex",
-        position: 49,
-        leaderGap: 1.02,
+        value: 6,
+        category: "matchup_edge",
+        position: 40,
+        leaderGap: 6,
         weakGap: 0,
+        signedEdge: 6,
+        tierScore: 1,
       });
     });
 
-    test("three decimals keep a 1.000625 raw spread visibly above the universalist boundary", () => {
+    test("a weakness-side spread above 5 is Matchup Hurdle", () => {
       const axis = matchupBalanceAxis("P", {
-        PvP: outcomeRows(33, 8), // 80.487805%
-        PvT: outcomeRows(31, 8), // 79.487179%
-        PvZ: outcomeRows(31, 8),
+        PvP: outcomeRows(50, 50),
+        PvT: outcomeRows(50, 50),
+        PvZ: outcomeRows(44, 56),
       });
       expect(axis).toMatchObject({
-        value: 1.001,
-        category: "matchup_flex",
-        position: 49,
-        leaderGap: 1.001,
-        weakGap: 0,
+        value: 6,
+        category: "matchup_hurdle",
+        position: 60,
+        leaderGap: 0,
+        weakGap: 6,
+        signedEdge: -6,
+        tierScore: -1,
       });
     });
 
@@ -236,6 +389,8 @@ describe("skill fingerprint pure replay heuristics", () => {
         position: 0,
         leaderGap: 10,
         weakGap: 1,
+        signedEdge: 10,
+        tierScore: 2,
         strongestMatchup: "PvP",
         weakestMatchup: "PvZ",
       });
@@ -253,6 +408,8 @@ describe("skill fingerprint pure replay heuristics", () => {
         position: 100,
         leaderGap: 1,
         weakGap: 10,
+        signedEdge: -10,
+        tierScore: -2,
         strongestMatchup: "PvP",
         weakestMatchup: "PvZ",
       });
@@ -291,6 +448,8 @@ describe("skill fingerprint pure replay heuristics", () => {
           position,
           leaderGap,
           weakGap,
+          signedEdge: category === "specialist" ? 10 : -10,
+          tierScore: category === "specialist" ? 2 : -2,
         });
         expect(axis.matchups.every((matchup) => matchup.games <= 50)).toBe(true);
       },
@@ -304,10 +463,12 @@ describe("skill fingerprint pure replay heuristics", () => {
       });
       expect(axis).toMatchObject({
         value: 9.96,
-        category: "matchup_flex",
+        category: "matchup_edge",
         position: 1,
         leaderGap: 9.96,
         weakGap: 0,
+        signedEdge: 9.96,
+        tierScore: 1,
       });
       expect(axis.position).not.toBe(0);
     });
@@ -320,15 +481,16 @@ describe("skill fingerprint pure replay heuristics", () => {
       });
       expect(axis).toMatchObject({
         value: 9.995,
-        category: "matchup_flex",
+        category: "matchup_edge",
         position: 1,
         leaderGap: 9.995,
         weakGap: 0,
+        signedEdge: 9.995,
+        tierScore: 1,
       });
     });
 
-    test("spreads through 5 points remain in the near-center 40-60 band", () => {
-      expect(NEAR_BALANCED_MAX_SPREAD).toBe(5);
+    test("all three rates within 5 points select the exact universalist tier", () => {
       const specialistLean = matchupBalanceAxis("P", {
         PvP: outcomeRows(54, 46),
         PvT: outcomeRows(50, 50),
@@ -341,13 +503,41 @@ describe("skill fingerprint pure replay heuristics", () => {
       });
       expect(specialistLean).toMatchObject({
         value: 5,
-        category: "matchup_flex",
-        position: 40,
+        category: "universalist",
+        position: 50,
+        tierScore: 0,
       });
       expect(blindSpotLean).toMatchObject({
         value: 5,
-        category: "matchup_flex",
-        position: 60,
+        category: "universalist",
+        position: 50,
+        tierScore: 0,
+      });
+    });
+
+    test("7.5-point moderate gaps land on the 25/75 score anchors", () => {
+      expect(MODERATE_MATCHUP_ANCHOR).toBe(7.5);
+      const edge = matchupBalanceAxis("P", {
+        PvP: outcomeRows(23, 17),
+        PvT: outcomeRows(20, 20),
+        PvZ: outcomeRows(20, 20),
+      });
+      const hurdle = matchupBalanceAxis("P", {
+        PvP: outcomeRows(20, 20),
+        PvT: outcomeRows(20, 20),
+        PvZ: outcomeRows(17, 23),
+      });
+      expect(edge).toMatchObject({
+        category: "matchup_edge",
+        position: 25,
+        signedEdge: 7.5,
+        tierScore: 1,
+      });
+      expect(hurdle).toMatchObject({
+        category: "matchup_hurdle",
+        position: 75,
+        signedEdge: -7.5,
+        tierScore: -1,
       });
     });
 
@@ -367,16 +557,20 @@ describe("skill fingerprint pure replay heuristics", () => {
         position: 0,
         leaderGap: 10,
         weakGap: 10,
+        signedEdge: 10,
+        tierScore: 2,
       });
       expect(largerWeakGap).toMatchObject({
         category: "blind_spot",
         position: 100,
         leaderGap: 10,
         weakGap: 11,
+        signedEdge: -11,
+        tierScore: -2,
       });
     });
 
-    test("other shapes are Matchup Flex and position follows the signed gap", () => {
+    test("moderate shapes choose edge or hurdle and ties favor edge", () => {
       const specialistLean = matchupBalanceAxis("P", {
         PvP: outcomeRows(58, 42),
         PvT: outcomeRows(52, 48),
@@ -393,12 +587,24 @@ describe("skill fingerprint pure replay heuristics", () => {
         PvZ: outcomeRows(52, 48),
       });
 
-      for (const axis of [specialistLean, equalGap, blindSpotLean]) {
-        expect(axis.category).toBe("matchup_flex");
-      }
-      expect(specialistLean.position).toBeLessThan(50);
-      expect(equalGap.position).toBe(40);
-      expect(blindSpotLean.position).toBeGreaterThan(50);
+      expect(specialistLean).toMatchObject({
+        category: "matchup_edge",
+        position: 40,
+        signedEdge: 6,
+        tierScore: 1,
+      });
+      expect(equalGap).toMatchObject({
+        category: "matchup_edge",
+        position: 49,
+        signedEdge: 5,
+        tierScore: 1,
+      });
+      expect(blindSpotLean).toMatchObject({
+        category: "matchup_hurdle",
+        position: 60,
+        signedEdge: -6,
+        tierScore: -1,
+      });
     });
 
     test("needs 10 decided games per matchup and excludes ties from win rate", () => {
@@ -411,6 +617,8 @@ describe("skill fingerprint pure replay heuristics", () => {
         value: null,
         category: null,
         position: null,
+        signedEdge: null,
+        tierScore: null,
       });
       const rows = Object.fromEntries(axis.matchups.map((row) => [row.matchup, row]));
       expect(rows.PvP).toMatchObject({
@@ -432,16 +640,11 @@ describe("skill fingerprint pure replay heuristics", () => {
     });
   });
 
-  test("deriveArchetype deterministically names all 36 combinations", () => {
+  test("deriveArchetype deterministically names all 175 combinations", () => {
     const names = [];
-    for (const repertoire of ["grinder", "adaptive", "creative"]) {
-      for (const pace of ["cheeser", "standard", "late_game"]) {
-        for (const matchup of [
-          "specialist",
-          "matchup_flex",
-          "universalist",
-          "blind_spot",
-        ]) {
+    for (const repertoire of Object.keys(ARCHETYPE_CORE_NAMES)) {
+      for (const pace of Object.keys(ARCHETYPE_CORE_NAMES[repertoire])) {
+        for (const matchup of Object.keys(MATCHUP_ARCHETYPE_PREFIXES)) {
           const args = { repertoire, pace, matchup };
           const first = deriveArchetype(args);
           expect(deriveArchetype(args)).toEqual(first);
@@ -455,7 +658,16 @@ describe("skill fingerprint pure replay heuristics", () => {
         }
       }
     }
-    expect(new Set(names).size).toBe(36);
+    expect(names).toHaveLength(175);
+    expect(new Set(names).size).toBe(175);
+    expect(ARCHETYPE_NAMES).toHaveProperty(
+      "creative|two_speed|blind_spot",
+      "Fault-Line Chaos Switchboard",
+    );
+    expect(ARCHETYPE_NAMES).toHaveProperty(
+      "one_trick|timing_attacker|specialist",
+      "Apex Clockwork Attacker",
+    );
     const catalog = new Set(Object.values(ARCHETYPE_NAMES));
     for (const name of names) expect(catalog.has(name)).toBe(true);
   });
@@ -672,8 +884,8 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       label: "Game length",
       position: 0,
       value: 300,
-      category: "cheeser",
-      categoryLabel: "Cheeser",
+      category: "timing_attacker",
+      categoryLabel: "Timing Attacker",
       sampleSize: 10,
     });
     expect(axes.matchup_balance).toEqual({
@@ -682,8 +894,22 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       position: 0,
       value: 10,
       category: "specialist",
-      categoryLabel: "Matchup Specialist",
+      categoryLabel: "Matchup Master",
       sampleSize: 30,
+    });
+
+    expect(fingerprint.repertoireSummary).toEqual({
+      distinctBuilds: 10,
+      effectiveBuilds: 10,
+    });
+    expect(fingerprint.paceSummary).toEqual({
+      averageSec: 300,
+      medianSec: 300,
+      belowFive: { games: 0, percent: 0 },
+      fiveToSeven: { games: 10, percent: 100 },
+      aboveSeven: { games: 0, percent: 0 },
+      sevenToFifteen: { games: 0, percent: 0 },
+      aboveFifteen: { games: 0, percent: 0 },
     });
 
     expect(fingerprint.buildOrders).toEqual([
@@ -731,12 +957,14 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       spread: 10,
       leaderGap: 10,
       weakGap: 0,
+      signedEdge: 10,
+      tierScore: 2,
       strongestMatchup: "PvZ",
       weakestMatchup: "PvT",
     });
     expect(fingerprint.archetype).toMatchObject({
-      key: "creative|cheeser|specialist",
-      name: "Lab-Crafted Ambusher",
+      key: "creative|timing_attacker|specialist",
+      name: "Apex Timing Inventor",
       description: expect.any(String),
       complete: true,
     });
@@ -765,7 +993,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       fingerprint.axes.find((axis) => axis.key === "matchup_balance"),
     ).toMatchObject({
       category: "universalist",
-      categoryLabel: "Matchup Universalist",
+      categoryLabel: "All-Matchup Ace",
       position: 50,
       value: 0,
       sampleSize: 30,
@@ -815,8 +1043,8 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       fingerprint.axes.find((axis) => axis.key === "repertoire"),
     ).toMatchObject({
       value: 1,
-      category: "grinder",
-      categoryLabel: "Consistent Grinder",
+      category: "one_trick",
+      categoryLabel: "Build-Order One-Trick",
       position: 0,
       sampleSize: 50,
     });
@@ -824,10 +1052,23 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       fingerprint.axes.find((axis) => axis.key === "pace"),
     ).toMatchObject({
       value: 900,
-      category: "late_game",
-      categoryLabel: "Late-Game Specialist",
+      category: "mid_late_master",
+      categoryLabel: "Mid/Late-Game Master",
       position: 100,
       sampleSize: 50,
+    });
+    expect(fingerprint.repertoireSummary).toEqual({
+      distinctBuilds: 1,
+      effectiveBuilds: 1,
+    });
+    expect(fingerprint.paceSummary).toEqual({
+      averageSec: 900,
+      medianSec: 900,
+      belowFive: { games: 0, percent: 0 },
+      fiveToSeven: { games: 0, percent: 0 },
+      aboveSeven: { games: 50, percent: 100 },
+      sevenToFifteen: { games: 50, percent: 100 },
+      aboveFifteen: { games: 0, percent: 0 },
     });
   });
 
@@ -867,7 +1108,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     ]);
     expect(fingerprint.archetype).toMatchObject({
       key: "partial:?|?|universalist",
-      name: "Matchup Universalist",
+      name: "All-Matchup Ace",
       complete: false,
     });
     expect(fingerprint.playstyle).toBe(fingerprint.archetype.name);

@@ -4,9 +4,9 @@
  * Replay-derived playstyle fingerprint.
  *
  * The three measurements are tendencies, not grades or percentiles:
- *   Consistent Grinder <-> Creative Genius
- *   Cheeser <-> Late-Game Specialist
- *   Matchup Specialist <-> Matchup Blind Spot
+ *   Build-Order One-Trick <-> Creative Genius
+ *   Cheeser <-> Late-Game Master (with distribution-aware tempo profiles)
+ *   Matchup Master <-> Matchup Blind Spot
  *
  * Only slim `games` fields are read. Missing evidence stays missing; no
  * benchmark, estimate, or mock value is substituted.
@@ -18,95 +18,137 @@ const MIN_BUILD_SAMPLE = 10;
 const MIN_DURATION_SAMPLE = 10;
 const MIN_MATCHUP_GAMES = 10;
 
-const GRINDER_MAX_BUILDS = 2;
-const CREATIVE_MIN_BUILDS = 10;
+const ONE_TRICK_MAX_EFFECTIVE_BUILDS = 1.5;
+const SIGNATURE_MAX_EFFECTIVE_BUILDS = 2.5;
+const GRINDER_MAX_EFFECTIVE_BUILDS = 5;
+const CREATIVE_MIN_EFFECTIVE_BUILDS = 10;
 const MIN_VALID_DURATION_SEC = 45;
-const CHEESE_MAX_SEC = 5 * 60;
-const LATE_GAME_MIN_SEC = 15 * 60;
-const BALANCED_MAX_SPREAD = 1;
-const NEAR_BALANCED_MAX_SPREAD = 5;
+const FIVE_MIN_SEC = 5 * 60;
+const SEVEN_MIN_SEC = 7 * 60;
+const FIFTEEN_MIN_SEC = 15 * 60;
+const TWO_SPEED_MIN_PERCENT = 25;
+const DOMINANT_TIMEFRAME_MIN_PERCENT = 80;
+const BALANCED_MAX_SPREAD = 5;
+const MODERATE_MATCHUP_ANCHOR = 7.5;
 const SPECIALIST_MIN_LEAD = 10;
 const BLIND_SPOT_MIN_GAP = 10;
-const NEAR_BALANCED_POSITION_RADIUS = 10;
 const THRESHOLD_EPSILON = 1e-9;
 
 const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
 
-/** Four matchup states keep the exact 1-point universalist rule visible. */
-const ARCHETYPE_NAMES = Object.freeze({
-  "grinder|cheeser|specialist": "Precision Ambusher",
-  "grinder|cheeser|matchup_flex": "Calculated Raider",
-  "grinder|cheeser|universalist": "Three-Matchup Punisher",
-  "grinder|cheeser|blind_spot": "Two-Front Raider",
-  "grinder|standard|specialist": "Matchup Technician",
-  "grinder|standard|matchup_flex": "Disciplined Operator",
-  "grinder|standard|universalist": "Reliable All-Rounder",
-  "grinder|standard|blind_spot": "Two-Front Technician",
-  "grinder|late_game|specialist": "Fortress Specialist",
-  "grinder|late_game|matchup_flex": "Endurance Engineer",
-  "grinder|late_game|universalist": "Macro Machine",
-  "grinder|late_game|blind_spot": "Fault-Line Fortress",
-
-  "adaptive|cheeser|specialist": "Counter-Build Hunter",
-  "adaptive|cheeser|matchup_flex": "Tempo Trickster",
-  "adaptive|cheeser|universalist": "Opening Opportunist",
-  "adaptive|cheeser|blind_spot": "Two-Front Trapper",
-  "adaptive|standard|specialist": "Strategic Specialist",
-  "adaptive|standard|matchup_flex": "Adaptive Competitor",
-  "adaptive|standard|universalist": "Versatile Tactician",
-  "adaptive|standard|blind_spot": "Strategic Soft Spot",
-  "adaptive|late_game|specialist": "Endgame Counterpuncher",
-  "adaptive|late_game|matchup_flex": "Scaling Strategist",
-  "adaptive|late_game|universalist": "Endgame Generalist",
-  "adaptive|late_game|blind_spot": "Scaling Soft Spot",
-
-  "creative|cheeser|specialist": "Lab-Crafted Ambusher",
-  "creative|cheeser|matchup_flex": "Chaos Architect",
-  "creative|cheeser|universalist": "Wildcard Raider",
-  "creative|cheeser|blind_spot": "Two-Front Wildcard",
-  "creative|standard|specialist": "Matchup Inventor",
-  "creative|standard|matchup_flex": "Build Lab Explorer",
-  "creative|standard|universalist": "Creative All-Rounder",
-  "creative|standard|blind_spot": "Creative Soft Spot",
-  "creative|late_game|specialist": "Endgame Innovator",
-  "creative|late_game|matchup_flex": "Late-Game Visionary",
-  "creative|late_game|universalist": "Strategic Polymath",
-  "creative|late_game|blind_spot": "Endgame Soft Spot",
+const ARCHETYPE_CORE_NAMES = Object.freeze({
+  one_trick: Object.freeze({
+    cheeser: "Pocket-Knife Ambusher",
+    timing_attacker: "Clockwork Attacker",
+    flexible: "Signature-Plan Pilot",
+    mid_late_master: "One-Line Commander",
+    late_game: "Fortress Devotee",
+    late_game_master: "Endgame Purist",
+    two_speed: "Binary Switchblade",
+  }),
+  signature: Object.freeze({
+    cheeser: "Opening Loyalist",
+    timing_attacker: "Timing Craftsman",
+    flexible: "Comfort-Pool Captain",
+    mid_late_master: "Core-Plan Commander",
+    late_game: "Scaling Loyalist",
+    late_game_master: "Endgame Artisan",
+    two_speed: "Dual-Gear Duelist",
+  }),
+  grinder: Object.freeze({
+    cheeser: "Repetition Raider",
+    timing_attacker: "Timing Technician",
+    flexible: "Disciplined Operator",
+    mid_late_master: "Macro Mechanic",
+    late_game: "Endurance Engineer",
+    late_game_master: "Siege Architect",
+    two_speed: "Tempo Gearbox",
+  }),
+  adaptive: Object.freeze({
+    cheeser: "Counter-Build Hunter",
+    timing_attacker: "Timing Shapeshifter",
+    flexible: "Adaptive Competitor",
+    mid_late_master: "Strategic Navigator",
+    late_game: "Scaling Strategist",
+    late_game_master: "Endgame Generalist",
+    two_speed: "Two-Gear Tactician",
+  }),
+  creative: Object.freeze({
+    cheeser: "Lab-Crafted Ambusher",
+    timing_attacker: "Timing Inventor",
+    flexible: "Build-Lab Explorer",
+    mid_late_master: "Transition Alchemist",
+    late_game: "Late-Game Visionary",
+    late_game_master: "Strategic Polymath",
+    two_speed: "Chaos Switchboard",
+  }),
 });
 
+const MATCHUP_ARCHETYPE_PREFIXES = Object.freeze({
+  specialist: "Apex",
+  matchup_edge: "Favored",
+  universalist: "Universal",
+  matchup_hurdle: "Battle-Tested",
+  blind_spot: "Fault-Line",
+});
+
+const ARCHETYPE_NAMES = Object.freeze(buildArchetypeNames());
+
 const TRAIT_LABELS = Object.freeze({
+  one_trick: "Build-Order One-Trick",
+  signature: "Signature Pilot",
   grinder: "Consistent Grinder",
   adaptive: "Adaptive Strategist",
   creative: "Creative Genius",
   cheeser: "Cheeser",
-  standard: "Flexible Pacer",
-  late_game: "Late-Game Specialist",
-  specialist: "Matchup Specialist",
-  matchup_flex: "Matchup Flex",
-  universalist: "Matchup Universalist",
+  timing_attacker: "Timing Attacker",
+  flexible: "Flexible Pacer",
+  mid_late_master: "Mid/Late-Game Master",
+  late_game: "Long-Game Lean",
+  late_game_master: "Late-Game Master",
+  two_speed: "Two-Speed Player",
+  specialist: "Matchup Master",
+  matchup_edge: "Matchup Edge",
+  universalist: "All-Matchup Ace",
+  matchup_hurdle: "Matchup Hurdle",
   blind_spot: "Matchup Blind Spot",
 });
 
 const TRAIT_DESCRIPTIONS = Object.freeze({
+  one_trick:
+    "Your build usage has the diversity of 1.5 or fewer equally played builds, showing a deeply rehearsed primary plan.",
+  signature:
+    "Your build usage has the diversity of more than 1.5 and at most 2.5 equally played builds, centered on a small signature pool.",
   grinder:
-    "You use 1-2 build orders in this matchup and sharpen them through repetition.",
+    "Your build usage has the diversity of more than 2.5 and at most 5 equally played builds, favoring repetition with a few dependable branches.",
   adaptive:
-    "You use 3-9 build orders in this matchup, giving you options without changing plans every game.",
+    "Your build usage has the diversity of more than 5 but fewer than 10 equally played builds, giving you a broad but still focused pool.",
   creative:
-    "You use 10 or more build orders in this matchup and regularly show opponents something different.",
+    "Your build usage has the diversity of 10 or more equally played builds, so variety is a defining part of your approach.",
   cheeser:
-    "Your average game ends in 5:00 or less, so your games are usually decided by early aggression.",
-  standard:
-    "Your average game is longer than 5:00 but shorter than 15:00, mixing early pressure, mid-game play, and transitions.",
+    "Your average game ends before 5:00 after the stronger distribution patterns are checked, pointing to consistently early decisions.",
+  timing_attacker:
+    "At least 80% of your games end from 5:00 through 7:00, revealing a concentrated timing-attack window.",
+  flexible:
+    "Your duration mix has no stronger specialist pattern and its average sits from 5:00 through 15:00.",
+  mid_late_master:
+    "At least 80% of your games last beyond 7:00, showing dependable comfort through the mid game and later transitions.",
   late_game:
-    "Your average game lasts 15:00 or longer, showing that you are comfortable with late-game armies and upgrades.",
+    "Your average game lasts beyond 15:00, but fewer than 80% individually cross that mark, so this is a long-game lean rather than a mastery claim.",
+  late_game_master:
+    "At least 80% of your games last beyond 15:00, making deep late-game play a repeatable pattern.",
+  two_speed:
+    "At least 25% of your games end before 5:00 and at least 25% last beyond 15:00, showing two distinct tempo gears.",
   specialist:
-    "One matchup is at least 10% stronger than both of your other matchups.",
-  matchup_flex:
-    "Your matchup win rates are not perfectly even, but no matchup stands 10% above or below both others.",
-  universalist: "All three matchup win rates are within 1% of each other.",
+    "One matchup has a dominant win-rate lead of at least 10 percentage points over the next-best matchup.",
+  matchup_edge:
+    "Your matchup results have a moderate strength-side edge; 7.5 percentage points is the scoring anchor between balanced and dominant.",
+  universalist:
+    "All three matchup win rates are within 5 percentage points of each other.",
+  matchup_hurdle:
+    "Your matchup results have a moderate weakness-side hurdle; 7.5 percentage points is the scoring anchor between balanced and severe.",
   blind_spot:
-    "One matchup is at least 10% weaker than both of your other matchups.",
+    "One matchup has a dominant win-rate deficit of at least 10 percentage points behind the next-weakest matchup.",
 });
 
 class SkillFingerprintService {
@@ -173,11 +215,15 @@ class SkillFingerprintService {
       playstyle: archetype.name,
       archetype,
       buildOrders: repertoire.builds,
+      repertoireSummary: repertoire.summary,
+      paceSummary: pace.summary,
       matchupWinRates: balance.matchups,
       matchupSummary: {
         spread: balance.value,
         leaderGap: balance.leaderGap,
         weakGap: balance.weakGap,
+        signedEdge: balance.signedEdge,
+        tierScore: balance.tierScore,
         strongestMatchup: balance.strongestMatchup,
         weakestMatchup: balance.weakestMatchup,
       },
@@ -221,31 +267,54 @@ function repertoireAxis(rows) {
     (a, b) => b.games - a.games || a.name.localeCompare(b.name),
   );
   const sampleSize = builds.reduce((sum, item) => sum + item.games, 0);
-  const value = builds.length;
-  if (sampleSize < MIN_BUILD_SAMPLE || value === 0) {
+  const distinctBuilds = builds.length;
+  const rawEffectiveBuilds = inverseSimpsonEffectiveCount(builds, sampleSize);
+  // Six decimals keep displayed evidence on the same side of every category
+  // boundary while still avoiding a noisy floating-point payload.
+  const effectiveBuilds = round6(rawEffectiveBuilds);
+  const summary = { distinctBuilds, effectiveBuilds };
+  if (sampleSize < MIN_BUILD_SAMPLE || distinctBuilds === 0) {
     return {
       position: null,
-      value,
+      value: effectiveBuilds,
       category: null,
       categoryLabel: null,
       sampleSize,
       builds,
+      summary,
     };
   }
-  const category =
-    value <= GRINDER_MAX_BUILDS
-      ? "grinder"
-      : value >= CREATIVE_MIN_BUILDS
-        ? "creative"
-        : "adaptive";
+  const category = repertoireCategory(rawEffectiveBuilds);
   return {
-    position: linearPosition(value, GRINDER_MAX_BUILDS, CREATIVE_MIN_BUILDS),
-    value,
+    position: linearPosition(
+      rawEffectiveBuilds,
+      ONE_TRICK_MAX_EFFECTIVE_BUILDS,
+      CREATIVE_MIN_EFFECTIVE_BUILDS,
+    ),
+    value: effectiveBuilds,
     category,
     categoryLabel: TRAIT_LABELS[category],
     sampleSize,
     builds,
+    summary,
   };
+}
+
+/** @param {number} effectiveBuilds */
+function repertoireCategory(effectiveBuilds) {
+  if (atMostThreshold(effectiveBuilds, ONE_TRICK_MAX_EFFECTIVE_BUILDS)) {
+    return "one_trick";
+  }
+  if (atMostThreshold(effectiveBuilds, SIGNATURE_MAX_EFFECTIVE_BUILDS)) {
+    return "signature";
+  }
+  if (atMostThreshold(effectiveBuilds, GRINDER_MAX_EFFECTIVE_BUILDS)) {
+    return "grinder";
+  }
+  if (!atLeastThreshold(effectiveBuilds, CREATIVE_MIN_EFFECTIVE_BUILDS)) {
+    return "adaptive";
+  }
+  return "creative";
 }
 
 /** @param {Array<Record<string, any>>} rows */
@@ -261,6 +330,7 @@ function paceAxis(rows) {
   const sampleSize = durations.length;
   const rawValue = sampleSize ? mean(durations) : null;
   const value = rawValue === null ? null : round2(rawValue);
+  const summary = durationDistributionSummary(durations, value);
   if (sampleSize < MIN_DURATION_SAMPLE) {
     return {
       position: null,
@@ -268,32 +338,77 @@ function paceAxis(rows) {
       category: null,
       categoryLabel: null,
       sampleSize,
+      summary,
     };
   }
-  const category =
-    /** @type {number} */ (rawValue) <= CHEESE_MAX_SEC
-      ? "cheeser"
-      : /** @type {number} */ (rawValue) >= LATE_GAME_MIN_SEC
-        ? "late_game"
-        : "standard";
+  const category = paceCategory(
+    /** @type {number} */ (rawValue),
+    summary,
+    sampleSize,
+  );
   return {
     position: linearPosition(
       /** @type {number} */ (rawValue),
-      CHEESE_MAX_SEC,
-      LATE_GAME_MIN_SEC,
+      FIVE_MIN_SEC,
+      FIFTEEN_MIN_SEC,
     ),
     value,
     category,
     categoryLabel: TRAIT_LABELS[category],
     sampleSize,
+    summary,
   };
 }
 
 /**
- * Specialist is `best - middle >= 10`; Blind Spot is `middle - worst >=
- * 10`. If both happen, the larger raw gap determines the direction. An exact
- * adjacent-gap tie keeps the original heuristic's deterministic specialist
- * priority, so a wide 70/60/50 shape can never masquerade as balanced.
+ * Distribution signatures take precedence over the fallback mean. That keeps
+ * an unmistakable two-tail or 80%-dominant pattern from being averaged into a
+ * generic middle label.
+ *
+ * @param {number} averageSec
+ * @param {ReturnType<typeof durationDistributionSummary>} summary
+ * @param {number} sampleSize
+ */
+function paceCategory(averageSec, summary, sampleSize) {
+  const belowFiveGames = summary.belowFive.games;
+  const fiveToSevenGames = summary.fiveToSeven.games;
+  const aboveSevenGames = summary.aboveSeven.games;
+  const aboveFifteenGames = summary.aboveFifteen.games;
+  if (
+    meetsPercentGate(belowFiveGames, sampleSize, TWO_SPEED_MIN_PERCENT) &&
+    meetsPercentGate(aboveFifteenGames, sampleSize, TWO_SPEED_MIN_PERCENT)
+  ) return "two_speed";
+  if (
+    meetsPercentGate(
+      aboveFifteenGames,
+      sampleSize,
+      DOMINANT_TIMEFRAME_MIN_PERCENT,
+    )
+  ) return "late_game_master";
+  if (
+    meetsPercentGate(
+      aboveSevenGames,
+      sampleSize,
+      DOMINANT_TIMEFRAME_MIN_PERCENT,
+    )
+  ) return "mid_late_master";
+  if (
+    meetsPercentGate(
+      fiveToSevenGames,
+      sampleSize,
+      DOMINANT_TIMEFRAME_MIN_PERCENT,
+    )
+  ) return "timing_attacker";
+  if (averageSec < FIVE_MIN_SEC) return "cheeser";
+  if (averageSec > FIFTEEN_MIN_SEC) return "late_game";
+  return "flexible";
+}
+
+/**
+ * The larger adjacent gap chooses the strength or hurdle direction. A tie
+ * deterministically favors the strength side. A dominant gap of at least 10
+ * reaches an endpoint; otherwise a total spread within 5 is universalist and
+ * the remaining shapes are moderate Matchup Edge / Matchup Hurdle profiles.
  *
  * @param {string} playerRace
  * @param {Record<string, Array<Record<string, any>>>} rowsByMatchup
@@ -314,6 +429,8 @@ function matchupBalanceAxis(playerRace, rowsByMatchup) {
       matchups,
       leaderGap: null,
       weakGap: null,
+      signedEdge: null,
+      tierScore: null,
       strongestMatchup: null,
       weakestMatchup: null,
     };
@@ -381,29 +498,31 @@ function matchupShape(matchups) {
   const rawLeaderGap = best.rawWinRate - middle.rawWinRate;
   const rawWeakGap = middle.rawWinRate - worst.rawWinRate;
 
-  let category = "matchup_flex";
-  if (atMostThreshold(rawSpread, BALANCED_MAX_SPREAD)) {
-    category = "universalist";
-  }
-  else if (
-    atLeastThreshold(rawLeaderGap, SPECIALIST_MIN_LEAD) &&
-    !meaningfullyGreater(rawWeakGap, rawLeaderGap)
+  const strengthDirection = !meaningfullyGreater(rawWeakGap, rawLeaderGap);
+  const dominantGap = strengthDirection ? rawLeaderGap : rawWeakGap;
+  let category;
+  if (
+    strengthDirection &&
+    atLeastThreshold(dominantGap, SPECIALIST_MIN_LEAD)
   ) category = "specialist";
   else if (
-    atLeastThreshold(rawWeakGap, BLIND_SPOT_MIN_GAP) &&
-    meaningfullyGreater(rawWeakGap, rawLeaderGap)
+    !strengthDirection &&
+    atLeastThreshold(dominantGap, BLIND_SPOT_MIN_GAP)
   ) category = "blind_spot";
-
-  let position = 50;
-  if (category === "specialist") position = 0;
-  else if (category === "blind_spot") position = 100;
-  else if (category !== "universalist") {
-    position = flexMatchupPosition(
-      rawSpread,
-      rawLeaderGap,
-      rawWeakGap,
-    );
+  else if (atMostThreshold(rawSpread, BALANCED_MAX_SPREAD)) {
+    category = "universalist";
   }
+  else category = strengthDirection ? "matchup_edge" : "matchup_hurdle";
+
+  const position = matchupPosition(category, dominantGap);
+  const rawSignedEdge = strengthDirection ? dominantGap : -dominantGap;
+  const tierScore = {
+    specialist: 2,
+    matchup_edge: 1,
+    universalist: 0,
+    matchup_hurdle: -1,
+    blind_spot: -2,
+  }[category];
 
   return {
     position,
@@ -411,53 +530,37 @@ function matchupShape(matchups) {
     category,
     leaderGap: round3(rawLeaderGap),
     weakGap: round3(rawWeakGap),
+    signedEdge: round3(rawSignedEdge),
+    tierScore,
     strongestMatchup: best.matchup.matchup,
     weakestMatchup: worst.matchup.matchup,
   };
 }
 
 /**
- * Matchup Flex occupies the interior of the same 0-100 spectrum as the two
- * endpoint categories. A 1-5 point total spread moves zero-to-ten points away
- * from center; above five, the dominant adjacent gap moves the marker from ten
- * toward fifty points away. Equal adjacent gaps use the original specialist
- * (left) priority. Only a raw qualifying gap may claim exact 0 or 100, and 50
- * is reserved for the universalist category.
+ * Five named matchup tiers share one continuous track. Moderate profiles move
+ * from center toward their endpoint as the dominant adjacent gap travels from
+ * 5 to 10 percentage points. The 7.5-point midpoint therefore lands at 25
+ * (edge) or 75 (hurdle). Endpoints remain reserved for raw 10+ point gaps,
+ * while 50 remains reserved for universalists.
  *
- * @param {number} spread
- * @param {number} leaderGap
- * @param {number} weakGap
+ * @param {string} category
+ * @param {number} dominantGap
  */
-function flexMatchupPosition(spread, leaderGap, weakGap) {
-  const direction = meaningfullyGreater(weakGap, leaderGap) ? 1 : -1;
-  let offset;
-  if (atMostThreshold(spread, NEAR_BALANCED_MAX_SPREAD)) {
-    const nearFraction = Math.max(
-      0,
-      Math.min(
-        1,
-        (spread - BALANCED_MAX_SPREAD) /
-          (NEAR_BALANCED_MAX_SPREAD - BALANCED_MAX_SPREAD),
-      ),
-    );
-    offset = NEAR_BALANCED_POSITION_RADIUS * nearFraction;
-  } else {
-    const dominantGap = Math.max(leaderGap, weakGap);
-    const transitionFraction = Math.max(
-      0,
-      Math.min(
-        1,
-        (dominantGap - NEAR_BALANCED_MAX_SPREAD) /
-          (SPECIALIST_MIN_LEAD - NEAR_BALANCED_MAX_SPREAD),
-      ),
-    );
-    offset =
-      NEAR_BALANCED_POSITION_RADIUS +
-      (50 - NEAR_BALANCED_POSITION_RADIUS) * transitionFraction;
-  }
-  const rounded = Math.round(50 + direction * offset);
-  if (rounded === 50) return 50 + direction;
-  return Math.max(1, Math.min(99, rounded));
+function matchupPosition(category, dominantGap) {
+  if (category === "specialist") return 0;
+  if (category === "blind_spot") return 100;
+  if (category === "universalist") return 50;
+  const fraction = Math.max(
+    0,
+    Math.min(
+      1,
+      (dominantGap - BALANCED_MAX_SPREAD) /
+        (2 * (MODERATE_MATCHUP_ANCHOR - BALANCED_MAX_SPREAD)),
+    ),
+  );
+  const offset = Math.max(1, Math.min(49, Math.round(50 * fraction)));
+  return category === "matchup_edge" ? 50 - offset : 50 + offset;
 }
 
 /** @param {number} value @param {number} threshold */
@@ -473,6 +576,21 @@ function atLeastThreshold(value, threshold) {
 /** @param {number} left @param {number} right */
 function meaningfullyGreater(left, right) {
   return left > right + THRESHOLD_EPSILON;
+}
+
+/** Build the complete 5 repertoire × 7 pace × 5 matchup name catalog. */
+function buildArchetypeNames() {
+  const names = /** @type {Record<string, string>} */ ({});
+  for (const [repertoire, paceNames] of Object.entries(ARCHETYPE_CORE_NAMES)) {
+    for (const [pace, coreName] of Object.entries(paceNames)) {
+      for (const [matchup, prefix] of Object.entries(
+        MATCHUP_ARCHETYPE_PREFIXES,
+      )) {
+        names[`${repertoire}|${pace}|${matchup}`] = `${prefix} ${coreName}`;
+      }
+    }
+  }
+  return names;
 }
 
 /**
@@ -570,11 +688,75 @@ function resultBucket(raw) {
   return null;
 }
 
+/**
+ * Inverse Simpson diversity: one divided by the sum of squared build shares.
+ * It is the number of equally frequent builds that would produce the observed
+ * concentration. One-off labels therefore contribute without carrying the
+ * same weight as a build the player repeats often.
+ *
+ * @param {Array<{games:number}>} builds
+ * @param {number} sampleSize
+ */
+function inverseSimpsonEffectiveCount(builds, sampleSize) {
+  if (!Number.isFinite(sampleSize) || sampleSize <= 0) return 0;
+  const squaredShares = builds.reduce((sum, build) => {
+    const share = build.games / sampleSize;
+    return sum + share * share;
+  }, 0);
+  return squaredShares > 0 ? 1 / squaredShares : 0;
+}
+
+/** @param {number} games @param {number} total */
+function durationBucket(games, total) {
+  return {
+    games,
+    percent: total > 0 ? round2((100 * games) / total) : null,
+  };
+}
+
+/**
+ * @param {number[]} durations
+ * @param {number|null} averageSec
+ */
+function durationDistributionSummary(durations, averageSec) {
+  const total = durations.length;
+  const belowFiveGames = durations.filter((value) => value < FIVE_MIN_SEC).length;
+  const fiveToSevenGames = durations.filter(
+    (value) => value >= FIVE_MIN_SEC && value <= SEVEN_MIN_SEC,
+  ).length;
+  const aboveSevenGames = durations.filter((value) => value > SEVEN_MIN_SEC).length;
+  const sevenToFifteenGames = durations.filter(
+    (value) => value > SEVEN_MIN_SEC && value <= FIFTEEN_MIN_SEC,
+  ).length;
+  const aboveFifteenGames = durations.filter(
+    (value) => value > FIFTEEN_MIN_SEC,
+  ).length;
+  return {
+    averageSec,
+    medianSec: total > 0 ? round2(median(durations)) : null,
+    belowFive: durationBucket(belowFiveGames, total),
+    fiveToSeven: durationBucket(fiveToSevenGames, total),
+    aboveSeven: durationBucket(aboveSevenGames, total),
+    sevenToFifteen: durationBucket(sevenToFifteenGames, total),
+    aboveFifteen: durationBucket(aboveFifteenGames, total),
+  };
+}
+
+/**
+ * Use integer cross-products so exact 25% / 80% gates never round across.
+ * @param {number} games
+ * @param {number} total
+ * @param {number} minimumPercent
+ */
+function meetsPercentGate(games, total, minimumPercent) {
+  return total > 0 && games * 100 >= total * minimumPercent;
+}
+
 /** @param {number} value @param {number} low @param {number} high */
 function linearPosition(value, low, high) {
   if (!Number.isFinite(value) || high <= low) return 0;
-  if (value <= low) return 0;
-  if (value >= high) return 100;
+  if (atMostThreshold(value, low)) return 0;
+  if (atLeastThreshold(value, high)) return 100;
   return Math.max(
     1,
     Math.min(99, Math.round((100 * (value - low)) / (high - low))),
@@ -586,6 +768,15 @@ function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/** @param {number[]} values */
+function median(values) {
+  const ordered = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 1
+    ? ordered[middle]
+    : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
 /** @param {number} value */
 function round2(value) {
   return Math.round(value * 100) / 100;
@@ -594,6 +785,11 @@ function round2(value) {
 /** @param {number} value */
 function round3(value) {
   return Math.round(value * 1000) / 1000;
+}
+
+/** @param {number} value */
+function round6(value) {
+  return Math.round(value * 1000000) / 1000000;
 }
 
 /** @param {unknown} raw */
@@ -608,22 +804,30 @@ module.exports = {
   SkillFingerprintService,
   deriveArchetype,
   repertoireAxis,
+  repertoireCategory,
   paceAxis,
   matchupBalanceAxis,
   ARCHETYPE_NAMES,
+  ARCHETYPE_CORE_NAMES,
+  MATCHUP_ARCHETYPE_PREFIXES,
   TRAIT_LABELS,
   WINDOW_GAMES,
   MIN_GAMES,
   MIN_BUILD_SAMPLE,
   MIN_DURATION_SAMPLE,
   MIN_MATCHUP_GAMES,
-  GRINDER_MAX_BUILDS,
-  CREATIVE_MIN_BUILDS,
+  ONE_TRICK_MAX_EFFECTIVE_BUILDS,
+  SIGNATURE_MAX_EFFECTIVE_BUILDS,
+  GRINDER_MAX_EFFECTIVE_BUILDS,
+  CREATIVE_MIN_EFFECTIVE_BUILDS,
   MIN_VALID_DURATION_SEC,
-  CHEESE_MAX_SEC,
-  LATE_GAME_MIN_SEC,
+  FIVE_MIN_SEC,
+  SEVEN_MIN_SEC,
+  FIFTEEN_MIN_SEC,
+  TWO_SPEED_MIN_PERCENT,
+  DOMINANT_TIMEFRAME_MIN_PERCENT,
   BALANCED_MAX_SPREAD,
-  NEAR_BALANCED_MAX_SPREAD,
+  MODERATE_MATCHUP_ANCHOR,
   SPECIALIST_MIN_LEAD,
   BLIND_SPOT_MIN_GAP,
 };

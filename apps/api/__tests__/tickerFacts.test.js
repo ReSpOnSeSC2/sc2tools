@@ -245,10 +245,14 @@ describe("services/tickerFacts", () => {
     const skillFingerprint = {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
-        playstyle: "Matchup Inventor",
+        playstyle: "Apex Adaptive Competitor",
+        repertoireSummary: {
+          distinctBuilds: 14,
+          effectiveBuilds: 8.35,
+        },
         axes: [
-          { key: "repertoire", position: 100, value: 10, category: "creative" },
-          { key: "pace", position: 24, value: 444.42, category: "standard" },
+          { key: "repertoire", position: 81, value: 8.35, category: "adaptive" },
+          { key: "pace", position: 24, value: 444.42, category: "flexible" },
           {
             key: "matchup_balance",
             position: 0,
@@ -256,7 +260,7 @@ describe("services/tickerFacts", () => {
             category: "specialist",
           },
         ],
-        buildOrders: Array.from({ length: 10 }, (_, i) => ({
+        buildOrders: Array.from({ length: 14 }, (_, i) => ({
           name: `PvZ build ${i + 1}`,
           games: i + 1,
         })),
@@ -295,7 +299,7 @@ describe("services/tickerFacts", () => {
     const play = facts.find((f) => f.id === "playstyle");
     expect(play).toBeTruthy();
     expect(play.text).toBe(
-      "PLAYSTYLE (PvZ): Matchup Inventor — 10 PvZ build orders, 7:24.42 average game; PvZ is your strongest matchup, with a win rate at least 10.555% higher than your other two",
+      "PLAYSTYLE (PvZ): Apex Adaptive Competitor — 14 distinct PvZ build orders (8.35 effective builds), 7:24.42 average game; PvZ is your strongest matchup, with a win rate at least 10.555% higher than your other two",
     );
     expect(play.text).not.toMatch(/percentile|benchmark|Master|percentage points|\bpp\b/i);
     expect(skillFingerprint.compute).toHaveBeenCalledWith("u1", { matchup: "PvZ" });
@@ -392,6 +396,67 @@ describe("services/tickerFacts", () => {
     expect(play.text).not.toMatch(/specialist|leads both|percentage points|\bpp\b/i);
   });
 
+  test.each([
+    {
+      tier: "Matchup Edge",
+      category: "matchup_edge",
+      position: 25,
+      playstyle: "Favored Disciplined Operator",
+      summary: {
+        strongestMatchup: "PvZ",
+        weakestMatchup: "PvP",
+        spread: 13,
+        leaderGap: 7.5,
+        weakGap: 5.5,
+      },
+      expected:
+        "PvZ gives you a Matchup Edge, leading your middle matchup by 7.5%",
+    },
+    {
+      tier: "Matchup Hurdle",
+      category: "matchup_hurdle",
+      position: 75,
+      playstyle: "Battle-Tested Disciplined Operator",
+      summary: {
+        strongestMatchup: "PvP",
+        weakestMatchup: "PvT",
+        spread: 13,
+        leaderGap: 5.5,
+        weakGap: 7.5,
+      },
+      expected:
+        "PvT is a Matchup Hurdle, trailing your middle matchup by 7.5%",
+    },
+  ])("playstyle detail explains the directional $tier tier", async (fixture) => {
+    await db.games.insertMany(
+      Array.from({ length: 25 }, (_, i) =>
+        game(i + 1, {
+          opponent: { displayName: `O${i}`, race: "Zerg" },
+        }),
+      ),
+    );
+    const skillFingerprint = {
+      compute: jest.fn(async (userId, { matchup }) => ({
+        matchup,
+        playstyle: fixture.playstyle,
+        axes: [
+          {
+            key: "matchup_balance",
+            position: fixture.position,
+            value: fixture.summary.spread,
+            category: fixture.category,
+          },
+        ],
+        matchupSummary: fixture.summary,
+      })),
+    };
+
+    const facts = await svc({ skillFingerprint }).factsFor("u1");
+    const play = facts.find((fact) => fact.id === "playstyle");
+    expect(play.text).toContain(fixture.expected);
+    expect(play.text).not.toContain("gap between your best and toughest matchups");
+  });
+
   test("playstyle detail respects an unavailable matchup summary", async () => {
     await db.games.insertMany(
       Array.from({ length: 25 }, (_, i) =>
@@ -449,6 +514,10 @@ describe("services/tickerFacts", () => {
       compute: jest.fn(async (userId, { matchup }) => ({
         matchup,
         playstyle: "Profile Still Forming",
+        repertoireSummary: {
+          distinctBuilds: 1,
+          effectiveBuilds: 1,
+        },
         axes: [
           {
             key: "repertoire",

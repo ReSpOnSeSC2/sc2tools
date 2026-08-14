@@ -30,6 +30,19 @@ type FingerprintData = {
     complete: boolean;
   };
   buildOrders: Array<{ name: string; games: number }>;
+  repertoireSummary?: {
+    distinctBuilds: number;
+    effectiveBuilds: number;
+  };
+  paceSummary?: {
+    averageSec: number | null;
+    medianSec: number | null;
+    belowFive: CountShare;
+    fiveToSeven: CountShare;
+    aboveSeven: CountShare;
+    sevenToFifteen: CountShare;
+    aboveFifteen: CountShare;
+  };
   matchupWinRates: MatchupWinRate[];
   matchupSummary: {
     spread: number | null;
@@ -37,6 +50,8 @@ type FingerprintData = {
     weakGap: number | null;
     strongestMatchup: string | null;
     weakestMatchup: string | null;
+    signedEdge?: number | null;
+    tierScore?: -2 | -1 | 0 | 1 | 2 | null;
   };
 };
 
@@ -55,26 +70,52 @@ type MatchupWinRate = {
   winRate: number | null;
 };
 
+type CountShare = {
+  games: number;
+  percent: number | null;
+};
+
+type AxisLegendItem = {
+  label: string;
+  detail: string;
+};
+
 type AxisMeta = {
   title: string;
   description: string;
-  leftLabel: string;
-  centerLabel: string;
-  rightLabel: string;
-  scale: string;
+  legend: ReadonlyArray<AxisLegendItem>;
+  legendNote: string;
+  trackTicks: ReadonlyArray<number>;
   trackClass: string;
 };
 
+type RepertoireCategory =
+  | "one_trick"
+  | "signature"
+  | "grinder"
+  | "adaptive"
+  | "creative";
+
+type PaceCategory =
+  | "cheeser"
+  | "timing_attacker"
+  | "flexible"
+  | "mid_late_master"
+  | "late_game"
+  | "late_game_master"
+  | "two_speed";
+
 type MatchupCategory =
   | "specialist"
-  | "matchup_flex"
+  | "matchup_edge"
   | "universalist"
+  | "matchup_hurdle"
   | "blind_spot";
 
 type CatalogRow = {
-  repertoire: "grinder" | "adaptive" | "creative";
-  pace: "cheeser" | "standard" | "late_game";
-  names: Record<MatchupCategory, string>;
+  repertoire: RepertoireCategory;
+  pace: PaceCategory;
+  coreName: string;
 };
 
 const RACE_LETTERS: ReadonlyArray<RaceLetter> = ["P", "T", "Z"];
@@ -94,54 +135,109 @@ const AXIS_ORDER: ReadonlyArray<AxisKey> = [
 const AXIS_META: Record<AxisKey, AxisMeta> = {
   repertoire: {
     title: "Build variety",
-    description: "How many different build orders you use in this matchup.",
-    leftLabel: "Consistent Grinder",
-    centerLabel: "Adaptive Strategist",
-    rightLabel: "Creative Genius",
-    scale: "1–2 builds · 3–9 builds · 10+ builds",
+    description:
+      "How broad your build pool really is after weighting each build by how often you play it.",
+    legend: [
+      { label: "Build-Order One-Trick", detail: "≤1.50 effective" },
+      { label: "Signature Pilot", detail: ">1.50 to 2.50" },
+      { label: "Consistent Grinder", detail: ">2.50 to 5.00" },
+      { label: "Adaptive Strategist", detail: ">5.00 and <10" },
+      { label: "Creative Genius", detail: "10+ effective" },
+    ],
+    legendNote:
+      "The marker is your continuous effective count; the cards below are tier rules, not evenly spaced tick labels.",
+    trackTicks: [0, 11.765, 41.176, 100],
     trackClass: "from-text-dim/45 via-accent/45 to-accent-cyan/70",
   },
   pace: {
-    title: "Average game length",
+    title: "Game-time profile",
     description:
-      "Whether your games usually end early, in the mid game, or in the late game.",
-    leftLabel: "Cheeser",
-    centerLabel: "Flexible Pacer",
-    rightLabel: "Late-Game Specialist",
-    scale: "5:00 or less · over 5:00 and under 15:00 · 15:00 or more",
+      "Combines your average with where your games cluster, so split-speed and mastery patterns stay visible.",
+    legend: [
+      { label: "Cheeser", detail: "average <5:00" },
+      { label: "Timing Attacker", detail: "≥80% from 5–7" },
+      { label: "Flexible Pacer", detail: "5–15 average" },
+      { label: "Mid/Late-Game Master", detail: "≥80% >7" },
+      { label: "Long-Game Lean", detail: "average >15:00" },
+      { label: "Late-Game Master", detail: "≥80% >15" },
+      { label: "Two-Speed Player", detail: "≥25% <5 and >15" },
+    ],
+    legendNote:
+      "The marker shows your average from the 5:00 to 15:00 scale. The badge can use the distribution rules below and override the average fallback.",
+    trackTicks: [0, 20, 100],
     trackClass: "from-warning/60 via-accent/40 to-accent-cyan/70",
   },
   matchup_balance: {
     title: "Matchup strengths",
     description:
-      "Compares your win rates across all three matchups. A clear strength pulls left; one weak matchup pulls right.",
-    leftLabel: "Matchup Specialist",
-    centerLabel: "Completely Balanced",
-    rightLabel: "Matchup Blind Spot",
-    scale:
-      "10%+ strength · all three within 5% (within 1% = balanced) · 10%+ weakness",
+      "Compares all three win rates. Strength pulls left, balance stays centered, and a weak matchup pulls right.",
+    legend: [
+      { label: "Matchup Master", detail: "≥+10 points" },
+      { label: "Matchup Edge", detail: "+7.5 anchor" },
+      { label: "All-Matchup Ace", detail: "all within 5" },
+      { label: "Matchup Hurdle", detail: "−7.5 anchor" },
+      { label: "Matchup Blind Spot", detail: "≤−10 points" },
+    ],
+    legendNote:
+      "These five states align to the track: 7.5 points anchors the inner edge/hurdle marks and 10 points reaches an endpoint.",
+    trackTicks: [0, 25, 50, 75, 100],
     trackClass: "from-accent-cyan/70 via-accent/30 to-danger/65",
   },
 };
 
 const MATCHUP_CATEGORY_LABELS: Record<MatchupCategory, string> = {
-  specialist: "Specialist",
-  matchup_flex: "Matchup flex",
-  universalist: "Universalist",
-  blind_spot: "Blind spot",
+  specialist: "Matchup Master",
+  matchup_edge: "Matchup Edge",
+  universalist: "All-Matchup Ace",
+  matchup_hurdle: "Matchup Hurdle",
+  blind_spot: "Matchup Blind Spot",
 };
 
 const ARCHETYPE_CATALOG: ReadonlyArray<CatalogRow> = [
-  { repertoire: "grinder", pace: "cheeser", names: { specialist: "Precision Ambusher", matchup_flex: "Calculated Raider", universalist: "Three-Matchup Punisher", blind_spot: "Two-Front Raider" } },
-  { repertoire: "grinder", pace: "standard", names: { specialist: "Matchup Technician", matchup_flex: "Disciplined Operator", universalist: "Reliable All-Rounder", blind_spot: "Two-Front Technician" } },
-  { repertoire: "grinder", pace: "late_game", names: { specialist: "Fortress Specialist", matchup_flex: "Endurance Engineer", universalist: "Macro Machine", blind_spot: "Fault-Line Fortress" } },
-  { repertoire: "adaptive", pace: "cheeser", names: { specialist: "Counter-Build Hunter", matchup_flex: "Tempo Trickster", universalist: "Opening Opportunist", blind_spot: "Two-Front Trapper" } },
-  { repertoire: "adaptive", pace: "standard", names: { specialist: "Strategic Specialist", matchup_flex: "Adaptive Competitor", universalist: "Versatile Tactician", blind_spot: "Strategic Soft Spot" } },
-  { repertoire: "adaptive", pace: "late_game", names: { specialist: "Endgame Counterpuncher", matchup_flex: "Scaling Strategist", universalist: "Endgame Generalist", blind_spot: "Scaling Soft Spot" } },
-  { repertoire: "creative", pace: "cheeser", names: { specialist: "Lab-Crafted Ambusher", matchup_flex: "Chaos Architect", universalist: "Wildcard Raider", blind_spot: "Two-Front Wildcard" } },
-  { repertoire: "creative", pace: "standard", names: { specialist: "Matchup Inventor", matchup_flex: "Build Lab Explorer", universalist: "Creative All-Rounder", blind_spot: "Creative Soft Spot" } },
-  { repertoire: "creative", pace: "late_game", names: { specialist: "Endgame Innovator", matchup_flex: "Late-Game Visionary", universalist: "Strategic Polymath", blind_spot: "Endgame Soft Spot" } },
+  { repertoire: "one_trick", pace: "cheeser", coreName: "Pocket-Knife Ambusher" },
+  { repertoire: "one_trick", pace: "timing_attacker", coreName: "Clockwork Attacker" },
+  { repertoire: "one_trick", pace: "flexible", coreName: "Signature-Plan Pilot" },
+  { repertoire: "one_trick", pace: "mid_late_master", coreName: "One-Line Commander" },
+  { repertoire: "one_trick", pace: "late_game", coreName: "Fortress Devotee" },
+  { repertoire: "one_trick", pace: "late_game_master", coreName: "Endgame Purist" },
+  { repertoire: "one_trick", pace: "two_speed", coreName: "Binary Switchblade" },
+  { repertoire: "signature", pace: "cheeser", coreName: "Opening Loyalist" },
+  { repertoire: "signature", pace: "timing_attacker", coreName: "Timing Craftsman" },
+  { repertoire: "signature", pace: "flexible", coreName: "Comfort-Pool Captain" },
+  { repertoire: "signature", pace: "mid_late_master", coreName: "Core-Plan Commander" },
+  { repertoire: "signature", pace: "late_game", coreName: "Scaling Loyalist" },
+  { repertoire: "signature", pace: "late_game_master", coreName: "Endgame Artisan" },
+  { repertoire: "signature", pace: "two_speed", coreName: "Dual-Gear Duelist" },
+  { repertoire: "grinder", pace: "cheeser", coreName: "Repetition Raider" },
+  { repertoire: "grinder", pace: "timing_attacker", coreName: "Timing Technician" },
+  { repertoire: "grinder", pace: "flexible", coreName: "Disciplined Operator" },
+  { repertoire: "grinder", pace: "mid_late_master", coreName: "Macro Mechanic" },
+  { repertoire: "grinder", pace: "late_game", coreName: "Endurance Engineer" },
+  { repertoire: "grinder", pace: "late_game_master", coreName: "Siege Architect" },
+  { repertoire: "grinder", pace: "two_speed", coreName: "Tempo Gearbox" },
+  { repertoire: "adaptive", pace: "cheeser", coreName: "Counter-Build Hunter" },
+  { repertoire: "adaptive", pace: "timing_attacker", coreName: "Timing Shapeshifter" },
+  { repertoire: "adaptive", pace: "flexible", coreName: "Adaptive Competitor" },
+  { repertoire: "adaptive", pace: "mid_late_master", coreName: "Strategic Navigator" },
+  { repertoire: "adaptive", pace: "late_game", coreName: "Scaling Strategist" },
+  { repertoire: "adaptive", pace: "late_game_master", coreName: "Endgame Generalist" },
+  { repertoire: "adaptive", pace: "two_speed", coreName: "Two-Gear Tactician" },
+  { repertoire: "creative", pace: "cheeser", coreName: "Lab-Crafted Ambusher" },
+  { repertoire: "creative", pace: "timing_attacker", coreName: "Timing Inventor" },
+  { repertoire: "creative", pace: "flexible", coreName: "Build-Lab Explorer" },
+  { repertoire: "creative", pace: "mid_late_master", coreName: "Transition Alchemist" },
+  { repertoire: "creative", pace: "late_game", coreName: "Late-Game Visionary" },
+  { repertoire: "creative", pace: "late_game_master", coreName: "Strategic Polymath" },
+  { repertoire: "creative", pace: "two_speed", coreName: "Chaos Switchboard" },
 ];
+
+const MATCHUP_ARCHETYPE_PREFIX: Record<MatchupCategory, string> = {
+  specialist: "Apex",
+  matchup_edge: "Favored",
+  universalist: "Universal",
+  matchup_hurdle: "Battle-Tested",
+  blind_spot: "Fault-Line",
+};
 
 const LS_MATCHUP = "analyzer.fingerprint.matchup";
 
@@ -265,19 +361,37 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
             </p>
           </div>
 
-          <dl className="grid grid-cols-2 gap-2">
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
             <HeroStat label="Matchup" value={fp.matchup} />
             <HeroStat
-              label="Build orders"
+              label="Detected builds"
               value={
                 axisAvailable(repertoire)
-                  ? fp.buildOrders.length.toLocaleString()
+                  ? (fp.repertoireSummary?.distinctBuilds ?? fp.buildOrders.length).toLocaleString()
+                  : "Still forming"
+              }
+            />
+            <HeroStat
+              label="Effective pool"
+              value={
+                axisAvailable(repertoire)
+                  ? formatEffectiveBuilds(
+                      fp.repertoireSummary?.effectiveBuilds ?? repertoire.value,
+                    )
                   : "Still forming"
               }
             />
             <HeroStat
               label="Avg game"
               value={axisAvailable(pace) ? formatDuration(pace.value) : "Still forming"}
+            />
+            <HeroStat
+              label="Time profile"
+              value={
+                axisAvailable(pace)
+                  ? pace.categoryLabel ?? "Still forming"
+                  : "Still forming"
+              }
             />
             <HeroStat
               label="Matchup profile"
@@ -312,8 +426,13 @@ function FingerprintBody({ fp }: { fp: FingerprintData }) {
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+      <div
+        className={`grid gap-4 ${
+          fp.paceSummary ? "xl:grid-cols-3" : "lg:grid-cols-2"
+        }`}
+      >
         <MatchupEvidence fp={fp} />
+        <PaceEvidence fp={fp} />
         <BuildEvidence fp={fp} />
       </div>
       <MethodologyDetails fp={fp} />
@@ -346,6 +465,10 @@ function SpectrumRow({
 }) {
   const meta = AXIS_META[axisKey];
   const available = axisAvailable(axis);
+  const legendGrid =
+    axisKey === "pace"
+      ? "grid-cols-2 sm:grid-cols-4 xl:grid-cols-7"
+      : "grid-cols-2 sm:grid-cols-5";
 
   return (
     <article
@@ -384,21 +507,37 @@ function SpectrumRow({
               className={`relative h-2.5 rounded-full bg-gradient-to-r ${meta.trackClass}`}
               aria-hidden="true"
             >
-              <span className="absolute left-1/2 top-1/2 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-text/35" />
+              {meta.trackTicks.map((position) => (
+                <span
+                  key={position}
+                  className="absolute top-1/2 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-text/30"
+                  style={{ left: `${position}%` }}
+                />
+              ))}
               <span
                 data-testid={`fingerprint-marker-${axisKey}`}
                 className="absolute top-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg bg-text shadow-hard"
                 style={{ left: `${clampPosition(axis.position)}%` }}
               />
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-micro font-medium leading-tight text-text-muted">
-              <span>{meta.leftLabel}</span>
-              <span className="text-center">{meta.centerLabel}</span>
-              <span className="text-right">{meta.rightLabel}</span>
-            </div>
-            <p className="mt-2 text-center text-micro tabular-nums text-text-dim">
-              {meta.scale}
+            <p className="mt-2 text-center text-micro leading-relaxed text-text-dim">
+              {meta.legendNote}
             </p>
+            <ul className={`mt-3 grid gap-1.5 ${legendGrid}`}>
+              {meta.legend.map((item) => (
+                <li
+                  key={item.label}
+                  className="rounded-md border border-border/75 bg-bg-surface/45 px-2 py-1.5 text-center"
+                >
+                  <span className="block text-micro font-semibold leading-tight text-text-muted">
+                    {item.label}
+                  </span>
+                  <span className="mt-0.5 block text-micro leading-tight tabular-nums text-text-dim">
+                    {item.detail}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
           <p className="mt-3 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
             {axisEvidence(axisKey, axis, fp)}
@@ -433,9 +572,23 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
           </p>
         </div>
         {fp.matchupSummary.spread != null ? (
-          <span className="text-micro font-semibold tabular-nums text-text-muted">
-            {formatPercentGap(fp.matchupSummary.spread)} between best and worst
-          </span>
+          <div className="text-right text-micro font-semibold tabular-nums text-text-muted">
+            {fp.matchupSummary.signedEdge != null &&
+            matchupCategory !== "universalist" ? (
+              <span className="block">
+                {formatSignedPoints(fp.matchupSummary.signedEdge)} dominant gap
+              </span>
+            ) : null}
+            {fp.matchupSummary.tierScore != null ? (
+              <span className="block">
+                Tier score {fp.matchupSummary.tierScore > 0 ? "+" : ""}
+                {fp.matchupSummary.tierScore}
+              </span>
+            ) : null}
+            <span className="block">
+              {formatPointGap(fp.matchupSummary.spread)} best-to-worst
+            </span>
+          </div>
         ) : null}
       </div>
 
@@ -443,10 +596,12 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
         <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {fp.matchupWinRates.map((row) => {
             const strongest =
-              matchupCategory === "specialist" &&
+              (matchupCategory === "specialist" ||
+                matchupCategory === "matchup_edge") &&
               row.matchup === fp.matchupSummary.strongestMatchup;
             const weakest =
-              matchupCategory === "blind_spot" &&
+              (matchupCategory === "blind_spot" ||
+                matchupCategory === "matchup_hurdle") &&
               row.matchup === fp.matchupSummary.weakestMatchup;
             return (
               <div
@@ -475,6 +630,15 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
                   {row.wins}W · {row.losses}L
                   {row.ties > 0 ? ` · ${row.ties}T` : ""}
                 </dd>
+                {strongest || weakest ? (
+                  <dd
+                    className={`mt-2 text-micro font-semibold ${
+                      strongest ? "text-accent-cyan" : "text-danger"
+                    }`}
+                  >
+                    {strongest ? "Strongest matchup" : "Toughest matchup"}
+                  </dd>
+                ) : null}
               </div>
             );
           })}
@@ -488,9 +652,72 @@ function MatchupEvidence({ fp }: { fp: FingerprintData }) {
   );
 }
 
+function PaceEvidence({ fp }: { fp: FingerprintData }) {
+  const pace = fp.axes.find((axis) => axis.key === "pace");
+  const summary = fp.paceSummary;
+  if (!summary || !pace) return null;
+  const available = axisAvailable(pace);
+
+  const bins = [
+    { label: "Under 5:00", value: summary.belowFive },
+    { label: "5:00–7:00", value: summary.fiveToSeven },
+    { label: "Over 7:00–15:00", value: summary.sevenToFifteen },
+    { label: "Over 15:00", value: summary.aboveFifteen },
+  ];
+
+  return (
+    <section
+      className="rounded-xl border border-border bg-bg-elevated/25 p-4"
+      aria-labelledby="pace-evidence-heading"
+    >
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h4 id="pace-evidence-heading" className="text-caption font-semibold text-text">
+            Game-time distribution
+          </h4>
+          <p className="mt-0.5 text-micro text-text-dim">
+            Real timed replays behind your pace profile.
+          </p>
+        </div>
+        {summary.medianSec != null ? (
+          <span className="text-micro font-semibold tabular-nums text-text-muted">
+            {formatDuration(summary.medianSec)} median
+          </span>
+        ) : null}
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2">
+        {bins.map((bin) => (
+          <div
+            key={bin.label}
+            className="rounded-lg border border-border bg-bg-surface/55 p-2.5"
+          >
+            <dt className="text-micro font-medium text-text-dim">{bin.label}</dt>
+            <dd className="mt-1 font-display text-caption font-bold tabular-nums text-text">
+              {formatSharePercent(bin.value.percent)}
+            </dd>
+            <dd className="mt-0.5 text-micro tabular-nums text-text-muted">
+              {bin.value.games} game{bin.value.games === 1 ? "" : "s"}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="mt-3 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
+        {available
+          ? paceProfileEvidence(pace, summary)
+          : `${pace.sampleSize.toLocaleString()} valid timed replay${pace.sampleSize === 1 ? " is" : "s are"} available. The distribution is real, but the pace label stays unranked until 10 are available.`}
+      </p>
+    </section>
+  );
+}
+
 function BuildEvidence({ fp }: { fp: FingerprintData }) {
   const preview = fp.buildOrders.slice(0, 8);
   const remaining = fp.buildOrders.length - preview.length;
+  const distinctBuilds =
+    fp.repertoireSummary?.distinctBuilds ?? fp.buildOrders.length;
+  const effectiveBuilds = fp.repertoireSummary?.effectiveBuilds;
   return (
     <section
       className="rounded-xl border border-border bg-bg-elevated/25 p-4"
@@ -505,9 +732,14 @@ function BuildEvidence({ fp }: { fp: FingerprintData }) {
             Builds detected in your recent {fp.matchup} replays.
           </p>
         </div>
-        <span className="text-micro font-semibold tabular-nums text-text-muted">
-          {fp.buildOrders.length} distinct
-        </span>
+        <div className="text-right text-micro font-semibold tabular-nums text-text-muted">
+          <span className="block">{distinctBuilds} distinct</span>
+          {effectiveBuilds != null ? (
+            <span className="block text-accent-cyan">
+              {formatEffectiveBuilds(effectiveBuilds)} effective
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {fp.buildOrders.length > 0 ? (
@@ -535,6 +767,12 @@ function BuildEvidence({ fp }: { fp: FingerprintData }) {
           games and games that ended too quickly are left out.
         </p>
       )}
+      {effectiveBuilds != null && fp.buildOrders.length > 0 ? (
+        <p className="mt-3 border-t border-border pt-3 text-micro leading-relaxed text-text-muted">
+          {distinctBuilds} detected names become {formatEffectiveBuilds(effectiveBuilds)} effective
+          builds after weighting each one by its share of your classified games.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -553,7 +791,7 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
 
       <div className="border-t border-border px-3 py-4 sm:px-4">
         <p className="text-caption leading-relaxed text-text-muted">
-          Build variety and average game length use your latest {fp.games}{" "}
+          Build variety and the game-time profile use your latest {fp.games}{" "}
           {fp.matchup} 1v1 replays, up to {fp.windowGames}. The matchup-strength
           track compares separate recent windows against Protoss, Terran, and Zerg.
           Each track needs enough games before it receives a rating. Dashboard
@@ -563,45 +801,99 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
         <ol className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
             <p className="text-caption font-semibold text-text">1. Build variety</p>
-            <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              We count how many different named builds you played. One or two
-              makes you a Consistent Grinder, three to nine makes you an
-              Adaptive Strategist, and 10 or more makes you a Creative Genius.
-              Repeating the same build still counts as one build. Replays we
-              cannot classify are left out.
-            </p>
+            <div className="mt-1 space-y-2 text-micro leading-relaxed text-text-muted">
+              <p>
+                <strong className="text-text">Distinct builds</strong> count every
+                recognized build name once. <strong className="text-text">Effective
+                builds</strong> also uses frequency: for each build, we take its share
+                of classified games (<em>p</em>), square those shares, add them, then
+                calculate <strong className="font-mono text-text">1 ÷ Σp²</strong>.
+              </p>
+              <p>
+                If every build is used equally, effective and distinct are the
+                same. Repeated favorites pull the effective count toward 1;
+                one-off builds add breadth but little weight. An effective count
+                is an equally-used-build equivalent—not a fraction of a build.
+              </p>
+              {fp.repertoireSummary && fp.repertoireSummary.distinctBuilds > 0 ? (
+                <p className="rounded-md border border-accent/20 bg-accent/5 p-2 text-text-muted">
+                  Your current window has {fp.repertoireSummary.distinctBuilds} detected
+                  builds and {formatEffectiveBuilds(fp.repertoireSummary.effectiveBuilds)} effective.
+                  That means your real usage mix is as diverse as{" "}
+                  {formatEffectiveBuilds(fp.repertoireSummary.effectiveBuilds)} builds
+                  played equally often.
+                </p>
+              ) : fp.repertoireSummary ? (
+                <p className="rounded-md border border-border bg-bg-elevated/40 p-2 text-text-dim">
+                  No named build has been classified in this window yet, so
+                  effective diversity cannot be interpreted.
+                </p>
+              ) : null}
+              <p>
+                The unrounded effective count selects the tier: 1.50 or less is
+                Build-Order One-Trick; over 1.50 through 2.50 is Signature Pilot;
+                over 2.50 through 5.00 is Consistent Grinder; over 5.00 but under
+                10 is Adaptive Strategist; 10 or more is Creative Genius. At
+                least 10 distinct builds are therefore necessary—but not enough
+                if most appeared only once. Unclassified replays are excluded.
+              </p>
+            </div>
           </li>
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
-            <p className="text-caption font-semibold text-text">2. Average game length</p>
-            <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              We average how long your games last. Five minutes or less makes
-              you a Cheeser, 15 minutes or more makes you a Late-Game
-              Specialist, and anything between those marks makes you a Flexible
-              Pacer. Wins and losses both count. Games under 45 seconds are
-              ignored as likely quits or restarts.
-            </p>
+            <p className="text-caption font-semibold text-text">2. Game-time profile</p>
+            <div className="mt-1 space-y-2 text-micro leading-relaxed text-text-muted">
+              <p>
+                We use the average and the full distribution. Distinctive patterns
+                win first: Two-Speed needs at least 25% of games under 5:00 and
+                25% over 15:00; Late-Game Master needs at least 80% over 15:00;
+                Mid/Late-Game Master needs at least 80% over 7:00; Timing Attacker
+                needs at least 80% from 5:00 through 7:00.
+              </p>
+              <p>
+                If none applies, an average strictly under 5:00 is Cheeser, an
+                average from 5:00 through 15:00 is Flexible Pacer, and an average
+                over 15:00 is Long-Game Lean. Specific distribution profiles can
+                override the average fallback; this is how a genuine short/long
+                Two-Speed split avoids being mislabeled Flexible.
+              </p>
+              <p>
+                Exact 5:00 and 15:00 games are not Two-Speed extremes; exact 7:00
+                belongs to the timing window. Wins and losses both count. Games
+                under 45 seconds are ignored as likely quits or restarts.
+              </p>
+            </div>
           </li>
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
             <p className="text-caption font-semibold text-text">3. Matchup strengths</p>
-            <p className="mt-1 text-micro leading-relaxed text-text-muted">
-              We compare your win rates in all three matchups on one track. If
-              they are within 5% of each other, your marker stays near the
-              middle; within 1% is Completely Balanced. If one matchup is at
-              least 10% better than each of the other two, you reach Matchup
-              Specialist. If one is at least 10% worse than each of the other
-              two, you reach Matchup Blind Spot. Between those marks, the marker
-              leans toward your larger strength or weakness. If both ends
-              qualify, the larger gap decides; an exact tie goes to Matchup
-              Specialist. Replay ties are shown, but only wins and losses count
-              toward win rate.
-            </p>
+            <div className="mt-1 space-y-2 text-micro leading-relaxed text-text-muted">
+              <p>
+                We rank your three win rates, then compare best to middle and
+                middle to worst. All three within 5 percentage points is an
+                All-Matchup Ace (score 0). Otherwise the larger adjacent gap sets
+                the direction: strength is positive and a hurdle is negative.
+              </p>
+              <p>
+                A dominant +10-point gap is Matchup Master (score +2); a smaller
+                positive gap is Matchup Edge (+1). A dominant −10-point gap is
+                Matchup Blind Spot (−2); a smaller negative gap is Matchup Hurdle
+                (−1). The ±7.5 marks are scoring anchors for a clear edge or
+                hurdle, not a sixth category—gaps just above 5 still need a home.
+              </p>
+              <p>
+                If the strength and hurdle gaps are exactly equal, strength wins
+                the deterministic tie-break. Each matchup needs 10 decided games
+                from its own latest-50 window. Replay ties are displayed, but only
+                wins and losses enter the win rates.
+              </p>
+            </div>
           </li>
         </ol>
 
         <p className="mt-4 rounded-lg border border-accent/25 bg-accent/5 p-3 text-micro leading-relaxed text-text-muted">
-          Your archetype name combines your build pool, average game length, and
-          matchup strengths. If one track needs more games, your profile stays
-          incomplete until the replay data is there.
+          Your archetype combines one of five build-pool tiers, seven game-time
+          profiles, and five matchup shapes: 175 deterministic possibilities,
+          all calculated from your real replays. If one track needs more games,
+          your profile stays incomplete until the replay evidence is there.
         </p>
       </div>
     </details>
@@ -611,8 +903,9 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
 function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
   const matchupCategories: ReadonlyArray<MatchupCategory> = [
     "specialist",
-    "matchup_flex",
+    "matchup_edge",
     "universalist",
+    "matchup_hurdle",
     "blind_spot",
   ];
 
@@ -623,7 +916,7 @@ function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
     >
       <summary className="flex min-h-[48px] cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 text-caption font-semibold text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
         <Fingerprint className="h-4 w-4 flex-none text-accent-cyan" aria-hidden />
-        <span>All 36 archetypes</span>
+        <span>All 175 archetypes</span>
         <ChevronDown
           className="ml-auto h-4 w-4 flex-none text-text-dim transition-transform group-open:rotate-180"
           aria-hidden
@@ -632,9 +925,10 @@ function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
 
       <div className="border-t border-border px-3 py-4 sm:px-4">
         <p className="text-micro leading-relaxed text-text-dim">
-          Nine repertoire-and-pace combinations, each with four possible
-          matchup shapes. The highlighted entry is your current complete
-          archetype.
+          Thirty-five build-pool and game-time combinations, each with five
+          matchup shapes. Names are compositional, so the title stays readable:
+          matchup prefix plus the build-and-time core. The highlighted entry is
+          your current complete archetype.
         </p>
         <ol className="mt-3 space-y-3">
           {ARCHETYPE_CATALOG.map((row) => (
@@ -645,7 +939,7 @@ function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
               <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">
                 {repertoireLabel(row.repertoire)} · {paceLabel(row.pace)}
               </p>
-              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 {matchupCategories.map((category) => {
                   const key = `${row.repertoire}|${row.pace}|${category}`;
                   const current = key === currentKey;
@@ -665,7 +959,7 @@ function ArchetypeCatalog({ currentKey }: { currentKey: string }) {
                         {MATCHUP_CATEGORY_LABELS[category]}
                       </span>
                       <span className="mt-0.5 block text-caption font-semibold text-text">
-                        {row.names[category]}
+                        {catalogArchetypeName(row, category)}
                       </span>
                       {current ? (
                         <span className="mt-1 inline-block rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan">
@@ -705,17 +999,22 @@ function axisValueLabel(
 ): string {
   if (axis.value == null) return "—";
   if (key === "repertoire") {
-    const count = Math.round(axis.value);
-    return `${count} build${count === 1 ? "" : "s"}`;
+    return `${formatEffectiveBuilds(axis.value)} effective`;
   }
   if (key === "pace") return `${formatDuration(axis.value)} avg`;
   if (axis.category === "specialist") {
-    return `${formatPercentGap(fp.matchupSummary.leaderGap)} stronger`;
+    return `+${formatPointGap(fp.matchupSummary.leaderGap)} master edge`;
+  }
+  if (axis.category === "matchup_edge") {
+    return `+${formatPointGap(fp.matchupSummary.leaderGap)} edge`;
+  }
+  if (axis.category === "matchup_hurdle") {
+    return `−${formatPointGap(fp.matchupSummary.weakGap)} hurdle`;
   }
   if (axis.category === "blind_spot") {
-    return `${formatPercentGap(fp.matchupSummary.weakGap)} weaker`;
+    return `−${formatPointGap(fp.matchupSummary.weakGap)} blind spot`;
   }
-  return `${formatPercentGap(fp.matchupSummary.spread)} range`;
+  return `${formatPointGap(fp.matchupSummary.spread)} total range`;
 }
 
 function missingAxisEvidence(
@@ -742,30 +1041,64 @@ function axisEvidence(
 ): string {
   const sample = axis.sampleSize.toLocaleString();
   if (key === "repertoire") {
-    const count = Math.round(axis.value as number);
-    return `We recognized ${count} different build${count === 1 ? "" : "s"} across ${sample} recent ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}.`;
+    const distinct =
+      fp.repertoireSummary?.distinctBuilds ?? fp.buildOrders.length;
+    const effective =
+      fp.repertoireSummary?.effectiveBuilds ?? (axis.value as number);
+    return `We detected ${distinct} distinct build${distinct === 1 ? "" : "s"} across ${sample} classified ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"}. Their play-frequency mix equals ${formatEffectiveBuilds(effective)} equally used builds, which selects ${axis.categoryLabel}.`;
   }
   if (key === "pace") {
-    return `Your ${sample} timed ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"} averaged ${formatDuration(axis.value as number)}.`;
+    const base = `Your ${sample} timed ${fp.matchup} replay${axis.sampleSize === 1 ? "" : "s"} averaged ${formatDuration(axis.value as number)}.`;
+    return fp.paceSummary
+      ? `${base} The ${axis.categoryLabel} badge uses the real time-band counts in the distribution card below.`
+      : base;
   }
   const { leaderGap, spread, strongestMatchup, weakGap, weakestMatchup } =
     fp.matchupSummary;
   if (axis.category === "specialist") {
-    return `You win ${strongestMatchup ?? "your strongest matchup"} at least ${formatPercentGap(leaderGap)} more often than either of your other matchups. That makes it your Matchup Specialist side, based on ${sample} wins and losses.`;
+    return `${strongestMatchup ?? "Your strongest matchup"} leads your middle matchup by ${formatPointGap(leaderGap)}. That clears the 10-point Matchup Master line, based on ${sample} wins and losses.`;
+  }
+  if (axis.category === "matchup_edge") {
+    const strength = (leaderGap ?? 0) >= 7.5 ? "clear" : "developing";
+    return `${strongestMatchup ?? "Your strongest matchup"} leads your middle matchup by ${formatPointGap(leaderGap)}, a ${strength} Matchup Edge. The 7.5-point mark is the track anchor; this profile covers every positive, sub-10 gap outside the five-point balanced zone. This uses ${sample} wins and losses.`;
   }
   if (axis.category === "blind_spot") {
-    return `You win ${weakestMatchup ?? "your weakest matchup"} at least ${formatPercentGap(weakGap)} less often than either of your other matchups. That makes it your Matchup Blind Spot side, based on ${sample} wins and losses.`;
+    return `${weakestMatchup ?? "Your toughest matchup"} trails your middle matchup by ${formatPointGap(weakGap)}. That clears the 10-point Matchup Blind Spot line, based on ${sample} wins and losses.`;
+  }
+  if (axis.category === "matchup_hurdle") {
+    const strength = (weakGap ?? 0) >= 7.5 ? "clear" : "developing";
+    return `${weakestMatchup ?? "Your toughest matchup"} trails your middle matchup by ${formatPointGap(weakGap)}, a ${strength} Matchup Hurdle. The 7.5-point mark is the track anchor; this profile covers every negative, sub-10 gap outside the five-point balanced zone. This uses ${sample} wins and losses.`;
   }
   if (axis.category === "universalist") {
-    return `Your three matchup win rates are only ${formatPercentGap(spread)} apart, putting you at Completely Balanced. This uses ${sample} wins and losses.`;
+    return `Your best and worst matchup win rates are ${formatPointGap(spread)} apart, so all three fit inside the five-point All-Matchup Ace band. This uses ${sample} wins and losses.`;
   }
-  const direction =
-    (axis.position as number) < 50
-      ? "toward Matchup Specialist"
-      : (axis.position as number) > 50
-        ? "toward Matchup Blind Spot"
-        : "right in the middle";
-  return `Your best and worst matchup are ${formatPercentGap(spread)} apart, so your marker sits ${direction}. This uses ${sample} wins and losses.`;
+  return `Your best and worst matchup are ${formatPointGap(spread)} apart. This uses ${sample} wins and losses.`;
+}
+
+function paceProfileEvidence(
+  axis: FingerprintAxis,
+  summary: NonNullable<FingerprintData["paceSummary"]>,
+): string {
+  const sample = axis.sampleSize;
+  if (axis.category === "two_speed") {
+    return `${summary.belowFive.games}/${sample} (${formatSharePercent(summary.belowFive.percent)}) ended under 5:00 and ${summary.aboveFifteen.games}/${sample} (${formatSharePercent(summary.aboveFifteen.percent)}) ran over 15:00, meeting both Two-Speed quarters.`;
+  }
+  if (axis.category === "late_game_master") {
+    return `${summary.aboveFifteen.games}/${sample} (${formatSharePercent(summary.aboveFifteen.percent)}) ran over 15:00, meeting the 80% Late-Game Master rule.`;
+  }
+  if (axis.category === "mid_late_master") {
+    return `${summary.aboveSeven.games}/${sample} (${formatSharePercent(summary.aboveSeven.percent)}) reached beyond 7:00, meeting the 80% Mid/Late-Game Master rule.`;
+  }
+  if (axis.category === "timing_attacker") {
+    return `${summary.fiveToSeven.games}/${sample} (${formatSharePercent(summary.fiveToSeven.percent)}) finished from 5:00 through 7:00, meeting the 80% Timing Attacker rule.`;
+  }
+  if (axis.category === "cheeser") {
+    return "The average is strictly under 5:00, so the fallback profile is Cheeser.";
+  }
+  if (axis.category === "late_game") {
+    return "The average is over 15:00 without an 80% long-game cluster, so the honest fallback is Long-Game Lean.";
+  }
+  return "The average is from 5:00 through 15:00 and no stronger distribution pattern overrides it, so the fallback is Flexible Pacer.";
 }
 
 function clampPosition(value: number): number {
@@ -781,9 +1114,28 @@ function formatWinRate(value: number | null): string {
   return `${formatNumber(normalizeWinRate(value), 3)}%`;
 }
 
-function formatPercentGap(value: number | null): string {
+function formatSharePercent(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${formatNumber(value, 3)}%`;
+  return `${formatNumber(value, 1)}%`;
+}
+
+function formatPointGap(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${formatNumber(value, 3)} percentage point${Math.abs(value) === 1 ? "" : "s"}`;
+}
+
+function formatSignedPoints(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${formatNumber(Math.abs(value), 3)} pts`;
+}
+
+function formatEffectiveBuilds(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "—";
+  const nearBoundary = [1.5, 2.5, 5, 10].some(
+    (boundary) => Math.abs(value - boundary) > 0 && Math.abs(value - boundary) < 0.01,
+  );
+  return formatNumber(value, nearBoundary ? 6 : 2);
 }
 
 function formatDuration(seconds: number): string {
@@ -809,16 +1161,35 @@ function formatNumber(value: number, places: number): string {
   });
 }
 
-function repertoireLabel(value: CatalogRow["repertoire"]): string {
-  if (value === "grinder") return "Consistent Grinder";
-  if (value === "creative") return "Creative Genius";
-  return "Adaptive Strategist";
+function repertoireLabel(value: RepertoireCategory): string {
+  const labels: Record<RepertoireCategory, string> = {
+    one_trick: "Build-Order One-Trick",
+    signature: "Signature Pilot",
+    grinder: "Consistent Grinder",
+    adaptive: "Adaptive Strategist",
+    creative: "Creative Genius",
+  };
+  return labels[value];
 }
 
-function paceLabel(value: CatalogRow["pace"]): string {
-  if (value === "cheeser") return "Cheeser";
-  if (value === "late_game") return "Late-Game Specialist";
-  return "Flexible Pacer";
+function paceLabel(value: PaceCategory): string {
+  const labels: Record<PaceCategory, string> = {
+    cheeser: "Cheeser",
+    timing_attacker: "Timing Attacker",
+    flexible: "Flexible Pacer",
+    mid_late_master: "Mid/Late-Game Master",
+    late_game: "Long-Game Lean",
+    late_game_master: "Late-Game Master",
+    two_speed: "Two-Speed Player",
+  };
+  return labels[value];
+}
+
+function catalogArchetypeName(
+  row: CatalogRow,
+  matchup: MatchupCategory,
+): string {
+  return `${MATCHUP_ARCHETYPE_PREFIX[matchup]} ${row.coreName}`;
 }
 
 /** Compact two-sided matchup picker with visible group labels. */
