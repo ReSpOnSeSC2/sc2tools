@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FingerprintCard } from "../FingerprintCard";
 
 const useApiMock = vi.fn();
@@ -13,54 +7,370 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
 }));
 
+const setFiltersMock = vi.fn();
+let filtersValue: Record<string, unknown> = { preset: "all" };
+let dbRevValue = 0;
+
+vi.mock("@/lib/filterContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/filterContext")>();
+  return {
+    ...actual,
+    useFilters: () => ({
+      filters: filtersValue,
+      setFilters: setFiltersMock,
+      dbRev: dbRevValue,
+      bumpRev: vi.fn(),
+      seasons: [],
+    }),
+  };
+});
+
 afterEach(() => {
   cleanup();
   useApiMock.mockReset();
+  setFiltersMock.mockReset();
+  filtersValue = { preset: "all" };
+  dbRevValue = 0;
   window.localStorage.clear();
 });
+
+/**
+ * Complete response-owned taxonomy. The component must render these categories,
+ * thresholds, scores, and counts without keeping a second client-side registry.
+ */
+function trait(
+  key: string,
+  label: string,
+  noun: string,
+  adjective: string,
+  blurb: string,
+  thresholdText: string,
+  extras: Record<string, number> = {},
+) {
+  return { key, label, noun, adjective, blurb, thresholdText, ...extras };
+}
+
+const TAXONOMY = {
+  axes: [
+    {
+      key: "repertoire",
+      label: "Build variety",
+      description:
+        "Shannon effective diversity weights every recognized build by how often you actually use it.",
+      leftLabel: "Build-Order One-Trick",
+      centerLabel: "Consistent Grinder",
+      rightLabel: "Creative Genius",
+      categories: [
+        trait(
+          "one_trick",
+          "Build-Order One-Trick",
+          "Purist",
+          "Devoted",
+          "A deeply rehearsed primary plan.",
+          "1.5 or fewer effective builds",
+        ),
+        trait(
+          "signature",
+          "Signature Pilot",
+          "Pilot",
+          "Signature",
+          "A small signature pool with a real alternate plan.",
+          "more than 1.5, up to 2.5 effective builds",
+        ),
+        trait(
+          "grinder",
+          "Consistent Grinder",
+          "Grinder",
+          "Disciplined",
+          "A dependable core sharpened through regular use.",
+          "more than 2.5, up to 5 effective builds",
+        ),
+        trait(
+          "adaptive",
+          "Adaptive Strategist",
+          "Strategist",
+          "Adaptive",
+          "A broad working repertoire.",
+          "more than 5, fewer than 10 effective builds",
+        ),
+        trait(
+          "creative",
+          "Creative Genius",
+          "Inventor",
+          "Creative",
+          "Variety is a defining weapon.",
+          "10 or more effective builds",
+        ),
+      ],
+    },
+    {
+      key: "pace",
+      label: "Game length",
+      description:
+        "Whether your games end early, in the mid game, or late — and whether you do both.",
+      leftLabel: "Cheeser",
+      centerLabel: "Flexible Pacer",
+      rightLabel: "Late-Game Master",
+      categories: [
+        trait(
+          "cheeser",
+          "Cheeser",
+          "Ambusher",
+          "All-In",
+          "Your average game ends before five minutes.",
+          "average under 5:00",
+        ),
+        trait(
+          "timing_attacker",
+          "Timing Attacker",
+          "Striker",
+          "Clockwork",
+          "Your games cluster in a concentrated timing window.",
+          "80%+ of games from 5:00 through 7:00",
+        ),
+        trait(
+          "flexible",
+          "Flexible Pacer",
+          "Operator",
+          "Flexible",
+          "No stronger timing signature dominates.",
+          "average from 5:00 through 15:00",
+        ),
+        trait(
+          "mid_late_master",
+          "Mid/Late-Game Master",
+          "Navigator",
+          "Transitional",
+          "Your games repeatedly reach the mid game and later.",
+          "80%+ of games over 7:00",
+        ),
+        trait(
+          "late_game",
+          "Long-Game Lean",
+          "Endurer",
+          "Long-Game",
+          "Your average runs beyond fifteen minutes.",
+          "average over 15:00",
+        ),
+        trait(
+          "late_game_master",
+          "Late-Game Master",
+          "Commander",
+          "Endgame",
+          "Deep late-game play is repeatable.",
+          "80%+ of games over 15:00",
+        ),
+        trait(
+          "two_speed",
+          "Two-Speed Player",
+          "Switchblade",
+          "Two-Speed",
+          "You expose two distinct tempo gears.",
+          "25%+ under 5:00 and 25%+ over 15:00",
+        ),
+      ],
+    },
+    {
+      key: "matchup_edge",
+      label: "Matchup edge",
+      description:
+        "This matchup's win rate against the average of your other two.",
+      leftLabel: "Matchup Specialist",
+      centerLabel: "Matchup Universalist",
+      rightLabel: "Matchup Blind Spot",
+      categories: [
+        trait(
+          "specialist",
+          "Matchup Specialist",
+          "Ace",
+          "Dominant",
+          "This selected matchup is a defining strength.",
+          "10+ point selected-matchup advantage",
+          { score: 2, trackPosition: 0 },
+        ),
+        trait(
+          "matchup_edge",
+          "Matchup Edge",
+          "Hunter",
+          "Favored",
+          "This selected matchup is on the strength side.",
+          "strength-side result below the 10-point endpoint",
+          { score: 1, trackPosition: 25 },
+        ),
+        trait(
+          "universalist",
+          "Matchup Universalist",
+          "Universalist",
+          "Even-Handed",
+          "All three matchup rates stay close.",
+          "all three matchup rates within 5 points",
+          { score: 0, trackPosition: 50 },
+        ),
+        trait(
+          "matchup_hurdle",
+          "Matchup Hurdle",
+          "Climber",
+          "Battle-Tested",
+          "This selected matchup is on the weakness side.",
+          "weakness-side result below the 10-point endpoint",
+          { score: -1, trackPosition: 75 },
+        ),
+        trait(
+          "blind_spot",
+          "Matchup Blind Spot",
+          "Underdog",
+          "Fault-Line",
+          "This selected matchup is a defining weakness.",
+          "10+ point selected-matchup deficit",
+          { score: -2, trackPosition: 100 },
+        ),
+      ],
+    },
+  ],
+};
+
+const MATCHUP_RATES = [
+  {
+    matchup: "PvP",
+    games: 31,
+    decidedGames: 30,
+    wins: 18,
+    losses: 12,
+    ties: 1,
+    winRate: 60,
+  },
+  {
+    matchup: "PvT",
+    games: 30,
+    decidedGames: 30,
+    wins: 15,
+    losses: 15,
+    ties: 0,
+    winRate: 50,
+  },
+  {
+    matchup: "PvZ",
+    games: 32,
+    decidedGames: 31,
+    wins: 22,
+    losses: 9,
+    ties: 1,
+    winRate: 70.968,
+  },
+];
+
+function axis<T extends Record<string, unknown>>(overrides: T) {
+  return {
+    position: 50 as number | null,
+    value: 1 as number | null,
+    category: null as string | null,
+    categoryLabel: null as string | null,
+    sampleSize: 0,
+    detail: null as Record<string, unknown> | null,
+    reason: null as string | null,
+    have: null as number | null,
+    needed: null as number | null,
+    ...overrides,
+  };
+}
+
+const REPERTOIRE_SUMMARY = {
+  method: "shannon_perplexity",
+  formula: "exp(-sum(p_i * ln(p_i)))",
+  distinctBuilds: 5,
+  effectiveBuilds: 3.913,
+  topBuildShare: 0.367,
+};
+
+const PACE_SUMMARY = {
+  averageSec: 489.46,
+  medianSec: 480,
+  belowFive: { games: 4, percent: 12.5 },
+  fiveToSeven: { games: 6, percent: 18.75 },
+  aboveSeven: { games: 22, percent: 68.75 },
+  sevenToFifteen: { games: 18, percent: 56.25 },
+  aboveFifteen: { games: 4, percent: 12.5 },
+};
 
 const FP = {
   matchup: "PvZ",
   race: "P",
   games: 32,
   windowGames: 50,
+  windowMode: "recent" as const,
+  windowTruncated: false,
+  strippedFilters: [] as string[],
+  status: "complete" as const,
   axes: [
-    {
+    axis({
       key: "repertoire",
-      label: "Build repertoire",
-      position: 28,
-      value: 3.913,
+      label: "Build variety",
+      position: 38,
+      // Public axis.value is the raw distinct count, not Shannon diversity.
+      value: 5,
       category: "grinder",
       categoryLabel: "Consistent Grinder",
       sampleSize: 30,
-    },
-    {
+      detail: REPERTOIRE_SUMMARY,
+    }),
+    axis({
       key: "pace",
-      label: "Game horizon",
+      label: "Game length",
       position: 32,
+      // Public axis.value remains the average duration in seconds.
       value: 489.46,
       category: "flexible",
       categoryLabel: "Flexible Pacer",
       sampleSize: 32,
-    },
-    {
-      key: "matchup_balance",
-      label: "Matchup shape",
+      detail: PACE_SUMMARY,
+    }),
+    axis({
+      key: "matchup_edge",
+      label: "Matchup edge",
       position: 0,
-      value: 20.968,
+      value: 15.968,
       category: "specialist",
-      categoryLabel: "Matchup Master",
-      sampleSize: 91,
-    },
+      categoryLabel: "Matchup Specialist",
+      sampleSize: 31,
+      detail: {
+        winRate: 70.968,
+        comparatorWinRate: 55,
+        comparedAgainst: ["PvP", "PvT"],
+        signedEdge: 15.968,
+        tierScore: 2,
+        allMatchupSpread: 20.968,
+      },
+    }),
   ],
-  playstyle: "Apex Disciplined Operator",
+  playstyle: "Dominant Grinder",
   archetype: {
     key: "grinder|flexible|specialist",
-    name: "Apex Disciplined Operator",
+    name: "Dominant Grinder",
     description:
-      "Your effective build pool rewards practiced variety. Your game-time profile is flexible. One matchup is a ten-point strength.",
+      "A dependable core sharpened through regular use. This selected matchup is a defining strength.",
     complete: true,
+    components: [
+      {
+        axis: "matchup_edge",
+        category: "specialist",
+        distinctiveness: 1,
+        role: "core" as const,
+      },
+      {
+        axis: "repertoire",
+        category: "grinder",
+        distinctiveness: 0.24,
+        role: "modifier" as const,
+      },
+      {
+        axis: "pace",
+        category: "flexible",
+        distinctiveness: 0.36,
+        role: "supporting" as const,
+      },
+    ],
   },
+  taxonomy: TAXONOMY,
   buildOrders: [
     { name: "PvZ - Stargate into Glaives", games: 11 },
     { name: "PvZ - Gate Expand", games: 8 },
@@ -68,313 +378,261 @@ const FP = {
     { name: "PvZ - Immortal Sentry", games: 4 },
     { name: "PvZ - DT Drop", games: 2 },
   ],
-  repertoireSummary: {
-    distinctBuilds: 5,
-    effectiveBuilds: 3.913,
-  },
-  paceSummary: {
-    averageSec: 489.46,
-    medianSec: 480,
-    belowFive: { games: 4, percent: 12.5 },
-    fiveToSeven: { games: 6, percent: 18.75 },
-    aboveSeven: { games: 22, percent: 68.75 },
-    sevenToFifteen: { games: 18, percent: 56.25 },
-    aboveFifteen: { games: 4, percent: 12.5 },
-  },
-  matchupWinRates: [
-    {
-      matchup: "PvP",
-      games: 31,
-      decidedGames: 30,
-      wins: 18,
-      losses: 12,
-      ties: 1,
-      winRate: 60,
-    },
-    {
-      matchup: "PvT",
-      games: 30,
-      decidedGames: 30,
-      wins: 15,
-      losses: 15,
-      ties: 0,
-      winRate: 50,
-    },
-    {
-      matchup: "PvZ",
-      games: 32,
-      decidedGames: 31,
-      wins: 22,
-      losses: 9,
-      ties: 1,
-      winRate: 70.968,
-    },
-  ],
+  repertoireSummary: REPERTOIRE_SUMMARY,
+  paceSummary: PACE_SUMMARY,
+  matchupWinRates: MATCHUP_RATES,
   matchupSummary: {
     spread: 20.968,
     leaderGap: 10.968,
     weakGap: 10,
+    selectedMatchup: "PvZ",
+    selectedWinRate: 70.968,
+    comparatorWinRate: 55,
+    comparedAgainst: ["PvP", "PvT"],
+    signedEdge: 15.968,
+    tierScore: 2 as const,
     strongestMatchup: "PvZ",
     weakestMatchup: "PvT",
-    signedEdge: 10.968,
-    tierScore: 2,
   },
 };
 
+function ok(fingerprint: unknown = FP) {
+  return { data: { fingerprint }, isLoading: false, error: undefined };
+}
+
 describe("FingerprintCard", () => {
-  it("requests the fingerprint endpoint for the default matchup", () => {
-    useApiMock.mockReturnValue({ data: undefined, isLoading: true });
-    render(<FingerprintCard />);
-    expect(useApiMock).toHaveBeenCalledWith(
-      "/v1/me/fingerprint?matchup=PvZ",
-      { revalidateOnFocus: false },
-    );
-  });
+  describe("filter wiring", () => {
+    it("sends the global filters and the db revision with the request", () => {
+      filtersValue = {
+        preset: "last_30d",
+        since: "2026-01-01T00:00:00.000Z",
+        until: "2026-02-01T00:00:00.000Z",
+        map_pool: "ladder",
+      };
+      dbRevValue = 7;
+      useApiMock.mockReturnValue({ data: undefined, isLoading: true });
+      render(<FingerprintCard />);
 
-  it("shows a skeleton while loading", () => {
-    useApiMock.mockReturnValue({ data: undefined, isLoading: true });
-    render(<FingerprintCard />);
-    expect(screen.getByText("Skill fingerprint")).toBeTruthy();
-  });
-
-  it("renders the real archetype, three spectra, and their replay evidence", () => {
-    useApiMock.mockReturnValue({ data: { fingerprint: FP }, isLoading: false });
-    render(<FingerprintCard />);
-
-    expect(
-      screen.getByRole("heading", { name: "Apex Disciplined Operator" }),
-    ).toBeTruthy();
-    expect(screen.getByText("Complete profile")).toBeTruthy();
-    expect(
-      screen.getByText(/32 recent PvZ 1v1 replays, using up to your latest 50/),
-    ).toBeTruthy();
-    expect(screen.getByText("3 of 3 tracks ready")).toBeTruthy();
-    expect(screen.getAllByTestId(/^fingerprint-axis-/)).toHaveLength(3);
-    expect(screen.queryByTestId("fingerprint-axis-blind_spot")).toBeNull();
-
-    const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
-    expect(within(repertoire).getAllByText("Consistent Grinder")).toHaveLength(2);
-    expect(within(repertoire).getByText("3.91 effective")).toBeTruthy();
-    expect(
-      within(repertoire).getByText(
-        /We detected 5 distinct builds across 30 classified PvZ replays/,
-      ),
-    ).toBeTruthy();
-    expect(screen.getByTestId("fingerprint-marker-repertoire").getAttribute("style"))
-      .toContain("left: 28%");
-
-    const pace = screen.getByTestId("fingerprint-axis-pace");
-    expect(within(pace).getAllByText("Flexible Pacer")).toHaveLength(2);
-    expect(within(pace).getAllByText("8:09.46 avg").length).toBeGreaterThan(0);
-    expect(
-      within(pace).getByText(/uses the real time-band counts/),
-    ).toBeTruthy();
-
-    const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
-    expect(within(matchup).getAllByText("Matchup Master")).toHaveLength(2);
-    expect(within(matchup).getByText("All-Matchup Ace")).toBeTruthy();
-    expect(within(matchup).getByText("Matchup Hurdle")).toBeTruthy();
-    expect(within(matchup).getByText("Matchup Blind Spot")).toBeTruthy();
-    expect(
-      within(matchup).getByText(
-        /PvZ leads your middle matchup by 10.968 percentage points/,
-      ),
-    ).toBeTruthy();
-
-    expect(screen.getByText("PvZ - Stargate into Glaives")).toBeTruthy();
-    expect(screen.getByText("70.968%")).toBeTruthy();
-    expect(screen.getByText("20.968 percentage points best-to-worst")).toBeTruthy();
-    expect(screen.getByText("+10.968 pts dominant gap")).toBeTruthy();
-    expect(screen.getByText("Tier score +2")).toBeTruthy();
-    expect(screen.getByText("8:00 median")).toBeTruthy();
-    expect(screen.getByText("5 distinct")).toBeTruthy();
-    expect(screen.getAllByText("3.91 effective").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/\bpp\b/i)).toBeNull();
-    expect(screen.queryByText(/MMR percentile/)).toBeNull();
-  });
-
-  it("keeps a missing signal visibly unclassified instead of plotting zero", () => {
-    const sparse = {
-      ...FP,
-      archetype: {
-        key: "incomplete",
-        name: "Profile still forming",
-        description: "Two signals are ready; matchup shape still needs games.",
-        complete: false,
-      },
-      axes: FP.axes.map((axis) =>
-        axis.key === "matchup_balance"
-          ? {
-              ...axis,
-              position: null,
-              value: null,
-              category: null,
-              categoryLabel: null,
-              sampleSize: 0,
-            }
-          : axis,
-      ),
-    };
-    useApiMock.mockReturnValue({
-      data: { fingerprint: sparse },
-      isLoading: false,
+      const [url, options] = useApiMock.mock.calls[0];
+      expect(url).toContain("/v1/me/fingerprint?matchup=PvZ");
+      expect(url).toContain("since=2026-01-01T00%3A00%3A00.000Z");
+      expect(url).toContain("until=2026-02-01T00%3A00%3A00.000Z");
+      expect(url).toContain("map_pool=ladder");
+      expect(url).not.toContain("preset=");
+      expect(url).toContain("#7");
+      expect(options).toEqual({ revalidateOnFocus: false });
     });
-    render(<FingerprintCard />);
 
-    expect(screen.getAllByText("2 of 3 tracks ready").length).toBeGreaterThan(0);
-    const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
-    expect(within(matchup).getByText("Not enough data")).toBeTruthy();
-    expect(within(matchup).getByText(/this track stays unranked/)).toBeTruthy();
-    expect(screen.queryByTestId("fingerprint-marker-matchup_balance")).toBeNull();
-    expect(screen.getByTestId("fingerprint-marker-repertoire")).toBeTruthy();
-  });
+    it("changing the date range changes the request key", () => {
+      useApiMock.mockReturnValue({ data: undefined, isLoading: true });
+      filtersValue = { preset: "all" };
+      const { unmount } = render(<FingerprintCard />);
+      const first = useApiMock.mock.calls[0][0];
+      unmount();
 
-  it("does not turn failed hero signals into zero-value facts", () => {
-    const forming = {
-      ...FP,
-      archetype: { ...FP.archetype, complete: false },
-      axes: FP.axes.map((axis) =>
-        axis.key === "repertoire" || axis.key === "pace"
-          ? {
-              ...axis,
-              position: null,
-              value: null,
-              category: null,
-              categoryLabel: null,
-              sampleSize: 8,
-            }
-          : axis,
-      ),
-    };
-    useApiMock.mockReturnValue({ data: { fingerprint: forming }, isLoading: false });
-    render(<FingerprintCard />);
-
-    const buildStat = screen.getByText("Detected builds").closest("div");
-    const effectiveStat = screen.getByText("Effective pool").closest("div");
-    const paceStat = screen.getByText("Avg game").closest("div");
-    expect(buildStat).toBeTruthy();
-    expect(effectiveStat).toBeTruthy();
-    expect(paceStat).toBeTruthy();
-    expect(within(buildStat!).getByText("Still forming")).toBeTruthy();
-    expect(within(effectiveStat!).getByText("Still forming")).toBeTruthy();
-    expect(within(paceStat!).getByText("Still forming")).toBeTruthy();
-  });
-
-  it("shows missing duration shares as unavailable instead of inventing zeroes", () => {
-    const zeroTimed = {
-      ...FP,
-      archetype: { ...FP.archetype, complete: false },
-      axes: FP.axes.map((axis) =>
-        axis.key === "pace"
-          ? {
-              ...axis,
-              position: null,
-              value: null,
-              category: null,
-              categoryLabel: null,
-              sampleSize: 0,
-            }
-          : axis,
-      ),
-      paceSummary: {
-        averageSec: null,
-        medianSec: null,
-        belowFive: { games: 0, percent: null },
-        fiveToSeven: { games: 0, percent: null },
-        aboveSeven: { games: 0, percent: null },
-        sevenToFifteen: { games: 0, percent: null },
-        aboveFifteen: { games: 0, percent: null },
-      },
-    };
-    useApiMock.mockReturnValue({ data: { fingerprint: zeroTimed }, isLoading: false });
-    render(<FingerprintCard />);
-
-    const distribution = screen
-      .getByRole("heading", { name: "Game-time distribution" })
-      .closest("section");
-    expect(distribution).toBeTruthy();
-    expect(within(distribution!).getAllByText("—")).toHaveLength(4);
-    expect(
-      within(distribution!).getByText(/0 valid timed replays are available/),
-    ).toBeTruthy();
-  });
-
-  it("renders a matchup blind spot at the opposite end of the spectrum", () => {
-    const blindSpot = {
-      ...FP,
-      axes: FP.axes.map((axis) =>
-        axis.key === "matchup_balance"
-          ? {
-              ...axis,
-              position: 100,
-              category: "blind_spot",
-              categoryLabel: "Matchup Blind Spot",
-            }
-          : axis,
-      ),
-      archetype: {
-        key: "grinder|flexible|blind_spot",
-        name: "Fault-Line Disciplined Operator",
-        description:
-          "A practiced build pool and flexible pace with one severe matchup weakness.",
-        complete: true,
-      },
-      matchupWinRates: FP.matchupWinRates.map((row) =>
-        row.matchup === "PvZ"
-          ? {
-              ...row,
-              decidedGames: 30,
-              wins: 18,
-              losses: 12,
-              winRate: 60,
-            }
-          : row,
-      ),
-      matchupSummary: {
-        ...FP.matchupSummary,
-        spread: 10,
-        leaderGap: 0,
-        weakGap: 10,
-        signedEdge: -10,
-        tierScore: -2,
-      },
-    };
-    useApiMock.mockReturnValue({
-      data: { fingerprint: blindSpot },
-      isLoading: false,
+      useApiMock.mockClear();
+      filtersValue = {
+        preset: "last_7d",
+        since: "2026-08-07T00:00:00.000Z",
+      };
+      render(<FingerprintCard />);
+      expect(useApiMock.mock.calls[0][0]).not.toBe(first);
     });
-    render(<FingerprintCard />);
 
-    expect(
-      screen.getByRole("heading", { name: "Fault-Line Disciplined Operator" }),
-    ).toBeTruthy();
-    const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
-    expect(within(matchup).getAllByText("Matchup Blind Spot")).toHaveLength(2);
-    expect(
-      within(matchup).getByText(
-        /PvT trails your middle matchup by 10 percentage points/,
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByTestId("fingerprint-marker-matchup_balance").getAttribute("style"),
-    ).toContain("left: 100%");
+    it("names the filters the API deliberately ignored", () => {
+      useApiMock.mockReturnValue(
+        ok({ ...FP, strippedFilters: ["build", "mmr_min"] }),
+      );
+      render(<FingerprintCard />);
+
+      const note = screen.getByTestId("fingerprint-stripped-filters");
+      expect(note.textContent).toMatch(/build/);
+      expect(note.textContent).toMatch(/MMR/);
+    });
   });
 
-  it("renders a Two-Speed profile from the returned time-band counts", () => {
-    const twoSpeed = {
-      ...FP,
-      axes: FP.axes.map((axis) =>
-        axis.key === "pace"
-          ? {
-              ...axis,
-              position: 50,
-              value: 600,
-              category: "two_speed",
-              categoryLabel: "Two-Speed Player",
-            }
-          : axis,
-      ),
-      paceSummary: {
+  describe("rendering", () => {
+    it("shows a skeleton while loading", () => {
+      useApiMock.mockReturnValue({ data: undefined, isLoading: true });
+      const { container } = render(<FingerprintCard />);
+      expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    });
+
+    it("renders the response archetype, three spectra, and replay evidence", () => {
+      useApiMock.mockReturnValue(ok());
+      render(<FingerprintCard />);
+
+      expect(
+        screen.getByRole("heading", { name: "Dominant Grinder" }),
+      ).toBeTruthy();
+      expect(screen.getByText("Complete profile")).toBeTruthy();
+      expect(
+        screen.getByTestId("fingerprint-name-rationale").textContent,
+      ).toMatch(/Matchup Specialist and Consistent Grinder/);
+      expect(
+        screen.getByText(/32 recent PvZ 1v1 replays, using up to your latest 50/),
+      ).toBeTruthy();
+      expect(screen.getByText("3 of 3 tracks ready")).toBeTruthy();
+
+      for (const key of ["repertoire", "pace", "matchup_edge"]) {
+        expect(screen.getByTestId("fingerprint-axis-" + key)).toBeTruthy();
+        expect(
+          screen
+            .getByTestId("fingerprint-marker-" + key)
+            .getAttribute("style"),
+        ).toContain("left:");
+      }
+      expect(
+        screen
+          .getByTestId("fingerprint-marker-matchup_edge")
+          .getAttribute("style"),
+      ).toContain("0%");
+
+      const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
+      expect(repertoire.textContent).toMatch(/5 detected/);
+      expect(repertoire.textContent).toMatch(/5 distinct builds/);
+      expect(repertoire.textContent).toMatch(
+        /Shannon diversity.*3\.91 equally used builds/,
+      );
+
+      const pace = screen.getByTestId("fingerprint-axis-pace");
+      expect(pace.textContent).toMatch(/8:09\.46 avg/);
+      expect(pace.textContent).toMatch(/real time-band counts/);
+
+      expect(screen.getByText("PvZ - Stargate into Glaives")).toBeTruthy();
+      expect(screen.getByText("8:00 median")).toBeTruthy();
+      expect(screen.getByText("5 distinct")).toBeTruthy();
+      expect(screen.getAllByText("3.91 effective").length).toBeGreaterThan(0);
+    });
+
+    it("describes the selected matchup against the comparison matchups", () => {
+      useApiMock.mockReturnValue(ok());
+      render(<FingerprintCard />);
+
+      const row = screen.getByTestId("fingerprint-axis-matchup_edge");
+      expect(row.textContent).toMatch(/PvP and PvT/);
+      expect(row.textContent).toMatch(/70\.968%/);
+      expect(row.textContent).toMatch(/55%/);
+      expect(row.textContent).toMatch(/\+15\.968 pts/);
+      expect(row.textContent).toMatch(/score \+2/i);
+    });
+
+    it("treats API win rates as percentages, including an exact 1%", () => {
+      const onePercent = {
+        ...FP,
+        axes: FP.axes.map((entry) =>
+          entry.key === "matchup_edge"
+            ? {
+                ...entry,
+                detail: {
+                  ...entry.detail,
+                  winRate: 1,
+                },
+              }
+            : entry,
+        ),
+        matchupWinRates: FP.matchupWinRates.map((row) =>
+          row.matchup === "PvT" ? { ...row, winRate: 1 } : row,
+        ),
+      };
+      useApiMock.mockReturnValue(ok(onePercent));
+      render(<FingerprintCard />);
+
+      expect(screen.getByText("1%")).toBeTruthy();
+      expect(
+        screen.getByTestId("fingerprint-axis-matchup_edge").textContent,
+      ).toMatch(/at 1%/);
+      expect(screen.queryByText("100%")).toBeNull();
+    });
+
+    it("explains distinct and Shannon-effective builds from response values", () => {
+      const dynamicSummary = {
+        method: "shannon_perplexity",
+        formula: "exp(-sum(p_i * ln(p_i)))",
+        distinctBuilds: 6,
+        effectiveBuilds: 2.718281,
+        topBuildShare: 0.5,
+      };
+      const dynamic = {
+        ...FP,
+        axes: FP.axes.map((entry) =>
+          entry.key === "repertoire"
+            ? {
+                ...entry,
+                value: 6,
+                detail: dynamicSummary,
+              }
+            : entry,
+        ),
+        buildOrders: [
+          { name: "Plan Alpha", games: 15 },
+          { name: "Plan Beta", games: 6 },
+          { name: "Plan Gamma", games: 3 },
+          { name: "Plan Delta", games: 2 },
+          { name: "Plan Epsilon", games: 2 },
+          { name: "Plan Zeta", games: 2 },
+        ],
+        repertoireSummary: dynamicSummary,
+      };
+      useApiMock.mockReturnValue(ok(dynamic));
+      const { container } = render(<FingerprintCard />);
+
+      const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
+      expect(repertoire.textContent).toMatch(/6 detected/);
+      expect(repertoire.textContent).toMatch(/6 distinct builds/);
+      expect(repertoire.textContent).toMatch(/2\.72 equally used builds/);
+      expect(screen.getByText("6 distinct")).toBeTruthy();
+      expect(screen.getAllByText("2.72 effective").length).toBeGreaterThan(0);
+
+      const methodology = screen
+        .getByText("How this fingerprint is calculated")
+        .closest("details");
+      expect(methodology).toBeTruthy();
+      const guide = methodology!.textContent ?? "";
+      expect(guide).toContain("exp(-sum(p_i * ln(p_i)))");
+      expect(guide).toContain(
+        "6 detected builds become 2.72 effective builds",
+      );
+      expect(guide).toContain(
+        "as diverse as 2.72 builds used equally often",
+      );
+      expect(container.textContent).not.toMatch(/14 detected builds/);
+      expect(container.textContent).not.toMatch(/8\.35 effective/);
+    });
+
+    it("keeps enough effective-build precision near a tier boundary", () => {
+      const boundarySummary = {
+        ...REPERTOIRE_SUMMARY,
+        distinctBuilds: 2,
+        effectiveBuilds: 1.503759,
+      };
+      const boundary = {
+        ...FP,
+        axes: FP.axes.map((entry) =>
+          entry.key === "repertoire"
+            ? {
+                ...entry,
+                position: 1,
+                value: 2,
+                category: "signature",
+                categoryLabel: "Signature Pilot",
+                detail: boundarySummary,
+              }
+            : entry,
+        ),
+        repertoireSummary: boundarySummary,
+      };
+      useApiMock.mockReturnValue(ok(boundary));
+      render(<FingerprintCard />);
+
+      const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
+      expect(repertoire.textContent).toMatch(/2 detected/);
+      expect(repertoire.textContent).toMatch(/Signature Pilot/);
+      expect(screen.getAllByText("1.503759 effective").length).toBeGreaterThan(0);
+    });
+
+    it("renders a Two-Speed profile from returned time buckets", () => {
+      const twoSpeedSummary = {
         averageSec: 600,
         medianSec: 540,
         belowFive: { games: 8, percent: 25 },
@@ -382,233 +640,553 @@ describe("FingerprintCard", () => {
         aboveSeven: { games: 18, percent: 56.25 },
         sevenToFifteen: { games: 10, percent: 31.25 },
         aboveFifteen: { games: 8, percent: 25 },
-      },
-      archetype: {
-        ...FP.archetype,
-        key: "grinder|two_speed|specialist",
-        name: "Apex Tempo Gearbox",
-      },
-    };
-    useApiMock.mockReturnValue({
-      data: { fingerprint: twoSpeed },
-      isLoading: false,
+      };
+      const twoSpeed = {
+        ...FP,
+        axes: FP.axes.map((entry) =>
+          entry.key === "pace"
+            ? {
+                ...entry,
+                position: 50,
+                value: 600,
+                category: "two_speed",
+                categoryLabel: "Two-Speed Player",
+                detail: twoSpeedSummary,
+              }
+            : entry,
+        ),
+        paceSummary: twoSpeedSummary,
+      };
+      useApiMock.mockReturnValue(ok(twoSpeed));
+      render(<FingerprintCard />);
+
+      const pace = screen.getByTestId("fingerprint-axis-pace");
+      expect(pace.textContent).toMatch(/Two-Speed Player/);
+      expect(pace.textContent).toMatch(/10:00 avg/);
+      expect(
+        screen.getByText(/8\/32 \(25%\) ended under 5:00/),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/8\/32 \(25%\) ran over 15:00/),
+      ).toBeTruthy();
     });
-    render(<FingerprintCard />);
 
-    const pace = screen.getByTestId("fingerprint-axis-pace");
-    expect(within(pace).getAllByText("Two-Speed Player")).toHaveLength(2);
-    expect(screen.getByText(/8\/32 \(25%\) ended under 5:00/)).toBeTruthy();
-    expect(screen.getByText(/8\/32 \(25%\) ran over 15:00/)).toBeTruthy();
-  });
+    it("reports the date-scoped window rather than a fixed recent-game claim", () => {
+      useApiMock.mockReturnValue(
+        ok({
+          ...FP,
+          windowMode: "range",
+          windowGames: 500,
+          games: 128,
+        }),
+      );
+      filtersValue = {
+        preset: "last_90d",
+        since: "2026-05-01T00:00:00.000Z",
+      };
+      render(<FingerprintCard />);
 
-  it("renders the moderate Matchup Hurdle and its signed score", () => {
-    const hurdle = {
-      ...FP,
-      axes: FP.axes.map((axis) =>
-        axis.key === "matchup_balance"
-          ? {
-              ...axis,
-              position: 75,
-              value: 12.5,
-              category: "matchup_hurdle",
-              categoryLabel: "Matchup Hurdle",
-            }
-          : axis,
-      ),
-      matchupSummary: {
-        ...FP.matchupSummary,
-        spread: 12.5,
-        leaderGap: 5,
-        weakGap: 7.5,
-        signedEdge: -7.5,
-        tierScore: -1,
-      },
-      archetype: {
-        ...FP.archetype,
-        key: "grinder|flexible|matchup_hurdle",
-        name: "Battle-Tested Disciplined Operator",
-      },
-    };
-    useApiMock.mockReturnValue({ data: { fingerprint: hurdle }, isLoading: false });
-    render(<FingerprintCard />);
-
-    const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
-    expect(within(matchup).getAllByText("Matchup Hurdle")).toHaveLength(2);
-    expect(within(matchup).getByText(/a clear Matchup Hurdle/)).toBeTruthy();
-    expect(screen.getByText("−7.5 pts dominant gap")).toBeTruthy();
-    expect(screen.getByText("Tier score -1")).toBeTruthy();
-    expect(
-      screen.getByTestId("fingerprint-marker-matchup_balance").getAttribute("style"),
-    ).toContain("left: 75%");
-  });
-
-  it("keeps a universal matchup profile neutral even when an adjacent gap is signed", () => {
-    const universalist = {
-      ...FP,
-      axes: FP.axes.map((axis) =>
-        axis.key === "matchup_balance"
-          ? {
-              ...axis,
-              position: 50,
-              value: 5,
-              category: "universalist",
-              categoryLabel: "All-Matchup Ace",
-            }
-          : axis,
-      ),
-      matchupWinRates: [
-        { ...FP.matchupWinRates[0], winRate: 54 },
-        { ...FP.matchupWinRates[1], winRate: 50 },
-        { ...FP.matchupWinRates[2], winRate: 49 },
-      ],
-      matchupSummary: {
-        ...FP.matchupSummary,
-        spread: 5,
-        leaderGap: 4,
-        weakGap: 1,
-        strongestMatchup: "PvP",
-        weakestMatchup: "PvZ",
-        signedEdge: 4,
-        tierScore: 0,
-      },
-      archetype: {
-        ...FP.archetype,
-        key: "grinder|flexible|universalist",
-        name: "Universal Disciplined Operator",
-      },
-    };
-    useApiMock.mockReturnValue({
-      data: { fingerprint: universalist },
-      isLoading: false,
+      expect(screen.getByText(/128 PvZ 1v1 replays in/)).toBeTruthy();
     });
-    render(<FingerprintCard />);
-
-    const matchup = screen.getByTestId("fingerprint-axis-matchup_balance");
-    expect(within(matchup).getAllByText("All-Matchup Ace")).toHaveLength(2);
-    expect(
-      screen.getByTestId("fingerprint-marker-matchup_balance").getAttribute("style"),
-    ).toContain("left: 50%");
-
-    const performance = screen
-      .getByRole("heading", { name: "Matchup performance" })
-      .closest("section");
-    expect(performance).toBeTruthy();
-    expect(within(performance!).queryByText(/dominant gap/i)).toBeNull();
-    expect(within(performance!).getByText("Tier score 0")).toBeTruthy();
-    expect(
-      within(performance!).getByText("5 percentage points best-to-worst"),
-    ).toBeTruthy();
   });
 
-  it("shows enough effective-build precision near a tier boundary", () => {
-    const boundary = {
-      ...FP,
-      axes: FP.axes.map((axis) =>
-        axis.key === "repertoire"
-          ? {
-              ...axis,
-              position: 1,
-              value: 1.503759,
-              category: "signature",
-              categoryLabel: "Signature Pilot",
-            }
-          : axis,
-      ),
-      repertoireSummary: {
-        distinctBuilds: 2,
-        effectiveBuilds: 1.503759,
+  describe("matchup scoring states", () => {
+    it.each([
+      ["specialist", "Matchup Specialist", 0, 10, 2, "+2"],
+      ["matchup_edge", "Matchup Edge", 25, 7.5, 1, "+1"],
+      ["universalist", "Matchup Universalist", 50, 1, 0, "0"],
+      ["matchup_hurdle", "Matchup Hurdle", 75, -7.5, -1, "-1"],
+      ["blind_spot", "Matchup Blind Spot", 100, -10, -2, "-2"],
+    ])(
+      "renders %s with its response score and track position",
+      (category, label, position, delta, score, scoreText) => {
+        const variant = {
+          ...FP,
+          axes: FP.axes.map((entry) =>
+            entry.key === "matchup_edge"
+              ? {
+                  ...entry,
+                  position,
+                  value: delta,
+                  category,
+                  categoryLabel: label,
+                  detail: {
+                    ...entry.detail,
+                    signedEdge: delta,
+                    tierScore: score,
+                    allMatchupSpread: category === "universalist" ? 5 : 20,
+                  },
+                }
+              : entry,
+          ),
+          matchupSummary: {
+            ...FP.matchupSummary,
+            spread: category === "universalist" ? 5 : 20,
+            signedEdge: delta,
+            tierScore: score,
+          },
+        };
+        useApiMock.mockReturnValue(ok(variant));
+        render(<FingerprintCard />);
+
+        const row = screen.getByTestId("fingerprint-axis-matchup_edge");
+        expect(row.textContent).toContain(label);
+        expect(row.textContent?.toLowerCase()).toContain(
+          "score " + scoreText.toLowerCase(),
+        );
+        expect(
+          screen
+            .getByTestId("fingerprint-marker-matchup_edge")
+            .getAttribute("style"),
+        ).toContain("left: " + position + "%");
       },
-    };
-    useApiMock.mockReturnValue({ data: { fingerprint: boundary }, isLoading: false });
-    render(<FingerprintCard />);
-
-    const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
-    expect(within(repertoire).getAllByText("Signature Pilot")).toHaveLength(2);
-    expect(within(repertoire).getByText("1.503759 effective")).toBeTruthy();
+    );
   });
 
-  it("documents every formula and exposes all 175 named archetypes", () => {
-    useApiMock.mockReturnValue({ data: { fingerprint: FP }, isLoading: false });
-    render(<FingerprintCard />);
+  describe("unrated tracks and honest nulls", () => {
+    it("uses the missing-data reason and progress supplied by the API", () => {
+      const partial = {
+        ...FP,
+        status: "partial" as const,
+        archetype: { ...FP.archetype, complete: false },
+        axes: FP.axes.map((entry) =>
+          entry.key === "repertoire"
+            ? {
+                ...entry,
+                position: null,
+                value: 2,
+                category: null,
+                categoryLabel: null,
+                reason: "needs_more_classified_builds",
+                have: 4,
+                needed: 10,
+              }
+            : entry,
+        ),
+      };
+      useApiMock.mockReturnValue(ok(partial));
+      render(<FingerprintCard />);
 
-    const summary = screen.getByText("How this fingerprint is calculated");
-    const details = summary.closest("details");
-    expect(details).toBeTruthy();
-    expect(details!.open).toBe(false);
-    fireEvent.click(summary);
-    expect(details!.open).toBe(true);
-
-    const guideText = details!.textContent ?? "";
-    expect(guideText).toContain("1 ÷ Σp²");
-    expect(guideText).toContain("5 detected builds and 3.91 effective");
-    expect(guideText).toContain("as diverse as 3.91 builds played equally often");
-    expect(guideText).toContain("1.50 or less is Build-Order One-Trick");
-    expect(guideText).toContain("over 1.50 through 2.50 is Signature Pilot");
-    expect(guideText).toContain("10 or more is Creative Genius");
-    expect(guideText).toContain("at least 25% of games under 5:00");
-    expect(guideText).toContain("Mid/Late-Game Master needs at least 80% over 7:00");
-    expect(guideText).toContain("average from 5:00 through 15:00 is Flexible Pacer");
-    expect(guideText).toContain("All three within 5 percentage points");
-    expect(guideText).toContain("±7.5 marks are scoring anchors");
-    expect(guideText).toContain("dominant +10-point gap is Matchup Master");
-    expect(guideText).toContain("only wins and losses enter the win rates");
-    expect(guideText).toContain("175 deterministic possibilities");
-
-    const catalogSummary = screen.getByText("All 175 archetypes");
-    const catalog = catalogSummary.closest("details");
-    expect(catalog).toBeTruthy();
-    expect(catalog!.open).toBe(false);
-    fireEvent.click(catalogSummary);
-    expect(catalog!.open).toBe(true);
-    expect(within(catalog!).getAllByTestId("archetype-option")).toHaveLength(175);
-    expect(within(catalog!).getByText("Apex Disciplined Operator")).toBeTruthy();
-    expect(within(catalog!).getByText("Fault-Line Chaos Switchboard")).toBeTruthy();
-    expect(within(catalog!).getByText("Your archetype")).toBeTruthy();
-  });
-
-  it("shows the friendly empty state below 10 games", () => {
-    useApiMock.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: { status: 404, code: "not_enough_games", message: "Not found." },
+      const row = screen.getByTestId("fingerprint-axis-repertoire");
+      expect(row.textContent).toMatch(/recognized build — 4 of 10/);
+      expect(screen.queryByTestId("fingerprint-marker-repertoire")).toBeNull();
+      expect(screen.getAllByText("2 of 3 tracks ready")).toHaveLength(2);
     });
-    render(<FingerprintCard />);
-    expect(screen.getByText(/Not enough PvZ games yet/)).toBeTruthy();
-    expect(screen.getByText(/at least 10 PvZ 1v1 games/)).toBeTruthy();
+
+    it("explains a missing comparison matchup in its own words", () => {
+      const noComparator = {
+        ...FP,
+        status: "partial" as const,
+        archetype: { ...FP.archetype, complete: false },
+        axes: FP.axes.map((entry) =>
+          entry.key === "matchup_edge"
+            ? {
+                ...entry,
+                position: null,
+                value: null,
+                category: null,
+                categoryLabel: null,
+                reason: "no_comparison_matchup",
+                have: 20,
+                needed: 8,
+              }
+            : entry,
+        ),
+      };
+      useApiMock.mockReturnValue(ok(noComparator));
+      render(<FingerprintCard />);
+
+      expect(
+        screen.getByTestId("fingerprint-axis-matchup_edge").textContent,
+      ).toMatch(/neither has enough decided games/);
+      expect(screen.queryByTestId("fingerprint-marker-matchup_edge")).toBeNull();
+    });
+
+    it("does not turn unavailable signals or percentages into zeroes", () => {
+      const emptyPace = {
+        averageSec: null,
+        medianSec: null,
+        belowFive: { games: 0, percent: null },
+        fiveToSeven: { games: 0, percent: null },
+        aboveSeven: { games: 0, percent: null },
+        sevenToFifteen: { games: 0, percent: null },
+        aboveFifteen: { games: 0, percent: null },
+      };
+      const forming = {
+        ...FP,
+        status: "insufficient" as const,
+        archetype: {
+          key: "partial:?|?|?",
+          name: "Profile Still Forming",
+          description: "More replay evidence is needed.",
+          complete: false,
+          components: [],
+        },
+        axes: FP.axes.map((entry) => ({
+          ...entry,
+          position: null,
+          value: entry.key === "repertoire" ? 0 : null,
+          category: null,
+          categoryLabel: null,
+          sampleSize: 0,
+          reason:
+            entry.key === "repertoire"
+              ? "needs_more_classified_builds"
+              : entry.key === "pace"
+                ? "needs_more_timed_games"
+                : "needs_more_decided_games",
+          have: 0,
+          needed: entry.key === "matchup_edge" ? 8 : 10,
+          detail:
+            entry.key === "repertoire"
+              ? {
+                  ...REPERTOIRE_SUMMARY,
+                  distinctBuilds: 0,
+                  effectiveBuilds: 0,
+                  topBuildShare: null,
+                }
+              : entry.key === "pace"
+                ? emptyPace
+                : null,
+        })),
+        buildOrders: [],
+        repertoireSummary: {
+          ...REPERTOIRE_SUMMARY,
+          distinctBuilds: 0,
+          effectiveBuilds: 0,
+          topBuildShare: null,
+        },
+        paceSummary: emptyPace,
+        matchupWinRates: [],
+        matchupSummary: {
+          spread: null,
+          leaderGap: null,
+          weakGap: null,
+          selectedMatchup: "PvZ",
+          selectedWinRate: null,
+          comparatorWinRate: null,
+          comparedAgainst: [],
+          signedEdge: null,
+          tierScore: null,
+          strongestMatchup: null,
+          weakestMatchup: null,
+        },
+      };
+      useApiMock.mockReturnValue(ok(forming));
+      render(<FingerprintCard />);
+
+      const hero = screen
+        .getByRole("heading", { name: "Profile Still Forming" })
+        .closest("section");
+      expect(hero).toBeTruthy();
+      for (const label of [
+        "Detected builds",
+        "Effective pool",
+        "Avg game",
+        "Time profile",
+        "Matchup edge",
+      ]) {
+        const stat = within(hero!).getByText(label).closest("div");
+        expect(stat).toBeTruthy();
+        expect(within(stat!).getByText("Still forming")).toBeTruthy();
+      }
+
+      const distribution = screen
+        .getByRole("heading", { name: "Game-time distribution" })
+        .closest("section");
+      expect(distribution).toBeTruthy();
+      expect(within(distribution!).getAllByText("—")).toHaveLength(4);
+      expect(
+        within(distribution!).getByText(/0 valid timed replays are available/),
+      ).toBeTruthy();
+
+      const performance = screen
+        .getByRole("heading", { name: "Matchup performance" })
+        .closest("section");
+      expect(performance).toBeTruthy();
+      expect(within(performance!).queryByText(/Tier score 0/)).toBeNull();
+      expect(within(performance!).queryByText(/0 pts vs comparison/)).toBeNull();
+      expect(
+        within(performance!).getByText(
+          /Matchup win rates will appear when qualifying games are available/,
+        ),
+      ).toBeTruthy();
+    });
   });
 
-  it("shows a generic failure state on other errors", () => {
-    useApiMock.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      error: { status: 500, message: "boom" },
+  describe("empty and recovery states", () => {
+    it("names the range and offers an escape when nothing matched", () => {
+      useApiMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { status: 404 },
+      });
+      filtersValue = {
+        preset: "last_7d",
+        since: "2026-08-07T00:00:00.000Z",
+      };
+      render(<FingerprintCard />);
+
+      expect(screen.getByText(/No PvZ games in this range/)).toBeTruthy();
+      fireEvent.click(screen.getByTestId("fingerprint-use-all-time"));
+      expect(setFiltersMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preset: "all",
+          since: undefined,
+          until: undefined,
+        }),
+      );
     });
-    render(<FingerprintCard />);
-    expect(screen.getByText(/Couldn't load your fingerprint/)).toBeTruthy();
+
+    it("offers no escape hatch when the range is already all time", () => {
+      useApiMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { status: 404 },
+      });
+      filtersValue = { preset: "all" };
+      render(<FingerprintCard />);
+
+      expect(screen.queryByTestId("fingerprint-use-all-time")).toBeNull();
+    });
+
+    it("offers the escape hatch on an incomplete profile too", () => {
+      useApiMock.mockReturnValue(
+        ok({
+          ...FP,
+          status: "partial",
+          archetype: { ...FP.archetype, complete: false },
+        }),
+      );
+      filtersValue = {
+        preset: "last_7d",
+        since: "2026-08-07T00:00:00.000Z",
+      };
+      render(<FingerprintCard />);
+
+      expect(screen.getByTestId("fingerprint-use-all-time")).toBeTruthy();
+    });
+
+    it("shows a generic failure for non-404 errors", () => {
+      useApiMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { status: 500 },
+      });
+      render(<FingerprintCard />);
+
+      expect(screen.getByText(/Couldn't load your fingerprint/)).toBeTruthy();
+    });
+  });
+
+  describe("response-owned taxonomy and explanation", () => {
+    it("renders all five build tiers, seven timing heuristics, and five matchup scores", () => {
+      useApiMock.mockReturnValue(ok());
+      render(<FingerprintCard />);
+
+      const repertoire = screen.getByTestId("fingerprint-axis-repertoire");
+      for (const category of TAXONOMY.axes[0].categories) {
+        expect(
+          within(repertoire).getAllByText(category.label).length,
+        ).toBeGreaterThan(0);
+        expect(
+          within(repertoire).getByText(category.thresholdText),
+        ).toBeTruthy();
+      }
+
+      const pace = screen.getByTestId("fingerprint-axis-pace");
+      for (const category of TAXONOMY.axes[1].categories) {
+        expect(within(pace).getAllByText(category.label).length).toBeGreaterThan(
+          0,
+        );
+        expect(within(pace).getByText(category.thresholdText)).toBeTruthy();
+      }
+
+      const matchup = screen.getByTestId("fingerprint-axis-matchup_edge");
+      for (const category of TAXONOMY.axes[2].categories) {
+        expect(
+          within(matchup).getAllByText(category.label).length,
+        ).toBeGreaterThan(0);
+        expect(
+          within(matchup).getByText(category.thresholdText),
+        ).toBeTruthy();
+      }
+      for (const score of ["Score +2", "Score +1", "Score 0", "Score -1", "Score -2"]) {
+        expect(within(matchup).getByText(score)).toBeTruthy();
+      }
+    });
+
+    it("documents Shannon, timing precedence, and the 5/7.5/10 matchup model", () => {
+      useApiMock.mockReturnValue(ok());
+      render(<FingerprintCard />);
+
+      const summary = screen.getByText("How this fingerprint is calculated");
+      const details = summary.closest("details");
+      expect(details).toBeTruthy();
+      expect(details!.open).toBe(false);
+      fireEvent.click(summary);
+      expect(details!.open).toBe(true);
+
+      const guide = details!.textContent ?? "";
+      expect(guide).toContain("Shannon diversity");
+      expect(guide).toContain("exp(-sum(p_i * ln(p_i)))");
+      expect(guide).toContain(
+        "5 detected builds become 3.91 effective builds",
+      );
+      expect(guide).toContain(
+        "as diverse as 3.91 builds used equally often",
+      );
+      expect(guide).toContain("five server tiers");
+      expect(guide).toContain("short/long split");
+      expect(guide).toContain("80% over-15:00 cluster");
+      expect(guide).toContain("80% over-7:00 cluster");
+      expect(guide).toContain("80% 5:00–7:00 timing window");
+      expect(guide).toContain("under-5:00, 5:00–15:00, and over-15:00");
+      expect(guide).toContain("best-to-worst spread is within 5 points");
+      expect(guide).toContain("+10 or more is the +2 endpoint");
+      expect(guide).toContain("−10 or less is the −2 endpoint");
+      expect(guide).toContain("±7.5 marks are visual anchors");
+      expect(guide).toContain(
+        "Ties are displayed but do not enter win rates",
+      );
+      expect(guide).toContain("175 possible three-trait profiles");
+    });
+
+    it("shows 17 response traits while reporting the 5×7×5 product", () => {
+      useApiMock.mockReturnValue(ok());
+      render(<FingerprintCard />);
+
+      const catalog = screen.getByTestId("fingerprint-archetype-catalog");
+      expect(within(catalog).getByText("175 possible profiles")).toBeTruthy();
+      expect(
+        within(catalog).getAllByTestId("archetype-option"),
+      ).toHaveLength(17);
+      const current = within(catalog)
+        .getAllByTestId("archetype-option")
+        .filter((element) => element.getAttribute("aria-current") === "true");
+      expect(current).toHaveLength(3);
+      expect(within(catalog).getAllByText(/Your trait/)).toHaveLength(3);
+    });
+
+    it("computes the profile count from a compact response taxonomy", () => {
+      const compact = {
+        ...FP,
+        taxonomy: {
+          axes: [
+            {
+              ...TAXONOMY.axes[0],
+              categories: TAXONOMY.axes[0].categories.slice(0, 2),
+            },
+            {
+              ...TAXONOMY.axes[1],
+              categories: TAXONOMY.axes[1].categories.slice(0, 3),
+            },
+            {
+              ...TAXONOMY.axes[2],
+              categories: TAXONOMY.axes[2].categories.slice(0, 4),
+            },
+          ],
+        },
+      };
+      useApiMock.mockReturnValue(ok(compact));
+      render(<FingerprintCard />);
+
+      const catalog = screen.getByTestId("fingerprint-archetype-catalog");
+      expect(within(catalog).getByText("24 possible profiles")).toBeTruthy();
+      expect(
+        within(catalog).getAllByTestId("archetype-option"),
+      ).toHaveLength(9);
+      const methodology = screen
+        .getByText("How this fingerprint is calculated")
+        .closest("details");
+      expect(methodology?.textContent).toContain(
+        "24 possible three-trait profiles",
+      );
+    });
+
+    it("renders invented response vocabulary and the response archetype verbatim", () => {
+      const inventedCategory = trait(
+        "grinder",
+        "Invented Trait",
+        "Nounish",
+        "Adjectival",
+        "Invented blurb.",
+        "some threshold",
+      );
+      const invented = {
+        ...FP,
+        playstyle: "Fallback Name",
+        archetype: {
+          ...FP.archetype,
+          name: "Server-Named Maverick",
+          description: "A description supplied only by this response.",
+        },
+        taxonomy: {
+          axes: [
+            {
+              ...TAXONOMY.axes[0],
+              label: "Invented Track",
+              description: "Invented description.",
+              leftLabel: "Left",
+              centerLabel: "Centre",
+              rightLabel: "Right",
+              categories: [inventedCategory],
+            },
+            TAXONOMY.axes[1],
+            TAXONOMY.axes[2],
+          ],
+        },
+      };
+      useApiMock.mockReturnValue(ok(invented));
+      render(<FingerprintCard />);
+
+      expect(
+        screen.getByRole("heading", { name: "Server-Named Maverick" }),
+      ).toBeTruthy();
+      expect(
+        screen.getByText("A description supplied only by this response."),
+      ).toBeTruthy();
+
+      const catalog = screen.getByTestId("fingerprint-archetype-catalog");
+      const heading = within(catalog).getByText("Invented Track");
+      const group = heading.closest("li");
+      expect(group).toBeTruthy();
+      expect(within(group!).getByText("Invented Trait")).toBeTruthy();
+      expect(within(group!).getByText("Adjectival · Nounish")).toBeTruthy();
+      expect(within(group!).getByText("Invented blurb.")).toBeTruthy();
+      expect(within(group!).getByText("some threshold")).toBeTruthy();
+      expect(
+        within(group!).getByTestId("archetype-option").getAttribute(
+          "aria-current",
+        ),
+      ).toBe("true");
+      expect(
+        within(group!).queryByText("Build-Order One-Trick"),
+      ).toBeNull();
+    });
+
+    it("no longer claims dashboard filters are ignored", () => {
+      useApiMock.mockReturnValue(ok());
+      const { container } = render(<FingerprintCard />);
+
+      expect(container.textContent).not.toMatch(
+        /Dashboard filters do not change/,
+      );
+    });
   });
 
   it("matchup picker refetches and persists the selection", () => {
-    useApiMock.mockReturnValue({ data: { fingerprint: FP }, isLoading: false });
+    useApiMock.mockReturnValue(ok());
     render(<FingerprintCard />);
+    fireEvent.click(screen.getByLabelText("Versus Terran"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Versus Terran" }));
-    expect(useApiMock).toHaveBeenLastCalledWith(
-      "/v1/me/fingerprint?matchup=PvT",
-      { revalidateOnFocus: false },
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "I play Zerg" }));
-    expect(useApiMock).toHaveBeenLastCalledWith(
-      "/v1/me/fingerprint?matchup=ZvT",
-      { revalidateOnFocus: false },
-    );
-    expect(window.localStorage.getItem("analyzer.fingerprint.matchup")).toBe(
-      "ZvT",
-    );
     expect(
-      screen
-        .getByRole("button", { name: "I play Zerg" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
+      useApiMock.mock.calls.some(([url]) =>
+        String(url).includes("matchup=PvT"),
+      ),
+    ).toBe(true);
+    expect(window.localStorage.getItem("analyzer.fingerprint.matchup")).toBe(
+      "PvT",
+    );
   });
 });

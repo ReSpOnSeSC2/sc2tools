@@ -11,17 +11,43 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Skill Fingerprint now follows the dashboard date range** — the card
+  previously read a fixed window of your 50 most recent games in a matchup and
+  ignored the filter bar entirely, so changing the time frame did nothing.
+  It now reads the same cohort as every other analyzer card (date range,
+  ladder-vs-custom, regions, map, exclude-too-short) and refreshes when new
+  replays arrive. Your race and matchup still come from the card's own picker,
+  and the build, MMR, opponent-strategy, leak and macro-score filters stay out
+  because each of them would redefine one of the tracks it measures — the card
+  now says so when one is active. A range too narrow to rate shows progress
+  toward each track and a one-click way back to all time, instead of a dead
+  end.
+
 ### Changed
 
 - **Skill Fingerprints now explain and reward practiced variety, timing shape,
   and matchup balance** — build repertoire separates detected names from an
-  inverse-Simpson effective count and adds One-Trick and Signature Pilot tiers;
+  Shannon-entropy effective count and adds One-Trick and Signature Pilot tiers;
   pace classification recognizes timing-window, mid/late mastery, late mastery,
   and genuine Two-Speed distributions from real replay durations; matchup
   scoring now has five named states around 5-, 7.5-, and 10-point landmarks.
-  The expanded 175-archetype catalog, signed matchup score, real time-band
-  evidence, and in-product methodology make every label reproducible without
-  estimates or placeholder data.
+  The expanded 175-combination archetype space, signed matchup score, real
+  time-band evidence, and in-product methodology make every label reproducible
+  without estimates or placeholder data.
+- **The Skill Fingerprint archetype is far more precise, and now differs per
+  matchup** — every matchup used to report the same name because a third of the
+  archetype was a race-wide measure that could not vary, and the remaining
+  bands were broad enough to funnel most players into one of 36 cells. The
+  matchup track now compares the selected matchup against your own other two;
+  build variety counts *effective* builds, so ten builds with one favourite is
+  no longer "Creative Genius"; and game length reads the distribution rather
+  than the mean, adding a two-speed type for players who genuinely mix quick
+  all-ins with long macro games. Names are now composed from the two tracks
+  where you are furthest from ordinary, with a neutral name when nothing stands
+  out, and the card explains which traits produced yours. Existing archetype
+  names will change.
 
 - **Trends now shows filtered total playtime overall and by exact matchup** -
   the existing game-length view sums real recorded replay time, follows every

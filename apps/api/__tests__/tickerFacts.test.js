@@ -457,6 +457,59 @@ describe("services/tickerFacts", () => {
     expect(play.text).not.toContain("gap between your best and toughest matchups");
   });
 
+  test.each([
+    ["specialist", 12, 0, 15, "Matchup Master, winning 12.0% more"],
+    ["matchup_edge", 7.5, 25, 13, "Matchup Edge, winning 7.5% more"],
+    ["universalist", 1, 50, 4, "three matchup win rates sit within 4.0%"],
+    ["matchup_hurdle", -7.5, 75, 13, "Matchup Hurdle, winning 7.5% less"],
+    ["blind_spot", -12, 100, 15, "Matchup Blind Spot, winning 12.0% less"],
+  ])(
+    "playstyle ticker understands selected-matchup tier %s",
+    async (category, delta, position, spread, expected) => {
+      await db.games.insertMany(
+        Array.from({ length: 25 }, (_, i) =>
+          game(i + 1, {
+            opponent: { displayName: `O${i}`, race: "Zerg" },
+          }),
+        ),
+      );
+      const skillFingerprint = {
+        compute: jest.fn(async (userId, { matchup }) => ({
+          matchup,
+          playstyle: "Selected Matchup Profile",
+          archetype: { complete: true },
+          axes: [
+            {
+              key: "matchup_edge",
+              position,
+              value: delta,
+              category,
+              detail: {
+                signedEdge: delta,
+                tierScore:
+                  category === "specialist"
+                    ? 2
+                    : category === "matchup_edge"
+                      ? 1
+                      : category === "matchup_hurdle"
+                        ? -1
+                        : category === "blind_spot"
+                          ? -2
+                          : 0,
+                allMatchupSpread: spread,
+              },
+            },
+          ],
+          matchupSummary: { spread },
+        })),
+      };
+
+      const facts = await svc({ skillFingerprint }).factsFor("u1");
+      const play = facts.find((fact) => fact.id === "playstyle");
+      expect(play.text).toContain(expected);
+    },
+  );
+
   test("playstyle detail respects an unavailable matchup summary", async () => {
     await db.games.insertMany(
       Array.from({ length: 25 }, (_, i) =>

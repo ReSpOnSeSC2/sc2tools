@@ -691,7 +691,16 @@ class TickerFactsService {
         const mu = mostPlayedMatchup(games);
         if (mu) {
           const fp = await this.skillFingerprint.compute(userId, { matchup: mu });
-          if (fp && typeof fp.playstyle === "string" && fp.playstyle) {
+          // Partial profiles became reachable once a thin cohort started
+          // returning 200 instead of 404. "Profile Still Forming" is honest on
+          // the card, but it is not a fact worth scrolling past on stream.
+          // Only an explicit `complete: false` suppresses the fact — a payload
+          // with no archetype block at all is a pre-rename fingerprint from a
+          // stale mock or a rolling worker, and stays readable.
+          const incomplete = Boolean(
+            fp && fp.archetype && fp.archetype.complete === false,
+          );
+          if (!incomplete && typeof fp.playstyle === "string" && fp.playstyle) {
             add(
               "playstyle",
               `PLAYSTYLE (${mu}): ${fp.playstyle}${playstyleDetail(fp, mu)}`,
@@ -921,9 +930,9 @@ function mostPlayedMatchup(games) {
 /**
  * Explain the current playstyle fingerprint with the raw replay measures that
  * actually selected it. Repertoire and pace describe the requested matchup;
- * matchup balance compares that race's three matchups. These are tendencies,
- * not skill percentiles, so the ticker reports counts, time, and matchup
- * win-rate gaps with familiar % notation rather than benchmark language.
+ * the matchup track compares that selection with the player's qualifying
+ * alternatives. These are tendencies, not skill percentiles, so the ticker
+ * reports counts, time, and matchup win-rate gaps with familiar % notation.
  *
  * The legacy branch is deliberately retained for a short compatibility
  * window. Ticker facts are decorative and may be fed by a stale mock or a
@@ -938,9 +947,13 @@ function playstyleDetail(fp, matchup) {
   const axes = Array.isArray(fp.axes) ? fp.axes : [];
   const repertoire = axes.find((axis) => axis && axis.key === "repertoire");
   const pace = axes.find((axis) => axis && axis.key === "pace");
-  const matchupBalance = axes.find(
-    (axis) => axis && axis.key === "matchup_balance",
-  );
+  // The matchup track was renamed matchup_balance -> matchup_edge when it
+  // became matchup-specific. Accept both: ticker facts may be served from a
+  // stale mock or a rolling worker mid-deploy, and an old fingerprint should
+  // stay readable rather than dropping the fact.
+  const matchupBalance =
+    axes.find((axis) => axis && axis.key === "matchup_edge") ||
+    axes.find((axis) => axis && axis.key === "matchup_balance");
   const hasCurrentShape = Boolean(
     repertoire ||
       pace ||
@@ -1060,12 +1073,17 @@ function matchupDetail(summary, rawRates, axis) {
   // not met. Do not bypass that decision by recomputing from provisional
   // rows; derivation is only a compatibility path for summary-less mocks.
   const derived = hasSummary ? null : deriveMatchupGaps(rawRates);
+  // `axis.value` is only a spread on the legacy matchup_balance axis. On
+  // matchup_edge it is a signed delta against the player's other matchups, so
+  // it must not stand in for a spread here.
+  const legacySpreadAxis =
+    axis && axis.key !== "matchup_edge" ? axis.value : null;
   const spread = firstFiniteNumber(
     data.spreadPp,
     data.spread,
     data.winRateSpreadPp,
     derived && derived.spread,
-    axis && axis.value,
+    legacySpreadAxis,
   );
   const lead = firstFiniteNumber(
     data.leaderGap,
@@ -1095,6 +1113,25 @@ function matchupDetail(summary, rawRates, axis) {
   );
   const category = firstNonEmptyString(axis && axis.category);
 
+  // The current axis is selected-matchup specific. Handle both the expanded
+  // five-tier vocabulary and the three labels emitted during its rollout.
+  const selectedDetail = selectedMatchupDetail(category, axis, spread);
+  if (selectedDetail) return selectedDetail;
+
+  return legacyMatchupDetail(category, spread, lead, weakGap, leader, weakest);
+}
+
+/**
+ * Legacy race-wide vocabulary for stale payloads and rolling workers.
+ * @param {string|null} category
+ * @param {number|null} spread
+ * @param {number|null} lead
+ * @param {number|null} weakGap
+ * @param {string|null} leader
+ * @param {string|null} weakest
+ * @returns {string}
+ */
+function legacyMatchupDetail(category, spread, lead, weakGap, leader, weakest) {
   if (category === "specialist" && lead !== null && lead >= 0) {
     return leader
       ? `${leader} is your strongest matchup, with a win rate at least ${formatPercentValue(lead)}% higher than your other two`
@@ -1115,7 +1152,61 @@ function matchupDetail(summary, rawRates, axis) {
     : "";
 }
 
-/** Explain the two directional, non-endpoint matchup tiers. */
+/**
+ * Explain a selected matchup against its qualifying comparison matchup(s).
+ * @param {string|null} category
+ * @param {Record<string, any>|undefined} axis
+ * @param {number|null} fallbackSpread
+ * @returns {string}
+ */
+function selectedMatchupDetail(category, axis, fallbackSpread) {
+  if (!axis || axis.key !== "matchup_edge") return "";
+  const detail = axis.detail && typeof axis.detail === "object"
+    ? axis.detail
+    : {};
+  const delta = firstFiniteNumber(detail.signedEdge, axis.value);
+  const spread = firstFiniteNumber(detail.allMatchupSpread, fallbackSpread);
+
+  if (category === "edge_strong" && delta !== null) {
+    return `you win this matchup ${formatPercentValue(Math.abs(delta))}% more often than its qualifying comparison`;
+  }
+  if (category === "edge_weak" && delta !== null) {
+    return `you win this matchup ${formatPercentValue(Math.abs(delta))}% less often than its qualifying comparison`;
+  }
+  if (
+    (category === "edge_on_par" || category === "universalist")
+    && spread !== null
+    && spread >= 0
+  ) {
+    return `your three matchup win rates sit within ${formatPercentValue(spread)}% of each other`;
+  }
+  if (delta === null) return "";
+  if (category === "specialist") {
+    return `this matchup is a Matchup Master, winning ${formatPercentValue(Math.abs(delta))}% more often than its qualifying comparison`;
+  }
+  if (category === "blind_spot") {
+    return `this matchup is a Matchup Blind Spot, winning ${formatPercentValue(Math.abs(delta))}% less often than its qualifying comparison`;
+  }
+  if (category === "matchup_hurdle") {
+    return `this matchup is a Matchup Hurdle, winning ${formatPercentValue(Math.abs(delta))}% less often than its qualifying comparison`;
+  }
+  if (category === "matchup_edge") {
+    return Math.abs(delta) < 1e-9
+      ? "this matchup matches its qualifying comparison; the non-balanced tie-break falls on the Matchup Edge side"
+      : `this matchup has a Matchup Edge, winning ${formatPercentValue(Math.abs(delta))}% more often than its qualifying comparison`;
+  }
+  return "";
+}
+
+/**
+ * Explain the two directional, non-endpoint matchup tiers.
+ * @param {string|null} category
+ * @param {number|null} lead
+ * @param {number|null} weakGap
+ * @param {string|null} leader
+ * @param {string|null} weakest
+ * @returns {string}
+ */
 function moderateMatchupDetail(category, lead, weakGap, leader, weakest) {
   if (category === "matchup_edge" && lead !== null && lead >= 0) {
     return leader
