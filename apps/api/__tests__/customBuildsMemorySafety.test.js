@@ -73,17 +73,24 @@ describe("custom-build rule scan memory safety", () => {
       gameId: `bounded-${String(i).padStart(3, "0")}`,
       date,
       myRace: "Protoss",
-      opponent: { race: i % 2 === 0 ? "Terran" : "Zerg" },
+      opponent: {
+        race: i % 2 === 0 ? "Terran" : "Zerg",
+        displayName: `Opponent ${i}`,
+        strategy: "Bounded strategy",
+        // Simulate a legacy row written before opponent children were
+        // allow-listed. Metadata paging must never hydrate this field.
+        unboundedLegacyField: "x".repeat(256 * 1024),
+      },
       isResumedFromReplay: false,
     }));
     await db.collection("games").insertMany(rows);
 
     const findMany = jest.fn(async (_uid, ids, opts) => {
-      expect(ids.length).toBeLessThanOrEqual(25);
+      expect(ids).toHaveLength(1);
       expect(opts).toEqual(
         expect.objectContaining({
           fields: ["buildLog"],
-          concurrency: expect.any(Number),
+          concurrency: 1,
         }),
       );
       return new Map(
@@ -106,7 +113,10 @@ describe("custom-build rule scan memory safety", () => {
 
     expect(seen).toHaveLength(69);
     expect(seen.every((game) => game.oppRace === "Terran")).toBe(true);
-    expect(findMany).toHaveBeenCalledTimes(6);
+    expect(seen.every((game) => (
+      game.opponent?.unboundedLegacyField === undefined
+    ))).toBe(true);
+    expect(findMany).toHaveBeenCalledTimes(69);
     expect(
       findMany.mock.calls.reduce((total, call) => total + call[1].length, 0),
     ).toBe(69);
@@ -181,6 +191,139 @@ describe("custom-build rule scan memory safety", () => {
     });
   });
 
+  test("game ingest never persists unknown opponent payload fields", async () => {
+    const games = db.collection("games");
+    const service = new GamesService({ games });
+    await service.upsert("u-opponent-bounds", {
+      gameId: "opponent-bounds",
+      date: new Date("2026-08-13T13:05:00.000Z"),
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Bounded LE",
+      opponent: {
+        displayName: "Legitimate name",
+        race: "Terran",
+        strategy: "Terran - Reaper Expand",
+        unboundedUnknown: "x".repeat(1024 * 1024),
+      },
+      "opponent.dottedUnknown": "y".repeat(1024 * 1024),
+      "opponent.displayName": "D".repeat(1024 * 1024),
+      unboundedTopLevel: "z".repeat(4 * 1024 * 1024),
+      top3Leaks: [{
+        name: "L".repeat(1024 * 1024),
+        unknown: "u".repeat(1024 * 1024),
+      }],
+      duration: { giant: "d".repeat(1024 * 1024) },
+      opp_strategy: { giant: "s".repeat(1024 * 1024) },
+    });
+
+    const stored = await games.findOne({
+      userId: "u-opponent-bounds",
+      gameId: "opponent-bounds",
+    });
+    expect(stored.opponent).toEqual(expect.objectContaining({
+      displayName: "Legitimate name",
+      race: "Terran",
+      strategy: "Terran - Reaper Expand",
+    }));
+    expect(stored.opponent.unboundedUnknown).toBeUndefined();
+    expect(stored.opponent.dottedUnknown).toBeUndefined();
+    expect(stored.unboundedTopLevel).toBeUndefined();
+    expect(stored.top3Leaks[0]).toEqual({ name: "L".repeat(120) });
+    expect(stored.duration).toBeUndefined();
+    expect(stored.opp_strategy).toBeUndefined();
+
+    await service.upsert("u-opponent-bounds", {
+      gameId: "opponent-dotted-bounds",
+      date: new Date("2026-08-13T13:06:00.000Z"),
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Bounded LE",
+      "opponent.displayName": "D".repeat(1024 * 1024),
+      "opponent.strategy": { giant: "S".repeat(1024 * 1024) },
+    });
+    const dotted = await games.findOne({
+      userId: "u-opponent-bounds",
+      gameId: "opponent-dotted-bounds",
+    });
+    expect(dotted.opponent.displayName).toBe("D".repeat(80));
+    expect(dotted.opponent.strategy).toBeUndefined();
+
+    // Inclusion projections protect reads from rows written by older API
+    // versions, not only new writes through the allowlist above.
+    await games.updateOne(
+      { userId: "u-opponent-bounds", gameId: "opponent-bounds" },
+      { $set: {
+        legacyUnknownPayload: "q".repeat(1024 * 1024),
+        duration: { giant: "d".repeat(1024 * 1024) },
+        macro_score: { giant: "m".repeat(1024 * 1024) },
+        opp_strategy: { giant: "s".repeat(1024 * 1024) },
+      } },
+    );
+    const [listed, fetched, many] = await Promise.all([
+      service.list("u-opponent-bounds", { limit: 10 }),
+      service.get("u-opponent-bounds", "opponent-bounds"),
+      service.findMany("u-opponent-bounds", ["opponent-bounds"]),
+    ]);
+    const listedTarget = listed.items.find((row) => row.gameId === "opponent-bounds");
+    for (const row of [listedTarget, fetched, many[0]]) {
+      expect(row.legacyUnknownPayload).toBeUndefined();
+      expect(row.duration).toBeUndefined();
+      expect(row.macro_score).toBeUndefined();
+      expect(row.opp_strategy).toBeUndefined();
+      expect(row.gameId).toBe("opponent-bounds");
+      expect(row.opponent.displayName).toBe("Legitimate name");
+    }
+  });
+
+  test("25 giant dossier timing lines compact to tiny synthesized rows", async () => {
+    const giantPadding = "X".repeat(5 * 1024 * 1024);
+    const ownLine = `[1:43] CyberneticsCore ${giantPadding}`;
+    const oppLine = `[1:00] Barracks ${giantPadding}`;
+    const candidates = Array.from({ length: 25 }, (_, i) => ({
+      gameId: `giant-timing-${i}`,
+      myRace: "Protoss",
+      opponent: { race: "Terran" },
+    }));
+    const findMany = jest.fn(async (_userId, ids, opts) => {
+      expect(ids).toHaveLength(1);
+      expect(opts).toEqual(expect.objectContaining({
+        fields: ["buildLog", "oppBuildLog"],
+        concurrency: 1,
+      }));
+      return new Map([[ids[0], {
+        buildLog: [ownLine],
+        oppBuildLog: [oppLine],
+      }]]);
+    });
+    const service = new CustomBuildsService({
+      games: db.collection("games"),
+      customBuilds: db.collection("custom_builds"),
+      customBuildJobs: db.collection("custom_build_jobs"),
+    }, { perGame: { gameDetails: { findMany } } });
+
+    const compact = await service._hydrateClassifiedTimingSample(
+      "u-giant-timing",
+      candidates,
+    );
+
+    expect(compact).toHaveLength(25);
+    expect(findMany).toHaveBeenCalledTimes(25);
+    const retained = compact.flatMap((game) => [
+      ...game.buildLog,
+      ...game.oppBuildLog,
+    ]);
+    // Numeric/boolean assertions avoid asking Jest to render the hostile input
+    // if this ever regresses.
+    expect(retained).toHaveLength(50);
+    expect(Math.max(...retained.map((line) => line.length))).toBeLessThan(64);
+    expect(retained.every((line) => !line.includes(giantPadding))).toBe(true);
+    expect(retained.filter((line) => line.endsWith("CyberneticsCore")))
+      .toHaveLength(25);
+    expect(retained.filter((line) => line.endsWith("Barracks")))
+      .toHaveLength(25);
+  });
+
   test("uses _id as a stable tie-breaker when every replay has the same date", async () => {
     const userId = "u-same-date";
     const date = new Date("2026-08-13T14:00:00.000Z");
@@ -201,18 +344,21 @@ describe("custom-build rule scan memory safety", () => {
 
     const seen = [];
     const pageSizes = [];
+    const candidatePageSizes = [];
     for await (const page of service.iterateRulePreviewPages(userId, {
       pageSize: 17,
       perspective: "you",
     })) {
       seen.push(...page.games.map((game) => game.gameId));
       pageSizes.push(page.games.length);
+      if (page.candidates > 0) candidatePageSizes.push(page.candidates);
     }
 
     expect(seen).toHaveLength(ids.length);
     expect(new Set(seen).size).toBe(ids.length);
     expect(new Set(seen)).toEqual(new Set(ids));
-    expect(pageSizes).toEqual([17, 17, 17, 17, 17, 17, 17, 17, 1]);
+    expect(pageSizes).toEqual(Array.from({ length: ids.length }, () => 1));
+    expect(candidatePageSizes).toEqual([17, 17, 17, 17, 17, 17, 17, 17, 1]);
   });
 
   test("walks legacy string and null dates after current BSON Date rows", async () => {
@@ -1775,6 +1921,66 @@ describe("custom-build rule scan memory safety", () => {
     expect(many[0]._customBuildSlug).toBeUndefined();
   });
 
+  test("single-game tagging cannot overwrite a newer replay revision", async () => {
+    const userId = "u-single-tag-revision-cas";
+    const games = db.collection("games");
+    await games.insertOne({
+      userId,
+      gameId: "revision-cas",
+      date: new Date("2026-08-13T21:02:00.000Z"),
+      myRace: "Protoss",
+      opponent: { race: "Terran" },
+      myBuild: "Newer payload label",
+      _customBuildSlug: "newer-payload-slug",
+      _customBuildRevision: "revision-new",
+    });
+    const service = new CustomBuildsService(
+      { games, customBuilds: db.collection("custom_builds") },
+      { perGame: new PerGameComputeService({ games }) },
+    );
+    await service.upsert(userId, {
+      slug: "revision-winner",
+      name: "Revision winner",
+      race: "Protoss",
+      vsRace: "Terran",
+      rules: [{ type: "before", name: "BuildPylon", time_lt: 60 }],
+    });
+    const stalePayload = {
+      gameId: "revision-cas",
+      myRace: "Protoss",
+      opponent: { race: "Terran" },
+      buildLog: ["[0:17] Pylon"],
+    };
+
+    await expect(
+      service.tagSingleGame(userId, stalePayload, {
+        expectedRevision: "revision-old",
+      }),
+    ).rejects.toMatchObject({
+      code: "custom_build_tag_superseded",
+    });
+    expect(await games.findOne({ userId, gameId: "revision-cas" }))
+      .toEqual(expect.objectContaining({
+        myBuild: "Newer payload label",
+        _customBuildSlug: "newer-payload-slug",
+        _customBuildRevision: "revision-new",
+      }));
+
+    await expect(
+      service.tagSingleGame(userId, stalePayload, {
+        expectedRevision: "revision-new",
+      }),
+    ).resolves.toEqual(expect.objectContaining({
+      chosen: "Revision winner",
+    }));
+    expect(await games.findOne({ userId, gameId: "revision-cas" }))
+      .toEqual(expect.objectContaining({
+        myBuild: "Revision winner",
+        _customBuildSlug: "revision-winner",
+        _customBuildRevision: "revision-new",
+      }));
+  });
+
   test("a definite nonmatch clears only a row proven owned by that slug", async () => {
     const userId = "u-clear-owned-slug";
     const games = db.collection("games");
@@ -1991,17 +2197,16 @@ describe("custom-build rule scan memory safety", () => {
       },
     ]);
     const findMany = jest.fn(async (_uid, ids, opts) => {
-      expect(ids).toEqual(expect.arrayContaining([
-        "deferred-valid",
-        "deferred-missing",
-      ]));
+      expect(ids).toHaveLength(1);
       expect(opts).toEqual(expect.objectContaining({
         strict: true,
         tolerateCorruptObjects: true,
       }));
-      return new Map([["deferred-valid", {
-        buildLog: ["[0:17] Pylon"],
-      }]]);
+      return ids[0] === "deferred-valid"
+        ? new Map([["deferred-valid", {
+          buildLog: ["[0:17] Pylon"],
+        }]])
+        : new Map();
     });
     const perGame = new PerGameComputeService(
       { games },

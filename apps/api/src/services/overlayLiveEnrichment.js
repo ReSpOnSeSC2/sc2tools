@@ -224,6 +224,7 @@ function buildEnrichmentKey(parts) {
  * @param {LiveEnvelopeLike} envelope
  * @param {boolean} [isFirstForGameKey=false] when true, bypass the
  *   cache lookup and force a fresh Mongo query.
+ * @param {LiveEnrichmentCoordinator|null} [coordinator]
  * @returns {Promise<object>}
  */
 async function enrichEnvelope(
@@ -234,6 +235,7 @@ async function enrichEnvelope(
   userId,
   envelope,
   isFirstForGameKey = false,
+  coordinator = null,
 ) {
   if (!userId || !envelope || typeof envelope !== "object") return envelope;
   const opp = envelope.opponent;
@@ -289,20 +291,28 @@ async function enrichEnvelope(
     return { ...envelope, streamerHistory: hit.payload };
   }
 
-  let history = null;
-  try {
-    history = await service.buildFromOpponentName(
-      userId,
-      name,
-      race || undefined,
-      pulseCharacterId,
-      myRace || undefined,
-      toonHandle,
-    );
-  } catch {
-    // Best-effort enrichment — never block the broker on a Mongo blip.
-    history = null;
-  }
+  const compute = async () => {
+    try {
+      return await service.buildFromOpponentName(
+        userId,
+        name,
+        race || undefined,
+        pulseCharacterId,
+        myRace || undefined,
+        toonHandle,
+      );
+    } catch {
+      // Best-effort enrichment — never block the broker on a Mongo blip.
+      return null;
+    }
+  };
+  const coordinated = coordinator
+    ? await coordinator.run(key, compute)
+    : { admitted: true, value: await compute() };
+  // Capacity shedding is deliberately not cached. A later 1 Hz tick can
+  // retry after one of the bounded lanes becomes available.
+  if (!coordinated.admitted) return envelope;
+  const history = coordinated.value;
   // Cache even null results so a Pulse-miss / unknown-opponent case
   // doesn't repeatedly hit the aggregation.
   cache.set(key, { payload: history || null, ts: now });
@@ -313,6 +323,84 @@ async function enrichEnvelope(
   }
   if (!history) return envelope;
   return { ...envelope, streamerHistory: history };
+}
+
+/**
+ * Identical-key single-flight plus a small process-wide admission lane for
+ * live opponent enrichment. Without this, a slow first lookup spawned a new
+ * history/detail aggregation on every 1 Hz agent envelope.
+ */
+class LiveEnrichmentCoordinator {
+  /**
+   * @param {{maxActive?: number, maxWaiters?: number, maxSubscribers?: number}} [opts]
+   */
+  constructor(opts = {}) {
+    this.maxActive = Math.max(1, Number(opts.maxActive) || 2);
+    this.maxWaiters = Math.max(0, Number(opts.maxWaiters) || 8);
+    this.maxSubscribers = Math.max(1, Number(opts.maxSubscribers) || 32);
+    this.active = 0;
+    /** @type {Array<any>} */
+    this.waiters = [];
+    /** @type {Map<string, any>} */
+    this.flights = new Map();
+  }
+
+  /** @param {string} key @param {() => Promise<any>} task */
+  run(key, task) {
+    const existing = this.flights.get(key);
+    if (existing) {
+      if (existing.subscribers >= this.maxSubscribers) {
+        return Promise.resolve({ admitted: false, value: null });
+      }
+      existing.subscribers += 1;
+      return existing.promise.finally(() => {
+        existing.subscribers = Math.max(0, existing.subscribers - 1);
+      });
+    }
+    if (this.active >= this.maxActive && this.waiters.length >= this.maxWaiters) {
+      return Promise.resolve({ admitted: false, value: null });
+    }
+    /** @type {(value: {admitted: boolean, value: any}) => void} */
+    let settle = () => {};
+    const promise = new Promise((resolve) => { settle = resolve; });
+    const flight = { key, task, settle, promise, subscribers: 1 };
+    this.flights.set(key, flight);
+    if (this.active < this.maxActive) this._start(flight);
+    else this.waiters.push(flight);
+    return promise.finally(() => {
+      flight.subscribers = Math.max(0, flight.subscribers - 1);
+    });
+  }
+
+  /** @param {any} flight */
+  _start(flight) {
+    this.active += 1;
+    Promise.resolve()
+      .then(flight.task)
+      .then(
+        (value) => flight.settle({ admitted: true, value }),
+        () => flight.settle({ admitted: true, value: null }),
+      )
+      .finally(() => {
+        if (this.flights.get(flight.key) === flight) {
+          this.flights.delete(flight.key);
+        }
+        this.active = Math.max(0, this.active - 1);
+        const next = this.waiters.shift();
+        if (next) this._start(next);
+      });
+  }
+
+  capacitySnapshot() {
+    return {
+      active: this.active,
+      queued: this.waiters.length,
+      flights: this.flights.size,
+      maxActive: this.maxActive,
+      maxWaiters: this.maxWaiters,
+      maxSubscribers: this.maxSubscribers,
+    };
+  }
 }
 
 /**
@@ -359,5 +447,6 @@ module.exports = {
   pickEnvelopeRegion,
   buildEnrichmentKey,
   enrichEnvelope,
+  LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent,
 };

@@ -5,8 +5,12 @@ const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
 const { computeDossierExtras } = require("./buildDossier");
-const { computeCompositions } = require("./buildCompositions");
+const {
+  computeCompositions,
+  prepareCompositionGame,
+} = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
+const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const TimingCatalog = require("./timingCatalog");
 const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
 const {
@@ -17,6 +21,9 @@ const {
 
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
+const CLASSIFIED_DOSSIER_SAMPLE_LIMIT = 1000;
+const CLASSIFIED_TIMING_SAMPLE_LIMIT = 25;
+const PHASE_GAME_SAMPLE_LIMIT = 100;
 const RECLASSIFY_MAX_ATTEMPTS = 3;
 const RECLASSIFY_TRANSIENT_MAX_ATTEMPTS = 8;
 const RECLASSIFY_RETRY_BASE_MS = 250;
@@ -24,6 +31,150 @@ const RECLASSIFY_WORKER_RETRY_MS = 1000;
 const RECLASSIFY_LEASE_MS = 60 * 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
+const CUSTOM_BUILD_ACTIVE_LIMIT = 100;
+
+// Return the established private-library contract without fetching arbitrary
+// legacy children. Dotted array leaves are intentional: a historical
+// signature/step item may contain a multi-megabyte field that no supported UI
+// consumes.
+const CUSTOM_BUILD_READ_PROJECTION = Object.freeze({
+  _id: 0,
+  userId: 1,
+  slug: 1,
+  name: 1,
+  race: 1,
+  vsRace: 1,
+  matchup: 1,
+  description: 1,
+  "signature.unit": 1,
+  "signature.count": 1,
+  "signature.beforeSec": 1,
+  "steps.supply": 1,
+  "steps.time": 1,
+  "steps.action": 1,
+  notes: 1,
+  isPublic: 1,
+  perspective: 1,
+  sourceGameId: 1,
+  opponentRace: 1,
+  "rules.type": 1,
+  "rules.name": 1,
+  "rules.time_lt": 1,
+  "rules.count": 1,
+  skillLevel: 1,
+  winConditions: 1,
+  losesTo: 1,
+  transitionsInto: 1,
+  shareWithCommunity: 1,
+  schemaVersion: 1,
+  source: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  _schemaVersion: 1,
+});
+
+const CUSTOM_BUILD_CLASSIFIER_PROJECTION = Object.freeze({
+  _id: 0,
+  slug: 1,
+  name: 1,
+  race: 1,
+  vsRace: 1,
+  perspective: 1,
+  "rules.type": 1,
+  "rules.name": 1,
+  "rules.time_lt": 1,
+  "rules.count": 1,
+  "signature.unit": 1,
+  "signature.count": 1,
+  "signature.beforeSec": 1,
+  updatedAt: 1,
+});
+
+const ROOT_PUBLIC_BUILD_EXPRESSION = publicBuildMongoExpression("$$ROOT");
+
+// Production reads use expressions, not whole array projections, so both the
+// number of legacy rows and the byte size of every retained leaf are bounded
+// before Mongo returns data to Node. The find projections above remain only as
+// a compatibility path for narrow in-memory test doubles.
+const CUSTOM_BUILD_READ_AGGREGATE_PROJECTION = Object.freeze({
+  _id: 0,
+  userId: boundedMongoString("$userId", 200),
+  slug: boundedMongoString("$slug", 80),
+  ...ROOT_PUBLIC_BUILD_EXPRESSION,
+  notes: boundedMongoString("$notes", 8000),
+  isPublic: boundedMongoBoolean("$isPublic"),
+  sourceGameId: boundedMongoString("$sourceGameId", 200),
+  opponentRace: boundedMongoString("$opponentRace", 16),
+  shareWithCommunity: boundedMongoBoolean("$shareWithCommunity"),
+  source: boundedMongoString("$source", 32),
+  createdAt: boundedMongoDate("$createdAt"),
+  updatedAt: boundedMongoDate("$updatedAt"),
+  _schemaVersion: boundedMongoNumber("$_schemaVersion"),
+});
+
+const CUSTOM_BUILD_CLASSIFIER_AGGREGATE_PROJECTION = Object.freeze({
+  _id: 0,
+  slug: boundedMongoString("$slug", 80),
+  name: ROOT_PUBLIC_BUILD_EXPRESSION.name,
+  race: ROOT_PUBLIC_BUILD_EXPRESSION.race,
+  vsRace: ROOT_PUBLIC_BUILD_EXPRESSION.vsRace,
+  perspective: ROOT_PUBLIC_BUILD_EXPRESSION.perspective,
+  rules: ROOT_PUBLIC_BUILD_EXPRESSION.rules,
+  signature: ROOT_PUBLIC_BUILD_EXPRESSION.signature,
+  updatedAt: boundedMongoDate("$updatedAt"),
+});
+
+/** @param {string} path @param {number} max */
+function boundedMongoString(path, max) {
+  return {
+    $cond: [
+      { $eq: [{ $type: path }, "string"] },
+      { $substrCP: [path, 0, max] },
+      null,
+    ],
+  };
+}
+
+/** @param {string} path */
+function boundedMongoBoolean(path) {
+  return {
+    $cond: [
+      { $eq: [{ $type: path }, "bool"] },
+      path,
+      null,
+    ],
+  };
+}
+
+/** @param {string} path */
+function boundedMongoNumber(path) {
+  return {
+    $cond: [
+      { $in: [{ $type: path }, ["int", "long", "double", "decimal"]] },
+      path,
+      null,
+    ],
+  };
+}
+
+/** @param {string} path */
+function boundedMongoDate(path) {
+  return {
+    $switch: {
+      branches: [
+        {
+          case: { $eq: [{ $type: path }, "date"] },
+          then: path,
+        },
+        {
+          case: { $eq: [{ $type: path }, "string"] },
+          then: { $substrCP: [path, 0, 40] },
+        },
+      ],
+      default: null,
+    },
+  };
+}
 
 /** @param {number} ms */
 function delay(ms) {
@@ -64,9 +215,11 @@ function runnableReclassificationMatch(now) {
  *   reclassifies, leaving the BuildCard stuck on "0 games" even though
  *   the live preview pinged "1 match".
  *
- *   `evaluateBuild` and `evaluateAllStats` re-run the saved rules
- *   against the user's last N games at request time, so the library
- *   and detail views show real numbers immediately.
+ *   Editor previews still evaluate draft rules live. Once replay matching
+ *   completes, `evaluateBuild` and `evaluateAllStats` read the durable
+ *   `_customBuildSlug` provenance instead. That makes individual replay rows,
+ *   library totals, and dossiers share one source of truth without repeatedly
+ *   hydrating large replay-analysis blobs from object storage.
  */
 class CustomBuildsService {
   /**
@@ -103,6 +256,22 @@ class CustomBuildsService {
     this._activeReclassify = null;
     this._reclassifyStopping = false;
     this._reclassifyRecoveryTimer = null;
+    /** @type {Map<string, Promise<void>>} */
+    this._buildMutationTails = new Map();
+  }
+
+  /**
+   * Capacity-only classifier state. Never expose the queued or active user's
+   * identity, build slug, generation, or lease token.
+   */
+  capacitySnapshot() {
+    return {
+      queuedAccounts: this._reclassifyQueuedUsers.size,
+      workerActive: this._reclassifyWorker !== null,
+      reclassificationActive: this._activeReclassify !== null,
+      recoveryTimerActive: this._reclassifyRecoveryTimer !== null,
+      stopping: this._reclassifyStopping,
+    };
   }
 
   /**
@@ -155,15 +324,39 @@ class CustomBuildsService {
    * @returns {Promise<Array<import('./types').CustomBuildRecord & {slug: string}>>}
    */
   async list(userId) {
+    if (typeof this.db.customBuilds.aggregate === "function") {
+      return /** @type {Promise<Array<import('./types').CustomBuildRecord & {slug: string}>>} */ (/** @type {unknown} */ (
+        this.db.customBuilds.aggregate([
+          { $match: { userId, deletedAt: { $exists: false } } },
+          { $sort: { updatedAt: -1 } },
+          { $limit: CUSTOM_BUILD_ACTIVE_LIMIT },
+          { $project: CUSTOM_BUILD_READ_AGGREGATE_PROJECTION },
+        ]).toArray()
+      ));
+    }
     return /** @type {Promise<Array<import('./types').CustomBuildRecord & {slug: string}>>} */ (/** @type {unknown} */ (
       this.db.customBuilds
       .find(
         { userId, deletedAt: { $exists: false } },
-        { projection: { _id: 0, reclassifyJob: 0 } },
+        { projection: CUSTOM_BUILD_READ_PROJECTION },
       )
       .sort({ updatedAt: -1 })
+      .limit(CUSTOM_BUILD_ACTIVE_LIMIT)
       .toArray()
     ));
+  }
+
+  /** @param {string} userId */
+  async libraryMeta(userId) {
+    const total = await this.db.customBuilds.countDocuments({
+      userId,
+      deletedAt: { $exists: false },
+    });
+    return {
+      total,
+      limit: CUSTOM_BUILD_ACTIVE_LIMIT,
+      truncated: total > CUSTOM_BUILD_ACTIVE_LIMIT,
+    };
   }
 
   /**
@@ -171,9 +364,16 @@ class CustomBuildsService {
    * @param {string} slug
    */
   async get(userId, slug) {
+    if (typeof this.db.customBuilds.aggregate === "function") {
+      return this.db.customBuilds.aggregate([
+        { $match: { userId, slug, deletedAt: { $exists: false } } },
+        { $limit: 1 },
+        { $project: CUSTOM_BUILD_READ_AGGREGATE_PROJECTION },
+      ]).next();
+    }
     return this.db.customBuilds.findOne(
       { userId, slug, deletedAt: { $exists: false } },
-      { projection: { _id: 0, reclassifyJob: 0 } },
+      { projection: CUSTOM_BUILD_READ_PROJECTION },
     );
   }
 
@@ -184,22 +384,32 @@ class CustomBuildsService {
    * @param {string} userId
    */
   async _listForClassification(userId) {
-    return this.db.customBuilds.find(
-      { userId, deletedAt: { $exists: false } },
-      {
-        projection: {
-          _id: 0,
-          slug: 1,
-          name: 1,
-          race: 1,
-          vsRace: 1,
-          perspective: 1,
-          rules: 1,
-          signature: 1,
-          updatedAt: 1,
-        },
-      },
-    ).sort({ updatedAt: -1 }).toArray();
+    let rows;
+    if (typeof this.db.customBuilds.aggregate === "function") {
+      rows = await this.db.customBuilds.aggregate([
+        { $match: { userId, deletedAt: { $exists: false } } },
+        { $sort: { updatedAt: -1 } },
+        { $limit: CUSTOM_BUILD_ACTIVE_LIMIT + 1 },
+        { $project: CUSTOM_BUILD_CLASSIFIER_AGGREGATE_PROJECTION },
+      ]).toArray();
+    } else {
+      rows = await this.db.customBuilds.find(
+        { userId, deletedAt: { $exists: false } },
+        { projection: CUSTOM_BUILD_CLASSIFIER_PROJECTION },
+      )
+        .sort({ updatedAt: -1 })
+        .limit(CUSTOM_BUILD_ACTIVE_LIMIT + 1)
+        .toArray();
+    }
+    if (rows.length > CUSTOM_BUILD_ACTIVE_LIMIT) {
+      const err = new Error(
+        `Replay matching supports up to ${CUSTOM_BUILD_ACTIVE_LIMIT} active custom builds.`,
+      );
+      /** @type {any} */ (err).status = 409;
+      /** @type {any} */ (err).code = "custom_build_library_over_limit";
+      throw err;
+    }
+    return rows;
   }
 
   /**
@@ -209,7 +419,42 @@ class CustomBuildsService {
    * @param {{slug: string} & Record<string, unknown>} build
    */
   async upsert(userId, build) {
+    return this._withUserBuildMutation(
+      userId,
+      () => this._upsertUnlocked(userId, build),
+    );
+  }
+
+  /**
+   * @private
+   * @param {string} userId
+   * @param {{slug: string} & Record<string, unknown>} build
+   */
+  async _upsertUnlocked(userId, build) {
     if (!build || !build.slug) throw new Error("slug required");
+    const existing = await this.db.customBuilds.findOne(
+      {
+        userId,
+        slug: build.slug,
+        deletedAt: { $exists: false },
+      },
+      { projection: { _id: 1 } },
+    );
+    if (!existing) {
+      const active = await this.db.customBuilds.countDocuments(
+        { userId, deletedAt: { $exists: false } },
+        { limit: CUSTOM_BUILD_ACTIVE_LIMIT },
+      );
+      if (active >= CUSTOM_BUILD_ACTIVE_LIMIT) {
+        const err = new Error(
+          `You can keep up to ${CUSTOM_BUILD_ACTIVE_LIMIT} active custom builds. `
+          + "Remove one before saving another.",
+        );
+        /** @type {any} */ (err).status = 409;
+        /** @type {any} */ (err).code = "custom_build_limit_reached";
+        throw err;
+      }
+    }
     const now = new Date();
     /** @type {Record<string, any>} */
     const doc = { ...build, userId, updatedAt: now };
@@ -770,8 +1015,8 @@ class CustomBuildsService {
   }
 
   /**
-   * Re-run a saved build's rules against the user's recent games and
-   * return the same shape /v1/builds/:name uses, plus the matching
+   * Read a saved build's durably classified games and return the same shape
+   * /v1/builds/:name uses, plus the matching
    * games per map / matchup / strategy so BuildDetailView renders the
    * standard breakdown cards. Returns null when the build doesn't
    * exist for this user.
@@ -787,48 +1032,215 @@ class CustomBuildsService {
    *   byMap: Array<{name: string, wins: number, losses: number, total: number, winRate: number}>,
    *   byStrategy: Array<{name: string, wins: number, losses: number, total: number, winRate: number}>,
    *   recent: Array<{gameId: string, date: string|null, map: string, opponent: string, opp_race: string, opp_strategy: string|null, result: string|null, duration: number|null}>,
+   *   resumedCount: number,
+   *   resumedRecent: Array<Record<string, any>>,
    *   scannedGames: number,
    *   ruleCount: number,
+   *   timingSampleGames: number,
+   *   timingSampleLimit: number,
+   *   timingsTruncated: boolean,
    * }>}
    */
   async evaluateBuild(userId, slug, opts = {}) {
-    if (!this.perGame) throw new Error("perGame_unavailable");
     const build = await this.get(userId, slug);
     if (!build) return null;
     const rules = extractRules(build);
-    const perspective = build.perspective === "opponent" ? "opponent" : "you";
-    let scannedGames = 0;
-    const matched = [];
-    for await (const page of this._rulePages(userId, {
-      limit: STATS_GAME_SCAN_CAP,
-      pageSize: 50,
-      perspective: "both",
-      signal: opts.signal,
-      metadataFilter: (g) => gameMatchesBuildMatchup(
-        normaliseGameRaces(g), build, perspective,
+    const games = this._gamesCollection();
+    const baseMatch = {
+      userId,
+      _customBuildSlug: slug,
+      isResumedFromReplay: { $ne: true },
+    };
+    const resumedMatch = {
+      userId,
+      _customBuildSlug: slug,
+      isResumedFromReplay: true,
+    };
+    const aggregate = games.aggregate(
+      [
+        { $match: baseMatch },
+        // The compound provenance index supplies this order before any
+        // computed stage. The recent facet can then take its first 50 rows
+        // without an in-memory sort over the build's full history.
+        { $sort: { date: -1 } },
+        { $addFields: { _customBuildResult: customBuildResultBucket() } },
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
+                  losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
+                  total: { $sum: 1 },
+                  lastPlayed: { $max: "$date" },
+                },
+              },
+            ],
+            byMatchup: classifiedGroupFacet(customBuildMatchupExpression()),
+            byMap: classifiedGroupFacet({ $ifNull: ["$map", "Unknown"] }),
+            byStrategy: classifiedGroupFacet({
+              $ifNull: ["$opponent.strategy", "Unknown"],
+            }),
+            recent: [
+              { $limit: RECENT_GAMES_LIMIT },
+              {
+                $project: {
+                  _id: 0,
+                  gameId: 1,
+                  date: 1,
+                  map: { $ifNull: ["$map", ""] },
+                  opponent: { $ifNull: ["$opponent.displayName", ""] },
+                  opp_race: { $ifNull: ["$opponent.race", ""] },
+                  opp_strategy: { $ifNull: ["$opponent.strategy", null] },
+                  result: 1,
+                  duration: { $ifNull: ["$durationSec", 0] },
+                  macroScore: { $ifNull: ["$macroScore", null] },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      { allowDiskUse: true, ...(opts.signal ? { signal: opts.signal } : {}) },
+    );
+    const [doc, resumedCount, resumedGames, dossierGames, timingCandidates] = await Promise.all([
+      aggregate.toArray().then((rows) => rows[0] || null),
+      games.countDocuments(
+        resumedMatch,
+        opts.signal ? { signal: opts.signal } : undefined,
       ),
-    })) {
-      scannedGames += page.games.length;
-      for (const game of filterMatchingGames(page.games, rules, perspective)) {
-        matched.push(toDossierAggregationGame(game));
-      }
-    }
-    const extras = computeDossierExtras(matched);
+      games.find(
+        resumedMatch,
+        {
+          projection: classifiedDossierProjection(),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+        },
+      ).sort({ date: -1 }).limit(RECENT_GAMES_LIMIT).toArray(),
+      // Dossier predictions and macro summaries need only slim game metadata.
+      // Bound the sample so opening a build can never retain an unbounded
+      // history, and never hydrate build logs from R2: the durable
+      // `_customBuildSlug` written by reclassification is the match truth.
+      games.find(
+        baseMatch,
+        {
+          projection: classifiedDossierProjection(),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+        },
+      ).sort({ date: -1 }).limit(CLASSIFIED_DOSSIER_SAMPLE_LIMIT).toArray(),
+      // Median timing summaries are the one dossier feature that genuinely
+      // needs build logs. Preserve it from a deliberately small sample; all
+      // counts and breakdowns above remain slim-row-only.
+      games.find(
+        baseMatch,
+        {
+          // Keep the metadata query slim. Even a small count of legacy rows
+          // can contain multi-megabyte inline logs, so selected logs are read
+          // and compacted one replay at a time below.
+          projection: classifiedDossierProjection(),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+        },
+      ).sort({ date: -1 }).limit(CLASSIFIED_TIMING_SAMPLE_LIMIT).toArray(),
+    ]);
+    const totals = doc?.totals?.[0] || {
+      wins: 0,
+      losses: 0,
+      total: 0,
+      lastPlayed: null,
+    };
+    const timingGames = await this._hydrateClassifiedTimingSample(
+      userId,
+      timingCandidates,
+      opts.signal,
+    );
+    const timingById = new Map(timingGames.map((game) => [game.gameId, game]));
+    const enrichedDossierGames = dossierGames.map(
+      (game) => timingById.get(game.gameId) || game,
+    );
+    const extras = computeDossierExtras(enrichedDossierGames);
     return {
       slug: build.slug,
       name: build.name || build.slug,
-      totals: rollupTotals(matched),
-      byMatchup: groupRows(matched, matchupKey),
-      byMap: groupRows(matched, (g) => g.map || "Unknown"),
-      byStrategy: groupRows(
-        matched,
-        (g) => (g.opponent && g.opponent.strategy) || "Unknown",
-      ),
-      recent: matched.slice(0, RECENT_GAMES_LIMIT).map(toRecent),
-      scannedGames,
+      totals: {
+        ...totals,
+        winRate: decidedWinRate(totals),
+      },
+      byMatchup: addClassifiedWinRates(doc?.byMatchup || []),
+      byMap: addClassifiedWinRates(doc?.byMap || []),
+      byStrategy: addClassifiedWinRates(doc?.byStrategy || []),
+      recent: doc?.recent || [],
+      resumedCount,
+      resumedRecent: resumedGames.map(toClassifiedRecent),
+      scannedGames: totals.total,
       ruleCount: rules.length,
+      timingSampleGames: timingGames.filter((game) => (
+        game.buildLog.length > 0 || game.oppBuildLog.length > 0
+      )).length,
+      timingSampleLimit: CLASSIFIED_TIMING_SAMPLE_LIMIT,
+      timingsTruncated: totals.total > CLASSIFIED_TIMING_SAMPLE_LIMIT,
       ...extras,
     };
+  }
+
+  /**
+   * Hydrate only the two build-log fields for a tiny recent sample and compact
+   * them immediately to the first timing-catalog occurrence per token. Object
+   * storage still decompresses one object per replay, so both sample size and
+   * concurrency are intentionally conservative.
+   * @param {string} userId
+   * @param {Array<Record<string, any>>} games
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<Array<Record<string, any> & {buildLog: string[], oppBuildLog: string[]}>>}
+   */
+  async _hydrateClassifiedTimingSample(userId, games, signal) {
+    if (!Array.isArray(games) || games.length === 0) return [];
+    const gameDetails = /** @type {any} */ (this.perGame)?.gameDetails;
+    const compact = [];
+    for (const game of games) {
+      if (signal?.aborted) throw abortError();
+      const gameId = String(game.gameId || "");
+      /** @type {Record<string, any>} */
+      let blob = {};
+      if (gameDetails && gameId) {
+        const one = await gameDetails.findMany(userId, [gameId], {
+          fields: ["buildLog", "oppBuildLog"],
+          concurrency: 1,
+          signal,
+        });
+        blob = one.get(gameId) || {};
+      }
+      if (signal?.aborted) throw abortError();
+
+      // Pre-detail-store rows can still have inline logs. Fetch at most one
+      // such row at a time, and only when object storage did not supply both
+      // selected fields, so raw logs never accumulate across the sample.
+      /** @type {Record<string, any>} */
+      let legacy = {};
+      if (
+        gameId
+        && (!Array.isArray(blob.buildLog) || !Array.isArray(blob.oppBuildLog))
+      ) {
+        legacy = await this._gamesCollection().findOne(
+          { userId, gameId },
+          {
+            projection: { _id: 0, buildLog: 1, oppBuildLog: 1 },
+            ...(signal ? { signal } : {}),
+          },
+        ) || {};
+      }
+      compact.push({
+        ...game,
+        buildLog: compactDossierTimingLog(
+          Array.isArray(blob.buildLog) ? blob.buildLog : legacy.buildLog,
+        ),
+        oppBuildLog: compactDossierTimingLog(
+          Array.isArray(blob.oppBuildLog)
+            ? blob.oppBuildLog
+            : legacy.oppBuildLog,
+        ),
+      });
+    }
+    return compact;
   }
 
   /**
@@ -852,12 +1264,10 @@ class CustomBuildsService {
   }
 
   /**
-   * Phase-aware analysis of a saved build's matched games. Feeds the
-   * scouting widget (compositions panel) and the BuildDetail
-   * transitions Sankey. Mirrors evaluateBuild's matchup-gate + rule-
-   * evaluator pipeline but pulls the heavier ``macroBreakdown`` blob
-   * per game (via ``includeMacroBreakdown: true``) so each matched
-   * game carries the phase classifier's required input.
+   * Phase-aware analysis of a saved build's durably classified games. Feeds
+   * the scouting widget and BuildDetail transitions Sankey. The cohort uses
+   * `_customBuildSlug`, matching replay rows and card totals; one detail is
+   * hydrated at a time and immediately reduced to a bounded phase summary.
    *
    * ``includeTransitions=false`` skips the Sankey aggregation entirely
    * so the scouting widget can request only the compositions payload
@@ -903,40 +1313,42 @@ class CustomBuildsService {
    *   limit: number,
    *   pageSize: number,
    *   perspective: "you"|"opponent",
-   *   build: Record<string, any>,
-   *   rules: any[],
+   *   slug: string,
+   *   phasePerspective: "you"|"opponent",
    *   strategyName: string|null,
    *   signal?: AbortSignal,
    *   filters?: object,
    *   match?: Record<string, unknown>,
    * }} opts
+   * @returns {Promise<{games: Record<string, any>[], truncated: boolean}>}
    */
   async _listForRulePhases(userId, opts) {
     /** @type {Record<string, any>[]} */
     const games = [];
-    if (!Array.isArray(opts.rules) || opts.rules.length === 0) return games;
+    let truncated = false;
     for await (const page of this._rulePages(userId, {
       limit: opts.limit,
       pageSize: opts.pageSize || 25,
-      perspective: opts.perspective,
+      perspective: opts.phasePerspective,
       includeMacroBreakdown: true,
       filters: opts.filters,
       match: opts.match,
       signal: opts.signal,
-      metadataFilter: (game) => gameMatchesBuildMatchup(
-        normaliseGameRaces(game), opts.build, opts.perspective,
-      ) && (!opts.strategyName || game?.opponent?.strategy === opts.strategyName),
+      metadataFilter: (game) => (
+        !opts.strategyName || game?.opponent?.strategy === opts.strategyName
+      ),
     })) {
       for (const game of page.games) {
-        // Defensive checks keep the compatibility fallback correct when a
-        // narrow per-game implementation ignores metadata/match push-down.
-        if (!gameMatchesBuildMatchup(game, opts.build, opts.perspective)) continue;
+        if (game.customBuildSlug !== opts.slug) continue;
         if (opts.strategyName && game?.opponent?.strategy !== opts.strategyName) continue;
-        if (evaluateGameRules(game, opts.rules, opts.perspective) !== "pass") continue;
-        games.push(toPhaseAggregationGame(game));
+        if (games.length >= PHASE_GAME_SAMPLE_LIMIT) {
+          truncated = true;
+          return { games, truncated };
+        }
+        games.push(toPhaseAggregationGame(game, opts.phasePerspective));
       }
     }
-    return games;
+    return { games, truncated };
   }
 
   /**
@@ -949,19 +1361,13 @@ class CustomBuildsService {
     const includeTransitions = opts.includeTransitions !== false;
     const build = await this.get(userId, slug);
     if (!build) return null;
-    const rules = extractRules(build);
-    // ``rulePerspective`` decides which side's events the rule
-    // evaluator scans — that always follows the saved build's intent
-    // (a build saved as "opponent" describes the opponent's opener).
-    // ``phasePerspective`` decides which side the classifier /
-    // signature picker score, and can be overridden by the caller so
-    // the comparison view can render both sides off the same matched
-    // set.
-    const rulePerspective = build.perspective === "opponent" ? "opponent" : "you";
+    // The saved perspective supplies the default phase-scoring side. Callers
+    // may override it to render both sides from the same authoritative cohort.
+    const storedPerspective = build.perspective === "opponent" ? "opponent" : "you";
     const phasePerspective = opts.perspective === "opponent"
       || opts.perspective === "you"
       ? opts.perspective
-      : rulePerspective;
+      : storedPerspective;
     // Optional cell-scoping filter: when the BuildVsStrategyComparison
     // drill-down asks for a saved build's compositions, it also passes
     // the opponent strategy axis so the trajectory describes the SAME
@@ -971,44 +1377,43 @@ class CustomBuildsService {
       typeof opts.strategyName === "string" && opts.strategyName
         ? opts.strategyName
         : null;
-    // Push the strategy predicate into the Mongo find so the recency
-    // cap applies to matching games. Without push-down a user with
-    // more games than ``STATS_GAME_SCAN_CAP`` saw the comparison
+    // Push the strategy predicate into Mongo so the bounded sample applies to
+    // matching games. Without push-down a user with a long history saw the
     // cohort silently shrink whenever the matrix cell sat outside the
     // most recent slice — this is what produced the "265 games in the
     // BvS cell, 13 in the WHAT YOU TYPICALLY DO header" discrepancy.
-    // The race / opponent-race side of the matchup-gate stays in JS
-    // because the legacy fallback (deriving race from a "PvT - …"
-    // build-name prefix when the field is absent) can't be expressed
-    // as a Mongo predicate without a more expensive aggregate.
-    /** @type {Record<string, any>|null} */
-    const matchPushdown = strategyName
-      ? { "opponent.strategy": strategyName }
-      : null;
+    /** @type {Record<string, any>} */
+    const matchPushdown = {
+      _customBuildSlug: slug,
+      ...(strategyName ? { "opponent.strategy": strategyName } : {}),
+    };
     // ``filters`` is consumed by the real perGameCompute implementation
     // (it feeds gamesMatchStage) but the trimmed PerGameComputeService
     // interface in types.d.ts doesn't declare it yet — widen the opts
     // literal locally so the pass-through stays typed.
-    const games = await this._listForRulePhases(
+    const phaseCohort = await this._listForRulePhases(
       userId,
       {
-        limit: STATS_GAME_SCAN_CAP,
+        limit: PHASE_GAME_SAMPLE_LIMIT + 1,
         pageSize: 25,
-        perspective: rulePerspective,
-        build,
-        rules,
+        perspective: phasePerspective,
+        phasePerspective,
+        slug,
         strategyName,
         signal: opts.signal,
         filters: opts && opts.filters,
-        ...(matchPushdown ? { match: matchPushdown } : {}),
+        match: matchPushdown,
       },
     );
-    const ruleMatched = games;
+    const ruleMatched = phaseCohort.games;
     // Defensive in-memory filter — keeps the service correct against
     // a perGame implementation that ignores ``match`` (test mocks).
     // In production the Mongo find has already done this work.
     const matched = ruleMatched;
     const comps = computeCompositions(matched, { perspective: phasePerspective });
+    if (phaseCohort.truncated && !comps.flags.includes("sample_truncated")) {
+      comps.flags.push("sample_truncated");
+    }
     /** @type {{
      *   slug: string,
      *   name: string,
@@ -1024,6 +1429,8 @@ class CustomBuildsService {
      *   },
      *   durationP95Sec: number,
      *   flags: string[],
+     *   sampleLimit: number,
+     *   sampleTruncated: boolean,
      *   transitions?: import('./types').BuildTransitionsPayload["transitions"],
      * }} */
     const out = {
@@ -1036,6 +1443,8 @@ class CustomBuildsService {
       medianCrossings: comps.medianCrossings,
       durationP95Sec: comps.durationP95Sec,
       flags: comps.flags,
+      sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
+      sampleTruncated: phaseCohort.truncated,
     };
     if (includeTransitions) {
       out.transitions = computeTransitions(matched, {
@@ -1046,8 +1455,8 @@ class CustomBuildsService {
   }
 
   /**
-   * Aggregate stats for every saved build the user owns. One scan over
-   * the user's recent games, evaluating every build's rules per game.
+   * Aggregate stats for every saved build the user owns from the durable
+   * per-replay `_customBuildSlug` provenance.
    * The returned rows match `/v1/builds` row shape so the existing
    * `decorateBuilds` UI code works unchanged.
    *
@@ -1056,69 +1465,81 @@ class CustomBuildsService {
    * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
    */
   async evaluateAllStats(userId, opts = {}) {
-    if (!this.perGame) throw new Error("perGame_unavailable");
     const builds = await this._listForClassification(userId);
     if (builds.length === 0) return [];
-    const accum = /** @type {Array<{
-     *   build: any,
-     *   rules: ReadonlyArray<import('./buildRulesEvaluator').BuildRule>,
-     *   perspective: "you"|"opponent",
-     *   total: number,
-     *   wins: number,
-     *   losses: number,
-     *   lastPlayed: Date|null,
-     * }>} */ (builds.map(
-      /** @param {any} b */ (b) => ({
-        build: b,
-        rules: extractRules(b),
-        perspective: b.perspective === "opponent" ? "opponent" : "you",
-        total: 0,
-        wins: 0,
-        losses: 0,
-        lastPlayed: null,
-      }),
-    ));
-    // Two passes are intentional: each page hydrates only one perspective,
-    // while every build for that side is evaluated before the page is freed.
-    for (const perspective of /** @type {Array<"you"|"opponent">} */ (["you", "opponent"])) {
-      if (!accum.some((a) => a.perspective === perspective)) continue;
-      for await (const page of this._rulePages(userId, {
-        limit: STATS_GAME_SCAN_CAP,
-        pageSize: 50,
-        perspective,
-        signal: opts.signal,
-      })) {
-        for (const a of accum) {
-          if (a.perspective !== perspective || a.rules.length === 0) continue;
-          for (const game of page.games) {
-            if (!gameMatchesBuildMatchup(game, a.build, perspective)) continue;
-            if (evaluateGameRules(game, a.rules, perspective) !== "pass") continue;
-            a.total += 1;
-            if (isWin(game.result)) a.wins += 1;
-            else if (isLoss(game.result)) a.losses += 1;
-            if (game.date && (!a.lastPlayed || game.date > a.lastPlayed)) {
-              a.lastPlayed = game.date;
-            }
-          }
-        }
-      }
-    }
-    return accum.map(
-      (a) => {
-        const b = a.build;
-        const decided = a.wins + a.losses;
+    const slugs = builds.map((build) => build.slug).filter(Boolean);
+    const rows = await this._gamesCollection().aggregate(
+      [
+        {
+          $match: {
+            userId,
+            _customBuildSlug: { $in: slugs },
+            isResumedFromReplay: { $ne: true },
+          },
+        },
+        { $addFields: { _customBuildResult: customBuildResultBucket() } },
+        {
+          $group: {
+            _id: "$_customBuildSlug",
+            wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
+            losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
+            total: { $sum: 1 },
+            lastPlayed: { $max: "$date" },
+          },
+        },
+      ],
+      { allowDiskUse: true, ...(opts.signal ? { signal: opts.signal } : {}) },
+    ).toArray();
+    const bySlug = new Map(rows.map((row) => [String(row._id || ""), row]));
+    return builds.map(
+      (b) => {
+        const row = bySlug.get(b.slug) || {
+          total: 0,
+          wins: 0,
+          losses: 0,
+          lastPlayed: null,
+        };
+        const decided = row.wins + row.losses;
         return {
           name: b.name || b.slug,
           slug: b.slug,
-          total: a.total,
-          wins: a.wins,
-          losses: a.losses,
-          winRate: decided > 0 ? a.wins / decided : 0,
-          lastPlayed: a.lastPlayed,
-          ruleCount: a.rules.length,
+          total: row.total,
+          wins: row.wins,
+          losses: row.losses,
+          winRate: decided > 0 ? row.wins / decided : 0,
+          lastPlayed: row.lastPlayed,
+          ruleCount: extractRules(b).length,
         };
       },
     );
+  }
+
+  /**
+   * Serialize quota checks and creates inside the current production process.
+   * The deployment intentionally remains single-instance while socket/live
+   * state is process-local. Entries disappear as soon as the final waiter
+   * leaves, so unique user IDs cannot turn this into an unbounded cache.
+   * @param {string} userId
+   * @param {() => Promise<any>} task
+   */
+  async _withUserBuildMutation(userId, task) {
+    const previous = this._buildMutationTails.get(userId) || Promise.resolve();
+    /** @type {() => void} */
+    let release = () => {};
+    const gate = new Promise((resolve) => {
+      release = () => resolve(undefined);
+    });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    this._buildMutationTails.set(userId, tail);
+    await previous.catch(() => undefined);
+    try {
+      return await task();
+    } finally {
+      release();
+      if (this._buildMutationTails.get(userId) === tail) {
+        this._buildMutationTails.delete(userId);
+      }
+    }
   }
 
   /**
@@ -1685,6 +2106,7 @@ class CustomBuildsService {
    *   oppBuildLog?: string[],
    *   opponent?: { race?: string|null }|null,
    * }} game
+   * @param {{expectedRevision?: string|null}} [opts]
    * @returns {Promise<null | {
    *   gameId: string,
    *   matched: number,
@@ -1692,7 +2114,7 @@ class CustomBuildsService {
    *   ruleCount: number,
    * }>}
    */
-  async tagSingleGame(userId, game) {
+  async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
     const builds = await this._listForClassification(userId);
     if (builds.length === 0) return null;
@@ -1774,8 +2196,14 @@ class CustomBuildsService {
     // Always claim explicit provenance, including when the agent/community
     // label happens to have the same display name. The caller's payload cannot
     // be trusted to report this private server-owned field.
-    await this._gamesCollection().updateOne(
-      { userId, gameId: probe.gameId },
+    const updateResult = await this._gamesCollection().updateOne(
+      {
+        userId,
+        gameId: probe.gameId,
+        ...(typeof opts.expectedRevision === "string"
+          ? { _customBuildRevision: opts.expectedRevision }
+          : {}),
+      },
       {
         $set: {
           myBuild: best.name,
@@ -1788,6 +2216,14 @@ class CustomBuildsService {
         },
       },
     );
+    if (
+      typeof opts.expectedRevision === "string"
+      && updateResult.matchedCount === 0
+    ) {
+      const err = new Error("custom_build_tag_superseded");
+      /** @type {any} */ (err).code = "custom_build_tag_superseded";
+      throw err;
+    }
     return {
       gameId: probe.gameId,
       matched: matchCount,
@@ -2062,12 +2498,13 @@ function collectPreviousBuildNames(value) {
  * Retain only the replay signals consumed by phase/composition aggregation.
  * This deliberately drops the rest of the hydrated detail blob between pages.
  * @param {Record<string, any>} game
+ * @param {"you"|"opponent"} perspective
  */
-function toPhaseAggregationGame(game) {
+function toPhaseAggregationGame(game, perspective) {
   const macro = game && game.macroBreakdown && typeof game.macroBreakdown === "object"
     ? game.macroBreakdown
     : {};
-  return {
+  const raw = {
     gameId: game.gameId,
     myBuild: game.myBuild,
     myRace: game.myRace,
@@ -2093,61 +2530,15 @@ function toPhaseAggregationGame(game) {
         ? macro.opp_production_buildings : [],
     },
   };
-}
-
-const DOSSIER_TIMING_TOKENS = Object.freeze(
-  Object.values(TimingCatalog.RACE_BUILDINGS)
-    .flat()
-    .map((row) => String(row.token || "").toLowerCase())
-    .filter(Boolean),
-);
-
-/**
- * Keep at most the first timing-catalog line per token. Dossier timing code
- * only asks for first occurrence, so retaining thousands of unrelated army
- * and upgrade lines until aggregation completes wastes memory without changing
- * any output.
- * @param {unknown} value
- */
-function compactDossierTimingLog(value) {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const raw of value) {
-    const line = String(raw || "");
-    const lower = line.toLowerCase();
-    let keep = false;
-    for (const token of DOSSIER_TIMING_TOKENS) {
-      if (seen.has(token) || !lower.includes(token)) continue;
-      seen.add(token);
-      keep = true;
-    }
-    if (keep) out.push(line);
-  }
-  return out;
-}
-
-/** @param {Record<string, any>} game */
-function toDossierAggregationGame(game) {
   return {
-    gameId: game.gameId,
-    date: game.date,
-    result: game.result,
-    map: game.map,
-    myRace: game.myRace,
-    oppRace: game.oppRace || game?.opponent?.race || null,
-    myBuild: game.myBuild,
-    durationSec: game.durationSec,
-    macroScore: game.macroScore,
-    apm: game.apm,
-    spq: game.spq,
-    opponent: game.opponent ? {
-      displayName: game.opponent.displayName || null,
-      race: game.opponent.race || null,
-      strategy: game.opponent.strategy || null,
-    } : null,
-    buildLog: compactDossierTimingLog(game.buildLog),
-    oppBuildLog: compactDossierTimingLog(game.oppBuildLog),
+    gameId: raw.gameId,
+    myBuild: raw.myBuild,
+    myRace: raw.myRace,
+    oppRace: raw.oppRace,
+    opponent: raw.opponent,
+    durationSec: raw.durationSec,
+    result: raw.result,
+    _phasePrepared: prepareCompositionGame(raw, perspective),
   };
 }
 
@@ -2416,95 +2807,197 @@ function evaluateGameRules(game, rules, perspective) {
 }
 
 /**
- * @param {Array<{result: string|null, date: Date|null}>} games
- * @returns {{wins: number, losses: number, total: number, winRate: number, lastPlayed: Date|null}}
+ * Normalise replay outcomes inside the Mongo pipeline used by the custom-build
+ * library. Keep the accepted vocabulary aligned with the rest of this service.
+ * @returns {Record<string, any>}
  */
-function rollupTotals(games) {
-  let wins = 0;
-  let losses = 0;
-  let last = null;
-  for (const g of games) {
-    if (isWin(g.result)) wins++;
-    else if (isLoss(g.result)) losses++;
-    if (g.date && (!last || g.date > last)) last = g.date;
-  }
-  const total = games.length;
-  const decided = wins + losses;
+function customBuildResultBucket() {
   return {
-    wins,
-    losses,
-    total,
-    winRate: decided > 0 ? wins / decided : 0,
-    lastPlayed: last,
+    $switch: {
+      branches: [
+        {
+          case: { $in: [
+            { $toLower: { $ifNull: ["$result", ""] } },
+            ["win", "victory"],
+          ] },
+          then: "win",
+        },
+        {
+          case: { $in: [
+            { $toLower: { $ifNull: ["$result", ""] } },
+            ["loss", "defeat"],
+          ] },
+          then: "loss",
+        },
+      ],
+      default: null,
+    },
   };
 }
 
-/**
- * @template T
- * @param {Array<{result: string|null}>} games
- * @param {(g: any) => string} keyFn
- */
-function groupRows(games, keyFn) {
-  /** @type {Map<string, {wins: number, losses: number, total: number}>} */
-  const buckets = new Map();
-  for (const g of games) {
-    const key = (keyFn(g) || "Unknown").trim() || "Unknown";
-    const cur = buckets.get(key) || { wins: 0, losses: 0, total: 0 };
-    cur.total += 1;
-    if (isWin(g.result)) cur.wins += 1;
-    else if (isLoss(g.result)) cur.losses += 1;
-    buckets.set(key, cur);
-  }
-  return [...buckets.entries()]
-    .map(([name, v]) => {
-      const decided = v.wins + v.losses;
-      return {
-        name,
-        wins: v.wins,
-        losses: v.losses,
-        total: v.total,
-        winRate: decided > 0 ? v.wins / decided : 0,
-      };
-    })
-    .sort((a, b) => b.total - a.total);
+/** @param {Record<string, any>} keyExpression */
+function classifiedGroupFacet(keyExpression) {
+  return [
+    {
+      $group: {
+        _id: keyExpression,
+        wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
+        losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
+        total: { $sum: 1 },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        name: { $cond: [
+          { $eq: [{ $ifNull: ["$_id", ""] }, ""] },
+          "Unknown",
+          "$_id",
+        ] },
+        wins: 1,
+        losses: 1,
+        total: 1,
+      },
+    },
+    { $sort: { total: -1, name: 1 } },
+  ];
 }
 
-/** @param {{myRace: string|null, oppRace: string|null}} g */
-function matchupKey(g) {
-  const my = (g.myRace || "?").charAt(0).toUpperCase() || "?";
-  const opp = (g.oppRace || "?").charAt(0).toUpperCase() || "?";
-  return `${my}v${opp}`;
-}
-
-/** @param {string|null} r */
-function isWin(r) {
-  if (!r) return false;
-  const s = String(r).toLowerCase();
-  return s === "win" || s === "victory";
-}
-
-/** @param {string|null} r */
-function isLoss(r) {
-  if (!r) return false;
-  const s = String(r).toLowerCase();
-  return s === "loss" || s === "defeat";
-}
-
-/** @param {any} g */
-function toRecent(g) {
+/** Build the same compact `PvT` matchup label the previous live evaluator used. */
+function customBuildMatchupExpression() {
+  /** @param {string} field */
+  const raceLetter = (field) => ({
+    $let: {
+      vars: { value: { $ifNull: [field, ""] } },
+      in: {
+        $cond: [
+          { $gt: [{ $strLenCP: "$$value" }, 0] },
+          { $toUpper: { $substrCP: ["$$value", 0, 1] } },
+          "?",
+        ],
+      },
+    },
+  });
   return {
-    gameId: g.gameId,
-    date: g.date instanceof Date ? g.date.toISOString() : g.date,
-    map: g.map || "",
-    opponent: (g.opponent && g.opponent.displayName) || "",
-    opp_race: g.oppRace || (g.opponent && g.opponent.race) || "",
-    opp_strategy: (g.opponent && g.opponent.strategy) || null,
-    result: g.result || null,
-    duration: g.durationSec != null ? g.durationSec : null,
-    macroScore: typeof g.macroScore === "number" ? g.macroScore : null,
+    $concat: [raceLetter("$myRace"), "v", raceLetter("$opponent.race")],
+  };
+}
+
+/** @param {{includeBuildLogs?: boolean}} [opts] Projection for bounded dossier enrichment. */
+function classifiedDossierProjection(opts = {}) {
+  /** @type {Record<string, number>} */
+  const projection = {
+    _id: 0,
+    gameId: 1,
+    date: 1,
+    result: 1,
+    map: 1,
+    myRace: 1,
+    myBuild: 1,
+    durationSec: 1,
+    macroScore: 1,
+    apm: 1,
+    spq: 1,
+    "opponent.displayName": 1,
+    "opponent.race": 1,
+    "opponent.strategy": 1,
+  };
+  if (opts.includeBuildLogs) {
+    // Legacy rows may still hold logs inline; current rows read these fields
+    // from the detail store in `_hydrateClassifiedTimingSample`.
+    projection.buildLog = 1;
+    projection.oppBuildLog = 1;
+  }
+  return projection;
+}
+
+const DOSSIER_TIMING_TOKENS = Object.freeze(
+  Object.values(TimingCatalog.RACE_BUILDINGS)
+    .flat()
+    .map((row) => String(row.token || "").toLowerCase())
+    .filter(Boolean),
+);
+
+// Legacy detail objects pre-date the ingest validator and may contain a very
+// large log string. Inspect only a small prefix and synthesize a canonical
+// timing row; never lowercase or retain the full untrusted input line.
+const DOSSIER_TIMING_PREFIX_SCAN_LENGTH = 256;
+const DOSSIER_TIMING_LINE_RE = /^\[(\d{1,5}):([0-5]\d)\]\s+([A-Za-z0-9_]{1,64})(?=\s|$)/;
+
+/**
+ * Dossier timing code uses only first occurrence, so keep at most one line per
+ * catalog token after the small detail sample has been hydrated.
+ * @param {unknown} value
+ */
+function compactDossierTimingLog(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of value) {
+    if (typeof raw !== "string") continue;
+    const match = DOSSIER_TIMING_LINE_RE.exec(
+      raw.slice(0, DOSSIER_TIMING_PREFIX_SCAN_LENGTH),
+    );
+    if (!match) continue;
+    // V8 may represent String#slice / regex captures as views into the giant
+    // parent string. Round-trip the <=64-byte ASCII token so retained output
+    // cannot keep the legacy multi-megabyte backing store alive.
+    const safeName = Buffer.from(match[3], "ascii").toString("ascii");
+    const lower = safeName.toLowerCase();
+    let keep = false;
+    for (const token of DOSSIER_TIMING_TOKENS) {
+      if (seen.has(token) || !lower.includes(token)) continue;
+      seen.add(token);
+      keep = true;
+    }
+    if (keep) {
+      // dnaTimings only needs the timestamp and token. Normalizing the minute
+      // field also guarantees every retained row is tiny and parser-safe.
+      const seconds = String(Number(match[2])).padStart(2, "0");
+      out.push(`[${Number(match[1])}:${seconds}] ${safeName}`);
+    }
+  }
+  return out;
+}
+
+/** @param {{wins?: number, losses?: number}} row */
+function decidedWinRate(row) {
+  const wins = Math.max(0, Number(row?.wins) || 0);
+  const losses = Math.max(0, Number(row?.losses) || 0);
+  return wins + losses > 0 ? wins / (wins + losses) : 0;
+}
+
+/**
+ * @param {Array<Record<string, any>>} rows
+ * @returns {Array<{name: string, wins: number, losses: number, total: number, winRate: number}>}
+ */
+function addClassifiedWinRates(rows) {
+  return rows.map((row) => ({
+    name: String(row.name || "Unknown"),
+    wins: Math.max(0, Number(row.wins) || 0),
+    losses: Math.max(0, Number(row.losses) || 0),
+    total: Math.max(0, Number(row.total) || 0),
+    winRate: decidedWinRate(row),
+  }));
+}
+
+/** @param {Record<string, any>} game */
+function toClassifiedRecent(game) {
+  return {
+    gameId: game.gameId,
+    date: game.date,
+    map: game.map || "",
+    opponent: game.opponent?.displayName || "",
+    opp_race: game.opponent?.race || "",
+    opp_strategy: game.opponent?.strategy || null,
+    result: game.result,
+    duration: game.durationSec || 0,
+    macroScore: game.macroScore ?? null,
+    isResumedFromReplay: true,
   };
 }
 
 module.exports = {
   CustomBuildsService,
+  CUSTOM_BUILD_ACTIVE_LIMIT,
 };

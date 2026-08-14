@@ -920,6 +920,114 @@ describe("services/pulseMmr", () => {
     expect(teamCalls).toBe(2);
   });
 
+  test("concurrent reordered account sets share one upstream fetch and JSON parse", async () => {
+    let releaseTeam;
+    const teamReady = new Promise((resolve) => {
+      releaseTeam = resolve;
+    });
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.includes("/season/list/all")) {
+        return jsonResponse([{ battlenetId: 60, region: "US" }]);
+      }
+      if (url.includes("/group/team")) {
+        await teamReady;
+        return jsonResponse([
+          {
+            rating: 4821,
+            region: "US",
+            lastPlayed: "2026-08-13T20:30:00Z",
+          },
+        ]);
+      }
+      return failureResponse();
+    });
+    const svc = new PulseMmrService({ fetchImpl });
+    const a = svc.getCurrentMmrForAny(["994428", "8970877"]);
+    const b = svc.getCurrentMmrForAny(["8970877", "994428"]);
+    await new Promise((resolve) => setImmediate(resolve));
+    releaseTeam();
+
+    await expect(Promise.all([a, b])).resolves.toEqual([
+      expect.objectContaining({ mmr: 4821, region: "NA" }),
+      expect.objectContaining({ mmr: 4821, region: "NA" }),
+    ]);
+    const seasonCalls = fetchImpl.mock.calls.filter((call) =>
+      String(call[0]).includes("/season/list/all"));
+    const teamCalls = fetchImpl.mock.calls.filter((call) =>
+      String(call[0]).includes("/group/team"));
+    expect(seasonCalls).toHaveLength(1);
+    expect(teamCalls).toHaveLength(1);
+  });
+
+  test("rejects a streamed JSON response above the decompressed byte cap", async () => {
+    const payload = JSON.stringify({ rows: ["x".repeat(256)] });
+    const svc = new PulseMmrService({
+      responseMaxBytes: 64,
+      fetchImpl: jest.fn(async () => new Response(payload, { status: 200 })),
+    });
+    await expect(
+      svc._getJson("https://pulse.invalid/oversize", { throwOnError: true }),
+    ).rejects.toMatchObject({ code: "PULSE_RESPONSE_TOO_LARGE" });
+  });
+
+  test("parses a streamed JSON response that stays under the byte cap", async () => {
+    const payload = { rows: [{ rating: 4821 }] };
+    const svc = new PulseMmrService({
+      responseMaxBytes: 1024,
+      fetchImpl: jest.fn(async () =>
+        new Response(JSON.stringify(payload), { status: 200 })),
+    });
+    await expect(
+      svc._getJson("https://pulse.invalid/small", { throwOnError: true }),
+    ).resolves.toEqual(payload);
+  });
+
+  test("admits at most two distinct Pulse fetch/parses process-wide", async () => {
+    const releases = [];
+    const makeService = () => new PulseMmrService({
+      fetchImpl: jest.fn(() => new Promise((resolve) => {
+        releases.push(() => resolve(jsonResponse({ ok: true })));
+      })),
+    });
+    const a = makeService();
+    const b = makeService();
+    const c = makeService();
+    const first = a._getJson("https://pulse.invalid/a", { throwOnError: true });
+    const second = b._getJson("https://pulse.invalid/b", { throwOnError: true });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    await expect(
+      c._getJson("https://pulse.invalid/c", { throwOnError: true }),
+    ).rejects.toMatchObject({ code: "PULSE_ADMISSION_BUSY" });
+    expect(releases).toHaveLength(2);
+    releases.splice(0).forEach((release) => release());
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { ok: true },
+      { ok: true },
+    ]);
+  });
+
+  test("hard-caps and sweeps the in-process MMR cache", () => {
+    let now = 1_000;
+    const svc = new PulseMmrService({
+      now: () => now,
+      cacheTtlMs: 100,
+      mmrCacheMaxEntries: 2,
+    });
+    svc._setMmrCache("a", { mmr: 1, region: "NA", fetchedAt: now });
+    svc._setMmrCache("b", { mmr: 2, region: "NA", fetchedAt: now });
+    svc._setMmrCache("c", { mmr: 3, region: "NA", fetchedAt: now });
+    expect([...svc._cache.keys()]).toEqual(["b", "c"]);
+
+    now += 60 * 60 * 1000 + 101;
+    svc._setMmrCache("fresh", {
+      mmr: 4,
+      region: "NA",
+      fetchedAt: now,
+    });
+    expect([...svc._cache.keys()]).toEqual(["fresh"]);
+  });
+
   test("extractCharacterId falls back to character.battlenetId when id is absent", async () => {
     // Older Pulse responses occasionally omit the internal `id`
     // and only ship the Blizzard-side `battlenetId`; that still

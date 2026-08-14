@@ -10,10 +10,43 @@ const addFormats =
 const ajv = new Ajv({ allErrors: true, removeAdditional: "failing" });
 addFormats(ajv);
 
+const SIGNATURE_MAX_ITEMS = 200;
+const RULES_MAX_ITEMS = 30;
+const STRATEGY_NOTES_MAX_ITEMS = 20;
+const LEGACY_STEPS_MAX_ITEMS = 200;
+
+// Keep this list in step with BUILD_SCHEMA. validateCustomBuild projects an
+// untrusted JSON body through it before AJV runs so an unknown multi-megabyte
+// object is never duplicated by the validation clone or persisted simply
+// because a previous schema happened to allow additional properties.
+const BUILD_FIELDS = Object.freeze([
+  "slug",
+  "name",
+  "race",
+  "vsRace",
+  "matchup",
+  "description",
+  "signature",
+  "steps",
+  "notes",
+  "isPublic",
+  "perspective",
+  "sourceGameId",
+  "opponentRace",
+  "rules",
+  "skillLevel",
+  "winConditions",
+  "losesTo",
+  "transitionsInto",
+  "shareWithCommunity",
+  "schemaVersion",
+  "source",
+]);
+
 const BUILD_SCHEMA = {
   type: "object",
   required: ["slug", "name", "race"],
-  additionalProperties: true,
+  additionalProperties: false,
   properties: {
     slug: { type: "string", minLength: 1, maxLength: 80, pattern: "^[a-zA-Z0-9._-]+$" },
     name: { type: "string", minLength: 1, maxLength: 120 },
@@ -22,17 +55,42 @@ const BUILD_SCHEMA = {
       type: "string",
       enum: ["Protoss", "Terran", "Zerg", "Random", "Any"],
     },
+    // Legacy builds may carry an already-derived PvT-style label. New editor
+    // saves derive it from race/vsRace, but retaining this bounded field keeps
+    // old imports and community forks compatible.
+    matchup: { type: "string", maxLength: 16 },
     description: { type: "string", maxLength: 4000 },
     signature: {
       type: "array",
-      maxItems: 200,
+      maxItems: SIGNATURE_MAX_ITEMS,
       items: {
         type: "object",
-        additionalProperties: true,
+        additionalProperties: false,
         properties: {
           unit: { type: "string", maxLength: 80 },
           count: { type: "integer", minimum: 1, maximum: 200 },
           beforeSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
+        },
+      },
+    },
+    // Read-only community pages still render this pre-signature build-order
+    // shape. It was previously accepted only because the top-level schema was
+    // open, which also made every unknown child unbounded.
+    steps: {
+      type: "array",
+      maxItems: LEGACY_STEPS_MAX_ITEMS,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          supply: { type: ["number", "null"], minimum: 0, maximum: 1000 },
+          time: {
+            anyOf: [
+              { type: "string", maxLength: 20 },
+              { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
+            ],
+          },
+          action: { type: "string", maxLength: 280 },
         },
       },
     },
@@ -55,7 +113,7 @@ const BUILD_SCHEMA = {
      */
     rules: {
       type: "array",
-      maxItems: 30,
+      maxItems: RULES_MAX_ITEMS,
       items: {
         type: "object",
         additionalProperties: false,
@@ -98,17 +156,17 @@ const BUILD_SCHEMA = {
     },
     winConditions: {
       type: "array",
-      maxItems: 20,
+      maxItems: STRATEGY_NOTES_MAX_ITEMS,
       items: { type: "string", maxLength: 280 },
     },
     losesTo: {
       type: "array",
-      maxItems: 20,
+      maxItems: STRATEGY_NOTES_MAX_ITEMS,
       items: { type: "string", maxLength: 280 },
     },
     transitionsInto: {
       type: "array",
-      maxItems: 20,
+      maxItems: STRATEGY_NOTES_MAX_ITEMS,
       items: { type: "string", maxLength: 280 },
     },
     shareWithCommunity: { type: "boolean" },
@@ -135,7 +193,7 @@ function validateCustomBuild(raw) {
   if (!raw || typeof raw !== "object") {
     return { valid: false, errors: ["body must be an object"] };
   }
-  const value = JSON.parse(JSON.stringify(raw));
+  const value = boundedBuildClone(/** @type {Record<string, unknown>} */ (raw));
   if (!validate(value)) {
     const errs = (validate.errors || []).map(
       /** @param {any} e */
@@ -146,4 +204,86 @@ function validateCustomBuild(raw) {
   return { valid: true, value };
 }
 
-module.exports = { validateCustomBuild };
+/**
+ * Copy only the persisted contract and at most one item beyond each array's
+ * maximum. The extra item lets AJV report `maxItems` while avoiding a second
+ * unbounded allocation for a hostile/legacy in-memory value. Nested objects
+ * are projected to their known leaves, so a giant unknown child is dropped
+ * before validation rather than after a JSON stringify/parse round trip.
+ *
+ * @param {Record<string, unknown>} raw
+ * @returns {Record<string, unknown>}
+ */
+function boundedBuildClone(raw) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const field of BUILD_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(raw, field)) {
+      out[field] = raw[field];
+    }
+  }
+  out.signature = boundedObjectArray(
+    raw.signature,
+    SIGNATURE_MAX_ITEMS,
+    ["unit", "count", "beforeSec"],
+  );
+  out.rules = boundedObjectArray(
+    raw.rules,
+    RULES_MAX_ITEMS,
+    ["type", "name", "time_lt", "count"],
+  );
+  out.steps = boundedObjectArray(
+    raw.steps,
+    LEGACY_STEPS_MAX_ITEMS,
+    ["supply", "time", "action"],
+  );
+  for (const field of ["winConditions", "losesTo", "transitionsInto"]) {
+    out[field] = boundedScalarArray(raw[field], STRATEGY_NOTES_MAX_ITEMS);
+  }
+  // Do not manufacture optional fields that were absent from the request.
+  for (const field of [
+    "signature",
+    "rules",
+    "steps",
+    "winConditions",
+    "losesTo",
+    "transitionsInto",
+  ]) {
+    if (!Object.prototype.hasOwnProperty.call(raw, field)) delete out[field];
+  }
+  return out;
+}
+
+/** @param {unknown} value @param {number} max */
+function boundedScalarArray(value, max) {
+  if (!Array.isArray(value)) return value;
+  return value.slice(0, max + 1);
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} max
+ * @param {readonly string[]} fields
+ */
+function boundedObjectArray(value, max, fields) {
+  if (!Array.isArray(value)) return value;
+  return value.slice(0, max + 1).map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    /** @type {Record<string, unknown>} */
+    const out = {};
+    for (const field of fields) {
+      if (Object.prototype.hasOwnProperty.call(item, field)) {
+        out[field] = item[field];
+      }
+    }
+    return out;
+  });
+}
+
+module.exports = {
+  validateCustomBuild,
+  SIGNATURE_MAX_ITEMS,
+  RULES_MAX_ITEMS,
+  STRATEGY_NOTES_MAX_ITEMS,
+  LEGACY_STEPS_MAX_ITEMS,
+};

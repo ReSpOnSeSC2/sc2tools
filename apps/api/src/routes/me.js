@@ -2,6 +2,10 @@
 
 const express = require("express");
 const { validateProfile } = require("../validation/profile");
+const {
+  claimReplayIngestAdmission,
+  releaseReplayIngestAdmission,
+} = require("../middleware/replayIngestAdmission");
 
 // Hard cap on the per-request MMR fan-out. Profiles with many toons
 // are rare but legitimate (smurf accounts, region-hoppers); we cap to
@@ -396,8 +400,8 @@ function buildMeRouter(deps) {
 
   // ── Uploaded multichat alert sounds ──
   // Small audio files for the multichat sound system. Bytes arrive
-  // base64 in JSON (well under the global body limit at the 300 KB
-  // cap); the OBS widget fetches them back on the token route
+  // base64 in JSON (handled by the authenticated large-body lane at the
+  // 300 KB cap); the OBS widget fetches them back on the token route
   // (/v1/multichat/:token/sound/:id). Wire shape errors map to the
   // service's coded throws.
 
@@ -416,6 +420,14 @@ function buildMeRouter(deps) {
   });
 
   router.post("/me/multichat-sounds", deps.auth, async (req, res, next) => {
+    const claimed = claimReplayIngestAdmission(res, { allowMissing: true });
+    if (!claimed) {
+      res.set("Retry-After", "5");
+      res.status(503).json({
+        error: { code: "replay_ingest_busy", retryable: true },
+      });
+      return;
+    }
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
@@ -452,6 +464,8 @@ function buildMeRouter(deps) {
         return;
       }
       next(err);
+    } finally {
+      releaseReplayIngestAdmission(res);
     }
   });
 

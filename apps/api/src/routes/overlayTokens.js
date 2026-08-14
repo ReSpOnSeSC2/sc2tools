@@ -7,6 +7,8 @@ const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 
 const { OverlayLiveService } = require("../services/overlayLive");
+const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
+const { sha256 } = require("../util/hash");
 
 /**
  * /v1/overlay-tokens — user's hosted-overlay tokens.
@@ -115,10 +117,13 @@ function buildOverlayTokensRouter(deps) {
     max: 100, // 10/sec average
     standardHeaders: true,
     legacyHeaders: false,
+    store: new BoundedRateLimitStore({ maxEntries: 1024 }),
     /** @param {import('express').Request} req */
     keyGenerator: (req) => {
-      const tok = req.body?.token || req.query?.token || "anon";
-      return `overlay-event:${tok}`;
+      const token = String(req.body?.token || req.query?.token || "anon")
+        .slice(0, 256);
+      const userId = req.auth?.userId || "anonymous";
+      return `overlay-event:${userId}:${sha256(token)}`;
     },
   });
 

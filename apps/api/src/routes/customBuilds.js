@@ -14,6 +14,7 @@ const PHASE_CACHE_TTL_MS = 60 * 1000;
 const PHASE_CACHE_MAX_ENTRIES = 32;
 const PHASE_MAX_CONCURRENT = 1;
 const PHASE_MAX_WAITERS = 8;
+const PHASE_MAX_SUBSCRIBERS = 32;
 const PHASE_RETRY_AFTER_SEC = 2;
 const PHASE_BUSY = Symbol("phase_busy");
 const PHASE_CANCELLED = Symbol("phase_cancelled");
@@ -179,12 +180,13 @@ function buildCustomBuildsRouter(deps) {
    * @param {string} userId
    * @param {string} slug
    * @param {number} latestGameMs
+   * @param {string} classificationRevision
    * @param {string} kind
    * @param {string} perspective
    * @param {string} [scope]
    * @param {string} [filtersKey]
    */
-  function phaseCacheKey(userId, slug, latestGameMs, kind, perspective, scope, filtersKey) {
+  function phaseCacheKey(userId, slug, latestGameMs, classificationRevision, kind, perspective, scope, filtersKey) {
     // ``perspective`` is included so the comparison view's two
     // queries don't poison each other's cache slot — left ("you")
     // and right ("opponent") off the same slug must compute
@@ -194,7 +196,7 @@ function buildCustomBuildsRouter(deps) {
     // for the same slug must NOT alias. ``filtersKey`` serialises the
     // global filter bar so timeframe / race / map / mmr / region
     // changes don't alias either.
-    return `${userId}|${slug}|${latestGameMs}|${kind}|${perspective}|${scope || ""}|${filtersKey || ""}`;
+    return `${userId}|${slug}|${latestGameMs}|${classificationRevision}|${kind}|${perspective}|${scope || ""}|${filtersKey || ""}`;
   }
   /**
    * Stable string key for a parsed filter object. Sorted entries so two
@@ -268,6 +270,23 @@ function buildCustomBuildsRouter(deps) {
     // Cheap probe so a fresh upload invalidates the cache key without
     // waiting for the TTL.
     return deps.customBuilds.latestGameDateMs(userId);
+  }
+
+  /** @param {string} userId */
+  async function classificationRevision(userId) {
+    if (typeof deps.customBuilds.getReclassifyStatus !== "function") {
+      return "legacy";
+    }
+    const status = await deps.customBuilds.getReclassifyStatus(userId);
+    const rawCompletedAt = status && status.completedAt;
+    const completedAt = rawCompletedAt instanceof Date
+      ? rawCompletedAt.getTime()
+      : rawCompletedAt ? new Date(rawCompletedAt).getTime() : 0;
+    return [
+      String(status?.generation || "none"),
+      String(status?.status || "idle"),
+      Number.isFinite(completedAt) ? completedAt : 0,
+    ].join(":");
   }
 
   /**
@@ -373,6 +392,7 @@ function buildCustomBuildsRouter(deps) {
       void entry.promise.then(settle, settle);
     }
 
+    if (entry.subscribers >= PHASE_MAX_SUBSCRIBERS) return PHASE_BUSY;
     entry.subscribers += 1;
     let detached = false;
     /** @type {() => void} */
@@ -641,8 +661,13 @@ function buildCustomBuildsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      const items = await deps.customBuilds.list(auth.userId);
-      res.json({ items });
+      const [items, meta] = await Promise.all([
+        deps.customBuilds.list(auth.userId),
+        typeof deps.customBuilds.libraryMeta === "function"
+          ? deps.customBuilds.libraryMeta(auth.userId)
+          : Promise.resolve({ total: null, limit: null, truncated: false }),
+      ]);
+      res.json({ items, ...meta });
     } catch (err) {
       next(err);
     }
@@ -651,43 +676,28 @@ function buildCustomBuildsRouter(deps) {
   /**
    * GET /v1/custom-builds/stats
    *
-   * Aggregate W/L/winRate per saved build by re-running each build's
-   * rules against the user's recent games. Lets the BuildsLibrary card
-   * grid show real numbers immediately after save, instead of waiting
-   * for the agent to reclassify and tag games with `myBuild`.
+   * Aggregate W/L/winRate per saved build from the authoritative
+   * `_customBuildSlug` written by the durable reclassification worker.
+   * This keeps the card grid identical to the replay rows without reloading
+   * every replay-analysis blob from object storage.
    */
   router.get("/custom-builds/stats", async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      if (!deps.perGame) {
-        res.status(503).json({ error: { code: "stats_unavailable" } });
-        return;
-      }
       const requestAbort = phaseRequestAbort(req, res);
       let items;
       try {
-        items = await runPhaseComputation(
-          `stats|${auth.userId}`,
-          (signal) => deps.customBuilds.evaluateAllStats(
-            auth.userId,
-            { signal },
-          ),
-          requestAbort.signal,
+        items = await deps.customBuilds.evaluateAllStats(
+          auth.userId,
+          { signal: requestAbort.signal },
         );
       } finally {
         requestAbort.cleanup();
       }
-      if (items === PHASE_CANCELLED) {
-        sendPhaseCancelled(req, res);
-        return;
-      }
-      if (items === PHASE_BUSY) {
-        sendPhaseBusy(res);
-        return;
-      }
-      res.json(items);
+      if (!requestAbort.signal.aborted && !res.headersSent) res.json(items);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       next(err);
     }
   });
@@ -708,17 +718,13 @@ function buildCustomBuildsRouter(deps) {
    * GET /v1/custom-builds/:slug/matches
    *
    * Per-build detail mirroring /v1/builds/:name shape. Same totals/
-   * byMatchup/byMap/byStrategy/recent fields, but driven by the saved
-   * rules so newly-saved builds show their matched games right away.
+   * byMatchup/byMap/byStrategy/recent fields, driven by the stored
+   * reclassification provenance so detail and library counts cannot drift.
    */
   router.get("/custom-builds/:slug/matches", async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      if (!deps.perGame) {
-        res.status(503).json({ error: { code: "stats_unavailable" } });
-        return;
-      }
       const slug = String(req.params.slug);
       const requestAbort = phaseRequestAbort(req, res);
       let result;
@@ -779,11 +785,15 @@ function buildCustomBuildsRouter(deps) {
           ? String(req.query.strategy)
           : null;
       const filters = parseFilters(req.query);
-      const latest = await latestGameMs(auth.userId);
+      const [latest, classifiedRevision] = await Promise.all([
+        latestGameMs(auth.userId),
+        classificationRevision(auth.userId),
+      ]);
       const key = phaseCacheKey(
         auth.userId,
         slug,
         latest,
+        classifiedRevision,
         "compositions",
         perspective || "default",
         strategyName ? `s:${strategyName}` : "",
@@ -852,9 +862,17 @@ function buildCustomBuildsRouter(deps) {
       }
       const slug = String(req.params.slug);
       const perspective = pickPerspective(req.query && req.query.perspective);
-      const latest = await latestGameMs(auth.userId);
+      const [latest, classifiedRevision] = await Promise.all([
+        latestGameMs(auth.userId),
+        classificationRevision(auth.userId),
+      ]);
       const key = phaseCacheKey(
-        auth.userId, slug, latest, "transitions", perspective || "default",
+        auth.userId,
+        slug,
+        latest,
+        classifiedRevision,
+        "transitions",
+        perspective || "default",
       );
       const cached = phaseCacheGet(key);
       if (cached) {

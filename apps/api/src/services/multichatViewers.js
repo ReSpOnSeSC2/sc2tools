@@ -32,10 +32,10 @@
  *                     upstream error, no live connection). The dock
  *                     renders nothing rather than a fake zero.
  *
- * Upstream protection: results are TTL-cached per (platform, channel)
- * and identical in-flight lookups are shared, so N open docks and
- * Browser Sources cost the platforms one request per TTL window, not
- * one per surface per poll.
+ * Upstream protection: results live in a bounded TTL/LRU cache per
+ * (platform, channel), identical in-flight lookups are shared, and distinct
+ * upstream work is capped. N open docks and Browser Sources therefore cost
+ * the platforms one request per TTL window, not one per surface per poll.
  */
 
 const { normalizeKickSlug } = require("./kickChannel");
@@ -45,6 +45,23 @@ const { normalizeYoutubeInput } = require("./youtubeLiveChat");
 const CACHE_TTL_MS = 20_000;
 /** Bound every upstream call so a hung fetch can't pin the request. */
 const FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Viewer lookups are optional dashboard decoration, so they must have a much
+ * smaller memory budget than replay ingestion or game analysis. Native fetch
+ * transparently decompresses responses; these limits are therefore enforced
+ * against the decompressed byte stream, not just Content-Length.
+ */
+const TWITCH_JSON_MAX_BYTES = 256 * 1024;
+const KICK_JSON_MAX_BYTES = 512 * 1024;
+const YOUTUBE_PAGE_MAX_BYTES = 4 * 1024 * 1024;
+
+/** Keep long-running processes bounded even when many channel names rotate. */
+const CACHE_MAX_ENTRIES = 256;
+const IN_FLIGHT_MAX_ENTRIES = 4;
+const IN_FLIGHT_MAX_SUBSCRIBERS = 16;
+const CHANNEL_INPUT_MAX_CHARS = 2048;
+const CAPACITY_WARNING_INTERVAL_MS = 10_000;
 
 /** Twitch's public web Client-ID — shipped in twitch.tv's own bundle. */
 const TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
@@ -67,6 +84,116 @@ const KICK_HEADERS = Object.freeze({
   "Accept-Language": "en",
   "User-Agent": PAGE_HEADERS["User-Agent"],
 });
+
+/** @param {unknown} raw @param {number} fallback @returns {number} */
+function positiveInteger(raw, fallback) {
+  return Number.isInteger(raw) && Number(raw) > 0 ? Number(raw) : fallback;
+}
+
+/**
+ * Best-effort cancellation used when a declared or streamed response exceeds
+ * its memory budget. It deliberately never hides the authoritative size error.
+ *
+ * @param {any} body
+ */
+async function cancelBody(body) {
+  try {
+    await body?.cancel?.();
+  } catch {
+    // The caller still reports the original bounded-response failure.
+  }
+}
+
+/**
+ * Read one response without allowing chunked transfer encoding or transparent
+ * decompression to bypass the byte ceiling. Native fetch takes the streaming
+ * branch. The `.text()` fallback exists only for small injected test doubles
+ * and is still checked before its contents can be parsed.
+ *
+ * @param {Response|any} response
+ * @param {number} maxBytes
+ * @param {string} provider
+ * @returns {Promise<string>}
+ */
+async function readBoundedText(response, maxBytes, provider) {
+  const declaredRaw = response?.headers?.get?.("content-length");
+  const declared = Number(declaredRaw);
+  if (
+    declaredRaw !== null &&
+    declaredRaw !== undefined &&
+    declaredRaw !== "" &&
+    Number.isFinite(declared) &&
+    declared > maxBytes
+  ) {
+    await cancelBody(response?.body);
+    throw new Error(`${provider} response exceeded the safe size limit`);
+  }
+
+  const reader = response?.body?.getReader?.();
+  if (reader) {
+    /** @type {Buffer[]} */
+    const chunks = [];
+    let totalBytes = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        const chunk = value instanceof Uint8Array
+          ? value
+          : new Uint8Array(value);
+        totalBytes += chunk.byteLength;
+        if (totalBytes > maxBytes) {
+          await cancelBody(reader);
+          throw new Error(`${provider} response exceeded the safe size limit`);
+        }
+        chunks.push(
+          Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+        );
+      }
+      return Buffer.concat(chunks, totalBytes).toString("utf8");
+    } finally {
+      chunks.length = 0;
+      try {
+        reader.releaseLock?.();
+      } catch {
+        // Some injected readers do not expose reusable locks.
+      }
+    }
+  }
+
+  if (typeof response?.text !== "function") {
+    throw new Error(`${provider} response body unavailable`);
+  }
+  const text = String(await response.text());
+  if (Buffer.byteLength(text, "utf8") > maxBytes) {
+    throw new Error(`${provider} response exceeded the safe size limit`);
+  }
+  return text;
+}
+
+/**
+ * JSON is parsed only after the complete decompressed response has passed the
+ * byte ceiling above.
+ *
+ * @param {Response|any} response
+ * @param {number} maxBytes
+ * @param {string} provider
+ * @returns {Promise<Record<string, any>>}
+ */
+async function readBoundedJson(response, maxBytes, provider) {
+  return /** @type {Record<string, any>} */ (
+    JSON.parse(await readBoundedText(response, maxBytes, provider))
+  );
+}
+
+/**
+ * @param {"twitch"|"kick"|"youtube"|"tiktok"} platform
+ * @returns {PlatformViewers}
+ */
+function unknownCount(platform) {
+  return { platform, viewers: null, live: false };
+}
 
 /**
  * @typedef {{
@@ -206,6 +333,9 @@ class MultichatViewersService {
    *   ttlMs?: number,
    *   now?: () => number,
    *   log?: { warn: Function } | null,
+   *   maxCacheEntries?: number,
+   *   maxInFlight?: number,
+   *   maxSubscribersPerLookup?: number,
    * }} [opts]
    */
   constructor(opts = {}) {
@@ -214,10 +344,85 @@ class MultichatViewersService {
     this.ttlMs = opts.ttlMs ?? CACHE_TTL_MS;
     this.now = opts.now || (() => Date.now());
     this.log = opts.log || null;
+    this.maxCacheEntries = positiveInteger(
+      opts.maxCacheEntries,
+      CACHE_MAX_ENTRIES,
+    );
+    this.maxInFlight = positiveInteger(
+      opts.maxInFlight,
+      IN_FLIGHT_MAX_ENTRIES,
+    );
+    this.maxSubscribersPerLookup = positiveInteger(
+      opts.maxSubscribersPerLookup,
+      IN_FLIGHT_MAX_SUBSCRIBERS,
+    );
+    this.lastCapacityWarningAtMs = 0;
     /** @type {Map<string, { atMs: number, value: PlatformViewers }>} */
     this.cache = new Map();
-    /** @type {Map<string, Promise<PlatformViewers>>} */
+    /**
+     * @type {Map<string, {
+     *   promise: Promise<PlatformViewers>, subscribers: number,
+     * }>}
+     */
     this.inFlight = new Map();
+  }
+
+  /** @param {string} key @param {PlatformViewers} value */
+  setCached(key, value) {
+    this.cache.delete(key);
+    while (this.cache.size >= this.maxCacheEntries) {
+      const oldest = this.cache.keys().next().value;
+      if (typeof oldest !== "string") break;
+      this.cache.delete(oldest);
+    }
+    this.cache.set(key, { atMs: this.now(), value });
+  }
+
+  /**
+   * Capacity rejection is expected during a burst. Throttle its warning so
+   * protective shedding cannot itself turn into an unbounded logging burst.
+   *
+   * @param {string} reason
+   * @param {string} platform
+   */
+  warnCapacity(reason, platform) {
+    const nowMs = this.now();
+    if (nowMs - this.lastCapacityWarningAtMs < CAPACITY_WARNING_INTERVAL_MS) {
+      return;
+    }
+    this.lastCapacityWarningAtMs = nowMs;
+    this.log?.warn?.(
+      { platform, reason },
+      "multichat viewer count lookup shed for capacity",
+    );
+  }
+
+  /**
+   * Aggregate-only runtime telemetry. Channel identities never leave this
+   * service through diagnostics.
+   *
+   * @returns {{
+   *   cacheEntries: number,
+   *   inflightRequests: number,
+   *   subscribers: number,
+   *   maxCacheEntries: number,
+   *   maxInflightRequests: number,
+   *   maxSubscribersPerRequest: number,
+   * }}
+   */
+  capacitySnapshot() {
+    let subscribers = 0;
+    for (const flight of this.inFlight.values()) {
+      subscribers += flight.subscribers;
+    }
+    return {
+      cacheEntries: this.cache.size,
+      inflightRequests: this.inFlight.size,
+      subscribers,
+      maxCacheEntries: this.maxCacheEntries,
+      maxInflightRequests: this.maxInFlight,
+      maxSubscribersPerRequest: this.maxSubscribersPerLookup,
+    };
   }
 
   /**
@@ -273,15 +478,37 @@ class MultichatViewersService {
    * @returns {Promise<PlatformViewers>}
    */
   lookup(platform, channel) {
-    const key = `${platform}:${channel.trim().toLowerCase()}`;
+    const input = String(channel ?? "").trim();
+    if (!input || input.length > CHANNEL_INPUT_MAX_CHARS) {
+      return Promise.resolve(unknownCount(platform));
+    }
+    // YouTube video IDs are case-sensitive. Other supported channel names are
+    // not, so retain their previous case-insensitive cache behaviour.
+    const identity = platform === "youtube" ? input : input.toLowerCase();
+    const key = `${platform}:${identity}`;
     const hit = this.cache.get(key);
     if (hit && this.now() - hit.atMs < this.ttlMs) {
+      // Map insertion order doubles as a tiny LRU list.
+      this.cache.delete(key);
+      this.cache.set(key, hit);
       return Promise.resolve(hit.value);
     }
+    if (hit) this.cache.delete(key);
     const pending = this.inFlight.get(key);
-    if (pending) return pending;
+    if (pending) {
+      if (pending.subscribers >= this.maxSubscribersPerLookup) {
+        this.warnCapacity("subscriber_limit", platform);
+        return Promise.resolve(unknownCount(platform));
+      }
+      pending.subscribers += 1;
+      return pending.promise;
+    }
+    if (this.inFlight.size >= this.maxInFlight) {
+      this.warnCapacity("in_flight_limit", platform);
+      return Promise.resolve(unknownCount(platform));
+    }
 
-    const job = this.fetchOne(platform, channel)
+    const baseJob = this.fetchOne(platform, channel)
       .catch((err) => {
         // Upstream hiccups are expected (Cloudflare, rate limits, a
         // page shape change): report unknown, never a fabricated 0.
@@ -289,19 +516,18 @@ class MultichatViewersService {
           { err: String(err), platform },
           "multichat viewer count lookup failed",
         );
-        return /** @type {PlatformViewers} */ ({
-          platform,
-          viewers: null,
-          live: false,
-        });
+        return unknownCount(platform);
       })
       .then((value) => {
-        this.cache.set(key, { atMs: this.now(), value });
-        this.inFlight.delete(key);
+        this.setCached(key, value);
         return value;
       });
-    this.inFlight.set(key, job);
-    return job;
+    const flight = { promise: baseJob, subscribers: 1 };
+    flight.promise = baseJob.finally(() => {
+      if (this.inFlight.get(key) === flight) this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, flight);
+    return flight.promise;
   }
 
   /**
@@ -339,8 +565,15 @@ class MultichatViewersService {
       }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`twitch gql ${res.status}`);
-    const json = /** @type {Record<string, any>} */ (await res.json());
+    if (!res.ok) {
+      await cancelBody(res.body);
+      throw new Error(`twitch gql ${res.status}`);
+    }
+    const json = await readBoundedJson(
+      res,
+      TWITCH_JSON_MAX_BYTES,
+      "twitch",
+    );
     const stream = json?.data?.user?.stream;
     // A known-offline channel is a truthful zero; an unknown login
     // (user null) is not — that stays unknown.
@@ -367,8 +600,11 @@ class MultichatViewersService {
     });
     // 403 is Cloudflare blocking the datacenter IP — the documented
     // failure mode of this endpoint, and an unknown, not a zero.
-    if (!res.ok) throw new Error(`kick ${res.status}`);
-    const json = /** @type {Record<string, any>} */ (await res.json());
+    if (!res.ok) {
+      await cancelBody(res.body);
+      throw new Error(`kick ${res.status}`);
+    }
+    const json = await readBoundedJson(res, KICK_JSON_MAX_BYTES, "kick");
     const live = json?.livestream;
     if (!live || live.is_live === false) {
       return { platform: "kick", viewers: 0, live: false };
@@ -395,8 +631,15 @@ class MultichatViewersService {
         redirect: "follow",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (!res.ok) throw new Error(`youtube page ${res.status}`);
-      const html = await res.text();
+      if (!res.ok) {
+        await cancelBody(res.body);
+        throw new Error(`youtube page ${res.status}`);
+      }
+      const html = await readBoundedText(
+        res,
+        YOUTUBE_PAGE_MAX_BYTES,
+        "youtube",
+      );
       const viewers = extractConcurrentViewers(html);
       if (viewers !== null) {
         return { platform: "youtube", viewers, live: true };
@@ -430,4 +673,10 @@ module.exports = {
   extractConcurrentViewers,
   toViewerCount,
   TWITCH_WEB_CLIENT_ID,
+  TWITCH_JSON_MAX_BYTES,
+  KICK_JSON_MAX_BYTES,
+  YOUTUBE_PAGE_MAX_BYTES,
+  CACHE_MAX_ENTRIES,
+  IN_FLIGHT_MAX_ENTRIES,
+  IN_FLIGHT_MAX_SUBSCRIBERS,
 };

@@ -134,7 +134,14 @@ export function hydrateStoredFilters(
  * sessions default to ranked-ladder 1v1 unless an explicit persisted
  * mode choice overrides that cohort.
  */
-export function AnalyzerProvider({ children }: { children: ReactNode }) {
+export function AnalyzerProvider({
+  children,
+  analysisGamesEnabled = false,
+}: {
+  children: ReactNode;
+  /** Full replay history is opt-in: Arcade enables it; Daily Pulse can request it. */
+  analysisGamesEnabled?: boolean;
+}) {
   const [filters, setFiltersState] = useState<AnalyzerFilters>(initialFilters);
   const [dbRev, setDbRev] = useState(0);
   const bumpRev = useCallback(() => setDbRev((v) => v + 1), []);
@@ -203,7 +210,9 @@ export function AnalyzerProvider({ children }: { children: ReactNode }) {
   );
   return (
     <FiltersContext.Provider value={value}>
-      <AnalysisGamesProvider>{children}</AnalysisGamesProvider>
+      <AnalysisGamesProvider enabled={analysisGamesEnabled}>
+        {children}
+      </AnalysisGamesProvider>
     </FiltersContext.Provider>
   );
 }

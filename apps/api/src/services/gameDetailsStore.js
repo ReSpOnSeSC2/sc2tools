@@ -42,7 +42,17 @@ const { isDeepStrictEqual, promisify } = require("util");
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
-const R2_BULK_READ_MAX_ACTIVE = 4;
+// One decoded object transiently exists as compressed bytes, gunzip output,
+// a UTF-8 string, and a parsed object. Two lanes preserve useful foreground
+// parallelism without letting four worst-case 6 MiB objects consume most of
+// the ~259 MiB V8 heap available on the production Starter instance.
+const R2_BULK_READ_MAX_ACTIVE = 2;
+const R2_BULK_READ_MAX_WAITERS = 32;
+// The HTTP replay body is capped at 5 MiB. Leave modest serialization
+// headroom while preventing partial recompute merges or legacy objects from
+// becoming an unbounded gzip/JSON allocation inside a 256 MiB V8 heap.
+const R2_DETAILS_MAX_JSON_BYTES = 6 * 1024 * 1024;
+const R2_DETAILS_MAX_COMPRESSED_BYTES = 7 * 1024 * 1024;
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -244,8 +254,8 @@ class R2DetailsStore {
   /**
    * Process-wide-for-this-store admission for bulk object reads. Every
    * readMany caller shares it, so simultaneous previews, reclassification,
-   * and stats requests cannot each decompress their own full concurrency
-   * window. Foreground single-game reads remain unaffected.
+   * stats, and foreground single-game requests cannot each decompress their
+   * own full concurrency window.
    * @param {AbortSignal} [signal]
    * @returns {Promise<() => void>}
    */
@@ -254,6 +264,15 @@ class R2DetailsStore {
     if (this._bulkReadActive < R2_BULK_READ_MAX_ACTIVE) {
       this._bulkReadActive += 1;
       return () => this._releaseBulkReadSlot();
+    }
+    if (this._bulkReadWaiters.length >= R2_BULK_READ_MAX_WAITERS) {
+      const err = /** @type {any} */ (
+        new Error("game detail reads are temporarily busy")
+      );
+      err.code = "game_details_busy";
+      err.status = 503;
+      err.retryAfterMs = 1000;
+      throw err;
     }
     // A release hands its existing slot directly to this waiter. Do not
     // increment after waking: a new caller could otherwise claim the briefly
@@ -302,6 +321,24 @@ class R2DetailsStore {
   }
 
   /**
+   * Identifier-free occupancy for the process-wide R2 bulk-read lane.
+   * @returns {{
+   *   active: number,
+   *   queued: number,
+   *   maxActive: number,
+   *   maxWaiters: number,
+   * }}
+   */
+  bulkReadCapacitySnapshot() {
+    return {
+      active: this._bulkReadActive,
+      queued: this._bulkReadWaiters.length,
+      maxActive: R2_BULK_READ_MAX_ACTIVE,
+      maxWaiters: R2_BULK_READ_MAX_WAITERS,
+    };
+  }
+
+  /**
    * Build the canonical object key for one game. Public so the
    * migration script can compute keys without instantiating the
    * store with a client.
@@ -328,6 +365,27 @@ class R2DetailsStore {
    * @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts]
    */
   async write(userId, gameId, date, blob, opts = {}) {
+    // A write first decodes the current object, then retains current + merged
+    // + serialized + gzip representations through the conditional PUT. Share
+    // the exact same two-object memory lane as readers for the whole retry
+    // sequence so one agent upload cannot become an uncounted third decode.
+    const release = await this._acquireBulkReadSlot(opts.signal);
+    try {
+      return await this._writeWithRetries(userId, gameId, date, blob, opts);
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * @private
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {Date} date
+   * @param {Record<string, any>} blob
+   * @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} opts
+   */
+  async _writeWithRetries(userId, gameId, date, blob, opts) {
     const key = this.keyFor(userId, gameId);
     for (let attempt = 0; attempt < R2_WRITE_MAX_ATTEMPTS; attempt += 1) {
       if (opts.signal && opts.signal.aborted) throw detailsAbortError();
@@ -368,7 +426,14 @@ class R2DetailsStore {
         await this._writeMetadata(userId, gameId, date, opts);
         return;
       }
-      const body = await gzip(Buffer.from(JSON.stringify(merged), "utf8"));
+      const serialized = JSON.stringify(merged);
+      if (Buffer.byteLength(serialized, "utf8") > R2_DETAILS_MAX_JSON_BYTES) {
+        throw detailsObjectTooLargeError();
+      }
+      const body = await gzip(Buffer.from(serialized, "utf8"));
+      if (body.length > R2_DETAILS_MAX_COMPRESSED_BYTES) {
+        throw detailsObjectTooLargeError();
+      }
       /** @type {import('@aws-sdk/client-s3').PutObjectCommandInput} */
       const put = {
         Bucket: this.bucket,
@@ -469,15 +534,37 @@ class R2DetailsStore {
     if (!etag) throw corruptDetailsObjectError(
       new Error("r2_details_etag_missing"),
     );
-    const buf = await streamToBuffer(/** @type {any} */ (resp.Body));
+    if (
+      Number.isFinite(Number(resp.ContentLength))
+      && Number(resp.ContentLength) > R2_DETAILS_MAX_COMPRESSED_BYTES
+    ) {
+      const responseBody = /** @type {any} */ (resp.Body);
+      if (responseBody && typeof responseBody.destroy === "function") {
+        responseBody.destroy();
+      }
+      throw detailsObjectTooLargeError();
+    }
+    const buf = await streamToBuffer(
+      /** @type {any} */ (resp.Body),
+      R2_DETAILS_MAX_COMPRESSED_BYTES,
+    );
     let blob;
     try {
-      const json = (await gunzip(buf)).toString("utf8");
+      const json = (await gunzip(buf, {
+        maxOutputLength: R2_DETAILS_MAX_JSON_BYTES,
+      })).toString("utf8");
       blob = JSON.parse(json);
       if (!blob || typeof blob !== "object" || Array.isArray(blob)) {
         throw new TypeError("detail object must be a JSON object");
       }
     } catch (err) {
+      if (
+        err && typeof err === "object"
+        && "code" in err
+        && (err.code === "ERR_BUFFER_TOO_LARGE" || err.code === "ERR_OUT_OF_RANGE")
+      ) {
+        throw detailsObjectTooLargeError();
+      }
       throw corruptDetailsObjectError(err);
     }
     return { blob, etag };
@@ -697,8 +784,18 @@ function corruptDetailsObjectError(cause) {
 function isCorruptDetailsObjectError(err) {
   return !!(
     err && typeof err === "object" && "code" in err
-    && /** @type {{code?: unknown}} */ (err).code === "game_details_object_corrupt"
+    && ["game_details_object_corrupt", "game_details_object_too_large"]
+      .includes(String(/** @type {{code?: unknown}} */ (err).code || ""))
   );
+}
+
+function detailsObjectTooLargeError() {
+  const err = /** @type {any} */ (
+    new Error("game detail object exceeds the safe byte limit")
+  );
+  err.code = "game_details_object_too_large";
+  err.status = 413;
+  return err;
 }
 
 /**
@@ -727,16 +824,38 @@ function assertDeleteObjectsSucceeded(response) {
  * portable across SDK versions.
  *
  * @param {NodeJS.ReadableStream} stream
+ * @param {number} maxBytes
  */
-async function streamToBuffer(stream) {
+async function streamToBuffer(stream, maxBytes) {
   return new Promise((resolve, reject) => {
     /** @type {Buffer[]} */
     const chunks = [];
+    let total = 0;
+    let settled = false;
     stream.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > maxBytes) {
+        settled = true;
+        const err = detailsObjectTooLargeError();
+        const destroyable = /** @type {any} */ (stream);
+        if (typeof destroyable.destroy === "function") destroyable.destroy(err);
+        reject(err);
+        return;
+      }
+      chunks.push(buffer);
     });
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", reject);
+    stream.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks, total));
+    });
+    stream.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
   });
 }
 

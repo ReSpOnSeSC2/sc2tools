@@ -9,6 +9,7 @@ const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
 } = require("../src/middleware/replayIngestAdmission");
+const { _internals: appInternals } = require("../src/app");
 
 function deferred() {
   let resolve;
@@ -33,6 +34,7 @@ function testApp({
     if (!req.headers.authorization) {
       req.headers.authorization = `Bearer ${"t".repeat(43)}`;
     }
+    req.auth = { userId: "admission-test-user", source: "device" };
     next();
   });
   app.use(buildReplayIngestAdmission({
@@ -70,13 +72,58 @@ function testApp({
 }
 
 describe("replay ingest admission", () => {
+  test("large authenticated JSON allowlist covers replay writebacks and sound uploads only", () => {
+    const matches = (method, originalUrl) => appInternals.isLargeAuthenticatedJson({
+      method,
+      originalUrl,
+    });
+    expect(matches("POST", "/v1/games")).toBe(true);
+    expect(matches("POST", "/v1/games/g-1/macro-breakdown")).toBe(true);
+    expect(matches("POST", "/v1/games/g-1/apm-curve")).toBe(true);
+    expect(matches("POST", "/v1/games/g-1/opp-build-order")).toBe(true);
+    expect(matches("POST", "/v1/me/multichat-sounds")).toBe(true);
+    expect(matches("GET", "/v1/games/g-1/macro-breakdown")).toBe(false);
+    expect(matches("POST", "/v1/custom-builds/example")).toBe(false);
+  });
+
+  test("admits the documented 300 KiB sound payload without restoring a global large parser", async () => {
+    const app = express();
+    app.use((req, _res, next) => {
+      req.auth = { userId: "sound-owner", source: "clerk" };
+      next();
+    });
+    app.use(buildReplayIngestAdmission({
+      maxActive: 1,
+      maxBodyBytes: 5 * 1024 * 1024,
+      matchRequest: appInternals.isLargeAuthenticatedJson,
+    }));
+    app.use(express.json({ limit: "5mb" }));
+    app.post("/v1/me/multichat-sounds", (req, res) => {
+      if (!claimReplayIngestAdmission(res)) return;
+      try {
+        res.status(201).json({
+          bytes: Buffer.from(String(req.body.dataBase64 || ""), "base64").length,
+        });
+      } finally {
+        releaseReplayIngestAdmission(res);
+      }
+    });
+    const bytes = Buffer.alloc(300 * 1024, 1);
+    bytes.set(Buffer.from("ID3"));
+    const response = await request(app)
+      .post("/v1/me/multichat-sounds")
+      .send({ label: "Maximum sound", dataBase64: bytes.toString("base64") });
+    expect(response.status).toBe(201);
+    expect(response.body.bytes).toBe(300 * 1024);
+  });
+
   test("route claims fail closed when the pre-parser gate is missing", () => {
     const res = { locals: {} };
     expect(claimReplayIngestAdmission(res)).toBe(false);
     expect(claimReplayIngestAdmission(res, { allowMissing: true })).toBe(true);
   });
 
-  test("rejects a missing Bearer header without occupying the ingest slot", async () => {
+  test("rejects missing or unverified credentials without occupying the ingest slot", async () => {
     const app = express();
     app.use(buildReplayIngestAdmission({ maxActive: 1 }));
     const missing = await request(app).post("/v1/games").send({ gameId: "no-auth" });
@@ -87,6 +134,12 @@ describe("replay ingest admission", () => {
       .set("authorization", "Bearer token trailing")
       .send({ gameId: "bad-auth" });
     expect(malformed.status).toBe(401);
+    const plausibleFake = await request(app)
+      .post("/v1/games")
+      .set("authorization", `Bearer ${"f".repeat(43)}`)
+      .send({ gameId: "fake-auth" });
+    expect(plausibleFake.status).toBe(401);
+    expect(plausibleFake.body.error.code).toBe("invalid_token");
     const oversized = await request(app)
       .post("/v1/games")
       .set("authorization", `Bearer ${"x".repeat(4097)}`)
@@ -257,6 +310,51 @@ describe("replay ingest admission", () => {
       ]);
       expect(response.status).toBe(413);
       expect(response.body.error.code).toBe("payload_too_large");
+    } finally {
+      hold.resolve();
+      await first;
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  test("times out a never-ending chunked body while the ingest lane is busy", async () => {
+    const hold = deferred();
+    const started = deferred();
+    const app = testApp({
+      hold,
+      onRouteStart: started.resolve,
+      bodyTimeoutMs: 40,
+    });
+    const server = http.createServer(app);
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const first = request(server)
+      .post("/v1/games")
+      .send({ gameId: "held-for-busy-timeout" })
+      .then((res) => res);
+    await started.promise;
+    try {
+      const outcome = deferred();
+      const closed = deferred();
+      const slow = http.request({
+        host: "127.0.0.1",
+        port: server.address().port,
+        path: "/v1/games",
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${"t".repeat(43)}`,
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+        },
+      }, (res) => {
+        res.resume();
+        res.once("end", () => outcome.resolve(res.statusCode));
+      });
+      slow.on("error", () => {});
+      slow.once("close", closed.resolve);
+      slow.write('{"gameId":"busy-and-slow"');
+      expect(await outcome.promise).toBe(408);
+      await closed.promise;
+      expect(slow.destroyed).toBe(true);
     } finally {
       hold.resolve();
       await first;

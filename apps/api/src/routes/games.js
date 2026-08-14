@@ -12,6 +12,12 @@ const {
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
 
+const ANALYSIS_CORPUS_MAX_CONCURRENT = 1;
+const ANALYSIS_CORPUS_MAX_WAITERS = 6;
+const ANALYSIS_CORPUS_RETRY_AFTER_SEC = 1;
+const ANALYSIS_CORPUS_RESPONSE_TIMEOUT_MS = 30_000;
+const REPLAY_INGEST_MAX_GAMES = 50;
+
 /**
  * /v1/games — list, get, ingest from agent.
  *
@@ -60,6 +66,7 @@ const {
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
+ *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} deps
  */
 function buildGamesRouter(deps) {
@@ -88,6 +95,15 @@ function buildGamesRouter(deps) {
   const scheduleSessionUpdate = createSessionUpdateScheduler(
     deps.io,
     deps.games,
+  );
+  // One narrowly projected page can still hold thousands of objects plus its
+  // JSON serialization buffer. Admit only one page at a time per API process;
+  // a small cancellable queue keeps concurrent Arcade users responsive without
+  // letting dashboard traffic multiply retained corpus pages during ingest.
+  const analysisCorpusAdmission = createAnalysisCorpusAdmission();
+  deps.runtimeCapacityRegistry?.register(
+    "analysisCorpus",
+    () => analysisCorpusAdmission.capacitySnapshot(),
   );
   // Within a single batch the same myToonHandle will repeat for every
   // game; track which ones we've already attempted to merge so a
@@ -126,20 +142,61 @@ function buildGamesRouter(deps) {
    * identical replay timestamps.
    */
   router.get("/games/analysis-corpus", async (req, res, next) => {
+    const requestAbort = analysisCorpusRequestAbort(req, res);
+    /** @type {(() => void) | null} */
+    let release = null;
+    /** @type {{ markComputeSettled: () => void } | null} */
+    let permitGuard = null;
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      res.json(
-        await deps.games.listAnalysisCorpus(auth.userId, {
-          limit: parseLimit(req.query.limit),
-          cursor:
-            typeof req.query.cursor === "string"
-              ? req.query.cursor
-              : undefined,
-        }),
-      );
+      release = await analysisCorpusAdmission.acquire(requestAbort.signal);
+      if (!release) {
+        if (!requestAbort.signal.aborted && !res.headersSent) {
+          res.set("Retry-After", String(ANALYSIS_CORPUS_RETRY_AFTER_SEC));
+          res.status(503).json({ error: { code: "analysis_corpus_busy" } });
+        }
+        return;
+      }
+      // A disconnect can race with the admission hand-off: the waiter is
+      // resolved, then the socket closes before the response-lifetime guard
+      // installs its listeners. Never strand the sole corpus permit in that
+      // window.
+      if (
+        requestAbort.signal.aborted
+        || res.destroyed
+        || res.writableEnded
+      ) {
+        release();
+        release = null;
+        return;
+      }
+      // Keep the memory permit until Node has handed the serialized page to
+      // the response stream (or the connection closes). Releasing immediately
+      // after `res.json()` allows a slow client to retain one large JSON buffer
+      // while the next request allocates another. The timeout prevents a
+      // stalled authenticated client from monopolizing the only corpus lane.
+      permitGuard = holdAnalysisCorpusPermit(res, release);
+      release = null;
+      const result = await deps.games.listAnalysisCorpus(auth.userId, {
+        limit: parseLimit(req.query.limit),
+        cursor:
+          typeof req.query.cursor === "string"
+            ? req.query.cursor
+            : undefined,
+        signal: requestAbort.signal,
+      });
+      if (!requestAbort.signal.aborted && !res.headersSent) res.json(result);
     } catch (err) {
+      if (requestAbort.signal.aborted || isAbortError(err)) return;
       next(err);
+    } finally {
+      // A closed socket aborts the Mongo query, but cancellation is not
+      // instantaneous. Do not hand the sole memory permit to another request
+      // until this page's computation has actually unwound as well.
+      if (permitGuard) permitGuard.markComputeSettled();
+      if (release) release();
+      requestAbort.cleanup();
     }
   });
 
@@ -316,6 +373,25 @@ function buildGamesRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const userId = auth.userId;
+      if (
+        Array.isArray(req.body?.games)
+        && req.body.games.length > REPLAY_INGEST_MAX_GAMES
+      ) {
+        // Reject before validation/result arrays or any Mongo/R2 work. The
+        // desktop agent already batches at this ceiling; this protects the
+        // JSON route from a tiny-item array that expands into a huge rejection
+        // response or monopolizes the single ingest lane.
+        req.body = undefined;
+        res.status(413).json({
+          error: {
+            code: "replay_batch_too_large",
+            message: `Replay batches are limited to ${REPLAY_INGEST_MAX_GAMES} games.`,
+            retryable: false,
+            maxGames: REPLAY_INGEST_MAX_GAMES,
+          },
+        });
+        return;
+      }
       const incoming = Array.isArray(req.body?.games)
         ? req.body.games
         : [req.body];
@@ -474,8 +550,15 @@ function buildGamesRouter(deps) {
         // the same flat MMR line. Current MMR remains available to the
         // session overlay through its separate profile/Pulse fallback.
         let created;
+        let customBuildRevision = null;
         try {
-          created = await deps.games.upsert(userId, game);
+          if (typeof deps.games.upsertWithRevision === "function") {
+            const stored = await deps.games.upsertWithRevision(userId, game);
+            created = stored.created;
+            customBuildRevision = stored.customBuildRevision;
+          } else {
+            created = await deps.games.upsert(userId, game);
+          }
         } catch (err) {
           const e = /** @type {{ message?: unknown }} */ (err);
           if (req.log) {
@@ -621,11 +704,16 @@ function buildGamesRouter(deps) {
         // the opponent profile / Recent games column always shows the
         // agent's auto label even after the user named their opener and
         // saved it — and a click-Reclassify pass would just be re-undone
-        // by the next upload. Fail-soft: a thrown evaluator never blocks
-        // the ingest itself.
+        // by the next upload. A storage failure here must remain retryable:
+        // GamesService intentionally invalidates old custom provenance before
+        // this hook evaluates the fresh payload. Acknowledging the replay in
+        // that gap would make the agent advance permanently while the replay
+        // disappears from authoritative custom/community totals.
         if (deps.customBuilds && typeof deps.customBuilds.tagSingleGame === "function") {
           try {
-            await deps.customBuilds.tagSingleGame(userId, game);
+            await deps.customBuilds.tagSingleGame(userId, game, {
+              expectedRevision: customBuildRevision,
+            });
           } catch (e) {
             if (req.log) {
               req.log.warn(
@@ -633,6 +721,12 @@ function buildGamesRouter(deps) {
                 "ingest_custom_build_tag_failed",
               );
             }
+            rejected.push({
+              gameId: game.gameId,
+              retryable: true,
+              errors: ["custom_build_tag_retry_required"],
+            });
+            continue;
           }
         }
         const outcome = { gameId: game.gameId, created };
@@ -1009,6 +1103,7 @@ async function emitSessionUpdate(io, games, userId, opts = {}) {
     try {
       const session = await games.todaySession(userId, tz, {
         refreshCurrentMmr,
+        reuseRecent: true,
       });
       // The first successful resolve bypasses and repopulates the
       // process-wide Pulse cache. Remaining overlay sockets can reuse
@@ -1028,6 +1123,7 @@ async function emitSessionUpdate(io, games, userId, opts = {}) {
     try {
       await games.todaySession(userId, undefined, {
         refreshCurrentMmr: true,
+        reuseRecent: true,
       });
     } catch {
       // Best-effort cache warm; the next connect/refresher retries.
@@ -1285,4 +1381,176 @@ function parseDate(raw) {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-module.exports = { buildGamesRouter, createSessionUpdateScheduler };
+/**
+ * Small abort-aware semaphore for analysis-corpus pages. A released slot is
+ * handed directly to the oldest live waiter, so active work never exceeds the
+ * configured ceiling even when a new request races the wake-up.
+ *
+ * @param {{maxActive?: number, maxWaiters?: number}} [opts]
+ */
+function createAnalysisCorpusAdmission(opts = {}) {
+  const maxActive = Math.max(
+    1,
+    Math.floor(Number(opts.maxActive)) || ANALYSIS_CORPUS_MAX_CONCURRENT,
+  );
+  const maxWaiters = Math.max(
+    0,
+    Number.isFinite(Number(opts.maxWaiters))
+      ? Math.floor(Number(opts.maxWaiters))
+      : ANALYSIS_CORPUS_MAX_WAITERS,
+  );
+  let active = 0;
+  /** @type {Array<{signal: AbortSignal, resolve: (release: (() => void) | null) => void}>} */
+  const waiters = [];
+
+  function releaseSlot() {
+    while (waiters.length > 0) {
+      const next = waiters.shift();
+      if (!next || next.signal.aborted) continue;
+      next.resolve(makeRelease());
+      return;
+    }
+    active = Math.max(0, active - 1);
+  }
+
+  function makeRelease() {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      releaseSlot();
+    };
+  }
+
+  /** @param {AbortSignal} signal */
+  function acquire(signal) {
+    if (signal.aborted) return Promise.resolve(null);
+    if (active < maxActive) {
+      active += 1;
+      return Promise.resolve(makeRelease());
+    }
+    if (waiters.length >= maxWaiters) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      /** @type {() => void} */
+      let onAbort = () => {};
+      /** @param {(() => void) | null} slot */
+      const finish = (slot) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(slot);
+      };
+      const waiter = { signal, resolve: finish };
+      onAbort = () => {
+        const index = waiters.indexOf(waiter);
+        if (index >= 0) waiters.splice(index, 1);
+        finish(null);
+      };
+      waiters.push(waiter);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
+  }
+
+  function capacitySnapshot() {
+    return {
+      activeRequests: active,
+      queuedRequests: waiters.length,
+      maxActiveRequests: maxActive,
+      maxQueuedRequests: maxWaiters,
+    };
+  }
+
+  return { acquire, capacitySnapshot };
+}
+
+/**
+ * Tie queued/active corpus work to the HTTP connection.
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ */
+function analysisCorpusRequestAbort(req, res) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const close = () => {
+    if (!res.writableEnded) abort();
+  };
+  req.once("aborted", abort);
+  res.once("close", close);
+  return {
+    signal: controller.signal,
+    cleanup() {
+      req.removeListener("aborted", abort);
+      res.removeListener("close", close);
+    },
+  };
+}
+
+/**
+ * Transfer an acquired corpus permit to the HTTP response lifetime.
+ * @param {import('express').Response} res
+ * @param {() => void} release
+ * @param {number} [timeoutMs]
+ * @returns {{ markComputeSettled: () => void }}
+ */
+function holdAnalysisCorpusPermit(
+  res,
+  release,
+  timeoutMs = ANALYSIS_CORPUS_RESPONSE_TIMEOUT_MS,
+) {
+  let released = false;
+  let responseSettled = false;
+  let computeSettled = false;
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let timer = null;
+  const releaseWhenSafe = () => {
+    if (released || !responseSettled || !computeSettled) return;
+    released = true;
+    if (timer) clearTimeout(timer);
+    res.removeListener("finish", responseDone);
+    res.removeListener("close", responseDone);
+    release();
+  };
+  const responseDone = () => {
+    responseSettled = true;
+    releaseWhenSafe();
+  };
+  // The response may already have closed before this helper is entered.
+  // Record that side of the latch synchronously rather than waiting for a
+  // close event that Node has already emitted. The computation must still
+  // settle before the permit is transferred.
+  if (res.destroyed || res.writableEnded) {
+    responseSettled = true;
+  } else {
+    timer = setTimeout(() => {
+      if (!res.writableEnded) res.destroy();
+      responseDone();
+    }, timeoutMs);
+    if (typeof timer.unref === "function") timer.unref();
+    res.once("finish", responseDone);
+    res.once("close", responseDone);
+  }
+  return {
+    markComputeSettled() {
+      computeSettled = true;
+      releaseWhenSafe();
+    },
+  };
+}
+
+/** @param {unknown} err */
+function isAbortError(err) {
+  return !!(
+    err
+    && typeof err === "object"
+    && /** @type {{name?: unknown}} */ (err).name === "AbortError"
+  );
+}
+
+module.exports = {
+  buildGamesRouter,
+  createSessionUpdateScheduler,
+  createAnalysisCorpusAdmission,
+  holdAnalysisCorpusPermit,
+};

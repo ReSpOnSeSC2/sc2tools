@@ -62,7 +62,7 @@ export function AnalyzerShell({
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 
   return (
-    <AnalyzerProvider>
+    <AnalyzerProvider analysisGamesEnabled={tab === "arcade"}>
       <div className="space-y-5">
         <DoctorBanner />
 

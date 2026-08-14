@@ -73,6 +73,19 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Custom-build replay totals now agree everywhere** - My Builds and an
+  author's Community cards read the same durable classification stored on each
+  replay, rather than re-running a smaller recent sample. Community cards now
+  label vote scores as votes, show private replay totals only to the build's
+  owner, and show loading or temporary unavailability instead of a false zero.
+
+- **The cloud API now bounds the memory bursts that caused intermittent 502s** -
+  repeated overlay reconnects, chat polling, SC2Pulse lookups, replay-detail
+  analyses, and analysis-corpus pages are now coalesced, size-limited,
+  admission-controlled, and cancelled when their clients leave. Ordinary
+  dashboard visits no longer load the large analysis corpus, and request logs
+  no longer record bearer, overlay, chatbot, or device-pairing credentials.
+
 - **Custom-build replay matching now shows real progress and completion** -
   Save and Save & Reclassify are distinct actions, background matching remains
   visible after the request is queued, completed results refresh automatically,

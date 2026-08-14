@@ -42,6 +42,8 @@ export interface CustomBuild {
 /** Aggregate stats from /v1/builds, keyed by build name (NOT slug). */
 export interface BuildStats {
   name: string;
+  /** Present on provenance-keyed custom-build stats; absent on legacy name buckets. */
+  slug?: string;
   total: number;
   wins: number;
   losses: number;
@@ -52,6 +54,10 @@ export interface BuildStats {
 /** Decorated build = CustomBuild + optional aggregate stats. */
 export interface DecoratedBuild extends CustomBuild {
   stats?: BuildStats;
+  /** Distinguishes a verified zero from a failed or unfinished stats request. */
+  statsState?: "ready" | "loading" | "unavailable";
+  /** Stable-slug classification is preferred; legacy name tags are fallback-only. */
+  statsSource?: "classified" | "stored-tags";
 }
 
 /** Detail response shape from /v1/builds/:name. */

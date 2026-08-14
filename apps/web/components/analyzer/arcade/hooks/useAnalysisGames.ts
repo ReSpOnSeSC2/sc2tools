@@ -3,6 +3,7 @@
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -40,7 +41,34 @@ export type AnalysisGamesResult = {
   pagesFetched: number;
   /** True only when the established 20,000-game product ceiling was hit. */
   hitCorpusLimit: boolean;
+  /** Whether a consumer has explicitly asked for the expensive corpus. */
+  isActive: boolean;
+  /** Activate the corpus, or retry it after a failed request. */
+  load: () => void;
+  /** Release a Daily Pulse request; Arcade can independently keep it active. */
+  release: () => void;
 };
+
+type AccountBoundAnalysisState = Omit<
+  AnalysisGamesResult,
+  "isActive" | "load" | "release"
+> & {
+  accountKey: string | null;
+};
+
+function emptyAnalysisState(
+  accountKey: string | null,
+  isLoading = false,
+): AccountBoundAnalysisState {
+  return {
+    accountKey,
+    items: [],
+    isLoading,
+    error: null,
+    pagesFetched: 0,
+    hitCorpusLimit: false,
+  };
+}
 
 const AnalysisGamesContext = createContext<AnalysisGamesResult | null>(null);
 
@@ -94,33 +122,56 @@ export function useSettledAnalysisRevision(
  */
 export function AnalysisGamesProvider({
   children,
+  enabled: enabledBySurface = false,
   refreshQuietMs = ANALYSIS_GAMES_REFRESH_QUIET_MS,
 }: {
   children: ReactNode;
+  /** Arcade passes true only while its tab is mounted. */
+  enabled?: boolean;
   refreshQuietMs?: number;
 }) {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const { dbRev } = useFilters();
   const settledRevision = useSettledAnalysisRevision(dbRev, refreshQuietMs);
-  const enabled = isLoaded && isSignedIn;
-  const [state, setState] = useState<AnalysisGamesResult>({
-    items: [],
-    isLoading: true,
-    error: null,
-    pagesFetched: 0,
-    hitCorpusLimit: false,
-  });
+  const accountKey = isLoaded && isSignedIn && userId ? userId : null;
+  const [requestedForAccount, setRequestedForAccount] = useState<string | null>(
+    null,
+  );
+  const [manualRevision, setManualRevision] = useState(0);
+  const active = enabledBySurface
+    || (accountKey !== null && requestedForAccount === accountKey);
+  const enabled = active && accountKey !== null;
+  const [state, setState] = useState<AccountBoundAnalysisState>(() =>
+    emptyAnalysisState(accountKey),
+  );
+
+  const load = useCallback(() => {
+    if (!accountKey) return;
+    // Keep the compact Daily Pulse gate visible as a loading state on the
+    // very render that follows the click; the fetch effect starts afterward.
+    setState((previous) => previous.accountKey === accountKey
+      ? {
+          ...previous,
+          isLoading: previous.pagesFetched === 0,
+          error: null,
+        }
+      : emptyAnalysisState(accountKey, true));
+    setRequestedForAccount(accountKey);
+    setManualRevision((value) => value + 1);
+  }, [accountKey]);
+  const release = useCallback(() => setRequestedForAccount(null), []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!active) {
+      setState(emptyAnalysisState(accountKey));
+      return;
+    }
+    if (!isLoaded) {
+      setState(emptyAnalysisState(null));
+      return;
+    }
     if (!enabled) {
-      setState({
-        items: [],
-        isLoading: false,
-        error: null,
-        pagesFetched: 0,
-        hitCorpusLimit: false,
-      });
+      setState(emptyAnalysisState(accountKey));
       return;
     }
 
@@ -128,11 +179,13 @@ export function AnalysisGamesProvider({
     let cancelled = false;
     // On refresh, keep rendering the last complete snapshot until its
     // replacement is ready. Initial load still reports loading to consumers.
-    setState((previous) => ({
-      ...previous,
-      isLoading: previous.pagesFetched === 0,
-      error: null,
-    }));
+    setState((previous) => previous.accountKey === accountKey
+      ? {
+          ...previous,
+          isLoading: previous.pagesFetched === 0,
+          error: null,
+        }
+      : emptyAnalysisState(accountKey, true));
 
     void (async () => {
       try {
@@ -172,6 +225,7 @@ export function AnalysisGamesProvider({
         // One replacement assignment is the retention guarantee: old pages
         // and old flat arrays are not kept in an application-wide cache.
         setState({
+          accountKey,
           items,
           isLoading: false,
           error: null,
@@ -180,11 +234,13 @@ export function AnalysisGamesProvider({
         });
       } catch (err) {
         if (cancelled || isAbortError(err)) return;
-        setState((previous) => ({
-          ...previous,
-          isLoading: false,
-          error: asClientApiError(err),
-        }));
+        setState((previous) => previous.accountKey === accountKey
+          ? {
+              ...previous,
+              isLoading: false,
+              error: asClientApiError(err),
+            }
+          : previous);
       }
     })();
 
@@ -192,9 +248,27 @@ export function AnalysisGamesProvider({
       cancelled = true;
       controller.abort();
     };
-  }, [enabled, getToken, isLoaded, settledRevision]);
+  }, [
+    active,
+    accountKey,
+    enabled,
+    getToken,
+    isLoaded,
+    manualRevision,
+    settledRevision,
+  ]);
 
-  const value = useMemo(() => state, [state]);
+  const value = useMemo(
+    () => {
+      // React runs effect cleanup after a render commits. During an A → B
+      // switch, synchronously hide A's corpus before aborting its requests.
+      const visibleState = state.accountKey === accountKey
+        ? state
+        : emptyAnalysisState(accountKey, enabled);
+      return { ...visibleState, isActive: active, load, release };
+    },
+    [accountKey, active, enabled, load, release, state],
+  );
   return createElement(AnalysisGamesContext.Provider, { value }, children);
 }
 

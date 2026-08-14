@@ -228,6 +228,7 @@ class FakeS3Client {
       }
       return {
         Body: bufferToStream(stored.body),
+        ContentLength: stored.body.length,
         ContentType: stored.ContentType,
         ContentEncoding: stored.ContentEncoding,
         ETag: stored.etag,
@@ -351,6 +352,32 @@ describe("R2DetailsStore", () => {
     await store.write("u1", "g1", date, SAMPLE_BLOB);
     const got = await store.read("u1", "g1");
     expect(got).toEqual(SAMPLE_BLOB);
+  });
+
+  test("rejects compressed expansion and oversized merged detail objects", async () => {
+    const date = new Date("2026-05-04T12:00:00Z");
+    const bombKey = store.keyFor("u1", "gzip-bomb");
+    const bomb = await gzip(Buffer.from(JSON.stringify({
+      buildLog: ["A".repeat(7 * 1024 * 1024)],
+    }), "utf8"));
+    s3.objects.set(bombKey, {
+      body: bomb,
+      etag: '"gzip-bomb"',
+      ContentEncoding: "gzip",
+    });
+
+    await expect(store.read("u1", "gzip-bomb")).rejects.toMatchObject({
+      code: "game_details_object_too_large",
+      status: 413,
+    });
+    await expect(store.write("u1", "oversized", date, {
+      buildLog: ["B".repeat(7 * 1024 * 1024)],
+    })).rejects.toMatchObject({
+      code: "game_details_object_too_large",
+      status: 413,
+    });
+    expect(s3.objects.has(store.keyFor("u1", "oversized"))).toBe(false);
+    expect(await collection.findOne({ userId: "u1", gameId: "oversized" })).toBeNull();
   });
 
   test("partial writes preserve fields already stored on the object", async () => {
@@ -502,7 +529,7 @@ describe("R2DetailsStore", () => {
     })).rejects.toBe(transient);
   });
 
-  test("concurrent bulk readers share the global four-object memory ceiling", async () => {
+  test("concurrent bulk readers share the global two-object memory ceiling", async () => {
     let active = 0;
     let maxActive = 0;
     store.read = jest.fn(async (_userId, gameId) => {
@@ -522,8 +549,54 @@ describe("R2DetailsStore", () => {
       }),
     ]);
 
-    expect(maxActive).toBeLessThanOrEqual(4);
+    expect(maxActive).toBeLessThanOrEqual(2);
     expect(store.read).toHaveBeenCalledTimes(24);
+  });
+
+  test("bounds queued object reads while the two active slots are stalled", async () => {
+    const activeReleases = await Promise.all(
+      Array.from({ length: 2 }, () => store._acquireBulkReadSlot()),
+    );
+    const waitingControllers = Array.from({ length: 32 }, () => new AbortController());
+    const waiters = waitingControllers.map((controller) =>
+      store._acquireBulkReadSlot(controller.signal).catch((err) => err),
+    );
+    expect(store._bulkReadWaiters).toHaveLength(32);
+    await expect(store._acquireBulkReadSlot()).rejects.toMatchObject({
+      code: "game_details_busy",
+      status: 503,
+      retryAfterMs: 1000,
+    });
+
+    for (const controller of waitingControllers) controller.abort();
+    for (const release of activeReleases) release();
+    await Promise.all(waiters);
+    expect(store._bulkReadWaiters).toHaveLength(0);
+    expect(store._bulkReadActive).toBe(0);
+  });
+
+  test("R2 writes share the decoded-object lane with reads", async () => {
+    const held = await Promise.all([
+      store._acquireBulkReadSlot(),
+      store._acquireBulkReadSlot(),
+    ]);
+    let completed = false;
+    const pendingWrite = store.write(
+      "u-write",
+      "g-write",
+      new Date("2026-05-04T12:00:00Z"),
+      SAMPLE_BLOB,
+    ).then(() => { completed = true; });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(completed).toBe(false);
+    expect(store._bulkReadWaiters).toHaveLength(1);
+
+    held[0]();
+    await pendingWrite;
+    expect(store._bulkReadActive).toBe(1);
+    held[1]();
+    expect(store._bulkReadActive).toBe(0);
   });
 
   test("delete removes the object + its Mongo metadata row", async () => {

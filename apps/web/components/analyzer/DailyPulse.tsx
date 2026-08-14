@@ -16,12 +16,12 @@
  *   - Cards deep-link into the analyzer tab that owns the full story
  *     (via onNavigate — tab state lives in DashboardLayout, not URLs).
  *
- * The strip hides entirely when the corpus can't support a single card
- * (brand-new account) — an empty pulse must never show filler.
+ * If the corpus can't support a card yet, the strip keeps a compact empty
+ * state so the loaded corpus can still be collapsed and released.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown, Loader2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { selectDailyPulse, type PulseCard, type PulseTone } from "@/lib/dailyPulse";
 import {
@@ -99,9 +99,9 @@ export function DailyPulse({
 }) {
   const seed = useDailySeed();
 
-  // Shared with Arcade, but cursor-paged through a strict field projection so
-  // an ordinary dashboard visit never asks the API to materialise/serialize
-  // 20,000 full slim game documents in one response.
+  // Shared with Arcade, but deliberately dormant on an ordinary dashboard.
+  // The compact gate below activates it only after the user asks to see the
+  // pulse; opening Arcade activates the same provider automatically.
   const gamesRes = useAnalysisGames();
   const seasonsRes = useApi<ApiSeasons>("/v1/seasons");
 
@@ -150,15 +150,31 @@ export function DailyPulse({
     setCollapsed(readCollapsed());
   }, []);
   const toggle = () => {
-    setCollapsed((prev) => {
-      writeCollapsed(!prev);
-      return !prev;
-    });
+    const next = !collapsed;
+    setCollapsed(next);
+    writeCollapsed(next);
+    if (next) gamesRes.release();
+    else if (!gamesRes.isActive) gamesRes.load();
   };
 
-  // No skeleton flash: the strip only appears once it has real cards.
-  // A brand-new account (zero eligible cards) never sees the section.
-  if (gamesRes.isLoading || selection.cards.length === 0) return null;
+  const loadPulse = () => {
+    setCollapsed(false);
+    writeCollapsed(false);
+    gamesRes.load();
+  };
+
+  // Keep the feature discoverable without silently loading the user's full
+  // replay history. Once requested, this same compact row carries loading and
+  // retry feedback instead of flashing an empty card strip.
+  if (!gamesRes.isActive || gamesRes.isLoading || gamesRes.error) {
+    return (
+      <DailyPulseGate
+        loading={gamesRes.isLoading}
+        failed={!!gamesRes.error}
+        onLoad={loadPulse}
+      />
+    );
+  }
 
   return (
     <section
@@ -192,18 +208,76 @@ export function DailyPulse({
       </button>
       {!collapsed ? (
         <div className="border-t border-border p-3">
-          <div className="flex snap-x gap-3 overflow-x-auto pb-1">
-            {selection.cards.map((card) => (
-              <PulseCardView
-                key={card.id}
-                card={card}
-                onNavigate={onNavigate}
-                onOpenOpponent={onOpenOpponent}
-              />
-            ))}
-          </div>
+          {selection.cards.length > 0 ? (
+            <div className="flex snap-x gap-3 overflow-x-auto pb-1">
+              {selection.cards.map((card) => (
+                <PulseCardView
+                  key={card.id}
+                  card={card}
+                  onNavigate={onNavigate}
+                  onOpenOpponent={onOpenOpponent}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="px-1 py-1 text-xs text-text-dim">
+              No replay insights yet. More games will unlock your daily pulse.
+            </p>
+          )}
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function DailyPulseGate({
+  loading,
+  failed,
+  onLoad,
+}: {
+  loading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  return (
+    <section
+      aria-label="Daily Pulse"
+      className="overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard"
+    >
+      <button
+        type="button"
+        onClick={onLoad}
+        disabled={loading}
+        className="flex min-h-[48px] w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-bg-elevated disabled:cursor-wait disabled:hover:bg-transparent"
+      >
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden className="relative flex h-2 w-2 flex-shrink-0">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+          </span>
+          <span className="text-caption font-semibold text-text">
+            Daily Pulse
+          </span>
+          <span className="truncate text-micro text-text-dim">
+            {loading
+              ? "Loading replay insights…"
+              : failed
+                ? "Replay insights couldn’t load"
+                : "Replay insights, loaded when you open them"}
+          </span>
+        </span>
+        {loading ? (
+          <Loader2
+            aria-hidden
+            className="h-4 w-4 flex-shrink-0 animate-spin text-accent"
+          />
+        ) : (
+          <span className="inline-flex flex-shrink-0 items-center gap-1 text-micro font-semibold text-accent">
+            {failed ? "Try again" : "Load"}
+            <ArrowRight aria-hidden className="h-3 w-3" />
+          </span>
+        )}
+      </button>
     </section>
   );
 }

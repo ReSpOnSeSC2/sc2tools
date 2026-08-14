@@ -113,11 +113,14 @@ describe("community + gdpr integration", () => {
       );
       expect(detail.status).toBe(200);
       expect(detail.body.build).toBeTruthy();
-      expect(detail.body.build.slug).toBe("my-build");
+      // The public document has its own shareable slug. The nested private
+      // source slug is internal publishing metadata and must never serialize.
+      expect(detail.body.build.slug).toBeUndefined();
       expect(detail.body.ownerUserId).toBe("u_a");
       // Per-user vote arrays must NOT be returned publicly.
       expect(detail.body.upvotes).toBeUndefined();
       expect(detail.body.downvotes).toBeUndefined();
+      expect(detail.body.sourceSlug).toBeUndefined();
     });
 
     test("list supports sort=new and q= search", async () => {
@@ -187,6 +190,161 @@ describe("community + gdpr integration", () => {
       // dominate the response.
       const pvtCount = res.body.items.filter((b) => b.matchup === "PvT").length;
       expect(pvtCount).toBe(3);
+    });
+
+    test("legacy private build fields are scrubbed from every public build read", async () => {
+      const publicSlug = "legacy-public-sanitizer";
+      const privateSlug = "private-source-never-public";
+      const secretNote = "legacy-private-scouting-note";
+      const sourceGameId = "private-replay-identity";
+      await db.communityBuilds.insertOne({
+        slug: publicSlug,
+        ownerUserId: "u_legacy_public_owner",
+        sourceSlug: privateSlug,
+        title: "Legacy Public Boundary Fixture",
+        description: "Public description",
+        matchup: "LvL",
+        authorName: "LegacyAuthor",
+        votes: 9999,
+        upvotes: ["private-voter"],
+        downvotes: [],
+        publishedAt: new Date("2026-08-13T13:00:00Z"),
+        updatedAt: new Date("2026-08-13T13:00:00Z"),
+        removed: false,
+        build: {
+          slug: privateSlug,
+          name: "Safe build name",
+          race: "Protoss",
+          notes: secretNote,
+          sourceGameId,
+          userId: "private-internal-user",
+          _id: "private-build-id",
+          rules: [{ type: "before", name: "BuildPylon", time_lt: 30 }],
+        },
+      });
+
+      try {
+        // The controversial request runs the real Mongo aggregation and
+        // regresses the formerly illegal mixed inclusion/exclusion project.
+        const responses = [
+          await request(app).get(
+            "/v1/community/builds?q=Legacy%20Public%20Boundary%20Fixture",
+          ),
+          await request(app).get(
+            "/v1/community/builds?sort=controversial&q=Legacy%20Public%20Boundary%20Fixture",
+          ),
+          await request(app).get(`/v1/community/builds/${publicSlug}`),
+          await request(app).get(
+            "/v1/community/arcade-universe?perMatchup=50&totalCap=500",
+          ),
+          await request(app).get(
+            "/v1/community/authors/u_legacy_public_owner",
+          ),
+        ];
+
+        for (const res of responses) {
+          expect(res.status).toBe(200);
+          const serialized = JSON.stringify(res.body);
+          expect(serialized).not.toContain(privateSlug);
+          expect(serialized).not.toContain(secretNote);
+          expect(serialized).not.toContain(sourceGameId);
+          expect(serialized).not.toContain("private-internal-user");
+          expect(serialized).not.toContain("private-build-id");
+          expect(serialized).not.toContain("private-voter");
+        }
+
+        const detail = responses[2].body;
+        expect(detail.slug).toBe(publicSlug);
+        expect(detail.build.name).toBe("Safe build name");
+        expect(detail.build.slug).toBeUndefined();
+        expect(detail.build.notes).toBeUndefined();
+        expect(detail.build.sourceGameId).toBeUndefined();
+        expect(detail.build.userId).toBeUndefined();
+      } finally {
+        await db.communityBuilds.deleteOne({ slug: publicSlug });
+      }
+    });
+
+    test("creator-only community stats reflect durable replay classification", async () => {
+      await db.games.insertOne({
+        userId: "u_a",
+        gameId: "community-classified-1",
+        date: new Date("2026-08-13T12:00:00Z"),
+        result: "Victory",
+        _customBuildSlug: "my-build",
+      });
+      const mine = await request(app)
+        .get("/v1/community/my-build-stats")
+        .set("authorization", "Bearer user-a");
+      expect(mine.status).toBe(200);
+      expect(mine.body.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ total: 1, wins: 1, losses: 0 }),
+        ]),
+      );
+      expect(mine.body.items[0].sourceSlug).toBeUndefined();
+
+      const otherViewer = await request(app)
+        .get("/v1/community/my-build-stats")
+        .set("authorization", "Bearer user-b");
+      expect(otherViewer.status).toBe(200);
+      expect(otherViewer.body.items).toEqual([]);
+
+      const publicList = await request(app).get("/v1/community/builds");
+      expect(publicList.body.items[0].sourceSlug).toBeUndefined();
+    });
+
+    test("creator-only community stats include every published build beyond 200", async () => {
+      const prefix = "owner-stats-over-200-";
+      const sourcePrefix = "owner-source-over-200-";
+      const fixtureCount = 205;
+      const publishedAtBase = Date.parse("2027-01-01T00:00:00Z");
+      await db.communityBuilds.insertMany(
+        Array.from({ length: fixtureCount }, (_, i) => ({
+          slug: `${prefix}${i}`,
+          ownerUserId: "u_a",
+          sourceSlug: `${sourcePrefix}${i}`,
+          title: `Owner stats fixture ${i}`,
+          votes: 0,
+          publishedAt: new Date(publishedAtBase - i * 1000),
+          removed: false,
+        })),
+      );
+      await db.games.insertOne({
+        userId: "u_a",
+        gameId: "owner-stats-over-200-game",
+        date: new Date("2027-01-01T00:00:00Z"),
+        result: "Victory",
+        _customBuildSlug: `${sourcePrefix}${fixtureCount - 1}`,
+      });
+
+      try {
+        const res = await request(app)
+          .get("/v1/community/my-build-stats")
+          .set("authorization", "Bearer user-a");
+        expect(res.status).toBe(200);
+        const fixtureRows = res.body.items.filter((row) =>
+          String(row.publicSlug).startsWith(prefix),
+        );
+        expect(fixtureRows).toHaveLength(fixtureCount);
+        expect(fixtureRows).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              publicSlug: `${prefix}${fixtureCount - 1}`,
+              total: 1,
+              wins: 1,
+              losses: 0,
+            }),
+          ]),
+        );
+        expect(JSON.stringify(fixtureRows)).not.toContain(sourcePrefix);
+      } finally {
+        await db.games.deleteOne({ gameId: "owner-stats-over-200-game" });
+        await db.communityBuilds.deleteMany({
+          ownerUserId: "u_a",
+          slug: { $regex: `^${prefix}` },
+        });
+      }
     });
   });
 
@@ -293,6 +451,42 @@ describe("community + gdpr integration", () => {
         slug: sourceSlug,
       });
       expect(restoredPrivate.isPublic).toBe(true);
+    });
+
+    test("legacy nested source slug remains available internally for unpublish", async () => {
+      const sourceSlug = "legacy-unpublish-source";
+      const publicSlug = await publishRemovalFixture(sourceSlug);
+      // Simulate an old publication written before top-level sourceSlug was
+      // durable. Public reads scrub build.slug, but owner removal still needs
+      // this private, internal-only fallback to update the source build badge.
+      await db.communityBuilds.updateOne(
+        { slug: publicSlug },
+        {
+          $unset: { sourceSlug: "" },
+          $set: { "build.slug": sourceSlug },
+        },
+      );
+
+      try {
+        const before = await request(app).get(
+          `/v1/community/builds/${publicSlug}`,
+        );
+        expect(before.status).toBe(200);
+        expect(before.body.build.slug).toBeUndefined();
+
+        const removed = await request(app)
+          .delete(`/v1/community/builds/${publicSlug}`)
+          .set("authorization", "Bearer user-a");
+        expect(removed.status).toBe(204);
+        const privateBuild = await db.customBuilds.findOne({
+          userId: "u_a",
+          slug: sourceSlug,
+        });
+        expect(privateBuild.isPublic).toBe(false);
+      } finally {
+        await db.communityBuilds.deleteOne({ slug: publicSlug });
+        await db.customBuilds.deleteOne({ userId: "u_a", slug: sourceSlug });
+      }
     });
 
     test("moderation removal mirrors only the actual owner's private build", async () => {
@@ -446,6 +640,43 @@ describe("community + gdpr integration", () => {
       expect(res.body.contributors).toBeGreaterThanOrEqual(5);
       expect(res.body.openings.Phoenix).toBeGreaterThan(0);
     });
+
+    test("does not publish a capped sample dominated by one prolific user", async () => {
+      const opp = "1-S2-2-k-anon-cap";
+      const prolificCount = 20000;
+      const rows = Array.from({ length: prolificCount }, (_, i) => ({
+        userId: "a-prolific-user",
+        gameId: `k-cap-prolific-${i}`,
+        date: new Date(2026, 0, 1, 0, 0, 0, i),
+        result: "Victory",
+        map: "Privacy Test Map",
+        opponent: { pulseId: opp, race: "Terran" },
+      }));
+      for (let i = 0; i < 4; i++) {
+        rows.push({
+          userId: `z-sparse-user-${i}`,
+          gameId: `k-cap-sparse-${i}`,
+          date: new Date(2025, 0, 1, 0, 0, i),
+          result: "Defeat",
+          map: "Privacy Test Map",
+          opponent: { pulseId: opp, race: "Terran" },
+        });
+      }
+      await db.games.insertMany(rows);
+
+      try {
+        // The full corpus has five distinct users, but the bounded query's
+        // indexed order contains only the prolific user. The returned sample
+        // must pass k-anonymity independently of the uncapped pre-check.
+        const res = await request(app).get(
+          `/v1/community/opponents/${encodeURIComponent(opp)}`,
+        );
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe("k_anon_threshold_not_met");
+      } finally {
+        await db.games.deleteMany({ "opponent.pulseId": opp });
+      }
+    }, 30000);
   });
 
   describe("community write protection", () => {

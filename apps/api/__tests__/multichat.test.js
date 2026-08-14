@@ -209,11 +209,8 @@ describe("services/youtubeLiveChat", () => {
       "https://www.youtube.com/live_chat?is_popout=1&v=abcABC12345":
         '"clientVersion":"2.20260101.00.00" "continuation":"TOPCHAT_TOKEN_AAAAAAAAAAAA" "continuation":"ALLCHAT_TOKEN_BBBBBBBBBBBB"',
     };
-    const fetchImpl = async (url) => ({
-      ok: true,
-      status: 200,
-      text: async () => pages[url] ?? "",
-    });
+    const fetchImpl = async (url) =>
+      new Response(pages[url] ?? "", { status: 200 });
     const out = await yt.resolveLiveChat("@Some", { fetchImpl });
     expect(out.videoId).toBe("abcABC12345");
     expect(out.continuation).toBe("ALLCHAT_TOKEN_BBBBBBBBBBBB");
@@ -221,11 +218,8 @@ describe("services/youtubeLiveChat", () => {
   });
 
   test("resolveLiveChat reports not_live for an offline channel", async () => {
-    const fetchImpl = async () => ({
-      ok: true,
-      status: 200,
-      text: async () => '{"videoId":"abcABC12345"}',
-    });
+    const fetchImpl = async () =>
+      new Response('{"videoId":"abcABC12345"}', { status: 200 });
     await expect(
       yt.resolveLiveChat("@Offline", { fetchImpl }),
     ).rejects.toMatchObject({ code: "not_live" });

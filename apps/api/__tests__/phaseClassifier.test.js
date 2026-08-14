@@ -4,7 +4,12 @@
 const fs = require("fs");
 const path = require("path");
 
-const { classifyGame, PHASES, PHASE_LABELS } = require(
+const {
+  classifyGame,
+  PHASES,
+  PHASE_LABELS,
+  MAX_CLASSIFIER_DURATION_SEC,
+} = require(
   "../src/services/phaseClassifier");
 
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "phase");
@@ -224,6 +229,47 @@ describe("phaseClassifier — unit behaviour", () => {
     // every sample — score should equal rawScore.
     expect(sample.floor).toBe(0);
     expect(sample.score).toBe(sample.rawScore);
+  });
+
+  test("bounds a 24-hour game with 5,000 timeline/stat rows", () => {
+    const stats = [];
+    const unitTimeline = [];
+    for (let i = 0; i < 5000; i += 1) {
+      stats.push({
+        time: i,
+        food_workers: 12,
+        food_used: 12,
+        army_value: 0,
+      });
+      unitTimeline.push({ time: i, my: { Marine: 1 }, opp: {} });
+    }
+
+    const out = classifyGame({
+      macroBreakdown: {
+        bases: Array.from({ length: 200 }, () => ({
+          name: "CommandCenter",
+          born_time: 0,
+          died_time: 24 * 60 * 60,
+        })),
+        production_buildings: Array.from({ length: 2000 }, () => ({
+          name: "Factory",
+          born_time: 0,
+          died_time: 24 * 60 * 60,
+        })),
+        stats_events: stats,
+        unit_timeline: unitTimeline,
+      },
+      race: "Terran",
+      durationSec: 24 * 60 * 60,
+    });
+
+    expect(out.analysisTruncated).toBe(true);
+    expect(out.analysisDurationSec).toBe(MAX_CLASSIFIER_DURATION_SEC);
+    expect(out.trajectory).toHaveLength(
+      Math.floor(MAX_CLASSIFIER_DURATION_SEC / 30) + 1,
+    );
+    expect(out.trajectory.at(-1).t).toBe(MAX_CLASSIFIER_DURATION_SEC);
+    expect(out.oppTrajectory).toHaveLength(out.trajectory.length);
   });
 });
 

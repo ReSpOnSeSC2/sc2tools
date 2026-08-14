@@ -22,7 +22,12 @@ import { BuildPublishModal } from "./BuildPublishModal";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 
-type ListResponse = { items: CustomBuild[] };
+type ListResponse = {
+  items: CustomBuild[];
+  total?: number | null;
+  limit?: number | null;
+  truncated?: boolean;
+};
 
 type ReclassifyResult = {
   ok: true;
@@ -66,6 +71,8 @@ const DEFAULT_FILTERS: BuildFilterState = {
   hideEmpty: false,
 };
 
+const EMPTY_BUILDS: CustomBuild[] = [];
+
 /**
  * Phase 7 builds library. Toast context comes from the app-wide
  * ToastProvider in the root layout.
@@ -78,10 +85,10 @@ function BuildsLibraryInner() {
   const { getToken } = useAuth();
   const { toast } = useToast();
   const builds = useApi<ListResponse>("/v1/custom-builds");
-  // Custom-build stats come from rule evaluation against the user's
-  // recent games — see /v1/custom-builds/stats — so a freshly saved
-  // build's W/L appears immediately, instead of waiting for the agent
-  // to reclassify games and tag `myBuild`.
+  // The custom-build endpoint reads the durable provenance slug written by
+  // replay matching, so it is the only authoritative source. Display names
+  // are not identities: two unrelated builds can share one, and renames must
+  // never move replay counts between them.
   const stats = useApi<BuildStats[]>("/v1/custom-builds/stats");
   const reclassifyStatus = useApi<ReclassifyStatus>(
     "/v1/custom-builds/reclassify-status",
@@ -108,6 +115,7 @@ function BuildsLibraryInner() {
   const initiatedReclassifyRef = useRef(false);
 
   const replayMatchingActive = isReclassifyActive(reclassifyStatus.data);
+  const libraryOverLimit = builds.data?.truncated === true;
 
   // A queued request outlives the POST that created it. Keep polling until
   // the durable worker reaches a terminal state, then refresh every library
@@ -144,7 +152,10 @@ function BuildsLibraryInner() {
         description: describeCompletedReclassify(progress),
         duration: progress.deferred ? null : undefined,
       });
-      void Promise.all([builds.mutate(), stats.mutate()]).catch(() => undefined);
+      void Promise.all([
+        builds.mutate(),
+        stats.mutate(),
+      ]).catch(() => undefined);
     } else {
       setShowReclassifyFailure(true);
       toast.error("Replay matching stopped", {
@@ -153,10 +164,13 @@ function BuildsLibraryInner() {
     }
   }, [reclassifyStatus.data, builds, stats, toast]);
 
-  const items = builds.data?.items ?? [];
+  const items = builds.data?.items ?? EMPTY_BUILDS;
   const decorated = useMemo<DecoratedBuild[]>(
-    () => decorateBuilds(items, stats.data ?? []),
-    [items, stats.data],
+    () => decorateBuilds(items, {
+      authoritativeStats: stats.data,
+      authoritativeStatsFailed: !!stats.error,
+    }),
+    [items, stats.data, stats.error],
   );
 
   const filtered = useMemo(
@@ -349,7 +363,7 @@ function BuildsLibraryInner() {
                 variant="secondary"
                 onClick={reclassifyAll}
                 loading={reclassifyAllPending || replayMatchingActive}
-                disabled={replayMatchingActive}
+                disabled={replayMatchingActive || libraryOverLimit}
                 iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
                 title="Re-evaluate every saved build's rules against your stored replays and update build tags. Runs in the cloud — no agent required."
               >
@@ -358,6 +372,10 @@ function BuildsLibraryInner() {
             ) : null}
             <Button
               onClick={openCreate}
+              disabled={libraryOverLimit}
+              title={libraryOverLimit
+                ? "Remove saved builds until the library is back within its safe limit."
+                : undefined}
               iconLeft={<Plus className="h-4 w-4" aria-hidden />}
             >
               New build
@@ -368,6 +386,20 @@ function BuildsLibraryInner() {
 
       {replayMatchingActive || showReclassifyFailure ? (
         <ReclassifyStatusPanel status={reclassifyStatus.data} />
+      ) : null}
+
+      {libraryOverLimit ? (
+        <section
+          role="alert"
+          className="mb-4 rounded-xl border border-warning/60 bg-warning/10 px-4 py-3 text-caption text-text"
+        >
+          <p className="font-semibold">Your build library is over its safe limit.</p>
+          <p className="mt-0.5 text-text-muted">
+            Showing the newest {(builds.data?.limit ?? items.length).toLocaleString()} of{" "}
+            {(builds.data?.total ?? items.length).toLocaleString()} builds. Replay matching and new builds
+            are paused until you remove enough visible builds; older builds then appear automatically.
+          </p>
+        </section>
       ) : null}
 
       {isInitialLoad ? (
@@ -405,7 +437,10 @@ function BuildsLibraryInner() {
                     onReclassify={reclassifyOne}
                     reclassifying={reclassifyingSlug === b.slug}
                     reclassifyDisabled={
-                      replayMatchingActive || reclassifyAllPending || !!reclassifyingSlug
+                      libraryOverLimit
+                      || replayMatchingActive
+                      || reclassifyAllPending
+                      || !!reclassifyingSlug
                     }
                   />
                 </li>
@@ -592,18 +627,40 @@ function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {
 
 function decorateBuilds(
   items: CustomBuild[],
-  stats: BuildStats[],
+  sources: {
+    authoritativeStats?: BuildStats[];
+    authoritativeStatsFailed: boolean;
+  },
 ): DecoratedBuild[] {
-  const byName = new Map<string, BuildStats>();
-  for (const s of stats) {
-    if (!s?.name) continue;
-    byName.set(s.name, s);
+  const authoritativeBySlug = new Map<string, BuildStats>();
+  for (const s of sources.authoritativeStats ?? []) {
+    if (s?.slug) authoritativeBySlug.set(s.slug, s);
   }
-  return items.map((b) => ({
-    ...b,
-    race: coerceRace(b.race, "Random"),
-    stats: byName.get(b.name),
-  }));
+  return items.map((b) => {
+    if (sources.authoritativeStatsFailed) {
+      return {
+        ...b,
+        race: coerceRace(b.race, "Random"),
+        // An SWR refresh can expose stale data alongside its latest error.
+        // Fail closed instead of presenting an old count as current.
+        statsState: "unavailable",
+      };
+    }
+    if (sources.authoritativeStats !== undefined) {
+      return {
+        ...b,
+        race: coerceRace(b.race, "Random"),
+        stats: authoritativeBySlug.get(b.slug),
+        statsState: "ready",
+        statsSource: "classified",
+      };
+    }
+    return {
+      ...b,
+      race: coerceRace(b.race, "Random"),
+      statsState: "loading",
+    };
+  });
 }
 
 function applyFilters(
@@ -612,7 +669,11 @@ function applyFilters(
 ): DecoratedBuild[] {
   const q = filters.search.trim().toLowerCase();
   const filtered = builds.filter((b) => {
-    if (filters.hideEmpty && (b.stats?.total ?? 0) === 0) return false;
+    if (
+      filters.hideEmpty
+      && b.statsState === "ready"
+      && (b.stats?.total ?? 0) === 0
+    ) return false;
     if (filters.matchup !== "All") {
       const want = filters.matchup;
       const have = matchupKeyForBuild(b);

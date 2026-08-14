@@ -7,7 +7,11 @@ const harness = vi.hoisted(() => ({
   mutateBuilds: vi.fn(async () => undefined),
   mutateStats: vi.fn(async () => undefined),
   mutateStatus: vi.fn(async () => undefined),
+  listData: undefined as undefined | Record<string, unknown>,
+  ruleStatsData: [] as Array<Record<string, unknown>> | undefined,
+  ruleStatsError: undefined as Error | undefined,
   statusData: undefined as undefined | Record<string, unknown>,
+  paths: [] as string[],
   success: vi.fn(),
   error: vi.fn(),
 }));
@@ -18,10 +22,11 @@ vi.mock("@clerk/nextjs", () => ({
 
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
-  useApi: (path: string) =>
-    path === "/v1/custom-builds"
+  useApi: (path: string) => {
+    harness.paths.push(path);
+    return path === "/v1/custom-builds"
       ? {
-          data: {
+          data: harness.listData ?? {
             items: [{
               slug: "pvt-test",
               name: "PvT Test Build",
@@ -34,13 +39,19 @@ vi.mock("@/lib/clientApi", () => ({
           mutate: harness.mutateBuilds,
         }
       : path === "/v1/custom-builds/stats"
-        ? { data: [], isLoading: false, error: null, mutate: harness.mutateStats }
+        ? {
+            data: harness.ruleStatsData,
+            isLoading: harness.ruleStatsData === undefined && !harness.ruleStatsError,
+            error: harness.ruleStatsError,
+            mutate: harness.mutateStats,
+          }
         : {
             data: harness.statusData,
             isLoading: false,
             error: null,
             mutate: harness.mutateStatus,
-          },
+          };
+  },
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
@@ -54,18 +65,34 @@ vi.mock("./BuildCard", () => ({
     build,
     onReclassify,
     onEdit,
+    reclassifyDisabled,
   }: {
-    build: { slug: string; name: string };
+    build: {
+      slug: string;
+      name: string;
+      stats?: { total: number };
+      statsState?: string;
+      statsSource?: string;
+    };
     onReclassify: (slug: string) => void;
     onEdit: (slug: string) => void;
+    reclassifyDisabled?: boolean;
   }) => (
     <>
-      <button type="button" onClick={() => onReclassify(build.slug)}>
+      <button
+        type="button"
+        disabled={reclassifyDisabled}
+        onClick={() => onReclassify(build.slug)}
+      >
         Reclassify {build.name}
       </button>
       <button type="button" onClick={() => onEdit(build.slug)}>
         Edit {build.name}
       </button>
+      <span>
+        stats:{build.stats?.total ?? "none"}:{build.statsSource ?? "none"}:
+        {build.statsState ?? "none"}
+      </span>
     </>
   ),
 }));
@@ -116,13 +143,46 @@ beforeEach(() => {
   harness.mutateStatus.mockReset();
   harness.mutateStatus.mockResolvedValue(undefined);
   harness.statusData = undefined;
+  harness.listData = undefined;
+  harness.ruleStatsData = [];
+  harness.ruleStatsError = undefined;
   harness.success.mockReset();
   harness.error.mockReset();
+  harness.paths.length = 0;
 });
 
 afterEach(cleanup);
 
 describe("BuildsLibrary queued reclassification feedback", () => {
+  it("shows a truthful over-limit state and pauses new matching work", () => {
+    harness.listData = {
+      items: [{
+        slug: "pvt-test",
+        name: "PvT Test Build",
+        race: "Protoss",
+        vsRace: "Terran",
+      }],
+      total: 104,
+      limit: 100,
+      truncated: true,
+    };
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Showing the newest 100 of 104 builds",
+    );
+    expect((screen.getByRole("button", {
+      name: "Reclassify replays",
+    }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", {
+      name: "Reclassify PvT Test Build",
+    }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", {
+      name: "New build",
+    }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("confirms that one build's replay matching was queued", async () => {
     harness.apiCall.mockResolvedValueOnce({
       ok: true,
@@ -234,6 +294,66 @@ describe("BuildsLibrary queued reclassification feedback", () => {
     });
     expect(harness.mutateBuilds).toHaveBeenCalled();
     expect(harness.mutateStats).toHaveBeenCalled();
+  });
+
+  it("never requests or inherits a same-name legacy build count", () => {
+    harness.ruleStatsData = undefined;
+    harness.ruleStatsError = new Error("HTTP 503");
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("stats:none:none:unavailable")).toBeTruthy();
+    expect(harness.paths).not.toContain("/v1/builds");
+  });
+
+  it("matches authoritative totals by stable slug, never display name", () => {
+    harness.ruleStatsData = [{
+      slug: "different-build",
+      name: "PvT Test Build",
+      total: 99,
+      wins: 99,
+      losses: 0,
+      winRate: 1,
+    }];
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("stats:none:classified:ready")).toBeTruthy();
+  });
+
+  it("marks replay stats unavailable instead of presenting a false zero", () => {
+    harness.ruleStatsData = undefined;
+    harness.ruleStatsError = new Error("HTTP 502");
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("stats:none:none:unavailable")).toBeTruthy();
+  });
+
+  it("does not present stale authoritative data after its refresh fails", () => {
+    harness.ruleStatsData = [{
+      slug: "pvt-test",
+      name: "PvT Test Build",
+      total: 17,
+      wins: 10,
+      losses: 7,
+      winRate: 10 / 17,
+    }];
+    harness.ruleStatsError = new Error("HTTP 502");
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("stats:none:none:unavailable")).toBeTruthy();
+    expect(screen.queryByText(/stats:17:/)).toBeNull();
+  });
+
+  it("keeps totals provisional while authoritative slug stats are loading", () => {
+    harness.ruleStatsData = undefined;
+    harness.ruleStatsError = undefined;
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("stats:none:none:loading")).toBeTruthy();
   });
 
   it("keeps a confirmed save queue visible when the library refresh fails", async () => {

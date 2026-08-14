@@ -158,6 +158,9 @@ function BuildStatsRow({
   stats: DecoratedBuild["stats"];
 }) {
   const total = stats?.total ?? 0;
+  const statsState = build.statsState ?? "ready";
+  const statsPending = statsState === "loading";
+  const statsUnavailable = statsState === "unavailable";
   const updated = build.updatedAt;
   return (
     <dl className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
@@ -182,14 +185,18 @@ function BuildStatsRow({
             Record
           </dt>
           <dd className="text-body tabular-nums text-text">
-            {total > 0 ? (
+            {statsPending ? (
+              <span className="text-text-dim">Loading…</span>
+            ) : statsUnavailable ? (
+              <span className="text-warning">Temporarily unavailable</span>
+            ) : total > 0 ? (
               <>
                 <span className="text-success">{stats?.wins ?? 0}W</span>
                 <span className="px-0.5 text-text-dim">·</span>
                 <span className="text-danger">{stats?.losses ?? 0}L</span>
               </>
             ) : (
-              <span className="text-text-dim">No games yet</span>
+              <span className="text-text-dim">No classified replays</span>
             )}
           </dd>
         </div>

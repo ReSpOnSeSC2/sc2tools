@@ -12,7 +12,7 @@ const express = require("express");
 const request = require("supertest");
 const { buildGamesRouter } = require("../src/routes/games");
 
-function buildTestApp({ ladderMapPool } = {}) {
+function buildTestApp({ ladderMapPool, customBuilds } = {}) {
   const upserts = [];
   const games = {
     upsert: jest.fn(async (userId, game) => {
@@ -30,6 +30,7 @@ function buildTestApp({ ladderMapPool } = {}) {
   app.use(buildGamesRouter({
     games,
     opponents,
+    customBuilds,
     ladderMapPool,
     auth,
     testOnlyAllowMissingReplayIngestAdmission: true,
@@ -44,6 +45,23 @@ const baseGame = {
 };
 
 describe("POST /games ladder-map + player-count stamping", () => {
+  test("rejects oversized item batches before validation or storage work", async () => {
+    const ladderMapPool = { get: jest.fn(async () => ({ maps: [] })) };
+    const { app, upserts } = buildTestApp({ ladderMapPool });
+
+    const res = await request(app)
+      .post("/games")
+      .send({ games: Array.from({ length: 51 }, () => null) });
+
+    expect(res.status).toBe(413);
+    expect(res.body.error).toEqual(expect.objectContaining({
+      code: "replay_batch_too_large",
+      maxGames: 50,
+    }));
+    expect(upserts).toHaveLength(0);
+    expect(ladderMapPool.get).not.toHaveBeenCalled();
+  });
+
   test("stamps isLadderMap true/false against the resolved pool", async () => {
     const ladderMapPool = {
       get: jest.fn(async () => ({ maps: ["Site Delta", "Goldenaura"] })),
@@ -169,6 +187,43 @@ describe("POST /games ladder-map + player-count stamping", () => {
         errors: [expect.stringMatching(/upsert_failed.*r2 temporarily/i)],
       }),
     ]);
+  });
+
+  test("does not acknowledge a replay until durable custom tagging heals", async () => {
+    const customBuilds = {
+      tagSingleGame: jest.fn()
+        .mockRejectedValueOnce(new Error("mongo write interrupted"))
+        .mockResolvedValueOnce({
+          gameId: "tag-retry",
+          matched: 1,
+          chosen: "PvT 3 Gate",
+          ruleCount: 2,
+        }),
+    };
+    const { app } = buildTestApp({ customBuilds });
+    const payload = {
+      ...baseGame,
+      gameId: "tag-retry",
+      map: "Site Delta",
+      buildLog: ["0:20 Pylon"],
+    };
+
+    const failed = await request(app).post("/games").send(payload);
+    expect(failed.status).toBe(202);
+    expect(failed.body.accepted).toEqual([]);
+    expect(failed.body.rejected).toEqual([{
+      gameId: "tag-retry",
+      retryable: true,
+      errors: ["custom_build_tag_retry_required"],
+    }]);
+
+    const healed = await request(app).post("/games").send(payload);
+    expect(healed.status).toBe(202);
+    expect(healed.body.accepted).toEqual([
+      expect.objectContaining({ gameId: "tag-retry" }),
+    ]);
+    expect(healed.body.rejected).toEqual([]);
+    expect(customBuilds.tagSingleGame).toHaveBeenCalledTimes(2);
   });
 
   test("quarantines resume markers before competitive ingest side effects", async () => {

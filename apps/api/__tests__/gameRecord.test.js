@@ -28,6 +28,104 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  test("fails fast without retaining one error per invalid heavy-array item", () => {
+    const r = validateGameRecord({
+      gameId: "bounded-validation-errors",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      buildLog: Array.from({ length: 5000 }, () => 123),
+      oppBuildLog: Array.from({ length: 5000 }, () => ({ invalid: true })),
+    });
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.errors.length).toBeLessThanOrEqual(1);
+  });
+
+  test.each([
+    { top3Leaks: [{ name: "X".repeat(121) }] },
+    { top3Leaks: Array.from({ length: 4 }, () => ({ name: "Supply block" })) },
+    { duration: { giant: true } },
+    { macro_score: { giant: true } },
+    { oppMmr: { giant: true } },
+    { oppPulseId: { giant: true } },
+    { oppRace: { giant: true } },
+    { opp_strategy: { giant: true } },
+  ])("rejects an unbounded allow-listed slim value", (extra) => {
+    const r = validateGameRecord({
+      gameId: "bounded-slim-alias",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      ...extra,
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  test("accepts unit timeline side maps at the memory-safety boundaries", () => {
+    const my = Object.fromEntries(Array.from({ length: 256 }, (_, i) => [
+      `SyntheticUnit${String(i).padStart(3, "0")}`,
+      1,
+    ]));
+    my["X".repeat(64)] = 1;
+    delete my.SyntheticUnit000;
+    const r = validateGameRecord({
+      gameId: "timeline-boundary",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      macroBreakdown: {
+        unit_timeline: [{ time: 100, my, opp: { Stalker: 4 } }],
+      },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  test.each([
+    { ["X".repeat(65)]: 1 },
+    Object.fromEntries(Array.from({ length: 257 }, (_, i) => [
+      `SyntheticUnit${String(i).padStart(3, "0")}`,
+      1,
+    ])),
+  ])("rejects an unbounded unit timeline side map", (my) => {
+    const r = validateGameRecord({
+      gameId: "timeline-unbounded",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+      macroBreakdown: { unit_timeline: [{ time: 100, my, opp: {} }] },
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  test("bounds every uploaded build-log line", () => {
+    const base = {
+      gameId: "bounded-log-line",
+      date: "2026-05-04T12:00:00.000Z",
+      result: "Victory",
+      myRace: "Protoss",
+      map: "Goldenaura",
+    };
+    expect(validateGameRecord({
+      ...base,
+      buildLog: ["X".repeat(256)],
+      earlyBuildLog: ["X".repeat(256)],
+      oppBuildLog: ["X".repeat(256)],
+      oppEarlyBuildLog: ["X".repeat(256)],
+    }).valid).toBe(true);
+    for (const field of [
+      "buildLog", "earlyBuildLog", "oppBuildLog", "oppEarlyBuildLog",
+    ]) {
+      expect(validateGameRecord({
+        ...base,
+        [field]: ["X".repeat(257)],
+      }).valid).toBe(false);
+    }
+  });
+
   test("accepts a bounded resume marker with unique game-id aliases", () => {
     const r = validateGameRecord({
       gameId: "resume-3",

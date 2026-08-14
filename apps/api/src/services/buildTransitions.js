@@ -210,11 +210,15 @@ function pickBuildLabel(list) {
 function pathForGame(g, buildLabel, perspective) {
   const macroBreakdown = (g && g.macroBreakdown) || {};
   const sidePerspective = perspective === "opponent" ? "opponent" : "you";
+  const prepared = g && g._phasePrepared
+    && g._phasePrepared.perspective === sidePerspective
+    ? g._phasePrepared
+    : null;
   const race = sidePerspective === "opponent"
     ? ((g && g.oppRace) || (g && g.myRace))
     : (g && g.myRace);
-  const durationSec = (g && g.durationSec) || 0;
-  const classified = classifyGame({
+  const durationSec = prepared?.durationSec || (g && g.durationSec) || 0;
+  const classified = prepared?.classified || classifyGame({
     macroBreakdown, race, durationSec, perspective: sidePerspective,
   });
   const finalPhase = classified.finalPhase;
@@ -245,7 +249,7 @@ function pathForGame(g, buildLabel, perspective) {
   if (finalPhase === "late") {
     const win = lateWindow(classified.crossings, durationSec);
     if (win) {
-      const units = pickSignatureUnits(
+      const units = prepared?.phases?.late?.units || pickSignatureUnits(
         macroBreakdown, win.start, win.end, sidePerspective,
       );
       const key = units.length > 0 ? signatureKey(units) : "Unknown";
@@ -257,7 +261,9 @@ function pathForGame(g, buildLabel, perspective) {
         kind: "lateComp",
       };
       if (units.length > 0) {
-        node.iconTokens = units.map((u) => u.token);
+        node.iconTokens = units.map(
+          (/** @type {{token: string}} */ u) => u.token,
+        );
       }
       path.push(node);
     }
@@ -286,9 +292,14 @@ function pathForGame(g, buildLabel, perspective) {
  */
 function pathForOpponentGame(g, col0Label) {
   const macroBreakdown = (g && g.macroBreakdown) || {};
+  const prepared = g && g._phasePrepared
+    && g._phasePrepared.perspective === "you"
+    ? g._phasePrepared
+    : null;
   const race = g && g.myRace;
-  const durationSec = (g && g.durationSec) || 0;
-  const classified = classifyGame({ macroBreakdown, race, durationSec });
+  const durationSec = prepared?.durationSec || (g && g.durationSec) || 0;
+  const classified = prepared?.classified
+    || classifyGame({ macroBreakdown, race, durationSec });
   const finalPhase = classified.finalPhase;
 
   const rawOppRace =

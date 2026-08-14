@@ -3,6 +3,7 @@
 const { buildSamplePayload } = require("./overlayLiveSamples");
 const {
   enrichEnvelope: enrichEnvelopeImpl,
+  LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
@@ -195,6 +196,11 @@ class OverlayLiveService {
     this._enrichmentCache = new Map();
     this._enrichmentTtlMs = 5 * 60 * 1000;
     this._enrichmentMax = 256;
+    this._enrichmentCoordinator = new LiveEnrichmentCoordinator({
+      maxActive: 2,
+      maxWaiters: 8,
+      maxSubscribers: 32,
+    });
     /**
      * Per-user "most recently enriched gameKey". The voice-readout
      * bug we hit at 2026-05-11 happened when a new match's loading-
@@ -845,6 +851,7 @@ class OverlayLiveService {
       userId,
       envelope,
       isFirstForGameKey,
+      this._enrichmentCoordinator,
     );
   }
 
@@ -852,6 +859,11 @@ class OverlayLiveService {
   clearEnrichmentCache() {
     this._enrichmentCache.clear();
     this._lastEnrichedGameKey.clear();
+  }
+
+  /** Identifier-free occupancy for the live enrichment admission lane. */
+  enrichmentCapacitySnapshot() {
+    return this._enrichmentCoordinator.capacitySnapshot();
   }
 
   /**

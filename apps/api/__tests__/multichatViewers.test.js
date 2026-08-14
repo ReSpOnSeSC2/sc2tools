@@ -31,6 +31,9 @@ const {
   MultichatViewersService,
   extractConcurrentViewers,
   toViewerCount,
+  TWITCH_JSON_MAX_BYTES,
+  KICK_JSON_MAX_BYTES,
+  YOUTUBE_PAGE_MAX_BYTES,
 } = require("../src/services/multichatViewers");
 const { TikTokChatRelay } = require("../src/services/tiktokChatRelay");
 
@@ -53,6 +56,33 @@ const htmlRes = (html, ok = true, status = 200) => ({
   text: async () => html,
   json: async () => ({}),
 });
+
+/**
+ * Advertises a response that is too large and exposes spies proving neither
+ * text nor JSON parsing was entered before it was rejected.
+ */
+const declaredOversizeRes = (maxBytes) => {
+  const cancel = jest.fn(async () => {});
+  const text = jest.fn(async () => {
+    throw new Error("oversized body must not be materialized");
+  });
+  const json = jest.fn(async () => {
+    throw new Error("oversized body must not be parsed");
+  });
+  return {
+    response: {
+      ok: true,
+      status: 200,
+      headers: { get: () => String(maxBytes + 1) },
+      body: { cancel },
+      text,
+      json,
+    },
+    cancel,
+    text,
+    json,
+  };
+};
 
 describe("services/multichatViewers — YouTube page extraction", () => {
   test("reads the concurrent count off a real live watch page", () => {
@@ -147,6 +177,24 @@ describe("services/multichatViewers — per-platform lookups", () => {
     });
     expect(calls[0].url).toBe("https://gql.twitch.tv/gql");
     expect(calls[0].body.variables).toEqual({ login: "somestreamer" });
+  });
+
+  test("twitch: parses the bounded stream exposed by native fetch", async () => {
+    const svc = new MultichatViewersService({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            data: { user: { stream: { viewersCount: 321 } } },
+          }),
+          { status: 200 },
+        ),
+    });
+
+    await expect(svc.fetchTwitch("somestreamer")).resolves.toEqual({
+      platform: "twitch",
+      viewers: 321,
+      live: true,
+    });
   });
 
   test("twitch: an offline channel is a truthful zero, an unknown login is not", async () => {
@@ -311,6 +359,119 @@ describe("services/multichatViewers — per-platform lookups", () => {
       live: false,
     });
   });
+
+  test("a transient non-success response is cancelled and degrades to unknown", async () => {
+    const cancel = jest.fn(async () => {});
+    const svc = new MultichatViewersService({
+      fetchImpl: async () => ({
+        ok: false,
+        status: 503,
+        body: { cancel },
+      }),
+    });
+
+    await expect(svc.lookup("kick", "somekick")).resolves.toEqual({
+      platform: "kick",
+      viewers: null,
+      live: false,
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    ["twitch", TWITCH_JSON_MAX_BYTES, "somechan"],
+    ["kick", KICK_JSON_MAX_BYTES, "somekick"],
+  ])(
+    "%s: rejects an oversized declared JSON body before materializing or parsing it",
+    async (platform, maxBytes, channel) => {
+      const oversized = declaredOversizeRes(maxBytes);
+      const svc = new MultichatViewersService({
+        fetchImpl: async () => oversized.response,
+      });
+
+      const result = await svc.lookup(platform, channel);
+
+      expect(result).toEqual({ platform, viewers: null, live: false });
+      expect(oversized.cancel).toHaveBeenCalledTimes(1);
+      expect(oversized.text).not.toHaveBeenCalled();
+      expect(oversized.json).not.toHaveBeenCalled();
+    },
+  );
+
+  test("youtube: rejects an oversized declared page before reading it and fails soft", async () => {
+    const oversized = declaredOversizeRes(YOUTUBE_PAGE_MAX_BYTES);
+    const svc = new MultichatViewersService({
+      fetchImpl: async () => oversized.response,
+    });
+
+    await expect(svc.lookup("youtube", "@SomeChannel")).resolves.toEqual({
+      platform: "youtube",
+      viewers: null,
+      live: false,
+    });
+    expect(oversized.cancel).toHaveBeenCalledTimes(1);
+    expect(oversized.text).not.toHaveBeenCalled();
+  });
+
+  test("chunked JSON is cancelled as soon as its decompressed stream crosses the cap", async () => {
+    const chunk = new Uint8Array(Math.floor(TWITCH_JSON_MAX_BYTES / 2) + 1);
+    let reads = 0;
+    const cancel = jest.fn(async () => {});
+    const reader = {
+      read: jest.fn(async () => {
+        reads += 1;
+        return { done: false, value: chunk };
+      }),
+      cancel,
+      releaseLock: jest.fn(),
+    };
+    const svc = new MultichatViewersService({
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: { getReader: () => reader },
+      }),
+    });
+
+    await expect(svc.lookup("twitch", "somechan")).resolves.toEqual({
+      platform: "twitch",
+      viewers: null,
+      live: false,
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(reads).toBe(2);
+  });
+
+  test("chunked YouTube HTML is cancelled before the oversized page is inspected", async () => {
+    const chunk = new Uint8Array(Math.floor(YOUTUBE_PAGE_MAX_BYTES / 2) + 1);
+    let reads = 0;
+    const cancel = jest.fn(async () => {});
+    const reader = {
+      read: jest.fn(async () => {
+        reads += 1;
+        return { done: false, value: chunk };
+      }),
+      cancel,
+      releaseLock: jest.fn(),
+    };
+    const svc = new MultichatViewersService({
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: { getReader: () => reader },
+      }),
+    });
+
+    await expect(svc.lookup("youtube", "@SomeChannel")).resolves.toEqual({
+      platform: "youtube",
+      viewers: null,
+      live: false,
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(reads).toBe(2);
+  });
 });
 
 describe("services/multichatViewers — caching and totals", () => {
@@ -418,6 +579,102 @@ describe("services/multichatViewers — caching and totals", () => {
     const out = await svc.forConfig(null);
     expect(out).toMatchObject({ platforms: [], total: 0, partial: false });
     expect(fetches).toBe(0);
+  });
+
+  test("the result cache is a bounded LRU and evicted channels refetch", async () => {
+    const calls = new Map();
+    const svc = new MultichatViewersService({
+      maxCacheEntries: 2,
+      fetchImpl: async (_url, init) => {
+        const login = JSON.parse(init.body).variables.login;
+        calls.set(login, (calls.get(login) || 0) + 1);
+        return jsonRes({ data: { user: { stream: { viewersCount: 1 } } } });
+      },
+    });
+
+    await svc.lookup("twitch", "alpha");
+    await svc.lookup("twitch", "bravo");
+    await svc.lookup("twitch", "alpha"); // refresh alpha's LRU position
+    await svc.lookup("twitch", "charlie"); // evicts bravo
+    await svc.lookup("twitch", "bravo");
+
+    expect(calls.get("alpha")).toBe(1);
+    expect(calls.get("charlie")).toBe(1);
+    expect(calls.get("bravo")).toBe(2);
+    expect(svc.cache.size).toBe(2);
+  });
+
+  test("distinct lookup bursts are shed at the in-flight cap without caching the transient unknown", async () => {
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let fetches = 0;
+    const svc = new MultichatViewersService({
+      maxInFlight: 1,
+      fetchImpl: async () => {
+        fetches += 1;
+        await gate;
+        return jsonRes({ data: { user: { stream: { viewersCount: 12 } } } });
+      },
+    });
+
+    const first = svc.lookup("twitch", "alpha");
+    await expect(svc.lookup("twitch", "bravo")).resolves.toEqual({
+      platform: "twitch",
+      viewers: null,
+      live: false,
+    });
+    expect(fetches).toBe(1);
+    expect(svc.inFlight.size).toBe(1);
+
+    release();
+    await expect(first).resolves.toMatchObject({ viewers: 12 });
+    await expect(svc.lookup("twitch", "bravo")).resolves.toMatchObject({
+      viewers: 12,
+    });
+    expect(fetches).toBe(2);
+  });
+
+  test("identical lookups coalesce, while attached callers remain bounded", async () => {
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let fetches = 0;
+    const svc = new MultichatViewersService({
+      maxSubscribersPerLookup: 2,
+      fetchImpl: async () => {
+        fetches += 1;
+        await gate;
+        return jsonRes({ data: { user: { stream: { viewersCount: 9 } } } });
+      },
+    });
+
+    const first = svc.lookup("twitch", "alpha");
+    const second = svc.lookup("twitch", "alpha");
+    await expect(svc.lookup("twitch", "alpha")).resolves.toEqual({
+      platform: "twitch",
+      viewers: null,
+      live: false,
+    });
+    expect(fetches).toBe(1);
+    expect(svc.capacitySnapshot()).toMatchObject({
+      inflightRequests: 1,
+      subscribers: 2,
+      maxSubscribersPerRequest: 2,
+    });
+
+    release();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { platform: "twitch", viewers: 9, live: true },
+      { platform: "twitch", viewers: 9, live: true },
+    ]);
+    expect(svc.capacitySnapshot()).toMatchObject({
+      cacheEntries: 1,
+      inflightRequests: 0,
+      subscribers: 0,
+    });
   });
 });
 

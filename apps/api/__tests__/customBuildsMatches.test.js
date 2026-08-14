@@ -65,11 +65,28 @@ const TERRAN_OPP_BUILD_LOG = [
   "[5:00] Factory",
 ];
 
+async function waitForReclassification(db, userId, generation, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const job = await db.customBuildJobs.findOne({ userId, generation });
+    if (job?.status === "complete") return job;
+    if (job?.status === "failed") {
+      throw new Error(`reclassification failed: ${job.error}`);
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out waiting for reclassification ${generation}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
   let mongo;
   let db;
   let app;
   let services;
+  let roomEmit;
+  let io;
 
   const config = {
     port: 0,
@@ -91,7 +108,14 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
-    const built = buildApp({ db, logger: pino({ level: "silent" }), config });
+    roomEmit = jest.fn();
+    io = { to: jest.fn(() => ({ emit: roomEmit })) };
+    const built = buildApp({
+      db,
+      logger: pino({ level: "silent" }),
+      config,
+      io,
+    });
     app = built.app;
     services = built.services;
   });
@@ -154,6 +178,16 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
       }),
     );
     expect(putRes.status).toBe(200);
+    await waitForReclassification(
+      db,
+      userId,
+      putRes.body.reclassify.generation,
+    );
+    expect(io.to).toHaveBeenCalledWith(`user:${userId}`);
+    expect(roomEmit).toHaveBeenCalledWith(
+      "games:changed",
+      expect.objectContaining({ count: 1 }),
+    );
 
     const res = await withAuth(
       request(app).get("/v1/custom-builds/pvp-custom/matches"),
@@ -196,6 +230,167 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
     expect(row.total).toBe(1);
   });
 
+  test("library stats and matches use durable classification provenance without hydrating replay blobs", async () => {
+    const userId = await bootstrap();
+    const slug = "authoritative-classification";
+    const save = await withAuth(
+      request(app).put(`/v1/custom-builds/${slug}`).send({
+        slug,
+        name: "Authoritative opener",
+        race: "Protoss",
+        vsRace: "Any",
+        // This deliberately cannot match either tagged replay below. The
+        // completed classifier's slug, not a second live rule pass, must drive
+        // the library and dossier.
+        rules: [{ type: "before", name: "BuildFleetBeacon", time_lt: 60 }],
+        reclassify: false,
+      }),
+    );
+    expect(save.status).toBe(200);
+
+    await services.games.upsert(userId, {
+      gameId: "g-authoritative-win",
+      date: new Date("2026-06-01T12:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "Old display name",
+      buildLog: PROTOSS_BUILD_LOG,
+      oppBuildLog: TERRAN_OPP_BUILD_LOG,
+      result: "Victory",
+      map: "Blackrock LE",
+      opponent: {
+        displayName: "TerranOne",
+        race: "Terran",
+        strategy: "Terran - Ghost Rush",
+      },
+    });
+    await services.games.upsert(userId, {
+      gameId: "g-authoritative-loss",
+      date: new Date("2026-06-02T12:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "Old display name",
+      buildLog: PROTOSS_BUILD_LOG,
+      oppBuildLog: ["[0:00] Drone", "[0:17] Overlord", "[0:50] SpawningPool"],
+      result: "Defeat",
+      map: "Blackrock LE",
+      opponent: {
+        displayName: "ZergOne",
+        race: "Zerg",
+        strategy: "Zerg - Roach Rush",
+      },
+    });
+    await services.games.upsert(userId, {
+      gameId: "g-rule-only-decoy",
+      date: new Date("2026-06-03T12:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "Agent classifier label",
+      buildLog: ["[0:30] FleetBeacon"],
+      result: "Victory",
+      map: "Blackrock LE",
+      opponent: { displayName: "Decoy", race: "Terran" },
+    });
+    await db.games.updateMany(
+      {
+        userId,
+        gameId: { $in: ["g-authoritative-win", "g-authoritative-loss"] },
+      },
+      { $set: { _customBuildSlug: slug } },
+    );
+    const indexes = await db.games.indexes();
+    const classifiedIndex = indexes.find((index) => (
+      index.key?.userId === 1
+      && index.key?._customBuildSlug === 1
+      && index.key?.date === -1
+    ));
+    expect(classifiedIndex).toBeTruthy();
+    const plan = await db.games.find(
+      { userId, _customBuildSlug: slug },
+    ).sort({ date: -1 }).limit(1).explain("queryPlanner");
+    expect(JSON.stringify(plan)).toContain(classifiedIndex.name);
+
+    const hydrateSpy = jest.spyOn(services.gameDetails, "findMany");
+    try {
+      const [stats, matches] = await Promise.all([
+        withAuth(request(app).get("/v1/custom-builds/stats")),
+        withAuth(request(app).get(`/v1/custom-builds/${slug}/matches`)),
+      ]);
+      expect(stats.status).toBe(200);
+      expect(stats.body.find((row) => row.slug === slug)).toEqual(
+        expect.objectContaining({
+          name: "Authoritative opener",
+          total: 2,
+          wins: 1,
+          losses: 1,
+          winRate: 0.5,
+        }),
+      );
+      expect(matches.status).toBe(200);
+      expect(matches.body).toEqual(expect.objectContaining({
+        name: "Authoritative opener",
+        totals: expect.objectContaining({
+          total: 2,
+          wins: 1,
+          losses: 1,
+          winRate: 0.5,
+        }),
+        recent: expect.arrayContaining([
+          expect.objectContaining({ gameId: "g-authoritative-win" }),
+          expect.objectContaining({ gameId: "g-authoritative-loss" }),
+        ]),
+        timingSampleGames: 2,
+        timingSampleLimit: 25,
+        timingsTruncated: false,
+      }));
+      expect(Object.values(matches.body.medianTimings).some(
+        (row) => row.count > 0,
+      )).toBe(true);
+      expect(matches.body.recent.map((row) => row.gameId))
+        .not.toContain("g-rule-only-decoy");
+      expect(matches.body.byMatchup.map((row) => row.name))
+        .toEqual(expect.arrayContaining(["PvT", "PvZ"]));
+      expect(hydrateSpy).toHaveBeenCalledTimes(2);
+      expect(hydrateSpy.mock.calls.map((call) => call[1][0])).toEqual(
+        expect.arrayContaining([
+          "g-authoritative-win",
+          "g-authoritative-loss",
+        ]),
+      );
+      for (const call of hydrateSpy.mock.calls) {
+        expect(call[0]).toBe(userId);
+        expect(call[1]).toHaveLength(1);
+        expect(call[1]).not.toContain("g-rule-only-decoy");
+        expect(call[2]).toEqual(expect.objectContaining({
+          fields: ["buildLog", "oppBuildLog"],
+          concurrency: 1,
+        }));
+      }
+
+      // Display-name edits do not change the stable replay ownership key.
+      const renamed = await withAuth(
+        request(app).put(`/v1/custom-builds/${slug}`).send({
+          slug,
+          name: "Renamed authoritative opener",
+          race: "Protoss",
+          vsRace: "Any",
+          rules: [{ type: "before", name: "BuildFleetBeacon", time_lt: 60 }],
+          reclassify: false,
+        }),
+      );
+      expect(renamed.status).toBe(200);
+      const renamedStats = await withAuth(
+        request(app).get("/v1/custom-builds/stats"),
+      );
+      expect(renamedStats.body.find((row) => row.slug === slug)).toEqual(
+        expect.objectContaining({
+          name: "Renamed authoritative opener",
+          total: 2,
+        }),
+      );
+      expect(hydrateSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      hydrateSpy.mockRestore();
+    }
+  });
+
   test("vsRace=Any allows cross-matchup replays through the gate", async () => {
     const userId = await bootstrap();
 
@@ -209,6 +404,11 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
       }),
     );
     expect(putRes.status).toBe(200);
+    await waitForReclassification(
+      db,
+      userId,
+      putRes.body.reclassify.generation,
+    );
 
     const res = await withAuth(
       request(app).get("/v1/custom-builds/protoss-any/matches"),
@@ -218,6 +418,45 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
     expect(ids).toEqual(
       expect.arrayContaining(["g-pvp-stargate", "g-pvt-stargate"]),
     );
+  });
+
+  test("stored stats and matches remain available when replay-detail evaluation is unavailable", async () => {
+    const customBuilds = {
+      evaluateAllStats: jest.fn(async () => [{
+        slug: "stored-only",
+        name: "Stored only",
+        total: 1,
+        wins: 1,
+        losses: 0,
+        winRate: 1,
+      }]),
+      evaluateBuild: jest.fn(async () => ({
+        slug: "stored-only",
+        name: "Stored only",
+        totals: { total: 1, wins: 1, losses: 0, winRate: 1 },
+        recent: [],
+      })),
+    };
+    const standalone = express();
+    standalone.use(express.json());
+    standalone.use((req, _res, next) => {
+      req.auth = { userId: "u-stored-only" };
+      next();
+    });
+    standalone.use("/v1", buildCustomBuildsRouter({
+      customBuilds,
+      perGame: null,
+      auth: (_req, _res, next) => next(),
+    }));
+
+    const [stats, matches] = await Promise.all([
+      request(standalone).get("/v1/custom-builds/stats"),
+      request(standalone).get("/v1/custom-builds/stored-only/matches"),
+    ]);
+    expect(stats.status).toBe(200);
+    expect(stats.body[0]).toEqual(expect.objectContaining({ total: 1 }));
+    expect(matches.status).toBe(200);
+    expect(matches.body.totals.total).toBe(1);
   });
 });
 
@@ -284,6 +523,10 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
       opponent: { displayName: "zergRusher", race: "Zerg", strategy: "Zerg - Mass Ling" },
       macroBreakdown: PHASE_FIXTURE.macroBreakdown,
     });
+    await db.games.updateOne(
+      { userId, gameId },
+      { $set: { _customBuildSlug: "pvz-adept" } },
+    );
   }
 
   async function savePhaseBuild() {
@@ -297,13 +540,17 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
       }),
     );
     expect(putRes.status).toBe(200);
+    return putRes.body?.reclassify?.generation || null;
   }
 
   test("returns the phase-aware JSON envelope without transitions", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-comp-1", new Date("2026-05-04T00:00:00Z"));
     await seedPhaseGame(userId, "g-comp-2", new Date("2026-05-05T00:00:00Z"));
-    await savePhaseBuild();
+    const generation = await savePhaseBuild();
+    if (generation) {
+      await waitForReclassification(db, userId, generation);
+    }
 
     const res = await withAuth(
       request(app).get("/v1/custom-builds/pvz-adept/compositions"),
@@ -372,7 +619,10 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
   test("second call within 60s short-circuits via the cache", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-cache-1", new Date("2026-05-06T00:00:00Z"));
-    await savePhaseBuild();
+    const generation = await savePhaseBuild();
+    if (generation) {
+      await waitForReclassification(db, userId, generation);
+    }
 
     const first = await withAuth(
       request(app).get("/v1/custom-builds/pvz-adept/compositions"),
@@ -397,7 +647,10 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
   test("?perspective=opponent forwards through to evaluateBuildPhases and is cached separately", async () => {
     const userId = await bootstrap();
     await seedPhaseGame(userId, "g-persp-1", new Date("2026-05-10T00:00:00Z"));
-    await savePhaseBuild();
+    const generation = await savePhaseBuild();
+    if (generation) {
+      await waitForReclassification(db, userId, generation);
+    }
 
     const spy = jest.spyOn(services.customBuilds, "evaluateBuildPhases");
     try {
@@ -444,8 +697,8 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
     // comparison view describes only the cell — not the build's full
     // marginal across opponents.
     const userId = await bootstrap();
-    const seedCellGame = (gameId, date, strategyLabel) =>
-      services.games.upsert(userId, {
+    const seedCellGame = async (gameId, date, strategyLabel) => {
+      await services.games.upsert(userId, {
         gameId,
         date,
         myRace: PHASE_FIXTURE.race,
@@ -458,6 +711,11 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
         opponent: { displayName: "zergRusher", race: "Zerg", strategy: strategyLabel },
         macroBreakdown: PHASE_FIXTURE.macroBreakdown,
       });
+      await db.games.updateOne(
+        { userId, gameId },
+        { $set: { _customBuildSlug: "pvz-cell-adept" } },
+      );
+    };
     await seedCellGame(
       "g-cell-mass-ling-1",
       new Date("2026-05-12T00:00:00Z"),
@@ -645,6 +903,10 @@ describe("GET /v1/custom-builds/:slug/transitions", () => {
       opponent: { displayName: "zergRusher", race: "Zerg", strategy: "Zerg - Mass Ling" },
       macroBreakdown: PHASE_FIXTURE.macroBreakdown,
     });
+    await db.games.updateOne(
+      { userId, gameId },
+      { $set: { _customBuildSlug: "pvz-adept" } },
+    );
   }
 
   async function savePhaseBuild() {

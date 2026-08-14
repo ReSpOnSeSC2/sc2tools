@@ -1,6 +1,10 @@
 "use strict";
 
 const express = require("express");
+const {
+  claimReplayIngestAdmission,
+  releaseReplayIngestAdmission,
+} = require("../middleware/replayIngestAdmission");
 
 /**
  * /v1/games/:gameId/{build-order,apm-curve,macro-breakdown,
@@ -58,6 +62,7 @@ function buildPerGameRouter(deps) {
   });
 
   router.post("/games/:gameId/apm-curve", async (req, res, next) => {
+    if (!claimLargeWrite(res)) return;
     try {
       const userId = requireAuth(req).userId;
       await deps.perGame.writeApmCurve(
@@ -68,6 +73,8 @@ function buildPerGameRouter(deps) {
       res.status(204).end();
     } catch (err) {
       next(err);
+    } finally {
+      releaseReplayIngestAdmission(res);
     }
   });
 
@@ -119,6 +126,7 @@ function buildPerGameRouter(deps) {
   // POST asks the agent to recompute. Body is OPTIONAL — if a body
   // payload is present we treat the call as the agent re-uploading.
   router.post("/games/:gameId/macro-breakdown", async (req, res, next) => {
+    if (!claimLargeWrite(res)) return;
     try {
       const userId = requireAuth(req).userId;
       const gameId = String(req.params.gameId);
@@ -141,10 +149,13 @@ function buildPerGameRouter(deps) {
       res.status(202).json({ ok: true, requested: true });
     } catch (err) {
       next(err);
+    } finally {
+      releaseReplayIngestAdmission(res);
     }
   });
 
   router.post("/games/:gameId/opp-build-order", async (req, res, next) => {
+    if (!claimLargeWrite(res)) return;
     try {
       const userId = requireAuth(req).userId;
       const gameId = String(req.params.gameId);
@@ -193,10 +204,29 @@ function buildPerGameRouter(deps) {
       res.status(202).json({ ok: true, requested: true });
     } catch (err) {
       next(err);
+    } finally {
+      releaseReplayIngestAdmission(res);
     }
   });
 
   return router;
+}
+
+/**
+ * Claim the pre-parser large-body lane. Focused router unit tests mount this
+ * router without the assembled app middleware, so they may proceed without a
+ * lane; production fails closed when a claimed lane was already released.
+ * @param {import('express').Response} res
+ */
+function claimLargeWrite(res) {
+  const claimed = claimReplayIngestAdmission(res, { allowMissing: true });
+  if (!claimed && !res.headersSent) {
+    res.set("Retry-After", "5");
+    res.status(503).json({
+      error: { code: "replay_ingest_busy", retryable: true },
+    });
+  }
+  return claimed;
 }
 
 /**

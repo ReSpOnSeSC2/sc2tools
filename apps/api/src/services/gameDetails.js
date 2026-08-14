@@ -61,6 +61,7 @@ class GameDetailsService {
    *   readMany: (userId: string, gameIds: string[], opts?: object) => Promise<Map<string, object>>,
    *   delete: (userId: string, gameId: string) => Promise<void>,
    *   deleteAllForUser: (userId: string) => Promise<void>,
+   *   bulkReadCapacitySnapshot?: () => {active: number, queued: number, maxActive: number, maxWaiters: number},
    * }} store  Backend that satisfies the gameDetailsStore contract.
    */
   constructor(store) {
@@ -114,10 +115,21 @@ class GameDetailsService {
    *
    * @param {string} userId
    * @param {string} gameId
+   * @param {{fields?: string[], signal?: AbortSignal}} [opts]
    * @returns {Promise<Record<string, any> | null>}
    */
-  async findOne(userId, gameId) {
-    return this.store.read(userId, gameId);
+  async findOne(userId, gameId, opts = {}) {
+    // Always use the bulk-reader's process-wide admission gate, even for a
+    // single unprojected legacy caller. This prevents several panels/tabs from
+    // bypassing the R2 concurrency and waiter limits through `store.read()`.
+    const one = await this.store.readMany(userId, [gameId], {
+      fields: Array.isArray(opts.fields) && opts.fields.length > 0
+        ? opts.fields
+        : undefined,
+      concurrency: 1,
+      signal: opts.signal,
+    });
+    return one.get(gameId) || null;
   }
 
   /**
@@ -133,6 +145,17 @@ class GameDetailsService {
    */
   async findMany(userId, gameIds, opts = {}) {
     return this.store.readMany(userId, gameIds, opts);
+  }
+
+  /**
+   * Identifier-free occupancy for the optional external-store read lane.
+   * Mongo-backed installs do not need admission and therefore report zeros.
+   */
+  bulkReadCapacitySnapshot() {
+    if (typeof this.store.bulkReadCapacitySnapshot === "function") {
+      return this.store.bulkReadCapacitySnapshot();
+    }
+    return { active: 0, queued: 0, maxActive: 0, maxWaiters: 0 };
   }
 
   /**

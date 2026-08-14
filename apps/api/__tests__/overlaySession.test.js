@@ -90,6 +90,23 @@ describe("services/games.todaySession", () => {
     expect(out).toEqual({ wins: 0, losses: 0, games: 0 });
   });
 
+  test("a replay upsert invalidates the short reconnect cache", async () => {
+    await expect(
+      svc.todaySession("u1", "UTC", { reuseRecent: true }),
+    ).resolves.toEqual({
+      wins: 0,
+      losses: 0,
+      games: 0,
+    });
+    await svc.upsert("u1", {
+      gameId: "g-after-cache",
+      date: new Date(),
+      result: "Victory",
+    });
+    const fresh = await svc.todaySession("u1", "UTC", { reuseRecent: true });
+    expect(fresh).toMatchObject({ games: 1, wins: 1, losses: 0 });
+  });
+
   test("counts only games that fall on today's local-day key", async () => {
     jest.useFakeTimers({
       ...TIMER_FAKE_OPTS,
@@ -1647,8 +1664,14 @@ describe("POST /v1/games re-emits overlay:session", () => {
     // A genuinely fresh insert bypasses the pre-game Pulse cache once;
     // the second overlay reuses the process-wide value repopulated by
     // the first resolve instead of causing another external fetch.
-    expect(sessionSpy.mock.calls[0][2]).toEqual({ refreshCurrentMmr: true });
-    expect(sessionSpy.mock.calls[1][2]).toEqual({ refreshCurrentMmr: false });
+    expect(sessionSpy.mock.calls[0][2]).toEqual({
+      refreshCurrentMmr: true,
+      reuseRecent: true,
+    });
+    expect(sessionSpy.mock.calls[1][2]).toEqual({
+      refreshCurrentMmr: false,
+      reuseRecent: true,
+    });
 
     for (const emit of captured.sessionEmits) {
       expect(emit.payload.games).toBe(1);

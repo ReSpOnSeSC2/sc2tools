@@ -21,15 +21,13 @@ describe("GamesService.findMany", () => {
         isResumedFromReplay: { $ne: true },
       },
       {
-        projection: {
+        projection: expect.objectContaining({
           _id: 0,
-          replayUpload: 0,
-          _customBuildSlug: 0,
-          _customBuildRevision: 0,
-          _customBuildReclassify: 0,
-          _customBuildClassificationSequence: 0,
-          _opponentBuildOrderWriteLease: 0,
-        },
+          gameId: 1,
+          date: 1,
+          "opponent.displayName": 1,
+          "opponent.race": 1,
+        }),
       },
     );
     expect(result.map((row) => row.gameId)).toEqual(["b", "a"]);
@@ -52,15 +50,13 @@ describe("GamesService.findMany", () => {
         isResumedFromReplay: { $ne: true },
       },
       {
-        projection: {
+        projection: expect.objectContaining({
           _id: 0,
-          replayUpload: 0,
-          _customBuildSlug: 0,
-          _customBuildRevision: 0,
-          _customBuildReclassify: 0,
-          _customBuildClassificationSequence: 0,
-          _opponentBuildOrderWriteLease: 0,
-        },
+          gameId: 1,
+          date: 1,
+          "opponent.displayName": 1,
+          "opponent.race": 1,
+        }),
       },
     );
   });

@@ -7,6 +7,7 @@ const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
+const { SessionResolutionGate } = require("./sessionResolutionGate");
 
 /** @param {number} ms */
 function wait(ms) {
@@ -25,15 +26,9 @@ const ANALYSIS_GAME_PROJECTION = Object.freeze({
   myToonHandle: 1,
   myRace: 1,
   myMmr: 1,
-  oppMmr: 1,
-  duration: 1,
   durationSec: 1,
   map: 1,
   myBuild: 1,
-  oppRace: 1,
-  opp_strategy: 1,
-  oppPulseId: 1,
-  macro_score: 1,
   macroScore: 1,
   "opponent.displayName": 1,
   "opponent.mmr": 1,
@@ -41,6 +36,106 @@ const ANALYSIS_GAME_PROJECTION = Object.freeze({
   "opponent.pulseCharacterId": 1,
   "opponent.pulseId": 1,
   "opponent.strategy": 1,
+});
+
+// Keep agent-controlled opponent metadata genuinely slim. Unknown top-level
+// game fields remain forward-compatible, but an arbitrary nested opponent
+// payload must not turn every opponent projection into a multi-megabyte row.
+const OPPONENT_SLIM_FIELDS = new Set([
+  "pulseId",
+  "toonHandle",
+  "pulseCharacterId",
+  "pulseLookupAttempted",
+  "mmrLookupAttempted",
+  "leagueLookupAttempted",
+  "displayName",
+  "race",
+  "mmr",
+  "leagueId",
+  "opening",
+  "strategy",
+]);
+
+// The agent payload is forward-compatible at validation time, but the slim
+// collection is a high-fan-out query surface. Persisting arbitrary top-level
+// fields would let one otherwise-valid replay turn every list response into a
+// multi-megabyte row. New heavy fields belong in game_details; new slim fields
+// must be reviewed and added here deliberately.
+const GAME_SLIM_FIELDS = new Set([
+  "gameId",
+  "userId",
+  "date",
+  "startedAt",
+  "result",
+  "myRace",
+  "myLadderRace",
+  "myBuild",
+  "map",
+  "playerCount",
+  "matchFormat",
+  "isLadderGame",
+  "gameVersion",
+  "gameBuild",
+  "durationSec",
+  "macroScore",
+  "apm",
+  "spq",
+  "myMmr",
+  "myMmrSource",
+  "myToonHandle",
+  "top3Leaks",
+  "_schemaVersion",
+  // Pre-nested-agent aliases retained for upload/backfill compatibility.
+  "duration",
+  "macro_score",
+  "oppMmr",
+  "oppPulseId",
+  "oppRace",
+  "opp_strategy",
+]);
+
+// Exact client-facing slim-row contract. Inclusion projection is essential:
+// it protects current reads from legacy rows written before the storage
+// allowlist existed, not just future writes.
+const PUBLIC_GAME_PROJECTION = Object.freeze({
+  _id: 0,
+  gameId: 1,
+  date: 1,
+  startedAt: 1,
+  result: 1,
+  myRace: 1,
+  myLadderRace: 1,
+  myBuild: 1,
+  map: 1,
+  playerCount: 1,
+  matchFormat: 1,
+  isLadderGame: 1,
+  gameVersion: 1,
+  gameBuild: 1,
+  durationSec: 1,
+  macroScore: 1,
+  apm: 1,
+  spq: 1,
+  myMmr: 1,
+  myMmrSource: 1,
+  myToonHandle: 1,
+  // Per-game leak details are served by the bounded macro/detail endpoints.
+  // Do not hydrate this legacy array in generic 2,000-row list reads: rows
+  // written before validation bounds may contain arbitrarily large values.
+  "opponent.pulseId": 1,
+  "opponent.toonHandle": 1,
+  "opponent.pulseCharacterId": 1,
+  "opponent.displayName": 1,
+  "opponent.race": 1,
+  "opponent.mmr": 1,
+  "opponent.leagueId": 1,
+  "opponent.opening": 1,
+  "opponent.strategy": 1,
+  "replayFile.storedAt": 1,
+  "replayFile.sizeBytes": 1,
+  "replayFile.sha256": 1,
+  isResumedFromReplay: 1,
+  resumedReplayGameIds: 1,
 });
 
 /**
@@ -103,6 +198,10 @@ class GamesService {
     // or there's no profile.pulseId. Defaults to a no-op so unit
     // tests don't have to plumb a logger through.
     this.logger = opts.logger || null;
+    // One process-wide-per-service lane for the overlay session widget.
+    // OBS can reconnect many Browser Sources together; they all ask for the
+    // same Mongo + SC2Pulse snapshot and must share that work.
+    this._sessionResolutionGate = new SessionResolutionGate();
   }
 
   /**
@@ -120,6 +219,19 @@ class GamesService {
    * @returns {Promise<boolean>}
    */
   async upsert(userId, game) {
+    const result = await this.upsertWithRevision(userId, game);
+    return result.created;
+  }
+
+  /**
+   * Route-facing variant that carries the opaque payload revision into the
+   * custom-build tag CAS. Public/internal callers that only need the legacy
+   * boolean continue to use `upsert` above.
+   * @param {string} userId
+   * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
+   * @returns {Promise<{created: boolean, customBuildRevision: string}>}
+   */
+  async upsertWithRevision(userId, game) {
     if (!game || !game.gameId) throw new Error("gameId required");
     const date = game.date instanceof Date ? game.date : new Date(game.date);
     if (Number.isNaN(date.getTime())) throw new Error("invalid game.date");
@@ -234,7 +346,8 @@ class GamesService {
     // A fresh replay parse invalidates any background decision made from the
     // previous payload. Reclassification staging compares this opaque,
     // server-owned token before recording a decision.
-    slimSet._customBuildRevision = crypto.randomUUID();
+    const customBuildRevision = crypto.randomUUID();
+    slimSet._customBuildRevision = customBuildRevision;
     const update = clearUnavailableMyMmr
       ? buildUnavailableMmrUpdate(slimSet, unset)
       : {
@@ -288,7 +401,11 @@ class GamesService {
       if (Date.now() >= leaseDeadline) throw opponentBuildOrderBusyError();
       await wait(50);
     }
-    return res.upsertedCount === 1;
+    this._sessionResolutionGate.invalidate(userId);
+    return {
+      created: res.upsertedCount === 1,
+      customBuildRevision,
+    };
   }
 
   /**
@@ -399,6 +516,7 @@ class GamesService {
       },
     );
 
+    this._sessionResolutionGate.invalidate(userId);
     return {
       created: ensured.upsertedCount === 1,
       newlyFlaggedExisting: Number(marked.matchedCount || 0),
@@ -422,15 +540,7 @@ class GamesService {
     }
     const items = await this.db.games
       .find(filter, {
-        projection: {
-          _id: 0,
-          replayUpload: 0,
-          _customBuildReclassify: 0,
-          _customBuildRevision: 0,
-          _customBuildClassificationSequence: 0,
-          _customBuildSlug: 0,
-          _opponentBuildOrderWriteLease: 0,
-        },
+        projection: PUBLIC_GAME_PROJECTION,
       })
       .sort({ date: -1 })
       .limit(limit + 1)
@@ -453,31 +563,35 @@ class GamesService {
    * corpus ceiling, preserving every current card/Arcade calculation while
    * bounding API memory for each concurrent user.
    *
-   * The cursor includes `_id` as a deterministic tie-breaker, so games with
-   * the same replay timestamp are neither skipped nor duplicated.
+   * The cursor preserves the raw BSON date type/value and includes `_id` as a
+   * deterministic tie-breaker. Historical imports may carry ISO strings,
+   * numeric epochs, or null instead of BSON Dates; pagination follows Mongo's
+   * Date -> string -> number -> null descending type order without coercion.
    *
    * @param {string} userId
-   * @param {{limit?: number, cursor?: string}} [opts]
+   * @param {{limit?: number, cursor?: string, signal?: AbortSignal}} [opts]
    * @returns {Promise<{items: object[], nextCursor: string|null}>}
    */
   async listAnalysisCorpus(userId, opts = {}) {
+    if (opts.signal && opts.signal.aborted) throw analysisCorpusAbortError();
     const limit = clampAnalysisLimit(opts.limit);
     const cursor = decodeAnalysisCursor(opts.cursor);
     /** @type {Record<string, any>} */
     const filter = { userId, isResumedFromReplay: { $ne: true } };
     if (cursor) {
-      filter.$or = [
-        { date: { $lt: cursor.date } },
-        { date: cursor.date, _id: { $lt: cursor.id } },
-      ];
+      filter.$or = analysisCursorLowerBranches(cursor);
     }
 
     /** @type {Array<Record<string, any>>} */
     const rows = await this.db.games
-      .find(filter, { projection: ANALYSIS_GAME_PROJECTION })
+      .find(filter, {
+        projection: ANALYSIS_GAME_PROJECTION,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      })
       .sort({ date: -1, _id: -1 })
       .limit(limit + 1)
       .toArray();
+    if (opts.signal && opts.signal.aborted) throw analysisCorpusAbortError();
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const last = page[page.length - 1];
@@ -497,15 +611,7 @@ class GamesService {
     return this.db.games.findOne(
       { userId, gameId },
       {
-        projection: {
-          _id: 0,
-          replayUpload: 0,
-          _customBuildReclassify: 0,
-          _customBuildRevision: 0,
-          _customBuildClassificationSequence: 0,
-          _customBuildSlug: 0,
-          _opponentBuildOrderWriteLease: 0,
-        },
+        projection: PUBLIC_GAME_PROJECTION,
       },
     );
   }
@@ -540,15 +646,7 @@ class GamesService {
           isResumedFromReplay: { $ne: true },
         },
         {
-          projection: {
-            _id: 0,
-            replayUpload: 0,
-            _customBuildReclassify: 0,
-            _customBuildRevision: 0,
-            _customBuildClassificationSequence: 0,
-            _customBuildSlug: 0,
-            _opponentBuildOrderWriteLease: 0,
-          },
+          projection: PUBLIC_GAME_PROJECTION,
         },
       )
       .toArray();
@@ -763,7 +861,7 @@ class GamesService {
    *
    * @param {string} userId
    * @param {string} [timezone] IANA tz, defaults to UTC
-   * @param {{refreshCurrentMmr?: boolean}} [opts]
+   * @param {{refreshCurrentMmr?: boolean, reuseRecent?: boolean}} [opts]
    * @returns {Promise<{
    *   wins: number,
    *   losses: number,
@@ -775,7 +873,29 @@ class GamesService {
    *   streak?: { kind: 'win'|'loss', count: number },
    * }>}
    */
-  async todaySession(userId, timezone, opts = {}) {
+  todaySession(userId, timezone, opts = {}) {
+    const tz = pickTimezone(timezone);
+    return this._sessionResolutionGate.resolve(
+      userId,
+      tz,
+      opts,
+      () => this._computeTodaySession(userId, tz, opts),
+    );
+  }
+
+  /** Capacity-only view used by the process runtime monitor. */
+  capacitySnapshot() {
+    return this._sessionResolutionGate.capacitySnapshot();
+  }
+
+  /**
+   * Uncached implementation behind the bounded session-resolution gate.
+   * @private
+   * @param {string} userId
+   * @param {string} timezone
+   * @param {{refreshCurrentMmr?: boolean, reuseRecent?: boolean}} [opts]
+   */
+  async _computeTodaySession(userId, timezone, opts = {}) {
     const tz = pickTimezone(timezone);
     // 14-day window covers the typical W-L horizon. The today-key
     // filter below still pins wins/losses/games/streak to the current
@@ -1423,7 +1543,7 @@ function clampAnalysisLimit(raw) {
 
 /**
  * @param {unknown} raw
- * @returns {{date: Date, id: import('mongodb').ObjectId}|null}
+ * @returns {{dateType: "date"|"string"|"number"|"null", date: Date|string|number|null, id: import('mongodb').ObjectId}|null}
  */
 function decodeAnalysisCursor(raw) {
   if (raw === undefined || raw === null || raw === "") return null;
@@ -1432,19 +1552,20 @@ function decodeAnalysisCursor(raw) {
   }
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
-    if (!parsed || parsed.v !== 1 || typeof parsed.d !== "string") {
-      throw invalidAnalysisCursor();
-    }
-    const date = new Date(parsed.d);
     const idText = typeof parsed.i === "string" ? parsed.i.toLowerCase() : "";
-    if (
-      Number.isNaN(date.getTime())
-      || !ObjectId.isValid(idText)
-      || new ObjectId(idText).toHexString() !== idText
-    ) {
+    if (!ObjectId.isValid(idText) || new ObjectId(idText).toHexString() !== idText) {
       throw invalidAnalysisCursor();
     }
-    return { date, id: new ObjectId(idText) };
+    // v1 was Date-only. Keep accepting it so an in-progress browser scan can
+    // cross a deploy without restarting or duplicating its first pages.
+    if (parsed && parsed.v === 1 && typeof parsed.d === "string") {
+      const date = new Date(parsed.d);
+      if (Number.isNaN(date.getTime())) throw invalidAnalysisCursor();
+      return { dateType: "date", date, id: new ObjectId(idText) };
+    }
+    if (!parsed || parsed.v !== 2) throw invalidAnalysisCursor();
+    const date = decodeAnalysisCursorDate(parsed.t, parsed.d);
+    return { ...date, id: new ObjectId(idText) };
   } catch (err) {
     const known = /** @type {{code?: unknown}|null} */ (err);
     if (known && known.code === "bad_request") throw err;
@@ -1454,14 +1575,88 @@ function decodeAnalysisCursor(raw) {
 
 /** @param {unknown} date @param {unknown} id @returns {string} */
 function encodeAnalysisCursor(date, id) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    throw new Error("analysis_games_cursor_date_missing");
-  }
+  const encodedDate = encodeAnalysisCursorDate(date);
   const objectId = id instanceof ObjectId ? id : new ObjectId(String(id));
   return Buffer.from(
-    JSON.stringify({ v: 1, d: date.toISOString(), i: objectId.toHexString() }),
+    JSON.stringify({
+      v: 2,
+      t: encodedDate.dateType,
+      d: encodedDate.value,
+      i: objectId.toHexString(),
+    }),
     "utf8",
   ).toString("base64url");
+}
+
+/**
+ * Build the exclusive descending continuation predicate for the cursor's raw
+ * BSON date type. Mongo comparison operators are type-bracketed, so explicit
+ * lower-type branches are required when a page crosses from Date to string,
+ * string to number, or number to null.
+ *
+ * @param {{dateType: "date"|"string"|"number"|"null", date: Date|string|number|null, id: import('mongodb').ObjectId}} cursor
+ * @returns {Array<Record<string, any>>}
+ */
+function analysisCursorLowerBranches(cursor) {
+  if (cursor.dateType === "null") {
+    return [{ date: null, _id: { $lt: cursor.id } }];
+  }
+  return [
+    { date: { $lt: cursor.date } },
+    { date: cursor.date, _id: { $lt: cursor.id } },
+    ...lowerAnalysisDateTypeBranches(cursor.dateType),
+    { date: null },
+  ];
+}
+
+/**
+ * @param {"date"|"string"|"number"} dateType
+ * @returns {Array<Record<string, any>>}
+ */
+function lowerAnalysisDateTypeBranches(dateType) {
+  const numbers = { date: { $type: ["double", "int", "long", "decimal"] } };
+  if (dateType === "date") {
+    return [{ date: { $type: "string" } }, numbers];
+  }
+  if (dateType === "string") return [numbers];
+  return [];
+}
+
+/**
+ * @param {unknown} rawType
+ * @param {unknown} rawValue
+ * @returns {{dateType: "date"|"string"|"number"|"null", date: Date|string|number|null}}
+ */
+function decodeAnalysisCursorDate(rawType, rawValue) {
+  if (rawType === "date" && typeof rawValue === "string") {
+    const date = new Date(rawValue);
+    if (!Number.isNaN(date.getTime())) return { dateType: "date", date };
+  } else if (rawType === "string" && typeof rawValue === "string") {
+    return { dateType: "string", date: rawValue };
+  } else if (rawType === "number" && Number.isFinite(rawValue)) {
+    return { dateType: "number", date: Number(rawValue) };
+  } else if (rawType === "null" && rawValue === null) {
+    return { dateType: "null", date: null };
+  }
+  throw invalidAnalysisCursor();
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{dateType: "date"|"string"|"number"|"null", value: string|number|null}}
+ */
+function encodeAnalysisCursorDate(raw) {
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return { dateType: "date", value: raw.toISOString() };
+  }
+  if (typeof raw === "string") return { dateType: "string", value: raw };
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return { dateType: "number", value: raw };
+  }
+  if (raw === null || raw === undefined) {
+    return { dateType: "null", value: null };
+  }
+  throw new Error("analysis_games_cursor_date_invalid");
 }
 
 /** @returns {Error & {status?: number, code?: string}} */
@@ -1471,6 +1666,12 @@ function invalidAnalysisCursor() {
   );
   err.status = 400;
   err.code = "bad_request";
+  return err;
+}
+
+function analysisCorpusAbortError() {
+  const err = new Error("analysis corpus request aborted");
+  err.name = "AbortError";
   return err;
 }
 
@@ -1560,29 +1761,113 @@ function buildUnavailableMmrUpdate(slimSet, unset) {
  * @returns {Record<string, any>}
  */
 function buildSlimSet(doc) {
-  const set = { ...doc };
-  // Defense in depth for future callers that bypass ``upsert``'s input
-  // normalization. Replay archive markers/intents may only be written by
-  // ReplayFilesService after it verifies the R2 object.
-  for (const key of Object.keys(set)) {
-    if (
-      key === "replayFile"
-      || key.startsWith("replayFile.")
-      || key === "replayUpload"
-      || key.startsWith("replayUpload.")
-    ) {
-      delete set[key];
+  /** @type {Record<string, any>} */
+  const set = {};
+  for (const [key, value] of Object.entries(doc)) {
+    if (GAME_SLIM_FIELDS.has(key)) {
+      const normalized = normalizeSlimField(key, value);
+      if (normalized !== undefined) set[key] = normalized;
+      continue;
+    }
+    if (key.startsWith("opponent.")) {
+      const child = key.slice("opponent.".length);
+      if (OPPONENT_SLIM_FIELDS.has(child)) {
+        const normalized = normalizeOpponentField(child, value);
+        if (normalized !== undefined) set[key] = normalized;
+      }
     }
   }
-  const opponent = set.opponent;
+  const opponent = doc.opponent;
   if (!opponent || typeof opponent !== "object" || Array.isArray(opponent)) {
     return set;
   }
-  delete set.opponent;
   for (const [key, value] of Object.entries(opponent)) {
-    set[`opponent.${key}`] = value;
+    if (!OPPONENT_SLIM_FIELDS.has(key)) continue;
+    const normalized = normalizeOpponentField(key, value);
+    if (normalized !== undefined) set[`opponent.${key}`] = normalized;
   }
   return set;
+}
+
+/**
+ * Normalize every legacy/high-fan-out allow-listed field even when an
+ * internal caller bypasses HTTP validation. Returning undefined drops an
+ * invalid value instead of persisting it into the slim games collection.
+ * @param {string} key
+ * @param {unknown} value
+ */
+function normalizeSlimField(key, value) {
+  if (key === "top3Leaks") return sanitizeTopLeakArray(value);
+  if (key === "duration") return boundedNumber(value, 0, 24 * 60 * 60);
+  if (key === "macro_score") return boundedNumber(value, 0, 100);
+  if (key === "oppMmr") return boundedInteger(value, 0, 9999);
+  if (key === "oppPulseId") return boundedString(value, 200);
+  if (key === "oppRace") return boundedString(value, 24);
+  if (key === "opp_strategy") return boundedString(value, 200);
+  return value;
+}
+
+/** @param {string} key @param {unknown} value */
+function normalizeOpponentField(key, value) {
+  if (key === "pulseId") return boundedString(value, 200);
+  if (key === "toonHandle") return boundedString(value, 64);
+  if (key === "pulseCharacterId") return boundedString(value, 32);
+  if (key === "displayName") return boundedString(value, 80);
+  if (key === "race") return boundedString(value, 24);
+  if (key === "opening") return boundedString(value, 80);
+  if (key === "strategy") return boundedString(value, 200);
+  if (key === "mmr") return boundedInteger(value, 0, 9999);
+  if (key === "leagueId") return boundedInteger(value, 0, 100);
+  if (
+    key === "pulseLookupAttempted"
+    || key === "mmrLookupAttempted"
+    || key === "leagueLookupAttempted"
+  ) {
+    return typeof value === "boolean" ? value : undefined;
+  }
+  return undefined;
+}
+
+/** @param {unknown} value @param {number} max */
+function boundedString(value, max) {
+  return typeof value === "string" ? value.slice(0, max) : undefined;
+}
+
+/** @param {unknown} value @param {number} min @param {number} max */
+function boundedNumber(value, min, max) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : undefined;
+}
+
+/** @param {unknown} value @param {number} min @param {number} max */
+function boundedInteger(value, min, max) {
+  const number = boundedNumber(value, min, max);
+  return number === undefined ? undefined : Math.trunc(number);
+}
+
+/** @param {unknown} value */
+function sanitizeTopLeakArray(value) {
+  if (!Array.isArray(value)) return undefined;
+  const out = [];
+  for (const item of value.slice(0, 3)) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    /** @type {Record<string, unknown>} */
+    const leak = {};
+    const row = /** @type {Record<string, unknown>} */ (item);
+    const name = boundedString(row.name, 120);
+    const detail = boundedString(row.detail, 300);
+    const quantity = boundedNumber(row.quantity, 0, 1000000);
+    const mineralCost = boundedNumber(row.mineral_cost, 0, 100000000);
+    const penalty = boundedNumber(row.penalty, 0, 100000000);
+    if (name !== undefined) leak.name = name;
+    if (detail !== undefined) leak.detail = detail;
+    if (quantity !== undefined) leak.quantity = quantity;
+    if (mineralCost !== undefined) leak.mineral_cost = mineralCost;
+    if (penalty !== undefined) leak.penalty = penalty;
+    if (Object.keys(leak).length > 0) out.push(leak);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 module.exports = { GamesService };

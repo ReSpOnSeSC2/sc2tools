@@ -7,6 +7,7 @@ import { fmtAgo } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "./AuthorChip";
 import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
+import { CommunityOwnerReplayCount } from "./CommunityOwnerReplayCount";
 import type { CommunityBuildListItem } from "./types";
 
 export interface CommunityBuildCardProps {
@@ -84,8 +85,14 @@ export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
             {description}
           </p>
         ) : null}
-        <div className="mt-auto flex items-baseline justify-between pr-24 pt-2">
-          <VoteScore votes={votes} />
+        <div className="mt-auto flex items-baseline justify-between gap-3 pr-24 pt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <VoteScore votes={votes} />
+            <CommunityOwnerReplayCount
+              publicSlug={build.slug}
+              ownerUserId={build.ownerUserId}
+            />
+          </div>
           <span className="inline-flex items-center gap-1 text-micro text-text-dim">
             <MessageSquare className="h-3 w-3" aria-hidden />
             <span>Open</span>
@@ -104,6 +111,7 @@ function VoteScore({ votes }: { votes: number }) {
         ? "text-danger"
         : "text-text-dim";
   const sign = votes > 0 ? "▲" : votes < 0 ? "▼" : "·";
+  const label = `${Math.abs(votes)} ${Math.abs(votes) === 1 ? "vote" : "votes"}`;
   return (
     <span
       className={[
@@ -113,7 +121,7 @@ function VoteScore({ votes }: { votes: number }) {
       aria-label={`${votes} net votes`}
     >
       <ArrowUpDown className="h-3 w-3" aria-hidden />
-      {sign} {Math.abs(votes)}
+      {sign} {label}
     </span>
   );
 }

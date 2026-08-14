@@ -10,9 +10,16 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const { canonicalRaceLetter } = require("./oppMmrStamp");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
-const { computeCompositions } = require("./buildCompositions");
+const {
+  computeCompositions,
+  prepareCompositionGame,
+} = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { computePerGameScouting } = require("./scouting/perGameScouting");
+const {
+  compactAnalysisBuildLog,
+  compactAnalysisMacroBreakdown,
+} = require("./boundedReplayDetail");
 
 // SC2Pulse MMR refetch window. recordGame / refreshMetadata skip the
 // network call entirely when we resolved this opponent's MMR within
@@ -52,8 +59,93 @@ const OPPONENTS_VERSION = expectedVersion(COLLECTIONS.OPPONENTS);
 // shared history — plus a detail blob per game — into memory per view.
 const OPPONENT_PROFILE_MAX_GAMES = 1000;
 
-const PROFILE_GAME_PROJECTION = {
+// Phase/timing/scouting panels need detail-store fields, but the totals and
+// replay table do not. Keep their analytical cohort deliberately much smaller
+// than the metadata cohort and hydrate it serially: one legacy multi-megabyte
+// detail can be reclaimed before the next one is read.
+const OPPONENT_PROFILE_ANALYSIS_MAX_GAMES = 100;
+const OPPONENT_PROFILE_SCOUTING_MAX_GAMES = 60;
+const OPPONENT_PROFILE_RECENT_SCOUTING_GAMES = 5;
+const OPPONENT_PROFILE_ANALYSIS_MAX_ACTIVE = 2;
+const OPPONENT_PROFILE_ANALYSIS_MAX_WAITERS = 8;
+const OPPONENT_PROFILE_ANALYSIS_WAIT_MS = 15_000;
+
+class OpponentProfileAnalysisAdmission {
+  constructor() {
+    this.active = 0;
+    /** @type {Array<any>} */
+    this.waiters = [];
+  }
+
+  async acquire() {
+    if (this.active < OPPONENT_PROFILE_ANALYSIS_MAX_ACTIVE) {
+      this.active += 1;
+      return this._releaseHandle();
+    }
+    if (this.waiters.length >= OPPONENT_PROFILE_ANALYSIS_MAX_WAITERS) {
+      throw opponentProfileBusyError();
+    }
+    return new Promise((resolve, reject) => {
+      const waiter = /** @type {any} */ ({ resolve, reject, timer: null });
+      waiter.timer = setTimeout(() => {
+        const index = this.waiters.indexOf(waiter);
+        if (index >= 0) this.waiters.splice(index, 1);
+        reject(opponentProfileBusyError());
+      }, OPPONENT_PROFILE_ANALYSIS_WAIT_MS);
+      if (typeof waiter.timer.unref === "function") waiter.timer.unref();
+      this.waiters.push(waiter);
+    });
+  }
+
+  _releaseHandle() {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const next = this.waiters.shift();
+      if (next) {
+        clearTimeout(next.timer);
+        next.resolve(this._releaseHandle());
+        return;
+      }
+      this.active = Math.max(0, this.active - 1);
+    };
+  }
+
+  snapshot() {
+    return {
+      active: this.active,
+      queued: this.waiters.length,
+      maxActive: OPPONENT_PROFILE_ANALYSIS_MAX_ACTIVE,
+      maxWaiters: OPPONENT_PROFILE_ANALYSIS_MAX_WAITERS,
+    };
+  }
+}
+
+const opponentProfileAnalysisAdmission = new OpponentProfileAnalysisAdmission();
+
+const OPPONENT_PROFILE_DOC_PROJECTION = {
   _id: 0,
+  pulseId: 1,
+  pulseCharacterId: 1,
+  toonHandle: 1,
+  displayNameSample: 1,
+  revealedName: 1,
+  race: 1,
+  mmr: 1,
+  leagueId: 1,
+  region: 1,
+  gameCount: 1,
+  wins: 1,
+  losses: 1,
+  firstSeen: 1,
+  lastSeen: 1,
+};
+
+const PROFILE_GAME_PROJECTION = {
+  // Kept internally for the one-row-at-a-time legacy detail fallback. The
+  // strict response serializer below never exposes Mongo identifiers.
+  _id: 1,
   gameId: 1,
   date: 1,
   result: 1,
@@ -61,42 +153,35 @@ const PROFILE_GAME_PROJECTION = {
   myRace: 1,
   myLadderRace: 1,
   myBuild: 1,
+  myMmr: 1,
   durationSec: 1,
   macroScore: 1,
-  // Internal raw-replay marker. The serializer exposes only availability
-  // and size, never its checksum or storage metadata.
-  replayFile: 1,
-  top3Leaks: 1,
-  apm: 1,
-  spq: 1,
-  // Canonical game-kind fields used by the analyzer's default
-  // ladder-1v1 scope. isLadderMap remains projected only for response
-  // compatibility; filtering deliberately trusts isLadderGame.
+  "replayFile.sizeBytes": 1,
+  "replayFile.storedAt": 1,
+  "top3Leaks.name": 1,
   isLadderGame: 1,
   isLadderMap: 1,
   playerCount: 1,
   matchFormat: 1,
+  // Heavy detail fields are deliberately absent. A bounded analytical sample
+  // is hydrated serially after the slim cohort has been filtered. Dotted
+  // opponent fields also keep unknown legacy children out of memory.
+  "opponent.pulseId": 1,
+  "opponent.pulseCharacterId": 1,
+  "opponent.toonHandle": 1,
+  "opponent.displayName": 1,
+  "opponent.race": 1,
+  "opponent.mmr": 1,
+  "opponent.leagueId": 1,
+  "opponent.region": 1,
+  "opponent.strategy": 1,
+};
+
+const PROFILE_DETAIL_PROJECTION = {
+  _id: 0,
   buildLog: 1,
   oppBuildLog: 1,
-  // earlyBuildLog / oppEarlyBuildLog deliberately omitted: dnaTimings
-  // (the only consumer of game payloads from this projection) reads
-  // only the full ``buildLog`` / ``oppBuildLog`` fields. Skipping the
-  // early arrays here used to load ~6 kB of redundant data per profile
-  // game; v0.4.3+ agents stop emitting them entirely and pre-v0.4.3
-  // docs still derive correctly from the full log when a service
-  // actually needs the early window (see ``readEarlyBuildLog`` in
-  // perGameCompute).
-  //
-  // macroBreakdown projected for legacy (pre-v0.4.3) docs that still
-  // carry it inline — the phase classifier in computeCompositions /
-  // computeTransitions reads it to compute the trajectory + Sankey on
-  // the profile. Post-cutover docs return ``undefined`` for this
-  // field and the gameDetails hydration block below fills it from
-  // the detail store. Stripped from the response by
-  // ``serializeGameForProfile`` so the heavy blob never reaches the
-  // client.
   macroBreakdown: 1,
-  opponent: 1,
 };
 
 // Metadata-only projection for the independently paginated All replays table.
@@ -1056,6 +1141,122 @@ class OpponentsService {
   }
 
   /**
+   * Hydrate the bounded analytical cohort one replay at a time. Heavy detail
+   * objects never accumulate: each is projected into compact build-log rows,
+   * prepared phase summaries, and a response-bounded scouting envelope before
+   * the next read begins.
+   *
+   * @private
+   * @param {string} userId
+   * @param {Array<{game: any, inDateScope: boolean, recentScouting: boolean}>} selected
+   */
+  async _hydrateProfileAnalyticalSample(userId, selected) {
+    const releaseAdmission = await opponentProfileAnalysisAdmission.acquire();
+    try {
+      const out = [];
+      let filteredScoutingCount = 0;
+      for (const choice of selected) {
+        const slim = choice.game;
+        /** @type {Record<string, any>|null} */
+        let detail = null;
+        if (
+          this.gameDetails
+          && typeof this.gameDetails.findOne === "function"
+          && slim.gameId
+        ) {
+          try {
+            detail = await this.gameDetails.findOne(
+              userId,
+              String(slim.gameId),
+              { fields: ["buildLog", "oppBuildLog", "macroBreakdown"] },
+            );
+          } catch (err) {
+            this.logger.warn(
+              { err },
+              "opponent profile detail read failed; trying legacy inline row",
+            );
+          }
+        }
+
+        const needsLegacyInline = !detail
+          || !Array.isArray(detail.buildLog)
+          || !Array.isArray(detail.oppBuildLog)
+          || !detail.macroBreakdown;
+        /** @type {Record<string, any>|null} */
+        let inline = null;
+        if (needsLegacyInline && slim._id) {
+          inline = await this.db.games.findOne(
+            { userId, _id: slim._id },
+            { projection: PROFILE_DETAIL_PROJECTION },
+          );
+        }
+
+        const buildLog = compactAnalysisBuildLog(
+          detail?.buildLog ?? inline?.buildLog,
+        );
+        const oppBuildLog = compactAnalysisBuildLog(
+          detail?.oppBuildLog ?? inline?.oppBuildLog,
+        );
+        const macroBreakdown = compactAnalysisMacroBreakdown(
+          detail?.macroBreakdown ?? inline?.macroBreakdown,
+        );
+        const hydrated = {
+          ...slim,
+          buildLog,
+          oppBuildLog,
+          macroBreakdown,
+        };
+
+        let scouting = null;
+        if (
+          choice.recentScouting
+          || (choice.inDateScope
+            && filteredScoutingCount < OPPONENT_PROFILE_SCOUTING_MAX_GAMES)
+        ) {
+          if (choice.inDateScope) filteredScoutingCount += 1;
+          try {
+            scouting = computePerGameScouting(hydrated);
+          } catch (err) {
+            this.logger.warn(
+              { err },
+              "opponent profile scouting reduction failed",
+            );
+          }
+        }
+
+        // The compact logs remain for DNA timings. Macro detail is replaced by
+        // two tiny prepared summaries because downstream phase panels score
+        // the game from both player perspectives.
+        const compactBase = {
+          ...profileAnalyticalMetadata(slim),
+          buildLog,
+          oppBuildLog,
+        };
+        out.push({
+          inDateScope: choice.inDateScope,
+          recentScouting: choice.recentScouting,
+          scouting,
+          youGame: {
+            ...compactBase,
+            _phasePrepared: safePrepareComposition(hydrated, "you"),
+          },
+          opponentGame: {
+            ...compactBase,
+            _phasePrepared: safePrepareComposition(hydrated, "opponent"),
+          },
+        });
+      }
+      return out;
+    } finally {
+      releaseAdmission();
+    }
+  }
+
+  profileAnalysisCapacitySnapshot() {
+    return opponentProfileAnalysisAdmission.snapshot();
+  }
+
+  /**
    * Build the full opponent profile payload consumed by the SPA's
    * `OpponentProfile` view: totals, byMap, byStrategy, top strategies,
    * recency-weighted predictions, matchup-aware median timings (overall
@@ -1096,10 +1297,9 @@ class OpponentsService {
     if (!filters.until && opts.until) filters.until = opts.until;
     const doc = await this.db.opponents.findOne(
       { userId, pulseId },
-      { projection: { _id: 0 } },
+      { projection: OPPONENT_PROFILE_DOC_PROJECTION },
     );
     if (!doc) return null;
-    delete doc._resumeReplayCounterRepairIds;
     // Match games against either identity field. The opponents row
     // stores the canonical SC2Pulse character id; if a player ever
     // rebound their Battle.net (rotating the toon_handle while
@@ -1146,40 +1346,8 @@ class OpponentsService {
       .toArray();
     const gamesTruncated = fetchedGames.length > OPPONENT_PROFILE_MAX_GAMES;
     const rawGames = fetchedGames.slice(0, OPPONENT_PROFILE_MAX_GAMES);
-    // dnaTimings reads ``buildLog`` / ``oppBuildLog`` off each game
-    // object to compute first-occurrence-of-token timings, and the
-    // phase classifier (powering the trajectory strip + transition
-    // Sankey on the profile) reads ``macroBreakdown``. All three
-    // fields live on the detail store after the v0.4.3 cutover —
-    // bulk-fetch them in one batched query so the per-profile cost
-    // is constant regardless of game count.
-    if (this.gameDetails && rawGames.length > 0) {
-      const needIds = [];
-      for (const g of rawGames) {
-        const missingLogs =
-          !Array.isArray(g.buildLog) || !Array.isArray(g.oppBuildLog);
-        const missingMacro = !g.macroBreakdown;
-        if (missingLogs || missingMacro) {
-          if (g.gameId) needIds.push(String(g.gameId));
-        }
-      }
-      if (needIds.length > 0) {
-        const blobs = await this.gameDetails.findMany(userId, needIds);
-        for (const g of rawGames) {
-          const blob = blobs.get(String(g.gameId || ""));
-          if (!blob) continue;
-          if (!Array.isArray(g.buildLog) && Array.isArray(blob.buildLog)) {
-            g.buildLog = blob.buildLog;
-          }
-          if (!Array.isArray(g.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
-            g.oppBuildLog = blob.oppBuildLog;
-          }
-          if (!g.macroBreakdown && blob.macroBreakdown) {
-            g.macroBreakdown = blob.macroBreakdown;
-          }
-        }
-      }
-    }
+    // Keep this full table cohort slim. The separate analytical selection
+    // below is the only path allowed to read replay detail fields.
     // Apply every non-date analyzer facet before deriving profile
     // aggregates. Date bounds remain separate so recency-oriented panels
     // can intentionally show the latest games inside the same cohort.
@@ -1187,6 +1355,22 @@ class OpponentsService {
     const rawFilteredGames = filterGamesByDate(
       scopedRawGames, filters.since, filters.until,
     );
+    const analyticalSelection = selectProfileAnalyticalGames(
+      scopedRawGames,
+      rawFilteredGames,
+    );
+    const analytical = await this._hydrateProfileAnalyticalSample(
+      userId,
+      analyticalSelection.items,
+    );
+    const analyticalFilteredGames = analytical
+      .filter((row) => row.inDateScope)
+      .map((row) => row.youGame);
+    const analyticalOpponentGames = analytical
+      .filter((row) => row.inDateScope)
+      .map((row) => row.opponentGame);
+    const analysisSampleTruncated = analyticalSelection.filteredTotal
+      > analyticalFilteredGames.length;
     const allGames = scopedRawGames.map(serializeGameForProfile);
     const filteredGames = rawFilteredGames.map(serializeGameForProfile);
     // Authoritative current name. ``rawGames`` is sorted by date desc
@@ -1236,7 +1420,7 @@ class OpponentsService {
       filteredGames,
       hasProfileFilters(filters) ? null : doc,
     );
-    const dna = computeDnaFields(filteredGames);
+    const dna = computeDnaFields(filteredGames, analyticalFilteredGames);
     // Phase trajectory + transition Sankey for "How games against this
     // opponent play out". Pure compute over the same date-filtered
     // games that drive the by-map / by-strategy / median-timings
@@ -1250,8 +1434,8 @@ class OpponentsService {
       : "vs opponent";
     // Same raw, date-filtered cohort the by-map/by-strategy aggregates
     // use; retaining raw rows here keeps detail-backed phase data intact.
-    const phasesCompute = computeCompositions(rawFilteredGames);
-    const transitionsCompute = computeTransitions(rawFilteredGames, {
+    const phasesCompute = computeCompositions(analyticalFilteredGames);
+    const transitionsCompute = computeTransitions(analyticalFilteredGames, {
       mode: "opponent",
       label: opponentLabel,
     });
@@ -1261,7 +1445,7 @@ class OpponentsService {
     // call ``computeCompositions`` per group. Cap at the top 6 by game
     // count so the payload stays bounded; everything beyond is folded
     // into the aggregate above.
-    const byStrategy = computeByStrategyPhases(rawFilteredGames, {
+    const byStrategy = computeByStrategyPhases(analyticalOpponentGames, {
       perspective: "opponent",
       maxStrategies: 6,
     });
@@ -1273,7 +1457,9 @@ class OpponentsService {
       finalPhaseDistribution: phasesCompute.finalPhaseDistribution,
       medianCrossings: phasesCompute.medianCrossings,
       durationP95Sec: phasesCompute.durationP95Sec,
-      flags: phasesCompute.flags,
+      flags: analysisSampleTruncated
+        ? [...new Set([...(phasesCompute.flags || []), "profile_sample_truncated"])]
+        : phasesCompute.flags,
       byStrategy,
     };
     const transitions = {
@@ -1293,18 +1479,10 @@ class OpponentsService {
     // ``allGames``, hence the raw-side traversal here. The compute
     // itself lives in ``scouting/perGameScouting.js`` to keep this
     // file under the 800-line ceiling.
-    const last5GamesScouting = scopedRawGames.slice(0, 5).map((g) => {
-      try {
-        return computePerGameScouting(g);
-      } catch (err) {
-        const e = /** @type {{ message?: unknown }} */ (err);
-        console.warn(
-          "perGameScouting failed for gameId=%s userId=%s: %s",
-          g && g.gameId, userId, (e && e.message) || e,
-        );
-        return null;
-      }
-    }).filter((envelope) => envelope !== null);
+    const last5GamesScouting = analytical
+      .filter((row) => row.recentScouting && row.scouting)
+      .slice(0, OPPONENT_PROFILE_RECENT_SCOUTING_GAMES)
+      .map((row) => row.scouting);
     // Per-game scouting envelopes for EVERY date-filtered game — the
     // opponent profile's "How games against this opponent play out"
     // widget tabs through these to show real build orders, real
@@ -1314,22 +1492,10 @@ class OpponentsService {
     // by-strategy panels use). Capped so a profile against an opponent
     // with hundreds of games doesn't blow the response size; the
     // overlay's last-5 surface keeps its dedicated field above.
-    const PROFILE_SCOUTING_CAP = 60;
-    const gamesScouting = rawFilteredGames
-      .slice(0, PROFILE_SCOUTING_CAP)
-      .map((g) => {
-        try {
-          return computePerGameScouting(g);
-        } catch (err) {
-          const e = /** @type {{ message?: unknown }} */ (err);
-          console.warn(
-            "perGameScouting failed for gameId=%s userId=%s: %s",
-            g && g.gameId, userId, (e && e.message) || e,
-          );
-          return null;
-        }
-      })
-      .filter((envelope) => envelope !== null);
+    const gamesScouting = analytical
+      .filter((row) => row.inDateScope && row.scouting)
+      .slice(0, OPPONENT_PROFILE_SCOUTING_MAX_GAMES)
+      .map((row) => row.scouting);
     const matchupTimingsLegacy = dna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
     // "Last MMR" overlay — same race-aware contract as the list path.
@@ -1410,6 +1576,9 @@ class OpponentsService {
       last5Games,
       last5GamesScouting,
       gamesScouting,
+      analysisSampleSize: analyticalFilteredGames.length,
+      analysisSampleLimit: OPPONENT_PROFILE_ANALYSIS_MAX_GAMES,
+      analysisSampleTruncated,
       gamesTruncated,
       games: filteredGames,
     };
@@ -3137,7 +3306,7 @@ function decrementFloorExpr(fieldPath, amount) {
  * @returns {string}
  */
 function sanitizeKey(raw) {
-  return String(raw).replace(/[.$ ]/g, "_");
+  return String(raw).replace(/[.$\u0000]/g, "_");
 }
 
 /**
@@ -3233,6 +3402,79 @@ function encodeOpponentGamesCursor(date, id) {
   ).toString("base64url");
 }
 
+/** @param {any} game */
+function profileAnalyticalMetadata(game) {
+  const opponent = game?.opponent && typeof game.opponent === "object"
+    ? game.opponent
+    : {};
+  return {
+    gameId: game?.gameId,
+    date: game?.date,
+    result: game?.result,
+    map: game?.map,
+    myRace: game?.myRace,
+    oppRace: opponent.race,
+    myBuild: game?.myBuild,
+    durationSec: game?.durationSec,
+    opponent: {
+      displayName: opponent.displayName,
+      race: opponent.race,
+      strategy: opponent.strategy,
+    },
+  };
+}
+
+/** @param {any} game @param {"you"|"opponent"} perspective */
+function safePrepareComposition(game, perspective) {
+  try {
+    return prepareCompositionGame(game, perspective);
+  } catch {
+    return prepareCompositionGame(
+      {
+        durationSec: game?.durationSec,
+        myRace: game?.myRace,
+        oppRace: game?.oppRace,
+        macroBreakdown: {},
+        buildLog: [],
+        oppBuildLog: [],
+      },
+      perspective,
+    );
+  }
+}
+
+/**
+ * Preserve the recent-five scouting contract, then fill the remaining bounded
+ * analytical sample from the date-filtered cohort. Objects are selected by
+ * reference from the already bounded slim array, so no full-cohort map is
+ * created.
+ * @param {any[]} scopedGames
+ * @param {any[]} filteredGames
+ */
+function selectProfileAnalyticalGames(scopedGames, filteredGames) {
+  const filtered = new Set(filteredGames);
+  const seen = new Set();
+  /** @type {Array<{game: any, inDateScope: boolean, recentScouting: boolean}>} */
+  const items = [];
+  /** @param {any} game @param {boolean} recentScouting */
+  const add = (game, recentScouting) => {
+    if (!game || seen.has(game) || items.length >= OPPONENT_PROFILE_ANALYSIS_MAX_GAMES) {
+      return;
+    }
+    seen.add(game);
+    items.push({
+      game,
+      inDateScope: filtered.has(game),
+      recentScouting,
+    });
+  };
+  for (const game of scopedGames.slice(0, OPPONENT_PROFILE_RECENT_SCOUTING_GAMES)) {
+    add(game, true);
+  }
+  for (const game of filteredGames) add(game, false);
+  return { items, filteredTotal: filteredGames.length };
+}
+
 /** @returns {Error & {status?: number, code?: string}} */
 function invalidOpponentGamesCursor() {
   const err = /** @type {Error & {status: number, code: string}} */ (
@@ -3240,6 +3482,19 @@ function invalidOpponentGamesCursor() {
   );
   err.status = 400;
   err.code = "bad_request";
+  return err;
+}
+
+/** @returns {Error & {status: number, code: string, retryAfterMs: number}} */
+function opponentProfileBusyError() {
+  const err = /** @type {Error & {
+   *   status: number,
+   *   code: string,
+   *   retryAfterMs: number,
+   * }} */ (new Error("opponent profile analysis is busy"));
+  err.status = 503;
+  err.code = "opponent_profile_busy";
+  err.retryAfterMs = 1_000;
   return err;
 }
 
@@ -3285,40 +3540,10 @@ function hasFilters(f) {
  * legacy SPA profile renderers (lowercase ISO date string,
  * `opp_strategy`, `opp_race`, `my_build`, `game_length`).
  *
- * @param {any} g Mongo games-collection doc (post detail hydration).
+ * @param {any} g Mongo games-collection slim metadata doc.
  */
 function serializeGameForProfile(g) {
-  if (!g) return g;
-  const opp = g.opponent || {};
-  const replaySizeBytes =
-    Number.isFinite(g.replayFile?.sizeBytes) && g.replayFile.sizeBytes > 0
-      ? g.replayFile.sizeBytes
-      : null;
-  // ``macroBreakdown`` is hydrated onto rawGames so the phase
-  // classifier can read it server-side, but the profile JSON envelope
-  // emits only the compact phase aggregates — drop the raw blob here
-  // so it doesn't bloat the response.
-  const rest = { ...g };
-  delete rest.macroBreakdown;
-  delete rest.replayFile;
-  return {
-    ...rest,
-    id: g.gameId || null,
-    date: g.date instanceof Date ? g.date.toISOString() : g.date,
-    map: g.map || "",
-    result: g.result || "",
-    opponent: opp.displayName || "",
-    opp_race: opp.race || "",
-    opp_strategy: opp.strategy || null,
-    my_build: g.myBuild || "",
-    my_race: g.myRace || "",
-    game_length: g.durationSec || 0,
-    macro_score: typeof g.macroScore === "number" ? g.macroScore : null,
-    replayAvailable:
-      replaySizeBytes !== null && Boolean(g.replayFile?.storedAt),
-    replayFilename: null,
-    replaySizeBytes,
-  };
+  return serializeCompactProfileGame(g);
 }
 
 /**
@@ -3567,12 +3792,16 @@ function computeTotals(games, doc) {
  * Run the DNA helpers against the games array. Pulled out of `get()`
  * to keep the method short.
  *
- * @param {Array<object>} games
+ * @param {Array<object>} games slim cohort used for counts/tendencies
+ * @param {Array<object>} [timingGames] bounded detail-backed timing sample
  */
-function computeDnaFields(games) {
+function computeDnaFields(games, timingGames = games) {
   const myRace = Dna.resolveMyRace(games);
   const oppRaceModal = Dna.resolveModalOppRace(games);
-  const medianTimings = Dna.computeMatchupAwareMedianTimings(games, myRace);
+  const medianTimings = Dna.computeMatchupAwareMedianTimings(
+    timingGames,
+    myRace,
+  );
   const medianTimingsOrder = Object.keys(medianTimings);
   const matchupLabel = TimingCatalog.matchupLabel(myRace, oppRaceModal);
 
@@ -3592,7 +3821,11 @@ function computeDnaFields(games) {
   if (myRace) {
     for (const ml of Object.keys(matchupCounts)) {
       const opp = ml.slice(-1);
-      const t = Dna.computeMedianTimingsForMatchup(games, myRace, opp);
+      const t = Dna.computeMedianTimingsForMatchup(
+        timingGames,
+        myRace,
+        opp,
+      );
       matchupTimings[ml] = { timings: t, order: Object.keys(t) };
     }
   }

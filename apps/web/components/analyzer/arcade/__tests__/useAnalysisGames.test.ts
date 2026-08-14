@@ -5,15 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   dbRev: 0,
   generation: 0,
+  isLoaded: true,
+  isSignedIn: true,
+  userId: "user-a" as string | null,
   getToken: vi.fn(async () => null),
   apiCall: vi.fn(),
 }));
 
+let providerEnabled = true;
+
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
     getToken: harness.getToken,
-    isLoaded: true,
-    isSignedIn: true,
+    isLoaded: harness.isLoaded,
+    isSignedIn: harness.isSignedIn,
+    userId: harness.userId,
   }),
 }));
 
@@ -44,7 +50,11 @@ afterEach(() => {
 beforeEach(() => {
   harness.dbRev = 0;
   harness.generation = 0;
+  harness.isLoaded = true;
+  harness.isSignedIn = true;
+  harness.userId = "user-a";
   harness.apiCall.mockReset();
+  providerEnabled = true;
   harness.apiCall.mockImplementation(async (_getToken, path: string) => {
     const cursor = new URL(path, "https://example.test").searchParams.get(
       "cursor",
@@ -129,9 +139,146 @@ describe("useSettledAnalysisRevision", () => {
 
 describe("AnalysisGamesProvider retention", () => {
   const wrapper = ({ children }: { children: ReactNode }) => {
-    const providerProps = { refreshQuietMs: 0, children };
+    const providerProps = {
+      enabled: providerEnabled,
+      refreshQuietMs: 0,
+      children,
+    };
     return createElement(AnalysisGamesProvider, providerProps);
   };
+
+  it("does not request any history until a surface explicitly enables it", async () => {
+    providerEnabled = false;
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper,
+    });
+
+    expect(result.current.isActive).toBe(false);
+    expect(result.current.isLoading).toBe(false);
+    expect(harness.apiCall).not.toHaveBeenCalled();
+
+    providerEnabled = true;
+    rerender();
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.isActive).toBe(true);
+    expect(harness.apiCall).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets Daily Pulse activate the shared corpus on demand", async () => {
+    providerEnabled = false;
+    const { result } = renderHook(() => useAnalysisGames(), { wrapper });
+
+    act(() => result.current.load());
+
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(result.current.isActive).toBe(true);
+    expect(harness.apiCall).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels an in-flight page and releases the corpus when Arcade closes", async () => {
+    let requestSignal: AbortSignal | undefined;
+    harness.apiCall.mockImplementationOnce(
+      async (_getToken, _path: string, init?: RequestInit) => {
+        requestSignal = init?.signal as AbortSignal | undefined;
+        return await new Promise((_resolve, reject) => {
+          requestSignal?.addEventListener(
+            "abort",
+            () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+            { once: true },
+          );
+        });
+      },
+    );
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper,
+    });
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(1));
+
+    providerEnabled = false;
+    rerender();
+
+    await waitFor(() => expect(requestSignal?.aborted).toBe(true));
+    await waitFor(() => expect(result.current.isActive).toBe(false));
+    expect(result.current.items).toEqual([]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("fails closed and aborts user A when the signed-in account changes", async () => {
+    let userASignal: AbortSignal | undefined;
+    harness.apiCall.mockImplementationOnce(
+      async (_getToken, _path: string, init?: RequestInit) => {
+        userASignal = init?.signal as AbortSignal | undefined;
+        return await new Promise((_resolve, reject) => {
+          userASignal?.addEventListener(
+            "abort",
+            () => reject(new Error("late user A failure")),
+            { once: true },
+          );
+        });
+      },
+    );
+
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper,
+    });
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(1));
+
+    harness.generation = 1;
+    harness.userId = "user-b";
+    rerender();
+
+    // The account-bound view hides A before React runs effect cleanup.
+    expect(result.current.items).toEqual([]);
+    expect(result.current.isLoading).toBe(true);
+
+    await waitFor(() => expect(userASignal?.aborted).toBe(true));
+    await waitFor(() => {
+      expect(result.current.items.map((row) => row.gameId)).toEqual([
+        "r1-a",
+        "r1-b",
+        "r1-c",
+      ]);
+    });
+    expect(result.current.error).toBeNull();
+  });
+
+  it("never renders user A's completed corpus while user B is loading", async () => {
+    const { result, rerender } = renderHook(() => useAnalysisGames(), {
+      wrapper,
+    });
+    await waitFor(() => {
+      expect(result.current.items.map((row) => row.gameId)).toEqual([
+        "r0-a",
+        "r0-b",
+        "r0-c",
+      ]);
+    });
+
+    let resolveUserB!: (page: {
+      items: ReturnType<typeof game>[];
+      nextCursor: null;
+    }) => void;
+    harness.apiCall.mockImplementationOnce(
+      async () => await new Promise((resolve) => {
+        resolveUserB = resolve;
+      }),
+    );
+
+    harness.userId = "user-b";
+    rerender();
+
+    expect(result.current.items).toEqual([]);
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveUserB({ items: [game("user-b-game")], nextCursor: null });
+    });
+    await waitFor(() => {
+      expect(result.current.items.map((row) => row.gameId)).toEqual([
+        "user-b-game",
+      ]);
+    });
+  });
 
   it("replaces one flat corpus across revisions without retaining old pages", async () => {
     const { result, rerender } = renderHook(() => useAnalysisGames(), {

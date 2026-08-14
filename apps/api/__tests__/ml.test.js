@@ -150,4 +150,24 @@ describe("services/ml", () => {
       else process.env.SC2_PY_ANALYZER_DIR = original;
     }
   });
+
+  test("releases the global training lane even when failure status cannot persist", async () => {
+    const db = makeMongo();
+    db.mlJobs.updateOne = jest.fn(async () => {
+      throw new Error("mongo_unavailable");
+    });
+    const svc = new MLService(db);
+    const jobId = "0123456789abcdef01234567";
+    svc._activeJobs.set("u1", {
+      jobId,
+      handle: null,
+      cancelled: false,
+    });
+
+    await expect(
+      svc._jobError("u1", jobId, new Error("training_failed")),
+    ).rejects.toThrow("mongo_unavailable");
+
+    expect(svc._activeJobs.has("u1")).toBe(false);
+  });
 });

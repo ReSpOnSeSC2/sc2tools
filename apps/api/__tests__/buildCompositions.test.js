@@ -6,9 +6,16 @@ const path = require("path");
 
 const {
   computeCompositions,
+  prepareCompositionGame,
   PHASE_WINDOWS,
   WORKER_SKIP,
 } = require("../src/services/buildCompositions");
+const {
+  canonicalizeName,
+  peakAliveInWindow,
+  MAX_UNIT_TOKEN_LENGTH,
+  MAX_UNIT_KEYS_PER_TICK_SIDE,
+} = require("../src/services/scouting/compositionAt");
 
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "phase");
 
@@ -209,6 +216,87 @@ describe("buildCompositions — peak-alive sampling across phase window", () => 
     expect(roach).toBeDefined();
     expect(roach.count).toBe(20);
     expect(rawBurrowed).toBeUndefined();
+  });
+
+  test("drops a 4 MiB timeline token before canonicalization or phase output", () => {
+    const oversizedToken = "X".repeat(4 * 1024 * 1024);
+    const peak = peakAliveInWindow([{
+      time: 100,
+      my: { [oversizedToken]: 999, Stalker: 5 },
+      opp: {},
+    }], 0, 200, "my", new Set());
+
+    // Keep failure output numeric: a regression must not make Jest format and
+    // duplicate the hostile 4 MiB key while reporting the assertion.
+    const emittedLengths = Object.keys(peak.counts).map((key) => key.length);
+    expect(Math.max(0, ...emittedLengths)).toBeLessThanOrEqual(
+      MAX_UNIT_TOKEN_LENGTH,
+    );
+    expect(peak.counts.Stalker).toBe(5);
+    expect(canonicalizeName(oversizedToken)).toBe("");
+
+    const game = makeGame({
+      gameId: "oversized-unit-token",
+      result: "Victory",
+      myUnitsAtMid: { Stalker: 5 },
+    });
+    game.macroBreakdown.unit_timeline[0].my = {
+      [oversizedToken]: 999,
+      Stalker: 5,
+    };
+    const prepared = prepareCompositionGame(game, "you");
+    const preparedTokenLengths = [];
+    let preparedHasStalker = false;
+    for (const phase of Object.values(prepared.phases)) {
+      if (!phase) continue;
+      for (const row of [...phase.units, ...phase.allUnits]) {
+        preparedTokenLengths.push(row.token.length);
+        if (row.token === "Stalker") preparedHasStalker = true;
+      }
+    }
+    expect(Math.max(0, ...preparedTokenLengths)).toBeLessThanOrEqual(
+      MAX_UNIT_TOKEN_LENGTH,
+    );
+    expect(preparedHasStalker).toBe(true);
+  });
+
+  test("prepared games retain only compact classifier fields", () => {
+    const prepared = prepareCompositionGame(makeGame({
+      gameId: "compact-classifier",
+      result: "Victory",
+      myUnitsAtMid: { Stalker: 5 },
+    }), "you");
+
+    expect(Object.keys(prepared.classified).sort()).toEqual([
+      "crossings", "finalPhase", "finalScore",
+    ]);
+    expect(prepared.classified).not.toHaveProperty("trajectory");
+    expect(prepared.classified).not.toHaveProperty("oppTrajectory");
+    expect(prepared.classified).not.toHaveProperty("deathEvents");
+  });
+
+  test("reads at most the bounded number of unit keys from one tick", () => {
+    const sideMap = {};
+    for (let i = 0; i < MAX_UNIT_KEYS_PER_TICK_SIDE; i += 1) {
+      sideMap[`SyntheticUnit${String(i).padStart(3, "0")}`] = 1;
+    }
+    Object.defineProperty(sideMap, "MustNotBeRead", {
+      enumerable: true,
+      get() {
+        throw new Error("timeline key cap was bypassed");
+      },
+    });
+
+    const peak = peakAliveInWindow(
+      [{ time: 100, my: sideMap, opp: {} }],
+      0,
+      200,
+      "my",
+      new Set(),
+    );
+    expect(Object.keys(peak.counts)).toHaveLength(
+      MAX_UNIT_KEYS_PER_TICK_SIDE,
+    );
   });
 });
 
@@ -436,6 +524,28 @@ describe("buildCompositions — perspective='opponent'", () => {
     // SCV is in the worker-skip set so it never appears in the
     // signature, no matter which side carries it.
     expect(sig.units.map((u) => u.token)).not.toContain("SCV");
+  });
+
+  test("bounded prepared opponent signals preserve raw aggregation results", () => {
+    const game = makeOppPerspectiveGame({
+      gameId: "prepared-opponent",
+      oppUnitsAtMid: { SiegeTank: 6, Marine: 12, SCV: 50 },
+    });
+    game.oppEvents = [
+      { name: "Factory", time: 80, category: "building" },
+      { name: "TerranInfantryWeaponsLevel1", time: 140, category: "upgrade" },
+    ];
+    const raw = computeCompositions([game], { perspective: "opponent" });
+    const compact = {
+      gameId: game.gameId,
+      myRace: game.myRace,
+      oppRace: game.oppRace,
+      result: game.result,
+      opponent: game.opponent,
+      _phasePrepared: prepareCompositionGame(game, "opponent"),
+    };
+    expect(computeCompositions([compact], { perspective: "opponent" }))
+      .toEqual(raw);
   });
 
   test("mirrors the W/L record to the opponent's side", () => {

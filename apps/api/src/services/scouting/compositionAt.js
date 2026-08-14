@@ -26,6 +26,63 @@
 
 const PHASE_LIST = ["early", "earlyMid", "mid", "midLate", "late"];
 
+// sc2reader's internal unit names are short ASCII-like tokens (the longest
+// names in the supported alias/morph tables are well below this ceiling).
+// Keep the guard deliberately generous for future game patches while making
+// it impossible for an untrusted multi-megabyte object key to be copied by
+// regex canonicalisation and retained in every prepared phase.
+const MAX_UNIT_TOKEN_LENGTH = 64;
+
+// A real replay has far fewer distinct unit types alive on one side at a
+// single tick. This mirrors the ingest-schema ceiling and also protects
+// already-stored legacy rows that pre-date that validation.
+const MAX_UNIT_KEYS_PER_TICK_SIDE = 256;
+
+const HAS_OWN = Object.prototype.hasOwnProperty;
+
+/**
+ * Cheap, allocation-free guard that MUST run before Map/Set lookups or regex
+ * canonicalisation of an untrusted unit-timeline property name.
+ *
+ * @param {unknown} name
+ * @returns {name is string}
+ */
+function isBoundedUnitToken(name) {
+  return typeof name === "string"
+    && name.length > 0
+    && name.length <= MAX_UNIT_TOKEN_LENGTH;
+}
+
+/**
+ * Fold one timeline side without ever reading or canonicalising more than the
+ * per-tick ceiling. Counting inherited enumerable names toward the inspection
+ * budget keeps the limit hard even for non-JSON legacy/test objects.
+ *
+ * @param {Record<string, number>} sideMap
+ * @param {Set<string>} ignore
+ * @returns {{counts: Map<string, number>, total: number}}
+ */
+function foldBoundedTimelineSide(sideMap, ignore) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  let total = 0;
+  let inspectedKeys = 0;
+  for (const rawName in sideMap) {
+    if (inspectedKeys >= MAX_UNIT_KEYS_PER_TICK_SIDE) break;
+    inspectedKeys += 1;
+    if (!HAS_OWN.call(sideMap, rawName)) continue;
+    if (!isBoundedUnitToken(rawName)) continue;
+    if (ignore.has(rawName)) continue;
+    const n = Number(sideMap[rawName]);
+    if (!(n > 0) || !Number.isFinite(n)) continue;
+    const canonical = canonicalizeName(rawName);
+    if (!canonical || ignore.has(canonical)) continue;
+    counts.set(canonical, (counts.get(canonical) || 0) + n);
+    total += n;
+  }
+  return { counts, total };
+}
+
 /**
  * Worker / drone family — these are filtered out of the army roster
  * by the macro panel via ``isWorkerUnit`` in lib/sc2-units. The set
@@ -148,7 +205,7 @@ const UNIT_NAME_PREFIX_BURROWED_RE = /^Burrowed/i;
  * @returns {string}
  */
 function canonicalizeName(name) {
-  if (!name) return "";
+  if (!isBoundedUnitToken(name)) return "";
   const direct = UNIT_NAME_ALIASES.get(name);
   if (direct) return direct;
   const stripped = String(name)
@@ -600,6 +657,8 @@ function sortByCountDesc(counts) {
 
 module.exports = {
   PHASE_LIST,
+  MAX_UNIT_TOKEN_LENGTH,
+  MAX_UNIT_KEYS_PER_TICK_SIDE,
   WORKER_NAMES,
   UNIT_NAME_ALIASES,
   UNIT_MORPH_PARENT,
@@ -662,24 +721,15 @@ function peakAliveInWindow(timeline, start, end, side, skip) {
     const sideMap = side === "my" ? row.my : row.opp;
     if (!sideMap || typeof sideMap !== "object") continue;
     sampleCount += 1;
-    /** @type {Map<string, number>} */
-    const perTick = new Map();
-    let totalThisRow = 0;
-    for (const rawName of Object.keys(sideMap)) {
-      if (ignore.has(rawName)) continue;
-      const n = Number(sideMap[rawName]);
-      if (!(n > 0)) continue;
-      const canonical = canonicalizeName(rawName);
-      if (!canonical || ignore.has(canonical)) continue;
-      perTick.set(canonical, (perTick.get(canonical) || 0) + n);
-      totalThisRow += n;
-    }
-    for (const [canonical, count] of perTick) {
+    // The helper checks name length before Set lookup / regex canonicalisation,
+    // preventing giant input keys from being copied into every phase.
+    const foldedSide = foldBoundedTimelineSide(sideMap, ignore);
+    for (const [canonical, count] of foldedSide.counts) {
       const prev = peak.get(canonical) || 0;
       if (count > prev) peak.set(canonical, count);
     }
-    if (totalThisRow > bestUnitCount) {
-      bestUnitCount = totalThisRow;
+    if (foldedSide.total > bestUnitCount) {
+      bestUnitCount = foldedSide.total;
       atTime = t;
     }
   }
@@ -698,13 +748,9 @@ function peakAliveInWindow(timeline, start, end, side, skip) {
     if (best) {
       const sideMap = side === "my" ? best.my : best.opp;
       if (sideMap && typeof sideMap === "object") {
-        for (const rawName of Object.keys(sideMap)) {
-          if (ignore.has(rawName)) continue;
-          const n = Number(sideMap[rawName]);
-          if (!(n > 0)) continue;
-          const canonical = canonicalizeName(rawName);
-          if (!canonical || ignore.has(canonical)) continue;
-          peak.set(canonical, (peak.get(canonical) || 0) + n);
+        const foldedSide = foldBoundedTimelineSide(sideMap, ignore);
+        for (const [canonical, n] of foldedSide.counts) {
+          peak.set(canonical, n);
         }
         atTime = Number(best.time) || null;
         sampleCount = 1;

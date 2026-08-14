@@ -90,7 +90,7 @@ function makeHarness(evaluateBuildPhases, overrides = {}) {
 }
 
 describe("custom-build phase endpoint admission", () => {
-  test("stats and matches share the bounded lane and receive cancellation signals", async () => {
+  test("cheap authoritative stats do not block bounded match analysis", async () => {
     const statsStarted = deferred();
     const releaseStats = deferred();
     let statsSignal;
@@ -117,9 +117,10 @@ describe("custom-build phase endpoint admission", () => {
     const matches = request(app)
       .get("/v1/custom-builds/lane-match/matches")
       .then((response) => response);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(evaluateBuild).not.toHaveBeenCalled();
+    expect(await waitForCondition(() => evaluateBuild.mock.calls.length === 1))
+      .toBe(true);
     expect(statsSignal).toBeInstanceOf(AbortSignal);
+    expect(matchesSignal).toBeInstanceOf(AbortSignal);
 
     releaseStats.resolve();
     const responses = await Promise.all([stats, matches]);
@@ -129,15 +130,30 @@ describe("custom-build phase endpoint admission", () => {
     expect(matchesSignal).toBeInstanceOf(AbortSignal);
   });
 
-  test("disconnecting queued matches removes them before heavy evaluation", async () => {
+  test("disconnecting matches aborts independently of cheap stats", async () => {
     const statsStarted = deferred();
     const releaseStats = deferred();
+    const matchStarted = deferred();
+    const matchAborted = deferred();
     const evaluateAllStats = jest.fn(async () => {
       statsStarted.resolve();
       await releaseStats.promise;
       return [];
     });
-    const evaluateBuild = jest.fn(async (_userId, slug) => ({ slug }));
+    const evaluateBuild = jest.fn(async (_userId, slug, opts) => {
+      matchStarted.resolve();
+      await new Promise((resolve, reject) => {
+        const abort = () => {
+          matchAborted.resolve();
+          const error = new Error("match disconnected");
+          error.name = "AbortError";
+          reject(error);
+        };
+        if (opts.signal.aborted) abort();
+        else opts.signal.addEventListener("abort", abort, { once: true });
+      });
+      return { slug };
+    });
     const { app } = makeHarness(
       async (_userId, slug) => phasePayload(slug),
       { evaluateAllStats, evaluateBuild },
@@ -147,18 +163,18 @@ describe("custom-build phase endpoint admission", () => {
       .get("/v1/custom-builds/stats")
       .then((response) => response);
     await statsStarted.promise;
-    const queued = request(app).get("/v1/custom-builds/no-late-match/matches");
-    const queuedSettled = queued.then(
+    const matching = request(app).get("/v1/custom-builds/no-late-match/matches");
+    const matchingSettled = matching.then(
       (response) => response,
       (error) => error,
     );
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await abortSupertest(queued, queuedSettled);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await matchStarted.promise;
+    const aborting = abortSupertest(matching, matchingSettled);
+    await matchAborted.promise;
+    await aborting;
     releaseStats.resolve();
     expect((await active).status).toBe(200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(evaluateBuild).not.toHaveBeenCalled();
+    expect(evaluateBuild).toHaveBeenCalledTimes(1);
   });
 
   test("disconnecting active stats aborts its scan and frees the lane", async () => {
@@ -226,6 +242,29 @@ describe("custom-build phase endpoint admission", () => {
     const responses = await Promise.all([first, second]);
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
     expect(responses[0].body).toEqual(responses[1].body);
+    expect(customBuilds.evaluateBuildPhases).toHaveBeenCalledTimes(1);
+  });
+
+  test("caps identical subscribers without retaining unbounded HTTP handlers", async () => {
+    const started = deferred();
+    const release = deferred();
+    const { app, customBuilds } = makeHarness(async (_userId, slug) => {
+      started.resolve();
+      await release.promise;
+      return phasePayload(slug);
+    });
+
+    const requests = Array.from({ length: 33 }, () => request(app)
+      .get("/v1/custom-builds/subscriber-cap/compositions")
+      .then((response) => response));
+    await started.promise;
+    expect(await waitForCondition(() =>
+      customBuilds.latestGameDateMs.mock.calls.length === 33)).toBe(true);
+    release.resolve();
+
+    const responses = await Promise.all(requests);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(32);
+    expect(responses.filter((response) => response.status === 503)).toHaveLength(1);
     expect(customBuilds.evaluateBuildPhases).toHaveBeenCalledTimes(1);
   });
 
@@ -535,6 +574,37 @@ describe("custom-build phase endpoint admission", () => {
     expect(customBuilds.evaluateBuildPhases).toHaveBeenCalledTimes(34);
   });
 
+  test("classification completion invalidates a pending cohort cache immediately", async () => {
+    let status = {
+      status: "running",
+      generation: "generation-1",
+      progress: {},
+    };
+    let attempt = 0;
+    const getReclassifyStatus = jest.fn(async () => status);
+    const { app, customBuilds } = makeHarness(async (_userId, slug) => {
+      attempt += 1;
+      return { ...phasePayload(slug), flags: [`attempt-${attempt}`] };
+    }, { getReclassifyStatus });
+
+    const pending = await request(app)
+      .get("/v1/custom-builds/revision-aware/compositions");
+    expect(pending.status).toBe(200);
+    expect(pending.body.flags).toEqual(["attempt-1"]);
+
+    status = {
+      status: "complete",
+      generation: "generation-1",
+      completedAt: new Date("2026-08-13T23:00:00.000Z"),
+      progress: {},
+    };
+    const completed = await request(app)
+      .get("/v1/custom-builds/revision-aware/compositions");
+    expect(completed.status).toBe(200);
+    expect(completed.body.flags).toEqual(["attempt-2"]);
+    expect(customBuilds.evaluateBuildPhases).toHaveBeenCalledTimes(2);
+  });
+
   test("saving or deleting a build invalidates its cached phase payload", async () => {
     const { app, customBuilds } = makeHarness(async (_userId, slug) =>
       phasePayload(slug));
@@ -626,12 +696,6 @@ describe("custom-build phase endpoint admission", () => {
   });
 
   test.each([
-    {
-      label: "aggregate stats",
-      path: "/v1/custom-builds/stats",
-      serviceMethod: "evaluateAllStats",
-      value: [],
-    },
     {
       label: "build matches",
       path: "/v1/custom-builds/edit-race/matches",

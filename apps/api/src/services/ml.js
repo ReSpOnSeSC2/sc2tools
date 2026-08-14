@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("fs");
 const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const {
@@ -9,6 +10,17 @@ const {
   writeTempFile,
   PythonError,
 } = require("../util/pythonRunner");
+
+// Training runs beside the API process on a small shared-memory
+// instance. Keep both the Python input and the number of samples
+// finite even for accounts with tens of thousands of replays.
+const ML_TRAINING_GAME_CAP = Math.min(LIMITS.ML_TRAINING_MAX_GAMES, 2_000);
+const ML_TRAINING_NDJSON_BYTE_CAP = 8 * 1024 * 1024;
+const ML_TRAINING_ROW_BYTE_CAP = 128 * 1024;
+const ML_TRAINING_LOG_LINE_CAP = 64;
+const ML_TRAINING_LOG_LINE_CHAR_CAP = 128;
+const ML_TRAINING_LOG_SCAN_CAP = 256;
+const ML_TRAINING_DETAIL_FIELDS = Object.freeze(["buildLog"]);
 
 /**
  * MLService — train + serve the per-user opening-prediction model.
@@ -46,10 +58,20 @@ class MLService {
     this.db = db;
     this.io = opts.io || null;
     this._activeJobs = new Map();
+    this._trainingReservations = new Set();
     // Optional GameDetailsService — used by ``_writeTrainingNdjson``
     // to hydrate ``buildLog`` for games whose slim row no longer
     // carries it inline (post-v0.4.3 cutover migration).
     this.gameDetails = opts.gameDetails || null;
+  }
+
+  /** Identifier-free occupancy for the single process-wide training lane. */
+  trainingCapacitySnapshot() {
+    return {
+      active: this._activeJobs.size,
+      reserved: this._trainingReservations.size,
+      maxActive: 1,
+    };
   }
 
   /**
@@ -107,9 +129,18 @@ class MLService {
     }
     const kind = opts.kind || "opener_predict";
     const running = this._activeJobs.get(userId);
-    if (running && !running.cancelled) {
-      throw httpError(409, "training_already_running", { jobId: running.jobId });
+    if (
+      (running && !running.cancelled)
+      || this._trainingReservations.has(userId)
+    ) {
+      throw httpError(409, "training_already_running", {
+        jobId: running ? running.jobId : null,
+      });
     }
+    if (this._activeJobs.size + this._trainingReservations.size >= 1) {
+      throw httpError(503, "training_capacity_busy", { retryAfterSec: 30 });
+    }
+    this._trainingReservations.add(userId);
     const job = {
       userId,
       kind,
@@ -121,11 +152,28 @@ class MLService {
       finishedAt: null,
     };
     stampVersion(job, COLLECTIONS.ML_JOBS);
-    const insertResult = await this.db.mlJobs.insertOne(job);
+    let insertResult;
+    try {
+      insertResult = await this.db.mlJobs.insertOne(job);
+    } finally {
+      this._trainingReservations.delete(userId);
+    }
     const jobId = String(insertResult.insertedId);
+    this._activeJobs.set(userId, {
+      jobId,
+      handle: null,
+      cancelled: false,
+    });
     // Kick async; the route handler returned 202 already.
-    this._runTraining({ userId, jobId, kind }).catch((err) => {
-      this._jobError(userId, jobId, err);
+    void this._runTraining({ userId, jobId, kind }).catch(async (err) => {
+      try {
+        await this._jobError(userId, jobId, err);
+      } catch {
+        // Status persistence is best-effort here. _jobError always releases
+        // the process-wide training lane in its finally block, and this catch
+        // prevents a secondary Mongo outage from becoming an unhandled
+        // rejection that can terminate Node.
+      }
     });
     return { jobId, status: "running" };
   }
@@ -135,11 +183,15 @@ class MLService {
    * @param {{ userId: string, jobId: string, kind: string }} args
    */
   async _runTraining({ userId, jobId, kind }) {
-    const tmpPath = await this._writeTrainingNdjson(userId);
+    const prepared = await this._writeTrainingNdjson(userId);
+    const tmpPath = prepared.path;
     try {
       await this._updateJob(userId, jobId, {
         phase: "training",
-        lastMessage: "training_started",
+        progress: { i: 0, total: prepared.gamesWritten },
+        lastMessage: prepared.truncated
+          ? `training_started sample=${prepared.gamesWritten} truncated=${prepared.limitReason}`
+          : `training_started sample=${prepared.gamesWritten}`,
       });
       const handle = spawnPythonNdjson({
         script: "scripts/ml_cli.py",
@@ -151,7 +203,7 @@ class MLService {
         onClose: ({ exitCode, stderr }) => {
           this._activeJobs.delete(userId);
           try {
-            require("fs").unlinkSync(tmpPath);
+            fs.unlinkSync(tmpPath);
           } catch (_e) {
             // best-effort cleanup
           }
@@ -167,10 +219,10 @@ class MLService {
           }
         },
       });
-      this._activeJobs.set(userId, { jobId, handle });
+      this._activeJobs.set(userId, { jobId, handle, cancelled: false });
     } catch (err) {
       try {
-        require("fs").unlinkSync(tmpPath);
+        fs.unlinkSync(tmpPath);
       } catch (_e) {
         // best-effort
       }
@@ -308,18 +360,12 @@ class MLService {
    * @private
    * @param {string} userId
    */
+  // eslint-disable-next-line max-lines-per-function
   async _writeTrainingNdjson(userId) {
-    // Two-stage scan so the cutover keeps working with both legacy
-    // (buildLog inline on games) and post-cutover (buildLog in the
-    // detail store) docs:
-    //   1. Page slim rows for every eligible game.
-    //   2. Bulk-fetch buildLog for the games that don't have it
-    //      inline anymore.
-    // ``deriveEarlyBuildLog`` is then applied to the unified buildLog
-    // — the Python trainer (``scripts/ml_cli.py``) keeps the same
-    // NDJSON shape it always has, no model-format change.
-    const { deriveEarlyBuildLog } = require("./perGameCompute");
-    const cursor = this.db.games
+    // Page one slim row at a time and hydrate at most one detail blob.
+    // Each completed training row is written straight to disk; neither
+    // replay blobs nor a second in-memory NDJSON copy accumulate here.
+    let cursor = this.db.games
       .find(
         {
           userId,
@@ -336,56 +382,97 @@ class MLService {
             myRace: 1,
             myBuild: 1,
             map: 1,
-            // Project the legacy inline copy when present; the
-            // hydration step below fills in any missing ones from
-            // the detail store. We keep the field projected so the
-            // pre-migration code path doesn't need a $exists guard.
             buildLog: 1,
-            opponent: 1,
+            "opponent.race": 1,
             macroScore: 1,
           },
         },
       )
       .sort({ date: -1 })
-      .limit(LIMITS.ML_TRAINING_MAX_GAMES);
-    /** @type {Array<any>} */
-    const games = [];
-    /** @type {string[]} */
-    const needHydration = [];
-    for await (const game of cursor) {
-      games.push(game);
-      if (!Array.isArray(game.buildLog) && game.gameId) {
-        needHydration.push(String(game.gameId));
-      }
-    }
-    if (this.gameDetails && needHydration.length > 0) {
-      const blobs = await this.gameDetails.findMany(userId, needHydration);
-      for (const game of games) {
-        if (Array.isArray(game.buildLog)) continue;
-        const blob = blobs.get(String(game.gameId || ""));
-        if (blob && Array.isArray(blob.buildLog)) {
-          game.buildLog = blob.buildLog;
+      // The extra row lets us report game-cap truncation without ever
+      // materialising more than the current cursor item.
+      .limit(ML_TRAINING_GAME_CAP + 1);
+    if (typeof cursor.batchSize === "function") cursor = cursor.batchSize(1);
+
+    const path = writeTempFile("ml-train", "ndjson", "");
+    const output = await fs.promises.open(path, "w");
+    let gamesScanned = 0;
+    let gamesWritten = 0;
+    let bytesWritten = 0;
+    let truncated = false;
+    let limitReason = null;
+    try {
+      for await (const game of cursor) {
+        if (gamesScanned >= ML_TRAINING_GAME_CAP) {
+          truncated = true;
+          limitReason = "game_cap";
+          break;
         }
+        gamesScanned += 1;
+        const buildLog = await this._trainingBuildLog(userId, game);
+        if (!Array.isArray(buildLog) || buildLog.length === 0) continue;
+
+        const row = compactTrainingGame(game, buildLog);
+        const line = `${JSON.stringify(row)}\n`;
+        const lineBytes = Buffer.byteLength(line, "utf8");
+        if (lineBytes > ML_TRAINING_ROW_BYTE_CAP) {
+          truncated = true;
+          limitReason = limitReason || "row_cap";
+          continue;
+        }
+        if (bytesWritten + lineBytes > ML_TRAINING_NDJSON_BYTE_CAP) {
+          truncated = true;
+          limitReason = "byte_cap";
+          break;
+        }
+        await output.write(line);
+        bytesWritten += lineBytes;
+        gamesWritten += 1;
       }
-    }
-    const lines = [];
-    for (const game of games) {
-      if (!Array.isArray(game.buildLog) || game.buildLog.length === 0) {
-        // No build log available for this game — skip rather than
-        // train on an empty feature row, which would silently degrade
-        // the model. Same effect as the old ``$exists: true`` filter.
-        continue;
+    } catch (err) {
+      await output.close().catch(() => {});
+      try {
+        fs.unlinkSync(path);
+      } catch {
+        // best-effort cleanup
       }
-      const enriched = {
-        ...game,
-        earlyBuildLog: deriveEarlyBuildLog(game.buildLog),
-      };
-      lines.push(JSON.stringify(enriched));
+      throw err;
     }
-    if (lines.length === 0) {
+    await output.close();
+    if (gamesWritten === 0) {
+      try {
+        fs.unlinkSync(path);
+      } catch {
+        // best-effort cleanup
+      }
       throw httpError(412, "not_enough_training_data");
     }
-    return writeTempFile("ml-train", "ndjson", lines.join("\n") + "\n");
+    return {
+      path,
+      gamesScanned,
+      gamesWritten,
+      bytesWritten,
+      truncated,
+      limitReason,
+    };
+  }
+
+  /**
+   * @private
+   * @param {string} userId
+   * @param {any} game
+   * @returns {Promise<any[] | null>}
+   */
+  async _trainingBuildLog(userId, game) {
+    if (Array.isArray(game.buildLog)) return game.buildLog;
+    const gameId = String(game.gameId || "");
+    if (!this.gameDetails || !gameId) return null;
+    const detail = await this.gameDetails.findMany(userId, [gameId], {
+      fields: [...ML_TRAINING_DETAIL_FIELDS],
+      concurrency: 1,
+    });
+    const blob = detail.get(gameId);
+    return blob && Array.isArray(blob.buildLog) ? blob.buildLog : null;
   }
 
   /**
@@ -412,14 +499,17 @@ class MLService {
    * @param {Error} err
    */
   async _jobError(userId, jobId, err) {
-    await this._updateJob(userId, jobId, {
-      status: "error",
-      phase: "error",
-      finishedAt: new Date(),
-      lastMessage: (err && err.message) || "unknown_error",
-    });
-    this._activeJobs.delete(userId);
-    this._broadcast(userId, "ml:error", { jobId, message: err && err.message });
+    try {
+      await this._updateJob(userId, jobId, {
+        status: "error",
+        phase: "error",
+        finishedAt: new Date(),
+        lastMessage: (err && err.message) || "unknown_error",
+      });
+      this._broadcast(userId, "ml:error", { jobId, message: err && err.message });
+    } finally {
+      this._activeJobs.delete(userId);
+    }
   }
 
   /**
@@ -438,6 +528,69 @@ class MLService {
   }
 }
 
+const TRAINING_BUILD_LOG_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
+
+/**
+ * Preserve the trainer's legacy ``buildLog`` + ``earlyBuildLog`` keys,
+ * but keep only a bounded first-five-minute opener sample. The Python
+ * model consumes opener features; late-game log entries only inflated
+ * the input and were previously duplicated across both keys.
+ *
+ * @param {any} game
+ * @param {any[]} buildLog
+ * @returns {Record<string, any>}
+ */
+function compactTrainingGame(game, buildLog) {
+  const earlyBuildLog = boundedEarlyBuildLog(buildLog);
+  const macroScore = Number(game.macroScore);
+  return {
+    gameId: clippedString(game.gameId, 128),
+    date: game.date instanceof Date
+      ? game.date.toISOString()
+      : clippedString(game.date, 64),
+    result: clippedString(game.result, 32),
+    myRace: clippedString(game.myRace, 32),
+    myBuild: clippedString(game.myBuild, 256),
+    map: clippedString(game.map, 256),
+    opponent: {
+      race: clippedString(game.opponent && game.opponent.race, 32),
+    },
+    macroScore: Number.isFinite(macroScore) ? macroScore : undefined,
+    buildLog: earlyBuildLog,
+    earlyBuildLog,
+  };
+}
+
+/**
+ * @param {any[]} fullLog
+ * @returns {string[]}
+ */
+function boundedEarlyBuildLog(fullLog) {
+  const out = [];
+  const scanLength = Math.min(fullLog.length, ML_TRAINING_LOG_SCAN_CAP);
+  for (let i = 0; i < scanLength; i += 1) {
+    const raw = fullLog[i];
+    const line = String(raw || "").slice(0, ML_TRAINING_LOG_LINE_CHAR_CAP);
+    const match = TRAINING_BUILD_LOG_RE.exec(line);
+    if (!match) continue;
+    const seconds = Number.parseInt(match[1], 10) * 60
+      + Number.parseInt(match[2], 10);
+    if (seconds > 300) break;
+    out.push(line);
+    if (out.length >= ML_TRAINING_LOG_LINE_CAP) break;
+  }
+  return out;
+}
+
+/**
+ * @param {unknown} value
+ * @param {number} max
+ * @returns {string | undefined}
+ */
+function clippedString(value, max) {
+  return typeof value === "string" ? value.slice(0, max) : undefined;
+}
+
 /**
  * @param {number} status
  * @param {string} code
@@ -451,4 +604,8 @@ function httpError(status, code, extra = {}) {
   return err;
 }
 
-module.exports = { MLService };
+module.exports = {
+  MLService,
+  ML_TRAINING_GAME_CAP,
+  ML_TRAINING_NDJSON_BYTE_CAP,
+};

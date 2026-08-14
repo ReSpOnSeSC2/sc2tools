@@ -1,6 +1,9 @@
 "use strict";
 
-const { classifyGame } = require("./phaseClassifier");
+const {
+  classifyGame,
+  MAX_CLASSIFIER_DURATION_SEC,
+} = require("./phaseClassifier");
 const { TECH_SC2_NAMES } = require("./techTokens");
 const { peakAliveInWindow } = require("./scouting/compositionAt");
 
@@ -62,6 +65,8 @@ const WORKER_SKIP = new Set([
 
 const MAX_SIGNATURES = 8;
 const MAX_SAMPLE_GAME_IDS = 25;
+const MAX_PHASE_UNITS = 64;
+const MAX_PHASE_TIMING_TOKENS = 128;
 
 /**
  * @param {Array<any>} games
@@ -94,8 +99,12 @@ const MAX_SAMPLE_GAME_IDS = 25;
 function computeCompositions(games, opts = {}) {
   const list = Array.isArray(games) ? games : [];
   const perspective = opts && opts.perspective === "opponent" ? "opponent" : "you";
+  const preparedGames = list.map((game) => ({
+    game,
+    prepared: preparedCompositionFor(game, perspective),
+  }));
 
-  if (perspective === "opponent" && oppSignalTooSparse(list)) {
+  if (perspective === "opponent" && oppSignalTooSparse(preparedGames)) {
     return emptyCompositionsResult(["opp_signals_sparse"]);
   }
 
@@ -108,7 +117,7 @@ function computeCompositions(games, opts = {}) {
     early: 0, earlyMid: 0, mid: 0, midLate: 0, late: 0,
   };
 
-  /** @type {Array<{game: any, classified: any}>} */
+  /** @type {Array<{game: any, classified: any, prepared: any}>} */
   const classifiedGames = [];
   /** @type {number[]} */
   const finalScores = [];
@@ -119,19 +128,13 @@ function computeCompositions(games, opts = {}) {
   /** @type {number[]} */
   const durations = [];
 
-  for (const g of list) {
-    const macroBreakdown = (g && g.macroBreakdown) || {};
+  for (const { game: g, prepared } of preparedGames) {
     // From the opponent's perspective the trajectory uses their race,
     // not the user's — falls back to the user's race when the
     // extractor didn't record an opponent race (legacy imports).
-    const race = perspective === "opponent"
-      ? ((g && g.oppRace) || (g && g.myRace))
-      : (g && g.myRace);
-    const durationSec = (g && g.durationSec) || 0;
-    const classified = classifyGame({
-      macroBreakdown, race, durationSec, perspective,
-    });
-    classifiedGames.push({ game: g, classified });
+    const durationSec = prepared.durationSec;
+    const classified = prepared.classified;
+    classifiedGames.push({ game: g, classified, prepared });
     finalPhaseDistribution[classified.finalPhase] += 1;
     finalScores.push(classified.finalScore);
     if (durationSec > 0) durations.push(durationSec);
@@ -271,7 +274,7 @@ function byCountDescTokenAsc(a, b) {
 /**
  * Bucket signatures + roll up tech / upgrade timings for one phase.
  *
- * @param {Array<{game: any, classified: any}>} classifiedGames
+ * @param {Array<{game: any, classified: any, prepared: any}>} classifiedGames
  * @param {string} phase
  * @param {"you"|"opponent"} [perspective]
  */
@@ -293,11 +296,9 @@ function computePerPhase(classifiedGames, phase, perspective) {
   /** @type {Map<string, number[]>} */
   const upgradeTimes = new Map();
 
-  for (const { game, classified } of classifiedGames) {
-    const durationSec = (game && game.durationSec) || 0;
-    const window = getPhaseWindow(phase, classified.crossings, durationSec);
-    if (!window) continue;
-    const midpoint = (window.start + window.end) / 2;
+  for (const { game, prepared } of classifiedGames) {
+    const phaseData = prepared.phases[phase];
+    if (!phaseData) continue;
 
     // PEAK-alive across the whole phase window — see the docstrings
     // on pickSignatureUnits / pickAllNonWorkerUnits for why we no
@@ -305,12 +306,8 @@ function computePerPhase(classifiedGames, phase, perspective) {
     // passed to collectTechFirstSeen / collectUpgradeFirstSeen since
     // those want the chronological midpoint of the phase, not the
     // peak.
-    const units = pickSignatureUnits(
-      game.macroBreakdown, window.start, window.end, perspective,
-    );
-    const allUnits = pickAllNonWorkerUnits(
-      game.macroBreakdown, window.start, window.end, perspective,
-    );
+    const units = phaseData.units;
+    const allUnits = phaseData.allUnits;
     if (units.length > 0) {
       const key = signatureKey(units);
       let bucket = sigBuckets.get(key);
@@ -358,8 +355,8 @@ function computePerPhase(classifiedGames, phase, perspective) {
       }
     }
 
-    collectTechFirstSeen(game, midpoint, techTimes);
-    collectUpgradeFirstSeen(game, midpoint, upgradeTimes);
+    appendPreparedTimes(techTimes, phaseData.tech);
+    appendPreparedTimes(upgradeTimes, phaseData.upgrades);
   }
 
   return {
@@ -407,7 +404,7 @@ function pickAllNonWorkerUnits(macroBreakdown, windowStart, windowEnd, perspecti
     entries.push({ token, count });
   }
   entries.sort(byCountDescTokenAsc);
-  return entries;
+  return entries.slice(0, MAX_PHASE_UNITS);
 }
 
 /**
@@ -433,8 +430,9 @@ function appendCount(map, token, count) {
  * @param {number} midpoint
  * @param {Map<string, number[]>} acc
  */
-function collectTechFirstSeen(game, midpoint, acc) {
-  const events = Array.isArray(game && game.events) ? game.events : [];
+function collectTechFirstSeen(game, midpoint, acc, perspective = "you") {
+  const selected = perspective === "opponent" ? game?.oppEvents : game?.events;
+  const events = Array.isArray(selected) ? selected : [];
   /** @type {Map<string, number>} */
   const firstSeen = new Map();
   for (const ev of events) {
@@ -462,8 +460,9 @@ function collectTechFirstSeen(game, midpoint, acc) {
  * @param {number} midpoint
  * @param {Map<string, number[]>} acc
  */
-function collectUpgradeFirstSeen(game, midpoint, acc) {
-  const events = Array.isArray(game && game.events) ? game.events : [];
+function collectUpgradeFirstSeen(game, midpoint, acc, perspective = "you") {
+  const selected = perspective === "opponent" ? game?.oppEvents : game?.events;
+  const events = Array.isArray(selected) ? selected : [];
   /** @type {Map<string, number>} */
   const firstSeen = new Map();
   for (const ev of events) {
@@ -701,20 +700,104 @@ function isLossResult(r) {
 }
 
 /**
- * Returns true when >50% of the games are missing opp_stats_events
- * — the sc2reader tracker quirk that drops the opponent's stream on
- * some Zerg replays. Strict ``>`` so an exact 50/50 split still
- * draws.
- *
- * @param {Array<any>} list
+ * @param {any} game
+ * @param {"you"|"opponent"} [perspective]
  */
+function prepareCompositionGame(game, perspective = "you") {
+  const side = perspective === "opponent" ? "opponent" : "you";
+  const macroBreakdown = (game && game.macroBreakdown) || {};
+  const race = side === "opponent"
+    ? ((game && game.oppRace) || (game && game.myRace))
+    : (game && game.myRace);
+  const durationSec = Math.min(
+    Math.max(0, Number(game && game.durationSec) || 0),
+    MAX_CLASSIFIER_DURATION_SEC,
+  );
+  const classifiedFull = classifyGame({
+    macroBreakdown,
+    race,
+    durationSec,
+    perspective: side,
+    compact: true,
+  });
+  // Phase aggregation only consumes these three fields. Retaining the full
+  // trajectories on every prepared replay multiplied hundreds of 30-second
+  // rows across the cohort after the raw detail had otherwise been released.
+  const classified = {
+    crossings: classifiedFull.crossings,
+    finalPhase: classifiedFull.finalPhase,
+    finalScore: classifiedFull.finalScore,
+  };
+  /** @type {Record<string, any>} */
+  const phases = {};
+  for (const phase of PHASE_ORDER) {
+    const window = getPhaseWindow(phase, classified.crossings, durationSec);
+    if (!window) {
+      phases[phase] = null;
+      continue;
+    }
+    const midpoint = (window.start + window.end) / 2;
+    const techTimes = new Map();
+    const upgradeTimes = new Map();
+    collectTechFirstSeen(game, midpoint, techTimes, side);
+    collectUpgradeFirstSeen(game, midpoint, upgradeTimes, side);
+    phases[phase] = {
+      units: pickSignatureUnits(
+        macroBreakdown,
+        window.start,
+        window.end,
+        side,
+      ),
+      allUnits: pickAllNonWorkerUnits(
+        macroBreakdown,
+        window.start,
+        window.end,
+        side,
+      ),
+      tech: firstPreparedTimes(techTimes),
+      upgrades: firstPreparedTimes(upgradeTimes),
+    };
+  }
+  return {
+    perspective: side,
+    durationSec,
+    classified,
+    hasOpponentStats: Array.isArray(macroBreakdown.opp_stats_events)
+      && macroBreakdown.opp_stats_events.length > 0,
+    phases,
+  };
+}
+
+/** @param {any} game @param {"you"|"opponent"} perspective */
+function preparedCompositionFor(game, perspective) {
+  const prepared = game && game._phasePrepared;
+  return prepared && prepared.perspective === perspective
+    ? prepared
+    : prepareCompositionGame(game, perspective);
+}
+
+/** @param {Map<string, number[]>} values */
+function firstPreparedTimes(values) {
+  return [...values.entries()]
+    .slice(0, MAX_PHASE_TIMING_TOKENS)
+    .map(([token, times]) => [token, times[0]]);
+}
+
+/** @param {Map<string, number[]>} target @param {Array<[string, number]>} rows */
+function appendPreparedTimes(target, rows) {
+  for (const [token, time] of Array.isArray(rows) ? rows : []) {
+    const current = target.get(token);
+    if (current) current.push(time);
+    else target.set(token, [time]);
+  }
+}
+
+/** @param {Array<{prepared: {hasOpponentStats?: boolean}}>} list */
 function oppSignalTooSparse(list) {
   if (!list || list.length === 0) return false;
   let missing = 0;
-  for (const g of list) {
-    const mb = (g && g.macroBreakdown) || {};
-    const opp = Array.isArray(mb.opp_stats_events) ? mb.opp_stats_events : [];
-    if (opp.length === 0) missing += 1;
+  for (const row of list) {
+    if (!row?.prepared?.hasOpponentStats) missing += 1;
   }
   return missing > list.length / 2;
 }
@@ -754,4 +837,7 @@ module.exports = {
   pickSignatureUnits,
   signatureKey,
   getPhaseWindow,
+  prepareCompositionGame,
+  MAX_PHASE_UNITS,
+  MAX_PHASE_TIMING_TOKENS,
 };

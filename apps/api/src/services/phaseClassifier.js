@@ -31,6 +31,16 @@
 
 const { tierThreeInternalNames } = require("./timingCatalog");
 
+// Replay uploads accept a broad 24-hour duration for forward compatibility,
+// but phase scoring is a per-second analysis and real SC2 games do not need a
+// day-long horizon. Two hours preserves extreme legitimate games while
+// bounding adversarial work and trajectory output to predictable sizes.
+const MAX_CLASSIFIER_DURATION_SEC = 2 * 60 * 60;
+const MAX_CLASSIFIER_BASE_ROWS = 200;
+const MAX_CLASSIFIER_PRODUCTION_ROWS = 2000;
+const MAX_CLASSIFIER_TIMELINE_ROWS = 5000;
+const HAS_OWN = Object.prototype.hasOwnProperty;
+
 /** @type {Record<string, number>} */
 const PHASES = {
   early: 0,
@@ -183,6 +193,90 @@ function activeTechCount(productionBuildings, t, durationSec) {
 }
 
 /**
+ * Precompute the lifecycle-derived score inputs once per integer second.
+ * Without this table, every crossing second rescanned up to 200 bases and
+ * 2,000 production rows several times. The table is capped by the two-hour
+ * analysis horizon and discarded when classification returns.
+ *
+ * @param {Array<{born_time:number,died_time:number}>} bases
+ * @param {Array<{name:string,born_time:number,died_time:number}>} production
+ * @param {number} durationSec
+ */
+function buildLifecycleLookup(bases, production, durationSec) {
+  const cap = Math.max(0, Math.floor(durationSec));
+  const baseCounts = new Uint16Array(cap + 1);
+  const baseEffective = new Float64Array(cap + 1);
+  const baseRows = Array.isArray(bases) ? bases : [];
+  for (let i = 0; i < Math.min(baseRows.length, MAX_CLASSIFIER_BASE_ROWS); i += 1) {
+    const base = baseRows[i];
+    const born = Number(base && base.born_time);
+    const rawDied = Number(base && base.died_time);
+    if (!Number.isFinite(born)) continue;
+    const died = Number.isFinite(rawDied) ? rawDied : cap;
+    const start = Math.max(0, Math.ceil(born));
+    const end = Math.min(cap, Math.floor(died));
+    if (start > end || born > cap) continue;
+    for (let t = start; t <= end; t += 1) {
+      baseCounts[t] += 1;
+      const age = t - born;
+      baseEffective[t] += age >= 60 ? 1 : age / 60;
+    }
+  }
+
+  const techDelta = new Int32Array(cap + 2);
+  const t3Delta = new Int32Array(cap + 2);
+  const productionRows = Array.isArray(production) ? production : [];
+  for (
+    let i = 0;
+    i < Math.min(productionRows.length, MAX_CLASSIFIER_PRODUCTION_ROWS);
+    i += 1
+  ) {
+    const row = productionRows[i];
+    const isTech = TECH_NAMES.has(row && row.name);
+    const isT3 = T3_TECH.has(row && row.name);
+    if (!isTech && !isT3) continue;
+    const born = Number(row && row.born_time);
+    const rawDied = Number(row && row.died_time);
+    if (!Number.isFinite(born)) continue;
+    const died = Number.isFinite(rawDied) ? rawDied : cap;
+    const start = Math.max(0, Math.ceil(born));
+    const end = Math.min(cap, Math.floor(died));
+    if (start > end || born > cap) continue;
+    if (isTech) {
+      techDelta[start] += 1;
+      techDelta[end + 1] -= 1;
+    }
+    if (isT3) {
+      t3Delta[start] += 1;
+      t3Delta[end + 1] -= 1;
+    }
+  }
+  const techCounts = new Uint16Array(cap + 1);
+  const t3Active = new Uint8Array(cap + 1);
+  let tech = 0;
+  let t3 = 0;
+  for (let t = 0; t <= cap; t += 1) {
+    tech += techDelta[t];
+    t3 += t3Delta[t];
+    techCounts[t] = tech;
+    t3Active[t] = t3 > 0 ? 1 : 0;
+  }
+
+  return {
+    /** @param {number} t */
+    lookup(t) {
+      const idx = Math.min(cap, Math.max(0, Math.floor(Number(t) || 0)));
+      return {
+        bases: baseCounts[idx],
+        basesEffective: baseEffective[idx],
+        tech: techCounts[idx],
+        t3TechActive: t3Active[idx] === 1,
+      };
+    },
+  };
+}
+
+/**
  * Index of the nearest stats row at or before `t`. Returns -1 when
  * `t` precedes the first sample. `times` MUST be ascending — the
  * extractor emits them in walk order which is monotonic.
@@ -259,65 +353,58 @@ function phaseFromScore(score) {
 }
 
 /**
- * True if any T3 production-tech structure is alive at time ``t``.
- *
- * @param {Array<{name:string,born_time:number,died_time:number}>} productionBuildings
- * @param {number} t
- * @param {number} durationSec
- */
-function hasActiveT3Tech(productionBuildings, t, durationSec) {
-  for (const p of productionBuildings) {
-    if (!T3_TECH.has(p.name)) continue;
-    if (p.born_time > durationSec) continue;
-    if (t < p.born_time) continue;
-    if (t > p.died_time) continue;
-    return true;
-  }
-  return false;
-}
-
-/**
- * True if any T3 unit (per ``T3_UNITS``) has been observed on the
- * given perspective's side of the unit timeline at or before ``t``.
+ * Earliest time a T3 unit was observed for the selected perspective.
+ * Scan the bounded catalog (nine direct lookups per row), rather than every
+ * untrusted map key on every scored second. The latter made a valid 5,000-row
+ * timeline multiplied by a 24-hour duration pathological.
  *
  * @param {Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>} timeline
- * @param {number} t
+ * @param {number} durationSec
  * @param {"you"|"opponent"} perspective
+ * @returns {number|null}
  */
-function hasT3UnitByTime(timeline, t, perspective) {
-  if (!Array.isArray(timeline) || timeline.length === 0) return false;
+function firstT3UnitTime(timeline, durationSec, perspective) {
+  if (!Array.isArray(timeline) || timeline.length === 0) return null;
   const sideKey = perspective === "opponent" ? "opp" : "my";
-  for (const row of timeline) {
+  let earliest = null;
+  for (
+    let i = 0;
+    i < Math.min(timeline.length, MAX_CLASSIFIER_TIMELINE_ROWS);
+    i += 1
+  ) {
+    const row = timeline[i];
     if (!row || typeof row !== "object") continue;
     const rowT = Number(row.time);
-    if (!Number.isFinite(rowT) || rowT > t) continue;
+    if (!Number.isFinite(rowT) || rowT < 0 || rowT > durationSec) continue;
     const side = row[sideKey];
     if (!side || typeof side !== "object") continue;
-    for (const token of Object.keys(side)) {
-      if (!T3_UNITS.has(token)) continue;
+    for (const token of T3_UNITS) {
+      if (!HAS_OWN.call(side, token)) continue;
       const n = Number(side[token]);
-      if (n > 0) return true;
+      if (!(n > 0) || !Number.isFinite(n)) continue;
+      if (earliest === null || rowT < earliest) earliest = rowT;
+      break;
     }
   }
-  return false;
+  return earliest;
 }
 
 /**
  * @param {{
- *   bases: Array<{born_time:number,died_time:number}>,
- *   production_buildings: Array<{name:string,born_time:number,died_time:number}>,
  *   stats: {empty: boolean, lookup: (t:number)=>{workers:number|null,supply:number|null,armyValue:number|null}},
+ *   lifecycle: {lookup: (t:number)=>{bases:number,basesEffective:number,tech:number,t3TechActive:boolean}},
  *   race: string,
  *   durationSec: number,
  *   t: number,
  *   unitTimeline?: Array<{time:number,my?:Record<string,number>,opp?:Record<string,number>}>,
  *   perspective?: "you"|"opponent",
+ *   t3UnitAt?: number|null,
  * }} ctx
  */
 function scoreAt(ctx) {
-  const eff = smoothedBaseCount(ctx.bases, ctx.t, ctx.durationSec);
-  const tech = activeTechCount(
-    ctx.production_buildings, ctx.t, ctx.durationSec);
+  const lifecycle = ctx.lifecycle.lookup(ctx.t);
+  const eff = lifecycle.basesEffective;
+  const tech = lifecycle.tech;
   const s = ctx.stats.lookup(ctx.t);
   let score = basePts(eff, ctx.race);
   if (s.workers !== null) {
@@ -336,11 +423,10 @@ function scoreAt(ctx) {
   // having spawned floors at late. Floors only raise the score —
   // never lower it — so the rawScore is preserved for debugging.
   let floor = 0;
-  if (hasActiveT3Tech(ctx.production_buildings, ctx.t, ctx.durationSec)) {
+  if (lifecycle.t3TechActive) {
     floor = PHASES.midLate;
   }
-  const timeline = Array.isArray(ctx.unitTimeline) ? ctx.unitTimeline : null;
-  if (timeline && hasT3UnitByTime(timeline, ctx.t, ctx.perspective || "you")) {
+  if (ctx.t3UnitAt != null && ctx.t >= ctx.t3UnitAt) {
     if (PHASES.late > floor) floor = PHASES.late;
   }
   const rawScore = score;
@@ -349,7 +435,7 @@ function scoreAt(ctx) {
     score: adjustedScore,
     rawScore,
     floor,
-    bases: countActiveBases(ctx.bases, ctx.t, ctx.durationSec),
+    bases: lifecycle.bases,
     basesEffective: eff,
     workers: s.workers,
     supply: s.supply,
@@ -637,6 +723,7 @@ function pickClassifierInputs(mb, durationSec, perspective) {
  *   race: string,
  *   durationSec: number,
  *   perspective?: "you"|"opponent",
+ *   compact?: boolean,
  * }} input
  *
  * ``race`` is nominally "Protoss"|"Terran"|"Zerg" but callers pass
@@ -655,7 +742,14 @@ function pickClassifierInputs(mb, durationSec, perspective) {
 function classifyGame(input) {
   const mb = (input && input.macroBreakdown) || {};
   const race = input && input.race;
-  const durationSec = Math.max(0, Math.floor((input && input.durationSec) || 0));
+  const requestedDurationSec = Math.max(
+    0,
+    Math.floor((input && input.durationSec) || 0),
+  );
+  const durationSec = Math.min(
+    requestedDurationSec,
+    MAX_CLASSIFIER_DURATION_SEC,
+  );
   /** @type {"you"|"opponent"} */
   const perspective = input && input.perspective === "opponent" ? "opponent" : "you";
   const {
@@ -667,13 +761,13 @@ function classifyGame(input) {
   } = pickClassifierInputs(mb, durationSec, perspective);
 
   const ctx = {
-    bases,
-    production_buildings: prodBuildings,
     stats,
+    lifecycle: buildLifecycleLookup(bases, prodBuildings, durationSec),
     race,
     durationSec,
     unitTimeline,
     perspective,
+    t3UnitAt: firstT3UnitTime(unitTimeline, durationSec, perspective),
   };
   const scoreFn = /** @param {number} t */ (t) => scoreAt({ ...ctx, t }).score;
   const sampleFn = /** @param {number} t */ (t) => scoreAt({ ...ctx, t });
@@ -681,9 +775,12 @@ function classifyGame(input) {
   const crossings = findCrossings(scoreFn, durationSec);
   const finalScore = finalWindowScore(scoreFn, durationSec);
   const finalPhase = phaseFromScore(finalScore);
-  const trajectory = sampleTrajectory(sampleFn, durationSec);
-  const oppTrajectory = buildOppTrajectory(mb, race, durationSec);
-  const deathEvents = collectDeathEvents(bases, prodBuildings, durationSec);
+  const compact = Boolean(input && input.compact);
+  const trajectory = compact ? [] : sampleTrajectory(sampleFn, durationSec);
+  const oppTrajectory = compact ? [] : buildOppTrajectory(mb, race, durationSec);
+  const deathEvents = compact
+    ? []
+    : collectDeathEvents(bases, prodBuildings, durationSec);
 
   return {
     crossings,
@@ -693,6 +790,8 @@ function classifyGame(input) {
     oppTrajectory,
     deathEvents,
     basesFromExpansionFallback,
+    analysisDurationSec: durationSec,
+    analysisTruncated: requestedDurationSec > durationSec,
   };
 }
 
@@ -703,6 +802,7 @@ module.exports = {
   T3_TECH,
   T3_UNITS,
   EXPANSION_NAMES,
+  MAX_CLASSIFIER_DURATION_SEC,
 };
 
 /*

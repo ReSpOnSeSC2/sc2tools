@@ -167,6 +167,40 @@ describe("services/overlayLive.enrichEnvelope (cached merge)", () => {
     spy.mockRestore();
   });
 
+  test("coalesces 1 Hz ticks while the first history lookup is still running", async () => {
+    let finish;
+    const pending = new Promise((resolve) => { finish = resolve; });
+    const spy = jest
+      .spyOn(svc, "buildFromOpponentName")
+      .mockImplementation(() => pending);
+
+    const first = svc.enrichEnvelope("u1", envelope({ gameKey: "slow-game" }));
+    await Promise.resolve();
+    const second = svc.enrichEnvelope("u1", envelope({
+      gameKey: "slow-game",
+      capturedAt: 2,
+    }));
+    const third = svc.enrichEnvelope("u1", envelope({
+      gameKey: "slow-game",
+      capturedAt: 3,
+    }));
+
+    await Promise.resolve();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(svc._enrichmentCoordinator.capacitySnapshot()).toEqual(
+      expect.objectContaining({ active: 1, flights: 1, queued: 0 }),
+    );
+    finish({ headToHead: { wins: 3, losses: 2 }, matchup: "PvT" });
+    const rows = await Promise.all([first, second, third]);
+    expect(rows.map((row) => row.streamerHistory.headToHead)).toEqual([
+      { wins: 3, losses: 2 },
+      { wins: 3, losses: 2 },
+      { wins: 3, losses: 2 },
+    ]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
   test("bypasses the cache for the FIRST envelope of every new gameKey (anti-stale guard)", async () => {
     // The 2026-05-11 incident: a new match's loading-screen envelope
     // arrived BEFORE the previous match's post-game ingest had a

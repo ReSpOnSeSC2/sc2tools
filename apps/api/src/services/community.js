@@ -10,6 +10,8 @@ const {
 } = require("../util/contentFilter");
 const {
   publicBuildSnapshot,
+  publicBuildMongoExpression,
+  boundedPublicString,
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 
@@ -20,14 +22,15 @@ const K_ANONYMITY_THRESHOLD = 5;
 // faced by thousands of users becomes an anonymous memory-exhaustion
 // lever.
 const AGGREGATE_OPPONENT_MAX_GAMES = 20000;
+const PUBLIC_AUTHOR_BUILD_LIMIT = 100;
 
 /**
- * Projection used for every public listing/detail of a community
+ * Outer projection used for every public listing/detail of a community
  * build. Centralised so list/detail/author-aggregate stay in sync —
  * anything new added to a build doc is automatically excluded from
  * public responses unless explicitly opted in here.
  */
-const PUBLIC_PROJECTION = Object.freeze({
+const PUBLIC_OUTER_PROJECTION = Object.freeze({
   _id: 0,
   slug: 1,
   ownerUserId: 1,
@@ -38,8 +41,75 @@ const PUBLIC_PROJECTION = Object.freeze({
   votes: 1,
   publishedAt: 1,
   updatedAt: 1,
-  build: 1,
 });
+
+// Aggregations cannot rely on a later dotted projection when an earlier
+// `$group` would already push the complete legacy build into an in-process
+// result. Construct and slice the safe nested object at that boundary.
+const PUBLIC_AGGREGATE_PROJECTION = Object.freeze({
+  ...PUBLIC_OUTER_PROJECTION,
+  build: publicBuildMongoExpression("$build"),
+});
+
+// Publish reads only fields that can enter the public snapshot. A historical
+// private doc may contain a multi-megabyte unknown child; never fetch that
+// object wholesale merely to publish a handful of known leaves.
+const PRIVATE_BUILD_PUBLICATION_PROJECTION = Object.freeze({
+  _id: 0,
+  ...publicBuildMongoExpression("$$ROOT"),
+});
+
+/**
+ * Read-time public serializer for a community-build document.
+ *
+ * Community rows created by older releases may contain a full private build
+ * under `build`. Mongo constructs only bounded safe leaves, then this final
+ * serializer applies the same allowlist used at publish time. Returning a raw
+ * row would preserve legacy `notes`, `sourceGameId`, `userId`, and the private
+ * source `build.slug`.
+ *
+ * Keep the outer allowlist explicit as well. That makes the serializer the
+ * final public boundary even if a future query accidentally fetches more
+ * fields than PUBLIC_AGGREGATE_PROJECTION.
+ *
+ * @param {Record<string, any>} row
+ * @returns {Record<string, any>}
+ */
+function publicCommunityBuildSnapshot(row) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  copyOuterString(out, "slug", row.slug, 80);
+  copyOuterString(out, "ownerUserId", row.ownerUserId, 200);
+  copyOuterString(out, "title", row.title, 200);
+  copyOuterString(out, "description", row.description, 4000);
+  copyOuterString(out, "matchup", row.matchup, 16);
+  copyOuterString(out, "authorName", row.authorName, 80);
+  if (typeof row.votes === "number" && Number.isFinite(row.votes)) {
+    out.votes = row.votes;
+  }
+  copyPublicDate(out, "publishedAt", row.publishedAt);
+  copyPublicDate(out, "updatedAt", row.updatedAt);
+  if (row.build !== undefined) {
+    out.build = publicBuildSnapshot(row.build);
+  }
+  return out;
+}
+
+/** @param {Record<string, any>} out @param {string} key @param {unknown} value @param {number} max */
+function copyOuterString(out, key, value, max) {
+  const safe = boundedPublicString(value, max);
+  if (safe !== undefined) out[key] = safe;
+}
+
+/** @param {Record<string, any>} out @param {string} key @param {unknown} value */
+function copyPublicDate(out, key, value) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    out[key] = new Date(value.getTime());
+  } else {
+    const safe = boundedPublicString(value, 40);
+    if (safe !== undefined) out[key] = safe;
+  }
+}
 
 /**
  * @param {Record<string, number>} counts
@@ -138,11 +208,17 @@ class CommunityService {
         throw err;
       }
     }
-    const priv = await this.db.customBuilds.findOne({
-      userId,
-      slug: userSlug,
-      deletedAt: { $exists: false },
-    });
+    const priv = await this.db.customBuilds.aggregate([
+      {
+        $match: {
+          userId,
+          slug: userSlug,
+          deletedAt: { $exists: false },
+        },
+      },
+      { $limit: 1 },
+      { $project: PRIVATE_BUILD_PUBLICATION_PROJECTION },
+    ]).next();
     if (!priv) {
       const err = new Error("build_not_found");
       /** @type {any} */ (err).status = 404;
@@ -356,16 +432,93 @@ class CommunityService {
         sort = { votes: -1, publishedAt: -1 };
         break;
     }
-    const cursor = this.db.communityBuilds
-      .find(filter, { projection: PUBLIC_PROJECTION })
-      .sort(sort)
-      .skip(offset)
-      .limit(limit + 1); // Fetch one extra to know whether more exist.
-    const rows = await cursor.toArray();
+    const rows = await this.db.communityBuilds.aggregate([
+      { $match: filter },
+      { $sort: sort },
+      { $skip: offset },
+      { $limit: limit + 1 }, // Fetch one extra to know whether more exist.
+      { $project: PUBLIC_AGGREGATE_PROJECTION },
+    ]).toArray();
     const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit);
+    const items = rows
+      .slice(0, limit)
+      .map((row) => publicCommunityBuildSnapshot(row));
     const total = await this.db.communityBuilds.countDocuments(filter);
     return { items, hasMore, total, offset, limit };
+  }
+
+  /**
+   * Authenticated owner-only replay totals for the creator's published cards.
+   * The response is keyed by PUBLIC slug and never exposes the private source
+   * slug or any replay identity. Other viewers receive only their own rows.
+   *
+   * @param {string} userId
+   * @returns {Promise<Array<{publicSlug: string, total: number, wins: number, losses: number}>>}
+   */
+  async listOwnerReplayStats(userId) {
+    const published = await this.db.communityBuilds
+      .find(
+        { ownerUserId: userId, removed: false },
+        { projection: { _id: 0, slug: 1, sourceSlug: 1 } },
+      )
+      .toArray();
+    const sourceSlugs = published
+      .map((row) => String(row.sourceSlug || ""))
+      .filter(Boolean);
+    if (sourceSlugs.length === 0) return [];
+    const counts = await this.db.games
+      .aggregate([
+        {
+          $match: {
+            userId,
+            _customBuildSlug: { $in: sourceSlugs },
+            isResumedFromReplay: { $ne: true },
+          },
+        },
+        {
+          $group: {
+            _id: "$_customBuildSlug",
+            total: { $sum: 1 },
+            wins: {
+              $sum: {
+                $cond: [
+                  { $in: [
+                    { $toLower: { $ifNull: ["$result", ""] } },
+                    ["win", "victory"],
+                  ] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            losses: {
+              $sum: {
+                $cond: [
+                  { $in: [
+                    { $toLower: { $ifNull: ["$result", ""] } },
+                    ["loss", "defeat"],
+                  ] },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ])
+      .toArray();
+    const bySource = new Map(
+      counts.map((row) => [String(row._id || ""), row]),
+    );
+    return published.map((row) => {
+      const count = bySource.get(String(row.sourceSlug || ""));
+      return {
+        publicSlug: String(row.slug || ""),
+        total: Math.max(0, Number(count?.total) || 0),
+        wins: Math.max(0, Number(count?.wins) || 0),
+        losses: Math.max(0, Number(count?.losses) || 0),
+      };
+    });
   }
 
   /**
@@ -406,7 +559,7 @@ class CommunityService {
                 votes: "$votes",
                 publishedAt: "$publishedAt",
                 updatedAt: "$updatedAt",
-                build: "$build",
+                build: publicBuildMongoExpression("$build"),
               },
             },
           },
@@ -424,7 +577,9 @@ class CommunityService {
         { $limit: totalCap },
       ])
       .toArray();
-    return { items };
+    return {
+      items: items.map((row) => publicCommunityBuildSnapshot(row)),
+    };
   }
 
   /**
@@ -448,13 +603,19 @@ class CommunityService {
         { $sort: { engagement: -1, publishedAt: -1 } },
         { $skip: page.offset },
         { $limit: page.limit + 1 },
-        { $project: { ...PUBLIC_PROJECTION, engagement: 0 } },
+        // This is an inclusion projection. Mongo permits `_id: 0` alongside
+        // inclusions, but excluding the computed `engagement` field here as
+        // well makes the projection illegally mixed. Because engagement is
+        // not included by PUBLIC_AGGREGATE_PROJECTION, it is already omitted.
+        { $project: PUBLIC_AGGREGATE_PROJECTION },
       ])
       .toArray();
     const hasMore = items.length > page.limit;
     const total = await this.db.communityBuilds.countDocuments(filter);
     return {
-      items: items.slice(0, page.limit),
+      items: items
+        .slice(0, page.limit)
+        .map((row) => publicCommunityBuildSnapshot(row)),
       hasMore,
       total,
       offset: page.offset,
@@ -470,15 +631,15 @@ class CommunityService {
    * @param {string} slug
    */
   async getPublic(slug) {
-    const row = await this.db.communityBuilds.findOne(
-      { slug, removed: false },
-      {
-        // Strip Mongo-internal fields and the per-user vote arrays.
-        // ownerUserId is intentionally exposed.
-        projection: { _id: 0, upvotes: 0, downvotes: 0 },
-      },
-    );
-    return row;
+    const row = await this.db.communityBuilds.aggregate([
+      { $match: { slug, removed: false } },
+      { $limit: 1 },
+      // Keep detail responses on the same explicit public allowlist as the
+      // collection view. In particular, sourceSlug links the publication to
+      // a user's private library and must never cross this boundary.
+      { $project: PUBLIC_AGGREGATE_PROJECTION },
+    ]).next();
+    return row ? publicCommunityBuildSnapshot(row) : null;
   }
 
   /**
@@ -503,13 +664,13 @@ class CommunityService {
    */
   async getAuthor(userId) {
     if (!userId) return null;
-    const builds = await this.db.communityBuilds
-      .find(
-        { ownerUserId: userId, removed: false },
-        { projection: PUBLIC_PROJECTION },
-      )
-      .sort({ publishedAt: -1 })
-      .toArray();
+    const rawBuilds = await this.db.communityBuilds.aggregate([
+      { $match: { ownerUserId: userId, removed: false } },
+      { $sort: { publishedAt: -1 } },
+      { $limit: PUBLIC_AUTHOR_BUILD_LIMIT },
+      { $project: PUBLIC_AGGREGATE_PROJECTION },
+    ]).toArray();
+    const builds = rawBuilds.map((row) => publicCommunityBuildSnapshot(row));
     if (builds.length === 0) return null;
     // Anonymization gate: at least one build must have a non-empty
     // authorName for the profile to be public. Users who publish
@@ -651,7 +812,8 @@ class CommunityService {
     // anonymous caller trigger an unbounded scan+load of every user's
     // games. ``distinct`` resolves from the index without shipping
     // documents.
-    const distinctUserIds = await this.db.games.distinct("userId", filter);
+    const distinctUserIds = (await this.db.games.distinct("userId", filter))
+      .filter((userId) => typeof userId === "string" && userId.length > 0);
     if (distinctUserIds.length < K_ANONYMITY_THRESHOLD) {
       return null;
     }
@@ -672,7 +834,18 @@ class CommunityService {
       // rows win (natural order); counts below reflect the capped set.
       .limit(AGGREGATE_OPPONENT_MAX_GAMES)
       .toArray();
-    const distinctUsers = new Set(games.map((g) => g.userId));
+    const distinctUsers = new Set(
+      games
+        .map((g) => g.userId)
+        .filter((userId) => typeof userId === "string" && userId.length > 0),
+    );
+    // The indexed pre-check above applies to the complete match set. A single
+    // prolific contributor can still occupy the entire bounded sample while
+    // four sparse contributors sit beyond the 20k cap. Never publish that
+    // sample: the aggregate itself must independently satisfy k-anonymity.
+    if (distinctUsers.size < K_ANONYMITY_THRESHOLD) {
+      return null;
+    }
     let wins = 0;
     let losses = 0;
     /** @type {Record<string, number>} */

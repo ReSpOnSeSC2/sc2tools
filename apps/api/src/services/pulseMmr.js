@@ -25,6 +25,20 @@
 const PULSE_API_ROOT = "https://sc2pulse.nephest.com/sc2/api";
 const PULSE_QUEUE = "LOTV_1V1";
 const REQUEST_TIMEOUT_MS = 8000;
+// Bound the DECOMPRESSED response before JSON.parse. The public endpoint is
+// normally tens of kilobytes for a user's handful of teams; four MiB leaves
+// ample headroom while preventing a malformed/upstream-error response from
+// consuming the API's small V8 heap in one parse.
+const RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+// This is process-wide, not per user. Two bounded responses can parse in
+// parallel; a third distinct request fails soft and retries on the next
+// widget tick. Identical URLs still coalesce before consuming a slot.
+const MAX_JSON_IN_FLIGHT = 2;
+const MAX_JSON_SUBSCRIBERS = 64;
+const MMR_CACHE_MAX_ENTRIES = 1_024;
+const RACE_CACHE_MAX_ENTRIES = 512;
+const BTAG_CACHE_MAX_ENTRIES = 1_024;
+let processJsonInFlight = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // Per-race breakdown TTL. Much longer than the overlay's single-MMR
 // cache: a ladder rating barely moves within an hour, opponent profiles
@@ -69,6 +83,10 @@ class PulseMmrService {
    *   cacheTtlMs?: number,
    *   raceCacheTtlMs?: number,
    *   btagCacheTtlMs?: number,
+   *   responseMaxBytes?: number,
+   *   mmrCacheMaxEntries?: number,
+   *   raceCacheMaxEntries?: number,
+   *   btagCacheMaxEntries?: number,
    * }} [opts]
    */
   constructor(opts = {}) {
@@ -84,6 +102,22 @@ class PulseMmrService {
       typeof opts.btagCacheTtlMs === "number"
         ? opts.btagCacheTtlMs
         : BTAG_CACHE_TTL_MS;
+    this.responseMaxBytes =
+      Number.isInteger(opts.responseMaxBytes) && Number(opts.responseMaxBytes) > 0
+        ? Number(opts.responseMaxBytes)
+        : RESPONSE_MAX_BYTES;
+    this.mmrCacheMaxEntries = positiveInteger(
+      opts.mmrCacheMaxEntries,
+      MMR_CACHE_MAX_ENTRIES,
+    );
+    this.raceCacheMaxEntries = positiveInteger(
+      opts.raceCacheMaxEntries,
+      RACE_CACHE_MAX_ENTRIES,
+    );
+    this.btagCacheMaxEntries = positiveInteger(
+      opts.btagCacheMaxEntries,
+      BTAG_CACHE_MAX_ENTRIES,
+    );
     /** @type {Map<string, PulseMmrEntry>} */
     this._cache = new Map();
     /**
@@ -108,6 +142,35 @@ class PulseMmrService {
      * @type {Map<string, {battleTag: string|null, fetchedAt: number}>}
      */
     this._btagCache = new Map();
+    /**
+     * Identical SC2Pulse URLs share one fetch and one bounded JSON parse.
+     * Reconnect storms used to launch one parse per Browser Source even when
+     * every source requested the same account/season URL.
+     * @type {Map<string, {promise: Promise<any>, subscribers: number}>}
+     */
+    this._jsonInFlight = new Map();
+  }
+
+  /**
+   * Process-capacity counters only. Deliberately excludes cache keys, URLs,
+   * character identifiers, and cached response values.
+   */
+  capacitySnapshot() {
+    let subscribers = 0;
+    for (const entry of this._jsonInFlight.values()) {
+      subscribers += Number(entry.subscribers) || 0;
+    }
+    return {
+      mmrCacheEntries: this._cache.size,
+      seasonCacheEntries: this._seasonCache.size,
+      raceCacheEntries: this._raceCache.size,
+      battleTagCacheEntries: this._btagCache.size,
+      requestInflight: this._jsonInFlight.size,
+      requestSubscribers: subscribers,
+      processRequestInflight: processJsonInFlight,
+      maxRequestInflight: MAX_JSON_IN_FLIGHT,
+      maxSubscribersPerRequest: MAX_JSON_SUBSCRIBERS,
+    };
   }
 
   /**
@@ -150,7 +213,7 @@ class PulseMmrService {
     const fetched = await this._fetchTeams(id);
     if (fetched) {
       const entry = { ...fetched, fetchedAt: now };
-      this._cache.set(id, entry);
+      this._setMmrCache(id, entry);
       return {
         mmr: entry.mmr,
         region: entry.region,
@@ -216,7 +279,7 @@ class PulseMmrService {
     // on every session-widget tick. The numeric MMR cache has its own
     // entry under ``characterId`` keyed by ``id``; this entry only
     // memoises the cheap mapping side.
-    this._cache.set(cacheKey, {
+    this._setMmrCache(cacheKey, {
       characterId,
       mmr: 0,
       region: null,
@@ -369,9 +432,12 @@ class PulseMmrService {
         tier: cached.tier ?? null,
       };
     }
-    const fetched = await this._fetchTeams(numericIds, { preferredRegion });
+    const fetched = await this._fetchTeams(
+      numericIds.slice().sort(),
+      { preferredRegion },
+    );
     if (fetched) {
-      this._cache.set(cacheKey, { ...fetched, fetchedAt: now });
+      this._setMmrCache(cacheKey, { ...fetched, fetchedAt: now });
       return fetched;
     }
     // Stale-while-error: same contract as the single-id path. A network
@@ -406,7 +472,7 @@ class PulseMmrService {
     }
     const characterId = await this._resolveCharacterIdFromToon(handle);
     if (!characterId) return null;
-    this._cache.set(cacheKey, {
+    this._setMmrCache(cacheKey, {
       characterId,
       mmr: 0,
       region: null,
@@ -680,7 +746,14 @@ class PulseMmrService {
       }
     }
     const races = Array.from(byRace.values()).sort((a, b) => b.mmr - a.mmr);
-    this._raceCache.set(cacheKey, { races, fetchedAt: now });
+    setBoundedCache(
+      this._raceCache,
+      cacheKey,
+      { races, fetchedAt: now },
+      this.raceCacheMaxEntries,
+      now,
+      this.raceCacheTtlMs,
+    );
     return races;
   }
 
@@ -748,7 +821,14 @@ class PulseMmrService {
     // Stale-while-error on hits: only overwrite a previously-good tag
     // with null when there was no prior value (a genuine first miss).
     if (fresh || !cached || !cached.battleTag) {
-      this._btagCache.set(id, { battleTag: fresh, fetchedAt: now });
+      setBoundedCache(
+        this._btagCache,
+        id,
+        { battleTag: fresh, fetchedAt: now },
+        this.btagCacheMaxEntries,
+        now,
+        this.btagCacheTtlMs,
+      );
       return fresh;
     }
     return cached.battleTag;
@@ -913,6 +993,75 @@ class PulseMmrService {
       if (opts.throwOnError) throw new Error("SC2Pulse fetch unavailable");
       return null;
     }
+    let entry = this._jsonInFlight.get(url);
+    if (entry) {
+      if (entry.subscribers >= MAX_JSON_SUBSCRIBERS) {
+        if (opts.throwOnError) throw pulseAdmissionBusyError();
+        return null;
+      }
+      entry.subscribers += 1;
+    } else {
+      if (this._jsonInFlight.size >= MAX_JSON_IN_FLIGHT) {
+        if (opts.throwOnError) throw pulseAdmissionBusyError();
+        return null;
+      }
+      const promise = this._fetchJson(url);
+      entry = { promise, subscribers: 1 };
+      this._jsonInFlight.set(url, entry);
+      promise.then(
+        () => {
+          if (this._jsonInFlight.get(url) === entry) {
+            this._jsonInFlight.delete(url);
+          }
+        },
+        () => {
+          if (this._jsonInFlight.get(url) === entry) {
+            this._jsonInFlight.delete(url);
+          }
+        },
+      );
+    }
+    try {
+      return await entry.promise;
+    } catch (err) {
+      if (opts.throwOnError) throw err;
+      return null;
+    }
+  }
+
+  /**
+   * Bounded write-through for both MMR results and toon mappings. A stale
+   * value remains available for one hour after its live TTL (fail-soft during
+   * a short Pulse outage), then becomes sweepable so one-off identities do
+   * not accumulate for the lifetime of the Node process.
+   * @private
+   * @param {string} key
+   * @param {PulseMmrEntry} value
+   */
+  _setMmrCache(key, value) {
+    setBoundedCache(
+      this._cache,
+      key,
+      value,
+      this.mmrCacheMaxEntries,
+      this.now(),
+      Math.max(this.cacheTtlMs + 60 * 60 * 1000, this.cacheTtlMs * 2),
+    );
+  }
+
+  /**
+   * One admitted upstream request. Kept separate from ``_getJson`` so every
+   * subscriber observes the same fetch/parse while retaining its own
+   * throw-on-error policy.
+   * @private
+   * @param {string} url
+   * @returns {Promise<any>}
+   */
+  async _fetchJson(url) {
+    if (processJsonInFlight >= MAX_JSON_IN_FLIGHT) {
+      throw pulseAdmissionBusyError();
+    }
+    processJsonInFlight += 1;
     const controller =
       typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller
@@ -924,20 +1073,137 @@ class PulseMmrService {
         headers: { accept: "application/json" },
       });
       if (!res || !res.ok) {
-        if (opts.throwOnError) {
-          const status = res && typeof res.status === "number" ? res.status : "unknown";
-          throw new Error(`SC2Pulse request failed (${status})`);
-        }
-        return null;
+        const status = res && typeof res.status === "number" ? res.status : "unknown";
+        throw new Error(`SC2Pulse request failed (${status})`);
       }
-      return await res.json();
-    } catch (err) {
-      if (opts.throwOnError) throw err;
-      return null;
+      return await readBoundedJson(res, this.responseMaxBytes);
     } finally {
       if (timer) clearTimeout(timer);
+      processJsonInFlight -= 1;
     }
   }
+}
+
+/**
+ * Remove expired entries, refresh the written key's insertion order, and
+ * evict oldest rows until the hard cap has room. Values in all Pulse caches
+ * carry ``fetchedAt`` by contract.
+ *
+ * @param {Map<string, any>} map
+ * @param {string} key
+ * @param {any} value
+ * @param {number} maxEntries
+ * @param {number} now
+ * @param {number} staleAfterMs
+ */
+function setBoundedCache(map, key, value, maxEntries, now, staleAfterMs) {
+  for (const [candidate, cached] of map) {
+    const fetchedAt = Number(cached?.fetchedAt);
+    if (Number.isFinite(fetchedAt) && now - fetchedAt >= staleAfterMs) {
+      map.delete(candidate);
+    }
+  }
+  map.delete(key);
+  while (map.size >= maxEntries) {
+    const oldest = map.keys().next().value;
+    if (typeof oldest !== "string") break;
+    map.delete(oldest);
+  }
+  map.set(key, value);
+}
+
+/**
+ * @param {unknown} raw
+ * @param {number} fallback
+ * @returns {number}
+ */
+function positiveInteger(raw, fallback) {
+  return Number.isInteger(raw) && Number(raw) > 0 ? Number(raw) : fallback;
+}
+
+/**
+ * Parse a fetch Response after bounding its decompressed byte stream. Native
+ * Node fetch responses take the streaming branch. The ``json`` fallback is
+ * retained only for the tiny injected response doubles used by unit tests.
+ *
+ * @param {Response|any} res
+ * @param {number} maxBytes
+ * @returns {Promise<any>}
+ */
+async function readBoundedJson(res, maxBytes) {
+  const contentLength = Number(res?.headers?.get?.("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    try {
+      await res.body?.cancel?.();
+    } catch {
+      // The size rejection is authoritative; cancellation is best-effort.
+    }
+    throw pulseResponseTooLargeError(maxBytes);
+  }
+  const reader = res?.body?.getReader?.();
+  if (reader) {
+    /** @type {Uint8Array[]} */
+    const chunks = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = value instanceof Uint8Array
+          ? value
+          : new Uint8Array(value || []);
+        total += chunk.byteLength;
+        if (total > maxBytes) {
+          try {
+            await reader.cancel();
+          } catch {
+            // Preserve the stable size error below.
+          }
+          throw pulseResponseTooLargeError(maxBytes);
+        }
+        chunks.push(chunk);
+      }
+    } finally {
+      try {
+        reader.releaseLock?.();
+      } catch {
+        // No-op: some test readers do not expose/reuse locks.
+      }
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  if (typeof res?.text === "function") {
+    const text = await res.text();
+    if (Buffer.byteLength(text, "utf8") > maxBytes) {
+      throw pulseResponseTooLargeError(maxBytes);
+    }
+    return JSON.parse(text);
+  }
+  if (typeof res?.json === "function") return res.json();
+  throw new Error("SC2Pulse response body unavailable");
+}
+
+/** @param {number} maxBytes */
+function pulseResponseTooLargeError(maxBytes) {
+  const err = /** @type {Error & {code: string}} */ (
+    new Error(`SC2Pulse response exceeds ${maxBytes} bytes`)
+  );
+  err.code = "PULSE_RESPONSE_TOO_LARGE";
+  return err;
+}
+
+function pulseAdmissionBusyError() {
+  const err = /** @type {Error & {code: string}} */ (
+    new Error("SC2Pulse request admission busy")
+  );
+  err.code = "PULSE_ADMISSION_BUSY";
+  return err;
 }
 
 /**

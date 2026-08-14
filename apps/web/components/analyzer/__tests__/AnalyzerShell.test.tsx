@@ -4,7 +4,17 @@ import type { ReactNode } from "react";
 import { AnalyzerShell } from "../AnalyzerShell";
 
 vi.mock("@/components/AnalyzerProvider", () => ({
-  AnalyzerProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AnalyzerProvider: ({
+    children,
+    analysisGamesEnabled,
+  }: {
+    children: ReactNode;
+    analysisGamesEnabled?: boolean;
+  }) => (
+    <div data-testid="analyzer-provider" data-corpus-active={analysisGamesEnabled}>
+      {children}
+    </div>
+  ),
 }));
 vi.mock("@/components/ui/ErrorBoundary", () => ({
   ErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -44,6 +54,20 @@ vi.mock("../TrendsTab", () => ({ TrendsTab: () => null }));
 afterEach(cleanup);
 
 describe("AnalyzerShell opponent hydration", () => {
+  it("enables full replay history only while Arcade is open", () => {
+    const view = render(
+      <AnalyzerShell totalGames={50} tab="trends" onTabChange={() => undefined} />,
+    );
+    expect(screen.getByTestId("analyzer-provider").getAttribute("data-corpus-active"))
+      .toBe("false");
+
+    view.rerender(
+      <AnalyzerShell totalGames={50} tab="arcade" onTabChange={() => undefined} />,
+    );
+    expect(screen.getByTestId("analyzer-provider").getAttribute("data-corpus-active"))
+      .toBe("true");
+  });
+
   it("opens the requested opponent profile instead of the opponents list", () => {
     render(
       <AnalyzerShell

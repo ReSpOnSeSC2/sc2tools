@@ -153,18 +153,41 @@ class PerGameComputeService {
    * @private
    * @param {string} userId
    * @param {string} gameId
-   * @param {{ slim?: object | null } | undefined} [opts]
+   * @param {{ slim?: object | null, fields?: string[], signal?: AbortSignal } | undefined} [opts]
    *        when the caller already loaded the slim games doc, pass
    *        it through to avoid a second findOne.
    * @returns {Promise<{ slim: any | null, blob: Record<string, any> }>}
    */
   async _readGameWithDetails(userId, gameId, opts = {}) {
+    /** @type {string[]} */
+    const fields = Array.isArray(opts.fields) && opts.fields.length > 0
+      ? opts.fields.filter((field) => HEAVY_FIELDS.includes(field))
+      : [...HEAVY_FIELDS];
+    /** @type {Record<string, 0|1>} */
+    const slimProjection = {
+      _id: 0,
+      gameId: 1,
+      myBuild: 1,
+      myRace: 1,
+      map: 1,
+      result: 1,
+      "opponent.displayName": 1,
+      "opponent.race": 1,
+      "opponent.strategy": 1,
+    };
+    for (const field of fields) slimProjection[field] = 1;
     const [slim, fromStore] = await Promise.all([
       opts.slim !== undefined
         ? Promise.resolve(opts.slim)
-        : this.db.games.findOne({ userId, gameId }, { projection: { _id: 0 } }),
+        : this.db.games.findOne(
+          { userId, gameId },
+          { projection: slimProjection },
+        ),
       this.gameDetails
-        ? this.gameDetails.findOne(userId, gameId)
+        ? this.gameDetails.findOne(userId, gameId, {
+          fields,
+          signal: opts.signal,
+        })
         : Promise.resolve(null),
     ]);
     /** @type {Record<string, any>} */
@@ -173,7 +196,7 @@ class PerGameComputeService {
     // post-cutover); the slim row supplies the legacy fallback.
     /** @type {Array<any>} */
     const sources = [slim, fromStore];
-    for (const k of HEAVY_FIELDS) {
+    for (const k of fields) {
       for (const src of sources) {
         if (src && src[k] !== undefined) {
           blob[k] = src[k];
@@ -192,7 +215,9 @@ class PerGameComputeService {
    * @returns {Promise<object | null>}
    */
   async buildOrder(userId, gameId) {
-    const { slim, blob } = await this._readGameWithDetails(userId, gameId);
+    const { slim, blob } = await this._readGameWithDetails(userId, gameId, {
+      fields: ["buildLog", "oppBuildLog"],
+    });
     if (!slim) return null;
     // Merge so ``readEarlyBuildLog`` / ``readOppEarlyBuildLog`` see
     // a single object with the build-log fields populated, regardless
@@ -270,7 +295,10 @@ class PerGameComputeService {
       { projection: { _id: 0, gameId: 1, map: 1, durationSec: 1, myRace: 1 } },
     );
     if (!slim) return null;
-    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const { blob } = await this._readGameWithDetails(userId, gameId, {
+      slim,
+      fields: ["mapPlayback"],
+    });
     const playback = blob.mapPlayback || null;
     if (!playback) return { ok: false, code: "not_computed" };
     return { ok: true, ...playback };
@@ -300,7 +328,10 @@ class PerGameComputeService {
       },
     );
     if (!slim) return null;
-    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const { blob } = await this._readGameWithDetails(userId, gameId, {
+      slim,
+      fields: ["macroBreakdown"],
+    });
     const breakdown = blob.macroBreakdown || slim.macroBreakdown || null;
     if (!breakdown) return { ok: false, code: "not_computed" };
     return {
@@ -336,7 +367,10 @@ class PerGameComputeService {
       },
     );
     if (!slim) return null;
-    const { blob } = await this._readGameWithDetails(userId, gameId, { slim });
+    const { blob } = await this._readGameWithDetails(userId, gameId, {
+      slim,
+      fields: ["apmCurve"],
+    });
     const curve = blob.apmCurve || slim.apmCurve || null;
     if (!curve) return { ok: false, code: "not_computed" };
     return {
@@ -700,7 +734,9 @@ class PerGameComputeService {
       gameId: 1,
       myBuild: 1,
       myRace: 1,
-      opponent: 1,
+      "opponent.displayName": 1,
+      "opponent.race": 1,
+      "opponent.strategy": 1,
       // Legacy fallback: pre-v0.4.3 docs still have these
       // inline. Once the cleanup migration runs, the projection
       // returns ``undefined`` and we serve from the detail
@@ -821,7 +857,11 @@ class PerGameComputeService {
     const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
       ? Math.floor(requestedLimit)
       : Number.POSITIVE_INFINITY;
-    const pageSize = Math.max(10, Math.min(100, Number(opts.pageSize) || 50));
+    // Metadata rows are slim, so a moderate cursor page keeps Mongo efficient.
+    // Heavy detail is intentionally hydrated one replay at a time below; a
+    // count-only page bound is not a memory bound when one valid replay body
+    // can approach the ingest limit.
+    const pageSize = Math.max(1, Math.min(50, Number(opts.pageSize) || 50));
     const perspective = opts.perspective === "opponent"
       ? "opponent"
       : opts.perspective === "both" ? "both" : "you";
@@ -846,7 +886,9 @@ class PerGameComputeService {
       _customBuildSlug: 1,
       _opponentBuildOrderWriteLease: 1,
       myRace: 1,
-      opponent: 1,
+      "opponent.displayName": 1,
+      "opponent.race": 1,
+      "opponent.strategy": 1,
       result: 1,
       date: 1,
       map: 1,
@@ -855,8 +897,9 @@ class PerGameComputeService {
       apm: 1,
       spq: 1,
     };
-    for (const field of logFields) projection[field] = 1;
-    if (includeMacroBreakdown) projection.macroBreakdown = 1;
+    // Do not include legacy inline heavy fields in the metadata page. They are
+    // read as a one-row fallback below only when the detail store lacks that
+    // replay, preventing N large inline logs from being retained together.
 
     let consumed = 0;
     /** @type {{date: Date|null, id: any}|null} */
@@ -901,33 +944,59 @@ class PerGameComputeService {
         : rows;
       const detailFields = [...logFields];
       if (includeMacroBreakdown) detailFields.push("macroBreakdown");
-      const needDetails = gated
-        .filter((g) => detailFields.some((field) =>
-          field === "macroBreakdown"
-            ? !g.macroBreakdown || typeof g.macroBreakdown !== "object"
-            : !Array.isArray(g[field])))
-        .map((g) => String(g.gameId || ""))
-        .filter(Boolean);
-      if (opts.signal && opts.signal.aborted) return;
-      const blobs = this.gameDetails && needDetails.length > 0
-        ? await this.gameDetails.findMany(userId, needDetails, {
-          fields: detailFields,
-          concurrency: Math.min(8, pageSize),
-          strict: opts.strictDetails === true,
-          tolerateCorruptObjects: opts.tolerateCorruptDetails === true,
-          signal: opts.signal,
-        })
-        : new Map();
-      if (opts.signal && opts.signal.aborted) return;
-      const mapped = gated.map((g) => {
+      if (gated.length === 0) {
+        yield { games: [], candidates: rows.length, hasMore };
+      }
+      for (let index = 0; index < gated.length; index += 1) {
+        if (opts.signal && opts.signal.aborted) return;
+        const g = gated[index];
         const gid = String(g.gameId || "");
-        const blob = blobs.get(gid) || {};
-        const buildLog = Array.isArray(g.buildLog)
-          ? g.buildLog
-          : Array.isArray(blob.buildLog) ? blob.buildLog : [];
-        const oppBuildLog = Array.isArray(g.oppBuildLog)
-          ? g.oppBuildLog
-          : Array.isArray(blob.oppBuildLog) ? blob.oppBuildLog : [];
+        /** @type {Record<string, any>} */
+        let blob = {};
+        if (this.gameDetails && gid) {
+          const one = await this.gameDetails.findMany(userId, [gid], {
+            fields: detailFields,
+            concurrency: 1,
+            strict: opts.strictDetails === true,
+            tolerateCorruptObjects: opts.tolerateCorruptDetails === true,
+            signal: opts.signal,
+          });
+          blob = one.get(gid) || {};
+        }
+        if (opts.signal && opts.signal.aborted) return;
+        // Pre-cutover games may carry the selected fields only on the slim
+        // document. Fetch that fallback one row at a time and only when the
+        // detail store did not provide every required field.
+        const needsLegacy = detailFields.some((field) => (
+          field === "macroBreakdown"
+            ? !blob[field] || typeof blob[field] !== "object"
+            : !Array.isArray(blob[field])
+        ));
+        /** @type {Record<string, any>} */
+        let legacy = {};
+        if (needsLegacy && gid) {
+          /** @type {Record<string, number>} */
+          const legacyProjection = { _id: 0 };
+          for (const field of detailFields) legacyProjection[field] = 1;
+          legacy = await this.db.games.findOne(
+            { userId, gameId: gid },
+            {
+              projection: legacyProjection,
+              ...(opts.signal ? { signal: opts.signal } : {}),
+            },
+          ) || {};
+        }
+        if (opts.signal && opts.signal.aborted) return;
+        const buildLog = Array.isArray(blob.buildLog)
+          ? blob.buildLog
+          : Array.isArray(legacy.buildLog) ? legacy.buildLog : [];
+        const oppBuildLog = Array.isArray(blob.oppBuildLog)
+          ? blob.oppBuildLog
+          : Array.isArray(legacy.oppBuildLog) ? legacy.oppBuildLog : [];
+        const detailAvailableYou = Array.isArray(blob.buildLog)
+          || Array.isArray(legacy.buildLog);
+        const detailAvailableOpponent = Array.isArray(blob.oppBuildLog)
+          || Array.isArray(legacy.oppBuildLog);
         /** @type {Record<string, any>} */
         const out = {
           gameId: gid,
@@ -962,21 +1031,26 @@ class PerGameComputeService {
           result: g.result || null,
           date: g.date || null,
           map: g.map || null,
-          detailAvailableYou: Array.isArray(g.buildLog) || Array.isArray(blob.buildLog),
-          detailAvailableOpponent: Array.isArray(g.oppBuildLog)
-            || Array.isArray(blob.oppBuildLog),
+          detailAvailableYou,
+          detailAvailableOpponent,
         };
         out.detailAvailable = perspective === "both"
-          ? out.detailAvailableYou && out.detailAvailableOpponent
-          : perspective === "you"
-            ? out.detailAvailableYou
-            : out.detailAvailableOpponent;
+          ? detailAvailableYou && detailAvailableOpponent
+          : perspective === "you" ? detailAvailableYou : detailAvailableOpponent;
         if (includeMacroBreakdown) {
-          out.macroBreakdown = g.macroBreakdown || blob.macroBreakdown || null;
+          out.macroBreakdown = blob.macroBreakdown
+            || legacy.macroBreakdown
+            || null;
         }
-        return out;
-      });
-      yield { games: mapped, candidates: rows.length, hasMore };
+        // Attribute the slim metadata page's candidate count exactly once;
+        // callers can retain their existing progress math while each yielded
+        // page owns at most one replay's raw logs and parsed event arrays.
+        yield {
+          games: [out],
+          candidates: index === 0 ? rows.length : 0,
+          hasMore: hasMore || index < gated.length - 1,
+        };
+      }
       if (!hasMore) return;
     }
   }

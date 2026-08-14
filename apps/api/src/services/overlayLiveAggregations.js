@@ -1,8 +1,15 @@
 "use strict";
 
 const { attachOpponentIdsToFilter } = require("../util/opponentIdentity");
-const { computeCompositions } = require("./buildCompositions");
+const {
+  computeCompositions,
+  prepareCompositionGame,
+} = require("./buildCompositions");
 const { computePerGameScouting } = require("./scouting/perGameScouting");
+const {
+  compactAnalysisBuildLog,
+  compactAnalysisMacroBreakdown,
+} = require("./boundedReplayDetail");
 
 /**
  * Cap on the number of recent games we run the phase classifier over
@@ -10,10 +17,14 @@ const { computePerGameScouting } = require("./scouting/perGameScouting");
  * up (the 1 Hz envelope cadence is cached, but the first envelope of
  * each new gameKey bypasses the cache) so the upper bound matters —
  * 50 is enough to give the modal final-phase and the trajectory
- * medians a stable signal while keeping the detail-store fetch under
- * a single batched round trip.
+ * medians a stable signal while keeping the detail-store work bounded.
  */
 const OPPONENT_PHASE_SCAN_CAP = 50;
+const OVERLAY_DETAIL_FIELDS = Object.freeze([
+  "buildLog",
+  "oppBuildLog",
+  "macroBreakdown",
+]);
 
 /** @type {ReadonlyArray<'early'|'earlyMid'|'mid'|'midLate'|'late'>} */
 const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
@@ -425,6 +436,40 @@ async function metaForMatchup(games, userId, myRace, oppRace) {
 }
 
 /**
+ * Read one projected detail object. Mongo can honor the field projection
+ * before materializing the row; R2 still parses one object, but never holds a
+ * multi-game batch or fans out concurrent reads from a 1 Hz overlay request.
+ * @param {import('./gameDetails').GameDetailsService|null} gameDetails
+ * @param {string} userId
+ * @param {string} gameId
+ * @param {ReadonlyArray<string>} fields
+ */
+async function readOneOverlayDetail(gameDetails, userId, gameId, fields) {
+  if (!gameDetails || !gameId) return null;
+  try {
+    if (typeof gameDetails.findMany === "function") {
+      const one = await gameDetails.findMany(userId, [gameId], {
+        fields: [...fields],
+        concurrency: 1,
+        tolerateCorruptObjects: true,
+      });
+      return one.get(gameId) || null;
+    }
+    if (typeof gameDetails.findOne === "function") {
+      const raw = await gameDetails.findOne(userId, gameId);
+      if (!raw || typeof raw !== "object") return null;
+      return Object.fromEntries(
+        fields.filter((field) => raw[field] !== undefined)
+          .map((field) => [field, raw[field]]),
+      );
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
  * Phase forecast for the scouting card's "Usually reaches Mid/Late"
  * strip. Pulls up to ``OPPONENT_PHASE_SCAN_CAP`` of the streamer's
  * recent games against this opponent in this matchup, hydrates
@@ -478,19 +523,16 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
       $options: "i",
     };
   }
-  // Inline projection covers the legacy pre-v0.4.3 docs that still
-  // carry ``macroBreakdown`` on the game row. Post-migration docs need
-  // the detail-store round-trip below — same pattern
-  // ``listForRulePreview`` uses for the customBuilds preview cursor.
+  // Metadata only. Detail-store data (or a one-row legacy inline fallback) is
+  // read serially below and immediately reduced to a prepared phase summary.
   const rows = await games
     .find(filter, {
       projection: {
-        _id: 0,
+        _id: 1,
         gameId: 1,
         result: 1,
         durationSec: 1,
         myRace: 1,
-        macroBreakdown: 1,
       },
     })
     .sort({ date: -1 })
@@ -499,27 +541,44 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
     .catch(() => []);
   if (rows.length === 0) return null;
 
-  const needDetailIds = [];
-  for (const r of rows) {
-    if (!r.macroBreakdown && r.gameId) needDetailIds.push(String(r.gameId));
-  }
-  /** @type {Map<string, Record<string, any>>} */
-  const blobs = gameDetails && needDetailIds.length > 0
-    ? await gameDetails.findMany(userId, needDetailIds).catch(() => new Map())
-    : new Map();
-
   const matched = [];
   for (const r of rows) {
-    const macroBreakdown = r.macroBreakdown
-      || (r.gameId ? (blobs.get(String(r.gameId)) || {}).macroBreakdown : null)
+    const gameId = String(r.gameId || "");
+    const detail = await readOneOverlayDetail(
+      gameDetails,
+      userId,
+      gameId,
+      ["macroBreakdown"],
+    );
+    const inline = !detail?.macroBreakdown && !r.macroBreakdown && r._id
+      ? await games.findOne(
+          { userId, _id: r._id },
+          { projection: { _id: 0, macroBreakdown: 1 } },
+        ).catch(() => null)
+      : null;
+    const rawMacro = detail?.macroBreakdown
+      || r.macroBreakdown
+      || inline?.macroBreakdown
       || null;
-    if (!macroBreakdown) continue;
-    matched.push({
-      gameId: String(r.gameId || ""),
+    if (!rawMacro) continue;
+    const base = {
+      gameId,
       myRace: r.myRace || myRace || null,
       durationSec: Number(r.durationSec) || 0,
       result: r.result || null,
-      macroBreakdown,
+    };
+    let prepared;
+    try {
+      prepared = prepareCompositionGame({
+        ...base,
+        macroBreakdown: compactAnalysisMacroBreakdown(rawMacro),
+      });
+    } catch {
+      continue;
+    }
+    matched.push({
+      ...base,
+      _phasePrepared: prepared,
     });
   }
   // 3-game floor mirrors the rival-tag threshold and the best-answer
@@ -635,7 +694,7 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
   const rows = await games
     .find(filter, {
       projection: {
-        _id: 0,
+        _id: 1,
         gameId: 1,
         date: 1,
         result: 1,
@@ -643,14 +702,9 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
         myRace: 1,
         myBuild: 1,
         durationSec: 1,
-        opponent: 1,
-        // Both build logs are projected so the per-game scouting
-        // envelope can compute both sides' build orders + per-phase
-        // composition / buildings / upgrades. Older v0.4.3 docs that
-        // moved them to the detail store are hydrated below.
-        buildLog: 1,
-        oppBuildLog: 1,
-        macroBreakdown: 1,
+        "opponent.displayName": 1,
+        "opponent.race": 1,
+        "opponent.strategy": 1,
       },
     })
     .sort({ date: -1 })
@@ -658,48 +712,58 @@ async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRa
     .toArray()
     .catch(() => []);
   if (rows.length === 0) return [];
-  // Hydrate macroBreakdown + buildLog + oppBuildLog from the detail
-  // store for post-v0.4.3 docs that don't carry them inline. Same
-  // pattern as ``opponentPhaseProfile``; bounded to 5 ids so this is
-  // a single small batched read. ``buildLog`` is included so the
-  // per-game scouting envelope's player-side data (myBuildOrder /
-  // myCompositionByPhase / myBuildingsByPhase / myUpgradesByPhase)
-  // is consistent with the opponent profile's path — even though
-  // the overlay's renderer only surfaces the opp side today.
-  if (gameDetails) {
-    const needIds = [];
-    for (const r of rows) {
-      const missingMyLog = !Array.isArray(r.buildLog);
-      const missingOppLog = !Array.isArray(r.oppBuildLog);
-      const missingMacro = !r.macroBreakdown;
-      if ((missingMyLog || missingOppLog || missingMacro) && r.gameId) {
-        needIds.push(String(r.gameId));
-      }
-    }
-    if (needIds.length > 0) {
-      const blobs = await gameDetails
-        .findMany(userId, needIds)
-        .catch(() => new Map());
-      for (const r of rows) {
-        const blob = blobs.get(String(r.gameId || ""));
-        if (!blob) continue;
-        if (!Array.isArray(r.buildLog) && Array.isArray(blob.buildLog)) {
-          r.buildLog = blob.buildLog;
-        }
-        if (!Array.isArray(r.oppBuildLog) && Array.isArray(blob.oppBuildLog)) {
-          r.oppBuildLog = blob.oppBuildLog;
-        }
-        if (!r.macroBreakdown && blob.macroBreakdown) {
-          r.macroBreakdown = blob.macroBreakdown;
-        }
-      }
-    }
-  }
+  // Hydrate one row at a time and immediately reduce it to the bounded
+  // scouting response. This preserves both sides' build-order/composition
+  // fields without retaining five raw replay blobs at once.
   /** @type {Array<object>} */
   const envelopes = [];
   for (const r of rows) {
+    const gameId = String(r.gameId || "");
+    const detail = await readOneOverlayDetail(
+      gameDetails,
+      userId,
+      gameId,
+      OVERLAY_DETAIL_FIELDS,
+    );
+    const needsInline = (
+      !Array.isArray(detail?.buildLog) && !Array.isArray(r.buildLog)
+    ) || (
+      !Array.isArray(detail?.oppBuildLog) && !Array.isArray(r.oppBuildLog)
+    ) || (!detail?.macroBreakdown && !r.macroBreakdown);
+    const inline = needsInline && r._id
+      ? await games.findOne(
+          { userId, _id: r._id },
+          {
+            projection: {
+              _id: 0,
+              buildLog: 1,
+              oppBuildLog: 1,
+              macroBreakdown: 1,
+            },
+          },
+        ).catch(() => null)
+      : null;
+    const hydrated = {
+      gameId,
+      date: r.date,
+      result: r.result,
+      map: r.map,
+      myRace: r.myRace,
+      myBuild: r.myBuild,
+      durationSec: r.durationSec,
+      opponent: r.opponent,
+      buildLog: compactAnalysisBuildLog(
+        detail?.buildLog ?? r.buildLog ?? inline?.buildLog,
+      ),
+      oppBuildLog: compactAnalysisBuildLog(
+        detail?.oppBuildLog ?? r.oppBuildLog ?? inline?.oppBuildLog,
+      ),
+      macroBreakdown: compactAnalysisMacroBreakdown(
+        detail?.macroBreakdown ?? r.macroBreakdown ?? inline?.macroBreakdown,
+      ),
+    };
     try {
-      const env = computePerGameScouting(r);
+      const env = computePerGameScouting(hydrated);
       // Strip the heavy ``macroBreakdown`` blob if the compute kept any
       // reference (it doesn't — it copies the fields it needs — but
       // defensive against future regressions).

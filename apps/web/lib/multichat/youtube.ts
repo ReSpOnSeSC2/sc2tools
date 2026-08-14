@@ -1,6 +1,7 @@
 // YouTube chat engine — drives the API's stateless resolve/poll relay.
 //
-// The Browser Source owns the polling loop (the API holds no state):
+// The Browser Source owns the polling loop (the API retains only a tiny
+// bounded in-flight/result cache):
 // resolve the streamer's channel to a live continuation once, then
 // poll at the cadence YouTube itself requests. A finished stream
 // re-resolves on a slow timer so the widget picks the next stream up
@@ -69,6 +70,14 @@ export function createYoutubeChat(
         `${base}/youtube/resolve?channel=${encodeURIComponent(channel)}`,
         { signal: controller.signal, cache: "no-store" },
       );
+      if (res.status === 503) {
+        callbacks.onStatus("connecting");
+        schedule(
+          resolve,
+          retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
+        );
+        return;
+      }
       if (res.status === 502) {
         const body = await res.json().catch(() => null);
         const code = body?.error?.code;
@@ -111,6 +120,14 @@ export function createYoutubeChat(
         signal: controller.signal,
         cache: "no-store",
       });
+      if (res.status === 503) {
+        callbacks.onStatus("connecting");
+        schedule(
+          () => void poll(continuation, clientVersion, firstPoll),
+          retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
+        );
+        return;
+      }
       if (!res.ok) {
         callbacks.onStatus("error", `poll ${res.status}`);
         schedule(resolve, ERROR_RETRY_MS);
@@ -171,4 +188,17 @@ export function createYoutubeChat(
       controller.abort();
     },
   };
+}
+
+/**
+ * Clamp server backpressure so old/malformed proxies cannot cause a hot loop
+ * or leave an OBS Browser Source dormant for minutes.
+ */
+export function retryAfterMs(
+  header: string | null,
+  fallbackMs: number,
+): number {
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds <= 0) return fallbackMs;
+  return Math.max(1_000, Math.min(30_000, Math.round(seconds * 1_000)));
 }

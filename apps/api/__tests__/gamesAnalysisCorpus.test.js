@@ -4,9 +4,14 @@
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const express = require("express");
 const request = require("supertest");
+const { EventEmitter } = require("events");
 
 const { connect } = require("../src/db/connect");
-const { buildGamesRouter } = require("../src/routes/games");
+const {
+  buildGamesRouter,
+  createAnalysisCorpusAdmission,
+  holdAnalysisCorpusPermit,
+} = require("../src/routes/games");
 const { GamesService } = require("../src/services/games");
 const { LIMITS } = require("../src/config/constants");
 
@@ -88,20 +93,14 @@ describe("GamesService.listAnalysisCorpus", () => {
     const row = out.items[0];
     expect(Object.keys(row).sort()).toEqual([
       "date",
-      "duration",
       "durationSec",
       "gameId",
       "macroScore",
-      "macro_score",
       "map",
       "myBuild",
       "myMmr",
       "myRace",
       "myToonHandle",
-      "oppMmr",
-      "oppPulseId",
-      "oppRace",
-      "opp_strategy",
       "opponent",
       "result",
     ].sort());
@@ -145,6 +144,62 @@ describe("GamesService.listAnalysisCorpus", () => {
     expect(new Set(ids)).toEqual(
       new Set(["same-a", "same-b", "same-c", "older"]),
     );
+  });
+
+  test("paginates mixed Date, string, number, and null cohorts without gaps", async () => {
+    const rows = [
+      exhaustiveGame("date-same-a", new Date("2026-08-12T12:00:00Z")),
+      exhaustiveGame("date-same-b", new Date("2026-08-12T12:00:00Z")),
+      exhaustiveGame("date-older", new Date("2026-08-11T12:00:00Z")),
+      exhaustiveGame("string-same-a", "2025-01-02T00:00:00.000Z"),
+      exhaustiveGame("string-same-b", "2025-01-02T00:00:00.000Z"),
+      exhaustiveGame("string-older", "2024-01-02T00:00:00.000Z"),
+      exhaustiveGame("number-same-a", 1_735_776_000_000),
+      exhaustiveGame("number-same-b", 1_735_776_000_000),
+      exhaustiveGame("number-older", 1_704_153_600_000),
+      exhaustiveGame("null-a", null),
+      exhaustiveGame("null-b", null),
+      exhaustiveGame("null-c", null),
+    ];
+    await db.games.insertMany([
+      ...rows,
+      { ...exhaustiveGame("resumed-mixed", null), isResumedFromReplay: true },
+      { ...exhaustiveGame("other-mixed", null), userId: "u2" },
+    ]);
+    const expected = await db.games
+      .find(
+        { userId: "u1", isResumedFromReplay: { $ne: true } },
+        { projection: { _id: 0, gameId: 1 } },
+      )
+      .sort({ date: -1, _id: -1 })
+      .toArray();
+
+    const seen = [];
+    const cursors = new Set();
+    let cursor;
+    let pages = 0;
+    do {
+      const page = await svc.listAnalysisCorpus("u1", { limit: 2, cursor });
+      seen.push(...page.items.map((row) => row.gameId));
+      cursor = page.nextCursor || undefined;
+      if (cursor) {
+        expect(cursors.has(cursor)).toBe(false);
+        cursors.add(cursor);
+      }
+      pages += 1;
+      expect(pages).toBeLessThan(20);
+    } while (cursor);
+
+    expect(seen).toEqual(expected.map((row) => row.gameId));
+    expect(seen).toHaveLength(rows.length);
+    expect(new Set(seen).size).toBe(rows.length);
+    const byId = new Map(
+      (await svc.listAnalysisCorpus("u1", { limit: 100 })).items
+        .map((row) => [row.gameId, row.date]),
+    );
+    expect(typeof byId.get("string-same-a")).toBe("string");
+    expect(typeof byId.get("number-same-a")).toBe("number");
+    expect(byId.get("null-a")).toBeNull();
   });
 
   test("caps every response well below the complete-corpus ceiling", async () => {
@@ -207,6 +262,130 @@ describe("GamesService.listAnalysisCorpus", () => {
     await expect(
       svc.listAnalysisCorpus("u1", { cursor: "not-a-cursor" }),
     ).rejects.toMatchObject({ status: 400, code: "bad_request" });
+
+    const id = "64b64c1f2f9f8a1f9c7a1234";
+    const invalidTypedCursors = [
+      { v: 2, t: "date", d: "not-a-date", i: id },
+      { v: 2, t: "string", d: 123, i: id },
+      { v: 2, t: "number", d: "1735776000000", i: id },
+      { v: 2, t: "null", d: 0, i: id },
+      { v: 2, t: "object", d: {}, i: id },
+    ].map((payload) => Buffer.from(JSON.stringify(payload)).toString("base64url"));
+    for (const cursor of invalidTypedCursors) {
+      await expect(
+        svc.listAnalysisCorpus("u1", { cursor }),
+      ).rejects.toMatchObject({ status: 400, code: "bad_request" });
+    }
+  });
+
+  test("continues accepting an in-flight v1 Date cursor after deploy", async () => {
+    const newer = await db.games.insertOne(
+      exhaustiveGame("v1-newer", new Date("2026-08-12T12:00:00Z")),
+    );
+    await db.games.insertMany([
+      exhaustiveGame("v1-older", new Date("2026-08-11T12:00:00Z")),
+      exhaustiveGame("v1-string", "2025-01-02T00:00:00.000Z"),
+      exhaustiveGame("v1-null", null),
+    ]);
+    const cursor = Buffer.from(JSON.stringify({
+      v: 1,
+      d: "2026-08-12T12:00:00.000Z",
+      i: newer.insertedId.toHexString(),
+    })).toString("base64url");
+
+    const page = await svc.listAnalysisCorpus("u1", { limit: 10, cursor });
+    expect(page.items.map((row) => row.gameId)).toEqual([
+      "v1-older",
+      "v1-string",
+      "v1-null",
+    ]);
+  });
+
+  test("honours cancellation before allocating a Mongo result page", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      svc.listAnalysisCorpus("u1", { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("analysis-corpus admission", () => {
+  test("serializes active pages and rejects work beyond the bounded queue", async () => {
+    const admission = createAnalysisCorpusAdmission({
+      maxActive: 1,
+      maxWaiters: 1,
+    });
+    const first = await admission.acquire(new AbortController().signal);
+    expect(first).toEqual(expect.any(Function));
+
+    let secondSettled = false;
+    const secondPromise = admission
+      .acquire(new AbortController().signal)
+      .then((release) => {
+        secondSettled = true;
+        return release;
+      });
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+    await expect(
+      admission.acquire(new AbortController().signal),
+    ).resolves.toBeNull();
+
+    first();
+    const second = await secondPromise;
+    expect(second).toEqual(expect.any(Function));
+    second();
+  });
+
+  test("removes a disconnected waiter without consuming the next slot", async () => {
+    const admission = createAnalysisCorpusAdmission({
+      maxActive: 1,
+      maxWaiters: 1,
+    });
+    const first = await admission.acquire(new AbortController().signal);
+    const waiting = new AbortController();
+    const queued = admission.acquire(waiting.signal);
+    waiting.abort();
+    await expect(queued).resolves.toBeNull();
+
+    first();
+    const next = await admission.acquire(new AbortController().signal);
+    expect(next).toEqual(expect.any(Function));
+    next();
+  });
+
+  test("holds a corpus permit through response finish and releases once", () => {
+    const res = new EventEmitter();
+    res.writableEnded = false;
+    res.destroy = jest.fn();
+    const release = jest.fn();
+
+    const guard = holdAnalysisCorpusPermit(res, release, 10_000);
+    expect(release).not.toHaveBeenCalled();
+
+    res.emit("finish");
+    expect(release).not.toHaveBeenCalled();
+    guard.markComputeSettled();
+    res.emit("close");
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(res.destroy).not.toHaveBeenCalled();
+  });
+
+  test("releases immediately when the response closed before hand-off", () => {
+    const res = new EventEmitter();
+    res.writableEnded = false;
+    res.destroyed = true;
+    res.destroy = jest.fn();
+    const release = jest.fn();
+
+    const guard = holdAnalysisCorpusPermit(res, release, 10_000);
+
+    expect(release).not.toHaveBeenCalled();
+    guard.markComputeSettled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(res.listenerCount("finish")).toBe(0);
+    expect(res.listenerCount("close")).toBe(0);
   });
 });
 
@@ -237,9 +416,13 @@ describe("GET /games/analysis-corpus", () => {
       items: [{ gameId: "g1" }],
       nextCursor: "next",
     });
-    expect(listAnalysisCorpus).toHaveBeenCalledWith("u-route", {
-      limit: 77,
-      cursor: "opaque",
-    });
+    expect(listAnalysisCorpus).toHaveBeenCalledWith(
+      "u-route",
+      expect.objectContaining({
+        limit: 77,
+        cursor: "opaque",
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });

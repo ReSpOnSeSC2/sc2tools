@@ -1,7 +1,9 @@
 "use strict";
 
+const { createHash } = require("crypto");
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
+const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -43,13 +45,25 @@ const rateLimit =
 function buildChatbotRouter(deps) {
   const router = express.Router();
 
+  const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: () => "chatbot:global",
+    store: new BoundedRateLimitStore({ maxEntries: 1 }),
+  });
+
   const limiter = rateLimit({
     windowMs: 60 * 1000,
     max: CHATBOT_RATE_LIMIT_PER_MIN,
     standardHeaders: true,
     legacyHeaders: false,
     /** @param {import('express').Request} req */
-    keyGenerator: (req) => `chatbot:${(req.params && req.params.token) || "anon"}`,
+    keyGenerator: (req) => `chatbot:${hashLimiterCredential(
+      (req.params && req.params.token) || "anon",
+    )}`,
+    store: new BoundedRateLimitStore({ maxEntries: 1024 }),
     /**
      * Plain-text 429 — a JSON blob would land verbatim in chat when a
      * bot forwards the body on non-200s.
@@ -62,6 +76,8 @@ function buildChatbotRouter(deps) {
       res.status(429).send("Rate limited. Try again in a minute.");
     },
   });
+
+  router.use("/chatbot/:token", globalLimiter);
 
   /**
    * Shared GET handler wrapper: plain-text content type, no-store,
@@ -109,5 +125,12 @@ function buildChatbotRouter(deps) {
 }
 
 const CHATBOT_RATE_LIMIT_PER_MIN = 30;
+
+/** @param {unknown} value */
+function hashLimiterCredential(value) {
+  return createHash("sha256")
+    .update(String(value || ""))
+    .digest("base64url");
+}
 
 module.exports = { buildChatbotRouter, CHATBOT_RATE_LIMIT_PER_MIN };

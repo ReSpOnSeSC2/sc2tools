@@ -4,6 +4,13 @@ const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 
 const PHASE_CACHE_TTL_MS = 60 * 1000;
+const PHASE_CACHE_MAX_ENTRIES = 32;
+const PHASE_MAX_CONCURRENT = 1;
+const PHASE_MAX_WAITERS = 8;
+const PHASE_MAX_SUBSCRIBERS = 32;
+const PHASE_RETRY_AFTER_SEC = 2;
+const PHASE_BUSY = Symbol("phase_busy");
+const PHASE_CANCELLED = Symbol("phase_cancelled");
 
 /**
  * /v1/builds, /v1/opp-strategies, /v1/strategies/:name/phases —
@@ -81,11 +88,170 @@ function buildBuildsRouter(deps) {
       phaseCache.delete(key);
       return null;
     }
+    phaseCache.delete(key);
+    phaseCache.set(key, hit);
     return hit.value;
   }
   /** @param {string} key @param {unknown} value */
   function phaseCacheSet(key, value) {
-    phaseCache.set(key, { value, expires: Date.now() + PHASE_CACHE_TTL_MS });
+    const now = Date.now();
+    for (const [cachedKey, entry] of phaseCache) {
+      if (entry.expires <= now) phaseCache.delete(cachedKey);
+    }
+    phaseCache.delete(key);
+    phaseCache.set(key, { value, expires: now + PHASE_CACHE_TTL_MS });
+    while (phaseCache.size > PHASE_CACHE_MAX_ENTRIES) {
+      const oldest = phaseCache.keys().next().value;
+      if (oldest === undefined) break;
+      phaseCache.delete(oldest);
+    }
+  }
+
+  /** @type {Map<string, {controller: AbortController, promise: Promise<any>, subscribers: number, settled: boolean}>} */
+  const phaseInFlight = new Map();
+  let activePhaseComputations = 0;
+  /** @type {Array<{signal: AbortSignal, resolve: (release: (() => void)|null) => void}>} */
+  const phaseWaiters = [];
+
+  /** @param {AbortSignal} signal @returns {Promise<(() => void)|null>} */
+  function acquirePhaseSlot(signal) {
+    if (signal.aborted) return Promise.resolve(null);
+    if (activePhaseComputations < PHASE_MAX_CONCURRENT) {
+      activePhaseComputations += 1;
+      return Promise.resolve(releasePhaseSlot);
+    }
+    if (phaseWaiters.length >= PHASE_MAX_WAITERS) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      /** @type {() => void} */
+      let onAbort = () => {};
+      /** @param {(() => void)|null} release */
+      const finish = (release) => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        resolve(release);
+      };
+      const waiter = { signal, resolve: finish };
+      onAbort = () => {
+        const index = phaseWaiters.indexOf(waiter);
+        if (index >= 0) phaseWaiters.splice(index, 1);
+        finish(null);
+      };
+      phaseWaiters.push(waiter);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
+  }
+
+  function releasePhaseSlot() {
+    activePhaseComputations = Math.max(0, activePhaseComputations - 1);
+    while (phaseWaiters.length > 0) {
+      const waiter = phaseWaiters.shift();
+      if (!waiter || waiter.signal.aborted) continue;
+      activePhaseComputations += 1;
+      waiter.resolve(releasePhaseSlot);
+      break;
+    }
+  }
+
+  /**
+   * Coalesce identical analysis while serialising distinct heavy scans. A
+   * bounded waiter/subscriber count prevents retained HTTP handlers from
+   * becoming a second memory multiplier around an otherwise bounded scan.
+   * @param {string} key
+   * @param {(signal: AbortSignal) => Promise<any>} compute
+   * @param {AbortSignal} subscriberSignal
+   */
+  async function runPhaseComputation(key, compute, subscriberSignal) {
+    if (subscriberSignal.aborted) return PHASE_CANCELLED;
+    let entry = phaseInFlight.get(key);
+    if (entry && entry.controller.signal.aborted && !entry.settled) {
+      if (phaseInFlight.get(key) === entry) phaseInFlight.delete(key);
+      entry = undefined;
+    }
+    if (!entry) {
+      const controller = new AbortController();
+      entry = {
+        controller,
+        promise: Promise.resolve(PHASE_CANCELLED),
+        subscribers: 0,
+        settled: false,
+      };
+      entry.promise = (async () => {
+        const release = await acquirePhaseSlot(controller.signal);
+        if (!release) {
+          return controller.signal.aborted ? PHASE_CANCELLED : PHASE_BUSY;
+        }
+        try {
+          const value = await compute(controller.signal);
+          return controller.signal.aborted ? PHASE_CANCELLED : value;
+        } catch (error) {
+          if (controller.signal.aborted) return PHASE_CANCELLED;
+          throw error;
+        } finally {
+          release();
+        }
+      })();
+      phaseInFlight.set(key, entry);
+      const created = entry;
+      const settle = () => {
+        created.settled = true;
+        if (phaseInFlight.get(key) === created) phaseInFlight.delete(key);
+      };
+      void entry.promise.then(settle, settle);
+    }
+    if (entry.subscribers >= PHASE_MAX_SUBSCRIBERS) return PHASE_BUSY;
+    entry.subscribers += 1;
+    /** @type {() => void} */
+    let onAbort = () => {};
+    const disconnected = new Promise((resolve) => {
+      onAbort = () => resolve(PHASE_CANCELLED);
+      subscriberSignal.addEventListener("abort", onAbort, { once: true });
+      if (subscriberSignal.aborted) onAbort();
+    });
+    try {
+      return await Promise.race([entry.promise, disconnected]);
+    } finally {
+      subscriberSignal.removeEventListener("abort", onAbort);
+      entry.subscribers = Math.max(0, entry.subscribers - 1);
+      if (entry.subscribers === 0 && !entry.settled) entry.controller.abort();
+    }
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function phaseRequestAbort(req, res) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    const close = () => {
+      if (!res.writableEnded) abort();
+    };
+    req.once("aborted", abort);
+    res.once("close", close);
+    return {
+      signal: controller.signal,
+      cleanup() {
+        req.removeListener("aborted", abort);
+        res.removeListener("close", close);
+      },
+    };
+  }
+
+  /** @param {import('express').Response} res @param {AbortSignal} signal @param {any} value */
+  function handlePhaseAdmissionResult(res, signal, value) {
+    if (value === PHASE_BUSY) {
+      res.set("Retry-After", String(PHASE_RETRY_AFTER_SEC));
+      res.status(503).json({ error: { code: "phase_analysis_busy" } });
+      return true;
+    }
+    if (value === PHASE_CANCELLED) {
+      if (!signal.aborted && !res.headersSent) {
+        res.set("Retry-After", String(PHASE_RETRY_AFTER_SEC));
+        res.status(503).json({ error: { code: "phase_analysis_retry" } });
+      }
+      return true;
+    }
+    return false;
   }
 
   router.get("/builds", async (req, res, next) => {
@@ -141,10 +307,13 @@ function buildBuildsRouter(deps) {
   router.get("/strategies/:name/phases", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
-      if (!deps.strategyPhases) {
+      const strategyPhases = deps.strategyPhases;
+      if (!strategyPhases) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
         return;
       }
+      const requestScope = phaseRequestAbort(req, res);
+      try {
       const name = String(req.params.name || "");
       const perspective = req.query && req.query.perspective === "opponent"
         ? "opponent"
@@ -158,7 +327,7 @@ function buildBuildsRouter(deps) {
           ? String(req.query.build)
           : null;
       const filters = parseFilters(req.query);
-      const latest = await deps.strategyPhases.latestGameDateMs(userId);
+      const latest = await strategyPhases.latestGameDateMs(userId);
       const key = phaseCacheKey(
         "strategy",
         userId,
@@ -173,17 +342,26 @@ function buildBuildsRouter(deps) {
         res.json(cached);
         return;
       }
-      const result = await deps.strategyPhases.evaluate(userId, name, {
-        perspective,
-        buildName,
-        filters,
-      });
+      const result = await runPhaseComputation(
+        key,
+        (signal) => strategyPhases.evaluate(userId, name, {
+          perspective,
+          buildName,
+          filters,
+          signal,
+        }),
+        requestScope.signal,
+      );
+      if (handlePhaseAdmissionResult(res, requestScope.signal, result)) return;
       if (!result) {
         res.status(404).json({ error: { code: "strategy_not_found" } });
         return;
       }
       phaseCacheSet(key, result);
       res.json(result);
+      } finally {
+        requestScope.cleanup();
+      }
     } catch (err) {
       next(err);
     }
@@ -204,10 +382,13 @@ function buildBuildsRouter(deps) {
   router.get("/builds/:name/phases", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
-      if (!deps.strategyPhases) {
+      const strategyPhases = deps.strategyPhases;
+      if (!strategyPhases) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
         return;
       }
+      const requestScope = phaseRequestAbort(req, res);
+      try {
       const name = String(req.params.name || "");
       const perspective =
         req.query && req.query.perspective === "opponent"
@@ -222,7 +403,7 @@ function buildBuildsRouter(deps) {
           ? String(req.query.strategy)
           : null;
       const filters = parseFilters(req.query);
-      const latest = await deps.strategyPhases.latestGameDateMs(userId);
+      const latest = await strategyPhases.latestGameDateMs(userId);
       const key = phaseCacheKey(
         "build",
         userId,
@@ -237,17 +418,25 @@ function buildBuildsRouter(deps) {
         res.json(cached);
         return;
       }
-      const result = await deps.strategyPhases.evaluateByBuildName(
-        userId,
-        name,
-        { perspective, strategyName, filters },
+      const result = await runPhaseComputation(
+        key,
+        (signal) => strategyPhases.evaluateByBuildName(
+          userId,
+          name,
+          { perspective, strategyName, filters, signal },
+        ),
+        requestScope.signal,
       );
+      if (handlePhaseAdmissionResult(res, requestScope.signal, result)) return;
       if (!result) {
         res.status(404).json({ error: { code: "build_not_found" } });
         return;
       }
       phaseCacheSet(key, result);
       res.json(result);
+      } finally {
+        requestScope.cleanup();
+      }
     } catch (err) {
       next(err);
     }

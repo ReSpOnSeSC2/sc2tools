@@ -119,6 +119,21 @@ function buildCommunityRouter(deps) {
     }
   });
 
+  router.get(
+    "/community/my-build-stats",
+    deps.auth,
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        const items = await deps.community.listOwnerReplayStats(auth.userId);
+        res.json({ items });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.get("/community/builds/:slug", async (req, res, next) => {
     try {
       const row = await deps.community.getPublic(String(req.params.slug));

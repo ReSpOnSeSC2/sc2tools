@@ -71,8 +71,14 @@ describe("games route session-update scheduler", () => {
     releases.shift()();
 
     await waitFor(() => calls.length === 2);
-    expect(calls[0].opts).toEqual({ refreshCurrentMmr: false });
-    expect(calls[1].opts).toEqual({ refreshCurrentMmr: true });
+    expect(calls[0].opts).toEqual({
+      refreshCurrentMmr: false,
+      reuseRecent: true,
+    });
+    expect(calls[1].opts).toEqual({
+      refreshCurrentMmr: true,
+      reuseRecent: true,
+    });
     expect(maxActive).toBe(1);
     releases.shift()();
     await drain;

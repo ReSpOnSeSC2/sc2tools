@@ -9,6 +9,10 @@ const DAY = "2026-07-18";
 const apiData = new Map<string, unknown>();
 let analysisGames: ArcadeGame[] = [];
 let analysisLoading = true;
+let analysisActive = true;
+let analysisError: { status: number; message: string } | null = null;
+const loadAnalysis = vi.fn();
+const releaseAnalysis = vi.fn();
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => {
@@ -23,9 +27,12 @@ vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({
   useAnalysisGames: () => ({
     items: analysisGames,
     isLoading: analysisLoading,
-    error: null,
+    error: analysisError,
     pagesFetched: analysisLoading ? 0 : 1,
     hitCorpusLimit: false,
+    isActive: analysisActive,
+    load: loadAnalysis,
+    release: releaseAnalysis,
   }),
 }));
 
@@ -43,6 +50,10 @@ beforeEach(() => {
   apiData.clear();
   analysisGames = [];
   analysisLoading = true;
+  analysisActive = true;
+  analysisError = null;
+  loadAnalysis.mockReset();
+  releaseAnalysis.mockReset();
   window.localStorage.clear();
 });
 
@@ -80,13 +91,50 @@ function corpusWithSession(): ArcadeGame[] {
 }
 
 describe("DailyPulse", () => {
-  it("renders nothing while loading or for an empty corpus", () => {
-    const { container } = render(<DailyPulse />);
-    expect(container.innerHTML).toBe("");
+  it("shows compact loading feedback", () => {
+    render(<DailyPulse />);
+    expect(screen.getByText("Loading replay insights…")).toBeTruthy();
+  });
 
+  it("keeps a release control when a loaded corpus has no eligible cards", () => {
     primeGames([]);
-    const { container: c2 } = render(<DailyPulse />);
-    expect(c2.innerHTML).toBe("");
+    render(<DailyPulse />);
+
+    expect(
+      screen.getByText(
+        "No replay insights yet. More games will unlock your daily pulse.",
+      ),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /daily pulse/i }));
+    expect(releaseAnalysis).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText(
+        "No replay insights yet. More games will unlock your daily pulse.",
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps full replay history dormant until Daily Pulse is requested", () => {
+    analysisActive = false;
+    analysisLoading = false;
+    render(<DailyPulse />);
+
+    expect(
+      screen.getByText("Replay insights, loaded when you open them"),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /daily pulse/i }));
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers an in-place retry when corpus loading fails", () => {
+    analysisLoading = false;
+    analysisError = { status: 503, message: "Busy" };
+    render(<DailyPulse />);
+
+    expect(screen.getByText("Replay insights couldn’t load")).toBeTruthy();
+    fireEvent.click(screen.getByText("Try again"));
+    expect(loadAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it("renders the day's cards from real games", () => {
@@ -114,6 +162,7 @@ describe("DailyPulse", () => {
     fireEvent.click(screen.getByText("Daily Pulse"));
     expect(screen.queryByText("You banked a winning session")).toBeNull();
     expect(window.localStorage.getItem("analyzer.pulse.collapsed")).toBe("1");
+    expect(releaseAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it("uses the verified current pool only for Queue Thought map advice", () => {

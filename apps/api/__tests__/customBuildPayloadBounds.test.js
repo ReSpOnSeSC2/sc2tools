@@ -1,0 +1,271 @@
+// @ts-nocheck
+"use strict";
+/* eslint-disable max-lines-per-function */
+
+const {
+  validateCustomBuild,
+  SIGNATURE_MAX_ITEMS,
+  LEGACY_STEPS_MAX_ITEMS,
+} = require("../src/validation/customBuild");
+const {
+  publicBuildSnapshot,
+  publicBuildMongoLeafProjection,
+  publicBuildMongoExpression,
+} = require("../src/services/communityBuildSnapshot");
+const {
+  CustomBuildsService,
+  CUSTOM_BUILD_ACTIVE_LIMIT,
+} = require("../src/services/customBuilds");
+const { CommunityService } = require("../src/services/community");
+
+const minimalBuild = (extra = {}) => ({
+  slug: "bounded-build",
+  name: "Bounded build",
+  race: "Protoss",
+  ...extra,
+});
+
+describe("custom/community build payload bounds", () => {
+  test("validation drops giant unknown fields before persistence", () => {
+    const giant = "private-giant".repeat(400_000);
+    const result = validateCustomBuild(minimalBuild({
+      unknownTopLevel: { giant },
+      signature: [{
+        unit: "Probe",
+        count: 1,
+        beforeSec: 17,
+        unknownNested: giant,
+      }],
+      rules: [{
+        type: "before",
+        name: "BuildPylon",
+        time_lt: 60,
+        unknownNested: giant,
+      }],
+      steps: [{
+        supply: 14,
+        time: "0:18",
+        action: "Pylon",
+        unknownNested: giant,
+      }],
+    }));
+
+    expect(result.valid).toBe(true);
+    if (!result.valid) throw new Error("expected valid build");
+    expect(result.value).not.toHaveProperty("unknownTopLevel");
+    expect(result.value.signature).toEqual([
+      { unit: "Probe", count: 1, beforeSec: 17 },
+    ]);
+    expect(result.value.rules).toEqual([
+      { type: "before", name: "BuildPylon", time_lt: 60 },
+    ]);
+    expect(result.value.steps).toEqual([
+      { supply: 14, time: "0:18", action: "Pylon" },
+    ]);
+  });
+
+  test("validation preserves bounded legacy steps and rejects oversized arrays", () => {
+    const legacy = validateCustomBuild(minimalBuild({
+      matchup: "PvT",
+      steps: [{ supply: null, time: 18, action: "Pylon" }],
+    }));
+    expect(legacy).toEqual(expect.objectContaining({ valid: true }));
+
+    const tooManySignatures = validateCustomBuild(minimalBuild({
+      signature: Array.from(
+        { length: SIGNATURE_MAX_ITEMS + 1 },
+        () => ({ unit: "Probe", count: 1, beforeSec: 17 }),
+      ),
+    }));
+    expect(tooManySignatures.valid).toBe(false);
+
+    const tooManySteps = validateCustomBuild(minimalBuild({
+      steps: Array.from(
+        { length: LEGACY_STEPS_MAX_ITEMS + 1 },
+        () => ({ action: "Probe" }),
+      ),
+    }));
+    expect(tooManySteps.valid).toBe(false);
+  });
+
+  test("public snapshots are bounded deep copies of safe leaves", () => {
+    const giant = "x".repeat(5 * 1024 * 1024);
+    const input = {
+      name: giant,
+      race: "Protoss",
+      description: giant,
+      privateNote: giant,
+      signature: Array.from(
+        { length: SIGNATURE_MAX_ITEMS + 10 },
+        (_, index) => ({
+          unit: index === 0 ? giant : "Probe",
+          count: 1,
+          beforeSec: 17,
+          giant,
+        }),
+      ),
+      steps: Array.from(
+        { length: LEGACY_STEPS_MAX_ITEMS + 10 },
+        () => ({ action: giant, secret: giant }),
+      ),
+    };
+
+    const snapshot = publicBuildSnapshot(input);
+    expect(snapshot.name).toHaveLength(120);
+    expect(snapshot.description).toHaveLength(4000);
+    expect(snapshot.signature).toHaveLength(SIGNATURE_MAX_ITEMS);
+    expect(snapshot.signature[0]).toEqual({
+      unit: expect.stringMatching(/^x{80}$/),
+      count: 1,
+      beforeSec: 17,
+    });
+    expect(snapshot.steps).toHaveLength(LEGACY_STEPS_MAX_ITEMS);
+    expect(snapshot.steps[0].action).toHaveLength(280);
+    expect(snapshot).not.toHaveProperty("privateNote");
+    expect(snapshot.signature[0]).not.toBe(input.signature[0]);
+    expect(snapshot.steps[0]).not.toBe(input.steps[0]);
+  });
+
+  test("Mongo public projections never request the whole nested build", () => {
+    const projection = publicBuildMongoLeafProjection("build");
+    expect(projection).not.toHaveProperty("build");
+    expect(projection).toEqual(expect.objectContaining({
+      "build.signature.unit": 1,
+      "build.rules.name": 1,
+      "build.steps.action": 1,
+    }));
+
+    const expression = publicBuildMongoExpression("$build");
+    expect(expression.signature).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(expression.steps).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(expression).not.toBe("$build");
+  });
+
+  test("private list and classifier bound arrays in Mongo plus a hard limit", async () => {
+    const pipelines = [];
+    const cursor = {
+      toArray: jest.fn(async () => []),
+    };
+    const aggregate = jest.fn((pipeline) => {
+      pipelines.push(pipeline);
+      return cursor;
+    });
+    const service = new CustomBuildsService(
+      { customBuilds: { aggregate }, customBuildJobs: {} },
+    );
+
+    await service.list("bounded-user");
+    await service._listForClassification("bounded-user");
+
+    expect(pipelines[0]).toContainEqual({ $limit: CUSTOM_BUILD_ACTIVE_LIMIT });
+    expect(pipelines[1]).toContainEqual({
+      $limit: CUSTOM_BUILD_ACTIVE_LIMIT + 1,
+    });
+    const listProjection = pipelines[0].find((stage) => stage.$project).$project;
+    const classifierProjection = pipelines[1]
+      .find((stage) => stage.$project).$project;
+    expect(listProjection.signature).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(listProjection.steps).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(listProjection.notes).toEqual(expect.objectContaining({
+      $cond: expect.any(Array),
+    }));
+    expect(classifierProjection.rules).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(classifierProjection).not.toHaveProperty("steps");
+  });
+
+  test("new builds stop at the active quota while existing builds remain editable", async () => {
+    const customBuilds = {
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ _id: "existing" }),
+      countDocuments: jest.fn(async () => CUSTOM_BUILD_ACTIVE_LIMIT),
+      updateOne: jest.fn(async () => ({ acknowledged: true })),
+    };
+    const service = new CustomBuildsService({ customBuilds, customBuildJobs: {} });
+
+    await expect(service.upsert("quota-user", minimalBuild()))
+      .rejects.toMatchObject({
+        message: expect.stringContaining("100 active custom builds"),
+        status: 409,
+        code: "custom_build_limit_reached",
+      });
+    expect(customBuilds.updateOne).not.toHaveBeenCalled();
+
+    await expect(service.upsert("quota-user", minimalBuild()))
+      .resolves.toBeUndefined();
+    expect(customBuilds.updateOne).toHaveBeenCalledTimes(1);
+  });
+
+  test("serializes concurrent creates so the active quota cannot be overrun", async () => {
+    const slugs = new Set(Array.from(
+      { length: CUSTOM_BUILD_ACTIVE_LIMIT - 1 },
+      (_, index) => `existing-${index}`,
+    ));
+    const customBuilds = {
+      findOne: jest.fn(async ({ slug }) => slugs.has(slug) ? { _id: slug } : null),
+      countDocuments: jest.fn(async () => slugs.size),
+      updateOne: jest.fn(async ({ slug }) => {
+        await new Promise((resolve) => setImmediate(resolve));
+        slugs.add(slug);
+        return { acknowledged: true };
+      }),
+    };
+    const service = new CustomBuildsService({ customBuilds, customBuildJobs: {} });
+
+    const outcomes = await Promise.allSettled([
+      service.upsert("quota-user", minimalBuild({ slug: "create-a" })),
+      service.upsert("quota-user", minimalBuild({ slug: "create-b" })),
+    ]);
+
+    expect(outcomes.filter((row) => row.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((row) => row.status === "rejected")).toHaveLength(1);
+    expect(slugs.size).toBe(CUSTOM_BUILD_ACTIVE_LIMIT);
+    expect(customBuilds.updateOne).toHaveBeenCalledTimes(1);
+  });
+
+  test("community list requests nested leaves and sanitizes legacy rows", async () => {
+    let projection;
+    const cursor = {
+      toArray: jest.fn(async () => [{
+        slug: "public-build",
+        title: "Public build",
+        build: {
+          name: "Safe",
+          signature: [{ unit: "Probe", count: 1, beforeSec: 17, secret: "x" }],
+          secret: "x",
+        },
+      }]),
+    };
+    const service = new CommunityService({
+      communityBuilds: {
+        aggregate: jest.fn((pipeline) => {
+          projection = pipeline.find((stage) => stage.$project).$project;
+          return cursor;
+        }),
+        countDocuments: jest.fn(async () => 1),
+      },
+    });
+
+    const result = await service.listPublic();
+    expect(projection.build).not.toBe(1);
+    expect(projection.build).not.toBe("$build");
+    expect(projection.build.signature).toEqual(expect.objectContaining({
+      $map: expect.any(Object),
+    }));
+    expect(result.items[0].build).toEqual({
+      name: "Safe",
+      signature: [{ unit: "Probe", count: 1, beforeSec: 17 }],
+    });
+  });
+});

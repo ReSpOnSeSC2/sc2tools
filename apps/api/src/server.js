@@ -14,6 +14,10 @@ const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
+const {
+  RuntimeCapacityRegistry,
+  buildRuntimeCapacityMonitor,
+} = require("./services/runtimeCapacity");
 const { buildPulseBackfillJob } = require("./jobs/pulseBackfillJob");
 const {
   buildOpponentMmrEnrichmentJob,
@@ -72,6 +76,7 @@ async function main() {
     },
   });
 
+  const runtimeCapacityRegistry = new RuntimeCapacityRegistry();
   const { app, services, adminClerkIds } = /** @type {{
     app: import('express').Express,
     services: {
@@ -81,7 +86,13 @@ async function main() {
       [k: string]: unknown,
     },
     adminClerkIds: Set<string>,
-  }} */ (buildApp({ db, logger, config, io }));
+  }} */ (buildApp({
+    db,
+    logger,
+    config,
+    io,
+    runtimeCapacityRegistry,
+  }));
   httpServer.on("request", app);
   // Admin allowlist shared by the REST gate (built inside buildApp
   // from SC2TOOLS_ADMIN_USER_IDS) and the socket layer below —
@@ -120,7 +131,7 @@ async function main() {
     resolveClerkUser: (clerkUserId) =>
       /** @type {any} */ (services).users.ensureFromClerk(clerkUserId),
     resolveSession: (userId, timezone) =>
-      services.games.todaySession(userId, timezone),
+      services.games.todaySession(userId, timezone, { reuseRecent: true }),
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>
@@ -164,8 +175,14 @@ async function main() {
     logger.error({ err }, "custom_build_reclassify_recovery_failed");
   }
 
+  const runtimeCapacity = buildRuntimeCapacityMonitor({
+    logger,
+    io,
+    registry: runtimeCapacityRegistry,
+  });
   httpServer.listen(config.port, () => {
     logger.info({ port: config.port }, "listening");
+    runtimeCapacity.start();
   });
 
   // Keep-alive heartbeat. Runs only when KEEPALIVE_TARGETS is configured —
@@ -269,6 +286,7 @@ async function main() {
   /** @param {string} signal */
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
+    runtimeCapacity.stop();
     // True drain, in order: stop accepting connections, let in-flight
     // requests finish, THEN close Mongo — the old fire-and-forget
     // close() left handlers mid-query when the client shut down. Long-

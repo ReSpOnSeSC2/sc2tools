@@ -1,8 +1,12 @@
 "use strict";
 
-const { computeCompositions } = require("./buildCompositions");
+const {
+  computeCompositions,
+  prepareCompositionGame,
+} = require("./buildCompositions");
 
-const STATS_GAME_SCAN_CAP = 1000;
+const PHASE_GAME_SAMPLE_LIMIT = 100;
+const PHASE_METADATA_PAGE_SIZE = 25;
 
 /**
  * StrategyPhasesService — phase-aware aggregator keyed by the
@@ -49,6 +53,60 @@ class StrategyPhasesService {
   }
 
   /**
+   * Cursor through matching replays while retaining only a compact prepared
+   * phase record. The legacy bulk helper is intentionally not a fallback:
+   * one replay detail may approach the request-size ceiling, so an array of
+   * hundreds of hydrated rows is not a valid memory bound.
+   *
+   * @param {string} userId
+   * @param {{
+   *   perspective: "you"|"opponent",
+   *   filters?: object,
+   *   match: Record<string, unknown>,
+   *   predicate: (game: any) => boolean,
+   *   signal?: AbortSignal,
+   * }} opts
+   * @returns {Promise<{games: Record<string, any>[], truncated: boolean}>}
+   * @private
+   */
+  async _preparedCohort(userId, opts) {
+    if (
+      !this.perGame
+      || typeof this.perGame.iterateRulePreviewPages !== "function"
+    ) {
+      throw new Error("perGame_unavailable");
+    }
+    /** @type {Record<string, any>[]} */
+    const games = [];
+    for await (const page of this.perGame.iterateRulePreviewPages(userId, {
+      limit: PHASE_GAME_SAMPLE_LIMIT + 1,
+      pageSize: PHASE_METADATA_PAGE_SIZE,
+      perspective: opts.perspective,
+      includeMacroBreakdown: true,
+      filters: opts.filters,
+      match: opts.match,
+      signal: opts.signal,
+      metadataFilter: opts.predicate,
+    })) {
+      if (opts.signal?.aborted) break;
+      for (const game of page.games) {
+        // Production applies this predicate before detail hydration; repeat it
+        // here defensively for test doubles and future iterator changes.
+        if (!opts.predicate(game)) continue;
+        if (games.length >= PHASE_GAME_SAMPLE_LIMIT) {
+          return { games, truncated: true };
+        }
+        games.push({
+          gameId: game.gameId || null,
+          result: game.result || null,
+          _phasePrepared: prepareCompositionGame(game, opts.perspective),
+        });
+      }
+    }
+    return { games, truncated: false };
+  }
+
+  /**
    * Run the phase-aware composition pipeline against every game where
    * the opponent ran ``strategyName``. Returns null when the strategy
    * has zero matches in the user's recent window so the route layer
@@ -76,7 +134,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} strategyName
-   * @param {{ perspective?: "you"|"opponent", buildName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
+   * @param {{ perspective?: "you"|"opponent", buildName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -87,6 +145,8 @@ class StrategyPhasesService {
    *   medianCrossings: {earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null},
    *   durationP95Sec: number,
    *   flags: string[],
+   *   sampleLimit: number,
+   *   sampleTruncated: boolean,
    * }>}
    */
   async evaluate(userId, strategyName, opts = {}) {
@@ -106,24 +166,29 @@ class StrategyPhasesService {
     /** @type {Record<string, any>} */
     const match = { "opponent.strategy": strategyName };
     if (buildName) match.myBuild = buildName;
-    const games = await this.perGame.listForRulePreview(userId, {
-      limit: STATS_GAME_SCAN_CAP,
-      includeMacroBreakdown: true,
+    const predicate = /** @param {any} g */ (g) => {
+      const s = g && g.opponent && g.opponent.strategy;
+      if (s !== strategyName) return false;
+      if (buildName && g.myBuild !== buildName) return false;
+      return true;
+    };
+    const cohort = await this._preparedCohort(userId, {
+      perspective,
       filters: opts && opts.filters,
       match,
+      predicate,
+      signal: opts.signal,
     });
     // Defensive in-memory filter — keeps the service correct against
     // a perGame implementation that ignores ``match`` (test mocks
     // historically returned every game). In production the Mongo find
     // has already done this work, so the filter is a no-op.
-    const matched = games.filter((g) => {
-      const s = g && g.opponent && g.opponent.strategy;
-      if (s !== strategyName) return false;
-      if (buildName && g.myBuild !== buildName) return false;
-      return true;
-    });
+    const matched = cohort.games;
     if (matched.length === 0) return null;
     const comps = computeCompositions(matched, { perspective });
+    if (cohort.truncated && !comps.flags.includes("sample_truncated")) {
+      comps.flags.push("sample_truncated");
+    }
     return {
       name: strategyName,
       total: matched.length,
@@ -134,6 +199,8 @@ class StrategyPhasesService {
       medianCrossings: comps.medianCrossings,
       durationP95Sec: comps.durationP95Sec,
       flags: comps.flags,
+      sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
+      sampleTruncated: cohort.truncated,
     };
   }
 
@@ -158,7 +225,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} buildName
-   * @param {{ perspective?: "you"|"opponent", strategyName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters> }} [opts]
+   * @param {{ perspective?: "you"|"opponent", strategyName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -169,6 +236,8 @@ class StrategyPhasesService {
    *   medianCrossings: {earlyMidAt: number|null, midAt: number|null, midLateAt: number|null, lateAt: number|null},
    *   durationP95Sec: number,
    *   flags: string[],
+   *   sampleLimit: number,
+   *   sampleTruncated: boolean,
    * }>}
    */
   async evaluateByBuildName(userId, buildName, opts = {}) {
@@ -188,23 +257,28 @@ class StrategyPhasesService {
     /** @type {Record<string, any>} */
     const match = { myBuild: buildName };
     if (strategyName) match["opponent.strategy"] = strategyName;
-    const games = await this.perGame.listForRulePreview(userId, {
-      limit: STATS_GAME_SCAN_CAP,
-      includeMacroBreakdown: true,
-      filters: opts && opts.filters,
-      match,
-    });
-    // Defensive in-memory filter — see ``evaluate`` for the rationale.
-    const matched = games.filter((g) => {
+    const predicate = /** @param {any} g */ (g) => {
       if (!g || g.myBuild !== buildName) return false;
       if (strategyName) {
         const s = g.opponent && g.opponent.strategy;
         if (s !== strategyName) return false;
       }
       return true;
+    };
+    const cohort = await this._preparedCohort(userId, {
+      perspective,
+      filters: opts && opts.filters,
+      match,
+      predicate,
+      signal: opts.signal,
     });
+    // Defensive in-memory filter — see ``evaluate`` for the rationale.
+    const matched = cohort.games;
     if (matched.length === 0) return null;
     const comps = computeCompositions(matched, { perspective });
+    if (cohort.truncated && !comps.flags.includes("sample_truncated")) {
+      comps.flags.push("sample_truncated");
+    }
     return {
       name: buildName,
       total: matched.length,
@@ -215,6 +289,8 @@ class StrategyPhasesService {
       medianCrossings: comps.medianCrossings,
       durationP95Sec: comps.durationP95Sec,
       flags: comps.flags,
+      sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
+      sampleTruncated: cohort.truncated,
     };
   }
 

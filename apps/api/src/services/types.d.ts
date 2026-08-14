@@ -177,11 +177,15 @@ export interface GamesService {
   ): Promise<{ items: object[]; nextBefore: Date | null }>;
   listAnalysisCorpus(
     userId: string,
-    opts?: { limit?: number; cursor?: string },
+    opts?: { limit?: number; cursor?: string; signal?: AbortSignal },
   ): Promise<{ items: object[]; nextCursor: string | null }>;
   get(userId: string, gameId: string): Promise<object | null>;
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
+  upsertWithRevision?(
+    userId: string,
+    game: object & { gameId: string },
+  ): Promise<{ created: boolean; customBuildRevision: string }>;
   quarantineResumedReplay(
     userId: string,
     game: object & {
@@ -213,7 +217,7 @@ export interface GamesService {
   todaySession(
     userId: string,
     timezone?: string,
-    opts?: { refreshCurrentMmr?: boolean },
+    opts?: { refreshCurrentMmr?: boolean; reuseRecent?: boolean },
   ): Promise<{
     wins: number;
     losses: number;
@@ -330,6 +334,11 @@ export interface ReclassifyQueueResult {
 
 export interface CustomBuildsService {
   list(userId: string): Promise<object[]>;
+  libraryMeta(userId: string): Promise<{
+    total: number;
+    limit: number;
+    truncated: boolean;
+  }>;
   get(userId: string, slug: string): Promise<object | null>;
   upsert(userId: string, build: object & { slug: string }): Promise<void>;
   softDelete(userId: string, slug: string): Promise<void>;
@@ -454,6 +463,7 @@ export interface CustomBuildsService {
       oppBuildLog?: string[];
       opponent?: { race?: string | null } | null;
     },
+    opts?: { expectedRevision?: string | null },
   ): Promise<
     | null
     | { gameId: string; matched: number; chosen: string | null; ruleCount: number }
@@ -724,6 +734,7 @@ export interface StrategyPhasesService {
        * restricts the game cohort the phases are computed over.
        */
       filters?: object;
+      signal?: AbortSignal;
     },
   ): Promise<null | {
     name: string;
@@ -740,6 +751,8 @@ export interface StrategyPhasesService {
     };
     durationP95Sec: number;
     flags: string[];
+    sampleLimit: number;
+    sampleTruncated: boolean;
   }>;
   evaluateByBuildName(
     userId: string,
@@ -758,6 +771,7 @@ export interface StrategyPhasesService {
        * restricts the game cohort the phases are computed over.
        */
       filters?: object;
+      signal?: AbortSignal;
     },
   ): Promise<null | {
     name: string;
@@ -774,6 +788,8 @@ export interface StrategyPhasesService {
     };
     durationP95Sec: number;
     flags: string[];
+    sampleLimit: number;
+    sampleTruncated: boolean;
   }>;
   latestGameDateMs(userId: string): Promise<number>;
 }

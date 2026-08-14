@@ -268,8 +268,14 @@ describe("services/strategyPhases", () => {
    */
   function makeService(listedGames) {
     const perGame = {
-      async listForRulePreview(_userId, _opts) {
-        return listedGames;
+      async *iterateRulePreviewPages(_userId, _opts) {
+        for (let i = 0; i < listedGames.length; i += 1) {
+          yield {
+            games: [listedGames[i]],
+            candidates: i === 0 ? listedGames.length : 0,
+            hasMore: i < listedGames.length - 1,
+          };
+        }
       },
     };
     return new StrategyPhasesService({}, { perGame });
@@ -379,16 +385,16 @@ describe("services/strategyPhases", () => {
       {},
       {
         perGame: {
-          async listForRulePreview(_userId, opts) {
+          async *iterateRulePreviewPages(_userId, opts) {
             capturedOpts = opts;
-            return makeStrategyGames([
+            yield { games: makeStrategyGames([
               {
                 gameId: "g-x",
                 result: "Victory",
                 strategy: "Zerg - Mass Ling",
                 myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
               },
-            ]);
+            ]), candidates: 1, hasMore: false };
           },
         },
       },
@@ -411,9 +417,9 @@ describe("services/strategyPhases", () => {
       {},
       {
         perGame: {
-          async listForRulePreview(_userId, opts) {
+          async *iterateRulePreviewPages(_userId, opts) {
             capturedOpts = opts;
-            return makeStrategyGames([
+            yield { games: makeStrategyGames([
               {
                 gameId: "g-y",
                 result: "Victory",
@@ -421,7 +427,7 @@ describe("services/strategyPhases", () => {
                 myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
                 myBuild: "PvZ - 3 Stargate Phoenix",
               },
-            ]);
+            ]), candidates: 1, hasMore: false };
           },
         },
       },
@@ -696,16 +702,16 @@ describe("services/strategyPhases", () => {
   test("evaluate pushes opponent.strategy into the perGame match filter", async () => {
     let captured = null;
     const perGame = {
-      async listForRulePreview(_userId, opts) {
+      async *iterateRulePreviewPages(_userId, opts) {
         captured = opts || {};
-        return makeStrategyGames([
+        yield { games: makeStrategyGames([
           {
             gameId: "g-mass-ling-1",
             result: "Victory",
             strategy: "Zerg - Mass Ling",
             myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
           },
-        ]);
+        ]), candidates: 1, hasMore: false };
       },
     };
     const svc = new StrategyPhasesService({}, { perGame });
@@ -721,9 +727,9 @@ describe("services/strategyPhases", () => {
   test("evaluate adds myBuild to the match filter when buildName is provided", async () => {
     let captured = null;
     const perGame = {
-      async listForRulePreview(_userId, opts) {
+      async *iterateRulePreviewPages(_userId, opts) {
         captured = opts || {};
-        return makeStrategyGames([
+        yield { games: makeStrategyGames([
           {
             gameId: "g-stargate-mass-ling",
             result: "Victory",
@@ -731,7 +737,7 @@ describe("services/strategyPhases", () => {
             myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
             myBuild: "PvZ - 3 Stargate Phoenix",
           },
-        ]);
+        ]), candidates: 1, hasMore: false };
       },
     };
     const svc = new StrategyPhasesService({}, { perGame });
@@ -747,9 +753,9 @@ describe("services/strategyPhases", () => {
   test("evaluateByBuildName pushes myBuild (and strategy when supplied) into the match filter", async () => {
     let captured = null;
     const perGame = {
-      async listForRulePreview(_userId, opts) {
+      async *iterateRulePreviewPages(_userId, opts) {
         captured = opts || {};
-        return makeStrategyGames([
+        yield { games: makeStrategyGames([
           {
             gameId: "g-stargate-mass-ling",
             result: "Victory",
@@ -757,7 +763,7 @@ describe("services/strategyPhases", () => {
             myUnitsAtMid: { Phoenix: 5, Stalker: 3, Probe: 60 },
             myBuild: "PvZ - 3 Stargate Phoenix",
           },
-        ]);
+        ]), candidates: 1, hasMore: false };
       },
     };
     const svc = new StrategyPhasesService({}, { perGame });
@@ -771,6 +777,46 @@ describe("services/strategyPhases", () => {
     expect(captured.match).toEqual({
       myBuild: "PvZ - 3 Stargate Phoenix",
       "opponent.strategy": "Zerg - Mass Ling",
+    });
+  });
+
+  test("phase cohorts stream one replay at a time and stop at the compact sample cap", async () => {
+    const template = makeStrategyGames([{
+      gameId: "phase-template",
+      result: "Victory",
+      strategy: "Zerg - Mass Ling",
+      myUnitsAtMid: { Stalker: 4, Phoenix: 3, Probe: 60 },
+    }])[0];
+    let yielded = 0;
+    let captured = null;
+    const perGame = {
+      async *iterateRulePreviewPages(_userId, opts) {
+        captured = opts;
+        for (let i = 0; i < 101; i += 1) {
+          yielded += 1;
+          yield {
+            games: [{ ...template, gameId: `phase-${i}` }],
+            candidates: i === 0 ? 101 : 0,
+            hasMore: i < 100,
+          };
+        }
+      },
+    };
+    const out = await new StrategyPhasesService({}, { perGame }).evaluate(
+      "u1",
+      "Zerg - Mass Ling",
+    );
+    expect(out.total).toBe(100);
+    expect(out.sampleLimit).toBe(100);
+    expect(out.sampleTruncated).toBe(true);
+    expect(out.flags).toContain("sample_truncated");
+    expect(yielded).toBe(101);
+    expect(captured).toMatchObject({
+      limit: 101,
+      pageSize: 25,
+      perspective: "you",
+      includeMacroBreakdown: true,
+      match: { "opponent.strategy": "Zerg - Mass Ling" },
     });
   });
 });

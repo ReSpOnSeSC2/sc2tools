@@ -19,6 +19,7 @@ const {
   buildReplayIngestAdmission,
 } = require("./middleware/replayIngestAdmission");
 const { captureClerkWebhookRawBody } = require("./middleware/jsonBody");
+const { sanitiseRequestForLog } = require("./middleware/requestLogging");
 
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
@@ -133,7 +134,29 @@ const {
   buildMeLiveRouter,
 } = require("./routes/agentLive");
 
-const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
+const REPLAY_JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
+const DEFAULT_JSON_LIMIT = "256kb";
+
+/**
+ * Large authenticated JSON writes share the replay admission lane. The sound
+ * uploader needs ~400 KiB of base64 JSON for its documented 300 KiB file cap,
+ * while agent detail writebacks can legitimately approach the replay limit.
+ * Keeping this allowlist narrow avoids restoring a global unauthenticated
+ * multi-megabyte parser.
+ * @param {import('express').Request} req
+ */
+function isLargeAuthenticatedJson(req) {
+  if (req.method !== "POST") return false;
+  const path = String(req.originalUrl || req.url || "")
+    .split("?", 1)[0]
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  if (path === "/v1/games" || path === "/games") return true;
+  if (path === "/v1/me/multichat-sounds" || path === "/me/multichat-sounds") {
+    return true;
+  }
+  return /^\/(?:v1\/)?games\/[^/]+\/(?:apm-curve|macro-breakdown|opp-build-order)$/.test(path);
+}
 
 /**
  * ``maxUserMessagesPerWindow`` is a test-injected override for the
@@ -152,6 +175,7 @@ const JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
  *   pulseMmr?: import('./services/pulseMmr').PulseMmrService,
  *   pulseIntel?: import('./services/pulseOpponentIntel').PulseOpponentIntelService,
  *   pulseLinks?: import('./services/pulseCharacterLinks').PulseCharacterLinkService,
+ *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} AppDeps
  */
 
@@ -174,6 +198,7 @@ function buildApp(deps) {
   // skip duplicate registrations.
   loadAllMigrations();
   const services = makeServices(deps);
+  registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
   const clerk = deps.config.clerkSecretKey
     ? buildClerkClient({
         secretKey: deps.config.clerkSecretKey,
@@ -183,13 +208,20 @@ function buildApp(deps) {
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  applyBaseMiddleware(app, deps);
+  const auth = buildAuth({
+    secretKey: deps.config.clerkSecretKey,
+    issuer: deps.config.clerkJwtIssuer,
+    audience: deps.config.clerkJwtAudience,
+    getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
+    ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
+  });
+  applyBaseMiddleware(app, deps, auth);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
   // the boot sequence also merges persisted DB admins into it.
   const adminClerkIds = new Set(deps.config.adminUserIds || []);
-  mountRoutes(app, deps, services, clerk, adminClerkIds);
+  mountRoutes(app, deps, services, clerk, adminClerkIds, auth);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
 }
@@ -609,8 +641,9 @@ function makeServices(deps) {
 /**
  * @param {import('express').Express} app
  * @param {AppDeps} deps
+ * @param {import('express').RequestHandler} auth
  */
-function applyBaseMiddleware(app, deps) {
+function applyBaseMiddleware(app, deps, auth) {
   app.use(helmet());
   app.use(
     cors({
@@ -623,6 +656,11 @@ function applyBaseMiddleware(app, deps) {
     pinoHttp({
       logger: deps.logger,
       customProps: () => ({ service: SERVICE.NAME }),
+      // Work with the raw IncomingMessage and emit a small, fail-closed
+      // header allowlist. Bearer/device credentials and path-carried overlay
+      // tokens must never be copied into Render logs.
+      wrapSerializers: false,
+      serializers: { req: sanitiseRequestForLog },
     }),
   );
   app.use(requestId);
@@ -636,6 +674,17 @@ function applyBaseMiddleware(app, deps) {
       legacyHeaders: false,
     }),
   );
+  // Verify the real credential before a replay body can occupy the sole
+  // pre-parser admission slot. A fake Bearer can no longer slow-stream for
+  // the body timeout and deny every paired agent. The games router verifies
+  // again after parsing, keeping this early gate independent of route state.
+  app.use((req, res, next) => {
+    if (!isLargeAuthenticatedJson(req)) {
+      next();
+      return;
+    }
+    auth(req, res, next);
+  });
   // Admit memory-heavy replay ingestion BEFORE parsing its multi-megabyte
   // JSON body. Excess batches get a retryable 503 and are durably requeued by
   // the agent instead of waiting here with parsed payloads retained in RAM.
@@ -643,18 +692,67 @@ function applyBaseMiddleware(app, deps) {
     buildReplayIngestAdmission({
       maxActive: deps.config.replayIngestMaxActive,
       maxBodyBytes: LIMITS.REQUEST_BODY_BYTES,
+      matchRequest: isLargeAuthenticatedJson,
       logger: deps.logger,
     }),
   );
-  // Stash exact raw bytes only for the Clerk webhook's Svix signature.
-  // Replay ingest never needs them; retaining a multi-megabyte raw Buffer
-  // beside its parsed body for the full R2 transaction wastes memory.
-  app.use(
-    express.json({
-      limit: JSON_LIMIT,
-      verify: captureClerkWebhookRawBody,
-    }),
-  );
+  // Only the authenticated, one-at-a-time replay route may parse a 5 MiB
+  // body. Every ordinary endpoint gets a much smaller ceiling; otherwise an
+  // unauthenticated client could open many parallel 5 MiB JSON requests to an
+  // unrelated route and fill the V8 heap before route auth ever ran.
+  const replayJson = express.json({ limit: REPLAY_JSON_LIMIT });
+  const ordinaryJson = express.json({
+    limit: DEFAULT_JSON_LIMIT,
+    verify: captureClerkWebhookRawBody,
+  });
+  app.use((req, res, next) => {
+    const parser = isLargeAuthenticatedJson(req) ? replayJson : ordinaryJson;
+    parser(req, res, next);
+  });
+}
+
+/**
+ * Register only synchronous, identifier-free occupancy readers. Keeping the
+ * adapters here lets services use gate-specific method names without widening
+ * their public response contracts.
+ *
+ * @param {import('./services/runtimeCapacity').RuntimeCapacityRegistry | undefined} registry
+ * @param {Record<string, any>} services
+ */
+function registerRuntimeCapacityProviders(registry, services) {
+  if (!registry) return;
+  const providers = {
+    pulse: services.pulseMmr?.capacitySnapshot
+      ? () => services.pulseMmr.capacitySnapshot()
+      : null,
+    session: services.games?.capacitySnapshot
+      ? () => services.games.capacitySnapshot()
+      : null,
+    customReclassification: services.customBuilds?.capacitySnapshot
+      ? () => services.customBuilds.capacitySnapshot()
+      : null,
+    overlayTokens: services.overlayTokens?.capacitySnapshot
+      ? () => services.overlayTokens.capacitySnapshot()
+      : null,
+    multichatViewers: services.multichatViewers?.capacitySnapshot
+      ? () => services.multichatViewers.capacitySnapshot()
+      : null,
+    opponentProfiles: services.opponents?.profileAnalysisCapacitySnapshot
+      ? () => services.opponents.profileAnalysisCapacitySnapshot()
+      : null,
+    overlayEnrichment: services.overlayLive?.enrichmentCapacitySnapshot
+      ? () => services.overlayLive.enrichmentCapacitySnapshot()
+      : null,
+    gameDetailsHeavyIo: services.gameDetails?.bulkReadCapacitySnapshot
+      ? () => services.gameDetails.bulkReadCapacitySnapshot()
+      : null,
+    mlTraining: services.ml?.trainingCapacitySnapshot
+      ? () => services.ml.trainingCapacitySnapshot()
+      : null,
+  };
+  for (const [name, provider] of Object.entries(providers)) {
+    if (provider) registry.register(name, provider);
+  }
 }
 
 /**
@@ -663,15 +761,9 @@ function applyBaseMiddleware(app, deps) {
  * @param {ReturnType<typeof makeServices>} services
  * @param {import('./services/clerkClient').ClerkClient} clerk
  * @param {Set<string>} adminClerkIds live admin set — see buildApp docs.
+ * @param {import('express').RequestHandler} auth
  */
-function mountRoutes(app, deps, services, clerk, adminClerkIds) {
-  const auth = buildAuth({
-    secretKey: deps.config.clerkSecretKey,
-    issuer: deps.config.clerkJwtIssuer,
-    audience: deps.config.clerkJwtAudience,
-    getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
-    ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
-  });
+function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
 
   // Public routers (no `router.use(auth)` — public endpoints OR per-route
   // auth) MUST mount before any auth-using router. Express runs every
@@ -837,6 +929,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       customBuilds: services.customBuilds,
       buildsList: (userId) => services.builds.list(userId, {}),
       tickerFacts: services.tickerFacts,
+      runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
     }),
   );
   // Operational admin router — gated on isAdmin(req) inside the
@@ -945,6 +1038,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds) {
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       auth,
+      runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
     }),
   );
   app.use(
@@ -1060,4 +1154,8 @@ function pickCorsOrigin(allowed) {
   };
 }
 
-module.exports = { buildApp };
+module.exports = {
+  buildApp,
+  // Focused middleware tests only; production callers use buildApp.
+  _internals: { isLargeAuthenticatedJson, registerRuntimeCapacityProviders },
+};

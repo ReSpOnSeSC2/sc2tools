@@ -5,7 +5,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const {
   PREDICATES,
   HEAVY_PREDICATES,
-  HEAVY_FIELDS,
+  isWin,
   isoWeekStart,
 } = require("./arcadePredicates");
 
@@ -49,6 +49,42 @@ const UNIT_STATS_SCAN_CAP = 1000;
  * the date filter mis-fires.
  */
 const RESOLVE_QUERY_LIMIT = 500;
+
+const ARCADE_QUEST_DETAIL_FIELDS = Object.freeze([
+  "buildLog",
+  "oppBuildLog",
+]);
+
+const ARCADE_UNIT_DETAIL_FIELDS = Object.freeze([
+  "buildLog",
+  "macroBreakdown",
+]);
+
+const RESOLVE_GAME_PROJECTION = Object.freeze({
+  _id: 0,
+  gameId: 1,
+  date: 1,
+  result: 1,
+  map: 1,
+  myRace: 1,
+  myBuild: 1,
+  myMmr: 1,
+  durationSec: 1,
+  duration: 1,
+  macroScore: 1,
+  macro_score: 1,
+  apm: 1,
+  APM: 1,
+  oppRace: 1,
+  opp_strategy: 1,
+  opp_mmr: 1,
+  oppMmr: 1,
+  oppPulseId: 1,
+  "opponent.race": 1,
+  "opponent.strategy": 1,
+  "opponent.mmr": 1,
+  "opponent.pulseId": 1,
+});
 
 class ArcadeService {
   /**
@@ -111,10 +147,8 @@ class ArcadeService {
    *
    * Two-pass strategy: predicates that read only the slim ``games``
    * row run in pass 1 (no extra I/O). Predicates that need build-log
-   * data (build_contains / won_with_unit) trigger one bulk
-   * ``game_details`` fetch in pass 2 — capped at the games already
-   * loaded by pass 1 so a card with three heavy-predicate cells still
-   * hits Mongo once, not three times.
+   * data (build_contains / won_with_unit) stream one detail row at a
+   * time in pass 2 and immediately fold it into bounded scalar state.
    *
    * Heavy-store outage: pass 2 is wrapped in try/catch so a
    * gameDetails failure can't erase ticks already returned by pass 1.
@@ -140,7 +174,7 @@ class ArcadeService {
           date: { $gte: start },
           isResumedFromReplay: { $ne: true },
         },
-        { projection: { _id: 0 } },
+        { projection: RESOLVE_GAME_PROJECTION },
       )
       .sort({ date: 1 })
       .limit(RESOLVE_QUERY_LIMIT)
@@ -170,29 +204,18 @@ class ArcadeService {
         : { id: cell.id, ticked: false };
     }
 
-    // Pass 2: heavy predicates. Bulk-load game_details for every game
-    // in the window once — the predicates are pure scans over that
-    // map. Keeping the fetch outside the predicate loop is what makes
-    // a 5-heavy-cell card a single round-trip.
+    // Pass 2: keep at most one detail blob live and fold it into
+    // scalar state before loading the next replay.
     if (heavyPending.length > 0 && this.gameDetails && games.length > 0) {
       try {
-        const ids = games.map((g) => String(g.gameId));
-        const detailsMap = await this.gameDetails.findMany(userId, ids);
-        // Decorate a shallow copy of each slim row with its heavy blob
-        // so predicates can read both halves without juggling two
-        // arrays. ``games`` is a per-request value that never escapes
-        // the method, so mutation here is safe.
-        for (const g of games) {
-          const blob = detailsMap.get(String(g.gameId));
-          if (blob) {
-            for (const key of HEAVY_FIELDS) {
-              if (blob[key] !== undefined) g[key] = blob[key];
-            }
-          }
-        }
+        const heavyHits = await resolveHeavyCellsSequential(
+          this.gameDetails,
+          userId,
+          games,
+          heavyPending,
+        );
         for (const { idx, cell } of heavyPending) {
-          const predicate = PREDICATES[cell.predicate];
-          const hit = predicate(games, cell.params || {});
+          const hit = heavyHits.get(idx);
           resolved[idx] = hit
             ? { id: cell.id, ticked: true, gameId: hit }
             : { id: cell.id, ticked: false };
@@ -246,9 +269,9 @@ class ArcadeService {
    * Aggregate unit-built counts and total units-lost across the user's
    * recent games. Powers two trivia quizzes ("which unit have you
    * built the most of" / "how many units have you lost"). Heavy data
-   * lives in game_details; this method bulk-loads details for the
-   * most recent ``UNIT_STATS_SCAN_CAP`` games and folds them into a
-   * compact aggregate. No DB write — the route is read-only and
+   * lives in game_details; this method streams details for the most
+   * recent ``UNIT_STATS_SCAN_CAP`` games into a compact aggregate.
+   * No DB write — the route is read-only and
    * recomputed on demand.
    *
    * Bounded by ``UNIT_STATS_SCAN_CAP`` so a 30 000-game corpus doesn't
@@ -284,39 +307,39 @@ class ArcadeService {
     if (!this.gameDetails) {
       return { ...empty, scannedGames: games.length };
     }
-    const ids = games.map((g) => String(g.gameId));
-    let detailsMap;
-    try {
-      detailsMap = await this.gameDetails.findMany(userId, ids);
-    } catch {
-      // Heavy-store outage → return slim-row-only aggregate so the
-      // trivia can still render an empty-state message rather than
-      // crashing the route.
-      return { ...empty, scannedGames: games.length };
-    }
     /** @type {Record<string, number>} */
     const builtByUnit = {};
     let totalUnitsLost = 0;
     let lostGames = 0;
-    for (const id of ids) {
-      const blob = detailsMap.get(id);
-      if (!blob) continue;
-      if (Array.isArray(blob.buildLog)) {
-        for (const line of blob.buildLog) {
-          const name = extractBuildLogName(line);
-          if (!name) continue;
-          if (isStructureName(name)) continue;
-          builtByUnit[name] = (builtByUnit[name] || 0) + 1;
+    try {
+      for (const game of games) {
+        const id = String(game.gameId || "");
+        if (!id) continue;
+        const detail = await this.gameDetails.findMany(userId, [id], {
+          fields: [...ARCADE_UNIT_DETAIL_FIELDS],
+          concurrency: 1,
+        });
+        const blob = detail.get(id);
+        if (!blob) continue;
+        if (Array.isArray(blob.buildLog)) {
+          for (const line of blob.buildLog) {
+            const name = extractBuildLogName(line);
+            if (!name) continue;
+            if (isStructureName(name)) continue;
+            builtByUnit[name] = (builtByUnit[name] || 0) + 1;
+          }
+        }
+        const me =
+          blob.macroBreakdown &&
+          blob.macroBreakdown.player_stats &&
+          blob.macroBreakdown.player_stats.me;
+        if (me && Number.isFinite(Number(me.units_lost))) {
+          totalUnitsLost += Number(me.units_lost);
+          lostGames += 1;
         }
       }
-      const me =
-        blob.macroBreakdown &&
-        blob.macroBreakdown.player_stats &&
-        blob.macroBreakdown.player_stats.me;
-      if (me && Number.isFinite(Number(me.units_lost))) {
-        totalUnitsLost += Number(me.units_lost);
-        lostGames += 1;
-      }
+    } catch {
+      return { ...empty, scannedGames: games.length };
     }
     return {
       scannedGames: games.length,
@@ -362,6 +385,115 @@ class ArcadeService {
     }));
     return { weekKey, items };
   }
+}
+
+/**
+ * Evaluate detail-backed card cells while retaining at most one heavy
+ * replay blob. Hits are staged until the scan completes so a store
+ * outage preserves the resolver's previous all-or-nothing behavior
+ * for heavy cells.
+ *
+ * @param {import('./gameDetails').GameDetailsService} gameDetails
+ * @param {string} userId
+ * @param {any[]} games
+ * @param {Array<{ idx: number, cell: any }>} pending
+ * @returns {Promise<Map<number, string>>}
+ */
+// eslint-disable-next-line max-lines-per-function
+async function resolveHeavyCellsSequential(gameDetails, userId, games, pending) {
+  const states = pending.map(({ idx, cell }) => {
+    const params = cell.params || {};
+    const unit = String(params.unit || "").toLowerCase().trim();
+    return {
+      idx,
+      predicate: cell.predicate,
+      unit,
+      need: Math.max(1, Number(params.count) || 1),
+      running: 0,
+      done: unit.length === 0,
+    };
+  });
+  const hits = new Map();
+  let unresolved = states.reduce((n, state) => n + (state.done ? 0 : 1), 0);
+  const ownNeedles = new Set(
+    states
+      .filter((state) => state.predicate !== "won_built_opp_unit_seen")
+      .map((state) => state.unit)
+      .filter(Boolean),
+  );
+  const opponentNeedles = new Set(
+    states
+      .filter((state) => state.predicate === "won_built_opp_unit_seen")
+      .map((state) => state.unit)
+      .filter(Boolean),
+  );
+
+  for (const game of games) {
+    if (unresolved === 0) break;
+    const id = String(game.gameId || "");
+    if (!id) continue;
+    const detail = await gameDetails.findMany(userId, [id], {
+      fields: [...ARCADE_QUEST_DETAIL_FIELDS],
+      concurrency: 1,
+    });
+    const blob = detail.get(id);
+    if (!blob) continue;
+    const ownCounts = countBuildLogNeedles(blob.buildLog, ownNeedles);
+    const opponentCounts = countBuildLogNeedles(
+      blob.oppBuildLog,
+      opponentNeedles,
+    );
+
+    for (const state of states) {
+      if (state.done) continue;
+      let matched = false;
+      if (state.predicate === "won_with_unit") {
+        matched = isWin(game) && (ownCounts.get(state.unit) || 0) > 0;
+      } else if (state.predicate === "won_built_n_of_unit") {
+        matched = isWin(game)
+          && (ownCounts.get(state.unit) || 0) >= state.need;
+      } else if (state.predicate === "won_built_opp_unit_seen") {
+        matched = isWin(game)
+          && (opponentCounts.get(state.unit) || 0) > 0;
+      } else if (state.predicate === "built_n_of_unit_week") {
+        state.running += ownCounts.get(state.unit) || 0;
+        matched = state.running >= state.need;
+      }
+      if (!matched) continue;
+      hits.set(state.idx, id);
+      state.done = true;
+      unresolved -= 1;
+    }
+  }
+  return hits;
+}
+
+/**
+ * Count every requested substring in one pass over a build log. This
+ * preserves the predicate registry's case-insensitive matching while
+ * avoiding repeated conversion of a large legacy log line for every
+ * heavy cell on the card.
+ *
+ * @param {unknown} log
+ * @param {Set<string>} needles
+ * @returns {Map<string, number>}
+ */
+function countBuildLogNeedles(log, needles) {
+  const counts = new Map();
+  for (const needle of needles) counts.set(needle, 0);
+  if (!Array.isArray(log) || needles.size === 0) return counts;
+  for (const entry of log) {
+    const value = typeof entry === "string"
+      ? entry
+      : String(JSON.stringify(entry) || "");
+    const lower = value.toLowerCase();
+    for (const needle of needles) {
+      if (lower.includes(needle)) {
+        counts.set(needle, (counts.get(needle) || 0) + 1);
+      }
+    }
+  }
+  return counts;
 }
 
 /**

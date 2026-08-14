@@ -26,6 +26,7 @@ const RELEASE_KEY = Symbol("replayIngestAdmissionRelease");
  *   maxActive?: number,
  *   maxBodyBytes?: number,
  *   bodyTimeoutMs?: number,
+ *   matchRequest?: (req: import('express').Request) => boolean,
  *   logger?: { warn?: (obj: object, msg: string) => void },
  * }} [opts]
  * @returns {import('express').RequestHandler}
@@ -38,17 +39,21 @@ function buildReplayIngestAdmission(opts = {}) {
     DEFAULT_BODY_TIMEOUT_MS,
   );
   let active = 0;
+  const matchRequest = typeof opts.matchRequest === "function"
+    ? opts.matchRequest
+    : isReplayIngest;
 
   return function replayIngestAdmission(req, res, next) {
-    if (!isReplayIngest(req)) {
+    if (!matchRequest(req)) {
       next();
       return;
     }
-    // This is only a cheap shape check; full device/JWT verification remains
-    // in auth middleware. It prevents an unauthenticated slow body from
-    // monopolising the sole replay slot before JSON parsing.
-    if (!hasBearerAuthorization(req)) {
-      sendError(res, 401, "missing_token", "Authentication is required.", false);
+    // Production authenticates this endpoint before admission/body parsing.
+    // Require that verified server-side state here as a fail-closed invariant;
+    // a syntactically plausible fake Bearer must never occupy the global slot.
+    if (!hasVerifiedReplayAuth(req)) {
+      const code = hasBearerAuthorization(req) ? "invalid_token" : "missing_token";
+      sendError(res, 401, code, "Authentication is required.", false);
       // Do not drain an untrusted chunked stream forever. Once the bounded
       // error reaches the client, close the socket without parsing the body.
       destroyAfterResponse(req, res);
@@ -80,16 +85,32 @@ function buildReplayIngestAdmission(opts = {}) {
         );
       }
       let streamedBytes = 0;
-      let overflowed = false;
-      req.on("data", (chunk) => {
-        if (overflowed) return;
+      let settled = false;
+      /** @type {ReturnType<typeof setTimeout> | null} */
+      let busyBodyTimer = null;
+      const cleanupBusyBody = () => {
+        if (busyBodyTimer) clearTimeout(busyBodyTimer);
+        busyBodyTimer = null;
+        req.removeListener("data", onBusyData);
+        req.removeListener("end", respondBusy);
+        req.removeListener("aborted", abandonBusyBody);
+        res.removeListener("close", abandonBusyBody);
+      };
+      /** @type {(status: number, code: string, message: string, retryable?: boolean) => void} */
+      const finishBusyBody = (status, code, message, retryable = true) => {
+        if (settled) return;
+        settled = true;
+        cleanupBusyBody();
+        sendError(res, status, code, message, retryable);
+      };
+      /** @param {Buffer|string} chunk */
+      const onBusyData = (chunk) => {
+        if (settled) return;
         streamedBytes += Buffer.isBuffer(chunk)
           ? chunk.length
           : Buffer.byteLength(String(chunk));
         if (streamedBytes > maxBodyBytes) {
-          overflowed = true;
-          sendError(
-            res,
+          finishBusyBody(
             413,
             "payload_too_large",
             "Request body is too large.",
@@ -97,23 +118,35 @@ function buildReplayIngestAdmission(opts = {}) {
           );
           destroyAfterResponse(req, res);
         }
-      });
-      const respondBusy = () => {
-        if (!overflowed) {
-          sendError(
-            res,
-            503,
-            "replay_ingest_busy",
-            "Replay ingest is busy; retry this batch shortly.",
-            true,
-          );
-        }
       };
+      const respondBusy = () => {
+        finishBusyBody(
+          503,
+          "replay_ingest_busy",
+          "Replay ingest is busy; retry this batch shortly.",
+        );
+      };
+      const abandonBusyBody = () => {
+        if (settled) return;
+        settled = true;
+        cleanupBusyBody();
+      };
+      req.on("data", onBusyData);
+      req.once("end", respondBusy);
+      req.once("aborted", abandonBusyBody);
+      res.once("close", abandonBusyBody);
+      busyBodyTimer = setTimeout(() => {
+        if (settled) return;
+        finishBusyBody(
+          408,
+          "replay_ingest_body_timeout",
+          "Replay upload body timed out.",
+        );
+        destroyAfterResponse(req, res);
+      }, bodyTimeoutMs);
+      if (typeof busyBodyTimer.unref === "function") busyBodyTimer.unref();
       if (req.readableEnded) respondBusy();
-      else {
-        req.once("end", respondBusy);
-        req.resume();
-      }
+      else req.resume();
       return;
     }
 
@@ -225,6 +258,17 @@ function hasBearerAuthorization(req) {
   );
 }
 
+/** @param {import('express').Request} req */
+function hasVerifiedReplayAuth(req) {
+  const auth = req.auth;
+  return Boolean(
+    auth
+    && typeof auth.userId === "string"
+    && auth.userId.length > 0
+    && (auth.source === "device" || auth.source === "clerk"),
+  );
+}
+
 /**
  * @param {import('express').Response} res
  * @param {number} status
@@ -257,6 +301,7 @@ module.exports = {
   buildReplayIngestAdmission,
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
+  isReplayIngest,
   // Exported only for focused route-matching tests.
   _internals: { isReplayIngest },
 };

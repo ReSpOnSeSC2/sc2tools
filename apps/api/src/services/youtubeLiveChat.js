@@ -1,5 +1,7 @@
 "use strict";
 
+const { createHash } = require("crypto");
+
 /**
  * YouTube live-chat relay — resolve + poll helpers for the multichat
  * overlay widget.
@@ -49,6 +51,20 @@ const DEFAULT_TIMEOUT_MS = 4000;
 /** Bound every upstream fetch so a hung poll can't pin a connection. */
 const FETCH_TIMEOUT_MS = 15000;
 
+/**
+ * A normal poll is tens of kilobytes. Keep generous headroom for busy chats,
+ * but never allow an upstream error/schema spike to become an unbounded
+ * Buffer + string + parsed object on the API heap.
+ */
+const POLL_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
+const PAGE_RESPONSE_MAX_BYTES = 4 * 1024 * 1024;
+const RELAY_RESPONSE_MAX_BYTES = 512 * 1024;
+const POLL_RESULT_CACHE_MS = 1500;
+const RESOLVE_RESULT_CACHE_MS = 5000;
+const YOUTUBE_RELAY_MAX_ACTIVE = 2;
+const YOUTUBE_RELAY_MAX_SUBSCRIBERS = 8;
+const YOUTUBE_RELAY_CACHE_MAX = 4;
+
 class YoutubeChatError extends Error {
   /**
    * @param {string} code machine-readable ("not_live", "not_found",
@@ -60,6 +76,340 @@ class YoutubeChatError extends Error {
     this.name = "YoutubeChatError";
     this.code = code;
   }
+}
+
+/**
+ * @param {{ continuation: unknown, clientVersion?: unknown }} args
+ * @returns {{continuation: string, clientVersion: string}}
+ */
+function normalizePollArgs(args) {
+  const continuation = String(args?.continuation || "");
+  if (!continuation || continuation.length > 4096) {
+    throw new YoutubeChatError("bad_input", "continuation required");
+  }
+  const clientVersion =
+    typeof args.clientVersion === "string" &&
+    /^[0-9.]{5,30}$/.test(args.clientVersion)
+      ? args.clientVersion
+      : DEFAULT_CLIENT_VERSION;
+  return { continuation, clientVersion };
+}
+
+/**
+ * Read one native-fetch response without allowing chunked transfer encoding
+ * to bypass the limit. The decoded string is deliberately short-lived and is
+ * released as soon as the caller parses or extracts from it.
+ *
+ * @param {Response} response
+ * @param {number} maxBytes
+ * @returns {Promise<string>}
+ */
+async function readBoundedTextResponse(response, maxBytes) {
+  const advertised = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(advertised) && advertised > maxBytes) {
+    await response.body?.cancel?.().catch(() => {});
+    throw new YoutubeChatError(
+      "upstream_too_large",
+      "youtube chat response exceeded the safe size limit",
+    );
+  }
+
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    throw new YoutubeChatError(
+      "upstream",
+      "youtube chat response was not streamable",
+    );
+  }
+
+  /** @type {Buffer[]} */
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new YoutubeChatError(
+          "upstream_too_large",
+          "youtube chat response exceeded the safe size limit",
+        );
+      }
+      chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+    }
+    return Buffer.concat(chunks, totalBytes).toString("utf8");
+  } finally {
+    chunks.length = 0;
+    reader.releaseLock?.();
+  }
+}
+
+/**
+ * @param {Response} response
+ * @param {number} maxBytes
+ * @returns {Promise<Record<string, any>>}
+ */
+async function readBoundedJsonResponse(response, maxBytes) {
+  const text = await readBoundedTextResponse(response, maxBytes);
+  try {
+    const json = JSON.parse(text);
+    if (!json || typeof json !== "object" || Array.isArray(json)) {
+      throw new Error("unexpected response shape");
+    }
+    return /** @type {Record<string, any>} */ (json);
+  } catch {
+    throw new YoutubeChatError(
+      "upstream",
+      "youtube chat returned invalid JSON",
+    );
+  }
+}
+
+/**
+ * One router owns one coordinator, which is process-global in production.
+ * Multiple OBS surfaces asking for the same continuation share a single
+ * fetch/parse/JSON stringify. A small number of distinct streams can make
+ * progress concurrently; further work fails fast instead of retaining a
+ * queue of upstream response bodies while the heap is under pressure.
+ */
+class YoutubePollCoordinator {
+  /**
+   * @param {{
+   *   fetchImpl?: typeof fetch,
+   *   maxActive?: number,
+   *   maxSubscribers?: number,
+   *   cacheMax?: number,
+   * }} [opts]
+   */
+  constructor(opts = {}) {
+    this.fetchImpl = opts.fetchImpl || fetch;
+    this.maxActive = Math.max(
+      1,
+      Math.floor(opts.maxActive || YOUTUBE_RELAY_MAX_ACTIVE),
+    );
+    this.maxSubscribers = Math.max(
+      1,
+      Math.floor(opts.maxSubscribers || YOUTUBE_RELAY_MAX_SUBSCRIBERS),
+    );
+    this.cacheMax = Math.max(
+      1,
+      Math.floor(opts.cacheMax || YOUTUBE_RELAY_CACHE_MAX),
+    );
+    /** @type {Map<string, {
+     *   key: string,
+     *   controller: AbortController,
+     *   promise: Promise<string>,
+     *   subscribers: number,
+     *   settled: boolean,
+     * }>} */
+    this.active = new Map();
+    /** @type {Map<string, {body: string, expiresAt: number}>} */
+    this.recent = new Map();
+  }
+
+  /**
+   * Relay pressure only. Continuations, channel inputs, and hashed cache keys
+   * are deliberately excluded.
+   */
+  capacitySnapshot() {
+    let subscribers = 0;
+    for (const flight of this.active.values()) {
+      subscribers += Number(flight.subscribers) || 0;
+    }
+    return {
+      activeRequests: this.active.size,
+      subscribers,
+      cachedResponses: this.recent.size,
+      maxActiveRequests: this.maxActive,
+      maxSubscribersPerRequest: this.maxSubscribers,
+      maxCachedResponses: this.cacheMax,
+    };
+  }
+
+  /**
+   * @param {{continuation: unknown, clientVersion?: unknown}} args
+   * @param {{signal?: AbortSignal}} [opts]
+   */
+  async poll(args, opts = {}) {
+    const normalized = normalizePollArgs(args);
+    const key = `poll:${createHash("sha256")
+      .update(normalized.clientVersion)
+      .update("\0")
+      .update(normalized.continuation)
+      .digest("base64url")}`;
+    return this._run(
+      key,
+      (workSignal) =>
+        pollLiveChat(normalized, {
+          fetchImpl: this.fetchImpl,
+          signal: workSignal,
+        }),
+      opts.signal,
+      "youtube_poll_busy",
+      POLL_RESULT_CACHE_MS,
+    );
+  }
+
+  /**
+   * @param {string} input
+   * @param {{signal?: AbortSignal}} [opts]
+   */
+  async resolve(input, opts = {}) {
+    const normalizedInput = String(input || "").trim();
+    normalizeYoutubeInput(normalizedInput);
+    // YouTube video ids are case-sensitive. Lower-casing the entire input
+    // aliases distinct streams (for example AbC... and aBc...) and can return
+    // one user's continuation to another. Preserve the validated input bytes;
+    // accepting a little less cache coalescing for differently-cased handles
+    // is safer than cross-stream cache contamination.
+    const key = `resolve:${createHash("sha256")
+      .update(normalizedInput)
+      .digest("base64url")}`;
+    return this._run(
+      key,
+      (workSignal) =>
+        resolveLiveChat(normalizedInput, {
+          fetchImpl: this.fetchImpl,
+          signal: workSignal,
+        }),
+      opts.signal,
+      "youtube_resolve_busy",
+      RESOLVE_RESULT_CACHE_MS,
+    );
+  }
+
+  /**
+   * @param {string} key
+   * @param {(signal: AbortSignal) => Promise<Record<string, any>>} work
+   * @param {AbortSignal | undefined} signal
+   * @param {string} busyCode
+   * @param {number} cacheMs
+   */
+  async _run(key, work, signal, busyCode, cacheMs) {
+    if (signal?.aborted) throw signal.reason || abortError();
+    this._pruneRecent();
+    const cached = this.recent.get(key);
+    if (cached) {
+      // Touch so the bounded Map is also an LRU under a busy multi-user stream.
+      this.recent.delete(key);
+      this.recent.set(key, cached);
+      return cached.body;
+    }
+
+    let flight = this.active.get(key);
+    // The last subscriber may disconnect before the upstream fetch observes
+    // its abort. Keep that retiring work counted until its promise settles:
+    // immediately replacing it would let rapid disconnect/reconnect cycles
+    // exceed the process-wide upstream-memory bound. A live client receives a
+    // retryable busy response and retries the same continuation shortly.
+    if (flight?.controller.signal.aborted) {
+      throw new YoutubeChatError(
+        busyCode,
+        "youtube chat relay is finishing cancelled work; retry shortly",
+      );
+    }
+    if (!flight && this.active.size >= this.maxActive) {
+      throw new YoutubeChatError(
+        busyCode,
+        "youtube chat relay is busy; retry shortly",
+      );
+    }
+    if (flight && flight.subscribers >= this.maxSubscribers) {
+      throw new YoutubeChatError(
+        busyCode,
+        "youtube chat relay has too many viewers; retry shortly",
+      );
+    }
+    if (!flight) {
+      const controller = new AbortController();
+      flight = {
+        key,
+        controller,
+        subscribers: 0,
+        settled: false,
+        promise: Promise.resolve(""),
+      };
+      const ownedFlight = flight;
+      ownedFlight.promise = work(controller.signal)
+        .then((value) => {
+          const body = JSON.stringify(value);
+          if (Buffer.byteLength(body, "utf8") > RELAY_RESPONSE_MAX_BYTES) {
+            throw new YoutubeChatError(
+              "upstream_too_large",
+              "youtube chat result exceeded the safe size limit",
+            );
+          }
+          this.recent.set(key, { body, expiresAt: Date.now() + cacheMs });
+          this._pruneRecent();
+          return body;
+        })
+        .finally(() => {
+          ownedFlight.settled = true;
+          if (this.active.get(key) === ownedFlight) this.active.delete(key);
+        });
+      this.active.set(key, ownedFlight);
+    }
+
+    flight.subscribers += 1;
+    try {
+      if (!signal) return await flight.promise;
+      return await waitForPromiseOrAbort(flight.promise, signal);
+    } finally {
+      flight.subscribers = Math.max(0, flight.subscribers - 1);
+      if (flight.subscribers === 0 && !flight.settled) {
+        flight.controller.abort(abortError());
+      }
+    }
+  }
+
+  _pruneRecent() {
+    const now = Date.now();
+    for (const [key, cached] of this.recent) {
+      if (cached.expiresAt <= now) this.recent.delete(key);
+    }
+    while (this.recent.size > this.cacheMax) {
+      const oldest = this.recent.keys().next().value;
+      if (typeof oldest !== "string") break;
+      this.recent.delete(oldest);
+    }
+  }
+}
+
+function abortError() {
+  const error = new Error("request aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {AbortSignal} signal
+ * @returns {Promise<T>}
+ */
+function waitForPromiseOrAbort(promise, signal) {
+  if (signal.aborted) return Promise.reject(signal.reason || abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(signal.reason || abortError());
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
@@ -161,25 +511,38 @@ function extractClientVersion(html) {
 /**
  * @param {typeof fetch} fetchImpl
  * @param {string} url
+ * @param {{signal?: AbortSignal, maxResponseBytes?: number}} [opts]
  * @returns {Promise<string>}
  */
-async function fetchPage(fetchImpl, url) {
-  const res = await fetchImpl(url, {
-    headers: PAGE_HEADERS,
-    redirect: "follow",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) {
-    throw new YoutubeChatError("upstream", `youtube page ${res.status}`);
+async function fetchPage(fetchImpl, url, opts = {}) {
+  const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, timeoutSignal])
+    : timeoutSignal;
+  try {
+    const res = await fetchImpl(url, {
+      headers: PAGE_HEADERS,
+      redirect: "follow",
+      signal,
+    });
+    if (!res.ok) {
+      throw new YoutubeChatError("upstream", `youtube page ${res.status}`);
+    }
+    return await readBoundedTextResponse(
+      res,
+      opts.maxResponseBytes || PAGE_RESPONSE_MAX_BYTES,
+    );
+  } catch (err) {
+    if (err instanceof YoutubeChatError || opts.signal?.aborted) throw err;
+    throw new YoutubeChatError("upstream", "youtube page request failed");
   }
-  return res.text();
 }
 
 /**
  * Resolve a streamer input to a live chat session.
  *
  * @param {string} input
- * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @param {{ fetchImpl?: typeof fetch, signal?: AbortSignal, maxPageBytes?: number }} [opts]
  * @returns {Promise<{ videoId: string, continuation: string,
  *   clientVersion: string }>}
  */
@@ -190,7 +553,10 @@ async function resolveLiveChat(input, opts = {}) {
   let videoId = directId;
   if (!videoId) {
     for (const url of pageUrls) {
-      const html = await fetchPage(fetchImpl, url);
+      const html = await fetchPage(fetchImpl, url, {
+        signal: opts.signal,
+        maxResponseBytes: opts.maxPageBytes,
+      });
       videoId = extractLiveVideoId(html);
       if (videoId) break;
     }
@@ -202,12 +568,18 @@ async function resolveLiveChat(input, opts = {}) {
     }
   }
 
-  const chatHtml = await fetchPage(fetchImpl, LIVE_CHAT_URL + videoId);
+  const chatHtml = await fetchPage(fetchImpl, LIVE_CHAT_URL + videoId, {
+    signal: opts.signal,
+    maxResponseBytes: opts.maxPageBytes,
+  });
   const continuation = extractChatContinuation(chatHtml);
   if (!continuation) {
     // A watch page exists but its chat frame has no continuation —
     // either the video isn't live or chat is disabled.
-    const watchHtml = await fetchPage(fetchImpl, WATCH_URL + videoId);
+    const watchHtml = await fetchPage(fetchImpl, WATCH_URL + videoId, {
+      signal: opts.signal,
+      maxResponseBytes: opts.maxPageBytes,
+    });
     if (!extractLiveVideoId(watchHtml)) {
       throw new YoutubeChatError("not_live", "video is not live");
     }
@@ -383,37 +755,44 @@ function parseLiveChatResponse(json) {
  * One stateless poll against the innertube chat endpoint.
  *
  * @param {{ continuation: string, clientVersion?: string }} args
- * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @param {{ fetchImpl?: typeof fetch, signal?: AbortSignal, maxResponseBytes?: number }} [opts]
  */
 async function pollLiveChat(args, opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
-  const continuation = String(args?.continuation || "");
-  if (!continuation || continuation.length > 4096) {
-    throw new YoutubeChatError("bad_input", "continuation required");
+  const { continuation, clientVersion } = normalizePollArgs(args);
+  const timeoutSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, timeoutSignal])
+    : timeoutSignal;
+  try {
+    const res = await fetchImpl(INNERTUBE_CHAT_URL, {
+      method: "POST",
+      headers: { ...PAGE_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: { client: { clientName: "WEB", clientVersion, hl: "en" } },
+        continuation,
+      }),
+      signal,
+    });
+    if (!res.ok) {
+      throw new YoutubeChatError("upstream", `youtube chat ${res.status}`);
+    }
+    const json = await readBoundedJsonResponse(
+      res,
+      opts.maxResponseBytes || POLL_RESPONSE_MAX_BYTES,
+    );
+    return parseLiveChatResponse(json);
+  } catch (err) {
+    if (err instanceof YoutubeChatError || opts.signal?.aborted) throw err;
+    throw new YoutubeChatError("upstream", "youtube chat request failed");
   }
-  const clientVersion =
-    typeof args.clientVersion === "string" && /^[0-9.]{5,30}$/.test(args.clientVersion)
-      ? args.clientVersion
-      : DEFAULT_CLIENT_VERSION;
-  const res = await fetchImpl(INNERTUBE_CHAT_URL, {
-    method: "POST",
-    headers: { ...PAGE_HEADERS, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      context: { client: { clientName: "WEB", clientVersion, hl: "en" } },
-      continuation,
-    }),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) {
-    throw new YoutubeChatError("upstream", `youtube chat ${res.status}`);
-  }
-  const json = await res.json();
-  return parseLiveChatResponse(/** @type {Record<string, any>} */ (json));
 }
 
 module.exports = {
   YoutubeChatError,
+  YoutubePollCoordinator,
   normalizeYoutubeInput,
+  normalizePollArgs,
   extractLiveVideoId,
   extractChatContinuation,
   extractClientVersion,
@@ -423,4 +802,8 @@ module.exports = {
   resolveLiveChat,
   pollLiveChat,
   DEFAULT_CLIENT_VERSION,
+  POLL_RESPONSE_MAX_BYTES,
+  RELAY_RESPONSE_MAX_BYTES,
+  YOUTUBE_RELAY_MAX_ACTIVE,
+  YOUTUBE_RELAY_MAX_SUBSCRIBERS,
 };

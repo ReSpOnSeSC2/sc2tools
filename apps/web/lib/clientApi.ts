@@ -26,13 +26,19 @@ export function useApi<T>(
   path: string | null,
   config?: SWRConfiguration<T, ClientApiError>,
 ) {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const key = isLoaded && isSignedIn && path ? path : null;
+  const { getToken, isLoaded, isSignedIn, userId } = useAuth();
+  // An authenticated response belongs to one Clerk account. Keeping userId in
+  // the SWR identity prevents a late response or warm cache from account A
+  // being read after the browser switches to account B. The request path sent
+  // to the API remains unchanged.
+  const key = isLoaded && isSignedIn && userId && path
+    ? (["authenticated-api", userId, path] as const)
+    : null;
   return useSWR<T, ClientApiError>(
     key,
-    async (p) => {
+    async ([, , requestPath]: readonly [string, string, string]) => {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}${p}`, {
+      const res = await fetch(`${API_BASE}${requestPath}`, {
         headers: token ? { authorization: `Bearer ${token}` } : undefined,
         cache: "no-store",
       });

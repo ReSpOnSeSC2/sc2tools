@@ -1,15 +1,16 @@
 "use strict";
 
+const { createHash } = require("crypto");
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
+const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 
 const {
   YoutubeChatError,
-  resolveLiveChat,
-  pollLiveChat,
+  YoutubePollCoordinator,
 } = require("../services/youtubeLiveChat");
 const {
   KickResolveError,
@@ -57,11 +58,32 @@ const {
  *   buildsList?: (userId: string) => Promise<Array<Record<string, any>>>,
  *   tickerFacts?: import('../services/tickerFacts').TickerFactsService,
  *   fetchImpl?: typeof fetch,
+ *   youtubePollCoordinator?: import('../services/youtubeLiveChat').YoutubePollCoordinator,
+ *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} deps
  */
 function buildMultichatRouter(deps) {
   const router = express.Router();
   const fetchImpl = deps.fetchImpl || fetch;
+  // One coordinator per mounted production router means all OBS/dock surfaces
+  // in this process share the same bounded YouTube response parse.
+  const youtubePollCoordinator =
+    deps.youtubePollCoordinator || new YoutubePollCoordinator({ fetchImpl });
+  deps.runtimeCapacityRegistry?.register(
+    "youtubeRelay",
+    () => youtubePollCoordinator.capacitySnapshot(),
+  );
+
+  // One fixed-key pre-auth guard bounds total fake-token traffic without
+  // storing attacker-controlled credentials or unbounded path cardinality.
+  const globalLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 1200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: () => "multichat:global",
+    store: new BoundedRateLimitStore({ maxEntries: 1 }),
+  });
 
   // Per-token limiter: the widget's steady state is one YouTube poll
   // every ~2-8s plus rare resolves — 60/min leaves generous headroom
@@ -72,7 +94,10 @@ function buildMultichatRouter(deps) {
     standardHeaders: true,
     legacyHeaders: false,
     /** @param {import('express').Request} req */
-    keyGenerator: (req) => `multichat:${req.params.token || "anon"}`,
+    keyGenerator: (req) => `multichat:${hashLimiterCredential(
+      req.params.token || "anon",
+    )}`,
+    store: new BoundedRateLimitStore({ maxEntries: 1024 }),
   });
 
   /** @type {import('express').RequestHandler} */
@@ -91,6 +116,8 @@ function buildMultichatRouter(deps) {
       next(err);
     }
   };
+
+  router.use("/multichat/:token", globalLimiter);
 
   router.get(
     "/multichat/:token/config",
@@ -319,19 +346,44 @@ function buildMultichatRouter(deps) {
     limiter,
     tokenAuth,
     async (req, res, next) => {
+      const requestAbort = new AbortController();
+      const abortRequest = () => {
+        if (!requestAbort.signal.aborted) requestAbort.abort();
+      };
+      const abortOnClose = () => {
+        if (!res.writableEnded) abortRequest();
+      };
+      req.once("aborted", abortRequest);
+      res.once("close", abortOnClose);
       try {
-        const out = await resolveLiveChat(String(req.query.channel || ""), {
-          fetchImpl,
-        });
-        res.json(out);
+        const out = await youtubePollCoordinator.resolve(
+          String(req.query.channel || ""),
+          { signal: requestAbort.signal },
+        );
+        if (requestAbort.signal.aborted || res.headersSent) return;
+        sendSharedJson(res, out);
       } catch (err) {
+        if (requestAbort.signal.aborted) return;
+        if (err instanceof Error && err.name === "AbortError") {
+          res.setHeader("Retry-After", "2");
+          res.status(503).json({ error: {
+            code: "youtube_resolve_busy",
+            message: "youtube chat resolution was interrupted; retry shortly",
+          } });
+          return;
+        }
         if (err instanceof YoutubeChatError) {
+          const busy = err.code === "youtube_resolve_busy";
+          if (busy) res.setHeader("Retry-After", "2");
           res
-            .status(err.code === "bad_input" ? 400 : 502)
+            .status(err.code === "bad_input" ? 400 : busy ? 503 : 502)
             .json({ error: { code: err.code, message: err.message } });
           return;
         }
         next(err);
+      } finally {
+        req.off("aborted", abortRequest);
+        res.off("close", abortOnClose);
       }
     },
   );
@@ -341,23 +393,47 @@ function buildMultichatRouter(deps) {
     limiter,
     tokenAuth,
     async (req, res, next) => {
+      const requestAbort = new AbortController();
+      const abortRequest = () => {
+        if (!requestAbort.signal.aborted) requestAbort.abort();
+      };
+      const abortOnClose = () => {
+        if (!res.writableEnded) abortRequest();
+      };
+      req.once("aborted", abortRequest);
+      res.once("close", abortOnClose);
       try {
-        const out = await pollLiveChat(
+        const out = await youtubePollCoordinator.poll(
           {
             continuation: String(req.body?.continuation || ""),
             clientVersion: req.body?.clientVersion,
           },
-          { fetchImpl },
+          { signal: requestAbort.signal },
         );
-        res.json(out);
+        if (requestAbort.signal.aborted || res.headersSent) return;
+        sendSharedJson(res, out);
       } catch (err) {
+        if (requestAbort.signal.aborted) return;
+        if (err instanceof Error && err.name === "AbortError") {
+          res.setHeader("Retry-After", "2");
+          res.status(503).json({ error: {
+            code: "youtube_poll_busy",
+            message: "youtube chat polling was interrupted; retry shortly",
+          } });
+          return;
+        }
         if (err instanceof YoutubeChatError) {
+          const busy = err.code === "youtube_poll_busy";
+          if (busy) res.setHeader("Retry-After", "2");
           res
-            .status(err.code === "bad_input" ? 400 : 502)
+            .status(err.code === "bad_input" ? 400 : busy ? 503 : 502)
             .json({ error: { code: err.code, message: err.message } });
           return;
         }
         next(err);
+      } finally {
+        req.off("aborted", abortRequest);
+        res.off("close", abortOnClose);
       }
     },
   );
@@ -530,6 +606,18 @@ function buildMultichatRouter(deps) {
   return router;
 }
 
+/**
+ * The coordinator serializes a shared result once. Sending the same immutable
+ * string avoids N concurrent `res.json` traversals/strings when several OBS
+ * Browser Sources subscribe to one chat continuation.
+ * @param {import('express').Response} res
+ * @param {string} body
+ */
+function sendSharedJson(res, body) {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.send(body);
+}
+
 /** Platforms the widget knows how to render. */
 const MULTICHAT_PLATFORMS = Object.freeze([
   "twitch",
@@ -608,6 +696,13 @@ function sanitizeMultichatConfig(prefs) {
     };
   }
   return out;
+}
+
+/** @param {unknown} value */
+function hashLimiterCredential(value) {
+  return createHash("sha256")
+    .update(String(value || ""))
+    .digest("base64url");
 }
 
 module.exports = {

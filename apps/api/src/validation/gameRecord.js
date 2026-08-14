@@ -11,8 +11,32 @@ const addFormats =
 // validation is read-only. Avoid JSON stringify/parse cloning here: replay
 // batches already live in req.body and a second deep copy of each heavy game
 // (build logs, macro timelines, map playback) doubled peak ingest memory.
-const ajv = new Ajv({ allErrors: true });
+// Fail on the first schema violation. A 5 MiB replay can contain thousands
+// of array items; collecting an AJV error object for every invalid item can
+// amplify one bounded request into hundreds of megabytes of heap.
+const ajv = new Ajv({ allErrors: false });
 addFormats(ajv);
+
+// These ceilings intentionally match services/scouting/compositionAt.js.
+// Real SC2 unit tokens / per-tick type counts sit far below them; their job is
+// to reject adversarial maps before phase preparation can amplify giant keys.
+const UNIT_TIMELINE_TOKEN_MAX_LENGTH = 64;
+const UNIT_TIMELINE_SIDE_MAX_PROPERTIES = 256;
+// Agent build-log rows are ``[m:ss] InternalName`` and are normally under
+// 40 characters. Leave ample room for future tokens without accepting a
+// multi-megabyte string in any of the 5,000-entry log arrays.
+const BUILD_LOG_LINE_MAX_LENGTH = 256;
+
+const UNIT_TIMELINE_SIDE_SCHEMA = {
+  type: "object",
+  additionalProperties: true,
+  maxProperties: UNIT_TIMELINE_SIDE_MAX_PROPERTIES,
+  propertyNames: {
+    type: "string",
+    minLength: 1,
+    maxLength: UNIT_TIMELINE_TOKEN_MAX_LENGTH,
+  },
+};
 
 const GAME_SCHEMA = {
   type: "object",
@@ -105,6 +129,30 @@ const GAME_SCHEMA = {
     // streamer's current 1v1 ladder rating via SC2Pulse without
     // requiring them to paste a numeric pulseCharacterId into Settings.
     myToonHandle: { type: "string", maxLength: 64 },
+    // Legacy slim aliases are still accepted from older agents, but each is
+    // explicitly typed so a forward-compatible unknown-field policy cannot
+    // turn an allow-listed high-fan-out field into a multi-megabyte object.
+    duration: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
+    macro_score: { type: "number", minimum: 0, maximum: 100 },
+    oppMmr: { type: "integer", minimum: 0, maximum: 9999 },
+    oppPulseId: { type: "string", maxLength: 200 },
+    oppRace: { type: "string", maxLength: 24 },
+    opp_strategy: { type: "string", maxLength: 200 },
+    top3Leaks: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          detail: { type: "string", maxLength: 300 },
+          quantity: { type: "number", minimum: 0, maximum: 1000000 },
+          mineral_cost: { type: "number", minimum: 0, maximum: 100000000 },
+          penalty: { type: "number", minimum: 0, maximum: 100000000 },
+        },
+      },
+    },
     opponent: {
       type: "object",
       additionalProperties: true,
@@ -147,10 +195,26 @@ const GAME_SCHEMA = {
         strategy: { type: "string", maxLength: 200 },
       },
     },
-    buildLog: { type: "array", maxItems: 5000 },
-    earlyBuildLog: { type: "array", maxItems: 1000 },
-    oppEarlyBuildLog: { type: "array", maxItems: 1000 },
-    oppBuildLog: { type: "array", maxItems: 5000 },
+    buildLog: {
+      type: "array",
+      maxItems: 5000,
+      items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
+    },
+    earlyBuildLog: {
+      type: "array",
+      maxItems: 1000,
+      items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
+    },
+    oppEarlyBuildLog: {
+      type: "array",
+      maxItems: 1000,
+      items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
+    },
+    oppBuildLog: {
+      type: "array",
+      maxItems: 5000,
+      items: { type: "string", maxLength: BUILD_LOG_LINE_MAX_LENGTH },
+    },
     // Structured macro analytics. The agent computes these on each
     // upload so the SPA's Activity tab and macro-breakdown drilldown
     // can render charts without a follow-up recompute round-trip.
@@ -169,7 +233,18 @@ const GAME_SCHEMA = {
         // shape: { time, my: {Name: count}, opp: {Name: count} }. Cap
         // is 5000 entries — enough for ~13 h of game time, so SC2's
         // hard 60-min limit never approaches the bound.
-        unit_timeline: { type: "array", maxItems: 5000 },
+        unit_timeline: {
+          type: "array",
+          maxItems: 5000,
+          items: {
+            type: "object",
+            additionalProperties: true,
+            properties: {
+              my: UNIT_TIMELINE_SIDE_SCHEMA,
+              opp: UNIT_TIMELINE_SIDE_SCHEMA,
+            },
+          },
+        },
         // Per-player cumulative stats: { me, opponent } each carrying
         // counters (units_produced, units_killed, etc.) plus the
         // average APM/SPM merged from the apmCurve. Drives the SPA's
@@ -234,7 +309,7 @@ function validateGameRecord(raw) {
   }
   const value = /** @type {Record<string, any>} */ (raw);
   if (!validate(value)) {
-    const errs = (validate.errors || []).map(
+    const errs = (validate.errors || []).slice(0, 3).map(
       /** @param {any} e */
       (e) => `${e.instancePath || "/"} ${e.message}`,
     );
