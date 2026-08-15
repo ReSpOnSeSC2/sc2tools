@@ -135,10 +135,12 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   // step coach during them; it must never flicker off on a timer.
   // Test fires still cap it via the generic test-mode rule below.
   "ghost-build": null,
-  // Randomizer plays a one-shot reveal animation (up to ~11 s for the
-  // fighter brawl / sumo styles) and shows the winner card for the
-  // remaining window before clearing the scene.
-  "randomizer": 26 * 1000,
+  // Randomizer is a two-act reveal: first the build (up to ~11 s for the
+  // fighter brawl / sumo styles), then—after the build card has fully
+  // cleared—the selected build's one- or two-Gateway opening-unit draw.
+  // Thirty-two seconds leaves a readable result hold without either act
+  // overlapping or being clipped by the production lifecycle.
+  "randomizer": 32 * 1000,
   // Multi-platform chat feed — a persistent, fully self-driven HUD.
   // It never consumes game payloads, so no timer applies.
   "multichat": null,

@@ -46,6 +46,41 @@ export const REVEAL_STYLES = [
 
 export type RevealStyle = (typeof REVEAL_STYLES)[number];
 
+/** Gateway-unit reveal styles. One is chosen after the build reveal. */
+export const UNIT_REVEAL_STYLES = [
+  "warp-gate",
+  "psi-draft",
+  "power-surge",
+] as const;
+
+export type UnitRevealStyle = (typeof UNIT_REVEAL_STYLES)[number];
+
+/** Protoss Gateway units supported by the opening-unit randomizer. */
+export const GATEWAY_UNIT_IDS = [
+  "zealot",
+  "stalker",
+  "sentry",
+  "adept",
+] as const;
+
+export type GatewayUnitId = (typeof GATEWAY_UNIT_IDS)[number];
+export type GatewayCount = 1 | 2;
+
+/** One selected unit and its relative custom weight. */
+export interface WeightedGatewayUnit {
+  id: GatewayUnitId;
+  weight: number;
+}
+
+/** Per-build settings for the one- or two-Gateway opening roll. */
+export interface OpeningUnitsConfig {
+  gateCount: GatewayCount;
+  /** Off means every selected unit has equal odds. */
+  useCustomWeights: boolean;
+  /** Presence in this list means selected. */
+  units: WeightedGatewayUnit[];
+}
+
 /** Where a build came from. */
 export type BuildSource = "catalog" | "custom";
 
@@ -63,6 +98,8 @@ export interface RandomizerBuild {
    * `useCustomWeights` on; otherwise every build is equal-chance.
    */
   weight: number;
+  /** Protoss-only second-stage roll shown after this build wins. */
+  openingUnits?: OpeningUnitsConfig;
 }
 
 /** Per-matchup randomizer settings. */
@@ -71,6 +108,8 @@ export interface MatchupConfig {
   enabled: boolean;
   /** Opt-in: honour `build.weight` instead of equal chance. */
   useCustomWeights: boolean;
+  /** Whether the winning build should proceed to its opening-unit roll. */
+  unitRandomizerEnabled: boolean;
   builds: RandomizerBuild[];
 }
 
@@ -83,9 +122,21 @@ export interface RandomizerSound {
 
 /** Full randomizer config — one entry per matchup. */
 export interface RandomizerConfig {
-  version: 1;
+  version: 2;
   matchups: Record<MatchupKey, MatchupConfig>;
   sound: RandomizerSound;
+}
+
+/** Result of the optional opening-unit roll for the chosen build. */
+export interface OpeningUnitsOutcome {
+  gateCount: GatewayCount;
+  /** One pick per Gateway. Picks are independent and may repeat. */
+  picks: GatewayUnitId[];
+  style: UnitRevealStyle;
+  /** Eligible selected units, in display order. */
+  pool: WeightedGatewayUnit[];
+  /** Normalized landing probabilities, parallel to `pool`. */
+  probabilities: number[];
 }
 
 /** Result of a single spin. */
@@ -97,6 +148,8 @@ export interface SpinOutcome {
   pool: RandomizerBuild[];
   /** Normalized landing probabilities, parallel to `pool`. 0..1. */
   probabilities: number[];
+  /** Null when the matchup/build is not eligible for the second stage. */
+  openingUnits: OpeningUnitsOutcome | null;
 }
 
 const MATCHUP_SET = new Set<string>(MATCHUPS);

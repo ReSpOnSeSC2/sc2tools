@@ -3,7 +3,8 @@
 /**
  * Per-matchup configuration card — enable toggle, custom-weights toggle,
  * checklist of catalog + custom builds, and (when custom weights are
- * on) a normalized-percent slider for every selected build.
+ * on) a normalized-percent slider for every selected build. Protoss
+ * matchups also expose a compact second-stage opening-unit editor.
  */
 import { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
@@ -22,10 +23,12 @@ import {
   setBuildWeight,
   toggleBuild,
 } from "@/lib/randomizer/config";
+import { defaultOpeningUnits } from "@/lib/randomizer/gatewayUnits";
 import type { MatchupConfig, MatchupKey } from "@/lib/randomizer/types";
 import { matchupRaces } from "@/lib/randomizer/types";
 import type { CustomBuild } from "@/components/builds/types";
 import { raceTint } from "@/lib/race";
+import { BuildUnitRollEditor } from "./BuildUnitRollEditor";
 
 export interface MatchupBuildPickerProps {
   matchup: MatchupKey;
@@ -68,6 +71,9 @@ export function MatchupBuildPicker({
           race: candidate.race,
           source: candidate.source,
           weight: 1,
+          ...(candidate.race === "Protoss"
+            ? { openingUnits: defaultOpeningUnits(candidate.suggestedGateCount) }
+            : {}),
         },
         on,
       ),
@@ -134,6 +140,12 @@ export function MatchupBuildPicker({
           </Section>
         </>
       )}
+
+      <BuildUnitRollEditor
+        matchup={matchup}
+        config={config}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -228,7 +240,9 @@ function BuildChecklist({
               </label>
               {selected && config.enabled && config.useCustomWeights ? (
                 <WeightSlider
+                  buildName={c.name}
                   value={build?.weight ?? 1}
+                  probability={probability}
                   onChange={(v) => onWeightChange(c.id, v)}
                 />
               ) : null}
@@ -241,15 +255,19 @@ function BuildChecklist({
 }
 
 function WeightSlider({
+  buildName,
   value,
+  probability,
   onChange,
 }: {
+  buildName: string;
   value: number;
+  probability: number;
   onChange: (next: number) => void;
 }) {
+  const pct = (probability * 100).toFixed(1);
   return (
     <div className="flex flex-shrink-0 items-center gap-2 sm:w-56">
-      <label className="sr-only">Weight</label>
       <input
         type="range"
         min={0}
@@ -257,7 +275,9 @@ function WeightSlider({
         step={0.1}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1 flex-1 cursor-pointer accent-accent-cyan"
+        aria-label={`Selection weight for build ${buildName}`}
+        aria-valuetext={`${value.toFixed(1)} weight, ${pct} percent selection chance`}
+        className="h-1 flex-1 cursor-pointer accent-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       />
       <span className="w-10 flex-shrink-0 text-right text-caption tabular-nums text-text">
         {value.toFixed(1)}

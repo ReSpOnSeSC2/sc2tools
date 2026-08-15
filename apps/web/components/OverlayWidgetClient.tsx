@@ -761,6 +761,14 @@ export function useWidgetVisibility(
   // window between page boot and the first envelope where neither
   // identity is known.
   const currentGameKey = liveGame?.gameKey ?? live?.gameKey ?? null;
+  // Test payloads deliberately have no gameKey. The API stamps every Test
+  // click with a nonce so the dedicated randomizer source can distinguish a
+  // fresh replay from the still-cached payload whose timer already expired.
+  // Keep this randomizer-only: other widgets retain their established
+  // visibility identity, while the composite client already re-arms from the
+  // complete `live` object.
+  const randomizerTestNonce =
+    widget === "randomizer" && isTest ? (live?.testNonce ?? null) : null;
 
   useEffect(() => {
     // No source at all (e.g. after the streamer cancelled a Test fire
@@ -792,7 +800,15 @@ export function useWidgetVisibility(
       setVisible(false);
       timerRef.current = null;
     }, duration);
-  }, [widget, hasAnySource, pinThroughMatch, isTest, currentGameKey, setVisible]);
+  }, [
+    widget,
+    hasAnySource,
+    pinThroughMatch,
+    isTest,
+    currentGameKey,
+    randomizerTestNonce,
+    setVisible,
+  ]);
 
   useEffect(
     () => () => {

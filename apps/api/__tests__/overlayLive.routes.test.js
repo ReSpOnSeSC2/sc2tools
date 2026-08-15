@@ -182,6 +182,9 @@ describe("POST /v1/overlay-events/test", () => {
     // The dedicated Ghost source uses isTest to show its placement hint
     // (or its URL-armed build); no other widget's sample may bleed in.
     expect(p.isTest).toBe(true);
+    expect(p.testNonce).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
     expect(p.testWidget).toBe("ghost-build");
     expect(p.matchup).toBe("PvZ");
     expect(p.session).toBeUndefined();

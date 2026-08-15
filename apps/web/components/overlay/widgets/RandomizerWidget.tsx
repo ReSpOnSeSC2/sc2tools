@@ -6,8 +6,8 @@
  * Triggers once per new gameKey: derives the matchup from whatever
  * source has it (post-game ``live`` payload, the agent's pre/in-game
  * envelope, or a derived race pairing), spins a weighted-random build
- * from the user's curated pool, and renders one of the five reveal
- * animations.
+ * from the user's curated pool, renders a build-order reveal, then follows it
+ * with the winning build's configured Gateway-unit draw when enabled.
  *
  * Test fires (`overlay:live` with `isTest: true`) also drive a spin —
  * the test payload always carries a matchup so the streamer can preview
@@ -25,8 +25,8 @@ import type {
   SpinOutcome,
 } from "@/lib/randomizer/types";
 import { isMatchupKey } from "@/lib/randomizer/types";
-import { spinResult } from "@/lib/randomizer/engine";
-import { RandomizerStage } from "@/components/randomizer/RandomizerStage";
+import { mulberry32, seedFromString, spinResult } from "@/lib/randomizer/engine";
+import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
 import {
   setRevealSoundEnabled,
   setRevealSoundVolume,
@@ -64,7 +64,11 @@ export function RandomizerWidget({
     if (lastSpinKeyRef.current === spinKey) return;
     const mc = config.matchups[matchup];
     if (!mc || !mc.enabled || mc.builds.length === 0) return;
-    const outcome = spinResult(matchup, mc);
+    // Game-key seeding keeps the build and unit pair identical if the same
+    // overlay is refreshed or rendered by both the composite and dedicated
+    // Browser Sources. Test fires carry a unique nonce so every click still
+    // produces a fresh outcome.
+    const outcome = spinResult(matchup, mc, mulberry32(seedFromString(spinKey)));
     if (!outcome) return;
     lastSpinKeyRef.current = spinKey;
     spinIdRef.current += 1;
@@ -80,11 +84,15 @@ export function RandomizerWidget({
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        width: "min(620px, 96vw)",
+        width: "min(680px, 96vw)",
         pointerEvents: "none",
       }}
     >
-      <RandomizerStage outcome={spin.outcome} spinId={spin.spinId} />
+      <RandomizerSequence
+        key={spin.spinId}
+        outcome={spin.outcome}
+        spinId={spin.spinId}
+      />
     </div>
   );
 }
@@ -110,8 +118,8 @@ function deriveMatchup(
 
 /**
  * Unique key per spin moment. Real games key off the agent's stable
- * `gameKey`; test fires synthesise a key from the `live` object's
- * identity so each Test click triggers a fresh spin.
+ * `gameKey`; test fires use the API-stamped nonce so each Test click
+ * triggers a fresh spin.
  */
 export function deriveSpinKey(
   matchup: MatchupKey | null,
@@ -122,7 +130,9 @@ export function deriveSpinKey(
   // Test fires don't carry a gameKey — synthesise one pinned to the test
   // fire so a second Test re-triggers the widget. Checked first because a
   // sample payload may carry a ``result`` and we still want it to spin.
-  if (live?.isTest) return `${matchup}:test:${live.matchup ?? "x"}`;
+  if (live?.isTest) {
+    return `${matchup}:test:${live.testNonce ?? live.gameKey ?? live.matchup ?? "x"}`;
+  }
   // The randomizer reveals "what to build THIS game", so it must fire at
   // game START only. The agent's pre/in-game envelope is the start
   // signal — key off its gameKey, but ONLY while the match is still LIVE

@@ -28,6 +28,22 @@ describe("customCandidates", () => {
     const list = customCandidates("PvZ", CUSTOM);
     for (const c of list) expect(c.id.startsWith("custom:")).toBe(true);
   });
+
+  it("suggests two Gates for PvP and one for PvT/PvZ", () => {
+    expect(customCandidates("PvP", CUSTOM).find((c) => c.name === "Anti-cheese")?.suggestedGateCount)
+      .toBe(2);
+    expect(customCandidates("PvZ", CUSTOM).find((c) => c.name === "Anti-cheese")?.suggestedGateCount)
+      .toBe(1);
+  });
+
+  it("lets an explicit Gate count in a custom name override the matchup", () => {
+    const explicit: CustomBuild[] = [
+      { slug: "one", name: "My 1 Gate Expand", race: "Protoss", vsRace: "Protoss" },
+      { slug: "two", name: "Secret 2-Gate", race: "Protoss", vsRace: "Terran" },
+    ];
+    expect(customCandidates("PvP", explicit)[0].suggestedGateCount).toBe(1);
+    expect(customCandidates("PvT", explicit)[0].suggestedGateCount).toBe(2);
+  });
 });
 
 describe("candidatePool", () => {

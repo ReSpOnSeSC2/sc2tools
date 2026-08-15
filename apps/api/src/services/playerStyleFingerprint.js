@@ -94,7 +94,7 @@ const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
 const AXIS_VOCABULARY = Object.freeze({
   repertoire: Object.freeze({
     one_trick: {
-      label: "Build-Order One-Trick",
+      label: "One-Trick Wonder",
       noun: "Purist",
       adjective: "Devoted",
       blurb:
@@ -160,7 +160,7 @@ const AXIS_VOCABULARY = Object.freeze({
       thresholdText: "average from 5:00 through 10:00",
     },
     mid_late_master: {
-      label: "Mid/Late-Game Master",
+      label: "Mid-Game Maestro",
       noun: "Navigator",
       adjective: "Transitional",
       blurb:
@@ -260,7 +260,7 @@ const AXIS_META = Object.freeze({
     label: "Build variety",
     description:
       "Shannon effective diversity weights every recognized build by how often you actually use it.",
-    leftLabel: "Build-Order One-Trick",
+    leftLabel: "One-Trick Wonder",
     centerLabel: "Consistent Grinder",
     rightLabel: "Creative Genius",
   },

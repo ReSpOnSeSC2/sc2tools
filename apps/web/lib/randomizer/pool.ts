@@ -18,12 +18,15 @@ import type { Race } from "@/lib/race";
 import { coerceRace, coerceVsRace } from "@/lib/race";
 import type { CustomBuild } from "@/components/builds/types";
 import { matchupRaces, type MatchupKey } from "./types";
+import { inferGatewayCount } from "./gatewayUnits";
 
 export interface PoolCandidate {
   id: string;
   name: string;
   race: Race;
   source: "catalog" | "custom";
+  /** Suggested opening production count; editable after selection. */
+  suggestedGateCount: 1 | 2;
 }
 
 /** Catalog builds available for a matchup (matchup-specific + generic). */
@@ -40,6 +43,7 @@ export function catalogCandidates(m: MatchupKey): PoolCandidate[] {
     name: d.name,
     race: d.race,
     source: "catalog" as const,
+    suggestedGateCount: inferGatewayCount(m, d.name),
   }));
 }
 
@@ -61,6 +65,7 @@ export function customCandidates(
       name: b.name,
       race: coerceRace(b.race),
       source: "custom" as const,
+      suggestedGateCount: inferGatewayCount(m, b.name),
     }));
 }
 

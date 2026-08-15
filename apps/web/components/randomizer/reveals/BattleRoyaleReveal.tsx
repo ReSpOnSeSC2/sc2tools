@@ -1,10 +1,9 @@
 "use client";
 
 /**
- * Battle Royale elimination — all eligible builds enter as contestants
- * and get knocked out one by one until the winner is crowned. The
- * elimination order is computed up front, so the visual matches the
- * engine's already-decided pick.
+ * Battle Royale elimination. The engine's already-decided winner is always
+ * present, while large pools use a deterministic visual bracket so the reveal
+ * stays readable and finishes on a predictable schedule.
  */
 import { useEffect, useMemo, useState } from "react";
 import { RaceIcon } from "@/components/overlay/WidgetShell";
@@ -20,8 +19,12 @@ import {
 } from "./revealShared";
 import { useRevealSound } from "./revealSound";
 
-const TICK_MS = 450;
-const FINAL_DELAY = 600;
+export const BATTLE_ROYALE_MAX_CONTENDERS = 12;
+export const BATTLE_ROYALE_TICK_MS = 450;
+export const BATTLE_ROYALE_FINAL_DELAY_MS = 600;
+export const BATTLE_ROYALE_MAX_DURATION_MS =
+  (BATTLE_ROYALE_MAX_CONTENDERS - 1) * BATTLE_ROYALE_TICK_MS +
+  BATTLE_ROYALE_FINAL_DELAY_MS;
 
 export function BattleRoyaleReveal({
   pool,
@@ -33,9 +36,13 @@ export function BattleRoyaleReveal({
 }: RevealProps) {
   const reducedMotion = useReducedMotion();
   const rarity = rarityFor(winnerProbability);
-  const eliminationOrder = useMemo(
-    () => buildEliminationOrder(pool, winner, spinId),
+  const visualField = useMemo(
+    () => buildBattleRoyaleField(pool, winner, spinId),
     [pool, winner, spinId],
+  );
+  const eliminationOrder = useMemo(
+    () => buildEliminationOrder(visualField, winner, spinId),
+    [visualField, winner, spinId],
   );
   const { eliminated, settled } = useEliminationDriver(
     spinId,
@@ -46,18 +53,50 @@ export function BattleRoyaleReveal({
   useRevealSound({
     style: "battle",
     spinId,
-    durationMs: eliminationOrder.length * TICK_MS + FINAL_DELAY,
+    durationMs: battleRoyaleDurationMs(eliminationOrder.length),
     reducedMotion,
-    eliminationTimesMs: eliminationOrder.map((_, i) => (i + 1) * TICK_MS),
+    eliminationTimesMs: eliminationOrder.map(
+      (_, i) => (i + 1) * BATTLE_ROYALE_TICK_MS,
+    ),
   });
+
+  const isVisualSubset = pool.length > visualField.length;
 
   return (
     <RevealFrame>
       <MatchupPill label={matchupLabel} />
+      {isVisualSubset ? (
+        <div
+          role="note"
+          style={{
+            width: "min(560px, 92vw)",
+            marginBottom: 8,
+            padding: "6px 10px",
+            borderRadius: 9,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "3px 10px",
+            color: "#aeb5c5",
+            background: "rgba(11,13,18,0.78)",
+            border: "1px solid rgba(174,181,197,0.2)",
+            fontSize: 11,
+            lineHeight: 1.35,
+          }}
+        >
+          <span style={{ color: "#e6e8ee", fontWeight: 700 }}>
+            Visual bracket · {visualField.length} of {pool.length} builds shown
+          </span>
+          <span>Winner drawn from the full eligible pool</span>
+        </div>
+      ) : null}
       <div
+        role="list"
+        aria-label="Battle Royale contenders"
         style={{
           display: "grid",
-          gridTemplateColumns: gridColumns(pool.length),
+          gridTemplateColumns: gridColumns(visualField.length),
           gap: 8,
           padding: 14,
           borderRadius: 14,
@@ -68,7 +107,7 @@ export function BattleRoyaleReveal({
           boxShadow: `0 8px 28px rgba(0,0,0,0.5)`,
         }}
       >
-        {pool.map((b) => (
+        {visualField.map((b) => (
           <Contestant
             key={b.id}
             build={b}
@@ -94,6 +133,7 @@ function Contestant({
   const accent = raceHex(build.race);
   return (
     <div
+      role="listitem"
       style={{
         position: "relative",
         padding: "8px 10px",
@@ -163,19 +203,69 @@ function gridColumns(n: number): string {
   return "repeat(4, 1fr)";
 }
 
+/**
+ * Selects a stable, bounded visual field without ever replacing the winner
+ * that the randomizer engine already chose from the complete eligible pool.
+ */
+export function buildBattleRoyaleField(
+  pool: RandomizerBuild[],
+  winner: RandomizerBuild,
+  spinId: number,
+): RandomizerBuild[] {
+  const seen = new Set<string>();
+  const uniquePool: RandomizerBuild[] = [];
+
+  for (const build of pool) {
+    if (seen.has(build.id)) continue;
+    seen.add(build.id);
+    uniquePool.push(build.id === winner.id ? winner : build);
+  }
+  if (!seen.has(winner.id)) uniquePool.push(winner);
+
+  if (uniquePool.length <= BATTLE_ROYALE_MAX_CONTENDERS) return uniquePool;
+
+  const sampledLosers = shuffled(
+    uniquePool.filter((build) => build.id !== winner.id),
+    spinId ^ 0x6d2b79f5,
+  ).slice(0, BATTLE_ROYALE_MAX_CONTENDERS - 1);
+  const shownIds = new Set(sampledLosers.map((build) => build.id));
+  shownIds.add(winner.id);
+
+  // Preserve source ordering so the winner's position does not become a tell.
+  return uniquePool.filter((build) => shownIds.has(build.id));
+}
+
+/** Duration for a bounded number of visual knockouts, including the final beat. */
+export function battleRoyaleDurationMs(eliminationCount: number): number {
+  const boundedCount = Math.min(
+    BATTLE_ROYALE_MAX_CONTENDERS - 1,
+    Math.max(0, Math.trunc(eliminationCount)),
+  );
+  return (
+    boundedCount * BATTLE_ROYALE_TICK_MS + BATTLE_ROYALE_FINAL_DELAY_MS
+  );
+}
+
 function buildEliminationOrder(
   pool: RandomizerBuild[],
   winner: RandomizerBuild,
   spinId: number,
 ): string[] {
-  const losers = pool.filter((b) => b.id !== winner.id);
-  let s = spinId | 0;
-  for (let i = losers.length - 1; i > 0; i -= 1) {
+  return shuffled(
+    pool.filter((b) => b.id !== winner.id),
+    spinId,
+  ).map((b) => b.id);
+}
+
+function shuffled<T>(items: T[], seed: number): T[] {
+  const result = [...items];
+  let s = seed | 0;
+  for (let i = result.length - 1; i > 0; i -= 1) {
     s = (s * 1664525 + 1013904223) | 0;
     const j = Math.abs(s) % (i + 1);
-    [losers[i], losers[j]] = [losers[j], losers[i]];
+    [result[i], result[j]] = [result[j], result[i]];
   }
-  return losers.map((b) => b.id);
+  return result;
 }
 
 function useEliminationDriver(
@@ -207,7 +297,7 @@ function useEliminationDriver(
             next.add(id);
             return next;
           });
-        }, (i + 1) * TICK_MS),
+        }, (i + 1) * BATTLE_ROYALE_TICK_MS),
       );
     });
     handles.push(
@@ -216,7 +306,7 @@ function useEliminationDriver(
           setSettled(true);
           onComplete?.();
         },
-        order.length * TICK_MS + FINAL_DELAY,
+        battleRoyaleDurationMs(order.length),
       ),
     );
 

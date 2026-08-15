@@ -31,7 +31,8 @@ import { useRevealSound } from "./revealSound";
 const W = 540;
 const H = 300;
 const R = 26;
-const DURATION_MS = 11000;
+export const FIGHTER_BRAWL_DURATION_MS = 11_000;
+const DURATION_MS = FIGHTER_BRAWL_DURATION_MS;
 
 interface Fighter {
   id: string;

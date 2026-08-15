@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { RandomizerStage } from "@/components/randomizer/RandomizerStage";
+import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
 import { spinResult } from "@/lib/randomizer/engine";
 import type {
   MatchupConfig,
@@ -40,7 +40,7 @@ export function RandomizerPreview({ matchup, config }: RandomizerPreviewProps) {
   return (
     <Section
       title="Live preview"
-      description="Try the reveal animation without firing it at OBS. A different style is picked each spin — same as the production widget."
+      description="Preview the complete OBS sequence: the build locks in and clears, then its configured opening Gateway unit or pair is drawn."
     >
       <Card>
         <div className="flex flex-col items-center gap-4">
@@ -65,9 +65,13 @@ export function RandomizerPreview({ matchup, config }: RandomizerPreviewProps) {
           {spin ? (
             <div
               className="flex w-full items-center justify-center rounded-xl border border-border bg-[#0b0d12] p-6"
-              style={{ minHeight: 500 }}
+              style={{ minHeight: 540 }}
             >
-              <RandomizerStage outcome={spin.outcome} spinId={spin.id} />
+              <RandomizerSequence
+                key={spin.id}
+                outcome={spin.outcome}
+                spinId={spin.id}
+              />
             </div>
           ) : null}
         </div>

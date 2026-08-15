@@ -27,6 +27,8 @@ export type LiveGamePayload = {
    * scene.
    */
   isTest?: boolean;
+  /** Unique value stamped onto each Settings Test fire for safe dedupe. */
+  testNonce?: number | string;
   /**
    * Widget id selected by a per-widget Settings test. All Browser
    * Sources for one token share a socket room, so non-target sources

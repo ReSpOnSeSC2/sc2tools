@@ -6,7 +6,10 @@ import type {
   LiveGameEnvelope,
   LiveGamePayload,
 } from "../overlay/types";
-import type { WidgetId } from "../overlay/widgetLifecycle";
+import {
+  TEST_DURATION_MS,
+  type WidgetId,
+} from "../overlay/widgetLifecycle";
 
 /**
  * Regression test for a real ladder-stream report: the scouting
@@ -346,6 +349,68 @@ describe("useWidgetVisibility — randomizer is game-START only", () => {
       />,
     );
     expect(out.value).toBe(true);
+  });
+
+  it("shows again when a second Test nonce arrives after the first timer hid it", () => {
+    const out = { value: false };
+    const { rerender } = render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ isTest: true, testNonce: 100, result: "win" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(TEST_DURATION_MS);
+    });
+    expect(out.value).toBe(false);
+
+    rerender(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ isTest: true, testNonce: 101, result: "win" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+    expect(out.value).toBe(true);
+  });
+
+  it("replaces the active Test timer when a distinct nonce arrives", () => {
+    const out = { value: false };
+    const { rerender } = render(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ isTest: true, testNonce: "first", result: "win" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(15_000);
+    });
+    rerender(
+      <VisibilityProbe
+        widget="randomizer"
+        live={liveOf({ isTest: true, testNonce: "second", result: "win" })}
+        liveGame={null}
+        visibleOut={out}
+      />,
+    );
+
+    // The first timer would have fired 5 seconds after the second click.
+    act(() => {
+      vi.advanceTimersByTime(5_001);
+    });
+    expect(out.value).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(TEST_DURATION_MS - 5_001);
+    });
+    expect(out.value).toBe(false);
   });
 
   it("shows on an agent-offline pre-game live (no result)", () => {

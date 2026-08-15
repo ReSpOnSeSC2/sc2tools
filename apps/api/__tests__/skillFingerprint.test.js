@@ -369,7 +369,7 @@ describe("skill fingerprint pure replay heuristics", () => {
       expect(below.category).toBe("mid_late_master");
     });
 
-    test("Mid/Late-Game Master wins at exactly 80% strictly above 10:00", () => {
+    test("Mid-Game Maestro wins at exactly 80% strictly above 10:00", () => {
       const exact = paceAxis([
         ...repeatedRows(8, { durationSec: 601 }),
         ...repeatedRows(2, { durationSec: 600 }),
@@ -380,7 +380,7 @@ describe("skill fingerprint pure replay heuristics", () => {
       ]);
       expect(exact).toMatchObject({
         category: "mid_late_master",
-        categoryLabel: "Mid/Late-Game Master",
+        categoryLabel: "Mid-Game Maestro",
         summary: { aboveTen: { games: 8, percent: 80 } },
       });
       // 70% over 10:00 clears no 80% gate, and the mean lands past 10:00.
@@ -1657,7 +1657,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     ).toMatchObject({
       value: 1,
       category: "one_trick",
-      categoryLabel: "Build-Order One-Trick",
+      categoryLabel: "One-Trick Wonder",
       position: 0,
       sampleSize: 50,
     });
@@ -1666,7 +1666,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     ).toMatchObject({
       value: 900,
       category: "mid_late_master",
-      categoryLabel: "Mid/Late-Game Master",
+      categoryLabel: "Mid-Game Maestro",
       position: 100,
       sampleSize: 50,
     });

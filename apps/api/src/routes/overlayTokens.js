@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { randomUUID } = require("node:crypto");
 const rateLimitModule = require("express-rate-limit");
 
 const rateLimit =
@@ -206,6 +207,10 @@ function buildOverlayTokensRouter(deps) {
         // fire would pin sample data to the scene until the streamer
         // refreshed the Browser Source.
         payload.isTest = true;
+        // Distinguish consecutive Test clicks carrying otherwise-identical
+        // sample data. The randomizer includes this nonce in its spin key so
+        // a second click replays without remounting the OBS Browser Source.
+        payload.testNonce = randomUUID();
         // Every Browser Source for a token shares the same socket room.
         // Preserve the requested widget id on per-widget probes so the
         // clients can ignore this synthetic event unless it targets them.

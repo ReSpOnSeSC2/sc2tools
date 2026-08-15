@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Build Roulette can now roll the opening Gateway units as a second act** —
+  every Protoss build can independently draw one or two units with equal or
+  custom odds, using real unit portraits and one of three animated reveal
+  styles after the build-order result has fully cleared.
+
 ### Fixed
 
 - **Skill Fingerprints no longer collapse to Balanced All-Rounder while their
@@ -48,7 +55,7 @@ corresponding GitHub Release.
 
 - **Skill Fingerprint game-length bands now match how 1v1 games actually end**
   — Timing Attacker covers 5:00 through 10:00 rather than 5:00 through 7:00,
-  Mid/Late-Game Master starts above 10:00, and Long-Game Lean now applies to
+  Mid-Game Maestro starts above 10:00, and Long-Game Lean now applies to
   averages over 10:00 instead of over 15:00, so Flexible Pacer no longer
   swallows every ten-to-fifteen-minute player. Late-Game Master still needs 80%
   of games past 15:00, and the distribution card reports the new

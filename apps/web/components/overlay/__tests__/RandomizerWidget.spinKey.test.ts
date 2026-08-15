@@ -52,8 +52,29 @@ describe("deriveSpinKey", () => {
   });
 
   it("always spins on a Test fire, even when the sample carries a result", () => {
-    const live: LiveGamePayload = { isTest: true, result: "win", matchup: "PvT" };
-    expect(deriveSpinKey("PvT", live, null)).toBe("PvT:test:PvT");
+    const live: LiveGamePayload = {
+      isTest: true,
+      testNonce: 12345,
+      result: "win",
+      matchup: "PvT",
+    };
+    expect(deriveSpinKey("PvT", live, null)).toBe("PvT:test:12345");
+  });
+
+  it("gives consecutive Test fires distinct keys", () => {
+    const first: LiveGamePayload = {
+      isTest: true,
+      testNonce: 100,
+      matchup: "PvT",
+    };
+    const second: LiveGamePayload = {
+      isTest: true,
+      testNonce: 101,
+      matchup: "PvT",
+    };
+    expect(deriveSpinKey("PvT", first, null)).not.toBe(
+      deriveSpinKey("PvT", second, null),
+    );
   });
 
   it("starts once, then stays silent when that same game ends", () => {

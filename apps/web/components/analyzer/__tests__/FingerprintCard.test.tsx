@@ -57,13 +57,13 @@ const TAXONOMY = {
       label: "Build variety",
       description:
         "Shannon effective diversity weights every recognized build by how often you actually use it.",
-      leftLabel: "Build-Order One-Trick",
+      leftLabel: "One-Trick Wonder",
       centerLabel: "Consistent Grinder",
       rightLabel: "Creative Genius",
       categories: [
         trait(
           "one_trick",
-          "Build-Order One-Trick",
+          "One-Trick Wonder",
           "Purist",
           "Devoted",
           "A deeply rehearsed primary plan.",
@@ -138,7 +138,7 @@ const TAXONOMY = {
         ),
         trait(
           "mid_late_master",
-          "Mid/Late-Game Master",
+          "Mid-Game Maestro",
           "Navigator",
           "Transitional",
           "Your games repeatedly reach the mid game and later.",
@@ -1324,7 +1324,7 @@ describe("FingerprintCard", () => {
         ),
       ).toBe("true");
       expect(
-        within(group!).queryByText("Build-Order One-Trick"),
+        within(group!).queryByText("One-Trick Wonder"),
       ).toBeNull();
     });
 

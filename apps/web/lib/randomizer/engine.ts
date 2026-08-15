@@ -5,12 +5,28 @@
  */
 import {
   REVEAL_STYLES,
+  UNIT_REVEAL_STYLES,
+  type GatewayUnitId,
   type MatchupConfig,
   type MatchupKey,
+  type OpeningUnitsOutcome,
   type RandomizerBuild,
   type RevealStyle,
   type SpinOutcome,
+  type UnitRevealStyle,
+  type WeightedGatewayUnit,
 } from "./types";
+import { isGatewayUnitId } from "./gatewayUnits";
+
+/** Stable unsigned 32-bit FNV-1a hash for game-key-derived PRNG seeds. */
+export function seedFromString(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
 
 /** Deterministic 32-bit PRNG. Returns a function yielding [0, 1). */
 export function mulberry32(seed: number): () => number {
@@ -69,6 +85,64 @@ export function pickRevealStyle(
   return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
 }
 
+/** Choose one of the dedicated opening-unit reveal styles. */
+export function pickUnitRevealStyle(
+  rng: () => number = Math.random,
+): UnitRevealStyle {
+  return UNIT_REVEAL_STYLES[
+    Math.min(UNIT_REVEAL_STYLES.length - 1, Math.floor(rng() * UNIT_REVEAL_STYLES.length))
+  ];
+}
+
+/** Effective weight for one selected Gateway unit. */
+export function effectiveOpeningUnitWeight(
+  unit: WeightedGatewayUnit,
+  useCustomWeights: boolean,
+): number {
+  if (!useCustomWeights) return 1;
+  const weight = Number(unit.weight);
+  return Number.isFinite(weight) && weight > 0 ? weight : 0;
+}
+
+/**
+ * Roll one unit per configured Gateway. Each draw uses the same normalized
+ * pool and is independent, so a two-Gate result may intentionally repeat.
+ */
+export function spinOpeningUnits(
+  build: RandomizerBuild,
+  enabled: boolean,
+  rng: () => number = Math.random,
+): OpeningUnitsOutcome | null {
+  if (!enabled || build.race !== "Protoss" || !build.openingUnits) return null;
+
+  const seen = new Set<GatewayUnitId>();
+  const pool = build.openingUnits.units.filter((unit) => {
+    if (!isGatewayUnitId(unit?.id) || seen.has(unit.id)) return false;
+    seen.add(unit.id);
+    return true;
+  });
+  if (pool.length === 0) return null;
+
+  const probabilities = normalizeProbabilities(
+    pool.map((unit) =>
+      effectiveOpeningUnitWeight(unit, build.openingUnits!.useCustomWeights),
+    ),
+  );
+  const gateCount = build.openingUnits.gateCount === 2 ? 2 : 1;
+  const picks: GatewayUnitId[] = [];
+  for (let gate = 0; gate < gateCount; gate += 1) {
+    picks.push(pool[pickIndex(probabilities, rng)].id);
+  }
+
+  return {
+    gateCount,
+    picks,
+    style: pickUnitRevealStyle(rng),
+    pool,
+    probabilities,
+  };
+}
+
 /**
  * Resolve a full spin for a matchup. Returns null when the matchup is
  * disabled or has no builds — callers render nothing in that case.
@@ -86,12 +160,21 @@ export function spinResult(
   const weights = pool.map((b) => effectiveWeight(b, cfg.useCustomWeights));
   const probabilities = normalizeProbabilities(weights);
   const winnerIndex = pickIndex(probabilities, rng);
+  // Preserve the original RNG ordering: build winner first, build reveal
+  // style second. Opening-unit draws are appended only after both decisions.
+  const style = pickRevealStyle(rng, avoidStyle);
+  const winner = pool[winnerIndex];
 
   return {
     matchup,
-    winner: pool[winnerIndex],
-    style: pickRevealStyle(rng, avoidStyle),
+    winner,
+    style,
     pool,
     probabilities,
+    openingUnits: spinOpeningUnits(
+      winner,
+      cfg.unitRandomizerEnabled === true,
+      rng,
+    ),
   };
 }
