@@ -14,6 +14,8 @@ import type { ChatEngine, EngineCallbacks } from "./types";
 const OFFLINE_RETRY_MS = 60_000;
 /** Backoff after transient poll failures. */
 const ERROR_RETRY_MS = 10_000;
+/** Allow a small API/browser clock difference at initial connection. */
+const FIRST_POLL_CLOCK_SKEW_MS = 5_000;
 
 interface WireMessage {
   id: string;
@@ -52,6 +54,7 @@ export function createYoutubeChat(
   const { apiBase, token, channel, callbacks } = opts;
   let closed = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let pollBackpressured = false;
   const controller = new AbortController();
 
   const schedule = (fn: () => void, ms: number) => {
@@ -62,7 +65,7 @@ export function createYoutubeChat(
 
   const base = `${apiBase}/v1/multichat/${encodeURIComponent(token)}`;
 
-  const resolve = async () => {
+  const resolve = async (cycleStartedAtMs: number = Date.now()) => {
     if (closed) return;
     callbacks.onStatus("connecting");
     try {
@@ -70,10 +73,13 @@ export function createYoutubeChat(
         `${base}/youtube/resolve?channel=${encodeURIComponent(channel)}`,
         { signal: controller.signal, cache: "no-store" },
       );
-      if (res.status === 503) {
-        callbacks.onStatus("connecting");
+      if (res.status === 429 || res.status === 503) {
+        callbacks.onStatus(
+          "connecting",
+          res.status === 429 ? "rate limited; retrying" : undefined,
+        );
         schedule(
-          resolve,
+          () => void resolve(cycleStartedAtMs),
           retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
         );
         return;
@@ -97,8 +103,9 @@ export function createYoutubeChat(
         continuation: string;
         clientVersion: string;
       };
+      pollBackpressured = false;
       callbacks.onStatus("connected");
-      void poll(data.continuation, data.clientVersion, true);
+      void poll(data.continuation, data.clientVersion, true, cycleStartedAtMs);
     } catch (err) {
       if (closed) return;
       callbacks.onStatus("error", String(err).slice(0, 80));
@@ -110,6 +117,7 @@ export function createYoutubeChat(
     continuation: string,
     clientVersion: string,
     firstPoll: boolean,
+    cycleStartedAtMs: number,
   ) => {
     if (closed) return;
     try {
@@ -120,10 +128,23 @@ export function createYoutubeChat(
         signal: controller.signal,
         cache: "no-store",
       });
-      if (res.status === 503) {
-        callbacks.onStatus("connecting");
+      if (res.status === 429 || res.status === 503) {
+        pollBackpressured = true;
+        callbacks.onStatus(
+          "connecting",
+          res.status === 429 ? "rate limited; retrying" : undefined,
+        );
+        // Keep the exact continuation. Re-resolving here can jump over
+        // messages while another OBS surface continues polling, then classify
+        // anything before that new resolve cycle as stale history.
         schedule(
-          () => void poll(continuation, clientVersion, firstPoll),
+          () =>
+            void poll(
+              continuation,
+              clientVersion,
+              firstPoll,
+              cycleStartedAtMs,
+            ),
           retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
         );
         return;
@@ -134,34 +155,51 @@ export function createYoutubeChat(
         return;
       }
       const data = (await res.json()) as PollResponse;
-      // The resolve continuation replays recent history; skip that
-      // first batch so switching scenes doesn't dump stale lines.
-      if (!firstPoll) {
-        for (const m of data.messages) {
-          callbacks.onMessage({
-            platform: "youtube",
-            id: m.id,
-            user: m.user,
-            text: m.text,
-            badges: (m.badges || []).filter(
-              (b): b is "owner" | "moderator" | "member" | "verified" =>
-                ["owner", "moderator", "member", "verified"].includes(b),
-            ),
-            atMs: m.atMs,
-          });
+      if (pollBackpressured) {
+        pollBackpressured = false;
+        callbacks.onStatus("connected");
+      }
+      // The resolve continuation replays recent history. Suppress only
+      // entries that predate this engine: a viewer can post while the dock's
+      // first request is in flight, and dropping that whole batch loses a
+      // genuinely live line. The tolerance covers small API/browser skew.
+      const firstPollCutoffMs = cycleStartedAtMs - FIRST_POLL_CLOCK_SKEW_MS;
+      for (const m of data.messages) {
+        if (
+          firstPoll &&
+          (!Number.isFinite(m.atMs) || m.atMs < firstPollCutoffMs)
+        ) {
+          continue;
         }
-        for (const e of data.events || []) {
-          if (!isChatEventKind(e.kind)) continue;
-          callbacks.onEvent?.({
-            platform: "youtube",
-            id: e.id,
-            kind: e.kind,
-            user: e.user,
-            detail: e.detail,
-            amount: e.amount,
-            atMs: e.atMs,
-          });
+        callbacks.onMessage({
+          platform: "youtube",
+          id: m.id,
+          user: m.user,
+          text: m.text,
+          badges: (m.badges || []).filter(
+            (b): b is "owner" | "moderator" | "member" | "verified" =>
+              ["owner", "moderator", "member", "verified"].includes(b),
+          ),
+          atMs: m.atMs,
+        });
+      }
+      for (const e of data.events || []) {
+        if (
+          firstPoll &&
+          (!Number.isFinite(e.atMs) || e.atMs < firstPollCutoffMs)
+        ) {
+          continue;
         }
+        if (!isChatEventKind(e.kind)) continue;
+        callbacks.onEvent?.({
+          platform: "youtube",
+          id: e.id,
+          kind: e.kind,
+          user: e.user,
+          detail: e.detail,
+          amount: e.amount,
+          atMs: e.atMs,
+        });
       }
       if (data.done || !data.continuation) {
         callbacks.onStatus("ended");
@@ -169,7 +207,13 @@ export function createYoutubeChat(
         return;
       }
       schedule(
-        () => void poll(data.continuation as string, clientVersion, false),
+        () =>
+          void poll(
+            data.continuation as string,
+            clientVersion,
+            false,
+            cycleStartedAtMs,
+          ),
         data.timeoutMs,
       );
     } catch (err) {

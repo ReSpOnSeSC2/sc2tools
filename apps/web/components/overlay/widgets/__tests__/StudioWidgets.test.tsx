@@ -28,6 +28,7 @@ import {
 
 let mockStudio: StudioState & { loaded: boolean };
 let mockChat: MultiChatState;
+const mockMultiChatArgs: Array<{ config?: unknown }> = [];
 
 vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
   const actual =
@@ -36,7 +37,10 @@ vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
 });
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
-  useMultiChat: () => mockChat,
+  useMultiChat: (args: { config?: unknown }) => {
+    mockMultiChatArgs.push(args);
+    return mockChat;
+  },
 }));
 
 let mockEngagement: EngagementSummary;
@@ -89,6 +93,7 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
 beforeEach(() => {
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
+  mockMultiChatArgs.length = 0;
   mockEngagement = { ...EMPTY_ENGAGEMENT };
   mockEngagementEvent = null;
   mockFacts = [];
@@ -122,6 +127,32 @@ describe("ChatHighlightWidget", () => {
 });
 
 describe("ChatPollWidget", () => {
+  it("opens the chat feed only while voting is open", () => {
+    const view = render(<ChatPollWidget token="tok" />);
+    expect(mockMultiChatArgs[mockMultiChatArgs.length - 1]?.config).toBeNull();
+
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      poll: {
+        question: "Choose",
+        options: ["One", "Two"],
+        startedAtMs: 1000,
+        status: "open",
+      },
+    };
+    view.rerender(<ChatPollWidget token="tok" />);
+    expect(mockMultiChatArgs[mockMultiChatArgs.length - 1]?.config).toEqual({
+      twitch: { enabled: true, channel: "me" },
+    });
+
+    mockStudio = {
+      ...mockStudio,
+      poll: mockStudio.poll ? { ...mockStudio.poll, status: "closed" } : null,
+    };
+    view.rerender(<ChatPollWidget token="tok" />);
+    expect(mockMultiChatArgs[mockMultiChatArgs.length - 1]?.config).toBeNull();
+  });
+
   it("renders options with counts from the real tally over the feed", () => {
     mockStudio = {
       ...EMPTY_STUDIO,

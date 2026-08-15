@@ -43,13 +43,16 @@ export function ChatPollWidget({
   live?: LiveGamePayload | null;
 }) {
   const { platforms } = useMultichatConfig(token);
+  const state = useStudioState(token, studioEvent ?? null);
+  const studioPoll = state.poll;
   const { messages } = useMultiChat({
     apiBase: API_BASE,
     token,
-    config: platforms,
+    // The transparent poll source used to run a complete four-platform feed
+    // all stream, even when no vote was open. That duplicate YouTube loop
+    // spent the same token budget as the visible chat and Stream Dock.
+    config: studioPoll?.status === "open" ? platforms : null,
   });
-  const state = useStudioState(token, studioEvent ?? null);
-  const studioPoll = state.poll;
 
   // Test-fire demo poll: swap in the sample question and walk the
   // scripted tally one step per second so the bars animate.

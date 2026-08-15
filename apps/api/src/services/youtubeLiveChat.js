@@ -44,7 +44,11 @@ const PAGE_HEADERS = Object.freeze({
 });
 
 /** Clamp YouTube's requested poll interval to a sane overlay cadence. */
-const MIN_TIMEOUT_MS = 1500;
+// Multiple OBS widgets and Stream Dock can all request the same public feed.
+// A five-second floor keeps those legitimate readers inside the shared
+// per-token request budget; continuation polls return every accumulated line,
+// so slowing an unusually aggressive upstream cadence does not drop chat.
+const MIN_TIMEOUT_MS = 5000;
 const MAX_TIMEOUT_MS = 10000;
 const DEFAULT_TIMEOUT_MS = 4000;
 

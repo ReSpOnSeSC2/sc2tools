@@ -38,6 +38,15 @@ const OFFLINE_RETRY_MS = 60 * 1000;
 const DISCONNECT_RETRY_MS = 10 * 1000;
 
 const DEFAULT_MAX_CHANNELS = 16;
+/** Bound replay de-duplication for one long-lived channel. */
+const MAX_SEEN_CHAT_IDS = 512;
+const TIKTOK_CONNECTION_OPTIONS = Object.freeze({
+  // TikTok returns a small recent-comment batch during connect. Keeping
+  // it is important when an OBS source starts after chat has begun; the
+  // Channel de-duplicates comments that the websocket repeats.
+  processInitialData: true,
+  enableExtendedGiftInfo: false,
+});
 
 /** @typedef {(event: Record<string, any>) => void} RelayListener */
 
@@ -150,6 +159,14 @@ class Channel {
     this.connection = null;
     /** @type {NodeJS.Timeout | null} */
     this.retryTimer = null;
+    /**
+     * TikTok can deliver the same comment in the connect response and
+     * again on the newly-opened websocket. Keep a bounded set across
+     * reconnects so enabling the startup comment batch cannot duplicate
+     * messages in the overlay.
+     * @type {Set<string>}
+     */
+    this.seenChatIds = new Set();
   }
 
   /** @param {Record<string, any>} event */
@@ -212,11 +229,22 @@ class Channel {
 
     connection.on("chat", (/** @type {Record<string, any>} */ data) => {
       const message = mapChatEvent(data);
-      if (message) this.emit({ type: "chat", message });
+      if (message && this.rememberChatId(message.id)) {
+        this.emit({ type: "chat", message });
+      }
     });
-    for (const name of ["gift", "follow", "subscribe"]) {
-      connection.on(name, (/** @type {Record<string, any>} */ data) => {
-        const event = mapTikTokEvent(name, data);
+    for (const [wireName, eventName] of [
+      ["gift", "gift"],
+      ["follow", "follow"],
+      // Connector 2.x calls subscription notifications `subNotify`.
+      ["subNotify", "subscribe"],
+    ]) {
+      connection.on(wireName, (/** @type {Record<string, any>} */ data) => {
+        // Initial-data processing intentionally restores recent comments,
+        // but replaying an old gift/follow/subscription would fire a stale
+        // alert every time OBS reconnects.
+        if (this.state !== "connected") return;
+        const event = mapTikTokEvent(eventName, data);
         if (event) this.emit({ type: "event", event });
       });
     }
@@ -261,6 +289,21 @@ class Channel {
       });
       this.scheduleRetry(OFFLINE_RETRY_MS);
     }
+  }
+
+  /**
+   * @param {string} id
+   * @returns {boolean} true only for the first occurrence
+   */
+  rememberChatId(id) {
+    const key = String(id);
+    if (this.seenChatIds.has(key)) return false;
+    this.seenChatIds.add(key);
+    if (this.seenChatIds.size > MAX_SEEN_CHAT_IDS) {
+      const oldest = this.seenChatIds.values().next().value;
+      if (oldest !== undefined) this.seenChatIds.delete(oldest);
+    }
+    return true;
   }
 
   stop() {
@@ -429,10 +472,7 @@ function mapTikTokEvent(name, data) {
 async function defaultConnectionFactory(username) {
   const mod = await import("tiktok-live-connector");
   const { TikTokLiveConnection } = /** @type {any} */ (mod);
-  return new TikTokLiveConnection(username, {
-    processInitialData: false,
-    enableExtendedGiftInfo: false,
-  });
+  return new TikTokLiveConnection(username, TIKTOK_CONNECTION_OPTIONS);
 }
 
 module.exports = {
@@ -440,6 +480,7 @@ module.exports = {
   normalizeTikTokUsername,
   mapChatEvent,
   mapTikTokEvent,
+  TIKTOK_CONNECTION_OPTIONS,
   OFFLINE_RETRY_MS,
   DISCONNECT_RETRY_MS,
 };

@@ -13,7 +13,10 @@ const { buildMultichatRouter } = require("../src/routes/multichat");
 
 const CONTINUATION = "continuation-token-long-enough";
 
-function pollPayload(next = "next-continuation-token-long-enough") {
+function pollPayload(
+  next = "next-continuation-token-long-enough",
+  timeoutMs = 4000,
+) {
   return {
     continuationContents: {
       liveChatContinuation: {
@@ -21,7 +24,7 @@ function pollPayload(next = "next-continuation-token-long-enough") {
           {
             timedContinuationData: {
               continuation: next,
-              timeoutMs: 4000,
+              timeoutMs,
             },
           },
         ],
@@ -48,9 +51,23 @@ describe("bounded YouTube chat polling", () => {
       ),
     ).resolves.toMatchObject({
       continuation: "next-continuation-token-long-enough",
-      timeoutMs: 4000,
+      timeoutMs: 5000,
       done: false,
     });
+  });
+
+  test("preserves a moderate cadence and caps an excessive one", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(pollPayload("next-a-long-enough", 7500)))
+      .mockResolvedValueOnce(jsonResponse(pollPayload("next-b-long-enough", 12000)));
+
+    await expect(
+      pollLiveChat({ continuation: CONTINUATION }, { fetchImpl }),
+    ).resolves.toMatchObject({ timeoutMs: 7500 });
+    await expect(
+      pollLiveChat({ continuation: CONTINUATION }, { fetchImpl }),
+    ).resolves.toMatchObject({ timeoutMs: 10000 });
   });
 
   test("rejects an oversized declared response before parsing", async () => {

@@ -31,6 +31,7 @@ const {
   normalizeTikTokUsername,
   mapChatEvent,
   mapTikTokEvent,
+  TIKTOK_CONNECTION_OPTIONS,
 } = require("../src/services/tiktokChatRelay");
 const {
   MultichatSoundsService,
@@ -50,7 +51,7 @@ describe("services/youtubeLiveChat", () => {
     expect(out.done).toBe(false);
     expect(typeof out.continuation).toBe("string");
     expect(out.continuation.length).toBeGreaterThan(20);
-    expect(out.timeoutMs).toBeGreaterThanOrEqual(1500);
+    expect(out.timeoutMs).toBeGreaterThanOrEqual(5000);
     expect(out.timeoutMs).toBeLessThanOrEqual(10000);
     expect(out.messages.length).toBeGreaterThanOrEqual(20);
     for (const m of out.messages) {
@@ -335,6 +336,62 @@ describe("services/tiktokChatRelay", () => {
     offB();
     expect(relay.size).toBe(0);
     expect(conn.disconnect).toHaveBeenCalled();
+  });
+
+  test("connect startup keeps recent chat once but suppresses stale alerts", async () => {
+    const conn = fakeConnection();
+    conn.connect.mockImplementation(async () => {
+      const startupChat = {
+        content: "comment posted just before OBS attached",
+        user: { displayId: "early_viewer" },
+        common: { msgId: "startup-1" },
+      };
+      conn.emit("chat", startupChat);
+      // Connector 2.x may repeat the connect-response message on the
+      // websocket immediately after it opens.
+      conn.emit("chat", startupChat);
+      conn.emit("gift", {
+        giftType: 5,
+        giftName: "Old gift",
+        common: { msgId: "old-gift" },
+      });
+      conn.emit("subNotify", {
+        user: { displayId: "old_subscriber" },
+        common: { msgId: "old-sub" },
+      });
+      return { roomId: "r1" };
+    });
+    const relay = new TikTokChatRelay({ connectionFactory: async () => conn });
+    const seen = [];
+    const off = relay.subscribe("streamer", (event) => seen.push(event));
+
+    await new Promise((r) => setImmediate(r));
+    expect(seen.filter((event) => event.type === "chat")).toHaveLength(1);
+    expect(seen.find((event) => event.type === "chat").message).toMatchObject({
+      id: "startup-1",
+      user: "early_viewer",
+      text: "comment posted just before OBS attached",
+    });
+    expect(seen.filter((event) => event.type === "event")).toHaveLength(0);
+
+    // A notification received after connect remains live behavior.
+    conn.emit("subNotify", {
+      user: { displayId: "new_subscriber" },
+      common: { msgId: "new-sub" },
+    });
+    expect(seen.find((event) => event.type === "event").event).toMatchObject({
+      id: "new-sub",
+      kind: "sub",
+      user: "new_subscriber",
+    });
+    off();
+  });
+
+  test("production connector requests TikTok's initial comment batch", () => {
+    expect(TIKTOK_CONNECTION_OPTIONS).toEqual({
+      processInitialData: true,
+      enableExtendedGiftInfo: false,
+    });
   });
 
   test("offline streamer surfaces status=offline and keeps the channel for retry", async () => {
