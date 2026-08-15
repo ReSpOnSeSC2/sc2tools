@@ -88,6 +88,9 @@ const { buildChatbotRouter } = require("./routes/chatbot");
 const {
   SkillFingerprintService,
 } = require("./services/skillFingerprint");
+const {
+  FingerprintPopulationCalibrationService,
+} = require("./services/fingerprintPopulationCalibration");
 const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
@@ -175,6 +178,7 @@ function isLargeAuthenticatedJson(req) {
  *   pulseMmr?: import('./services/pulseMmr').PulseMmrService,
  *   pulseIntel?: import('./services/pulseOpponentIntel').PulseOpponentIntelService,
  *   pulseLinks?: import('./services/pulseCharacterLinks').PulseCharacterLinkService,
+ *   fingerprintPopulationCalibration?: import('./services/fingerprintPopulationCalibration').FingerprintPopulationCalibrationService,
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} AppDeps
  */
@@ -316,9 +320,15 @@ function makeServices(deps) {
   // served PUBLICLY by routes/ladderMeta.js for the /meta SEO page.
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
   // Skill Fingerprint — replay-derived build, game-length, and matchup
-  // tendencies plus a deterministic player archetype for the Trends tab.
+  // tendencies plus a player-population-calibrated archetype for Trends.
+  const fingerprintPopulationCalibration =
+    deps.fingerprintPopulationCalibration ||
+    new FingerprintPopulationCalibrationService(deps.db, {
+      logger: deps.logger,
+    });
   const skillFingerprint = new SkillFingerprintService(deps.db, {
     logger: deps.logger,
+    populationCalibration: fingerprintPopulationCalibration,
   });
   const opponents = new OpponentsService(
     deps.db,
@@ -630,6 +640,7 @@ function makeServices(deps) {
     pulseIntel,
     pulseLinks,
     leaguePercentiles,
+    fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
     publicProfile,

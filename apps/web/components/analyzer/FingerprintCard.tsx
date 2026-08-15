@@ -17,6 +17,15 @@ type FingerprintAxis = {
   categoryLabel: string | null;
   sampleSize: number;
   detail: AxisDetail | null;
+  /** Population-calibrated naming score; independent from marker position. */
+  distinctiveness?: number;
+  calibration?: {
+    method?: "two_sided_percentile" | "tier_rarity" | string;
+    populationSize?: number;
+    percentile?: number;
+    tierFrequency?: number;
+    distinctiveness?: number;
+  } | null;
   /** Why an unrated track is unrated. Null once the track has a category. */
   reason: AxisReason | string | null;
   have: number | null;
@@ -47,6 +56,7 @@ type AxisDetail = {
   signedEdge?: number;
   tierScore?: -2 | -1 | 0 | 1 | 2;
   allMatchupSpread?: number | null;
+  classificationMethod?: string;
 };
 
 type AxisReason =
@@ -111,6 +121,19 @@ type FingerprintData = {
     components: ArchetypeComponent[];
   };
   taxonomy: { axes: TaxonomyAxis[] };
+  populationCalibration?: {
+    status: "ready" | "unavailable";
+    method: "player_population" | string;
+    matchup?: string | null;
+    populationSize?: number | null;
+    updatedAt?: string | null;
+    reference?: {
+      windowGames?: number;
+      windowMode?: string;
+      filters?: string;
+    } | null;
+    version?: number | null;
+  };
   buildOrders: Array<{ name: string; games: number }>;
   repertoireSummary?: {
     method?: string;
@@ -961,6 +984,16 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
           Your race and matchup come from the picker above, not the dashboard
           race filter.
         </p>
+        <p className="mt-2 text-caption leading-relaxed text-text-muted">
+          Spectrum markers show the absolute replay measurement. The separate
+          0&ndash;1 score used to choose the archetype name is calibrated against one
+          recent fingerprint per player in {fp.matchup}: continuous measures use
+          distance from the population median, while distribution signatures use
+          how rare their tier is.
+          {fp.populationCalibration?.status === "ready"
+            ? ` The current reference contains ${(fp.populationCalibration.populationSize ?? 0).toLocaleString()} qualifying player profiles.`
+            : " Population calibration is still building, so no marker position is treated as distinctive by itself."}
+        </p>
 
         <ol className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
           <li className="rounded-lg border border-border bg-bg-surface/55 p-3">
@@ -1015,9 +1048,10 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
               <p>
                 We use the real duration distribution before falling back to the
                 average. In order: a short/long split, an 80% over-15:00
-                cluster, an 80% over-10:00 cluster, and an 80% 5:00&ndash;10:00 timing
-                window get first claim. Only then do the under-5:00,
-                5:00&ndash;10:00, and over-10:00 average profiles apply.
+                cluster, an 80% under-5:00 cluster, an 80% over-10:00 cluster,
+                and an 80% 5:00&ndash;10:00 timing window get first claim. Only
+                then do the under-5:00, 5:00&ndash;10:00, and over-10:00 average
+                fallbacks apply.
               </p>
               <p>
                 Boundaries are deliberate: the split-profile extremes are strictly under
@@ -1393,7 +1427,10 @@ function paceProfileEvidence(
     return `${summary.fiveToTen.games}/${sample} (${formatSharePercent(summary.fiveToTen.percent)}) finished from 5:00 through 10:00, meeting the 80% rule for ${label}.`;
   }
   if (axis.category === "cheeser") {
-    return `The average is strictly under 5:00, so the server selects ${label}.`;
+    if (axis.detail?.classificationMethod === "dominant_under_five") {
+      return `${summary.belowFive.games}/${sample} (${formatSharePercent(summary.belowFive.percent)}) ended under 5:00, meeting the 80% rule for ${label}.`;
+    }
+    return `No stronger distribution signature fired, and the average is strictly under 5:00, so the fallback selects ${label}.`;
   }
   if (axis.category === "late_game") {
     return `The average is over 10:00 without an 80% long-game cluster, so the server selects ${label}.`;

@@ -931,8 +931,9 @@ function mostPlayedMatchup(games) {
  * Explain the current playstyle fingerprint with the raw replay measures that
  * actually selected it. Repertoire and pace describe the requested matchup;
  * the matchup track compares that selection with the player's qualifying
- * alternatives. These are tendencies, not skill percentiles, so the ticker
- * reports counts, time, and matchup win-rate gaps with familiar % notation.
+ * alternatives. These are tendencies rather than skill grades; although the
+ * archetype namer uses player-population rarity, the ticker reports the raw
+ * counts, time, and matchup win-rate gaps with familiar % notation.
  *
  * The legacy branch is deliberately retained for a short compatibility
  * window. Ticker facts are decorative and may be fed by a stale mock or a

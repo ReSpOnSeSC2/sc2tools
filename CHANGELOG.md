@@ -20,6 +20,10 @@ corresponding GitHub Release.
   one matchup per row on phones, and shows win rates and point gaps to one
   decimal.
 
+- **Cheeser detection now has the missing distribution gate** — an early-game
+  profile fires when at least 80% of valid replay durations end before 5:00,
+  so one long outlier can no longer turn nineteen four-minute games into a
+  highly distinctive Flexible Pacer.
 - **The Skill Fingerprint now follows the dashboard date range** — the card
   previously read a fixed window of your 50 most recent games in a matchup and
   ignored the filter bar entirely, so changing the time frame did nothing.
@@ -49,6 +53,13 @@ corresponding GitHub Release.
   point gaps display to one decimal instead of three, and the endpoint
   mechanics stay in the methodology panel where they belong.
 
+- **Archetype distinctiveness is now calibrated against players, not pixels** —
+  a nightly reference gives each qualifying player/matchup window one vote.
+  Continuous repertoire, pace, and moderate matchup measures use two-sided
+  empirical percentiles with correct midranks for ties; distribution and
+  endpoint signatures use tier rarity. Marker positions remain unchanged as
+  visual evidence, but no longer decide the name, and the former Two-Speed
+  special case is gone.
 - **Skill Fingerprints now explain and reward practiced variety, timing shape,
   and matchup balance** — build repertoire separates detected names from an
   Shannon-entropy effective count and adds One-Trick and Signature Pilot tiers;

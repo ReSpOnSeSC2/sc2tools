@@ -3,13 +3,16 @@
 /**
  * Replay-derived playstyle fingerprint.
  *
- * Three tendencies, not grades or percentiles:
+ * Three replay-derived tendencies:
  *   Build repertoire  — how many distinct plans you actually lean on
  *   Game length       — where your games get decided
  *   Matchup edge      — this matchup against your own other two
  *
  * Only slim `games` fields are read. Missing evidence stays missing; no
- * benchmark, estimate, or mock value is substituted.
+ * estimate or mock value is substituted. The marker on each spectrum remains
+ * an absolute measurement, while archetype naming uses a separate
+ * player-population calibration supplied by
+ * FingerprintPopulationCalibrationService.
  *
  * The replay window honours the analyzer's global filter bar through the same
  * `gamesMatchStage` every other analytics service uses — see
@@ -136,8 +139,8 @@ const AXIS_VOCABULARY = Object.freeze({
       noun: "Ambusher",
       adjective: "All-In",
       blurb:
-        "After the stronger distribution signatures are checked, your average game still ends before 5:00.",
-      thresholdText: "average under 5:00",
+        "At least 80% of your games end before 5:00, or the remaining fallback profile still averages under 5:00.",
+      thresholdText: "80%+ under 5:00, or average under 5:00 fallback",
     },
     timing_attacker: {
       label: "Timing Attacker",
@@ -393,11 +396,18 @@ function hasDateRange(filters) {
 class SkillFingerprintService {
   /**
    * @param {{ games: import('mongodb').Collection }} db
-   * @param {{ logger?: import('pino').Logger | null }} [opts]
+   * @param {{
+   *   logger?: import('pino').Logger | null,
+   *   populationCalibration?: {
+   *     lookup: (args:{matchup:string}) => Promise<Record<string, any> | null>,
+   *     scoreAxis: (table:Record<string, any> | null, axisKey:string, result:Record<string, any>) => Record<string, any> | null,
+   *   } | null,
+   * }} [opts]
    */
   constructor(db, opts = {}) {
     this.games = db.games;
     this.logger = opts.logger || null;
+    this.populationCalibration = opts.populationCalibration || null;
   }
 
   /**
@@ -431,14 +441,17 @@ class SkillFingerprintService {
     const selectedRows = await loadWindow(this.games, userId, mu, filters, rowCap);
     if (selectedRows.length === 0) return null;
 
-    const windows = await Promise.all(
-      RACE_LETTERS.map((opponentRace) => {
-        const candidate = `${mu[0]}v${opponentRace}`;
-        return candidate === mu
-          ? Promise.resolve(selectedRows)
-          : loadWindow(this.games, userId, candidate, filters, rowCap);
-      }),
-    );
+    const [windows, calibrationTable] = await Promise.all([
+      Promise.all(
+        RACE_LETTERS.map((opponentRace) => {
+          const candidate = `${mu[0]}v${opponentRace}`;
+          return candidate === mu
+            ? Promise.resolve(selectedRows)
+            : loadWindow(this.games, userId, candidate, filters, rowCap);
+        }),
+      ),
+      loadPopulationCalibration(this.populationCalibration, mu, this.logger),
+    ]);
     const rowsByMatchup = Object.fromEntries(
       RACE_LETTERS.map((opponentRace, index) => [
         `${mu[0]}v${opponentRace}`,
@@ -446,12 +459,31 @@ class SkillFingerprintService {
       ]),
     );
 
-    const repertoire = repertoireAxis(selectedRows);
-    const pace = paceAxis(selectedRows);
+    const rawRepertoire = repertoireAxis(selectedRows);
+    const rawPace = paceAxis(selectedRows);
     // Race-wide shape is retained purely as evidence: it populates the three
     // win-rate cards and `matchupSummary`, which tickerFacts reads directly.
     const balance = matchupBalanceAxis(mu[0], rowsByMatchup);
-    const edge = matchupEdgeAxis(mu, balance.matchups);
+    const rawEdge = matchupEdgeAxis(mu, balance.matchups);
+
+    const repertoire = calibrateAxisResult(
+      this.populationCalibration,
+      calibrationTable,
+      "repertoire",
+      rawRepertoire,
+    );
+    const pace = calibrateAxisResult(
+      this.populationCalibration,
+      calibrationTable,
+      "pace",
+      rawPace,
+    );
+    const edge = calibrateAxisResult(
+      this.populationCalibration,
+      calibrationTable,
+      "matchup_edge",
+      rawEdge,
+    );
 
     const axes = [
       publicAxis("repertoire", AXIS_META.repertoire.label, repertoire),
@@ -484,6 +516,7 @@ class SkillFingerprintService {
       playstyle: archetype.name,
       archetype,
       taxonomy: buildTaxonomy(),
+      populationCalibration: publicCalibrationSummary(calibrationTable),
       buildOrders: repertoire.builds,
       repertoireSummary: repertoire.summary,
       paceSummary: pace.summary,
@@ -563,6 +596,11 @@ function publicAxis(key, label, result) {
       (result.category ? labels[result.category] || result.category : null),
     sampleSize: result.sampleSize,
     detail: result.detail || null,
+    distinctiveness:
+      typeof result.distinctiveness === "number"
+        ? round3(result.distinctiveness)
+        : 0,
+    calibration: result.calibration || null,
     reason: result.category ? null : result.reason || null,
     have: result.category ? null : result.sampleSize,
     needed: result.category ? null : (result.needed ?? null),
@@ -643,6 +681,102 @@ function repertoireAxis(rows) {
   };
 }
 
+/**
+ * Population calibration is optional at the request boundary: a fresh deploy
+ * can receive traffic before its first background rebuild finishes. A lookup
+ * failure must not take the raw fingerprint down with it. Missing calibration
+ * produces a conservative zero naming score; it never falls back to marker
+ * geometry and silently recreates the old bug.
+ *
+ * @param {any} calibration
+ * @param {string} matchup
+ * @param {import('pino').Logger | null} logger
+ * @returns {Promise<Record<string, any> | null>}
+ */
+async function loadPopulationCalibration(calibration, matchup, logger) {
+  if (!calibration || typeof calibration.lookup !== "function") return null;
+  try {
+    return await calibration.lookup({ matchup });
+  } catch (err) {
+    if (logger && typeof logger.warn === "function") {
+      logger.warn(
+        {
+          err: err instanceof Error ? err.message : String(err),
+          matchup,
+        },
+        "skill_fingerprint_calibration_lookup_error",
+      );
+    }
+    return null;
+  }
+}
+
+/**
+ * Attach the independent naming score without touching the absolute spectrum
+ * marker (`position`) or the public headline measurement (`value`).
+ *
+ * @param {any} calibration
+ * @param {Record<string, any> | null} table
+ * @param {string} axisKey
+ * @param {Record<string, any>} result
+ * @returns {Record<string, any>}
+ */
+function calibrateAxisResult(calibration, table, axisKey, result) {
+  let scored = null;
+  if (
+    result &&
+    result.category &&
+    calibration &&
+    typeof calibration.scoreAxis === "function"
+  ) {
+    try {
+      scored = calibration.scoreAxis(table, axisKey, result);
+    } catch {
+      scored = null;
+    }
+  }
+  const candidate = scored && typeof scored === "object"
+    ? (scored.distinctiveness ?? scored.score)
+    : null;
+  const distinctiveness =
+    typeof candidate === "number" && Number.isFinite(candidate)
+      ? clamp01(candidate)
+      : 0;
+  return {
+    ...result,
+    distinctiveness,
+    calibration: scored && typeof scored === "object"
+      ? { ...scored, distinctiveness }
+      : null,
+  };
+}
+
+/**
+ * Expose only provenance and population size. Histograms and tier counts stay
+ * server-side: the response needs to explain its benchmark, not ship it.
+ *
+ * @param {Record<string, any> | null} table
+ */
+function publicCalibrationSummary(table) {
+  if (!table || typeof table !== "object") {
+    return { status: "unavailable", method: "player_population" };
+  }
+  return {
+    status: "ready",
+    method: "player_population",
+    matchup: typeof table.matchup === "string" ? table.matchup : null,
+    populationSize:
+      typeof table.n === "number"
+        ? table.n
+        : typeof table.populationSize === "number"
+          ? table.populationSize
+          : null,
+    updatedAt: table.updatedAt || null,
+    reference: table.reference || null,
+    version: table.version ?? table.schemaVersion ?? null,
+  };
+}
+
 /** @param {number} effectiveBuilds */
 function repertoireCategory(effectiveBuilds) {
   if (atMostThreshold(effectiveBuilds, ONE_TRICK_MAX_EFFECTIVE_BUILDS)) {
@@ -693,11 +827,16 @@ function paceAxis(rows) {
       summary,
     };
   }
-  const category = paceCategory(
+  const classification = paceClassification(
     /** @type {number} */ (rawAverage),
     summary,
     sampleSize,
   );
+  const category = classification.category;
+  const classifiedSummary = {
+    ...summary,
+    classificationMethod: classification.method,
+  };
   return {
     // 5:00 -> 0, 15:00 -> 100, which puts the 10:00 flexible/long-game
     // boundary exactly at the centre of the track.
@@ -710,8 +849,8 @@ function paceAxis(rows) {
     category,
     categoryLabel: TRAIT_LABELS[category],
     sampleSize,
-    detail: summary,
-    summary,
+    detail: classifiedSummary,
+    summary: classifiedSummary,
   };
 }
 
@@ -724,7 +863,7 @@ function paceAxis(rows) {
  * @param {ReturnType<typeof durationDistributionSummary>} summary
  * @param {number} sampleSize
  */
-function paceCategory(averageSec, summary, sampleSize) {
+function paceClassification(averageSec, summary, sampleSize) {
   const belowFiveGames = summary.belowFive.games;
   const fiveToTenGames = summary.fiveToTen.games;
   const aboveTenGames = summary.aboveTen.games;
@@ -732,33 +871,60 @@ function paceCategory(averageSec, summary, sampleSize) {
   if (
     meetsPercentGate(belowFiveGames, sampleSize, TWO_SPEED_MIN_PERCENT) &&
     meetsPercentGate(aboveFifteenGames, sampleSize, TWO_SPEED_MIN_PERCENT)
-  ) return "two_speed";
+  ) return { category: "two_speed", method: "two_tail_share" };
   if (
     meetsPercentGate(
       aboveFifteenGames,
       sampleSize,
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
-  ) return "late_game_master";
-  // Disjoint from the timing gate below: [5:00, 10:00] and (10:00, ∞) cannot
-  // both reach 80%, so neither shadows the other whatever the order.
+  ) return {
+    category: "late_game_master",
+    method: "dominant_over_fifteen",
+  };
+  if (
+    meetsPercentGate(
+      belowFiveGames,
+      sampleSize,
+      DOMINANT_TIMEFRAME_MIN_PERCENT,
+    )
+  ) return { category: "cheeser", method: "dominant_under_five" };
+  // Disjoint from the timing gate below: [5:00, 10:00] and (10:00, infinity)
+  // cannot both reach 80%, so neither shadows the other whatever the order.
   if (
     meetsPercentGate(
       aboveTenGames,
       sampleSize,
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
-  ) return "mid_late_master";
+  ) return { category: "mid_late_master", method: "dominant_over_ten" };
   if (
     meetsPercentGate(
       fiveToTenGames,
       sampleSize,
       DOMINANT_TIMEFRAME_MIN_PERCENT,
     )
-  ) return "timing_attacker";
-  if (averageSec < FIVE_MIN_SEC) return "cheeser";
-  if (averageSec > TEN_MIN_SEC) return "late_game";
-  return "flexible";
+  ) return {
+    category: "timing_attacker",
+    method: "dominant_five_to_ten",
+  };
+  if (averageSec < FIVE_MIN_SEC) {
+    return { category: "cheeser", method: "mean_under_five" };
+  }
+  if (averageSec > TEN_MIN_SEC) {
+    return { category: "late_game", method: "mean_over_ten" };
+  }
+  return { category: "flexible", method: "mean_middle" };
+}
+
+/**
+ * Stable category-only helper retained for callers and boundary tests.
+ * @param {number} averageSec
+ * @param {ReturnType<typeof durationDistributionSummary>} summary
+ * @param {number} sampleSize
+ */
+function paceCategory(averageSec, summary, sampleSize) {
+  return paceClassification(averageSec, summary, sampleSize).category;
 }
 
 /**
@@ -986,30 +1152,25 @@ function atLeastThreshold(value, threshold) {
 }
 
 /**
- * How far from unremarkable an axis sits, on 0..1. Drives which two traits get
- * to name the player, so the name describes what is *unusual* about them —
- * that is what stops the modal player from being handed the modal name.
- *
- * Not simply `|position - 50|`: `two_speed` sits at the centre of the pace
- * track by construction and would otherwise score zero despite being one of
- * the most distinctive timing patterns.
+ * Population-calibrated 0..1 naming score. Spectrum marker geometry is not a
+ * population statistic and must never be used as a fallback here: saturated
+ * endpoints and a non-typical visual centre caused the original cross-axis
+ * ranking bug. Without a calibration table the score stays conservative at 0.
  *
  * @param {string} axisKey
  * @param {Record<string, any>} result
  */
 function axisDistinctiveness(axisKey, result) {
-  if (!result || !result.category || typeof result.position !== "number") {
+  void axisKey;
+  if (
+    !result ||
+    !result.category ||
+    typeof result.distinctiveness !== "number" ||
+    !Number.isFinite(result.distinctiveness)
+  ) {
     return 0;
   }
-  if (axisKey === "pace" && result.category === "two_speed") {
-    const detail = result.detail || {};
-    const earlyShare = (detail.belowFive?.percent ?? 0) / 100;
-    const lateShare = (detail.aboveFifteen?.percent ?? 0) / 100;
-    const weaker = Math.min(earlyShare, lateShare);
-    const threshold = TWO_SPEED_MIN_PERCENT / 100;
-    return clamp01((weaker - threshold) / (0.5 - threshold));
-  }
-  return clamp01(Math.abs(result.position - 50) / 50);
+  return clamp01(result.distinctiveness);
 }
 
 /**
@@ -1075,7 +1236,7 @@ function deriveArchetype(axisResults) {
 
   let name;
   let components;
-  if (complete && overrides[key]) {
+  if (!neutral && complete && overrides[key]) {
     name = overrides[key];
     components = ranked.map((entry, index) => componentOf(entry, index));
   } else if (neutral) {
@@ -1308,9 +1469,11 @@ module.exports = {
   repertoireCategory,
   paceAxis,
   paceCategory,
+  paceClassification,
   matchupBalanceAxis,
   matchupEdgeAxis,
   axisDistinctiveness,
+  calibrateAxisResult,
   perplexity,
   AXIS_ORDER,
   AXIS_VOCABULARY,

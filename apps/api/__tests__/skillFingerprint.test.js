@@ -18,6 +18,11 @@ const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { PulseMmrService } = require("../src/services/pulseMmr");
 const {
+  COLLECTION_NAME: FINGERPRINT_CALIBRATION_COLLECTION,
+  MIN_POPULATION_SAMPLE,
+  SCHEMA_VERSION: FINGERPRINT_CALIBRATION_VERSION,
+} = require("../src/services/fingerprintPopulationCalibration");
+const {
   AXIS_ORDER,
   AXIS_VOCABULARY,
   ARCHETYPE_OVERRIDES,
@@ -32,6 +37,7 @@ const {
   WINDOW_GAMES,
   axisDistinctiveness,
   buildTaxonomy,
+  calibrateAxisResult,
   deriveArchetype,
   fingerprintFilters,
   matchupBalanceAxis,
@@ -432,12 +438,35 @@ describe("skill fingerprint pure replay heuristics", () => {
       expect(axis.detail.aboveFifteen.percent).toBeGreaterThanOrEqual(25);
     });
 
-    test("mean fallbacks remain honest about a single very long game", () => {
-      const durations = [...Array(9).fill(240), 2700];
-      const axis = paceAxis(durationRows(durations));
-      expect(axis.category).toBe("flexible");
-      expect(axis.value).toBe(486);
-      expect(axis.detail.medianSec).toBe(240);
+    test("an 80% under-five distribution is Cheeser before a long outlier distorts its mean", () => {
+      const axis = paceAxis(
+        durationRows([...Array(19).fill(240), 1500]),
+      );
+      expect(axis).toMatchObject({
+        category: "cheeser",
+        value: 303,
+        detail: {
+          classificationMethod: "dominant_under_five",
+          belowFive: { games: 19, percent: 95 },
+        },
+      });
+    });
+
+    test("the under-five distribution gate is exact at 80%", () => {
+      const exact = paceAxis(
+        durationRows([...Array(8).fill(240), ...Array(2).fill(600)]),
+      );
+      const below = paceAxis(
+        durationRows([...Array(7).fill(240), ...Array(3).fill(600)]),
+      );
+      expect(exact).toMatchObject({
+        category: "cheeser",
+        detail: { classificationMethod: "dominant_under_five" },
+      });
+      expect(below).toMatchObject({
+        category: "flexible",
+        detail: { classificationMethod: "mean_middle" },
+      });
     });
 
     test("5:00 and 10:00 are both inside the timing-attacker window", () => {
@@ -690,8 +719,18 @@ describe("skill fingerprint pure replay heuristics", () => {
   describe("deriveArchetype", () => {
     const categoriesFor = (axisKey) => Object.keys(AXIS_VOCABULARY[axisKey]);
 
-    function axisInput(axisKey, category, position, detail) {
-      return { key: axisKey, category, position, detail: detail || null };
+    function axisInput(axisKey, category, position, detail, distinctiveness) {
+      return {
+        key: axisKey,
+        category,
+        position,
+        detail: detail || null,
+        // Fixtures state the naming score explicitly. Derivation no longer
+        // reads marker geometry; this default only keeps the older scenarios
+        // concise while the dedicated tests below prove that separation.
+        distinctiveness:
+          distinctiveness ?? Math.abs(Number(position) - 50) / 50,
+      };
     }
 
     test("every reachable combination yields a stable, non-empty name", () => {
@@ -780,6 +819,19 @@ describe("skill fingerprint pure replay heuristics", () => {
       });
     });
 
+    test("component roles follow calibrated score, with axis order breaking ties", () => {
+      const archetype = deriveArchetype([
+        axisInput("repertoire", "adaptive", 99, null, 0.4),
+        axisInput("pace", "flexible", 1, null, 0.4),
+        axisInput("matchup_edge", "matchup_hurdle", 50, null, 0.8),
+      ]);
+      expect(archetype.components).toEqual([
+        expect.objectContaining({ axis: "matchup_edge", role: "core", distinctiveness: 0.8 }),
+        expect.objectContaining({ axis: "repertoire", role: "modifier", distinctiveness: 0.4 }),
+        expect.objectContaining({ axis: "pace", role: "supporting", distinctiveness: 0.4 }),
+      ]);
+    });
+
     test("every override key resolves to a reachable combination", () => {
       const valid = new Set();
       for (const repertoire of categoriesFor("repertoire")) {
@@ -818,26 +870,60 @@ describe("skill fingerprint pure replay heuristics", () => {
   });
 
   describe("axisDistinctiveness", () => {
-    test("two_speed is distinctive despite sitting at the centre of the track", () => {
-      const d = axisDistinctiveness("pace", {
-        category: "two_speed",
+    test("attaches scorer metadata without moving the visual marker", () => {
+      const result = calibrateAxisResult(
+        {
+          scoreAxis: () => ({
+            distinctiveness: 0.9,
+            method: "tier_rarity",
+            populationSize: 100,
+            tierFrequency: 0.1,
+          }),
+        },
+        { matchup: "PvZ" },
+        "pace",
+        { category: "timing_attacker", position: 50, value: 360 },
+      );
+      expect(result).toMatchObject({
         position: 50,
-        detail: {
-          belowFive: { percent: 45 },
-          aboveFifteen: { percent: 45 },
+        value: 360,
+        distinctiveness: 0.9,
+        calibration: {
+          method: "tier_rarity",
+          populationSize: 100,
+          tierFrequency: 0.1,
         },
       });
-      expect(d).toBeGreaterThan(0.75);
+      expect(axisDistinctiveness("pace", result)).toBe(0.9);
     });
 
-    test("a bare two_speed at the threshold is not distinctive", () => {
+    test("missing population data yields zero, never marker distance", () => {
+      const result = calibrateAxisResult(
+        { scoreAxis: () => null },
+        null,
+        "repertoire",
+        { category: "creative", position: 100 },
+      );
+      expect(result).toMatchObject({
+        position: 100,
+        distinctiveness: 0,
+        calibration: null,
+      });
+    });
+
+    test("reads the population score even when the marker sits at the centre", () => {
       const d = axisDistinctiveness("pace", {
         category: "two_speed",
         position: 50,
-        detail: {
-          belowFive: { percent: 25 },
-          aboveFifteen: { percent: 25 },
-        },
+        distinctiveness: 0.91,
+      });
+      expect(d).toBe(0.91);
+    });
+
+    test("never infers distinctiveness from an endpoint marker", () => {
+      const d = axisDistinctiveness("pace", {
+        category: "cheeser",
+        position: 0,
       });
       expect(d).toBe(0);
     });
@@ -923,6 +1009,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
   beforeEach(async () => {
     sequence = 0;
     await db.games.deleteMany({ userId });
+    await db.db.collection(FINGERPRINT_CALIBRATION_COLLECTION).deleteMany({});
   });
 
   afterAll(async () => {
@@ -934,6 +1021,56 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     return request(app)
       .get(`/v1/me/fingerprint?matchup=${encodeURIComponent(matchup)}${query}`)
       .set("authorization", "Bearer test-token");
+  }
+
+  async function seedCalibrationTable(matchup = "PvZ") {
+    await db.db.collection(FINGERPRINT_CALIBRATION_COLLECTION).insertOne({
+      version: FINGERPRINT_CALIBRATION_VERSION,
+      matchup,
+      n: MIN_POPULATION_SAMPLE,
+      axes: {
+        repertoire: {
+          metric: "effectiveBuilds",
+          n: MIN_POPULATION_SAMPLE,
+          valueN: MIN_POPULATION_SAMPLE,
+          histogram: [
+            { value: 1, count: 40 },
+            { value: 2, count: 10 },
+          ],
+          categoryCounts: { one_trick: 40, signature: 10 },
+        },
+        pace: {
+          metric: "averageSec",
+          n: MIN_POPULATION_SAMPLE,
+          valueN: MIN_POPULATION_SAMPLE,
+          histogram: [{ value: 600, count: MIN_POPULATION_SAMPLE }],
+          categoryCounts: { timing_attacker: 45, flexible: 5 },
+        },
+        matchup_edge: {
+          metric: "signedEdge",
+          n: MIN_POPULATION_SAMPLE,
+          valueN: MIN_POPULATION_SAMPLE,
+          histogram: [{ value: 0, count: MIN_POPULATION_SAMPLE }],
+          categoryCounts: {
+            specialist: 5,
+            universalist: 30,
+            blind_spot: 5,
+            matchup_edge: 5,
+            matchup_hurdle: 5,
+          },
+        },
+      },
+      reference: {
+        version: FINGERPRINT_CALIBRATION_VERSION,
+        population: "global",
+        unit: "player_matchup_window",
+        windowGames: WINDOW_GAMES,
+        windowMode: "latest",
+        filters: "non_resumed_1v1_ptz_matchups",
+      },
+      updatedAt: new Date("2026-08-14T12:00:00.000Z"),
+      _schemaVersion: FINGERPRINT_CALIBRATION_VERSION,
+    });
   }
 
   async function seedRows(matchup, count, options = {}) {
@@ -1148,6 +1285,70 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     });
   });
 
+  test("uses player-population scores for naming without moving spectrum markers", async () => {
+    await seedCompleteRace({ builds: ["Standard Build", "Fast Expand"] });
+    await seedCalibrationTable("PvZ");
+
+    const fp = (await getFingerprint("PvZ")).body.fingerprint;
+    expect(fp.populationCalibration).toMatchObject({
+      status: "ready",
+      method: "player_population",
+      matchup: "PvZ",
+      populationSize: MIN_POPULATION_SAMPLE,
+      version: FINGERPRINT_CALIBRATION_VERSION,
+      reference: {
+        unit: "player_matchup_window",
+        windowGames: WINDOW_GAMES,
+      },
+    });
+
+    const axes = Object.fromEntries(fp.axes.map((axis) => [axis.key, axis]));
+    expect(axes.repertoire).toMatchObject({
+      category: "signature",
+      distinctiveness: 0.8,
+      calibration: {
+        method: "two_sided_percentile",
+        percentile: 0.9,
+        populationSize: MIN_POPULATION_SAMPLE,
+      },
+    });
+    expect(axes.pace).toMatchObject({
+      category: "timing_attacker",
+      position: 50,
+      distinctiveness: 0.1,
+      calibration: {
+        method: "tier_rarity",
+        tierFrequency: 0.9,
+      },
+    });
+    expect(axes.matchup_edge).toMatchObject({
+      category: "specialist",
+      position: 0,
+      distinctiveness: 0.9,
+      calibration: {
+        method: "tier_rarity",
+        tierFrequency: 0.1,
+      },
+    });
+    expect(fp.archetype.components).toEqual([
+      expect.objectContaining({
+        axis: "matchup_edge",
+        role: "core",
+        distinctiveness: 0.9,
+      }),
+      expect.objectContaining({
+        axis: "repertoire",
+        role: "modifier",
+        distinctiveness: 0.8,
+      }),
+      expect.objectContaining({
+        axis: "pace",
+        role: "supporting",
+        distinctiveness: 0.1,
+      }),
+    ]);
+  });
+
   test("uses decided games for rates while preserving tie and total counts", async () => {
     await seedMatchup("PvP", { wins: 5, losses: 5, ties: 2 });
     await seedMatchup("PvT", { wins: 5, losses: 5, ties: 2 });
@@ -1194,7 +1395,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
 
   // --- Reported bug #1: the date filter did nothing -------------------------
 
-  test("a date range changes the window, the counts, and the archetype", async () => {
+  test("a date range changes the window, counts, and measured categories", async () => {
     const january = new Date(Date.UTC(2026, 0, 15));
     const march = new Date(Date.UTC(2026, 2, 15));
 
@@ -1230,7 +1431,10 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     expect(repertoireOf(marchOnly).category).not.toBe(
       repertoireOf(all).category,
     );
-    expect(marchOnly.archetype.name).not.toBe(all.archetype.name);
+    // The isolated route fixture has no 50-player population table. A missing
+    // calibration stays conservative instead of falling back to marker distance.
+    expect(marchOnly.populationCalibration.status).toBe("unavailable");
+    expect(marchOnly.archetype.name).toBe(NEUTRAL_ARCHETYPE_NAME);
   });
 
   test("an until bound excludes later games", async () => {
@@ -1249,7 +1453,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
 
   // --- Reported bug #2: every matchup showed the same archetype -------------
 
-  test("the three matchups of one race can produce different archetypes", async () => {
+  test("the three matchups of one race produce different matchup traits", async () => {
     // Same builds and pace everywhere, so only the matchup edge differs. Under
     // the old race-wide balance axis all three of these returned one name.
     await seedMatchup("PvP", { wins: 4, losses: 16 });
@@ -1270,8 +1474,11 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     expect(edgeOf(pvt).category).toBe("matchup_edge");
     expect(edgeOf(pvp).category).toBe("blind_spot");
 
-    const names = [pvp, pvt, pvz].map((res) => res.body.fingerprint.archetype.name);
-    expect(new Set(names).size).toBeGreaterThanOrEqual(2);
+    for (const response of [pvp, pvt, pvz]) {
+      expect(response.body.fingerprint.populationCalibration.status).toBe(
+        "unavailable",
+      );
+    }
   });
 
   // --- Filter narrowing, proven end to end ---------------------------------
@@ -1397,6 +1604,7 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       aboveTen: { games: 50, percent: 100 },
       tenToFifteen: { games: 50, percent: 100 },
       aboveFifteen: { games: 0, percent: 0 },
+      classificationMethod: "dominant_over_ten",
     });
     expect(fingerprint.windowTruncated).toBe(true);
   });

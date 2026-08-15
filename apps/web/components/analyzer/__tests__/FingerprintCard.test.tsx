@@ -117,8 +117,8 @@ const TAXONOMY = {
           "Cheeser",
           "Ambusher",
           "All-In",
-          "Your average game ends before five minutes.",
-          "average under 5:00",
+          "At least 80% of your games end before 5:00, or the remaining fallback profile still averages under 5:00.",
+          "80%+ under 5:00, or average under 5:00 fallback",
         ),
         trait(
           "timing_attacker",
@@ -312,6 +312,13 @@ const FP = {
       categoryLabel: "Consistent Grinder",
       sampleSize: 30,
       detail: REPERTOIRE_SUMMARY,
+      distinctiveness: 0.64,
+      calibration: {
+        method: "two_sided_percentile",
+        populationSize: 1284,
+        percentile: 0.82,
+        distinctiveness: 0.64,
+      },
     }),
     axis({
       key: "pace",
@@ -323,6 +330,13 @@ const FP = {
       categoryLabel: "Flexible Pacer",
       sampleSize: 32,
       detail: PACE_SUMMARY,
+      distinctiveness: 0.18,
+      calibration: {
+        method: "two_sided_percentile",
+        populationSize: 1284,
+        percentile: 0.59,
+        distinctiveness: 0.18,
+      },
     }),
     axis({
       key: "matchup_edge",
@@ -340,6 +354,13 @@ const FP = {
         tierScore: 2,
         allMatchupSpread: 20.968,
       },
+      distinctiveness: 0.84,
+      calibration: {
+        method: "tier_rarity",
+        populationSize: 1284,
+        tierFrequency: 0.16,
+        distinctiveness: 0.84,
+      },
     }),
   ],
   playstyle: "Dominant Grinder",
@@ -353,24 +374,32 @@ const FP = {
       {
         axis: "matchup_edge",
         category: "specialist",
-        distinctiveness: 1,
+        distinctiveness: 0.84,
         role: "core" as const,
       },
       {
         axis: "repertoire",
         category: "grinder",
-        distinctiveness: 0.24,
+        distinctiveness: 0.64,
         role: "modifier" as const,
       },
       {
         axis: "pace",
         category: "flexible",
-        distinctiveness: 0.36,
+        distinctiveness: 0.18,
         role: "supporting" as const,
       },
     ],
   },
   taxonomy: TAXONOMY,
+  populationCalibration: {
+    status: "ready" as const,
+    method: "player_population" as const,
+    matchup: "PvZ",
+    populationSize: 1284,
+    updatedAt: "2026-08-14T12:00:00.000Z",
+    version: 1,
+  },
   buildOrders: [
     { name: "PvZ - Stargate into Glaives", games: 11 },
     { name: "PvZ - Gate Expand", games: 8 },
@@ -669,6 +698,50 @@ describe("FingerprintCard", () => {
       ).toBeTruthy();
       expect(
         screen.getByText(/8\/32 \(25%\) ran over 15:00/),
+      ).toBeTruthy();
+    });
+
+    it("explains a dominant under-five Cheeser despite a long outlier", () => {
+      const dominantCheeserSummary = {
+        averageSec: 341,
+        medianSec: 280,
+        belowFive: { games: 19, percent: 95 },
+        fiveToTen: { games: 0, percent: 0 },
+        aboveTen: { games: 1, percent: 5 },
+        tenToFifteen: { games: 0, percent: 0 },
+        aboveFifteen: { games: 1, percent: 5 },
+      };
+      const dominantCheeser = {
+        ...FP,
+        games: 20,
+        axes: FP.axes.map((entry) =>
+          entry.key === "pace"
+            ? {
+                ...entry,
+                position: 6.833,
+                value: 341,
+                category: "cheeser",
+                categoryLabel: "Cheeser",
+                sampleSize: 20,
+                detail: {
+                  ...dominantCheeserSummary,
+                  classificationMethod: "dominant_under_five",
+                },
+              }
+            : entry,
+        ),
+        paceSummary: dominantCheeserSummary,
+      };
+      useApiMock.mockReturnValue(ok(dominantCheeser));
+      render(<FingerprintCard />);
+
+      const pace = screen.getByTestId("fingerprint-axis-pace");
+      expect(pace.textContent).toMatch(/Cheeser/);
+      expect(pace.textContent).toMatch(/5:41 avg/);
+      expect(
+        screen.getByText(
+          /19\/20 \(95%\) ended under 5:00, meeting the 80% rule for Cheeser/,
+        ),
       ).toBeTruthy();
     });
 
@@ -1040,17 +1113,49 @@ describe("FingerprintCard", () => {
       expect(guide).toContain("five server tiers");
       expect(guide).toContain("short/long split");
       expect(guide).toContain("80% over-15:00 cluster");
+      expect(guide).toContain("80% under-5:00 cluster");
       expect(guide).toContain("80% over-10:00 cluster");
       expect(guide).toContain("80% 5:00–10:00 timing window");
       expect(guide).toContain("under-5:00, 5:00–10:00, and over-10:00");
       expect(guide).toContain("best-to-worst spread is within 5 points");
       expect(guide).toContain("Ahead by 10 points or more is Specialist (score +2)");
       expect(guide).toContain("behind by 10 or more is Blind Spot (score −2)");
+      expect(guide).toContain("score used to choose the archetype name");
+      expect(guide).toContain("one recent fingerprint per player in PvZ");
+      expect(guide).toContain("distance from the population median");
+      expect(guide).toContain("how rare their tier is");
+      expect(guide).toContain(
+        "current reference contains 1,284 qualifying player profiles",
+      );
       expect(guide).toContain("±7.5 marks are visual anchors");
       expect(guide).toContain(
         "Ties are displayed but do not enter win rates",
       );
       expect(guide).toContain("175 possible three-trait profiles");
+    });
+
+    it("explains the conservative naming behavior while calibration is unavailable", () => {
+      useApiMock.mockReturnValue(
+        ok({
+          ...FP,
+          populationCalibration: {
+            status: "unavailable",
+            method: "player_population",
+          },
+        }),
+      );
+      render(<FingerprintCard />);
+
+      const methodology = screen
+        .getByText("How this fingerprint is calculated")
+        .closest("details");
+      expect(methodology).toBeTruthy();
+      const guide = methodology!.textContent ?? "";
+      expect(guide).toContain("Population calibration is still building");
+      expect(guide).toContain(
+        "no marker position is treated as distinctive by itself",
+      );
+      expect(guide).not.toContain("1,284 qualifying player profiles");
     });
 
     it("shows 17 response traits while reporting the 5×7×5 product", () => {

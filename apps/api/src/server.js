@@ -28,6 +28,9 @@ const {
   buildLeaguePercentilesRecomputeJob,
 } = require("./jobs/leaguePercentilesRecomputeJob");
 const {
+  buildFingerprintPopulationCalibrationRecomputeJob,
+} = require("./jobs/fingerprintPopulationCalibrationRecomputeJob");
+const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
 const sentry = require("./util/sentry");
@@ -273,6 +276,17 @@ async function main() {
   });
   leaguePercentilesJob.start();
 
+  // Nightly player-level reference for Skill Fingerprint naming. This is a
+  // separate table from per-game league benchmarks: each player/matchup window
+  // contributes exactly one observation.
+  const fingerprintPopulationCalibrationJob =
+    buildFingerprintPopulationCalibrationRecomputeJob({
+      calibration: /** @type {any} */ (services)
+        .fingerprintPopulationCalibration,
+      logger,
+    });
+  fingerprintPopulationCalibrationJob.start();
+
   // Nightly effectiveness-weighted ladder meta rebuild (public /meta).
   const ladderMetaJob = buildLadderMetaRecomputeJob({
     ladderMeta: /** @type {any} */ (services).ladderMeta,
@@ -317,6 +331,7 @@ async function main() {
     await ladderMapPoolRefresh.stop();
     await ladderMapBackfill.stop();
     await leaguePercentilesJob.stop();
+    await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();
