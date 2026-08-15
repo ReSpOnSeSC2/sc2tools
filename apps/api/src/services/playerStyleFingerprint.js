@@ -77,6 +77,7 @@ const SPECIALIST_MIN_LEAD = 10;
 const BLIND_SPOT_MIN_GAP = 10;
 /** Below this on every axis, no trait is worth naming a player after. */
 const NEUTRAL_MAX_DISTINCTIVENESS = 0.15;
+const TAXONOMY_FALLBACK_METHOD = "taxonomy_fallback";
 const THRESHOLD_EPSILON = 1e-9;
 
 const RACE_LETTERS = Object.freeze(["P", "T", "Z"]);
@@ -485,16 +486,19 @@ class SkillFingerprintService {
       rawEdge,
     );
 
-    const axes = [
-      publicAxis("repertoire", AXIS_META.repertoire.label, repertoire),
-      publicAxis("pace", AXIS_META.pace.label, pace),
-      publicAxis("matchup_edge", AXIS_META.matchup_edge.label, edge),
-    ];
-    const archetype = deriveArchetype([
+    const scoredAxisResults = [
       { key: "repertoire", ...repertoire },
       { key: "pace", ...pace },
       { key: "matchup_edge", ...edge },
-    ]);
+    ];
+    const axes = scoredAxisResults.map((result) =>
+      publicAxis(
+        result.key,
+        /** @type {Record<string, any>} */ (AXIS_META)[result.key].label,
+        result,
+      ),
+    );
+    const archetype = deriveArchetype(scoredAxisResults);
 
     const ratedAxes = axes.filter((axis) => axis.category).length;
     const status = archetype.complete
@@ -516,7 +520,10 @@ class SkillFingerprintService {
       playstyle: archetype.name,
       archetype,
       taxonomy: buildTaxonomy(),
-      populationCalibration: publicCalibrationSummary(calibrationTable),
+      populationCalibration: publicCalibrationSummary(
+        calibrationTable,
+        scoredAxisResults,
+      ),
       buildOrders: repertoire.builds,
       repertoireSummary: repertoire.summary,
       paceSummary: pace.summary,
@@ -597,9 +604,10 @@ function publicAxis(key, label, result) {
     sampleSize: result.sampleSize,
     detail: result.detail || null,
     distinctiveness:
-      typeof result.distinctiveness === "number"
+      typeof result.distinctiveness === "number" &&
+      Number.isFinite(result.distinctiveness)
         ? round3(result.distinctiveness)
-        : 0,
+        : null,
     calibration: result.calibration || null,
     reason: result.category ? null : result.reason || null,
     have: result.category ? null : result.sampleSize,
@@ -684,9 +692,9 @@ function repertoireAxis(rows) {
 /**
  * Population calibration is optional at the request boundary: a fresh deploy
  * can receive traffic before its first background rebuild finishes. A lookup
- * failure must not take the raw fingerprint down with it. Missing calibration
- * produces a conservative zero naming score; it never falls back to marker
- * geometry and silently recreates the old bug.
+ * failure must not take the raw fingerprint down with it. Missing population
+ * evidence remains unknown so archetype composition can switch to the honest
+ * taxonomy fallback; it never falls back to marker geometry.
  *
  * @param {any} calibration
  * @param {string} matchup
@@ -738,16 +746,23 @@ function calibrateAxisResult(calibration, table, axisKey, result) {
   const candidate = scored && typeof scored === "object"
     ? (scored.distinctiveness ?? scored.score)
     : null;
-  const distinctiveness =
-    typeof candidate === "number" && Number.isFinite(candidate)
-      ? clamp01(candidate)
-      : 0;
+  const hasPopulationScore =
+    typeof candidate === "number" && Number.isFinite(candidate);
+  const distinctiveness = hasPopulationScore ? clamp01(candidate) : null;
   return {
     ...result,
     distinctiveness,
-    calibration: scored && typeof scored === "object"
+    calibration: hasPopulationScore && scored && typeof scored === "object"
       ? { ...scored, distinctiveness }
-      : null,
+      : result && result.category
+        ? {
+            method: TAXONOMY_FALLBACK_METHOD,
+            status: "provisional",
+            reason: table
+              ? "axis_population_undersampled"
+              : "population_reference_unavailable",
+          }
+        : null,
   };
 }
 
@@ -756,10 +771,23 @@ function calibrateAxisResult(calibration, table, axisKey, result) {
  * server-side: the response needs to explain its benchmark, not ship it.
  *
  * @param {Record<string, any> | null} table
+ * @param {Array<Record<string, any> & {key:string}>} [axisResults]
  */
-function publicCalibrationSummary(table) {
+function publicCalibrationSummary(table, axisResults = []) {
+  const fallbackAxes = axisResults
+    .filter(
+      (result) => result?.calibration?.method === TAXONOMY_FALLBACK_METHOD,
+    )
+    .map((result) => result.key);
+  const fallback = fallbackAxes.length > 0
+    ? { method: TAXONOMY_FALLBACK_METHOD, axes: fallbackAxes }
+    : null;
   if (!table || typeof table !== "object") {
-    return { status: "unavailable", method: "player_population" };
+    return {
+      status: "unavailable",
+      method: "player_population",
+      fallback,
+    };
   }
   return {
     status: "ready",
@@ -774,6 +802,7 @@ function publicCalibrationSummary(table) {
     updatedAt: table.updatedAt || null,
     reference: table.reference || null,
     version: table.version ?? table.schemaVersion ?? null,
+    fallback,
   };
 }
 
@@ -1155,7 +1184,8 @@ function atLeastThreshold(value, threshold) {
  * Population-calibrated 0..1 naming score. Spectrum marker geometry is not a
  * population statistic and must never be used as a fallback here: saturated
  * endpoints and a non-typical visual centre caused the original cross-axis
- * ranking bug. Without a calibration table the score stays conservative at 0.
+ * ranking bug. Missing population evidence is handled before this helper by
+ * the taxonomy fallback; this function never infers a score from position.
  *
  * @param {string} axisKey
  * @param {Record<string, any>} result
@@ -1186,9 +1216,9 @@ function axisDistinctiveness(axisKey, result) {
  */
 function deriveArchetype(axisResults) {
   const results = Array.isArray(axisResults) ? axisResults : [];
-  /** @type {Map<string, Record<string, any>>} */
+  /** @type {Map<string, Record<string, any> & {key:string}>} */
   const byKey = new Map(results.map((entry) => [entry.key, entry]));
-  /** @type {Array<Record<string, any>>} */
+  /** @type {Array<Record<string, any> & {key:string}>} */
   const ordered = [];
   for (const axisKey of AXIS_ORDER) {
     const entry = byKey.get(axisKey);
@@ -1199,7 +1229,7 @@ function deriveArchetype(axisResults) {
     ordered.length === AXIS_ORDER.length && rated.length === AXIS_ORDER.length;
 
   const categories = AXIS_ORDER.map(
-    (axisKey) => (byKey.get(axisKey) || {}).category || "?",
+    (axisKey) => byKey.get(axisKey)?.category || "?",
   );
   const key = complete
     ? categories.join("|")
@@ -1212,8 +1242,18 @@ function deriveArchetype(axisResults) {
       description:
         "More replay evidence is needed before a player archetype can be assigned.",
       complete: false,
+      namingMode: "insufficient",
       components: [],
     };
+  }
+
+  const allPopulationScored = rated.every(
+    (entry) =>
+      typeof entry.distinctiveness === "number" &&
+      Number.isFinite(entry.distinctiveness),
+  );
+  if (!allPopulationScored) {
+    return deriveTaxonomyFallback(rated, key, complete);
   }
 
   const ranked = rated
@@ -1257,18 +1297,66 @@ function deriveArchetype(axisResults) {
     .filter(Boolean)
     .join(" ");
 
-  return { key, name, description, complete, components };
+  return {
+    key,
+    name,
+    description,
+    complete,
+    namingMode: "population_calibrated",
+    components,
+  };
 }
 
 /**
- * @param {{axis:string,category:string,distinctiveness:number}} entry
+ * A population-free name must not pretend it knows which axis is rarest.
+ * Compose every rated category in stable taxonomy order instead. That keeps
+ * the name responsive to timeframe and matchup changes, exposes up to all 175
+ * complete category combinations, and never consults spectrum-marker pixels.
+ *
+ * @param {Array<Record<string, any> & {key:string}>} rated
+ * @param {string} key
+ * @param {boolean} complete
+ */
+function deriveTaxonomyFallback(rated, key, complete) {
+  const entries = rated.map((entry) => ({
+    axis: entry.key,
+    category: entry.category,
+    distinctiveness: null,
+    vocab: vocabularyFor(entry.key, entry.category),
+  }));
+  const core = entries[0];
+  const modifiers = entries.slice(1);
+  const name = [
+    ...modifiers.map((entry) => entry.vocab.adjective).reverse(),
+    core.vocab.noun,
+  ].join(" ");
+  const description = entries
+    .map((entry) => entry.vocab.blurb)
+    .filter(Boolean)
+    .join(" ");
+  return {
+    key,
+    name,
+    description,
+    complete,
+    namingMode: "taxonomy_fallback",
+    components: entries.map((entry, index) => componentOf(entry, index)),
+  };
+}
+
+/**
+ * @param {{axis:string,category:string,distinctiveness:number|null}} entry
  * @param {number} index Rank in the distinctiveness ordering; -1 when unused.
  */
 function componentOf(entry, index) {
   return {
     axis: entry.axis,
     category: entry.category,
-    distinctiveness: round3(entry.distinctiveness),
+    distinctiveness:
+      typeof entry.distinctiveness === "number" &&
+      Number.isFinite(entry.distinctiveness)
+        ? round3(entry.distinctiveness)
+        : null,
     role: index === 0 ? "core" : index === 1 ? "modifier" : "supporting",
   };
 }
@@ -1500,4 +1588,5 @@ module.exports = {
   SPECIALIST_MIN_LEAD,
   BLIND_SPOT_MIN_GAP,
   NEUTRAL_MAX_DISTINCTIVENESS,
+  TAXONOMY_FALLBACK_METHOD,
 };

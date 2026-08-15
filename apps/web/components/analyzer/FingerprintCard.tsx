@@ -17,14 +17,16 @@ type FingerprintAxis = {
   categoryLabel: string | null;
   sampleSize: number;
   detail: AxisDetail | null;
-  /** Population-calibrated naming score; independent from marker position. */
-  distinctiveness?: number;
+  /** Population-calibrated naming score; null while taxonomy fallback is active. */
+  distinctiveness?: number | null;
   calibration?: {
     method?: "two_sided_percentile" | "tier_rarity" | string;
     populationSize?: number;
     percentile?: number;
     tierFrequency?: number;
     distinctiveness?: number;
+    status?: "provisional" | string;
+    reason?: string;
   } | null;
   /** Why an unrated track is unrated. Null once the track has a category. */
   reason: AxisReason | string | null;
@@ -96,7 +98,7 @@ type TaxonomyAxis = {
 type ArchetypeComponent = {
   axis: string;
   category: string;
-  distinctiveness: number;
+  distinctiveness: number | null;
   role: "core" | "modifier" | "supporting";
 };
 
@@ -118,6 +120,7 @@ type FingerprintData = {
     name: string;
     description: string;
     complete: boolean;
+    namingMode?: "population_calibrated" | "taxonomy_fallback" | "insufficient";
     components: ArchetypeComponent[];
   };
   taxonomy: { axes: TaxonomyAxis[] };
@@ -133,6 +136,10 @@ type FingerprintData = {
       filters?: string;
     } | null;
     version?: number | null;
+    fallback?: {
+      method: "taxonomy_fallback" | string;
+      axes: string[];
+    } | null;
   };
   buildOrders: Array<{ name: string; games: number }>;
   repertoireSummary?: {
@@ -361,6 +368,14 @@ function FingerprintBody({
                   ? "Complete profile"
                   : `${readyCount} of ${trackCount} tracks ready`}
               </span>
+              {fp.archetype.namingMode === "taxonomy_fallback" ? (
+                <span
+                  data-testid="fingerprint-provisional-name"
+                  className="rounded-full border border-warning/45 bg-warning/10 px-2.5 py-1 text-micro font-semibold text-warning"
+                >
+                  Provisional name
+                </span>
+              ) : null}
             </div>
             <h4
               id="playstyle-heading"
@@ -490,14 +505,18 @@ function FingerprintBody({
 }
 
 /**
- * Say which two traits produced the name. The old fixed table could not
- * explain itself; composition can, and a name you can trace is a name you
- * believe.
+ * Say which traits produced the name. Population-calibrated names identify
+ * their top two; provisional names list every rated category because no
+ * cross-axis rarity ordering exists yet.
  */
 function NameRationale({ fp }: { fp: FingerprintData }) {
-  const named = fp.archetype.components.filter(
-    (component) => component.role === "core" || component.role === "modifier",
-  );
+  const provisional = fp.archetype.namingMode === "taxonomy_fallback";
+  const named = provisional
+    ? fp.archetype.components
+    : fp.archetype.components.filter(
+        (component) =>
+          component.role === "core" || component.role === "modifier",
+      );
   if (named.length === 0) return null;
   const labelFor = (component: ArchetypeComponent) =>
     findCategory(fp, component.axis, component.category)?.label ??
@@ -507,7 +526,9 @@ function NameRationale({ fp }: { fp: FingerprintData }) {
       data-testid="fingerprint-name-rationale"
       className="mt-2 text-micro leading-relaxed text-text-dim"
     >
-      Named for your most distinctive traits:{" "}
+      {provisional
+        ? "Provisional name includes every rated trait: "
+        : "Named for your most distinctive traits: "}
       {named.map((component) => labelFor(component)).join(" and ")}.
     </p>
   );
@@ -960,6 +981,9 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
     fp.matchupSummary.signedEdge,
     edgeAxis?.value,
   );
+  const fallbackAxes = fp.populationCalibration?.fallback?.axes ?? [];
+  const fullyPopulationCalibrated =
+    fp.populationCalibration?.status === "ready" && fallbackAxes.length === 0;
   const combinationCount = taxonomyCombinationCount(taxonomyAxes);
   return (
     <details className="group rounded-xl border border-border bg-bg-elevated/25">
@@ -985,14 +1009,10 @@ function MethodologyDetails({ fp }: { fp: FingerprintData }) {
           race filter.
         </p>
         <p className="mt-2 text-caption leading-relaxed text-text-muted">
-          Spectrum markers show the absolute replay measurement. The separate
-          0&ndash;1 score used to choose the archetype name is calibrated against one
-          recent fingerprint per player in {fp.matchup}: continuous measures use
-          distance from the population median, while distribution signatures use
-          how rare their tier is.
-          {fp.populationCalibration?.status === "ready"
-            ? ` The current reference contains ${(fp.populationCalibration.populationSize ?? 0).toLocaleString()} qualifying player profiles.`
-            : " Population calibration is still building, so no marker position is treated as distinctive by itself."}
+          Spectrum markers show the absolute replay measurement.{" "}
+          {fullyPopulationCalibrated
+            ? `The separate 0–1 naming score compares one recent fingerprint per player in ${fp.matchup}: continuous measures use distance from the population median, while distribution signatures use how rare their tier is. The current reference contains ${(fp.populationCalibration?.populationSize ?? 0).toLocaleString()} qualifying player profiles.`
+            : "Population calibration is still building for one or more tracks. Until it is ready, the provisional name composes every rated trait measured in this timeframe, so category changes still change the name. Marker position never chooses it."}
         </p>
 
         <ol className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
@@ -1198,8 +1218,9 @@ function ArchetypeVocabulary({ fp }: { fp: FingerprintData }) {
       <div className="border-t border-border px-3 py-4 sm:px-4">
         <p className="text-micro leading-relaxed text-text-dim">
           Every response-owned trait below can contribute to a compositional
-          archetype name. Your current trait is highlighted with the role and
-          distinctiveness that explain whether it shaped the name.
+          archetype name. Your current trait is highlighted with its naming
+          role. A population score appears once that track has enough reference
+          players; provisional names include every rated trait instead.
         </p>
         <ol className="mt-3 space-y-3">
           {taxonomyAxes.map((axis) => (
@@ -1245,7 +1266,9 @@ function ArchetypeVocabulary({ fp }: { fp: FingerprintData }) {
                         <span className="mt-1 inline-block rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan">
                           Your trait
                           {component
-                            ? ` · ${component.role} · ${formatNumber(component.distinctiveness, 2)} distinctive`
+                            ? typeof component.distinctiveness === "number"
+                              ? ` · ${component.role} · ${formatNumber(component.distinctiveness, 2)} distinctive`
+                              : ` · ${component.role} · provisional`
                             : ""}
                         </span>
                       ) : null}

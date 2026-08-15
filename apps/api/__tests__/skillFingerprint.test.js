@@ -34,6 +34,7 @@ const {
   ONE_TRICK_MAX_EFFECTIVE_BUILDS,
   RANGE_ROW_CAP,
   SIGNATURE_MAX_EFFECTIVE_BUILDS,
+  TAXONOMY_FALLBACK_METHOD,
   WINDOW_GAMES,
   axisDistinctiveness,
   buildTaxonomy,
@@ -832,6 +833,48 @@ describe("skill fingerprint pure replay heuristics", () => {
       ]);
     });
 
+    test("an unavailable population composes every rated trait and ignores marker geometry", () => {
+      const fallback = (positions) =>
+        deriveArchetype([
+          { key: "repertoire", category: "one_trick", position: positions[0], distinctiveness: null },
+          { key: "pace", category: "timing_attacker", position: positions[1], distinctiveness: null },
+          { key: "matchup_edge", category: "specialist", position: positions[2], distinctiveness: null },
+        ]);
+      const left = fallback([0, 50, 100]);
+      const right = fallback([100, 0, 50]);
+
+      expect(left).toMatchObject({
+        name: "Dominant Clockwork Purist",
+        namingMode: "taxonomy_fallback",
+        complete: true,
+        components: [
+          { axis: "repertoire", category: "one_trick", role: "core", distinctiveness: null },
+          { axis: "pace", category: "timing_attacker", role: "modifier", distinctiveness: null },
+          { axis: "matchup_edge", category: "specialist", role: "supporting", distinctiveness: null },
+        ],
+      });
+      expect(right).toEqual(left);
+      expect(left.name).not.toBe(NEUTRAL_ARCHETYPE_NAME);
+    });
+
+    test("taxonomy fallback exposes every complete category combination", () => {
+      const names = new Set();
+      for (const repertoire of categoriesFor("repertoire")) {
+        for (const pace of categoriesFor("pace")) {
+          for (const edge of categoriesFor("matchup_edge")) {
+            const archetype = deriveArchetype([
+              { key: "repertoire", category: repertoire, distinctiveness: null },
+              { key: "pace", category: pace, distinctiveness: null },
+              { key: "matchup_edge", category: edge, distinctiveness: null },
+            ]);
+            expect(archetype.namingMode).toBe("taxonomy_fallback");
+            names.add(archetype.name);
+          }
+        }
+      }
+      expect(names.size).toBe(5 * 7 * 5);
+    });
+
     test("every override key resolves to a reachable combination", () => {
       const valid = new Set();
       for (const repertoire of categoriesFor("repertoire")) {
@@ -897,17 +940,43 @@ describe("skill fingerprint pure replay heuristics", () => {
       expect(axisDistinctiveness("pace", result)).toBe(0.9);
     });
 
-    test("missing population data yields zero, never marker distance", () => {
+    test("missing population data stays unknown and activates taxonomy fallback", () => {
+      const results = [0, 50, 100].map((position) =>
+        calibrateAxisResult(
+          { scoreAxis: () => null },
+          null,
+          "repertoire",
+          { category: "creative", position, value: 12 },
+        ),
+      );
+      for (const [index, result] of results.entries()) {
+        expect(result).toMatchObject({
+          position: [0, 50, 100][index],
+          value: 12,
+          distinctiveness: null,
+          calibration: {
+            method: TAXONOMY_FALLBACK_METHOD,
+            status: "provisional",
+            reason: "population_reference_unavailable",
+          },
+        });
+      }
+    });
+
+    test("an undersampled axis falls back even when the matchup table is ready", () => {
       const result = calibrateAxisResult(
         { scoreAxis: () => null },
-        null,
-        "repertoire",
-        { category: "creative", position: 100 },
+        { matchup: "PvZ", n: 50 },
+        "pace",
+        { category: "timing_attacker", position: 50, value: 600 },
       );
       expect(result).toMatchObject({
-        position: 100,
-        distinctiveness: 0,
-        calibration: null,
+        distinctiveness: null,
+        calibration: {
+          method: TAXONOMY_FALLBACK_METHOD,
+          status: "provisional",
+          reason: "axis_population_undersampled",
+        },
       });
     });
 
@@ -1431,10 +1500,18 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     expect(repertoireOf(marchOnly).category).not.toBe(
       repertoireOf(all).category,
     );
-    // The isolated route fixture has no 50-player population table. A missing
-    // calibration stays conservative instead of falling back to marker distance.
+    // The isolated route fixture has no 50-player population table. Its
+    // provisional taxonomy name still follows the measured categories.
     expect(marchOnly.populationCalibration.status).toBe("unavailable");
-    expect(marchOnly.archetype.name).toBe(NEUTRAL_ARCHETYPE_NAME);
+    expect(all.populationCalibration.status).toBe("unavailable");
+    expect(all.populationCalibration.fallback).toMatchObject({
+      method: TAXONOMY_FALLBACK_METHOD,
+      axes: expect.arrayContaining(["repertoire", "pace"]),
+    });
+    expect(marchOnly.archetype.namingMode).toBe("taxonomy_fallback");
+    expect(all.archetype.name).not.toBe(NEUTRAL_ARCHETYPE_NAME);
+    expect(marchOnly.archetype.name).not.toBe(NEUTRAL_ARCHETYPE_NAME);
+    expect(marchOnly.archetype.name).not.toBe(all.archetype.name);
   });
 
   test("an until bound excludes later games", async () => {
@@ -1478,7 +1555,15 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
       expect(response.body.fingerprint.populationCalibration.status).toBe(
         "unavailable",
       );
+      expect(response.body.fingerprint.archetype.namingMode).toBe(
+        "taxonomy_fallback",
+      );
     }
+    const names = [pvp, pvt, pvz].map(
+      (response) => response.body.fingerprint.archetype.name,
+    );
+    expect(new Set(names).size).toBeGreaterThan(1);
+    expect(names).not.toContain(NEUTRAL_ARCHETYPE_NAME);
   });
 
   // --- Filter narrowing, proven end to end ---------------------------------

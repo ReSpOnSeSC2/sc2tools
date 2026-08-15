@@ -370,6 +370,7 @@ const FP = {
     description:
       "A dependable core sharpened through regular use. This selected matchup is a defining strength.",
     complete: true,
+    namingMode: "population_calibrated" as const,
     components: [
       {
         axis: "matchup_edge",
@@ -1120,7 +1121,7 @@ describe("FingerprintCard", () => {
       expect(guide).toContain("best-to-worst spread is within 5 points");
       expect(guide).toContain("Ahead by 10 points or more is Specialist (score +2)");
       expect(guide).toContain("behind by 10 or more is Blind Spot (score −2)");
-      expect(guide).toContain("score used to choose the archetype name");
+      expect(guide).toContain("0–1 naming score");
       expect(guide).toContain("one recent fingerprint per player in PvZ");
       expect(guide).toContain("distance from the population median");
       expect(guide).toContain("how rare their tier is");
@@ -1134,18 +1135,67 @@ describe("FingerprintCard", () => {
       expect(guide).toContain("175 possible three-trait profiles");
     });
 
-    it("explains the conservative naming behavior while calibration is unavailable", () => {
-      useApiMock.mockReturnValue(
-        ok({
-          ...FP,
-          populationCalibration: {
-            status: "unavailable",
-            method: "player_population",
+    it("renders a responsive provisional taxonomy name while calibration builds", () => {
+      const provisional = {
+        ...FP,
+        playstyle: "Dominant Flexible Grinder",
+        axes: FP.axes.map((entry) => ({
+          ...entry,
+          distinctiveness: null,
+          calibration: {
+            method: "taxonomy_fallback",
+            status: "provisional",
+            reason: "population_reference_unavailable",
           },
-        }),
+        })),
+        archetype: {
+          ...FP.archetype,
+          name: "Dominant Flexible Grinder",
+          namingMode: "taxonomy_fallback" as const,
+          components: [
+            {
+              axis: "repertoire",
+              category: "grinder",
+              distinctiveness: null,
+              role: "core" as const,
+            },
+            {
+              axis: "pace",
+              category: "flexible",
+              distinctiveness: null,
+              role: "modifier" as const,
+            },
+            {
+              axis: "matchup_edge",
+              category: "specialist",
+              distinctiveness: null,
+              role: "supporting" as const,
+            },
+          ],
+        },
+        populationCalibration: {
+          status: "unavailable" as const,
+          method: "player_population",
+          fallback: {
+            method: "taxonomy_fallback",
+            axes: ["repertoire", "pace", "matchup_edge"],
+          },
+        },
+      };
+      useApiMock.mockReturnValue(
+        ok(provisional),
       );
       render(<FingerprintCard />);
 
+      expect(screen.getByText("Dominant Flexible Grinder")).toBeTruthy();
+      expect(
+        screen.getByTestId("fingerprint-provisional-name").textContent,
+      ).toContain("Provisional name");
+      const rationale = screen.getByTestId("fingerprint-name-rationale").textContent ?? "";
+      expect(rationale).toContain("Provisional name includes every rated trait");
+      expect(rationale).toContain("Consistent Grinder");
+      expect(rationale).toContain("Flexible Pacer");
+      expect(rationale).toContain("Matchup Specialist");
       const methodology = screen
         .getByText("How this fingerprint is calculated")
         .closest("details");
@@ -1153,9 +1203,16 @@ describe("FingerprintCard", () => {
       const guide = methodology!.textContent ?? "";
       expect(guide).toContain("Population calibration is still building");
       expect(guide).toContain(
-        "no marker position is treated as distinctive by itself",
+        "provisional name composes every rated trait measured in this timeframe",
       );
+      expect(guide).toContain("category changes still change the name");
+      expect(guide).toContain("Marker position never chooses it");
       expect(guide).not.toContain("1,284 qualifying player profiles");
+
+      const catalog = screen.getByTestId("fingerprint-archetype-catalog");
+      expect(
+        within(catalog).getAllByText(/Your trait.*provisional/),
+      ).toHaveLength(3);
     });
 
     it("shows 17 response traits while reporting the 5×7×5 product", () => {

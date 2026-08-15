@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Skill Fingerprints no longer collapse to Balanced All-Rounder while their
+  population benchmark is building** — missing or undersampled calibration used
+  to turn every naming score into zero, so changing the timeframe could change
+  all three measured traits without changing the archetype. The provisional
+  path now composes every rated trait directly (up to all 175 combinations),
+  clearly marks the name as provisional, and never uses spectrum-marker pixels
+  as a substitute for population evidence.
+
 - **Matchup performance numbers no longer spill out of their boxes** — the
   card shared a three-column row with the other two evidence panels, leaving
   roughly 110px per matchup on a wide screen, and a three-decimal win rate did
