@@ -10,6 +10,9 @@
 import { isChatEventKind } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks, PlatformState } from "./types";
 
+/** Keep replayed SSE frames from resurfacing after an EventSource reconnect. */
+const SEEN_CHAT_IDS_CAP = 512;
+
 const RELAY_STATES: readonly PlatformState[] = [
   "connecting",
   "connected",
@@ -22,6 +25,8 @@ interface RelayEvent {
   type: "status" | "chat" | "event";
   state?: string;
   detail?: string;
+  session?: string;
+  replay?: boolean;
   message?: {
     id: string;
     user: string;
@@ -53,6 +58,7 @@ export function createTikTokChat(
     `${apiBase}/v1/multichat/${encodeURIComponent(token)}` +
     `/tiktok/stream?username=${encodeURIComponent(username)}`;
   const source = new EventSource(url);
+  const seenChatIds = new Set<string>();
 
   source.onmessage = (event) => {
     let data: RelayEvent;
@@ -70,15 +76,28 @@ export function createTikTokChat(
     }
     if (data.type === "chat" && data.message) {
       const m = data.message;
+      const sourceId = String(m.id);
+      const session = String(data.session || "").trim();
+      // TikTok message ids are scoped to a broadcast room. Including
+      // the room keeps reconnect duplicates out while allowing a new
+      // broadcast to reuse a connector id in the same open widget.
+      const id = session ? `${session}:${sourceId}` : sourceId;
+      if (seenChatIds.has(id)) return;
+      seenChatIds.add(id);
+      if (seenChatIds.size > SEEN_CHAT_IDS_CAP) {
+        const oldest = seenChatIds.values().next().value;
+        if (oldest !== undefined) seenChatIds.delete(oldest);
+      }
       callbacks.onMessage({
         platform: "tiktok",
-        id: m.id,
+        id,
         user: m.user,
         text: m.text,
         badges: (m.badges || []).filter((b): b is ChatBadge =>
           ["owner", "moderator", "member", "verified", "vip"].includes(b),
         ),
         atMs: m.atMs,
+        ...(data.replay === true ? { backlog: true } : {}),
       });
       return;
     }

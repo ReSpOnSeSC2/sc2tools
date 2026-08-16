@@ -35,6 +35,12 @@ export interface ChatMessage {
   color?: string;
   badges: ChatBadge[];
   atMs: number;
+  /**
+   * Historical chat restored by a relay after this surface attached.
+   * It remains visible in the feed, but must not trigger speech,
+   * sounds, commands, or engagement a second time.
+   */
+  backlog?: boolean;
   emotes?: import("./emotes").ChatEmote[];
 }
 

@@ -25,10 +25,11 @@ corresponding GitHub Release.
   recover the missed batch, messages posted during the first poll are kept, and
   idle poll widgets no longer spend the shared YouTube request budget.
 
-- **Recent TikTok comments now appear when the relay connects after a live has started** —
-  the relay no longer discards TikTok's small startup comment batch, de-duplicates
-  messages repeated by the live socket, and avoids replaying old gift, follow, or
-  subscription alerts during reconnects.
+- **Recent TikTok comments now appear in every connected Stream Dock and widget** —
+  the relay no longer discards TikTok's small startup comment batch, keeps a bounded
+  chat-only backlog for surfaces that attach to an existing shared connection,
+  de-duplicates messages repeated by the live socket, and avoids replaying old gift,
+  follow, or subscription alerts during reconnects.
 
 - **Skill Fingerprints no longer collapse to Balanced All-Rounder while their
   population benchmark is building** — missing or undersampled calibration used

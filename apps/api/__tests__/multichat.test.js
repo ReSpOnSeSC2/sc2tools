@@ -31,7 +31,9 @@ const {
   normalizeTikTokUsername,
   mapChatEvent,
   mapTikTokEvent,
+  sourceTimestampMs,
   TIKTOK_CONNECTION_OPTIONS,
+  MAX_RECENT_CHAT_EVENTS,
 } = require("../src/services/tiktokChatRelay");
 const {
   MultichatSoundsService,
@@ -344,7 +346,7 @@ describe("services/tiktokChatRelay", () => {
       const startupChat = {
         content: "comment posted just before OBS attached",
         user: { displayId: "early_viewer" },
-        common: { msgId: "startup-1" },
+        common: { msgId: "startup-1", createTime: "1700000000123" },
       };
       conn.emit("chat", startupChat);
       // Connector 2.x may repeat the connect-response message on the
@@ -371,7 +373,9 @@ describe("services/tiktokChatRelay", () => {
       id: "startup-1",
       user: "early_viewer",
       text: "comment posted just before OBS attached",
+      atMs: 1_700_000_000_123,
     });
+    expect(seen.find((event) => event.type === "chat").replay).toBe(true);
     expect(seen.filter((event) => event.type === "event")).toHaveLength(0);
 
     // A notification received after connect remains live behavior.
@@ -385,6 +389,190 @@ describe("services/tiktokChatRelay", () => {
       user: "new_subscriber",
     });
     off();
+  });
+
+  test("stream end during initial data cannot resolve back to connected", async () => {
+    const conn = fakeConnection();
+    conn.connect.mockImplementation(async () => {
+      conn.emit("chat", {
+        content: "staged startup history",
+        user: { displayId: "early_viewer" },
+        common: { msgId: "staged-1", createTime: "1700000000123" },
+      });
+      conn.emit("streamEnd");
+      conn.emit("chat", {
+        content: "must be ignored after the end",
+        user: { displayId: "late_frame" },
+        common: { msgId: "staged-2", createTime: "1700000001123" },
+      });
+      return { roomId: "already-ended" };
+    });
+    const relay = new TikTokChatRelay({ connectionFactory: async () => conn });
+    const seen = [];
+    const off = relay.subscribe("streamer", (event) => seen.push(event));
+
+    await new Promise((r) => setImmediate(r));
+    expect(seen.at(-1)).toEqual({ type: "status", state: "ended" });
+    expect(seen.some((event) => event.state === "connected")).toBe(false);
+    expect(seen.some((event) => event.type === "chat")).toBe(false);
+    expect(relay.channels.get("streamer").recentChatEvents).toEqual([]);
+
+    off();
+  });
+
+  test("late subscribers receive the bounded recent chat but no old alerts", async () => {
+    const conn = fakeConnection();
+    const relay = new TikTokChatRelay({ connectionFactory: async () => conn });
+    const seenA = [];
+    const offA = relay.subscribe("streamer", (event) => seenA.push(event));
+    await new Promise((r) => setImmediate(r));
+
+    conn.emit("gift", {
+      giftType: 5,
+      giftName: "Live gift",
+      user: { displayId: "supporter" },
+      common: { msgId: "gift-1" },
+    });
+    for (let i = 0; i < MAX_RECENT_CHAT_EVENTS + 2; i += 1) {
+      conn.emit("chat", {
+        content: `comment ${i}`,
+        user: { displayId: `viewer${i}` },
+        common: { msgId: `late-${i}` },
+      });
+    }
+
+    const seenB = [];
+    const offB = relay.subscribe("@Streamer", (event) => seenB.push(event));
+    expect(seenB[0]).toMatchObject({ type: "status", state: "connected" });
+    expect(seenB.filter((event) => event.type === "event")).toHaveLength(0);
+    const replayed = seenB.filter((event) => event.type === "chat");
+    expect(replayed).toHaveLength(MAX_RECENT_CHAT_EVENTS);
+    expect(replayed.every((event) => event.replay === true)).toBe(true);
+    expect(replayed[0].message).toMatchObject({
+      id: "late-2",
+      text: "comment 2",
+    });
+    expect(replayed.at(-1).message).toMatchObject({
+      id: `late-${MAX_RECENT_CHAT_EVENTS + 1}`,
+      text: `comment ${MAX_RECENT_CHAT_EVENTS + 1}`,
+    });
+
+    conn.emit("streamEnd");
+    const seenAfterEnd = [];
+    const offAfterEnd = relay.subscribe("streamer", (event) =>
+      seenAfterEnd.push(event),
+    );
+    expect(seenAfterEnd).toEqual([{ type: "status", state: "ended" }]);
+
+    offAfterEnd();
+    offB();
+    offA();
+  });
+
+  test("a surface joining mid-reconnect receives same-room history once", async () => {
+    const first = fakeConnection();
+    const reconnect = fakeConnection();
+    const repeated = {
+      content: "message before the connection blip",
+      user: { displayId: "viewer1" },
+      common: { msgId: "same-room-1", createTime: "1700000000000" },
+    };
+    reconnect.connect.mockImplementation(async () => {
+      reconnect.emit("chat", repeated);
+      return { roomId: "r1" };
+    });
+    const connectionFactory = jest
+      .fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(reconnect);
+    const relay = new TikTokChatRelay({ connectionFactory });
+    const seenA = [];
+    const offA = relay.subscribe("streamer", (event) => seenA.push(event));
+    await new Promise((r) => setImmediate(r));
+    const channel = relay.channels.get("streamer");
+    channel.scheduleRetry = jest.fn();
+
+    first.emit("chat", repeated);
+    first.emit("disconnected");
+    const seenB = [];
+    const offB = relay.subscribe("streamer", (event) => seenB.push(event));
+    expect(seenB).toEqual([{ type: "status", state: "connecting" }]);
+
+    await channel.connectOnce();
+    const chatsA = seenA.filter((event) => event.type === "chat");
+    const chatsB = seenB.filter((event) => event.type === "chat");
+    expect(chatsA).toHaveLength(1);
+    expect(chatsB).toEqual([
+      expect.objectContaining({
+        replay: true,
+        session: "r1",
+        message: expect.objectContaining({ id: "same-room-1" }),
+      }),
+    ]);
+    expect(seenB).toContainEqual({ type: "status", state: "connected" });
+
+    offB();
+    offA();
+  });
+
+  test("a changed TikTok room starts a fresh retained-chat session", async () => {
+    const first = fakeConnection();
+    const next = fakeConnection();
+    next.connect.mockImplementation(async () => {
+      next.emit("chat", {
+        content: "new broadcast, reused connector id",
+        user: { displayId: "new_viewer" },
+        common: { msgId: "room-local-1", createTime: "1700000060000" },
+      });
+      return { roomId: "r2" };
+    });
+    const connectionFactory = jest
+      .fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(next);
+    const relay = new TikTokChatRelay({ connectionFactory });
+    const seenA = [];
+    const offA = relay.subscribe("streamer", (event) => seenA.push(event));
+    await new Promise((r) => setImmediate(r));
+    const channel = relay.channels.get("streamer");
+    channel.scheduleRetry = jest.fn();
+
+    first.emit("chat", {
+      content: "prior broadcast",
+      user: { displayId: "old_viewer" },
+      common: { msgId: "room-local-1", createTime: "1700000000000" },
+    });
+    first.emit("disconnected");
+    const seenB = [];
+    const offB = relay.subscribe("streamer", (event) => seenB.push(event));
+
+    await channel.connectOnce();
+    const chatsB = seenB.filter((event) => event.type === "chat");
+    expect(chatsB).toHaveLength(1);
+    expect(chatsB[0]).toMatchObject({
+      replay: true,
+      session: "r2",
+      message: {
+        id: "room-local-1",
+        text: "new broadcast, reused connector id",
+      },
+    });
+    const seenLate = [];
+    const offLate = relay.subscribe("streamer", (event) =>
+      seenLate.push(event),
+    );
+    expect(seenLate.filter((event) => event.type === "chat")).toEqual([
+      expect.objectContaining({
+        replay: true,
+        message: expect.objectContaining({
+          text: "new broadcast, reused connector id",
+        }),
+      }),
+    ]);
+
+    offLate();
+    offB();
+    offA();
   });
 
   test("production connector requests TikTok's initial comment batch", () => {
@@ -408,6 +596,78 @@ describe("services/tiktokChatRelay", () => {
     off();
   });
 
+  test("an offline boundary drops the prior live before the next broadcast", async () => {
+    const live = fakeConnection();
+    const offline = fakeConnection();
+    offline.connect.mockRejectedValue(
+      new Error("The requested user isn't online :("),
+    );
+    const nextLive = fakeConnection();
+    nextLive.connect.mockImplementation(async () => {
+      nextLive.emit("chat", {
+        content: "first comment in the next live",
+        user: { displayId: "new_viewer" },
+        common: { msgId: "new-1", createTime: "1700000060000" },
+      });
+      return { roomId: "r2" };
+    });
+    const connectionFactory = jest
+      .fn()
+      .mockResolvedValueOnce(live)
+      .mockResolvedValueOnce(offline)
+      .mockResolvedValueOnce(nextLive);
+    const relay = new TikTokChatRelay({ connectionFactory });
+    const firstSurface = [];
+    const offFirst = relay.subscribe("streamer", (event) =>
+      firstSurface.push(event),
+    );
+    await new Promise((r) => setImmediate(r));
+    const channel = relay.channels.get("streamer");
+    // Drive retries synchronously; timer scheduling itself is covered
+    // by the existing offline/disconnect tests.
+    channel.scheduleRetry = jest.fn();
+
+    live.emit("chat", {
+      content: "comment from the prior live",
+      user: { displayId: "old_viewer" },
+      common: { msgId: "old-1", createTime: "1700000000000" },
+    });
+    live.emit("disconnected");
+    await channel.connectOnce();
+    expect(channel.state).toBe("offline");
+    expect(channel.recentChatEvents).toEqual([]);
+    expect(channel.seenChatIds.size).toBe(0);
+
+    const whileOffline = [];
+    const offWhileOffline = relay.subscribe("streamer", (event) =>
+      whileOffline.push(event),
+    );
+    expect(whileOffline).toEqual([{ type: "status", state: "offline" }]);
+
+    await channel.connectOnce();
+    const nextSurface = [];
+    const offNext = relay.subscribe("streamer", (event) =>
+      nextSurface.push(event),
+    );
+    expect(nextSurface[0]).toEqual({ type: "status", state: "connected" });
+    expect(nextSurface.filter((event) => event.type === "chat")).toEqual([
+      expect.objectContaining({
+        replay: true,
+        message: expect.objectContaining({
+          id: "new-1",
+          text: "first comment in the next live",
+        }),
+      }),
+    ]);
+    expect(nextSurface.some((event) => event.message?.id === "old-1")).toBe(
+      false,
+    );
+
+    offNext();
+    offWhileOffline();
+    offFirst();
+  });
+
   test("global cap rejects with relay_at_capacity", async () => {
     const relay = new TikTokChatRelay({
       maxChannels: 1,
@@ -426,12 +686,13 @@ describe("services/tiktokChatRelay", () => {
         comment: "   ",
         content: "current payload",
         user: { displayId: "current_user" },
-        common: { msgId: "current-1" },
+        common: { msgId: "current-1", createTime: "1700000000123" },
       }),
     ).toMatchObject({
       id: "current-1",
       user: "current_user",
       text: "current payload",
+      atMs: 1_700_000_000_123,
     });
     expect(
       mapChatEvent({
@@ -444,6 +705,9 @@ describe("services/tiktokChatRelay", () => {
       user: "legacy_user",
       text: "legacy payload",
     });
+    expect(sourceTimestampMs({ createTime: "1700000000" })).toBe(
+      1_700_000_000_000,
+    );
   });
 
   test("mapChatEvent drops empty chat and caps length", () => {

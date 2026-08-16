@@ -50,7 +50,7 @@ export function useEngagementReporter(
       seen.add(key);
       // The backlog visible at mount predates this reporter — other
       // sources already reported it (or it predates the stream).
-      if (m.atMs < mountedAtRef.current - 5_000) continue;
+      if (m.backlog || m.atMs < mountedAtRef.current - 5_000) continue;
       pending.push({
         platform: m.platform,
         id: m.id,

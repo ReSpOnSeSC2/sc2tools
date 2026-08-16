@@ -51,7 +51,9 @@ export function useCommandAnswers(
       const key = `${m.platform}:${m.id}`;
       if (seenRef.current.has(key)) continue;
       seenRef.current.add(key);
-      if (!enabled || m.atMs < mountedAtRef.current - 2000) continue;
+      if (!enabled || m.backlog || m.atMs < mountedAtRef.current - 2000) {
+        continue;
+      }
       const match = m.text
         .trim()
         .match(/^!(opponent|mmr|build|rank|level|xp)\b/i);

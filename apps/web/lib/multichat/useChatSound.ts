@@ -51,7 +51,13 @@ export function useChatSound(
       const key = `${m.platform}:${m.id}`;
       if (seenRef.current.has(key)) continue;
       seenRef.current.add(key);
-      if (!config.enabled || m.atMs < mountedAtRef.current - 2000) continue;
+      if (
+        !config.enabled ||
+        m.backlog ||
+        m.atMs < mountedAtRef.current - 2000
+      ) {
+        continue;
+      }
       fresh = true;
     }
     if (fresh && dinger) dinger.ping();
