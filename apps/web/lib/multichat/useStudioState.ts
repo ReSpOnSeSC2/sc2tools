@@ -56,6 +56,34 @@ export interface StudioTimer {
   setAtMs: number;
 }
 
+/** One time-ranged YouTube segment in the reusable BRB/Starting Soon reel. */
+export interface StudioBrollClip {
+  id: string;
+  title: string;
+  videoId: string;
+  startSeconds: number;
+  endSeconds: number;
+}
+
+/** Persisted player/library controls shared by the Dock and OBS source. */
+export interface StudioBrollConfig {
+  clips: StudioBrollClip[];
+  shuffle: boolean;
+  muted: boolean;
+  /** Integer percent, 0..100. */
+  volume: number;
+  /** Changing this counter asks every connected player to advance. */
+  skipNonce: number;
+}
+
+export const DEFAULT_BROLL_CONFIG: StudioBrollConfig = {
+  clips: [],
+  shuffle: true,
+  muted: false,
+  volume: 20,
+  skipNonce: 0,
+};
+
 export interface StudioState {
   highlight: StudioHighlight | null;
   poll: StudioPoll | null;
@@ -64,6 +92,7 @@ export interface StudioState {
   recapSeq: number;
   scene: StudioScene | null;
   timer: StudioTimer | null;
+  broll: StudioBrollConfig;
   /** Epoch ms the streamer marked as go-live — clip-log VOD offsets. */
   streamStartMs: number | null;
   /** VOD URL for clickable clip-moment timestamps (https, validated). */
@@ -79,6 +108,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   recapSeq: 0,
   scene: null,
   timer: null,
+  broll: DEFAULT_BROLL_CONFIG,
   streamStartMs: null,
   vodUrl: null,
   updatedAt: null,
@@ -173,6 +203,75 @@ function sanitizeTimer(raw: unknown): StudioTimer | null {
   };
 }
 
+const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const BROLL_CLIP_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const BROLL_MAX_CLIPS = 100;
+const BROLL_MAX_SECONDS = 24 * 60 * 60;
+
+/** Client mirror of the API sanitizer. Never lets embed-shaped input through. */
+function sanitizeBroll(raw: unknown): StudioBrollConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_BROLL_CONFIG, clips: [] };
+  }
+  const b = raw as Record<string, unknown>;
+  const clips: StudioBrollClip[] = [];
+  const seenIds = new Set<string>();
+  for (const candidate of Array.isArray(b.clips) ? b.clips : []) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+    const clip = candidate as Record<string, unknown>;
+    const id = typeof clip.id === "string" ? clip.id.trim() : "";
+    const title =
+      typeof clip.title === "string" ? clip.title.trim().slice(0, 120) : "";
+    const videoId =
+      typeof clip.videoId === "string" ? clip.videoId.trim() : "";
+    if (
+      !BROLL_CLIP_ID_RE.test(id) ||
+      seenIds.has(id) ||
+      !title ||
+      !YOUTUBE_VIDEO_ID_RE.test(videoId) ||
+      typeof clip.startSeconds !== "number" ||
+      !Number.isFinite(clip.startSeconds) ||
+      typeof clip.endSeconds !== "number" ||
+      !Number.isFinite(clip.endSeconds)
+    ) {
+      continue;
+    }
+    const startSeconds = Math.floor(clip.startSeconds);
+    const endSeconds = Math.floor(clip.endSeconds);
+    if (
+      startSeconds < 0 ||
+      endSeconds <= startSeconds ||
+      endSeconds > BROLL_MAX_SECONDS
+    ) {
+      continue;
+    }
+    clips.push({ id, title, videoId, startSeconds, endSeconds });
+    seenIds.add(id);
+    if (clips.length >= BROLL_MAX_CLIPS) break;
+  }
+
+  const volume =
+    typeof b.volume === "number" && Number.isFinite(b.volume)
+      ? Math.min(100, Math.max(0, Math.round(b.volume)))
+      : DEFAULT_BROLL_CONFIG.volume;
+  const skipNonce =
+    typeof b.skipNonce === "number" && Number.isFinite(b.skipNonce)
+      ? Math.min(2_147_483_647, Math.max(0, Math.floor(b.skipNonce)))
+      : DEFAULT_BROLL_CONFIG.skipNonce;
+
+  return {
+    clips,
+    shuffle:
+      typeof b.shuffle === "boolean" ? b.shuffle : DEFAULT_BROLL_CONFIG.shuffle,
+    muted:
+      typeof b.muted === "boolean" ? b.muted : DEFAULT_BROLL_CONFIG.muted,
+    volume,
+    skipNonce,
+  };
+}
+
 /**
  * Narrow an untrusted wire value (GET body or socket payload) to a
  * fully-defaulted StudioState. Never throws.
@@ -200,6 +299,7 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     goals: sanitizeGoals(s.goals),
     scene: sanitizeScene(s.scene),
     timer: sanitizeTimer(s.timer),
+    broll: sanitizeBroll(s.broll),
     streamStartMs:
       Number.isFinite(Number(s.streamStartMs)) && Number(s.streamStartMs) > 0
         ? Number(s.streamStartMs)

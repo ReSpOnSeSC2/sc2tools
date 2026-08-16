@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "depth-lint": "node scripts/depthLint.mjs",
     "maps:sync": "node scripts/sync-map-images.mjs",
+    "backgrounds:export": "node scripts/export-stream-backgrounds.mjs",
     "scenes:render": "node scripts/render-scene.mjs"
   },
   "dependencies": {

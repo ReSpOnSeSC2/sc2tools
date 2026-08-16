@@ -42,6 +42,11 @@ import {
   DEFAULT_BACKDROP_ACCENT,
   type BackdropVariant,
 } from "./SC2BackdropScene";
+import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
+import {
+  isStreamBackgroundId,
+  type StreamBackgroundId,
+} from "@/lib/streamBackgrounds";
 
 /**
  * ``manual`` is the transparent-until-selected cover used by the OBS
@@ -49,7 +54,8 @@ import {
  * while the Stream Dock is Live and becomes a full-canvas Starting Soon / BRB
  * scene only after the streamer explicitly presses one of those buttons.
  */
-export type OverlaySceneVariant = BackdropVariant | "manual";
+type DockDrivenSceneVariant = BackdropVariant | "manual";
+export type OverlaySceneVariant = DockDrivenSceneVariant | StreamBackgroundId;
 
 /** Countdown repaint cadence. 4 Hz is smooth enough for MM:SS. */
 const TICK_MS = 250;
@@ -79,6 +85,34 @@ export function OverlaySceneClient({
   scene: OverlaySceneVariant;
   staticMode?: boolean;
   demo?: boolean;
+}) {
+  // Virtual sets are deliberately independent of live-game and Stream Dock
+  // state. Their named URL always paints the same camera backdrop and opens no
+  // socket or polling loop, which makes seven long-lived OBS sources cheap.
+  if (isStreamBackgroundId(scene)) {
+    return <CinematicBackgroundScene backgroundId={scene} />;
+  }
+
+  return (
+    <DockDrivenOverlaySceneClient
+      token={token}
+      scene={scene}
+      staticMode={staticMode}
+      demo={demo}
+    />
+  );
+}
+
+function DockDrivenOverlaySceneClient({
+  token,
+  scene,
+  staticMode,
+  demo,
+}: {
+  token: string;
+  scene: DockDrivenSceneVariant;
+  staticMode: boolean;
+  demo: boolean;
 }) {
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);

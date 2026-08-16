@@ -1,7 +1,8 @@
+import { OverlaySceneClient } from "@/components/overlay/scenes/OverlaySceneClient";
 import {
-  OverlaySceneClient,
-  type OverlaySceneVariant,
-} from "@/components/overlay/scenes/OverlaySceneClient";
+  isValidScene,
+  VALID_SCENES,
+} from "@/components/overlay/scenes/sceneVariants";
 
 export const metadata = {
   title: "Live overlay scene",
@@ -26,21 +27,6 @@ export const fetchCache = "force-no-store";
  * the scene name lands in the DOM, so it is never interpolated
  * unvalidated.
  */
-const VALID_SCENES = new Set<OverlaySceneVariant>([
-  "between-games",
-  "starting-soon",
-  "brb",
-  "intermission",
-  // Internal/manual setup URL: transparent while Live, opaque when the
-  // Stream Dock explicitly selects Starting Soon or BRB. The scene builder
-  // keeps this source at the top of every layout it owns.
-  "manual",
-]);
-
-function isValidScene(name: string): name is OverlaySceneVariant {
-  return VALID_SCENES.has(name as OverlaySceneVariant);
-}
-
 export default async function OverlayScenePage({
   params,
   searchParams,

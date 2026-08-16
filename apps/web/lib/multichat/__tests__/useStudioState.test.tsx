@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 
-import { useStudioState } from "../useStudioState";
+import {
+  DEFAULT_BROLL_CONFIG,
+  sanitizeStudioState,
+  useStudioState,
+} from "../useStudioState";
 
 function Probe({
   studioEvent,
@@ -190,5 +194,65 @@ describe("useStudioState ordering", () => {
         "loaded:starting",
       );
     });
+  });
+});
+
+describe("b-roll state sanitization", () => {
+  it("supplies reusable library defaults for legacy studio snapshots", () => {
+    expect(sanitizeStudioState({}).broll).toEqual(DEFAULT_BROLL_CONFIG);
+  });
+
+  it("keeps only safe ranged YouTube clips and clamps player controls", () => {
+    const state = sanitizeStudioState({
+      broll: {
+        clips: [
+          {
+            id: "recent-finale",
+            title: "  Last stand at the natural  ",
+            videoId: "99UKipUcV_s",
+            startSeconds: 601.9,
+            endSeconds: 674.8,
+            iframeHtml: "<iframe />",
+          },
+          {
+            id: "recent-finale",
+            title: "Duplicate",
+            videoId: "99UKipUcV_s",
+            startSeconds: 700,
+            endSeconds: 730,
+          },
+          {
+            id: "bad range",
+            title: "Invalid",
+            videoId: "not-a-video",
+            startSeconds: 9,
+            endSeconds: 3,
+          },
+        ],
+        shuffle: false,
+        muted: true,
+        volume: 500,
+        skipNonce: 9_999_999_999,
+        autoplayScript: "alert(1)",
+      },
+    });
+
+    expect(state.broll).toEqual({
+      clips: [
+        {
+          id: "recent-finale",
+          title: "Last stand at the natural",
+          videoId: "99UKipUcV_s",
+          startSeconds: 601,
+          endSeconds: 674,
+        },
+      ],
+      shuffle: false,
+      muted: true,
+      volume: 100,
+      skipNonce: 2_147_483_647,
+    });
+    expect(state.broll).not.toHaveProperty("autoplayScript");
+    expect(state.broll.clips[0]).not.toHaveProperty("iframeHtml");
   });
 });

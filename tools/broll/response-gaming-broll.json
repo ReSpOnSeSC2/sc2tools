@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "clips": [
+    {
+      "id": "99UKipUcV_s-515-553",
+      "title": "Mineral-Line Melee",
+      "videoId": "99UKipUcV_s",
+      "startSeconds": 515,
+      "endSeconds": 553
+    },
+    {
+      "id": "99UKipUcV_s-618-658",
+      "title": "Beamstorm at the Ramp",
+      "videoId": "99UKipUcV_s",
+      "startSeconds": 618,
+      "endSeconds": 658
+    },
+    {
+      "id": "99UKipUcV_s-3552-3608",
+      "title": "Golden Fleet Collision",
+      "videoId": "99UKipUcV_s",
+      "startSeconds": 3552,
+      "endSeconds": 3608
+    },
+    {
+      "id": "99UKipUcV_s-4345-4409",
+      "title": "Snowfield Counterpush",
+      "videoId": "99UKipUcV_s",
+      "startSeconds": 4345,
+      "endSeconds": 4409
+    },
+    {
+      "id": "99UKipUcV_s-5685-5763",
+      "title": "Laser Wall on the Creep",
+      "videoId": "99UKipUcV_s",
+      "startSeconds": 5685,
+      "endSeconds": 5763
+    },
+    {
+      "id": "2NL8N6h8HPE-515-570",
+      "title": "Holding the Dark Approach",
+      "videoId": "2NL8N6h8HPE",
+      "startSeconds": 515,
+      "endSeconds": 570
+    },
+    {
+      "id": "2NL8N6h8HPE-632-687",
+      "title": "First Serious Move-Out",
+      "videoId": "2NL8N6h8HPE",
+      "startSeconds": 632,
+      "endSeconds": 687
+    },
+    {
+      "id": "2NL8N6h8HPE-744-829",
+      "title": "Terran Base Break and GG",
+      "videoId": "2NL8N6h8HPE",
+      "startSeconds": 744,
+      "endSeconds": 829
+    },
+    {
+      "id": "2NL8N6h8HPE-6200-6265",
+      "title": "Carrier Raid Through the Terran Production Line",
+      "videoId": "2NL8N6h8HPE",
+      "startSeconds": 6200,
+      "endSeconds": 6265
+    },
+    {
+      "id": "2NL8N6h8HPE-6562-6642",
+      "title": "Max-Supply Carrier Fleet vs. Terran Air",
+      "videoId": "2NL8N6h8HPE",
+      "startSeconds": 6562,
+      "endSeconds": 6642
+    },
+    {
+      "id": "LZXblTLEfhk-546-588",
+      "title": "Crossfire at the Dark Choke",
+      "videoId": "LZXblTLEfhk",
+      "startSeconds": 546,
+      "endSeconds": 588
+    },
+    {
+      "id": "LZXblTLEfhk-707-743",
+      "title": "Last Clash Before the Scoreboard",
+      "videoId": "LZXblTLEfhk",
+      "startSeconds": 707,
+      "endSeconds": 743
+    },
+    {
+      "id": "LZXblTLEfhk-1968-2021",
+      "title": "Greenfield Airburst",
+      "videoId": "LZXblTLEfhk",
+      "startSeconds": 1968,
+      "endSeconds": 2021
+    },
+    {
+      "id": "LZXblTLEfhk-2157-2201",
+      "title": "Final Sweep Through the Grasslands",
+      "videoId": "LZXblTLEfhk",
+      "startSeconds": 2157,
+      "endSeconds": 2201
+    },
+    {
+      "id": "LZXblTLEfhk-3138-3186",
+      "title": "Red Flyers Meet the Prism Wall",
+      "videoId": "LZXblTLEfhk",
+      "startSeconds": 3138,
+      "endSeconds": 3186
+    },
+    {
+      "id": "CMtppdgp7hk-781-852",
+      "title": "Prismatic Beam Barrage",
+      "videoId": "CMtppdgp7hk",
+      "startSeconds": 781,
+      "endSeconds": 852
+    },
+    {
+      "id": "CMtppdgp7hk-947-994",
+      "title": "Second-Wave Breakthrough",
+      "videoId": "CMtppdgp7hk",
+      "startSeconds": 947,
+      "endSeconds": 994
+    },
+    {
+      "id": "CMtppdgp7hk-2667-2704",
+      "title": "Interceptor Screen at the Outer Base",
+      "videoId": "CMtppdgp7hk",
+      "startSeconds": 2667,
+      "endSeconds": 2704
+    },
+    {
+      "id": "CMtppdgp7hk-4202-4242",
+      "title": "Victory Push Through the Bio Wall",
+      "videoId": "CMtppdgp7hk",
+      "startSeconds": 4202,
+      "endSeconds": 4242
+    },
+    {
+      "id": "CMtppdgp7hk-4503-4544",
+      "title": "Last Base, Last Push",
+      "videoId": "CMtppdgp7hk",
+      "startSeconds": 4503,
+      "endSeconds": 4544
+    },
+    {
+      "id": "GBrAzMCs49M-807-890",
+      "title": "Laser Storm at the Nexus",
+      "videoId": "GBrAzMCs49M",
+      "startSeconds": 807,
+      "endSeconds": 890
+    },
+    {
+      "id": "GBrAzMCs49M-2932-3007",
+      "title": "Carrier Ball Breaks the Natural",
+      "videoId": "GBrAzMCs49M",
+      "startSeconds": 2932,
+      "endSeconds": 3007
+    },
+    {
+      "id": "GBrAzMCs49M-4220-4290",
+      "title": "Snowfield Surround",
+      "videoId": "GBrAzMCs49M",
+      "startSeconds": 4220,
+      "endSeconds": 4290
+    },
+    {
+      "id": "GBrAzMCs49M-5478-5548",
+      "title": "Green-Lane Counterpunch",
+      "videoId": "GBrAzMCs49M",
+      "startSeconds": 5478,
+      "endSeconds": 5548
+    },
+    {
+      "id": "GBrAzMCs49M-6184-6256",
+      "title": "Maxed-Out Base Defense",
+      "videoId": "GBrAzMCs49M",
+      "startSeconds": 6184,
+      "endSeconds": 6256
+    },
+    {
+      "id": "tognfeAhPO4-694-764",
+      "title": "Swarm at the Front Door",
+      "videoId": "tognfeAhPO4",
+      "startSeconds": 694,
+      "endSeconds": 764
+    },
+    {
+      "id": "tognfeAhPO4-2627-2695",
+      "title": "Battle Across the Ice",
+      "videoId": "tognfeAhPO4",
+      "startSeconds": 2627,
+      "endSeconds": 2695
+    },
+    {
+      "id": "tognfeAhPO4-3618-3688",
+      "title": "Warp-In Under Fire",
+      "videoId": "tognfeAhPO4",
+      "startSeconds": 3618,
+      "endSeconds": 3688
+    },
+    {
+      "id": "tognfeAhPO4-5685-5755",
+      "title": "Golden Armada Takes the Choke",
+      "videoId": "tognfeAhPO4",
+      "startSeconds": 5685,
+      "endSeconds": 5755
+    },
+    {
+      "id": "tognfeAhPO4-7020-7090",
+      "title": "Last Snowfield Stand",
+      "videoId": "tognfeAhPO4",
+      "startSeconds": 7020,
+      "endSeconds": 7090
+    },
+    {
+      "id": "5rDI8BFAF08-1543-1623",
+      "title": "Carrier Fleet Cracks the Terran Pocket",
+      "videoId": "5rDI8BFAF08",
+      "startSeconds": 1543,
+      "endSeconds": 1623
+    },
+    {
+      "id": "5rDI8BFAF08-1671-1753",
+      "title": "Golden Fleet Over the Last Expansion",
+      "videoId": "5rDI8BFAF08",
+      "startSeconds": 1671,
+      "endSeconds": 1753
+    },
+    {
+      "id": "5rDI8BFAF08-2300-2342",
+      "title": "Opening Salvo at the Foundry",
+      "videoId": "5rDI8BFAF08",
+      "startSeconds": 2300,
+      "endSeconds": 2342
+    },
+    {
+      "id": "5rDI8BFAF08-2344-2398",
+      "title": "Reinforcements Into the Fire",
+      "videoId": "5rDI8BFAF08",
+      "startSeconds": 2344,
+      "endSeconds": 2398
+    },
+    {
+      "id": "5rDI8BFAF08-2803-2849",
+      "title": "Counterstrike Through the Dark Lane",
+      "videoId": "5rDI8BFAF08",
+      "startSeconds": 2803,
+      "endSeconds": 2849
+    },
+    {
+      "id": "-HVdPDIfox4-845-915",
+      "title": "Beams Through the Swarm",
+      "videoId": "-HVdPDIfox4",
+      "startSeconds": 845,
+      "endSeconds": 915
+    },
+    {
+      "id": "-HVdPDIfox4-2308-2378",
+      "title": "Terran Line Cracks",
+      "videoId": "-HVdPDIfox4",
+      "startSeconds": 2308,
+      "endSeconds": 2378
+    },
+    {
+      "id": "-HVdPDIfox4-3785-3855",
+      "title": "Counterattack on the Space Platform",
+      "videoId": "-HVdPDIfox4",
+      "startSeconds": 3785,
+      "endSeconds": 3855
+    },
+    {
+      "id": "-HVdPDIfox4-5146-5216",
+      "title": "Fleet Versus the Green Tide",
+      "videoId": "-HVdPDIfox4",
+      "startSeconds": 5146,
+      "endSeconds": 5216
+    },
+    {
+      "id": "-HVdPDIfox4-5758-5822",
+      "title": "Final Defense, No Room Left",
+      "videoId": "-HVdPDIfox4",
+      "startSeconds": 5758,
+      "endSeconds": 5822
+    }
+  ]
+}

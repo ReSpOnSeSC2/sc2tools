@@ -971,7 +971,20 @@ describe("routes/multichat studio", () => {
   test("empty studio boots with defaults", async () => {
     const res = await request(app2).get(`/v1/multichat/${token2}/studio`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ highlight: null, poll: null, goals: [], blockedUsers: [], recapSeq: 0 });
+    expect(res.body).toMatchObject({
+      highlight: null,
+      poll: null,
+      goals: [],
+      blockedUsers: [],
+      recapSeq: 0,
+      broll: {
+        clips: [],
+        shuffle: true,
+        muted: false,
+        volume: 20,
+        skipNonce: 0,
+      },
+    });
   });
 
   test("highlight/poll/goals round-trip sanitized and persist", async () => {
@@ -1037,6 +1050,69 @@ describe("routes/multichat studio", () => {
       .post(`/v1/multichat/${token2}/studio`)
       .send({ timer: null });
     expect(cleared.body.timer).toBeNull();
+  });
+
+  test("b-roll playlist and player controls round-trip sanitized", async () => {
+    const set = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({
+        broll: {
+          clips: [
+            {
+              id: "  comeback-1  ",
+              title: "  Huge comeback  ",
+              videoId: "AbCdEf12345",
+              startSeconds: 90.9,
+              endSeconds: 141.2,
+              unsafeUrl: "javascript:alert(1)",
+            },
+            {
+              id: "bad-video",
+              title: "Rejected",
+              videoId: "https://youtube.com/watch?v=AbCdEf12345",
+              startSeconds: 0,
+              endSeconds: 10,
+            },
+          ],
+          shuffle: false,
+          muted: true,
+          volume: 120,
+          skipNonce: 7.9,
+          evil: true,
+        },
+      });
+    expect(set.status).toBe(200);
+    expect(set.body.broll).toEqual({
+      clips: [
+        {
+          id: "comeback-1",
+          title: "Huge comeback",
+          videoId: "AbCdEf12345",
+          startSeconds: 90,
+          endSeconds: 141,
+        },
+      ],
+      shuffle: false,
+      muted: true,
+      volume: 100,
+      skipNonce: 7,
+    });
+    const again = await request(app2).get(
+      `/v1/multichat/${token2}/studio`,
+    );
+    expect(again.body.broll).toEqual(set.body.broll);
+
+    // null is an explicit reset, useful when removing the playlist.
+    const reset = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ broll: null });
+    expect(reset.body.broll).toEqual({
+      clips: [],
+      shuffle: true,
+      muted: false,
+      volume: 20,
+      skipNonce: 0,
+    });
   });
 
   test("stream-start mark round-trips; garbage epochs clear", async () => {

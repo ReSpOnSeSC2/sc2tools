@@ -1,13 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { ClerkProvider } from "@clerk/nextjs";
-import { clerkAppearanceBase } from "@/lib/clerk-appearance";
-import { CookieBanner } from "@/components/CookieBanner";
-import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
-import { Header } from "@/components/chrome/Header";
-import { Footer } from "@/components/chrome/Footer";
-import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
-import { ToastProvider } from "@/components/ui/Toast";
+import { AppShell } from "@/app/AppShell";
 import "./globals.css";
 
 /**
@@ -130,34 +123,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider appearance={clerkAppearanceBase}>
-      <html
-        lang="en"
-        data-theme="dark"
-        className={`${sans.variable} ${display.variable} ${serif.variable}`}
-        suppressHydrationWarning
-      >
-        <head>
-          <script
-            // Synchronous theme bootstrap — must run before paint.
-            dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT }}
-          />
-        </head>
-        <body className="flex min-h-dvh flex-col overflow-x-clip">
-          {/* Single app-wide toast context — every surface can call
-              useToast() without remembering to mount its own provider. */}
-          <ToastProvider>
-            <Header />
-            <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-              {children}
-            </main>
-            <Footer />
-            <CookieBanner />
-            <GoogleAnalytics />
-            <ServiceWorkerRegister />
-          </ToastProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html
+      lang="en"
+      data-theme="dark"
+      className={`${sans.variable} ${display.variable} ${serif.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script
+          // Synchronous theme bootstrap — must run before paint.
+          dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT }}
+        />
+      </head>
+      <body className="flex min-h-dvh flex-col overflow-x-clip">
+        <AppShell>{children}</AppShell>
+      </body>
+    </html>
   );
 }

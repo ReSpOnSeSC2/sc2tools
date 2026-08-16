@@ -23,6 +23,10 @@ const io = vi.hoisted(() =>
 vi.mock("socket.io-client", () => ({ io }));
 
 import { OverlaySceneClient } from "../OverlaySceneClient";
+import {
+  STREAM_BACKGROUND_IDS,
+  getStreamBackground,
+} from "@/lib/streamBackgrounds";
 
 let fetchSpy: ReturnType<typeof vi.fn>;
 
@@ -157,4 +161,35 @@ describe("live mode", () => {
       ).toBeNull();
     },
   );
+});
+
+describe("independent virtual-set scenes", () => {
+  it.each(STREAM_BACKGROUND_IDS)(
+    "renders %s from its stable catalog asset",
+    (backgroundId) => {
+      const background = getStreamBackground(backgroundId);
+      const { container } = render(
+        <OverlaySceneClient token="tok" scene={backgroundId} />,
+      );
+      expect(
+        container.querySelector('[data-scene-kind="cinematic-background"]')
+          ?.getAttribute("data-background-id"),
+      ).toBe(backgroundId);
+      expect(container.querySelector("img")?.getAttribute("src")).toBe(
+        background.src1080,
+      );
+      expect(container.querySelector(".sc2bd")).toBeNull();
+    },
+  );
+
+  it("opens no socket and starts no studio polling", () => {
+    render(
+      <OverlaySceneClient
+        token="tok"
+        scene="interstellar-broadcast-studio"
+      />,
+    );
+    expect(io).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

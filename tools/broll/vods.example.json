@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "videos": [
+    {
+      "videoId": "XXXXXXXXXXX",
+      "title": "Replace with the stream title",
+      "clips": [
+        {
+          "title": "Example comeback",
+          "start": "1:12:08",
+          "end": "1:13:02",
+          "include": false
+        }
+      ]
+    }
+  ]
+}

@@ -4,7 +4,7 @@
  * MultichatStudioService — live "stream studio" state for the
  * multichat overlay family: the pinned chat highlight, the active
  * chat poll, the stream goals, the studio blocklist, and the
- * session-recap trigger.
+ * session-recap trigger, and the BRB / Starting Soon b-roll playlist.
  *
  * State is per overlay TOKEN (the dock and every Browser Source of a
  * token share one studio), persisted in Mongo so an OBS restart or
@@ -24,6 +24,21 @@ const GOALS_MAX = 4;
 const GOAL_MAX_LABEL = 40;
 const HIGHLIGHT_MAX_TEXT = 500;
 const BLOCKLIST_MAX = 50;
+const BROLL_MAX_CLIPS = 100;
+const BROLL_CLIP_ID_MAX = 64;
+const BROLL_TITLE_MAX = 120;
+const BROLL_TIMESTAMP_MAX_SECONDS = 24 * 60 * 60;
+const BROLL_SKIP_NONCE_MAX = 2_147_483_647;
+const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const BROLL_CLIP_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+const DEFAULT_BROLL = Object.freeze({
+  clips: Object.freeze([]),
+  shuffle: true,
+  muted: false,
+  volume: 20,
+  skipNonce: 0,
+});
 
 class MultichatStudioService {
   /**
@@ -54,6 +69,10 @@ class MultichatStudioService {
       recapSeq: Number(doc?.recapSeq) || 0,
       scene: doc?.scene ?? null,
       timer: doc?.timer ?? null,
+      // Sanitize on read as well as write. This gives documents created
+      // before b-roll existed stable defaults and prevents a hand-edited or
+      // legacy Mongo row from reaching an OBS Browser Source unsanitized.
+      broll: sanitizeBroll(doc?.broll),
       streamStartMs: Number.isFinite(doc?.streamStartMs)
         ? Number(doc?.streamStartMs)
         : null,
@@ -63,7 +82,7 @@ class MultichatStudioService {
   }
 
   /**
-   * Apply a partial update ({highlight} | {poll} | {goals} |
+   * Apply a partial update ({highlight} | {poll} | {goals} | {broll} |
    * {blockedUsers} | {recap:true}) — sanitized, persisted, broadcast.
    *
    * @param {string} token
@@ -91,6 +110,9 @@ class MultichatStudioService {
     }
     if ("timer" in patch) {
       set.timer = sanitizeTimer(patch.timer);
+    }
+    if ("broll" in patch) {
+      set.broll = sanitizeBroll(patch.broll);
     }
     if ("streamStartMs" in patch) {
       set.streamStartMs = sanitizeStreamStartMs(patch.streamStartMs);
@@ -231,6 +253,99 @@ function sanitizeTimer(raw) {
 }
 
 /**
+ * Persisted YouTube b-roll playlist and player controls shared by the Stream
+ * Dock and full-screen scene widget. Only exact YouTube video IDs and bounded
+ * segment timestamps survive; remote URLs and arbitrary embed parameters are
+ * deliberately not accepted. ``null``/junk resets to defaults.
+ *
+ * Volume is the same 0..100 integer convention as the other multichat audio
+ * controls. ``skipNonce`` is a bounded counter: changing it lets the dock ask
+ * every connected player to advance without adding another socket event.
+ *
+ * @param {unknown} raw
+ * @returns {{clips: Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number}>, shuffle: boolean, muted: boolean, volume: number, skipNonce: number}}
+ */
+function sanitizeBroll(raw) {
+  const b = /** @type {Record<string, unknown>} */ (
+    raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
+  );
+  /** @type {Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number}>} */
+  const clips = [];
+  const seenIds = new Set();
+  const candidates = Array.isArray(b.clips) ? b.clips : [];
+
+  for (const candidate of candidates) {
+    const sanitized = sanitizeBrollClip(candidate, seenIds);
+    if (!sanitized) continue;
+    clips.push(sanitized);
+    seenIds.add(sanitized.id);
+    if (clips.length >= BROLL_MAX_CLIPS) break;
+  }
+
+  const volumeRaw = b.volume;
+  const skipNonceRaw = b.skipNonce;
+  return {
+    clips,
+    shuffle:
+      typeof b.shuffle === "boolean" ? b.shuffle : DEFAULT_BROLL.shuffle,
+    muted: typeof b.muted === "boolean" ? b.muted : DEFAULT_BROLL.muted,
+    volume:
+      typeof volumeRaw === "number" && Number.isFinite(volumeRaw)
+        ? Math.min(100, Math.max(0, Math.round(volumeRaw)))
+        : DEFAULT_BROLL.volume,
+    skipNonce:
+      typeof skipNonceRaw === "number" && Number.isFinite(skipNonceRaw)
+        ? Math.min(
+            BROLL_SKIP_NONCE_MAX,
+            Math.max(0, Math.floor(skipNonceRaw)),
+          )
+        : DEFAULT_BROLL.skipNonce,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @param {Set<string>} seenIds
+ * @returns {{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number} | null}
+ */
+function sanitizeBrollClip(raw, seenIds) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const clip = /** @type {Record<string, unknown>} */ (raw);
+  const id = typeof clip.id === "string" ? clip.id.trim() : "";
+  const title =
+    typeof clip.title === "string"
+      ? clip.title.trim().slice(0, BROLL_TITLE_MAX)
+      : "";
+  const videoId =
+    typeof clip.videoId === "string" ? clip.videoId.trim() : "";
+  const startRaw = clip.startSeconds;
+  const endRaw = clip.endSeconds;
+  if (
+    !BROLL_CLIP_ID_RE.test(id) ||
+    id.length > BROLL_CLIP_ID_MAX ||
+    seenIds.has(id) ||
+    !title ||
+    !YOUTUBE_VIDEO_ID_RE.test(videoId) ||
+    typeof startRaw !== "number" ||
+    !Number.isFinite(startRaw) ||
+    typeof endRaw !== "number" ||
+    !Number.isFinite(endRaw)
+  ) {
+    return null;
+  }
+  const startSeconds = Math.floor(startRaw);
+  const endSeconds = Math.floor(endRaw);
+  if (
+    startSeconds < 0 ||
+    endSeconds <= startSeconds ||
+    endSeconds > BROLL_TIMESTAMP_MAX_SECONDS
+  ) {
+    return null;
+  }
+  return { id, title, videoId, startSeconds, endSeconds };
+}
+
+/**
  * Stream-start marker (wall-clock ms) for the clip log's VOD-offset
  * math. Bounded to [now − 48h, now + 5min] — a marathon stream fits,
  * while garbage epochs (0, far-future) that would produce nonsense
@@ -289,6 +404,8 @@ module.exports = {
   sanitizeBlockedUsers,
   sanitizeScene,
   sanitizeTimer,
+  sanitizeBroll,
   sanitizeStreamStartMs,
   sanitizeVodUrl,
+  DEFAULT_BROLL,
 };

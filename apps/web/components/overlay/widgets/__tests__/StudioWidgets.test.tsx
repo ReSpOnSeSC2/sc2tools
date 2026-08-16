@@ -9,7 +9,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
-import type { StudioState } from "@/lib/multichat/useStudioState";
+import {
+  DEFAULT_BROLL_CONFIG,
+  type StudioState,
+} from "@/lib/multichat/useStudioState";
 import type { LiveGamePayload } from "@/components/overlay/types";
 import type { SessionSummary } from "../SessionWidget";
 import { ChatHighlightWidget } from "../ChatHighlightWidget";
@@ -84,6 +87,7 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
   recapSeq: 0,
   scene: null,
   timer: null,
+  broll: DEFAULT_BROLL_CONFIG,
   streamStartMs: null,
   vodUrl: null,
   updatedAt: null,
@@ -358,6 +362,10 @@ describe("StreamSceneWidget", () => {
     render(<StreamSceneWidget token="tok" />);
     expect(screen.getByText("BE RIGHT BACK")).toBeTruthy();
     expect(screen.getByText("Grabbing water, back in 5")).toBeTruthy();
+    const hud = screen.getByTestId("stream-scene-hud");
+    expect(hud.style.top).toContain("clamp(");
+    expect(hud.style.width).toBe("min(88vw, 820px)");
+    expect(screen.getByTestId("broll-player")).toBeTruthy();
   });
 
   it("renders Starting Soon with a ticking countdown", () => {

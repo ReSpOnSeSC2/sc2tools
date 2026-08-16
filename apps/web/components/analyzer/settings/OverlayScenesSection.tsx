@@ -12,44 +12,71 @@
  */
 
 import { useState } from "react";
-import { Layers, Monitor } from "lucide-react";
+import { Clapperboard, Layers, Monitor } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { appendOverlayThemeToUrl, type OverlayTheme } from "@/lib/overlayTheme";
+import {
+  STREAM_BACKGROUNDS,
+  type StreamBackgroundId,
+} from "@/lib/streamBackgrounds";
 import { UrlRow } from "./OverlayUrlRow";
 
+type LegacySceneId =
+  | "between-games"
+  | "starting-soon"
+  | "brb"
+  | "intermission"
+  | "manual";
+
 type SceneMeta = {
-  id: string;
+  id: LegacySceneId | StreamBackgroundId;
   label: string;
   hint: string;
+  kind: "animated-scene" | "virtual-set";
 };
 
-const SCENES: ReadonlyArray<SceneMeta> = [
+const CORE_SCENES: ReadonlyArray<SceneMeta> = [
   {
     id: "between-games",
     label: "Between Games backdrop",
     hint: "Sits behind your camera, chat and game inset during downtime. Keeps its middle calm on purpose and tints to your opponent's race while a match is live.",
+    kind: "animated-scene",
   },
   {
     id: "starting-soon",
     label: "Starting Soon",
     hint: "Full-canvas card with a headline and countdown. Driven by the Stream Dock's Starting soon button.",
+    kind: "animated-scene",
   },
   {
     id: "brb",
     label: "Be Right Back",
     hint: "Same card, BRB wording. Driven by the Stream Dock's BRB button.",
+    kind: "animated-scene",
   },
   {
     id: "intermission",
     label: "Intermission",
     hint: "Neutral full-canvas card for breaks between series or segments.",
+    kind: "animated-scene",
   },
   {
     id: "manual",
     label: "Stream Dock manual override",
     hint: "Transparent while Live; becomes Starting Soon or BRB when you press it in the Stream Dock. Put this at the very top of every scene your automatic switcher can select.",
+    kind: "animated-scene",
   },
+];
+
+const SCENES: ReadonlyArray<SceneMeta> = [
+  ...CORE_SCENES,
+  ...STREAM_BACKGROUNDS.map((background) => ({
+    id: background.id,
+    label: background.label,
+    hint: background.description,
+    kind: "virtual-set" as const,
+  })),
 ];
 
 export function OverlayScenesSection({
@@ -63,12 +90,15 @@ export function OverlayScenesSection({
 }) {
   const [preview, setPreview] = useState<string>("between-games");
   const base = origin ?? "";
-  const previewUrl = `${base}/overlay/${token}/scene/${preview}?demo=1`;
+  const selectedScene = SCENES.find((scene) => scene.id === preview);
+  const previewUrl = `${base}/overlay/${token}/scene/${preview}${
+    selectedScene?.kind === "virtual-set" ? "" : "?demo=1"
+  }`;
 
   return (
     <Section
       title="Full-screen scenes"
-      description="Animated StarCraft II backdrops plus a transparent manual cover that keeps Stream Dock Starting Soon and BRB above automatic scene changes."
+      description="Animated broadcast scenes, a transparent Stream Dock cover, and seven static virtual sets you can place behind your camera."
     >
       <Card>
         <div className="flex items-start gap-3 px-2 py-2 text-caption text-text-muted">
@@ -99,17 +129,22 @@ export function OverlayScenesSection({
       <Card padded={false}>
         <ul className="min-w-0 divide-y divide-border">
           {SCENES.map((scene) => {
-            const url = appendOverlayThemeToUrl(
-              `${base}/overlay/${token}/scene/${scene.id}`,
-              theme,
-            );
+            const sceneUrl = `${base}/overlay/${token}/scene/${scene.id}`;
+            // A virtual set contains no themed UI, so its permanent OBS URL
+            // stays unchanged when the streamer restyles overlay widgets.
+            const url =
+              scene.kind === "virtual-set"
+                ? sceneUrl
+                : appendOverlayThemeToUrl(sceneUrl, theme);
+            const SceneIcon =
+              scene.kind === "virtual-set" ? Clapperboard : Layers;
             return (
               <li
                 key={scene.id}
                 className="grid min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center sm:gap-3"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <Layers
+                  <SceneIcon
                     className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan"
                     aria-hidden
                   />
@@ -165,9 +200,9 @@ export function OverlayScenesSection({
             />
           </div>
           <p className="text-caption text-text-muted">
-            Preview shows sample values. On stream the accent follows your
-            live opponent&apos;s race and the countdown comes from the
-            Stream Dock.
+            {selectedScene?.kind === "virtual-set"
+              ? "This is the clean virtual set: no baked-in text or widgets. Keep it behind your camera and other sources."
+              : "Preview shows sample values. On stream the accent follows your live opponent's race and the countdown comes from the Stream Dock."}
           </p>
         </div>
       </Card>
@@ -200,7 +235,7 @@ export function OverlayScenesSection({
               your scene changes.
             </li>
             <li>
-              For a named backdrop, choose{" "}
+              For a named backdrop or virtual set, choose{" "}
               <strong className="text-text">Order → Send to Back</strong>.
               For the <strong className="text-text">manual override</strong>,
               add the same source to every automatically selected scene and

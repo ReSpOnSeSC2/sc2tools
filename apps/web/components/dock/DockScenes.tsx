@@ -8,9 +8,14 @@
  * and a Go-live button.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCountdown } from "@/components/overlay/widgets/StreamSceneWidget";
-import type { StudioScene, StudioTimer } from "@/lib/multichat/useStudioState";
+import type {
+  StudioBrollConfig,
+  StudioScene,
+  StudioTimer,
+} from "@/lib/multichat/useStudioState";
+import { BrollLibraryEditor } from "./BrollLibraryEditor";
 import { DockButton } from "./DockClient";
 
 const QUICK_MINUTES = [5, 10, 15] as const;
@@ -117,11 +122,13 @@ export function DockTimer({
 
 export function DockScenes({
   scene,
+  broll,
   busy,
   streamStartMs = null,
   onPost,
 }: {
   scene: StudioScene | null;
+  broll: StudioBrollConfig;
   busy: boolean;
   /** Existing go-live mark — when set, "Go live" won't overwrite it. */
   streamStartMs?: number | null;
@@ -129,6 +136,15 @@ export function DockScenes({
 }) {
   const [message, setMessage] = useState("");
   const [minutes, setMinutes] = useState<number>(5);
+  const [volumeDraft, setVolumeDraft] = useState(broll.volume);
+  const volumeInFlightRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setVolumeDraft(broll.volume);
+    if (volumeInFlightRef.current === broll.volume) {
+      volumeInFlightRef.current = null;
+    }
+  }, [broll.volume]);
 
   // Live remaining time on the status row.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -152,6 +168,28 @@ export function DockScenes({
   const remainMs = scene?.countdownEndsAt
     ? Math.max(0, scene.countdownEndsAt - nowMs)
     : null;
+
+  const updateBroll = (patch: Partial<StudioBrollConfig>) =>
+    onPost({ broll: { ...broll, ...patch } });
+
+  const commitVolume = (next = volumeDraft) => {
+    const volume = Math.max(0, Math.min(100, Math.round(next)));
+    if (
+      volume === broll.volume ||
+      volumeInFlightRef.current === volume
+    ) {
+      return;
+    }
+    volumeInFlightRef.current = volume;
+    void updateBroll({ volume }).finally(() => {
+      if (volumeInFlightRef.current === volume) {
+        volumeInFlightRef.current = null;
+      }
+    });
+  };
+
+  const clipCount = broll.clips.length;
+  const brollActive = Boolean(scene && clipCount > 0);
 
   return (
     <div className="space-y-2.5">
@@ -190,6 +228,86 @@ export function DockScenes({
           first (Settings → Overlay).
         </p>
       )}
+
+      <div className="rounded-md border border-border bg-bg-elevated/50 p-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-micro font-bold uppercase tracking-wider ${
+              brollActive
+                ? "border-accent-cyan/50 bg-accent-cyan/10 text-accent-cyan"
+                : clipCount > 0
+                  ? "border-border text-text-muted"
+                  : "border-danger/40 text-danger"
+            }`}
+            aria-live="polite"
+          >
+            {brollActive ? "B-roll active" : clipCount > 0 ? "B-roll ready" : "No b-roll"}
+          </span>
+          <span className="text-caption text-text-dim">
+            {clipCount} {clipCount === 1 ? "highlight clip" : "highlight clips"}
+          </span>
+        </div>
+        <p className="mt-1 text-micro text-text-dim">
+          Plays automatically behind the compact banner whenever Starting Soon
+          or BRB is active.
+        </p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            disabled={busy || clipCount < 2}
+            aria-pressed={broll.shuffle}
+            onClick={() => void updateBroll({ shuffle: !broll.shuffle })}
+            className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
+          >
+            {broll.shuffle ? "🔀 Shuffle" : "→ In order"}
+          </button>
+          <button
+            type="button"
+            disabled={busy || clipCount === 0}
+            aria-label={broll.muted ? "Unmute b-roll" : "Mute b-roll"}
+            aria-pressed={broll.muted}
+            onClick={() => void updateBroll({ muted: !broll.muted })}
+            className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
+          >
+            {broll.muted ? "🔇 Muted" : "🔊 Sound"}
+          </button>
+          <label className="flex min-w-[9rem] flex-1 items-center gap-1.5 text-caption text-text-dim">
+            <span className="sr-only">B-roll volume</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={volumeDraft}
+              disabled={busy || broll.muted || clipCount === 0}
+              aria-label="B-roll volume"
+              onChange={(event) => setVolumeDraft(Number(event.target.value))}
+              onPointerUp={() => commitVolume()}
+              onKeyUp={() => commitVolume()}
+              onBlur={() => commitVolume()}
+              className="min-w-0 flex-1 accent-[var(--accent,#3ec0c7)]"
+            />
+            <span className="w-9 text-right tabular-nums">{volumeDraft}%</span>
+          </label>
+          <DockButton
+            disabled={busy || !scene || clipCount === 0}
+            onClick={() =>
+              void updateBroll({
+                skipNonce: Math.max(0, broll.skipNonce) + 1,
+              })
+            }
+          >
+            ⏭ Skip
+          </DockButton>
+        </div>
+
+        <BrollLibraryEditor
+          broll={broll}
+          busy={busy}
+          onPost={onPost}
+        />
+      </div>
 
       <input
         type="text"

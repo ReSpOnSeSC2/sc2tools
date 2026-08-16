@@ -335,6 +335,7 @@ export function DockClient({ token }: { token: string }) {
             <SectionCard title="Scenes">
               <DockScenes
                 scene={studio.scene}
+                broll={studio.broll}
                 busy={busy}
                 streamStartMs={studio.streamStartMs}
                 onPost={postStudio}

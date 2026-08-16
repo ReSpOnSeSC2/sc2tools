@@ -1,0 +1,300 @@
+{
+  "version": 1,
+  "channel": {
+    "id": "UCZS3YP1mvpqyuU5vPvHVG7g",
+    "name": "ReSpOnSe Gaming AND Fitness AND AI Music"
+  },
+  "curatedAt": "2026-08-16",
+  "notes": "Landscape, self-owned SC2 gameplay only. Menus, long pauses, BRB screens, scoreboards, portrait duplicates, and third-party watch-party footage were excluded.",
+  "videos": [
+    {
+      "videoId": "99UKipUcV_s",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-15",
+      "clips": [
+        {
+          "title": "Mineral-Line Melee",
+          "startSeconds": 515,
+          "endSeconds": 553,
+          "notes": "A red bio force crashes into the defended mineral line; the range opens on approach and exits as the first wave breaks."
+        },
+        {
+          "title": "Beamstorm at the Ramp",
+          "startSeconds": 618,
+          "endSeconds": 658,
+          "notes": "A concentrated beam exchange at the ramp, ending before the game transition."
+        },
+        {
+          "title": "Golden Fleet Collision",
+          "startSeconds": 3552,
+          "endSeconds": 3608,
+          "notes": "Large Protoss air groups converge at mid-map and trade sustained fire."
+        },
+        {
+          "title": "Snowfield Counterpush",
+          "startSeconds": 4345,
+          "endSeconds": 4409,
+          "notes": "A mixed ground-and-air army turns defense into a forceful counterpush through a snowy choke."
+        },
+        {
+          "title": "Laser Wall on the Creep",
+          "startSeconds": 5685,
+          "endSeconds": 5763,
+          "notes": "Sustained green beam volleys cut through a large Zerg force with almost no dead time."
+        }
+      ]
+    },
+    {
+      "videoId": "2NL8N6h8HPE",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-16",
+      "notes": "The third-party tournament/watch-party section around 47:00–136:00 is intentionally excluded.",
+      "clips": [
+        {
+          "title": "Holding the Dark Approach",
+          "startSeconds": 515,
+          "endSeconds": 570,
+          "notes": "Purposeful defensive positioning and early contact on the dark approach."
+        },
+        {
+          "title": "First Serious Move-Out",
+          "startSeconds": 632,
+          "endSeconds": 687,
+          "notes": "The army crosses center and applies the first sustained pressure."
+        },
+        {
+          "title": "Terran Base Break and GG",
+          "startSeconds": 744,
+          "endSeconds": 829,
+          "notes": "A base assault drives through the defense into the game-ending payoff."
+        },
+        {
+          "title": "Carrier Raid Through the Terran Production Line",
+          "startSeconds": 6200,
+          "endSeconds": 6265,
+          "notes": "The fleet enters the Terran base, focus-fires production and defenders, then rotates out."
+        },
+        {
+          "title": "Max-Supply Carrier Fleet vs. Terran Air",
+          "startSeconds": 6562,
+          "endSeconds": 6642,
+          "notes": "A 198/200-supply fleet collides with the Terran air screen and sustains pressure before the BRB boundary."
+        }
+      ]
+    },
+    {
+      "videoId": "LZXblTLEfhk",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-09",
+      "clips": [
+        {
+          "title": "Crossfire at the Dark Choke",
+          "startSeconds": 546,
+          "endSeconds": 588,
+          "notes": "The armies meet in a narrow lane for a continuous crossfire."
+        },
+        {
+          "title": "Last Clash Before the Scoreboard",
+          "startSeconds": 707,
+          "endSeconds": 743,
+          "notes": "The game's final concentrated engagement, cut before postgame."
+        },
+        {
+          "title": "Greenfield Airburst",
+          "startSeconds": 1968,
+          "endSeconds": 2021,
+          "notes": "The Protoss force dives into a red formation amid repeated beams and explosions."
+        },
+        {
+          "title": "Final Sweep Through the Grasslands",
+          "startSeconds": 2157,
+          "endSeconds": 2201,
+          "notes": "A short windup becomes the decisive final sweep."
+        },
+        {
+          "title": "Red Flyers Meet the Prism Wall",
+          "startSeconds": 3138,
+          "endSeconds": 3186,
+          "notes": "Red air units run into layered Protoss fire and strong beam effects."
+        }
+      ]
+    },
+    {
+      "videoId": "CMtppdgp7hk",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-09",
+      "clips": [
+        {
+          "title": "Prismatic Beam Barrage",
+          "startSeconds": 781,
+          "endSeconds": 852,
+          "notes": "Multiple beam units rake a large red army across the industrial map."
+        },
+        {
+          "title": "Second-Wave Breakthrough",
+          "startSeconds": 947,
+          "endSeconds": 994,
+          "notes": "The follow-up army crashes into a second formation with air and ground fire."
+        },
+        {
+          "title": "Interceptor Screen at the Outer Base",
+          "startSeconds": 2667,
+          "endSeconds": 2704,
+          "notes": "The fleet launches and catches incoming flyers before the fight disperses."
+        },
+        {
+          "title": "Victory Push Through the Bio Wall",
+          "startSeconds": 4202,
+          "endSeconds": 4242,
+          "notes": "A compact Protoss formation punches through a dense bio line into victory."
+        },
+        {
+          "title": "Last Base, Last Push",
+          "startSeconds": 4503,
+          "endSeconds": 4544,
+          "notes": "The final advance clears the remaining defenders as the win lands."
+        }
+      ]
+    },
+    {
+      "videoId": "GBrAzMCs49M",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-09",
+      "clips": [
+        {
+          "title": "Laser Storm at the Nexus",
+          "startSeconds": 807,
+          "endSeconds": 890,
+          "notes": "A sustained Protoss-versus-Zerg Nexus fight with a clean disengage."
+        },
+        {
+          "title": "Carrier Ball Breaks the Natural",
+          "startSeconds": 2932,
+          "endSeconds": 3007,
+          "notes": "The golden air army crashes the natural through impact and aftermath."
+        },
+        {
+          "title": "Snowfield Surround",
+          "startSeconds": 4220,
+          "endSeconds": 4290,
+          "notes": "Reinforcements converge into a concentrated snowy counterfight."
+        },
+        {
+          "title": "Green-Lane Counterpunch",
+          "startSeconds": 5478,
+          "endSeconds": 5548,
+          "notes": "A late-game rotation catches the army and continues the pressure."
+        },
+        {
+          "title": "Maxed-Out Base Defense",
+          "startSeconds": 6184,
+          "endSeconds": 6256,
+          "notes": "A dense Nexus and mineral-line defense collapses into rapid repositioning."
+        }
+      ]
+    },
+    {
+      "videoId": "tognfeAhPO4",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-08",
+      "clips": [
+        {
+          "title": "Swarm at the Front Door",
+          "startSeconds": 694,
+          "endSeconds": 764,
+          "notes": "A flood hits the prepared position through volleys and cleanup."
+        },
+        {
+          "title": "Battle Across the Ice",
+          "startSeconds": 2627,
+          "endSeconds": 2695,
+          "notes": "An open-ground fight tracked across several sustained volleys."
+        },
+        {
+          "title": "Warp-In Under Fire",
+          "startSeconds": 3618,
+          "endSeconds": 3688,
+          "notes": "A base-edge fight escalates with reinforcements and focus fire."
+        },
+        {
+          "title": "Golden Armada Takes the Choke",
+          "startSeconds": 5685,
+          "endSeconds": 5755,
+          "notes": "A carrier-heavy army overwhelms the industrial choke."
+        },
+        {
+          "title": "Last Snowfield Stand",
+          "startSeconds": 7020,
+          "endSeconds": 7090,
+          "notes": "A clean ramp-up and impact leave the Protoss force standing."
+        }
+      ]
+    },
+    {
+      "videoId": "5rDI8BFAF08",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-05",
+      "clips": [
+        {
+          "title": "Carrier Fleet Cracks the Terran Pocket",
+          "startSeconds": 1543,
+          "endSeconds": 1623,
+          "notes": "A large fleet advances through tanks and bio into the defended pocket."
+        },
+        {
+          "title": "Golden Fleet Over the Last Expansion",
+          "startSeconds": 1671,
+          "endSeconds": 1753,
+          "notes": "The fleet unloads on the final expansion in a sustained assault."
+        },
+        {
+          "title": "Opening Salvo at the Foundry",
+          "startSeconds": 2300,
+          "endSeconds": 2342,
+          "notes": "Two late-game armies make immediate contact in the industrial lane."
+        },
+        {
+          "title": "Reinforcements Into the Fire",
+          "startSeconds": 2344,
+          "endSeconds": 2398,
+          "notes": "Fresh units enter the battle's sustained second phase."
+        },
+        {
+          "title": "Counterstrike Through the Dark Lane",
+          "startSeconds": 2803,
+          "endSeconds": 2849,
+          "notes": "A compact counterattack catches and clears the red force."
+        }
+      ]
+    },
+    {
+      "videoId": "-HVdPDIfox4",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-04",
+      "clips": [
+        {
+          "title": "Beams Through the Swarm",
+          "startSeconds": 845,
+          "endSeconds": 915,
+          "notes": "A sustained air-and-ground fight unfolds beside the base."
+        },
+        {
+          "title": "Terran Line Cracks",
+          "startSeconds": 2308,
+          "endSeconds": 2378,
+          "notes": "A broad formation collides with a reinforced push and resolves cleanly."
+        },
+        {
+          "title": "Counterattack on the Space Platform",
+          "startSeconds": 3785,
+          "endSeconds": 3855,
+          "notes": "Regrouping and warp-ins escalate into a driven counterattack."
+        },
+        {
+          "title": "Fleet Versus the Green Tide",
+          "startSeconds": 5146,
+          "endSeconds": 5216,
+          "notes": "A carrier mass meets a packed Zerg force in a high-density fight."
+        },
+        {
+          "title": "Final Defense, No Room Left",
+          "startSeconds": 5758,
+          "endSeconds": 5822,
+          "notes": "A tight economy defense and rapid camera snaps deliver the session payoff."
+        }
+      ]
+    }
+  ]
+}
