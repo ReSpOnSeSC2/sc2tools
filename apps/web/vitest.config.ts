@@ -7,7 +7,11 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
-    include: ["components/**/*.test.{ts,tsx}", "lib/**/*.test.{ts,tsx}"],
+    include: [
+      "app/**/*.test.{ts,tsx}",
+      "components/**/*.test.{ts,tsx}",
+      "lib/**/*.test.{ts,tsx}",
+    ],
     css: false,
   },
   resolve: {

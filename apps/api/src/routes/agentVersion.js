@@ -72,13 +72,12 @@ function buildAgentVersionRouter(deps) {
   });
 
   /**
-   * Public download-click beacon. The marketing page's DownloadCard
-   * fires this with ``navigator.sendBeacon`` (or a keepalive fetch
-   * fallback) immediately before the browser starts the GitHub-hosted
-   * download. The response is intentionally tiny — clients don't
-   * await it — so a slow Mongo path can never delay a user's
-   * download. Best-effort: a failed insert returns 204 anyway so we
-   * never leak a 500 onto the marketing surface.
+   * Public download-event sink. The web app's tracked installer route calls
+   * this server-to-server from Next's post-response lifecycle; the legacy
+   * same-origin beacon proxy also calls it for already-open browser bundles.
+   * A failed insert returns 503 so the web layer can log the missed event.
+   * The installer redirect remains fail-open, so this status can never block
+   * a download.
    */
   router.post("/agent/download-event", async (req, res) => {
     try {
@@ -91,7 +90,7 @@ function buildAgentVersionRouter(deps) {
         const userAgent = headerStr(req, "user-agent");
         const referer = headerStr(req, "referer");
         const country = pickCountry(req);
-        await adminEvents.record("agent_download", {
+        const event = await adminEvents.record("agent_download", {
           platform,
           version,
           channel,
@@ -100,10 +99,14 @@ function buildAgentVersionRouter(deps) {
           referer,
           country,
         });
+        if (!event) {
+          res.status(503).end();
+          return;
+        }
       }
       res.status(204).end();
     } catch {
-      res.status(204).end();
+      res.status(503).end();
     }
   });
 

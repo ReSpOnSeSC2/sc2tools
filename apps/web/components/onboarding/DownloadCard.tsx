@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
 import { usePlatformDetect } from "./usePlatformDetect";
-import { reportDownloadStarted } from "./reportDownloadStarted";
 import { gaEvent } from "@/lib/analytics/gtag";
 import type { DetectedOS } from "./types";
 
@@ -67,26 +66,27 @@ export function DownloadCard({
         <PlatformIcon os={os} />
       </header>
 
-      <a
-        href={artifact.downloadUrl}
-        download
-        onClick={() => {
-          reportDownloadStarted({
-            platform: osLabelKey(os),
-            version: latest,
-            channel: "stable",
-          });
+      <form
+        action="/api/download/agent"
+        method="post"
+        onSubmit={() => {
           gaEvent("agent_download", {
             platform: osLabelKey(os),
             version: latest,
           });
         }}
-        className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent-cyan px-5 text-body-lg font-semibold text-white shadow-halo-cyan transition-colors hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
-        aria-describedby="download-verify-hint"
       >
-        <Download className="h-5 w-5" aria-hidden />
-        Download for {OS_LABEL[osLabelKey(os)]}
-      </a>
+        <input type="hidden" name="platform" value={osLabelKey(os)} />
+        <input type="hidden" name="artifactUrl" value={artifact.downloadUrl} />
+        <button
+          type="submit"
+          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-accent-cyan px-5 text-body-lg font-semibold text-white shadow-halo-cyan transition-colors hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:w-auto"
+          aria-describedby="download-verify-hint"
+        >
+          <Download className="h-5 w-5" aria-hidden />
+          Download for {OS_LABEL[osLabelKey(os)]}
+        </button>
+      </form>
 
       <ShaSnippet sha={artifact.sha256} fileSize={artifact.sizeBytes} />
 

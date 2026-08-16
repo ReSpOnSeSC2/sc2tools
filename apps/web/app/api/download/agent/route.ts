@@ -1,64 +1,96 @@
 /**
- * GET /api/download/agent
+ * POST /api/download/agent
  *
- * One-click installer download. 302-redirects to the latest
- * agent-v* GitHub release's `.exe` asset so users never have to know
- * the version number. A Download button anywhere on the site can
- * point at this URL — it just works.
+ * Tracked installer hand-off. The download card already resolved the latest
+ * release metadata (version, SHA, size, and GitHub asset), so it submits that
+ * asset here. We validate that it belongs to this repository's agent release,
+ * schedule the admin event, then issue a 303 to the installer.
  *
- * Optional query string:
- *   ?platform=windows  (default; the only supported platform today)
- *
- * Edge-cached for 10 min. Returns 503 if no release has been
- * published yet, which is rare in production but useful for the
- * window before the first release is tagged.
+ * POST keeps crawlers and speculative link prefetches from creating events.
+ * The event runs through Next's after() lifecycle, so a slow analytics API
+ * never delays or prevents the actual installer response.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
+import { forwardAgentDownloadEvent } from "@/lib/agentDownloadEvents.server";
 
 export const runtime = "nodejs";
-export const revalidate = 600;
+// Every POST represents a real installer hand-off; never cache the response.
+export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const platform = url.searchParams.get("platform") || "windows";
-
-  // Reuse the metadata route's logic by hitting it through fetch.
-  // Keeps the GitHub call shape in one place; the route is cached so
-  // a redirect doesn't double-charge the rate limit.
-  const metaUrl = new URL("/api/agent/version", url);
-  metaUrl.searchParams.set("platform", platform);
-  metaUrl.searchParams.set("channel", "stable");
-
-  const res = await fetch(metaUrl.toString(), {
-    next: { revalidate: 600 },
-  });
-  if (!res.ok) {
+export async function POST(req: NextRequest) {
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
     return NextResponse.json(
-      { ok: false, error: "release_lookup_failed" },
-      { status: 502 },
-    );
-  }
-  const meta = (await res.json()) as {
-    artifact?: { downloadUrl: string };
-  };
-  if (!meta.artifact?.downloadUrl) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "no_release_published",
-        message:
-          "No installer has been tagged yet. Run from source meanwhile " +
-          "or check back shortly.",
-      },
-      { status: 503 },
+      { ok: false, error: "invalid_download_request" },
+      { status: 400, headers: noStoreHeaders() },
     );
   }
 
-  return NextResponse.redirect(meta.artifact.downloadUrl, {
-    status: 302,
-    headers: {
-      "Cache-Control": "public, s-maxage=600, stale-while-revalidate=3600",
-    },
+  const rawAssetUrl = form.get("artifactUrl");
+  const asset = trustedAgentAsset(
+    typeof rawAssetUrl === "string" ? rawAssetUrl : "",
+  );
+  if (!asset) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_agent_artifact" },
+      { status: 400, headers: noStoreHeaders() },
+    );
+  }
+
+  const rawPlatform = form.get("platform");
+  const platform = typeof rawPlatform === "string" ? rawPlatform : "windows";
+  // Snapshot request headers before the response closes. after() extends the
+  // serverless request lifetime for the event write without delaying the 303.
+  const eventRequest = { headers: new Headers(req.headers) };
+  after(() =>
+    forwardAgentDownloadEvent(eventRequest, {
+      platform,
+      version: asset.version,
+      channel: "stable",
+    }),
+  );
+
+  return NextResponse.redirect(asset.downloadUrl, {
+    status: 303,
+    headers: noStoreHeaders(),
   });
+}
+
+const AGENT_RELEASE_PATH =
+  /^\/ReSpOnSeSC2\/sc2tools\/releases\/download\/agent-v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\/([^/]+)$/i;
+const AGENT_INSTALLER_NAMES = [
+  /^SC2ToolsAgent-Setup-.*\.exe$/i,
+  /^sc2tools-agent.*\.exe$/i,
+];
+
+function trustedAgentAsset(
+  raw: string,
+): { downloadUrl: string; version: string } | null {
+  try {
+    const url = new URL(raw);
+    if (
+      url.origin !== "https://github.com" ||
+      url.username ||
+      url.password ||
+      url.hash
+    ) {
+      return null;
+    }
+    const match = url.pathname.match(AGENT_RELEASE_PATH);
+    if (!match) return null;
+    const filename = decodeURIComponent(match[2]);
+    if (!AGENT_INSTALLER_NAMES.some((pattern) => pattern.test(filename))) {
+      return null;
+    }
+    return { downloadUrl: url.toString(), version: match[1] };
+  } catch {
+    return null;
+  }
+}
+
+function noStoreHeaders(): Record<string, string> {
+  return { "Cache-Control": "private, no-store, max-age=0" };
 }

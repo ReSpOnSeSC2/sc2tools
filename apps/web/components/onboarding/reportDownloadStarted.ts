@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Fire a one-shot "agent download started" beacon to the SAME-ORIGIN
- * ``POST /api/agent/download-event`` route, which forwards the event
- * server-side to the backend so admin counters + the notification feed
- * pick up each click.
+ * Legacy compatibility for browser bundles deployed before installer links
+ * moved to the tracked ``POST /api/download/agent`` form hand-off. New code
+ * should submit the resolved artifact there so the redirect and notification
+ * share one server-side request lifecycle.
  *
  * Why same-origin: ``navigator.sendBeacon`` with a JSON body is not a
  * CORS-safelisted request, so a cross-origin beacon (web origin -> api

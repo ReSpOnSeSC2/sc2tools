@@ -179,6 +179,25 @@ describe("admin notification events", () => {
     expect(ev.payload.platform).toBe("unknown");
   });
 
+  test("download-event reports a failed notification write", async () => {
+    const record = jest
+      .spyOn(services.adminEvents, "record")
+      .mockResolvedValueOnce(null);
+    const res = await request(app)
+      .post("/v1/agent/download-event")
+      .send({ platform: "windows", version: "0.3.11" });
+
+    expect(res.status).toBe(503);
+    expect(record).toHaveBeenCalledWith(
+      "agent_download",
+      expect.objectContaining({
+        platform: "windows",
+        version: "0.3.11",
+      }),
+    );
+    record.mockRestore();
+  });
+
   test("admin events list returns newest first", async () => {
     await services.adminEvents.record("user_signup", {
       clerkUserId: "clerk_a",

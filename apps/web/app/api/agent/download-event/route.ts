@@ -10,36 +10,31 @@
  *
  * Routing the beacon to this SAME-ORIGIN route sidesteps CORS entirely,
  * then we forward the event to the backend server-side (server-to-
- * server, reliable, no preflight). This is the server-side recording
- * path; it's the single source of truth for download counts, so the
- * client no longer also posts to the backend directly (no double
- * counting). The actual installer link still points straight at the
- * GitHub asset, so the download itself can never depend on this route.
+ * server, reliable, no preflight). Current download links no longer use
+ * a beacon: /api/download/agent records and redirects in one request.
+ * This endpoint remains for already-open pages running an older bundle.
  *
- * Fire-and-forget: always returns 204 so a tracking failure never
- * surfaces to the user mid-download.
+ * Compatibility endpoint: always returns 204 so stale browser bundles
+ * cannot surface a tracking failure during a download. Forward failures
+ * are now logged by the shared server helper.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { forwardAgentDownloadEvent } from "@/lib/agentDownloadEvents.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
-
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown> = {};
-  // sendBeacon may deliver either application/json or a text/plain
-  // Blob depending on the browser; accept both.
+  // Legacy browser bundles may still send this beacon after a deployment.
+  // Read the stream once so malformed JSON cannot leave it locked before a
+  // text fallback. New download links use /api/download/agent directly.
   try {
-    body = await req.json();
+    const raw = await req.text();
+    body = raw ? JSON.parse(raw) : {};
   } catch {
-    try {
-      body = JSON.parse(await req.text());
-    } catch {
-      body = {};
-    }
+    body = {};
   }
 
   const payload = {
@@ -48,38 +43,7 @@ export async function POST(req: NextRequest) {
     channel: typeof body.channel === "string" ? body.channel : "stable",
   };
 
-  // Forward the original client IP / UA / referer so the backend's
-  // beacon record reflects the real visitor, not this server.
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
-  const ua = req.headers.get("user-agent");
-  const referer = req.headers.get("referer");
-  const xff = req.headers.get("x-forwarded-for");
-  if (ua) headers["user-agent"] = ua;
-  if (referer) headers["referer"] = referer;
-  if (xff) headers["x-forwarded-for"] = xff;
-  // The edge (Vercel / Cloudflare) already resolves the visitor's
-  // country into a header; forward it under a stable name so the
-  // backend records it without running its own geo-IP lookup. Null
-  // when this deployment sits behind neither CDN — the field just
-  // stays empty, never blocks the beacon.
-  const country =
-    req.headers.get("x-vercel-ip-country") ||
-    req.headers.get("cf-ipcountry") ||
-    req.headers.get("x-country-code");
-  if (country) headers["x-geo-country"] = country;
-
-  try {
-    await fetch(`${API_BASE}/v1/agent/download-event`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
-  } catch {
-    /* swallow — never block the user's download on analytics */
-  }
+  await forwardAgentDownloadEvent(req, payload);
 
   return new NextResponse(null, { status: 204 });
 }
