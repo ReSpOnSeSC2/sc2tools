@@ -57,6 +57,20 @@ class ManifestTests(unittest.TestCase):
             },
         )
 
+    def test_generated_id_is_backend_safe_for_leading_punctuation_video_id(self) -> None:
+        vod = broll.Vod(
+            video_id="-HVdPDIfox4",
+            title="Ladder night",
+            source_url="https://www.youtube.com/watch?v=-HVdPDIfox4",
+            clips=[{"title": "Beams Through the Swarm", "start": 845, "end": 915}],
+        )
+
+        clip = broll.build_clip_library([vod])["clips"][0]
+
+        self.assertEqual(clip["id"], "clip--HVdPDIfox4-845-915")
+        self.assertIsNotNone(broll.CLIP_ID_RE.fullmatch(clip["id"]))
+        self.assertEqual(clip["videoId"], "-HVdPDIfox4")
+
     def test_rejects_backwards_range(self) -> None:
         vod = broll.Vod(
             video_id="ABCDEFGHIJK",

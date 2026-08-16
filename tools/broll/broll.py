@@ -209,6 +209,13 @@ def build_clip_library(vods: Iterable[Vod]) -> dict[str, Any]:
                 base_id = requested_id
             else:
                 base_id = f"{vod.video_id}-{start}-{end}"
+                # YouTube permits '-' and '_' as the first character, while
+                # the persisted Studio schema requires IDs to start with an
+                # ASCII letter or digit. Keep existing generated IDs stable,
+                # and prefix only the otherwise-invalid leading-punctuation
+                # case.
+                if not CLIP_ID_RE.fullmatch(base_id):
+                    base_id = f"clip-{base_id}"
             clip_id = _unique_clip_id(base_id, used_ids)
             used_ids.add(clip_id)
 
