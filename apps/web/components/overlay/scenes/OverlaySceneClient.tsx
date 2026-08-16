@@ -43,6 +43,7 @@ import {
   type BackdropVariant,
 } from "./SC2BackdropScene";
 import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
+import { StreamSceneCanvas } from "../widgets/StreamSceneWidget";
 import {
   isStreamBackgroundId,
   type StreamBackgroundId,
@@ -212,6 +213,26 @@ function DockDrivenOverlaySceneClient({
         aria-hidden="true"
         data-variant="manual-inactive"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
+      />
+    );
+  }
+
+  // The agent-created horizontal layouts use ``/scene/manual`` as their
+  // topmost Stream Dock cover, while many vertical canvases use the standalone
+  // ``/widget/stream-scene`` source. Render the same shared b-roll canvas in
+  // both places so the manual cover does not replace a playing reel with the
+  // legacy SC2 backdrop as soon as its studio snapshot arrives.
+  if (
+    scene === "manual" &&
+    !demo &&
+    dockScene &&
+    studio.broll.clips.length > 0
+  ) {
+    return (
+      <StreamSceneCanvas
+        scene={dockScene}
+        broll={studio.broll}
+        remainMs={countdownMs}
       />
     );
   }

@@ -23,6 +23,17 @@ const CLIPS: BrollClip[] = [
   },
 ];
 
+const SHUFFLE_CLIPS: BrollClip[] = [
+  ...CLIPS,
+  {
+    id: "burrowed-ambush",
+    title: "Burrowed ambush catches the army",
+    videoId: "QweRTY67890",
+    startSeconds: 420,
+    endSeconds: 455,
+  },
+];
+
 interface MockPlayer {
   destroy: ReturnType<typeof vi.fn>;
   loadVideoById: ReturnType<typeof vi.fn>;
@@ -74,6 +85,8 @@ function installYouTubeMock() {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   delete (window as unknown as { YT?: unknown }).YT;
 });
 
@@ -145,6 +158,44 @@ describe("BrollPlayer", () => {
         endSeconds: 348,
       });
     });
+    expect(screen.getByTestId("broll-player").dataset.playbackStatus).toBe(
+      "loading",
+    );
+    expect(screen.getByTestId("broll-media").style.opacity).toBe("1");
+
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+      youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
+    });
+    await waitFor(() => {
+      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "abcDEF12345",
+        startSeconds: 90,
+        endSeconds: 120,
+      });
+    });
+
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+      youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
+    });
+    await waitFor(() => {
+      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+        videoId: "ZYXwvu98765",
+        startSeconds: 300,
+        endSeconds: 348,
+      });
+    });
+
+    // Two complete automatic ordered cycles: A -> B -> A -> B.
+    expect(
+      youtube.player.loadVideoById.mock.calls.map(([clip]) => clip.videoId),
+    ).toEqual([
+      "abcDEF12345",
+      "ZYXwvu98765",
+      "abcDEF12345",
+      "ZYXwvu98765",
+    ]);
 
     view.rerender(
       <BrollPlayer
@@ -166,19 +217,34 @@ describe("BrollPlayer", () => {
     expect(youtube.player.mute).toHaveBeenCalled();
   });
 
-  it("falls back without a blank canvas when every clip is rejected", async () => {
+  it("retries the reel after a full rejected pass instead of stopping permanently", async () => {
+    vi.useFakeTimers();
     const youtube = installYouTubeMock();
     render(
       <BrollPlayer
-        clips={[CLIPS[0]]}
-        shuffle
+        clips={CLIPS}
+        shuffle={false}
         muted
         volume={20}
         skipNonce={0}
       />,
     );
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "abcDEF12345",
+      startSeconds: 90,
+      endSeconds: 120,
+    });
+
+    act(() => {
+      youtube.handlers().onError({ target: youtube.player });
+    });
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "ZYXwvu98765",
+      startSeconds: 300,
+      endSeconds: 348,
     });
 
     act(() => {
@@ -188,7 +254,72 @@ describe("BrollPlayer", () => {
       "fallback",
     );
     expect(screen.getByText("HIGHLIGHT REEL STANDBY")).toBeTruthy();
-    expect(youtube.player.stopVideo).toHaveBeenCalled();
+    expect(youtube.player.stopVideo).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(2_999);
+    });
+    expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "abcDEF12345",
+      startSeconds: 90,
+      endSeconds: 120,
+    });
+
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+      youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
+    });
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "ZYXwvu98765",
+      startSeconds: 300,
+      endSeconds: 348,
+    });
+  });
+
+  it("keeps auto-advancing in shuffle mode after refilling the bag", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const youtube = installYouTubeMock();
+    render(
+      <BrollPlayer
+        clips={SHUFFLE_CLIPS}
+        shuffle
+        muted
+        volume={20}
+        skipNonce={0}
+      />,
+    );
+    await waitFor(() => {
+      expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(1);
+    });
+
+    for (let transition = 0; transition < 4; transition += 1) {
+      act(() => {
+        youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+        youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
+      });
+      await waitFor(() => {
+        expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(
+          transition + 2,
+        );
+      });
+    }
+
+    // The first bag is C,B. Its refill excludes B (the current clip), then
+    // yields C,A, so playback continues without a repeat at the bag seam.
+    expect(
+      youtube.player.loadVideoById.mock.calls.map(([clip]) => clip.videoId),
+    ).toEqual([
+      "abcDEF12345",
+      "QweRTY67890",
+      "ZYXwvu98765",
+      "QweRTY67890",
+      "abcDEF12345",
+    ]);
   });
 
   it("builds complete shuffle cycles without replaying the current clip", () => {

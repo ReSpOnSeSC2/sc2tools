@@ -17,6 +17,7 @@ import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
 const YOUTUBE_IFRAME_API = "https://www.youtube.com/iframe_api";
 const API_READY_TIMEOUT_MS = 12_000;
 const PLAYBACK_WATCHDOG_GRACE_MS = 8_000;
+const FAILED_CYCLE_RETRY_MS = 3_000;
 const BACKGROUND_ROTATE_MS = 24_000;
 
 export type BrollClip = StudioBrollClip;
@@ -132,6 +133,7 @@ export function BrollPlayer({
   const [status, setStatus] = useState<PlaybackStatus>(
     playableClips.length > 0 ? "loading" : "empty",
   );
+  const [hasStartedPlayback, setHasStartedPlayback] = useState(false);
 
   const safeVolume = clampVolume(volume);
   const currentClip = playableClips[playback.index] ?? playableClips[0] ?? null;
@@ -197,6 +199,29 @@ export function BrollPlayer({
   const advanceRef = useRef(advancePlayback);
   advanceRef.current = advancePlayback;
 
+  const handleClipFailure = useCallback(
+    (clip: BrollClip) => {
+      clearWatchdog();
+      failedClipKeysRef.current.add(clipKey(clip));
+      if (failedClipKeysRef.current.size < clipsRef.current.length) {
+        advanceRef.current();
+        return;
+      }
+
+      // YouTube errors can be transient (especially while multiple OBS browser
+      // sources initialize together). A non-empty library must not become a
+      // terminal standby screen after one rejected pass. Pause briefly to
+      // avoid a hot error loop, then start another cycle.
+      setStatus("fallback");
+      watchdogRef.current = window.setTimeout(() => {
+        watchdogRef.current = null;
+        failedClipKeysRef.current.clear();
+        advanceRef.current();
+      }, FAILED_CYCLE_RETRY_MS);
+    },
+    [clearWatchdog],
+  );
+
   const applyAudio = useCallback((player: YouTubePlayer) => {
     player.setVolume(volumeRef.current);
     if (mutedRef.current || volumeRef.current === 0) player.mute();
@@ -223,14 +248,9 @@ export function BrollPlayer({
         advanceRef.current();
       }, durationMs + PLAYBACK_WATCHDOG_GRACE_MS);
     } catch {
-      failedClipKeysRef.current.add(clipKey(clip));
-      if (failedClipKeysRef.current.size >= clipsRef.current.length) {
-        setStatus("fallback");
-      } else {
-        advanceRef.current();
-      }
+      handleClipFailure(clip);
     }
-  }, [applyAudio, clearWatchdog]);
+  }, [applyAudio, clearWatchdog, handleClipFailure]);
 
   const loadCurrentClipRef = useRef(loadCurrentClip);
   loadCurrentClipRef.current = loadCurrentClip;
@@ -242,6 +262,7 @@ export function BrollPlayer({
     signatureRef.current = signature;
     failedClipKeysRef.current.clear();
     clearWatchdog();
+    setHasStartedPlayback(false);
     const count = playableClips.length;
     const nextIndex =
       shuffle && count > 1 ? Math.floor(Math.random() * count) : 0;
@@ -303,6 +324,7 @@ export function BrollPlayer({
               if (cancelled) return;
               if (event.data === YT.PlayerState.PLAYING) {
                 failedClipKeysRef.current.clear();
+                setHasStartedPlayback(true);
                 setStatus("playing");
               } else if (event.data === YT.PlayerState.ENDED) {
                 advanceRef.current();
@@ -315,18 +337,7 @@ export function BrollPlayer({
                 setStatus("fallback");
                 return;
               }
-              clearWatchdog();
-              failedClipKeysRef.current.add(clipKey(clip));
-              if (failedClipKeysRef.current.size >= clipsRef.current.length) {
-                setStatus("fallback");
-                try {
-                  playerRef.current?.stopVideo();
-                } catch {
-                  // The fallback canvas is already visible; a rejected stop is harmless.
-                }
-              } else {
-                advanceRef.current();
-              }
+              handleClipFailure(clip);
             },
           },
         });
@@ -348,7 +359,7 @@ export function BrollPlayer({
         // YouTube may already have torn down its iframe during navigation.
       }
     };
-  }, [applyAudio, clearWatchdog, hasPlayableClips]);
+  }, [applyAudio, clearWatchdog, handleClipFailure, hasPlayableClips]);
 
   useEffect(() => {
     advanceLockedRef.current = false;
@@ -380,6 +391,8 @@ export function BrollPlayer({
       : status === "empty"
         ? "HIGHLIGHT REEL READY"
         : "LOADING HIGHLIGHT REEL";
+  const showMedia =
+    hasStartedPlayback && status !== "empty" && status !== "fallback";
 
   return (
     <div
@@ -390,7 +403,7 @@ export function BrollPlayer({
     >
       <style>{brollCss}</style>
       <div className="broll-fallback" style={fallbackStyle} aria-hidden="true">
-        <StreamSetFallback active={status !== "playing"} />
+        <StreamSetFallback active={!showMedia} />
         <div className="broll-set-shade" />
         <div className="broll-standby">
           <span className="broll-standby-kicker">SC2 TOOLS · ARCHIVE FEED</span>
@@ -401,7 +414,7 @@ export function BrollPlayer({
         <div
           className="broll-media"
           data-testid="broll-media"
-          style={{ opacity: status === "playing" ? 1 : 0 }}
+          style={{ opacity: showMedia ? 1 : 0 }}
         >
           <div ref={mountRef} />
         </div>

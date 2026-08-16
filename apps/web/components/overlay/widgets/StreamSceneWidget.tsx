@@ -18,7 +18,11 @@
  */
 
 import { useEffect, useState, type CSSProperties } from "react";
-import { useStudioState, type StudioScene } from "@/lib/multichat/useStudioState";
+import {
+  useStudioState,
+  type StudioBrollConfig,
+  type StudioScene,
+} from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import { testScene } from "@/lib/multichat/testStudio";
 import type { LiveGamePayload } from "../types";
@@ -57,7 +61,6 @@ export function StreamSceneWidget({
   // useStudioState defaults an older snapshot's missing b-roll field, so this
   // always remains a safe player config during rollout.
   const broll = state.broll;
-  const hasBroll = broll.clips.length > 0;
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -69,11 +72,42 @@ export function StreamSceneWidget({
 
   if (!scene) return <div style={{ background: "transparent" }} />;
 
-  const isBrb = scene.mode === "brb";
-  const headline = isBrb ? "BE RIGHT BACK" : "STARTING SOON";
   const remainMs = scene.countdownEndsAt
     ? Math.max(0, scene.countdownEndsAt - nowMs)
     : null;
+
+  return (
+    <StreamSceneCanvas
+      scene={scene}
+      broll={broll}
+      remainMs={remainMs}
+      testActive={testActive}
+    />
+  );
+}
+
+/**
+ * Shared full-canvas presentation for every Stream Dock cover.
+ *
+ * The standalone widget and the agent-built ``/scene/manual`` source must
+ * paint the same reel. Keeping the rendering here prevents the horizontal
+ * manual cover from hiding b-roll behind the legacy backdrop while a vertical
+ * canvas using the widget URL continues playing it.
+ */
+export function StreamSceneCanvas({
+  scene,
+  broll,
+  remainMs,
+  testActive = false,
+}: {
+  scene: StudioScene;
+  broll: StudioBrollConfig;
+  remainMs: number | null;
+  testActive?: boolean;
+}) {
+  const hasBroll = broll.clips.length > 0;
+  const isBrb = scene.mode === "brb";
+  const headline = isBrb ? "BE RIGHT BACK" : "STARTING SOON";
   const done = remainMs !== null && remainMs <= 0;
 
   return (

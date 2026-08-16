@@ -20,6 +20,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Starting Soon / BRB B-roll now stays continuous on every OBS canvas** —
+  the topmost horizontal manual cover now uses the same highlight reel as the
+  vertical scene, ordered and shuffled playlists restart after their last clip,
+  and ordinary clip handoffs keep the video layer visible instead of flashing a
+  generated fallback set. A fully rejected playlist pauses briefly and retries
+  rather than becoming a permanent standby screen.
+
 - **YouTube messages no longer disappear from Stream Dock while the overlay keeps
   receiving them** — rate-limited clients retain their exact chat cursor and
   recover the missed batch, messages posted during the first poll are kept, and

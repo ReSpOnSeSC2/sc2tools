@@ -21,6 +21,13 @@ const io = vi.hoisted(() =>
   vi.fn((_url: string, _opts: { auth: { overlayToken: string } }) => socket),
 );
 vi.mock("socket.io-client", () => ({ io }));
+const brollPlayer = vi.hoisted(() => vi.fn());
+vi.mock("../../widgets/BrollPlayer", () => ({
+  BrollPlayer: (props: unknown) => {
+    brollPlayer(props);
+    return <div data-testid="broll-player" />;
+  },
+}));
 
 import { OverlaySceneClient } from "../OverlaySceneClient";
 import {
@@ -161,6 +168,61 @@ describe("live mode", () => {
       ).toBeNull();
     },
   );
+
+  it("uses the shared b-roll canvas for the active manual cover", async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        scene: {
+          mode: "starting",
+          message: "Manual reel",
+          countdownEndsAt: null,
+          setAtMs: Date.now(),
+        },
+        broll: {
+          clips: [
+            {
+              id: "opening-highlight",
+              title: "Opening highlight",
+              videoId: "abcdefghijk",
+              startSeconds: 12,
+              endSeconds: 42,
+            },
+          ],
+          shuffle: false,
+          muted: true,
+          volume: 20,
+          skipNonce: 0,
+        },
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+    const { container } = render(
+      <OverlaySceneClient token="tok" scene="manual" />,
+    );
+
+    expect(await screen.findByTestId("stream-scene-hud")).toBeTruthy();
+    expect(screen.getByTestId("broll-player")).toBeTruthy();
+    expect(brollPlayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clips: [
+          expect.objectContaining({
+            id: "opening-highlight",
+            videoId: "abcdefghijk",
+          }),
+        ],
+        shuffle: false,
+        muted: true,
+        volume: 20,
+      }),
+    );
+    expect(screen.getByText("Manual reel")).toBeTruthy();
+    expect(
+      container.querySelector('[data-scene-layout="broll"]'),
+    ).toBeTruthy();
+    expect(container.querySelector(".sc2bd")).toBeNull();
+  });
 });
 
 describe("independent virtual-set scenes", () => {
