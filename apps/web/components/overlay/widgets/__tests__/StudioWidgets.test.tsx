@@ -39,6 +39,14 @@ vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
   return { ...actual, useStudioState: () => mockStudio };
 });
 
+// BrollPlayer's YouTube lifecycle has its own focused suite. These render
+// contracts only need to prove when StreamSceneWidget mounts the player.
+vi.mock("../BrollPlayer", () => ({
+  BrollPlayer: ({ clips }: { clips: Array<{ id: string }> }) => (
+    <div data-testid="broll-player" data-clip-count={clips.length} />
+  ),
+}));
+
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: (args: { config?: unknown }) => {
     mockMultiChatArgs.push(args);
@@ -349,7 +357,7 @@ describe("StreamSceneWidget", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("renders BRB with the streamer's message", () => {
+  it("restores the centered default BRB scene when the library is empty", () => {
     mockStudio = {
       ...EMPTY_STUDIO,
       scene: {
@@ -359,13 +367,50 @@ describe("StreamSceneWidget", () => {
         setAtMs: 1,
       },
     };
-    render(<StreamSceneWidget token="tok" />);
+    const { container } = render(<StreamSceneWidget token="tok" />);
     expect(screen.getByText("BE RIGHT BACK")).toBeTruthy();
     expect(screen.getByText("Grabbing water, back in 5")).toBeTruthy();
+    const defaultScene = screen.getByTestId("stream-scene-default");
+    expect(defaultScene.parentElement?.dataset.sceneLayout).toBe("default");
+    expect(defaultScene.style.justifyContent).toBe("center");
+    expect(container.querySelectorAll(".scn-ember")).toHaveLength(14);
+    expect(screen.queryByTestId("stream-scene-hud")).toBeNull();
+    expect(screen.queryByTestId("broll-player")).toBeNull();
+  });
+
+  it("automatically uses b-roll and the compact HUD when clips exist", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      broll: {
+        ...DEFAULT_BROLL_CONFIG,
+        clips: [
+          {
+            id: "hold-the-line",
+            title: "Hold at the natural",
+            videoId: "abcDEF12345",
+            startSeconds: 90,
+            endSeconds: 140,
+          },
+        ],
+      },
+      scene: {
+        mode: "starting",
+        message: "Loading into ladder",
+        countdownEndsAt: Date.now() + 5 * 60_000,
+        setAtMs: Date.now(),
+      },
+    };
+    render(<StreamSceneWidget token="tok" />);
+
+    expect(screen.getByText("STARTING SOON")).toBeTruthy();
+    expect(screen.getByText("Loading into ladder")).toBeTruthy();
+    expect(screen.getByText(/^0?5:00$|^0?4:5\d$/)).toBeTruthy();
+    expect(screen.getByTestId("broll-player").dataset.clipCount).toBe("1");
     const hud = screen.getByTestId("stream-scene-hud");
+    expect(hud.parentElement?.dataset.sceneLayout).toBe("broll");
     expect(hud.style.top).toContain("clamp(");
     expect(hud.style.width).toBe("min(88vw, 820px)");
-    expect(screen.getByTestId("broll-player")).toBeTruthy();
+    expect(screen.queryByTestId("stream-scene-default")).toBeNull();
   });
 
   it("renders Starting Soon with a ticking countdown", () => {
@@ -806,6 +851,32 @@ describe("Stream Studio Test fire", () => {
     expect(screen.getByText("STARTING SOON")).toBeTruthy();
     expect(screen.getByText(/Test: ranked ladder grind/)).toBeTruthy();
     expect(screen.getByText("TEST")).toBeTruthy();
+    expect(screen.getByTestId("stream-scene-default")).toBeTruthy();
+    expect(screen.queryByTestId("broll-player")).toBeNull();
+  });
+
+  it("StreamSceneWidget Test keeps the compact b-roll layout for a configured library", () => {
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      broll: {
+        ...DEFAULT_BROLL_CONFIG,
+        clips: [
+          {
+            id: "carrier-finish",
+            title: "Carrier fleet closes it out",
+            videoId: "ZYXwvu98765",
+            startSeconds: 300,
+            endSeconds: 348,
+          },
+        ],
+      },
+    };
+    render(<StreamSceneWidget token="tok" live={testFire("stream-scene")} />);
+
+    expect(screen.getByText("TEST")).toBeTruthy();
+    expect(screen.getByTestId("stream-scene-hud")).toBeTruthy();
+    expect(screen.getByTestId("broll-player").dataset.clipCount).toBe("1");
+    expect(screen.queryByTestId("stream-scene-default")).toBeNull();
   });
 
   it("StreamSceneWidget ignores a test targeting a different widget", () => {

@@ -67,6 +67,35 @@ function makeSocket(handshake) {
   };
 }
 
+const TOKEN_A_STUDIO = {
+  broll: {
+    clips: [{
+      id: "clip-a",
+      title: "Token A highlight",
+      videoId: "AbCdEf12345",
+      startSeconds: 10,
+      endSeconds: 40,
+    }],
+    shuffle: true,
+    muted: false,
+    volume: 20,
+    skipNonce: 0,
+  },
+};
+const TOKEN_B_STUDIO = {
+  broll: {
+    clips: [],
+    shuffle: true,
+    muted: false,
+    volume: 20,
+    skipNonce: 0,
+  },
+};
+
+function studioEvent(socket) {
+  return socket.emitted.find((event) => event.event === "overlay:multichat");
+}
+
 describe("attachSocketAuth (overlay)", () => {
   test("rejects when no resolveOverlayToken is wired", async () => {
     const io = setupIo();
@@ -204,6 +233,38 @@ describe("attachSocketAuth (overlay)", () => {
       (entry) => entry.event === "overlay:multichat",
     );
     expect(event?.payload).toEqual(studio);
+  });
+
+  test("each overlay socket replays only its exact token's b-roll", async () => {
+    const io = setupIo();
+    const states = new Map([
+      ["tok-a", TOKEN_A_STUDIO],
+      ["tok-b", TOKEN_B_STUDIO],
+    ]);
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async (token) =>
+        token === "tok-a"
+          ? { userId: "owner-a", label: "A", enabledWidgets: [] }
+          : token === "tok-b"
+            ? { userId: "owner-b", label: "B", enabledWidgets: [] }
+            : null,
+      resolveStudioState: async (token) => states.get(token) ?? null,
+    });
+
+    const socketA = await io.runHandshake({ auth: { overlayToken: "tok-a" } });
+    io.runConnect(socketA);
+    await new Promise((resolve) => setImmediate(resolve));
+    const socketB = await io.runHandshake({ auth: { overlayToken: "tok-b" } });
+    io.runConnect(socketB);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(socketA.rooms).toContain("overlay:tok-a");
+    expect(socketA.rooms).not.toContain("overlay:tok-b");
+    expect(socketB.rooms).toContain("overlay:tok-b");
+    expect(socketB.rooms).not.toContain("overlay:tok-a");
+    expect(studioEvent(socketA)?.payload).toEqual(TOKEN_A_STUDIO);
+    expect(studioEvent(socketB)?.payload).toEqual(TOKEN_B_STUDIO);
   });
 
   test("a studio snapshot failure never rejects the overlay connection", async () => {

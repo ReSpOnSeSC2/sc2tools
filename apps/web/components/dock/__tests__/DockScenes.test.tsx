@@ -167,6 +167,11 @@ describe("DockScenes b-roll controls", () => {
     expect(screen.getByText("No b-roll")).toBeTruthy();
     expect(screen.getByText("0 highlight clips")).toBeTruthy();
     expect(
+      screen.getByText(
+        "This Stream Dock has no b-roll. The default BRB / Starting Soon screen is active; add your own YouTube highlights below to enable it.",
+      ),
+    ).toBeTruthy();
+    expect(
       (screen.getByRole("button", { name: /Shuffle/ }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);

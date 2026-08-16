@@ -7,10 +7,11 @@
  * (with an optional message and countdown), and "Live" makes it
  * fully transparent again.
  *
- * The scene's visual layer is a full-canvas highlight reel with a broadcast-
- * safe animated fallback. Scene wording, the streamer's message, and the
- * Dock-controlled countdown sit in a compact top HUD so the footage stays
- * visible. The scene inherits the overlay theme accent via ``--ov-accent``.
+ * Configured highlight libraries use a full-canvas reel with the wording and
+ * Dock-controlled countdown in a compact top HUD. With no clips configured,
+ * the original centered glow-and-ember scene remains the default instead of
+ * presenting b-roll standby UI. Both inherit the overlay theme accent through
+ * ``--ov-accent``.
  *
  * The shared ``overlay:live`` payload is read for one thing: the
  * Settings Test button (demo Starting Soon with a live countdown).
@@ -24,6 +25,15 @@ import type { LiveGamePayload } from "../types";
 import { BrollPlayer } from "./BrollPlayer";
 
 const TICK_MS = 250;
+
+/** Deterministic ember field for the no-library default scene. */
+const EMBERS = Array.from({ length: 14 }, (_, i) => ({
+  left: (i * 37 + 11) % 100,
+  size: 3 + ((i * 13) % 6),
+  delay: ((i * 47) % 200) / 10,
+  duration: 14 + ((i * 29) % 12),
+  opacity: 0.12 + ((i * 17) % 20) / 100,
+}));
 
 export function StreamSceneWidget({
   token,
@@ -47,6 +57,7 @@ export function StreamSceneWidget({
   // useStudioState defaults an older snapshot's missing b-roll field, so this
   // always remains a safe player config during rollout.
   const broll = state.broll;
+  const hasBroll = broll.clips.length > 0;
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -66,34 +77,88 @@ export function StreamSceneWidget({
   const done = remainMs !== null && remainMs <= 0;
 
   return (
-    <div style={frameStyle}>
+    <div
+      data-scene-layout={hasBroll ? "broll" : "default"}
+      style={hasBroll ? brollFrameStyle : defaultFrameStyle}
+    >
       <style>{sceneCss}</style>
-      <BrollPlayer {...broll} />
+      {hasBroll ? (
+        <>
+          <BrollPlayer {...broll} />
 
-      <div data-testid="stream-scene-hud" style={hudStyle}>
-        <div className="scn-scan" aria-hidden="true" />
-        <div style={hudRowStyle}>
-          {testActive ? <div style={testTagStyle}>TEST</div> : null}
-          <div className="scn-headline" style={headlineStyle}>
-            {headline}
-          </div>
-          {remainMs !== null ? (
-            <div
-              className={done ? "scn-now" : undefined}
-              style={countdownStyle}
-            >
-              {done
-                ? isBrb
-                  ? "BACK ANY MOMENT"
-                  : "STARTING NOW"
-                : formatCountdown(remainMs)}
+          <div data-testid="stream-scene-hud" style={hudStyle}>
+            <div className="scn-scan" aria-hidden="true" />
+            <div style={hudRowStyle}>
+              {testActive ? <div style={brollTestTagStyle}>TEST</div> : null}
+              <div
+                className="scn-headline scn-broll-headline"
+                style={brollHeadlineStyle}
+              >
+                {headline}
+              </div>
+              {remainMs !== null ? (
+                <div
+                  className={done ? "scn-now" : undefined}
+                  style={brollCountdownStyle}
+                >
+                  {done
+                    ? isBrb
+                      ? "BACK ANY MOMENT"
+                      : "STARTING NOW"
+                    : formatCountdown(remainMs)}
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-        {scene.message ? (
-          <div style={messageStyle}>{scene.message}</div>
-        ) : null}
-      </div>
+            {scene.message ? (
+              <div style={brollMessageStyle}>{scene.message}</div>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="scn-glow scn-glow-a" style={glowA} />
+          <div className="scn-glow scn-glow-b" style={glowB} />
+          {EMBERS.map((ember, index) => (
+            <div
+              key={index}
+              className="scn-ember"
+              style={{
+                left: `${ember.left}%`,
+                width: ember.size,
+                height: ember.size,
+                opacity: ember.opacity,
+                animationDelay: `${ember.delay}s`,
+                animationDuration: `${ember.duration}s`,
+              }}
+            />
+          ))}
+
+          <div data-testid="stream-scene-default" style={centerStyle}>
+            {testActive ? <div style={defaultTestTagStyle}>TEST</div> : null}
+            <div
+              className="scn-headline scn-default-headline"
+              style={defaultHeadlineStyle}
+            >
+              {headline}
+            </div>
+            <div style={ruleStyle} />
+            {scene.message ? (
+              <div style={defaultMessageStyle}>{scene.message}</div>
+            ) : null}
+            {remainMs !== null ? (
+              done ? (
+                <div className="scn-now" style={defaultCountdownStyle}>
+                  {isBrb ? "BACK ANY MOMENT" : "STARTING NOW"}
+                </div>
+              ) : (
+                <div style={defaultCountdownStyle}>
+                  {formatCountdown(remainMs)}
+                </div>
+              )
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -112,6 +177,25 @@ export function formatCountdown(remainMs: number): string {
 /* ──────────────── styles ──────────────── */
 
 const sceneCss = `
+  .scn-glow { animation: scnDrift 26s ease-in-out infinite alternate; }
+  .scn-glow-b { animation-duration: 34s; animation-direction: alternate-reverse; }
+  @keyframes scnDrift {
+    from { transform: translate3d(-4%, -3%, 0) scale(1); }
+    to { transform: translate3d(5%, 4%, 0) scale(1.15); }
+  }
+  .scn-ember {
+    position: absolute;
+    bottom: -12px;
+    border-radius: 999px;
+    background: var(--ov-accent, #3ec0c7);
+    animation-name: scnRise;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes scnRise {
+    from { transform: translateY(0); }
+    to { transform: translateY(-110vh); }
+  }
   .scn-scan {
     position: absolute;
     inset: 0;
@@ -130,8 +214,13 @@ const sceneCss = `
     background: linear-gradient(90deg, transparent, var(--ov-accent, #3ec0c7), transparent);
     animation: scnScan 5.5s ease-in-out infinite;
   }
-  .scn-headline { animation: scnBreathe 5s ease-in-out infinite; }
-  @keyframes scnBreathe {
+  .scn-default-headline { animation: scnDefaultBreathe 5s ease-in-out infinite; }
+  @keyframes scnDefaultBreathe {
+    0%, 100% { text-shadow: 0 0 26px rgba(62,192,199,0.35); }
+    50% { text-shadow: 0 0 44px rgba(62,192,199,0.6); }
+  }
+  .scn-broll-headline { animation: scnBrollBreathe 5s ease-in-out infinite; }
+  @keyframes scnBrollBreathe {
     0%, 100% { text-shadow: 0 0 18px rgba(62,192,199,0.26); }
     50% { text-shadow: 0 0 28px rgba(62,192,199,0.48); }
   }
@@ -145,17 +234,60 @@ const sceneCss = `
     50% { opacity: 0.75; transform: scale(1.04); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .scn-scan::after, .scn-headline, .scn-now { animation: none; }
+    .scn-glow, .scn-ember, .scn-scan::after,
+    .scn-default-headline, .scn-broll-headline, .scn-now { animation: none; }
   }
 `;
 
-const frameStyle: CSSProperties = {
+const brollFrameStyle: CSSProperties = {
   position: "absolute",
   inset: 0,
   overflow: "hidden",
   background: "#03070d",
   fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
   color: "#e6e8ee",
+};
+
+const defaultFrameStyle: CSSProperties = {
+  ...brollFrameStyle,
+  background:
+    "radial-gradient(120% 90% at 50% 10%, #101623 0%, #0a0d14 55%, #05070b 100%)",
+};
+
+const glowA: CSSProperties = {
+  position: "absolute",
+  top: "-20%",
+  left: "-10%",
+  width: "55%",
+  height: "55%",
+  borderRadius: "50%",
+  background:
+    "radial-gradient(circle, color-mix(in srgb, var(--ov-accent, #3ec0c7) 22%, transparent) 0%, transparent 70%)",
+  filter: "blur(30px)",
+};
+
+const glowB: CSSProperties = {
+  position: "absolute",
+  bottom: "-25%",
+  right: "-10%",
+  width: "60%",
+  height: "60%",
+  borderRadius: "50%",
+  background:
+    "radial-gradient(circle, rgba(120,90,220,0.16) 0%, transparent 70%)",
+  filter: "blur(34px)",
+};
+
+const centerStyle: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 18,
+  textAlign: "center",
+  padding: "0 6vw",
 };
 
 const hudStyle: CSSProperties = {
@@ -185,7 +317,7 @@ const hudRowStyle: CSSProperties = {
   gap: "clamp(12px, 2vw, 30px)",
 };
 
-const testTagStyle: CSSProperties = {
+const brollTestTagStyle: CSSProperties = {
   flex: "0 0 auto",
   padding: "3px 6px",
   border: "1px solid rgba(245,185,66,0.46)",
@@ -196,7 +328,7 @@ const testTagStyle: CSSProperties = {
   color: "#f5b942",
 };
 
-const headlineStyle: CSSProperties = {
+const brollHeadlineStyle: CSSProperties = {
   flex: "1 1 auto",
   fontSize: "clamp(17px, 2.25vw, 31px)",
   fontWeight: 850,
@@ -206,7 +338,7 @@ const headlineStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const messageStyle: CSSProperties = {
+const brollMessageStyle: CSSProperties = {
   marginTop: 6,
   paddingTop: 6,
   borderTop: "1px solid rgba(255,255,255,0.08)",
@@ -217,7 +349,7 @@ const messageStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-const countdownStyle: CSSProperties = {
+const brollCountdownStyle: CSSProperties = {
   flex: "0 0 auto",
   fontSize: "clamp(18px, 2.5vw, 35px)",
   fontWeight: 850,
@@ -225,4 +357,44 @@ const countdownStyle: CSSProperties = {
   letterSpacing: "0.08em",
   color: "var(--ov-accent, #3ec0c7)",
   whiteSpace: "nowrap",
+};
+
+const defaultTestTagStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  letterSpacing: "0.12em",
+  color: "#f5b942",
+};
+
+const defaultHeadlineStyle: CSSProperties = {
+  fontSize: "clamp(34px, 7vw, 96px)",
+  fontWeight: 900,
+  letterSpacing: "0.22em",
+  textTransform: "uppercase",
+  color: "#fff",
+};
+
+const ruleStyle: CSSProperties = {
+  width: "min(340px, 40vw)",
+  height: 3,
+  borderRadius: 999,
+  background:
+    "linear-gradient(90deg, transparent, var(--ov-accent, #3ec0c7), transparent)",
+};
+
+const defaultMessageStyle: CSSProperties = {
+  fontSize: "clamp(15px, 2vw, 26px)",
+  fontWeight: 500,
+  color: "rgba(255,255,255,0.82)",
+  maxWidth: "70vw",
+  overflowWrap: "anywhere",
+};
+
+const defaultCountdownStyle: CSSProperties = {
+  marginTop: 6,
+  fontSize: "clamp(40px, 8vw, 110px)",
+  fontWeight: 800,
+  fontVariantNumeric: "tabular-nums",
+  letterSpacing: "0.06em",
+  color: "var(--ov-accent, #3ec0c7)",
 };

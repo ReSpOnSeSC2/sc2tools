@@ -928,6 +928,28 @@ describe("routes/multichat", () => {
   });
 });
 
+const EMPTY_BROLL = {
+  clips: [],
+  shuffle: true,
+  muted: false,
+  volume: 20,
+  skipNonce: 0,
+};
+const OWNER_A_CLIP = {
+  id: "owner-a-clip",
+  title: "Owner A private highlight",
+  videoId: "AbCdEf12345",
+  startSeconds: 15,
+  endSeconds: 55,
+};
+const OWNER_B_CLIP = {
+  id: "owner-b-clip",
+  title: "Owner B private highlight",
+  videoId: "ZyXwVu98765",
+  startSeconds: 70,
+  endSeconds: 120,
+};
+
 describe("routes/multichat studio", () => {
   // Reuses the router test harness above via a fresh in-memory app.
   const { MultichatStudioService } = require("../src/services/multichatStudio");
@@ -935,17 +957,23 @@ describe("routes/multichat studio", () => {
   let db2;
   let app2;
   let token2;
+  let sameOwnerToken2;
+  let otherOwnerToken2;
   let uid2;
+  let overlayTokens2;
   let sounds2;
 
   beforeAll(async () => {
     mongo2 = await MongoMemoryServer.create();
     db2 = await connect({ uri: mongo2.getUri(), dbName: "multichat_studio_test" });
     const users2 = new UsersService(db2, {});
-    const overlayTokens2 = new OverlayTokensService(db2);
+    overlayTokens2 = new OverlayTokensService(db2);
     const uid = (await users2.ensureFromClerk("user_studio")).userId;
     uid2 = uid;
     token2 = (await overlayTokens2.create(uid, "t")).token;
+    sameOwnerToken2 = (await overlayTokens2.create(uid, "same-owner-second-token")).token;
+    const otherUid = (await users2.ensureFromClerk("user_studio_other")).userId;
+    otherOwnerToken2 = (await overlayTokens2.create(otherUid, "other-owner-token")).token;
     const studio = new MultichatStudioService(db2, {});
     sounds2 = new MultichatSoundsService(db2);
     app2 = express();
@@ -1113,6 +1141,59 @@ describe("routes/multichat studio", () => {
       volume: 20,
       skipNonce: 0,
     });
+  });
+
+  test("b-roll stays isolated by exact token across same and different owners", async () => {
+    const setOwner = await request(app2)
+      .post(`/v1/multichat/${token2}/studio`)
+      .send({ broll: { clips: [OWNER_A_CLIP] } });
+    expect(setOwner.status).toBe(200);
+    expect(setOwner.body.broll.clips).toEqual([OWNER_A_CLIP]);
+
+    // Studio state is token-scoped even when both tokens belong to the same
+    // account. A second OBS/dock setup starts with an independent empty reel.
+    const sameOwnerEmpty = await request(app2).get(
+      `/v1/multichat/${sameOwnerToken2}/studio`,
+    );
+    expect(sameOwnerEmpty.status).toBe(200);
+    expect(sameOwnerEmpty.body.broll).toEqual(EMPTY_BROLL);
+
+    // A different owner's valid token is independent in both directions.
+    const otherOwnerEmpty = await request(app2).get(
+      `/v1/multichat/${otherOwnerToken2}/studio`,
+    );
+    expect(otherOwnerEmpty.status).toBe(200);
+    expect(otherOwnerEmpty.body.broll).toEqual(EMPTY_BROLL);
+    const setOther = await request(app2)
+      .post(`/v1/multichat/${otherOwnerToken2}/studio`)
+      .send({ broll: { clips: [OWNER_B_CLIP], shuffle: false } });
+    expect(setOther.status).toBe(200);
+    expect(setOther.body.broll.clips).toEqual([OWNER_B_CLIP]);
+
+    const ownerAgain = await request(app2).get(
+      `/v1/multichat/${token2}/studio`,
+    );
+    expect(ownerAgain.body.broll.clips).toEqual([OWNER_A_CLIP]);
+    expect(ownerAgain.body.broll.clips).not.toContainEqual(OWNER_B_CLIP);
+  });
+
+  test("unknown and revoked tokens cannot read or write Studio state", async () => {
+    // Unknown and revoked bearer tokens fail before Studio persistence is
+    // touched, even if they attempt to POST a syntactically valid library.
+    const unknownToken = "unknown-overlay-token";
+    const unknown = await request(app2)
+      .post(`/v1/multichat/${unknownToken}/studio`)
+      .send({ broll: { clips: [OWNER_B_CLIP] } });
+    expect(unknown.status).toBe(401);
+    expect(
+      await db2.multichatStudio.countDocuments({ token: unknownToken }),
+    ).toBe(0);
+
+    await overlayTokens2.revoke(uid2, sameOwnerToken2);
+    const revoked = await request(app2).get(
+      `/v1/multichat/${sameOwnerToken2}/studio`,
+    );
+    expect(revoked.status).toBe(401);
   });
 
   test("stream-start mark round-trips; garbage epochs clear", async () => {

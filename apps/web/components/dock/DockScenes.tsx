@@ -248,8 +248,9 @@ export function DockScenes({
           </span>
         </div>
         <p className="mt-1 text-micro text-text-dim">
-          Plays automatically behind the compact banner whenever Starting Soon
-          or BRB is active.
+          {clipCount > 0
+            ? "These highlights belong to this Stream Dock and play automatically behind the compact banner whenever Starting Soon or BRB is active."
+            : "This Stream Dock has no b-roll. The default BRB / Starting Soon screen is active; add your own YouTube highlights below to enable it."}
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
