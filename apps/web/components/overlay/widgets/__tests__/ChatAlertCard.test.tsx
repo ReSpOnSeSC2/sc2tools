@@ -217,12 +217,12 @@ describe("ChatAlertCard preset renderer", () => {
       getComputedStyle(
         mediaView.container.querySelector(".ca-main") as HTMLElement,
       ).gridTemplateColumns,
-    ).toContain("144px");
+    ).toContain("122px");
     expect(
       getComputedStyle(
         mediaView.container.querySelector(".ca-art") as HTMLElement,
       ).width,
-    ).toBe("138px");
+    ).toBe("118px");
     expect(getComputedStyle(staticCard as HTMLElement).minHeight).toBe("112px");
     expect(
       getComputedStyle(
