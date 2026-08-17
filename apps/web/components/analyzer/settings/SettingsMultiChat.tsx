@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
 import { ExternalLink, Languages, LayoutPanelLeft, MessageSquare, Wand2 } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
@@ -246,6 +247,10 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
   useEffect(() => {
     if (!dirty && data) setDraft(draftFromConfig(data));
   }, [data, dirty]);
+
+  // Portals need a DOM; render nothing on the server pass.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Warn before a reload or tab close while edits are pending. Next's client
   // router can't be intercepted from here, so in-app navigation is covered by
@@ -740,22 +745,12 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
             ) : null}
 
             {/*
-              Sticky once there are edits. The alert picker and the other
-              sub-panels sit far above this point in a long card, so an inline
-              button meant a streamer could change a preset, never scroll down,
-              navigate away and silently lose the edit. Pinning the bar to the
-              bottom of the viewport keeps the save affordance in view wherever
-              they are in the card, and says why it is disabled when validation
-              is blocking rather than just greying out.
+              The canonical save control. A floating duplicate is portalled to
+              the body while the form is dirty -- see below. position:sticky is
+              not an option here: Card sets overflow-hidden, and any ancestor
+              with overflow disables sticky on its descendants.
             */}
-            <div
-              className={[
-                "flex flex-wrap items-center gap-3",
-                dirty
-                  ? "sticky bottom-0 z-10 -mx-4 border-t border-accent/40 bg-bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5"
-                  : "",
-              ].filter(Boolean).join(" ")}
-            >
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={() => void save()}
                 disabled={saving || !dirty || problems.length > 0}
@@ -779,6 +774,40 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
           </div>
         )}
       </Card>
+      {/*
+        Floating save bar. The alert picker and the other sub-panels sit far
+        above the inline button in a long card, so edits could be made, never
+        scrolled past, and lost on navigation. Portalled to document.body
+        because Card's overflow-hidden would clip a sticky element and a
+        transformed ancestor would capture a fixed one.
+      */}
+      {mounted && dirty
+        ? createPortal(
+            <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4">
+              <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-full border border-accent/50 bg-bg-surface/95 px-4 py-2.5 shadow-xl backdrop-blur">
+                <span className="text-caption font-medium text-accent">
+                  Unsaved chat settings
+                </span>
+                {problems.length > 0 ? (
+                  <span className="text-caption text-warning">
+                    {problems.length === 1
+                      ? "Fix the issue in the card to save"
+                      : `Fix ${problems.length} issues in the card to save`}
+                  </span>
+                ) : null}
+                <Button
+                  size="sm"
+                  onClick={() => void save()}
+                  disabled={saving || problems.length > 0}
+                >
+                  <MessageSquare className="mr-1.5 h-4 w-4" aria-hidden />
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </Section>
   );
 }

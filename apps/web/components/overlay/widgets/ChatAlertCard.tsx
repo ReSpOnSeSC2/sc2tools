@@ -560,10 +560,10 @@ export const CHAT_ALERT_CARD_CSS = `
   .ca-eyebrow { display: flex; min-width: 0; align-items: center; gap: 7px; }
   .ca-platform { display: inline-flex; align-items: center; justify-content: center; min-width: 27px; height: 17px; padding: 0 5px; border-radius: 4px; font-size: 9px; font-weight: 900; letter-spacing: .05em; flex: 0 0 auto; }
   .ca-kind { color: var(--ca-accent-alt); font-size: 10px; line-height: 1; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; white-space: nowrap; }
-  .ca-callout { min-width: 0; overflow: hidden; color: rgba(255,255,255,.64); font-size: 9px; line-height: 1; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-  .ca-amount { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 46%; padding: 4px 9px; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; border: 1px solid color-mix(in srgb, var(--ca-accent) 46%, transparent); border-radius: 12px; color: #fff5b8; background: color-mix(in srgb, var(--ca-accent) 16%, rgba(0,0,0,.3)); font-size: 12px; line-height: 1.18; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; text-wrap: balance; }
-  .ca-user { margin-top: 7px; overflow-wrap: anywhere; color: #fff; font-size: clamp(18px, 4.4vw, 26px); line-height: 1.08; font-weight: 950; letter-spacing: -.025em; text-shadow: 0 2px 7px rgba(0,0,0,.55); }
-  .ca-detail { margin-top: 5px; overflow-wrap: anywhere; color: rgba(255,255,255,.82); font-size: 13px; line-height: 1.3; font-weight: 560; }
+  .ca-callout { flex: 1 1 auto; min-width: 0; overflow: hidden; color: rgba(255,255,255,.64); font-size: 9px; line-height: 1; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+  .ca-amount { margin-left: auto; flex: 0 0 auto; max-width: 62%; padding: 4px 9px; overflow-wrap: normal; word-break: normal; hyphens: none; border: 1px solid color-mix(in srgb, var(--ca-accent) 46%, transparent); border-radius: 12px; color: #fff5b8; background: color-mix(in srgb, var(--ca-accent) 16%, rgba(0,0,0,.3)); font-size: 12px; line-height: 1.18; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; text-wrap: balance; }
+  .ca-user { margin-top: 7px; overflow-wrap: break-word; hyphens: auto; color: #fff; font-size: clamp(18px, 4.4vw, 26px); line-height: 1.08; font-weight: 950; letter-spacing: -.025em; text-shadow: 0 2px 7px rgba(0,0,0,.55); }
+  .ca-detail { margin-top: 5px; overflow-wrap: break-word; color: rgba(255,255,255,.82); font-size: 13px; line-height: 1.3; font-weight: 560; }
   .ca-glow { position: absolute; z-index: 0; left: -36px; top: -38px; width: 160px; height: 160px; border-radius: 50%; background: var(--ca-accent); filter: blur(56px); opacity: .17; }
   .ca-decorations { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
   .ca-particle { --ca-size: 13px; position: absolute; left: var(--ca-x); top: 108%; color: var(--ca-accent-alt); font-size: var(--ca-size); line-height: 1; font-weight: 950; opacity: .7; text-shadow: 0 2px 8px rgba(0,0,0,.4); transform: rotate(var(--ca-turn)); animation: caFloat 2.7s var(--ca-delay) ease-in-out infinite; }
@@ -668,8 +668,12 @@ export const CHAT_ALERT_CARD_CSS = `
   .ca-sc2-icon { width:72px;height:72px;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 0 11px color-mix(in srgb,var(--ca-accent) 70%,transparent)); }
   .ca-rendered-media { display:block;width:100%;height:100%;object-fit:contain; }
   .ca-has-rendered-media { min-height:160px; }
-  .ca-has-rendered-media .ca-main { box-sizing:border-box;min-height:160px;grid-template-columns:144px minmax(0,1fr);gap:16px;padding:9px 18px 9px 10px; }
-  .ca-has-rendered-media .ca-art { width:138px;height:138px; }
+  .ca-has-rendered-media .ca-main { box-sizing:border-box;min-height:160px;grid-template-columns:122px minmax(0,1fr);gap:13px;padding:9px 16px 9px 10px; }
+  .ca-has-rendered-media .ca-art { width:118px;height:118px; }
+  /* The media column costs the text column ~150px, so ease the headline down
+     rather than let a long display name break mid-word. */
+  .ca-has-rendered-media .ca-user { font-size: clamp(16px, 3.5vw, 21px); }
+  .ca-has-rendered-media .ca-detail { font-size: 12px; }
   .ca-boss-meter { position:relative;z-index:3;margin:-8px 17px 12px 14px;height:12px;overflow:hidden;border:1px solid rgba(255,255,255,.38);border-radius:3px;background:#240710}.ca-boss-meter span{display:block;width:94%;height:100%;background:linear-gradient(90deg,#dc193d,#ff8a45)}.ca-boss-meter b{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:7px;letter-spacing:.18em;text-shadow:0 1px 2px #000}
   .ca-preview { width:100%; }
   .ca-preview .ca-user { font-size:20px; }
