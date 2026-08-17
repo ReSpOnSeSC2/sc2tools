@@ -1,0 +1,21 @@
+# Local proprietary inputs and generated render products never belong in git.
+#
+# The models and renders here are derived from rights-controlled StarCraft II
+# assets and are restricted to admin accounts. This repository is public, so
+# committing any of it would make it world-downloadable and defeat that gate
+# entirely -- and git history would keep it even after a later removal.
+#
+# Everything below lives in the private R2 buckets instead. Upload it with
+# upload_to_r2.py; see docs/cloud/ALERT_MEDIA_R2.md.
+/addons/
+/models/
+/output/
+/delivery/
+/outputs/
+/work/
+/*.blend
+/*.blend1
+/*.m3
+/*.m3a
+/*.dds
+/*.tga

@@ -20,6 +20,7 @@ const {
   sanitizeChatAppearance,
   sanitizeChatTts,
   sanitizeChatSound,
+  sanitizeChatAlerts,
 } = require("../services/multichatAppearance");
 
 /**
@@ -48,7 +49,13 @@ const {
  *
  * @param {{
  *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null> },
- *   users: { getPreferences: (userId: string, type: string) => Promise<Record<string, any>> },
+ *   users: {
+ *     getPreferences: (userId: string, type: string) => Promise<Record<string, any>>,
+ *     isAdminUserId?: (userId: string) => Promise<boolean>,
+ *   },
+ *   auth?: import('express').RequestHandler,
+ *   isAdmin?: (req: import('express').Request) => boolean,
+ *   alertMedia?: import('../services/alertMediaStore').AlertMediaStore | null,
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
@@ -150,6 +157,72 @@ function buildMultichatRouter(deps) {
           );
         }
         res.json({ config });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // ── Admin-gated SC2 3D alert media ──
+  // The rendered SC2 presets come from rights-controlled game assets, so the
+  // media lives in a private R2 bucket and is handed out only as short-lived
+  // presigned URLs. Two surfaces need it, with different credentials:
+  //
+  //   * the Settings preview, which has a Clerk session -> deps.isAdmin(req)
+  //   * the OBS overlay, whose only credential is the URL token
+  //
+  // The overlay cannot use the Clerk gate: overlay tokens are created with the
+  // internal user UUID and carry no Clerk id, so the owning user's persisted
+  // admin role is checked instead. A non-admin gets 403 and the widget falls
+  // back to its code-native static art -- the same path a viewer without the
+  // grant already takes, so nothing renders broken.
+  /** @param {import('express').Response} res */
+  const alertMediaUnavailable = (res) => res.status(503).json({
+    error: { code: "alert_media_not_configured" },
+  });
+
+  const requireSession = deps.auth
+    || ((/** @type {any} */ _req, /** @type {any} */ res) =>
+      res.status(503).json({ error: { code: "auth_unavailable" } }));
+
+  router.get(
+    "/multichat/alert-media",
+    requireSession,
+    async (req, res, next) => {
+      try {
+        if (!deps.isAdmin || !deps.isAdmin(req)) {
+          res.status(403).json({ error: { code: "admin_only" } });
+          return;
+        }
+        if (!deps.alertMedia) { alertMediaUnavailable(res); return; }
+        const grant = await deps.alertMedia.createGrant();
+        // Signed URLs are per-caller and short-lived; never let a shared cache
+        // hold them.
+        res.set("Cache-Control", "private, no-store").json(grant);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
+    "/multichat/:token/alert-media",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        // @ts-ignore stamped by tokenAuth
+        const userId = String(req.overlayUserId);
+        const isOwnerAdmin = deps.users.isAdminUserId
+          ? await deps.users.isAdminUserId(userId)
+          : false;
+        if (!isOwnerAdmin) {
+          res.status(403).json({ error: { code: "admin_only" } });
+          return;
+        }
+        if (!deps.alertMedia) { alertMediaUnavailable(res); return; }
+        const grant = await deps.alertMedia.createGrant();
+        res.set("Cache-Control", "private, no-store").json(grant);
       } catch (err) {
         next(err);
       }
@@ -630,8 +703,8 @@ const MULTICHAT_PLATFORMS = Object.freeze([
  * Whitelist-shape the stored preferences blob before it leaves the API
  * on a token-authed route. The settings page may store anything the
  * 5 MiB body limit allows; the overlay only ever sees the four known
- * platform entries with their known fields, plus the strict-sanitized
- * ``appearance`` styling blob (multichatAppearance service).
+ * platform entries with their known fields, plus strict-sanitized appearance,
+ * TTS, sound and visual-alert blobs (multichatAppearance service).
  *
  * @param {Record<string, any>} prefs
  * @returns {Record<string, any>}
@@ -665,6 +738,9 @@ function sanitizeMultichatConfig(prefs) {
   }
   if (prefs?.sound && typeof prefs.sound === "object") {
     out.sound = sanitizeChatSound(prefs.sound);
+  }
+  if (prefs?.alerts && typeof prefs.alerts === "object") {
+    out.alerts = sanitizeChatAlerts(prefs.alerts);
   }
   // Translation: the widget only learns {enabled, mode, targetLang} —
   // the provider endpoint and API key never leave the server (the

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { MultiChatWidget, useMultichatConfig } from "../MultiChatWidget";
+import {
+  MultiChatWidget,
+  useMultichatConfig,
+  type LoadedConfig,
+} from "../MultiChatWidget";
 import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
+import { DEFAULT_ALERTS } from "@/lib/multichat/alerts";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
 
@@ -103,8 +108,15 @@ async function renderWidget() {
   return view;
 }
 
-function ConfigProbe({ token }: { token: string }) {
+function ConfigProbe({
+  token,
+  onConfig,
+}: {
+  token: string;
+  onConfig?: (config: LoadedConfig) => void;
+}) {
   const config = useMultichatConfig(token);
+  onConfig?.(config);
   return (
     <div data-testid="config-state">
       {config.loaded
@@ -114,7 +126,61 @@ function ConfigProbe({ token }: { token: string }) {
   );
 }
 
+function requireLoadedConfig(config: LoadedConfig | null): LoadedConfig {
+  if (!config) throw new Error("Expected the config probe to have rendered");
+  return config;
+}
+
 describe("MultiChatWidget", () => {
+  it("loads and sanitizes the alerts section outside platform config", async () => {
+    let latestConfig: LoadedConfig | null = null;
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        config: {
+          twitch: { enabled: true, channel: "alert-channel" },
+          alerts: {
+            eventVisuals: {
+              follow: "frog-hype",
+              raid: "shuffle",
+              reward: "not-a-real-preset",
+              notAnEvent: "cash-pop",
+            },
+            motion: "maximum",
+            durationSec: 99,
+            showHistory: false,
+            injectedCss: "url(javascript:alert(1))",
+          },
+        },
+      }),
+    });
+
+    render(
+      <ConfigProbe
+        token="alerts-token"
+        onConfig={(config) => { latestConfig = config; }}
+      />,
+    );
+    expect(await screen.findByText("ready:alert-channel")).toBeTruthy();
+
+    const loaded = requireLoadedConfig(latestConfig);
+    expect(loaded.alerts.eventVisuals).toMatchObject({
+      follow: "frog-hype",
+      raid: "shuffle",
+      reward: "classic",
+      sub: "classic",
+    });
+    expect(Object.keys(loaded.alerts.eventVisuals)).toHaveLength(11);
+    expect(loaded.alerts.eventVisuals).not.toHaveProperty("notAnEvent");
+    expect(loaded.alerts).toMatchObject({
+      motion: "maximum",
+      durationSec: 15,
+      showHistory: false,
+    });
+    expect(loaded.alerts).not.toHaveProperty("injectedCss");
+    expect(loaded.platforms).not.toHaveProperty("alerts");
+  });
+
   it("keeps config unverified after failure and unlocks on a successful retry", async () => {
     vi.useFakeTimers();
     fetchMock
@@ -144,13 +210,17 @@ describe("MultiChatWidget", () => {
   });
 
   it("masks the previous config immediately when the overlay token changes", async () => {
+    let latestConfig: LoadedConfig | null = null;
     let resolveNew: ((value: unknown) => void) | null = null;
     fetchMock.mockImplementation((url: string) => {
       if (String(url).includes("old-token")) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            config: { twitch: { enabled: true, channel: "old-channel" } },
+            config: {
+              twitch: { enabled: true, channel: "old-channel" },
+              alerts: { eventVisuals: { follow: "frog-party" } },
+            },
           }),
         });
       }
@@ -159,17 +229,31 @@ describe("MultiChatWidget", () => {
       });
     });
 
-    const view = render(<ConfigProbe token="old-token" />);
+    const observeConfig = (config: LoadedConfig) => { latestConfig = config; };
+    const view = render(
+      <ConfigProbe token="old-token" onConfig={observeConfig} />,
+    );
     expect(await screen.findByText("ready:old-channel")).toBeTruthy();
+    expect(requireLoadedConfig(latestConfig).alerts.eventVisuals.follow)
+      .toBe("frog-party");
 
-    view.rerender(<ConfigProbe token="new-token" />);
+    view.rerender(
+      <ConfigProbe token="new-token" onConfig={observeConfig} />,
+    );
     expect(screen.getByTestId("config-state").textContent).toBe("unverified");
+    expect(requireLoadedConfig(latestConfig).platforms).toBeNull();
+    expect(requireLoadedConfig(latestConfig).alerts).toEqual(
+      DEFAULT_ALERTS,
+    );
 
     await act(async () => {
       resolveNew?.({
         ok: true,
         json: async () => ({
-          config: { twitch: { enabled: true, channel: "new-channel" } },
+          config: {
+            twitch: { enabled: true, channel: "new-channel" },
+            alerts: { eventVisuals: { follow: "cash-pop" } },
+          },
         }),
       });
       await Promise.resolve();
@@ -178,6 +262,64 @@ describe("MultiChatWidget", () => {
     expect(screen.getByTestId("config-state").textContent).toBe(
       "ready:new-channel",
     );
+    expect(requireLoadedConfig(latestConfig).alerts.eventVisuals.follow)
+      .toBe("cash-pop");
+  });
+
+  it("keeps platform config identity stable across alerts-only refreshes", async () => {
+    vi.useFakeTimers();
+    let latestConfig: LoadedConfig | null = null;
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          config: {
+            twitch: { enabled: true, channel: "stable-channel" },
+            alerts: { eventVisuals: { follow: "classic" } },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          config: {
+            twitch: { enabled: true, channel: "stable-channel" },
+            alerts: {
+              eventVisuals: { follow: "laughing-man" },
+              motion: "maximum",
+            },
+          },
+        }),
+      });
+
+    render(
+      <ConfigProbe
+        token="stable-token"
+        onConfig={(config) => { latestConfig = config; }}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const initial = requireLoadedConfig(latestConfig);
+    expect(initial.loaded).toBe(true);
+    expect(initial.alerts.eventVisuals.follow).toBe("classic");
+    const initialPlatforms = initial.platforms;
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const refreshed = requireLoadedConfig(latestConfig);
+    expect(refreshed.alerts.eventVisuals.follow).toBe("laughing-man");
+    expect(refreshed.alerts.motion).toBe("maximum");
+    expect(refreshed.platforms).toBe(initialPlatforms);
+    expect(refreshed.platforms).not.toHaveProperty("alerts");
   });
 
   it("renders a silent audio=0 copy without enabling TTS or dings", async () => {

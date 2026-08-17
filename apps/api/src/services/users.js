@@ -93,6 +93,32 @@ class UsersService {
   }
 
   /**
+   * Whether this *internal* user id carries the DB ``admin`` role.
+   *
+   * The REST and socket gates compare ``req.auth.clerkUserId`` against the
+   * in-memory allowlist, which works because a Clerk-authenticated request
+   * carries that id. Overlay tokens do not: they are created with the
+   * internal UUID (``auth.userId``) and never see a Clerk session, so a
+   * token-authenticated surface has no Clerk id to compare. This is the
+   * lookup for that case.
+   *
+   * Reads the persisted role rather than the live allowlist, so it also
+   * covers admins minted by the email allowlist or an explicit grant. An
+   * unknown or role-less user is simply not an admin.
+   *
+   * @param {string} userId internal user UUID
+   * @returns {Promise<boolean>}
+   */
+  async isAdminUserId(userId) {
+    if (typeof userId !== "string" || !userId) return false;
+    const hit = await this.db.users.findOne(
+      { userId, role: "admin" },
+      { projection: { _id: 0, userId: 1 } },
+    );
+    return Boolean(hit);
+  }
+
+  /**
    * Grant the ``admin`` role to another user. Combined with the email
    * allowlist, this is how admins come to exist — the endpoint that
    * calls it is itself gated on ``isAdmin``, so "only an admin can add

@@ -56,6 +56,11 @@ import {
   type ChatSoundConfig,
 } from "@/lib/multichat/sound";
 import {
+  DEFAULT_ALERTS,
+  sanitizeAlertConfig,
+  type AlertConfig,
+} from "@/lib/multichat/alerts";
+import {
   DEFAULT_TTS,
   sanitizeTtsConfig,
   type ChatTtsConfig,
@@ -63,6 +68,7 @@ import {
 import type { MultichatConfig } from "@/lib/multichat/types";
 import { UrlRow } from "./OverlayUrlRow";
 import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
+import { SettingsMultiChatAlerts } from "./SettingsMultiChatAlerts";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
 import { ChatBotCard } from "./ChatBotCard";
@@ -106,6 +112,7 @@ type Draft = {
   tiktokEnabled: boolean;
   tiktokUsername: string;
   appearance: ChatAppearance;
+  alerts: AlertConfig;
   tts: ChatTtsConfig;
   sound: ChatSoundConfig;
   translate: TranslateDraft;
@@ -123,6 +130,7 @@ const EMPTY_DRAFT: Draft = {
   tiktokEnabled: false,
   tiktokUsername: "",
   appearance: DEFAULT_APPEARANCE,
+  alerts: DEFAULT_ALERTS,
   tts: DEFAULT_TTS,
   sound: DEFAULT_SOUND,
   translate: DEFAULT_TRANSLATE,
@@ -144,6 +152,7 @@ function draftFromConfig(config: MultichatConfig | undefined | null): Draft {
     tiktokEnabled: config?.tiktok?.enabled === true,
     tiktokUsername: config?.tiktok?.username ?? "",
     appearance: sanitizeAppearance(config?.appearance),
+    alerts: sanitizeAlertConfig(config?.alerts),
     tts: sanitizeTtsConfig(config?.tts),
     sound: sanitizeSoundConfig(config?.sound),
     translate: translateFromConfig(config),
@@ -198,6 +207,7 @@ function configFromDraft(
       username: d.tiktokUsername.trim() || undefined,
     },
     appearance: d.appearance as unknown as Record<string, unknown>,
+    alerts: d.alerts as unknown as Record<string, unknown>,
     tts: d.tts as unknown as Record<string, unknown>,
     sound: d.sound as unknown as Record<string, unknown>,
     translate: {
@@ -539,6 +549,13 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               <SettingsMultiChatAppearance
                 value={draft.appearance}
                 onChange={(appearance) => set({ appearance })}
+              />
+            </div>
+
+            <div className="border-t border-border pt-5">
+              <SettingsMultiChatAlerts
+                value={draft.alerts}
+                onChange={(alerts) => set({ alerts })}
               />
             </div>
 

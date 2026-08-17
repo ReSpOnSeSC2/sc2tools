@@ -31,6 +31,10 @@ import {
   EVENT_KIND_LABEL,
   type ChatEvent,
 } from "@/lib/multichat/events";
+import {
+  DEFAULT_ALERTS,
+  resolveAlertVisualPreset,
+} from "@/lib/multichat/alerts";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useEventSounds } from "@/lib/multichat/useEventSounds";
@@ -52,13 +56,12 @@ import {
 import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import { useMultichatConfig } from "./MultiChatWidget";
+import { ChatAlertCard } from "./ChatAlertCard";
 import {
   useSpeechSynthesisIdle,
   useWidgetAudioOwner,
 } from "./widgetAudio";
 
-/** How long the newest event (and its temporary history) stays visible. */
-const ALERT_VISIBLE_MS = 8_000;
 /** Faded history entries kept under the prominent card. */
 const STACK_SIZE = 3;
 /** A 50-recipient gift bundle fits without dropping a single recognition. */
@@ -66,6 +69,8 @@ const ALERT_QUEUE_CAP = 60;
 /** Near-live relay catch-up may still alert; older replay is timeline-only. */
 const ALERT_REPLAY_GRACE_MS = 15_000;
 const ALERT_SEEN_CAP = 500;
+
+import { useOverlayAlertMediaGrant } from "@/lib/multichat/useAlertMediaGrant";
 
 export function ChatAlertsWidget({
   token,
@@ -78,8 +83,18 @@ export function ChatAlertsWidget({
   /** Shared overlay payload — read ONLY for the Test-fire flag. */
   live?: LiveGamePayload | null;
 }) {
+  // Admin-gated SC2 3D media: presigned per overlay token, and only when the
+  // token's owning user holds admin. A non-admin overlay simply never gets a
+  // grant and the cards render their code-native art.
+  useOverlayAlertMediaGrant(token);
   const audioOwner = useWidgetAudioOwner();
-  const { platforms, appearance, sound, loaded } = useMultichatConfig(token);
+  const {
+    platforms,
+    appearance,
+    sound,
+    alerts = DEFAULT_ALERTS,
+    loaded,
+  } = useMultichatConfig(token);
   const studio = useStudioState(token, studioEvent ?? null);
   const { events: feedEvents, messages: feedMessages } = useMultiChat({
     apiBase: API_BASE,
@@ -266,11 +281,15 @@ export function ChatAlertsWidget({
     // Large gift/sub bursts move briskly enough that everybody is seen while
     // ordinary one-off support still gets the full hero-card dwell.
     const backlog = queueLengthRef.current;
-    const dwellMs =
-      backlog >= 20 ? 2_000 : backlog >= 8 ? 4_000 : ALERT_VISIBLE_MS;
+    const configuredDwellMs = alerts.durationSec * 1_000;
+    const dwellMs = backlog >= 20
+      ? Math.min(configuredDwellMs, 2_000)
+      : backlog >= 8
+        ? Math.min(configuredDwellMs, 4_000)
+        : configuredDwellMs;
     const timer = setTimeout(() => setProminent(null), dwellMs);
     return () => clearTimeout(timer);
-  }, [prominent]);
+  }, [alerts.durationSec, prominent]);
 
   // Sounds follow the visible queue (one supporter at a time), so a burst
   // is neither dropped nor collapsed into an inaudible pile-up.
@@ -293,28 +312,25 @@ export function ChatAlertsWidget({
       && (!audioOwner || speechIdle),
   });
 
-  const stack = visibleProminent
+  const stack = visibleProminent && alerts.showHistory
     ? visibleHistory.slice(0, -1).slice(-STACK_SIZE).reverse()
     : [];
 
   if (!visibleProminent) return <div style={{ background: "transparent" }} />;
+  const preset = resolveAlertVisualPreset(
+    alerts.eventVisuals[visibleProminent.kind],
+    visibleProminent.kind,
+    chatEventIdentity(visibleProminent),
+  );
 
   return (
     <div style={frameStyle}>
-      <style>{`
-        .chat-alert-card { animation: caPop 260ms cubic-bezier(.34,1.56,.64,1); }
-        @keyframes caPop {
-          from { opacity: 0; transform: translateY(-10px) scale(0.96); }
-          to { opacity: 1; transform: none; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .chat-alert-card { animation: none; }
-        }
-      `}</style>
       {testActive ? <div style={testTagStyle}>TEST</div> : null}
-      <AlertCard
+      <ChatAlertCard
         key={chatEventIdentity(visibleProminent)}
         event={visibleProminent}
+        preset={preset}
+        motion={alerts.motion}
       />
       {stack.map((e) => (
         <div key={chatEventIdentity(e)} style={stackRowStyle}>
@@ -375,29 +391,6 @@ function representedAlertCount(event: ChatEvent): number {
   return Number.isSafeInteger(count) && count > 0 ? count : 1;
 }
 
-function AlertCard({ event }: { event: ChatEvent }) {
-  const meta = PLATFORM_META[event.platform];
-  return (
-    <div className="chat-alert-card" style={cardStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ ...miniChipStyle, background: meta.color, color: meta.fg }}>
-          {meta.short}
-        </span>
-        <span style={kindStyle}>{EVENT_KIND_LABEL[event.kind]}</span>
-        {event.amount ? <span style={amountStyle}>{event.amount}</span> : null}
-      </div>
-      <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "#fff" }}>
-        {event.user}
-      </div>
-      {event.detail ? (
-        <div style={{ marginTop: 3, fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.85)", overflowWrap: "anywhere" }}>
-          {event.detail}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /* ──────────────── styles ──────────────── */
 
 const frameStyle: CSSProperties = {
@@ -410,42 +403,12 @@ const frameStyle: CSSProperties = {
   fontFamily: "var(--ov-font, Inter, ui-sans-serif, system-ui, sans-serif)",
 };
 
-const cardStyle: CSSProperties = {
-  width: "100%",
-  minWidth: 240,
-  maxWidth: 360,
-  background:
-    "var(--ov-panel-bg, linear-gradient(135deg, rgba(11,13,18,0.94) 0%, rgba(22,26,35,0.94) 100%))",
-  border: "1px solid rgba(62,192,199,0.35)",
-  borderLeft: "4px solid var(--ov-accent, #3ec0c7)",
-  borderRadius: "var(--ov-radius, 12px)",
-  boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-  padding: "12px 14px",
-  color: "#e6e8ee",
-};
-
 // Matches the multichat status-row TEST chip.
 const testTagStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 700,
   letterSpacing: "0.08em",
   color: "#f5b942",
-};
-
-const kindStyle: CSSProperties = {
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: "0.12em",
-  textTransform: "uppercase",
-  color: "var(--ov-accent, #3ec0c7)",
-};
-
-const amountStyle: CSSProperties = {
-  marginLeft: "auto",
-  fontSize: 13,
-  fontWeight: 800,
-  color: "#e6b450",
-  fontVariantNumeric: "tabular-nums",
 };
 
 const miniChipStyle: CSSProperties = {

@@ -47,6 +47,7 @@ const { TickerFactsService } = require("./services/tickerFacts");
 const { TwitchChatBotService } = require("./services/twitchChatBot");
 const { buildChatBotSettingsRouter } = require("./routes/chatBotSettings");
 const { buildMultichatRouter } = require("./routes/multichat");
+const { buildAlertMediaStore } = require("./services/alertMediaStore");
 const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
 const { AggregationsService } = require("./services/aggregations");
@@ -974,6 +975,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildMultichatRouter({
       overlayTokens: services.overlayTokens,
       users: services.users,
+      auth,
+      isAdmin,
+      // Null when R2_ALERT_MEDIA_BUCKET is unset: the 3D presets then answer
+      // 503 and the widget renders its static fallback. Every other preset is
+      // code-native, so the feature degrades instead of failing to boot.
+      alertMedia: buildAlertMediaStore(deps.config.r2),
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
       sounds: services.multichatSounds,

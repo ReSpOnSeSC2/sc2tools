@@ -47,6 +47,11 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     secretAccessKey: string,
  *     prefix: string,
  *     replayPrefix: string,
+ *     alertMediaBucket: string,
+ *     alertMediaPrefix: string,
+ *     alertMediaAccessKeyId: string,
+ *     alertMediaSecretAccessKey: string,
+ *     alertMediaExpiresSec: number,
  *   }|null,
  *   cloudflareAnalytics: {
  *     accountId: string,
@@ -370,6 +375,25 @@ function parseR2Config(env) {
     secretAccessKey: env.R2_SECRET_ACCESS_KEY || "",
     prefix: env.R2_PREFIX || "game-details",
     replayPrefix: env.R2_REPLAY_PREFIX || "raw-replays/v1",
+    // Admin-gated SC2 3D alert media. A separate private bucket from the
+    // replay store, so its token can be scoped to it alone and the render
+    // archive never mixes with user replay data. Leaving the bucket unset
+    // disables the feature rather than failing boot; the endpoints answer 503
+    // and the widget falls back to static art. See
+    // docs/cloud/ALERT_MEDIA_R2.md.
+    alertMediaBucket: env.R2_ALERT_MEDIA_BUCKET || "",
+    alertMediaPrefix: env.R2_ALERT_MEDIA_PREFIX || "alerts/sc2-3d",
+    // Optional dedicated credentials. The alert-media bucket is a different
+    // bucket from the replay store, and R2 tokens are bucket-scoped, so the
+    // replay token cannot read it. Setting these lets production use an
+    // Object Read only token scoped to the alert bucket alone -- it signs
+    // GETs and never writes. Unset falls back to the shared R2 credentials,
+    // which only works if that token's scope covers this bucket too.
+    alertMediaAccessKeyId: env.R2_ALERT_MEDIA_ACCESS_KEY_ID || "",
+    alertMediaSecretAccessKey: env.R2_ALERT_MEDIA_SECRET_ACCESS_KEY || "",
+    alertMediaExpiresSec: Number(env.R2_ALERT_MEDIA_EXPIRES_SEC) > 0
+      ? Number(env.R2_ALERT_MEDIA_EXPIRES_SEC)
+      : 300,
   };
 }
 

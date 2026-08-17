@@ -59,6 +59,11 @@ import {
 import { useChatSound } from "@/lib/multichat/useChatSound";
 import { useChatTts } from "@/lib/multichat/useChatTts";
 import { sanitizeSoundConfig } from "@/lib/multichat/sound";
+import {
+  DEFAULT_ALERTS,
+  sanitizeAlertConfig,
+  type AlertConfig,
+} from "@/lib/multichat/alerts";
 import { useCommandAnswers } from "@/lib/multichat/useCommandAnswers";
 import { sanitizeRankRace } from "@/lib/multichat/rankLadders";
 import { useTranslation } from "@/lib/multichat/useTranslation";
@@ -98,6 +103,8 @@ export interface LoadedConfig {
   tts: Record<string, unknown> | null;
   /** Raw ding blob — stable identity; sanitized inside useChatSound. */
   sound: Record<string, unknown> | null;
+  /** Visual treatment for the event-alert Browser Source. */
+  alerts: AlertConfig;
   loaded: boolean;
 }
 
@@ -112,6 +119,7 @@ export function useMultichatConfig(token: string): LoadedConfig {
   const [appearance, setAppearance] = useState<ChatAppearance>(DEFAULT_APPEARANCE);
   const [tts, setTts] = useState<Record<string, unknown> | null>(null);
   const [sound, setSound] = useState<Record<string, unknown> | null>(null);
+  const [alerts, setAlerts] = useState<AlertConfig>(DEFAULT_ALERTS);
   // Readiness belongs to the token, not merely to this hook instance. A
   // Settings preview can reuse the component for another overlay token; mask
   // the previous token's channels and moderation config until the new token's
@@ -130,6 +138,7 @@ export function useMultichatConfig(token: string): LoadedConfig {
     let lastAppearanceJson = "";
     let lastTtsJson = "";
     let lastSoundJson = "";
+    let lastAlertsJson = "";
     const load = async () => {
       try {
         const res = await fetch(
@@ -150,6 +159,7 @@ export function useMultichatConfig(token: string): LoadedConfig {
           appearance: nextAppearance,
           tts: nextTts,
           sound: nextSound,
+          alerts: nextAlerts,
           ...nextPlatforms
         } = next;
 
@@ -173,6 +183,11 @@ export function useMultichatConfig(token: string): LoadedConfig {
           lastSoundJson = soundJson;
           setSound(nextSound ?? null);
         }
+        const alertsJson = JSON.stringify(nextAlerts ?? null);
+        if (alertsJson !== lastAlertsJson) {
+          lastAlertsJson = alertsJson;
+          setAlerts(sanitizeAlertConfig(nextAlerts));
+        }
         setLoadedToken(token);
       } catch {
         /* transient — next tick retries */
@@ -191,6 +206,7 @@ export function useMultichatConfig(token: string): LoadedConfig {
     appearance: loaded ? appearance : DEFAULT_APPEARANCE,
     tts: loaded ? tts : null,
     sound: loaded ? sound : null,
+    alerts: loaded ? alerts : DEFAULT_ALERTS,
     loaded,
   };
 }
