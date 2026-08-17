@@ -47,6 +47,24 @@ export function grantNeedsRefresh(
  */
 export const GATED_MEDIA_PREFIX = "/alerts/sc2-3d/";
 
+/**
+ * Opt-in local preview of the gated media, for development only.
+ *
+ * Deliberately NOT enabled by every non-production build: tests and preview
+ * builds should exercise the same gate production does, so leaving it off by
+ * default keeps the default behaviour honest. A developer who wants to see the
+ * 3D presets without a deployed API sets
+ * NEXT_PUBLIC_ALERT_MEDIA_LOCAL_FALLBACK=1 in .env.local and drops the render
+ * files into apps/web/public/alerts/sc2-3d (that directory ignores media, so
+ * they stay untracked).
+ *
+ * The NODE_ENV check is a second lock: even if the flag reaches a production
+ * environment, the branch is inlined to false and eliminated from the bundle.
+ */
+const ALLOW_LOCAL_GATED_MEDIA =
+  process.env.NODE_ENV !== "production"
+  && process.env.NEXT_PUBLIC_ALERT_MEDIA_LOCAL_FALLBACK === "1";
+
 /** Whether this catalog path is one of the admin-gated SC2 3D objects. */
 export function isGatedMediaPath(path: string | undefined): boolean {
   return typeof path === "string" && path.startsWith(GATED_MEDIA_PREFIX);
@@ -70,7 +88,11 @@ export function resolveAlertMediaUrl(
   if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(path)) return path;
   const signed = grant?.urls?.[path];
   if (signed) return signed;
-  return isGatedMediaPath(path) ? undefined : path;
+  if (!isGatedMediaPath(path)) return path;
+  // Opt-in local preview only; see ALLOW_LOCAL_GATED_MEDIA above. Off by
+  // default so tests and preview builds see the real gate.
+  if (ALLOW_LOCAL_GATED_MEDIA) return path;
+  return undefined;
 }
 
 // --- grant store -----------------------------------------------------------

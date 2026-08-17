@@ -181,6 +181,40 @@ function buildMultichatRouter(deps) {
     error: { code: "alert_media_not_configured" },
   });
 
+  /**
+   * Mint and send a grant, shared by both authenticated surfaces.
+   *
+   * R2 API tokens are bucket-scoped, so a deployment that sets
+   * R2_ALERT_MEDIA_BUCKET but leaves R2_ALERT_MEDIA_ACCESS_KEY_ID unset falls
+   * back to the replay-store credentials, which cannot read this bucket. That
+   * surfaces as a 403 from R2 on the first list. Reporting it as a distinct
+   * 503 code makes it a legible misconfiguration instead of a 500 that reads
+   * like a crash.
+   *
+   * @param {import('express').Response} res
+   * @param {import('express').NextFunction} next
+   */
+  const sendAlertMediaGrant = async (res, next) => {
+    if (!deps.alertMedia) { alertMediaUnavailable(res); return; }
+    try {
+      const grant = await deps.alertMedia.createGrant();
+      // Signed URLs are per-caller and short-lived; never let a shared cache
+      // hold them.
+      res.set("Cache-Control", "private, no-store").json(grant);
+    } catch (err) {
+      const status = /** @type {any} */ (err)?.$metadata?.httpStatusCode;
+      const name = String(/** @type {any} */ (err)?.name || "");
+      if (
+        status === 403
+        || /AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch/i.test(name)
+      ) {
+        res.status(503).json({ error: { code: "alert_media_unreadable" } });
+        return;
+      }
+      next(err);
+    }
+  };
+
   const requireSession = deps.auth
     || ((/** @type {any} */ _req, /** @type {any} */ res) =>
       res.status(503).json({ error: { code: "auth_unavailable" } }));
@@ -194,11 +228,7 @@ function buildMultichatRouter(deps) {
           res.status(403).json({ error: { code: "admin_only" } });
           return;
         }
-        if (!deps.alertMedia) { alertMediaUnavailable(res); return; }
-        const grant = await deps.alertMedia.createGrant();
-        // Signed URLs are per-caller and short-lived; never let a shared cache
-        // hold them.
-        res.set("Cache-Control", "private, no-store").json(grant);
+        await sendAlertMediaGrant(res, next);
       } catch (err) {
         next(err);
       }
@@ -220,9 +250,7 @@ function buildMultichatRouter(deps) {
           res.status(403).json({ error: { code: "admin_only" } });
           return;
         }
-        if (!deps.alertMedia) { alertMediaUnavailable(res); return; }
-        const grant = await deps.alertMedia.createGrant();
-        res.set("Cache-Control", "private, no-store").json(grant);
+        await sendAlertMediaGrant(res, next);
       } catch (err) {
         next(err);
       }

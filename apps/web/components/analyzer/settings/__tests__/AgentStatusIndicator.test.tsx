@@ -16,8 +16,19 @@ const liveState = vi.hoisted(() => ({
   },
 }));
 
+const meState = vi.hoisted(() => ({
+  current: { agentLastSeenAt: null as string | null },
+}));
+
 vi.mock("@/lib/useLiveGame", () => ({
   useLiveGame: () => liveState.current,
+}));
+
+// The indicator now also reads the agent heartbeat from /v1/me. useApi pulls
+// Clerk's useAuth, which throws outside <ClerkProvider>, so mock the boundary.
+vi.mock("@/lib/clientApi", () => ({
+  API_BASE: "",
+  useApi: () => ({ data: meState.current, error: undefined, isLoading: false }),
 }));
 
 import { AgentStatusIndicator } from "../AgentStatusIndicator";
@@ -29,6 +40,7 @@ describe("AgentStatusIndicator", () => {
       lastUpdatedAt: null,
       connected: false,
     };
+    meState.current = { agentLastSeenAt: null };
     vi.useFakeTimers();
   });
   afterEach(() => {
@@ -131,5 +143,48 @@ describe("AgentStatusIndicator", () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(container.textContent).toContain("Agent offline");
+  });
+
+  // The bug this fixes: the live bridge reads Blizzard's localhost API, which
+  // only exists while SC2 is running. A healthy agent with the game closed
+  // emitted nothing and was wrongly reported offline.
+  it("shows connected when only the heartbeat is fresh (SC2 closed)", () => {
+    meState.current = { agentLastSeenAt: new Date().toISOString() };
+    const { container } = render(<AgentStatusIndicator />);
+    expect(container.textContent).toContain("Agent connected · no game");
+    expect(container.textContent).not.toContain("Agent offline");
+  });
+
+  it("goes offline once the heartbeat is older than the tolerance", () => {
+    meState.current = {
+      agentLastSeenAt: new Date(Date.now() - 200_000).toISOString(),
+    };
+    const { container } = render(<AgentStatusIndicator />);
+    expect(container.textContent).toContain("Agent offline");
+  });
+
+  it("tolerates a single missed 60s heartbeat", () => {
+    meState.current = {
+      agentLastSeenAt: new Date(Date.now() - 90_000).toISOString(),
+    };
+    const { container } = render(<AgentStatusIndicator />);
+    expect(container.textContent).toContain("Agent connected · no game");
+  });
+
+  it("ignores an unparseable heartbeat rather than throwing", () => {
+    meState.current = { agentLastSeenAt: "not-a-date" };
+    const { container } = render(<AgentStatusIndicator />);
+    expect(container.textContent).toContain("Agent offline");
+  });
+
+  it("prefers the in-game envelope over the heartbeat", () => {
+    meState.current = { agentLastSeenAt: new Date().toISOString() };
+    liveState.current = {
+      live: { phase: "in-game" } as unknown as Record<string, unknown>,
+      lastUpdatedAt: Date.now(),
+      connected: true,
+    };
+    const { container } = render(<AgentStatusIndicator />);
+    expect(container.textContent).toContain("Agent connected · in game");
   });
 });

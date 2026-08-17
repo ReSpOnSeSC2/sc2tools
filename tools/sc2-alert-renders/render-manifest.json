@@ -221,7 +221,7 @@
           ],
           "scale": 1.0,
           "position": [0.0, 0.0, 0.0],
-          "rotationDeg": [0.0, 0.0, 0.0]
+          "rotationDeg": [0.0, 0.0, 180.0]
         }
       ],
       "nativeActions": {
@@ -479,7 +479,7 @@
           "path": "Assets/Units/Protoss/Carrier/Carrier.m3",
           "scale": 1.0,
           "position": [0.0, 0.0, 1.2],
-          "rotationDeg": [0.0, 0.0, 0.0]
+          "rotationDeg": [0.0, 0.0, 180.0]
         },
         {
           "role": "interceptor_1",
@@ -740,7 +740,7 @@
           "path": "Assets/Units/Terran/BattlecruiserEX2/BattlecruiserEX2.m3",
           "scale": 1.0,
           "position": [0.0, 0.0, 1.3],
-          "rotationDeg": [0.0, 0.0, -8.0]
+          "rotationDeg": [0.0, 0.0, 132.0]
         }
       ],
       "nativeActions": {

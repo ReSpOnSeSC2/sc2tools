@@ -77,7 +77,7 @@ const EXPECTED_3D_BY_KIND = {
 
 describe("visual alert preset catalog", () => {
   test("ships 50+ stable, unique and complete visual presets", () => {
-    expect(ALERT_VISUAL_PRESETS).toHaveLength(57);
+    expect(ALERT_VISUAL_PRESETS).toHaveLength(69);
     expect(new Set(ALERT_VISUAL_PRESET_IDS).size).toBe(
       ALERT_VISUAL_PRESET_IDS.length,
     );
