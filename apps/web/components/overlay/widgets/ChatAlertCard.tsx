@@ -374,6 +374,70 @@ function StaticPresetArt({ preset }: { preset: AlertVisualPreset }): ReactNode {
       return <div className="ca-pixel-gem">◆</div>;
     case "comic-burst":
       return <div className="ca-word-art">WOW!</div>;
+    // Meme formats. Every one is drawn here rather than loaded: the
+    // recognisable part of these memes is the layout, not any particular
+    // photograph, so reproducing the format keeps the joke and carries no
+    // licensing exposure.
+    case "impact-caption":
+      return (
+        <div className="ca-impact">
+          <b>WHEN THE</b>
+          <i>ALERT HITS</i>
+        </div>
+      );
+    case "deal-with-it":
+      return (
+        <div className="ca-shades">
+          <i className="ca-shade-lens" />
+          <span className="ca-shade-bridge" />
+          <i className="ca-shade-lens" />
+        </div>
+      );
+    case "bonk":
+      return <div className="ca-bonk"><b>🔨</b><span>BONK</span></div>;
+    case "not-stonks":
+      return <StonksArt down />;
+    case "big-brain":
+      return (
+        <div className="ca-brain">
+          <i /><i /><i />
+          <span>🧠</span>
+        </div>
+      );
+    case "side-eye":
+      return (
+        <div className="ca-side-eye">
+          <i className="ca-side-eye-ball" />
+        </div>
+      );
+    case "vhs-rewind":
+      return (
+        <div className="ca-vhs">
+          <span className="ca-vhs-rec" />
+          <b>REC</b>
+          <i className="ca-vhs-track" />
+        </div>
+      );
+    case "blue-screen":
+      return (
+        <div className="ca-bsod">
+          <b>:(</b>
+          <span>0x5C2</span>
+        </div>
+      );
+    case "buffering":
+      return <div className="ca-buffer"><i /></div>;
+    case "crickets":
+      return (
+        <div className="ca-crickets">
+          <b>🦗</b>
+          <i className="ca-tumbleweed" />
+        </div>
+      );
+    case "applause-sign":
+      return <div className="ca-applause"><span>APPLAUSE</span></div>;
+    case "chat-is-this-real":
+      return <div className="ca-say"><span>chat?</span></div>;
     default:
       return <div className="ca-emoji">{preset.emoji}</div>;
   }
@@ -409,13 +473,24 @@ function BillArt({ gold = false }: { gold?: boolean }) {
   );
 }
 
-function StonksArt() {
+function StonksArt({ down = false }: { down?: boolean }) {
+  // The crashing variant is the same chart mirrored vertically, so the two
+  // presets stay visually related instead of looking like unrelated art.
   return (
-    <div className="ca-chart">
+    <div className={`ca-chart${down ? " ca-chart-down" : ""}`}>
       <i /><i /><i /><i />
       <svg viewBox="0 0 80 48" aria-hidden="true">
-        <polyline points="3,42 20,31 32,36 49,18 61,23 77,4" />
-        <polyline className="ca-chart-arrow" points="66,4 77,4 77,15" />
+        {down ? (
+          <>
+            <polyline points="3,4 20,15 32,10 49,28 61,23 77,42" />
+            <polyline className="ca-chart-arrow" points="66,42 77,42 77,31" />
+          </>
+        ) : (
+          <>
+            <polyline points="3,42 20,31 32,36 49,18 61,23 77,4" />
+            <polyline className="ca-chart-arrow" points="66,4 77,4 77,15" />
+          </>
+        )}
       </svg>
     </div>
   );
@@ -486,7 +561,7 @@ export const CHAT_ALERT_CARD_CSS = `
   .ca-platform { display: inline-flex; align-items: center; justify-content: center; min-width: 27px; height: 17px; padding: 0 5px; border-radius: 4px; font-size: 9px; font-weight: 900; letter-spacing: .05em; flex: 0 0 auto; }
   .ca-kind { color: var(--ca-accent-alt); font-size: 10px; line-height: 1; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; white-space: nowrap; }
   .ca-callout { min-width: 0; overflow: hidden; color: rgba(255,255,255,.64); font-size: 9px; line-height: 1; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-  .ca-amount { margin-left: auto; max-width: 44%; padding: 3px 7px; overflow-wrap: anywhere; border: 1px solid color-mix(in srgb, var(--ca-accent) 46%, transparent); border-radius: 999px; color: #fff5b8; background: color-mix(in srgb, var(--ca-accent) 16%, rgba(0,0,0,.3)); font-size: 12px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; }
+  .ca-amount { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 46%; padding: 4px 9px; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; border: 1px solid color-mix(in srgb, var(--ca-accent) 46%, transparent); border-radius: 12px; color: #fff5b8; background: color-mix(in srgb, var(--ca-accent) 16%, rgba(0,0,0,.3)); font-size: 12px; line-height: 1.18; font-weight: 900; font-variant-numeric: tabular-nums; text-align: center; text-wrap: balance; }
   .ca-user { margin-top: 7px; overflow-wrap: anywhere; color: #fff; font-size: clamp(18px, 4.4vw, 26px); line-height: 1.08; font-weight: 950; letter-spacing: -.025em; text-shadow: 0 2px 7px rgba(0,0,0,.55); }
   .ca-detail { margin-top: 5px; overflow-wrap: anywhere; color: rgba(255,255,255,.82); font-size: 13px; line-height: 1.3; font-weight: 560; }
   .ca-glow { position: absolute; z-index: 0; left: -36px; top: -38px; width: 160px; height: 160px; border-radius: 50%; background: var(--ca-accent); filter: blur(56px); opacity: .17; }
@@ -504,6 +579,55 @@ export const CHAT_ALERT_CARD_CSS = `
   .ca-deco-crown { color: #ffe56c; animation-name: caCrown; }
   .ca-deco-warning-stripes { top: calc(var(--ca-i) * 38%); color: #ffd949; animation-name: caWarning; }
   .ca-deco-meteors { color: #d9f1ff; animation-name: caMeteor; }
+  /* ── Meme formats ─────────────────────────────────────────────────────
+     Drawn, not loaded. Each rule reproduces the silhouette of a viral
+     format from type and CSS so the presets ship with zero media. */
+  .ca-impact { display: grid; place-items: center; gap: 2px; padding: 4px; font-family: Impact, "Haettenschweiler", "Arial Black", sans-serif; line-height: .95; text-align: center; text-transform: uppercase; }
+  .ca-impact b, .ca-impact i { color: #fff; font-style: normal; font-weight: 900; letter-spacing: .01em; -webkit-text-stroke: 2px #000; paint-order: stroke fill; }
+  .ca-impact b { font-size: 15px; }
+  .ca-impact i { font-size: 13px; }
+  .ca-shades { display: flex; align-items: center; justify-content: center; gap: 0; animation: caShadeDrop .5s cubic-bezier(.2,1.5,.4,1) both; }
+  .ca-shade-lens { width: 30px; height: 20px; border: 3px solid #0b1220; border-radius: 3px; background: linear-gradient(160deg, #1e293b, #020617); box-shadow: inset 0 2px 0 rgba(255,255,255,.22); }
+  .ca-shade-bridge { width: 9px; height: 4px; background: #0b1220; }
+  .ca-bonk { position: relative; display: grid; place-items: center; }
+  .ca-bonk b { font-size: 40px; transform-origin: 80% 80%; animation: caBonkSwing .5s cubic-bezier(.3,1.6,.5,1) infinite alternate; }
+  .ca-bonk span { position: absolute; bottom: -2px; color: #fde68a; font-size: 13px; font-weight: 950; letter-spacing: .08em; -webkit-text-stroke: 1px rgba(0,0,0,.6); paint-order: stroke fill; }
+  .ca-chart-down svg polyline { stroke: #ef4444; }
+  .ca-chart-down i { background: rgba(239,68,68,.3); }
+  .ca-brain { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
+  .ca-brain span { position: relative; z-index: 1; font-size: 38px; }
+  .ca-brain i { position: absolute; border: 2px solid var(--ca-accent); border-radius: 50%; opacity: 0; animation: caBrainRing 2.4s ease-out infinite; }
+  .ca-brain i:nth-child(1) { width: 46px; height: 46px; animation-delay: 0s; }
+  .ca-brain i:nth-child(2) { width: 62px; height: 62px; animation-delay: .5s; }
+  .ca-brain i:nth-child(3) { width: 78px; height: 78px; animation-delay: 1s; }
+  .ca-side-eye { display: grid; place-items: center; width: 62px; height: 40px; border: 3px solid #0b1220; border-radius: 50%; background: #f8fafc; }
+  .ca-side-eye-ball { width: 17px; height: 17px; border-radius: 50%; background: radial-gradient(circle at 34% 34%, #475569, #0b1220 62%); animation: caSideEye 2.6s ease-in-out infinite; }
+  .ca-vhs { position: relative; display: flex; align-items: center; gap: 5px; padding: 6px 9px; overflow: hidden; border-radius: 4px; background: rgba(2,6,23,.72); font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .ca-vhs b { color: #e2e8f0; font-size: 12px; font-weight: 800; letter-spacing: .18em; }
+  .ca-vhs-rec { width: 9px; height: 9px; border-radius: 50%; background: #f43f5e; animation: caBlink 1.1s steps(1,end) infinite; }
+  .ca-vhs-track { position: absolute; left: 0; width: 100%; height: 8px; background: rgba(255,255,255,.14); animation: caVhsTrack 2.6s linear infinite; }
+  .ca-bsod { display: grid; place-items: center; gap: 1px; padding: 7px 11px; border-radius: 3px; background: #1d4ed8; font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .ca-bsod b { color: #fff; font-size: 24px; line-height: 1; }
+  .ca-bsod span { color: #bfdbfe; font-size: 9px; letter-spacing: .1em; }
+  .ca-buffer { display: grid; place-items: center; }
+  .ca-buffer i { width: 34px; height: 34px; border: 4px solid rgba(255,255,255,.18); border-top-color: var(--ca-accent); border-radius: 50%; animation: caSpin 1s linear infinite; }
+  .ca-crickets { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
+  .ca-crickets b { font-size: 30px; animation: caCricketHop 1.6s ease-in-out infinite; }
+  .ca-tumbleweed { position: absolute; bottom: 4px; left: -14%; width: 15px; height: 15px; border: 2px dashed #b8a179; border-radius: 50%; animation: caTumble 3.4s linear infinite; }
+  .ca-applause { display: grid; place-items: center; padding: 6px 10px; border: 2px solid #fbbf24; border-radius: 5px; background: rgba(120,53,15,.55); box-shadow: 0 0 16px rgba(251,191,36,.5); animation: caApplauseGlow .8s ease-in-out infinite alternate; }
+  .ca-applause span { color: #fff7ed; font-size: 11px; font-weight: 950; letter-spacing: .14em; }
+  .ca-say { position: relative; display: grid; place-items: center; min-width: 58px; padding: 9px 12px; border-radius: 13px; background: #f8fafc; }
+  .ca-say span { color: #0f172a; font-size: 14px; font-weight: 800; }
+  .ca-say::after { position: absolute; bottom: -7px; left: 15px; width: 0; height: 0; border-top: 9px solid #f8fafc; border-right: 11px solid transparent; content: ""; }
+  @keyframes caShadeDrop { from { transform: translateY(-26px) rotate(-9deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes caBonkSwing { from { transform: rotate(-42deg); } to { transform: rotate(14deg); } }
+  @keyframes caBrainRing { 0% { transform: scale(.55); opacity: .85; } 100% { transform: scale(1.18); opacity: 0; } }
+  @keyframes caSideEye { 0%, 22% { transform: translateX(-11px); } 45%, 72% { transform: translateX(11px); } 100% { transform: translateX(-11px); } }
+  @keyframes caVhsTrack { from { top: -10%; } to { top: 110%; } }
+  @keyframes caSpin { to { transform: rotate(360deg); } }
+  @keyframes caCricketHop { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-7px) rotate(6deg); } }
+  @keyframes caTumble { from { transform: translateX(0) rotate(0); } to { transform: translateX(150px) rotate(540deg); } }
+  @keyframes caApplauseGlow { from { box-shadow: 0 0 9px rgba(251,191,36,.34); } to { box-shadow: 0 0 22px rgba(251,191,36,.78); } }
   .ca-deco-scanlines { inset: calc(var(--ca-i) * 33%) 0 auto; left: 0; width: 100%; height: 1px; color: transparent; background: rgba(255,255,255,.07); animation: caScan 2s linear infinite; }
   .ca-layout-lower-third { min-height: 88px; border-radius: 8px; }
   .ca-layout-lower-third .ca-main { grid-template-columns: 62px minmax(0,1fr); padding-block: 10px; }

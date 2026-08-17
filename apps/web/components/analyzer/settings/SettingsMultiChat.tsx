@@ -247,6 +247,19 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
     if (!dirty && data) setDraft(draftFromConfig(data));
   }, [data, dirty]);
 
+  // Warn before a reload or tab close while edits are pending. Next's client
+  // router can't be intercepted from here, so in-app navigation is covered by
+  // the sticky bar staying visible rather than by a prompt.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   const set = (patch: Partial<Draft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
     setDirty(true);
@@ -726,7 +739,23 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               </ul>
             ) : null}
 
-            <div className="flex items-center gap-3">
+            {/*
+              Sticky once there are edits. The alert picker and the other
+              sub-panels sit far above this point in a long card, so an inline
+              button meant a streamer could change a preset, never scroll down,
+              navigate away and silently lose the edit. Pinning the bar to the
+              bottom of the viewport keeps the save affordance in view wherever
+              they are in the card, and says why it is disabled when validation
+              is blocking rather than just greying out.
+            */}
+            <div
+              className={[
+                "flex flex-wrap items-center gap-3",
+                dirty
+                  ? "sticky bottom-0 z-10 -mx-4 border-t border-accent/40 bg-bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5"
+                  : "",
+              ].filter(Boolean).join(" ")}
+            >
               <Button
                 onClick={() => void save()}
                 disabled={saving || !dirty || problems.length > 0}
@@ -735,7 +764,16 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
                 {saving ? "Saving…" : "Save chat settings"}
               </Button>
               {dirty ? (
-                <span className="text-caption text-text-muted">Unsaved changes</span>
+                <span className="text-caption font-medium text-accent">
+                  Unsaved changes
+                </span>
+              ) : null}
+              {dirty && problems.length > 0 ? (
+                <span className="text-caption text-warning">
+                  {problems.length === 1
+                    ? "Fix the issue above to save"
+                    : `Fix ${problems.length} issues above to save`}
+                </span>
               ) : null}
             </div>
           </div>

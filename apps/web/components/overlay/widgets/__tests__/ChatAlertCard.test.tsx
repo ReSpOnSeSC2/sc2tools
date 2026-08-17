@@ -101,7 +101,7 @@ function setReducedMotion(matches: boolean) {
 
 describe("ChatAlertCard preset renderer", () => {
   it("preserves event semantics and renderer data for every visual preset", () => {
-    expect(ALERT_VISUAL_PRESETS).toHaveLength(57);
+    expect(ALERT_VISUAL_PRESETS).toHaveLength(69);
 
     for (const preset of ALERT_VISUAL_PRESETS) {
       const view = render(
@@ -229,6 +229,35 @@ describe("ChatAlertCard preset renderer", () => {
         staticView.container.querySelector(".ca-art") as HTMLElement,
       ).width,
     ).toBe("78px");
+  });
+
+  it("gives every Meme preset bespoke art and no remote media", () => {
+    const memes = ALERT_VISUAL_PRESETS.filter((p) => p.category === "Meme");
+    expect(memes.length).toBeGreaterThanOrEqual(12);
+
+    for (const preset of memes) {
+      // Code-native by construction: a meme format carries no licensing
+      // exposure, but an image URL would.
+      expect(preset.animationUrl).toBeUndefined();
+      expect(preset.animationPosterUrl).toBeUndefined();
+      expect(preset.assetUrl).toBeUndefined();
+      expect(preset.adminOnly).toBeUndefined();
+
+      const view = render(
+        <ChatAlertCard event={SEMANTIC_EVENT} preset={preset} motion="full" />,
+      );
+      const art = view.container.querySelector(".ca-art");
+      expect(art, `missing art for ${preset.id}`).not.toBeNull();
+      // Nothing may reach the network.
+      expect(view.container.querySelector("img")).toBeNull();
+      expect(view.container.querySelector("video")).toBeNull();
+      // A bespoke renderer, not the generic emoji fallback.
+      expect(
+        art?.querySelector(".ca-emoji"),
+        `${preset.id} fell through to the emoji fallback`,
+      ).toBeNull();
+      cleanup();
+    }
   });
 
   it("renders static art for a 3D preset when no grant is held", () => {
