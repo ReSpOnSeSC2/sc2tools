@@ -35,6 +35,17 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Connecting Twitch no longer sticks on "Needs retry" with "subscription
+  already exists"** — Twitch identifies an EventSub subscription by type,
+  version and condition, not by the callback it points at, so a subscription
+  left behind by a failed callback verification, an exhausted delivery budget, a
+  revoked grant or an earlier callback URL kept refusing its own replacement.
+  Reconnecting now clears whatever still holds each slot before recreating it,
+  recovers from a conflict the broadcaster-scoped listing did not return, and
+  prunes duplicate rows on retired callbacks that would otherwise double an
+  alert. A conflict that genuinely cannot be replaced is reported with the event
+  type that failed instead of a raw provider string.
+
 - **Incoming raids now update the Stream Dock audience immediately** — Twitch
   raids and Kick hosts temporarily raise that platform's displayed count while
   its official viewer API catches up. Replayed/stale events and duplicate event

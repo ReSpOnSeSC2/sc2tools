@@ -2,8 +2,18 @@
 
 const { createHash, randomBytes } = require("crypto");
 
-const REQUEST_TIMEOUT_MS = 12_000;
-const JSON_MAX_BYTES = 512 * 1024;
+const {
+  PlatformOauthError,
+  postForm,
+  fetchJson,
+  fetchNoContent,
+} = require("./platformOauthHttp");
+// Twitch EventSub reconciliation lives in its own module; it is re-exported here
+// so `platformOauthClients` stays the single provider surface for callers.
+const {
+  TWITCH_EVENT_TYPES,
+  reconcileTwitchEventSubscriptions,
+} = require("./twitchEventSubscriptions");
 
 /** @typedef {{clientId:string,clientSecret:string,redirectUri:string,callbackUrl?:string,webhookSecret?:string}} ProviderConfig */
 
@@ -22,49 +32,6 @@ const YOUTUBE_SCOPES = Object.freeze([
   "https://www.googleapis.com/auth/youtube.readonly",
 ]);
 
-const TWITCH_EVENT_TYPES = Object.freeze([
-  {
-    type: "channel.follow",
-    version: "2",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id, moderator_user_id: id }),
-  },
-  {
-    type: "channel.channel_points_custom_reward_redemption.add",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.channel_points_automatic_reward_redemption.add",
-    version: "2",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.subscribe",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.subscription.message",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.subscription.gift",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.cheer",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ broadcaster_user_id: id }),
-  },
-  {
-    type: "channel.raid",
-    version: "1",
-    condition: (/** @type {string} */ id) => ({ to_broadcaster_user_id: id }),
-  },
-]);
-
 const KICK_EVENT_TYPES = Object.freeze([
   { name: "channel.followed", version: 1 },
   { name: "channel.subscription.new", version: 1 },
@@ -73,16 +40,6 @@ const KICK_EVENT_TYPES = Object.freeze([
   { name: "kicks.gifted", version: 1 },
   { name: "channel.reward.redemption.updated", version: 1 },
 ]);
-
-class PlatformOauthError extends Error {
-  /** @param {string} code @param {string} message @param {number} [status] */
-  constructor(code, message, status = 502) {
-    super(message);
-    this.name = "PlatformOauthError";
-    this.code = code;
-    this.status = status;
-  }
-}
 
 function createPkcePair() {
   const verifier = randomBytes(48).toString("base64url");
@@ -207,104 +164,6 @@ async function getTwitchAppToken(config, fetchImpl = fetch) {
     "twitch_app_token",
   );
   return normalizeTokenResponse(json, "twitch").accessToken;
-}
-
-/** @param {{broadcasterUserId:string,appAccessToken:string,clientId:string,callbackUrl:string,webhookSecret:string,fetchImpl?:typeof fetch}} args */
-async function reconcileTwitchEventSubscriptions(args) {
-  const existing = await listTwitchSubscriptions(args);
-  const keys = new Set(
-    existing
-      .filter((row) =>
-        twitchSubscriptionIsActive(row)
-        && row?.transport?.method === "webhook"
-        && row?.transport?.callback === args.callbackUrl)
-      .map((row) => twitchSubscriptionKey(row)),
-  );
-  const created = [];
-  for (const spec of TWITCH_EVENT_TYPES) {
-    const condition = spec.condition(args.broadcasterUserId);
-    const key = `${spec.type}:${spec.version}:${conditionKey(condition)}`;
-    if (keys.has(key)) continue;
-    const response = await fetchJson(
-      args.fetchImpl || fetch,
-      "https://api.twitch.tv/helix/eventsub/subscriptions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${args.appAccessToken}`,
-          "Client-Id": args.clientId,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: spec.type,
-          version: spec.version,
-          condition,
-          transport: {
-            method: "webhook",
-            callback: args.callbackUrl,
-            secret: args.webhookSecret,
-          },
-        }),
-      },
-      "twitch_eventsub_create",
-    );
-    const rows = Array.isArray(response.data) ? response.data : [];
-    if (!rows.some((/** @type {any} */ row) => twitchSubscriptionIsActive(row))) {
-      throw new PlatformOauthError(
-        "twitch_eventsub_create",
-        `Twitch did not confirm the ${spec.type} subscription`,
-      );
-    }
-    created.push(...rows);
-  }
-  return { existing, created };
-}
-
-/** @param {Record<string, any>} row */
-function twitchSubscriptionKey(row) {
-  return `${String(row?.type || "")}:${String(row?.version || "")}:${conditionKey(row?.condition || {})}`;
-}
-
-/** @param {Record<string, any>} row */
-function twitchSubscriptionIsActive(row) {
-  return row?.status === "enabled"
-    || row?.status === "webhook_callback_verification_pending";
-}
-
-/** @param {{appAccessToken:string,clientId:string,broadcasterUserId?:string,fetchImpl?:typeof fetch}} args */
-async function listTwitchSubscriptions(args) {
-  const rows = [];
-  let cursor = "";
-  for (let page = 0; page < 100; page += 1) {
-    const url = new URL("https://api.twitch.tv/helix/eventsub/subscriptions");
-    // EventSub supports a user_id condition filter. This avoids scanning every
-    // customer subscription owned by the app as the installation grows.
-    if (args.broadcasterUserId) {
-      url.searchParams.set("user_id", args.broadcasterUserId);
-    }
-    if (cursor) url.searchParams.set("after", cursor);
-    const json = await fetchJson(
-      args.fetchImpl || fetch,
-      url.toString(),
-      {
-        headers: {
-          Authorization: `Bearer ${args.appAccessToken}`,
-          "Client-Id": args.clientId,
-        },
-      },
-      "twitch_eventsub_list",
-    );
-    rows.push(...(Array.isArray(json.data) ? json.data : []));
-    cursor = String(json.pagination?.cursor || "");
-    if (!cursor) break;
-  }
-  if (cursor) {
-    throw new PlatformOauthError(
-      "twitch_eventsub_list",
-      "Twitch returned more EventSub pages than could be reconciled safely",
-    );
-  }
-  return rows;
 }
 
 /** @param {ProviderConfig} config @param {string} code @param {string} verifier @param {typeof fetch} [fetchImpl] */
@@ -563,107 +422,6 @@ function normalizeTokenResponse(json, platform) {
         ? json.scope.split(/\s+/).filter(Boolean)
         : [],
   };
-}
-
-/** @param {Record<string, any>} condition */
-function conditionKey(condition) {
-  return Object.entries(condition || {})
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
-}
-
-/** @param {typeof fetch} fetchImpl @param {string} url @param {Record<string,string>} fields @param {string} code */
-async function postForm(fetchImpl, url, fields, code) {
-  return fetchJson(
-    fetchImpl,
-    url,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(fields).toString(),
-    },
-    code,
-  );
-}
-
-/** @param {typeof fetch} fetchImpl @param {string} url @param {RequestInit} init @param {string} code */
-async function fetchJson(fetchImpl, url, init, code) {
-  let response;
-  try {
-    response = await fetchImpl(url, {
-      ...init,
-      signal: init.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new PlatformOauthError(code, `${code} request failed: ${safeError(err)}`);
-  }
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const body = await readBoundedText(response, JSON_MAX_BYTES);
-      const parsed = JSON.parse(body);
-      detail = String(parsed.message || parsed.error_description || parsed.error || "").slice(0, 160);
-    } catch {
-      detail = "";
-    }
-    throw new PlatformOauthError(
-      code,
-      `${code} returned ${response.status}${detail ? `: ${detail}` : ""}`,
-      response.status,
-    );
-  }
-  const body = await readBoundedText(response, JSON_MAX_BYTES);
-  try {
-    return JSON.parse(body);
-  } catch {
-    throw new PlatformOauthError(code, `${code} returned invalid JSON`);
-  }
-}
-
-/** @param {typeof fetch} fetchImpl @param {string} url @param {RequestInit} init @param {string} code */
-async function fetchNoContent(fetchImpl, url, init, code) {
-  let response;
-  try {
-    response = await fetchImpl(url, {
-      ...init,
-      signal: init.signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (err) {
-    throw new PlatformOauthError(code, `${code} request failed: ${safeError(err)}`);
-  }
-  if (response.ok) return;
-  let detail = "";
-  try {
-    const body = await readBoundedText(response, JSON_MAX_BYTES);
-    try {
-      const parsed = JSON.parse(body);
-      detail = String(parsed.message || parsed.error_description || parsed.error || "");
-    } catch {
-      detail = body;
-    }
-  } catch {
-    detail = "";
-  }
-  throw new PlatformOauthError(
-    code,
-    `${code} returned ${response.status}${detail ? `: ${detail.slice(0, 160)}` : ""}`,
-    response.status,
-  );
-}
-
-/** @param {Response} response @param {number} maxBytes */
-async function readBoundedText(response, maxBytes) {
-  const declared = Number(response.headers?.get?.("content-length") || 0);
-  if (declared > maxBytes) throw new Error("response_too_large");
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > maxBytes) throw new Error("response_too_large");
-  return text;
-}
-
-/** @param {unknown} err */
-function safeError(err) {
-  return err instanceof Error ? err.name : "network error";
 }
 
 module.exports = {
