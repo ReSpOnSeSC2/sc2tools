@@ -592,6 +592,138 @@ describe("official OAuth and delivery contracts", () => {
       .toHaveLength(oauth.TWITCH_EVENT_TYPES.length);
   });
 
+  test("Twitch reconcile replaces a subscription Twitch still counts as existing", async () => {
+    const callbackUrl = "https://api.sc2tools.com/v1/webhooks/twitch/eventsub";
+    const [healthy, failed, misrouted] = oauth.TWITCH_EVENT_TYPES;
+    const slot = (spec, extra) => ({
+      type: spec.type,
+      version: spec.version,
+      condition: spec.condition("broadcaster-1"),
+      transport: { method: "webhook", callback: callbackUrl },
+      ...extra,
+    });
+    const twitch = fakeTwitchEventSub([
+      slot(healthy, { status: "enabled" }),
+      // Verification failed once, so notifications never arrive — but the row
+      // still owns the slot and refuses every recreate with 409.
+      slot(failed, { status: "webhook_callback_verification_failed" }),
+      // Left behind by an earlier callback URL: alerts go to a dead endpoint.
+      slot(misrouted, {
+        status: "enabled",
+        transport: { method: "webhook", callback: "https://old.example/webhook" },
+      }),
+    ]);
+
+    const result = await oauth.reconcileTwitchEventSubscriptions({
+      broadcasterUserId: "broadcaster-1",
+      appAccessToken: "app-token",
+      clientId: "client",
+      callbackUrl,
+      webhookSecret: "a-strong-eventsub-secret",
+      fetchImpl: twitch.fetchImpl,
+    });
+
+    expect(result.removed.map((row) => row.type)).toEqual([failed.type, misrouted.type]);
+    expect(result.created).toHaveLength(oauth.TWITCH_EVENT_TYPES.length - 1);
+    // The healthy row is reused rather than churned.
+    expect(twitch.calls.filter((call) => call.method === "DELETE")).toHaveLength(2);
+    expect(twitch.calls.some((call) => call.body?.type === healthy.type)).toBe(false);
+    // Every configured event now points at the configured callback exactly once.
+    expect(twitch.rows).toHaveLength(oauth.TWITCH_EVENT_TYPES.length);
+    for (const spec of oauth.TWITCH_EVENT_TYPES) {
+      const owners = twitch.rows.filter((row) => row.type === spec.type);
+      expect(owners).toHaveLength(1);
+      expect(owners[0].transport.callback).toBe(callbackUrl);
+    }
+  });
+
+  test("Twitch reconcile recovers from a conflict the broadcaster listing missed", async () => {
+    const callbackUrl = "https://api.sc2tools.com/v1/webhooks/twitch/eventsub";
+    const seed = oauth.TWITCH_EVENT_TYPES.map((spec) => ({
+      type: spec.type,
+      version: spec.version,
+      condition: spec.condition("broadcaster-1"),
+      status: "enabled",
+      transport: { method: "webhook", callback: "https://old.example/webhook" },
+    }));
+    const args = {
+      broadcasterUserId: "broadcaster-1",
+      appAccessToken: "app-token",
+      clientId: "client",
+      callbackUrl,
+      webhookSecret: "a-strong-eventsub-secret",
+    };
+
+    for (const options of [{ blindUserFilter: true }, { blindUserFilter: true, anonymousConflict: true }]) {
+      const twitch = fakeTwitchEventSub(seed, options);
+      const result = await oauth.reconcileTwitchEventSubscriptions({
+        ...args,
+        fetchImpl: twitch.fetchImpl,
+      });
+      expect(result.created).toHaveLength(oauth.TWITCH_EVENT_TYPES.length);
+      expect(twitch.rows.map((row) => row.transport.callback))
+        .toEqual(oauth.TWITCH_EVENT_TYPES.map(() => callbackUrl));
+    }
+  });
+
+  test("Twitch reconcile surfaces an unresolvable conflict instead of reporting success", async () => {
+    const callbackUrl = "https://api.sc2tools.com/v1/webhooks/twitch/eventsub";
+    const twitch = fakeTwitchEventSub(
+      oauth.TWITCH_EVENT_TYPES.map((spec) => ({
+        type: spec.type,
+        version: spec.version,
+        condition: spec.condition("broadcaster-1"),
+        status: "authorization_revoked",
+        transport: { method: "webhook", callback: callbackUrl },
+      })),
+      { rejectDelete: true },
+    );
+
+    await expect(oauth.reconcileTwitchEventSubscriptions({
+      broadcasterUserId: "broadcaster-1",
+      appAccessToken: "app-token",
+      clientId: "client",
+      callbackUrl,
+      webhookSecret: "a-strong-eventsub-secret",
+      fetchImpl: twitch.fetchImpl,
+    })).rejects.toMatchObject({ code: "twitch_eventsub_delete", status: 503 });
+  });
+
+  test("Twitch reconcile keeps a healthy connection when leftover cleanup fails", async () => {
+    const callbackUrl = "https://api.sc2tools.com/v1/webhooks/twitch/eventsub";
+    const [spec] = oauth.TWITCH_EVENT_TYPES;
+    const twitch = fakeTwitchEventSub(
+      [
+        {
+          type: spec.type,
+          version: spec.version,
+          condition: spec.condition("broadcaster-1"),
+          status: "enabled",
+          transport: { method: "webhook", callback: callbackUrl },
+        },
+      ],
+      { rejectDelete: true },
+    );
+    // A duplicate row on a retired callback shares the slot with the healthy one.
+    twitch.rows.push({
+      ...twitch.rows[0],
+      id: subscriptionId(99),
+      transport: { method: "webhook", callback: "https://old.example/webhook" },
+    });
+
+    const result = await oauth.reconcileTwitchEventSubscriptions({
+      broadcasterUserId: "broadcaster-1",
+      appAccessToken: "app-token",
+      clientId: "client",
+      callbackUrl,
+      webhookSecret: "a-strong-eventsub-secret",
+      fetchImpl: twitch.fetchImpl,
+    });
+
+    expect(result.removed).toEqual([]);
+    expect(result.created).toHaveLength(oauth.TWITCH_EVENT_TYPES.length - 1);
+  });
+
   test("Kick reconnect lists subscriptions and creates only missing event types", async () => {
     const requests = [];
     const fetchImpl = async (_url, init = {}) => {
@@ -1383,4 +1515,75 @@ function jsonResponse(body, status = 200) {
     headers: { get: () => String(Buffer.byteLength(text)) },
     text: async () => text,
   };
+}
+
+function conditionKey(condition) {
+  return Object.entries(condition || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+}
+
+function subscriptionId(index) {
+  return `d5ad6ba1-38c0-48c8-a7ae-${String(index).padStart(12, "0")}`;
+}
+
+/**
+ * A stand-in for Twitch's EventSub endpoints that enforces the rule the real API
+ * enforces: a subscription is identified by type + version + condition, and a
+ * create that collides with an existing row is refused with 409 whatever the
+ * transport callback or current status is. Reconcile logic that never clears the
+ * colliding row cannot pass this fake, which a permissive mock would let through.
+ */
+function fakeTwitchEventSub(seed = [], options = {}) {
+  const rows = seed.map((row, index) => ({ id: subscriptionId(index + 1), ...row }));
+  const calls = [];
+  let created = rows.length;
+  const fetchImpl = jest.fn(async (rawUrl, init = {}) => {
+    const url = new URL(rawUrl);
+    const method = init.method || "GET";
+    calls.push({ method, url, body: init.body ? JSON.parse(init.body) : null });
+    if (method === "GET") {
+      const type = url.searchParams.get("type");
+      const userId = url.searchParams.get("user_id");
+      if (type) return jsonResponse({ data: rows.filter((row) => row.type === type), pagination: {} });
+      if (userId) {
+        // Twitch matches any user id named in the condition. `blindUserFilter`
+        // reproduces a listing that fails to surface an existing row.
+        const matched = options.blindUserFilter
+          ? []
+          : rows.filter((row) => Object.values(row.condition || {}).includes(userId));
+        return jsonResponse({ data: matched, pagination: {} });
+      }
+      return jsonResponse({ data: rows, pagination: {} });
+    }
+    if (method === "DELETE") {
+      const id = url.searchParams.get("id");
+      const index = rows.findIndex((row) => row.id === id);
+      if (index < 0) return jsonResponse({ message: "subscription not found" }, 404);
+      if (options.rejectDelete) return jsonResponse({ message: "service unavailable" }, 503);
+      rows.splice(index, 1);
+      return jsonResponse({}, 204);
+    }
+    const body = JSON.parse(init.body);
+    const clash = rows.find((row) => row.type === body.type
+      && String(row.version) === String(body.version)
+      && conditionKey(row.condition) === conditionKey(body.condition));
+    if (clash) {
+      return jsonResponse({
+        message: options.anonymousConflict
+          ? "subscription already exists"
+          : `subscription already exists; id=${clash.id}`,
+      }, 409);
+    }
+    created += 1;
+    const row = {
+      id: subscriptionId(created),
+      status: "webhook_callback_verification_pending",
+      ...body,
+    };
+    rows.push(row);
+    return jsonResponse({ data: [row] }, 202);
+  });
+  return { rows, calls, fetchImpl };
 }
