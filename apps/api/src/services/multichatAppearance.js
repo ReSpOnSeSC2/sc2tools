@@ -423,14 +423,161 @@ function sanitizeChatSound(raw) {
   };
 }
 
+/* ──────────────── visual event alerts ──────────────── */
+
+/**
+ * Stable visual-preset ids — mirror of
+ * apps/web/lib/multichat/alerts.ts ALERT_VISUAL_PRESET_IDS. These ids are
+ * persisted in preferences, so the token-authenticated config route must only
+ * return selections understood by the renderer.
+ */
+const ALERT_VISUAL_PRESET_IDS = Object.freeze([
+  "classic",
+  "clean-lower-third",
+  "neon-card",
+  "minimal-pill",
+  "pixel-panel",
+  "comic-burst",
+  "laughing-man",
+  "mind-blown",
+  "chef-kiss",
+  "plot-twist",
+  "frog-hype",
+  "frog-sip",
+  "frog-bonk",
+  "frog-business",
+  "frog-party",
+  "frog-oracle",
+  "cash-pop",
+  "money-rain",
+  "stonks",
+  "jackpot",
+  "cash-register",
+  "gold-rush",
+  "airhorn",
+  "boss-entrance",
+  "arena-roar",
+  "level-up",
+  "raid-boss",
+  "victory-lap",
+  "heart-bloom",
+  "cozy-welcome",
+  "gold-star",
+  "community-hug",
+  "confetti-thanks",
+  "tiny-crown",
+  "mule-money-drop",
+  "zergling-swarm",
+  "battlecruiser-arrival",
+  "protoss-warp-in",
+  "overlord-delivery",
+  "gg-fireworks",
+  "zealot-dance-3d",
+  "marine-skyfire-3d",
+  "archon-merge-3d",
+  "archon-backflip-3d",
+  "stalker-blink-3d",
+  "carrier-interceptors-3d",
+  "zergling-zoomies-3d",
+  "baneling-bowling-3d",
+  "overlord-party-balloon-3d",
+  "battlecruiser-warp-in-3d",
+  "mule-money-drop-3d",
+  "glitch-gremlin",
+  "emergency-broadcast",
+  "meteor-impact",
+  "rubber-chicken",
+  "cosmic-rift",
+  "maximum-vitality",
+]);
+
+const ALERT_VISUAL_PRESET_ID_SET = new Set(ALERT_VISUAL_PRESET_IDS);
+const ALERT_VISUAL_MOTIONS = Object.freeze(["subtle", "full", "maximum"]);
+const ALERT_DURATION_MIN_SEC = 3;
+const ALERT_DURATION_MAX_SEC = 15;
+
+const DEFAULT_EVENT_VISUALS = Object.freeze(Object.fromEntries(
+  CHAT_EVENT_KINDS.map((kind) => [kind, "classic"]),
+));
+
+const DEFAULT_ALERTS = Object.freeze({
+  eventVisuals: DEFAULT_EVENT_VISUALS,
+  motion: "full",
+  durationSec: 8,
+  showHistory: true,
+});
+
+/** @param {unknown} value */
+function alertRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/** @param {unknown} value */
+function sanitizeAlertDuration(value) {
+  const duration = Number(value);
+  if (!Number.isFinite(duration)) return DEFAULT_ALERTS.durationSec;
+  return Math.min(
+    ALERT_DURATION_MAX_SEC,
+    Math.max(ALERT_DURATION_MIN_SEC, Math.round(duration)),
+  );
+}
+
+/**
+ * Exact server mirror of apps/web/lib/multichat/alerts.ts
+ * sanitizeAlertConfig. The settings preference is trusted only as storage;
+ * every field is whitelist-shaped before an OBS bearer-token route exposes it.
+ *
+ * @param {unknown} raw
+ * @returns {{
+ *   eventVisuals: Record<string, string>,
+ *   motion: string,
+ *   durationSec: number,
+ *   showHistory: boolean,
+ * }}
+ */
+function sanitizeChatAlerts(raw) {
+  const source = /** @type {Record<string, unknown>} */ (
+    alertRecord(raw) ? raw : {}
+  );
+  const rawVisuals = /** @type {Record<string, unknown>} */ (
+    alertRecord(source.eventVisuals) ? source.eventVisuals : {}
+  );
+  /** @type {Record<string, string>} */
+  const eventVisuals = {};
+  for (const kind of CHAT_EVENT_KINDS) {
+    const selection = rawVisuals[kind];
+    eventVisuals[kind] = selection === "shuffle"
+      || ALERT_VISUAL_PRESET_ID_SET.has(/** @type {string} */ (selection))
+      ? /** @type {string} */ (selection)
+      : DEFAULT_EVENT_VISUALS[kind];
+  }
+
+  return {
+    eventVisuals,
+    motion: ALERT_VISUAL_MOTIONS.includes(
+      /** @type {string} */ (source.motion),
+    )
+      ? /** @type {string} */ (source.motion)
+      : DEFAULT_ALERTS.motion,
+    durationSec: sanitizeAlertDuration(source.durationSec),
+    showHistory: typeof source.showHistory === "boolean"
+      ? source.showHistory
+      : DEFAULT_ALERTS.showHistory,
+  };
+}
+
 module.exports = {
   sanitizeChatAppearance,
   sanitizeChatTts,
   sanitizeChatSound,
+  sanitizeChatAlerts,
   DEFAULT_APPEARANCE,
   DEFAULT_TTS,
   DEFAULT_SOUND,
+  DEFAULT_ALERTS,
   SOUND_EFFECT_IDS,
   PACK_SOUND_IDS,
   DEFAULT_EVENT_SOUNDS,
+  ALERT_VISUAL_PRESET_IDS,
+  DEFAULT_EVENT_VISUALS,
 };

@@ -1,0 +1,834 @@
+{
+  "schemaVersion": 1,
+  "defaults": {
+    "fps": 24,
+    "frameStart": 1,
+    "resolution": {
+      "width": 768,
+      "height": 768,
+      "percentage": 100
+    },
+    "render": {
+      "samples": 64,
+      "transparent": true
+    },
+    "effectRealization": {
+      "bakeStep": 1,
+      "maxParticlesPerSystem": 256,
+      "maxParticlesTotal": 1024,
+      "particleEmissionStrength": 1.8,
+      "particleOpacity": 1.0,
+      "displacementSubdivision": 2,
+      "displacementUnitScale": 0.035,
+      "displacementOpacity": 0.18
+    },
+    "import": {
+      "mesh": true,
+      "effects": true,
+      "rig": true,
+      "animations": true
+    },
+    "materials": {
+      "teamColor": "#278BFF",
+      "fallbackColor": "#6C7893",
+      "emissionStrength": 2.5,
+      "productionTextureRequirements": {
+        "Assets/Units/Protoss/Zealot_Ex2/Zealot_Ex2.m3": [
+          { "path": "Assets/Textures/Zealot_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Zealot_Specular.dds", "slots": ["spec", "emis1"] },
+          { "path": "Assets/Textures/Zealot_Normal.dds", "slots": ["norm"] },
+          { "path": "Assets/Textures/ZealotDreads_Diffuse2.dds", "slots": ["diff", "spec"] },
+          { "path": "Assets/Textures/ZealotDreads_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Terran/Marine/Marine.m3": [
+          { "path": "Assets/Textures/marine_diffuse_blood.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Decal_Terran_0000_01.dds", "slots": ["decal"] },
+          { "path": "Assets/Textures/Marine_Specular_Blood.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Marine_Normal_Blood.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Protoss/HighTemplar/HighTemplar.m3": [
+          { "path": "Assets/Textures/TemplarDreads_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/TemplarDreads_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/FlatNormal.dds", "slots": ["norm"] },
+          { "path": "Assets/Textures/Templar_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Templar_Specular.dds", "slots": ["spec", "emis1"] },
+          { "path": "Assets/Textures/Templar_Normal.dds", "slots": ["norm"] },
+          { "path": "Assets/Textures/Templar_Cape.dds", "slots": ["diff", "spec"] },
+          { "path": "Assets/Textures/Templar_Cape_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Protoss/Archon/Archon.m3": [
+          { "path": "Assets/Textures/Archon_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Archon_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Archon_Emissive2.dds", "slots": ["emis1", "emis2"] },
+          { "path": "Assets/Textures/Archon_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Protoss/Stalker/Stalker.m3": [
+          { "path": "Assets/Textures/Stalker_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Stalker_Specular.dds", "slots": ["spec", "emis1"] },
+          { "path": "Assets/Textures/Stalker_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Protoss/Carrier/Carrier.m3": [
+          { "path": "Assets/Textures/Carrier_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Carrier_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Carrier_Emissive.dds", "slots": ["emis1", "emis2"] },
+          { "path": "Assets/Textures/Carrier_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Protoss/Interceptor/Interceptor.m3": [
+          { "path": "Assets/Textures/Interceptor_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Interceptor_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Interceptor_Emissive.dds", "slots": ["emis1"] },
+          { "path": "Assets/Textures/Interceptor_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Zerg/Zergling/Zergling.m3": [
+          { "path": "Assets/Textures/Zergling_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Zergling_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Zergling_Emissive.dds", "slots": ["emis1"] },
+          { "path": "Assets/Textures/Zergling_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Zerg/BanelingEx1/BanelingEx1.m3": [
+          { "path": "Assets/Textures/Baneling_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Baneling_Specular.dds", "slots": ["spec"] },
+          { "path": "Assets/Textures/Baneling_Emissive.dds", "slots": ["emis1", "emis2"] },
+          { "path": "Assets/Textures/Baneling_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Zerg/Overlord/Overlord.m3": [
+          { "path": "Assets/Textures/Overlord_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Overlord_Specular.dds", "slots": ["spec", "alpha1"] },
+          { "path": "Assets/Textures/Overlord_Emissive.dds", "slots": ["emis1", "emis2"] },
+          { "path": "Assets/Textures/Overlord_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Terran/BattlecruiserEX2/BattlecruiserEX2.m3": [
+          { "path": "Assets/Textures/Battlecruiser_Diffuse.dds", "slots": ["diff"] },
+          { "path": "Assets/Textures/Decal_Terran01_01.dds", "slots": ["decal"] },
+          { "path": "Assets/Textures/Battlecruiser_Emissive.dds", "slots": ["spec", "emis1"] },
+          { "path": "Assets/Textures/Battlecruiser_Normal.dds", "slots": ["norm"] }
+        ],
+        "Assets/Units/Terran/MULE/MULE.m3": [
+          { "path": "Assets/Textures/Mule_Diffuse.dds", "slots": ["diff", "spec"] },
+          { "path": "Assets/Textures/Mule_Emissive2.dds", "slots": ["emis1"] },
+          { "path": "Assets/Textures/Mule_Normal.dds", "slots": ["norm"] }
+        ]
+      },
+      "productionUnsupportedEffectGateModels": [
+        "Assets/Units/Protoss/Zealot_Ex2/Zealot_Ex2.m3",
+        "Assets/Units/Protoss/HighTemplar/HighTemplar.m3",
+        "Assets/Units/Protoss/Archon/Archon.m3",
+        "Assets/Units/Protoss/Carrier/Carrier.m3",
+        "Assets/Units/Terran/BattlecruiserEX2/BattlecruiserEX2.m3"
+      ]
+    },
+    "camera": {
+      "type": "ORTHO",
+      "location": [7.5, 10.0, 6.5],
+      "target": [0.0, 0.0, 1.6],
+      "orthoScale": 7.0,
+      "focalLength": 52.0,
+      "autoFrame": true,
+      "framingMode": "poster",
+      "posterOccupancy": 0.7,
+      "sequenceOccupancy": 0.82,
+      "margin": 1.02,
+      "minOrthoScale": 1.8,
+      "maxOrthoScale": 24.0,
+      "includeEffects": true,
+      "maxEffectExpansion": 1.02,
+      "maxSequenceExpansion": 1.08,
+      "sampleCount": 13,
+      "targetBias": [0.0, 0.0, 0.12]
+    },
+    "palette": {
+      "primary": "#62D9FF",
+      "secondary": "#B084FF",
+      "warm": "#FFD166"
+    }
+  },
+  "specs": [
+    {
+      "id": "zealot-dance",
+      "deliveryBaseName": "zealot-dance-3d",
+      "label": "Zealot native dance",
+      "choreography": "zealot_dance",
+      "frameEnd": 96,
+      "posterFrame": 62,
+      "materials": {
+        "teamColor": "#258DFF",
+        "fallbackColor": "#C9B36A"
+      },
+      "palette": {
+        "primary": "#55D6FF",
+        "secondary": "#F6C453"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Protoss/Zealot_Ex2/Zealot_Ex2.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/Zealot_SwarmAnims/Zealot_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Stand Dance", "Stand Dance 00", "Stand Victory 00", "Stand Victory"],
+            "contains": ["stand dance", "dance", "stand victory", "victory", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "jumpHeight": 0.24,
+        "spinDegrees": 22.0
+      }
+    },
+    {
+      "id": "marine-skyfire",
+      "deliveryBaseName": "marine-skyfire-3d",
+      "label": "Marine grounded skyfire salute",
+      "choreography": "marine_skyfire",
+      "frameEnd": 84,
+      "posterFrame": 55,
+      "camera": {
+        "posterOccupancy": 0.8,
+        "minOrthoScale": 1.45
+      },
+      "materials": {
+        "teamColor": "#D94352",
+        "fallbackColor": "#52667C"
+      },
+      "palette": {
+        "primary": "#5CC8FF",
+        "secondary": "#FF6B35",
+        "warm": "#FFE66D"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Terran/Marine/Marine.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Terran/Marine_SwarmAnims/Marine_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 0.58,
+            "prefer": ["Attack", "Attack 00", "Attack Superior", "Attack Inferior"],
+            "contains": ["attack superior", "attack", "ready"],
+            "loop": true
+          },
+          {
+            "start": 0.58,
+            "end": 1.0,
+            "prefer": ["Stand Victory 00", "Stand Victory 01", "Stand Victory", "Cheer"],
+            "contains": ["stand victory", "victory", "cheer", "stand"],
+            "loop": false
+          }
+        ]
+      },
+      "options": {
+        "burstCount": 4
+      }
+    },
+    {
+      "id": "archon-merge",
+      "deliveryBaseName": "archon-merge-3d",
+      "label": "High Templar native Archon merge",
+      "choreography": "archon_merge",
+      "frameEnd": 108,
+      "posterFrame": 100,
+      "camera": {
+        "framingMode": "sequence"
+      },
+      "effectRealization": {
+        "maxParticlesPerSystem": 512,
+        "maxParticlesTotal": 1024,
+        "particleOpacity": 0.75,
+        "displacementOpacity": 0.015
+      },
+      "materials": {
+        "teamColor": "#258DFF",
+        "fallbackColor": "#8A7CE8"
+      },
+      "palette": {
+        "primary": "#5EEBFF",
+        "secondary": "#B56CFF",
+        "warm": "#FFFFFF"
+      },
+      "models": [
+        {
+          "role": "templar_left",
+          "path": "Assets/Units/Protoss/HighTemplar/HighTemplar.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/HighTemplar_SwarmAnims/HighTemplar_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [-2.1, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, -18.0]
+        },
+        {
+          "role": "templar_right",
+          "path": "Assets/Units/Protoss/HighTemplar/HighTemplar.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/HighTemplar_SwarmAnims/HighTemplar_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [2.1, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 18.0]
+        },
+        {
+          "role": "hero",
+          "path": "Assets/Units/Protoss/Archon/Archon.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/Archon_SwarmAnims/Archon_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "templar_left": [
+          {
+            "start": 0.0,
+            "end": 0.62,
+            "prefer": ["Spell A", "Spell A 00", "Spell B", "Stand"],
+            "contains": ["spell a", "spell", "stand"],
+            "loop": false
+          }
+        ],
+        "templar_right": [
+          {
+            "start": 0.0,
+            "end": 0.62,
+            "prefer": ["Spell B", "Spell B 00", "Spell A", "Stand"],
+            "contains": ["spell b", "spell", "stand"],
+            "loop": false
+          }
+        ],
+        "hero": [
+          {
+            "start": 0.55,
+            "end": 0.72,
+            "prefer": ["Stand Work Start", "Birth"],
+            "contains": ["stand work start", "work start", "birth", "stand"],
+            "loop": false
+          },
+          {
+            "start": 0.72,
+            "end": 1.0,
+            "prefer": ["Stand Work", "Ready", "Stand"],
+            "contains": ["stand work", "ready", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "mergeHeight": 0.6
+      }
+    },
+    {
+      "id": "archon-backflip",
+      "deliveryBaseName": "archon-backflip-3d",
+      "label": "Archon native-attack backflip",
+      "choreography": "archon_backflip",
+      "frameEnd": 90,
+      "posterFrame": 50,
+      "camera": {
+        "framingMode": "sequence"
+      },
+      "effectRealization": {
+        "particleOpacity": 0.75,
+        "displacementOpacity": 0.015
+      },
+      "materials": {
+        "teamColor": "#258DFF",
+        "fallbackColor": "#8A7CE8"
+      },
+      "palette": {
+        "primary": "#6BE7FF",
+        "secondary": "#C578FF"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Protoss/Archon/Archon.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/Archon_SwarmAnims/Archon_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Attack Superior", "Attack", "Ready", "Stand"],
+            "contains": ["attack superior", "attack", "ready", "stand"],
+            "loop": false
+          }
+        ]
+      },
+      "options": {
+        "jumpHeight": 2.4,
+        "flipDegrees": 360.0
+      }
+    },
+    {
+      "id": "stalker-blink",
+      "deliveryBaseName": "stalker-blink-3d",
+      "label": "Stalker native attack blink",
+      "choreography": "stalker_blink",
+      "frameEnd": 78,
+      "posterFrame": 53,
+      "camera": {
+        "framingMode": "sequence"
+      },
+      "materials": {
+        "teamColor": "#258DFF",
+        "fallbackColor": "#6677A5"
+      },
+      "palette": {
+        "primary": "#4DE7FF",
+        "secondary": "#7E72FF"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Protoss/Stalker/Stalker.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Protoss/Stalker_SwarmAnims/Stalker_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [-1.8, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Attack", "Attack Superior", "Ready", "Stand"],
+            "contains": ["attack", "ready", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "blinkDistance": 3.8,
+        "squash": 0.06
+      }
+    },
+    {
+      "id": "carrier-interceptors",
+      "deliveryBaseName": "carrier-interceptors-3d",
+      "label": "Carrier native Cover interceptor launch",
+      "choreography": "carrier_interceptors",
+      "frameEnd": 120,
+      "posterFrame": 74,
+      "camera": {
+        "framingMode": "sequence",
+        "sequenceOccupancy": 0.82
+      },
+      "materials": {
+        "teamColor": "#258DFF",
+        "fallbackColor": "#B0A067"
+      },
+      "palette": {
+        "primary": "#64DEFF",
+        "secondary": "#FFD166"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Protoss/Carrier/Carrier.m3",
+          "scale": 1.0,
+          "position": [0.0, 0.0, 1.2],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        },
+        {
+          "role": "interceptor_1",
+          "path": "Assets/Units/Protoss/Interceptor/Interceptor.m3",
+          "scale": 0.75,
+          "position": [0.0, 0.0, 1.4],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        },
+        {
+          "role": "interceptor_2",
+          "path": "Assets/Units/Protoss/Interceptor/Interceptor.m3",
+          "scale": 0.75,
+          "position": [0.0, 0.0, 1.4],
+          "rotationDeg": [0.0, 0.0, 90.0]
+        },
+        {
+          "role": "interceptor_3",
+          "path": "Assets/Units/Protoss/Interceptor/Interceptor.m3",
+          "scale": 0.75,
+          "position": [0.0, 0.0, 1.4],
+          "rotationDeg": [0.0, 0.0, 180.0]
+        },
+        {
+          "role": "interceptor_4",
+          "path": "Assets/Units/Protoss/Interceptor/Interceptor.m3",
+          "scale": 0.75,
+          "position": [0.0, 0.0, 1.4],
+          "rotationDeg": [0.0, 0.0, 270.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Cover", "Stand Cover", "Stand"],
+            "contains": ["cover", "stand"],
+            "loop": true
+          }
+        ],
+        "interceptor_1": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Walk", "Stand"],
+            "contains": ["walk", "stand"],
+            "loop": true
+          }
+        ],
+        "interceptor_2": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Walk", "Stand"],
+            "contains": ["walk", "stand"],
+            "loop": true
+          }
+        ],
+        "interceptor_3": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Walk", "Stand"],
+            "contains": ["walk", "stand"],
+            "loop": true
+          }
+        ],
+        "interceptor_4": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Walk", "Stand"],
+            "contains": ["walk", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "orbitRadius": 4.0,
+        "orbitHeight": 1.2,
+        "turns": 1.5
+      }
+    },
+    {
+      "id": "zergling-zoomies",
+      "deliveryBaseName": "zergling-zoomies-3d",
+      "label": "Zergling native Walk zoomies",
+      "choreography": "zergling_zoomies",
+      "frameEnd": 82,
+      "posterFrame": 57,
+      "camera": {
+        "framingMode": "poster",
+        "followRole": "hero",
+        "followAxes": ["x", "y"],
+        "followFactor": 0.8,
+        "posterOccupancy": 0.74,
+        "minOrthoScale": 0.9,
+        "maxSequenceExpansion": 1.08
+      },
+      "materials": {
+        "teamColor": "#8C55E8",
+        "fallbackColor": "#75528C"
+      },
+      "palette": {
+        "primary": "#B5FF5E",
+        "secondary": "#A563FF"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Zerg/Zergling/Zergling.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Zerg/Zergling_SwarmAnims/Zergling_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [-3.4, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Walk", "Walk Fast", "Attack", "Stand"],
+            "contains": ["walk", "attack", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "runDistance": 4.4,
+        "zigzagDepth": 0.75
+      }
+    },
+    {
+      "id": "baneling-bowling",
+      "deliveryBaseName": "baneling-bowling-3d",
+      "label": "Baneling native Superior bowling ball",
+      "choreography": "baneling_bowling",
+      "frameEnd": 86,
+      "posterFrame": 58,
+      "camera": {
+        "framingMode": "poster",
+        "followRole": "hero",
+        "followAxes": ["x", "y"],
+        "followFactor": 0.8,
+        "posterOccupancy": 0.65,
+        "minOrthoScale": 0.9,
+        "maxSequenceExpansion": 1.08
+      },
+      "materials": {
+        "teamColor": "#8C55E8",
+        "fallbackColor": "#78A63E"
+      },
+      "palette": {
+        "primary": "#A8FF36",
+        "secondary": "#6CFF9B"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Zerg/BanelingEx1/BanelingEx1.m3",
+          "scale": 1.0,
+          "position": [-3.5, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Superior", "Walk Superior", "Walk", "Stand"],
+            "contains": ["superior", "walk", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "rollDistance": 4.8,
+        "rollDegrees": 720.0
+      }
+    },
+    {
+      "id": "overlord-party-balloon",
+      "deliveryBaseName": "overlord-party-balloon-3d",
+      "label": "Overlord native party balloon",
+      "choreography": "overlord_party_balloon",
+      "frameEnd": 108,
+      "posterFrame": 68,
+      "materials": {
+        "teamColor": "#8C55E8",
+        "fallbackColor": "#7C568C",
+        "emissionStrength": 0.8
+      },
+      "palette": {
+        "primary": "#E46DFF",
+        "secondary": "#7DFFB2",
+        "warm": "#FFD166"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Zerg/Overlord/Overlord.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Zerg/Overlord_SwarmAnims/Overlord_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 1.2],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 1.0,
+            "prefer": ["Stand Work", "Spell", "Walk", "Stand"],
+            "contains": ["stand work", "spell", "walk", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "bobHeight": 0.7,
+        "confettiCount": 12
+      }
+    },
+    {
+      "id": "battlecruiser-warp-in",
+      "deliveryBaseName": "battlecruiser-warp-in-3d",
+      "label": "Battlecruiser native warp-in",
+      "choreography": "battlecruiser_warp_in",
+      "frameEnd": 112,
+      "posterFrame": 77,
+      "camera": {
+        "framingMode": "sequence"
+      },
+      "materials": {
+        "teamColor": "#D94352",
+        "fallbackColor": "#576A7D"
+      },
+      "palette": {
+        "primary": "#4AB6FF",
+        "secondary": "#FF4D67",
+        "warm": "#FFD166"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Terran/BattlecruiserEX2/BattlecruiserEX2.m3",
+          "scale": 1.0,
+          "position": [0.0, 0.0, 1.3],
+          "rotationDeg": [0.0, 0.0, -8.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 0.62,
+            "prefer": ["GLBirth A", "Birth A", "Birth", "Spell"],
+            "contains": ["glbirth a", "birth", "spell", "stand"],
+            "loop": false
+          },
+          {
+            "start": 0.62,
+            "end": 1.0,
+            "prefer": ["Stand", "Walk"],
+            "contains": ["stand", "walk"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "arrivalScale": 0.12,
+        "bankDegrees": 18.0
+      }
+    },
+    {
+      "id": "mule-money-drop",
+      "deliveryBaseName": "mule-money-drop-3d",
+      "label": "MULE native Work money drop",
+      "choreography": "mule_money_drop",
+      "frameEnd": 96,
+      "posterFrame": 41,
+      "camera": {
+        "framingMode": "poster",
+        "followRole": "hero",
+        "followAxes": ["x", "y", "z"],
+        "followFactor": 1.0,
+        "posterOccupancy": 0.65,
+        "minOrthoScale": 1.2,
+        "maxSequenceExpansion": 1.08
+      },
+      "materials": {
+        "teamColor": "#D94352",
+        "fallbackColor": "#687782"
+      },
+      "palette": {
+        "primary": "#7BFF8A",
+        "secondary": "#FFD84D",
+        "warm": "#FFFFFF"
+      },
+      "models": [
+        {
+          "role": "hero",
+          "path": "Assets/Units/Terran/MULE/MULE.m3",
+          "animationPaths": [
+            {
+              "path": "Assets/Units/Terran/MULE_SwarmAnims/MULE_SwarmAnims.m3a",
+              "optional": true
+            }
+          ],
+          "scale": 1.0,
+          "position": [0.0, 0.0, 0.0],
+          "rotationDeg": [0.0, 0.0, 0.0]
+        }
+      ],
+      "nativeActions": {
+        "hero": [
+          {
+            "start": 0.0,
+            "end": 0.60,
+            "prefer": ["Work Start", "Stand Work Start", "Birth", "Stand"],
+            "contains": ["work start", "birth", "stand"],
+            "loop": false
+          },
+          {
+            "start": 0.60,
+            "end": 1.0,
+            "prefer": ["Work", "Stand Work", "Repair", "Stand"],
+            "contains": ["work", "repair", "stand"],
+            "loop": true
+          }
+        ]
+      },
+      "options": {
+        "dropHeight": 3.6,
+        "coinStartHeight": 3.7,
+        "coinCount": 7
+      }
+    }
+  ]
+}

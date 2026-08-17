@@ -1,0 +1,11 @@
+# Deliberately empty of media.
+#
+# Anything under apps/web/public is served unauthenticated, so the rendered
+# SC2 3D alert media must never live here: it is derived from rights-controlled
+# game assets and is restricted to admin accounts. The files are stored in the
+# private R2 bucket (sc2tools-alert-media) and reached only through the
+# admin-gated presign endpoint. See docs/sc2-alert-render-pipeline.md.
+*.webm
+*.webp
+*.png
+!.gitignore

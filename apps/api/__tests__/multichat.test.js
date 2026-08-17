@@ -39,6 +39,23 @@ const {
   MultichatSoundsService,
   sniffMime,
 } = require("../src/services/multichatSounds");
+const {
+  ALERT_VISUAL_PRESET_IDS,
+} = require("../src/services/multichatAppearance");
+
+const THREE_D_ALERT_VISUAL_PRESET_IDS = Object.freeze([
+  "zealot-dance-3d",
+  "marine-skyfire-3d",
+  "archon-merge-3d",
+  "archon-backflip-3d",
+  "stalker-blink-3d",
+  "carrier-interceptors-3d",
+  "zergling-zoomies-3d",
+  "baneling-bowling-3d",
+  "overlord-party-balloon-3d",
+  "battlecruiser-warp-in-3d",
+  "mule-money-drop-3d",
+]);
 
 const FIXTURE = JSON.parse(
   fs.readFileSync(
@@ -1019,6 +1036,40 @@ describe("routes/multichat", () => {
     });
   });
 
+  test("persists every 3D StarCraft alert preset through the token config route", async () => {
+    const eventVisuals = {
+      sub: "zealot-dance-3d",
+      resub: "marine-skyfire-3d",
+      giftsub: "archon-merge-3d",
+      raid: "archon-backflip-3d",
+      member: "stalker-blink-3d",
+      superchat: "carrier-interceptors-3d",
+      gift: "zergling-zoomies-3d",
+      follow: "baneling-bowling-3d",
+      cheer: "overlord-party-balloon-3d",
+      share: "battlecruiser-warp-in-3d",
+      reward: "mule-money-drop-3d",
+    };
+    await users.updatePreferences(userId, "multichat", {
+      alerts: {
+        eventVisuals,
+        motion: "maximum",
+        durationSec: 12,
+        showHistory: false,
+      },
+    });
+
+    const res = await request(app).get(`/v1/multichat/${token}/config`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.config.alerts).toEqual({
+      eventVisuals,
+      motion: "maximum",
+      durationSec: 12,
+      showHistory: false,
+    });
+  });
+
   test("youtube resolve surfaces structured upstream errors", async () => {
     const res = await request(app).get(
       `/v1/multichat/${token}/youtube/resolve?channel=@whoever`,
@@ -1521,6 +1572,14 @@ describe("routes/multichat studio", () => {
 });
 
 describe("sanitizeMultichatConfig", () => {
+  test("server alert whitelist contains exactly the 11 3D preset ids", () => {
+    expect(ALERT_VISUAL_PRESET_IDS).toHaveLength(57);
+    expect(new Set(ALERT_VISUAL_PRESET_IDS).size).toBe(57);
+    expect(
+      ALERT_VISUAL_PRESET_IDS.filter((id) => id.endsWith("-3d")),
+    ).toEqual(THREE_D_ALERT_VISUAL_PRESET_IDS);
+  });
+
   test("empty prefs → empty config", () => {
     expect(sanitizeMultichatConfig({})).toEqual({});
     expect(sanitizeMultichatConfig(null)).toEqual({});
@@ -1655,11 +1714,74 @@ describe("sanitizeMultichatConfig", () => {
     expect(out.sound.messageSound).not.toBe("vuvuzela");
   });
 
-  test("appearance/tts/sound omitted stays omitted (no default bloat)", () => {
+  test("alert visuals whitelist valid partial selections and remove unknown keys", () => {
+    const out = sanitizeMultichatConfig({
+      alerts: {
+        eventVisuals: {
+          follow: "laughing-man",
+          raid: "shuffle",
+          giftsub: "frog-party",
+          superchat: "cash-pop",
+          reward: "protoss-warp-in",
+          notAnEvent: "maximum-vitality",
+        },
+        motion: "maximum",
+        durationSec: 9.6,
+        showHistory: false,
+        injectedCss: "url(javascript:alert(1))",
+      },
+    });
+
+    expect(out.alerts.eventVisuals).toMatchObject({
+      follow: "laughing-man",
+      raid: "shuffle",
+      giftsub: "frog-party",
+      superchat: "cash-pop",
+      reward: "protoss-warp-in",
+      // Missing known kinds materialize with their legacy-safe default.
+      sub: "classic",
+    });
+    expect(Object.keys(out.alerts.eventVisuals)).toHaveLength(11);
+    expect(out.alerts.eventVisuals.notAnEvent).toBeUndefined();
+    expect(out.alerts.motion).toBe("maximum");
+    expect(out.alerts.durationSec).toBe(10);
+    expect(out.alerts.showHistory).toBe(false);
+    expect(out.alerts.injectedCss).toBeUndefined();
+  });
+
+  test("alert visual junk falls back and duration stays inside 3–15 seconds", () => {
+    const low = sanitizeMultichatConfig({
+      alerts: {
+        eventVisuals: { follow: "unknown-meme", raid: 42 },
+        motion: "hyperdrive",
+        durationSec: -100,
+        showHistory: "false",
+      },
+    }).alerts;
+    expect(low.eventVisuals.follow).toBe("classic");
+    expect(low.eventVisuals.raid).toBe("classic");
+    expect(low.motion).toBe("full");
+    expect(low.durationSec).toBe(3);
+    expect(low.showHistory).toBe(true);
+
+    const high = sanitizeMultichatConfig({
+      alerts: { motion: "subtle", durationSec: 999 },
+    }).alerts;
+    expect(high.motion).toBe("subtle");
+    expect(high.durationSec).toBe(15);
+
+    const nonFinite = sanitizeMultichatConfig({
+      alerts: { durationSec: "not-a-number" },
+    }).alerts;
+    expect(nonFinite.durationSec).toBe(8);
+  });
+
+  test("appearance/tts/sound/alerts omitted stays omitted (no default bloat)", () => {
     const out = sanitizeMultichatConfig({ twitch: { enabled: true } });
     expect(out.appearance).toBeUndefined();
     expect(out.tts).toBeUndefined();
     expect(out.sound).toBeUndefined();
+    expect(out.alerts).toBeUndefined();
   });
 
   test("engagement rank race passes through whitelisted", () => {

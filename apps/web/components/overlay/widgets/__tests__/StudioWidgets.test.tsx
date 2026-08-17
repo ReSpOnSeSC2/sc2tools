@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
 import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
+import { DEFAULT_ALERTS, type AlertConfig } from "@/lib/multichat/alerts";
 import {
   DEFAULT_BROLL_CONFIG,
   type StudioState,
@@ -33,6 +34,10 @@ import {
 let mockStudio: StudioState & { loaded: boolean; snapshotReady: boolean };
 let mockChat: MultiChatState;
 let mockAppearance = { ...DEFAULT_APPEARANCE };
+let mockAlerts: AlertConfig = {
+  ...DEFAULT_ALERTS,
+  eventVisuals: { ...DEFAULT_ALERTS.eventVisuals },
+};
 const mockMultiChatArgs: Array<{ config?: unknown }> = [];
 const eventSoundSpy = vi.hoisted(() => vi.fn());
 
@@ -100,6 +105,7 @@ vi.mock("../MultiChatWidget", () => ({
     appearance: mockAppearance,
     tts: null,
     sound: null,
+    alerts: mockAlerts,
     loaded: true,
   }),
 }));
@@ -129,6 +135,10 @@ beforeEach(() => {
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
   mockAppearance = { ...DEFAULT_APPEARANCE };
+  mockAlerts = {
+    ...DEFAULT_ALERTS,
+    eventVisuals: { ...DEFAULT_ALERTS.eventVisuals },
+  };
   mockMultiChatArgs.length = 0;
   mockEngagement = { ...EMPTY_ENGAGEMENT };
   mockEngagementEvent = null;
@@ -308,6 +318,95 @@ describe("ChatAlertsWidget", () => {
     expect(screen.getByText("$5.00")).toBeTruthy();
     // The already-shown event sits in the faded stack.
     expect(screen.getByText("BigStreamer")).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("dispatches each event kind through its configured visual preset", () => {
+    vi.useFakeTimers();
+    mockAlerts = {
+      ...DEFAULT_ALERTS,
+      durationSec: 3,
+      motion: "maximum",
+      eventVisuals: {
+        ...DEFAULT_ALERTS.eventVisuals,
+        follow: "frog-sip",
+        raid: "raid-boss",
+      },
+    };
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "twitch",
+          id: "preset-follow",
+          kind: "follow",
+          user: "FrogFollower",
+          detail: "followed",
+          atMs: Date.now(),
+        },
+        {
+          platform: "twitch",
+          id: "preset-raid",
+          kind: "raid",
+          user: "BossRaider",
+          detail: "raided",
+          amount: "99",
+          atMs: Date.now() + 1,
+        },
+      ],
+    };
+
+    const { container } = render(<ChatAlertsWidget token="tok" />);
+    expect(
+      container.querySelector('[data-alert-preset="frog-sip"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-alert-motion="maximum"]'),
+    ).toBeTruthy();
+
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.getByText("BossRaider")).toBeTruthy();
+    expect(
+      container.querySelector('[data-alert-preset="raid-boss"]'),
+    ).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("hides the faded alert history when showHistory is disabled", () => {
+    vi.useFakeTimers();
+    mockAlerts = {
+      ...DEFAULT_ALERTS,
+      durationSec: 3,
+      showHistory: false,
+      eventVisuals: { ...DEFAULT_ALERTS.eventVisuals },
+    };
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "twitch",
+          id: "history-first",
+          kind: "follow",
+          user: "FirstSupporter",
+          detail: "followed",
+          atMs: Date.now(),
+        },
+        {
+          platform: "youtube",
+          id: "history-second",
+          kind: "member",
+          user: "CurrentSupporter",
+          detail: "became a member",
+          atMs: Date.now() + 1,
+        },
+      ],
+    };
+
+    render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("FirstSupporter")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.getByText("CurrentSupporter")).toBeTruthy();
+    expect(screen.queryByText("FirstSupporter")).toBeNull();
     vi.useRealTimers();
   });
 

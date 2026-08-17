@@ -99,4 +99,9 @@ export interface MultichatConfig {
    * lib/multichat/sound.sanitizeSoundConfig before use.
    */
   sound?: Record<string, unknown>;
+  /**
+   * On-stream event-alert presentation — untyped on the wire; always pass
+   * through lib/multichat/alerts.sanitizeAlertConfig before use.
+   */
+  alerts?: Record<string, unknown>;
 }
