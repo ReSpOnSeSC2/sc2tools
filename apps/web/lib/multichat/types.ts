@@ -6,7 +6,7 @@
 
 // Type-only import — erased at compile time, so the events ⇄ types
 // reference cycle never exists at runtime.
-import type { ChatEvent } from "./events";
+import type { ChatEvent, ChatEventKind } from "./events";
 
 export type ChatPlatform = "twitch" | "kick" | "youtube" | "tiktok";
 
@@ -41,6 +41,13 @@ export interface ChatMessage {
    * sounds, commands, or engagement a second time.
    */
   backlog?: boolean;
+  /**
+   * The platform also emitted a dedicated supporter event for this message.
+   * Audio surfaces use the event sound instead of stacking generic chat audio.
+   */
+  pairedEventKind?: ChatEventKind;
+  /** Presentation-only audio suppression; the message still renders normally. */
+  suppressAudio?: boolean;
   emotes?: import("./emotes").ChatEmote[];
 }
 

@@ -18,25 +18,54 @@
  * seconds (see lib/multichat/testStudio).
  */
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { API_BASE } from "@/lib/clientApi";
-import { EVENT_KIND_LABEL, type ChatEvent } from "@/lib/multichat/events";
+import {
+  chatEventIdentity,
+  EVENT_KIND_LABEL,
+  type ChatEvent,
+} from "@/lib/multichat/events";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useEventSounds } from "@/lib/multichat/useEventSounds";
+import {
+  blockedUserSet,
+  excludeBlockedUsers,
+  isBlockedUser,
+} from "@/lib/multichat/appearance";
+import { useStudioState } from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import {
   TEST_EVENT_INTERVAL_MS,
   testEvents,
 } from "@/lib/multichat/testStudio";
+import {
+  overlayFeedTailIsQuiet,
+  useOverlayBuildRefresh,
+} from "../useOverlayBuildRefresh";
 import type { LiveGamePayload } from "../types";
 import { PLATFORM_META } from "./MultiChatMessageList";
 import { useMultichatConfig } from "./MultiChatWidget";
+import {
+  useSpeechSynthesisIdle,
+  useWidgetAudioOwner,
+} from "./widgetAudio";
 
 /** How long the newest event (and its temporary history) stays visible. */
 const ALERT_VISIBLE_MS = 8_000;
 /** Faded history entries kept under the prominent card. */
 const STACK_SIZE = 3;
+/** A 50-recipient gift bundle fits without dropping a single recognition. */
+const ALERT_QUEUE_CAP = 60;
+/** Near-live relay catch-up may still alert; older replay is timeline-only. */
+const ALERT_REPLAY_GRACE_MS = 15_000;
+const ALERT_SEEN_CAP = 500;
 
 export function ChatAlertsWidget({
   token,
@@ -49,14 +78,32 @@ export function ChatAlertsWidget({
   /** Shared overlay payload — read ONLY for the Test-fire flag. */
   live?: LiveGamePayload | null;
 }) {
-  void studioEvent;
-  const { platforms, sound } = useMultichatConfig(token);
+  const audioOwner = useWidgetAudioOwner();
+  const { platforms, appearance, sound, loaded } = useMultichatConfig(token);
+  const studio = useStudioState(token, studioEvent ?? null);
   const { events: feedEvents, messages: feedMessages } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
-  useEngagementReporter(token, feedMessages, feedEvents);
+  const blockedUsers = useMemo(
+    () => blockedUserSet(appearance, studio.blockedUsers),
+    [appearance, studio.blockedUsers],
+  );
+  const moderationReady = loaded && studio.snapshotReady;
+  const moderatedMessages = useMemo(
+    () => moderationReady
+      ? excludeBlockedUsers(feedMessages, blockedUsers)
+      : [],
+    [blockedUsers, feedMessages, moderationReady],
+  );
+  const moderatedFeedEvents = useMemo(
+    () => moderationReady
+      ? excludeBlockedUsers(feedEvents, blockedUsers)
+      : [],
+    [blockedUsers, feedEvents, moderationReady],
+  );
+  useEngagementReporter(token, moderatedMessages, moderatedFeedEvents);
 
   // Test-fire demo stream — feed the sample events in one at a time
   // (first immediately) so each rides the normal prominent-card
@@ -83,43 +130,174 @@ export function ChatAlertsWidget({
     return () => clearInterval(timer);
   }, [testActive]);
 
-  const events = testActive ? demoEvents : feedEvents;
+  const events = testActive ? demoEvents : moderatedFeedEvents;
 
-  // Alert sounds — per-event-kind synthesized effects, configured in
-  // Settings. Test-fire demo events ride the same path, so the Test
-  // button auditions the sounds exactly as a real raid would.
-  useEventSounds(events, sound);
-
-  const newest = events.length > 0 ? events[events.length - 1] : null;
-  const newestKey = newest ? `${newest.platform}:${newest.id}` : null;
-
-  // Promote each newly-arrived event to the prominent slot for
-  // ALERT_VISIBLE_MS, then clear the whole toaster. The feed retains old
-  // events, so rendering the stack after this timer would leave alerts on
-  // stream indefinitely.
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A real queue, rather than "latest wins": a gift/sub burst must not
+  // replace somebody before their recognition card was ever visible.
+  const seenRef = useRef<Set<string>>(new Set());
+  const [queue, setQueue] = useState<ChatEvent[]>([]);
+  const [prominent, setProminent] = useState<ChatEvent | null>(null);
+  const [history, setHistory] = useState<ChatEvent[]>([]);
+  const feedTail = moderatedFeedEvents.at(-1);
+  const feedTailIdentity = feedTail
+    ? `${chatEventIdentity(feedTail)}:${feedTail.atMs}:${feedTail.amount ?? ""}`
+    : "";
+  const feedTailAtMs = feedTail?.atMs ?? 0;
+  const initiallyQuiet =
+    feedTailAtMs === 0
+    || Date.now() - feedTailAtMs >= ALERT_REPLAY_GRACE_MS;
+  const [feedQuietForReload, setFeedQuietForReload] = useState(initiallyQuiet);
+  const [quietConfirmedTail, setQuietConfirmedTail] = useState<string | null>(
+    () => initiallyQuiet ? feedTailIdentity : null,
+  );
+  const buildRefreshInitializedRef = useRef(false);
+  const queueLengthRef = useRef(0);
+  queueLengthRef.current = queue.length;
+  const prominentAllowed = prominent
+    ? !isBlockedUser(prominent.user, blockedUsers)
+    : false;
+  const visibleProminent = prominentAllowed ? prominent : null;
+  const visibleHistory = history.filter(
+    (event) => !isBlockedUser(event.user, blockedUsers),
+  );
   useEffect(() => {
-    if (!newestKey) return;
-    setActiveKey(newestKey);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setActiveKey(null), ALERT_VISIBLE_MS);
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
+    // A Dock/Settings block can land while a card is already prominent or
+    // waiting in the burst queue. Remove it immediately from every visual and
+    // audio state, but deliberately keep seenRef intact so unblocking cannot
+    // resurrect retained feed history as a new alert.
+    setQueue((current) => current.filter(
+      (event) => !isBlockedUser(event.user, blockedUsers),
+    ));
+    setProminent((current) => (
+      current && isBlockedUser(current.user, blockedUsers) ? null : current
+    ));
+    setHistory((current) => current.filter(
+      (event) => !isBlockedUser(event.user, blockedUsers),
+    ));
+  }, [blockedUsers]);
+  useEffect(() => {
+    const firstObservation = !buildRefreshInitializedRef.current;
+    buildRefreshInitializedRef.current = true;
+    if (feedTailAtMs === 0) {
+      setQuietConfirmedTail(feedTailIdentity);
+      setFeedQuietForReload(true);
+      return;
+    }
+    const remaining = firstObservation
+      ? ALERT_REPLAY_GRACE_MS - Math.max(0, Date.now() - feedTailAtMs)
+      : ALERT_REPLAY_GRACE_MS;
+    if (remaining <= 0) {
+      setQuietConfirmedTail(feedTailIdentity);
+      setFeedQuietForReload(true);
+      return;
+    }
+    setFeedQuietForReload(false);
+    const timer = setTimeout(() => {
+      setQuietConfirmedTail(feedTailIdentity);
+      setFeedQuietForReload(true);
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [feedTailAtMs, feedTailIdentity]);
+  const feedTailQuiet = overlayFeedTailIsQuiet(
+    feedQuietForReload,
+    feedTailIdentity,
+    quietConfirmedTail,
+  );
+  useEffect(() => {
+    const additions: ChatEvent[] = [];
+    for (const event of events) {
+      // If the alert Browser Source was merely a few seconds slower to mount,
+      // it should still recognize the supporter. A real restart must not turn
+      // the whole retained timeline into fresh sounds/toasts.
+      if (
+        event.replayed &&
+        Date.now() - event.atMs > ALERT_REPLAY_GRACE_MS
+      ) continue;
+      const key = chatEventIdentity(event);
+      if (seenRef.current.has(key)) {
+        // Cumulative events (YouTube Jewels combos) update the one existing
+        // card in place; they do not enqueue another donation or sound.
+        if (event.updateKey || event.official) {
+          setQueue((current) =>
+            current.map((item) =>
+              chatEventIdentity(item) === key ? event : item,
+            ),
+          );
+          setProminent((current) =>
+            current && chatEventIdentity(current) === key ? event : current,
+          );
+          setHistory((current) =>
+            current.map((item) =>
+              chatEventIdentity(item) === key ? event : item,
+            ),
+          );
+        }
+        continue;
       }
-    };
-  }, [newestKey]);
+      seenRef.current.add(key);
+      additions.push(event);
+    }
+    if (seenRef.current.size > ALERT_SEEN_CAP) {
+      // Set iteration follows insertion order. Drop only the oldest identities
+      // so the full recent replay window remains protected even though the
+      // rendered feed itself retains fewer rows.
+      const oldestFirst = seenRef.current.values();
+      const excess = seenRef.current.size - ALERT_SEEN_CAP;
+      for (let index = 0; index < excess; index += 1) {
+        const oldest = oldestFirst.next().value;
+        if (oldest !== undefined) seenRef.current.delete(oldest);
+      }
+    }
+    if (additions.length > 0) {
+      setQueue((current) => appendAlertQueue(current, additions));
+    }
+  }, [events]);
 
-  if (events.length === 0) return <div style={{ background: "transparent" }} />;
+  useEffect(() => {
+    if (prominent || queue.length === 0) return;
+    const next = queue[0];
+    setQueue((current) => current.slice(1));
+    setProminent(next);
+    setHistory((current) => [...current, next].slice(-(STACK_SIZE + 1)));
+  }, [prominent, queue]);
 
-  const prominent = activeKey === newestKey ? newest : null;
-  const stack = prominent
-    ? events.slice(0, events.length - 1).slice(-STACK_SIZE).reverse()
+  useEffect(() => {
+    if (!prominent) return;
+    // Large gift/sub bursts move briskly enough that everybody is seen while
+    // ordinary one-off support still gets the full hero-card dwell.
+    const backlog = queueLengthRef.current;
+    const dwellMs =
+      backlog >= 20 ? 2_000 : backlog >= 8 ? 4_000 : ALERT_VISIBLE_MS;
+    const timer = setTimeout(() => setProminent(null), dwellMs);
+    return () => clearTimeout(timer);
+  }, [prominent]);
+
+  // Sounds follow the visible queue (one supporter at a time), so a burst
+  // is neither dropped nor collapsed into an inaudible pile-up.
+  const audioSound = useMemo(
+    () => (
+      audioOwner
+        ? sound
+        : { ...(sound ?? {}), eventSoundsEnabled: false }
+    ),
+    [audioOwner, sound],
+  );
+  useEventSounds(visibleProminent ? [visibleProminent] : [], audioSound);
+  const speechIdle = useSpeechSynthesisIdle(audioOwner);
+  useOverlayBuildRefresh({
+    enabled: !testActive,
+    safeToReload:
+      visibleProminent === null
+      && queue.length === 0
+      && feedTailQuiet
+      && (!audioOwner || speechIdle),
+  });
+
+  const stack = visibleProminent
+    ? visibleHistory.slice(0, -1).slice(-STACK_SIZE).reverse()
     : [];
 
-  if (!prominent) return <div style={{ background: "transparent" }} />;
+  if (!visibleProminent) return <div style={{ background: "transparent" }} />;
 
   return (
     <div style={frameStyle}>
@@ -134,11 +312,12 @@ export function ChatAlertsWidget({
         }
       `}</style>
       {testActive ? <div style={testTagStyle}>TEST</div> : null}
-      {prominent ? (
-        <AlertCard key={`${prominent.platform}:${prominent.id}`} event={prominent} />
-      ) : null}
+      <AlertCard
+        key={chatEventIdentity(visibleProminent)}
+        event={visibleProminent}
+      />
       {stack.map((e) => (
-        <div key={`${e.platform}:${e.id}`} style={stackRowStyle}>
+        <div key={chatEventIdentity(e)} style={stackRowStyle}>
           <span
             style={{
               ...miniChipStyle,
@@ -155,6 +334,45 @@ export function ChatAlertsWidget({
       ))}
     </div>
   );
+}
+
+/**
+ * Preserve ordinary gift bundles in full. If a truly pathological burst
+ * exceeds the bounded renderer queue, keep the earliest cards and append an
+ * explicit summary instead of silently marking omitted supporters as seen.
+ * Every individual event remains visible in the unified chat/Dock timeline.
+ */
+export function appendAlertQueue(
+  current: ReadonlyArray<ChatEvent>,
+  additions: ReadonlyArray<ChatEvent>,
+): ChatEvent[] {
+  const combined = [...current, ...additions];
+  if (combined.length <= ALERT_QUEUE_CAP) return combined;
+
+  const kept = combined.slice(0, ALERT_QUEUE_CAP - 1);
+  const overflow = combined.slice(ALERT_QUEUE_CAP - 1);
+  const last = overflow[overflow.length - 1];
+  const overflowCount = overflow.reduce(
+    (total, event) => total + representedAlertCount(event),
+    0,
+  );
+  return [
+    ...kept,
+    {
+      ...last,
+      id: `alert-overflow:${overflow[0].atMs}:${last.atMs}:${overflowCount}`,
+      user: `${overflowCount} more supporters`,
+      detail: "recognized in the unified chat timeline",
+      amount: `${overflowCount} events`,
+    },
+  ];
+}
+
+function representedAlertCount(event: ChatEvent): number {
+  const match = event.id.match(/^alert-overflow:[^:]*:[^:]*:(\d+)$/);
+  if (!match) return 1;
+  const count = Number(match[1]);
+  return Number.isSafeInteger(count) && count > 0 ? count : 1;
 }
 
 function AlertCard({ event }: { event: ChatEvent }) {

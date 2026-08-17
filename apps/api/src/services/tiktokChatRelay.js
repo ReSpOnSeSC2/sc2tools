@@ -49,12 +49,21 @@ const MAX_SEEN_CHAT_IDS = 512;
  * with an empty feed until the next brand-new comment.
  */
 const MAX_RECENT_CHAT_EVENTS = 50;
+/**
+ * Recent normalized events retained so a chat widget joining the shared
+ * upstream after the alert widget sees the same follows/gifts/subscriptions.
+ * Replays are explicitly marked; alert surfaces suppress replayed toasts and
+ * sounds while timeline surfaces still show the recognition row.
+ */
+const MAX_RECENT_PLATFORM_EVENTS = 50;
 const TIKTOK_CONNECTION_OPTIONS = Object.freeze({
   // TikTok returns a small recent-comment batch during connect. Keeping
   // it is important when an OBS source starts after chat has begun; the
   // Channel de-duplicates comments that the websocket repeats.
   processInitialData: true,
-  enableExtendedGiftInfo: false,
+  // Supplies each gift's diamond cost so recognition can show the
+  // streamer's actual diamond total instead of only the combo count.
+  enableExtendedGiftInfo: true,
 });
 
 /** @typedef {(event: Record<string, any>) => void} RelayListener */
@@ -99,9 +108,9 @@ class TikTokChatRelay {
       channel.start();
     }
     channel.listeners.set(listener, new Set());
-    // Late joiners see the current state and the same recent chat that
-    // earlier surfaces received. Only chat is replayed: an old gift,
-    // follow, or subscription must never fire a fresh alert.
+    // Late joiners see the current state and the same recent chat/events that
+    // earlier surfaces received. Event replays are wire-marked so timeline
+    // surfaces catch up without firing a second toast or sound.
     channel.deliver(listener, { type: "status", state: channel.state });
     if (channel.state === "connected") {
       channel.replayRecent(listener);
@@ -183,13 +192,20 @@ class Channel {
      * @type {Set<string>}
      */
     this.seenChatIds = new Set();
+    /** Event ids seen in this broadcast (gifts/follows/subs/shares). */
+    this.seenEventIds = new Set();
     /**
-     * Bounded chat-only backlog shared with late Dock/widget listeners.
+     * Bounded chat backlog shared with late Dock/widget listeners.
      * Entries already use the relay wire shape and are immutable after
      * mapping, so replay cannot diverge from the original fan-out.
      * @type {Record<string, any>[]}
      */
     this.recentChatEvents = [];
+    /**
+     * Bounded normalized-event backlog for late timeline surfaces.
+     * @type {Record<string, any>[]}
+     */
+    this.recentPlatformEvents = [];
   }
 
   /** @param {Record<string, any>} event */
@@ -198,6 +214,8 @@ class Channel {
       this.state = event.state;
     } else if (event.type === "chat") {
       this.rememberRecentChat(event);
+    } else if (event.type === "event") {
+      this.rememberRecentPlatformEvent(event);
     }
     for (const listener of this.listeners.keys()) {
       this.deliver(listener, event);
@@ -215,6 +233,17 @@ class Channel {
     }
   }
 
+  /** @param {Record<string, any>} event */
+  rememberRecentPlatformEvent(event) {
+    this.recentPlatformEvents.push(event);
+    if (this.recentPlatformEvents.length > MAX_RECENT_PLATFORM_EVENTS) {
+      this.recentPlatformEvents.splice(
+        0,
+        this.recentPlatformEvents.length - MAX_RECENT_PLATFORM_EVENTS,
+      );
+    }
+  }
+
   /**
    * Deliver once per listener/message id. This lets reconnecting
    * listeners catch up after the room is known without duplicating
@@ -225,26 +254,37 @@ class Channel {
   deliver(listener, event) {
     const delivered = this.listeners.get(listener);
     if (!delivered) return;
-    const chatId = event.type === "chat" ? String(event.message?.id || "") : "";
-    if (chatId && delivered.has(chatId)) return;
+    const deliveryId =
+      event.type === "chat"
+        ? `chat:${String(event.message?.id || "")}`
+        : event.type === "event"
+          ? `event:${String(event.event?.id || "")}`
+          : "";
+    if (deliveryId && delivered.has(deliveryId)) return;
     try {
       listener(event);
     } catch {
       /* one bad SSE pipe must not break the fan-out */
     }
-    if (chatId) rememberBoundedId(delivered, chatId);
+    if (deliveryId) rememberBoundedId(delivered, deliveryId);
   }
 
   /** @param {RelayListener} listener */
   replayRecent(listener) {
-    for (const event of this.recentChatEvents) {
+    const recent = [
+      ...this.recentChatEvents,
+      ...this.recentPlatformEvents,
+    ].sort((a, b) => wireEventTimestamp(a) - wireEventTimestamp(b));
+    for (const event of recent) {
       this.deliver(listener, { ...event, replay: true });
     }
   }
 
   clearSessionHistory() {
     this.recentChatEvents = [];
+    this.recentPlatformEvents = [];
     this.seenChatIds.clear();
+    this.seenEventIds.clear();
     for (const delivered of this.listeners.values()) delivered.clear();
   }
 
@@ -326,6 +366,7 @@ class Channel {
     for (const [wireName, eventName] of [
       ["gift", "gift"],
       ["follow", "follow"],
+      ["share", "share"],
       // Connector 2.x calls subscription notifications `subNotify`.
       ["subNotify", "subscribe"],
     ]) {
@@ -336,7 +377,13 @@ class Channel {
         // alert every time OBS reconnects.
         if (this.state !== "connected") return;
         const event = mapTikTokEvent(eventName, data);
-        if (event) this.emit({ type: "event", event });
+        if (event && rememberBoundedId(this.seenEventIds, event.id)) {
+          this.emit({
+            type: "event",
+            event,
+            ...(this.roomId ? { session: this.roomId } : {}),
+          });
+        }
       });
     }
     // `roomUser` is the webcast's viewer-count heartbeat — the live
@@ -568,6 +615,14 @@ function mapChatEvent(data) {
   };
 }
 
+/** @param {Record<string, any>} wire */
+function wireEventTimestamp(wire) {
+  const value = Number(
+    wire?.type === "chat" ? wire?.message?.atMs : wire?.event?.atMs,
+  );
+  return Number.isFinite(value) ? value : 0;
+}
+
 /**
  * Map a connector event (`gift`, `follow`, `subscribe`) to the slim
  * relay event, or null for anything not worth surfacing. Streakable
@@ -591,29 +646,74 @@ function mapTikTokEvent(name, data) {
     data?.nickname ||
     "viewer";
   const msgId = data?.msgId || data?.common?.msgId;
+  const atMs = sourceTimestampMs(data);
+  const discriminator =
+    data?.giftId ||
+    data?.action ||
+    data?.shareType ||
+    data?.subMonth ||
+    data?.repeatCount ||
+    "event";
   const base = {
     id: msgId
       ? String(msgId)
-      : `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      : `${name}:${atMs}:${String(user)}:${String(discriminator)}`,
     user: String(user),
-    atMs: sourceTimestampMs(data),
+    atMs,
   };
   if (name === "gift") {
-    if (data?.giftType === 1 && !data?.repeatEnd) return null;
+    const details = data?.giftDetails || data?.gift || {};
+    const extended = data?.extendedGiftInfo || {};
+    const giftType = details?.giftType ?? data?.giftType;
+    if (giftType === 1 && !data?.repeatEnd) return null;
     const count = Number(data?.repeatCount) || 1;
+    const giftName =
+      details?.giftName ||
+      details?.name ||
+      extended?.name ||
+      extended?.giftName ||
+      data?.giftName ||
+      "a gift";
+    const rawDiamondCost =
+      extended?.diamond_count ??
+      extended?.diamondCount ??
+      extended?.cost ??
+      details?.diamondCount ??
+      details?.diamond_count ??
+      data?.diamondCount;
+    const diamondCost = Number(rawDiamondCost);
+    const diamonds =
+      Number.isFinite(diamondCost) && diamondCost > 0
+        ? Math.round(diamondCost * count)
+        : 0;
     return {
       ...base,
       kind: "gift",
       detail:
-        `sent ${data?.giftName || "a gift"}` + (count > 1 ? ` x${count}` : ""),
-      amount: String(count),
+        `sent ${giftName}` + (count > 1 ? ` x${count}` : ""),
+      amount:
+        diamonds > 0
+          ? `${diamonds.toLocaleString("en-US")} ${diamonds === 1 ? "diamond" : "diamonds"}`
+          : `${count} ${count === 1 ? "gift" : "gifts"}`,
     };
   }
   if (name === "follow") {
     return { ...base, kind: "follow", detail: "followed" };
   }
   if (name === "subscribe") {
+    const months = Number(data?.subMonth ?? data?.month ?? data?.months);
+    if (Number.isFinite(months) && months > 1) {
+      return {
+        ...base,
+        kind: "resub",
+        detail: `subscribed for ${Math.floor(months)} months`,
+        amount: `${Math.floor(months)} months`,
+      };
+    }
     return { ...base, kind: "sub", detail: "subscribed" };
+  }
+  if (name === "share") {
+    return { ...base, kind: "share", detail: "shared the stream" };
   }
   return null;
 }

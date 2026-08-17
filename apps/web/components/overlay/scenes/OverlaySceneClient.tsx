@@ -36,6 +36,7 @@ import type {
   LiveGameEnvelope,
   LiveGamePayload,
 } from "@/components/overlay/types";
+import { useOverlayBuildRefresh } from "@/components/overlay/useOverlayBuildRefresh";
 import {
   SC2BackdropScene,
   accentForRace,
@@ -44,6 +45,7 @@ import {
 } from "./SC2BackdropScene";
 import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
 import { StreamSceneCanvas } from "../widgets/StreamSceneWidget";
+import { useBrollAudioOwner } from "../widgets/brollAudio";
 import {
   isStreamBackgroundId,
   type StreamBackgroundId,
@@ -118,6 +120,7 @@ function DockDrivenOverlaySceneClient({
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [studioEvent, setStudioEvent] = useState<unknown>(null);
+  const brollAudioOwner = useBrollAudioOwner();
 
   useEffect(() => {
     if (demo) return;
@@ -165,6 +168,10 @@ function DockDrivenOverlaySceneClient({
   // pressed a button just now, and that is a more recent statement of
   // intent than whatever the Browser Source URL was set to weeks ago.
   const dockScene = demo ? null : studio.scene;
+  useOverlayBuildRefresh({
+    enabled: scene === "manual" && !demo,
+    safeToReload: !dockScene,
+  });
   const fallbackVariant: BackdropVariant =
     scene === "manual" ? "starting-soon" : scene;
   const variant: BackdropVariant = dockScene
@@ -218,21 +225,19 @@ function DockDrivenOverlaySceneClient({
   }
 
   // The agent-created horizontal layouts use ``/scene/manual`` as their
-  // topmost Stream Dock cover, while many vertical canvases use the standalone
-  // ``/widget/stream-scene`` source. Render the same shared b-roll canvas in
-  // both places so the manual cover does not replace a playing reel with the
-  // legacy SC2 backdrop as soon as its studio snapshot arrives.
-  if (
-    scene === "manual" &&
-    !demo &&
-    dockScene &&
-    studio.broll.clips.length > 0
-  ) {
+  // topmost Stream Dock cover, while vertical canvases use the standalone
+  // ``/widget/stream-scene`` source. Once the Dock activates either BRB or
+  // Starting Soon, always route the manual source through the exact same
+  // canvas. Keeping even the empty-library fallback on this shared path means
+  // the two OBS copies cannot silently diverge because one render took the
+  // legacy SC2 backdrop branch before its b-roll snapshot arrived.
+  if (scene === "manual" && !demo && dockScene) {
     return (
       <StreamSceneCanvas
         scene={dockScene}
         broll={studio.broll}
         remainMs={countdownMs}
+        brollAudioOwner={brollAudioOwner}
       />
     );
   }

@@ -22,6 +22,15 @@ const SAFE_HEADER_NAMES = Object.freeze([
 const CREDENTIAL_PATH_SEGMENT =
   /\/(multichat|chatbot|overlay-tokens|device-pairings)\/[^/?#]+/giu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
+const OAUTH_CALLBACK_PATH =
+  /^\/v1\/integrations\/(?:twitch|kick|youtube)\/callback\/?$/iu;
+const OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS = new Set([
+  "code",
+  "state",
+  "error",
+  "error_description",
+  "error_uri",
+]);
 
 /**
  * Preserve route shape and useful filters while removing credentials.
@@ -37,8 +46,15 @@ function sanitiseRequestUrl(value) {
   );
   try {
     const parsed = new URL(redacted, "http://request.invalid");
+    const isOauthCallback = OAUTH_CALLBACK_PATH.test(parsed.pathname);
     for (const key of parsed.searchParams.keys()) {
-      if (SENSITIVE_QUERY_KEY.test(key)) {
+      if (
+        SENSITIVE_QUERY_KEY.test(key)
+        || (
+          isOauthCallback
+          && OAUTH_CALLBACK_SENSITIVE_QUERY_KEYS.has(key.toLowerCase())
+        )
+      ) {
         parsed.searchParams.set(key, "[redacted]");
       }
     }

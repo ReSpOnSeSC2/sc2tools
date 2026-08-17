@@ -13,17 +13,26 @@ import type {
   StudioBrollConfig,
 } from "@/lib/multichat/useStudioState";
 import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
+import {
+  effectiveBrollPlayback,
+  resolveBrollTimeline,
+  type BrollTimelinePosition,
+} from "./brollTimeline";
 
 const YOUTUBE_IFRAME_API = "https://www.youtube.com/iframe_api";
 const API_READY_TIMEOUT_MS = 12_000;
-const PLAYBACK_WATCHDOG_GRACE_MS = 8_000;
 const FAILED_CYCLE_RETRY_MS = 3_000;
+const PLAYBACK_BOUNDARY_SLOP_MS = 25;
+const DRIFT_CHECK_MS = 2_000;
+const MAX_PLAYBACK_DRIFT_SECONDS = 0.35;
 const BACKGROUND_ROTATE_MS = 24_000;
 
 export type BrollClip = StudioBrollClip;
 export type BrollPlayerConfig = StudioBrollConfig;
 
 export interface BrollPlayerProps extends StudioBrollConfig {
+  /** True only for the designated horizontal OBS audio source. */
+  audioOwner: boolean;
   /** Optional wording for the broadcast-safe canvas shown without video. */
   fallbackLabel?: string;
 }
@@ -32,6 +41,7 @@ type PlaybackStatus = "empty" | "loading" | "playing" | "fallback";
 
 interface YouTubePlayer {
   destroy(): void;
+  getCurrentTime?(): number;
   loadVideoById(options: {
     videoId: string;
     startSeconds: number;
@@ -39,6 +49,7 @@ interface YouTubePlayer {
   }): void;
   mute(): void;
   playVideo(): void;
+  seekTo?(seconds: number, allowSeekAhead: boolean): void;
   setVolume(volume: number): void;
   stopVideo(): void;
   unMute(): void;
@@ -81,32 +92,6 @@ type YouTubeWindow = Window &
 let youtubeApiPromise: Promise<YouTubeApi> | null = null;
 
 /**
- * A shuffled cycle containing every clip except the one already on screen.
- * The exclusion also prevents a repeat at the seam between two cycles.
- */
-export function createBrollShuffleBag(
-  clipCount: number,
-  currentIndex: number,
-  random: () => number = Math.random,
-): number[] {
-  const count = Math.max(0, Math.floor(clipCount));
-  if (count <= 1) return count === 1 ? [0] : [];
-
-  const bag = Array.from({ length: count }, (_, index) => index).filter(
-    (index) => index !== currentIndex,
-  );
-  for (let i = bag.length - 1; i > 0; i -= 1) {
-    const sample = random();
-    const bounded = Number.isFinite(sample)
-      ? Math.min(0.999999, Math.max(0, sample))
-      : 0;
-    const j = Math.floor(bounded * (i + 1));
-    [bag[i], bag[j]] = [bag[j], bag[i]];
-  }
-  return bag;
-}
-
-/**
  * Full-canvas YouTube highlight reel for OBS Browser Sources.
  *
  * The component owns playback only. Stream-scene wording and timers remain in
@@ -118,6 +103,8 @@ export function BrollPlayer({
   muted,
   volume,
   skipNonce,
+  playback: playbackAnchor,
+  audioOwner,
   fallbackLabel = "HIGHLIGHT REEL STANDBY",
 }: BrollPlayerProps) {
   const playableClips = useMemo(() => normalizeClips(clips), [clips]);
@@ -125,164 +112,224 @@ export function BrollPlayer({
     () => playableClips.map(clipKey).join("\u001f"),
     [playableClips],
   );
-  const firstIndex =
-    shuffle && playableClips.length > 1
-      ? Math.floor(Math.random() * playableClips.length)
-      : 0;
-  const [playback, setPlayback] = useState({ index: firstIndex, generation: 0 });
+  const sharedPlayback = useMemo(
+    () => effectiveBrollPlayback(playbackAnchor, skipNonce, playableClips.length),
+    [playbackAnchor, playableClips.length, skipNonce],
+  );
+  const timelineSignature = `${signature}|${shuffle ? 1 : 0}|${sharedPlayback.epochMs}|${sharedPlayback.revision}|${sharedPlayback.seed}|${sharedPlayback.cursor}`;
+  const [timelineState, setTimelineState] = useState<{
+    position: BrollTimelinePosition | null;
+    generation: number;
+  }>(() => ({
+    position: resolveBrollTimeline(
+      playableClips,
+      shuffle,
+      sharedPlayback,
+      Date.now(),
+    ),
+    generation: 0,
+  }));
   const [status, setStatus] = useState<PlaybackStatus>(
     playableClips.length > 0 ? "loading" : "empty",
   );
   const [hasStartedPlayback, setHasStartedPlayback] = useState(false);
 
   const safeVolume = clampVolume(volume);
-  const currentClip = playableClips[playback.index] ?? playableClips[0] ?? null;
+  const currentClip =
+    (timelineState.position
+      ? playableClips[timelineState.position.clipIndex]
+      : null) ?? playableClips[0] ?? null;
   const currentKey = currentClip ? clipKey(currentClip) : "";
 
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
-  const clipsRef = useRef(playableClips);
-  const currentClipRef = useRef(currentClip);
   const mutedRef = useRef(muted);
   const volumeRef = useRef(safeVolume);
-  const shuffleBagRef = useRef<number[]>(
-    shuffle
-      ? createBrollShuffleBag(playableClips.length, firstIndex)
-      : [],
-  );
-  const failedClipKeysRef = useRef(new Set<string>());
-  const watchdogRef = useRef<number | null>(null);
-  const advanceLockedRef = useRef(false);
-  const signatureRef = useRef(signature);
-  const shuffleRef = useRef(shuffle);
-  const previousSkipNonceRef = useRef(skipNonce);
+  const audioOwnerRef = useRef(audioOwner);
+  const timelineRef = useRef({
+    clips: playableClips,
+    shuffle,
+    playback: sharedPlayback,
+  });
+  const positionRef = useRef(timelineState.position);
+  const boundaryRef = useRef<number | null>(null);
+  const retryRef = useRef<number | null>(null);
+  const driftIntervalRef = useRef<number | null>(null);
+  const timelineSignatureRef = useRef(timelineSignature);
+  const loadCurrentClipRef = useRef<() => void>(() => undefined);
 
-  clipsRef.current = playableClips;
-  currentClipRef.current = currentClip;
+  timelineRef.current = {
+    clips: playableClips,
+    shuffle,
+    playback: sharedPlayback,
+  };
+  positionRef.current = timelineState.position;
   mutedRef.current = muted;
   volumeRef.current = safeVolume;
+  audioOwnerRef.current = audioOwner;
 
-  const clearWatchdog = useCallback(() => {
-    if (watchdogRef.current !== null) {
-      window.clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
+  const clearPlaybackTimers = useCallback(() => {
+    if (boundaryRef.current !== null) {
+      window.clearTimeout(boundaryRef.current);
+      boundaryRef.current = null;
+    }
+    if (retryRef.current !== null) {
+      window.clearTimeout(retryRef.current);
+      retryRef.current = null;
     }
   }, []);
 
-  const advancePlayback = useCallback(() => {
-    const count = clipsRef.current.length;
-    if (count === 0 || advanceLockedRef.current) return;
-    advanceLockedRef.current = true;
-    clearWatchdog();
-    setPlayback((previous) => {
-      const current = Math.min(previous.index, count - 1);
-      let next = 0;
-      if (count === 1) {
-        next = 0;
-      } else if (shuffleRef.current) {
-        let bag = shuffleBagRef.current.filter(
-          (index) => index >= 0 && index < count && index !== current,
-        );
-        if (bag.length === 0) {
-          bag = createBrollShuffleBag(count, current);
-        }
-        next = bag.shift() ?? ((current + 1) % count);
-        shuffleBagRef.current = bag;
-      } else {
-        next = (current + 1) % count;
-      }
-      return { index: next, generation: previous.generation + 1 };
-    });
-  }, [clearWatchdog]);
-
-  const advanceRef = useRef(advancePlayback);
-  advanceRef.current = advancePlayback;
-
-  const handleClipFailure = useCallback(
-    (clip: BrollClip) => {
-      clearWatchdog();
-      failedClipKeysRef.current.add(clipKey(clip));
-      if (failedClipKeysRef.current.size < clipsRef.current.length) {
-        advanceRef.current();
-        return;
-      }
-
-      // YouTube errors can be transient (especially while multiple OBS browser
-      // sources initialize together). A non-empty library must not become a
-      // terminal standby screen after one rejected pass. Pause briefly to
-      // avoid a hot error loop, then start another cycle.
-      setStatus("fallback");
-      watchdogRef.current = window.setTimeout(() => {
-        watchdogRef.current = null;
-        failedClipKeysRef.current.clear();
-        advanceRef.current();
-      }, FAILED_CYCLE_RETRY_MS);
-    },
-    [clearWatchdog],
-  );
-
   const applyAudio = useCallback((player: YouTubePlayer) => {
-    player.setVolume(volumeRef.current);
-    if (mutedRef.current || volumeRef.current === 0) player.mute();
+    player.setVolume(audioOwnerRef.current ? volumeRef.current : 0);
+    if (
+      !audioOwnerRef.current ||
+      mutedRef.current ||
+      volumeRef.current === 0
+    ) player.mute();
     else player.unMute();
   }, []);
 
+  const resolveNow = useCallback(() => {
+    const timeline = timelineRef.current;
+    return resolveBrollTimeline(
+      timeline.clips,
+      timeline.shuffle,
+      timeline.playback,
+      Date.now(),
+    );
+  }, []);
+
+  const syncToTimeline = useCallback(() => {
+    const position = resolveNow();
+    positionRef.current = position;
+    setTimelineState((previous) => ({
+      position,
+      generation: previous.generation + 1,
+    }));
+  }, [resolveNow]);
+
+  const syncToTimelineRef = useRef(syncToTimeline);
+  syncToTimelineRef.current = syncToTimeline;
+
+  const scheduleBoundary = useCallback(
+    (position: BrollTimelinePosition) => {
+      if (boundaryRef.current !== null) {
+        window.clearTimeout(boundaryRef.current);
+      }
+      boundaryRef.current = window.setTimeout(() => {
+        boundaryRef.current = null;
+        syncToTimelineRef.current();
+      }, Math.max(PLAYBACK_BOUNDARY_SLOP_MS, Math.ceil(position.remainingMs) + PLAYBACK_BOUNDARY_SLOP_MS));
+    },
+    [],
+  );
+
+  const handleClipFailure = useCallback(() => {
+    const position = resolveNow();
+    if (!position) {
+      setStatus("empty");
+      return;
+    }
+    setStatus("fallback");
+    scheduleBoundary(position);
+    if (retryRef.current !== null) window.clearTimeout(retryRef.current);
+    if (position.remainingMs > FAILED_CYCLE_RETRY_MS + 250) {
+      retryRef.current = window.setTimeout(() => {
+        retryRef.current = null;
+        loadCurrentClipRef.current();
+      }, FAILED_CYCLE_RETRY_MS);
+    }
+  }, [resolveNow, scheduleBoundary]);
+
+  const correctPlaybackDrift = useCallback(
+    (player: YouTubePlayer) => {
+      const expected = resolveNow();
+      const shown = positionRef.current;
+      if (!expected || !shown) return;
+      if (expected.clipIndex !== shown.clipIndex) {
+        syncToTimelineRef.current();
+        return;
+      }
+      scheduleBoundary(expected);
+      const actualSeconds = player.getCurrentTime?.();
+      const expectedClip = timelineRef.current.clips[expected.clipIndex];
+      const expectedSeconds =
+        expectedClip.startSeconds + expected.offsetMs / 1000;
+      if (
+        typeof actualSeconds === "number" &&
+        Number.isFinite(actualSeconds) &&
+        Math.abs(actualSeconds - expectedSeconds) >
+          MAX_PLAYBACK_DRIFT_SECONDS
+      ) {
+        player.seekTo?.(expectedSeconds, true);
+      }
+    },
+    [resolveNow, scheduleBoundary],
+  );
+
   const loadCurrentClip = useCallback(() => {
     const player = playerRef.current;
-    const clip = currentClipRef.current;
-    if (!player || !playerReadyRef.current || !clip) return;
+    const position = resolveNow();
+    const clipsNow = timelineRef.current.clips;
+    const clip = position ? clipsNow[position.clipIndex] : null;
+    if (!player || !playerReadyRef.current || !clip || !position) return;
 
-    clearWatchdog();
+    if (
+      positionRef.current &&
+      positionRef.current.clipIndex !== position.clipIndex
+    ) {
+      syncToTimelineRef.current();
+      return;
+    }
+    positionRef.current = position;
+    clearPlaybackTimers();
+    scheduleBoundary(position);
     setStatus("loading");
     try {
       applyAudio(player);
+      const offsetSeconds = position.offsetMs / 1000;
+      const startSeconds = Math.min(
+        clip.endSeconds - 0.05,
+        clip.startSeconds + offsetSeconds,
+      );
       player.loadVideoById({
         videoId: clip.videoId,
-        startSeconds: clip.startSeconds,
+        startSeconds,
         endSeconds: clip.endSeconds,
       });
       player.playVideo();
-      const durationMs = (clip.endSeconds - clip.startSeconds) * 1000;
-      watchdogRef.current = window.setTimeout(() => {
-        advanceRef.current();
-      }, durationMs + PLAYBACK_WATCHDOG_GRACE_MS);
     } catch {
-      handleClipFailure(clip);
+      handleClipFailure();
     }
-  }, [applyAudio, clearWatchdog, handleClipFailure]);
+  }, [
+    applyAudio,
+    clearPlaybackTimers,
+    handleClipFailure,
+    resolveNow,
+    scheduleBoundary,
+  ]);
 
-  const loadCurrentClipRef = useRef(loadCurrentClip);
   loadCurrentClipRef.current = loadCurrentClip;
 
-  // A replacement library starts a fresh reel. Merely changing volume or the
-  // skip nonce does not disturb its position.
+  // Library, shuffle and skip updates carry a new server-owned timeline
+  // revision. Re-resolve from wall time instead of asking each player to make
+  // an independent random/local advance decision.
   useEffect(() => {
-    if (signatureRef.current === signature) return;
-    signatureRef.current = signature;
-    failedClipKeysRef.current.clear();
-    clearWatchdog();
-    setHasStartedPlayback(false);
-    const count = playableClips.length;
-    const nextIndex =
-      shuffle && count > 1 ? Math.floor(Math.random() * count) : 0;
-    shuffleBagRef.current = shuffle
-      ? createBrollShuffleBag(count, nextIndex)
-      : [];
-    setPlayback((previous) => ({
-      index: nextIndex,
+    if (timelineSignatureRef.current === timelineSignature) return;
+    timelineSignatureRef.current = timelineSignature;
+    clearPlaybackTimers();
+    const position = resolveNow();
+    positionRef.current = position;
+    setTimelineState((previous) => ({
+      position,
       generation: previous.generation + 1,
     }));
-    if (count === 0) setStatus("empty");
-  }, [clearWatchdog, playableClips.length, shuffle, signature]);
-
-  useEffect(() => {
-    if (shuffleRef.current === shuffle) return;
-    shuffleRef.current = shuffle;
-    shuffleBagRef.current = shuffle
-      ? createBrollShuffleBag(playableClips.length, playback.index)
-      : [];
-  }, [playableClips.length, playback.index, shuffle]);
+    if (!position) {
+      setHasStartedPlayback(false);
+      setStatus("empty");
+    }
+  }, [clearPlaybackTimers, resolveNow, timelineSignature]);
 
   // Construct one YouTube player per library. Individual clips are loaded into
   // it so auto-advance does not churn iframes or flash the page background.
@@ -319,25 +366,40 @@ export function BrollPlayer({
               playerReadyRef.current = true;
               applyAudio(event.target);
               loadCurrentClipRef.current();
+              if (driftIntervalRef.current !== null) {
+                window.clearInterval(driftIntervalRef.current);
+              }
+              driftIntervalRef.current = window.setInterval(() => {
+                const currentPlayer = playerRef.current;
+                if (currentPlayer) correctPlaybackDrift(currentPlayer);
+              }, DRIFT_CHECK_MS);
             },
             onStateChange(event) {
               if (cancelled) return;
               if (event.data === YT.PlayerState.PLAYING) {
-                failedClipKeysRef.current.clear();
+                if (retryRef.current !== null) {
+                  window.clearTimeout(retryRef.current);
+                  retryRef.current = null;
+                }
                 setHasStartedPlayback(true);
                 setStatus("playing");
+                correctPlaybackDrift(event.target);
               } else if (event.data === YT.PlayerState.ENDED) {
-                advanceRef.current();
+                // Never let an early/late iframe ENDED event choose the next
+                // clip locally. Re-resolve the shared clock; if the boundary
+                // has not arrived yet, use the safe fallback until it does.
+                const expected = resolveNow();
+                const shown = positionRef.current;
+                if (expected && shown && expected.clipIndex !== shown.clipIndex) {
+                  syncToTimelineRef.current();
+                } else {
+                  handleClipFailure();
+                }
               }
             },
             onError() {
               if (cancelled) return;
-              const clip = currentClipRef.current;
-              if (!clip) {
-                setStatus("fallback");
-                return;
-              }
-              handleClipFailure(clip);
+              handleClipFailure();
             },
           },
         });
@@ -349,7 +411,11 @@ export function BrollPlayer({
 
     return () => {
       cancelled = true;
-      clearWatchdog();
+      clearPlaybackTimers();
+      if (driftIntervalRef.current !== null) {
+        window.clearInterval(driftIntervalRef.current);
+        driftIntervalRef.current = null;
+      }
       playerReadyRef.current = false;
       const player = playerRef.current;
       playerRef.current = null;
@@ -359,31 +425,31 @@ export function BrollPlayer({
         // YouTube may already have torn down its iframe during navigation.
       }
     };
-  }, [applyAudio, clearWatchdog, handleClipFailure, hasPlayableClips]);
+  }, [
+    applyAudio,
+    clearPlaybackTimers,
+    correctPlaybackDrift,
+    handleClipFailure,
+    hasPlayableClips,
+    resolveNow,
+  ]);
 
   useEffect(() => {
-    advanceLockedRef.current = false;
     if (!currentKey) {
-      clearWatchdog();
+      clearPlaybackTimers();
       setStatus("empty");
       return;
     }
     if (playerReadyRef.current) loadCurrentClipRef.current();
     else setStatus("loading");
-  }, [clearWatchdog, currentKey, playback.generation]);
+  }, [clearPlaybackTimers, currentKey, timelineState.generation]);
 
   useEffect(() => {
     const player = playerRef.current;
     if (player && playerReadyRef.current) applyAudio(player);
-  }, [applyAudio, muted, safeVolume]);
+  }, [applyAudio, audioOwner, muted, safeVolume]);
 
-  useEffect(() => {
-    if (previousSkipNonceRef.current === skipNonce) return;
-    previousSkipNonceRef.current = skipNonce;
-    advanceRef.current();
-  }, [skipNonce]);
-
-  useEffect(() => () => clearWatchdog(), [clearWatchdog]);
+  useEffect(() => () => clearPlaybackTimers(), [clearPlaybackTimers]);
 
   const standbyCopy =
     status === "fallback"
@@ -397,6 +463,8 @@ export function BrollPlayer({
   return (
     <div
       className="broll-player"
+      data-audio-owner={audioOwner ? "true" : "false"}
+      data-clip-id={currentClip?.id ?? ""}
       data-playback-status={status}
       data-testid="broll-player"
       style={playerFrameStyle}

@@ -36,6 +36,9 @@ const EVENT_XP = {
   superchat: 60,
   gift: 20,
   follow: 10,
+  cheer: 20,
+  share: 10,
+  reward: 15,
 };
 const ORACLE_POINTS = 10;
 const TALLY_THROTTLE_MS = 2_000;

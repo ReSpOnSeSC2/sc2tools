@@ -2095,6 +2095,8 @@ def _handle_obs_build(
         SceneBuildError,
         build_scenes,
         plan_scenes,
+        repair_broll_audio_roles,
+        repair_chat_alert_audio_roles,
         repair_manual_scene_overrides,
     )
 
@@ -2126,6 +2128,13 @@ def _handle_obs_build(
             overlay_token=token,
             webcam_source=request.get("webcam_source") or None,
             game_source=request.get("game_source") or None,
+        )
+        manual_url = next(
+            item.browser_path
+            for scene in plan.scenes
+            for item in scene.items
+            if item.share_key == "manual_scene_override"
+            and item.browser_path
         )
         rebuild = bool(request.get("rebuild"))
         repaired: list[str] = []
@@ -2162,13 +2171,6 @@ def _handle_obs_build(
                 scene.name for scene in plan.scenes if not scene.exists
             ]
             if authorized_existing:
-                manual_url = next(
-                    item.browser_path
-                    for scene in plan.scenes
-                    for item in scene.items
-                    if item.share_key == "manual_scene_override"
-                    and item.browser_path
-                )
                 repaired = repair_manual_scene_overrides(
                     client,
                     browser_url=manual_url,
@@ -2205,6 +2207,18 @@ def _handle_obs_build(
                 )
         else:
             created = build_scenes(client, plan)
+        (
+            chat_alert_audio_owners,
+            chat_alert_role_updates,
+            chat_alert_geometry_updates,
+        ) = repair_chat_alert_audio_roles(
+            client,
+            browser_url=manual_url,
+        )
+        audio_owner, audio_role_updates = repair_broll_audio_roles(
+            client,
+            browser_url=manual_url,
+        )
     except SceneBuildError as exc:
         return {"ok": False, "message": str(exc)}
     except Exception as exc:  # noqa: BLE001
@@ -2214,9 +2228,17 @@ def _handle_obs_build(
         client.shutdown()
 
     log.info(
-        "obs_scene_build_ok created=%s repaired=%s",
+        "obs_scene_build_ok created=%s repaired=%s "
+        "chat_alert_audio_owners=%s chat_alert_audio_role_updates=%s "
+        "chat_alert_geometry_updates=%s "
+        "broll_audio_owner=%s broll_audio_role_updates=%s",
         ",".join(created),
         ",".join(repaired),
+        chat_alert_audio_owners,
+        len(chat_alert_role_updates),
+        len(chat_alert_geometry_updates),
+        audio_owner or "none",
+        len(audio_role_updates),
     )
     note = " ".join(plan.warnings) if plan.warnings else ""
     updated_existing = [name for name in repaired if name not in created]
@@ -2343,10 +2365,13 @@ def _build_obs_switcher(
 
         This callback is best-effort by design: scene switching must stay
         available even if an older OBS build cannot inventory or edit items.
-        The repair itself is restricted to the two exact generated scenes and
-        never changes their existing camera, capture, or custom sources. It
-        uses a throwaway request connection so a failed migration cannot drop
-        the switcher's long-lived request or event sockets.
+        The generated repair is restricted to the two exact builder scenes and
+        only their authenticated manual-cover/chat-alert routes. A separate
+        portrait exception only references Live's existing alert renderer when
+        exact scene, route, token, and portrait fingerprints all match. Neither
+        changes existing camera, capture, or custom sources. A throwaway
+        request connection keeps failures away from the switcher's long-lived
+        request and event sockets.
         """
         repair_host, repair_port, repair_password = client.connection_settings
         repair_client = ObsClient(
@@ -2358,29 +2383,120 @@ def _build_obs_switcher(
         try:
             from .live.obs_layout import (
                 discover_manual_override_url,
+                discover_widget_only_broll_url,
+                repair_broll_audio_roles,
+                repair_chat_alert_audio_roles,
                 repair_manual_scene_overrides,
+                repair_vertical_scene_chat_alerts,
             )
 
             if not repair_client.connect_now():
                 raise RuntimeError("OBS repair connection did not stay healthy")
-            manual_url = discover_manual_override_url(repair_client)
+            try:
+                if repair_vertical_scene_chat_alerts(repair_client):
+                    log.info("obs_vertical_chat_alert_auto_repaired")
+            except Exception as exc:  # noqa: BLE001 - independent repair
+                log.warning(
+                    "obs_vertical_chat_alert_auto_repair_failed err=%s; "
+                    "will retry on next OBS connection",
+                    exc,
+                )
+
+            manual_url = None
+            try:
+                manual_url = discover_manual_override_url(repair_client)
+            except Exception as exc:  # noqa: BLE001 - independent discovery
+                log.warning(
+                    "obs_manual_override_url_discovery_failed err=%s; "
+                    "will retry on next OBS connection",
+                    exc,
+                )
+
+            audio_identity_url = manual_url
+            if audio_identity_url is None:
+                try:
+                    audio_identity_url = discover_widget_only_broll_url(
+                        repair_client,
+                    )
+                except Exception as exc:  # noqa: BLE001 - independent discovery
+                    log.warning(
+                        "obs_broll_url_discovery_failed err=%s; "
+                        "will retry on next OBS connection",
+                        exc,
+                    )
+
+            manual_repaired: list[str] = []
             if manual_url is None:
                 log.debug(
                     "obs_manual_override_auto_repair_skipped "
                     "reason=no_generated_overlay_url",
                 )
-                return
-            repaired = repair_manual_scene_overrides(
-                repair_client,
-                browser_url=manual_url,
-            )
-            if repaired:
-                log.info(
-                    "obs_manual_override_auto_repaired scenes=%r",
-                    repaired,
-                )
+            else:
+                try:
+                    manual_repaired = repair_manual_scene_overrides(
+                        repair_client,
+                        browser_url=manual_url,
+                    )
+                    if manual_repaired:
+                        log.info(
+                            "obs_manual_override_auto_repaired scenes=%r",
+                            manual_repaired,
+                        )
+                except Exception as exc:  # noqa: BLE001 - independent repair
+                    log.warning(
+                        "obs_manual_override_auto_repair_failed err=%s; "
+                        "will retry on next OBS connection",
+                        exc,
+                    )
+
+            if audio_identity_url is not None:
+                try:
+                    audio_owners, audio_updates, geometry_scenes = (
+                        repair_chat_alert_audio_roles(
+                            repair_client,
+                            browser_url=audio_identity_url,
+                        )
+                    )
+                    if audio_updates or geometry_scenes:
+                        log.info(
+                            "obs_chat_alert_audio_roles_auto_repaired "
+                            "owners=%r sources=%r scenes=%r",
+                            audio_owners,
+                            audio_updates,
+                            geometry_scenes,
+                        )
+                except Exception as exc:  # noqa: BLE001 - independent repair
+                    log.warning(
+                        "obs_chat_alert_audio_roles_auto_repair_failed err=%s; "
+                        "will retry on next OBS connection",
+                        exc,
+                    )
+
+            if audio_identity_url is not None:
+                try:
+                    owner, updated = repair_broll_audio_roles(
+                        repair_client,
+                        browser_url=audio_identity_url,
+                    )
+                    if updated:
+                        log.info(
+                            "obs_broll_audio_roles_auto_repaired owner=%s "
+                            "sources=%r",
+                            owner or "none",
+                            updated,
+                        )
+                except Exception as exc:  # noqa: BLE001 - independent repair
+                    log.warning(
+                        "obs_broll_audio_roles_auto_repair_failed err=%s; "
+                        "will retry on next OBS connection",
+                        exc,
+                    )
         except Exception as exc:  # noqa: BLE001
-            log.warning("obs_manual_override_auto_repair_failed err=%s", exc)
+            log.warning(
+                "obs_startup_repair_failed err=%s; "
+                "will retry on next OBS connection",
+                exc,
+            )
         finally:
             repair_client.shutdown()
 

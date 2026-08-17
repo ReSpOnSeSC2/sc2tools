@@ -67,7 +67,24 @@ function buildOverlayTokensRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
-      await deps.overlayTokens.revoke(auth.userId, String(req.params.token));
+      const token = String(req.params.token);
+      const revoked = await deps.overlayTokens.revoke(auth.userId, token);
+      // A token is also a live Socket.IO credential. Revoking the Mongo row
+      // must terminate every already-authenticated Browser Source using that
+      // room; otherwise it could keep requesting private replay snapshots
+      // until the socket happened to reconnect. Only disconnect after an
+      // ownership-matched revoke so a caller cannot evict another user's room.
+      if (revoked && deps.io && typeof deps.io.in === "function") {
+        try {
+          const room = deps.io.in(`overlay:${token}`);
+          if (room && typeof room.disconnectSockets === "function") {
+            room.disconnectSockets(true);
+          }
+        } catch {
+          // The durable revoke already succeeded. The resync handler performs
+          // a fresh ownership check as a second enforcement layer.
+        }
+      }
       res.status(204).end();
     } catch (err) {
       next(err);

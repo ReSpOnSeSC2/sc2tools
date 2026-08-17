@@ -15,7 +15,7 @@ import {
   type ChatSoundConfig,
   type EventSounder,
 } from "./sound";
-import type { ChatEvent } from "./events";
+import { chatEventIdentity, type ChatEvent } from "./events";
 
 const SEEN_IDS_CAP = 500;
 
@@ -48,11 +48,12 @@ export function useEventSounds(
   useEffect(() => {
     const sounder = sounderRef.current;
     for (const e of events) {
-      const key = `${e.platform}:${e.id}`;
+      const key = chatEventIdentity(e);
       if (seenRef.current.has(key)) continue;
       seenRef.current.add(key);
       if (
         !config.eventSoundsEnabled ||
+        e.replayed === true ||
         e.atMs < mountedAtRef.current - 2000
       ) {
         continue;
@@ -61,7 +62,7 @@ export function useEventSounds(
       sounder?.play(e.kind);
     }
     if (seenRef.current.size > SEEN_IDS_CAP) {
-      seenRef.current = new Set(events.map((e) => `${e.platform}:${e.id}`));
+      seenRef.current = new Set(events.map(chatEventIdentity));
     }
   }, [events, config.eventSoundsEnabled]);
 }

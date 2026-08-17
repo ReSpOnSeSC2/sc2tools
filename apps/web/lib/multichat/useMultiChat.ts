@@ -8,12 +8,13 @@
 // they're low-frequency and the setup screen wants them live.
 
 import { useEffect, useRef, useState } from "react";
-import { EVENT_CAP, type ChatEvent } from "./events";
+import { appendEvents, EVENT_CAP, type ChatEvent } from "./events";
 import { appendMessages, FEED_CAP } from "./feed";
 import { createKickChat } from "./kick";
 import { createTikTokChat } from "./tiktok";
 import { createTwitchChat } from "./twitch";
 import { createYoutubeChat } from "./youtube";
+import { createOfficialPlatformEvents } from "./official";
 import type {
   ChatEngine,
   ChatMessage,
@@ -47,7 +48,10 @@ export function useMultiChat(args: {
   const eventBufferRef = useRef<ChatEvent[]>([]);
 
   useEffect(() => {
-    if (!config) return;
+    if (!config && !token) {
+      setActive(false);
+      return;
+    }
     const engines: ChatEngine[] = [];
     const onMessage = (m: ChatMessage) => {
       bufferRef.current.push(m);
@@ -60,7 +64,7 @@ export function useMultiChat(args: {
         setStatuses((prev) => ({ ...prev, [platform]: { state, detail } }));
       };
 
-    if (config.twitch?.enabled && config.twitch.channel) {
+    if (config?.twitch?.enabled && config.twitch.channel) {
       engines.push(
         createTwitchChat({
           channel: config.twitch.channel,
@@ -68,7 +72,7 @@ export function useMultiChat(args: {
         }),
       );
     }
-    if (config.kick?.enabled && config.kick.chatroomId) {
+    if (config?.kick?.enabled && config.kick.chatroomId) {
       engines.push(
         createKickChat({
           chatroomId: config.kick.chatroomId,
@@ -76,7 +80,7 @@ export function useMultiChat(args: {
         }),
       );
     }
-    if (config.youtube?.enabled && config.youtube.channel) {
+    if (config?.youtube?.enabled && config.youtube.channel) {
       engines.push(
         createYoutubeChat({
           apiBase,
@@ -86,7 +90,7 @@ export function useMultiChat(args: {
         }),
       );
     }
-    if (config.tiktok?.enabled && config.tiktok.username) {
+    if (config?.tiktok?.enabled && config.tiktok.username) {
       engines.push(
         createTikTokChat({
           apiBase,
@@ -96,7 +100,15 @@ export function useMultiChat(args: {
         }),
       );
     }
-    setActive(engines.length > 0);
+    // Official connections fill gaps the public chat transports cannot expose
+    // (Twitch/Kick follows + rewards, public YouTube subscribers). Keep this
+    // separate from platform status dots so one shared socket cannot mask a
+    // direct chat outage.
+    const chatEngineCount = engines.length;
+    if (token) {
+      engines.push(createOfficialPlatformEvents({ apiBase, token, onEvent }));
+    }
+    setActive(chatEngineCount > 0);
 
     const flush = setInterval(() => {
       if (bufferRef.current.length > 0) {
@@ -107,7 +119,7 @@ export function useMultiChat(args: {
       if (eventBufferRef.current.length > 0) {
         const batch = eventBufferRef.current;
         eventBufferRef.current = [];
-        setEvents((prev) => appendMessages(prev, batch, EVENT_CAP));
+        setEvents((prev) => appendEvents(prev, batch, EVENT_CAP));
       }
     }, FLUSH_INTERVAL_MS);
 

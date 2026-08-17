@@ -48,6 +48,9 @@ function makeSocket(handshake) {
   return {
     handshake,
     data: {},
+    connected: true,
+    disconnected: false,
+    disconnectCalls: [],
     rooms: [],
     emitted,
     join(room) {
@@ -61,7 +64,12 @@ function makeSocket(handshake) {
     },
     fire(event, ...args) {
       const fn = eventHandlers.get(event);
-      if (fn) fn(...args);
+      return fn ? fn(...args) : undefined;
+    },
+    disconnect(close) {
+      this.disconnectCalls.push(close);
+      this.connected = false;
+      this.disconnected = true;
     },
     eventHandlers,
   };
@@ -266,6 +274,51 @@ describe("attachSocketAuth (overlay) — overlay:resync", () => {
     socket.fire("overlay:resync");
     await new Promise((r) => setImmediate(r));
     expect(sessionCalls).toHaveLength(2);
+  });
+
+  test("freshly revalidates the overlay token and disconnects a revoked socket before replay", async () => {
+    const io = setupIo();
+    let active = true;
+    const validateOverlayToken = jest.fn(async (userId, token) =>
+      active && userId === "u1" && token === "tok-1");
+    const resolveSession = jest.fn(async () => ({ wins: 1, losses: 0, games: 1 }));
+    const resolvePlatformEvents = jest.fn(async () => [{
+      platform: "twitch",
+      id: "private-event",
+      kind: "follow",
+      user: "Viewer",
+      detail: "followed",
+      atMs: Date.now(),
+    }]);
+    attachSocketAuth(io, {
+      secretKey: "sk_test",
+      resolveOverlayToken: async () => ({
+        userId: "u1",
+        label: "main",
+        enabledWidgets: [],
+      }),
+      validateOverlayToken,
+      resolveSession,
+      resolvePlatformEvents,
+    });
+    const socket = await io.runHandshake({
+      auth: { overlayToken: "tok-1" },
+    });
+    io.runConnect(socket);
+    await new Promise((r) => setImmediate(r));
+    resolveSession.mockClear();
+    resolvePlatformEvents.mockClear();
+    socket.emitted.length = 0;
+
+    active = false;
+    await socket.fire("overlay:resync");
+    await new Promise((r) => setImmediate(r));
+
+    expect(validateOverlayToken).toHaveBeenCalledWith("u1", "tok-1");
+    expect(socket.disconnectCalls).toEqual([true]);
+    expect(resolveSession).not.toHaveBeenCalled();
+    expect(resolvePlatformEvents).not.toHaveBeenCalled();
+    expect(socket.emitted).toEqual([]);
   });
 });
 

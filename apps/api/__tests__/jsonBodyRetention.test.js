@@ -16,4 +16,14 @@ describe("JSON raw-body retention", () => {
     captureClerkWebhookRawBody(req, {}, Buffer.alloc(4 * 1024 * 1024));
     expect(req).not.toHaveProperty("rawBody");
   });
+
+  test.each([
+    "/v1/webhooks/twitch/eventsub",
+    "/v1/webhooks/kick/events",
+  ])("retains exact bytes for signed platform webhook %s", (url) => {
+    const req = { originalUrl: url };
+    const body = Buffer.from('{"signed":true}');
+    captureClerkWebhookRawBody(req, {}, body);
+    expect(req.rawBody).toBe(body);
+  });
 });

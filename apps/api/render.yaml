@@ -113,6 +113,40 @@ services:
         # batch size. Client-side Retry-After + adaptive batching remain as
         # the belt-and-suspenders bound on server load.
         value: "600"
+      # Official creator-account notifications. Values stay dashboard-managed:
+      # sync:false preserves them across Blueprint redeploys and never stores a
+      # credential in Git. Callback defaults already target api.sc2tools.com;
+      # the optional overrides are declared so an operator-set value is kept.
+      - key: PLATFORM_TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: PLATFORM_INTEGRATIONS_RETURN_URL
+        sync: false
+      - key: PLATFORM_SUBSCRIPTION_HEALTH_INTERVAL_MS
+        sync: false
+      - key: YOUTUBE_SUBSCRIBER_POLL_INTERVAL_MS
+        sync: false
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CLIENT_SECRET
+        sync: false
+      - key: TWITCH_EVENTSUB_SECRET
+        sync: false
+      - key: TWITCH_REDIRECT_URI
+        sync: false
+      - key: TWITCH_EVENTSUB_CALLBACK_URL
+        sync: false
+      - key: KICK_CLIENT_ID
+        sync: false
+      - key: KICK_CLIENT_SECRET
+        sync: false
+      - key: KICK_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
       # Fail-fast, per-process replay-ingest admission. Keep one active batch
       # on Starter; raise only after measuring production RSS under load.
       - key: REPLAY_INGEST_MAX_ACTIVE

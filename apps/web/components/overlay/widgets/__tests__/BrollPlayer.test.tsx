@@ -1,10 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { BrollPlayer, type BrollClip } from "../BrollPlayer";
 import {
-  BrollPlayer,
-  createBrollShuffleBag,
-  type BrollClip,
-} from "../BrollPlayer";
+  createBrollPlaybackOrder,
+  effectiveBrollPlayback,
+  resolveBrollTimeline,
+} from "../brollTimeline";
 
 const CLIPS: BrollClip[] = [
   {
@@ -34,11 +35,20 @@ const SHUFFLE_CLIPS: BrollClip[] = [
   },
 ];
 
+const ANCHOR = {
+  epochMs: 1_000_000,
+  revision: 7,
+  seed: 0x1234abcd,
+  cursor: 0,
+};
+
 interface MockPlayer {
   destroy: ReturnType<typeof vi.fn>;
+  getCurrentTime: ReturnType<typeof vi.fn>;
   loadVideoById: ReturnType<typeof vi.fn>;
   mute: ReturnType<typeof vi.fn>;
   playVideo: ReturnType<typeof vi.fn>;
+  seekTo: ReturnType<typeof vi.fn>;
   setVolume: ReturnType<typeof vi.fn>;
   stopVideo: ReturnType<typeof vi.fn>;
   unMute: ReturnType<typeof vi.fn>;
@@ -51,22 +61,26 @@ interface MockHandlers {
 }
 
 function installYouTubeMock() {
-  const player: MockPlayer = {
-    destroy: vi.fn(),
-    loadVideoById: vi.fn(),
-    mute: vi.fn(),
-    playVideo: vi.fn(),
-    setVolume: vi.fn(),
-    stopVideo: vi.fn(),
-    unMute: vi.fn(),
-  };
-  let handlers: MockHandlers | null = null;
+  const players: MockPlayer[] = [];
+  const handlerSets: MockHandlers[] = [];
   const Player = vi.fn(function (
     this: unknown,
     _element: HTMLElement,
     options: { events: MockHandlers },
   ) {
-    handlers = options.events;
+    const player: MockPlayer = {
+      destroy: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      loadVideoById: vi.fn(),
+      mute: vi.fn(),
+      playVideo: vi.fn(),
+      seekTo: vi.fn(),
+      setVolume: vi.fn(),
+      stopVideo: vi.fn(),
+      unMute: vi.fn(),
+    };
+    players.push(player);
+    handlerSets.push(options.events);
     queueMicrotask(() => options.events.onReady({ target: player }));
     return player;
   });
@@ -75,8 +89,14 @@ function installYouTubeMock() {
     PlayerState: { ENDED: 0, PLAYING: 1 },
   };
   return {
-    player,
+    players,
+    get player() {
+      const player = players[0];
+      if (!player) throw new Error("YouTube player was not constructed");
+      return player;
+    },
     handlers: () => {
+      const handlers = handlerSets[0];
       if (!handlers) throw new Error("YouTube player was not constructed");
       return handlers;
     },
@@ -94,6 +114,7 @@ describe("BrollPlayer", () => {
   it("renders a generated camera-safe set when no valid clips exist", () => {
     const { container } = render(
       <BrollPlayer
+        audioOwner
         clips={[]}
         shuffle
         muted={false}
@@ -113,223 +134,230 @@ describe("BrollPlayer", () => {
     expect(container.querySelectorAll(".broll-set-layer")).toHaveLength(1);
   });
 
-  it("loads time ranges, applies audio, auto-advances, and reacts to skipNonce", async () => {
+  it("keeps two video players synchronized but gives audio to only one", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 5_000);
+    const youtube = installYouTubeMock();
+    render(
+      <>
+        <BrollPlayer
+          audioOwner
+          clips={SHUFFLE_CLIPS}
+          shuffle
+          muted={false}
+          volume={23}
+          skipNonce={0}
+          playback={ANCHOR}
+        />
+        <BrollPlayer
+          audioOwner={false}
+          clips={SHUFFLE_CLIPS}
+          shuffle
+          muted={false}
+          volume={23}
+          skipNonce={0}
+          playback={ANCHOR}
+        />
+      </>,
+    );
+    await act(async () => Promise.resolve());
+
+    expect(youtube.players).toHaveLength(2);
+    expect(youtube.players[0].loadVideoById.mock.calls[0][0]).toEqual(
+      youtube.players[1].loadVideoById.mock.calls[0][0],
+    );
+    expect(youtube.players[0].setVolume).toHaveBeenCalledWith(23);
+    expect(youtube.players[0].unMute).toHaveBeenCalled();
+    expect(youtube.players[1].setVolume).toHaveBeenCalledWith(0);
+    expect(youtube.players[1].mute).toHaveBeenCalled();
+    expect(youtube.players[1].unMute).not.toHaveBeenCalled();
+  });
+
+  it("loads at the authoritative offset, advances by wall clock, and applies skip/audio updates", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 5_000);
     const youtube = installYouTubeMock();
     const view = render(
       <BrollPlayer
-        clips={CLIPS}
+        audioOwner
+        clips={SHUFFLE_CLIPS}
         shuffle={false}
         muted={false}
         volume={23}
         skipNonce={0}
+        playback={ANCHOR}
       />,
     );
-
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenCalledWith({
-        videoId: "abcDEF12345",
-        startSeconds: 90,
-        endSeconds: 120,
-      });
+    await act(async () => Promise.resolve());
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "abcDEF12345",
+      startSeconds: 95,
+      endSeconds: 120,
     });
     expect(youtube.player.setVolume).toHaveBeenCalledWith(23);
     expect(youtube.player.unMute).toHaveBeenCalled();
 
+    // An early iframe event cannot make one OBS copy advance independently.
     act(() => {
-      youtube.handlers().onStateChange({
-        target: youtube.player,
-        data: 1,
-      });
-    });
-    expect(screen.getByTestId("broll-player").dataset.playbackStatus).toBe(
-      "playing",
-    );
-
-    act(() => {
-      youtube.handlers().onStateChange({
-        target: youtube.player,
-        data: 0,
-      });
-    });
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-        videoId: "ZYXwvu98765",
-        startSeconds: 300,
-        endSeconds: 348,
-      });
-    });
-    expect(screen.getByTestId("broll-player").dataset.playbackStatus).toBe(
-      "loading",
-    );
-    expect(screen.getByTestId("broll-media").style.opacity).toBe("1");
-
-    act(() => {
-      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
       youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
     });
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-        videoId: "abcDEF12345",
-        startSeconds: 90,
-        endSeconds: 120,
-      });
-    });
+    expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
-      youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
+    await act(async () => {
+      vi.advanceTimersByTime(25_050);
+      await Promise.resolve();
     });
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-        videoId: "ZYXwvu98765",
-        startSeconds: 300,
-        endSeconds: 348,
-      });
-    });
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith(
+      expect.objectContaining({ videoId: "ZYXwvu98765", endSeconds: 348 }),
+    );
 
-    // Two complete automatic ordered cycles: A -> B -> A -> B.
-    expect(
-      youtube.player.loadVideoById.mock.calls.map(([clip]) => clip.videoId),
-    ).toEqual([
-      "abcDEF12345",
-      "ZYXwvu98765",
-      "abcDEF12345",
-      "ZYXwvu98765",
-    ]);
-
+    const skipAnchor = {
+      ...ANCHOR,
+      epochMs: Date.now(),
+      revision: ANCHOR.revision + 1,
+      cursor: 2,
+    };
     view.rerender(
       <BrollPlayer
-        clips={CLIPS}
+        audioOwner
+        clips={SHUFFLE_CLIPS}
         shuffle={false}
         muted
         volume={0}
         skipNonce={1}
+        playback={skipAnchor}
       />,
     );
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-        videoId: "abcDEF12345",
-        startSeconds: 90,
-        endSeconds: 120,
-      });
+    await act(async () => Promise.resolve());
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "QweRTY67890",
+      startSeconds: 420,
+      endSeconds: 455,
     });
     expect(youtube.player.setVolume).toHaveBeenLastCalledWith(0);
     expect(youtube.player.mute).toHaveBeenCalled();
   });
 
-  it("retries the reel after a full rejected pass instead of stopping permanently", async () => {
+  it("retries a rejected clip at the shared offset instead of locally skipping", async () => {
     vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 1_000);
     const youtube = installYouTubeMock();
     render(
       <BrollPlayer
+        audioOwner
         clips={CLIPS}
         shuffle={false}
         muted
         volume={20}
         skipNonce={0}
+        playback={ANCHOR}
       />,
     );
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await act(async () => Promise.resolve());
     expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
       videoId: "abcDEF12345",
-      startSeconds: 90,
+      startSeconds: 91,
       endSeconds: 120,
     });
 
     act(() => {
       youtube.handlers().onError({ target: youtube.player });
-    });
-    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-      videoId: "ZYXwvu98765",
-      startSeconds: 300,
-      endSeconds: 348,
-    });
-
-    act(() => {
-      youtube.handlers().onError({ target: youtube.player });
-    });
-    expect(screen.getByTestId("broll-player").dataset.playbackStatus).toBe(
-      "fallback",
-    );
-    expect(screen.getByText("HIGHLIGHT REEL STANDBY")).toBeTruthy();
-    expect(youtube.player.stopVideo).not.toHaveBeenCalled();
-
-    act(() => {
-      vi.advanceTimersByTime(2_999);
+      vi.advanceTimersByTime(3_000);
     });
     expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(2);
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
     expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
       videoId: "abcDEF12345",
-      startSeconds: 90,
+      startSeconds: 94,
       endSeconds: 120,
     });
-
-    act(() => {
-      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
-      youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
-    });
-    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
-      videoId: "ZYXwvu98765",
-      startSeconds: 300,
-      endSeconds: 348,
-    });
+    expect(screen.getByTestId("broll-player").dataset.clipId).toBe(
+      "hold-the-line",
+    );
   });
 
-  it("keeps auto-advancing in shuffle mode after refilling the bag", async () => {
-    vi.spyOn(Math, "random").mockReturnValue(0);
-    const youtube = installYouTubeMock();
-    render(
+  it("uses one deterministic shuffled choice and offset for separate mounts", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 12_345);
+    const firstYouTube = installYouTubeMock();
+    const first = render(
       <BrollPlayer
+        audioOwner
         clips={SHUFFLE_CLIPS}
         shuffle
         muted
         volume={20}
         skipNonce={0}
+        playback={ANCHOR}
       />,
     );
-    await waitFor(() => {
-      expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(1);
-    });
+    await act(async () => Promise.resolve());
+    const firstLoad = firstYouTube.player.loadVideoById.mock.calls[0][0];
+    first.unmount();
 
-    for (let transition = 0; transition < 4; transition += 1) {
-      act(() => {
-        youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
-        youtube.handlers().onStateChange({ target: youtube.player, data: 0 });
-      });
-      await waitFor(() => {
-        expect(youtube.player.loadVideoById).toHaveBeenCalledTimes(
-          transition + 2,
-        );
-      });
-    }
-
-    // The first bag is C,B. Its refill excludes B (the current clip), then
-    // yields C,A, so playback continues without a repeat at the bag seam.
-    expect(
-      youtube.player.loadVideoById.mock.calls.map(([clip]) => clip.videoId),
-    ).toEqual([
-      "abcDEF12345",
-      "QweRTY67890",
-      "ZYXwvu98765",
-      "QweRTY67890",
-      "abcDEF12345",
-    ]);
+    // A later independent Browser Source/reconnect gets the same schedule and
+    // seeks forward by exactly the wall-clock mount difference.
+    vi.setSystemTime(ANCHOR.epochMs + 13_345);
+    const secondYouTube = installYouTubeMock();
+    render(
+      <BrollPlayer
+        audioOwner
+        clips={SHUFFLE_CLIPS}
+        shuffle
+        muted
+        volume={20}
+        skipNonce={0}
+        playback={ANCHOR}
+      />,
+    );
+    await act(async () => Promise.resolve());
+    const secondLoad = secondYouTube.player.loadVideoById.mock.calls[0][0];
+    expect(secondLoad.videoId).toBe(firstLoad.videoId);
+    expect(secondLoad.startSeconds - firstLoad.startSeconds).toBeCloseTo(1, 5);
   });
 
-  it("builds complete shuffle cycles without replaying the current clip", () => {
-    const samples = [0.73, 0.12, 0.91, 0.44];
-    let sample = 0;
-    const bag = createBrollShuffleBag(5, 2, () => samples[sample++] ?? 0);
+  it("seeks a lagging player back to the shared clock as soon as it plays", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 2_000);
+    const youtube = installYouTubeMock();
+    render(
+      <BrollPlayer
+        audioOwner
+        clips={CLIPS}
+        shuffle={false}
+        muted
+        volume={20}
+        skipNonce={0}
+        playback={ANCHOR}
+      />,
+    );
+    await act(async () => Promise.resolve());
+    youtube.player.getCurrentTime.mockReturnValue(91);
 
-    expect(bag).toHaveLength(4);
-    expect(new Set(bag).size).toBe(4);
-    expect(bag).not.toContain(2);
-    expect([...bag].sort()).toEqual([0, 1, 3, 4]);
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+    });
+    expect(youtube.player.seekTo).toHaveBeenCalledWith(92, true);
+  });
+
+  it("builds deterministic complete shuffle cycles and resolves reconnect offsets", () => {
+    const first = createBrollPlaybackOrder(8, true, 0xdecafbad);
+    const second = createBrollPlaybackOrder(8, true, 0xdecafbad);
+    expect(first).toEqual(second);
+    expect(new Set(first).size).toBe(8);
+    expect(first).not.toEqual(createBrollPlaybackOrder(8, true, 42));
+
+    const position = resolveBrollTimeline(CLIPS, false, ANCHOR, 1_035_250);
+    expect(position).toMatchObject({
+      clipIndex: 1,
+      cursor: 1,
+      offsetMs: 5_250,
+      remainingMs: 42_750,
+    });
+    expect(effectiveBrollPlayback(undefined, 5, SHUFFLE_CLIPS.length)).toEqual({
+      epochMs: 0,
+      revision: 5,
+      seed: 0,
+      cursor: 2,
+    });
   });
 });

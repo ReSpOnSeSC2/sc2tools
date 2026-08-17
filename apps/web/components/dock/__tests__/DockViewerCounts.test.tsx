@@ -130,6 +130,17 @@ describe("sanitizeViewerCounts", () => {
     expect(out.loaded).toBe(true);
   });
 
+  it("keeps a valid per-platform observation time for raid reconciliation", () => {
+    const out = sanitizeViewerCounts({
+      platforms: [
+        { platform: "twitch", viewers: 100, live: true, observedAtMs: 123456 },
+        { platform: "kick", viewers: 10, live: true, observedAtMs: "bad" },
+      ],
+    });
+    expect(out.platforms[0].observedAtMs).toBe(123456);
+    expect(out.platforms[1].observedAtMs).toBeUndefined();
+  });
+
   it("treats a negative or unparsable count as unknown", () => {
     const out = sanitizeViewerCounts({
       platforms: [

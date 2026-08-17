@@ -49,7 +49,7 @@ describe("OverlayTokensService resolve burst control", () => {
       ),
     ).toHaveLength(1);
 
-    await service.revoke("user-1", row.token);
+    await expect(service.revoke("user-1", row.token)).resolves.toBe(true);
     await expect(service.resolve(row.token)).resolves.toBeNull();
     expect(collection.findOne).toHaveBeenCalledTimes(2);
   });

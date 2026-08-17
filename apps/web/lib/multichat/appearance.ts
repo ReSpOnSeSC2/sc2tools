@@ -274,13 +274,48 @@ export function appearanceStyles(a: ChatAppearance): AppearanceStyles {
 
 /* ──────────────── visibility filter ──────────────── */
 
-/** Parse the blockedUsers CSV once per appearance change. */
-export function blockedUserSet(a: ChatAppearance): Set<string> {
+/** One identity rule for Settings, the Stream Dock, messages and events. */
+export function normalizeBlockedUser(value: string): string {
+  return value.trim().toLowerCase().replace(/^@+/, "");
+}
+
+export function normalizedBlockedUserSet(
+  users: Iterable<string>,
+): Set<string> {
   const out = new Set<string>();
-  for (const part of a.blockedUsers.split(",")) {
-    const name = part.trim().toLowerCase().replace(/^@/, "");
+  for (const value of users) {
+    const name = normalizeBlockedUser(value);
     if (name) out.add(name);
   }
+  return out;
+}
+
+export function isBlockedUser(
+  user: string,
+  blocked: ReadonlySet<string>,
+): boolean {
+  return blocked.has(normalizeBlockedUser(user));
+}
+
+/** Preserve input identity when a moderation pass removes nothing. */
+export function excludeBlockedUsers<T extends { user: string }>(
+  items: ReadonlyArray<T>,
+  blocked: ReadonlySet<string>,
+): ReadonlyArray<T> {
+  if (blocked.size === 0) return items;
+  const kept = items.filter((item) => !isBlockedUser(item.user, blocked));
+  return kept.length === items.length ? items : kept;
+}
+
+/** Parse Settings CSV plus the shared Stream Dock blocklist. */
+export function blockedUserSet(
+  a: ChatAppearance,
+  additionalUsers: Iterable<string> = [],
+): Set<string> {
+  const out = normalizedBlockedUserSet([
+    ...a.blockedUsers.split(","),
+    ...additionalUsers,
+  ]);
   if (a.hideBots) {
     for (const bot of KNOWN_BOTS) out.add(bot);
   }
@@ -304,7 +339,7 @@ export function visibleMessages(
   for (const m of messages) {
     if (ttlMs !== null && nowMs - m.atMs >= ttlMs) continue;
     if (a.hideCommands && m.text.startsWith("!")) continue;
-    if (blocked.size > 0 && blocked.has(m.user.trim().toLowerCase())) continue;
+    if (blocked.size > 0 && isBlockedUser(m.user, blocked)) continue;
     kept.push(m);
   }
   return kept.length > a.maxVisible ? kept.slice(kept.length - a.maxVisible) : kept;

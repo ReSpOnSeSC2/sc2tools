@@ -66,6 +66,7 @@ import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
 import { ChatBotCard } from "./ChatBotCard";
+import { OfficialPlatformConnections } from "./OfficialPlatformConnections";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
@@ -425,11 +426,13 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
 
             <ChatBotCard twitchChannel={draft.twitchChannel.trim()} />
 
+            <OfficialPlatformConnections />
+
             <PlatformRow
               label="Twitch"
               enabled={draft.twitchEnabled}
               onToggle={(on) => set({ twitchEnabled: on })}
-              hint="Read-only chat via Twitch's anonymous IRC — no Twitch login or OAuth needed."
+              hint="Live chat works here. Connect Twitch under Notification accounts for signed follows, rewards, subs, resubs, gift subs, cheers and incoming raids; duplicate chat/EventSub copies are paired automatically."
             >
               <TextInput
                 value={draft.twitchChannel}
@@ -443,7 +446,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               label="Kick"
               enabled={draft.kickEnabled}
               onToggle={(on) => set({ kickEnabled: on })}
-              hint="Reads your public Kick chatroom directly — one-time chatroom-id detection, then no server involved."
+              hint="Public chat works here. Connect Kick under Notification accounts for signed follows, rewards, new/renewed subscriptions, gifted subs and KICKs gifts; duplicate chat/webhook copies are paired automatically."
               badge={
                 draft.kickChatroomId ? (
                   <Badge variant="success" size="sm">{`chatroom #${draft.kickChatroomId}`}</Badge>
@@ -508,7 +511,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               label="YouTube"
               enabled={draft.youtubeEnabled}
               onToggle={(on) => set({ youtubeEnabled: on })}
-              hint="Give your handle once — each stream's live chat is discovered automatically. No API key."
+              hint="Live chat, memberships, gifted memberships, Super Chats, Super Stickers and Jewels gifts are recognized automatically. Connect YouTube under Notification accounts to add public free channel subscriptions."
             >
               <TextInput
                 value={draft.youtubeChannel}
@@ -522,7 +525,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               label="TikTok"
               enabled={draft.tiktokEnabled}
               onToggle={(on) => set({ tiktokEnabled: on })}
-              hint="Username only — no stream key needed, ever. Chat reads from your public LIVE; while you're offline the widget idles and auto-connects when you go live."
+              hint="Public LIVE chat, follows, subscriptions, shares, gifts and diamond totals are recognized. TikTok does not offer a public LIVE API, so this connection is best-effort and auto-reconnects while you are live."
             >
               <TextInput
                 value={draft.tiktokUsername}

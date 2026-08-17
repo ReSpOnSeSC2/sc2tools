@@ -124,6 +124,8 @@ async function main() {
     audience: config.clerkJwtAudience,
     isAdminClerkId: (clerkUserId) => adminClerkIds.has(clerkUserId),
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
+    validateOverlayToken: (userId, token) =>
+      services.overlayTokens.tokenBelongsToUser(userId, token),
     resolveDeviceToken: (tokenHash) =>
       /** @type {any} */ (services).pairings.findTokenByHash(tokenHash),
     // Same Clerk → internal userId map the REST middleware uses, so a
@@ -144,6 +146,8 @@ async function main() {
     // the manual Starting Soon / BRB cover.
     resolveStudioState: (token) =>
       /** @type {any} */ (services).multichatStudio.get(token),
+    resolvePlatformEvents: (userId) =>
+      /** @type {any} */ (services).platformIntegrations.recentEvents(userId),
     // Synchronous broker-snapshot accessor used by the overlay
     // connect-replay path AND the ``overlay:resync`` /
     // ``overlay:heartbeat`` handlers. Returns the latest
@@ -186,6 +190,7 @@ async function main() {
   httpServer.listen(config.port, () => {
     logger.info({ port: config.port }, "listening");
     runtimeCapacity.start();
+    /** @type {any} */ (services).platformIntegrations.start();
   });
 
   // Keep-alive heartbeat. Runs only when KEEPALIVE_TARGETS is configured —
@@ -301,6 +306,7 @@ async function main() {
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
     runtimeCapacity.stop();
+    await /** @type {any} */ (services).platformIntegrations.stop();
     // True drain, in order: stop accepting connections, let in-flight
     // requests finish, THEN close Mongo — the old fire-and-forget
     // close() left handlers mid-query when the client shut down. Long-

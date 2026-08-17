@@ -77,6 +77,9 @@ export const DEFAULT_EVENT_SOUNDS: Record<ChatEventKind, string> = {
   superchat: "coin",
   gift: "coin",
   follow: "pop",
+  cheer: "coin",
+  share: "pop",
+  reward: "sparkle",
 };
 
 export const DEFAULT_SOUND: ChatSoundConfig = {

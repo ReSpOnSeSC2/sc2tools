@@ -54,6 +54,7 @@ export function useChatSound(
       if (
         !config.enabled ||
         m.backlog ||
+        m.suppressAudio ||
         m.atMs < mountedAtRef.current - 2000
       ) {
         continue;

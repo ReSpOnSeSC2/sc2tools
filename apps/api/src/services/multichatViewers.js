@@ -200,7 +200,13 @@ function unknownCount(platform) {
  *   platform: "twitch"|"kick"|"youtube"|"tiktok",
  *   viewers: number | null,
  *   live: boolean,
+ *   observedAtMs?: number,
  * }} PlatformViewers
+ */
+
+/**
+ * @typedef {{ value: PlatformViewers, observedAtMs: number | null }}
+ * ObservedPlatformViewers
  */
 
 /**
@@ -357,25 +363,33 @@ class MultichatViewersService {
       IN_FLIGHT_MAX_SUBSCRIBERS,
     );
     this.lastCapacityWarningAtMs = 0;
-    /** @type {Map<string, { atMs: number, value: PlatformViewers }>} */
+    /**
+     * @type {Map<string, {
+     *   atMs: number, observedAtMs: number, value: PlatformViewers,
+     * }>}
+     */
     this.cache = new Map();
     /**
      * @type {Map<string, {
-     *   promise: Promise<PlatformViewers>, subscribers: number,
+     *   promise: Promise<ObservedPlatformViewers>, subscribers: number,
      * }>}
      */
     this.inFlight = new Map();
   }
 
-  /** @param {string} key @param {PlatformViewers} value */
-  setCached(key, value) {
+  /**
+   * @param {string} key
+   * @param {PlatformViewers} value
+   * @param {number} observedAtMs
+   */
+  setCached(key, value, observedAtMs) {
     this.cache.delete(key);
     while (this.cache.size >= this.maxCacheEntries) {
       const oldest = this.cache.keys().next().value;
       if (typeof oldest !== "string") break;
       this.cache.delete(oldest);
     }
-    this.cache.set(key, { atMs: this.now(), value });
+    this.cache.set(key, { atMs: this.now(), observedAtMs, value });
   }
 
   /**
@@ -446,16 +460,16 @@ class MultichatViewersService {
     const cfg = config && typeof config === "object" ? config : {};
 
     if (cfg.twitch?.enabled && cfg.twitch.channel) {
-      jobs.push(this.lookup("twitch", String(cfg.twitch.channel)));
+      jobs.push(this.lookupForConfig("twitch", String(cfg.twitch.channel)));
     }
     if (cfg.kick?.enabled && cfg.kick.channel) {
-      jobs.push(this.lookup("kick", String(cfg.kick.channel)));
+      jobs.push(this.lookupForConfig("kick", String(cfg.kick.channel)));
     }
     if (cfg.youtube?.enabled && cfg.youtube.channel) {
-      jobs.push(this.lookup("youtube", String(cfg.youtube.channel)));
+      jobs.push(this.lookupForConfig("youtube", String(cfg.youtube.channel)));
     }
     if (cfg.tiktok?.enabled && cfg.tiktok.username) {
-      jobs.push(this.lookup("tiktok", String(cfg.tiktok.username)));
+      jobs.push(this.lookupForConfig("tiktok", String(cfg.tiktok.username)));
     }
 
     const platforms = /** @type {PlatformViewers[]} */ (
@@ -478,9 +492,44 @@ class MultichatViewersService {
    * @returns {Promise<PlatformViewers>}
    */
   lookup(platform, channel) {
+    return this.lookupObserved(platform, channel).then(({ value }) => value);
+  }
+
+  /**
+   * Viewer response shape used only by `forConfig`. Public single-platform
+   * lookup callers retain the legacy object exactly, while the Dock receives
+   * the time this upstream observation completed (including cache hits).
+   *
+   * @param {"twitch"|"kick"|"youtube"|"tiktok"} platform
+   * @param {string} channel
+   * @returns {Promise<PlatformViewers & { observedAtMs?: number }>}
+   */
+  lookupForConfig(platform, channel) {
+    return this.lookupObserved(platform, channel).then(
+      ({ value, observedAtMs }) => ({
+        ...value,
+        ...(observedAtMs === null ? {} : { observedAtMs }),
+      }),
+    );
+  }
+
+  /**
+   * Internal lookup retaining observation metadata through cache/in-flight
+   * de-duplication. `observedAtMs` is captured when `fetchOne` resolves: the
+   * response may contain a raid that happened while the request was in flight,
+   * so request-start time would incorrectly label that newer count pre-raid.
+   *
+   * @param {"twitch"|"kick"|"youtube"|"tiktok"} platform
+   * @param {string} channel
+   * @returns {Promise<ObservedPlatformViewers>}
+   */
+  lookupObserved(platform, channel) {
     const input = String(channel ?? "").trim();
     if (!input || input.length > CHANNEL_INPUT_MAX_CHARS) {
-      return Promise.resolve(unknownCount(platform));
+      return Promise.resolve({
+        value: unknownCount(platform),
+        observedAtMs: null,
+      });
     }
     // YouTube video IDs are case-sensitive. Other supported channel names are
     // not, so retain their previous case-insensitive cache behaviour.
@@ -491,21 +540,30 @@ class MultichatViewersService {
       // Map insertion order doubles as a tiny LRU list.
       this.cache.delete(key);
       this.cache.set(key, hit);
-      return Promise.resolve(hit.value);
+      return Promise.resolve({
+        value: hit.value,
+        observedAtMs: hit.observedAtMs,
+      });
     }
     if (hit) this.cache.delete(key);
     const pending = this.inFlight.get(key);
     if (pending) {
       if (pending.subscribers >= this.maxSubscribersPerLookup) {
         this.warnCapacity("subscriber_limit", platform);
-        return Promise.resolve(unknownCount(platform));
+        return Promise.resolve({
+          value: unknownCount(platform),
+          observedAtMs: null,
+        });
       }
       pending.subscribers += 1;
       return pending.promise;
     }
     if (this.inFlight.size >= this.maxInFlight) {
       this.warnCapacity("in_flight_limit", platform);
-      return Promise.resolve(unknownCount(platform));
+      return Promise.resolve({
+        value: unknownCount(platform),
+        observedAtMs: null,
+      });
     }
 
     const baseJob = this.fetchOne(platform, channel)
@@ -519,8 +577,9 @@ class MultichatViewersService {
         return unknownCount(platform);
       })
       .then((value) => {
-        this.setCached(key, value);
-        return value;
+        const observedAtMs = this.now();
+        this.setCached(key, value, observedAtMs);
+        return { value, observedAtMs };
       });
     const flight = { promise: baseJob, subscribers: 1 };
     flight.promise = baseJob.finally(() => {

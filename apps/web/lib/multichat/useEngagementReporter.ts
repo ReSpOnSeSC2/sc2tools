@@ -17,7 +17,7 @@
 import { useEffect, useRef } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import type { ChatMessage } from "./types";
-import type { ChatEvent } from "./events";
+import { chatEventIdentity, type ChatEvent } from "./events";
 
 const FLUSH_MS = 10_000;
 const FLUSH_AT = 80;
@@ -60,13 +60,14 @@ export function useEngagementReporter(
       });
     }
     for (const e of events) {
-      const key = `e:${e.platform}:${e.id}`;
+      const eventIdentity = chatEventIdentity(e);
+      const key = `e:${eventIdentity}`;
       if (seen.has(key)) continue;
       seen.add(key);
       if (e.atMs < mountedAtRef.current - 5_000) continue;
       pending.push({
         platform: e.platform,
-        id: `ev:${e.id}`,
+        id: `ev:${e.updateKey || e.id}`,
         user: e.user,
         kind: e.kind,
         atMs: e.atMs,

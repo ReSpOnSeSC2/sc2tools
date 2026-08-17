@@ -8,7 +8,10 @@ import {
   FONT_SIZE_MIN,
   appearanceStyles,
   blockedUserSet,
+  excludeBlockedUsers,
   hexToRgba,
+  isBlockedUser,
+  normalizedBlockedUserSet,
   sanitizeAppearance,
   visibleMessages,
   type ChatAppearance,
@@ -164,5 +167,24 @@ describe("visibleMessages", () => {
       msg({ id: "c", user: "RealViewer" }),
     ];
     expect(visibleMessages(feed, a, 1_000_000).map((m) => m.id)).toEqual(["c"]);
+  });
+
+  test("normalizes Settings and Dock identities for any chat activity", () => {
+    const blocked = normalizedBlockedUserSet([
+      "  @MixedCaseUser  ",
+      "@@SecondUser",
+      " ",
+    ]);
+    expect([...blocked]).toEqual(["mixedcaseuser", "seconduser"]);
+    expect(isBlockedUser("@MIXEDCASEUSER", blocked)).toBe(true);
+    const activity = [
+      { id: "blocked", user: " mixedcaseuser " },
+      { id: "allowed", user: "FriendlyViewer" },
+    ];
+    expect(excludeBlockedUsers(activity, blocked)).toEqual([
+      { id: "allowed", user: "FriendlyViewer" },
+    ]);
+    const empty = new Set<string>();
+    expect(excludeBlockedUsers(activity, empty)).toBe(activity);
   });
 });

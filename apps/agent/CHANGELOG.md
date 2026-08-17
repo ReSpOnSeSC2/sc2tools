@@ -2,6 +2,23 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.22
+
+### Fixed - connected OBS B-roll and complete alert placement
+
+- Horizontal and vertical Starting Soon / BRB players remain separate video
+  renderers but follow one deterministic playlist clock, including shuffle,
+  skips, reconnects, and clip handoffs.
+- OBS now assigns one explicit B-roll audio owner and keeps every other canvas
+  silent, preventing doubled or out-of-phase sound from long-lived Browser
+  Sources.
+- Existing generated scenes gain correctly sized chat-alert sources, while
+  Live and vertical layouts reuse one audio owner without shrinking visual
+  copies or duplicating chat TTS, dings, or alert sounds.
+- Startup repairs stale manual-cover URLs, browser roles, ordering, and source
+  references independently, so one unavailable OBS scene cannot prevent the
+  remaining repairs from completing on the next connection.
+
 ## 0.15.21
 
 ### Fixed - Windows installer handoff after automatic updates

@@ -28,6 +28,14 @@ describe("request log sanitisation", () => {
       "/v1/games/analysis-corpus?limit=2000&cursor=safe-cursor",
       "/v1/games/analysis-corpus?limit=2000&cursor=safe-cursor",
     ],
+    [
+      "/v1/integrations/twitch/callback?code=oauth-code&state=csrf-state&error=access_denied&error_description=nope&error_uri=https%3A%2F%2Fprovider.test%2Ferror&request_id=safe",
+      "/v1/integrations/twitch/callback?code=%5Bredacted%5D&state=%5Bredacted%5D&error=%5Bredacted%5D&error_description=%5Bredacted%5D&error_uri=%5Bredacted%5D&request_id=safe",
+    ],
+    [
+      "/v1/games?state=complete&code=protoss&error=0",
+      "/v1/games?state=complete&code=protoss&error=0",
+    ],
   ])("redacts credentials without losing route diagnostics: %s", (input, expected) => {
     expect(sanitiseRequestUrl(input)).toBe(expected);
   });

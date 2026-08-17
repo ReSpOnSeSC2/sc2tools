@@ -13,6 +13,9 @@ class _RawObs:
     def __init__(self) -> None:
         self.disconnected = False
         self.enabled_calls = []
+        self.input_setting_calls = []
+        self.refresh_calls = []
+        self.removed_item_calls = []
 
     def get_scene_list(self):
         return SimpleNamespace(scenes=[])
@@ -40,6 +43,17 @@ class _RawObs:
         return SimpleNamespace(
             input_settings={"url": "https://sc2tools.com/overlay/t/scene/manual"},
         )
+
+    def set_input_settings(self, input_name, input_settings, overlay):
+        self.input_setting_calls.append(
+            (input_name, input_settings, overlay),
+        )
+
+    def press_input_properties_button(self, input_name, property_name):
+        self.refresh_calls.append((input_name, property_name))
+
+    def remove_scene_item(self, scene_name, item_id):
+        self.removed_item_calls.append((scene_name, item_id))
 
     def set_scene_item_enabled(self, scene_name, item_id, enabled):
         self.enabled_calls.append((scene_name, item_id, enabled))
@@ -87,6 +101,29 @@ def test_scene_item_and_input_settings_responses_are_normalised() -> None:
         assert client.get_input_settings("SC2 Tools Manual Override") == {
             "url": "https://sc2tools.com/overlay/t/scene/manual",
         }
+
+        client.set_input_settings(
+            "SC2 Tools Manual Override",
+            {"url": "https://sc2tools.com/overlay/t/scene/manual?audio=1"},
+        )
+        assert raw.input_setting_calls == [
+            (
+                "SC2 Tools Manual Override",
+                {"url": "https://sc2tools.com/overlay/t/scene/manual?audio=1"},
+                True,
+            ),
+        ]
+
+        client.refresh_browser_input("SC2 Tools Manual Override")
+        assert raw.refresh_calls == [
+            ("SC2 Tools Manual Override", "refreshnocache"),
+        ]
+
+        client.remove_scene_item(
+            scene_name="SC2 Tools — In Game",
+            item_id=42,
+        )
+        assert raw.removed_item_calls == [("SC2 Tools — In Game", 42)]
 
         client.set_scene_item_enabled(
             scene_name="SC2 Tools — In Game",

@@ -4,7 +4,13 @@
 // ChatMessageEvent payload the public Pusher channel delivers.
 
 import { describe, expect, test } from "vitest";
-import { appendMessages, fallbackColor, FEED_CAP } from "@/lib/multichat/feed";
+import {
+  appendMessages,
+  fallbackColor,
+  FEED_CAP,
+  mergeDisplayFeed,
+} from "@/lib/multichat/feed";
+import type { ChatEvent } from "@/lib/multichat/events";
 import {
   normalizeKickChannelInput,
   normalizeTikTokUsernameInput,
@@ -109,6 +115,17 @@ describe("twitch IRC parsing", () => {
 
   test("emote-less messages carry no emotes field", () => {
     expect(parseTwitchMessage(RAW_PRIVMSG)!.emotes).toBeUndefined();
+  });
+
+  test("marks a cheer chat line as paired with its supporter event", () => {
+    const line =
+      "@badges=;bits=250;color=#9146FF;display-name=CheerFan;emotes=;id=cheer-msg;tmi-sent-ts=1768686000123 " +
+      ":cheerfan!cheerfan@cheerfan.tmi.twitch.tv PRIVMSG #chan :Cheer250 great game";
+    expect(parseTwitchMessage(line)).toMatchObject({
+      id: "cheer-msg",
+      text: "Cheer250 great game",
+      pairedEventKind: "cheer",
+    });
   });
 
   test("parseTwitchEmotesTag drops malformed and out-of-range entries", () => {
@@ -289,6 +306,44 @@ describe("feed", () => {
   test("fallbackColor is deterministic and hsl-shaped", () => {
     expect(fallbackColor("viewer")).toBe(fallbackColor("viewer"));
     expect(fallbackColor("viewer")).toMatch(/^hsl\(\d+ 65% 70%\)$/);
+  });
+
+  test("merges messages and events chronologically without changing their types", () => {
+    const messages = [
+      { ...msg("later"), atMs: 30 },
+      { ...msg("same-time"), atMs: 20 },
+    ];
+    const events: ChatEvent[] = [
+      {
+        platform: "youtube",
+        id: "member-1",
+        kind: "member",
+        user: "Supporter",
+        detail: "became a member",
+        atMs: 10,
+      },
+      {
+        platform: "twitch",
+        id: "raid-1",
+        kind: "raid",
+        user: "Raider",
+        detail: "raided the channel",
+        amount: "42 viewers",
+        atMs: 20,
+      },
+    ];
+
+    const rows = mergeDisplayFeed(messages, events);
+    expect(rows.map((row) => `${row.rowType}:${row.item.id}`)).toEqual([
+      "event:member-1",
+      "message:same-time",
+      "event:raid-1",
+      "message:later",
+    ]);
+    expect(mergeDisplayFeed(messages, events, 2).map((row) => row.item.id)).toEqual([
+      "raid-1",
+      "later",
+    ]);
   });
 });
 

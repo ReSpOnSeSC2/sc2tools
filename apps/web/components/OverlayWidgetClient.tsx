@@ -392,7 +392,13 @@ function WidgetRenderer({
       // Unified Twitch/Kick/YouTube/TikTok chat — self-driven; the
       // token is its auth for the cloud chat relays. ``live`` is read
       // only for the Settings Test-fire flag.
-      return <MultiChatWidget token={token} live={live} />;
+      return (
+        <MultiChatWidget
+          token={token}
+          live={live}
+          studioEvent={studioEvent}
+        />
+      );
     case "chat-highlight":
       // Stream Studio family — all gated on the studio state pushed
       // as ``overlay:multichat`` (and fetched at boot); each renders

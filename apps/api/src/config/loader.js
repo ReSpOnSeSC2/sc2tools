@@ -73,6 +73,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     credentials: { client_email: string, private_key: string }|null,
  *     keyFile: string|null,
  *   },
+ *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
  * }}
  *
  * Example:
@@ -148,7 +149,114 @@ function loadConfig(env = process.env) {
     atlasAdmin: parseAtlasAdminConfig(env),
     renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
+    platformIntegrations: parsePlatformIntegrationsConfig(env),
   };
+}
+
+/**
+ * Official account connections are optional as a feature, but each provider
+ * is all-or-none. A dedicated encryption key is mandatory as soon as any
+ * provider is enabled; it is intentionally unrelated to SERVER_PEPPER_HEX.
+ */
+/** @param {NodeJS.ProcessEnv} env */
+function parsePlatformIntegrationsConfig(env) {
+  const apiOrigin = "https://api.sc2tools.com";
+  const rawTwitchEventsubSecret = String(env.TWITCH_EVENTSUB_SECRET || "");
+  const twitch = optionalProvider("Twitch", {
+    clientId: env.TWITCH_CLIENT_ID,
+    clientSecret: env.TWITCH_CLIENT_SECRET,
+    webhookSecret: env.TWITCH_EVENTSUB_SECRET,
+  }, {
+    redirectUri: env.TWITCH_REDIRECT_URI
+      || `${apiOrigin}/v1/integrations/twitch/callback`,
+    callbackUrl: env.TWITCH_EVENTSUB_CALLBACK_URL
+      || `${apiOrigin}/v1/webhooks/twitch/eventsub`,
+  });
+  if (twitch && !isValidTwitchEventsubSecret(rawTwitchEventsubSecret)) {
+    throw new Error(
+      "TWITCH_EVENTSUB_SECRET must contain 10 to 100 printable ASCII characters",
+    );
+  }
+  if (twitch) twitch.webhookSecret = rawTwitchEventsubSecret;
+  const kick = optionalProvider("Kick", {
+    clientId: env.KICK_CLIENT_ID,
+    clientSecret: env.KICK_CLIENT_SECRET,
+  }, {
+    redirectUri: env.KICK_REDIRECT_URI
+      || `${apiOrigin}/v1/integrations/kick/callback`,
+  });
+  const youtube = optionalProvider("YouTube", {
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+  }, {
+    redirectUri: env.GOOGLE_REDIRECT_URI
+      || `${apiOrigin}/v1/integrations/youtube/callback`,
+  });
+  const enabled = Boolean(twitch || kick || youtube);
+  const encryptionKey = String(env.PLATFORM_TOKEN_ENCRYPTION_KEY || "").trim();
+  if (enabled && !isValidEncryptionKey(encryptionKey)) {
+    throw new Error(
+      "PLATFORM_TOKEN_ENCRYPTION_KEY must be set to 64 hex characters or base64 for exactly 32 bytes when an official platform integration is configured",
+    );
+  }
+  return {
+    enabled,
+    encryptionKey: enabled ? encryptionKey : null,
+    returnUrl: String(
+      env.PLATFORM_INTEGRATIONS_RETURN_URL
+        || "https://sc2tools.com/settings#overlay",
+    ).trim(),
+    youtubePollIntervalMs: parsePositiveInteger(
+      env.YOUTUBE_SUBSCRIBER_POLL_INTERVAL_MS,
+      5 * 60 * 1000,
+      "YOUTUBE_SUBSCRIBER_POLL_INTERVAL_MS",
+    ),
+    providerHealthIntervalMs: parsePositiveInteger(
+      env.PLATFORM_SUBSCRIPTION_HEALTH_INTERVAL_MS,
+      5 * 60 * 1000,
+      "PLATFORM_SUBSCRIPTION_HEALTH_INTERVAL_MS",
+    ),
+    twitch,
+    kick,
+    youtube,
+  };
+}
+
+/**
+ * @param {string} label
+ * @param {Record<string, string|undefined>} required
+ * @param {Record<string, string>} extras
+ */
+function optionalProvider(label, required, extras) {
+  const fields = Object.fromEntries(
+    Object.entries(required).map(([key, value]) => [key, String(value || "").trim()]),
+  );
+  const count = Object.values(fields).filter(Boolean).length;
+  if (count === 0) return null;
+  if (count !== Object.keys(fields).length) {
+    throw new Error(`${label} official integration credentials must be set together`);
+  }
+  return { ...fields, ...extras };
+}
+
+/** @param {string} value */
+function isValidEncryptionKey(value) {
+  if (/^[0-9a-f]{64}$/i.test(value)) return true;
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) return false;
+  try {
+    return Buffer.from(value, "base64").length === 32;
+  } catch {
+    return false;
+  }
+}
+
+/** @param {string} value */
+function isValidTwitchEventsubSecret(value) {
+  if (value.length < 10 || value.length > 100) return false;
+  return Array.from(value).every((character) => {
+    const code = character.charCodeAt(0);
+    return code >= 0x20 && code <= 0x7e;
+  });
 }
 
 /**
@@ -471,4 +579,5 @@ module.exports = {
   parseAtlasAdminConfig,
   parseRenderAdminConfig,
   parseAnalyticsConfig,
+  parsePlatformIntegrationsConfig,
 };

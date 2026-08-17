@@ -26,7 +26,9 @@ import {
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
 import { testScene } from "@/lib/multichat/testStudio";
 import type { LiveGamePayload } from "../types";
+import { useOverlayBuildRefresh } from "../useOverlayBuildRefresh";
 import { BrollPlayer } from "./BrollPlayer";
+import { useBrollAudioOwner } from "./brollAudio";
 
 const TICK_MS = 250;
 
@@ -52,12 +54,17 @@ export function StreamSceneWidget({
 }) {
   const state = useStudioState(token, studioEvent ?? null);
   const testActive = useTestFireFlag(live, "stream-scene");
+  const brollAudioOwner = useBrollAudioOwner();
   const [demoScene, setDemoScene] = useState<StudioScene | null>(null);
   useEffect(() => {
     setDemoScene(testActive ? testScene(Date.now()) : null);
   }, [testActive]);
 
   const scene = testActive ? demoScene : state.scene;
+  useOverlayBuildRefresh({
+    enabled: !testActive,
+    safeToReload: !scene,
+  });
   // useStudioState defaults an older snapshot's missing b-roll field, so this
   // always remains a safe player config during rollout.
   const broll = state.broll;
@@ -82,6 +89,7 @@ export function StreamSceneWidget({
       broll={broll}
       remainMs={remainMs}
       testActive={testActive}
+      brollAudioOwner={brollAudioOwner}
     />
   );
 }
@@ -99,11 +107,14 @@ export function StreamSceneCanvas({
   broll,
   remainMs,
   testActive = false,
+  brollAudioOwner,
 }: {
   scene: StudioScene;
   broll: StudioBrollConfig;
   remainMs: number | null;
   testActive?: boolean;
+  /** Exactly one separately-rendered OBS copy may own B-roll audio. */
+  brollAudioOwner: boolean;
 }) {
   const hasBroll = broll.clips.length > 0;
   const isBrb = scene.mode === "brb";
@@ -118,7 +129,7 @@ export function StreamSceneCanvas({
       <style>{sceneCss}</style>
       {hasBroll ? (
         <>
-          <BrollPlayer {...broll} />
+          <BrollPlayer {...broll} audioOwner={brollAudioOwner} />
 
           <div data-testid="stream-scene-hud" style={hudStyle}>
             <div className="scn-scan" aria-hidden="true" />

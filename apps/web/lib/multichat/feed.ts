@@ -1,9 +1,51 @@
 // Multichat feed — pure merge/store helpers. No I/O, no React.
 
-import type { ChatPlatform } from "./types";
+import type { ChatEvent } from "./events";
+import type { ChatMessage, ChatPlatform } from "./types";
 
 /** Hard cap on retained messages — OBS sources run for hours. */
 export const FEED_CAP = 200;
+
+/** A display row in the unified, chronological chat/event timeline. */
+export type ChatDisplayItem =
+  | { rowType: "message"; item: ChatMessage }
+  | { rowType: "event"; item: ChatEvent };
+
+/**
+ * Merge messages and normalized platform events for presentation only.
+ *
+ * Keeping this separate from the message feed is deliberate: callers can
+ * render follows/subs/gifts in chronological context without accidentally
+ * passing those events through message-only effects such as TTS, dings,
+ * commands, or translation.
+ */
+export function mergeDisplayFeed(
+  messages: ReadonlyArray<ChatMessage>,
+  events: ReadonlyArray<ChatEvent>,
+  cap: number = Number.POSITIVE_INFINITY,
+): ChatDisplayItem[] {
+  const rows: Array<{ row: ChatDisplayItem; sourceOrder: number }> = [
+    ...messages.map((item, sourceOrder) => ({
+      row: { rowType: "message" as const, item },
+      sourceOrder,
+    })),
+    ...events.map((item, eventOrder) => ({
+      row: { rowType: "event" as const, item },
+      sourceOrder: messages.length + eventOrder,
+    })),
+  ];
+
+  rows.sort(
+    (a, b) =>
+      a.row.item.atMs - b.row.item.atMs || a.sourceOrder - b.sourceOrder,
+  );
+  const merged = rows.map(({ row }) => row);
+  if (!Number.isFinite(cap)) return merged;
+  const boundedCap = Math.max(0, Math.trunc(cap));
+  return merged.length > boundedCap
+    ? merged.slice(merged.length - boundedCap)
+    : merged;
+}
 
 /**
  * Append a batch to the feed: dedupe on (platform, id), keep arrival

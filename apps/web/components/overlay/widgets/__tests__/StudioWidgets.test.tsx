@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
+import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
 import {
   DEFAULT_BROLL_CONFIG,
   type StudioState,
@@ -17,7 +18,7 @@ import type { LiveGamePayload } from "@/components/overlay/types";
 import type { SessionSummary } from "../SessionWidget";
 import { ChatHighlightWidget } from "../ChatHighlightWidget";
 import { ChatPollWidget } from "../ChatPollWidget";
-import { ChatAlertsWidget } from "../ChatAlertsWidget";
+import { appendAlertQueue, ChatAlertsWidget } from "../ChatAlertsWidget";
 import { StreamGoalsWidget } from "../StreamGoalsWidget";
 import { SessionRecapWidget } from "../SessionRecapWidget";
 import { StreamSceneWidget, formatCountdown } from "../StreamSceneWidget";
@@ -29,9 +30,15 @@ import {
   type EngagementSummary,
 } from "@/lib/multichat/useEngagementState";
 
-let mockStudio: StudioState & { loaded: boolean };
+let mockStudio: StudioState & { loaded: boolean; snapshotReady: boolean };
 let mockChat: MultiChatState;
+let mockAppearance = { ...DEFAULT_APPEARANCE };
 const mockMultiChatArgs: Array<{ config?: unknown }> = [];
+const eventSoundSpy = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/multichat/useEventSounds", () => ({
+  useEventSounds: (...args: unknown[]) => eventSoundSpy(...args),
+}));
 
 vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
   const actual =
@@ -42,8 +49,18 @@ vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
 // BrollPlayer's YouTube lifecycle has its own focused suite. These render
 // contracts only need to prove when StreamSceneWidget mounts the player.
 vi.mock("../BrollPlayer", () => ({
-  BrollPlayer: ({ clips }: { clips: Array<{ id: string }> }) => (
-    <div data-testid="broll-player" data-clip-count={clips.length} />
+  BrollPlayer: ({
+    clips,
+    audioOwner,
+  }: {
+    clips: Array<{ id: string }>;
+    audioOwner: boolean;
+  }) => (
+    <div
+      data-testid="broll-player"
+      data-clip-count={clips.length}
+      data-audio-owner={String(audioOwner)}
+    />
   ),
 }));
 
@@ -80,14 +97,17 @@ vi.mock("@/lib/multichat/useTickerFacts", async (importOriginal) => {
 vi.mock("../MultiChatWidget", () => ({
   useMultichatConfig: () => ({
     platforms: { twitch: { enabled: true, channel: "me" } },
-    appearance: {},
+    appearance: mockAppearance,
     tts: null,
     sound: null,
     loaded: true,
   }),
 }));
 
-const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
+const EMPTY_STUDIO: StudioState & {
+  loaded: boolean;
+  snapshotReady: boolean;
+} = {
   highlight: null,
   poll: null,
   goals: [],
@@ -100,11 +120,15 @@ const EMPTY_STUDIO: StudioState & { loaded: boolean } = {
   vodUrl: null,
   updatedAt: null,
   loaded: true,
+  snapshotReady: true,
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
   mockStudio = { ...EMPTY_STUDIO };
   mockChat = { messages: [], events: [], statuses: {}, active: true };
+  mockAppearance = { ...DEFAULT_APPEARANCE };
   mockMultiChatArgs.length = 0;
   mockEngagement = { ...EMPTY_ENGAGEMENT };
   mockEngagementEvent = null;
@@ -113,6 +137,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe("ChatHighlightWidget", () => {
@@ -220,7 +245,34 @@ describe("ChatPollWidget", () => {
 });
 
 describe("ChatAlertsWidget", () => {
-  it("renders the newest event prominently", () => {
+  it("renders alerts but disables event sound in an audio=0 copy", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/overlay/tok/widget/chat-alerts?audio=0",
+    );
+    mockChat = {
+      ...mockChat,
+      events: [{
+        platform: "twitch",
+        id: "silent-alert",
+        kind: "follow",
+        user: "SeenFollower",
+        detail: "followed",
+        atMs: Date.now(),
+      }],
+    };
+
+    render(<ChatAlertsWidget token="tok" />);
+
+    expect(screen.getByText("SeenFollower")).toBeTruthy();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[1]).toMatchObject({
+      eventSoundsEnabled: false,
+    });
+  });
+
+  it("queues events oldest-first so every supporter becomes prominent", () => {
+    vi.useFakeTimers();
     mockChat = {
       ...mockChat,
       events: [
@@ -245,16 +297,245 @@ describe("ChatAlertsWidget", () => {
       ],
     };
     render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("BigStreamer")).toBeTruthy();
+    expect(screen.queryByText("Fan99")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
     expect(screen.getByText("Fan99")).toBeTruthy();
     expect(screen.getByText("Super Chat")).toBeTruthy();
     expect(screen.getByText("$5.00")).toBeTruthy();
-    // The older event sits in the faded stack.
+    // The already-shown event sits in the faded stack.
     expect(screen.getByText("BigStreamer")).toBeTruthy();
+    vi.useRealTimers();
   });
 
   it("renders nothing when no events have arrived", () => {
     const { container } = render(<ChatAlertsWidget token="tok" />);
     expect(container.textContent).toBe("");
+  });
+
+  it("holds alerts and audio until moderation has an authoritative snapshot", () => {
+    const event = {
+      platform: "twitch" as const,
+      id: "waiting-for-moderation",
+      kind: "follow" as const,
+      user: "PossiblyBlockedFollower",
+      detail: "followed",
+      atMs: Date.now(),
+    };
+    mockStudio = { ...EMPTY_STUDIO, snapshotReady: false };
+    mockChat = { ...mockChat, events: [event] };
+
+    const view = render(<ChatAlertsWidget token="tok" />);
+
+    expect(screen.queryByText(event.user)).toBeNull();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([]);
+
+    mockStudio = { ...EMPTY_STUDIO, snapshotReady: true };
+    view.rerender(<ChatAlertsWidget token="tok" />);
+
+    expect(screen.getByText(event.user)).toBeTruthy();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([event]);
+  });
+
+  it("filters Settings and Stream Dock blocked users before queue and audio", () => {
+    mockAppearance = {
+      ...DEFAULT_APPEARANCE,
+      blockedUsers: " @SettingsBlocked ",
+    };
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      blockedUsers: [" @DockBlocked "],
+    };
+    const allowed = {
+      platform: "twitch" as const,
+      id: "allowed-follow",
+      kind: "follow" as const,
+      user: "FriendlyFollower",
+      detail: "followed",
+      atMs: Date.now(),
+    };
+    mockChat = {
+      ...mockChat,
+      events: [
+        { ...allowed, id: "settings-blocked", user: "SETTINGSBLOCKED" },
+        { ...allowed, id: "dock-blocked", user: "dockblocked" },
+        allowed,
+      ],
+    };
+
+    render(<ChatAlertsWidget token="tok" />);
+
+    expect(screen.getByText("FriendlyFollower")).toBeTruthy();
+    expect(screen.queryByText("SETTINGSBLOCKED")).toBeNull();
+    expect(screen.queryByText("dockblocked")).toBeNull();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([allowed]);
+  });
+
+  it("prunes a newly blocked prominent and queued alert without resurrecting it", () => {
+    const first = {
+      platform: "twitch" as const,
+      id: "first-alert",
+      kind: "raid" as const,
+      user: "FirstRaider",
+      detail: "raided",
+      atMs: Date.now(),
+    };
+    const second = {
+      ...first,
+      id: "second-alert",
+      user: "QueuedRaider",
+      atMs: Date.now() + 1,
+    };
+    mockChat = { ...mockChat, events: [first, second] };
+    const view = render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("FirstRaider")).toBeTruthy();
+
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      blockedUsers: [" firsTRAIDER ", "@QUEUEDRAIDER"],
+    };
+    view.rerender(<ChatAlertsWidget token="tok" />);
+
+    expect(screen.queryByText("FirstRaider")).toBeNull();
+    expect(screen.queryByText("QueuedRaider")).toBeNull();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([]);
+
+    // Retained relay history stays seen while blocked. Unblocking does not
+    // enqueue or ring either event a second time.
+    mockStudio = { ...EMPTY_STUDIO };
+    view.rerender(<ChatAlertsWidget token="tok" />);
+    expect(screen.queryByText("FirstRaider")).toBeNull();
+    expect(screen.queryByText("QueuedRaider")).toBeNull();
+    expect(eventSoundSpy.mock.calls.at(-1)?.[0]).toEqual([]);
+  });
+
+  it("keeps a 50-recipient gift burst so every supporter is shown", () => {
+    vi.useFakeTimers();
+    mockChat = {
+      ...mockChat,
+      events: Array.from({ length: 50 }, (_, index) => ({
+        platform: "youtube" as const,
+        id: `gift-${index}`,
+        kind: "member" as const,
+        user: `GiftRecipient${index}`,
+        detail: "received a gifted membership",
+        atMs: 1_000 + index,
+      })),
+    };
+
+    render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("GiftRecipient0")).toBeTruthy();
+    for (let index = 1; index < 50; index += 1) {
+      act(() => {
+        vi.advanceTimersByTime(8_000);
+      });
+      expect(screen.getByText(`GiftRecipient${index}`)).toBeTruthy();
+    }
+    vi.useRealTimers();
+  });
+
+  it("carries an existing overflow total into later alert bursts", () => {
+    const supporter = (index: number) => ({
+      platform: "twitch" as const,
+      id: `overflow-supporter-${index}`,
+      kind: "giftsub" as const,
+      user: `Supporter${index}`,
+      detail: "received a gift sub",
+      atMs: 1_000 + index,
+    });
+    const first = appendAlertQueue(
+      [],
+      Array.from({ length: 61 }, (_, index) => supporter(index)),
+    );
+    expect(first).toHaveLength(60);
+    expect(first.at(-1)?.user).toBe("2 more supporters");
+
+    const next = appendAlertQueue(
+      first,
+      Array.from({ length: 3 }, (_, index) => supporter(61 + index)),
+    );
+    expect(next).toHaveLength(60);
+    expect(next.at(-1)?.user).toBe("5 more supporters");
+    expect(next.at(-1)?.amount).toBe("5 events");
+  });
+
+  it("keeps replayed events in chat without firing an old alert again", () => {
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "tiktok",
+          id: "replayed-gift",
+          kind: "gift",
+          user: "EarlierSupporter",
+          detail: "sent a Rose",
+          atMs: 1_000,
+          replayed: true,
+        },
+      ],
+    };
+    const { container } = render(<ChatAlertsWidget token="tok" />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("alerts a near-live replay when the alert surface joined seconds late", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(20_000);
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "tiktok",
+          id: "near-live-gift",
+          kind: "gift",
+          user: "JustNowSupporter",
+          detail: "sent a Rose",
+          atMs: 10_000,
+          replayed: true,
+        },
+      ],
+    };
+    render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("JustNowSupporter")).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("updates one Jewels combo card instead of queueing cumulative totals", () => {
+    const first = {
+      platform: "youtube" as const,
+      id: "jewel-1:combo:1",
+      updateKey: "jewels:jewel-1",
+      updateVersion: 1,
+      kind: "gift" as const,
+      user: "JewelFan",
+      detail: "sent Galaxy",
+      amount: "100 Jewels",
+      atMs: Date.now(),
+    };
+    mockChat = { ...mockChat, events: [first] };
+    const view = render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("100 Jewels")).toBeTruthy();
+
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          ...first,
+          id: "jewel-1:combo:3",
+          updateVersion: 3,
+          detail: "sent Galaxy x3",
+          amount: "300 Jewels",
+          atMs: Date.now() + 1_000,
+        },
+      ],
+    };
+    view.rerender(<ChatAlertsWidget token="tok" />);
+    expect(screen.queryByText("100 Jewels")).toBeNull();
+    expect(screen.getByText("300 Jewels")).toBeTruthy();
+    expect(screen.getAllByText("JewelFan")).toHaveLength(1);
   });
 
   it("clears the alert and faded history after the visibility window", () => {
@@ -282,9 +563,14 @@ describe("ChatAlertsWidget", () => {
     };
 
     const { container } = render(<ChatAlertsWidget token="tok" />);
-    expect(screen.getByText("NewestFan")).toBeTruthy();
     expect(screen.getByText("OlderRaider")).toBeTruthy();
+    expect(screen.queryByText("NewestFan")).toBeNull();
 
+    act(() => {
+      vi.advanceTimersByTime(8_000);
+    });
+
+    expect(screen.getByText("NewestFan")).toBeTruthy();
     act(() => {
       vi.advanceTimersByTime(8_000);
     });
@@ -379,6 +665,8 @@ describe("StreamSceneWidget", () => {
   });
 
   it("automatically uses b-roll and the compact HUD when clips exist", () => {
+    vi.stubGlobal("innerWidth", 1920);
+    vi.stubGlobal("innerHeight", 1080);
     mockStudio = {
       ...EMPTY_STUDIO,
       broll: {
@@ -406,11 +694,41 @@ describe("StreamSceneWidget", () => {
     expect(screen.getByText("Loading into ladder")).toBeTruthy();
     expect(screen.getByText(/^0?5:00$|^0?4:5\d$/)).toBeTruthy();
     expect(screen.getByTestId("broll-player").dataset.clipCount).toBe("1");
+    expect(screen.getByTestId("broll-player").dataset.audioOwner).toBe("true");
     const hud = screen.getByTestId("stream-scene-hud");
     expect(hud.parentElement?.dataset.sceneLayout).toBe("broll");
     expect(hud.style.top).toContain("clamp(");
     expect(hud.style.width).toBe("min(88vw, 820px)");
     expect(screen.queryByTestId("stream-scene-default")).toBeNull();
+  });
+
+  it("keeps a 1080x1920 standalone copy video-only", () => {
+    vi.stubGlobal("innerWidth", 1080);
+    vi.stubGlobal("innerHeight", 1920);
+    mockStudio = {
+      ...EMPTY_STUDIO,
+      broll: {
+        ...DEFAULT_BROLL_CONFIG,
+        clips: [
+          {
+            id: "vertical-highlight",
+            title: "Vertical highlight",
+            videoId: "abcDEF12345",
+            startSeconds: 90,
+            endSeconds: 140,
+          },
+        ],
+      },
+      scene: {
+        mode: "brb",
+        message: "Vertical break",
+        countdownEndsAt: null,
+        setAtMs: Date.now(),
+      },
+    };
+
+    render(<StreamSceneWidget token="tok" />);
+    expect(screen.getByTestId("broll-player").dataset.audioOwner).toBe("false");
   });
 
   it("renders Starting Soon with a ticking countdown", () => {
@@ -925,13 +1243,17 @@ describe("Stream Studio Test fire", () => {
     expect(screen.getByText("TestSubscriber")).toBeTruthy();
     expect(screen.getByText("TEST")).toBeTruthy();
     expect(screen.queryByText("TestRaider")).toBeNull();
-    // Next event arrives on the demo cadence.
+    // Later events arrive on the demo cadence but wait their turn.
     act(() => {
       vi.advanceTimersByTime(2000);
     });
+    expect(screen.queryByText("TestRaider")).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
     expect(screen.getByText("TestRaider")).toBeTruthy();
     act(() => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(8000);
     });
     expect(screen.getByText("TestFan")).toBeTruthy();
     expect(screen.getByText("$5.00")).toBeTruthy();

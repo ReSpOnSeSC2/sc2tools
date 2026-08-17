@@ -213,7 +213,7 @@ export function BrollLibraryEditor({
   const [transferError, setTransferError] = useState(false);
 
   const saveClips = (clips: StudioBrollClip[]) =>
-    onPost({ broll: { ...broll, clips } });
+    onPost({ broll: { clips } });
 
   const addClip = async () => {
     const videoId = parseYouTubeVideoId(source);

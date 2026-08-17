@@ -33,12 +33,13 @@ describe("TikTok SSE chat", () => {
   it("forwards chat after the relay reports a green connection", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const onMessage = vi.fn();
+    const onEvent = vi.fn();
     const onStatus = vi.fn();
     const engine = createTikTokChat({
       apiBase: "https://api.example.test",
       token: "overlay token",
       username: "@Some.User",
-      callbacks: { onMessage, onStatus },
+      callbacks: { onMessage, onEvent, onStatus },
     });
 
     const source = FakeEventSource.instances[0];
@@ -128,6 +129,30 @@ describe("TikTok SSE chat", () => {
       text: "same source id in the next broadcast",
       badges: [],
       atMs: 1_786_839_000_000,
+    });
+
+    source.emit({
+      type: "event",
+      session: "room-2",
+      replay: true,
+      event: {
+        id: "gift-1",
+        kind: "gift",
+        user: "supporter",
+        detail: "sent a Rose",
+        amount: "5 diamonds",
+        atMs: 1_786_839_000_100,
+      },
+    });
+    expect(onEvent).toHaveBeenCalledWith({
+      platform: "tiktok",
+      id: "room-2:gift-1",
+      kind: "gift",
+      user: "supporter",
+      detail: "sent a Rose",
+      amount: "5 diamonds",
+      atMs: 1_786_839_000_100,
+      replayed: true,
     });
 
     engine.close();

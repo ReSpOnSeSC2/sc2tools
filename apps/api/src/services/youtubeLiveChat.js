@@ -653,10 +653,8 @@ function badgeTags(badges) {
  * events + the next continuation. Pure — unit-tested against a
  * captured real response.
  *
- * Events cover the two receipt renderers a chat overlay cares about:
- * ``liveChatMembershipItemRenderer`` (new/renewed members) and
- * ``liveChatPaidMessageRenderer`` (Super Chats). Everything else
- * (stickers, banners, tickers) stays skipped.
+ * Events cover memberships, Super Chats/Stickers, gifted memberships,
+ * and Jewels gifts. Decorative tickers and duplicate banners stay skipped.
  *
  * @param {Record<string, any>} json
  * @returns {{ messages: Array<{ id: string, user: string, text: string,
@@ -717,6 +715,124 @@ function parseLiveChatResponse(json) {
       continue;
     }
 
+    const sticker = item?.liveChatPaidStickerRenderer;
+    if (sticker) {
+      const usec = Number(sticker.timestampUsec);
+      const amount = String(
+        sticker.purchaseAmountText?.simpleText || "",
+      ).trim();
+      events.push({
+        id: String(sticker.id || `${sticker.timestampUsec}-${events.length}`),
+        kind: "superchat",
+        user: String(sticker.authorName?.simpleText || "viewer"),
+        detail: runsToText(sticker.message?.runs).trim() || "sent a Super Sticker",
+        ...(amount ? { amount } : {}),
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
+    const giftPurchase =
+      item?.liveChatSponsorshipsGiftPurchaseAnnouncementRenderer;
+    if (giftPurchase) {
+      const header = giftPurchase.header?.liveChatSponsorshipsHeaderRenderer || {};
+      const usec = Number(giftPurchase.timestampUsec);
+      const line =
+        runsToText(header.primaryText?.runs).trim() ||
+        runsToText(giftPurchase.message?.runs).trim() ||
+        "gifted channel memberships";
+      const count = line.match(/\b(\d[\d,]*)\b/);
+      events.push({
+        id: String(
+          giftPurchase.id || `${giftPurchase.timestampUsec}-${events.length}`,
+        ),
+        kind: "giftsub",
+        user: String(
+          header.authorName?.simpleText ||
+          giftPurchase.authorName?.simpleText ||
+          "viewer",
+        ),
+        detail: line,
+        ...(count ? { amount: `${count[1]} memberships` } : {}),
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
+    const giftReceived =
+      item?.liveChatSponsorshipsGiftRedemptionAnnouncementRenderer;
+    if (giftReceived) {
+      const usec = Number(giftReceived.timestampUsec);
+      events.push({
+        id: String(
+          giftReceived.id || `${giftReceived.timestampUsec}-${events.length}`,
+        ),
+        kind: "member",
+        user: String(giftReceived.authorName?.simpleText || "viewer"),
+        detail:
+          runsToText(giftReceived.message?.runs).trim() ||
+          "received a gifted membership",
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
+    // YouTube's 2026 Jewels gift renderer is still rolling out. Accept
+    // both names observed across web-client variants and keep the mapper
+    // defensive so a missing optional field never drops the recognition.
+    const jewels =
+      item?.liveChatGiftMessageRenderer || item?.liveChatGiftItemRenderer;
+    if (jewels) {
+      const usec = Number(jewels.timestampUsec);
+      const comboText = String(
+        jewels.comboCount ??
+        jewels.giftComboCount ??
+        jewels.comboCountText?.simpleText ??
+        "",
+      );
+      const comboMatch = comboText.match(/\d[\d,]*/);
+      const comboCount = comboMatch
+        ? Number(comboMatch[0].replaceAll(",", ""))
+        : 0;
+      const amount = String(
+        jewels.giftAmountText?.simpleText ||
+        jewels.purchaseAmountText?.simpleText ||
+        jewels.amountText?.simpleText ||
+        "",
+      ).trim();
+      const giftName = String(
+        jewels.giftName?.simpleText || jewels.giftName || "",
+      ).trim();
+      const sourceId = String(
+        jewels.id || `${jewels.timestampUsec}-${events.length}`,
+      );
+      events.push({
+        // Jewels combos intentionally update one renderer id. Scope the
+        // normalized id to the cumulative combo count so a later total is not
+        // discarded as a transport duplicate; an identical retry still is.
+        id:
+          Number.isFinite(comboCount) && comboCount > 0
+            ? `${sourceId}:combo:${comboCount}`
+            : sourceId,
+        ...(Number.isFinite(comboCount) && comboCount > 0
+          ? {
+              updateKey: `jewels:${sourceId}`,
+              updateVersion: comboCount,
+            }
+          : {}),
+        kind: "gift",
+        user: String(jewels.authorName?.simpleText || "viewer"),
+        detail:
+          runsToText(jewels.message?.runs).trim() ||
+          (giftName
+            ? `sent ${giftName}${comboCount > 1 ? ` x${comboCount}` : ""}`
+            : `sent a Jewels gift${comboCount > 1 ? ` x${comboCount}` : ""}`),
+        ...(amount ? { amount } : {}),
+        atMs: Number.isFinite(usec) ? Math.round(usec / 1000) : Date.now(),
+      });
+      continue;
+    }
+
     const r = item?.liveChatTextMessageRenderer;
     if (!r) continue;
     const text = runsToText(r.message?.runs).trim();
@@ -746,6 +862,10 @@ function parseLiveChatResponse(json) {
       }
     }
   }
+  // YouTube can batch renderer actions out of timestamp order. Keep every
+  // surface on the same oldest-to-newest sequence before client de-duplication.
+  messages.sort((a, b) => a.atMs - b.atMs);
+  events.sort((a, b) => a.atMs - b.atMs);
   return {
     messages,
     events,

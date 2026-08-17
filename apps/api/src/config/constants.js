@@ -49,6 +49,12 @@ const COLLECTIONS = Object.freeze({
   MULTICHAT_VIEWERS: "multichat_viewers",
   MULTICHAT_PREDICTIONS: "multichat_predictions",
   MULTICHAT_CLIP_MOMENTS: "multichat_clip_moments",
+  // Official OAuth connections live outside generic user preferences so
+  // encrypted refresh/access tokens can never leak to an overlay response.
+  PLATFORM_CONNECTIONS: "platform_connections",
+  PLATFORM_OAUTH_STATES: "platform_oauth_states",
+  PLATFORM_WEBHOOK_RECEIPTS: "platform_webhook_receipts",
+  PLATFORM_EVENTS: "platform_events",
   ML_MODELS: "ml_models",
   ML_JOBS: "ml_jobs",
   IMPORT_JOBS: "import_jobs",

@@ -11,6 +11,9 @@
  * anchors the right edge. A count we can't read truthfully is simply
  * absent — never a zero (see lib/multichat/useViewerCounts).
  *
+ * Normalized follows/subs/gifts/raids are interleaved as read-only event
+ * cards, so notification rows can never be mistaken for moderation targets.
+ *
  * Per-message actions (hover on desktop, tap to reveal in the OBS
  * dock / on touch):
  *   - Highlight — pins the message on stream (studio state).
@@ -20,7 +23,17 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { fallbackColor } from "@/lib/multichat/feed";
+import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
+import {
+  excludeBlockedUsers,
+  isBlockedUser,
+  normalizedBlockedUserSet,
+} from "@/lib/multichat/appearance";
+import {
+  chatEventIdentity,
+  EVENT_KIND_LABEL,
+  type ChatEvent,
+} from "@/lib/multichat/events";
 import { PLATFORM_META } from "@/components/overlay/widgets/MultiChatMessageList";
 import {
   EMPTY_VIEWER_COUNTS,
@@ -69,6 +82,7 @@ export function DockChat({
   loaded,
   platforms,
   messages,
+  events = [],
   statuses,
   blockedUsers,
   busy,
@@ -79,6 +93,8 @@ export function DockChat({
   loaded: boolean;
   platforms: MultichatConfig | null;
   messages: ReadonlyArray<ChatMessage>;
+  /** Read-only platform events; blocked authors are filtered from the Dock. */
+  events?: ReadonlyArray<ChatEvent>;
   statuses: Partial<
     Record<ChatPlatform, { state: PlatformState; detail?: string }>
   >;
@@ -92,9 +108,6 @@ export function DockChat({
   const enabled = configuredPlatforms(platforms);
   // Counts hang off the status row that's already there — no new
   // chrome, no second strip to eat the dock's vertical budget.
-  const viewersByPlatform = new Map(
-    viewers.platforms.map((p) => [p.platform, p.viewers]),
-  );
   const anyKnown = viewers.platforms.some((p) => p.viewers !== null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const stuckRef = useRef(true);
@@ -103,11 +116,14 @@ export function DockChat({
   // Armed Block target — one at a time, self-disarms.
   const [armed, setArmed] = useState<string | null>(null);
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blocked = normalizedBlockedUserSet(blockedUsers);
+  const visibleEvents = excludeBlockedUsers(events, blocked);
+  const displayRows = mergeDisplayFeed(messages, visibleEvents);
 
   useEffect(() => {
     const el = listRef.current;
     if (el && stuckRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [messages, events]);
   useEffect(
     () => () => {
       if (armTimer.current) clearTimeout(armTimer.current);
@@ -134,8 +150,6 @@ export function DockChat({
     armTimer.current = setTimeout(() => setArmed(null), BLOCK_ARM_MS);
   };
 
-  const blocked = new Set(blockedUsers.map((u) => u.toLowerCase()));
-
   return (
     <div className="flex min-w-0 flex-col rounded-lg border border-border bg-bg-surface">
       {/* Status + audience share one wrapping row: tighter gaps keep
@@ -153,7 +167,10 @@ export function DockChat({
         ) : null}
         {enabled.map((p) => {
           const st = statuses[p]?.state ?? "connecting";
-          const count = viewersByPlatform.get(p) ?? null;
+          const platformViewers = viewers.platforms.find(
+            (entry) => entry.platform === p,
+          );
+          const count = platformViewers?.viewers ?? null;
           return (
             <span
               key={p}
@@ -171,7 +188,12 @@ export function DockChat({
                 <span
                   data-testid={`dock-viewers-${p}`}
                   className="tabular-nums text-text"
-                  title={`${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}`}
+                  title={
+                    `${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}` +
+                    (platformViewers?.raidAdjusted
+                      ? " — includes a recent raid while the platform count refreshes"
+                      : "")
+                  }
                 >
                   {formatViewers(count)}
                 </span>
@@ -184,7 +206,9 @@ export function DockChat({
             data-testid="dock-viewers-total"
             className="ml-auto inline-flex items-baseline gap-1 whitespace-nowrap"
             title={
-              viewers.partial
+              viewers.settlingRaid
+                ? `${viewers.total.toLocaleString("en-US")} estimated across platforms while a recent raid settles into the official count`
+                : viewers.partial
                 ? `${viewers.total.toLocaleString("en-US")} currently watching across the platforms we could reach — at least one didn't report`
                 : `${viewers.total.toLocaleString("en-US")} currently watching across all platforms`
             }
@@ -205,21 +229,82 @@ export function DockChat({
         data-testid="dock-chat-list"
         className="h-[50vh] min-h-48 overflow-y-auto px-2 py-1.5 lg:h-[calc(100vh-6rem)]"
       >
-        {messages.length === 0 ? (
+        {displayRows.length === 0 ? (
           <div className="px-1 py-2 text-caption text-text-dim">
             {enabled.length > 0
               ? "Connected — waiting for chat…"
               : "Chat appears here once a platform is configured."}
           </div>
         ) : (
-          messages.map((m) => {
+          displayRows.map((row) => {
+            if (row.rowType === "event") {
+              const event = row.item;
+              const meta = PLATFORM_META[event.platform];
+              return (
+                <div
+                  key={`event:${chatEventIdentity(event)}`}
+                  data-testid="dock-event-row"
+                  aria-label={[
+                    `${meta.label} ${EVENT_KIND_LABEL[event.kind]}`,
+                    event.user,
+                    event.detail,
+                    event.amount,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                  className="my-1 rounded-md border border-accent-cyan/30 border-l-4 bg-accent-cyan/10 px-2 py-1.5 text-caption leading-snug"
+                  style={{ borderLeftColor: meta.color }}
+                >
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                    <span className="tabular-nums text-micro text-text-dim">
+                      {timeLabel(event.atMs)}
+                    </span>
+                    <span
+                      className="inline-flex h-4 shrink-0 items-center justify-center rounded px-1.5 align-middle text-micro font-extrabold leading-none tracking-wide"
+                      style={{ background: meta.color, color: meta.fg }}
+                      title={`${meta.label} event`}
+                      aria-label={`${meta.label} event`}
+                    >
+                      {meta.short}
+                    </span>
+                    <span
+                      className="text-micro font-extrabold uppercase tracking-wider"
+                      style={{ color: meta.color }}
+                    >
+                      {EVENT_KIND_LABEL[event.kind]}
+                    </span>
+                    {event.amount ? (
+                      <span className="ml-auto font-bold tabular-nums text-[#f2c66d]">
+                        {event.amount}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-0.5 min-w-0 break-words text-text">
+                    <span
+                      className="font-semibold"
+                      style={{ color: fallbackColor(event.user) }}
+                    >
+                      {event.user}
+                    </span>
+                    {event.detail ? (
+                      <span className="text-text-muted">
+                        {" "}
+                        {event.detail}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            }
+
+            const m = row.item;
             const key = `${m.platform}:${m.id}`;
             const meta = PLATFORM_META[m.platform];
-            const isBlocked = blocked.has(m.user.trim().toLowerCase());
+            const isBlocked = isBlockedUser(m.user, blocked);
             const showActions = selected === key;
             return (
               <div
-                key={key}
+                key={`message:${key}`}
                 className={`group rounded-md px-1 py-0.5 text-caption leading-snug hover:bg-bg-elevated ${isBlocked ? "opacity-40" : ""}`}
               >
                 <button

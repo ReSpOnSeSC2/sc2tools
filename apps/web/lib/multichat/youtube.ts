@@ -32,6 +32,8 @@ interface WireEvent {
   detail: string;
   amount?: string;
   atMs: number;
+  updateKey?: string;
+  updateVersion?: number;
 }
 
 interface PollResponse {
@@ -199,6 +201,10 @@ export function createYoutubeChat(
           detail: e.detail,
           amount: e.amount,
           atMs: e.atMs,
+          ...(e.updateKey ? { updateKey: e.updateKey } : {}),
+          ...(Number.isFinite(e.updateVersion)
+            ? { updateVersion: e.updateVersion }
+            : {}),
         });
       }
       if (data.done || !data.continuation) {

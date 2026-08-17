@@ -2,7 +2,8 @@
 
 /**
  * MultiChatMessageList — the presentational core of the multichat
- * overlay. Renders an appearance-driven list of chat messages; used
+ * overlay. Renders an appearance-driven timeline of chat messages and
+ * normalized platform events; used
  * by BOTH the OBS widget (MultiChatWidget) and the Settings live
  * preview (SettingsMultiChatAppearance), so the preview is pixel-
  * honest about what OBS will show.
@@ -18,8 +19,13 @@
  */
 
 import { useMemo, type CSSProperties } from "react";
-import { fallbackColor } from "@/lib/multichat/feed";
+import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
 import { renderTextWithEmotes } from "@/lib/multichat/emotes";
+import {
+  chatEventIdentity,
+  EVENT_KIND_LABEL,
+  type ChatEvent,
+} from "@/lib/multichat/events";
 import {
   appearanceStyles,
   type ChatAppearance,
@@ -66,12 +72,15 @@ function timeLabel(atMs: number): string {
 
 export function MultiChatMessageList({
   messages,
+  events = [],
   appearance,
   emptyText,
   translations,
 }: {
   /** Oldest → newest; `newestAt` decides which end renders "new". */
   messages: ReadonlyArray<ChatMessage>;
+  /** Display-only platform events, merged chronologically with messages. */
+  events?: ReadonlyArray<ChatEvent>;
   appearance: ChatAppearance;
   emptyText?: string;
   /** Optional (platform:id) → translated text overlay (useTranslation). */
@@ -79,9 +88,11 @@ export function MultiChatMessageList({
 }) {
   const s = useMemo(() => appearanceStyles(appearance), [appearance]);
   const ordered = useMemo(
-    () =>
-      appearance.newestAt === "top" ? [...messages].reverse() : messages,
-    [messages, appearance.newestAt],
+    () => {
+      const merged = mergeDisplayFeed(messages, events, appearance.maxVisible);
+      return appearance.newestAt === "top" ? merged.reverse() : merged;
+    },
+    [messages, events, appearance.maxVisible, appearance.newestAt],
   );
 
   const listStyle: CSSProperties = {
@@ -122,17 +133,155 @@ export function MultiChatMessageList({
           {emptyText}
         </div>
       ) : (
-        ordered.map((m) => (
-          <MessageRow
-            key={`${m.platform}:${m.id}`}
-            message={m}
-            appearance={appearance}
-            textShadow={s.textShadow}
-            fontWeight={s.fontWeight}
-            translated={translations?.[`${m.platform}:${m.id}`]}
-          />
-        ))
+        ordered.map((row) =>
+          row.rowType === "message" ? (
+            <MessageRow
+              key={`message:${row.item.platform}:${row.item.id}`}
+              message={row.item}
+              appearance={appearance}
+              textShadow={s.textShadow}
+              fontWeight={s.fontWeight}
+              translated={
+                translations?.[`${row.item.platform}:${row.item.id}`]
+              }
+            />
+          ) : (
+            <EventRow
+              key={`event:${chatEventIdentity(row.item)}`}
+              event={row.item}
+              appearance={appearance}
+              textShadow={s.textShadow}
+            />
+          ),
+        )
       )}
+    </div>
+  );
+}
+
+function EventRow({
+  event,
+  appearance,
+  textShadow,
+}: {
+  event: ChatEvent;
+  appearance: ChatAppearance;
+  textShadow: string | undefined;
+}) {
+  const meta = PLATFORM_META[event.platform];
+  const kind = EVENT_KIND_LABEL[event.kind];
+  const alignSelf =
+    appearance.align === "right" ? ("flex-end" as const) : "stretch";
+  const accessibleDetail = [
+    `${meta.label} ${kind}`,
+    event.user,
+    event.detail,
+    event.amount,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <div
+      className="mc-msg"
+      data-testid="mc-event-row"
+      aria-label={accessibleDetail}
+      style={{
+        alignSelf,
+        width: appearance.align === "right" ? "min(92%, 520px)" : undefined,
+        maxWidth: "100%",
+        borderRadius: 8,
+        border: `1px solid ${meta.color}66`,
+        borderLeft: `4px solid ${meta.color}`,
+        background: `linear-gradient(90deg, ${meta.color}20, rgba(255,255,255,0.055))`,
+        padding: "6px 9px",
+        color: "var(--ov-text, rgba(255,255,255,0.92))",
+        textShadow,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent:
+            appearance.align === "right" ? "flex-end" : undefined,
+          gap: 6,
+          flexWrap: "wrap",
+        }}
+      >
+        {appearance.showTimestamps ? (
+          <span
+            style={{
+              color: "rgba(255,255,255,0.45)",
+              fontSize: Math.max(9, appearance.fontSize - 4),
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {timeLabel(event.atMs)}
+          </span>
+        ) : null}
+        {appearance.showPlatformChips ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: Math.round(appearance.fontSize * 1.55),
+              height: Math.round(appearance.fontSize * 1.05),
+              borderRadius: 4,
+              fontSize: Math.max(8, Math.round(appearance.fontSize * 0.62)),
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              background: meta.color,
+              color: meta.fg,
+            }}
+            title={`${meta.label} event`}
+            aria-label={`${meta.label} event`}
+          >
+            {meta.short}
+          </span>
+        ) : null}
+        <span
+          style={{
+            color: meta.color,
+            fontSize: Math.max(9, appearance.fontSize - 3),
+            fontWeight: 800,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          {kind}
+        </span>
+        {event.amount ? (
+          <span
+            style={{
+              marginLeft: appearance.align === "right" ? undefined : "auto",
+              color: "#f2c66d",
+              fontWeight: 800,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {event.amount}
+          </span>
+        ) : null}
+      </div>
+      <div
+        style={{
+          marginTop: 2,
+          overflowWrap: "anywhere",
+          textAlign: appearance.align === "right" ? "right" : "left",
+        }}
+      >
+        <span style={{ color: fallbackColor(event.user), fontWeight: 750 }}>
+          {event.user}
+        </span>
+        {event.detail ? (
+          <span style={{ color: "rgba(255,255,255,0.82)" }}>
+            {" "}
+            {event.detail}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

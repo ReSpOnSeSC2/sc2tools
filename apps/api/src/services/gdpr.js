@@ -60,6 +60,11 @@ const PURGE_ONLY_COLLECTIONS = [
   ["arcadeLeaderboard", "userId"],
   ["communityBuilds", "ownerUserId"],
   ["communityReports", "reporterUserId"],
+  // Credentials are encrypted and intentionally excluded from export/restore;
+  // account deletion still removes them and all short-lived event rows.
+  ["platformConnections", "userId"],
+  ["platformOauthStates", "userId"],
+  ["platformEvents", "userId"],
 ];
 
 class GdprService {

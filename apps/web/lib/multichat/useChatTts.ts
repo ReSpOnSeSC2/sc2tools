@@ -67,7 +67,7 @@ export function useChatTts(
       if (spokenRef.current.has(key)) continue;
       spokenRef.current.add(key);
       if (!speaker || !config.enabled) continue;
-      if (m.backlog) continue;
+      if (m.backlog || m.suppressAudio) continue;
       // Backlog guard: anything time-stamped before this source loaded
       // is history, not live chat — mark seen, don't read it.
       if (m.atMs < mountedAtRef.current - 2000) continue;

@@ -65,6 +65,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *   issuer?: string,
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[]}|null>,
+ *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
  *     wins: number, losses: number, games: number,
@@ -73,6 +74,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
+ *   resolvePlatformEvents?: (userId: string) => Promise<Array<Record<string, unknown>>>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
  *     envelope?: object|null,
@@ -252,6 +254,9 @@ function attachSocketAuth(io, opts) {
       if (t && opts.resolveStudioState) {
         replayOverlayStudioState(socket, opts.resolveStudioState, t);
       }
+      if (u && opts.resolvePlatformEvents) {
+        replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, u);
+      }
       // Replay the latest live state to the freshly-connected overlay.
       // Without this, a Browser Source that reconnects mid-match
       // (transient network blip; OBS scene swap; Streamlabs page
@@ -292,7 +297,7 @@ function attachSocketAuth(io, opts) {
       // Source page reload, or when the heartbeat reveals a gameKey
       // drift. Rate-limited so a misbehaving client can't trigger a
       // Mongo aggregation per tick.
-      socket.on("overlay:resync", () => {
+      socket.on("overlay:resync", async () => {
         const now = Date.now();
         const last =
           typeof socket.data.lastResyncMs === "number"
@@ -302,6 +307,33 @@ function attachSocketAuth(io, opts) {
         socket.data.lastResyncMs = now;
         const userId = socket.data.overlayUserId;
         if (!userId) return;
+        // The token may have been revoked after this socket's handshake. Use
+        // the fresh ownership validator when the production service provides
+        // one (rather than its short-lived resolve cache), and fail closed on
+        // lookup errors. The revoke route also disconnects the room promptly;
+        // this check protects cross-process sockets and disconnect races.
+        let stillValid = false;
+        try {
+          if (t && opts.validateOverlayToken) {
+            stillValid = await opts.validateOverlayToken(userId, t);
+          } else if (t && opts.resolveOverlayToken) {
+            const current = await opts.resolveOverlayToken(t);
+            stillValid = current?.userId === userId;
+          }
+        } catch {
+          // Do not replay private state while token validity is unknown. Keep
+          // the socket connected so a transient database issue can recover.
+          return;
+        }
+        if (!stillValid) {
+          try {
+            socket.disconnect(true);
+          } catch {
+            // A raced transport close is already equivalent to disconnect.
+          }
+          return;
+        }
+        if (socket.connected === false) return;
         if (opts.resolveSession) {
           opts
             .resolveSession(userId, socket.data.timezone)
@@ -315,6 +347,9 @@ function attachSocketAuth(io, opts) {
         }
         if (t && opts.resolveStudioState) {
           replayOverlayStudioState(socket, opts.resolveStudioState, t);
+        }
+        if (opts.resolvePlatformEvents) {
+          replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, userId);
         }
       });
       // 30-second heartbeat the client uses to detect when its cached
@@ -468,4 +503,29 @@ function replayOverlayStudioState(socket, resolveStudioState, token) {
     });
 }
 
-module.exports = { attachSocketAuth, RESYNC_MIN_INTERVAL_MS };
+/**
+ * @param {{emit:(event:string,payload:unknown)=>unknown}} socket
+ * @param {(userId:string)=>Promise<Array<Record<string,unknown>>>} resolvePlatformEvents
+ * @param {string} userId
+ */
+function replayOverlayPlatformEvents(socket, resolvePlatformEvents, userId) {
+  Promise.resolve()
+    .then(() => resolvePlatformEvents(userId))
+    .then((events) => {
+      if (!Array.isArray(events)) return;
+      for (const event of events) {
+        if (event && typeof event === "object") {
+          socket.emit("overlay:platformEvent", event);
+        }
+      }
+    })
+    .catch(() => {
+      // Live webhook fan-out remains healthy if replay storage is unavailable.
+    });
+}
+
+module.exports = {
+  attachSocketAuth,
+  replayOverlayPlatformEvents,
+  RESYNC_MIN_INTERVAL_MS,
+};

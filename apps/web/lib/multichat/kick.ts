@@ -19,6 +19,13 @@ export const KICK_PUSHER_URL =
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const KICK_EVENT_PREFIX = "App\\Events\\";
+const KICK_LITERAL_EVENT_NAMES = new Set([
+  "channel.followed",
+  "channel.reward.redemption.updated",
+]);
+
+let fallbackEventSequence = 0;
 
 export interface ParsedKickMessage {
   id: string;
@@ -118,14 +125,15 @@ export function parseKickEvent(
   eventName: string,
   data: Record<string, unknown>,
 ): ChatEvent | null {
-  const short = eventName.startsWith("App\\Events\\")
-    ? eventName.slice("App\\Events\\".length)
+  const short = eventName.startsWith(KICK_EVENT_PREFIX)
+    ? eventName.slice(KICK_EVENT_PREFIX.length)
     : eventName;
 
   let kind: ChatEvent["kind"];
   let user: string;
   let detail: string;
   let amount: string | undefined;
+  let dedupeKey: string | undefined;
   switch (short) {
     case "SubscriptionEvent": {
       user = String(data?.username || "").trim();
@@ -137,6 +145,9 @@ export function parseKickEvent(
         kind = "sub";
         detail = "subscribed";
       }
+      dedupeKey = kind === "resub"
+        ? `support:resub:${kickSupportActorKey(user)}:${Number.isFinite(months) ? months : 0}`
+        : `support:sub:${kickSupportActorKey(user)}`;
       break;
     }
     case "GiftedSubscriptionsEvent": {
@@ -146,6 +157,7 @@ export function parseKickEvent(
       const count = Array.isArray(gifted) ? gifted.length || 1 : 1;
       amount = String(count);
       detail = `gifted ${count} ${count === 1 ? "sub" : "subs"}`;
+      dedupeKey = `support:giftsub:${kickSupportActorKey(user)}:${count}`;
       break;
     }
     case "StreamHostEvent": {
@@ -156,21 +168,83 @@ export function parseKickEvent(
       detail = `raiding with ${viewers} viewers`;
       break;
     }
+    case "FollowerEvent":
+    case "FollowedEvent":
+    case "ChannelFollowedEvent":
+    case "channel.followed": {
+      kind = "follow";
+      const follower = (data?.follower ?? {}) as Record<string, unknown>;
+      user = String(
+        follower?.username || data?.username || data?.follower_username || "",
+      ).trim();
+      detail = "followed";
+      break;
+    }
+    case "RewardRedeemedEvent":
+    case "ChannelRewardRedemptionEvent":
+    case "channel.reward.redemption.updated": {
+      kind = "reward";
+      const redeemer = (data?.user ?? data?.redeemer ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const reward = (data?.reward ?? {}) as Record<string, unknown>;
+      user = String(
+        redeemer?.username || data?.username || data?.user_username || "",
+      ).trim();
+      const title = String(
+        reward?.title || data?.reward_title || "Channel reward",
+      ).trim();
+      detail = `redeemed ${title}`;
+      dedupeKey = `support:reward:${kickSupportActorKey(user)}:${kickSupportShortHash(title)}`;
+      break;
+    }
     default:
       return null;
   }
   if (!user) return null;
 
   const created = Date.parse(String(data?.created_at ?? ""));
-  return {
+  const receivedAt = Date.now();
+  const transportId = data?.id || data?.event_id;
+  const atMs = Number.isFinite(created) ? created : receivedAt;
+  const parsed: ChatEvent = {
     platform: "kick",
-    id: String(data?.id || `${eventName}-${Date.now()}-${user}`),
+    id: transportId
+      ? String(transportId)
+      : Number.isFinite(created)
+        ? `${short}:${created}:${user}`
+        : nextFallbackEventId(short, user, receivedAt),
     kind,
     user,
     detail,
     amount,
-    atMs: Number.isFinite(created) ? created : Date.now(),
+    atMs,
+    ...(dedupeKey ? { dedupeKey, dedupeWindowMs: 2 * 60 * 1000 } : {}),
   };
+  if (kind === "follow") {
+    parsed.updateKey = kickFollowCoalesceKey(user, atMs);
+    parsed.updateVersion = 1;
+  }
+  return parsed;
+}
+
+function kickFollowCoalesceKey(user: string, atMs: number): string {
+  const window = Math.floor(atMs / (15 * 60 * 1000));
+  return `follow:${user.trim().toLowerCase()}:${window}`.slice(0, 240);
+}
+
+function kickSupportActorKey(value: unknown): string {
+  return String(value || "viewer").trim().toLowerCase().replace(/\s+/g, "_").slice(0, 100);
+}
+
+function kickSupportShortHash(value: unknown): string {
+  let hash = 0x811c9dc5;
+  for (const char of String(value || "").trim().toLowerCase()) {
+    hash ^= char.codePointAt(0) || 0;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
 }
 
 export function createKickChat(
@@ -226,16 +300,21 @@ export function createKickChat(
           break;
         }
         default: {
-          // Any other App\Events\* frame is a candidate platform event
-          // (subs, gifted subs, hosts) — parse defensively, drop the rest.
-          if (!String(frame.event || "").startsWith("App\\Events\\")) break;
+          // Kick sends most platform events under App\Events\*, while its
+          // documented follow/reward events use literal dotted names.
+          // Admit both forms, then let the defensive parser drop unknowns.
+          const eventName = String(frame.event || "");
+          if (
+            !eventName.startsWith(KICK_EVENT_PREFIX)
+            && !KICK_LITERAL_EVENT_NAMES.has(eventName)
+          ) break;
           let payload: Record<string, unknown>;
           try {
             payload = JSON.parse(String(frame.data || "{}"));
           } catch {
             return;
           }
-          const event = parseKickEvent(String(frame.event), payload);
+          const event = parseKickEvent(eventName, payload);
           if (event) callbacks.onEvent?.(event);
           break;
         }
@@ -270,4 +349,17 @@ export function createKickChat(
       }
     },
   };
+}
+
+function nextFallbackEventId(
+  shortName: string,
+  user: string,
+  receivedAt: number,
+): string {
+  // With neither a transport id nor a source timestamp, a deterministic id
+  // would suppress every later event of the same kind from this user. Pair a
+  // receipt timestamp with a process-local sequence so even same-tick frames
+  // remain distinct. Stable transport/timestamp identities above still dedupe.
+  fallbackEventSequence += 1;
+  return `${shortName}:received:${receivedAt}:${fallbackEventSequence}:${user}`;
 }

@@ -559,6 +559,14 @@ class ObsClient:
         settings = getattr(resp, "input_settings", None) or {}
         return dict(settings) if isinstance(settings, dict) else {}
 
+    def set_input_settings(self, name: str, settings: Dict[str, Any]) -> None:
+        """Overlay selected settings without resetting unrelated OBS fields."""
+        self._call("set_input_settings", name, settings, True)
+
+    def refresh_browser_input(self, name: str) -> None:
+        """Reload one Browser Source without changing its saved URL/settings."""
+        self._call("press_input_properties_button", name, "refreshnocache")
+
     def get_scene_item_list(self, scene_name: str) -> List[Dict[str, Any]]:
         """Return the scene stack in OBS layer order (bottom to top).
 
@@ -641,6 +649,10 @@ class ObsClient:
         resp = self._call("create_scene_item", scene_name, source_name, enabled)
         item_id = getattr(resp, "scene_item_id", None)
         return int(item_id) if item_id is not None else 0
+
+    def remove_scene_item(self, *, scene_name: str, item_id: int) -> None:
+        """Remove one scene reference, leaving its source/other scenes alone."""
+        self._call("remove_scene_item", scene_name, item_id)
 
     def create_input(
         self,

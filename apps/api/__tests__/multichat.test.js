@@ -82,7 +82,7 @@ describe("services/youtubeLiveChat", () => {
     expect(out.events).toEqual([]);
   });
 
-  test("membership + Super Chat renderers become events, not messages", () => {
+  test("membership + paid renderers become events, not messages", () => {
     const out = yt.parseLiveChatResponse({
       continuationContents: {
         liveChatContinuation: {
@@ -106,6 +106,46 @@ describe("services/youtubeLiveChat", () => {
                       runs: [{ text: "Welcome to " }, { text: "Members!" }],
                     },
                     authorBadges: [],
+                  },
+                },
+              },
+            },
+            {
+              addChatItemAction: {
+                item: {
+                  liveChatPaidStickerRenderer: {
+                    id: "sticker-1",
+                    timestampUsec: "1768686003000000",
+                    authorName: { simpleText: "StickerFan" },
+                    purchaseAmountText: { simpleText: "$2.00" },
+                  },
+                },
+              },
+            },
+            {
+              addChatItemAction: {
+                item: {
+                  liveChatSponsorshipsGiftPurchaseAnnouncementRenderer: {
+                    id: "gift-members-1",
+                    timestampUsec: "1768686004000000",
+                    header: {
+                      liveChatSponsorshipsHeaderRenderer: {
+                        authorName: { simpleText: "GenerousMember" },
+                        primaryText: { runs: [{ text: "Gifted 5 memberships" }] },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            {
+              addChatItemAction: {
+                item: {
+                  liveChatSponsorshipsGiftRedemptionAnnouncementRenderer: {
+                    id: "gift-received-1",
+                    timestampUsec: "1768686005000000",
+                    authorName: { simpleText: "LuckyViewer" },
+                    message: { runs: [{ text: "received a gift membership" }] },
                   },
                 },
               },
@@ -166,8 +206,85 @@ describe("services/youtubeLiveChat", () => {
         amount: "€2.00",
         atMs: 1768686002000,
       },
+      {
+        id: "sticker-1",
+        kind: "superchat",
+        user: "StickerFan",
+        detail: "sent a Super Sticker",
+        amount: "$2.00",
+        atMs: 1768686003000,
+      },
+      {
+        id: "gift-members-1",
+        kind: "giftsub",
+        user: "GenerousMember",
+        detail: "Gifted 5 memberships",
+        amount: "5 memberships",
+        atMs: 1768686004000,
+      },
+      {
+        id: "gift-received-1",
+        kind: "member",
+        user: "LuckyViewer",
+        detail: "received a gift membership",
+        atMs: 1768686005000,
+      },
     ]);
     expect(out.continuation).toBe("NEXT_TOKEN_CCCCCCCCCCCCCCCCCCCC");
+  });
+
+  test("Jewels combo updates keep distinct cumulative totals", () => {
+    const giftItem = (comboCount, timestampUsec) => ({
+      addChatItemAction: {
+        item: {
+          liveChatGiftMessageRenderer: {
+            id: "jewels-combo-1",
+            timestampUsec,
+            comboCount,
+            authorName: { simpleText: "JewelFan" },
+            giftName: { simpleText: "Galaxy" },
+            giftAmountText: { simpleText: `${comboCount * 100} Jewels` },
+          },
+        },
+      },
+    });
+    const out = yt.parseLiveChatResponse({
+      continuationContents: {
+        liveChatContinuation: {
+          continuations: [
+            {
+              timedContinuationData: {
+                continuation: "NEXT_TOKEN_JEWELS_COMBO_1",
+                timeoutMs: 2_000,
+              },
+            },
+          ],
+          actions: [
+            giftItem(1, "1768686000000000"),
+            giftItem(3, "1768686001000000"),
+          ],
+        },
+      },
+    });
+
+    expect(out.events).toEqual([
+      expect.objectContaining({
+        id: "jewels-combo-1:combo:1",
+        updateKey: "jewels:jewels-combo-1",
+        updateVersion: 1,
+        kind: "gift",
+        user: "JewelFan",
+        detail: "sent Galaxy",
+        amount: "100 Jewels",
+      }),
+      expect.objectContaining({
+        id: "jewels-combo-1:combo:3",
+        updateKey: "jewels:jewels-combo-1",
+        updateVersion: 3,
+        detail: "sent Galaxy x3",
+        amount: "300 Jewels",
+      }),
+    ]);
   });
 
   test("normalizeYoutubeInput handles every supported paste shape", () => {
@@ -416,11 +533,12 @@ describe("services/tiktokChatRelay", () => {
     expect(seen.some((event) => event.state === "connected")).toBe(false);
     expect(seen.some((event) => event.type === "chat")).toBe(false);
     expect(relay.channels.get("streamer").recentChatEvents).toEqual([]);
+    expect(relay.channels.get("streamer").recentPlatformEvents).toEqual([]);
 
     off();
   });
 
-  test("late subscribers receive the bounded recent chat but no old alerts", async () => {
+  test("late subscribers receive recent chat and replay-marked platform events", async () => {
     const conn = fakeConnection();
     const relay = new TikTokChatRelay({ connectionFactory: async () => conn });
     const seenA = [];
@@ -444,7 +562,18 @@ describe("services/tiktokChatRelay", () => {
     const seenB = [];
     const offB = relay.subscribe("@Streamer", (event) => seenB.push(event));
     expect(seenB[0]).toMatchObject({ type: "status", state: "connected" });
-    expect(seenB.filter((event) => event.type === "event")).toHaveLength(0);
+    expect(seenB.filter((event) => event.type === "event")).toEqual([
+      expect.objectContaining({
+        type: "event",
+        replay: true,
+        session: "r1",
+        event: expect.objectContaining({
+          id: "gift-1",
+          kind: "gift",
+          user: "supporter",
+        }),
+      }),
+    ]);
     const replayed = seenB.filter((event) => event.type === "chat");
     expect(replayed).toHaveLength(MAX_RECENT_CHAT_EVENTS);
     expect(replayed.every((event) => event.replay === true)).toBe(true);
@@ -578,7 +707,7 @@ describe("services/tiktokChatRelay", () => {
   test("production connector requests TikTok's initial comment batch", () => {
     expect(TIKTOK_CONNECTION_OPTIONS).toEqual({
       processInitialData: true,
-      enableExtendedGiftInfo: false,
+      enableExtendedGiftInfo: true,
     });
   });
 
@@ -636,6 +765,7 @@ describe("services/tiktokChatRelay", () => {
     await channel.connectOnce();
     expect(channel.state).toBe("offline");
     expect(channel.recentChatEvents).toEqual([]);
+    expect(channel.recentPlatformEvents).toEqual([]);
     expect(channel.seenChatIds.size).toBe(0);
 
     const whileOffline = [];
@@ -742,13 +872,23 @@ describe("services/tiktokChatRelay", () => {
       kind: "gift",
       user: "fan1",
       detail: "sent Rose x3",
-      amount: "3",
+      amount: "3 gifts",
       atMs: expect.any(Number),
     });
     // Non-streak gift emits immediately; absent fields still emit.
     expect(
-      mapTikTokEvent("gift", { giftType: 5, giftName: "Galaxy", uniqueId: "fan2" }),
-    ).toMatchObject({ kind: "gift", user: "fan2", detail: "sent Galaxy", amount: "1" });
+      mapTikTokEvent("gift", {
+        giftDetails: { giftType: 5, giftName: "Galaxy" },
+        extendedGiftInfo: { diamond_count: 1000 },
+        repeatCount: 2,
+        uniqueId: "fan2",
+      }),
+    ).toMatchObject({
+      kind: "gift",
+      user: "fan2",
+      detail: "sent Galaxy x2",
+      amount: "2,000 diamonds",
+    });
     expect(mapTikTokEvent("gift", {})).toMatchObject({
       kind: "gift",
       user: "viewer",
@@ -756,7 +896,7 @@ describe("services/tiktokChatRelay", () => {
     });
   });
 
-  test("mapTikTokEvent maps follow/subscribe and drops unknown names", () => {
+  test("mapTikTokEvent maps follow/subscribe/share and drops unknown names", () => {
     expect(
       mapTikTokEvent("follow", { user: { uniqueId: "newfan" } }),
     ).toMatchObject({ kind: "follow", user: "newfan", detail: "followed" });
@@ -766,10 +906,26 @@ describe("services/tiktokChatRelay", () => {
     expect(
       mapTikTokEvent("subscribe", { uniqueId: "supporter" }),
     ).toMatchObject({ kind: "sub", user: "supporter", detail: "subscribed" });
+    expect(
+      mapTikTokEvent("subscribe", { uniqueId: "loyal", subMonth: 7 }),
+    ).toMatchObject({
+      kind: "resub",
+      user: "loyal",
+      detail: "subscribed for 7 months",
+      amount: "7 months",
+    });
+    expect(
+      mapTikTokEvent("share", { uniqueId: "amplifier", msgId: "share-1" }),
+    ).toMatchObject({
+      id: "share-1",
+      kind: "share",
+      user: "amplifier",
+      detail: "shared the stream",
+    });
     expect(mapTikTokEvent("like", { uniqueId: "x" })).toBeNull();
   });
 
-  test("gift/follow/subscribe events fan out over the relay", async () => {
+  test("gift/follow/share events fan out once over the relay", async () => {
     const conn = fakeConnection();
     const relay = new TikTokChatRelay({ connectionFactory: async () => conn });
     const seen = [];
@@ -782,10 +938,13 @@ describe("services/tiktokChatRelay", () => {
       msgId: "g2",
     });
     conn.emit("follow", { user: { uniqueId: "newfan" } });
+    conn.emit("share", { user: { uniqueId: "sharer" }, msgId: "s1" });
+    conn.emit("share", { user: { uniqueId: "sharer" }, msgId: "s1" });
     const events = seen.filter((e) => e.type === "event").map((e) => e.event);
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     expect(events[0]).toMatchObject({ kind: "gift", id: "g2", user: "fan" });
     expect(events[1]).toMatchObject({ kind: "follow", user: "newfan" });
+    expect(events[2]).toMatchObject({ kind: "share", id: "s1", user: "sharer" });
     off();
   });
 });
@@ -934,6 +1093,7 @@ const EMPTY_BROLL = {
   muted: false,
   volume: 20,
   skipNonce: 0,
+  playback: { epochMs: 0, revision: 0, seed: 0, cursor: 0 },
 };
 const OWNER_A_CLIP = {
   id: "owner-a-clip",
@@ -1124,6 +1284,12 @@ describe("routes/multichat studio", () => {
       muted: true,
       volume: 100,
       skipNonce: 7,
+      playback: {
+        epochMs: expect.any(Number),
+        revision: 1,
+        seed: expect.any(Number),
+        cursor: 0,
+      },
     });
     const again = await request(app2).get(
       `/v1/multichat/${token2}/studio`,
@@ -1140,6 +1306,7 @@ describe("routes/multichat studio", () => {
       muted: false,
       volume: 20,
       skipNonce: 0,
+      playback: { epochMs: 0, revision: 2, seed: 0, cursor: 0 },
     });
   });
 
@@ -1437,6 +1604,9 @@ describe("sanitizeMultichatConfig", () => {
         superchat: "coin",
         gift: "coin",
         follow: "pop",
+        cheer: "coin",
+        share: "pop",
+        reward: "sparkle",
       },
       customSounds: [],
     });

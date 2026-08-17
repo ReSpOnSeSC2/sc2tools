@@ -13,6 +13,21 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Official creator-account notifications now cover the recognition events
+  chat APIs cannot deliver reliably** — streamers can connect Twitch, Kick,
+  and YouTube from Settings using provider OAuth. Signed, replay-protected
+  Twitch EventSub delivers follows, channel-point rewards, subscriptions,
+  resubscriptions, gift subs, cheers, and incoming raids. Kick webhooks add
+  follows, channel rewards, new/renewed/gift subscriptions, and KICKs gifts;
+  YouTube adds best-effort recent public channel subscriptions. Public-chat
+  and official copies are paired one-for-one in either arrival order, so the
+  durable official record cannot produce a second card, sound, or XP award.
+  Tokens are encrypted in a dedicated server-side vault, webhook deliveries are durably
+  de-duplicated and replayed to reconnecting overlays, and periodic health
+  checks repair expiring or missing provider subscriptions automatically.
+  Twitch grants are validated on startup and hourly, refreshed reactively,
+  and disconnected safely when the provider says reauthorization is required.
+
 - **Build Roulette can now roll the opening Gateway units as a second act** —
   every Protoss build can independently draw one or two units with equal or
   custom odds, using real unit portraits and one of three animated reveal
@@ -20,23 +35,47 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Incoming raids now update the Stream Dock audience immediately** — Twitch
+  raids and Kick hosts temporarily raise that platform's displayed count while
+  its official viewer API catches up. Replayed/stale events and duplicate event
+  IDs are ignored, refreshed official totals replace the temporary floor
+  without double-counting, and a hard expiry prevents a lagging platform from
+  leaving the audience permanently inflated.
+
 - **Starting Soon / BRB B-roll now stays continuous on every OBS canvas** —
   the topmost horizontal manual cover now uses the same highlight reel as the
-  vertical scene, ordered and shuffled playlists restart after their last clip,
-  and ordinary clip handoffs keep the video layer visible instead of flashing a
-  generated fallback set. A fully rejected playlist pauses briefly and retries
-  rather than becoming a permanent standby screen.
+  vertical scene, and separate players follow one server-owned shuffle order,
+  clip, and wall-clock offset through reconnects, skips, and library changes.
+  OBS assigns one explicit `?audio=1` owner and marks every other landscape or
+  portrait copy `?audio=0`, preventing doubled or phase-shifted sound even when
+  multiple 1920x1080 sources stay loaded. Ordered and shuffled playlists restart
+  after their last clip, and ordinary handoffs keep the video visible.
+
+- **Four-platform supporter activity now reaches both alerts and the unified
+  chat timeline** — Twitch cheers, YouTube Super Stickers, gifted memberships
+  and Jewels combos, plus TikTok follows, subscriptions, shares, gifts and
+  diamond totals are normalized into visible event cards. Alert bursts queue
+  instead of replacing people, large membership bundles keep every recipient,
+  and native-size alert/chat copies render on each canvas while one explicitly
+  elected Live/Vertical source owns sounds, TTS and message dings. Generated
+  visual followers stay silent, preserving their intended dimensions without
+  doubled audio. Existing fingerprint-matched layouts are repaired safely on
+  reconnect. Settings now includes official Twitch, Kick and YouTube account
+  connections for durable follows, rewards, subscriptions, gifts, cheers,
+  raids, and best-effort public YouTube subscriptions; overlapping live-chat
+  copies are paired so every action appears once.
 
 - **YouTube messages no longer disappear from Stream Dock while the overlay keeps
   receiving them** — rate-limited clients retain their exact chat cursor and
   recover the missed batch, messages posted during the first poll are kept, and
   idle poll widgets no longer spend the shared YouTube request budget.
 
-- **Recent TikTok comments now appear in every connected Stream Dock and widget** —
-  the relay no longer discards TikTok's small startup comment batch, keeps a bounded
-  chat-only backlog for surfaces that attach to an existing shared connection,
-  de-duplicates messages repeated by the live socket, and avoids replaying old gift,
-  follow, or subscription alerts during reconnects.
+- **Recent TikTok activity now appears in every connected Stream Dock and
+  widget** — the relay retains a bounded chat and recognition-event backlog for
+  surfaces sharing one upstream connection and de-duplicates reconnect frames.
+  Late timeline surfaces receive replay-marked follows, gifts and subscriptions.
+  The alert source recognizes a few-seconds-late arrival but suppresses stale
+  replayed toasts and sounds.
 
 - **Skill Fingerprints no longer collapse to Balanced All-Rounder while their
   population benchmark is building** — missing or undersampled calibration used

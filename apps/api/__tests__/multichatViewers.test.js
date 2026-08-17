@@ -475,6 +475,52 @@ describe("services/multichatViewers — per-platform lookups", () => {
 });
 
 describe("services/multichatViewers — caching and totals", () => {
+  test("observation time is response completion, not request start", async () => {
+    let now = 1_000_000;
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const svc = new MultichatViewersService({
+      now: () => now,
+      fetchImpl: async () => {
+        await gate;
+        return jsonRes({ data: { user: { stream: { viewersCount: 42 } } } });
+      },
+    });
+
+    const pending = svc.forConfig({
+      twitch: { enabled: true, channel: "somechan" },
+    });
+    now = 1_000_250;
+    release();
+    const result = await pending;
+    expect(result.platforms[0].observedAtMs).toBe(1_000_250);
+  });
+
+  test("forConfig exposes the real cached observation time, not response time", async () => {
+    let now = 1_000_000;
+    const svc = new MultichatViewersService({
+      ttlMs: 20_000,
+      now: () => now,
+      fetchImpl: async () =>
+        jsonRes({ data: { user: { stream: { viewersCount: 10 } } } }),
+    });
+    const config = { twitch: { enabled: true, channel: "somechan" } };
+
+    const first = await svc.forConfig(config);
+    expect(first.platforms[0].observedAtMs).toBe(1_000_000);
+
+    now += 5_000;
+    const cached = await svc.forConfig(config);
+    expect(cached.atMs).toBe(1_005_000);
+    expect(cached.platforms[0].observedAtMs).toBe(1_000_000);
+
+    now += 20_001;
+    const refreshed = await svc.forConfig(config);
+    expect(refreshed.platforms[0].observedAtMs).toBe(1_025_001);
+  });
+
   test("repeat lookups inside the TTL hit cache; concurrent ones share one fetch", async () => {
     let fetches = 0;
     let now = 1_000_000;

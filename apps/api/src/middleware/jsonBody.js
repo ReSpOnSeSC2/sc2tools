@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Preserve raw JSON bytes only for the signed Clerk webhook.
+ * Preserve raw JSON bytes only for signed webhook endpoints.
  *
  * ``express.json`` already holds its parse buffer temporarily. Assigning that
  * buffer to every request kept a second, raw representation alive for the
@@ -13,11 +13,18 @@
  * @param {import('express').Response} _res
  * @param {Buffer} buf
  */
-function captureClerkWebhookRawBody(req, _res, buf) {
+function captureSignedWebhookRawBody(req, _res, buf) {
   const path = String(req.originalUrl || req.url || "").split("?", 1)[0];
-  if (path === "/v1/webhooks/clerk") {
+  if (
+    path === "/v1/webhooks/clerk"
+    || path === "/v1/webhooks/twitch/eventsub"
+    || path === "/v1/webhooks/kick/events"
+  ) {
     /** @type {any} */ (req).rawBody = buf;
   }
 }
 
-module.exports = { captureClerkWebhookRawBody };
+// Keep the old export name for focused tests and downstream imports.
+const captureClerkWebhookRawBody = captureSignedWebhookRawBody;
+
+module.exports = { captureSignedWebhookRawBody, captureClerkWebhookRawBody };

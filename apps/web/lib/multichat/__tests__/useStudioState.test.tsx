@@ -16,9 +16,14 @@ function Probe({
 }) {
   const studio = useStudioState(token, studioEvent);
   return (
-    <div data-testid="scene-state">
-      {studio.loaded ? "loaded" : "loading"}:{studio.scene?.mode ?? "live"}
-    </div>
+    <>
+      <div data-testid="scene-state">
+        {studio.loaded ? "loaded" : "loading"}:{studio.scene?.mode ?? "live"}
+      </div>
+      <div data-testid="snapshot-state">
+        {studio.snapshotReady ? "ready" : "unverified"}
+      </div>
+    </>
   );
 }
 
@@ -41,8 +46,77 @@ function sceneState(
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("useStudioState authoritative readiness", () => {
+  it("records a failed initial attempt without declaring moderation ready", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
+    );
+
+    render(<Probe studioEvent={null} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("scene-state").textContent).toBe("loaded:live");
+    });
+    expect(screen.getByTestId("snapshot-state").textContent).toBe(
+      "unverified",
+    );
+  });
+
+  it("accepts an empty successful retry as a known-no-blocklist snapshot", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Probe studioEvent={null} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("snapshot-state").textContent).toBe(
+      "unverified",
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("snapshot-state").textContent).toBe("ready");
+  });
+
+  it("unlocks from an authoritative socket snapshot after the GET fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }),
+    );
+    const { rerender } = render(<Probe studioEvent={null} />);
+    await waitFor(() => {
+      expect(screen.getByTestId("scene-state").textContent).toBe("loaded:live");
+    });
+    expect(screen.getByTestId("snapshot-state").textContent).toBe(
+      "unverified",
+    );
+
+    rerender(
+      <Probe studioEvent={sceneState("brb", "2026-08-04T12:01:00.000Z")} />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("snapshot-state").textContent).toBe("ready");
+    });
+    expect(screen.getByTestId("scene-state").textContent).toBe("loaded:brb");
+  });
 });
 
 describe("useStudioState ordering", () => {
@@ -254,5 +328,36 @@ describe("b-roll state sanitization", () => {
     });
     expect(state.broll).not.toHaveProperty("autoplayScript");
     expect(state.broll.clips[0]).not.toHaveProperty("iframeHtml");
+  });
+
+  it("accepts only bounded shared playback timeline metadata", () => {
+    const state = sanitizeStudioState({
+      broll: {
+        clips: [
+          {
+            id: "timeline-clip",
+            title: "Timeline clip",
+            videoId: "99UKipUcV_s",
+            startSeconds: 10,
+            endSeconds: 20,
+          },
+        ],
+        playback: {
+          epochMs: 123_456.7,
+          revision: 8.9,
+          seed: -1,
+          cursor: 900,
+          script: "alert(1)",
+        },
+      },
+    });
+
+    expect(state.broll.playback).toEqual({
+      epochMs: 123_457,
+      revision: 8,
+      seed: 4_294_967_295,
+      cursor: 0,
+    });
+    expect(state.broll.playback).not.toHaveProperty("script");
   });
 });

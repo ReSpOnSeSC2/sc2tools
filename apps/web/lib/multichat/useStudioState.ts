@@ -65,6 +65,22 @@ export interface StudioBrollClip {
   endSeconds: number;
 }
 
+/**
+ * Server-owned anchor for the shared B-roll timeline. Independent OBS Browser
+ * Sources use this same epoch/order position to load separate YouTube players
+ * at the same clip offset.
+ */
+export interface StudioBrollPlayback {
+  /** Wall-clock epoch (ms) at which `cursor` began. */
+  epochMs: number;
+  /** Monotonic-ish reload signal changed by library/shuffle/skip controls. */
+  revision: number;
+  /** Unsigned 32-bit seed for the deterministic shuffle order. */
+  seed: number;
+  /** Position in that order, not an index in `clips`. */
+  cursor: number;
+}
+
 /** Persisted player/library controls shared by the Dock and OBS source. */
 export interface StudioBrollConfig {
   clips: StudioBrollClip[];
@@ -74,6 +90,8 @@ export interface StudioBrollConfig {
   volume: number;
   /** Changing this counter asks every connected player to advance. */
   skipNonce: number;
+  /** Missing only on legacy API snapshots; the player has a deterministic fallback. */
+  playback?: StudioBrollPlayback;
 }
 
 export const DEFAULT_BROLL_CONFIG: StudioBrollConfig = {
@@ -260,6 +278,30 @@ function sanitizeBroll(raw: unknown): StudioBrollConfig {
     typeof b.skipNonce === "number" && Number.isFinite(b.skipNonce)
       ? Math.min(2_147_483_647, Math.max(0, Math.floor(b.skipNonce)))
       : DEFAULT_BROLL_CONFIG.skipNonce;
+  const rawPlayback =
+    b.playback && typeof b.playback === "object" && !Array.isArray(b.playback)
+      ? (b.playback as Record<string, unknown>)
+      : null;
+  const epochRaw = Number(rawPlayback?.epochMs);
+  const revisionRaw = Number(rawPlayback?.revision);
+  const seedRaw = Number(rawPlayback?.seed);
+  const cursorRaw = Number(rawPlayback?.cursor);
+  const playback = rawPlayback
+    ? {
+        epochMs:
+          Number.isFinite(epochRaw) && epochRaw >= 0
+            ? Math.min(8_640_000_000_000_000, Math.round(epochRaw))
+            : 0,
+        revision: Number.isFinite(revisionRaw)
+          ? Math.min(2_147_483_647, Math.max(0, Math.floor(revisionRaw)))
+          : 0,
+        seed: Number.isFinite(seedRaw) ? Math.floor(seedRaw) >>> 0 : 0,
+        cursor:
+          clips.length > 0 && Number.isFinite(cursorRaw)
+            ? Math.max(0, Math.floor(cursorRaw)) % clips.length
+            : 0,
+      }
+    : undefined;
 
   return {
     clips,
@@ -269,6 +311,7 @@ function sanitizeBroll(raw: unknown): StudioBrollConfig {
       typeof b.muted === "boolean" ? b.muted : DEFAULT_BROLL_CONFIG.muted,
     volume,
     skipNonce,
+    ...(playback ? { playback } : {}),
   };
 }
 
@@ -330,10 +373,16 @@ export function useStudioState(
   token: string,
   studioEvent: unknown,
   options?: { enabled?: boolean },
-): StudioState & { loaded: boolean } {
+): StudioState & { loaded: boolean; snapshotReady: boolean } {
   const enabled = options?.enabled ?? true;
   const [state, setState] = useState<StudioState>(DEFAULT_STUDIO_STATE);
+  // ``loaded`` preserves the existing "first request finished" contract for
+  // non-moderation widgets. ``snapshotReady`` is deliberately stricter: it is
+  // true only after an authoritative server snapshot (GET or socket) arrives.
+  // Moderation consumers must fail closed on the latter so a transient 5xx
+  // cannot briefly expose activity from a user in the persisted blocklist.
   const [loaded, setLoaded] = useState(false);
+  const [snapshotReady, setSnapshotReady] = useState(false);
   // Ordering guards for the three paths that can deliver the same snapshot:
   // initial/periodic GET, live socket broadcast, and socket connect replay.
   // Local sequences make same-millisecond fetch/event races deterministic;
@@ -379,6 +428,7 @@ export function useStudioState(
     fetchSequenceRef.current += 1;
     setState(DEFAULT_STUDIO_STATE);
     setLoaded(false);
+    setSnapshotReady(false);
   }, [token]);
 
   useEffect(() => {
@@ -394,12 +444,17 @@ export function useStudioState(
         );
         if (!res.ok) return;
         const body: unknown = await res.json();
+        // A 200 with a malformed payload is not proof that the authoritative
+        // blocklist is empty. The real endpoint always returns a plain object;
+        // an empty object is a valid, known-no-blocklist snapshot.
+        if (!body || typeof body !== "object" || Array.isArray(body)) return;
         if (
           cancelled
           || fetchSequence !== fetchSequenceRef.current
           || socketSequence !== socketSequenceRef.current
         ) return;
         applySnapshot(body);
+        setSnapshotReady(true);
       } catch {
         /* transient — next tick retries */
       } finally {
@@ -419,11 +474,16 @@ export function useStudioState(
   useEffect(() => {
     if (Object.is(lastStudioEventRef.current, studioEvent)) return;
     lastStudioEventRef.current = studioEvent;
-    if (!studioEvent || typeof studioEvent !== "object") return;
+    if (
+      !studioEvent
+      || typeof studioEvent !== "object"
+      || Array.isArray(studioEvent)
+    ) return;
     socketSequenceRef.current += 1;
     applySnapshot(studioEvent);
     setLoaded(true);
+    setSnapshotReady(true);
   }, [studioEvent, applySnapshot]);
 
-  return { ...state, loaded };
+  return { ...state, loaded, snapshotReady };
 }

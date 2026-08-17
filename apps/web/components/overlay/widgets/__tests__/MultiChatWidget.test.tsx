@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { MultiChatWidget } from "../MultiChatWidget";
+import { MultiChatWidget, useMultichatConfig } from "../MultiChatWidget";
 import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
@@ -15,29 +15,57 @@ let mockChat: MultiChatState = {
   statuses: {},
   active: false,
 };
+let mockStudioBlockedUsers: string[] = [];
+let mockStudioSnapshotReady = true;
+
+const hookSpies = vi.hoisted(() => ({
+  engagement: vi.fn(),
+  sound: vi.fn(),
+  tts: vi.fn(),
+  commands: vi.fn(),
+  translation: vi.fn(),
+}));
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: () => mockChat,
 }));
 
+vi.mock("@/lib/multichat/useStudioState", () => ({
+  useStudioState: () => ({
+    blockedUsers: mockStudioBlockedUsers,
+    loaded: true,
+    snapshotReady: mockStudioSnapshotReady,
+  }),
+}));
+
 vi.mock("@/lib/multichat/useEngagementReporter", () => ({
-  useEngagementReporter: () => undefined,
+  useEngagementReporter: (...args: unknown[]) =>
+    hookSpies.engagement(...args),
 }));
 
 vi.mock("@/lib/multichat/useChatSound", () => ({
-  useChatSound: () => undefined,
+  useChatSound: (...args: unknown[]) => hookSpies.sound(...args),
 }));
 
 vi.mock("@/lib/multichat/useChatTts", () => ({
-  useChatTts: () => ({ needsGesture: false, onUserGesture: vi.fn() }),
+  useChatTts: (...args: unknown[]) => {
+    hookSpies.tts(...args);
+    return { needsGesture: false, onUserGesture: vi.fn() };
+  },
 }));
 
 vi.mock("@/lib/multichat/useCommandAnswers", () => ({
-  useCommandAnswers: () => null,
+  useCommandAnswers: (...args: unknown[]) => {
+    hookSpies.commands(...args);
+    return null;
+  },
 }));
 
 vi.mock("@/lib/multichat/useTranslation", () => ({
-  useTranslation: () => ({}),
+  useTranslation: (...args: unknown[]) => {
+    hookSpies.translation(...args);
+    return {};
+  },
 }));
 
 // The config loader hits the token-authed relay; stub fetch with the
@@ -45,6 +73,8 @@ vi.mock("@/lib/multichat/useTranslation", () => ({
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockResolvedValue({
     ok: true,
@@ -52,10 +82,13 @@ beforeEach(() => {
   });
   mockConfig = { config: null, loaded: false };
   mockChat = { messages: [], events: [], statuses: {}, active: false };
+  mockStudioBlockedUsers = [];
+  mockStudioSnapshotReady = true;
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -70,7 +103,115 @@ async function renderWidget() {
   return view;
 }
 
+function ConfigProbe({ token }: { token: string }) {
+  const config = useMultichatConfig(token);
+  return (
+    <div data-testid="config-state">
+      {config.loaded
+        ? `ready:${config.platforms?.twitch?.channel ?? "none"}`
+        : "unverified"}
+    </div>
+  );
+}
+
 describe("MultiChatWidget", () => {
+  it("keeps config unverified after failure and unlocks on a successful retry", async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          config: { twitch: { enabled: true, channel: "retry-channel" } },
+        }),
+      });
+
+    render(<ConfigProbe token="retry-token" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("config-state").textContent).toBe("unverified");
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("config-state").textContent).toBe(
+      "ready:retry-channel",
+    );
+  });
+
+  it("masks the previous config immediately when the overlay token changes", async () => {
+    let resolveNew: ((value: unknown) => void) | null = null;
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).includes("old-token")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            config: { twitch: { enabled: true, channel: "old-channel" } },
+          }),
+        });
+      }
+      return new Promise((resolve) => {
+        resolveNew = resolve;
+      });
+    });
+
+    const view = render(<ConfigProbe token="old-token" />);
+    expect(await screen.findByText("ready:old-channel")).toBeTruthy();
+
+    view.rerender(<ConfigProbe token="new-token" />);
+    expect(screen.getByTestId("config-state").textContent).toBe("unverified");
+
+    await act(async () => {
+      resolveNew?.({
+        ok: true,
+        json: async () => ({
+          config: { twitch: { enabled: true, channel: "new-channel" } },
+        }),
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("config-state").textContent).toBe(
+      "ready:new-channel",
+    );
+  });
+
+  it("renders a silent audio=0 copy without enabling TTS or dings", async () => {
+    window.history.replaceState({}, "", "/overlay/tok/widget/multichat?audio=0");
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      tts: { enabled: true },
+      sound: { enabled: true },
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      events: [],
+      messages: [{
+        platform: "twitch",
+        id: "silent-copy",
+        user: "StillVisible",
+        text: "the follower still renders",
+        badges: [],
+        atMs: Date.now(),
+      }],
+    };
+
+    await renderWidget();
+
+    expect(await screen.findByText("the follower still renders")).toBeTruthy();
+    expect(hookSpies.tts.mock.calls.at(-1)?.[1]).toMatchObject({
+      enabled: false,
+    });
+    expect(hookSpies.sound.mock.calls.at(-1)?.[1]).toMatchObject({
+      enabled: false,
+    });
+  });
+
   it("shows the setup hint when no platform is configured", async () => {
     mockConfig.config = { twitch: { enabled: false } };
     await renderWidget();
@@ -115,6 +256,214 @@ describe("MultiChatWidget", () => {
     expect(screen.getByTitle("Moderator")).toBeTruthy();
   });
 
+  it("shows normalized events without sending them through message effects", async () => {
+    mockConfig.config = { twitch: { enabled: true, channel: "me" } };
+    const now = Date.now();
+    const message = {
+      platform: "twitch" as const,
+      id: "chat-1",
+      user: "Viewer",
+      text: "hello chat",
+      badges: [],
+      atMs: now,
+    };
+    const event = {
+      platform: "twitch" as const,
+      id: "raid-1",
+      kind: "raid" as const,
+      user: "RaidLeader",
+      detail: "raided the channel",
+      amount: "42 viewers",
+      atMs: now + 1,
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [message],
+      events: [event],
+    };
+
+    await renderWidget();
+
+    const eventRow = await screen.findByTestId("mc-event-row");
+    expect(eventRow.textContent).toContain("RaidLeader raided the channel");
+    expect(eventRow.textContent).toContain("42 viewers");
+    expect(screen.getByLabelText("Twitch event")).toBeTruthy();
+    expect(hookSpies.engagement).toHaveBeenLastCalledWith(
+      "tok_test",
+      [message],
+      [event],
+    );
+    for (const effect of [
+      hookSpies.sound,
+      hookSpies.tts,
+      hookSpies.commands,
+      hookSpies.translation,
+    ]) {
+      expect(effect.mock.calls.at(-1)?.[0]).toEqual([message]);
+    }
+  });
+
+  it("filters Settings and Stream Dock blocked users from cards and engagement", async () => {
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: {
+        ...DEFAULT_APPEARANCE,
+        blockedUsers: "  @SettingsBlocked  ",
+      },
+    };
+    mockStudioBlockedUsers = [" @DockBlocked "];
+    const allowedMessage = {
+      platform: "twitch" as const,
+      id: "allowed-message",
+      user: "FriendlyViewer",
+      text: "hello",
+      badges: [],
+      atMs: Date.now(),
+    };
+    const allowedEvent = {
+      platform: "twitch" as const,
+      id: "allowed-event",
+      kind: "follow" as const,
+      user: "FriendlyFollower",
+      detail: "followed",
+      atMs: Date.now() + 1,
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [
+        allowedMessage,
+        {
+          ...allowedMessage,
+          id: "settings-message",
+          user: "@SETTINGSBLOCKED",
+          text: "must stay hidden",
+        },
+      ],
+      events: [
+        allowedEvent,
+        {
+          ...allowedEvent,
+          id: "settings-event",
+          user: "settingsblocked",
+        },
+        {
+          ...allowedEvent,
+          id: "dock-event",
+          user: "DOCKBLOCKED",
+        },
+      ],
+    };
+
+    await renderWidget();
+
+    expect(await screen.findByText("FriendlyFollower")).toBeTruthy();
+    expect(screen.queryByText("must stay hidden")).toBeNull();
+    expect(screen.queryByText("settingsblocked")).toBeNull();
+    expect(screen.queryByText("DOCKBLOCKED")).toBeNull();
+    expect(hookSpies.engagement).toHaveBeenLastCalledWith(
+      "tok_test",
+      [allowedMessage],
+      [allowedEvent],
+    );
+  });
+
+  it("fails closed until the Stream Dock blocklist snapshot is authoritative", async () => {
+    mockConfig.config = { twitch: { enabled: true, channel: "me" } };
+    mockStudioSnapshotReady = false;
+    const message = {
+      platform: "twitch" as const,
+      id: "unverified-chat",
+      user: "MaybeBlocked",
+      text: "must wait for moderation",
+      badges: [],
+      atMs: Date.now(),
+    };
+    const event = {
+      platform: "twitch" as const,
+      id: "unverified-follow",
+      kind: "follow" as const,
+      user: "MaybeBlockedFollower",
+      detail: "followed",
+      atMs: Date.now() + 1,
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [message],
+      events: [event],
+    };
+
+    const view = await renderWidget();
+
+    expect(screen.queryByText(message.text)).toBeNull();
+    expect(screen.queryByText(event.user)).toBeNull();
+    expect(hookSpies.engagement).toHaveBeenLastCalledWith("tok_test", [], []);
+    expect(hookSpies.sound.mock.calls.at(-1)?.[0]).toEqual([]);
+    expect(hookSpies.tts.mock.calls.at(-1)?.[0]).toEqual([]);
+
+    mockStudioSnapshotReady = true;
+    view.rerender(<MultiChatWidget token="tok_test" />);
+
+    expect(await screen.findByText(message.text)).toBeTruthy();
+    expect(screen.getByText(event.user)).toBeTruthy();
+    expect(hookSpies.engagement).toHaveBeenLastCalledWith(
+      "tok_test",
+      [message],
+      [event],
+    );
+  });
+
+  it("uses the cheer event sound without stacking generic chat audio", async () => {
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      tts: { enabled: true },
+      sound: {
+        enabled: true,
+        eventSoundsEnabled: true,
+        eventVolume: 80,
+        eventSounds: { cheer: "coin" },
+      },
+    };
+    const now = Date.now();
+    const cheerMessage = {
+      platform: "twitch" as const,
+      id: "cheer-chat",
+      user: "CheerFan",
+      text: "Cheer100 great game",
+      badges: [],
+      atMs: now,
+      pairedEventKind: "cheer" as const,
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [cheerMessage],
+      events: [{
+        platform: "twitch",
+        id: "cheer-chat:cheer",
+        kind: "cheer",
+        user: "CheerFan",
+        detail: "cheered",
+        amount: "100 bits",
+        atMs: now,
+      }],
+    };
+
+    await renderWidget();
+
+    expect(await screen.findByText("Cheer100 great game")).toBeTruthy();
+    expect(hookSpies.tts.mock.calls.at(-1)?.[0]).toEqual([
+      { ...cheerMessage, suppressAudio: true },
+    ]);
+    expect(hookSpies.sound.mock.calls.at(-1)?.[0]).toEqual([
+      { ...cheerMessage, suppressAudio: true },
+    ]);
+    // Non-audio behavior still receives the original chat line.
+    expect(hookSpies.commands.mock.calls.at(-1)?.[0]).toEqual([cheerMessage]);
+  });
+
   it("surfaces per-platform status while not fully connected", async () => {
     mockConfig.config = {
       twitch: { enabled: true, channel: "me" },
@@ -149,7 +498,16 @@ describe("MultiChatWidget", () => {
       mockChat = {
         active: true,
         statuses: { twitch: { state: "connected" } },
-        events: [],
+        events: [
+          {
+            platform: "twitch",
+            id: "ttl-event",
+            kind: "follow",
+            user: "FreshFollower",
+            detail: "followed the channel",
+            atMs: base,
+          },
+        ],
         messages: [
           {
             platform: "twitch",
@@ -170,10 +528,13 @@ describe("MultiChatWidget", () => {
       });
 
       expect(screen.getByText("expires on time")).toBeTruthy();
+      expect(screen.getByText("FreshFollower")).toBeTruthy();
       act(() => vi.advanceTimersByTime(29_999));
       expect(screen.getByText("expires on time")).toBeTruthy();
+      expect(screen.getByText("FreshFollower")).toBeTruthy();
       act(() => vi.advanceTimersByTime(1));
       expect(screen.queryByText("expires on time")).toBeNull();
+      expect(screen.queryByText("FreshFollower")).toBeNull();
     } finally {
       cleanup();
       vi.clearAllTimers();

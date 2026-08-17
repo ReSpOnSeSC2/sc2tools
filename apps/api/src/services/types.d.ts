@@ -575,7 +575,7 @@ export interface OverlayTokensService {
       }
     | null
   >;
-  revoke(userId: string, token: string): Promise<void>;
+  revoke(userId: string, token: string): Promise<boolean>;
   setWidgetEnabled(
     userId: string,
     token: string,

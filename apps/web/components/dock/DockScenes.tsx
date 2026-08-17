@@ -170,7 +170,7 @@ export function DockScenes({
     : null;
 
   const updateBroll = (patch: Partial<StudioBrollConfig>) =>
-    onPost({ broll: { ...broll, ...patch } });
+    onPost({ broll: patch });
 
   const commitVolume = (next = volumeDraft) => {
     const volume = Math.max(0, Math.min(100, Math.round(next)));

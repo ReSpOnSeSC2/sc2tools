@@ -114,7 +114,7 @@ describe("b-roll input helpers", () => {
 });
 
 describe("DockScenes b-roll controls", () => {
-  it("shows active status and posts complete nested config updates", async () => {
+  it("shows active status and posts race-safe partial config updates", async () => {
     const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
       async () => undefined,
     );
@@ -139,16 +139,16 @@ describe("DockScenes b-roll controls", () => {
 
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(4));
     expect(onPost).toHaveBeenNthCalledWith(1, {
-      broll: { ...BROLL, shuffle: false },
+      broll: { shuffle: false },
     });
     expect(onPost).toHaveBeenNthCalledWith(2, {
-      broll: { ...BROLL, muted: true },
+      broll: { muted: true },
     });
     expect(onPost).toHaveBeenNthCalledWith(3, {
-      broll: { ...BROLL, skipNonce: 4 },
+      broll: { skipNonce: 4 },
     });
     expect(onPost).toHaveBeenNthCalledWith(4, {
-      broll: { ...BROLL, volume: 37 },
+      broll: { volume: 37 },
     });
   });
 
@@ -237,11 +237,10 @@ describe("BrollLibraryEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Add highlight" }));
 
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
-    const update = onPost.mock.calls[0][0] as { broll: StudioBrollConfig };
-    expect(update.broll.shuffle).toBe(BROLL.shuffle);
-    expect(update.broll.muted).toBe(BROLL.muted);
-    expect(update.broll.volume).toBe(BROLL.volume);
-    expect(update.broll.skipNonce).toBe(BROLL.skipNonce);
+    const update = onPost.mock.calls[0][0] as {
+      broll: Pick<StudioBrollConfig, "clips">;
+    };
+    expect(Object.keys(update.broll)).toEqual(["clips"]);
     expect(update.broll.clips.at(-1)).toEqual({
       id: "qwerty_1234-750-785",
       title: "Storm drop comeback",
@@ -261,7 +260,7 @@ describe("BrollLibraryEditor", () => {
     ).toBe("");
   });
 
-  it("removes one clip without dropping playback settings", async () => {
+  it("removes one clip with a library-only patch", async () => {
     const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
       async () => undefined,
     );
@@ -271,7 +270,7 @@ describe("BrollLibraryEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove Hold the line" }));
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
-      broll: { ...BROLL, clips: [CLIPS[1]] },
+      broll: { clips: [CLIPS[1]] },
     });
   });
 
@@ -290,7 +289,7 @@ describe("BrollLibraryEditor", () => {
     );
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
-      broll: { ...BROLL, clips: [CLIPS[1]] },
+      broll: { clips: [CLIPS[1]] },
     });
     expect(await screen.findByText("Imported 1 clip.")).toBeTruthy();
   });
@@ -314,7 +313,7 @@ describe("BrollLibraryEditor", () => {
 
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
-      broll: { ...BROLL, clips: [CLIPS[1]] },
+      broll: { clips: [CLIPS[1]] },
     });
     expect(
       (screen.getByRole("textbox", {

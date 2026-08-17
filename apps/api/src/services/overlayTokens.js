@@ -214,9 +214,10 @@ class OverlayTokensService {
   /**
    * @param {string} userId
    * @param {string} token
+   * @returns {Promise<boolean>} whether the token belonged to this user
    */
   async revoke(userId, token) {
-    await this.db.overlayTokens.updateOne(
+    const result = await this.db.overlayTokens.updateOne(
       { userId, token },
       { $set: { revokedAt: new Date() } },
     );
@@ -225,6 +226,7 @@ class OverlayTokensService {
     this.lastSeenWrites.delete(cacheKey);
     const pending = this.resolveInflight.get(cacheKey);
     if (pending) this.invalidatedInflight.add(pending);
+    return Number(result?.matchedCount || 0) > 0;
   }
 
   /**

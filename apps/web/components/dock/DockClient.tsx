@@ -24,8 +24,15 @@
  * two-column with chat on the left and controls on the right.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import {
+  blockedUserSet,
+  excludeBlockedUsers,
+  DEFAULT_APPEARANCE,
+  sanitizeAppearance,
+  type ChatAppearance,
+} from "@/lib/multichat/appearance";
 import { useEngagementReporter } from "@/lib/multichat/useEngagementReporter";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
 import { useViewerCounts } from "@/lib/multichat/useViewerCounts";
@@ -45,6 +52,10 @@ import { useEngagementState } from "@/lib/multichat/useEngagementState";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
+const DEFAULT_MODERATION_APPEARANCE = {
+  blockedUsers: DEFAULT_APPEARANCE.blockedUsers,
+  hideBots: DEFAULT_APPEARANCE.hideBots,
+};
 
 /**
  * Platform entries only, identity-stable across refetches — same
@@ -54,14 +65,20 @@ const CONFIG_REFRESH_MS = 60_000;
  */
 function usePlatformConfig(token: string): {
   platforms: MultichatConfig | null;
+  moderationAppearance: Pick<ChatAppearance, "blockedUsers" | "hideBots">;
   loaded: boolean;
 } {
   const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [moderationAppearance, setModerationAppearance] = useState<
+    Pick<ChatAppearance, "blockedUsers" | "hideBots">
+  >(DEFAULT_MODERATION_APPEARANCE);
+  const [loadedToken, setLoadedToken] = useState<string | null>(null);
+  const loaded = loadedToken === token;
 
   useEffect(() => {
     let cancelled = false;
     let lastJson = "";
+    let lastModerationJson = "";
     const load = async () => {
       try {
         const res = await fetch(
@@ -69,23 +86,42 @@ function usePlatformConfig(token: string): {
           { cache: "no-store" },
         );
         if (!res.ok) return;
-        const body = (await res.json()) as { config?: MultichatConfig };
+        const body: unknown = await res.json();
+        if (!body || typeof body !== "object" || Array.isArray(body)) return;
+        const rawConfig = (body as Record<string, unknown>).config;
+        if (
+          rawConfig != null
+          && (typeof rawConfig !== "object" || Array.isArray(rawConfig))
+        ) return;
         if (cancelled) return;
+        const config = (rawConfig ?? {}) as MultichatConfig;
         const {
-          appearance: _appearance,
+          appearance,
           tts: _tts,
           sound: _sound,
           ...next
-        } = body?.config ?? {};
+        } = config;
         const json = JSON.stringify(next);
         if (json !== lastJson) {
           lastJson = json;
           setPlatforms(next);
         }
+        // Appearance styling must not enter the platform object above: doing
+        // so reconnects every chat engine.  Keep only the two moderation
+        // fields the Dock needs, strictly sanitized and identity-stable.
+        const sanitized = sanitizeAppearance(appearance);
+        const nextModeration = {
+          blockedUsers: sanitized.blockedUsers,
+          hideBots: sanitized.hideBots,
+        };
+        const moderationJson = JSON.stringify(nextModeration);
+        if (moderationJson !== lastModerationJson) {
+          lastModerationJson = moderationJson;
+          setModerationAppearance(nextModeration);
+        }
+        setLoadedToken(token);
       } catch {
         /* transient — next tick retries */
-      } finally {
-        if (!cancelled) setLoaded(true);
       }
     };
     void load();
@@ -96,7 +132,13 @@ function usePlatformConfig(token: string): {
     };
   }, [token]);
 
-  return { platforms, loaded };
+  return {
+    platforms: loaded ? platforms : null,
+    moderationAppearance: loaded
+      ? moderationAppearance
+      : DEFAULT_MODERATION_APPEARANCE,
+    loaded,
+  };
 }
 
 const SECTIONS = [
@@ -111,22 +153,31 @@ const SECTIONS = [
 ] as const;
 
 export function DockClient({ token }: { token: string }) {
-  const { platforms, loaded } = usePlatformConfig(token);
+  const { platforms, moderationAppearance, loaded } = usePlatformConfig(token);
   const { messages, events, statuses } = useMultiChat({
     apiBase: API_BASE,
     token,
     config: platforms,
   });
-  useEngagementReporter(token, messages, events);
   // Live audience size per platform + combined, read from the
   // platforms server-side (they send no CORS headers).
-  const viewers = useViewerCounts(token);
+  const viewers = useViewerCounts(token, events);
   // Clip-moment log — boot summary + the hook's 60s refetch (the
   // dock has no overlay socket; a fresh spike shows on the next
   // refetch, which is fine for a post-stream shortlist).
   const { summary: engagement } = useEngagementState(token, null);
 
-  const [studio, setStudio] = useState<StudioState>(DEFAULT_STUDIO_STATE);
+  // Keep readiness tied to the token as part of the snapshot itself. That
+  // makes a token change fail closed on its very first render instead of
+  // briefly reusing the previous stream's blocklist and studio controls.
+  const [studioSnapshot, setStudioSnapshot] = useState<{
+    token: string | null;
+    state: StudioState;
+  }>({ token: null, state: DEFAULT_STUDIO_STATE });
+  const studio = studioSnapshot.token === token
+    ? studioSnapshot.state
+    : DEFAULT_STUDIO_STATE;
+  const studioSnapshotReady = studioSnapshot.token === token;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,19 +185,50 @@ export function DockClient({ token }: { token: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const load = async () => {
       try {
         const res = await fetch(studioUrl, { cache: "no-store" });
-        if (!res.ok || cancelled) return;
-        setStudio(sanitizeStudioState(await res.json()));
+        if (!res.ok) return;
+        const body: unknown = await res.json();
+        if (
+          cancelled
+          || !body
+          || typeof body !== "object"
+          || Array.isArray(body)
+        ) return;
+        setStudioSnapshot({ token, state: sanitizeStudioState(body) });
       } catch {
-        /* the first action's response re-syncs */
+        /* transient — the interval or first action response re-syncs */
       }
-    })();
+    };
+    void load();
+    const timer = setInterval(load, CONFIG_REFRESH_MS);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
-  }, [studioUrl]);
+  }, [studioUrl, token]);
+
+  const blockedUsers = useMemo(
+    () => blockedUserSet(
+      { ...DEFAULT_APPEARANCE, ...moderationAppearance },
+      studio.blockedUsers,
+    ),
+    [moderationAppearance, studio.blockedUsers],
+  );
+  const moderatedMessages = useMemo(
+    () => loaded && studioSnapshotReady
+      ? excludeBlockedUsers(messages, blockedUsers)
+      : [],
+    [blockedUsers, loaded, messages, studioSnapshotReady],
+  );
+  const moderatedEvents = useMemo(
+    () => loaded && studioSnapshotReady
+      ? excludeBlockedUsers(events, blockedUsers)
+      : [],
+    [blockedUsers, events, loaded, studioSnapshotReady],
+  );
+  useEngagementReporter(token, moderatedMessages, moderatedEvents);
 
   // Every action goes through here: POST the partial, adopt the
   // sanitized full state the server returns. Disabled-while-in-flight
@@ -166,14 +248,19 @@ export function DockClient({ token }: { token: string }) {
           setError(`Save failed (${res.status}) — try again.`);
           return;
         }
-        setStudio(sanitizeStudioState(await res.json()));
+        const body: unknown = await res.json();
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+          setError("Save failed — the server returned an invalid response.");
+          return;
+        }
+        setStudioSnapshot({ token, state: sanitizeStudioState(body) });
       } catch {
         setError("Save failed — check the connection and try again.");
       } finally {
         setBusy(false);
       }
     },
-    [studioUrl],
+    [studioUrl, token],
   );
 
   const highlightMessage = useCallback(
@@ -274,9 +361,10 @@ export function DockClient({ token }: { token: string }) {
           <DockChat
             loaded={loaded}
             platforms={platforms}
-            messages={messages}
+            messages={moderatedMessages}
+            events={moderatedEvents}
             statuses={statuses}
-            blockedUsers={studio.blockedUsers}
+            blockedUsers={[...blockedUsers]}
             busy={busy}
             viewers={viewers}
             onHighlight={(m) => void highlightMessage(m)}

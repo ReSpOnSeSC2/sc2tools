@@ -10,12 +10,18 @@ let mockChat: MultiChatState = {
   statuses: {},
   active: false,
 };
+const engagementSpy = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
   useMultiChat: () => mockChat,
 }));
 
+vi.mock("@/lib/multichat/useEngagementReporter", () => ({
+  useEngagementReporter: (...args: unknown[]) => engagementSpy(...args),
+}));
+
 const CONFIG: MultichatConfig = { twitch: { enabled: true, channel: "me" } };
+let configState: MultichatConfig = CONFIG;
 
 const EMPTY_STUDIO = {
   highlight: null,
@@ -36,11 +42,13 @@ const fetchMock = vi.fn();
 let studioState: Record<string, unknown> = { ...EMPTY_STUDIO };
 
 beforeEach(() => {
+  engagementSpy.mockClear();
+  configState = CONFIG;
   studioState = { ...EMPTY_STUDIO };
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     if (String(url).includes("/config")) {
-      return { ok: true, json: async () => ({ config: CONFIG }) };
+      return { ok: true, json: async () => ({ config: configState }) };
     }
     if (String(url).includes("/studio")) {
       if (init?.method === "POST") {
@@ -66,6 +74,7 @@ afterEach(async () => {
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
   });
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -107,6 +116,264 @@ describe("DockClient", () => {
     expect(await screen.findByText("gg wp")).toBeTruthy();
     expect(screen.getByText("Viewer")).toBeTruthy();
     expect(await screen.findByText("Twitch")).toBeTruthy();
+  });
+
+  it("keeps config-side moderation closed until a successful retry", async () => {
+    vi.useFakeTimers();
+    let configGets = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/config")) {
+        configGets += 1;
+        if (configGets === 1) {
+          return { ok: false, status: 503, json: async () => ({}) };
+        }
+        return { ok: true, json: async () => ({ config: configState }) };
+      }
+      if (String(url).includes("/studio")) {
+        return { ok: true, json: async () => studioState };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const message = {
+      platform: "twitch" as const,
+      id: "config-wait-message",
+      user: "ConfigWaiter",
+      text: "wait for authoritative config",
+      badges: [],
+      atMs: Date.now(),
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [message],
+      events: [],
+    };
+
+    render(<DockClient token="tok_test" />);
+    await act(async () => {
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    });
+    expect(configGets).toBe(1);
+    expect(screen.queryByText(message.text)).toBeNull();
+    expect(engagementSpy).toHaveBeenLastCalledWith("tok_test", [], []);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    });
+    expect(configGets).toBe(2);
+    expect(screen.getByText(message.text)).toBeTruthy();
+    expect(engagementSpy).toHaveBeenLastCalledWith(
+      "tok_test",
+      [message],
+      [],
+    );
+  });
+
+  it("masks the previous token's config and studio state immediately", async () => {
+    let holdNewConfig = false;
+    fetchMock.mockImplementation(async (url: string) => {
+      const target = String(url);
+      if (target.includes("/config")) {
+        if (holdNewConfig && target.includes("new-token")) {
+          return new Promise(() => undefined);
+        }
+        return { ok: true, json: async () => ({ config: configState }) };
+      }
+      if (target.includes("/studio")) {
+        return { ok: true, json: async () => studioState };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const message = {
+      platform: "twitch" as const,
+      id: "token-change-message",
+      user: "OldTokenViewer",
+      text: "old token activity",
+      badges: [],
+      atMs: Date.now(),
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [message],
+      events: [],
+    };
+
+    const view = render(<DockClient token="old-token" />);
+    expect(await screen.findByText(message.text)).toBeTruthy();
+
+    holdNewConfig = true;
+    view.rerender(<DockClient token="new-token" />);
+
+    expect(screen.queryByText(message.text)).toBeNull();
+    expect(engagementSpy).toHaveBeenLastCalledWith("new-token", [], []);
+  });
+
+  it("fails closed after a studio fetch error and unlocks on retry", async () => {
+    vi.useFakeTimers();
+    let studioGets = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/config")) {
+        return { ok: true, json: async () => ({ config: configState }) };
+      }
+      if (String(url).includes("/studio") && !init?.method) {
+        studioGets += 1;
+        if (studioGets === 1) {
+          return { ok: false, status: 503, json: async () => ({}) };
+        }
+        return { ok: true, json: async () => studioState };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    const message = {
+      platform: "twitch" as const,
+      id: "moderation-wait-message",
+      user: "PossiblyBlocked",
+      text: "wait for the blocklist",
+      badges: [],
+      atMs: Date.now(),
+    };
+    const event = {
+      platform: "twitch" as const,
+      id: "moderation-wait-event",
+      kind: "follow" as const,
+      user: "PossiblyBlockedFollower",
+      detail: "followed",
+      atMs: Date.now() + 1,
+    };
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      messages: [message],
+      events: [event],
+    };
+
+    render(<DockClient token="tok_test" />);
+    await act(async () => {
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    });
+
+    expect(studioGets).toBe(1);
+    expect(screen.queryByText(message.text)).toBeNull();
+    expect(screen.queryByText(event.user)).toBeNull();
+    expect(engagementSpy).toHaveBeenLastCalledWith("tok_test", [], []);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      for (let i = 0; i < 8; i += 1) await Promise.resolve();
+    });
+
+    expect(studioGets).toBe(2);
+    expect(screen.getByText(message.text)).toBeTruthy();
+    expect(screen.getByText(event.user)).toBeTruthy();
+    expect(engagementSpy).toHaveBeenLastCalledWith(
+      "tok_test",
+      [message],
+      [event],
+    );
+  });
+
+  it("excludes Dock-blocked messages and events from engagement", async () => {
+    studioState = { ...EMPTY_STUDIO, blockedUsers: [" @BlockedUser "] };
+    const allowedMessage = {
+      platform: "twitch" as const,
+      id: "allowed-message",
+      user: "FriendlyViewer",
+      text: "hello",
+      badges: [],
+      atMs: Date.now(),
+    };
+    const allowedEvent = {
+      platform: "twitch" as const,
+      id: "allowed-event",
+      kind: "follow" as const,
+      user: "FriendlyFollower",
+      detail: "followed",
+      atMs: Date.now(),
+    };
+    mockChat = {
+      active: true,
+      statuses: {},
+      messages: [
+        allowedMessage,
+        { ...allowedMessage, id: "blocked-message", user: "BLOCKEDUSER" },
+      ],
+      events: [
+        allowedEvent,
+        { ...allowedEvent, id: "blocked-event", user: "@blockeduser" },
+      ],
+    };
+
+    render(<DockClient token="tok_test" />);
+
+    await waitFor(() => {
+      expect(engagementSpy).toHaveBeenLastCalledWith(
+        "tok_test",
+        [allowedMessage],
+        [allowedEvent],
+      );
+    });
+    expect(screen.queryByText("BLOCKEDUSER")).toBeNull();
+    expect(screen.queryByText("@blockeduser")).toBeNull();
+    expect(screen.getByText("FriendlyFollower")).toBeTruthy();
+  });
+
+  it("excludes Settings-blocked activity from the Dock and engagement", async () => {
+    configState = {
+      ...CONFIG,
+      appearance: { blockedUsers: " @SettingsBlocked ", hideBots: false },
+    };
+    const allowedMessage = {
+      platform: "twitch" as const,
+      id: "settings-allowed-message",
+      user: "FriendlyViewer",
+      text: "hello",
+      badges: [],
+      atMs: Date.now(),
+    };
+    const allowedEvent = {
+      platform: "twitch" as const,
+      id: "settings-allowed-event",
+      kind: "follow" as const,
+      user: "FriendlyFollower",
+      detail: "followed",
+      atMs: Date.now(),
+    };
+    mockChat = {
+      active: true,
+      statuses: {},
+      messages: [
+        allowedMessage,
+        {
+          ...allowedMessage,
+          id: "settings-blocked-message",
+          user: "SETTINGSBLOCKED",
+          text: "should stay out of engagement",
+        },
+      ],
+      events: [
+        allowedEvent,
+        {
+          ...allowedEvent,
+          id: "settings-blocked-event",
+          user: "@settingsblocked",
+        },
+      ],
+    };
+
+    render(<DockClient token="tok_test" />);
+
+    await waitFor(() => {
+      expect(engagementSpy).toHaveBeenLastCalledWith(
+        "tok_test",
+        [allowedMessage],
+        [allowedEvent],
+      );
+    });
+    expect(screen.queryByText("should stay out of engagement")).toBeNull();
+    expect(screen.queryByText("@settingsblocked")).toBeNull();
+    expect(screen.getByText("FriendlyFollower")).toBeTruthy();
   });
 
   it("Highlight POSTs the message to the studio endpoint", async () => {

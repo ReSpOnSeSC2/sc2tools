@@ -19,6 +19,7 @@ import pytest
 from sc2tools_agent import runner
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.live.obs_client import ObsAuthFailed
+from sc2tools_agent.live.obs_layout import CHAT_ALERTS_INPUT_NAME
 from sc2tools_agent.live.obs_scene import SCENE_BETWEEN_GAMES, SCENE_IN_GAME
 from sc2tools_agent.runner import (
     _apply_obs_settings,
@@ -305,11 +306,23 @@ def test_obs_connect_auto_repairs_legacy_generated_scene_covers() -> None:
         assert len(manual_inputs) == 1
         manual_name = manual_inputs[0]["name"]
         assert ProbeClient.input_settings[manual_name]["url"] == (
-            "https://sc2tools.com/overlay/tok/scene/manual"
+            "https://sc2tools.com/overlay/tok/scene/manual?audio=1"
+        )
+        alert_inputs = [
+            row for row in ProbeClient.inputs
+            if row["name"].startswith(CHAT_ALERTS_INPUT_NAME)
+        ]
+        assert len(alert_inputs) == 1
+        alert_name = alert_inputs[0]["name"]
+        assert ProbeClient.input_settings[alert_name]["url"] == (
+            "https://sc2tools.com/overlay/tok/widget/chat-alerts?audio=1"
         )
         for scene_name in (SCENE_BETWEEN_GAMES, SCENE_IN_GAME):
-            assert ProbeClient.scene_items[scene_name][-1]["source_name"] == (
+            assert ProbeClient.scene_items[scene_name][-2]["source_name"] == (
                 manual_name
+            )
+            assert ProbeClient.scene_items[scene_name][-1]["source_name"] == (
+                alert_name
             )
         assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][1]["transform"] == {
             "custom": "preserve",
@@ -332,6 +345,344 @@ def test_obs_connect_auto_repairs_legacy_generated_scene_covers() -> None:
             ctrl.shutdown()
 
 
+def test_obs_connect_references_live_alert_input_in_owned_vertical_layout() -> None:
+    """The portrait migration runs even without generated builder scenes."""
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    token_root = "https://sc2tools.com/overlay/tok"
+    ProbeClient.scenes = ["Live Scene", "Vertical Scene"]
+    ProbeClient.inputs = [
+        {"name": "Alert Box", "kind": "browser_source"},
+        {"name": "Chat", "kind": "browser_source"},
+        {"name": "BRB/Starting Soon - Vertical", "kind": "browser_source"},
+        {"name": "Camera", "kind": "dshow_input"},
+    ]
+    ProbeClient.input_settings = {
+        "Alert Box": {"url": f"{token_root}/widget/chat-alerts"},
+        "Chat": {"url": f"{token_root}/widget/multichat"},
+        "BRB/Starting Soon - Vertical": {
+            "url": f"{token_root}/widget/stream-scene",
+            "width": 1080,
+            "height": 1920,
+        },
+    }
+    ProbeClient.scene_items = {
+        "Live Scene": [
+            {
+                "source_name": "Alert Box", "item_id": 1, "index": 0,
+                "input_kind": "browser_source", "enabled": False,
+                "transform": {"live_geometry": "preserve"},
+            },
+            {
+                "source_name": "Camera", "item_id": 5, "index": 1,
+                "input_kind": "dshow_input", "enabled": True,
+                "transform": {"custom": "also preserve"},
+            },
+        ],
+        "Vertical Scene": [
+            {
+                "source_name": "Camera", "item_id": 2, "index": 0,
+                "input_kind": "dshow_input", "enabled": True,
+                "transform": {"custom": "preserve"},
+            },
+            {
+                "source_name": "Chat", "item_id": 3, "index": 1,
+                "input_kind": "browser_source", "enabled": True,
+                "transform": {},
+            },
+            {
+                "source_name": "BRB/Starting Soon - Vertical",
+                "item_id": 4, "index": 2, "input_kind": "browser_source",
+                "enabled": True, "transform": {},
+            },
+        ],
+    }
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        on_connected = client.kwargs["on_connected"]
+        on_connected()
+        assert ProbeClient.scene_items["Vertical Scene"][-1]["source_name"] == (
+            "Alert Box"
+        )
+        assert ProbeClient.scene_items["Live Scene"][-1]["source_name"] == (
+            "Alert Box"
+        )
+        assert ProbeClient.scene_items["Live Scene"][-1]["enabled"] is True
+        assert ProbeClient.scene_items["Live Scene"][-1]["transform"] == {
+            "live_geometry": "preserve",
+        }
+        assert ProbeClient.scene_items["Vertical Scene"][0]["transform"] == {
+            "custom": "preserve",
+        }
+        assert [row["name"] for row in ProbeClient.inputs].count("Alert Box") == 1
+
+        counts = (
+            len(ProbeClient.inputs),
+            len(ProbeClient.scene_items["Vertical Scene"]),
+        )
+        on_connected()
+        assert (
+            len(ProbeClient.inputs),
+            len(ProbeClient.scene_items["Vertical Scene"]),
+        ) == counts
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
+def test_obs_connect_assigns_roles_to_native_chat_alert_copies_once() -> None:
+    """Startup keeps native viewports while Live/Aitum owns all sound."""
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    root = "https://sc2tools.com/overlay/tok"
+    ProbeClient.scenes = [
+        SCENE_BETWEEN_GAMES,
+        SCENE_IN_GAME,
+        "Live Scene",
+        "Vertical Scene",
+    ]
+    ProbeClient.inputs = [
+        {"name": "SC2 Tools Backdrop", "kind": "browser_source"},
+        {"name": "SC2 Tools Session Stats", "kind": "browser_source"},
+        {"name": "SC2 Tools Chat", "kind": "browser_source"},
+        {"name": "Old Generated Alerts", "kind": "browser_source"},
+        {"name": "Chat", "kind": "browser_source"},
+        {"name": "Alert Box", "kind": "browser_source"},
+        {"name": "BRB/Starting Soon - Vertical", "kind": "browser_source"},
+        {"name": "SC2", "kind": "game_capture"},
+    ]
+    ProbeClient.input_settings = {
+        "SC2 Tools Backdrop": {"url": f"{root}/scene/between-games"},
+        "SC2 Tools Session Stats": {"url": f"{root}/widget/session"},
+        "SC2 Tools Chat": {"url": f"{root}/widget/multichat"},
+        # Legacy builds could already have the correct generated viewport but
+        # predate explicit audio roles. Startup must role-correct and reuse
+        # this source before manual repair adds the In Game reference; creating
+        # a second 1792x360 input here would leave two possible sound owners.
+        "Old Generated Alerts": {
+            "url": f"{root}/widget/chat-alerts",
+            "width": 1792,
+            "height": 360,
+        },
+        "Chat": {
+            "url": f"{root}/widget/multichat",
+            "height": 1400,
+            "custom": "preserve chat settings",
+        },
+        "Alert Box": {
+            "url": f"{root}/widget/chat-alerts",
+            "width": 800,
+            "height": 600,
+            "custom": "preserve alert settings",
+        },
+        "BRB/Starting Soon - Vertical": {
+            "url": f"{root}/widget/stream-scene?audio=0",
+            "width": 1080,
+            "height": 1920,
+            "shutdown": False,
+            "reroute_audio": False,
+        },
+    }
+
+    def _item(
+        source: str,
+        item_id: int,
+        index: int,
+        *,
+        kind: str = "browser_source",
+        enabled: bool = True,
+        transform: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "source_name": source,
+            "item_id": item_id,
+            "index": index,
+            "input_kind": kind,
+            "enabled": enabled,
+            "transform": dict(transform or {}),
+        }
+
+    ProbeClient.scene_items = {
+        SCENE_BETWEEN_GAMES: [
+            _item("SC2 Tools Backdrop", 1, 0),
+            _item("SC2 Tools Session Stats", 2, 1),
+            _item("SC2 Tools Chat", 3, 2, enabled=False),
+            _item("Old Generated Alerts", 4, 3),
+        ],
+        SCENE_IN_GAME: [
+            _item("SC2", 5, 0, kind="game_capture"),
+            _item("Old Generated Alerts", 6, 1, enabled=False),
+        ],
+        "Live Scene": [
+            _item("Chat", 7, 0),
+            _item("Alert Box", 8, 1, transform={"live": "preserve"}),
+        ],
+        "Vertical Scene": [
+            _item("Chat", 9, 0),
+            _item("BRB/Starting Soon - Vertical", 10, 1),
+        ],
+    }
+    chat_settings = dict(ProbeClient.input_settings["Chat"])
+    alert_settings = dict(ProbeClient.input_settings["Alert Box"])
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        on_connected = client.kwargs["on_connected"]
+        on_connected()
+
+        between_sources = [
+            item["source_name"]
+            for item in ProbeClient.scene_items[SCENE_BETWEEN_GAMES]
+        ]
+        in_game_sources = [
+            item["source_name"]
+            for item in ProbeClient.scene_items[SCENE_IN_GAME]
+        ]
+        native_chat = next(
+            name for name in between_sources
+            if ProbeClient.input_settings.get(name, {}).get("url", "").endswith(
+                "/widget/multichat?audio=0",
+            )
+        )
+        native_alert = next(
+            name for name in between_sources
+            if ProbeClient.input_settings.get(name, {}).get("url", "").endswith(
+                "/widget/chat-alerts?audio=0",
+            )
+        )
+        assert native_chat != "Chat"
+        assert native_alert != "Alert Box"
+        assert native_alert == "Old Generated Alerts"
+        assert native_alert in in_game_sources
+        assert "Chat" not in between_sources
+        assert "Alert Box" not in between_sources + in_game_sources
+        assert "Old Generated Alerts" in between_sources + in_game_sources
+        same_token_alert_inputs = {
+            name
+            for name, settings in ProbeClient.input_settings.items()
+            if str(settings.get("url") or "").startswith(
+                f"{root}/widget/chat-alerts",
+            )
+        }
+        assert same_token_alert_inputs == {"Alert Box", "Old Generated Alerts"}
+        assert ProbeClient.input_settings["Chat"] == {
+            **chat_settings,
+            "url": f"{root}/widget/multichat?audio=1",
+            "shutdown": False,
+        }
+        assert ProbeClient.input_settings["Alert Box"] == {
+            **alert_settings,
+            "url": f"{root}/widget/chat-alerts?audio=1",
+            "shutdown": False,
+        }
+        assert (
+            ProbeClient.input_settings[native_chat]["width"],
+            ProbeClient.input_settings[native_chat]["height"],
+        ) == (552, 984)
+        assert (
+            ProbeClient.input_settings[native_alert]["width"],
+            ProbeClient.input_settings[native_alert]["height"],
+        ) == (1792, 360)
+        assert ProbeClient.refreshed_browser_inputs == []
+
+        counts = {
+            scene_name: len(ProbeClient.scene_items[scene_name])
+            for scene_name in ProbeClient.scenes
+        }
+        settings = {
+            name: dict(value)
+            for name, value in ProbeClient.input_settings.items()
+        }
+        on_connected()
+        assert {
+            scene_name: len(ProbeClient.scene_items[scene_name])
+            for scene_name in ProbeClient.scenes
+        } == counts
+        assert ProbeClient.input_settings == settings
+        assert ProbeClient.refreshed_browser_inputs == []
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
+def test_obs_connect_does_not_force_refresh_explicit_broll_sources() -> None:
+    """Already-migrated sources defer deploy reloads until the break is safe."""
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    route = "https://sc2tools.com/overlay/tok/widget/stream-scene"
+    ProbeClient.scenes = ["Horizontal", "Portrait"]
+    ProbeClient.inputs = [
+        {"name": "Horizontal B-roll", "kind": "browser_source"},
+        {"name": "Portrait B-roll", "kind": "browser_source"},
+        {"name": "Foreign B-roll", "kind": "browser_source"},
+    ]
+    ProbeClient.input_settings = {
+        "Horizontal B-roll": {
+            "url": route + "?audio=1",
+            "width": 1920,
+            "height": 1080,
+            "reroute_audio": False,
+        },
+        "Portrait B-roll": {
+            "url": route + "?audio=0",
+            "width": 1080,
+            "height": 1920,
+            "reroute_audio": False,
+        },
+        "Foreign B-roll": {
+            "url": "https://example.com/overlay/other/widget/stream-scene",
+            "width": 1920,
+            "height": 1080,
+            "reroute_audio": False,
+        },
+    }
+    ProbeClient.scene_items = {"Horizontal": [], "Portrait": []}
+
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        on_connected = client.kwargs["on_connected"]
+        on_connected()
+        assert ProbeClient.refreshed_browser_inputs == []
+        assert ProbeClient.input_settings["Horizontal B-roll"]["url"] == (
+            route + "?audio=1"
+        )
+        assert ProbeClient.input_settings["Portrait B-roll"]["url"] == (
+            route + "?audio=0"
+        )
+
+        on_connected()
+        assert ProbeClient.refreshed_browser_inputs == []
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
 def test_obs_connect_repair_failure_does_not_break_switcher() -> None:
     from sc2tools_agent.runner import _build_obs_switcher
 
@@ -349,6 +700,101 @@ def test_obs_connect_repair_failure_does_not_break_switcher() -> None:
     assert client is not None
     try:
         client.kwargs["on_connected"]()
+        assert ProbeClient.instances[0].shutdown_called is False
+        assert ProbeClient.instances[1].shutdown_called is True
+    finally:
+        if ctrl:
+            ctrl.shutdown()
+
+
+def test_obs_connect_isolates_independent_startup_repair_failures(
+    monkeypatch,
+    caplog,
+) -> None:
+    """Portrait/manual failures must not suppress chat or B-roll repair."""
+    from sc2tools_agent.live import obs_layout
+    from sc2tools_agent.runner import _build_obs_switcher
+
+    class _Bus:
+        def subscribe(self, cb: Any) -> None:
+            pass
+
+    manual_url = "https://sc2tools.com/overlay/tok/scene/manual"
+    calls: List[str] = []
+
+    def _fail_vertical(client: Any) -> bool:
+        calls.append("vertical")
+        raise RuntimeError("vertical unavailable")
+
+    def _discover_manual(client: Any) -> str:
+        calls.append("discover_manual")
+        return manual_url
+
+    def _fail_manual(client: Any, *, browser_url: str, **kw: Any) -> List[str]:
+        assert browser_url == manual_url
+        calls.append("manual")
+        raise RuntimeError("manual unavailable")
+
+    def _repair_chat(client: Any, *, browser_url: str):
+        assert browser_url == manual_url
+        calls.append("chat")
+        return {}, [], []
+
+    def _repair_broll(client: Any, *, browser_url: str):
+        assert browser_url == manual_url
+        calls.append("broll")
+        return "owner", []
+
+    monkeypatch.setattr(
+        obs_layout,
+        "repair_vertical_scene_chat_alerts",
+        _fail_vertical,
+    )
+    monkeypatch.setattr(
+        obs_layout,
+        "discover_manual_override_url",
+        _discover_manual,
+    )
+    monkeypatch.setattr(
+        obs_layout,
+        "discover_widget_only_broll_url",
+        lambda client: pytest.fail("manual identity should already be known"),
+    )
+    monkeypatch.setattr(
+        obs_layout,
+        "repair_manual_scene_overrides",
+        _fail_manual,
+    )
+    monkeypatch.setattr(
+        obs_layout,
+        "repair_chat_alert_audio_roles",
+        _repair_chat,
+    )
+    monkeypatch.setattr(
+        obs_layout,
+        "repair_broll_audio_roles",
+        _repair_broll,
+    )
+
+    client, ctrl = _build_obs_switcher(
+        state=AgentState(obs_scene_switch_enabled=True),
+        bridge=SimpleNamespace(bus=_Bus()),
+        log=_LOG,
+    )
+    assert client is not None
+    try:
+        with caplog.at_level(logging.WARNING, logger=_LOG.name):
+            client.kwargs["on_connected"]()
+
+        assert calls == [
+            "vertical",
+            "discover_manual",
+            "manual",
+            "chat",
+            "broll",
+        ]
+        assert "obs_vertical_chat_alert_auto_repair_failed" in caplog.text
+        assert "obs_manual_override_auto_repair_failed" in caplog.text
         assert ProbeClient.instances[0].shutdown_called is False
         assert ProbeClient.instances[1].shutdown_called is True
     finally:
@@ -509,6 +955,7 @@ class ProbeClient:
     input_settings: Dict[str, Dict[str, Any]] = {}
     next_item_id: int = 100
     inventory_error: Optional[BaseException] = None
+    refreshed_browser_inputs: List[str] = []
 
     def __init__(self, **kw: Any) -> None:
         self.kwargs = kw
@@ -558,6 +1005,14 @@ class ProbeClient:
     def get_input_settings(self, name: str) -> Dict[str, Any]:
         return dict(ProbeClient.input_settings.get(name, {}))
 
+    def set_input_settings(
+        self, name: str, settings: Dict[str, Any],
+    ) -> None:
+        ProbeClient.input_settings[name].update(settings)
+
+    def refresh_browser_input(self, name: str) -> None:
+        ProbeClient.refreshed_browser_inputs.append(name)
+
     def get_scene_item_list(self, scene_name: str) -> List[Dict[str, Any]]:
         if ProbeClient.inventory_error is not None:
             raise ProbeClient.inventory_error
@@ -589,11 +1044,24 @@ class ProbeClient:
                 "item_id": ProbeClient.next_item_id,
                 "index": len(items),
                 "input_kind": kind,
-                "enabled": True,
+                "enabled": bool(kw.get("enabled", True)),
                 "transform": {},
             },
         )
         return ProbeClient.next_item_id
+
+    def remove_scene_item(self, **kw: Any) -> None:
+        scene_name = str(kw["scene_name"])
+        item_id = int(kw["item_id"])
+        ProbeClient.scene_items[scene_name] = [
+            item for item in ProbeClient.scene_items[scene_name]
+            if int(item["item_id"]) != item_id
+        ]
+        for index, item in enumerate(sorted(
+            ProbeClient.scene_items[scene_name],
+            key=lambda row: int(row["index"]),
+        )):
+            item["index"] = index
 
     def create_input(self, **kw: Any) -> int:
         ProbeClient.next_item_id += 1
@@ -656,6 +1124,7 @@ def _patch_client(monkeypatch):
     ProbeClient.input_settings = {}
     ProbeClient.next_item_id = 100
     ProbeClient.inventory_error = None
+    ProbeClient.refreshed_browser_inputs = []
     monkeypatch.setattr(runner, "ObsClient", ProbeClient)
     yield
 
@@ -768,6 +1237,28 @@ def test_build_creates_both_scenes(tmp_path: Path, monkeypatch) -> None:
     assert result["ok"] is True, result["message"]
     assert SCENE_BETWEEN_GAMES in ProbeClient.scenes
     assert SCENE_IN_GAME in ProbeClient.scenes
+    # With no pre-existing Live/Vertical renderer, the generated native-size
+    # sources become the owners immediately in this build transaction.  A
+    # streamer must never need an OBS reconnect before chat/alert audio works.
+    chat_sources = [
+        settings
+        for settings in ProbeClient.input_settings.values()
+        if "/widget/multichat" in str(settings.get("url") or "")
+    ]
+    alert_sources = [
+        settings
+        for settings in ProbeClient.input_settings.values()
+        if "/widget/chat-alerts" in str(settings.get("url") or "")
+    ]
+    assert len(chat_sources) == 1
+    assert chat_sources[0]["url"].endswith("/widget/multichat?audio=1")
+    assert (chat_sources[0]["width"], chat_sources[0]["height"]) == (552, 984)
+    assert len(alert_sources) == 1
+    assert alert_sources[0]["url"].endswith("/widget/chat-alerts?audio=1")
+    assert (alert_sources[0]["width"], alert_sources[0]["height"]) == (
+        1792,
+        360,
+    )
 
 
 def test_build_updates_existing_generated_scenes_without_clobbering(
@@ -809,9 +1300,12 @@ def test_build_updates_existing_generated_scenes_without_clobbering(
         item["source_name"]
         for item in ProbeClient.scene_items[SCENE_BETWEEN_GAMES]
     ]
-    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][-1][
+    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][-2][
         "source_name"
     ].startswith("SC2 Tools Manual Override")
+    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES][-1][
+        "source_name"
+    ].startswith(CHAT_ALERTS_INPUT_NAME)
     assert SCENE_IN_GAME not in ProbeClient.scenes
 
     # A separate Build creates only the missing counterpart; it still has no
@@ -831,6 +1325,142 @@ def test_build_updates_existing_generated_scenes_without_clobbering(
     )
     assert SCENE_IN_GAME in ProbeClient.scenes
     assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES] == between_after_update
+
+
+def test_partial_build_reuses_legacy_native_shared_inputs_before_creating_scene(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """A direct Build must not mint second native shared renderers.
+
+    Older generated scenes can already contain the correct 1792x360 source
+    without an explicit audio role.  When only the counterpart is missing,
+    preflight must treat bare/audio=1 as the same geometry-specific input,
+    reference it in the new scene, then let role repair mute it behind Live's
+    canonical owner. The same rule keeps the existing full-canvas manual cover
+    connected across both generated scenes when only its audio marker differs.
+    """
+    monkeypatch.setattr(
+        runner, "_overlay_token_for_build", lambda cfg, state, log: "tok",
+    )
+    root = "https://sc2tools.com/overlay/tok"
+    ProbeClient.scenes = [SCENE_BETWEEN_GAMES, "Live Scene"]
+    ProbeClient.inputs.extend([
+        {"name": "Legacy Native Alerts", "kind": "browser_source"},
+        {"name": "Alert Box", "kind": "browser_source"},
+        {"name": "Legacy Manual Override", "kind": "browser_source"},
+    ])
+    ProbeClient.input_settings.update({
+        "Legacy Native Alerts": {
+            "url": f"{root}/widget/chat-alerts",
+            "width": 1792,
+            "height": 360,
+        },
+        "Alert Box": {
+            "url": f"{root}/widget/chat-alerts?audio=1",
+            "width": 800,
+            "height": 600,
+            "shutdown": False,
+        },
+        "Legacy Manual Override": {
+            "url": f"{root}/scene/manual",
+            "width": 1920,
+            "height": 1080,
+            "shutdown": False,
+            "reroute_audio": False,
+        },
+    })
+    ProbeClient.scene_items = {
+        SCENE_BETWEEN_GAMES: [{
+            "source_name": "Legacy Native Alerts",
+            "item_id": 1,
+            "index": 0,
+            "input_kind": "browser_source",
+            "enabled": True,
+            "transform": {"legacy_geometry": "preserve"},
+        }, {
+            "source_name": "Legacy Manual Override",
+            "item_id": 3,
+            "index": 1,
+            "input_kind": "browser_source",
+            "enabled": True,
+            "transform": {"manual_geometry": "preserve"},
+        }],
+        "Live Scene": [{
+            "source_name": "Alert Box",
+            "item_id": 2,
+            "index": 0,
+            "input_kind": "browser_source",
+            "enabled": True,
+            "transform": {"live_geometry": "preserve"},
+        }],
+    }
+
+    result = _handle_obs_build(
+        cfg=_cfg(tmp_path),
+        state=AgentState(device_token="dev"),
+        request={"game_source": "SC2"},
+        log=_LOG,
+    )
+
+    assert result["ok"] is True, result["message"]
+    assert f"Created 1 missing scene(s): {SCENE_IN_GAME}" in result["message"]
+    in_game_sources = [
+        item["source_name"]
+        for item in ProbeClient.scene_items[SCENE_IN_GAME]
+    ]
+    assert "Legacy Native Alerts" in in_game_sources
+    assert "Legacy Manual Override" in in_game_sources
+    assert ProbeClient.input_settings["Legacy Native Alerts"] == {
+        "url": f"{root}/widget/chat-alerts?audio=0",
+        "width": 1792,
+        "height": 360,
+    }
+    assert ProbeClient.input_settings["Alert Box"] == {
+        "url": f"{root}/widget/chat-alerts?audio=1",
+        "width": 800,
+        "height": 600,
+        "shutdown": False,
+    }
+    same_token_alert_inputs = {
+        name
+        for name, settings in ProbeClient.input_settings.items()
+        if str(settings.get("url") or "").startswith(
+            f"{root}/widget/chat-alerts",
+        )
+    }
+    assert same_token_alert_inputs == {
+        "Alert Box",
+        "Legacy Native Alerts",
+    }
+    same_token_manual_inputs = {
+        name
+        for name, settings in ProbeClient.input_settings.items()
+        if str(settings.get("url") or "").startswith(f"{root}/scene/manual")
+    }
+    assert same_token_manual_inputs == {"Legacy Manual Override"}
+    assert ProbeClient.input_settings["Legacy Manual Override"] == {
+        "url": f"{root}/scene/manual?audio=1",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": False,
+        "reroute_audio": False,
+    }
+    # The pre-existing scene remains outside this Build's mutation authority.
+    assert ProbeClient.scene_items[SCENE_BETWEEN_GAMES] == [{
+        "source_name": "Legacy Native Alerts",
+        "item_id": 1,
+        "index": 0,
+        "input_kind": "browser_source",
+        "enabled": True,
+        "transform": {"legacy_geometry": "preserve"},
+    }, {
+        "source_name": "Legacy Manual Override",
+        "item_id": 3,
+        "index": 1,
+        "input_kind": "browser_source",
+        "enabled": True,
+        "transform": {"manual_geometry": "preserve"},
+    }]
 
 
 def test_build_does_not_infer_permission_to_modify_existing_scenes(

@@ -162,6 +162,26 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.PLATFORM_CONNECTIONS]: {
+    collection: COLLECTIONS.PLATFORM_CONNECTIONS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.PLATFORM_OAUTH_STATES]: {
+    collection: COLLECTIONS.PLATFORM_OAUTH_STATES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS]: {
+    collection: COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.PLATFORM_EVENTS]: {
+    collection: COLLECTIONS.PLATFORM_EVENTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   // Operational + ancillary collections. None of these have a
   // multi-version migration history yet — they all started life on
   // v1 and stay there until a future shape change. Listing them here

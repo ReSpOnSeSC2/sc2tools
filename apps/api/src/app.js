@@ -18,7 +18,7 @@ const { buildAuth } = require("./middleware/auth");
 const {
   buildReplayIngestAdmission,
 } = require("./middleware/replayIngestAdmission");
-const { captureClerkWebhookRawBody } = require("./middleware/jsonBody");
+const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
 const { sanitiseRequestForLog } = require("./middleware/requestLogging");
 
 const { UsersService } = require("./services/users");
@@ -37,6 +37,7 @@ const {
 const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
+const { PlatformIntegrationsService } = require("./services/platformIntegrations");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
@@ -112,6 +113,9 @@ const {
 const { buildCustomBuildsRouter } = require("./routes/customBuilds");
 const { buildDevicePairingsRouter } = require("./routes/devicePairings");
 const { buildOverlayTokensRouter } = require("./routes/overlayTokens");
+const {
+  buildPlatformIntegrationsRouter,
+} = require("./routes/platformIntegrations");
 const { buildAggregationsRouter } = require("./routes/aggregations");
 const { buildBuildsRouter } = require("./routes/builds");
 const { buildBuildsMmrStatsRouter } = require("./routes/buildsMmrStats");
@@ -376,6 +380,12 @@ function makeServices(deps) {
   });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
+  const platformIntegrations = new PlatformIntegrationsService(deps.db, {
+    config: deps.config.platformIntegrations || { enabled: false },
+    overlayTokens,
+    io: deps.io,
+    logger: deps.logger,
+  });
   // TikTok chat relay for the multichat overlay widget — one upstream
   // TikTok connection per streamer username, fanned out to every OBS
   // Browser Source over SSE. Constructed once so the connection pool
@@ -606,6 +616,7 @@ function makeServices(deps) {
     customBuilds,
     pairings,
     overlayTokens,
+    platformIntegrations,
     overlayLive,
     liveGameBroker,
     tiktokChatRelay,
@@ -675,6 +686,25 @@ function applyBaseMiddleware(app, deps, auth) {
     }),
   );
   app.use(requestId);
+  const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
+    req.method === "POST"
+    && (
+      req.path === `${SERVICE.ROUTE_PREFIX}/webhooks/twitch/eventsub`
+      || req.path === `${SERVICE.ROUTE_PREFIX}/webhooks/kick/events`
+    );
+  // Twitch and Kick delivery hosts are shared by many broadcasters. Give
+  // signed, body-bounded webhook paths their own generous admission bucket so
+  // a legitimate provider burst cannot consume the generic browser/API limit.
+  app.use(
+    rateLimit({
+      windowMs: 60 * 1000,
+      max: 3_000,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (/** @type {import('express').Request} */ req) =>
+        !isSignedProviderWebhook(req),
+    }),
+  );
   // Reject request-rate bursts before allocating/parsing JSON bodies. The
   // replay-specific gate below separately bounds expensive in-flight work.
   app.use(
@@ -683,6 +713,7 @@ function applyBaseMiddleware(app, deps, auth) {
       max: deps.config.rateLimitPerMinute,
       standardHeaders: true,
       legacyHeaders: false,
+      skip: isSignedProviderWebhook,
     }),
   );
   // Verify the real credential before a replay body can occupy the sole
@@ -714,7 +745,7 @@ function applyBaseMiddleware(app, deps, auth) {
   const replayJson = express.json({ limit: REPLAY_JSON_LIMIT });
   const ordinaryJson = express.json({
     limit: DEFAULT_JSON_LIMIT,
-    verify: captureClerkWebhookRawBody,
+    verify: captureSignedWebhookRawBody,
   });
   app.use((req, res, next) => {
     const parser = isLargeAuthenticatedJson(req) ? replayJson : ordinaryJson;
@@ -850,6 +881,17 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildDevicePairingsRouter({ pairings: services.pairings, auth }),
+  );
+  // Official OAuth callbacks + signed platform webhooks must remain in the
+  // public bundle. Account management paths apply Clerk auth per route.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPlatformIntegrationsRouter({
+      integrations: services.platformIntegrations,
+      auth,
+      logger: deps.logger,
+      returnUrl: deps.config.platformIntegrations?.returnUrl,
+    }),
   );
   // SC2TOOLS_ADMIN_USER_IDS is a CSV of *Clerk* user IDs (the
   // `user_xxx` strings from the Clerk dashboard), so the gate compares

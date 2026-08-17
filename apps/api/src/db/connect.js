@@ -23,6 +23,10 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   multichatViewers: import('mongodb').Collection,
  *   multichatPredictions: import('mongodb').Collection,
  *   multichatClipMoments: import('mongodb').Collection,
+ *   platformConnections: import('mongodb').Collection,
+ *   platformOauthStates: import('mongodb').Collection,
+ *   platformWebhookReceipts: import('mongodb').Collection,
+ *   platformEvents: import('mongodb').Collection,
  *   mlModels: import('mongodb').Collection,
  *   mlJobs: import('mongodb').Collection,
  *   importJobs: import('mongodb').Collection,
@@ -86,6 +90,10 @@ async function connect({ uri, dbName }, observability = {}) {
     multichatViewers: db.collection(COLLECTIONS.MULTICHAT_VIEWERS),
     multichatPredictions: db.collection(COLLECTIONS.MULTICHAT_PREDICTIONS),
     multichatClipMoments: db.collection(COLLECTIONS.MULTICHAT_CLIP_MOMENTS),
+    platformConnections: db.collection(COLLECTIONS.PLATFORM_CONNECTIONS),
+    platformOauthStates: db.collection(COLLECTIONS.PLATFORM_OAUTH_STATES),
+    platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
+    platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
     mlModels: db.collection(COLLECTIONS.ML_MODELS),
     mlJobs: db.collection(COLLECTIONS.ML_JOBS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
@@ -328,6 +336,14 @@ async function ensureIndexes(ctx) {
     { atDate: 1 },
     { expireAfterSeconds: 48 * 60 * 60 },
   );
+  // New writes lazily mark one authoritative studio row per overlay token.
+  // Sparse avoids a risky startup migration if an older unindexed deployment
+  // ever produced duplicate legacy rows; the service promotes one row on its
+  // next write and all later reads prefer that canonical key.
+  await ctx.multichatStudio.createIndex(
+    { studioKey: 1 },
+    { unique: true, sparse: true },
+  );
   await ctx.multichatViewers.createIndex(
     { token: 1, userKey: 1 },
     { unique: true },
@@ -342,6 +358,37 @@ async function ensureIndexes(ctx) {
   await ctx.multichatClipMoments.createIndex(
     { atDate: 1 },
     { expireAfterSeconds: 7 * 24 * 60 * 60 },
+  );
+
+  await ctx.platformConnections.createIndex(
+    { userId: 1, platform: 1 },
+    { unique: true },
+  );
+  await ctx.platformConnections.createIndex(
+    { platform: 1, platformUserId: 1 },
+    { unique: true, sparse: true },
+  );
+  await ctx.platformOauthStates.createIndex({ stateHash: 1 }, { unique: true });
+  await ctx.platformOauthStates.createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0 },
+  );
+  await ctx.platformWebhookReceipts.createIndex(
+    { platform: 1, messageId: 1 },
+    { unique: true },
+  );
+  await ctx.platformWebhookReceipts.createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0 },
+  );
+  await ctx.platformEvents.createIndex(
+    { userId: 1, platform: 1, eventId: 1 },
+    { unique: true },
+  );
+  await ctx.platformEvents.createIndex({ userId: 1, receivedAt: -1 });
+  await ctx.platformEvents.createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0 },
   );
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });

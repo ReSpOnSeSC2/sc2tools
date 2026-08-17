@@ -261,6 +261,9 @@ const CHAT_EVENT_KINDS = [
   "superchat",
   "gift",
   "follow",
+  "cheer",
+  "share",
+  "reward",
 ];
 
 /** Per-kind defaults — mirror of sound.ts DEFAULT_EVENT_SOUNDS. */
@@ -273,6 +276,9 @@ const DEFAULT_EVENT_SOUNDS = Object.freeze({
   superchat: "coin",
   gift: "coin",
   follow: "pop",
+  cheer: "coin",
+  share: "pop",
+  reward: "sparkle",
 });
 
 const DEFAULT_SOUND = Object.freeze({

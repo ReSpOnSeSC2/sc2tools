@@ -105,14 +105,19 @@ export function createTikTokChat(
       const e = data.event;
       // Unknown kinds (a newer relay) are skipped, not guessed at.
       if (!isChatEventKind(e.kind)) return;
+      const sourceId = String(e.id);
+      const session = String(data.session || "").trim();
       callbacks.onEvent?.({
         platform: "tiktok",
-        id: String(e.id),
+        // Connector ids may be reused in a later broadcast. Match chat's
+        // room-scoped identity so a loyal supporter is never deduped away.
+        id: session ? `${session}:${sourceId}` : sourceId,
         kind: e.kind,
         user: String(e.user || "viewer"),
         detail: String(e.detail || ""),
         amount: e.amount != null ? String(e.amount) : undefined,
         atMs: Number.isFinite(e.atMs) ? e.atMs : Date.now(),
+        ...(data.replay === true ? { replayed: true } : {}),
       });
     }
   };

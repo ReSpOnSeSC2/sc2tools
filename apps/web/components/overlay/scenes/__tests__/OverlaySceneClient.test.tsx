@@ -162,66 +162,111 @@ describe("live mode", () => {
 
       expect(await screen.findByText(headline)).toBeTruthy();
       expect(screen.getByText("Manual break")).toBeTruthy();
-      expect(container.querySelector(".sc2bd")).toBeTruthy();
+      expect(container.querySelector(".sc2bd")).toBeNull();
+      expect(
+        container.querySelector('[data-scene-layout="default"]'),
+      ).toBeTruthy();
       expect(
         container.querySelector('[data-variant="manual-inactive"]'),
       ).toBeNull();
     },
   );
 
-  it("uses the shared b-roll canvas for the active manual cover", async () => {
+  it.each([
+    ["starting", "STARTING SOON"],
+    ["brb", "BE RIGHT BACK"],
+  ] as const)(
+    "uses the shared b-roll canvas for an active %s manual cover",
+    async (mode, headline) => {
+      fetchSpy.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          scene: {
+            mode,
+            message: "Manual reel",
+            countdownEndsAt: null,
+            setAtMs: Date.now(),
+          },
+          broll: {
+            clips: [
+              {
+                id: "opening-highlight",
+                title: "Opening highlight",
+                videoId: "abcdefghijk",
+                startSeconds: 12,
+                endSeconds: 42,
+              },
+            ],
+            shuffle: false,
+            muted: true,
+            volume: 20,
+            skipNonce: 0,
+          },
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+
+      const { container } = render(
+        <OverlaySceneClient token="tok" scene="manual" />,
+      );
+
+      expect(await screen.findByTestId("stream-scene-hud")).toBeTruthy();
+      expect(screen.getByTestId("broll-player")).toBeTruthy();
+      expect(screen.getByText(headline)).toBeTruthy();
+      expect(brollPlayer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clips: [
+            expect.objectContaining({
+              id: "opening-highlight",
+              videoId: "abcdefghijk",
+            }),
+          ],
+          shuffle: false,
+          muted: true,
+          volume: 20,
+          audioOwner: true,
+        }),
+      );
+      expect(screen.getByText("Manual reel")).toBeTruthy();
+      expect(
+        container.querySelector('[data-scene-layout="broll"]'),
+      ).toBeTruthy();
+      expect(container.querySelector(".sc2bd")).toBeNull();
+    },
+  );
+
+  it("keeps a future 1080x1920 manual copy video-only", async () => {
+    vi.stubGlobal("innerWidth", 1080);
+    vi.stubGlobal("innerHeight", 1920);
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         scene: {
-          mode: "starting",
-          message: "Manual reel",
+          mode: "brb",
+          message: "Vertical manual reel",
           countdownEndsAt: null,
           setAtMs: Date.now(),
         },
         broll: {
           clips: [
             {
-              id: "opening-highlight",
-              title: "Opening highlight",
+              id: "vertical-manual-highlight",
+              title: "Vertical manual highlight",
               videoId: "abcdefghijk",
               startSeconds: 12,
               endSeconds: 42,
             },
           ],
-          shuffle: false,
-          muted: true,
-          volume: 20,
-          skipNonce: 0,
         },
         updatedAt: new Date().toISOString(),
       }),
     });
 
-    const { container } = render(
-      <OverlaySceneClient token="tok" scene="manual" />,
-    );
-
-    expect(await screen.findByTestId("stream-scene-hud")).toBeTruthy();
-    expect(screen.getByTestId("broll-player")).toBeTruthy();
+    render(<OverlaySceneClient token="tok" scene="manual" />);
+    expect(await screen.findByTestId("broll-player")).toBeTruthy();
     expect(brollPlayer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        clips: [
-          expect.objectContaining({
-            id: "opening-highlight",
-            videoId: "abcdefghijk",
-          }),
-        ],
-        shuffle: false,
-        muted: true,
-        volume: 20,
-      }),
+      expect.objectContaining({ audioOwner: false }),
     );
-    expect(screen.getByText("Manual reel")).toBeTruthy();
-    expect(
-      container.querySelector('[data-scene-layout="broll"]'),
-    ).toBeTruthy();
-    expect(container.querySelector(".sc2bd")).toBeNull();
   });
 });
 
