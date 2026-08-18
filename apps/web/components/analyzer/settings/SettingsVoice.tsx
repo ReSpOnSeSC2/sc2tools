@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Volume2, Play, Square } from "lucide-react";
+import { Volume2, Play, Square, AlertTriangle } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -14,16 +14,25 @@ import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
+import {
+  classifyAvailability,
+  describeVoice,
+  explainResolution,
+  inferVoiceGender,
+  resolveVoice,
+  usableVoices,
+  type VoiceGender,
+} from "@/lib/voiceCatalog";
 
 /**
  * Voice prefs persisted under ``preferences.voice``. Schema parity
  * with `data/config.schema.json` (`config.voice`):
- *   enabled         ↔ enabled
- *   volume          ↔ volume
- *   rate            ↔ rate
- *   pitch           ↔ pitch
- *   delayMs         ↔ delay_ms (canonicalised to camelCase here)
- *   voice           ↔ preferred_voice
+ *   enabled         <-> enabled
+ *   volume          <-> volume
+ *   rate            <-> rate
+ *   pitch           <-> pitch
+ *   delayMs         <-> delay_ms (canonicalised to camelCase here)
+ *   voice           <-> preferred_voice
  *   events.scouting — web addition; legacy SPA always spoke the
  *                     scouting card.
  */
@@ -33,10 +42,15 @@ type VoicePrefs = {
   /**
    * BCP-47 lang of the picked voice (e.g. ``en-US``). Captured here so
    * the OBS overlay can fall back to a same-language local voice when
-   * the exact pick isn't installed in its embedded Chromium (CEF) — see
-   * ``useVoiceReadout`` ``findVoice``.
+   * the exact pick isn't installed in its embedded Chromium (CEF).
    */
   voiceLang?: string;
+  /**
+   * Gender of the picked voice. Captured so that when the overlay HAS
+   * to substitute, it substitutes a voice of the same gender — picking
+   * a female voice and hearing Microsoft David was the whole bug.
+   */
+  voiceGender?: VoiceGender;
   rate?: number;
   pitch?: number;
   volume?: number;
@@ -82,6 +96,13 @@ export function SettingsVoice() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  /**
+   * Off by default: the picker shows only voices that survive the trip
+   * into OBS. Turning this on re-admits this browser's private network
+   * voices for streamers who drive the overlay from a real Chrome
+   * window instead of a Browser Source.
+   */
+  const [showBrowserOnly, setShowBrowserOnly] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const silentTimerRef = useRef<number | null>(null);
 
@@ -107,6 +128,76 @@ export function SettingsVoice() {
     };
   }, []);
 
+  /** Voices that will still exist inside the OBS/Streamlabs runtime. */
+  const portable = useMemo(() => usableVoices(voices), [voices]);
+  const offered = showBrowserOnly ? voices : portable;
+  const hiddenCount = voices.length - portable.length;
+
+  const wish = useMemo(
+    () => ({
+      name: draft.voice,
+      lang: draft.voiceLang,
+      gender: draft.voiceGender,
+    }),
+    [draft.voice, draft.voiceLang, draft.voiceGender],
+  );
+
+  /**
+   * What the overlay will really speak with once it is running inside a
+   * Browser Source. Resolved against the portable-only catalog, which
+   * is precisely what OBS would report.
+   */
+  const obsResolution = useMemo(
+    () => resolveVoice(portable, wish),
+    [portable, wish],
+  );
+  const obsExplanation = explainResolution(obsResolution, wish);
+
+  /** True when the current pick cannot survive outside this browser. */
+  const pickIsBrowserOnly = useMemo(() => {
+    if (!draft.voice) return false;
+    const found = voices.find((v) => v.name === draft.voice);
+    return (
+      classifyAvailability({
+        name: draft.voice,
+        localService: found?.localService ?? true,
+      }) === "chromeOnly"
+    );
+  }, [draft.voice, voices]);
+
+  function pickVoiceByName(name: string | undefined) {
+    if (!name) {
+      setDraft((d) => ({
+        ...d,
+        voice: undefined,
+        voiceLang: undefined,
+        voiceGender: undefined,
+      }));
+      return;
+    }
+    const found = voices.find((v) => v.name === name);
+    setDraft((d) => ({
+      ...d,
+      voice: name,
+      // Capture lang + gender alongside the name so the overlay can
+      // substitute intelligently when this exact voice is missing.
+      voiceLang: found?.lang || undefined,
+      voiceGender: inferVoiceGender(name),
+    }));
+  }
+
+  /** One-click repair for a pick that OBS cannot honour. */
+  function switchToObsSafeVoice() {
+    const target = obsResolution.voice;
+    if (!target) {
+      toast.warning("No OBS-compatible voice found in this browser's list.");
+      return;
+    }
+    pickVoiceByName(target.name);
+    setShowBrowserOnly(false);
+    toast.success(`Switched to ${target.name}`);
+  }
+
   async function save() {
     if (saving) return;
     setSaving(true);
@@ -130,7 +221,14 @@ export function SettingsVoice() {
     }
   }
 
-  function preview() {
+  /**
+   * Speak the sample line.
+   *
+   * ``asObs`` resolves the pick against the portable-only catalog — the
+   * same inventory a Browser Source sees — so the streamer can hear the
+   * substitution before they go live instead of discovering it mid-game.
+   */
+  function preview(asObs = false) {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       toast.warning("This browser has no speech synthesis support.");
       return;
@@ -146,17 +244,15 @@ export function SettingsVoice() {
     }
     setAutoplayBlocked(false);
     // Mirror the live readout phrasing so the streamer hears exactly
-    // what the overlay will say. Keeps Settings → Test honest.
+    // what the overlay will say. Keeps Settings -> Test honest.
     const utt = new SpeechSynthesisUtterance(buildPreviewPhrase());
     utt.rate = clamp(draft.rate ?? 1, 0.5, 2);
     utt.pitch = clamp(draft.pitch ?? 1, 0, 2);
     utt.volume = clamp(draft.volume ?? 1, 0, 1);
-    if (draft.voice) {
-      const match = voices.find((v) => v.name === draft.voice);
-      if (match) {
-        utt.voice = match;
-        utt.lang = match.lang || "en-US";
-      }
+    const resolution = resolveVoice(asObs ? portable : voices, wish);
+    if (resolution.voice) {
+      utt.voice = resolution.voice;
+      utt.lang = resolution.voice.lang || "en-US";
     }
     let started = false;
     utt.onstart = () => {
@@ -200,7 +296,7 @@ export function SettingsVoice() {
       window.speechSynthesis.speak(utt);
       // Silent-failure detection: if onstart hasn't fired in 2 s,
       // the engine ate the request without telling us. This matches
-      // the overlay's voice-readout.js retry policy so Settings →
+      // the overlay's voice-readout.js retry policy so Settings ->
       // Test reproduces the same diagnostic UX the streamer would
       // see in OBS.
       silentTimerRef.current = window.setTimeout(() => {
@@ -214,7 +310,7 @@ export function SettingsVoice() {
     else dispatch();
   }
 
-  const groupedVoices = useMemo(() => groupVoices(voices), [voices]);
+  const groupedVoices = useMemo(() => groupVoices(offered), [offered]);
 
   if (isLoading) return <Skeleton rows={4} />;
 
@@ -244,27 +340,21 @@ export function SettingsVoice() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Voice"
-              hint={'"Google …" voices play in Chrome but not in OBS/Streamlabs — the overlay falls back to a same-language local voice there.'}
+              hint="Only voices that also work inside OBS and Streamlabs are listed. Voices are labelled with their gender so a substitution never changes it."
             >
               <Select
                 value={draft.voice ?? ""}
-                onChange={(e) => {
-                  const name = e.target.value || undefined;
-                  // Capture the lang too so the overlay can fall back to
-                  // a same-language voice when this exact pick isn't
-                  // installed inside OBS/Streamlabs' CEF runtime.
-                  const lang = name
-                    ? voices.find((v) => v.name === name)?.lang || undefined
-                    : undefined;
-                  setDraft((d) => ({ ...d, voice: name, voiceLang: lang }));
-                }}
+                onChange={(e) => pickVoiceByName(e.target.value || undefined)}
               >
                 <option value="">Default system voice</option>
                 {Object.entries(groupedVoices).map(([lang, vs]) => (
                   <optgroup key={lang} label={lang}>
                     {vs.map((v) => (
                       <option key={v.name} value={v.name}>
-                        {v.name}
+                        {describeVoice(v)}
+                        {classifyAvailability(v) === "chromeOnly"
+                          ? "  (this browser only)"
+                          : ""}
                       </option>
                     ))}
                   </optgroup>
@@ -273,7 +363,7 @@ export function SettingsVoice() {
             </Field>
             <RangeSlider
               label="Rate"
-              suffix="×"
+              suffix="x"
               min={0.5}
               max={2}
               step={0.1}
@@ -304,14 +394,71 @@ export function SettingsVoice() {
               step={50}
               value={draft.delayMs ?? 300}
               decimals={0}
-              onChange={(delayMs) =>
-                setDraft((d) => ({ ...d, delayMs }))
-              }
+              onChange={(delayMs) => setDraft((d) => ({ ...d, delayMs }))}
             />
-            <div className="flex items-end">
-              <PreviewButton previewing={previewing} onClick={preview} />
+            <div className="flex items-end gap-2">
+              <PreviewButton previewing={previewing} onClick={() => preview(false)} />
+              <Button
+                variant="secondary"
+                onClick={() => preview(true)}
+                disabled={previewing}
+                title="Hear the voice the OBS Browser Source will actually use"
+              >
+                Hear the OBS version
+              </Button>
             </div>
           </div>
+
+          {hiddenCount > 0 ? (
+            <label className="mt-3 flex items-start gap-2 text-caption text-text-muted">
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-accent-cyan"
+                checked={showBrowserOnly}
+                onChange={(e) => setShowBrowserOnly(e.target.checked)}
+              />
+              <span>
+                Also show {hiddenCount} voice{hiddenCount === 1 ? "" : "s"} that
+                only work in this browser (the &quot;Google …&quot; and
+                &quot;… Online (Natural)&quot; voices are synthesised on the
+                vendor&apos;s servers, so an OBS or Streamlabs Browser Source
+                can never load them).
+              </span>
+            </label>
+          ) : null}
+
+          {pickIsBrowserOnly ? (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-2 rounded-lg border border-status-warn bg-status-warn-bg px-3 py-2 text-caption text-text"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <div>
+                <strong>{draft.voice}</strong> only exists in this browser. In
+                OBS or Streamlabs it cannot load, so the overlay will speak with{" "}
+                <strong>{obsResolution.voice?.name ?? "the system default"}</strong>{" "}
+                instead.{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  onClick={switchToObsSafeVoice}
+                >
+                  Use that voice everywhere
+                </button>{" "}
+                so what you hear here is what your stream hears.
+              </div>
+            </div>
+          ) : obsExplanation ? (
+            <div className="mt-4 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-caption text-text-muted">
+              {obsExplanation}
+            </div>
+          ) : draft.voice ? (
+            <div className="mt-4 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-caption text-text-muted">
+              In OBS and Streamlabs this speaks as{" "}
+              <strong className="text-text">{draft.voice}</strong> — the same
+              voice you hear here.
+            </div>
+          ) : null}
 
           {autoplayBlocked ? (
             <div
@@ -324,11 +471,11 @@ export function SettingsVoice() {
               <button
                 type="button"
                 className="underline underline-offset-2"
-                onClick={preview}
+                onClick={() => preview(false)}
               >
                 Retry now
               </button>
-              {" "}— once this works in Settings, the OBS overlay's
+              {" "}— once this works in Settings, the OBS overlay&apos;s
               banner only appears if it loads before your first click.
             </div>
           ) : null}
@@ -486,7 +633,7 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * Sample sentence used by Settings → Voice → Test voice. Must mirror
+ * Sample sentence used by Settings -> Voice -> Test voice. Must mirror
  * the shape ``buildLiveGameScoutingLine`` produces in production so the
  * streamer hears in Settings exactly what they'll hear in OBS at match
  * start: name, race, MMR, H2H with win-%, and a trailing "Good luck."

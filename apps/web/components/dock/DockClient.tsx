@@ -43,6 +43,9 @@ import {
   type StudioState,
 } from "@/lib/multichat/useStudioState";
 import type { ChatMessage, MultichatConfig } from "@/lib/multichat/types";
+import { sanitizeTtsConfig, type ChatTtsConfig } from "@/lib/multichat/tts";
+import { useVoiceApplier } from "@/lib/useVoiceApplier";
+import { inferVoiceGender } from "@/lib/voiceCatalog";
 import { DockChat } from "./DockChat";
 import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
@@ -66,12 +69,15 @@ const DEFAULT_MODERATION_APPEARANCE = {
 function usePlatformConfig(token: string): {
   platforms: MultichatConfig | null;
   moderationAppearance: Pick<ChatAppearance, "blockedUsers" | "hideBots">;
+  /** Read-aloud voice settings, shared with the OBS multichat widget. */
+  tts: ChatTtsConfig;
   loaded: boolean;
 } {
   const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
   const [moderationAppearance, setModerationAppearance] = useState<
     Pick<ChatAppearance, "blockedUsers" | "hideBots">
   >(DEFAULT_MODERATION_APPEARANCE);
+  const [tts, setTts] = useState<ChatTtsConfig>(() => sanitizeTtsConfig(null));
   const [loadedToken, setLoadedToken] = useState<string | null>(null);
   const loaded = loadedToken === token;
 
@@ -79,6 +85,7 @@ function usePlatformConfig(token: string): {
     let cancelled = false;
     let lastJson = "";
     let lastModerationJson = "";
+    let lastTtsJson = "";
     const load = async () => {
       try {
         const res = await fetch(
@@ -97,7 +104,7 @@ function usePlatformConfig(token: string): {
         const config = (rawConfig ?? {}) as MultichatConfig;
         const {
           appearance,
-          tts: _tts,
+          tts: rawTts,
           sound: _sound,
           ...next
         } = config;
@@ -119,6 +126,15 @@ function usePlatformConfig(token: string): {
           lastModerationJson = moderationJson;
           setModerationAppearance(nextModeration);
         }
+        // Read-aloud voice. Kept OUT of the platform object above for
+        // the same reason appearance is: a new identity there would
+        // reconnect every chat engine.
+        const nextTts = sanitizeTtsConfig(rawTts);
+        const ttsJson = JSON.stringify(nextTts);
+        if (ttsJson !== lastTtsJson) {
+          lastTtsJson = ttsJson;
+          setTts(nextTts);
+        }
         setLoadedToken(token);
       } catch {
         /* transient — next tick retries */
@@ -137,6 +153,7 @@ function usePlatformConfig(token: string): {
     moderationAppearance: loaded
       ? moderationAppearance
       : DEFAULT_MODERATION_APPEARANCE,
+    tts,
     loaded,
   };
 }
@@ -153,7 +170,8 @@ const SECTIONS = [
 ] as const;
 
 export function DockClient({ token }: { token: string }) {
-  const { platforms, moderationAppearance, loaded } = usePlatformConfig(token);
+  const { platforms, moderationAppearance, tts, loaded } =
+    usePlatformConfig(token);
   const { messages, events, statuses } = useMultiChat({
     apiBase: API_BASE,
     token,
@@ -275,16 +293,35 @@ export function DockClient({ token }: { token: string }) {
   // the streamer is touching, so the tap doubles as the autoplay
   // gesture). "Auto-read" speaks each newly pinned message; the pin
   // that's already on screen when the dock opens stays silent.
-  const speakHighlight = useCallback((h: StudioHighlight) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(`${h.user} says: ${h.text}`);
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* speech backend hiccup — stay silent */
-    }
-  }, []);
+  // The dock reads aloud with the SAME voice the streamer chose for
+  // chat TTS. It used to construct a bare utterance, which meant the
+  // engine default spoke — Microsoft David on Windows — no matter what
+  // was selected.
+  const applyVoice = useVoiceApplier(
+    useMemo(
+      () => ({
+        name: tts.voiceName || undefined,
+        gender: tts.voiceName ? inferVoiceGender(tts.voiceName) : undefined,
+      }),
+      [tts.voiceName],
+    ),
+  );
+  const speakHighlight = useCallback(
+    (h: StudioHighlight) => {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(`${h.user} says: ${h.text}`);
+        u.rate = tts.rate;
+        u.volume = tts.volume / 100;
+        applyVoice(u);
+        window.speechSynthesis.speak(u);
+      } catch {
+        /* speech backend hiccup — stay silent */
+      }
+    },
+    [applyVoice, tts.rate, tts.volume],
+  );
 
   const [autoRead, setAutoRead] = useState(false);
   useEffect(() => {

@@ -533,6 +533,78 @@ describe("useVoiceReadout (hook)", () => {
     expect(cap.utterances[0]?.lang).toBe("en-US");
   });
 
+  it("REGRESSION: a female pick never degrades to the male engine default", () => {
+    // The reported symptom: the streamer selects a female Google voice
+    // in Settings, but the overlay speaks with Microsoft David. Inside
+    // OBS the Google voice is absent AND David is the engine default,
+    // so the old "prefer the default" fallback handed back a male voice
+    // for a female selection. The substitute must keep the gender.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const david = makeVoice(
+      "Microsoft David - English (United States)",
+      "en-US",
+    );
+    (david as { default: boolean }).default = true;
+    const zira = makeVoice(
+      "Microsoft Zira - English (United States)",
+      "en-US",
+    );
+    const hazel = makeVoice(
+      "Microsoft Hazel - English (United Kingdom)",
+      "en-GB",
+    );
+    cap.setVoices([david, zira, hazel]);
+    render(
+      <Harness
+        live={{ oppName: "Alice", oppRace: "Zerg" }}
+        prefs={{
+          enabled: true,
+          events: { scouting: true },
+          voice: "Google UK English Female",
+          voiceLang: "en-GB",
+          voiceGender: "female",
+          delayMs: 0,
+        }}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.voice).toBe(hazel);
+    expect(cap.utterances[0]?.voice).not.toBe(david);
+  });
+
+  it("holds the gender even for prefs saved before voiceGender existed", () => {
+    // Older saved prefs carry only the name; the gender is read back
+    // out of "... Female" rather than lost.
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const david = makeVoice(
+      "Microsoft David - English (United States)",
+      "en-US",
+    );
+    (david as { default: boolean }).default = true;
+    const zira = makeVoice(
+      "Microsoft Zira - English (United States)",
+      "en-US",
+    );
+    cap.setVoices([david, zira]);
+    render(
+      <Harness
+        live={{ oppName: "Bob", oppRace: "Terran" }}
+        prefs={{
+          enabled: true,
+          events: { scouting: true },
+          voice: "Google US English Female",
+          delayMs: 0,
+        }}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.voice).toBe(zira);
+  });
+
   it("falls back via voiceLang when the voice name encodes no language", () => {
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     window.sessionStorage.setItem("sc2tools.voiceUnlocked", "1");

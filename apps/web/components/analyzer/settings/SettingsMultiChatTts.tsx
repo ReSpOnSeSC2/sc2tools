@@ -5,12 +5,14 @@
  *
  * Controlled TTS editor — part of the same draft/Save as the channel
  * config and appearance. The voice list comes from THIS browser's
- * speech engine; the OBS machine may have a different inventory, so
- * the stored value is a voice NAME and the widget falls back to the
- * OBS machine's default when that name isn't installed there (the
- * caveat is surfaced inline). "Preview voice" speaks a sample line
- * right here so the streamer can audition rate/volume/voice without
- * touching OBS.
+ * speech engine, filtered to the voices that also exist inside the OBS
+ * Browser Source: the "Google ..." and "... Online (Natural)" voices
+ * are synthesised on the vendor's servers and CEF cannot load them, so
+ * offering them only produced a silent swap to the engine default.
+ * Anything that still has to be substituted keeps the language and the
+ * gender of the original pick (lib/voiceCatalog). "Preview voice"
+ * speaks a sample line right here so the streamer can audition
+ * rate/volume/voice without touching OBS.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -51,6 +53,13 @@ import {
   type ChatTtsConfig,
 } from "@/lib/multichat/tts";
 import { CHAT_PLATFORMS, type ChatPlatform } from "@/lib/multichat/types";
+import {
+  classifyAvailability,
+  describeVoice,
+  explainResolution,
+  resolveVoice,
+  usableVoices,
+} from "@/lib/voiceCatalog";
 
 const PLATFORM_LABEL: Record<ChatPlatform, string> = {
   twitch: "Twitch",
@@ -172,6 +181,20 @@ export function SettingsMultiChatTts({
   overlayToken?: string | null;
 }) {
   const voices = useBrowserVoices();
+  // Only the voices that survive the trip into OBS, unless the streamer
+  // explicitly asks to see this browser's private ones.
+  const [showBrowserOnly, setShowBrowserOnly] = useState(false);
+  const portable = useMemo(() => usableVoices(voices), [voices]);
+  const offeredVoices = showBrowserOnly ? voices : portable;
+  const hiddenVoiceCount = voices.length - portable.length;
+  const voiceWish = useMemo(
+    () => ({ name: value.voiceName || undefined }),
+    [value.voiceName],
+  );
+  const obsVoiceNote = explainResolution(
+    resolveVoice(portable, voiceWish),
+    voiceWish,
+  );
   const previewRef = useRef<ReturnType<typeof createChatSpeaker> | null>(null);
   const set = (patch: Partial<ChatTtsConfig>) =>
     onChange({ ...value, ...patch });
@@ -424,12 +447,35 @@ export function SettingsMultiChatTts({
                 className="w-full min-w-0 rounded-lg border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-text focus:border-accent focus:outline-none"
               >
                 <option value="">Machine default</option>
-                {voices.map((v) => (
+                {offeredVoices.map((v) => (
                   <option key={`${v.name}|${v.lang}`} value={v.name}>
-                    {v.name} ({v.lang})
+                    {describeVoice(v)} ({v.lang})
+                    {classifyAvailability(v) === "chromeOnly"
+                      ? " - this browser only"
+                      : ""}
                   </option>
                 ))}
               </select>
+              {obsVoiceNote ? (
+                <div className="mt-1 text-caption text-text-dim">
+                  {obsVoiceNote}
+                </div>
+              ) : null}
+              {hiddenVoiceCount > 0 ? (
+                <label className="mt-1 flex items-start gap-1.5 text-caption text-text-dim">
+                  <input
+                    type="checkbox"
+                    checked={showBrowserOnly}
+                    onChange={(e) => setShowBrowserOnly(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent,#3ec0c7)]"
+                  />
+                  <span>
+                    Show {hiddenVoiceCount} browser-only voice
+                    {hiddenVoiceCount === 1 ? "" : "s"} (OBS can&apos;t load
+                    these)
+                  </span>
+                </label>
+              ) : null}
             </label>
             <label className="block min-w-0">
               <div className="mb-1 text-caption text-text-dim">

@@ -18,6 +18,8 @@ import {
   ghostVoiceLine,
   nextSpeakIndex,
 } from "@/lib/ghostVoice";
+import { useVoiceApplier } from "@/lib/useVoiceApplier";
+import type { VoicePrefs } from "../useVoiceReadout";
 
 /**
  * GhostBuildWidget — the Ghost Build practice coach, a persistent HUD.
@@ -57,12 +59,17 @@ export function GhostBuildWidget({
   live,
   liveGame,
   ghostParam = null,
+  voicePrefs = null,
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   /** Raw validated Ghost URL value from either fragment or legacy query.
    *  Decoded once; malformed values act like "not armed". */
   ghostParam?: string | null;
+  /** Socket-delivered voice prefs. The coach speaks with the streamer's
+   *  chosen voice instead of the engine default; null keeps the legacy
+   *  behaviour of letting the engine decide. */
+  voicePrefs?: VoicePrefs | null;
 }) {
   const config = useMemo(() => decodeGhostBuildConfig(ghostParam), [ghostParam]);
   // Keep old v1 URLs recognizable, but never fan their one build across all
@@ -125,7 +132,7 @@ export function GhostBuildWidget({
     const t = selectGhostTarget(config, races.ownRace, races.opponentRace);
     return t ? t.steps : null;
   }, [voiceEnabled, config, matchActive, randomBlocked, races]);
-  useGhostVoice(voiceSteps, clockSec);
+  useGhostVoice(voiceSteps, clockSec, voicePrefs ?? null);
 
   if (!config) {
     if (legacyTarget) {
@@ -446,7 +453,16 @@ function StepRow({
 function useGhostVoice(
   steps: readonly GhostStep[] | null,
   clockSec: number | null,
+  prefs: VoicePrefs | null,
 ) {
+  // Same voice the scouting readout uses. Without this the coach spoke
+  // with the engine default (Microsoft David on Windows) no matter what
+  // the streamer picked in Settings.
+  const applyVoice = useVoiceApplier(
+    prefs
+      ? { name: prefs.voice, lang: prefs.voiceLang, gender: prefs.voiceGender }
+      : undefined,
+  );
   const lastSpokenRef = useRef(-1);
   const caughtUpRef = useRef(false);
 
@@ -473,12 +489,17 @@ function useGhostVoice(
     lastSpokenRef.current = idx;
     try {
       const utterance = new SpeechSynthesisUtterance(ghostVoiceLine(steps[idx]));
-      utterance.rate = 1.05;
+      // A hair faster than conversational so a step lands before its
+      // target time; the streamer's own rate wins when they set one.
+      utterance.rate = prefs?.rate ?? 1.05;
+      if (typeof prefs?.pitch === "number") utterance.pitch = prefs.pitch;
+      if (typeof prefs?.volume === "number") utterance.volume = prefs.volume;
+      applyVoice(utterance);
       window.speechSynthesis.speak(utterance);
     } catch {
       // A blocked/absent voice engine silently degrades to the HUD.
     }
-  }, [steps, clockSec]);
+  }, [steps, clockSec, prefs, applyVoice]);
 
   // Never leave queued speech behind when the source unmounts.
   useEffect(

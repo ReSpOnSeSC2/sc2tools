@@ -4,8 +4,9 @@
 // Design constraints:
 //   - The OBS Browser Source and the streamer's desktop browser have
 //     DIFFERENT voice inventories; the config stores a voice NAME and
-//     the speaker falls back to the platform default when that name
-//     isn't installed where it runs.
+//     the speaker resolves it through lib/voiceCatalog when that exact
+//     name isn't installed where it runs — same language, same gender,
+//     rather than dropping to the engine default.
 //   - Chat can burst far faster than speech. A small queue with a hard
 //     cap keeps the readout near-real-time: when the queue is full the
 //     OLDEST unspoken lines drop — being seconds behind a raid spam is
@@ -22,6 +23,7 @@
 // sanitizeChatTts) exactly.
 
 import { clearPersistedUnlock } from "@/components/overlay/useVoiceReadout.gesture";
+import { resolveVoice } from "@/lib/voiceCatalog";
 import type { ChatMessage, ChatPlatform } from "./types";
 import { CHAT_PLATFORMS } from "./types";
 
@@ -165,11 +167,22 @@ export function createChatSpeaker(
     onBlockedChange?.(next);
   };
 
+  /**
+   * Resolve the configured voice against whatever THIS runtime has.
+   *
+   * This used to be an exact name match with no fallback, so a voice
+   * the OBS Browser Source doesn't ship (every "Google ..." voice —
+   * they are synthesised on Google's servers and CEF has no key for
+   * them) silently produced the engine default: Microsoft David, male,
+   * on Windows. Now it walks the shared ladder in lib/voiceCatalog,
+   * which keeps the language AND the gender of the original pick.
+   *
+   * Language and gender are inferred from the stored name rather than
+   * stored alongside it, so no config migration is needed.
+   */
   const pickVoice = (): SpeechSynthesisVoice | null => {
     if (!synth || !config.voiceName) return null;
-    return (
-      synth.getVoices().find((v) => v.name === config.voiceName) ?? null
-    );
+    return resolveVoice(synth.getVoices(), { name: config.voiceName }).voice;
   };
 
   const pump = () => {

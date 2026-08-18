@@ -21,6 +21,11 @@ import {
   readPersistedUnlock,
 } from "./useVoiceReadout.gesture";
 import {
+  resolveVoice,
+  type VoiceGender,
+  type VoiceResolution,
+} from "@/lib/voiceCatalog";
+import {
   consumeFingerprint,
   resetPreGameFingerprints,
   resetScoutingFingerprints,
@@ -72,6 +77,15 @@ export interface VoicePrefs {
    * to inferring the language from the voice name instead.
    */
   voiceLang?: string;
+  /**
+   * Gender of the picked voice, captured in Settings. When the exact
+   * voice is missing from THIS runtime we substitute a same-language
+   * voice of the SAME gender — picking "Google UK English Female" and
+   * hearing Microsoft David (the Windows engine default, male) was the
+   * bug this field exists to prevent. Optional: prefs saved before this
+   * field existed have it inferred from the voice name instead.
+   */
+  voiceGender?: VoiceGender;
   /** Speech rate, 0.5 – 2.0. Defaults to 1. */
   rate?: number;
   /** Speech pitch, 0 – 2. Defaults to 1. */
@@ -326,16 +340,17 @@ export function useVoiceReadout(
         // Some browsers throw on cancel before any utterance has played.
       }
       const requestId = ++speakRequestRef.current;
+      const wish = {
+        name: prefs?.voice,
+        lang: prefs?.voiceLang,
+        gender: prefs?.voiceGender,
+      };
       const wantedVoice = prefs?.voice;
-      const wantedLang = prefs?.voiceLang;
       const dispatch = (attempt = 0) => {
         if (requestId !== speakRequestRef.current) return;
-        const { voice: match, catalogEmpty } = resolvePreferredVoice(
-          synth,
-          voicesRef,
-          wantedVoice,
-          wantedLang,
-        );
+        const resolution = resolvePreferredVoice(synth, voicesRef, wish);
+        const match = resolution.voice;
+        const catalogEmpty = resolution.reason === "catalogEmpty";
         // Retry ONLY while the engine hasn't reported any voice yet —
         // Chromium / CEF populate the catalog asynchronously and the
         // first speak can lose the race. Once the catalog is non-empty
@@ -365,11 +380,13 @@ export function useVoiceReadout(
         if (match) {
           utt.voice = match;
           utt.lang = match.lang || "en-US";
-          if (wantedVoice && match.name !== wantedVoice) {
+          if (resolution.substituted) {
             log(
-              "preferred voice unavailable here; same-language fallback:",
+              "preferred voice unavailable here; substituted (" +
+                resolution.reason +
+                "):",
               wantedVoice,
-              "→",
+              "->",
               match.name,
               match.lang,
             );
@@ -377,7 +394,10 @@ export function useVoiceReadout(
             log("voice =", match.name, match.lang);
           }
         } else if (wantedVoice) {
-          log("preferred voice not found, no same-language fallback:", wantedVoice);
+          log(
+            "preferred voice not found; engine default will speak:",
+            wantedVoice,
+          );
         }
         utt.onerror = (ev) => {
           const code = (ev as SpeechSynthesisErrorEvent).error || "unknown";
@@ -419,6 +439,7 @@ export function useVoiceReadout(
       prefs?.pitch,
       prefs?.voice,
       prefs?.voiceLang,
+      prefs?.voiceGender,
       prefs?.volume,
       prefs?.delayMs,
       log,
@@ -784,121 +805,29 @@ function clamp(n: number, lo: number, hi: number): number {
 
 /**
  * Resolve the streamer's voice selection against the catalog the
- * CURRENT runtime actually exposes. Returns the matched voice (or a
- * same-language fallback) alongside whether the catalog was still empty,
- * so the caller can tell "engine hasn't loaded its voices yet" (worth a
- * short retry) apart from "this voice just isn't installed here"
- * (retrying can't help — the OBS / Streamlabs CEF case).
+ * CURRENT runtime actually exposes.
+ *
+ * The matching ladder itself lives in ``@/lib/voiceCatalog`` so that
+ * every speech surface in the app — this readout, the Ghost Coach, the
+ * dock, multichat TTS — degrades identically. All this wrapper adds is
+ * the ref-cached catalog: ``getVoices()`` can transiently return an
+ * empty array in CEF even after it has populated, so we keep the last
+ * non-empty answer and reuse it.
+ *
+ * The returned ``reason`` lets the caller tell "engine hasn't loaded
+ * its voices yet" (``catalogEmpty`` — worth a short retry) apart from
+ * "this voice just isn't installed here" (retrying can't help; that's
+ * the OBS / Streamlabs CEF case, where a substitution already happened).
  */
 function resolvePreferredVoice(
   synth: SpeechSynthesis,
   voicesRef: MutableRefObject<SpeechSynthesisVoice[]>,
-  wantedVoice: string | undefined,
-  wantedLang: string | undefined,
-): { voice: SpeechSynthesisVoice | null; catalogEmpty: boolean } {
+  wish: { name?: string; lang?: string; gender?: VoiceGender },
+): VoiceResolution {
   const latest = synth.getVoices();
   if (latest.length > 0) voicesRef.current = latest;
   const catalog = latest.length > 0 ? latest : voicesRef.current;
-  const catalogEmpty = catalog.length === 0;
-  if (!wantedVoice && !wantedLang) return { voice: null, catalogEmpty };
-  return { voice: findVoice(catalog, wantedVoice, wantedLang), catalogEmpty };
-}
-
-/**
- * Find the best voice for the streamer's selection in the given
- * catalog. Tries, in order:
- *
- *   1. Exact ``name`` match — the happy path, when Settings and the
- *      overlay happen to share the same voice set.
- *   2. Case / whitespace-insensitive ``name`` match — guards against
- *      trivial label drift between engines.
- *   3. Same-language fallback — when the named voice isn't installed in
- *      THIS runtime at all. The streamer almost always picked the voice
- *      in their desktop Chrome (where the "Google …" cloud voices live),
- *      but the overlay speaks from inside OBS / Streamlabs' embedded
- *      Chromium (CEF), which ships only the local OS voices ("Microsoft
- *      …" on Windows). Rather than silently dropping to whatever the
- *      engine default is — which on a non-English OS can be the wrong
- *      language entirely — we pick the closest voice in the selection's
- *      language so the readout still sounds right.
- *
- * Returns ``null`` only when even the language is unknown / unmatched,
- * leaving the utterance on the engine default (the legacy behaviour).
- */
-function findVoice(
-  voices: SpeechSynthesisVoice[],
-  wantedVoice: string | undefined,
-  wantedLang: string | undefined,
-): SpeechSynthesisVoice | null {
-  if (voices.length === 0) return null;
-  if (wantedVoice) {
-    const exact = voices.find((v) => v.name === wantedVoice);
-    if (exact) return exact;
-    const wanted = normalizeVoiceName(wantedVoice);
-    const normalized = voices.find(
-      (v) => normalizeVoiceName(v.name) === wanted,
-    );
-    if (normalized) return normalized;
-  }
-  const lang = wantedLang || inferLangFromVoiceName(wantedVoice);
-  return pickVoiceByLang(voices, lang);
-}
-
-function normalizeVoiceName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function normalizeLang(lang: string | undefined | null): string {
-  return (lang || "").trim().toLowerCase().replace(/_/g, "-");
-}
-
-/**
- * Pick the best available voice for a BCP-47 language tag. Prefers an
- * exact locale match (``en-US``), then any voice sharing the base
- * language (``en``). Within a tier it favours the engine default, then a
- * local (non-network) voice — both more reliable inside CEF — then the
- * first entry. Returns ``null`` when nothing matches the language.
- */
-function pickVoiceByLang(
-  voices: SpeechSynthesisVoice[],
-  lang: string | null,
-): SpeechSynthesisVoice | null {
-  const target = normalizeLang(lang);
-  if (!target) return null;
-  const base = target.split("-")[0];
-  const exact = voices.filter((v) => normalizeLang(v.lang) === target);
-  const sameBase = voices.filter(
-    (v) => normalizeLang(v.lang).split("-")[0] === base,
-  );
-  const pool = exact.length > 0 ? exact : sameBase;
-  if (pool.length === 0) return null;
-  return (
-    pool.find((v) => v.default) ?? pool.find((v) => v.localService) ?? pool[0]
-  );
-}
-
-/**
- * Best-effort language inference from a voice NAME, for prefs saved
- * before ``voiceLang`` was captured. Covers the common Chrome / Edge /
- * Windows English voice labels (the dominant case — "Google US English",
- * "Microsoft Zira - English (United States)", …). Returns ``null`` when
- * the language can't be inferred so the caller leaves the engine default
- * untouched.
- */
-function inferLangFromVoiceName(name: string | undefined): string | null {
-  if (!name) return null;
-  const n = name.toLowerCase();
-  if (/\ben-gb\b|uk english|british|english \(united kingdom\)|\(uk\)/.test(n)) {
-    return "en-GB";
-  }
-  if (/\ben-us\b|us english|english \(united states\)|\(us\)/.test(n)) {
-    return "en-US";
-  }
-  if (/\ben-au\b|australian|english \(australia\)/.test(n)) return "en-AU";
-  if (/\ben-in\b|indian|english \(india\)/.test(n)) return "en-IN";
-  if (/\ben-ca\b|english \(canada\)/.test(n)) return "en-CA";
-  if (/\benglish\b|\ben-[a-z]{2}\b/.test(n)) return "en";
-  return null;
+  return resolveVoice(catalog, wish);
 }
 
 function useDebugFlag(prefDebug: boolean | undefined): boolean {

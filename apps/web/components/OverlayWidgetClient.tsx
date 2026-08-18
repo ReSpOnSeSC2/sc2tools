@@ -288,6 +288,7 @@ export function OverlayWidgetClient({
         ghostParam={effectiveGhostParam}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
+        voicePrefs={voicePrefs}
       />
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
@@ -329,6 +330,7 @@ function WidgetRenderer({
   ghostParam,
   studioEvent,
   engagementEvent,
+  voicePrefs,
 }: {
   widget: WidgetId;
   token: string;
@@ -339,6 +341,10 @@ function WidgetRenderer({
   ghostParam: string | null;
   studioEvent: unknown;
   engagementEvent: unknown;
+  /** Socket-delivered voice prefs, so spoken widgets use the streamer's
+   *  chosen voice instead of the engine default (Microsoft David on
+   *  Windows). */
+  voicePrefs: VoicePrefs | null;
 }) {
   switch (widget) {
     case "opponent":
@@ -386,7 +392,12 @@ function WidgetRenderer({
       // Practice coach — the target build rides in this Browser
       // Source's own validated Ghost URL value, not in any payload.
       return (
-        <GhostBuildWidget live={live} liveGame={liveGame} ghostParam={ghostParam} />
+        <GhostBuildWidget
+          live={live}
+          liveGame={liveGame}
+          ghostParam={ghostParam}
+          voicePrefs={voicePrefs}
+        />
       );
     case "multichat":
       // Unified Twitch/Kick/YouTube/TikTok chat — self-driven; the
