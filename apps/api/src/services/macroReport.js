@@ -500,6 +500,14 @@ function shapeSegments(rows, labelOf) {
 }
 
 /** Duration segments keep the canonical bucket order, zero-filled.
+ *
+ *  Each row carries its own edges so a click can list the games behind
+ *  it through the global ``min_minutes`` / ``max_minutes`` filter. They
+ *  ship in MINUTES because that is the filter's unit, and they keep the
+ *  buckets' inclusive-lower / exclusive-upper convention, so a drill
+ *  lists exactly the games the bar counted — the filter reads the same
+ *  ``durationSec`` this pipeline buckets on.
+ *
  *  @param {Array<Record<string, any>> | undefined} rows */
 function shapeDurationSegments(rows) {
   const byKey = new Map((rows || []).map((r) => [r._id, r]));
@@ -508,6 +516,8 @@ function shapeDurationSegments(rows) {
     return {
       key: b.key,
       label: b.label,
+      minMinutes: b.min === null ? null : b.min / 60,
+      maxMinutes: b.max === null ? null : b.max / 60,
       games: r?.games || 0,
       wins: r?.wins || 0,
       losses: r?.losses || 0,

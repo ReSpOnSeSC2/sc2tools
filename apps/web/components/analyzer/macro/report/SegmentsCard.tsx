@@ -12,10 +12,11 @@ import type { MacroReportData, ReportDrill, SegmentRow } from "./types";
  * segment is flagged so patterns like "my macro holds in PvT but
  * falls apart past 14 minutes" are one glance away.
  *
- * Matchup and build rows click through to the games behind them via
- * the existing opp_race / build games-list filters. Game-length rows
- * don't (the API has no duration filter), so they render as plain
- * rows rather than pretending.
+ * Every row clicks through to the games behind it — matchup and build
+ * via opp_race / build, game length via the global min_minutes /
+ * max_minutes bounds. The length rows carry their own edges from the
+ * API rather than hardcoding them here, so the drill can never drift
+ * away from the buckets the bars were computed with.
  */
 
 type SegmentKind = "matchup" | "duration" | "build";
@@ -43,7 +44,13 @@ function drillFor(kind: SegmentKind, row: SegmentRow): ReportDrill | null {
       params: { build: row.key },
     };
   }
-  return null;
+  // Game length. A row with neither edge is unbounded on both sides,
+  // which is every game — not a drill worth offering.
+  const params: Record<string, string | number> = {};
+  if (typeof row.minMinutes === "number") params.min_minutes = row.minMinutes;
+  if (typeof row.maxMinutes === "number") params.max_minutes = row.maxMinutes;
+  if (Object.keys(params).length === 0) return null;
+  return { title: `Games lasting ${row.label}`, params };
 }
 
 export function SegmentsCard({

@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react
 import {
   DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
+  normalizeGameLengthBounds,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { DEFAULT_PRESET, resolvePreset, type PresetId } from "@/lib/datePresets";
@@ -25,6 +26,8 @@ export type StoredFilters = {
   exclude_too_short?: boolean;
   map_pool?: "ladder" | "nonladder" | "all";
   game_size?: "1v1" | "team" | "all";
+  min_minutes?: number;
+  max_minutes?: number;
 };
 
 // Only the globally-visible FilterBar controls persist across reloads.
@@ -49,6 +52,8 @@ const PERSISTED_KEYS = [
   "exclude_too_short",
   "map_pool",
   "game_size",
+  "min_minutes",
+  "max_minutes",
 ] as const;
 
 export function pickPersisted(f: Partial<AnalyzerFilters>): StoredFilters {
@@ -117,6 +122,14 @@ export function hydrateStoredFilters(
   if (next.exclude_too_short === undefined) next.exclude_too_short = true;
   if (next.map_pool === undefined) next.map_pool = "ladder";
   if (next.game_size === undefined) next.game_size = "1v1";
+  // localStorage is user-writable and outlives any given build, so the
+  // game-length bounds are re-sanitised on the way in rather than
+  // trusted. Both default to absent — "any length" — which keeps a
+  // first-time session's query string byte-identical to what it was
+  // before this filter existed.
+  const length = normalizeGameLengthBounds(next.min_minutes, next.max_minutes);
+  next.min_minutes = length.min_minutes;
+  next.max_minutes = length.max_minutes;
   return next;
 }
 

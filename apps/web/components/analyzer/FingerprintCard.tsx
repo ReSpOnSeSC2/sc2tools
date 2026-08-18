@@ -1485,6 +1485,8 @@ const STRIPPED_FILTER_NAMES: Record<string, string> = {
   leak: "macro leak",
   macro_min: "macro score",
   macro_max: "macro score",
+  min_minutes: "game length",
+  max_minutes: "game length",
   race: "race",
   opp_race: "opponent race",
   group_by_race_played: "race grouping",

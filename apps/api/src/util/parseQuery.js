@@ -30,6 +30,8 @@ const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
  *   leak?: string,
  *   macroMin?: number,
  *   macroMax?: number,
+ *   minMinutes?: number,
+ *   maxMinutes?: number,
  *   excludeTooShort?: boolean,
  *   regions?: string[],
  *   mapPool?: 'ladder'|'nonladder',
@@ -88,6 +90,23 @@ function parseFilters(q) {
   if (macroMin !== undefined) out.macroMin = macroMin;
   const macroMax = parseFiniteInt(q.macro_max);
   if (macroMax !== undefined) out.macroMax = macroMax;
+  // Global "Game length" filter. Bounds arrive as whole minutes and are
+  // applied against ``durationSec`` -- the SAME field the Macro Report
+  // buckets its game-length segments on (macroReport.js
+  // DURATION_BUCKETS). That field is derived from
+  // ``replay.length.seconds`` and holds real elapsed seconds, NOT the
+  // ~1.4x Blizzard "Faster" game clock that older extractor output used
+  // for event timestamps (see db/migrations/2026-05-17-rescale-timebase
+  // -- durationSec was explicitly left alone there because it was always
+  // on the real scale). Sharing the source is what makes the Macro tab's
+  // "10-14 min" bar and ``min_minutes=10&max_minutes=14`` describe the
+  // same cohort instead of two answers that differ by 40%.
+  const { minMinutes, maxMinutes } = parseMinuteBounds(
+    q.min_minutes,
+    q.max_minutes,
+  );
+  if (minMinutes !== undefined) out.minMinutes = minMinutes;
+  if (maxMinutes !== undefined) out.maxMinutes = maxMinutes;
   if (parseBool(q.exclude_too_short)) {
     out.excludeTooShort = true;
   }
@@ -108,6 +127,58 @@ function parseFilters(q) {
     out.gameSize = q.game_size;
   }
   return out;
+}
+
+/**
+ * Upper limit accepted on a game-length bound, in minutes.
+ *
+ * Ten hours is far past any real StarCraft II game (the longest
+ * recorded professional games run one to two hours), so the cap never
+ * touches a legitimate filter. It exists so a hand-edited URL cannot
+ * push an absurd number into the match stage.
+ */
+const MAX_GAME_LENGTH_MINUTES = 600;
+
+/**
+ * Parse the "Game length" bounds off the query string.
+ *
+ * Whole minutes, clamped to [0, MAX_GAME_LENGTH_MINUTES]; anything
+ * unparseable is dropped rather than throwing, matching every other
+ * filter here.
+ *
+ * A transposed pair (min above max) is swapped rather than honoured
+ * literally. Read at face value it selects nothing, and answering an
+ * obvious typo with a blank dashboard is worse than answering with the
+ * range the user plainly meant.
+ *
+ * @param {unknown} rawMin
+ * @param {unknown} rawMax
+ * @returns {{minMinutes?: number, maxMinutes?: number}}
+ */
+function parseMinuteBounds(rawMin, rawMax) {
+  let min = clampMinutes(parseFiniteInt(rawMin));
+  let max = clampMinutes(parseFiniteInt(rawMax));
+  if (min !== undefined && max !== undefined && min > max) {
+    const swap = min;
+    min = max;
+    max = swap;
+  }
+  /** @type {{minMinutes?: number, maxMinutes?: number}} */
+  const out = {};
+  // A zero lower bound is the absence of a constraint, not a
+  // constraint of its own -- keep it off the wire so an "any length"
+  // selection produces the same query it always did.
+  if (min !== undefined && min > 0) out.minMinutes = min;
+  if (max !== undefined && max > 0) out.maxMinutes = max;
+  return out;
+}
+
+/** @param {number|undefined} value @returns {number|undefined} */
+function clampMinutes(value) {
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.min(value, MAX_GAME_LENGTH_MINUTES);
 }
 
 /**
@@ -187,6 +258,26 @@ function gamesMatchStage(userId, filters) {
     // Exclusive upper bound — see parseFilters: score buckets tile.
     if (typeof f.macroMax === "number") score.$lt = f.macroMax;
     match.macroScore = score;
+  }
+  // "Game length" filter, driving every analyzer tab. Minutes convert
+  // to seconds because ``durationSec`` is the stored unit -- and is the
+  // same field the Macro Report's game-length segments bucket on, so
+  // the two surfaces agree by construction.
+  //
+  // Lower bound inclusive, upper bound EXCLUSIVE, matching macro_min /
+  // macro_max: adjacent length bands ("6-10", "10-14") then tile
+  // without a game that ended at exactly 10:00 being counted twice.
+  //
+  // Rows with no numeric ``durationSec`` fall out of both explicit
+  // bounds. That is deliberate and matches how mapPool / gameSize treat
+  // a missing canonical flag below: a game whose length was never
+  // recorded cannot honestly be claimed for a length band.
+  if (typeof f.minMinutes === "number" || typeof f.maxMinutes === "number") {
+    /** @type {Record<string, number>} */
+    const duration = {};
+    if (typeof f.minMinutes === "number") duration.$gte = f.minMinutes * 60;
+    if (typeof f.maxMinutes === "number") duration.$lt = f.maxMinutes * 60;
+    match.durationSec = duration;
   }
   // "Exclude too-short games": the strategy detector emits a
   // matchup-prefixed "<X>v<Y> - Game Too Short" label (also surfaced
@@ -395,6 +486,7 @@ function resultBucket(raw) {
 }
 
 module.exports = {
+  MAX_GAME_LENGTH_MINUTES,
   parseFilters,
   parseDate,
   parseFiniteInt,

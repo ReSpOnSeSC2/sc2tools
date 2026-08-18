@@ -11,7 +11,9 @@ const {
   caseInsensitiveContains,
   gamesMatchStage,
   resultBucket,
+  MAX_GAME_LENGTH_MINUTES,
 } = require("../src/util/parseQuery");
+const { DURATION_BUCKETS } = require("../src/services/macroReport");
 
 describe("util/parseQuery", () => {
   describe("parseFilters", () => {
@@ -248,6 +250,104 @@ describe("util/parseQuery", () => {
       expect(parseFilters({ regions: "" }).regions).toBeUndefined();
       expect(parseFilters({ regions: "XX,YY" }).regions).toBeUndefined();
       expect(parseFilters({}).regions).toBeUndefined();
+    });
+  });
+
+  // The global "Game length" filter. Its whole reason for existing on
+  // ``durationSec`` rather than any of the other time fields floating
+  // around this codebase is that ``durationSec`` is real elapsed
+  // seconds — the same source the Macro Report's game-length buckets
+  // use. The last test in this block is the one that keeps that true.
+  describe("game length filter", () => {
+    test("parses whole-minute bounds off the query string", () => {
+      expect(parseFilters({ min_minutes: "10", max_minutes: "20" })).toMatchObject({
+        minMinutes: 10,
+        maxMinutes: 20,
+      });
+    });
+
+    test("either bound stands alone", () => {
+      expect(parseFilters({ min_minutes: "20" })).toEqual({ minMinutes: 20 });
+      expect(parseFilters({ max_minutes: "10" })).toEqual({ maxMinutes: 10 });
+    });
+
+    test.each([
+      ["absent", {}],
+      ["empty strings", { min_minutes: "", max_minutes: "" }],
+      ["non-numeric", { min_minutes: "ten", max_minutes: "soon" }],
+      ["negative", { min_minutes: "-5", max_minutes: "-1" }],
+      // Zero is the absence of a lower bound, not a bound of its own —
+      // emitting ``$gte: 0`` would silently drop every row with no
+      // recorded duration for no user-visible reason.
+      ["zero", { min_minutes: "0", max_minutes: "0" }],
+    ])("drops %s bounds entirely", (_label, query) => {
+      const out = parseFilters(query);
+      expect(out.minMinutes).toBeUndefined();
+      expect(out.maxMinutes).toBeUndefined();
+    });
+
+    test("clamps an absurd bound instead of passing it through", () => {
+      expect(parseFilters({ max_minutes: "999999" }).maxMinutes).toBe(
+        MAX_GAME_LENGTH_MINUTES,
+      );
+    });
+
+    test("swaps a transposed pair rather than matching nothing", () => {
+      // Taken literally this asks for games both under 5 and over 30
+      // minutes, i.e. nothing. A blank dashboard is a worse answer to
+      // an obvious typo than the range that was plainly meant.
+      expect(parseFilters({ min_minutes: "30", max_minutes: "5" })).toMatchObject({
+        minMinutes: 5,
+        maxMinutes: 30,
+      });
+    });
+
+    test("becomes an inclusive-min / exclusive-max range on durationSec", () => {
+      const stage = gamesMatchStage("u1", { minMinutes: 10, maxMinutes: 20 });
+      expect(stage.durationSec).toEqual({ $gte: 600, $lt: 1200 });
+    });
+
+    test("either bound alone leaves the other side open", () => {
+      expect(gamesMatchStage("u1", { minMinutes: 20 }).durationSec).toEqual({
+        $gte: 1200,
+      });
+      expect(gamesMatchStage("u1", { maxMinutes: 6 }).durationSec).toEqual({
+        $lt: 360,
+      });
+    });
+
+    test("no bounds leaves durationSec unconstrained", () => {
+      expect(gamesMatchStage("u1", {})).not.toHaveProperty("durationSec");
+    });
+
+    test("composes with, and does not disturb, exclude_too_short", () => {
+      // Regression guard: the 'Game Too Short' filter is a label match
+      // on a different pair of fields and must keep working untouched
+      // alongside a duration range.
+      const stage = gamesMatchStage("u1", {
+        minMinutes: 10,
+        excludeTooShort: true,
+      });
+      expect(stage.durationSec).toEqual({ $gte: 600 });
+      expect(stage.myBuild).toEqual({ $not: /Game Too Short$/ });
+      expect(stage["opponent.strategy"]).toEqual({ $not: /Game Too Short$/ });
+    });
+
+    test("bounds line up exactly with the Macro Report's length buckets", () => {
+      // The contract that makes clicking a "10–14 min" bar list the
+      // games that bar counted: same field, same unit, same
+      // inclusive-lower / exclusive-upper edges. If DURATION_BUCKETS
+      // ever moves off durationSec or changes its tiling, this fails.
+      for (const bucket of DURATION_BUCKETS) {
+        const stage = gamesMatchStage("u1", {
+          minMinutes: bucket.min === null ? undefined : bucket.min / 60,
+          maxMinutes: bucket.max === null ? undefined : bucket.max / 60,
+        });
+        const expected = {};
+        if (bucket.min !== null) expected.$gte = bucket.min;
+        if (bucket.max !== null) expected.$lt = bucket.max;
+        expect(stage.durationSec).toEqual(expected);
+      }
     });
   });
 

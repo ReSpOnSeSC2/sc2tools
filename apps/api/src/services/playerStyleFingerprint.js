@@ -321,6 +321,14 @@ const TRAIT_LABELS = Object.freeze(
  * opponent-strategy, leak and macro-score filters all select a slice of
  * *opponents* or of *individual games*, which biases every win-rate-derived
  * measure and would make a macro axis circular with its own filter.
+ *
+ * The game-length bounds are stripped for the same circularity reason, and
+ * more sharply than most: the game-length axis reads directly off replay
+ * duration, so filtering to 20+ minute games would hand back
+ * "Late Game Master" to every player on earth, and filtering to sub-10
+ * would hand back the opposite. A fingerprint is a claim about a player's
+ * whole cohort; it cannot be computed from a slice selected on the very
+ * quantity one of its axes measures.
  */
 const STRIPPED_FILTER_KEYS = Object.freeze([
   "build",
@@ -330,6 +338,8 @@ const STRIPPED_FILTER_KEYS = Object.freeze([
   "leak",
   "macroMin",
   "macroMax",
+  "minMinutes",
+  "maxMinutes",
   "groupByRacePlayed",
 ]);
 
@@ -341,6 +351,8 @@ const STRIPPED_FILTER_LABELS = Object.freeze({
   leak: "leak",
   macroMin: "macro_min",
   macroMax: "macro_max",
+  minMinutes: "min_minutes",
+  maxMinutes: "max_minutes",
   groupByRacePlayed: "group_by_race_played",
 });
 
