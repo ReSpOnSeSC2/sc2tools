@@ -126,6 +126,8 @@ describe("fingerprintFilters", () => {
         leak: "Supply Blocked",
         macroMin: 60,
         macroMax: 80,
+        minMinutes: 20,
+        maxMinutes: 40,
         groupByRacePlayed: true,
         gameSize: "team",
       },
@@ -154,6 +156,12 @@ describe("fingerprintFilters", () => {
       "leak",
       "macroMin",
       "macroMax",
+      // Game length is stripped for the sharpest circularity reason of
+      // the lot: an axis of this fingerprint is computed FROM replay
+      // duration, so a 20-40 minute cohort would report "Late Game
+      // Master" for every player alive.
+      "minMinutes",
+      "maxMinutes",
       "groupByRacePlayed",
     ]) {
       expect(filters[key]).toBeUndefined();
@@ -167,6 +175,8 @@ describe("fingerprintFilters", () => {
         "leak",
         "macro_min",
         "macro_max",
+        "min_minutes",
+        "max_minutes",
         "race",
         "opp_race",
       ]),

@@ -48,6 +48,13 @@ export interface LeakRow {
 export interface SegmentRow {
   key: string;
   label: string;
+  /** Inclusive lower edge in minutes; null = unbounded. Present on
+   *  game-length rows only — matchup and build rows omit both. */
+  minMinutes?: number | null;
+  /** EXCLUSIVE upper edge in minutes; null = unbounded. Matches the
+   *  API's min_minutes / max_minutes filter, so a row click lists
+   *  exactly the games the row counted. */
+  maxMinutes?: number | null;
   games: number;
   wins: number;
   losses: number;

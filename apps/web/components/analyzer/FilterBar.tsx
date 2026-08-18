@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
 import { useFilters } from "@/lib/filterContext";
+import { PillButton } from "./FilterPill";
+import { GameLengthFilter } from "./GameLengthFilter";
 import {
   PRESETS,
   resolvePreset,
@@ -240,6 +242,8 @@ export function FilterBar() {
 
       <GameSizeToggle />
 
+      <GameLengthFilter />
+
       <ExcludeTooShortToggle />
     </div>
   );
@@ -293,37 +297,6 @@ function SegmentedFilter<T extends string>({
         );
       })}
     </div>
-  );
-}
-
-function PillButton({
-  active,
-  title,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  title: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={title}
-      className={[
-        "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
-        "text-micro font-medium uppercase tracking-wider tabular-nums",
-        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        active
-          ? "border-accent/40 bg-accent/10 text-accent"
-          : "border-border text-text-dim hover:bg-bg-elevated hover:text-text",
-      ].join(" ")}
-    >
-      {children}
-    </button>
   );
 }
 

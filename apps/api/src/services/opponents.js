@@ -3529,6 +3529,8 @@ function hasFilters(f) {
       || f.leak
       || typeof f.macroMin === "number"
       || typeof f.macroMax === "number"
+      || typeof f.minMinutes === "number"
+      || typeof f.maxMinutes === "number"
       || f.excludeTooShort
       || f.mapPool
       || f.gameSize,
@@ -3635,6 +3637,21 @@ function filterGamesByAnalyzerScope(games, f) {
       if (typeof f.macroMin === "number" && score < f.macroMin) return false;
       // Exclusive upper bound, matching gamesMatchStage.
       if (typeof f.macroMax === "number" && score >= f.macroMax) return false;
+    }
+    if (typeof f.minMinutes === "number" || typeof f.maxMinutes === "number") {
+      const durationSec = g.durationSec;
+      // Type bracketing again: a game with no recorded length matches
+      // neither bound, exactly as it drops out of gamesMatchStage.
+      if (typeof durationSec !== "number" || !Number.isFinite(durationSec)) {
+        return false;
+      }
+      if (typeof f.minMinutes === "number" && durationSec < f.minMinutes * 60) {
+        return false;
+      }
+      // Exclusive upper bound, matching gamesMatchStage.
+      if (typeof f.maxMinutes === "number" && durationSec >= f.maxMinutes * 60) {
+        return false;
+      }
     }
 
     if (f.excludeTooShort) {

@@ -63,6 +63,25 @@ export type AnalyzerFilters = {
    * "all" is an explicit, persisted no-constraint choice. Default = "1v1".
    */
   game_size?: "1v1" | "team" | "all";
+  /**
+   * Game-length filter, in whole minutes. `min_minutes` is inclusive,
+   * `max_minutes` EXCLUSIVE, so adjacent bands ("6–10", "10–14") tile
+   * without a game that ended at exactly 10:00 landing in both.
+   *
+   * The API applies these against `durationSec` — the same field the
+   * Macro Report's game-length segments bucket on, which holds real
+   * elapsed seconds rather than the ~1.4× "Faster" game clock. Picking
+   * "10–14 min" here therefore selects the games behind the Macro tab's
+   * "10–14 min" bar, not a differently-scaled cohort.
+   *
+   * Both are undefined by default ("any length"). This is separate from
+   * and additional to `exclude_too_short`, which drops the
+   * no-build-order cohort by its "Game Too Short" strategy label rather
+   * than by duration — that toggle is deliberately left untouched here,
+   * and the two compose (hiding too-short games AND asking for 20+ min).
+   */
+  min_minutes?: number;
+  max_minutes?: number;
   /** Preset id selected in the date filter; not sent to the API. */
   preset?: PresetId;
 };
@@ -97,6 +116,45 @@ export const FiltersContext = createContext<FiltersValue>({
 
 export function useFilters(): FiltersValue {
   return useContext(FiltersContext);
+}
+
+/**
+ * Longest game length the filter accepts, in minutes. Mirrors the API's
+ * `MAX_GAME_LENGTH_MINUTES`; ten hours is far past any real SC2 game, so
+ * the cap only ever catches a typo or a hand-edited value.
+ */
+export const MAX_GAME_LENGTH_MINUTES = 600;
+
+/**
+ * Sanitise a pair of game-length bounds.
+ *
+ * Applied on every path a value can enter from — the picker, and rehydration
+ * from localStorage, which is user-writable and can hold anything a previous
+ * build (or a console poke) left behind. Non-numeric, negative and zero
+ * bounds collapse to "no constraint"; a transposed pair is swapped, matching
+ * the API, because reading it literally selects nothing and answering an
+ * obvious typo with a blank dashboard is worse than answering with the range
+ * that was plainly meant.
+ */
+export function normalizeGameLengthBounds(
+  rawMin: unknown,
+  rawMax: unknown,
+): { min_minutes?: number; max_minutes?: number } {
+  let min = coerceMinutes(rawMin);
+  let max = coerceMinutes(rawMax);
+  if (min !== undefined && max !== undefined && min > max) {
+    [min, max] = [max, min];
+  }
+  const out: { min_minutes?: number; max_minutes?: number } = {};
+  if (min !== undefined) out.min_minutes = min;
+  if (max !== undefined) out.max_minutes = max;
+  return out;
+}
+
+function coerceMinutes(raw: unknown): number | undefined {
+  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(Math.floor(n), MAX_GAME_LENGTH_MINUTES);
 }
 
 /** Keys we never send to the API — UI-only state. */

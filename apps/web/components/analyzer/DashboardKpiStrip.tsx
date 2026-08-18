@@ -96,7 +96,7 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
   );
   // The Win Rate card uses its OWN preset for since/until (so the
   // user can ask "season win rate" without touching the global date
-  // filter), but it still honours the global game-kind and
+  // filter), but it still honours the global game-kind, game-length and
   // "Hide too-short games" facets. Otherwise the headline cards can
   // re-introduce custom/team games that the rest of the dashboard has
   // removed. The falsy/all cases are dropped by `filtersToQuery`.
@@ -107,6 +107,8 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     if (filters.exclude_too_short) params.exclude_too_short = true;
     params.map_pool = filters.map_pool;
     params.game_size = filters.game_size;
+    params.min_minutes = filters.min_minutes;
+    params.max_minutes = filters.max_minutes;
     return filtersToQuery(params);
   }, [
     wrRange,
@@ -114,6 +116,8 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     filters.exclude_too_short,
     filters.map_pool,
     filters.game_size,
+    filters.min_minutes,
+    filters.max_minutes,
   ]);
 
   // Global series — used for Games today. Streak is fetched from a
@@ -139,12 +143,16 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
       exclude_too_short: filters.exclude_too_short,
       map_pool: filters.map_pool,
       game_size: filters.game_size,
+      min_minutes: filters.min_minutes,
+      max_minutes: filters.max_minutes,
     });
   }, [
     tz,
     filters.exclude_too_short,
     filters.map_pool,
     filters.game_size,
+    filters.min_minutes,
+    filters.max_minutes,
   ]);
   const globalSeries = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${globalSeriesQuery}`,
@@ -156,12 +164,15 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
 
   // /v1/streak walks games one-by-one to compute the consecutive
   // same-result streak. Pass the global "Hide too-short games"
-  // toggle and game-kind scope so a removed replay cannot reset or
-  // extend the visible cohort's streak.
+  // toggle, game-kind scope and game-length bounds so a game the rest
+  // of the dashboard has filtered out cannot reset or extend the
+  // visible cohort's streak.
   const streakQuery = filtersToQuery({
     exclude_too_short: filters.exclude_too_short,
     map_pool: filters.map_pool,
     game_size: filters.game_size,
+    min_minutes: filters.min_minutes,
+    max_minutes: filters.max_minutes,
   });
   const streakResp = useApi<StreakResponse>(`/v1/streak${streakQuery}`);
   const streak = streakResp.data ?? { kind: null, count: 0, lastGameAt: null };

@@ -72,6 +72,16 @@ describe("pickPersisted", () => {
       pickPersisted({ map_pool: "all", game_size: "all" }),
     ).toEqual({ map_pool: "all", game_size: "all" });
   });
+
+  // Game length is a FilterBar control with visible pills and a Clear
+  // button, so unlike the drill-downs above it belongs in storage: the
+  // user can see it is on and can turn it off.
+  it("persists the game-length bounds", () => {
+    expect(pickPersisted({ min_minutes: 10, max_minutes: 20 })).toEqual({
+      min_minutes: 10,
+      max_minutes: 20,
+    });
+  });
 });
 
 describe("hydrateStoredFilters", () => {
@@ -104,5 +114,34 @@ describe("hydrateStoredFilters", () => {
       game_size: "all",
       exclude_too_short: false,
     });
+  });
+
+  it("restores a stored game-length range", () => {
+    expect(
+      hydrateStoredFilters({ preset: "all", min_minutes: 10, max_minutes: 20 }),
+    ).toMatchObject({ min_minutes: 10, max_minutes: 20 });
+  });
+
+  it("leaves game length unset when nothing was stored", () => {
+    const out = hydrateStoredFilters({ preset: "all" });
+    expect(out.min_minutes).toBeUndefined();
+    expect(out.max_minutes).toBeUndefined();
+  });
+
+  it("re-sanitises garbage bounds instead of forwarding them", () => {
+    // localStorage is user-writable and outlives any given build, so a
+    // stale or hand-edited blob must not reach the wire. A transposed
+    // pair is corrected rather than left to select nothing.
+    const junk = hydrateStoredFilters({
+      preset: "all",
+      min_minutes: -4 as unknown as number,
+      max_minutes: "twenty" as unknown as number,
+    });
+    expect(junk.min_minutes).toBeUndefined();
+    expect(junk.max_minutes).toBeUndefined();
+
+    expect(
+      hydrateStoredFilters({ preset: "all", min_minutes: 30, max_minutes: 5 }),
+    ).toMatchObject({ min_minutes: 5, max_minutes: 30 });
   });
 });

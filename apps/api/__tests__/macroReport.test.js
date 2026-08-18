@@ -248,4 +248,43 @@ describe("macro report aggregation", () => {
     expect(list.total).toBe(1);
     expect(list.games[0].id).toBe("g1");
   });
+
+  test("each game-length segment drills to exactly the games it counted", async () => {
+    // The contract behind clicking a "Where macro collapses" length row.
+    // The row publishes its own edges in minutes; feeding them straight
+    // back through the global min_minutes / max_minutes filter has to
+    // reproduce the row's own count. It does because both sides read
+    // ``durationSec`` — real elapsed seconds — rather than one of them
+    // reaching for a Blizzard-clock field that runs ~1.4x fast.
+    const fixtures = [
+      ["g1", 200], // lt6
+      ["g2", 359], // lt6, one second below the boundary
+      ["g3", 360], // 6to10, exactly on the boundary
+      ["g4", 700], // 10to14
+      ["g5", 900], // 14to20
+      ["g6", 1200], // 20plus, exactly on the boundary
+      ["g7", 4000], // 20plus
+    ];
+    for (const [gameId, durationSec] of fixtures) {
+      await games.upsert("u1", game(gameId, { score: 70, durationSec }));
+    }
+
+    const out = await macroReport.report("u1", {});
+
+    let drilled = 0;
+    for (const row of out.segments.duration) {
+      /** @type {Record<string, string>} */
+      const query = {};
+      if (row.minMinutes !== null) query.min_minutes = String(row.minMinutes);
+      if (row.maxMinutes !== null) query.max_minutes = String(row.maxMinutes);
+      const rows = await db.games
+        .find(gamesMatchStage("u1", parseFilters(query)))
+        .toArray();
+      expect(rows).toHaveLength(row.games);
+      drilled += rows.length;
+    }
+    // Every fixture landed in exactly one band — the edges tile, so a
+    // game sitting on a boundary is neither counted twice nor dropped.
+    expect(drilled).toBe(fixtures.length);
+  });
 });
