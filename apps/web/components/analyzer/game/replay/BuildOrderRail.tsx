@@ -106,7 +106,12 @@ function BuildRow({
           background: current ? SIDE_TINT[entry.owner] : undefined,
         }}
       >
-        <ReplayIcon name={entry.name} kind={entry.kind} className="h-5 w-5" />
+        <ReplayIcon
+          name={entry.name}
+          kind={entry.kind}
+          side={entry.owner}
+          className="h-5 w-5"
+        />
         <span
           className={`min-w-0 flex-1 truncate text-micro ${
             current ? "font-semibold text-text" : "text-text-muted"

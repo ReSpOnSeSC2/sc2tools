@@ -15,17 +15,20 @@
  *  - full page  → ``ReplayStage``, the vespene-style HUD: mirrored top
  *    bar, production rail, live build-order feed, transport dock with
  *    event markers.
- *  - ``compact`` (the macro drilldown modal) → the bare
- *    ``MapReplayer``, unchanged. The requirement there is "map and
- *    transport only, no rails", which is exactly what the replayer's
- *    own chrome already is, and it keeps the drilldown's units-lost
- *    panels that hosts have shipped with since the replayer landed.
+ *  - ``compact`` (the macro drilldown modal) → ``CompactReplayHost``:
+ *    the same bare ``MapReplayer`` as before plus a one-control strip
+ *    carrying the background score. The requirement there is still "map
+ *    and transport only, no rails", which is exactly what the
+ *    replayer's own chrome already is, and it keeps the drilldown's
+ *    units-lost panels that hosts have shipped with since the replayer
+ *    landed — the score was simply unreachable in this host, because
+ *    ``MusicControl`` only ever lived in ``ReplayStage``'s dock.
  */
 
 import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
 import { sanitizeMapPlayback } from "@/lib/mapReplay";
-import { MapReplayer } from "./MapReplayer";
+import { CompactReplayHost } from "./replay/CompactReplayHost";
 import { ReplayStage } from "./replay/ReplayStage";
 
 /** Stage height cap for the compact (drilldown) host, in CSS px. The
@@ -117,7 +120,12 @@ export function MapReplaySection({
             {playback.mapName || ""}
           </span>
         </div>
-        <MapReplayer playback={playback} maxHeightPx={stageMaxH} />
+        <CompactReplayHost
+          playback={playback}
+          gameId={gameId}
+          myRace={myRace}
+          maxHeightPx={stageMaxH}
+        />
       </section>
     );
   }

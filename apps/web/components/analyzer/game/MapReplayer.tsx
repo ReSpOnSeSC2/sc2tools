@@ -41,6 +41,8 @@ import {
 import {
   buildingAliveAt,
   buildingPositionAt,
+  gasTappedAt,
+  isGasStructure,
   isTownHall,
   isWorkerUnit,
   MINING_SNAP_RADIUS,
@@ -57,6 +59,7 @@ import {
   unitMaxSpeed,
   worldProjection,
   type MapPlayback,
+  type PlaybackBuilding,
 } from "@/lib/mapReplay";
 import {
   animFrameIndex,
@@ -373,6 +376,7 @@ export function MapReplayer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [playingState, setPlayingState] = useState(false);
   const [speedState, setSpeedState] = useState<(typeof SPEEDS)[number]>(8);
   const [timeState, setTimeState] = useState(0);
@@ -442,6 +446,89 @@ export function MapReplayer({
   const resetView = useCallback(() => {
     viewRef.current = { z: 1, ox: 0, oy: 0 };
   }, []);
+
+  /* ── Fullscreen ────────────────────────────────────────────────
+   * The stage, not the canvas. A host that draws chrome around the
+   * replay (``ReplayStage``: top bar, rails, transport dock) marks its
+   * outermost element ``data-replay-stage``; we go fullscreen on that
+   * so the whole HUD comes with it. With no such host — the compact
+   * drilldown, or a bare ``MapReplayer`` — the component's own root is
+   * the stage.
+   *
+   * State is read from the document, never assumed from the click:
+   * Esc, the browser's own chrome and the F11 key all leave fullscreen
+   * without firing anything on the button.
+   */
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
+  /** Something containing this replayer is the fullscreen element —
+   *  either its own root or a ``ReplayStage`` around it. Drives the
+   *  button's label/pressed state and the sizing cap. */
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  /** THIS component's root is the fullscreen element (no stage host).
+   *  Only then does the root need to paint its own backdrop: a
+   *  fullscreen element is viewport-sized and transparent by default. */
+  const [isOwnFullscreen, setIsOwnFullscreen] = useState(false);
+  // Set by the sizing effect below; called again whenever fullscreen
+  // flips, because the canvas takes its size from its container and the
+  // viewport cap, and neither change is guaranteed to reach the
+  // ResizeObserver.
+  const remeasureRef = useRef<(() => void) | null>(null);
+  const fullscreenRef = useRef(false);
+  fullscreenRef.current = isFullscreen;
+
+  const fullscreenTarget = useCallback((): HTMLElement | null => {
+    const root = rootRef.current;
+    if (!root) return null;
+    const stage = root.closest<HTMLElement>("[data-replay-stage]");
+    return stage ?? root;
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    // Feature detection, not UA sniffing. ``fullscreenEnabled`` is
+    // false inside an iframe without allowfullscreen, which is exactly
+    // when the button must not be offered.
+    const root = document.documentElement;
+    const supported =
+      typeof root.requestFullscreen === "function" &&
+      typeof document.exitFullscreen === "function" &&
+      document.fullscreenEnabled !== false;
+    setFullscreenAvailable(supported);
+    if (!supported) return;
+    const onChange = () => {
+      const el = document.fullscreenElement;
+      const mine = !!el && !!rootRef.current && el.contains(rootRef.current);
+      setIsFullscreen(mine);
+      setIsOwnFullscreen(!!el && el === rootRef.current);
+      fullscreenRef.current = mine;
+      // Synchronously and again after the browser has settled the new
+      // viewport — otherwise the canvas keeps its pre-fullscreen
+      // backing store and the map draws into a corner.
+      remeasureRef.current?.();
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => remeasureRef.current?.());
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return;
+    // Only OUR fullscreen is ours to exit. If some other element owns
+    // the screen, requesting ours replaces it, which is what the click
+    // asked for.
+    if (fullscreenRef.current && document.fullscreenElement) {
+      void Promise.resolve(document.exitFullscreen()).catch(() => {});
+      return;
+    }
+    const target = fullscreenTarget();
+    if (!target || typeof target.requestFullscreen !== "function") return;
+    // A rejected request (no user activation, blocked by policy) must
+    // not surface as an unhandled rejection; the button simply stays
+    // in its current state because ``fullscreenchange`` never fires.
+    void Promise.resolve(target.requestFullscreen()).catch(() => {});
+  }, [fullscreenTarget]);
 
   useEffect(() => {
     layoutImageRef.current = null;
@@ -565,13 +652,20 @@ export function MapReplayer({
       const aspect =
         (playback.bounds.maxY - playback.bounds.minY) /
         (playback.bounds.maxX - playback.bounds.minX);
-      const viewportCap =
-        (typeof window !== "undefined" ? window.innerHeight : 900) *
-        STAGE_VIEWPORT_FRACTION;
-      const capH = Math.max(
-        STAGE_MIN_H_PX,
-        Math.min(STAGE_MAX_H_PX, maxHeightPx ?? viewportCap),
-      );
+      const viewportH = typeof window !== "undefined" ? window.innerHeight : 900;
+      const viewportCap = viewportH * STAGE_VIEWPORT_FRACTION;
+      // Fullscreen ignores the host's height cap AND the 1080 ceiling —
+      // the point of it is to use the screen, and a compact host's
+      // 420 px cap following the stage into fullscreen is exactly the
+      // stale-size bug this control has to avoid. It keeps the same
+      // viewport FRACTION, so the surrounding chrome (this component's
+      // own transport, or the stage's top bar and dock) still fits.
+      const capH = fullscreenRef.current
+        ? Math.max(STAGE_MIN_H_PX, viewportCap)
+        : Math.max(
+            STAGE_MIN_H_PX,
+            Math.min(STAGE_MAX_H_PX, maxHeightPx ?? viewportCap),
+          );
       const availW = Math.max(240, rect.width);
       const w = Math.min(availW, capH / aspect);
       const h = w * aspect;
@@ -583,11 +677,16 @@ export function MapReplayer({
       if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     apply();
+    // Published so the fullscreen listener can re-measure: entering
+    // fullscreen changes the viewport, not necessarily the wrapper's
+    // observed box, so the ResizeObserver alone is not enough.
+    remeasureRef.current = apply;
     const obs =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(apply) : null;
     obs?.observe(wrap);
     if (typeof window !== "undefined") window.addEventListener("resize", apply);
     return () => {
+      if (remeasureRef.current === apply) remeasureRef.current = null;
       obs?.disconnect();
       if (typeof window !== "undefined") window.removeEventListener("resize", apply);
     };
@@ -701,7 +800,17 @@ export function MapReplayer({
   );
 
   return (
-    <div className="space-y-2" data-testid="map-replayer">
+    <div
+      ref={rootRef}
+      /* ``h-full`` + a stage background only when the replayer itself is
+         the fullscreen element: a fullscreen div is viewport-sized and
+         transparent by default, which would otherwise show a white
+         page behind a letterboxed canvas. */
+      className={`space-y-2 ${
+        isOwnFullscreen ? "h-full overflow-auto bg-[#070a0f] p-3" : ""
+      }`}
+      data-testid="map-replayer"
+    >
       {!hideControls && (
       <div className="flex flex-wrap items-center gap-2">
         {/* Fixed width so ▶ Play / ❚❚ Pause toggling never shifts the
@@ -774,12 +883,27 @@ export function MapReplayer({
           </button>
           <button
             type="button"
-            aria-label="Reset view"
+            aria-label="Reset zoom"
+            title="Reset zoom"
+            data-testid="replay-reset-zoom"
             onClick={resetView}
             className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-caption font-semibold text-text hover:border-accent"
           >
-            ⤢
+            <span aria-hidden>⟲</span>
           </button>
+          {fullscreenAvailable ? (
+            <button
+              type="button"
+              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+              aria-pressed={isFullscreen}
+              title={isFullscreen ? "Exit full screen" : "Full screen"}
+              data-testid="replay-fullscreen"
+              onClick={toggleFullscreen}
+              className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-caption font-semibold text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span aria-hidden>{isFullscreen ? "⤡" : "⤢"}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1044,6 +1168,10 @@ interface Derived {
   buildingStand: Array<SpriteAnimHandle | null>;
   buildingHall: Uint8Array;
   buildingPhase: Float32Array;
+  /** Just the vespene structures, so the per-frame "is this geyser
+   *  tapped?" guard rescans ~1% of the building list instead of all of
+   *  it, once per gas node, every frame. */
+  gasBuildings: PlaybackBuilding[];
 }
 
 const derivedCache = new WeakMap<MapPlayback, Derived>();
@@ -1092,12 +1220,14 @@ function derivedOf(playback: MapPlayback): Derived {
     const buildingStand: Array<SpriteAnimHandle | null> = new Array(bn);
     const buildingHall = new Uint8Array(bn);
     const buildingPhase = new Float32Array(bn);
+    const gasBuildings: PlaybackBuilding[] = [];
     for (let i = 0; i < bn; i += 1) {
       const b = playback.buildings[i];
       const sprite = resolveSprite(b.name, "building");
       buildingStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
       buildingHall[i] = isTownHall(b.name) ? 1 : 0;
       buildingPhase[i] = phaseOffset(i * 2654435761);
+      if (isGasStructure(b.name)) gasBuildings.push(b);
     }
     d = {
       workerName,
@@ -1110,6 +1240,7 @@ function derivedOf(playback: MapPlayback): Derived {
       buildingStand,
       buildingHall,
       buildingPhase,
+      gasBuildings,
     };
     derivedCache.set(playback, d);
   }
@@ -1289,11 +1420,32 @@ function renderFrame(
   // Neutral terrain furniture (v2 payloads): mineral lines, geysers,
   // rocks, towers — mined-out patches and broken rocks disappear at
   // their recorded death time.
+  const derived = derivedOf(playback);
   const minFurniturePx = MIN_FURNITURE_SCREEN_PX / view.z;
   const glyphPx = Math.max(minFurniturePx, RESOURCE_GLYPH_WORLD * k);
   const rocksPx = Math.max(minFurniturePx, ROCKS_GLYPH_WORLD * k);
   for (const r of playback.resources) {
     if (!resourceAliveAt(r, t)) continue;
+    // A TAPPED geyser is not drawn at all: the structure standing on it
+    // IS its presentation, exactly as in SC2, where a built
+    // Refinery/Extractor/Assimilator hides the geyser completely.
+    //
+    // This is the gas-placement fix. The two are recorded at the same
+    // map coordinate (measured: Δ = 0 on every gas structure in ten
+    // real payloads), but they are PLACED by different conventions —
+    // the glyph is centred on the coordinate, while the sprite is
+    // anchored at its model's ground origin, which sits below the
+    // bitmap's centre. The sprite's cell therefore lands ~0.5–0.7 world
+    // units up-screen of the glyph (see the harness in
+    // ``lib/__tests__/gasPlacement.test.ts``), and the green pool fringed
+    // out from under the structure's downhill edge — most visibly in
+    // the compact host, where ``MIN_FURNITURE_SCREEN_PX`` floors the
+    // glyph at 9 px while an Assimilator is only 9.8 px wide.
+    //
+    // The anchor convention is not the thing to change: it is what puts
+    // every unit's feet and every structure's footprint on its
+    // coordinate. Removing the duplicate marker is.
+    if (r.kind === "gas" && gasTappedAt(derived.gasBuildings, r, t)) continue;
     const glyph = resourceGlyph(r.kind, iconDpr);
     if (!glyph) continue;
     const size = r.kind === "rocks" ? rocksPx : glyphPx;
@@ -1328,20 +1480,15 @@ function renderFrame(
         for (const r of playback.resources) {
           if (r.kind !== "gas") continue;
           if (Math.hypot(r.x - hall.x, r.y - hall.y) > 11) continue;
-          const tapped = playback.buildings.some(
-            (b) =>
-              b.owner === side &&
-              buildingAliveAt(b, t) &&
-              Math.hypot(b.x - r.x, b.y - r.y) <= 1.5,
-          );
-          if (tapped) slots.push(r, r, r);
+          // Same test the draw pass above uses, so a geyser can never be
+          // hidden-as-tapped here and still counted as untapped there.
+          if (gasTappedAt(derived.gasBuildings, r, t, side)) slots.push(r, r, r);
         }
         hall.slots = slots;
       }
     }
   }
 
-  const derived = derivedOf(playback);
   const facings = derived.facings;
   const trackBox = derived.trackBox;
   entityCount = 0;

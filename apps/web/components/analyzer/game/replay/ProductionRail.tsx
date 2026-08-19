@@ -56,9 +56,11 @@ const COMP_ROWS_MAX = 12;
 function QueueBubble({
   group,
   kind,
+  side,
 }: {
   group: QueueGroup;
   kind: "unit" | "structure";
+  side: ReplaySide;
 }) {
   const label = prettyName(group.name);
   const seconds = Math.max(0, Math.ceil(group.remaining));
@@ -67,7 +69,7 @@ function QueueBubble({
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-1.5 py-1"
       title={`${label} — ${seconds}s remaining${group.count > 1 ? `, ${group.count} in production` : ""}`}
     >
-      <ReplayIcon name={group.name} kind={kind} className="h-5 w-5" />
+      <ReplayIcon name={group.name} kind={kind} side={side} className="h-5 w-5" />
       <span className="whitespace-nowrap text-micro tabular-nums text-text">
         {seconds}s
         {group.count > 1 ? (
@@ -83,11 +85,13 @@ function QueueSection({
   label,
   groups,
   kind,
+  side,
   emptyText = "Idle",
 }: {
   label: string;
   groups: QueueGroup[];
   kind: "unit" | "structure";
+  side: ReplaySide;
   emptyText?: string;
 }) {
   return (
@@ -98,7 +102,7 @@ function QueueSection({
       ) : (
         <ul className="flex flex-wrap gap-1.5 px-2.5 pb-1">
           {groups.map((g) => (
-            <QueueBubble key={g.name} group={g} kind={kind} />
+            <QueueBubble key={g.name} group={g} kind={kind} side={side} />
           ))}
         </ul>
       )}
@@ -109,10 +113,12 @@ function QueueSection({
 function CompositionList({
   rows,
   kind,
+  side,
   emptyText,
 }: {
   rows: Array<{ name: string; count: number }>;
   kind: "unit" | "structure";
+  side: ReplaySide;
   emptyText: string;
 }) {
   if (rows.length === 0) {
@@ -128,7 +134,7 @@ function CompositionList({
           className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-1.5 py-1"
           title={`${r.count}× ${prettyName(r.name)}`}
         >
-          <ReplayIcon name={r.name} kind={kind} className="h-5 w-5" />
+          <ReplayIcon name={r.name} kind={kind} side={side} className="h-5 w-5" />
           <span className="text-micro font-semibold tabular-nums text-text">
             {r.count}
           </span>
@@ -232,11 +238,12 @@ function ProductionRailImpl({
             id={`${uid}-panel-queue`}
             aria-labelledby={`${uid}-tab-queue`}
           >
-            <QueueSection label="Units" groups={queue.units} kind="unit" />
+            <QueueSection label="Units" groups={queue.units} kind="unit" side={side} />
             <QueueSection
               label="Structures"
               groups={queue.structures}
               kind="structure"
+              side={side}
             />
             <section aria-label="Upgrades">
               <h4 className={SECTION_LABEL_CLASS}>Upgrades</h4>
@@ -260,7 +267,12 @@ function ProductionRailImpl({
             <h4 className={SECTION_LABEL_CLASS}>
               Army <span className="text-text-muted">({comp.armyCount})</span>
             </h4>
-            <CompositionList rows={comp.army} kind="unit" emptyText="No army" />
+            <CompositionList
+              rows={comp.army}
+              kind="unit"
+              side={side}
+              emptyText="No army"
+            />
 
             <h4 className={SECTION_LABEL_CLASS}>Workers</h4>
             <p className="px-2.5 pb-1 text-caption tabular-nums text-text">
@@ -275,6 +287,7 @@ function ProductionRailImpl({
             <CompositionList
               rows={structures}
               kind="structure"
+              side={side}
               emptyText="None standing"
             />
 

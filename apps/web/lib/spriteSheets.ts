@@ -122,6 +122,20 @@ const SPRITE_ALIASES: Readonly<Record<string, string>> = {
   MothershipCore: "Mothership",
   BattleCruiser: "Battlecruiser",
   Battlecruiser: "Battlecruiser",
+  // Terran add-ons. The tracker names these per parent structure
+  // (BarracksTechLab, FactoryReactor, StarportTechLab, ...) but SC2
+  // ships exactly ONE techlab.m3 and ONE reactor.m3 -- every parent
+  // reuses the same add-on model -- so they all fold onto the two
+  // sheets we baked. ``lib/sc2-icons.ts`` already does the identical
+  // fold for the flat roster icons; without it here the map dropped
+  // straight to that flat icon instead of the sprite.
+  BarracksTechLab: "TechLab",
+  BarracksReactor: "Reactor",
+  FactoryTechLab: "TechLab",
+  FactoryReactor: "Reactor",
+  StarportTechLab: "TechLab",
+  StarportReactor: "Reactor",
+  TechLabReactor: "Reactor",
 };
 
 /** Suffixes the tracker appends for a temporary state; the base model
@@ -170,6 +184,52 @@ export interface SpriteAnimHandle {
 }
 
 const resolveCache = new Map<string, ResolvedSprite | null>();
+const nameCache = new Map<string, string | null>();
+
+/**
+ * Playback name → canonical sheet name, or null when nothing ships for
+ * it. THE alias authority: the map's ``resolveSprite`` and the DOM
+ * roster icons both go through here, so ``BarracksTechLab`` resolves to
+ * ``TechLab`` in exactly one place. Deliberately kind-agnostic — a
+ * roster row knows "unit" / "structure" in the HUD's vocabulary, not
+ * the payload list a name came from, and sheet names are globally
+ * unique so the fold is unambiguous without it.
+ */
+export function canonicalSpriteName(rawName: string): string | null {
+  const cached = nameCache.get(rawName);
+  if (cached !== undefined) return cached;
+  let name: string | null = null;
+  if (SPRITE_MANIFEST[rawName]) name = rawName;
+  else if (SPRITE_ALIASES[rawName] && SPRITE_MANIFEST[SPRITE_ALIASES[rawName]]) {
+    name = SPRITE_ALIASES[rawName];
+  } else {
+    for (const suffix of STATE_SUFFIXES) {
+      if (rawName.length > suffix.length && rawName.endsWith(suffix)) {
+        const base = rawName.slice(0, -suffix.length);
+        if (SPRITE_MANIFEST[base]) {
+          name = base;
+          break;
+        }
+      }
+    }
+  }
+  nameCache.set(rawName, name);
+  return name;
+}
+
+/**
+ * URL of the pre-rendered 128 px roster icon for a sheet name — the
+ * SAME 3D model the map draws, framed as a thumbnail. One file per
+ * (sheet, colour), so a DOM list can use a plain ``<img>`` and never
+ * touch this module's per-frame atlas state (``beginSpriteFrame``),
+ * which the 60 fps canvas loop owns exclusively.
+ *
+ * ``name`` must already be canonical — pass it through
+ * ``canonicalSpriteName`` first.
+ */
+export function spriteIconUrl(name: string, color: SpriteColor): string {
+  return `${SPRITE_BASE}/icons/${name}_${color}.webp`;
+}
 
 /**
  * Playback unit/building name → sheet, or null when no sheet ships for
@@ -188,21 +248,7 @@ export function resolveSprite(
   const cached = resolveCache.get(key);
   if (cached !== undefined) return cached;
   let resolved: ResolvedSprite | null = null;
-  let name: string | null = null;
-  if (SPRITE_MANIFEST[rawName]) name = rawName;
-  else if (SPRITE_ALIASES[rawName] && SPRITE_MANIFEST[SPRITE_ALIASES[rawName]]) {
-    name = SPRITE_ALIASES[rawName];
-  } else {
-    for (const suffix of STATE_SUFFIXES) {
-      if (rawName.length > suffix.length && rawName.endsWith(suffix)) {
-        const base = rawName.slice(0, -suffix.length);
-        if (SPRITE_MANIFEST[base]) {
-          name = base;
-          break;
-        }
-      }
-    }
-  }
+  const name = canonicalSpriteName(rawName);
   if (name) {
     const meta = SPRITE_MANIFEST[name];
     if (meta.kind === kind || DUAL_KIND_SPRITES.has(name)) {
@@ -492,6 +538,32 @@ function atlasFor(
 
 /* ──────────────── draw ──────────────── */
 
+/** The scene-space rect ``drawSprite`` blits into, and where the CELL's
+ * own centre lands. Anchored draws put the model's GROUND ORIGIN on
+ * ``(x, y)``, so ``cx``/``cy`` — the middle of the bitmap — sits above
+ * it by ``(frameSize / 2 − ay) × cellPx / frameSize``. Exported so the
+ * placement of an anchored sprite can be measured against map furniture
+ * that is drawn centred (the resource glyphs) without a canvas. */
+export interface SpriteDrawRect {
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly cx: number;
+  readonly cy: number;
+}
+
+export function spriteDrawRect(
+  handle: SpriteAnimHandle,
+  x: number,
+  y: number,
+  cellPx: number,
+): SpriteDrawRect {
+  const scale = cellPx / handle.sprite.meta.frameSize;
+  const dx = x - handle.anim.ax * scale;
+  const dy = y - handle.anim.ay * scale;
+  return { x: dx, y: dy, size: cellPx, cx: dx + cellPx / 2, cy: dy + cellPx / 2 };
+}
+
 /**
  * Draw one sprite cell so that its ANCHOR pixel lands on ``(x, y)`` in
  * scene coordinates, ``cellPx`` scene px wide.
@@ -528,9 +600,9 @@ export function drawSprite(
   const col = cellIndex % anim.cols;
   const row = (cellIndex / anim.cols) | 0;
 
-  const scale = cellPx / meta.frameSize;
-  const dx = x - anim.ax * scale;
-  const dy = y - anim.ay * scale;
+  const rect = spriteDrawRect(handle, x, y, cellPx);
+  const dx = rect.x;
+  const dy = rect.y;
 
   const bucket = bucketFor(cellPx * rasterScale, meta.frameSize);
   if (bucket > 0) {

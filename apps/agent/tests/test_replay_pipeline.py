@@ -1563,7 +1563,9 @@ def _sample_playback():
                 "name": "Stalker",
                 "born": 120.0,
                 "died": 300.0,
-                # Tuple-style waypoints, deliberately denser than the 2s gap.
+                # Tuple-style waypoints. The middle sample sits ~0.7
+                # world units off the chord the other two draw, so the
+                # corner-preserving pass reads it as redundant.
                 "waypoints": [(120.0, 30.0, 40.0), (120.5, 31.0, 40.0), (125.0, 40.0, 50.0)],
             },
         ],
@@ -1594,7 +1596,8 @@ def test_compact_map_playback_produces_bounded_camelcase_payload():
     assert out["battles"] == [{"t": 200.0, "x": 100.0, "y": 90.0}]
     # Buildings only — the Probe unit event is not a building.
     assert [b["name"] for b in out["buildings"]] == ["Nexus", "Hatchery"]
-    # Waypoint downsample: the 120.5s sample (< 2s gap) is dropped.
+    # Waypoint simplification: the 120.5s sample lies within epsilon of
+    # the straight line between its neighbours, so it is dropped.
     stalker = next(u for u in out["units"] if u["name"] == "Stalker")
     assert stalker["wp"] == [120.0, 30.0, 40.0, 125.0, 40.0, 50.0]
     assert stalker["died"] == 300.0
@@ -1822,3 +1825,173 @@ def test_compact_map_playback_prefers_lifecycle_buildings_with_moves():
     assert "moves" not in hatch
     # Legacy event-scan buildings are NOT mixed in when lifecycle exists.
     assert len(out["buildings"]) == 2
+
+
+# ── Corner-preserving waypoint simplification (RDP) ──────────────────
+#
+# The compaction used to keep one sample every 2 seconds, which sampled
+# away the corners a unit walked around cliffs and ramps — the web
+# interpolates between waypoints, so a missing corner is drawn as a
+# straight line through unwalkable ground. These lock down the
+# Ramer-Douglas-Peucker replacement: corners survive, straight runs
+# collapse, the per-unit cap still holds, and the ends of every track
+# stay put so ``born`` / ``died`` keep lining up.
+
+
+def _unit_with_track(track, **extra):
+    """A my_units entry carrying ``track`` as tuple-style waypoints."""
+    unit = {"name": "Stalker", "born": track[0][0] if track else 0.0,
+            "died": None, "waypoints": list(track)}
+    unit.update(extra)
+    return unit
+
+
+def _wp_of(out, name="Stalker"):
+    return next(u for u in out["units"] if u["name"] == name)["wp"]
+
+
+def test_compact_map_playback_keeps_corners_and_drops_collinear_runs():
+    """The whole point of the change: a unit that walked east and then
+    turned north keeps its turn and loses the redundant samples along
+    each leg. Under the old fixed-time rule the corner was whatever
+    happened to land on the 2-second grid."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    east = [(float(i), 50.0 + i, 50.0) for i in range(11)]     # → (60, 50)
+    north = [(float(10 + i), 60.0, 50.0 + i) for i in range(1, 11)]
+    pb = _sample_playback()
+    pb["my_units"] = [_unit_with_track(east + north)]
+    pb["opp_units"] = []
+
+    out = _compact_map_playback(pb, [])
+    assert out is not None
+    # Three samples survive: both ends and the corner itself.
+    assert _wp_of(out) == [0.0, 50.0, 50.0, 10.0, 60.0, 50.0, 20.0, 60.0, 60.0]
+
+
+def test_compact_map_playback_simplification_respects_the_waypoint_cap():
+    """A pathological all-corners track must still fit the cap, and it
+    must fit it by coarsening — never by truncation. A truncated track
+    stops mid-map and never reaches where the unit actually died."""
+    from sc2tools_agent.replay_pipeline import (
+        _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
+        _compact_map_playback,
+    )
+
+    # 800 alternating samples: every single one is a real corner.
+    zigzag = [
+        (float(i), i * 0.5, 0.0 if i % 2 == 0 else 8.0)
+        for i in range(800)
+    ]
+    pb = _sample_playback()
+    pb["my_units"] = [_unit_with_track(zigzag)]
+    pb["opp_units"] = []
+
+    wp = _wp_of(_compact_map_playback(pb, []))
+    assert len(wp) % 3 == 0
+    assert len(wp) // 3 <= _PLAYBACK_MAX_WAYPOINTS_PER_UNIT
+    # Coarsened, not truncated: the last sample is the track's last
+    # sample, not the 240th one.
+    assert wp[:3] == [0.0, 0.0, 0.0]
+    assert wp[-3:] == [799.0, 399.5, 8.0]
+    # And it uses the budget it has rather than collapsing to the ends.
+    assert len(wp) // 3 > _PLAYBACK_MAX_WAYPOINTS_PER_UNIT // 2
+
+
+def test_compact_map_playback_keeps_endpoints_and_monotonic_time():
+    """Each surviving waypoint keeps its own real timestamp — nothing is
+    resampled onto a grid — and time only ever moves forward. The web
+    lerps on ``t1 - t0``, so a repeated or backwards stamp renders as a
+    teleport."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    track = [
+        (100.0, 20.0, 20.0),
+        (101.5, 60.0, 21.0),
+        (101.5, 99.0, 99.0),   # duplicate stamp — dropped
+        (100.9, 10.0, 10.0),   # backwards stamp — dropped
+        (104.28, 60.0, 80.0),
+        (109.0, 21.0, 79.0),
+    ]
+    pb = _sample_playback()
+    pb["my_units"] = [_unit_with_track(track, born=100.0, died=109.0)]
+    pb["opp_units"] = []
+
+    out = _compact_map_playback(pb, [])
+    unit = next(u for u in out["units"] if u["name"] == "Stalker")
+    wp = unit["wp"]
+    times = wp[0::3]
+    assert times[0] == 100.0 and times[-1] == 109.0
+    assert all(b > a for a, b in zip(times, times[1:]))
+    # Real stamps, not a 2s grid: 104.28 rounds to 104.3, not to 104.0.
+    assert 104.3 in times
+    assert unit["born"] == 100.0 and unit["died"] == 109.0
+
+
+def test_compact_map_playback_handles_degenerate_tracks():
+    """0, 1 and 2 samples, plus a unit that never moved. A stationary
+    unit collapses to its two ends — the whole middle is redundant."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    pb = _sample_playback()
+    pb["my_units"] = [
+        {"name": "Empty", "born": 0.0, "died": None, "waypoints": []},
+        {"name": "One", "born": 5.0, "died": None,
+         "waypoints": [(5.0, 30.0, 30.0)]},
+        {"name": "Two", "born": 6.0, "died": None,
+         "waypoints": [(6.0, 30.0, 30.0), (9.0, 44.0, 51.0)]},
+        {"name": "Parked", "born": 0.0, "died": 119.0,
+         "waypoints": [(float(i), 25.0, 25.0) for i in range(120)]},
+    ]
+    pb["opp_units"] = []
+
+    out = _compact_map_playback(pb, [])
+    names = [u["name"] for u in out["units"]]
+    # A unit with no track at all carries no story and is dropped.
+    assert "Empty" not in names
+    assert _wp_of(out, "One") == [5.0, 30.0, 30.0]
+    assert _wp_of(out, "Two") == [6.0, 30.0, 30.0, 9.0, 44.0, 51.0]
+    assert _wp_of(out, "Parked") == [0.0, 25.0, 25.0, 119.0, 25.0, 25.0]
+
+
+def test_simplify_track_keeps_an_out_and_back_excursion():
+    """Distance is measured to the chord SEGMENT, not its infinite line.
+    A worker that walks out to a patch and returns gives a chord whose
+    ends nearly coincide; measured against the infinite line the far
+    turn sits at ~zero distance and the whole trip would vanish."""
+    from sc2tools_agent.replay_pipeline import (
+        _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
+        _PLAYBACK_WAYPOINT_EPSILON,
+        _simplify_track,
+    )
+
+    out_and_back = [(0.0, 10.0, 10.0), (5.0, 40.0, 10.0), (10.0, 10.2, 10.0)]
+    kept = _simplify_track(
+        out_and_back, _PLAYBACK_WAYPOINT_EPSILON,
+        _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
+    )
+    assert kept == out_and_back
+
+
+def test_simplify_track_survives_a_track_deeper_than_the_recursion_limit():
+    """The simplifier is iterative on purpose. A long track splits once
+    per corner, and the textbook recursive form would run out of stack
+    on a real 20-minute worker before it ran out of waypoints."""
+    import random
+
+    from sc2tools_agent.replay_pipeline import (
+        _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
+        _PLAYBACK_WAYPOINT_EPSILON,
+        _simplify_track,
+    )
+
+    rng = random.Random(7)
+    track = [
+        (float(i), rng.uniform(0.0, 150.0), rng.uniform(0.0, 150.0))
+        for i in range(6000)
+    ]
+    kept = _simplify_track(
+        track, _PLAYBACK_WAYPOINT_EPSILON, _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
+    )
+    assert 2 <= len(kept) <= _PLAYBACK_MAX_WAYPOINTS_PER_UNIT
+    assert kept[0] == track[0] and kept[-1] == track[-1]

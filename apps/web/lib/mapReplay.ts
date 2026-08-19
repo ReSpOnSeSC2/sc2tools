@@ -454,6 +454,53 @@ export function buildingAliveAt(b: PlaybackBuilding, t: number): boolean {
   return b.died === null || b.died > t;
 }
 
+/* ──────────────── gas geysers ────────────────
+ *
+ * A geyser and the structure built on it are recorded at the SAME map
+ * coordinate — verified across ten real payloads (138 gas structures,
+ * Δx = Δy = 0.00 for every one of them). The tolerance below is
+ * therefore only slack for a hand-edited or future payload, not a real
+ * expected offset.
+ */
+export const GAS_TAP_RADIUS = 1.5;
+
+const GAS_STRUCTURES: ReadonlySet<string> = new Set([
+  "Refinery",
+  "RefineryRich",
+  "Extractor",
+  "ExtractorRich",
+  "Assimilator",
+  "AssimilatorRich",
+]);
+
+/** Is this a vespene structure (the thing that covers a geyser)? */
+export function isGasStructure(name: string): boolean {
+  return GAS_STRUCTURES.has(name);
+}
+
+/**
+ * Is a gas structure standing on this geyser at time t?
+ *
+ * Shared by the draw pass (which must not paint a geyser that has been
+ * built over) and the mining-slot builder (which only gives a hall gas
+ * slots once the geyser is tapped), so the two cannot drift.
+ * ``owner`` narrows it to one side; omitted, either side counts.
+ */
+export function gasTappedAt(
+  buildings: ReadonlyArray<PlaybackBuilding>,
+  node: { x: number; y: number },
+  t: number,
+  owner?: "me" | "opp",
+): boolean {
+  for (const b of buildings) {
+    if (owner && b.owner !== owner) continue;
+    if (!isGasStructure(b.name)) continue;
+    if (!buildingAliveAt(b, t)) continue;
+    if (Math.hypot(b.x - node.x, b.y - node.y) <= GAS_TAP_RADIUS) return true;
+  }
+  return false;
+}
+
 /** Flying-building cruise speed for relocation interpolation. */
 const BUILDING_FLY_SPEED = 1.3;
 

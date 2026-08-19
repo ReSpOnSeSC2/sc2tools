@@ -17,6 +17,9 @@
     "components/analyzer/game/MapReplaySection.tsx",
     "components/analyzer/game/replay/**/*.ts",
     "components/analyzer/game/replay/**/*.tsx",
-    "lib/replayMusic.ts"
+    "lib/replayMusic.ts",
+    "lib/sc2-icons.ts",
+    "lib/__tests__/gasPlacement.test.ts",
+    "lib/__tests__/rosterIcons.test.ts"
   ]
 }

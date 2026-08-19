@@ -135,6 +135,12 @@ export function ReplayStage({
   return (
     <section
       data-testid="replay-stage"
+      /* The fullscreen target. ``MapReplayer``'s ⤢ walks up to the
+         nearest ``[data-replay-stage]`` so the top bar, both rails and
+         the transport dock go fullscreen with the canvas instead of a
+         bare, chrome-less map. Absent (compact host, bare replayer) the
+         replayer falls back to its own root. */
+      data-replay-stage=""
       /* Stable label: hosts and their tests have keyed off
          ``aria-label="Map replay"`` since the replayer shipped. The map
          name is in the top bar. */
