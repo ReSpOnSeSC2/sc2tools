@@ -43,13 +43,14 @@ describe("track manifest", () => {
     expect(new Set(ids).size).toBe(5);
     for (const t of TRACKS) {
       expect(t.path.endsWith(".mp3")).toBe(true);
-      // The path is NOT derived from the id — the two Protoss takes
-      // sit under a protoss/ prefix on R2 and the rest do not.
+      // The path is NOT derived from the id: it mirrors the flat
+      // apps/web/public/audio/replay/ layout that the upload script
+      // copies into R2, so a key can be corrected without a rename.
       expect(t.duration > 0).toBe(true);
       expect(t.race === "Terran" || t.race === "Zerg" || t.race === "Protoss").toBe(true);
     }
     expect(TRACKS.find((t) => t.id === "protoss-orbital-reliquary")?.path).toBe(
-      "protoss/protoss-orbital-reliquary.mp3",
+      "protoss-orbital-reliquary.mp3",
     );
     expect(TRACKS.find((t) => t.id === "zerg-chitin-rift")?.path).toBe(
       "zerg-chitin-rift.mp3",

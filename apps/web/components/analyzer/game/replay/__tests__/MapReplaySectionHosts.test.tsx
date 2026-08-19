@@ -1,7 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rawPayload } from "./fixtures";
+
+// vitest.config.ts sets globals:false, so React Testing Library never
+// registers its automatic cleanup -- without this every render stays
+// mounted and the next query matches the previous test's DOM too.
+afterEach(() => cleanup());
 
 /**
  * The two presentations ``MapReplaySection`` picks between: the

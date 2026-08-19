@@ -11,7 +11,7 @@
  * Plain vitest assertions only: this repo has no jest-dom.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -153,6 +153,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // globals:false => no automatic RTL cleanup; unmount first so the
+  // engine's teardown runs before the fakes are removed.
+  cleanup();
   delete (window as unknown as Mutable).AudioContext;
   delete (window as unknown as Mutable).Audio;
   vi.useRealTimers();
@@ -571,6 +574,6 @@ describe("MusicControl in the transport dock", () => {
       unmount();
     }
     expect(new Set(opened).size).toBe(1);
-    expect(opened[0]).toContain("protoss/");
+    expect(opened[0]).toContain("protoss-orbital-reliquary");
   });
 });

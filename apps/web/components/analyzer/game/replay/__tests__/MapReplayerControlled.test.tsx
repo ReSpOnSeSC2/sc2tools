@@ -1,8 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MapReplayer } from "../../MapReplayer";
 import { payload } from "./fixtures";
+
+// vitest.config.ts sets globals:false, so React Testing Library never
+// registers its automatic cleanup -- without this every render stays
+// mounted and the next query matches the previous test's DOM too.
+afterEach(() => cleanup());
 
 /**
  * Guards the ONE change the HUD needed from ``MapReplayer``: optional

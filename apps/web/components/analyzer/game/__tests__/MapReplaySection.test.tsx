@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MapReplaySection } from "../MapReplaySection";
 
 let mockApi: { data: unknown; isLoading: boolean; error: unknown };
@@ -33,18 +33,29 @@ const PLAYBACK = {
 };
 
 describe("MapReplaySection", () => {
+  // The full-page host now renders ReplayStage, so the transport is
+  // TransportDock's (aria-labelled "Play"/"Pause"/"Playback speed N
+  // times…") rather than MapReplayer's own "▶ Play" / "8×" chrome,
+  // which ReplayStage hides via ``hideControls``. The canvas, the map
+  // name and the scrubber are unchanged.
   it("renders the replayer with controls and HUD for real playback data", () => {
     mockApi = { data: PLAYBACK, isLoading: false, error: null };
     render(<MapReplaySection gameId="g1" />);
     expect(screen.getByTestId("map-replayer")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "▶ Play" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "8×" })).toBeTruthy();
+    expect(screen.getByTestId("replay-transport")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /playback speed/i })).toBeTruthy();
     expect(screen.getByLabelText("Playback position")).toBeTruthy();
-    expect(screen.getByText(/11:40/)).toBeTruthy(); // 700s game length
+    // Scoped to the dock: the HUD also renders an sr-only live-stats
+    // sentence ("At 0:00 of 11:40 on Alcyone LE: …"), so an unscoped
+    // /11:40/ now matches two nodes.
+    expect(
+      within(screen.getByTestId("replay-transport")).getByText(/11:40/),
+    ).toBeTruthy(); // 700s game length
     expect(screen.getByText("Alcyone LE")).toBeTruthy();
     // Play toggles to Pause.
-    fireEvent.click(screen.getByRole("button", { name: "▶ Play" }));
-    expect(screen.getByRole("button", { name: "❚❚ Pause" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
   });
 
   it("shows the re-sync hint for pre-playback uploads", () => {
