@@ -66,6 +66,20 @@ export interface PlaybackResource {
   died: number | null;
 }
 
+/** One ability / spell cast (v5 payloads). Compact on the wire:
+ *  ``o`` 0 = me / 1 = opponent, ``a`` a stable ability slug
+ *  ("PsiStorm", "EMP", "FungalGrowth", …) that the engine maps raw
+ *  sc2reader ability names onto, ``t`` game seconds. ``x`` / ``y`` are
+ *  ABSENT (not null) for a self-cast the engine could not place —
+ *  Stim, Burrow — and the replayer pins those to the casting unit. */
+export interface ReplayCast {
+  o: 0 | 1;
+  a: string;
+  t: number;
+  x?: number;
+  y?: number;
+}
+
 export interface MapPlayback {
   v: number;
   mapName: string;
@@ -77,6 +91,10 @@ export interface MapPlayback {
   units: PlaybackUnit[];
   /** Neutral terrain furniture (v2 payloads; empty for v1). */
   resources: PlaybackResource[];
+  /** Ability / spell casts (v5 payloads). OPTIONAL — v4 and older
+   *  payloads have no casts at all and must keep rendering exactly as
+   *  before, so this is undefined rather than an empty array there. */
+  casts?: ReplayCast[];
   /** Per-side [t, armyValue, workers, supplyUsed] rows, ascending t. */
   stats: { me: number[][]; opp: number[][] };
 }
@@ -230,6 +248,34 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   if (lastActivity > 60 && gameLength > lastActivity * 1.2) {
     gameLength = Math.round(lastActivity * 1.02);
   }
+  // Casts (v5). Same defensive treatment as everything else: drop
+  // malformed entries one by one, cap the length, clamp t into the
+  // playback's own timeline. Absent/!Array input yields an empty list
+  // and the key is then omitted from the result entirely, so a v4
+  // payload behaves exactly as it did before v5 existed.
+  const casts: ReplayCast[] = [];
+  for (const cs of Array.isArray(p.casts) ? p.casts.slice(0, 800) : []) {
+    if (!cs || typeof cs !== "object") continue;
+    const r = cs as Record<string, unknown>;
+    if (typeof r.a !== "string" || r.a.length === 0) continue;
+    const t = num(r.t);
+    if (!Number.isFinite(t)) continue;
+    const o = num(r.o) === 1 ? 1 : 0;
+    const cast: ReplayCast = {
+      o,
+      a: r.a.slice(0, 40),
+      t: Math.min(Math.max(t, 0), gameLength),
+    };
+    // x/y travel as a pair or not at all — half a coordinate is a
+    // malformed cast, not a cast at the origin.
+    const x = r.x === null || r.x === undefined ? NaN : num(r.x);
+    const y = r.y === null || r.y === undefined ? NaN : num(r.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      cast.x = x;
+      cast.y = y;
+    }
+    casts.push(cast);
+  }
   if (units.length === 0 && buildings.length === 0) return null;
   return {
     v: Number.isFinite(num(p.v)) ? num(p.v) : 1,
@@ -241,6 +287,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     buildings,
     units,
     resources,
+    ...(casts.length ? { casts } : {}),
     stats: { me: statsMe, opp: statsOpp },
   };
 }
@@ -572,14 +619,19 @@ export function statsAt(
 }
 
 /** Worker unit names render dimmer/smaller than army. */
-const WORKER_NAMES = new Set(["Probe", "SCV", "Drone", "MULE"]);
+export const WORKER_UNIT_NAMES: ReadonlySet<string> = new Set([
+  "Probe",
+  "SCV",
+  "Drone",
+  "MULE",
+]);
 
 export function isWorkerUnit(name: string): boolean {
-  return WORKER_NAMES.has(name);
+  return WORKER_UNIT_NAMES.has(name);
 }
 
 /** Town-hall names render as the biggest building squares. */
-const TOWNHALL_NAMES = new Set([
+export const TOWNHALL_NAMES: ReadonlySet<string> = new Set([
   "Nexus",
   "CommandCenter",
   "OrbitalCommand",

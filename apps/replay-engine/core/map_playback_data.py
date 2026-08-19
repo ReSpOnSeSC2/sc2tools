@@ -13,6 +13,7 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
+from .ability_casts import extract_ability_casts
 from .paths import APP_DIR
 from .timebase import event_seconds, real_game_length
 from .replay_loader import load_replay_with_fallback
@@ -457,6 +458,30 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         print(f"map_playback: extract_resource_nodes failed: {exc}")
         resources = []
 
+    # Ability / spell casts (Psi Storm, EMP, Fungal, Stim, ...). Fed
+    # the unit tracks so self-cast abilities that carry no target
+    # location can be placed at the casting unit. Best-effort like the
+    # unit tracks: a replay whose command events confuse sc2reader
+    # still gets a full playback, just without spells.
+    try:
+        cast_data = extract_ability_casts(replay, me.pid, tracks)
+    except Exception as exc:
+        print(f"map_playback: extract_ability_casts failed: {exc}")
+        cast_data = {"casts": [], "unmapped": {}}
+    unmapped_abilities = cast_data.get("unmapped") or {}
+    if unmapped_abilities:
+        # Not an error — SC2 patches faster than sc2reader's datapacks.
+        # Printing it is how the next mapping update gets its input.
+        print(
+            "map_playback: unmapped ability names: "
+            + ", ".join(
+                f"{name}x{count}"
+                for name, count in sorted(
+                    unmapped_abilities.items(), key=lambda kv: -kv[1]
+                )[:20]
+            )
+        )
+
     return {
         "map_name": getattr(replay, "map_name", None),
         "game_length": game_length,
@@ -474,4 +499,6 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "resources": resources,
         "my_buildings": lifecycle.get(me.pid, []),
         "opp_buildings": lifecycle.get(opp.pid, []),
+        "ability_casts": cast_data.get("casts") or [],
+        "unmapped_abilities": unmapped_abilities,
     }

@@ -1382,6 +1382,32 @@ _PLAYBACK_STATS_STEP_SEC = 10.0
 _PLAYBACK_MAX_BATTLES = 80
 _PLAYBACK_MAX_RESOURCES = 600
 _PLAYBACK_MAX_BUILDING_MOVES = 20
+_PLAYBACK_MAX_CASTS = 400
+
+# Ability casts ranked for the 400-cast budget. Tier 0 decides fights
+# and must survive truncation; tier 2 is the high-frequency macro /
+# micro chatter a viewer can lose without losing the story. Anything
+# the engine adds later that isn't listed lands in the middle tier, so
+# a new spell is never silently the first thing thrown away.
+_PLAYBACK_CAST_PRIORITY: Dict[str, int] = {
+    # — tier 0: game-deciding AoE and snipes
+    "PsiStorm": 0, "EMP": 0, "FungalGrowth": 0, "CorrosiveBile": 0,
+    "PurificationNova": 0, "Nuke": 0, "BlindingCloud": 0,
+    "ParasiticBomb": 0, "Yamato": 0, "TimeWarp": 0, "ForceField": 0,
+    "StasisWard": 0, "Abduct": 0, "NeuralParasite": 0, "Feedback": 0,
+    "Snipe": 0, "WidowMineDetonate": 0, "MassRecall": 0,
+    "TacticalJump": 0,
+    # — tier 1: meaningful, but frequent enough to thin
+    "GuardianShield": 1, "Revelation": 1, "Contaminate": 1,
+    "InterferenceMatrix": 1, "AntiArmorMissile": 1, "CausticSpray": 1,
+    "GravitonBeam": 1, "ScannerSweep": 1, "SpawnChangeling": 1,
+    "InfestedTerran": 1, "PulsarBeam": 1, "Salvage": 1, "Lockdown": 1,
+    "SupplyDrop": 1, "CalldownMULE": 1,
+    # — tier 2: macro / micro spam (a 20-minute PvP is ~200 chronos)
+    "ChronoBoost": 2, "Stim": 2, "Blink": 2, "Charge": 2,
+    "Burrow": 2, "Unburrow": 2,
+}
+_PLAYBACK_CAST_DEFAULT_PRIORITY = 1
 
 
 def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
@@ -1440,13 +1466,14 @@ def _compact_map_playback(
     payloads. Output shape (camelCase, ready for the web replayer):
 
       {
-        v: 4, mapName, gameLength,
+        v: 5, mapName, gameLength,
         bounds: {minX, minY, maxX, maxY},
         spawns: [{owner: 'me'|'opp', x, y}],
         battles: [{t, x, y}],
         buildings: [{owner, name, t, x, y, moves?, died?}],
         units: [{owner, name, born, died|null, sd?, wp: [t,x,y,…]}],
         resources: [{kind, x, y, died?}],
+        casts: [{o: 0|1, a: '<slug>', t, x?, y?}],
         stats: {me: [[t, army, workers, supply]…], opp: […]}
       }
 
@@ -1455,6 +1482,15 @@ def _compact_map_playback(
     Archon, a MULE expiring — so the web's loss ledger can tell
     resources SPENT from resources LOST exactly instead of pairing
     deaths with building starts heuristically.
+
+    ``casts`` (v5) are ability / spell casts — Psi Storm, EMP, Fungal
+    Growth, Stim, Chrono Boost … — with ``o`` 0 for me and 1 for the
+    opponent and ``a`` a stable slug from the engine's
+    ``core.ability_casts.ABILITY_SLUGS``. ``x`` / ``y`` are OMITTED
+    (not null) when the cast has no map location the engine could
+    resolve — a self-cast Stim whose caster wasn't in the tracked
+    selection — and the replayer pins those to the casting unit
+    instead. Older payloads simply have no ``casts`` key.
     """
     bounds_in = playback.get("bounds")
     if not isinstance(bounds_in, Mapping):
@@ -1481,11 +1517,19 @@ def _compact_map_playback(
         for key in ("my_units", "opp_units")
         for u in (playback.get(key) or [])
     )
+    # v5 promises the ``casts`` array. Claim it only when the bundled
+    # engine actually produced the key — a game with no spells at all
+    # still emits ``ability_casts: []``, so presence of the KEY (not of
+    # any cast) is what separates "engine can do this" from "engine is
+    # too old to know". An older engine keeps producing v4 / v3 exactly
+    # as before.
+    has_casts = "ability_casts" in playback
     out: Dict[str, Any] = {
-        # v4: units carry ``sd`` (killer-less death = spent, not lost);
-        # v3 added building lift/land ``moves`` + ``died``; v2 added
-        # ``resources`` (neutral mineral/gas/rock/tower nodes).
-        "v": 4 if has_attribution else 3,
+        # v5: ``casts`` (ability/spell casts); v4: units carry ``sd``
+        # (killer-less death = spent, not lost); v3 added building
+        # lift/land ``moves`` + ``died``; v2 added ``resources``
+        # (neutral mineral/gas/rock/tower nodes).
+        "v": (5 if has_casts else 4) if has_attribution else 3,
         "mapName": str(playback.get("map_name") or ""),
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
@@ -1537,6 +1581,59 @@ def _compact_map_playback(
             break
     if resources:
         out["resources"] = resources
+
+    # Ability / spell casts (v5). Kept deliberately terse — this rides
+    # in every upload alongside the unit tracks.
+    #
+    # Truncation rule when a game blows past the cap: whole priority
+    # tiers survive in order (see _PLAYBACK_CAST_PRIORITY), and the one
+    # tier that overflows is thinned by EVEN TIME SPACING rather than
+    # truncated. Slicing [:400] chronologically would drop every spell
+    # after roughly the 12-minute mark of a long game — exactly the
+    # part a viewer scrubs to.
+    casts: list = []
+    for c in playback.get("ability_casts") or []:
+        if not isinstance(c, Mapping):
+            continue
+        ability = c.get("ability")
+        owner = c.get("owner")
+        t = c.get("t")
+        if not ability or owner not in ("me", "opp"):
+            continue
+        if not isinstance(t, (int, float)):
+            continue
+        entry: Dict[str, Any] = {
+            "o": 0 if owner == "me" else 1,
+            "a": str(ability),
+            "t": round(float(t), 1),
+        }
+        x, y = c.get("x"), c.get("y")
+        # Omit rather than send nulls: a self-cast the engine could not
+        # place is smaller as an absent key, and the web treats
+        # "no coordinates" and "null coordinates" identically.
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+            entry["x"] = round(float(x), 1)
+            entry["y"] = round(float(y), 1)
+        casts.append(entry)
+    if len(casts) > _PLAYBACK_MAX_CASTS:
+        def _tier(entry: Mapping[str, Any]) -> int:
+            return _PLAYBACK_CAST_PRIORITY.get(
+                entry.get("a"), _PLAYBACK_CAST_DEFAULT_PRIORITY,
+            )
+        kept: list = []
+        for tier in sorted({_tier(c) for c in casts}):
+            room = _PLAYBACK_MAX_CASTS - len(kept)
+            if room <= 0:
+                break
+            tier_casts = [c for c in casts if _tier(c) == tier]
+            if len(tier_casts) > room:
+                step = len(tier_casts) / float(room)
+                tier_casts = [tier_casts[int(i * step)] for i in range(room)]
+            kept.extend(tier_casts)
+        kept.sort(key=lambda c: c["t"])
+        casts = kept
+    if casts:
+        out["casts"] = casts
 
     buildings: list = []
     per_side_counts = {"me": 0, "opp": 0}

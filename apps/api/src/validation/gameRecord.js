@@ -289,6 +289,28 @@ const GAME_SCHEMA = {
         buildings: { type: "array", maxItems: 1000 },
         units: { type: "array", maxItems: 1200 },
         resources: { type: "array", maxItems: 600 },
+        // Ability / spell casts (v5 payloads; absent on v4 and older).
+        // o = 0 me / 1 opponent, a = stable ability slug, t = game
+        // seconds, x/y = world cells and are OMITTED when the engine
+        // could not place a self-cast. Nothing is required: a cast the
+        // agent shaped oddly must never cost the whole game record its
+        // upload, and apps/web's sanitizeMapPlayback drops malformed
+        // entries individually before anything is drawn.
+        casts: {
+          type: "array",
+          maxItems: 800,
+          items: {
+            type: "object",
+            additionalProperties: true,
+            properties: {
+              o: { type: "integer", minimum: 0, maximum: 1 },
+              a: { type: "string", maxLength: 40 },
+              t: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
+              x: { type: "number" },
+              y: { type: "number" },
+            },
+          },
+        },
         stats: { type: "object", additionalProperties: true },
       },
     },

@@ -13,6 +13,22 @@ corresponding GitHub Release.
 
 ### Added
 
+- **The map replayer now draws spells** — Psi Storm, EMP, Fungal Growth,
+  Corrosive Bile, Stim, Chrono Boost, Time Warp, Blinding Cloud, Parasitic
+  Bomb, Purification Nova, Yamato, Scanner Sweep, MULE, Supply Drop,
+  Revelation, Feedback, Neural Parasite, Contaminate, Interference Matrix,
+  Anti-Armor Missile, Abduct, Caustic Spray, Guardian Shield, Force Field,
+  Stasis Ward, Snipe, Nuke, Mass Recall, Salvage, Changeling, Widow Mine
+  detonation, Blink, Burrow/Unburrow, Tactical Jump, Pulsar Beam and
+  Graviton Beam land on the canvas at the place and second they were cast.
+  The engine maps sc2reader's patch-specific raw ability names onto stable
+  slugs (`core/ability_casts.py`) and reports any name it could not map so
+  the next SC2 patch is a one-line mapping edit rather than an
+  investigation. Casts ride in the playback payload as a new `casts` array
+  (wire version 5, ~2.5% larger uploads, capped at 400 casts with the
+  fight-deciding spells kept ahead of Chrono Boost spam). Payloads from
+  older agents have no `casts` and render exactly as before.
+
 - **Official creator-account notifications now cover the recognition events
   chat APIs cannot deliver reliably** — streamers can connect Twitch, Kick,
   and YouTube from Settings using provider OAuth. Signed, replay-protected

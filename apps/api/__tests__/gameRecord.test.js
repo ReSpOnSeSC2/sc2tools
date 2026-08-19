@@ -534,3 +534,82 @@ describe("validateGameRecord", () => {
     }
   });
 });
+
+/** @param {any} mapPlayback */
+const withPlayback = (mapPlayback) => ({
+  gameId: "casts-1",
+  date: "2026-05-04T12:00:00.000Z",
+  result: "Victory",
+  myRace: "Protoss",
+  map: "Goldenaura",
+  mapPlayback,
+});
+
+const BASE_PLAYBACK = {
+  v: 5,
+  mapName: "Goldenaura",
+  gameLength: 900,
+  bounds: { minX: 0, minY: 0, maxX: 200, maxY: 200 },
+  spawns: [],
+  battles: [],
+  buildings: [],
+  units: [],
+  resources: [],
+  stats: { me: [], opp: [] },
+};
+
+describe("validateGameRecord — mapPlayback casts (v5)", () => {
+  test("accepts a v5 payload carrying casts", () => {
+    const r = validateGameRecord(
+      withPlayback({
+        ...BASE_PLAYBACK,
+        casts: [
+          { o: 0, a: "PsiStorm", t: 301.4, x: 100.1, y: 90.2 },
+          { o: 1, a: "FungalGrowth", t: 305, x: 101, y: 91 },
+          // Self-cast the engine could not place: x/y omitted entirely.
+          { o: 0, a: "Stim", t: 310 },
+        ],
+      }),
+    );
+    expect(r.valid).toBe(true);
+    if (r.valid) {
+      const v = /** @type {any} */ (r.value);
+      expect(v.mapPlayback.casts.length).toBe(3);
+      expect(v.mapPlayback.casts[2].x).toBeUndefined();
+    }
+  });
+
+  test("casts stay optional — v4 and older payloads are untouched", () => {
+    // The API has no recompute path, so almost every stored game will
+    // never gain a casts array. Absence must remain valid forever.
+    const r = validateGameRecord(withPlayback({ ...BASE_PLAYBACK, v: 4 }));
+    expect(r.valid).toBe(true);
+  });
+
+  test("rejects casts with the wrong field types", () => {
+    const r = validateGameRecord(
+      withPlayback({ ...BASE_PLAYBACK, casts: [{ o: "me", a: "PsiStorm", t: 5 }] }),
+    );
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.errors.join(" ")).toMatch(/casts/);
+  });
+
+  test("bounds the casts array", () => {
+    const tooMany = Array.from({ length: 801 }, () => ({
+      o: 0,
+      a: "ChronoBoost",
+      t: 1,
+    }));
+    const r = validateGameRecord(withPlayback({ ...BASE_PLAYBACK, casts: tooMany }));
+    expect(r.valid).toBe(false);
+
+    const atCap = Array.from({ length: 800 }, () => ({
+      o: 0,
+      a: "ChronoBoost",
+      t: 1,
+    }));
+    expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, casts: atCap })).valid).toBe(
+      true,
+    );
+  });
+});

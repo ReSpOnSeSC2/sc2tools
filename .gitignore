@@ -208,3 +208,11 @@ calibration-replays/
 # Playwright run artifacts (apps/web responsive e2e smoke)
 /apps/web/test-results/
 /apps/web/playwright-report/
+
+# Baked SC2 sprite sheets (156MB, served from Cloudflare R2 in prod).
+# Regenerate with the Blender bake; upload with scripts/upload-sprites.mjs.
+apps/web/public/sprites/
+
+# Replay background score (13MB, served from Cloudflare R2 in prod).
+# Upload with: node scripts/upload-sprites.mjs --source apps/web/public/audio/replay --bucket sc2tools-audio --prefix audio/v1
+apps/web/public/audio/replay/

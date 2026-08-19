@@ -1631,6 +1631,110 @@ def test_compact_map_playback_marks_spent_deaths_and_claims_v4():
     assert "sd" not in drones[2]
 
 
+def test_compact_map_playback_emits_casts_and_claims_v5():
+    """Ability casts ride along as ``casts`` and lift the payload to v5.
+
+    ``o`` is 0 for me / 1 for the opponent, ``a`` is the engine's
+    stable slug, coordinates round to 1 decimal, and a cast the engine
+    could not place OMITS x/y rather than sending nulls."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    pb = _sample_playback()
+    pb["my_units"][0]["killer_pid"] = 2          # attribution -> v4 floor
+    pb["ability_casts"] = [
+        {"owner": "me", "ability": "PsiStorm", "t": 301.44,
+         "x": 100.06, "y": 90.02, "targetUnitId": None},
+        {"owner": "opp", "ability": "FungalGrowth", "t": 305.0,
+         "x": 101.0, "y": 91.0, "targetUnitId": None},
+        # Self-cast the engine could not place.
+        {"owner": "me", "ability": "Stim", "t": 310.0,
+         "x": None, "y": None, "targetUnitId": None},
+    ]
+    out = _compact_map_playback(pb)
+    assert out["v"] == 5
+    assert out["casts"] == [
+        {"o": 0, "a": "PsiStorm", "t": 301.4, "x": 100.1, "y": 90.0},
+        {"o": 1, "a": "FungalGrowth", "t": 305.0, "x": 101.0, "y": 91.0},
+        {"o": 0, "a": "Stim", "t": 310.0},
+    ]
+    # Omitted, never null — the web treats absent and null the same
+    # but absent is smaller and this rides in every upload.
+    assert "x" not in out["casts"][2]
+
+
+def test_compact_map_playback_drops_malformed_casts():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    pb = _sample_playback()
+    pb["ability_casts"] = [
+        {"owner": "me", "ability": "EMP", "t": 100.0, "x": 5.0, "y": 6.0},
+        {"owner": "spectator", "ability": "EMP", "t": 100.0},   # bad owner
+        {"owner": "me", "ability": "", "t": 100.0},             # no ability
+        {"owner": "me", "ability": "EMP", "t": None},           # no time
+        "not-a-mapping",
+    ]
+    out = _compact_map_playback(pb)
+    assert [c["a"] for c in out["casts"]] == ["EMP"]
+
+
+def test_compact_map_playback_without_casts_key_stays_v4():
+    """Backward compatibility is the whole game here: the API has no
+    recompute path, so most stored games will never have casts. An
+    engine too old to produce them must keep emitting exactly the v4
+    payload it emitted before."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    pb = _sample_playback()
+    pb["my_units"][0]["killer_pid"] = 2
+    assert "ability_casts" not in pb
+    out = _compact_map_playback(pb)
+    assert out["v"] == 4
+    assert "casts" not in out
+
+    # A new engine on a game with no spells at all still claims v5 --
+    # presence of the KEY is the capability signal, not the count.
+    pb["ability_casts"] = []
+    out_empty = _compact_map_playback(pb)
+    assert out_empty["v"] == 5
+    assert "casts" not in out_empty
+
+
+def test_compact_map_playback_caps_casts_keeping_the_decisive_ones():
+    """Over the cap, whole priority tiers survive in order and the one
+    tier that overflows is thinned by EVEN TIME SPACING. Chrono Boost
+    spam must never crowd out a Psi Storm, and the thinning must not
+    amputate the back half of the game the way [:400] would."""
+    from sc2tools_agent.replay_pipeline import (
+        _PLAYBACK_MAX_CASTS,
+        _compact_map_playback,
+    )
+
+    pb = _sample_playback()
+    casts = []
+    # 600 chrono boosts spread over the whole game (tier 2)...
+    for i in range(600):
+        casts.append({"owner": "me", "ability": "ChronoBoost",
+                      "t": float(i), "x": 10.0, "y": 10.0})
+    # ...and 30 storms scattered through it (tier 0).
+    for i in range(30):
+        casts.append({"owner": "opp", "ability": "PsiStorm",
+                      "t": float(i * 20), "x": 20.0, "y": 20.0})
+    pb["ability_casts"] = casts
+    out = _compact_map_playback(pb)
+
+    assert len(out["casts"]) == _PLAYBACK_MAX_CASTS
+    # Every storm survives; the chrono tier absorbs the loss.
+    assert sum(1 for c in out["casts"] if c["a"] == "PsiStorm") == 30
+    assert sum(1 for c in out["casts"] if c["a"] == "ChronoBoost") == (
+        _PLAYBACK_MAX_CASTS - 30
+    )
+    # Still chronological, and the LAST minute of the game is still
+    # represented — the thinning is a sample, not a truncation.
+    times = [c["t"] for c in out["casts"]]
+    assert times == sorted(times)
+    assert max(times) >= 560.0
+
+
 def test_compact_map_playback_rejects_junk_bounds():
     from sc2tools_agent.replay_pipeline import _compact_map_playback
 
