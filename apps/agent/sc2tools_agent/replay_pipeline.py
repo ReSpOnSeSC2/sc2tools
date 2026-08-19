@@ -1860,6 +1860,17 @@ def _compact_map_playback(
                 # array forward and lerps on (t1 - t0), so a repeated or
                 # backwards stamp renders as a teleport. The old 2s gap
                 # rule dropped those as a side effect; say it out loud.
+                #
+                # Compare at the resolution that SHIPS (0.1s), not the
+                # raw one. The engine stamps waypoints to 0.01s and its
+                # own compaction enforces no minimum gap: a worker's 1Hz
+                # bucketing keys on int(t), so 5.99 and 6.01 both
+                # survive, and a unit under micro turns twice inside a
+                # tick. Two raw stamps that differ can therefore still
+                # collide once rounded — the zero-length lerp this guard
+                # exists to prevent. Rounding here is free for the
+                # simplifier, which only ever looks at x/y.
+                t = round(t, 1)
                 if last_t is not None and t <= last_t:
                     continue
                 last_t = t

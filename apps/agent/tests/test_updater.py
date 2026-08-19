@@ -8,7 +8,7 @@ import json
 import socket
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Optional
 
 import pytest
@@ -317,7 +317,15 @@ def test_windows_launcher_waits_for_agent_exit_without_cmd_shell(
     assert len(calls) == 1
     args, kwargs = calls[0]
     assert isinstance(args, list)
-    assert args[0].lower().endswith(r"windowspowershell\v1.0\powershell.exe")
+    # Compare path COMPONENTS, not a separator-bearing suffix. The code
+    # under test builds this with pathlib, which picks POSIX separators
+    # off-Windows -- so a backslash suffix silently fails anywhere but
+    # the CI runner, which made this suite unverifiable on Linux.
+    assert tuple(PurePath(args[0]).parts[-3:]) == (
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe",
+    )
     assert "cmd.exe" not in " ".join(args).lower()
     assert "timeout /t" not in " ".join(args).lower()
     assert kwargs["shell"] is False

@@ -1928,6 +1928,33 @@ def test_compact_map_playback_keeps_endpoints_and_monotonic_time():
     assert unit["born"] == 100.0 and unit["died"] == 109.0
 
 
+def test_compact_map_playback_separates_stamps_that_collide_when_rounded():
+    """Two samples the engine kept apart can still land on the same 0.1s
+    stamp once the payload rounds them, and the web's lerp divides by
+    (t1 - t0). The old 2s gap rule made that unreachable; RDP happily
+    keeps both sides of a sharp turn taken inside a single tick, so the
+    monotonic guard has to compare at the resolution that ships."""
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+
+    # A corner turned 0.03s after the previous sample — both survive RDP,
+    # and 104.28 / 104.31 both round to 104.3.
+    track = [
+        (100.00, 20.0, 20.0),
+        (104.28, 60.0, 20.0),
+        (104.31, 60.0, 60.0),
+        (109.00, 20.0, 60.0),
+    ]
+    pb = _sample_playback()
+    pb["my_units"] = [_unit_with_track(track)]
+    pb["opp_units"] = []
+
+    times = _wp_of(_compact_map_playback(pb, []))[0::3]
+    assert all(b > a for a, b in zip(times, times[1:])), times
+    # Ends still line up with the track, and the collision cost exactly
+    # one sample rather than the whole tail.
+    assert times[0] == 100.0 and times[-1] == 109.0
+
+
 def test_compact_map_playback_handles_degenerate_tracks():
     """0, 1 and 2 samples, plus a unit that never moved. A stationary
     unit collapses to its two ends — the whole middle is redundant."""
