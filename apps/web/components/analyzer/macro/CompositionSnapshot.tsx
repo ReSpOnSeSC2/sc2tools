@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
+import { canonicalSpriteName, spriteIconUrl } from "@/lib/spriteSheets";
 import { formatGameClock } from "@/lib/macro";
 import { sortedArmyComposition } from "@/lib/sc2-units";
 import type {
@@ -367,6 +368,7 @@ function PlayerStrip({
           source={unitSource}
           chips={[
             <UnitChip
+              side={side}
               key="__worker__"
               name={workerName}
               kind="unit"
@@ -376,6 +378,7 @@ function PlayerStrip({
             />,
             ...sortedUnits.map(({ name: unitName, count }) => (
               <UnitChip
+              side={side}
                 key={unitName}
                 name={unitName}
                 kind="unit"
@@ -407,6 +410,7 @@ function PlayerStrip({
           }
           chips={sortedBuildings.map(({ name: buildingName, count }) => (
             <UnitChip
+              side={side}
               key={buildingName}
               name={buildingName}
               kind="building"
@@ -425,6 +429,7 @@ function PlayerStrip({
           }
           chips={sortedUpgrades.map(({ name: upgradeName, count }) => (
             <UnitChip
+              side={side}
               key={upgradeName}
               name={upgradeName}
               kind="upgrade"
@@ -501,18 +506,73 @@ function SourceBadge({ source }: { source: CompositionSource }) {
   return null;
 }
 
+/**
+ * The chip's icon. Units and buildings use the Blender-rendered sprite
+ * cutout; upgrades have no 3D render and keep the flat command-card
+ * icon, as does anything the sprite manifest doesn't know (Broodling,
+ * the Adept phase-shift). A 404 falls back at runtime rather than
+ * showing a broken image.
+ *
+ * Deliberately local to this file: the app-wide ``Icon`` is shared with
+ * the optimizer, randomizer, fingerprint card and race chips, so
+ * swapping it there would be a far wider blast radius than the army
+ * roster the change is actually for.
+ */
+function ChipIcon({
+  name,
+  kind,
+  side,
+  fallback,
+}: {
+  name: string;
+  kind: "unit" | "building" | "upgrade";
+  side: "me" | "opp";
+  fallback: string;
+}) {
+  const sprite = kind === "upgrade" ? null : canonicalSpriteName(name);
+  const url = sprite ? spriteIconUrl(sprite, side === "me" ? "blue" : "red") : null;
+  const [failed, setFailed] = useState<string | null>(null);
+  if (url && failed !== url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        width={CHIP_ICON_PX}
+        height={CHIP_ICON_PX}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(url)}
+        style={{ width: CHIP_ICON_PX, height: CHIP_ICON_PX }}
+        className="shrink-0 object-contain"
+      />
+    );
+  }
+  return (
+    <Icon
+      name={name}
+      kind={kind}
+      size={CHIP_ICON_PX}
+      fallback={fallback}
+      decorative
+    />
+  );
+}
+
 function UnitChip({
   name,
   kind,
   count,
   fallback,
   tone,
+  side,
 }: {
   name: string;
   kind: "unit" | "building" | "upgrade";
   count: number;
   fallback: string;
   tone: "neutral" | "building" | "upgrade";
+  side: "me" | "opp";
 }) {
   const toneClass =
     tone === "building"
@@ -525,13 +585,7 @@ function UnitChip({
       className={`inline-flex items-center gap-1.5 rounded ${toneClass} px-2 py-1 text-[13px] tabular-nums text-text`}
       title={`${count} × ${name}`}
     >
-      <Icon
-        name={name}
-        kind={kind}
-        size={CHIP_ICON_PX}
-        fallback={fallback}
-        decorative
-      />
+      <ChipIcon name={name} kind={kind} side={side} fallback={fallback} />
       <span className="font-semibold">{count}</span>
     </span>
   );

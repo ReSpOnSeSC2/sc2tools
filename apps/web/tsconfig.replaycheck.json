@@ -20,6 +20,8 @@
     "lib/replayMusic.ts",
     "lib/sc2-icons.ts",
     "lib/__tests__/gasPlacement.test.ts",
-    "lib/__tests__/rosterIcons.test.ts"
+    "lib/__tests__/rosterIcons.test.ts",
+    "components/analyzer/macro/CompositionSnapshot.tsx",
+    "components/ui/Icon.tsx"
   ]
 }
