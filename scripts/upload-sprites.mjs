@@ -31,7 +31,33 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep, posix } from "node:path";
-import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
+
+// The AWS SDK is a dependency of apps/api, not of the repo root, and this
+// script is run from the root (it resolves asset paths off process.cwd()).
+// A bare import therefore fails. Try the normal resolution first -- so this
+// keeps working if the SDK is ever hoisted or added at the root -- then fall
+// back to resolving it out of apps/api/node_modules.
+const { S3Client, PutObjectCommand, HeadObjectCommand } = await (async () => {
+  try {
+    return await import("@aws-sdk/client-s3");
+  } catch {
+    try {
+      const reqFromApi = createRequire(
+        join(process.cwd(), "apps", "api", "package.json"),
+      );
+      return await import(
+        pathToFileURL(reqFromApi.resolve("@aws-sdk/client-s3")).href
+      );
+    } catch {
+      console.error("Cannot find @aws-sdk/client-s3.");
+      console.error("Run this from the repo root, and make sure apps/api has");
+      console.error("its dependencies installed:  npm --prefix apps/api install");
+      process.exit(1);
+    }
+  }
+})();
 
 const ROOT = process.cwd();
 const args = process.argv.slice(2);
@@ -114,4 +140,7 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
   for (let f = queue.shift(); f; f = queue.shift()) await put(f);
 }));
 console.log(`Done. uploaded=${done} skipped=${skipped} bytes=${(bytes / 1048576).toFixed(1)} MB`);
-console.log(`Set NEXT_PUBLIC_SPRITE_BASE to your public bucket/worker URL + /${PREFIX}`);
+const envVar = BUCKET.includes("audio")
+  ? "NEXT_PUBLIC_AUDIO_BASE"
+  : "NEXT_PUBLIC_SPRITE_BASE";
+console.log(`Set ${envVar} to your public bucket URL + /${PREFIX}`);
