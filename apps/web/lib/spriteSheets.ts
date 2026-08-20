@@ -48,6 +48,7 @@ import {
   type SpriteAnimMeta,
   type SpriteSheetMeta,
 } from "./spriteManifest.generated";
+import { SPRITE_ICON_FILL } from "./spriteIconFit.generated";
 
 export type { SpriteAnimMeta, SpriteSheetMeta };
 
@@ -229,6 +230,51 @@ export function canonicalSpriteName(rawName: string): string | null {
  */
 export function spriteIconUrl(name: string, color: SpriteColor): string {
   return `${SPRITE_BASE}/icons/${name}_${color}.webp`;
+}
+
+/**
+ * How much of the icon frame the drawn pixels should span after
+ * correction. Slightly under 1 so a corrected structure keeps a hair of
+ * breathing room inside the chip — the same framing the units already
+ * shipped with (Marine measures 0.984).
+ */
+const ICON_FIT_TARGET = 0.92;
+
+/**
+ * Ceiling on the correction. The genuinely tiny models — Larva,
+ * Changeling, Locust — measure around 0.47, and scaling those all the
+ * way to the target would draw a Larva as large as a Thor and push the
+ * frame's overflow well outside the chip's layout box. Capping keeps a
+ * residual size hierarchy and bounds the overdraw at 35 %.
+ */
+const ICON_FIT_MAX = 1.35;
+
+/**
+ * CSS scale that makes a roster icon's drawn pixels fill its box.
+ *
+ * The Blender bake framed every model independently and did NOT
+ * normalise the result: units run edge to edge (Marine 0.984, Thor
+ * 1.0) while structures kept a wide transparent margin (Nexus 0.672,
+ * Dark Shrine 0.578). In a 22 px chip that margin costs the Nexus a
+ * third of its pixels, and it reads as a mis-sized icon beside a
+ * full-bleed Marine rather than as a smaller building — nothing in the
+ * framing encodes real in-game scale, so there is no meaning to
+ * preserve.
+ *
+ * ``name`` must already be canonical — pass it through
+ * ``canonicalSpriteName`` first. Unknown names (and anything already at
+ * or above the target) return 1, so a sprite added ahead of the next
+ * ``gen-sprite-icon-fit`` run simply goes uncorrected.
+ *
+ * Apply it as a transform rather than as width/height: the element
+ * keeps its layout size and only the transparent margin spills outside
+ * it, so a denser row does not reflow.
+ */
+export function spriteIconScale(name: string | null | undefined): number {
+  if (!name) return 1;
+  const fill = SPRITE_ICON_FILL[name];
+  if (!fill || fill >= ICON_FIT_TARGET) return 1;
+  return Math.min(ICON_FIT_TARGET / fill, ICON_FIT_MAX);
 }
 
 /**

@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { canonicalSpriteName, spriteIconUrl } from "@/lib/spriteSheets";
+import { Modal } from "@/components/ui/Modal";
+import {
+  canonicalSpriteName,
+  spriteIconScale,
+  spriteIconUrl,
+} from "@/lib/spriteSheets";
 import { formatGameClock } from "@/lib/macro";
-import { sortedArmyComposition } from "@/lib/sc2-units";
+import { humanizeBuildName } from "@/lib/build-events";
+import { getUnitCost, sortedArmyComposition } from "@/lib/sc2-units";
 import type {
   ProductionBuildingRecord,
   UnitTimelineEntry,
@@ -14,6 +20,8 @@ import {
   countUpgradesAt,
   deriveBuildingComposition,
   sortByCountDesc,
+  upgradeDisplayBase,
+  upgradeDisplayTier,
   type BuildEvent,
   type BuildingSource,
   type CompositionSource,
@@ -74,6 +82,37 @@ export interface CompositionSnapshotProps {
  * "sm" preset (16 px) so the chips remain legible at typical viewing
  * distances on dense rosters. The chip text scales with the icon. */
 const CHIP_ICON_PX = 22;
+
+/**
+ * Icon size in the tap-to-enlarge detail dialog. The renders are 128 px
+ * masters, so this is their native size — anything larger would just
+ * upscale a thumbnail, and pulling the 2048² sprite SHEET for a sharper
+ * one would mean a multi-hundred-KB download to enlarge a single chip.
+ */
+const CHIP_DETAIL_ICON_PX = 128;
+
+/** What a chip stands for. Drives the icon source and the count wording. */
+type ChipKind = "unit" | "building" | "upgrade";
+
+/**
+ * The chip the user tapped, frozen at the moment of the tap. Frozen
+ * rather than live because the roster re-snaps as the pointer moves
+ * over the chart above: without the freeze, opening a Roach chip and
+ * then nudging the mouse would silently renumber the open dialog.
+ */
+interface ChipDetail {
+  name: string;
+  kind: ChipKind;
+  count: number;
+  side: "me" | "opp";
+  playerName: string;
+  /** Player race, used when the unit catalog has no race of its own. */
+  playerRace: string;
+  /** Game clock the roster was showing when the chip was tapped. */
+  time: number;
+  /** Row provenance, so the dialog can repeat the row's caveat. */
+  source?: CompositionSource;
+}
 
 /**
  * Live unit + building composition strip beneath the chart. Mirrors
@@ -220,6 +259,12 @@ export function CompositionSnapshot({
     Object.keys(oppUpgrades).length === 0 &&
     !buildOrderLoading;
 
+  // One dialog for the whole panel rather than one per chip: only a
+  // single chip can be open at a time, and hoisting it here keeps the
+  // ~100 chips of a late-game roster from each carrying dialog state.
+  const [detail, setDetail] = useState<ChipDetail | null>(null);
+  const closeDetail = useCallback(() => setDetail(null), []);
+
   const buildOrderState: BuildOrderState = buildOrderLoading
     ? "loading"
     : buildOrderError
@@ -263,6 +308,7 @@ export function CompositionSnapshot({
           upgrades={myUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
+          onSelect={setDetail}
         />
         <PlayerStrip
           side="opp"
@@ -277,8 +323,11 @@ export function CompositionSnapshot({
           upgrades={oppUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
+          onSelect={setDetail}
         />
       </div>
+
+      <ChipDetailDialog detail={detail} onClose={closeDetail} />
     </div>
   );
 }
@@ -298,6 +347,7 @@ function PlayerStrip({
   upgrades,
   time,
   buildOrderState,
+  onSelect,
 }: {
   side: "me" | "opp";
   name: string;
@@ -311,6 +361,8 @@ function PlayerStrip({
   upgrades: Record<string, number>;
   time: number;
   buildOrderState: BuildOrderState;
+  /** Opens the enlarge dialog for a chip. */
+  onSelect: (detail: ChipDetail) => void;
 }) {
   const sortedUnits = useMemo(
     () => sortedArmyComposition(composition),
@@ -325,6 +377,13 @@ function PlayerStrip({
     [upgrades],
   );
   const workerName = workerNameForRace(race);
+  // Everything a chip needs to describe itself in the dialog but that
+  // is constant across the whole strip. Bundled so each chip call site
+  // stays about the chip.
+  const chipContext: ChipContext = useMemo(
+    () => ({ side, playerName: name, playerRace: race, time, onSelect }),
+    [side, name, race, time, onSelect],
+  );
   const accentClass =
     side === "me"
       ? "border-success/50 bg-success/[0.04]"
@@ -368,23 +427,25 @@ function PlayerStrip({
           source={unitSource}
           chips={[
             <UnitChip
-              side={side}
+              ctx={chipContext}
               key="__worker__"
               name={workerName}
               kind="unit"
               count={workers}
               fallback={workerName.slice(0, 1)}
               tone="neutral"
+              source={unitSource}
             />,
             ...sortedUnits.map(({ name: unitName, count }) => (
               <UnitChip
-              side={side}
+                ctx={chipContext}
                 key={unitName}
                 name={unitName}
                 kind="unit"
                 count={count}
                 fallback={unitName.slice(0, 2)}
                 tone="neutral"
+                source={unitSource}
               />
             )),
           ]}
@@ -410,13 +471,14 @@ function PlayerStrip({
           }
           chips={sortedBuildings.map(({ name: buildingName, count }) => (
             <UnitChip
-              side={side}
+              ctx={chipContext}
               key={buildingName}
               name={buildingName}
               kind="building"
               count={count}
               fallback={buildingName.slice(0, 2)}
               tone="building"
+              source={buildingSource === "alive" ? "timeline" : "build_order"}
             />
           ))}
         />
@@ -429,7 +491,7 @@ function PlayerStrip({
           }
           chips={sortedUpgrades.map(({ name: upgradeName, count }) => (
             <UnitChip
-              side={side}
+              ctx={chipContext}
               key={upgradeName}
               name={upgradeName}
               kind="upgrade"
@@ -523,56 +585,76 @@ function ChipIcon({
   kind,
   side,
   fallback,
+  px = CHIP_ICON_PX,
 }: {
   name: string;
-  kind: "unit" | "building" | "upgrade";
+  kind: ChipKind;
   side: "me" | "opp";
   fallback: string;
+  /** Rendered box size. Defaults to the roster chip; the detail dialog
+   *  passes the render's native 128 px. */
+  px?: number;
 }) {
   const sprite = kind === "upgrade" ? null : canonicalSpriteName(name);
   const url = sprite ? spriteIconUrl(sprite, side === "me" ? "blue" : "red") : null;
   const [failed, setFailed] = useState<string | null>(null);
   if (url && failed !== url) {
+    // The bake framed structures with a wide transparent margin and
+    // units edge-to-edge, so a Nexus drew about two thirds the pixels
+    // of the Marine beside it. ``spriteIconScale`` scales the margin
+    // away. It is a transform, NOT a width bump: the element keeps its
+    // ``px`` layout box, so a denser roster does not reflow and only
+    // the (transparent) frame edge spills out.
+    const scale = spriteIconScale(sprite);
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={url}
         alt=""
-        width={CHIP_ICON_PX}
-        height={CHIP_ICON_PX}
+        width={px}
+        height={px}
         loading="lazy"
         decoding="async"
         onError={() => setFailed(url)}
-        style={{ width: CHIP_ICON_PX, height: CHIP_ICON_PX }}
+        style={{
+          width: px,
+          height: px,
+          transform: scale === 1 ? undefined : `scale(${scale})`,
+        }}
         className="shrink-0 object-contain"
       />
     );
   }
+  // Flat command-card fallback. No fit correction: those icons are a
+  // different asset family and were already cropped tight.
   return (
-    <Icon
-      name={name}
-      kind={kind}
-      size={CHIP_ICON_PX}
-      fallback={fallback}
-      decorative
-    />
+    <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />
   );
 }
 
+/**
+ * One roster chip. A BUTTON, not a span: the icon is 22 px and the name
+ * lives only in the ``title``, which touch devices never show — so on a
+ * phone the chip was an unidentifiable thumbnail. Tapping (or pressing
+ * Enter / Space) opens the detail dialog, which names it.
+ */
 function UnitChip({
+  ctx,
   name,
   kind,
   count,
   fallback,
   tone,
-  side,
+  source,
 }: {
+  ctx: ChipContext;
   name: string;
-  kind: "unit" | "building" | "upgrade";
+  kind: ChipKind;
   count: number;
   fallback: string;
   tone: "neutral" | "building" | "upgrade";
-  side: "me" | "opp";
+  /** Row provenance, repeated in the dialog. */
+  source?: CompositionSource;
 }) {
   const toneClass =
     tone === "building"
@@ -580,15 +662,193 @@ function UnitChip({
       : tone === "upgrade"
         ? "bg-bg-elevated/80 ring-1 ring-accent/30"
         : "bg-bg-elevated";
+  const label = chipLabel(name, kind, count);
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded ${toneClass} px-2 py-1 text-[13px] tabular-nums text-text`}
-      title={`${count} × ${name}`}
+    <button
+      type="button"
+      // ``py-1.5`` on touch and the original ``py-1`` from sm up: the
+      // desktop roster keeps its density while the tap target clears
+      // the ~32 px the chip needs to be reliably hittable.
+      className={`inline-flex touch-manipulation items-center gap-1.5 rounded ${toneClass} px-2 py-1.5 text-[13px] tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:py-1`}
+      title={label}
+      aria-label={label}
+      aria-haspopup="dialog"
+      onClick={() =>
+        ctx.onSelect({
+          name,
+          kind,
+          count,
+          side: ctx.side,
+          playerName: ctx.playerName,
+          playerRace: ctx.playerRace,
+          time: ctx.time,
+          source,
+        })
+      }
     >
-      <ChipIcon name={name} kind={kind} side={side} fallback={fallback} />
+      <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} />
       <span className="font-semibold">{count}</span>
-    </span>
+    </button>
   );
+}
+
+/** Strip-wide context every chip in a strip shares. */
+interface ChipContext {
+  side: "me" | "opp";
+  playerName: string;
+  playerRace: string;
+  time: number;
+  onSelect: (detail: ChipDetail) => void;
+}
+
+/**
+ * Tap-to-enlarge dialog. Answers the two things a 22 px chip cannot:
+ * WHAT it is (the roster is 3D renders, and a Robotics Bay at 22 px is
+ * not obviously a Robotics Bay) and what its number means.
+ *
+ * Rendered once for the whole panel, from state the chip froze on tap.
+ */
+function ChipDetailDialog({
+  detail,
+  onClose,
+}: {
+  detail: ChipDetail | null;
+  onClose: () => void;
+}) {
+  if (!detail) return null;
+  const { name, kind, count, side, playerName, playerRace, time } = detail;
+  // Upgrades are not in the unit catalog and have no cost row.
+  const cost = kind === "upgrade" ? null : getUnitCost(name);
+  const race = raceLabel(cost?.race ?? playerRace);
+  const displayName = chipDisplayName(name, kind);
+  const subtitle = [playerName, KIND_WORD[kind], race, formatGameClock(time)]
+    .filter(Boolean)
+    .join(" · ");
+  const totalCost =
+    cost && count > 1
+      ? { m: cost.m * count, g: cost.g * count, s: cost.s * count }
+      : null;
+  const caveat = SOURCE_CAVEAT[detail.source ?? "timeline"];
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={displayName}
+      description={subtitle}
+      size="sm"
+      mobileLayout="center"
+    >
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-5">
+        <div
+          className={`flex h-40 w-40 shrink-0 items-center justify-center rounded-lg border ${
+            side === "me" ? "border-success/40" : "border-danger/40"
+          } bg-bg-elevated`}
+        >
+          <ChipIcon
+            name={name}
+            kind={kind}
+            side={side}
+            fallback={name.slice(0, 2)}
+            px={CHIP_DETAIL_ICON_PX}
+          />
+        </div>
+        <dl className="w-full min-w-0 space-y-2 text-caption">
+          <DetailRow
+            label={kind === "upgrade" ? "Status" : "Count"}
+            value={chipCountLabel(name, kind, count)}
+          />
+          {cost ? (
+            <DetailRow label="Cost each" value={costLine(cost.m, cost.g, cost.s)} />
+          ) : null}
+          {totalCost ? (
+            <DetailRow
+              label="Total"
+              value={costLine(totalCost.m, totalCost.g, totalCost.s)}
+            />
+          ) : null}
+          {caveat ? (
+            <p className="pt-1 text-micro text-text-muted">{caveat}</p>
+          ) : null}
+        </dl>
+      </div>
+    </Modal>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-border/60 pb-1.5 last:border-0">
+      <dt className="text-micro uppercase tracking-wider text-text-dim">
+        {label}
+      </dt>
+      <dd className="tabular-nums text-text">{value}</dd>
+    </div>
+  );
+}
+
+const KIND_WORD: Record<ChipKind, string> = {
+  unit: "Unit",
+  building: "Structure",
+  upgrade: "Upgrade",
+};
+
+/** Repeats the row's SourceBadge warning, which has no hover on touch. */
+const SOURCE_CAVEAT: Record<CompositionSource, string> = {
+  timeline: "",
+  empty: "",
+  hybrid:
+    "Counted from the build order, with deaths taken from the unit timeline.",
+  build_order:
+    "Counted from the build order — per-tick deaths aren't tracked for this game, so losses may not be subtracted.",
+};
+
+/**
+ * Chip name for humans: ``CyberneticsCore`` → ``Cybernetics Core``.
+ * Tiered upgrades drop the level suffix, because the level is reported
+ * separately rather than as part of the name.
+ */
+function chipDisplayName(name: string, kind: ChipKind): string {
+  const base = kind === "upgrade" ? upgradeDisplayBase(name) : name;
+  return humanizeBuildName(base) || base;
+}
+
+/**
+ * What the number on the chip MEANS. For units and structures it is a
+ * quantity; for a tiered upgrade ``countUpgradesAt`` reuses the slot to
+ * carry the level, so "3" there means +3, not three of them.
+ */
+function chipCountLabel(name: string, kind: ChipKind, count: number): string {
+  if (kind === "upgrade") {
+    const tier = upgradeDisplayTier(name);
+    return tier ? `Level ${tier}` : "Researched";
+  }
+  return `${count.toLocaleString()} on the field`;
+}
+
+/** Chip tooltip / accessible name: "Roach — 23 on the field". */
+function chipLabel(name: string, kind: ChipKind, count: number): string {
+  return `${chipDisplayName(name, kind)} — ${chipCountLabel(name, kind, count)}`;
+}
+
+/** "75 minerals · 25 gas · 2 supply", dropping whatever is zero. */
+function costLine(minerals: number, gas: number, supply: number): string {
+  const parts: string[] = [];
+  if (minerals > 0) parts.push(`${Math.round(minerals).toLocaleString()} minerals`);
+  if (gas > 0) parts.push(`${Math.round(gas).toLocaleString()} gas`);
+  // Zerglings and Banelings cost half supply, so a count multiple can
+  // land on a half — round to one decimal rather than lying with an int.
+  if (supply > 0) parts.push(`${Math.round(supply * 10) / 10} supply`);
+  return parts.length > 0 ? parts.join(" · ") : "Free";
+}
+
+/** Race letter or full name → full name; "" for Random / unknown. */
+function raceLabel(race: string): string {
+  const initial = (race || "").charAt(0).toUpperCase();
+  if (initial === "Z") return "Zerg";
+  if (initial === "T") return "Terran";
+  if (initial === "P") return "Protoss";
+  return "";
 }
 
 function workerNameForRace(race: string): string {

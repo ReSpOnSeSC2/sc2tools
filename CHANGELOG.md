@@ -51,6 +51,29 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **The army-graph roster now tells you what each chip is, and stops
+  drawing structures small** — every unit, building and upgrade chip is a
+  button: click or tap one and a dialog names it ("Cybernetics Core", not
+  a 22 px thumbnail), reports how many were on the field at the hovered
+  second, and gives the mineral / gas / supply cost each and for the
+  group. Previously the name lived only in a `title` tooltip, which no
+  touch device has ever shown, so on a phone the roster was a row of
+  unidentifiable renders. The chips also carry their name as an
+  accessible label now, and the tap target grows on small screens
+  without changing desktop density. Separately, the pre-rendered 128 px
+  roster icons were never framed consistently — units run edge to edge
+  (Marine 98 % of the frame) while structures kept a wide transparent
+  margin (Nexus 67 %, Dark Shrine 58 %) — so a Nexus drew two thirds the
+  pixels of the Marine beside it. `scripts/gen-sprite-icon-fit.mjs`
+  measures every icon's opaque bounds into
+  `lib/spriteIconFit.generated.ts`, and the chips scale that dead margin
+  away in CSS. Nothing reflows (the correction is a transform, so the
+  layout box is unchanged) and no asset is rewritten, which matters
+  because the icons ship from R2 under a one-year immutable cache.
+  Finally, a tiered upgrade chip's number is its LEVEL, not a quantity —
+  the caption said "3 × ProtossGroundWeaponsLevel3" and now reads
+  "Protoss Ground Weapons — Level 3".
+
 - **Connecting Twitch no longer sticks on "Needs retry" with "subscription
   already exists"** — Twitch identifies an EventSub subscription by type,
   version and condition, not by the callback it points at, so a subscription

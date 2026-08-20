@@ -668,6 +668,35 @@ export function deriveBuildingComposition(opts: {
   return { buildings: built, source: "alive" };
 }
 
+/** ``ProtossGroundWeaponsLevel2`` → base name + level. */
+const TIERED_UPGRADE_RE = /^(.+?)level([1-3])$/i;
+
+/**
+ * The level a tiered upgrade name encodes, or ``null`` when the
+ * upgrade has no levels (Charge, Stim, Burrow).
+ *
+ * Exists because ``countUpgradesAt`` deliberately reuses the count
+ * slot of its output map to carry the TIER, so a +3 player gets one
+ * chip reading 3 rather than three chips reading 1. Anything that
+ * renders that number to a human has to know it is a level and not a
+ * quantity, or it ends up captioning the chip "3 x Protoss Ground
+ * Weapons Level 3".
+ */
+export function upgradeDisplayTier(rawName: string): number | null {
+  const m = TIERED_UPGRADE_RE.exec(rawName || "");
+  return m ? Number(m[2]) : null;
+}
+
+/**
+ * A tiered upgrade's name with the level suffix removed, for display:
+ * ``ProtossGroundWeaponsLevel3`` → ``ProtossGroundWeapons``. Non-tiered
+ * names pass through untouched.
+ */
+export function upgradeDisplayBase(rawName: string): string {
+  const m = TIERED_UPGRADE_RE.exec(rawName || "");
+  return m ? m[1] : rawName;
+}
+
 /**
  * Identify the family + tier of a tiered upgrade name (weapons /
  * armor / shields / carapace level 1-3). Returns ``null`` for non-
@@ -683,7 +712,7 @@ export function deriveBuildingComposition(opts: {
 function tieredUpgradeFamily(
   rawName: string,
 ): { family: string; tier: number } | null {
-  const m = /^(.+?)level([1-3])$/i.exec(rawName);
+  const m = TIERED_UPGRADE_RE.exec(rawName);
   if (!m) return null;
   let family = m[1]
     .toLowerCase()
