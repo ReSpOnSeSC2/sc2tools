@@ -280,6 +280,48 @@
       "videoId": "-HVdPDIfox4",
       "startSeconds": 5758,
       "endSeconds": 5822
+    },
+    {
+      "id": "HWsJ4tYz3M8-1398-1442",
+      "title": "Warp-In at the Terran Front",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 1398,
+      "endSeconds": 1442
+    },
+    {
+      "id": "HWsJ4tYz3M8-2977-3026",
+      "title": "Green Ridge Trade",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 2977,
+      "endSeconds": 3026
+    },
+    {
+      "id": "HWsJ4tYz3M8-4404-4452",
+      "title": "Carrier Fleet Into the Viking Wall",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 4404,
+      "endSeconds": 4452
+    },
+    {
+      "id": "HWsJ4tYz3M8-4862-4908",
+      "title": "Maxed Fleet, Storm and Nuke",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 4862,
+      "endSeconds": 4908
+    },
+    {
+      "id": "HWsJ4tYz3M8-6106-6154",
+      "title": "Carriers Through the Industrial Choke",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 6106,
+      "endSeconds": 6154
+    },
+    {
+      "id": "HWsJ4tYz3M8-6432-6479",
+      "title": "Archon Storm Closes the Session",
+      "videoId": "HWsJ4tYz3M8",
+      "startSeconds": 6432,
+      "endSeconds": 6479
     }
   ]
 }

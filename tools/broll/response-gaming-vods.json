@@ -4,7 +4,7 @@
     "id": "UCZS3YP1mvpqyuU5vPvHVG7g",
     "name": "ReSpOnSe Gaming AND Fitness AND AI Music"
   },
-  "curatedAt": "2026-08-16",
+  "curatedAt": "2026-08-20",
   "notes": "Landscape, self-owned SC2 gameplay only. Menus, long pauses, BRB screens, scoreboards, portrait duplicates, and third-party watch-party footage were excluded.",
   "videos": [
     {
@@ -293,6 +293,49 @@
           "startSeconds": 5758,
           "endSeconds": 5822,
           "notes": "A tight economy defense and rapid camera snaps deliver the session payoff."
+        }
+      ]
+    },
+    {
+      "videoId": "HWsJ4tYz3M8",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-17",
+      "notes": "Six ladder games, three on NA and three on EU. The 31:21-43:01 stretch is the BE RIGHT BACK scene playing the existing archive b-roll and is excluded, as are the post-game talking-head scenes and every victory/rewind screen. Every range below was confirmed frame-by-frame as live self-played gameplay.",
+      "clips": [
+        {
+          "title": "Warp-In at the Terran Front",
+          "startSeconds": 1398,
+          "endSeconds": 1442,
+          "notes": "Three-Gate Stalker pressure arriving at the Terran natural; gold Nexus and warp-ins on the left, blue Stalkers engaging on the right."
+        },
+        {
+          "title": "Green Ridge Trade",
+          "startSeconds": 2977,
+          "endSeconds": 3026,
+          "notes": "Gateway armies trading across the open green ridge, continuous contact with no dead time."
+        },
+        {
+          "title": "Carrier Fleet Into the Viking Wall",
+          "startSeconds": 4404,
+          "endSeconds": 4452,
+          "notes": "Golden Carriers and interceptor beams colliding with massed Vikings and bio over the green map — the largest sustained air engagement of the session."
+        },
+        {
+          "title": "Maxed Fleet, Storm and Nuke",
+          "startSeconds": 4862,
+          "endSeconds": 4908,
+          "notes": "Maxed Protoss fleet, blue Psi Storms and a Terran nuke landing in the same engagement. Ends before the game-over screen."
+        },
+        {
+          "title": "Carriers Through the Industrial Choke",
+          "startSeconds": 6106,
+          "endSeconds": 6154,
+          "notes": "Carriers and Tempests cutting through a dark industrial map against Zerg, with heavy blue splash effects."
+        },
+        {
+          "title": "Archon Storm Closes the Session",
+          "startSeconds": 6432,
+          "endSeconds": 6479,
+          "notes": "Archons and Tempest beams breaking the Zerg army in the final game. Cut one second before the victory transition."
         }
       ]
     }
