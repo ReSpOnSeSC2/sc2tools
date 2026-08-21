@@ -25,16 +25,36 @@
  * }} Deps
  */
 
-/** Bucket widths offered by the opponent-MMR histogram. */
-const OPP_MMR_BUCKET_WIDTHS = [50, 100];
+/**
+ * A bucket width the opponent-MMR histogram knows how to draw, in MMR.
+ *
+ * @typedef {50 | 100 | 500} OppMmrBucketWidth
+ */
+
+/**
+ * Bucket widths offered by the opponent-MMR histogram, narrowest
+ * first.
+ *
+ * 500 is the width the client selects by default. A season of ladder
+ * spans roughly 2000 MMR end to end, which 50- and 100-wide bins shred
+ * into dozens of thin bars whose win rates swing on two or three
+ * games; 500-wide brackets hold enough sample per bar to be worth
+ * reading. The narrower widths stay on the toggle for players whose
+ * opponents cluster tightly enough to support them.
+ *
+ * @type {ReadonlyArray<OppMmrBucketWidth>}
+ */
+const OPP_MMR_BUCKET_WIDTHS = [50, 100, 500];
 /** Range threshold (in MMR) below which 50-wide bins read cleaner. */
 const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
 /** Safety cap so a malformed payload can't fan out to thousands of bins. */
 const OPP_MMR_MAX_BUCKETS = 80;
 /** Hard cap on a single MMR-band drilldown so a wide manual band
  *  (or a pathological filter) can't stream tens of thousands of rows
- *  to the client at once. A real 50/100-wide bracket tops out well
- *  under this. */
+ *  to the client at once. Even a 500-wide bracket over a full career
+ *  tops out well under this; when one does not, the response still
+ *  carries the true ``total`` alongside the truncated rows so the
+ *  drilldown can say how many of them it is showing. */
 const OPP_MMR_BAND_GAMES_MAX = 2000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,11 +89,33 @@ function oppMmrTrustFloor(now = Date.now()) {
 }
 
 /**
- * Win rate bucketed by **absolute opponent MMR**, in clean 50- or
- * 100-MMR bands.
+ * Narrow an arbitrary caller-supplied value to a supported bucket
+ * width.
  *
- * Bucket width is either picked explicitly (``opts.bucketWidth``
- * = 50 or 100) or auto-chosen from the actual opponent-MMR spread
+ * Shared by this service's width resolver and the HTTP route's
+ * ``bucket_width`` parser so there is exactly one list of legal
+ * widths — adding a bracket size to ``OPP_MMR_BUCKET_WIDTHS`` offers
+ * it on the wire and in the pipeline at once, with no second list to
+ * keep in sync. Numeric strings are accepted because query params
+ * arrive as text; anything else (``"auto"``, junk, a repeated param
+ * that Express hands over as an array) yields ``null`` so the caller
+ * falls back to its own default.
+ *
+ * @param {unknown} raw
+ * @returns {OppMmrBucketWidth | null}
+ */
+function asOppMmrBucketWidth(raw) {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = Number(raw);
+  return OPP_MMR_BUCKET_WIDTHS.find((w) => w === n) ?? null;
+}
+
+/**
+ * Win rate bucketed by **absolute opponent MMR**, in clean 50-, 100-
+ * or 500-MMR bands.
+ *
+ * Bucket width is either picked explicitly (``opts.bucketWidth`` =
+ * any of ``OPP_MMR_BUCKET_WIDTHS``) or auto-chosen from the spread
  * in the filtered data: tight ranges (≤500 MMR end-to-end) get
  * 50-wide bins so the picture has detail, wider ranges get 100-wide
  * bins so the chart doesn't fan out into 30+ thin bars. Either way
@@ -98,7 +140,7 @@ function oppMmrTrustFloor(now = Date.now()) {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{ bucketWidth?: number | "auto" }} [opts]
+ * @param {{ bucketWidth?: unknown }} [opts]
  */
 async function oppMmrBuckets(deps, userId, filters, opts = {}) {
   const match = deps.gamesMatchStage(userId, filters);
@@ -111,9 +153,15 @@ async function oppMmrBuckets(deps, userId, filters, opts = {}) {
 }
 
 /**
- * Pick the bin width. Honours an explicit ``50`` / ``100`` from
- * the caller; for ``"auto"`` or anything unrecognised, queries
- * the data range and picks the cleaner default.
+ * Pick the bin width. Honours any width the histogram supports (see
+ * ``OPP_MMR_BUCKET_WIDTHS``); for ``"auto"`` or anything
+ * unrecognised, queries the data range and picks the cleaner default.
+ *
+ * Auto only ever answers 50 or 100. The 500-wide view deliberately
+ * throws detail away in exchange for sample per bar, which is a call
+ * for the user to make rather than one to infer from a range probe —
+ * so it is offered on the toggle (and selected there by default)
+ * instead of being auto-picked here.
  *
  * The range probe joins in the opponents-row mmr fallback so a user
  * whose only high-MMR encounter has no per-game snapshot still gets
@@ -123,11 +171,13 @@ async function oppMmrBuckets(deps, userId, filters, opts = {}) {
  *
  * @param {Deps} deps
  * @param {object} match
- * @param {number | "auto" | undefined} requested
+ * @param {unknown} requested
  * @param {Date} trustFloor Games older than this contribute no MMR.
+ * @returns {Promise<OppMmrBucketWidth>}
  */
 async function resolveOppMmrBucketWidth(deps, match, requested, trustFloor) {
-  if (requested === 50 || requested === 100) return requested;
+  const explicit = asOppMmrBucketWidth(requested);
+  if (explicit !== null) return explicit;
   const rows = await deps.games
     .aggregate([
       { $match: match },
@@ -417,6 +467,7 @@ module.exports = {
   oppMmrBuckets,
   oppMmrBucketGames,
   oppMmrTrustFloor,
+  asOppMmrBucketWidth,
   OPP_MMR_BUCKET_WIDTHS,
   OPP_MMR_AUTO_WIDTH_CUTOFF,
   OPP_MMR_MAX_BUCKETS,

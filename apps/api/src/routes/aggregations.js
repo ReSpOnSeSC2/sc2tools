@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
+const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
 
 /**
  * /v1 — analytics aggregations.
@@ -222,8 +223,9 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // WR split by absolute opponent MMR, in clean 50- or 100-MMR
-  // bands. ``bucket_width`` may be 50, 100, or "auto" (default);
+  // WR split by absolute opponent MMR, in clean 50-, 100- or
+  // 500-MMR bands. ``bucket_width`` may be any supported width or
+  // "auto" (also the fallback for a missing or unrecognised param);
   // auto picks 50 for tight ranges and 100 for wide ones. The
   // response carries the chosen width back so the client toggle
   // can highlight which width was used.
@@ -479,18 +481,20 @@ function parseSortOrder(raw) {
 
 /**
  * Parse the ``bucket_width`` query param for /opp-mmr-buckets.
- * Accepts 50, 100, or "auto"; anything else falls through to
- * ``"auto"`` so the service picks a sensible default.
+ * Accepts any width the histogram supports; everything else — a
+ * literal "auto", an unsupported number, junk — falls through to
+ * ``"auto"`` so the service picks a sensible default from the data
+ * range rather than erroring on a cosmetic parameter.
+ *
+ * The legal widths live next to the histogram itself
+ * (``services/trendsOppMmr``), so a new bracket size is added in one
+ * place instead of being kept in sync across two.
  *
  * @param {unknown} raw
- * @returns {50 | 100 | "auto"}
+ * @returns {import('../services/trendsOppMmr').OppMmrBucketWidth | "auto"}
  */
 function parseOppMmrBucketWidth(raw) {
-  if (raw === undefined || raw === null) return "auto";
-  const s = String(raw).trim().toLowerCase();
-  if (s === "50") return 50;
-  if (s === "100") return 100;
-  return "auto";
+  return asOppMmrBucketWidth(raw) ?? "auto";
 }
 
 /** @param {number} status @param {string} code */

@@ -41,13 +41,34 @@ type OppMmrBucket = {
   maxMmr: number | null;
 };
 
+/**
+ * Band widths the histogram API supports, narrowest first. Mirrors
+ * ``OPP_MMR_BUCKET_WIDTHS`` in ``services/trendsOppMmr`` — the server
+ * rejects anything else back to "auto", so the two lists move
+ * together.
+ */
+const BUCKET_WIDTHS = [50, 100, 500] as const;
+
+type BucketWidth = (typeof BUCKET_WIDTHS)[number];
+
 type Response = {
-  bucketWidth: 50 | 100;
+  bucketWidth: BucketWidth;
   buckets: OppMmrBucket[];
   unknown: { total: number; wins: number; losses: number };
 };
 
-type WidthMode = "auto" | 50 | 100;
+type WidthMode = "auto" | BucketWidth;
+
+/**
+ * The width the card opens on.
+ *
+ * 500 is the honest default: a season of ladder spans roughly 2000
+ * MMR, which 100-wide bins shred into twenty-odd bars whose win rates
+ * swing on a game or two — a picture that looks precise and reads as
+ * noise. Wide brackets put real sample behind every bar; anyone who
+ * wants the fine grain is one tap away.
+ */
+const DEFAULT_WIDTH_MODE: WidthMode = 500;
 
 const COLOR_ACCENT = "#7c8cff";
 const COLOR_GRID = "#1f2533";
@@ -55,14 +76,15 @@ const COLOR_BORDER_STRONG = "#2a3142";
 const COLOR_TEXT_DIM = "#6b7280";
 
 /**
- * Win rate by **absolute opponent MMR**, in clean 50- or 100-MMR
- * bands.
+ * Win rate by **absolute opponent MMR**, in clean 50-, 100- or
+ * 500-MMR bands.
  *
- * Bin width is auto-chosen from the data range — tight ranges
- * (≤500 MMR end-to-end) get 50-wide bins so the picture has
- * detail, wider ranges get 100-wide bins so the chart doesn't
- * fan out into 30+ thin bars. A small toggle lets the user
- * override the choice.
+ * The card opens on 500-wide bands, where every bar carries enough
+ * games to mean something. A small toggle trades that sample back for
+ * detail — 100- or 50-wide bands — or hands the choice to the server,
+ * which sizes bins from the data range (tight ranges of ≤500 MMR
+ * end-to-end get 50-wide bins, wider ranges 100-wide, so the chart
+ * never fans out into 30+ thin bars).
  *
  * The chart pairs game-count bars (coloured by the WR ramp) with
  * a WR line, just like the game-length card — same visual idiom
@@ -70,7 +92,7 @@ const COLOR_TEXT_DIM = "#6b7280";
  */
 export function OppMmrBucketsChart() {
   const { filters, dbRev } = useFilters();
-  const [widthMode, setWidthMode] = useState<WidthMode>("auto");
+  const [widthMode, setWidthMode] = useState<WidthMode>(DEFAULT_WIDTH_MODE);
   const [selectedBand, setSelectedBand] = useState<SelectedBand | null>(null);
   const query = useMemo(
     () => ({ ...filters, bucket_width: widthMode }),
@@ -209,6 +231,7 @@ export function OppMmrBucketsChart() {
               dataKey="total"
               radius={[4, 4, 0, 0]}
               minPointSize={3}
+              maxBarSize={72}
             >
               {rows.map((r) => (
                 <Cell key={r.lo} fill={r.color} fillOpacity={0.85} />
@@ -247,18 +270,38 @@ function WidthToggle({
   onChange,
 }: {
   value: WidthMode;
-  actualWidth: 50 | 100;
+  actualWidth: BucketWidth;
   onChange: (mode: WidthMode) => void;
 }) {
-  // "Auto" mode shows the actually-picked width as a small badge so
-  // the user can see what was chosen without flipping back to read it.
-  const options: Array<{ id: WidthMode; label: string; sub?: string }> = [
-    { id: "auto", label: "Auto", sub: `${actualWidth}` },
-    { id: 50, label: "50" },
-    { id: 100, label: "100" },
+  // The badge on "Auto" reports the width auto-resolved to, so the
+  // user can see what was chosen without flipping back to read it —
+  // but only while auto is the live mode. In an explicit mode the
+  // response simply echoes the width the user picked, and printing
+  // that under "Auto" would credit auto with a choice it never made.
+  const options: Array<{
+    id: WidthMode;
+    label: string;
+    aria: string;
+    sub?: string;
+  }> = [
+    {
+      id: "auto",
+      label: "Auto",
+      aria: "Choose the band width automatically",
+      sub: value === "auto" ? `${actualWidth}` : undefined,
+    },
+    ...BUCKET_WIDTHS.map((width) => ({
+      id: width as WidthMode,
+      label: String(width),
+      aria: `Group opponents into ${width}-MMR bands`,
+    })),
   ];
   return (
-    <div className="flex items-center gap-1 text-micro">
+    <div
+      role="group"
+      aria-label="Opponent MMR band width"
+      className="flex flex-wrap items-center justify-end gap-1 text-micro"
+    >
       <span className="text-text-dim">Width</span>
       {options.map((opt) => (
         <button
@@ -266,6 +309,7 @@ function WidthToggle({
           type="button"
           onClick={() => onChange(opt.id)}
           aria-pressed={value === opt.id}
+          aria-label={opt.aria}
           className={[
             "rounded px-2 py-0.5",
             value === opt.id

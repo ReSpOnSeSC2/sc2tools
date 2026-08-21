@@ -829,6 +829,83 @@ describe("services/aggregations", () => {
     expect(wide.bucketWidth).toBe(100);
   });
 
+  test("oppMmrBuckets auto never widens past 100", async () => {
+    // Auto trades detail for readability only as far as 100-wide bins.
+    // The 500-wide view throws detail away on purpose, which is the
+    // user's call to make on the toggle — not something a range probe
+    // should decide for them behind their back.
+    const games = buildGames([
+      () => [{ _id: null, mn: 2400, mx: 6300 }], // 3900 span: as wide as ladder gets
+      () => [{ bins: [], unknown: [] }],
+    ]);
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.oppMmrBuckets("u1", {}, { bucketWidth: "auto" })
+    );
+    expect(out.bucketWidth).toBe(100);
+  });
+
+  test("oppMmrBuckets bins at an explicit 500-wide width without probing the range", async () => {
+    // 500 is the width the card selects on load, so it has to survive
+    // as an explicit choice: one aggregation (the bin pipeline), not
+    // two. If it ever fell through to "auto" the probe would answer
+    // 100 and the chart would silently redraw at a width nobody asked
+    // for.
+    const pipelines = [];
+    const games = {
+      aggregate(pipeline) {
+        pipelines.push(pipeline);
+        return {
+          toArray: () =>
+            Promise.resolve([
+              {
+                bins: [
+                  { _id: 4500, wins: 30, losses: 10, total: 40, avgMmr: 4712, minMmr: 4501, maxMmr: 4996 },
+                  { _id: 5000, wins: 42, losses: 58, total: 100, avgMmr: 5203, minMmr: 5002, maxMmr: 5488 },
+                ],
+                unknown: [{ _id: null, wins: 2, losses: 3, total: 5 }],
+              },
+            ]),
+        };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.oppMmrBuckets("u1", {}, { bucketWidth: 500 })
+    );
+    expect(pipelines).toHaveLength(1);
+    expect(out.bucketWidth).toBe(500);
+    expect(JSON.stringify(pipelines[0])).toContain('"$divide":["$_oppMmr",500]');
+    expect(out.buckets[0]).toMatchObject({
+      lo: 4500,
+      hi: 5000,
+      label: "4500–4999",
+      total: 40,
+    });
+    expect(out.buckets[1]).toMatchObject({ lo: 5000, hi: 5500, label: "5000–5499" });
+    expect(out.buckets[1].winRate).toBeCloseTo(0.42);
+    expect(out.unknown.total).toBe(5);
+  });
+
+  test("oppMmrBuckets accepts a numeric-string width straight off the query string", async () => {
+    // The HTTP route narrows bucket_width before calling, but the
+    // service is the last line of defence for every other caller: a
+    // raw "500" must not fall through to the auto probe.
+    const pipelines = [];
+    const games = {
+      aggregate(pipeline) {
+        pipelines.push(pipeline);
+        return { toArray: () => Promise.resolve([{ bins: [], unknown: [] }]) };
+      },
+    };
+    const svc = new AggregationsService({ games });
+    const out = /** @type {any} */ (
+      await svc.oppMmrBuckets("u1", {}, { bucketWidth: "500" })
+    );
+    expect(pipelines).toHaveLength(1);
+    expect(out.bucketWidth).toBe(500);
+  });
+
   test("oppMmrBuckets guards opponent.mmr with $isNumber so int-stored values bucket correctly", async () => {
     // Regression: the agent stores opponent.mmr via int(opp.mmr). An
     // earlier cut of the pipeline used `$eq: [{ $type: ... }, "double"]`,

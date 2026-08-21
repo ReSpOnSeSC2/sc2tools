@@ -13,6 +13,20 @@ corresponding GitHub Release.
 
 ### Added
 
+- **"Win rate by opponent MMR" now groups in 500-MMR brackets, and opens
+  that way** — across a real ladder spread the old 50/100-wide bands fanned
+  the card out into twenty-odd bars carrying two or three games each, so the
+  win-rate line swung on single results and read as noise. The width toggle
+  now offers **500** alongside Auto, 50 and 100, and the card selects it on
+  load: every bar carries enough sample to mean something, and the narrower
+  views stay one tap away for players whose opponents cluster tightly.
+  `Auto` also stops taking credit it hasn't earned — it only reports a
+  resolved width while it is the live mode, instead of echoing back whatever
+  the user had picked. The API accepts `bucket_width=500` from the same
+  single list of legal widths the pipeline bins with, so the wire and the
+  chart cannot drift apart, and `auto` still answers 50 or 100 only: zooming
+  out that far trades away detail, which stays the user's call.
+
 - **The map replayer now draws spells** — Psi Storm, EMP, Fungal Growth,
   Corrosive Bile, Stim, Chrono Boost, Time Warp, Blinding Cloud, Parasitic
   Bomb, Purification Nova, Yamato, Scanner Sweep, MULE, Supply Drop,
