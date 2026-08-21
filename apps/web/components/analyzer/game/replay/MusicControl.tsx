@@ -15,7 +15,7 @@
  * engine start audio when music is switched on mid-replay.
  */
 
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
 import { Music2, VolumeX } from "lucide-react";
 import type { ReplayMusicApi } from "@/lib/replayMusic";
 
@@ -81,9 +81,12 @@ function MusicControlImpl({ music }: { music: ReplayMusicApi }) {
         aria-label="Replay music volume"
         aria-valuetext={`${Math.round(volume * 100)} percent`}
         title="Music volume"
-        className={`h-6 w-16 cursor-pointer accent-[#3ec0c7] ${
-          enabled ? "" : "opacity-40"
-        }`}
+        /* Same track treatment as the scrubber (``.replay-range`` in
+           app/globals.css) so the dock has one slider style, not two. */
+        className={`replay-range w-16 ${enabled ? "" : "opacity-50"}`}
+        style={
+          { "--replay-progress": `${Math.round(volume * 100)}%` } as CSSProperties
+        }
       />
     </div>
   );

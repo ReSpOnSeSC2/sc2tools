@@ -481,3 +481,164 @@ a:hover {
 .cl-formButtonPrimary:hover {
   background-color: rgb(var(--accent-hover)) !important;
 }
+
+/* ============================================================
+ * Replay stage — a self-contained "broadcast" colour scope.
+ *
+ * THE BUG THIS FIXES. ``ReplayStage`` paints itself near-black
+ * (``STAGE_BG``, #070a0f) no matter which theme the app is in, but
+ * every panel inside it is built from the app's token utilities
+ * (``text-text-dim``, ``border-border``, ``bg-bg-elevated``). Those
+ * tokens are resolved against the PAGE's ground, so in the light theme
+ * the stage rendered near-black ink on a near-black stage — the top-bar
+ * numbers, the opening line and the whole build feed were effectively
+ * invisible — and even in the dark theme ``--border`` (#1c2431) all but
+ * vanished against a ground two stops darker than the one it was
+ * chosen for.
+ *
+ * THE FIX. Re-declare the token variables on the stage root. Every
+ * Tailwind token utility inside resolves against THESE values, so the
+ * stage looks identical in both themes and each value is picked
+ * against ``STAGE_BG`` rather than against the app ground:
+ *
+ *   text        #e9eff4  17.4:1  primary numbers and names
+ *   text-muted  #aebbc7  10.6:1  secondary / history rows
+ *   text-dim    #8d9baa   7.4:1  labels, timestamps  (WCAG AA at 12px+)
+ *   border      #26303f          visible hairline on the dark ground
+ *
+ * ``color-scheme: dark`` is part of the contract: it is what makes the
+ * native range inputs (scrubber, music volume), checkboxes and
+ * overflow scrollbars render dark inside the stage while the rest of a
+ * light-theme page stays light.
+ * ============================================================ */
+.replay-scope {
+  color-scheme: dark;
+
+  --bg: 7 10 15;              /* #070a0f — matches STAGE_BG exactly */
+  --bg-surface: 12 16 24;     /* #0c1018 */
+  --bg-elevated: 20 26 36;    /* #141a24 */
+  --bg-subtle: 31 40 54;      /* #1f2836 */
+
+  --text: 233 239 244;        /* #e9eff4 — 17.4:1 on the stage */
+  --text-muted: 174 187 199;  /* #aebbc7 — 10.6:1 */
+  --text-dim: 141 155 170;    /* #8d9baa —  7.4:1 */
+
+  --accent: 32 150 166;       /* #2096a6 — lifted so a 15% wash reads */
+  --accent-hover: 60 200 214; /* #3cc8d6 */
+  --accent-cyan: 62 224 214;  /* #3ee0d6 */
+
+  --border: 38 48 63;         /* #26303f — visible hairline */
+  --border-strong: 66 83 105; /* #425369 */
+  --line: 92 105 124;
+
+  --success: 62 200 132;
+  --warning: 232 156 56;
+  --danger: 255 107 107;
+
+  color: rgb(var(--text));
+}
+
+/* Fullscreen uses the whole screen: the stage's own responsive height
+ * cap (``xl:h-[min(88vh,1040px)]``) would otherwise letterbox it inside
+ * a viewport-sized fullscreen element. ``!important`` because that cap
+ * is an inline style when a host passes an explicit height. */
+.replay-scope:fullscreen {
+  height: 100% !important;
+  max-height: none !important;
+  width: 100%;
+  border-radius: 0;
+  border-color: transparent;
+}
+
+/* ---- Range inputs inside the stage -------------------------------
+ * The scrubber and the music level are real ``<input type="range">``
+ * elements (keyboard + AT support comes free); this is what makes them
+ * look like a player's transport instead of an OS widget. The played
+ * portion is driven by ``--replay-progress``, set inline by the
+ * component, so the fill tracks the playhead without a second element
+ * stealing pointer events from the input.
+ * ----------------------------------------------------------------- */
+.replay-scope input[type="range"].replay-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+.replay-scope input[type="range"].replay-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    rgb(var(--accent-cyan)) 0%,
+    rgb(var(--accent-cyan)) var(--replay-progress, 0%),
+    rgb(var(--bg-subtle)) var(--replay-progress, 0%),
+    rgb(var(--bg-subtle)) 100%
+  );
+}
+.replay-scope input[type="range"].replay-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    rgb(var(--accent-cyan)) 0%,
+    rgb(var(--accent-cyan)) var(--replay-progress, 0%),
+    rgb(var(--bg-subtle)) var(--replay-progress, 0%),
+    rgb(var(--bg-subtle)) 100%
+  );
+}
+.replay-scope input[type="range"].replay-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2px solid rgb(var(--accent-cyan));
+  box-shadow: 0 0 0 3px rgba(62, 224, 214, 0.18);
+  transition: transform 0.1s var(--ease-out);
+}
+.replay-scope input[type="range"].replay-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 2px solid rgb(var(--accent-cyan));
+  box-shadow: 0 0 0 3px rgba(62, 224, 214, 0.18);
+}
+.replay-scope input[type="range"].replay-range:hover::-webkit-slider-thumb,
+.replay-scope input[type="range"].replay-range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.replay-scope input[type="range"].replay-range:focus-visible {
+  outline: 2px solid rgb(var(--accent-cyan));
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+/* Thin, on-palette scrollbars for the two rails — the default chunky
+ * light scrollbar was one more thing that gave away that the stage was
+ * borrowing the page's colour scheme. */
+.replay-scope .replay-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong)) transparent;
+}
+.replay-scope .replay-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.replay-scope .replay-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.replay-scope .replay-scroll::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.replay-scope .replay-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--text-dim));
+  background-clip: content-box;
+}

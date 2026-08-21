@@ -34,8 +34,24 @@
  * RESPONSIVE. One instance of each rail (no duplicated DOM, no
  * duplicated ids), repositioned with flex ``order``: three columns at
  * ``xl``, and below that a single column with the MAP FIRST and the
- * rails stacked under it, each capped at ``max-h-80`` and scrolling.
- * The map never shrinks to make room for a rail.
+ * rails stacked under it, each capped and scrolling. The map never
+ * shrinks to make room for a rail.
+ *
+ * LAYOUT / SIZING CONTRACT. At ``xl`` the stage has a DEFINITE height
+ * (``min(88vh, 1040px)``) and lays out as a player: the top bar and the
+ * transport dock are fixed, and the middle band takes what is left
+ * (``min-h-0 flex-1``). The map column inside it is likewise
+ * ``min-h-0 min-w-0 flex-1``, which is what finally gives
+ * ``MapReplayer`` a box whose size does NOT depend on the canvas it is
+ * about to size — the circular measurement that used to pin the map at
+ * its 240 px floor. Below ``xl`` the stage is content-height and the
+ * map band carries an explicit viewport height instead.
+ *
+ * COLOUR. The stage paints ``STAGE_BG`` in BOTH themes, so it also
+ * carries ``.replay-scope`` (app/globals.css), which re-declares the
+ * design tokens against that ground. Without it every panel inside
+ * inherits the page's tokens — near-black ink on a near-black stage in
+ * the light theme.
  */
 
 import { useCallback, useMemo, useState } from "react";
@@ -53,7 +69,7 @@ import { ProductionRail, type ProductionTab } from "./ProductionRail";
 import { BuildOrderRail, type BuildFilter } from "./BuildOrderRail";
 import { ReplaySettings } from "./ReplaySettings";
 import { TransportDock, type ReplaySpeed } from "./TransportDock";
-import { STAGE_BG } from "./replayTheme";
+import { REPLAY_SCOPE_CLASS, STAGE_BG } from "./replayTheme";
 
 export function ReplayStage({
   playback,
@@ -88,6 +104,11 @@ export function ReplayStage({
    *  the minerals/gas fields rather than inventing them. Pass a stable
    *  (memoised) object — it is a ``useMemo`` dependency. */
   banked?: BankedSeries;
+  /** Pin the whole stage to an exact height in CSS px, overriding the
+   *  responsive ``min(84vh, 940px)`` player height. Hosts that embed
+   *  the stage in a fixed panel pass one; the full-page host passes
+   *  none. The map fills whatever is left after the top bar and the
+   *  transport dock, so this is the ONE knob that sizes the replay. */
   maxHeightPx?: number;
 }) {
   const model = useMemo(() => deriveReplayHud(playback), [playback]);
@@ -145,8 +166,20 @@ export function ReplayStage({
          ``aria-label="Map replay"`` since the replayer shipped. The map
          name is in the top bar. */
       aria-label="Map replay"
-      className="overflow-hidden rounded-xl border border-border"
-      style={{ background: STAGE_BG }}
+      /* PLAYER LAYOUT. A definite height at ``xl`` turns the stage into
+         a real video-player shell — fixed top bar, a middle band that
+         takes everything left over, fixed transport dock — which is
+         also what gives the map a box to fill. Below ``xl`` the stage
+         is content-height and the map band carries its own viewport
+         height instead. ``.replay-scope`` re-declares the design
+         tokens against ``STAGE_BG`` so the panels are legible whatever
+         theme the page is in; ``:fullscreen`` (globals.css) releases
+         the height cap. */
+      className={`${REPLAY_SCOPE_CLASS} flex flex-col overflow-hidden rounded-xl border border-border xl:h-[min(88vh,1040px)] xl:min-h-[34rem]`}
+      style={{
+        background: STAGE_BG,
+        ...(maxHeightPx ? { height: `${maxHeightPx}px` } : null),
+      }}
     >
       <ReplayTopBar
         t={time}
@@ -159,7 +192,7 @@ export function ReplayStage({
         oppRace={oppRace}
       />
 
-      <div className="flex flex-col gap-2 p-2 lg:gap-3 lg:p-3 xl:flex-row xl:items-stretch">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 xl:flex-row xl:items-stretch xl:gap-2.5 xl:p-2.5">
         {showProduction ? (
           <ProductionRail
             model={model}
@@ -171,14 +204,21 @@ export function ReplayStage({
             onSideChange={setProductionSide}
             myName={myName}
             oppName={oppName}
-            className="order-2 flex max-h-80 xl:order-1 xl:max-h-none xl:w-[13.5rem] xl:shrink-0"
+            className="order-2 flex max-h-72 xl:order-1 xl:h-full xl:max-h-none xl:w-56 xl:shrink-0"
           />
         ) : null}
 
-        <div className="order-1 flex min-w-0 flex-1 justify-center xl:order-2">
+        {/* The map band, and the box the canvas actually measures.
+            ``min-w-0`` keeps it from growing to its content.
+            ``flex-none`` below ``xl`` is load-bearing: the band is a
+            COLUMN item there, where ``flex-1`` would set
+            ``flex-basis: 0`` on the HEIGHT and silently beat
+            ``h-[52vh]`` — collapsing the map to its ``min-h``. At
+            ``xl`` the band is a ROW item, so ``flex-1`` is exactly
+            right and takes over. */}
+        <div className="order-1 flex h-[52vh] max-h-[36rem] min-h-[16rem] min-w-0 flex-none xl:order-2 xl:h-auto xl:max-h-none xl:flex-1">
           <MapReplayer
             playback={playback}
-            maxHeightPx={maxHeightPx}
             time={time}
             onTimeChange={onTimeChange}
             playing={playing}
@@ -186,6 +226,7 @@ export function ReplayStage({
             speed={speed}
             onSpeedChange={onSpeedChange}
             hideControls
+            fill
           />
         </div>
 
@@ -204,7 +245,7 @@ export function ReplayStage({
             buildMatchPct={buildMatchPct}
             myName={myName}
             oppName={oppName}
-            className="order-3 flex max-h-80 xl:max-h-none xl:w-[15rem] xl:shrink-0"
+            className="order-3 flex max-h-72 xl:h-full xl:max-h-none xl:w-64 xl:shrink-0"
           />
         ) : null}
       </div>

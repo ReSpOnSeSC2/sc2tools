@@ -41,6 +41,7 @@ import {
 import type { MapPlayback } from "@/lib/mapReplay";
 import { ReplayIcon } from "./ReplayIcon";
 import {
+  chipClass,
   RAIL_CLASS,
   RAIL_HEADER_CLASS,
   SECTION_LABEL_CLASS,
@@ -66,14 +67,14 @@ function QueueBubble({
   const seconds = Math.max(0, Math.ceil(group.remaining));
   return (
     <li
-      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-1.5 py-1"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated px-1.5 py-1 transition-colors hover:border-border-strong"
       title={`${label} — ${seconds}s remaining${group.count > 1 ? `, ${group.count} in production` : ""}`}
     >
-      <ReplayIcon name={group.name} kind={kind} side={side} className="h-5 w-5" />
-      <span className="whitespace-nowrap text-micro tabular-nums text-text">
+      <ReplayIcon name={group.name} kind={kind} side={side} className="h-6 w-6" />
+      <span className="whitespace-nowrap text-micro font-semibold tabular-nums text-text">
         {seconds}s
         {group.count > 1 ? (
-          <span className="text-text-muted">{` ×${group.count}`}</span>
+          <span className="font-medium text-text-muted">{` ×${group.count}`}</span>
         ) : null}
       </span>
       <span className="sr-only">{label}</span>
@@ -98,9 +99,9 @@ function QueueSection({
     <section aria-label={label}>
       <h4 className={SECTION_LABEL_CLASS}>{label}</h4>
       {groups.length === 0 ? (
-        <p className="px-2.5 pb-1 text-caption text-text-dim">{emptyText}</p>
+        <p className="px-3 pb-1 text-caption text-text-dim">{emptyText}</p>
       ) : (
-        <ul className="flex flex-wrap gap-1.5 px-2.5 pb-1">
+        <ul className="flex flex-wrap gap-1.5 px-3 pb-1">
           {groups.map((g) => (
             <QueueBubble key={g.name} group={g} kind={kind} side={side} />
           ))}
@@ -122,19 +123,19 @@ function CompositionList({
   emptyText: string;
 }) {
   if (rows.length === 0) {
-    return <p className="px-2.5 pb-1 text-caption text-text-dim">{emptyText}</p>;
+    return <p className="px-3 pb-1 text-caption text-text-dim">{emptyText}</p>;
   }
   const shown = rows.slice(0, COMP_ROWS_MAX);
   const folded = rows.length - shown.length;
   return (
-    <ul className="flex flex-wrap gap-1.5 px-2.5 pb-1">
+    <ul className="flex flex-wrap gap-1.5 px-3 pb-1">
       {shown.map((r) => (
         <li
           key={r.name}
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-1.5 py-1"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-elevated px-1.5 py-1 transition-colors hover:border-border-strong"
           title={`${r.count}× ${prettyName(r.name)}`}
         >
-          <ReplayIcon name={r.name} kind={kind} side={side} className="h-5 w-5" />
+          <ReplayIcon name={r.name} kind={kind} side={side} className="h-6 w-6" />
           <span className="text-micro font-semibold tabular-nums text-text">
             {r.count}
           </span>
@@ -142,7 +143,7 @@ function CompositionList({
         </li>
       ))}
       {folded > 0 ? (
-        <li className="inline-flex items-center px-1 text-micro text-text-dim">
+        <li className="inline-flex items-center px-1 text-micro font-medium text-text-dim">
           +{folded} more
         </li>
       ) : null}
@@ -191,23 +192,28 @@ function ProductionRailImpl({
       <div className={RAIL_HEADER_CLASS}>
         <span
           aria-hidden
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ background: SIDE_COLOR[side] }}
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: SIDE_COLOR[side], boxShadow: `0 0 8px ${SIDE_COLOR[side]}` }}
         />
-        <span className="min-w-0 flex-1 truncate text-caption font-semibold text-text">
+        <span className="min-w-0 flex-1 truncate text-caption font-semibold tracking-tight text-text">
           Production
         </span>
         <button
           type="button"
           onClick={() => onSideChange(side === "me" ? "opp" : "me")}
           aria-label={`Showing ${label}. Switch side.`}
-          className="rounded border border-border px-1.5 py-0.5 text-micro font-semibold text-text-muted hover:border-accent hover:text-text"
+          title={`Showing ${label}. Switch side.`}
+          className="max-w-[7rem] shrink-0 truncate rounded-md border border-border bg-bg-elevated px-2 py-0.5 text-micro font-semibold text-text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
         >
           {label}
         </button>
       </div>
 
-      <div role="tablist" aria-label="Production view" className="flex gap-1 p-1.5">
+      <div
+        role="tablist"
+        aria-label="Production view"
+        className="flex shrink-0 gap-1 border-b border-border p-2"
+      >
         {([
           ["queue", "Queue"],
           ["field", "On Field"],
@@ -220,18 +226,14 @@ function ProductionRailImpl({
             aria-selected={tab === id}
             aria-controls={`${uid}-panel-${id}`}
             onClick={() => onTabChange(id)}
-            className={`flex-1 rounded-md border px-2 py-1 text-micro font-semibold ${
-              tab === id
-                ? "border-accent bg-accent/15 text-text"
-                : "border-border bg-bg-elevated text-text-muted hover:border-accent"
-            }`}
+            className={`flex-1 ${chipClass(tab === id)}`}
           >
             {text}
           </button>
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+      <div className="replay-scroll min-h-0 flex-1 overflow-y-auto pb-3">
         {tab === "queue" ? (
           <div
             role="tabpanel"
@@ -250,9 +252,9 @@ function ProductionRailImpl({
               {/* Deliberate empty state: MapPlayback has no upgrade
                   events, so there is nothing to show and nothing
                   defensible to guess. */}
-              <p className="px-2.5 pb-1 text-caption text-text-dim">
+              <p className="px-3 pb-1 text-caption text-text-dim">
                 Not tracked
-                <span className="block text-micro">
+                <span className="mt-0.5 block text-micro leading-snug text-text-dim/80">
                   This replay payload carries no upgrade events.
                 </span>
               </p>
@@ -275,9 +277,9 @@ function ProductionRailImpl({
             />
 
             <h4 className={SECTION_LABEL_CLASS}>Workers</h4>
-            <p className="px-2.5 pb-1 text-caption tabular-nums text-text">
+            <p className="px-3 pb-1 text-caption font-semibold tabular-nums text-text">
               {comp.workers}
-              <span className="text-text-muted">
+              <span className="font-normal text-text-muted">
                 {" "}
                 {model.workerName[side] ? prettyName(model.workerName[side] ?? "") : "workers"}
               </span>
@@ -292,12 +294,12 @@ function ProductionRailImpl({
             />
 
             <h4 className={SECTION_LABEL_CLASS}>Upgrades</h4>
-            <p className="px-2.5 pb-1 text-caption text-text-dim">Not tracked</p>
+            <p className="px-3 pb-1 text-caption text-text-dim">Not tracked</p>
 
             <h4 className={SECTION_LABEL_CLASS}>Losses to {formatClock(t)}</h4>
-            <p className="px-2.5 pb-1 text-caption tabular-nums text-text">
+            <p className="px-3 pb-1 text-caption font-semibold tabular-nums text-text">
               {lost.count} units
-              <span className="text-text-muted">
+              <span className="font-normal text-text-muted">
                 {` · ${lost.minerals.toLocaleString()} minerals · ${lost.gas.toLocaleString()} gas`}
               </span>
             </p>

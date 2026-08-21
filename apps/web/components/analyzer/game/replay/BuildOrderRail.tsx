@@ -41,6 +41,7 @@ import {
 } from "@/lib/replayHud";
 import { ReplayIcon } from "./ReplayIcon";
 import {
+  chipClass,
   RAIL_CLASS,
   RAIL_HEADER_CLASS,
   SIDE_COLOR,
@@ -98,10 +99,13 @@ function BuildRow({
         aria-label={`${name}${entry.count > 1 ? ` times ${entry.count}` : ""}, ${
           entry.supply
         } supply, at ${formatClock(entry.t)}. Jump here.`}
-        className={`flex w-full items-center gap-1.5 border-l-2 px-2 py-1 text-left transition-colors ${
-          current ? "bg-bg-subtle" : "hover:bg-bg-subtle/60"
-        } ${ahead ? "opacity-40" : ""}`}
+        className={`flex w-full items-center gap-2 border-l-[3px] px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent-cyan ${
+          current ? "" : "hover:bg-bg-subtle/70"
+        }`}
         style={{
+          // The side stripe is the ONLY thing that tells the two
+          // players apart in this list, so it stays at full strength on
+          // every row; only the CONTENT dims for the lookahead.
           borderLeftColor: SIDE_COLOR[entry.owner],
           background: current ? SIDE_TINT[entry.owner] : undefined,
         }}
@@ -110,19 +114,32 @@ function BuildRow({
           name={entry.name}
           kind={entry.kind}
           side={entry.owner}
-          className="h-5 w-5"
+          /* Lookahead rows are dimmed with opacity on the CONTENT
+             rather than on the row, so the icons fade with the text
+             instead of the row losing its side stripe. */
+          className={`h-6 w-6 ${ahead ? "opacity-45" : ""}`}
         />
         <span
           className={`min-w-0 flex-1 truncate text-micro ${
-            current ? "font-semibold text-text" : "text-text-muted"
+            current
+              ? "font-semibold text-text"
+              : ahead
+                ? "text-text-dim/70"
+                : "text-text-muted"
           }`}
         >
           {name}
           {entry.count > 1 ? (
-            <span className="text-text-dim">{` ×${entry.count}`}</span>
+            <span className={current ? "text-text-muted" : "text-text-dim"}>
+              {` ×${entry.count}`}
+            </span>
           ) : null}
         </span>
-        <span className="shrink-0 whitespace-nowrap text-micro tabular-nums text-text-dim">
+        <span
+          className={`shrink-0 whitespace-nowrap text-micro tabular-nums ${
+            current ? "font-semibold text-text" : ahead ? "text-text-dim/70" : "text-text-dim"
+          }`}
+        >
           {entry.supply} · {formatClock(entry.t)}
         </span>
       </button>
@@ -206,13 +223,13 @@ function BuildOrderRailImpl({
       aria-label="Build order"
       className={`${RAIL_CLASS} ${className}`}
     >
-      <div className={`${RAIL_HEADER_CLASS} flex-wrap`}>
-        <span className="min-w-0 flex-1 truncate text-caption font-semibold text-text">
+      <div className={`${RAIL_HEADER_CLASS} flex-wrap gap-y-1`}>
+        <span className="min-w-0 flex-1 truncate text-caption font-semibold tracking-tight text-text">
           Build order
         </span>
         {typeof buildMatchPct === "number" ? (
           <span
-            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-micro font-semibold tabular-nums text-text-muted"
+            className="shrink-0 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-1.5 py-0.5 text-micro font-semibold tabular-nums text-text"
             title="How closely this game matched the reference build"
           >
             {Math.round(buildMatchPct)}% match
@@ -220,7 +237,7 @@ function BuildOrderRailImpl({
         ) : null}
         {headerBuild ? (
           <p
-            className="w-full truncate text-micro text-text-dim"
+            className="w-full truncate text-micro font-medium text-text-dim"
             title={
               headerIsDerived
                 ? `Read from the first structures placed — ${headerBuild}`
@@ -233,8 +250,15 @@ function BuildOrderRailImpl({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 p-1.5">
-        <div role="group" aria-label="Filter build order by side" className="flex gap-1">
+      {/* Two fixed rows rather than one wrapping row: with real player
+          names in the side filter the single row wrapped unpredictably
+          and dropped "Following" onto a line of its own. */}
+      <div className="shrink-0 space-y-1 border-b border-border p-2">
+        <div
+          role="group"
+          aria-label="Filter build order by side"
+          className="flex gap-1"
+        >
           {([
             ["both", "Both"],
             ["me", sideLabel("me", myName)],
@@ -245,54 +269,45 @@ function BuildOrderRailImpl({
               type="button"
               onClick={() => onFilterChange(id)}
               aria-pressed={filter === id}
-              className={`max-w-[6rem] truncate rounded-md border px-1.5 py-1 text-micro font-semibold ${
-                filter === id
-                  ? "border-accent bg-accent/15 text-text"
-                  : "border-border bg-bg-elevated text-text-muted hover:border-accent"
-              }`}
+              title={id === "both" ? "Show both players" : `Show ${text} only`}
+              className={`min-w-0 flex-1 truncate ${chipClass(filter === id)}`}
             >
               {text}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => onShowWorkersChange(!showWorkers)}
-          aria-pressed={showWorkers}
-          aria-label="Show worker production in the build order"
-          title="Show worker production"
-          className={`rounded-md border px-1.5 py-1 text-micro font-semibold ${
-            showWorkers
-              ? "border-accent bg-accent/15 text-text"
-              : "border-border bg-bg-elevated text-text-muted hover:border-accent"
-          }`}
-        >
-          Workers
-        </button>
-        <button
-          type="button"
-          onClick={() => onAutoScrollChange(!autoScroll)}
-          aria-pressed={autoScroll}
-          aria-label="Follow the playhead automatically"
-          title="Auto-scroll with playback"
-          className={`ml-auto rounded-md border px-1.5 py-1 text-micro font-semibold ${
-            autoScroll
-              ? "border-accent bg-accent/15 text-text"
-              : "border-border bg-bg-elevated text-text-muted hover:border-accent"
-          }`}
-        >
-          {autoScroll ? "Following" : "Paused"}
-        </button>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => onShowWorkersChange(!showWorkers)}
+            aria-pressed={showWorkers}
+            aria-label="Show worker production in the build order"
+            title="Show worker production"
+            className={`flex-1 ${chipClass(showWorkers)}`}
+          >
+            Workers
+          </button>
+          <button
+            type="button"
+            onClick={() => onAutoScrollChange(!autoScroll)}
+            aria-pressed={autoScroll}
+            aria-label="Follow the playhead automatically"
+            title="Auto-scroll with playback"
+            className={`flex-1 ${chipClass(autoScroll)}`}
+          >
+            {autoScroll ? "Following" : "Paused"}
+          </button>
+        </div>
       </div>
 
       {visible.length === 0 ? (
-        <p className="px-2.5 pb-3 text-caption text-text-dim">
+        <p className="px-3 py-3 text-caption text-text-dim">
           Nothing to show with these filters.
         </p>
       ) : (
         <ol
           ref={listRef}
-          className="relative min-h-0 flex-1 overflow-y-auto"
+          className="replay-scroll relative min-h-0 flex-1 overflow-y-auto py-1"
           aria-label="Build order feed"
         >
           {visible.map((entry, i) => (

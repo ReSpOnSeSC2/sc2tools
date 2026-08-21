@@ -51,6 +51,43 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **The map replay now fills the space it is given, and is legible in
+  both themes** — the replay stage was two bugs in a trenchcoat. The
+  canvas measured the box that CONTAINED it while sitting inside a
+  shrink-to-fit flex item, so the wrapper's width came from the canvas
+  and the canvas's width came from the wrapper: a circular measurement
+  that settled on the 240 px floor on its first pass and never grew,
+  which is why a 700 px column rendered a postage stamp. The canvas is
+  now absolutely positioned (it contributes nothing to the box being
+  measured) and the stage lays out as a real video player — a definite
+  height at `xl`, fixed top bar and transport dock, and a middle band
+  that takes everything left over — so the map is ~2.8x wider on a
+  1512 px window and ~3.3x on a 1080p one, and fullscreen finally uses
+  the whole screen instead of letterboxing to 84% of it.
+
+  Separately, the stage paints itself near-black in BOTH themes while
+  every panel inside it was built from the app's design tokens, which
+  resolve against the PAGE's ground: in the light theme that meant
+  near-black ink on a near-black stage — the top-bar numbers, the
+  opening line and the whole build feed were effectively invisible, and
+  even in dark the panel borders had all but vanished. The stage now
+  carries its own colour scope (`.replay-scope`) whose tokens are
+  picked against that ground (7.4:1 for the dimmest label, 17.4:1 for
+  the numbers), so it renders identically whatever theme the page is
+  in, native scrollbars and range inputs included.
+
+  The HUD around it was rebuilt to match: the scoreboard shows a value
+  over a visible label instead of a cross-platform glyph soup with the
+  meaning hidden in a tooltip, and sheds its least decisive stats
+  before it truncates on narrow windows; the build feed's lookahead
+  rows dim their CONTENT rather than the whole row, so a row never
+  loses the side stripe that says who built it; the build rail's
+  controls sit in two fixed rows instead of one that wrapped
+  unpredictably around real player names; the scrubber, phase bands and
+  transport buttons are styled as one transport rather than an OS
+  widget; and the map's zoom / reset / fullscreen controls are real
+  icons on a glass toolbar riding the map's own corner.
+
 - **The army-graph roster now tells you what each chip is, and stops
   drawing structures small** — every unit, building and upgrade chip is a
   button: click or tap one and a dialog names it ("Cybernetics Core", not

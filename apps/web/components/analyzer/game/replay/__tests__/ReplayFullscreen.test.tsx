@@ -11,10 +11,17 @@ import { payload } from "./fixtures";
 afterEach(() => cleanup());
 
 /**
- * The ⤢ control. It used to reset the zoom, which is not what the icon
- * says and not what the user expected; it now toggles real fullscreen
- * on the STAGE (so the HUD rails come with it), and the reset moved to
- * its own ⟲ button.
+ * The fullscreen control. It used to reset the zoom, which is not what
+ * the icon says and not what the user expected; it now toggles real
+ * fullscreen on the STAGE (so the HUD rails come with it), and the
+ * reset moved to its own button.
+ *
+ * Both controls draw lucide SVGs rather than the bare ⤢ / ⟲ glyphs
+ * they shipped with — those rendered as a different (sometimes
+ * missing) shape on every platform, and sat next to lucide icons in
+ * the same dock. The assertions below therefore key off the
+ * accessible name plus the presence of an icon, which is the contract
+ * that actually matters, instead of a literal codepoint.
  *
  * jsdom implements neither the Fullscreen API nor the element sizing it
  * changes, so the API surface is stubbed here. What these tests can
@@ -132,9 +139,13 @@ describe("the replayer's view controls", () => {
     expect(reset.tagName).toBe("BUTTON");
     expect(fs.getAttribute("type")).toBe("button");
     expect(reset.getAttribute("type")).toBe("button");
-    // The reset control no longer wears the fullscreen glyph.
-    expect(reset.textContent).toBe("⟲");
-    expect(fs.textContent).toBe("⤢");
+    // The reset control no longer wears the fullscreen icon, and both
+    // render a real (aria-hidden) icon rather than a text glyph.
+    expect(reset.querySelector("svg")).toBeTruthy();
+    expect(fs.querySelector("svg")).toBeTruthy();
+    expect(reset.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(reset.textContent).toBe("");
+    expect(fs.textContent).toBe("");
   });
 
   it("requests fullscreen on the replayer's own root when there is no stage", () => {
@@ -169,7 +180,7 @@ describe("the replayer's view controls", () => {
     const on = screen.getByTestId("replay-fullscreen");
     expect(on.getAttribute("aria-pressed")).toBe("true");
     expect(on.getAttribute("aria-label")).toBe("Exit full screen");
-    expect(on.textContent).toBe("⤡");
+    expect(on.querySelector("svg")).toBeTruthy();
   });
 
   it("follows an Esc exit, which fires no click at all", () => {

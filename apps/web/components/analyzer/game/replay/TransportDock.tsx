@@ -12,9 +12,22 @@
  * minerals``) and seeks on activation, so the timeline is usable from
  * the keyboard alone. They sit in their own strip rather than on top of
  * the range, so neither steals pointer events from the other.
+ *
+ * THE SCRUBBER stays a native range input — that is what makes it
+ * keyboard- and AT-operable for free — but it wears
+ * ``.replay-range`` (app/globals.css), which paints the played portion
+ * from the ``--replay-progress`` custom property set here. A separate
+ * progress element layered under a transparent input would have to
+ * fight the input for pointer events; a gradient on the track cannot.
+ *
+ * The phase strip is BANDS, not floating labels: the old version drew
+ * a bare left border and a dim caption, which on a short game left
+ * three barely-legible words hanging over the timeline with nothing to
+ * say which stretch each one covered.
  */
 
-import { memo, type ReactNode } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
+import { Pause, Play, SkipBack } from "lucide-react";
 import { formatClock, type TimelineMarker } from "@/lib/replayHud";
 import type { PhaseBand } from "@/lib/replayHud";
 import type { ReplayMusicApi } from "@/lib/replayMusic";
@@ -35,7 +48,14 @@ const MARKER_COLOR: Readonly<Record<TimelineMarker["kind"], string>> = {
 };
 
 const DOCK_BUTTON_CLASS =
-  "inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-md border border-border bg-bg-elevated px-2 text-caption font-semibold text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  "inline-flex h-9 min-w-[2.25rem] shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated px-2 text-caption font-semibold text-text transition-colors hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan";
+
+/** Clamp to [0, 100] so a marker past the last stats sample — or a
+ *  ``gameLength`` of 0 — cannot escape the strip. */
+function pct(t: number, gameLength: number): number {
+  if (!(gameLength > 0)) return 0;
+  return Math.min(100, Math.max(0, (t / gameLength) * 100));
+}
 
 function MarkerDots({
   markers,
@@ -59,9 +79,9 @@ function MarkerDots({
           onClick={() => onSeek(m.t)}
           title={m.title}
           aria-label={`${m.title}. Jump here.`}
-          className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/40 transition-transform hover:scale-150 focus-visible:scale-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-black/50 transition-transform hover:scale-[1.6] focus-visible:scale-[1.6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
           style={{
-            left: `${Math.min(100, Math.max(0, (m.t / gameLength) * 100))}%`,
+            left: `${pct(m.t, gameLength)}%`,
             background: m.owner ? SIDE_COLOR[m.owner] : MARKER_COLOR[m.kind],
           }}
         />
@@ -79,17 +99,25 @@ function PhaseStrip({
 }) {
   if (phases.length < 2) return null;
   return (
-    <div className="relative h-3.5" aria-hidden>
-      {phases.map((p) => (
+    <div className="relative h-3" aria-hidden>
+      {phases.map((p, i) => (
         <span
           key={p.label}
-          className="absolute top-0 truncate border-l border-border pl-1 text-[0.6rem] font-semibold uppercase leading-none tracking-wider text-text-dim"
+          className="absolute top-0 flex h-full items-center overflow-hidden rounded-sm px-1"
           style={{
-            left: `${(p.from / gameLength) * 100}%`,
-            width: `${((p.to - p.from) / gameLength) * 100}%`,
+            left: `${pct(p.from, gameLength)}%`,
+            width: `${Math.max(0, pct(p.to, gameLength) - pct(p.from, gameLength))}%`,
+            // Alternating weight reads as "these are consecutive
+            // stretches of the game" without needing three colours.
+            background: i % 2 === 0 ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.09)",
+            // A hard right edge so consecutive bands read as separate
+            // stretches rather than one long strip.
+            boxShadow: "inset -1px 0 0 rgba(7,10,15,0.9)",
           }}
         >
-          {p.label}
+          <span className="truncate text-[0.5625rem] font-semibold uppercase leading-none tracking-[0.1em] text-text-dim">
+            {p.label}
+          </span>
         </span>
       ))}
     </div>
@@ -124,10 +152,11 @@ function TransportDockImpl({
   /** Settings popover and any other trailing controls. */
   children?: ReactNode;
 }) {
+  const progress = pct(t, gameLength);
   return (
     <div
       data-testid="replay-transport"
-      className="flex items-center gap-2 border-t border-border px-3 py-2"
+      className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-surface/60 px-3 py-2"
     >
       <button
         type="button"
@@ -136,7 +165,7 @@ function TransportDockImpl({
         title="Skip to start"
         className={DOCK_BUTTON_CLASS}
       >
-        <span aria-hidden>⏮</span>
+        <SkipBack className="h-4 w-4" aria-hidden />
       </button>
       <button
         type="button"
@@ -149,21 +178,25 @@ function TransportDockImpl({
         aria-label={playing ? "Pause" : "Play"}
         aria-pressed={playing}
         title={playing ? "Pause" : "Play"}
-        className={DOCK_BUTTON_CLASS}
+        className={`${DOCK_BUTTON_CLASS} border-accent-cyan/50 bg-accent-cyan/15 hover:border-accent-cyan hover:bg-accent-cyan/25`}
       >
-        <span aria-hidden>{playing ? "❚❚" : "▶"}</span>
+        {playing ? (
+          <Pause className="h-4 w-4" aria-hidden />
+        ) : (
+          <Play className="h-4 w-4" aria-hidden />
+        )}
       </button>
       <button
         type="button"
         onClick={() => onSpeedChange(nextSpeed(speed))}
         aria-label={`Playback speed ${speed} times. Click to cycle.`}
         title="Playback speed"
-        className={DOCK_BUTTON_CLASS}
+        className={`${DOCK_BUTTON_CLASS} tabular-nums`}
       >
         {speed}×
       </button>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pt-0.5">
         <PhaseStrip phases={phases} gameLength={gameLength} />
         <MarkerDots markers={markers} gameLength={gameLength} onSeek={onSeek} />
         <input
@@ -175,11 +208,15 @@ function TransportDockImpl({
           onChange={(e) => onSeek(Number(e.target.value))}
           aria-label="Playback position"
           aria-valuetext={`${formatClock(t)} of ${formatClock(gameLength)}`}
-          className="h-6 w-full cursor-pointer accent-[#3ec0c7]"
+          className="replay-range"
+          style={{ "--replay-progress": `${progress}%` } as CSSProperties}
         />
       </div>
 
-      <span className="shrink-0 whitespace-nowrap text-caption tabular-nums text-text-muted">
+      {/* ONE text run on purpose: hosts and tests read this label as
+          "8:42 / 21:07", and splitting the total into a child element
+          would break that into two nodes. */}
+      <span className="shrink-0 whitespace-nowrap text-caption font-semibold tabular-nums text-text">
         {formatClock(t)} / {formatClock(gameLength)}
       </span>
       {music ? <MusicControl music={music} /> : null}

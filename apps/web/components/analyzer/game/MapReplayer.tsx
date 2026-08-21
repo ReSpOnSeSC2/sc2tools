@@ -89,10 +89,16 @@ import {
   type LossSummary,
 } from "@/lib/mapReplayLosses";
 import { drawSpellEffects, spellEffectsVersion } from "@/lib/spellEffects";
+import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import { getIconPath, type IconKind } from "@/lib/sc2-icons";
+import { REPLAY_SCOPE_CLASS } from "./replay/replayTheme";
 
 const SPEEDS = [1, 4, 8, 16] as const;
+/** The floating map-view controls. Glass over the canvas, so they read
+ *  at any terrain colour without a hard panel cutting into the map. */
+const VIEW_BUTTON_CLASS =
+  "inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3ee0d6]";
 const ME_ARMY = "#3ec0c7";
 const ME_WORKER = "rgba(62,192,199,0.45)";
 const OPP_ARMY = "#e05656";
@@ -363,6 +369,14 @@ export function MapReplayer({
    * hosts that render their own. The canvas, its zoom buttons and the
    * screen-reader summary always stay. */
   hideControls = false,
+  /** Fill the host's box instead of sizing to the viewport.
+   *
+   * ``ReplayStage`` lays the replay out like a video player: a
+   * fixed-height column whose middle band is the map. In that mode the
+   * HOST owns the available box and the canvas measures it directly —
+   * which is also the only way to break the feedback loop that used to
+   * pin the map at its 240 px floor (see the sizing effect below). */
+  fill = false,
 }: {
   playback: MapPlayback;
   maxHeightPx?: number;
@@ -373,9 +387,13 @@ export function MapReplayer({
   speed?: (typeof SPEEDS)[number];
   onSpeedChange?: (speed: (typeof SPEEDS)[number]) => void;
   hideControls?: boolean;
+  fill?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  /** The box that hugs the canvas exactly, so the overlay toolbar sits
+   *  on the MAP's corner rather than the (often wider) wrapper's. */
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [playingState, setPlayingState] = useState(false);
   const [speedState, setSpeedState] = useState<(typeof SPEEDS)[number]>(8);
@@ -638,10 +656,34 @@ export function MapReplayer({
     return () => cancelAnimationFrame(raf);
   }, [playback, gameLength, emitTime, emitPlaying]);
 
-  // Size the stage: full column width, the MAP's aspect, capped by the
-  // viewport (or the host's ``maxHeightPx``). When the height cap bites
-  // the canvas narrows rather than letterboxing, and the wrapper
-  // centres it — so every canvas pixel is playable ground.
+  // ── Stage sizing ────────────────────────────────────────────────
+  //
+  // THE BUG THIS REPLACES. The old pass measured ``wrapRef`` — the box
+  // that CONTAINS the canvas — while the canvas was a normal in-flow
+  // child of a shrink-to-fit flex item. The wrapper's width therefore
+  // came from the canvas, and the canvas's width came from the
+  // wrapper: a circular measurement that settled on the ``max(240, 0)``
+  // floor on the very first pass and never grew again. That is why the
+  // map rendered as a ~240 px postage stamp in the middle of a 700 px
+  // column no matter how large the window was.
+  //
+  // THE FIX. The canvas is ABSOLUTELY POSITIONED (see the markup), so
+  // it contributes nothing to its container's size and the measurement
+  // can never feed back into itself. What is measured depends on the
+  // mode:
+  //
+  //   fill      the host (``ReplayStage``) owns a definite box —
+  //             ``flex-1 min-h-0 min-w-0`` inside a fixed-height
+  //             column — so BOTH axes are read from it and the map
+  //             genuinely fills the space it is given, fullscreen
+  //             included.
+  //   default   width from the (block-level, ``w-full``) wrapper,
+  //             height from ``maxHeightPx`` or the viewport fraction,
+  //             exactly as hosts embedding a bare replayer expect.
+  //             The wrapper's own height is then SET from the result.
+  //
+  // Either way the canvas keeps the map's aspect: it narrows rather
+  // than letterboxing, so every canvas pixel is playable ground.
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
@@ -654,25 +696,46 @@ export function MapReplayer({
         (playback.bounds.maxX - playback.bounds.minX);
       const viewportH = typeof window !== "undefined" ? window.innerHeight : 900;
       const viewportCap = viewportH * STAGE_VIEWPORT_FRACTION;
-      // Fullscreen ignores the host's height cap AND the 1080 ceiling —
-      // the point of it is to use the screen, and a compact host's
-      // 420 px cap following the stage into fullscreen is exactly the
-      // stale-size bug this control has to avoid. It keeps the same
-      // viewport FRACTION, so the surrounding chrome (this component's
-      // own transport, or the stage's top bar and dock) still fits.
-      const capH = fullscreenRef.current
-        ? Math.max(STAGE_MIN_H_PX, viewportCap)
-        : Math.max(
-            STAGE_MIN_H_PX,
-            Math.min(STAGE_MAX_H_PX, maxHeightPx ?? viewportCap),
-          );
+
+      // In fill mode the container IS the cap, on both axes. jsdom (and
+      // a not-yet-laid-out box) reports 0 — fall back to the viewport
+      // rule there rather than collapsing to the floor.
+      const measuredH = fill ? rect.height : 0;
+      const capH =
+        measuredH > 1
+          ? Math.max(STAGE_MIN_H_PX, measuredH)
+          : fullscreenRef.current
+            ? // Fullscreen ignores the host's height cap AND the 1080
+              // ceiling — the point of it is to use the screen, and a
+              // compact host's 420 px cap following the stage into
+              // fullscreen is exactly the stale-size bug this control
+              // has to avoid. Same viewport FRACTION, so the
+              // surrounding chrome still fits.
+              Math.max(STAGE_MIN_H_PX, viewportCap)
+            : Math.max(
+                STAGE_MIN_H_PX,
+                Math.min(STAGE_MAX_H_PX, maxHeightPx ?? viewportCap),
+              );
+
       const availW = Math.max(240, rect.width);
       const w = Math.min(availW, capH / aspect);
       const h = w * aspect;
+
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
+      // The frame hugs the canvas so the overlay toolbar rides the
+      // map's corner; it is absolutely positioned and centred, so this
+      // never feeds back into ``rect``.
+      const frame = frameRef.current;
+      if (frame) {
+        frame.style.width = `${w}px`;
+        frame.style.height = `${h}px`;
+      }
+      // Outside fill mode nothing else gives the wrapper a height —
+      // the canvas is out of flow — so it takes the canvas's.
+      if (!fill) wrap.style.height = `${h}px`;
       const ctx = canvas.getContext("2d");
       if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
@@ -690,7 +753,7 @@ export function MapReplayer({
       obs?.disconnect();
       if (typeof window !== "undefined") window.removeEventListener("resize", apply);
     };
-  }, [playback, maxHeightPx]);
+  }, [playback, maxHeightPx, fill]);
 
   // Wheel zoom, drag pan, and two-pointer pinch. Native listeners so
   // wheel can preventDefault (React's is passive), pointer capture so
@@ -802,13 +865,24 @@ export function MapReplayer({
   return (
     <div
       ref={rootRef}
-      /* ``h-full`` + a stage background only when the replayer itself is
-         the fullscreen element: a fullscreen div is viewport-sized and
-         transparent by default, which would otherwise show a white
-         page behind a letterboxed canvas. */
-      className={`space-y-2 ${
-        isOwnFullscreen ? "h-full overflow-auto bg-[#070a0f] p-3" : ""
-      }`}
+      /* ``h-full`` + a stage background (and the replay colour scope,
+         so the chrome inside is legible on it) only when the replayer
+         itself is the fullscreen element: a fullscreen div is
+         viewport-sized and transparent by default, which would
+         otherwise show a white page behind a letterboxed canvas. */
+      className={[
+        "min-w-0",
+        // ``w-full`` is load-bearing, not cosmetic: the replayer is a
+        // flex ITEM in both hosts, and a flex item defaults to
+        // shrink-to-fit. Without it the root sized itself to the
+        // canvas it was supposed to be sizing.
+        fill ? "flex h-full w-full flex-col" : "w-full space-y-2",
+        isOwnFullscreen
+          ? `${REPLAY_SCOPE_CLASS} h-full overflow-auto bg-[#070a0f] p-3`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-testid="map-replayer"
     >
       {!hideControls && (
@@ -852,58 +926,85 @@ export function MapReplayer({
       </div>
       )}
 
-      <div ref={wrapRef} className="relative flex min-w-0 justify-center">
-        <canvas
-          ref={canvasRef}
-          className="block touch-none rounded-lg border border-border bg-[#0a0d13]"
-          aria-label={`Map playback of ${playback.mapName || "this game"}`}
-        />
-        <div className="absolute right-2 top-2 flex flex-col gap-1">
-          <button
-            type="button"
-            aria-label="Zoom in"
-            onClick={() => {
-              const c = canvasRef.current;
-              if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1.4);
-            }}
-            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-body font-semibold text-text hover:border-accent"
+      <div
+        ref={wrapRef}
+        /* The measured box. In fill mode the stage hands it a definite
+           height (``flex-1`` inside a fixed-height column with
+           ``min-h-0``), so content can never grow it and the sizing
+           pass has a stable number to read. */
+        className={`relative min-w-0 ${
+          fill ? "min-h-0 flex-1 overflow-hidden" : "w-full"
+        }`}
+      >
+        {/* Absolutely positioned and centred: the canvas is OUT OF FLOW,
+            which is what stops its size feeding back into the box being
+            measured. Its width/height come from the sizing effect. */}
+        <div
+          ref={frameRef}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        >
+          <canvas
+            ref={canvasRef}
+            className="block h-full w-full touch-none rounded-lg bg-[#0a0d13] shadow-[0_10px_40px_-16px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.14]"
+            aria-label={`Map playback of ${playback.mapName || "this game"}`}
+          />
+          <div
+            className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 p-1 backdrop-blur-sm"
+            role="group"
+            aria-label="Map view controls"
           >
-            +
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom out"
-            onClick={() => {
-              const c = canvasRef.current;
-              if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1 / 1.4);
-            }}
-            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-body font-semibold text-text hover:border-accent"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            aria-label="Reset zoom"
-            title="Reset zoom"
-            data-testid="replay-reset-zoom"
-            onClick={resetView}
-            className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-caption font-semibold text-text hover:border-accent"
-          >
-            <span aria-hidden>⟲</span>
-          </button>
-          {fullscreenAvailable ? (
             <button
               type="button"
-              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
-              aria-pressed={isFullscreen}
-              title={isFullscreen ? "Exit full screen" : "Full screen"}
-              data-testid="replay-fullscreen"
-              onClick={toggleFullscreen}
-              className="h-8 w-8 rounded-md border border-border bg-bg-elevated/90 text-caption font-semibold text-text hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label="Zoom in"
+              title="Zoom in"
+              onClick={() => {
+                const c = canvasRef.current;
+                if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1.4);
+              }}
+              className={VIEW_BUTTON_CLASS}
             >
-              <span aria-hidden>{isFullscreen ? "⤡" : "⤢"}</span>
+              <Plus className="h-4 w-4" aria-hidden />
             </button>
-          ) : null}
+            <button
+              type="button"
+              aria-label="Zoom out"
+              title="Zoom out"
+              onClick={() => {
+                const c = canvasRef.current;
+                if (c) applyZoom(c.clientWidth / 2, c.clientHeight / 2, 1 / 1.4);
+              }}
+              className={VIEW_BUTTON_CLASS}
+            >
+              <Minus className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label="Reset zoom"
+              title="Reset zoom"
+              data-testid="replay-reset-zoom"
+              onClick={resetView}
+              className={VIEW_BUTTON_CLASS}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden />
+            </button>
+            {fullscreenAvailable ? (
+              <button
+                type="button"
+                aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+                aria-pressed={isFullscreen}
+                title={isFullscreen ? "Exit full screen" : "Full screen"}
+                data-testid="replay-fullscreen"
+                onClick={toggleFullscreen}
+                className={VIEW_BUTTON_CLASS}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Maximize2 className="h-4 w-4" aria-hidden />
+                )}
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
