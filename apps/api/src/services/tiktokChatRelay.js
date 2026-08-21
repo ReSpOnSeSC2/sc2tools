@@ -61,9 +61,14 @@ const TIKTOK_CONNECTION_OPTIONS = Object.freeze({
   // it is important when an OBS source starts after chat has begun; the
   // Channel de-duplicates comments that the websocket repeats.
   processInitialData: true,
-  // Supplies each gift's diamond cost so recognition can show the
-  // streamer's actual diamond total instead of only the combo count.
-  enableExtendedGiftInfo: true,
+  // NOTE: `enableExtendedGiftInfo` is deliberately absent. It supplies each
+  // gift's diamond cost, but the gift list is fetched from Euler Stream's
+  // *signature* endpoint DURING connect(), and Euler moved that endpoint
+  // behind a paid plan (HTTP 401, `x-required-scopes: PRO`). A rejected gift
+  // fetch rejects the whole connect promise, so enabling it takes chat down
+  // with it. Chat signing itself is still free and unaffected. Set
+  // TIKTOK_SIGN_API_KEY to buy the diamond values back — see
+  // defaultConnectionFactory.
 });
 
 /** @typedef {(event: Record<string, any>) => void} RelayListener */
@@ -727,7 +732,15 @@ function mapTikTokEvent(name, data) {
 async function defaultConnectionFactory(username) {
   const mod = await import("tiktok-live-connector");
   const { TikTokLiveConnection } = /** @type {any} */ (mod);
-  return new TikTokLiveConnection(username, TIKTOK_CONNECTION_OPTIONS);
+  // A paid Euler Stream key is the only thing that unlocks the gift-list
+  // signature endpoint. Without one we connect without extended gift info
+  // rather than losing chat entirely; gifts still arrive, just without a
+  // diamond total (mapTikTokEvent already degrades to the combo count).
+  const signApiKey = String(process.env.TIKTOK_SIGN_API_KEY || "").trim();
+  return new TikTokLiveConnection(username, {
+    ...TIKTOK_CONNECTION_OPTIONS,
+    ...(signApiKey ? { signApiKey, enableExtendedGiftInfo: true } : {}),
+  });
 }
 
 /**

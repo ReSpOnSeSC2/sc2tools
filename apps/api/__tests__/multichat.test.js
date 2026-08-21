@@ -724,8 +724,15 @@ describe("services/tiktokChatRelay", () => {
   test("production connector requests TikTok's initial comment batch", () => {
     expect(TIKTOK_CONNECTION_OPTIONS).toEqual({
       processInitialData: true,
-      enableExtendedGiftInfo: true,
     });
+  });
+
+  test("extended gift info stays off unless a paid sign key is configured", () => {
+    // Euler Stream paywalled the gift-list signature endpoint; asking for it
+    // without a key rejects connect() and kills chat.
+    expect(TIKTOK_CONNECTION_OPTIONS).not.toHaveProperty(
+      "enableExtendedGiftInfo",
+    );
   });
 
   test("offline streamer surfaces status=offline and keeps the channel for retry", async () => {
