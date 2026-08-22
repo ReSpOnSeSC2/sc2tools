@@ -9,9 +9,9 @@ vi.mock("@/lib/api", () => ({
   apiFetch: vi.fn(async () => apiHarness.response),
 }));
 
-vi.mock("@/components/chrome/AppChrome", () => ({
-  AppChrome: ({ children }: { children: React.ReactNode }) => (
-    <div>chrome loaded {children}</div>
+vi.mock("@/components/dashboard/AnalyzerFrame", () => ({
+  AnalyzerFrame: ({ children }: { children: React.ReactNode }) => (
+    <div>analyzer frame {children}</div>
   ),
 }));
 
@@ -26,7 +26,8 @@ afterEach(() => {
  * The /v1/me gate moved from the old dashboard page into the /app
  * layout so every routed section shares it. Same guarantees as before:
  * a 502 gets a friendly retry with no deployment internals, and an
- * expired session routes back to sign-in.
+ * expired session routes back to sign-in. The surrounding chrome is
+ * mounted by AppShell, so this layout only supplies AnalyzerFrame.
  */
 describe("app layout API recovery state", () => {
   it("shows a friendly retry without deployment instructions during a 502", async () => {
@@ -50,7 +51,7 @@ describe("app layout API recovery state", () => {
       .toBe("/sign-in");
   });
 
-  it("mounts the chrome around children once /v1/me resolves", async () => {
+  it("mounts the analyzer frame around children once /v1/me resolves", async () => {
     apiHarness.response = {
       ok: true,
       status: 200,
@@ -63,7 +64,7 @@ describe("app layout API recovery state", () => {
     };
     render(await resolveLayout());
 
-    expect(screen.getByText(/chrome loaded/)).toBeTruthy();
+    expect(screen.getByText(/analyzer frame/)).toBeTruthy();
     expect(screen.getByText("PAGE")).toBeTruthy();
   });
 });

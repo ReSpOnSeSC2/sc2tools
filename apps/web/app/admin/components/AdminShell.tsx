@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
-import { Menu, X } from "lucide-react";
 
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useAdminEventsSocket } from "./useAdminEventsSocket";
@@ -19,10 +18,11 @@ import type {
  *
  *   - Desktop (≥ ``md``): persistent left sidebar with the section
  *     navigation; content fills the remaining width.
- *   - Mobile (``< md``): a sticky top header with a hamburger that
- *     toggles a slide-in drawer. The drawer auto-closes on
- *     navigation so the user lands on the new tab without an extra
- *     tap.
+ *   - Mobile (``< md``): a horizontal scroll strip above the content,
+ *     matching the Settings sub-navigation. The app chrome already
+ *     owns the product-level nav (rail on desktop, tab bar plus More
+ *     sheet on mobile), so a second hamburger here would be a
+ *     competing menu rather than a section switcher.
  *
  * Each tab is a real Next.js route under ``/admin/<slug>`` rather
  * than React-state-driven; that keeps deep links shareable, plays
@@ -90,96 +90,77 @@ const NAV: ReadonlyArray<NavItem> = [
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
   const active = pickActive(NAV, pathname || "/admin");
   const unread = useUnreadCount();
   const infrastructureNotice = useInfrastructureNotice();
 
-  return (
-    <div className="flex min-h-[calc(100dvh-4rem)] flex-col gap-4 md:flex-row md:gap-6">
-      {/* Mobile header — sticks to the top of the viewport. */}
-      <div className="md:hidden">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
-          <button
-            type="button"
-            aria-label={adminMenuLabel(unread, infrastructureNotice)}
-            className="hard-press relative inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-            onClick={() => setDrawerOpen(true)}
-          >
-            <Menu className="h-5 w-5" aria-hidden />
-            {/* The unread badge otherwise lives only inside the drawer,
-                so on mobile a new signup / download / message left no
-                visible signal until you opened the menu. Surface it on
-                the header button itself. */}
-            {unread > 0 ? (
-              <span
-                className="absolute -right-1 -top-1 inline-flex min-w-[1.125rem] items-center justify-center rounded-full bg-accent-cyan px-1 py-0.5 text-micro font-bold leading-none text-white"
-                aria-hidden
-              >
-                {unread > 99 ? "99+" : unread}
-              </span>
-            ) : null}
-            {infrastructureNotice ? (
-              <span
-                className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-bg-surface ${infrastructureNotice === "upgrade" ? "bg-danger" : "bg-warning"}`}
-                aria-hidden
-              />
-            ) : null}
-          </button>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Admin
-            </span>
-            <span className="truncate text-body font-semibold">
-              {active?.label ?? "Admin"}
-            </span>
-          </div>
-          <span className="w-10" aria-hidden />
-        </header>
-      </div>
+  const badgeFor = (href: string) =>
+    href === "/admin/notifications" && unread > 0 ? unread : 0;
+  const noticeFor = (href: string) =>
+    href === "/admin/health" ? infrastructureNotice : null;
 
-      {/* Mobile drawer overlay. */}
-      {drawerOpen ? (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
-          onClick={() => setDrawerOpen(false)}
-          role="presentation"
-        />
-      ) : null}
+  return (
+    <div className="flex flex-col gap-4 md:flex-row md:gap-6">
+      {/* Mobile — horizontal scroll strip, same shape as Settings. */}
+      <nav
+        aria-label="Admin sections"
+        className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 md:hidden"
+      >
+        {NAV.map((item) => {
+          const isActive = item.href === active?.href;
+          const badge = badgeFor(item.href);
+          const capacityStatus = noticeFor(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isActive ? "page" : undefined}
+              className={[
+                "inline-flex min-h-[40px] flex-none items-center gap-2 rounded-full border-2 px-3.5",
+                "text-caption font-bold whitespace-nowrap transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                isActive
+                  ? "border-accent-cyan/40 bg-accent-cyan/10 text-accent"
+                  : "border-border text-text-muted hover:bg-bg-elevated hover:text-text",
+              ].join(" ")}
+            >
+              <NavIcon path={item.icon} />
+              {item.label}
+              {badge > 0 ? (
+                <span
+                  className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-cyan px-1.5 py-0.5 text-micro font-bold leading-none text-white"
+                  aria-label={`${badge} unread`}
+                >
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              ) : null}
+              {capacityStatus ? (
+                <span
+                  className={`inline-block h-2.5 w-2.5 flex-none rounded-full ${capacityStatus === "upgrade" ? "bg-danger" : "bg-warning"}`}
+                  role="img"
+                  aria-label={`Infrastructure status: ${capacityStatus}`}
+                />
+              ) : null}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Desktop sidebar. */}
       <aside
-        className={[
-          "fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] transform border-r border-border bg-bg-surface p-4 transition-transform md:static md:z-auto md:w-64 md:translate-x-0 md:border-r md:bg-transparent md:p-0",
-          drawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-        ].join(" ")}
+        className="hidden w-64 flex-none md:block"
         aria-label="Admin navigation"
       >
-        <div className="mb-3 flex items-center justify-between md:hidden">
-          <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-            Admin
-          </span>
-          <button
-            type="button"
-            aria-label="Close admin navigation"
-            className="hard-press inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
-            onClick={() => setDrawerOpen(false)}
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </div>
         <nav className="space-y-1">
           {NAV.map((item) => {
             const isActive = item.href === active?.href;
-            const badge =
-              item.href === "/admin/notifications" && unread > 0 ? unread : 0;
-            const capacityStatus = item.href === "/admin/health"
-              ? infrastructureNotice
-              : null;
+            const badge = badgeFor(item.href);
+            const capacityStatus = noticeFor(item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setDrawerOpen(false)}
                 className={[
                   "flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors",
                   isActive
@@ -228,10 +209,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      {/* Page content. */}
-      <main className="min-w-0 flex-1">
+      {/* Page content. The app chrome owns <main>, so this is a plain box. */}
+      <div className="min-w-0 flex-1">
         <div className="space-y-6">{children}</div>
-      </main>
+      </div>
     </div>
   );
 }
@@ -278,20 +259,6 @@ function useInfrastructureNotice(): "watch" | "upgrade" | null {
   return data?.overallStatus === "watch" || data?.overallStatus === "upgrade"
     ? data.overallStatus
     : null;
-}
-
-function adminMenuLabel(
-  unread: number,
-  infrastructureNotice: "watch" | "upgrade" | null,
-): string {
-  const notices: string[] = [];
-  if (unread > 0) notices.push(`${unread} unread`);
-  if (infrastructureNotice) {
-    notices.push(`infrastructure ${infrastructureNotice}`);
-  }
-  return notices.length > 0
-    ? `Open admin navigation (${notices.join(", ")})`
-    : "Open admin navigation";
 }
 
 function pickActive(items: ReadonlyArray<NavItem>, pathname: string) {

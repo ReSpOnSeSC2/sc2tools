@@ -44,6 +44,12 @@ vi.mock("@/components/pwa/ServiceWorkerRegister", () => ({
   ServiceWorkerRegister: () => <div data-testid="service-worker" />,
 }));
 
+vi.mock("@/components/chrome/AppChrome", () => ({
+  AppChrome: ({ children }: { children: ReactNode }) => (
+    <div data-testid="app-chrome">{children}</div>
+  ),
+}));
+
 import { AppShell } from "./AppShell";
 
 function renderAt(pathname: string | null) {
@@ -85,7 +91,21 @@ describe("token-auth broadcast routes", () => {
 });
 
 describe("app chrome routes", () => {
-  it.each(["/app", "/app/opponents", "/app/game/g1", "/app/macro"])(
+  it.each([
+    "/app",
+    "/app/opponents",
+    "/app/game/g1",
+    "/app/macro",
+    "/builds",
+    "/builds/my-opener",
+    "/meta",
+    "/community",
+    "/community/builds/slug",
+    "/devices",
+    "/settings",
+    "/admin",
+    "/admin/users",
+  ])(
     "keeps Clerk and site-wide concerns on %s without the marketing shell",
     (pathname) => {
       renderAt(pathname);
@@ -96,17 +116,27 @@ describe("app chrome routes", () => {
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
       expect(screen.getByTestId("google-analytics")).toBeTruthy();
       expect(screen.getByTestId("service-worker")).toBeTruthy();
-      // The /app layout owns its own chrome (rail + context bar), so the
-      // marketing header/footer and constrained <main> stay out of the way.
+      // AppChrome owns the rail, the context bar and <main>, so the
+      // marketing header/footer never render alongside it.
+      expect(screen.getByTestId("app-chrome")).toBeTruthy();
       expect(screen.queryByTestId("site-header")).toBeNull();
       expect(screen.queryByTestId("site-footer")).toBeNull();
-      expect(screen.getByTestId("route-content").closest("main")).toBeNull();
     },
   );
 });
 
 describe("normal and protected routes", () => {
-  it.each(["/", "/settings", "/overlay-tools", "/dockyard", "/apparel"])(
+  it.each([
+    "/",
+    "/download",
+    "/donate",
+    "/welcome",
+    "/legal/privacy",
+    "/definitions",
+    "/overlay-tools",
+    "/dockyard",
+    "/apparel",
+  ])(
     "keeps Clerk and the complete site shell on %s",
     (pathname) => {
       renderAt(pathname);

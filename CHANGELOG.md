@@ -25,6 +25,21 @@ corresponding GitHub Release.
   code-split per route — Today's first load carries ~22 kB of
   route-specific JS instead of the whole analyzer.
 
+- **The command rail now carries the whole product, on every device** —
+  Settings, the custom-build library, Community, Meta, Devices and Admin
+  moved off the marketing header and into the same chrome as /app, so
+  the mobile hamburger is gone from the signed-in product entirely:
+  every surface gets the rail on desktop and the bottom tab bar plus
+  More sheet on phones. Admin's own nested hamburger and slide-in drawer
+  became a horizontal section strip, matching the pattern Settings
+  already used — one menu per screen instead of two. /meta and
+  /community stay reachable signed-out: the shell's structure is
+  identical either way and only its contents swap (public destinations
+  and sign-in CTAs instead of the section rail and account button), so
+  a shared community link never shifts layout while Clerk resolves.
+  The context bar defers its `<h1>` to pages that carry their own title,
+  so no surface ships two.
+
 - **One navigation system: the command rail** — /app routes swapped the
   marketing header plus in-page tab column for an app shell: a 64 px icon
   rail (expands on hover/focus) carrying Today, all seven sections, the

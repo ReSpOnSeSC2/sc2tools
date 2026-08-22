@@ -12,7 +12,7 @@ import {
 } from "@/components/analyzer/tabs";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
-import { useDashboardMe } from "@/components/chrome/AppChrome";
+import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useApi } from "@/lib/clientApi";
 
