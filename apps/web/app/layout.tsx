@@ -57,9 +57,9 @@ const serif = localFont({
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
-const SITE_TITLE = "SC2 Tools — opponent intel, build orders, live overlay";
+const SITE_TITLE = "SC2 Tools — replay analysis, build coaching & Stream Studio";
 const SITE_DESCRIPTION =
-  "Sign in, install the agent, and your StarCraft II opponents tab loads in seconds — across every device.";
+  "Turn every StarCraft II replay into opponent intel, a 3D match review, build coaching, personal trends, and a complete OBS production suite.";
 
 export const metadata: Metadata = {
   // Resolves relative OG/Twitter image URLs (incl. the per-page ones) to
@@ -91,7 +91,7 @@ export const metadata: Metadata = {
         url: "/og.jpg",
         width: 1200,
         height: 630,
-        alt: "SC2 Tools — StarCraft II opponent intel and build orders",
+        alt: "SC2 Tools — StarCraft II replay analysis, coaching, and Stream Studio",
       },
     ],
   },

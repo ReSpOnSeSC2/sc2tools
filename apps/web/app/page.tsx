@@ -19,18 +19,14 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Banner } from "@/components/Banner";
-import { DonateBanner } from "@/components/landing/DonateBanner";
 import {
   HeroCarousel,
   type HeroCarouselSlide,
 } from "@/components/landing/HeroCarousel";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
-import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
+import { LandingPageContent } from "@/components/landing/LandingPageContent";
 import { StreamStudioShowcase } from "@/components/landing/StreamStudioShowcase";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
-import {
-  getInfrastructureCosts,
-} from "@/lib/infrastructureCosts";
 
 /* =============================================================== */
 /* PAGE                                                             */
@@ -69,11 +65,10 @@ const WEBSITE_JSON_LD = {
   name: "SC2 Tools",
   url: SITE_URL,
   description:
-    "Opponent intel, build orders, and a live OBS overlay for StarCraft II.",
+    "Replay analysis, opponent intel, build coaching, and a complete OBS Stream Studio for StarCraft II.",
 };
 
-export default async function LandingPage() {
-  const infrastructureCosts = await getInfrastructureCosts();
+export default function LandingPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <script
@@ -84,23 +79,7 @@ export default async function LandingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
       />
-      {/* Narrative arc: ethos hero → a real game read by the app →
-          the analysis toolset (A) → the streaming toolkit (B) → the
-          arcade (C) → try the replay reader yourself → how to start
-          (D) → install → support → close. Folios run A→D in reading
-          order — the interactive replay demo deliberately sits
-          un-lettered between C and D as a "hands-on interlude". */}
-      <Masthead />
-      <LeadFeature />
-      <RealGameShowcase />
-      <PillarsSection />
-      <StreamStudioSection />
-      <ArcadeSection />
-      <ReplaySection />
-      <HowItWorksSection />
-      <MobileInstallSection />
-      <DonateBanner costs={infrastructureCosts} />
-      <FinalCtaSection />
+      <LandingPageContent />
     </div>
   );
 }
@@ -309,7 +288,7 @@ function TrustStrip() {
 
 function ReplaySection() {
   return (
-    <section className="mt-24 md:mt-32">
+    <section id="replay-demo" className="scroll-mt-24 mt-24 md:mt-32">
       <ReplayDemo />
     </section>
   );
@@ -701,7 +680,7 @@ function CtaLink({
 }: CtaLinkProps) {
   const variantClass =
     variant === "primary"
-      ? "bg-accent text-white hover:bg-accent-hover"
+      ? "bg-accent text-white hover:brightness-90"
       : "bg-bg-elevated text-text border-2 border-line hover:bg-bg-subtle";
   const sizeClass =
     size === "lg"

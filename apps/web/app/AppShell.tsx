@@ -34,7 +34,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (isTokenSurface) {
     return (
       <ToastProvider>
-        <main className={MAIN_CLASS}>{children}</main>
+        <main id="main-content" className={MAIN_CLASS}>
+          {children}
+        </main>
       </ToastProvider>
     );
   }
@@ -42,8 +44,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider appearance={clerkAppearanceBase}>
       <ToastProvider>
+        <a
+          href="#main-content"
+          className="sr-only z-[100] rounded-md bg-bg-surface px-4 py-3 font-semibold text-text shadow-hard focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus:ring-2 focus:ring-accent"
+        >
+          Skip to content
+        </a>
         <Header />
-        <main className={MAIN_CLASS}>{children}</main>
+        <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
+          {children}
+        </main>
         <Footer />
         <CookieBanner />
         <GoogleAnalytics />

@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { Wand2 } from "lucide-react";
+import { ImprovementPreview } from "@/components/landing/ProductShowcases";
 
 /* =============================================================== */
 /* REAL-GAME SHOWCASE — one actual replay, read by the app          */
@@ -70,26 +70,6 @@ const RACE_DOT: Record<ShowcasePlayer["race"], string> = {
   Terran: "bg-race-terran",
 };
 
-/** Real product screenshots of the stats/graph pages the games feed. */
-const TREND_SHOTS: ReadonlyArray<{
-  src: string;
-  alt: string;
-  caption: string;
-}> = [
-  {
-    src: "/landing/builds.png",
-    alt: "Custom Builds page in SC2 Tools showing per-build wins, losses, win rate, and trend sparklines",
-    caption:
-      "Per-build win rate, W-L and a trend sparkline for every opener you play — split by matchup and by map.",
-  },
-  {
-    src: "/landing/opponent-dna.png",
-    alt: "Opponent profile in SC2 Tools showing head-to-head record, build tendencies, and median key timings",
-    caption:
-      "Per-opponent dossier — your head-to-head record, the builds they lean on, and their median key timings.",
-  },
-];
-
 export function RealGameShowcase() {
   return (
     <section className="mt-24 md:mt-32">
@@ -152,48 +132,36 @@ export function RealGameShowcase() {
         />
       </dl>
 
-      {/* Trends & graphs — the stats pages every parsed game feeds. */}
-      <div className="mt-16 grid gap-x-10 gap-y-4 lg:grid-cols-12">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-y border-border py-4">
+        <p className="max-w-3xl text-body text-text-muted">
+          This example comes from the committed replay fixture used by the
+          parser test suite. The values are real parser output; only the player
+          names are hidden.
+        </p>
+        <span className="inline-flex items-center gap-1.5 text-caption font-semibold text-success">
+          <span className="h-2 w-2 rounded-full bg-success" aria-hidden />
+          Real replay · anonymized
+        </span>
+      </div>
+
+      <div className="mt-20 grid gap-x-10 gap-y-5 lg:grid-cols-12 md:mt-24">
         <p className="kicker lg:col-span-4">And it stacks up over time</p>
         <div className="lg:col-span-8">
           <hr className="ed-rule mb-5" />
-          <h3 className="font-serif text-[26px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[32px]">
+          <h3 className="font-serif text-[30px] font-semibold leading-tight tracking-[-0.01em] text-text md:text-[38px]">
             A few games in, the graphs do the talking.
           </h3>
           <p className="mt-3 max-w-2xl text-body-lg text-text-muted">
-            Every game you finish feeds the same stats pages: win rate week by
-            week with a rolling average, your MMR climb, the matchups and maps
-            you&rsquo;re strongest on, and how your build mix shifts — plus
-            per-build and per-opponent breakdowns.
+            Every game you finish feeds the same intelligence pages: win rate
+            week by week, your MMR climb, the matchups and maps you are
+            strongest on, and how your build mix shifts—plus per-build and
+            per-opponent breakdowns.
           </p>
         </div>
       </div>
-
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
-        {TREND_SHOTS.map((shot) => (
-          <figure key={shot.src} className="space-y-3">
-            <div className="overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40 shadow-hard">
-              <Image
-                src={shot.src}
-                alt={shot.alt}
-                width={1600}
-                height={900}
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="block h-auto w-full"
-              />
-            </div>
-            <figcaption className="text-body text-text-muted">
-              {shot.caption}
-            </figcaption>
-          </figure>
-        ))}
+      <div className="mt-8">
+        <ImprovementPreview />
       </div>
-
-      <p className="mt-8 max-w-3xl text-body text-text-muted">
-        The desktop app does all of this after every game you finish — no
-        tagging, nothing to upload. And the OBS overlay flags a familiar
-        opponent the moment they load in.
-      </p>
     </section>
   );
 }

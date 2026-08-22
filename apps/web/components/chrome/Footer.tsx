@@ -22,9 +22,10 @@ interface FooterLink {
 }
 
 const PRODUCT_LINKS: readonly FooterLink[] = [
-  { href: "/app", label: "Dashboard" },
-  { href: "/builds", label: "Builds" },
-  { href: "/settings#overlay", label: "Overlay" },
+  { href: "/#analyze", label: "Analyze" },
+  { href: "/#practice", label: "Practice" },
+  { href: "/#stream", label: "Stream Studio" },
+  { href: "/builds", label: "Custom builds" },
   { href: "/devices", label: "Devices" },
   { href: "/download", label: "Download agent" },
 ];
@@ -91,8 +92,8 @@ function BrandStrip() {
         </span>
       </Link>
       <p className="mt-3 max-w-xs text-caption text-text-muted">
-        Real opponent intel for StarCraft II. No install ceremony — sign in,
-        run the agent, and your opponents tab loads in seconds.
+        Replay analysis, opponent intel, build coaching, and a complete Stream
+        Studio for StarCraft II.
       </p>
     </div>
   );
