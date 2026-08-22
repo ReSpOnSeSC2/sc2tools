@@ -28,12 +28,12 @@ const REPLAY_FEED = [
 ] as const;
 
 const UNIT_MARKERS = [
-  { src: "/sprites/icons/Stalker_blue.webp", alt: "Stalker", left: "24%", top: "59%", size: "h-10 w-10 sm:h-12 sm:w-12" },
-  { src: "/sprites/icons/Zealot_blue.webp", alt: "Zealot", left: "34%", top: "49%", size: "h-9 w-9 sm:h-11 sm:w-11" },
-  { src: "/sprites/icons/Immortal_blue.webp", alt: "Immortal", left: "43%", top: "63%", size: "h-11 w-11 sm:h-14 sm:w-14" },
-  { src: "/sprites/icons/Marine_red.webp", alt: "Marine", left: "66%", top: "39%", size: "h-8 w-8 sm:h-10 sm:w-10" },
-  { src: "/sprites/icons/Marauder_red.webp", alt: "Marauder", left: "73%", top: "48%", size: "h-10 w-10 sm:h-12 sm:w-12" },
-  { src: "/sprites/icons/Medivac_red.webp", alt: "Medivac", left: "78%", top: "29%", size: "h-11 w-11 sm:h-14 sm:w-14" },
+  { src: "/icons/sc2/units/stalker.png", alt: "Stalker", left: "24%", top: "59%", size: "h-10 w-10 sm:h-12 sm:w-12" },
+  { src: "/icons/sc2/units/zealot.png", alt: "Zealot", left: "34%", top: "49%", size: "h-9 w-9 sm:h-11 sm:w-11" },
+  { src: "/icons/sc2/units/immortal.png", alt: "Immortal", left: "43%", top: "63%", size: "h-11 w-11 sm:h-14 sm:w-14" },
+  { src: "/icons/sc2/units/marine.png", alt: "Marine", left: "66%", top: "39%", size: "h-8 w-8 sm:h-10 sm:w-10" },
+  { src: "/icons/sc2/units/marauder.png", alt: "Marauder", left: "73%", top: "48%", size: "h-10 w-10 sm:h-12 sm:w-12" },
+  { src: "/icons/sc2/units/medivac.png", alt: "Medivac", left: "78%", top: "29%", size: "h-11 w-11 sm:h-14 sm:w-14" },
 ] as const;
 
 export function ReplayTheaterPreview({ priority = false }: { priority?: boolean }) {
@@ -305,8 +305,8 @@ export function PracticePreview() {
             <Gamepad2 className="h-6 w-6 text-editorial" aria-hidden />
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <UnitPick src="/sprites/icons/Stalker_blue.webp" name="Stalker" odds="45%" />
-            <UnitPick src="/sprites/icons/Adept_blue.webp" name="Adept" odds="30%" />
+            <UnitPick src="/icons/sc2/units/stalker.png" name="Stalker" odds="45%" />
+            <UnitPick src="/icons/sc2/units/adept.png" name="Adept" odds="30%" />
           </div>
           <div className="mt-4 rounded-md border border-border bg-bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
