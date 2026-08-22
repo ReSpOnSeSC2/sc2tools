@@ -15,6 +15,12 @@ import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
 
+/** /app and everything under it renders inside its own chrome (AppChrome). */
+function isAppChromeRoute(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return pathname === "/app" || pathname.startsWith("/app/");
+}
+
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
  *
@@ -24,12 +30,18 @@ const MAIN_CLASS =
  * The toast context remains available because dock controls use the same app
  * primitives as the signed-in site.
  *
+ * `/app/*` routes own their chrome: the app layout mounts the rail, context
+ * bar and mobile tab bar, so the marketing Header/Footer and the constrained
+ * <main> wrapper are omitted for them — only the providers and site-wide
+ * concerns (cookies, analytics, service worker) remain.
+ *
  * All other routes retain the existing Clerk + site-shell composition. A null
  * pathname is treated conservatively as a normal route so authentication is
  * never skipped while the router is becoming ready.
  */
 export function AppShell({ children }: { children: ReactNode }) {
-  const isTokenSurface = isTokenAuthRoute(usePathname());
+  const pathname = usePathname();
+  const isTokenSurface = isTokenAuthRoute(pathname);
 
   if (isTokenSurface) {
     return (
@@ -38,6 +50,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </ToastProvider>
+    );
+  }
+
+  if (isAppChromeRoute(pathname)) {
+    return (
+      <ClerkProvider appearance={clerkAppearanceBase}>
+        <ToastProvider>
+          {children}
+          <CookieBanner />
+          <GoogleAnalytics />
+          <ServiceWorkerRegister />
+        </ToastProvider>
+      </ClerkProvider>
     );
   }
 

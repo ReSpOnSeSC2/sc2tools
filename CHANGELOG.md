@@ -11,6 +11,40 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every analyzer section is now a real URL** — the dashboard's seven
+  client-side tabs became routes: `/app/opponents`, `/app/strategies`,
+  `/app/trends`, `/app/macro`, `/app/maps`, `/app/builds`, `/app/arcade`,
+  with each opponent dossier at `/app/opponents/<pulseId>`. Bookmarks,
+  refresh, the browser Back button and sharing a section with a teammate
+  all work now; opening a dossier no longer destroys the list behind it.
+  The old URL shapes keep working: `/app?opponent=<id>` redirects to the
+  dossier route and `/app?tab=<id>` to its section, so pre-redesign links
+  and the game page's "Back to opponent" path land correctly. Sections
+  code-split per route — Today's first load carries ~22 kB of
+  route-specific JS instead of the whole analyzer.
+
+- **One navigation system: the command rail** — /app routes swapped the
+  marketing header plus in-page tab column for an app shell: a 64 px icon
+  rail (expands on hover/focus) carrying Today, all seven sections, the
+  custom-build library, agent, settings, meta, community and (for admins)
+  admin; a slim sticky context bar with the section name, live sync
+  status, theme toggle and account button; and on phones a bottom tab bar
+  (Today · Opponents · Builds · Maps · More-sheet) instead of the modal
+  section picker. The ten stacked header blocks above the first data row
+  collapsed into that one bar, and the app content area widened from the
+  1,280 px marketing cap to a fluid 1,680 px — the opponent table fits
+  without horizontal scrolling on desktop displays.
+
+- **Today is the new front door** — `/app` now answers the between-games
+  questions in one screen: the live-game panel, KPI strip, Ladder Pulse
+  and Daily Pulse, with each pulse card deep-linking into its routed
+  section. The Settings → "Default tab" preference still lands you on
+  your chosen section (once per browser session). The macro report, the
+  per-game replay analysis page and the map artwork pipeline are
+  untouched — they inherit the new chrome and the wider canvas.
+
 ### Added
 
 - **"Win rate by opponent MMR" now groups in 500-MMR brackets, and opens

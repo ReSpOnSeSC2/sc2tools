@@ -255,9 +255,7 @@ describe("GameDetailPage", () => {
     );
 
     const back = screen.getByRole("link", { name: "Back to Foe" });
-    expect(back.getAttribute("href")).toBe(
-      "/app?tab=opponents&opponent=1-S2-1-99",
-    );
+    expect(back.getAttribute("href")).toBe("/app/opponents/1-S2-1-99");
   });
 
   it("shows a branded not-found state with a back link on 404", () => {

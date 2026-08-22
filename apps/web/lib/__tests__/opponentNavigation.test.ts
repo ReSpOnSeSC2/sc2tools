@@ -19,7 +19,7 @@ describe("opponent navigation context", () => {
       displayName: "Barcode Rival",
     });
     expect(opponentProfileHref(context)).toBe(
-      "/app?tab=opponents&opponent=1-S2-1-42%2Falt",
+      "/app/opponents/1-S2-1-42%2Falt",
     );
   });
 

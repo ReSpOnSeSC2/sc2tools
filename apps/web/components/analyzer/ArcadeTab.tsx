@@ -18,7 +18,7 @@ const SUBS: Array<{ id: Sub; label: string }> = [
 ];
 
 /**
- * ArcadeTab — root surface mounted by AnalyzerShell. Owns the
+ * ArcadeTab — root surface for the /app/arcade route. Owns the
  * sub-navigation; each sub renders its own surface and composes the
  * shared engine + state hooks.
  */

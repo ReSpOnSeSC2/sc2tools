@@ -39,18 +39,19 @@ export function gameAnalysisHref(
   return `${base}?${query.toString()}`;
 }
 
-/** Stable dashboard URL that re-opens one opponent dossier after navigation. */
+/**
+ * Stable URL that re-opens one opponent dossier after navigation.
+ * Dossiers are real routes (/app/opponents/[pulseId]); the old
+ * `/app?tab=opponents&opponent=…` shape is still accepted by /app,
+ * which redirects it here, so pre-redesign bookmarks keep working.
+ */
 export function opponentProfileHref(
   opponent?: OpponentNavigationContext | null,
 ): string {
   const pulseId = clean(opponent?.pulseId, 256);
   if (!pulseId) return "/app";
 
-  const query = new URLSearchParams({
-    tab: "opponents",
-    [OPPONENT_QUERY_PARAM]: pulseId,
-  });
-  return `/app?${query.toString()}`;
+  return `/app/opponents/${encodeURIComponent(pulseId)}`;
 }
 
 function first(value: string | string[] | undefined): string | undefined {

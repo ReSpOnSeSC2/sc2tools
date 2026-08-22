@@ -84,8 +84,29 @@ describe("token-auth broadcast routes", () => {
   });
 });
 
+describe("app chrome routes", () => {
+  it.each(["/app", "/app/opponents", "/app/game/g1", "/app/macro"])(
+    "keeps Clerk and site-wide concerns on %s without the marketing shell",
+    (pathname) => {
+      renderAt(pathname);
+
+      expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(route.clerkRenders).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("route-content")).toBeTruthy();
+      expect(screen.getByTestId("cookie-banner")).toBeTruthy();
+      expect(screen.getByTestId("google-analytics")).toBeTruthy();
+      expect(screen.getByTestId("service-worker")).toBeTruthy();
+      // The /app layout owns its own chrome (rail + context bar), so the
+      // marketing header/footer and constrained <main> stay out of the way.
+      expect(screen.queryByTestId("site-header")).toBeNull();
+      expect(screen.queryByTestId("site-footer")).toBeNull();
+      expect(screen.getByTestId("route-content").closest("main")).toBeNull();
+    },
+  );
+});
+
 describe("normal and protected routes", () => {
-  it.each(["/", "/app", "/settings", "/overlay-tools", "/dockyard"])(
+  it.each(["/", "/settings", "/overlay-tools", "/dockyard", "/apparel"])(
     "keeps Clerk and the complete site shell on %s",
     (pathname) => {
       renderAt(pathname);

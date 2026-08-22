@@ -23,7 +23,7 @@ type Misc = {
 const DEFAULT_MISC: Misc = {};
 
 // Mirrors components/analyzer/tabs.ts TABS — the values must be real
-// TabIds or DashboardLayout ignores the preference (the old "ml"
+// TabIds or the Today route ignores the preference (the old "ml"
 // entry pointed at a tab that no longer exists).
 const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "opponents", label: "Opponents" },

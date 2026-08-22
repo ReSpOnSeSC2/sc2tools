@@ -13,8 +13,8 @@
  *     the strip rotates to the new day's mix without a refresh.
  *   - One analyzer-scoped provider owns the memory-bounded corpus, so the
  *     dashboard strip and Arcade reuse the same current flat snapshot.
- *   - Cards deep-link into the analyzer tab that owns the full story
- *     (via onNavigate — tab state lives in DashboardLayout, not URLs).
+ *   - Cards deep-link into the routed section that owns the full story
+ *     (via onNavigate — the host maps a TabId to its /app route).
  *
  * If the corpus can't support a card yet, the strip keeps a compact empty
  * state so the loaded corpus can still be collapsed and released.
