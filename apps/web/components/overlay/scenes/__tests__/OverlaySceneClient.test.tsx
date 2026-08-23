@@ -225,6 +225,7 @@ describe("live mode", () => {
           muted: true,
           volume: 20,
           audioOwner: true,
+          videoFormat: "horizontal",
         }),
       );
       expect(screen.getByText("Manual reel")).toBeTruthy();
@@ -265,7 +266,10 @@ describe("live mode", () => {
     render(<OverlaySceneClient token="tok" scene="manual" />);
     expect(await screen.findByTestId("broll-player")).toBeTruthy();
     expect(brollPlayer).toHaveBeenCalledWith(
-      expect.objectContaining({ audioOwner: false }),
+      expect.objectContaining({
+        audioOwner: false,
+        videoFormat: "horizontal",
+      }),
     );
   });
 });

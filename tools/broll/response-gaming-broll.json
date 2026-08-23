@@ -322,6 +322,116 @@
       "videoId": "HWsJ4tYz3M8",
       "startSeconds": 6432,
       "endSeconds": 6479
+    },
+    {
+      "id": "hajXg3Ql5h4-95-130",
+      "title": "Red Swarm Breakthrough",
+      "videoId": "hajXg3Ql5h4",
+      "startSeconds": 95,
+      "endSeconds": 130,
+      "vertical": {
+        "videoId": "weH1bu8-oQc",
+        "startSeconds": 111
+      }
+    },
+    {
+      "id": "hajXg3Ql5h4-1030-1090",
+      "title": "Stormfront Showdown",
+      "videoId": "hajXg3Ql5h4",
+      "startSeconds": 1030,
+      "endSeconds": 1090,
+      "vertical": {
+        "videoId": "weH1bu8-oQc",
+        "startSeconds": 1046
+      }
+    },
+    {
+      "id": "hajXg3Ql5h4-1965-2005",
+      "title": "Final Line Break",
+      "videoId": "hajXg3Ql5h4",
+      "startSeconds": 1965,
+      "endSeconds": 2005,
+      "vertical": {
+        "videoId": "weH1bu8-oQc",
+        "startSeconds": 1981
+      }
+    },
+    {
+      "id": "ClXDot0F0K0-10-55",
+      "title": "Opening Base Breaker",
+      "videoId": "ClXDot0F0K0",
+      "startSeconds": 10,
+      "endSeconds": 55,
+      "vertical": {
+        "videoId": "X3nNNB0orKI",
+        "startSeconds": 7
+      }
+    },
+    {
+      "id": "ClXDot0F0K0-760-810",
+      "title": "Beams Over the Natural",
+      "videoId": "ClXDot0F0K0",
+      "startSeconds": 760,
+      "endSeconds": 810,
+      "vertical": {
+        "videoId": "X3nNNB0orKI",
+        "startSeconds": 757
+      }
+    },
+    {
+      "id": "ClXDot0F0K0-1705-1745",
+      "title": "Formation Into Fire",
+      "videoId": "ClXDot0F0K0",
+      "startSeconds": 1705,
+      "endSeconds": 1745,
+      "vertical": {
+        "videoId": "X3nNNB0orKI",
+        "startSeconds": 1702
+      }
+    },
+    {
+      "id": "ClXDot0F0K0-3120-3195",
+      "title": "Late-Game Firestorm",
+      "videoId": "ClXDot0F0K0",
+      "startSeconds": 3120,
+      "endSeconds": 3195,
+      "vertical": {
+        "videoId": "X3nNNB0orKI",
+        "startSeconds": 3117
+      }
+    },
+    {
+      "id": "Y9U7S6erIP8-1050-1095",
+      "title": "Laser Crossfire",
+      "videoId": "Y9U7S6erIP8",
+      "startSeconds": 1050,
+      "endSeconds": 1095,
+      "vertical": {
+        "videoId": "VrLV7mFS59g",
+        "startSeconds": 1193
+      }
+    },
+    {
+      "id": "Y9U7S6erIP8-3590-3635",
+      "title": "Golden Armada Assault",
+      "videoId": "Y9U7S6erIP8",
+      "startSeconds": 3590,
+      "endSeconds": 3635,
+      "vertical": {
+        "videoId": "VrLV7mFS59g",
+        "startSeconds": 3733
+      }
+    },
+    {
+      "id": "Y9U7S6erIP8-3745-3815",
+      "title": "Final Swarm Collision",
+      "videoId": "Y9U7S6erIP8",
+      "startSeconds": 3745,
+      "endSeconds": 3815,
+      "vertical": {
+        "videoId": "VrLV7mFS59g",
+        "startSeconds": 3888
+      }
     }
   ]
 }

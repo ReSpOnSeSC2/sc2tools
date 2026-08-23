@@ -21,6 +21,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import {
   useStudioState,
   type StudioBrollConfig,
+  type StudioBrollVideoFormat,
   type StudioScene,
 } from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
@@ -29,6 +30,7 @@ import type { LiveGamePayload } from "../types";
 import { useOverlayBuildRefresh } from "../useOverlayBuildRefresh";
 import { BrollPlayer } from "./BrollPlayer";
 import { useBrollAudioOwner } from "./brollAudio";
+import { useBrollVideoFormat } from "./brollVideoFormat";
 
 const TICK_MS = 250;
 
@@ -55,6 +57,7 @@ export function StreamSceneWidget({
   const state = useStudioState(token, studioEvent ?? null);
   const testActive = useTestFireFlag(live, "stream-scene");
   const brollAudioOwner = useBrollAudioOwner();
+  const brollVideoFormat = useBrollVideoFormat();
   const [demoScene, setDemoScene] = useState<StudioScene | null>(null);
   useEffect(() => {
     setDemoScene(testActive ? testScene(Date.now()) : null);
@@ -83,6 +86,12 @@ export function StreamSceneWidget({
     ? Math.max(0, scene.countdownEndsAt - nowMs)
     : null;
 
+  // Do not let hydration request the default landscape source before the
+  // actual OBS canvas (or explicit orientation override) is known.
+  if (broll.clips.length > 0 && !brollVideoFormat) {
+    return <div style={{ background: "transparent" }} />;
+  }
+
   return (
     <StreamSceneCanvas
       scene={scene}
@@ -90,6 +99,7 @@ export function StreamSceneWidget({
       remainMs={remainMs}
       testActive={testActive}
       brollAudioOwner={brollAudioOwner}
+      videoFormat={brollVideoFormat ?? "horizontal"}
     />
   );
 }
@@ -108,6 +118,7 @@ export function StreamSceneCanvas({
   remainMs,
   testActive = false,
   brollAudioOwner,
+  videoFormat,
 }: {
   scene: StudioScene;
   broll: StudioBrollConfig;
@@ -115,6 +126,8 @@ export function StreamSceneCanvas({
   testActive?: boolean;
   /** Exactly one separately-rendered OBS copy may own B-roll audio. */
   brollAudioOwner: boolean;
+  /** The OBS canvas-specific YouTube source selected for paired highlights. */
+  videoFormat: StudioBrollVideoFormat;
 }) {
   const hasBroll = broll.clips.length > 0;
   const isBrb = scene.mode === "brb";
@@ -129,7 +142,11 @@ export function StreamSceneCanvas({
       <style>{sceneCss}</style>
       {hasBroll ? (
         <>
-          <BrollPlayer {...broll} audioOwner={brollAudioOwner} />
+          <BrollPlayer
+            {...broll}
+            audioOwner={brollAudioOwner}
+            videoFormat={videoFormat}
+          />
 
           <div data-testid="stream-scene-hud" style={hudStyle}>
             <div className="scn-scan" aria-hidden="true" />

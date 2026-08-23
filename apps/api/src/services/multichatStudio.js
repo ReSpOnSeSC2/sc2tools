@@ -446,13 +446,13 @@ function sanitizeTimer(raw) {
  * every connected player to advance without adding another socket event.
  *
  * @param {unknown} raw
- * @returns {{clips: Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number}>, shuffle: boolean, muted: boolean, volume: number, skipNonce: number, playback: {epochMs: number, revision: number, seed: number, cursor: number}}}
+ * @returns {{clips: Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number, vertical?: {videoId: string, startSeconds: number}}>, shuffle: boolean, muted: boolean, volume: number, skipNonce: number, playback: {epochMs: number, revision: number, seed: number, cursor: number}}}
  */
 function sanitizeBroll(raw) {
   const b = /** @type {Record<string, unknown>} */ (
     raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
   );
-  /** @type {Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number}>} */
+  /** @type {Array<{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number, vertical?: {videoId: string, startSeconds: number}}>} */
   const clips = [];
   const seenIds = new Set();
   const candidates = Array.isArray(b.clips) ? b.clips : [];
@@ -634,10 +634,15 @@ function nextBrollSeed(
   return hash >>> 0;
 }
 
-/** @param {Array<{id: string, videoId: string, startSeconds: number, endSeconds: number}>} clips */
+/** @param {Array<{id: string, videoId: string, startSeconds: number, endSeconds: number, vertical?: {videoId: string, startSeconds: number}}>} clips */
 function brollLibrarySignature(clips) {
   return clips
-    .map((clip) => `${clip.id}:${clip.videoId}:${clip.startSeconds}:${clip.endSeconds}`)
+    .map((clip) => {
+      const vertical = clip.vertical
+        ? `:${clip.vertical.videoId}:${clip.vertical.startSeconds}`
+        : "";
+      return `${clip.id}:${clip.videoId}:${clip.startSeconds}:${clip.endSeconds}${vertical}`;
+    })
     .join("\u001f");
 }
 
@@ -697,7 +702,7 @@ function resolveBrollCursor(broll, nowMs) {
 /**
  * @param {unknown} raw
  * @param {Set<string>} seenIds
- * @returns {{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number} | null}
+ * @returns {{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number, vertical?: {videoId: string, startSeconds: number}} | null}
  */
 function sanitizeBrollClip(raw, seenIds) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -733,7 +738,53 @@ function sanitizeBrollClip(raw, seenIds) {
   ) {
     return null;
   }
-  return { id, title, videoId, startSeconds, endSeconds };
+  /** @type {{id: string, title: string, videoId: string, startSeconds: number, endSeconds: number, vertical?: {videoId: string, startSeconds: number}}} */
+  const sanitized = { id, title, videoId, startSeconds, endSeconds };
+  const vertical = sanitizeBrollVerticalSource(
+    clip.vertical,
+    endSeconds - startSeconds,
+  );
+  if (vertical) sanitized.vertical = vertical;
+  return sanitized;
+}
+
+/**
+ * A portrait source stores only its matching first frame. The logical clip's
+ * landscape duration is reused by every player, making mismatched durations
+ * impossible to persist.
+ *
+ * @param {unknown} raw
+ * @param {number} durationSeconds
+ * @returns {{videoId: string, startSeconds: number} | null}
+ */
+function sanitizeBrollVerticalSource(raw, durationSeconds) {
+  const verticalRaw = /** @type {Record<string, unknown> | null} */ (
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? raw
+      : null
+  );
+  const verticalVideoId =
+    typeof verticalRaw?.videoId === "string"
+      ? verticalRaw.videoId.trim()
+      : "";
+  const verticalStartRaw = verticalRaw?.startSeconds;
+  if (
+    YOUTUBE_VIDEO_ID_RE.test(verticalVideoId) &&
+    typeof verticalStartRaw === "number" &&
+    Number.isFinite(verticalStartRaw)
+  ) {
+    const verticalStartSeconds = Math.floor(verticalStartRaw);
+    if (
+      verticalStartSeconds >= 0 &&
+      verticalStartSeconds + durationSeconds <= BROLL_TIMESTAMP_MAX_SECONDS
+    ) {
+      return {
+        videoId: verticalVideoId,
+        startSeconds: verticalStartSeconds,
+      };
+    }
+  }
+  return null;
 }
 
 /**

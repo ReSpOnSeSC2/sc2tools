@@ -43,6 +43,7 @@ class Vod:
     title: str
     clips: list[dict[str, Any]]
     source_url: str
+    vertical_video_id: str | None = None
 
 
 def extract_video_id(value: str) -> str:
@@ -101,6 +102,7 @@ def load_manifest(path: Path) -> list[Vod]:
             source = raw
             title = ""
             clips: list[dict[str, Any]] = []
+            vertical_video_id = None
         elif isinstance(raw, dict):
             source = str(raw.get("videoId") or raw.get("id") or raw.get("url") or "")
             title = str(raw.get("title") or "").strip()
@@ -108,6 +110,13 @@ def load_manifest(path: Path) -> list[Vod]:
             if not isinstance(raw_clips, list) or not all(isinstance(c, dict) for c in raw_clips):
                 raise BrollError(f"Video {index} clips must be an array of objects.")
             clips = list(raw_clips)
+            vertical_source = str(raw.get("verticalVideoId") or "").strip()
+            try:
+                vertical_video_id = (
+                    extract_video_id(vertical_source) if vertical_source else None
+                )
+            except BrollError as exc:
+                raise BrollError(f"Video {index} vertical source: {exc}") from exc
         else:
             raise BrollError(f"Video {index} must be a video ID, URL, or object.")
 
@@ -124,6 +133,7 @@ def load_manifest(path: Path) -> list[Vod]:
                 title=title,
                 clips=clips,
                 source_url=f"https://www.youtube.com/watch?v={video_id}",
+                vertical_video_id=vertical_video_id,
             )
         )
     if not vods:
@@ -221,15 +231,33 @@ def build_clip_library(vods: Iterable[Vod]) -> dict[str, Any]:
 
             default_title = f"{vod.title or 'Highlight'} @ {format_timecode(start)}"
             title = str(raw.get("title") or default_title).strip()[:MAX_TITLE_LENGTH]
-            result.append(
-                {
-                    "id": clip_id,
-                    "title": title,
-                    "videoId": vod.video_id,
-                    "startSeconds": start,
-                    "endSeconds": end,
-                }
+            emitted_clip: dict[str, Any] = {
+                "id": clip_id,
+                "title": title,
+                "videoId": vod.video_id,
+                "startSeconds": start,
+                "endSeconds": end,
+            }
+            vertical_start_raw = raw.get(
+                "verticalStartSeconds", raw.get("verticalStart")
             )
+            if vertical_start_raw is not None:
+                if not vod.vertical_video_id:
+                    raise BrollError(
+                        f"{context} has a vertical start but its video needs verticalVideoId."
+                    )
+                vertical_start = parse_timecode(
+                    vertical_start_raw, f"{context} vertical start"
+                )
+                if vertical_start + (end - start) > MAX_TIMESTAMP_SECONDS:
+                    raise BrollError(
+                        f"{context} vertical range must end before 24:00:00."
+                    )
+                emitted_clip["vertical"] = {
+                    "videoId": vod.vertical_video_id,
+                    "startSeconds": vertical_start,
+                }
+            result.append(emitted_clip)
             if len(result) > MAX_CLIPS:
                 raise BrollError(f"A Stream Dock library can contain at most {MAX_CLIPS} clips.")
     return {"version": 1, "clips": result}
@@ -533,6 +561,18 @@ def prepare(args: argparse.Namespace) -> int:
             "notes": str(old.get("notes") or ""),
             "clips": clips,
         }
+        vertical_video_id = vod.vertical_video_id
+        if not vertical_video_id and old.get("verticalVideoId"):
+            try:
+                vertical_video_id = extract_video_id(
+                    str(old.get("verticalVideoId"))
+                )
+            except BrollError as exc:
+                raise BrollError(
+                    f"Existing review vertical source for {vod.video_id}: {exc}"
+                ) from exc
+        if vertical_video_id:
+            entry["verticalVideoId"] = vertical_video_id
         review_videos.append(entry)
 
     review = {

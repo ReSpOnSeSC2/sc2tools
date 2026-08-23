@@ -42,6 +42,14 @@ const ANCHOR = {
   cursor: 0,
 };
 
+const PAIRED_CLIP: BrollClip = {
+  ...CLIPS[0],
+  vertical: {
+    videoId: "vertABC1234",
+    startSeconds: 200,
+  },
+};
+
 interface MockPlayer {
   destroy: ReturnType<typeof vi.fn>;
   getCurrentTime: ReturnType<typeof vi.fn>;
@@ -171,6 +179,123 @@ describe("BrollPlayer", () => {
     expect(youtube.players[1].setVolume).toHaveBeenCalledWith(0);
     expect(youtube.players[1].mute).toHaveBeenCalled();
     expect(youtube.players[1].unMute).not.toHaveBeenCalled();
+  });
+
+  it("loads paired horizontal and vertical simulcasts at one shared offset", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 5_000);
+    const youtube = installYouTubeMock();
+    render(
+      <>
+        <BrollPlayer
+          audioOwner
+          videoFormat="horizontal"
+          clips={[PAIRED_CLIP]}
+          shuffle={false}
+          muted={false}
+          volume={23}
+          skipNonce={0}
+          playback={ANCHOR}
+        />
+        <BrollPlayer
+          audioOwner={false}
+          videoFormat="vertical"
+          clips={[PAIRED_CLIP]}
+          shuffle={false}
+          muted={false}
+          volume={23}
+          skipNonce={0}
+          playback={ANCHOR}
+        />
+      </>,
+    );
+    await act(async () => Promise.resolve());
+
+    expect(youtube.players[0].loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "abcDEF12345",
+      startSeconds: 95,
+      endSeconds: 120,
+    });
+    expect(youtube.players[1].loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "vertABC1234",
+      startSeconds: 205,
+      endSeconds: 230,
+    });
+    const players = screen.getAllByTestId("broll-player");
+    expect(players[0].dataset.clipId).toBe(players[1].dataset.clipId);
+    expect(players[0].dataset.videoFormat).toBe("horizontal");
+    expect(players[1].dataset.videoFormat).toBe("vertical");
+  });
+
+  it("falls back to the horizontal source when a clip has no vertical pair", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 1_000);
+    const youtube = installYouTubeMock();
+    render(
+      <BrollPlayer
+        audioOwner={false}
+        videoFormat="vertical"
+        clips={[CLIPS[0]]}
+        shuffle={false}
+        muted
+        volume={20}
+        skipNonce={0}
+        playback={ANCHOR}
+      />,
+    );
+    await act(async () => Promise.resolve());
+
+    expect(youtube.player.loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "abcDEF12345",
+      startSeconds: 91,
+      endSeconds: 120,
+    });
+  });
+
+  it("hides media while an orientation change reloads at the shared offset", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(ANCHOR.epochMs + 5_000);
+    const youtube = installYouTubeMock();
+    const view = render(
+      <BrollPlayer
+        audioOwner
+        videoFormat="horizontal"
+        clips={[PAIRED_CLIP]}
+        shuffle={false}
+        muted
+        volume={20}
+        skipNonce={0}
+        playback={ANCHOR}
+      />,
+    );
+    await act(async () => Promise.resolve());
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+    });
+    expect(screen.getByTestId("broll-media").style.opacity).toBe("1");
+
+    view.rerender(
+      <BrollPlayer
+        audioOwner
+        videoFormat="vertical"
+        clips={[PAIRED_CLIP]}
+        shuffle={false}
+        muted
+        volume={20}
+        skipNonce={0}
+        playback={ANCHOR}
+      />,
+    );
+    expect(screen.getByTestId("broll-media").style.opacity).toBe("0");
+    await act(async () => Promise.resolve());
+
+    expect(youtube.players).toHaveLength(2);
+    expect(youtube.players[0].destroy).toHaveBeenCalled();
+    expect(youtube.players[1].loadVideoById).toHaveBeenLastCalledWith({
+      videoId: "vertABC1234",
+      startSeconds: 205,
+      endSeconds: 230,
+    });
   });
 
   it("loads at the authoritative offset, advances by wall clock, and applies skip/audio updates", async () => {

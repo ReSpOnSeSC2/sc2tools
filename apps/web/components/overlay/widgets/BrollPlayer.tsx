@@ -11,6 +11,7 @@ import {
 import type {
   StudioBrollClip,
   StudioBrollConfig,
+  StudioBrollVideoFormat,
 } from "@/lib/multichat/useStudioState";
 import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
 import {
@@ -33,6 +34,8 @@ export type BrollPlayerConfig = StudioBrollConfig;
 export interface BrollPlayerProps extends StudioBrollConfig {
   /** True only for the designated horizontal OBS audio source. */
   audioOwner: boolean;
+  /** Selects the matching landscape or portrait source on paired clips. */
+  videoFormat?: StudioBrollVideoFormat;
   /** Optional wording for the broadcast-safe canvas shown without video. */
   fallbackLabel?: string;
 }
@@ -105,6 +108,7 @@ export function BrollPlayer({
   skipNonce,
   playback: playbackAnchor,
   audioOwner,
+  videoFormat = "horizontal",
   fallbackLabel = "HIGHLIGHT REEL STANDBY",
 }: BrollPlayerProps) {
   const playableClips = useMemo(() => normalizeClips(clips), [clips]);
@@ -139,7 +143,12 @@ export function BrollPlayer({
     (timelineState.position
       ? playableClips[timelineState.position.clipIndex]
       : null) ?? playableClips[0] ?? null;
-  const currentKey = currentClip ? clipKey(currentClip) : "";
+  const currentMedia = currentClip
+    ? resolveClipMedia(currentClip, videoFormat)
+    : null;
+  const currentKey = currentClip
+    ? `${clipKey(currentClip)}:${videoFormat}`
+    : "";
 
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
@@ -254,8 +263,9 @@ export function BrollPlayer({
       scheduleBoundary(expected);
       const actualSeconds = player.getCurrentTime?.();
       const expectedClip = timelineRef.current.clips[expected.clipIndex];
+      const expectedMedia = resolveClipMedia(expectedClip, videoFormat);
       const expectedSeconds =
-        expectedClip.startSeconds + expected.offsetMs / 1000;
+        expectedMedia.startSeconds + expected.offsetMs / 1000;
       if (
         typeof actualSeconds === "number" &&
         Number.isFinite(actualSeconds) &&
@@ -265,7 +275,7 @@ export function BrollPlayer({
         player.seekTo?.(expectedSeconds, true);
       }
     },
-    [resolveNow, scheduleBoundary],
+    [resolveNow, scheduleBoundary, videoFormat],
   );
 
   const loadCurrentClip = useCallback(() => {
@@ -274,6 +284,7 @@ export function BrollPlayer({
     const clipsNow = timelineRef.current.clips;
     const clip = position ? clipsNow[position.clipIndex] : null;
     if (!player || !playerReadyRef.current || !clip || !position) return;
+    const media = resolveClipMedia(clip, videoFormat);
 
     if (
       positionRef.current &&
@@ -290,13 +301,13 @@ export function BrollPlayer({
       applyAudio(player);
       const offsetSeconds = position.offsetMs / 1000;
       const startSeconds = Math.min(
-        clip.endSeconds - 0.05,
-        clip.startSeconds + offsetSeconds,
+        media.endSeconds - 0.05,
+        media.startSeconds + offsetSeconds,
       );
       player.loadVideoById({
-        videoId: clip.videoId,
+        videoId: media.videoId,
         startSeconds,
-        endSeconds: clip.endSeconds,
+        endSeconds: media.endSeconds,
       });
       player.playVideo();
     } catch {
@@ -308,6 +319,7 @@ export function BrollPlayer({
     handleClipFailure,
     resolveNow,
     scheduleBoundary,
+    videoFormat,
   ]);
 
   loadCurrentClipRef.current = loadCurrentClip;
@@ -341,6 +353,7 @@ export function BrollPlayer({
     }
 
     let cancelled = false;
+    setHasStartedPlayback(false);
     setStatus("loading");
     loadYouTubeApi()
       .then((YT) => {
@@ -465,6 +478,8 @@ export function BrollPlayer({
       className="broll-player"
       data-audio-owner={audioOwner ? "true" : "false"}
       data-clip-id={currentClip?.id ?? ""}
+      data-video-format={videoFormat}
+      data-video-id={currentMedia?.videoId ?? ""}
       data-playback-status={status}
       data-testid="broll-player"
       style={playerFrameStyle}
@@ -592,19 +607,63 @@ function normalizeClips(clips: BrollClip[]): BrollClip[] {
       continue;
     }
     seen.add(identity);
+    const rawVertical = raw.vertical;
+    const verticalVideoId =
+      rawVertical && typeof rawVertical === "object" && !Array.isArray(rawVertical)
+        ? String(rawVertical.videoId ?? "").trim()
+        : "";
+    const verticalStartSeconds =
+      rawVertical && typeof rawVertical === "object" && !Array.isArray(rawVertical)
+        ? Math.floor(Number(rawVertical.startSeconds))
+        : Number.NaN;
+    const hasValidVerticalSource =
+      /^[A-Za-z0-9_-]{11}$/.test(verticalVideoId) &&
+      Number.isFinite(verticalStartSeconds) &&
+      verticalStartSeconds >= 0 &&
+      verticalStartSeconds + (endSeconds - startSeconds) <= 86_400;
     normalized.push({
       id: identity,
       title: title || "Untitled highlight",
       videoId,
       startSeconds,
       endSeconds,
+      ...(hasValidVerticalSource
+        ? {
+            vertical: {
+              videoId: verticalVideoId,
+              startSeconds: verticalStartSeconds,
+            },
+          }
+        : {}),
     });
   }
   return normalized;
 }
 
 function clipKey(clip: BrollClip): string {
-  return `${clip.id}:${clip.videoId}:${clip.startSeconds}:${clip.endSeconds}`;
+  const vertical = clip.vertical
+    ? `:${clip.vertical.videoId}:${clip.vertical.startSeconds}`
+    : "";
+  return `${clip.id}:${clip.videoId}:${clip.startSeconds}:${clip.endSeconds}${vertical}`;
+}
+
+function resolveClipMedia(
+  clip: BrollClip,
+  videoFormat: StudioBrollVideoFormat,
+): { videoId: string; startSeconds: number; endSeconds: number } {
+  const durationSeconds = clip.endSeconds - clip.startSeconds;
+  if (videoFormat === "vertical" && clip.vertical) {
+    return {
+      videoId: clip.vertical.videoId,
+      startSeconds: clip.vertical.startSeconds,
+      endSeconds: clip.vertical.startSeconds + durationSeconds,
+    };
+  }
+  return {
+    videoId: clip.videoId,
+    startSeconds: clip.startSeconds,
+    endSeconds: clip.endSeconds,
+  };
 }
 
 function clampVolume(volume: number): number {

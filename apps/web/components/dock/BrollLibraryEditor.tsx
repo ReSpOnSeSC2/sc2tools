@@ -176,6 +176,47 @@ export function parseBrollLibraryJson(input: string): BrollLibraryParseResult {
         ? requestedId
         : stableClipId(videoId, start, end, usedIds);
     usedIds.add(id);
+    let vertical: StudioBrollClip["vertical"];
+    if (Object.hasOwn(clip, "vertical")) {
+      const rawVertical = clip.vertical;
+      if (
+        !rawVertical ||
+        typeof rawVertical !== "object" ||
+        Array.isArray(rawVertical)
+      ) {
+        return {
+          clips: null,
+          error: `Clip ${index + 1} has an invalid vertical source.`,
+        };
+      }
+      const source = rawVertical as Record<string, unknown>;
+      const verticalVideoId = parseYouTubeVideoId(String(source.videoId ?? ""));
+      const verticalStartRaw = source.startSeconds;
+      if (
+        !verticalVideoId ||
+        typeof verticalStartRaw !== "number" ||
+        !Number.isFinite(verticalStartRaw)
+      ) {
+        return {
+          clips: null,
+          error: `Clip ${index + 1} has an invalid vertical source.`,
+        };
+      }
+      const verticalStartSeconds = Math.floor(verticalStartRaw);
+      if (
+        verticalStartSeconds < 0 ||
+        verticalStartSeconds + (end - start) > MAX_TIMESTAMP_SECONDS
+      ) {
+        return {
+          clips: null,
+          error: `Clip ${index + 1} has an invalid vertical time range.`,
+        };
+      }
+      vertical = {
+        videoId: verticalVideoId,
+        startSeconds: verticalStartSeconds,
+      };
+    }
     clips.push({
       id,
       title:
@@ -185,6 +226,7 @@ export function parseBrollLibraryJson(input: string): BrollLibraryParseResult {
       videoId,
       startSeconds: start,
       endSeconds: end,
+      ...(vertical ? { vertical } : {}),
     });
   }
   return { clips, error: null };
@@ -387,6 +429,7 @@ export function BrollLibraryEditor({
                     {formatTimecode(clip.startSeconds)}–{formatTimecode(clip.endSeconds)}
                     {" · "}
                     {formatTimecode(clip.endSeconds - clip.startSeconds)} long
+                    {clip.vertical ? " · Vertical paired" : " · Horizontal only"}
                   </span>
                 </span>
                 <button

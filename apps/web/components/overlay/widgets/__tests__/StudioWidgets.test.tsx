@@ -57,14 +57,17 @@ vi.mock("../BrollPlayer", () => ({
   BrollPlayer: ({
     clips,
     audioOwner,
+    videoFormat,
   }: {
     clips: Array<{ id: string }>;
     audioOwner: boolean;
+    videoFormat: "horizontal" | "vertical";
   }) => (
     <div
       data-testid="broll-player"
       data-clip-count={clips.length}
       data-audio-owner={String(audioOwner)}
+      data-video-format={videoFormat}
     />
   ),
 }));
@@ -794,6 +797,9 @@ describe("StreamSceneWidget", () => {
     expect(screen.getByText(/^0?5:00$|^0?4:5\d$/)).toBeTruthy();
     expect(screen.getByTestId("broll-player").dataset.clipCount).toBe("1");
     expect(screen.getByTestId("broll-player").dataset.audioOwner).toBe("true");
+    expect(screen.getByTestId("broll-player").dataset.videoFormat).toBe(
+      "horizontal",
+    );
     const hud = screen.getByTestId("stream-scene-hud");
     expect(hud.parentElement?.dataset.sceneLayout).toBe("broll");
     expect(hud.style.top).toContain("clamp(");
@@ -828,6 +834,9 @@ describe("StreamSceneWidget", () => {
 
     render(<StreamSceneWidget token="tok" />);
     expect(screen.getByTestId("broll-player").dataset.audioOwner).toBe("false");
+    expect(screen.getByTestId("broll-player").dataset.videoFormat).toBe(
+      "vertical",
+    );
   });
 
   it("renders Starting Soon with a ticking countdown", () => {

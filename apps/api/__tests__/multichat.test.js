@@ -1310,6 +1310,11 @@ describe("routes/multichat studio", () => {
               videoId: "AbCdEf12345",
               startSeconds: 90.9,
               endSeconds: 141.2,
+              vertical: {
+                videoId: "portrait123",
+                startSeconds: 233.9,
+                unsafeUrl: "javascript:alert(1)",
+              },
               unsafeUrl: "javascript:alert(1)",
             },
             {
@@ -1336,6 +1341,10 @@ describe("routes/multichat studio", () => {
           videoId: "AbCdEf12345",
           startSeconds: 90,
           endSeconds: 141,
+          vertical: {
+            videoId: "portrait123",
+            startSeconds: 233,
+          },
         },
       ],
       shuffle: false,

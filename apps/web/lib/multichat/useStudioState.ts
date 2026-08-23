@@ -56,14 +56,25 @@ export interface StudioTimer {
   setAtMs: number;
 }
 
+export interface StudioBrollVerticalSource {
+  videoId: string;
+  /** Portrait simulcast time matching the landscape clip's first frame. */
+  startSeconds: number;
+}
+
 /** One time-ranged YouTube segment in the reusable BRB/Starting Soon reel. */
 export interface StudioBrollClip {
   id: string;
   title: string;
+  /** Landscape/default source used by the agent-built manual scene. */
   videoId: string;
   startSeconds: number;
   endSeconds: number;
+  /** Optional duration-matched portrait simulcast; absent means fallback. */
+  vertical?: StudioBrollVerticalSource;
 }
+
+export type StudioBrollVideoFormat = "horizontal" | "vertical";
 
 /**
  * Server-owned anchor for the shared B-roll timeline. Independent OBS Browser
@@ -265,7 +276,41 @@ function sanitizeBroll(raw: unknown): StudioBrollConfig {
     ) {
       continue;
     }
-    clips.push({ id, title, videoId, startSeconds, endSeconds });
+    const sanitized: StudioBrollClip = {
+      id,
+      title,
+      videoId,
+      startSeconds,
+      endSeconds,
+    };
+    const rawVertical =
+      clip.vertical &&
+      typeof clip.vertical === "object" &&
+      !Array.isArray(clip.vertical)
+        ? (clip.vertical as Record<string, unknown>)
+        : null;
+    const verticalVideoId =
+      typeof rawVertical?.videoId === "string"
+        ? rawVertical.videoId.trim()
+        : "";
+    const verticalStartRaw = rawVertical?.startSeconds;
+    if (
+      YOUTUBE_VIDEO_ID_RE.test(verticalVideoId) &&
+      typeof verticalStartRaw === "number" &&
+      Number.isFinite(verticalStartRaw)
+    ) {
+      const verticalStartSeconds = Math.floor(verticalStartRaw);
+      if (
+        verticalStartSeconds >= 0 &&
+        verticalStartSeconds + (endSeconds - startSeconds) <= BROLL_MAX_SECONDS
+      ) {
+        sanitized.vertical = {
+          videoId: verticalVideoId,
+          startSeconds: verticalStartSeconds,
+        };
+      }
+    }
+    clips.push(sanitized);
     seenIds.add(id);
     if (clips.length >= BROLL_MAX_CLIPS) break;
   }

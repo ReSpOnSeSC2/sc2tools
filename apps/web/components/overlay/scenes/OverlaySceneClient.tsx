@@ -238,6 +238,7 @@ function DockDrivenOverlaySceneClient({
         broll={studio.broll}
         remainMs={countdownMs}
         brollAudioOwner={brollAudioOwner}
+        videoFormat="horizontal"
       />
     );
   }

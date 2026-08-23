@@ -16,10 +16,10 @@ No system-wide install is required.
 
 This workspace already includes the first curated library:
 
-- `response-gaming-vods.json` — the editable source with eight landscape VODs,
-  40 selected ranges, and review notes.
-- `response-gaming-broll.json` — the ready-to-import Stream Dock file (40:41
-  total playback).
+- `response-gaming-vods.json` — the editable source with 12 landscape VODs,
+  three paired vertical simulcasts, 56 selected ranges, and review notes.
+- `response-gaming-broll.json` — the ready-to-import Stream Dock file (53:48
+  total playback, including 10 landscape/portrait paired highlights).
 
 In the Stream Dock, open **Scenes → Manage highlight library**, choose the
 ready-to-import JSON file, then click Starting Soon or BRB. To extend it later,
@@ -77,6 +77,26 @@ exporting it.
 }
 ```
 
+For a matching vertical simulcast, put `verticalVideoId` on the video and the
+matching first frame on each clip. The emitted vertical source inherits the
+landscape clip duration, so horizontal and vertical OBS canvases stay on the
+same shared timeline:
+
+```json
+{
+  "videoId": "HORIZONTAL1",
+  "verticalVideoId": "VERTICAL123",
+  "clips": [
+    {
+      "title": "Paired fight",
+      "start": "17:30",
+      "end": "18:15",
+      "verticalStart": "19:53"
+    }
+  ]
+}
+```
+
 The emitted file is deliberately minimal and compatible with the dock:
 
 ```json
@@ -88,7 +108,11 @@ The emitted file is deliberately minimal and compatible with the dock:
       "title": "Hold at the natural into the counterattack",
       "videoId": "XXXXXXXXXXX",
       "startSeconds": 4328,
-      "endSeconds": 4382
+      "endSeconds": 4382,
+      "vertical": {
+        "videoId": "YYYYYYYYYYY",
+        "startSeconds": 4471
+      }
     }
   ]
 }
@@ -96,6 +120,8 @@ The emitted file is deliberately minimal and compatible with the dock:
 
 The dock accepts at most 100 clips, titles up to 120 characters, and timestamps
 below 24 hours. `emit` enforces those constraints before it writes anything.
+Landscape-only records remain valid and are also the safe fallback when a
+vertical source is absent.
 
 ## Useful options
 

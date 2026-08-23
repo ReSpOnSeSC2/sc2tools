@@ -46,6 +46,10 @@ const CLIPS = [
     videoId: "abcDEF_1234",
     startSeconds: 90,
     endSeconds: 150,
+    vertical: {
+      videoId: "portrait123",
+      startSeconds: 97,
+    },
   },
   {
     id: "clip-two",
@@ -110,6 +114,11 @@ describe("b-roll input helpers", () => {
         JSON.stringify([{ ...CLIPS[0], endSeconds: 90 }]),
       ).error,
     ).toMatch(/invalid time range/);
+    expect(
+      parseBrollLibraryJson(
+        JSON.stringify([{ ...CLIPS[0], vertical: { videoId: "bad", startSeconds: 1 } }]),
+      ).error,
+    ).toMatch(/invalid vertical source/);
   });
 });
 

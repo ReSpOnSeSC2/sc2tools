@@ -71,6 +71,40 @@ class ManifestTests(unittest.TestCase):
         self.assertIsNotNone(broll.CLIP_ID_RE.fullmatch(clip["id"]))
         self.assertEqual(clip["videoId"], "-HVdPDIfox4")
 
+    def test_emits_duration_matched_vertical_simulcast_source(self) -> None:
+        vod = broll.Vod(
+            video_id="ABCDEFGHIJK",
+            title="Ladder night",
+            source_url="https://www.youtube.com/watch?v=ABCDEFGHIJK",
+            vertical_video_id="ZYXWVUT9876",
+            clips=[
+                {
+                    "title": "Paired fight",
+                    "start": "1:00",
+                    "end": "1:45",
+                    "verticalStart": "1:07",
+                }
+            ],
+        )
+
+        clip = broll.build_clip_library([vod])["clips"][0]
+
+        self.assertEqual(
+            clip["vertical"],
+            {"videoId": "ZYXWVUT9876", "startSeconds": 67},
+        )
+        self.assertEqual(clip["endSeconds"] - clip["startSeconds"], 45)
+
+    def test_rejects_vertical_start_without_vertical_video(self) -> None:
+        vod = broll.Vod(
+            video_id="ABCDEFGHIJK",
+            title="Ladder night",
+            source_url="https://www.youtube.com/watch?v=ABCDEFGHIJK",
+            clips=[{"start": 10, "end": 20, "verticalStart": 11}],
+        )
+        with self.assertRaisesRegex(broll.BrollError, "needs verticalVideoId"):
+            broll.build_clip_library([vod])
+
     def test_rejects_backwards_range(self) -> None:
         vod = broll.Vod(
             video_id="ABCDEFGHIJK",
@@ -84,6 +118,15 @@ class ManifestTests(unittest.TestCase):
     def test_rejects_non_finite_numeric_time(self) -> None:
         with self.assertRaisesRegex(broll.BrollError, "outside the supported range"):
             broll.parse_timecode(float("nan"), "clip start")
+
+    def test_checked_in_response_library_matches_source_manifest(self) -> None:
+        source = Path(broll.__file__).with_name("response-gaming-vods.json")
+        emitted = Path(broll.__file__).with_name("response-gaming-broll.json")
+
+        expected = broll.build_clip_library(broll.load_manifest(source))
+        actual = json.loads(emitted.read_text(encoding="utf-8"))
+
+        self.assertEqual(actual, expected)
 
 
 class MediaCommandTests(unittest.TestCase):
@@ -147,13 +190,30 @@ class MediaCommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             manifest = directory / "vods.json"
-            manifest.write_text(json.dumps({"videos": ["ABCDEFGHIJK"]}), encoding="utf-8")
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "videos": [
+                            {
+                                "videoId": "ABCDEFGHIJK",
+                                "verticalVideoId": "ZYXWVUT9876",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
             review = directory / "review"
             (review / "proxies").mkdir(parents=True)
             (review / "sheets").mkdir()
             (review / "proxies" / "ABCDEFGHIJK.mp4").write_bytes(b"cached proxy")
             (review / "sheets" / "ABCDEFGHIJK-sheet-001.jpg").write_bytes(b"cached sheet")
-            selected_clip = {"title": "Keep me", "start": "1:00", "end": "1:45"}
+            selected_clip = {
+                "title": "Keep me",
+                "start": "1:00",
+                "end": "1:45",
+                "verticalStart": "1:07",
+            }
             (review / "review.json").write_text(
                 json.dumps(
                     {
@@ -178,6 +238,16 @@ class MediaCommandTests(unittest.TestCase):
             self.assertEqual(status, 0)
             updated = json.loads((review / "review.json").read_text(encoding="utf-8"))
             self.assertEqual(updated["videos"][0]["clips"], [selected_clip])
+            self.assertEqual(
+                updated["videos"][0]["verticalVideoId"], "ZYXWVUT9876"
+            )
+            emitted = broll.build_clip_library(
+                broll.load_manifest(review / "review.json")
+            )
+            self.assertEqual(
+                emitted["clips"][0]["vertical"],
+                {"videoId": "ZYXWVUT9876", "startSeconds": 67},
+            )
 
 
 if __name__ == "__main__":

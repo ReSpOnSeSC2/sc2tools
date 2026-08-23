@@ -286,6 +286,11 @@ describe("b-roll state sanitization", () => {
             videoId: "99UKipUcV_s",
             startSeconds: 601.9,
             endSeconds: 674.8,
+            vertical: {
+              videoId: "portrait123",
+              startSeconds: 608.9,
+              iframeHtml: "<iframe />",
+            },
             iframeHtml: "<iframe />",
           },
           {
@@ -319,6 +324,10 @@ describe("b-roll state sanitization", () => {
           videoId: "99UKipUcV_s",
           startSeconds: 601,
           endSeconds: 674,
+          vertical: {
+            videoId: "portrait123",
+            startSeconds: 608,
+          },
         },
       ],
       shuffle: false,
@@ -328,6 +337,34 @@ describe("b-roll state sanitization", () => {
     });
     expect(state.broll).not.toHaveProperty("autoplayScript");
     expect(state.broll.clips[0]).not.toHaveProperty("iframeHtml");
+    expect(state.broll.clips[0].vertical).not.toHaveProperty("iframeHtml");
+  });
+
+  it("drops a malformed vertical pairing while retaining its safe base clip", () => {
+    const state = sanitizeStudioState({
+      broll: {
+        clips: [
+          {
+            id: "safe-base",
+            title: "Safe base",
+            videoId: "99UKipUcV_s",
+            startSeconds: 10,
+            endSeconds: 30,
+            vertical: { videoId: "bad", startSeconds: 20 },
+          },
+        ],
+      },
+    });
+
+    expect(state.broll.clips).toEqual([
+      {
+        id: "safe-base",
+        title: "Safe base",
+        videoId: "99UKipUcV_s",
+        startSeconds: 10,
+        endSeconds: 30,
+      },
+    ]);
   });
 
   it("accepts only bounded shared playback timeline metadata", () => {

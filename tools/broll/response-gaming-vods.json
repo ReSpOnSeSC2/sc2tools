@@ -4,7 +4,7 @@
     "id": "UCZS3YP1mvpqyuU5vPvHVG7g",
     "name": "ReSpOnSe Gaming AND Fitness AND AI Music"
   },
-  "curatedAt": "2026-08-20",
+  "curatedAt": "2026-08-23",
   "notes": "Landscape, self-owned SC2 gameplay only. Menus, long pauses, BRB screens, scoreboards, portrait duplicates, and third-party watch-party footage were excluded.",
   "videos": [
     {
@@ -336,6 +336,100 @@
           "startSeconds": 6432,
           "endSeconds": 6479,
           "notes": "Archons and Tempest beams breaking the Zerg army in the final game. Cut one second before the victory transition."
+        }
+      ]
+    },
+    {
+      "videoId": "hajXg3Ql5h4",
+      "verticalVideoId": "weH1bu8-oQc",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-22 (part 1)",
+      "notes": "The first of the three newest landscape replay parts. The portrait simulcast, black reconnect frame, menus, quiet macro stretches, and post-game presentation are excluded.",
+      "clips": [
+        {
+          "title": "Red Swarm Breakthrough",
+          "startSeconds": 95,
+          "endSeconds": 130,
+          "verticalStartSeconds": 111,
+          "notes": "A red ground force presses through sustained beams, explosions and repeated contact, ending before the camera returns to a quiet base view."
+        },
+        {
+          "title": "Stormfront Showdown",
+          "startSeconds": 1030,
+          "endSeconds": 1090,
+          "verticalStartSeconds": 1046,
+          "notes": "Two dense armies stay engaged through repeated spell bursts and a large blue-white impact, cut before base management resumes."
+        },
+        {
+          "title": "Final Line Break",
+          "startSeconds": 1965,
+          "endSeconds": 2005,
+          "verticalStartSeconds": 1981,
+          "notes": "An advancing force builds into concentrated base combat with sustained weapons fire and spell effects, ending before the empty-map lull."
+        }
+      ]
+    },
+    {
+      "videoId": "ClXDot0F0K0",
+      "verticalVideoId": "X3nNNB0orKI",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-22 (part 2)",
+      "notes": "The second of the three newest landscape replay parts. Portrait footage, reconnects, result screens, talking-head intermissions and low-action setup are excluded.",
+      "clips": [
+        {
+          "title": "Opening Base Breaker",
+          "startSeconds": 10,
+          "endSeconds": 55,
+          "verticalStartSeconds": 7,
+          "notes": "Continuous opening combat drives into a crowded snowy base assault, ending five seconds before the victory screen."
+        },
+        {
+          "title": "Beams Over the Natural",
+          "startSeconds": 760,
+          "endSeconds": 810,
+          "verticalStartSeconds": 757,
+          "notes": "Large air and ground groups trade sustained blue-white beam fire across the natural, cut before the host intermission."
+        },
+        {
+          "title": "Formation Into Fire",
+          "startSeconds": 1705,
+          "endSeconds": 1745,
+          "verticalStartSeconds": 1702,
+          "notes": "A massed formation advances into dense red-blue contact, base pressure and repeated beam exchanges."
+        },
+        {
+          "title": "Late-Game Firestorm",
+          "startSeconds": 3120,
+          "endSeconds": 3195,
+          "verticalStartSeconds": 3117,
+          "notes": "Repeated explosions, beam volleys and dense army movement carry the late-game fight to the final safe frame before results."
+        }
+      ]
+    },
+    {
+      "videoId": "Y9U7S6erIP8",
+      "verticalVideoId": "VrLV7mFS59g",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-22 (part 3)",
+      "notes": "The newest landscape replay. Portrait footage, the intro, talking-head analysis, replay overlays, fragmented fights and the end screen are excluded.",
+      "clips": [
+        {
+          "title": "Laser Crossfire",
+          "startSeconds": 1050,
+          "endSeconds": 1095,
+          "verticalStartSeconds": 1193,
+          "notes": "A sustained red-versus-gold engagement delivers continuous beam volleys and explosions after the base-camera lull."
+        },
+        {
+          "title": "Golden Armada Assault",
+          "startSeconds": 3590,
+          "endSeconds": 3635,
+          "verticalStartSeconds": 3733,
+          "notes": "A dense golden fleet raids the base through projectiles, warp effects and repeated contact, ending before the quieter base shot."
+        },
+        {
+          "title": "Final Swarm Collision",
+          "startSeconds": 3745,
+          "endSeconds": 3815,
+          "verticalStartSeconds": 3888,
+          "notes": "An uninterrupted climactic swarm-versus-fleet battle runs to the last safe frame before the talking-head transition."
         }
       ]
     }

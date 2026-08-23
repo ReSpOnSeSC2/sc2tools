@@ -41,6 +41,11 @@ describe("multichat studio b-roll clip records", () => {
           title: `  ${"x".repeat(140)}  `,
           startSeconds: 1.9,
           endSeconds: 4.8,
+          vertical: {
+            videoId: "portrait123",
+            startSeconds: 8.9,
+            remoteUrl: "javascript:alert(1)",
+          },
           remoteUrl: "javascript:alert(1)",
         }),
         clip("valid_1"), // duplicate client IDs are ambiguous — drop it.
@@ -61,6 +66,10 @@ describe("multichat studio b-roll clip records", () => {
         videoId: VIDEO_ID,
         startSeconds: 1,
         endSeconds: 4,
+        vertical: {
+          videoId: "portrait123",
+          startSeconds: 8,
+        },
       },
       {
         id: "boundary",
@@ -71,6 +80,27 @@ describe("multichat studio b-roll clip records", () => {
       },
     ]);
     expect(result.clips[0].remoteUrl).toBeUndefined();
+    expect(result.clips[0].vertical.remoteUrl).toBeUndefined();
+  });
+
+  test("drops malformed vertical sources without losing safe landscape clips", () => {
+    const result = sanitizeBroll({
+      clips: [
+        clip("bad-pair", {
+          vertical: { videoId: "not-video", startSeconds: 20 },
+        }),
+        clip("past-bound", {
+          startSeconds: 10,
+          endSeconds: 30,
+          vertical: { videoId: "portrait123", startSeconds: 86_390 },
+        }),
+      ],
+    });
+
+    expect(result.clips).toEqual([
+      clip("bad-pair"),
+      clip("past-bound", { startSeconds: 10, endSeconds: 30 }),
+    ]);
   });
 });
 
@@ -152,7 +182,13 @@ describe("authoritative synchronized b-roll timeline", () => {
   test("audio-only writes preserve the timeline and skip advances from now", () => {
     const configured = prepareBrollUpdate(
       {
-        clips: [clip("a"), clip("b"), clip("c")],
+        clips: [
+          clip("a", {
+            vertical: { videoId: "portrait123", startSeconds: 30 },
+          }),
+          clip("b"),
+          clip("c"),
+        ],
         shuffle: false,
         muted: false,
         volume: 20,
@@ -162,16 +198,20 @@ describe("authoritative synchronized b-roll timeline", () => {
       10_000,
     );
     const audioUpdate = prepareBrollUpdate(
-      { ...configured, muted: true, volume: 5 },
+      { muted: true, volume: 5 },
       configured,
       15_000,
     );
     expect(audioUpdate.playback).toEqual(configured.playback);
+    expect(audioUpdate.clips[0].vertical).toEqual({
+      videoId: "portrait123",
+      startSeconds: 30,
+    });
 
     // At +15s the shared schedule is halfway through clip B. Skip must anchor
     // clip C, rather than incrementing the originally persisted A cursor.
     const skipped = prepareBrollUpdate(
-      { ...audioUpdate, skipNonce: 1 },
+      { skipNonce: 1 },
       audioUpdate,
       25_000,
     );
@@ -181,6 +221,34 @@ describe("authoritative synchronized b-roll timeline", () => {
       seed: configured.playback.seed,
       cursor: 2,
     });
+  });
+
+  test("changing only a vertical pairing resets the shared timeline", () => {
+    const configured = prepareBrollUpdate(
+      {
+        clips: [
+          clip("paired", {
+            vertical: { videoId: "portrait123", startSeconds: 50 },
+          }),
+        ],
+      },
+      DEFAULT_BROLL,
+      10_000,
+    );
+    const changed = prepareBrollUpdate(
+      {
+        clips: [
+          clip("paired", {
+            vertical: { videoId: "portrait123", startSeconds: 51 },
+          }),
+        ],
+      },
+      configured,
+      20_000,
+    );
+
+    expect(changed.playback.epochMs).toBe(20_000);
+    expect(changed.playback.revision).toBe(configured.playback.revision + 1);
   });
 });
 
