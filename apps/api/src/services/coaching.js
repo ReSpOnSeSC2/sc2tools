@@ -14,6 +14,9 @@
  *   student — any entry in ``state.students[]`` linked to this userId
  */
 
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
+
 const DOC_ID = "locker";
 const USERS_PAGE = 20;
 const GAMES_CAP = 500;
@@ -47,12 +50,16 @@ class CoachingService {
    */
   async putState(state, expectedRev) {
     const next = (expectedRev || 0) + 1;
+    const update = stampVersion(
+      { state, rev: next, updatedAt: new Date() },
+      COLLECTIONS.COACHING,
+    );
     const res = await this.db.coaching.updateOne(
       /** @type {any} */ (expectedRev
         ? { _id: DOC_ID, rev: expectedRev }
         : { _id: DOC_ID, rev: { $in: [0, null] } }),
       {
-        $set: { state, rev: next, updatedAt: new Date() },
+        $set: update,
         $setOnInsert: { createdAt: new Date() },
       },
       { upsert: expectedRev === 0 },
