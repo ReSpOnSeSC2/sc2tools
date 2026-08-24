@@ -186,6 +186,9 @@ const isAdmin=()=>meCoach===adminId();
 const coachName=id=>((S.coaches.find(c=>c.id===id)||S.coaches[0]||{name:S.coach}).name);
 (S.students||[]).forEach(st=>{if(!st.coachId)st.coachId=adminId()});
 const myStudents=()=>S.students.filter(st=>isAdmin()||st.coachId===meCoach);
+const myCoachName=()=>{const st=S.students.find(x=>x.id===meId);return coachName(st?st.coachId:adminId())};
+const coachSelectHTML=id=>isAdmin()&&S.coaches.length>1?`<label class="sub" style="display:block;margin-top:8px">Assign to coach<select id="${id}" style="width:100%;margin-top:4px">${S.coaches.map(c=>`<option value="${c.id}"${c.id===meCoach?" selected":""}>${esc(c.name)}</option>`).join("")}</select></label>`:"";
+const pickedCoach=id=>{const el=$(id);return(el&&el.value)||meCoach||adminId()};
 if(!S.shelfLibrary)S.shelfLibrary=[];
 /* migrate older records to the merged product model */
 (S.students||[]).forEach(st=>{
@@ -240,7 +243,7 @@ async function persist(okMsg){
    render();toast("Save failed — your work is still on screen; try again");return false}
  }
  if(preview){toast("Preview mode — changes are not saved");render();return false}
- if(readOnly){toast("This view is read-only — ask your coach for edit access");return false}
+ if(readOnly){toast("This view is read-only — ask "+esc(myCoachName())+" for edit access");return false}
  if(busy)return false; busy=true; render();
  try{
   await artifactNS.publish(buildDoc(S));
@@ -249,7 +252,7 @@ async function persist(okMsg){
   busy=false;
   const c=e&&e.code;
   if(c==="conflict"){toast("Someone saved a moment before you — reloading to the latest…");return false}
-  if(c==="not_writer"||c==="not_granted"||c==="consent_required"){readOnly=true;render();toast("You have view-only access. Ask "+esc(S.coach)+" to share this page with edit access so your work can save.",4200);return false}
+  if(c==="not_writer"||c==="not_granted"||c==="consent_required"){readOnly=true;render();toast("You have view-only access. Ask "+esc(myCoachName())+" to share this page with edit access so your work can save.",4200);return false}
   if(c==="too_large"){toast("Storage limit reached — remove a large item (Storage panel in Help) and try again",4200);render();return false}
   if(c==="rate_limited"){toast("Saving too fast — wait a few seconds and try again");render();return false}
   toast("Save failed ("+(c||"error")+") — your work is still on screen; try again");render();return false}
@@ -355,11 +358,11 @@ function walkSteps(){
   ["Inbox & agent","The replay-admission card tracks each student's season basis from the SC2 Tools agent (current / bridge / historical / quarantine) — students see one honest receipt line. Submitted replays queue here for you to download and watch; every piece of feedback is yours, written or spoken, never automated."],
   ["Sharing & saving","Share this page (top-right of the artifact viewer) with each student — give EDIT access or their submissions can't save. Every save publishes a new version for everyone. The ? button reopens help anytime."]];
  return[
-  ["Welcome to your locker","One page, no noise: your week leads with a single focus and a single action from "+S.coach+". Builds, materials and check-ins live behind tabs when you need them. Discord stays the place to talk."],
-  ["Your builds","Openers your coach assigns when the time is right — full build order and the benchmark timings to aim for. No wall of theory on day one."],
-  ["Your shelf","Session notes, voice memos, videos and marked-up screenshots — each one made for you, with the coach's note. New items land on top."],
-  ["Replays","Best: install the SC2 Tools agent and your games sync automatically. Otherwise “Submit replays” sends a whole batch at once. Your coach watches them personally — feedback comes back on your shelf in his words."],
-  ["Worksheets","When a worksheet is waiting, answer it before your session — it's how the coach aims your next hour. The ? button reopens this tour anytime."]];
+  ["Welcome to your locker","One page, no noise: your week leads with a single focus and a single action from "+myCoachName()+". Builds, materials and check-ins live behind tabs when you need them. Discord stays the place to talk."],
+  ["Your builds","Openers "+myCoachName()+" assigns when the time is right — full build order and the benchmark timings to aim for. No wall of theory on day one."],
+  ["Your shelf","Session notes, voice memos, videos and marked-up screenshots — each one made for you, with "+myCoachName()+"'s note. New items land on top."],
+  ["Replays","Best: install the SC2 Tools agent and your games sync automatically. Otherwise “Submit replays” sends a whole batch at once. "+myCoachName()+" watches them personally — feedback comes back on your shelf in their own words."],
+  ["Worksheets","When a worksheet is waiting, answer it before your session — it's how "+myCoachName()+" aims your next hour. The ? button reopens this tour anytime."]];
 }
 let walkI=0;
 function walkthrough(){walkI=0;ls.set("locker.walked."+role,"1");renderWalk()}
@@ -380,25 +383,31 @@ function helpHTML(){
   <div class="row"><h2 style="margin:0;flex:1">Help</h2><button class="iconbtn" onclick="helpOpen=false;render()">Close ✕</button></div>
   <button class="btn q" style="margin-top:10px" onclick="helpOpen=false;render();walkthrough()">↻ Replay the walkthrough</button>
   ${role==="coach"?`
-  <h4>Sharing with students</h4><p>Use the artifact viewer's share menu. Give each student <b>edit</b> access — that's what lets their worksheet answers and replay submissions save. View-only students can read but not submit.</p>
-  <h4>Reviewing replays</h4><p>Inbox → “Export batch” downloads submissions as one .json bundle → run <span style="font-family:var(--mono)">python unpack_batch.py bundle.json</span> in your coaching folder to unpack the .SC2Replay files → watch them yourself, then put your feedback on the shelf as notes, voice memos, or a linked replay.</p>
+  ${SITE?`<h4>Access</h4><p>Everyone signs in with their sc2tools.com account at <b>sc2tools.com/coaching</b> — no links to share, no passcodes. You link coaches and students to real accounts in <b>⚙ Admin</b>; anyone not linked sees nothing.</p>`
+  :`<h4>Sharing with students</h4><p>Use the artifact viewer's share menu. Give each student <b>edit</b> access — that's what lets their worksheet answers and replay submissions save. View-only students can read but not submit.</p>`}
+  ${SITE?`<h4>Reviewing replays</h4><p>Synced picks in the Inbox are already in your database — open them in your dashboard, then hit “reviewed”. Uploaded files export as one bundle to watch locally. Feedback goes on the shelf in your words: notes, voice memos, or a linked replay.</p>`
+  :`<h4>Reviewing replays</h4><p>Inbox → “Export batch” downloads submissions as one .json bundle → run <span style="font-family:var(--mono)">python unpack_batch.py bundle.json</span> in your coaching folder to unpack the .SC2Replay files → watch them yourself, then put your feedback on the shelf as notes, voice memos, or a linked replay.</p>`}
   <h4>Voice & video</h4><p>Voice memos record right here (browser will ask for the mic; if it's blocked, attach an audio file instead). Video: paste a Loom/YouTube link, or attach a small file (≤8 MB) — big videos belong on Loom.</p>
-  <h4>Passcode & coaches</h4><div class="row"><button class="btn sm" onclick="helpOpen=false;render();changePinModal()">Change my passcode</button></div>
-  <p>Add or remove coaches (and students) in ⚙ Admin at the bottom of the roster. Each coach signs in with their own passcode.</p>
+  ${SITE?`<h4>Coaches & students</h4><p>Managed in ⚙ Admin at the bottom of the roster. Only the admin adds or removes coaches; adding one requires their account to have a paired SC2 Tools agent (checked live). Coaches manage their own students.</p>`
+  :`<h4>Passcode & coaches</h4><div class="row"><button class="btn sm" onclick="helpOpen=false;render();changePinModal()">Change my passcode</button></div>
+  <p>Add or remove coaches (and students) in ⚙ Admin at the bottom of the roster. Each coach signs in with their own passcode.</p>`}
   <h4>Backups</h4><p>Download the whole Locker (students, shelves, worksheets, focus) as one JSON file, or restore from one.</p>
   <div class="row"><button class="btn sm" onclick="exportBackup()">⇩ Export backup</button>
   <label><input type="file" accept=".json,application/json" style="display:none" onchange="importBackup(this)"><span class="iconbtn" style="cursor:pointer">⇪ Restore backup</span></label></div>
-  <h4>SC2 Tools agent</h4><p>Each student's agent status lives in their Weekly-focus context card. Fill the replay-admission lanes automatically: run <span style="font-family:var(--mono)">agent_sync.py</span> over their replays (or your parsed.jsonl) and use “Import agent sync” in the Inbox — it sets the lanes, marks the agent connected and stamps the sync date. Replay shelf items and build references can link straight into sc2tools.com instead of carrying the file.</p>
-  <h4>Seasonal build refresh</h4><p>The build library is generated from your replay database. Each season, re-run the extractor and ask Claude to republish this page — the URL and all student data stay.</p>
+  ${SITE?`<h4>SC2 Tools agent</h4><p>Fully live: every linked account's agent uploads feed the pickers, the admission lanes and the connected status automatically — nothing to import, and season rollover reclassifies on its own.</p>`
+  :`<h4>SC2 Tools agent</h4><p>Each student's agent status lives in their Weekly-focus context card. Fill the replay-admission lanes automatically: run <span style="font-family:var(--mono)">agent_sync.py</span> over their replays (or your parsed.jsonl) and use “Import agent sync” in the Inbox — it sets the lanes, marks the agent connected and stamps the sync date. Replay shelf items and build references can link straight into sc2tools.com instead of carrying the file.</p>`}
+  ${SITE?`<h4>Seasonal build refresh</h4><p>The build library ships inside the page asset. Each season: re-run the extractor, then <span style="font-family:var(--mono)">python coaching/build_locker.py --season N</span> and deploy — student data lives in the database and is untouched.</p>`
+  :`<h4>Seasonal build refresh</h4><p>The build library is generated from your replay database. Each season, re-run the extractor and ask Claude to republish this page — the URL and all student data stay.</p>`}
   <h4>Storage</h4><p>${kb(used)} used of ${kb(BUDGET)} budget. Largest stored files:</p>
   <div class="meter ${used>BUDGET*0.8?"hot":""}"><i style="width:${Math.min(100,used/BUDGET*100)}%"></i></div>
   ${assets.map(a=>`<div class="filelist"><div class="f"><b>${esc(a.n)}</b><span>${kb(a.size)}</span><button class="btn sm q" onclick="delAsset('${a.id}')">delete</button></div></div>`).join("")||'<p>No stored files yet.</p>'}
-  <h4>Forgot passcode?</h4><p>Ask Claude to republish the page with a reset — student data is preserved.</p>`
+  ${SITE?"":`<h4>Forgot passcode?</h4><p>Ask Claude to republish the page with a reset — student data is preserved.</p>`}`
   :`
-  <h4>Submitting replays</h4><p>“Submit replays” takes a whole batch: drag in every .SC2Replay from the session, tag the build you were playing, send once. Your coach watches them personally; feedback lands on your shelf.</p>
-  <h4>Worksheets</h4><p>Answer before your session. Long answers beat short ones — the coach reads everything.</p>
-  <h4>Downloading files</h4><p>Replay files download with a “.txt” ending added (a platform rule) — after saving, remove the .txt so it ends in .SC2Replay and it opens in StarCraft normally.</p>
-  <h4>Something not saving?</h4><p>You may have view-only access — ask your coach to re-share the page with edit access.</p>`}
+  <h4>Submitting replays</h4><p>“Submit replays” takes a whole batch: drag in every .SC2Replay from the session, tag the build you were playing, send once. ${esc(myCoachName())} watches them personally; feedback lands on your shelf.</p>
+  <h4>Worksheets</h4><p>Answer before your session. Long answers beat short ones — ${esc(myCoachName())} reads everything.</p>
+  ${SITE?"":`<h4>Downloading files</h4><p>Replay files download with a “.txt” ending added (a platform rule) — after saving, remove the .txt so it ends in .SC2Replay and it opens in StarCraft normally.</p>`}
+  ${SITE?`<h4>Something not working?</h4><p>Make sure you're signed in with the account ${esc(myCoachName())} linked — and ping them on Discord if it still looks wrong.</p>`
+  :`<h4>Something not saving?</h4><p>You may have view-only access — ask ${esc(myCoachName())} to re-share the page with edit access.</p>`}`}
  </div>`}
 /* ---------- assets ---------- */
 function addAsset(name,mime,b64){const id=uid();S.assets[id]={n:name,mime,b64,size:Math.round(b64.length*0.75)};return id}
@@ -439,7 +448,7 @@ function shelfItemHTML(st,it,coach){
   body=meta+(it.link?`<div style="margin-top:5px"><a href="${esc(it.link)}" target="_blank" rel="noopener">▸ open this game in SC2 Tools</a></div>`:"");
  }
  else if(it.ty==="replay"&&it.asset){const a=S.assets[it.asset];
-  body=`<div class="row" style="margin-top:7px"><button class="btn sm" onclick="saveDownload('${esc(a.n)}.txt',S.assets['${it.asset}'].b64,true)">⇩ download replay</button><span class="sub">save, then remove the “.txt” ending</span></div>`}
+  body=`<div class="row" style="margin-top:7px"><button class="btn sm" onclick="saveDownload('${esc(a.n)}${SITE?"":".txt"}',S.assets['${it.asset}'].b64,true)">⇩ download replay</button><span class="sub">${SITE?"":"save, then remove the “.txt” ending"}</span></div>`}
  if(it.ty==="pdf")body=it.asset?`<div class="row" style="margin-top:7px"><button class="btn sm" onclick="pdfDownload('${it.asset}')">⇩ download PDF</button></div>`
    :it.link?`<div style="margin-top:6px"><a href="${esc(it.link)}" target="_blank" rel="noopener">▸ open: ${esc(it.link)}</a></div>`:"";
  const ic={voice:"MEMO",video:"VID",pdf:"PDF",replay:"REP",notes:"NOTE",image:"IMG"}[it.ty]||"•";
@@ -452,7 +461,7 @@ async function pdfDownload(assetId){const a=S.assets[assetId];if(!a)return;
   await downloadsNS.save({filename:a.n,data:u});toast("Saved ✓")
  }catch(e){
   if(e&&e.code==="declined")return;
-  if(e&&e.code==="extension_not_enabled"){toast("PDF saving isn't enabled in this view — ask your coach to drop it in Discord too",3600);return}
+  if(e&&e.code==="extension_not_enabled"){toast("PDF saving isn't enabled in this view — ask "+esc(myCoachName())+" to drop it in Discord too",3600);return}
   toast("Download failed")}}
 function rmShelf(sid,iid){const st=byId(sid);st.shelf=st.shelf.filter(x=>x.id!==iid);persist()}
 function saveShelfToLibrary(sid,iid){
@@ -551,13 +560,15 @@ function adminModal(){
   <div class="row" style="margin-top:8px"><button class="btn sm" onclick="addCoach()">Add coach</button></div>`}`
   :`<p class="sub">Coaches are managed by ${esc(coachName(adminId()))} (admin). You manage your own students below.</p>`}
   <h3 style="margin-top:16px">${isAdmin()?"All students":"Your students"}</h3>
-  ${myStudents().map(st=>`<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(st.name)}</div><div class="n">${st.email?esc(st.email)+" · ":""}${esc(st.note||"")}${isAdmin()?" · coach: "+esc(coachName(st.coachId)):""}</div></div>
+  ${myStudents().map(st=>`<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(st.name)}</div><div class="n">${st.email?esc(st.email)+" · ":""}${esc(st.note||"")}</div>
+    ${isAdmin()?`<div class="n" style="margin-top:4px">assigned coach: <select onchange="reassignStudent('${st.id}',this.value)" style="font-size:12px;padding:2px 6px">${S.coaches.map(c=>`<option value="${c.id}"${c.id===st.coachId?" selected":""}>${esc(c.name)}</option>`).join("")}</select></div>`:""}</div>
    <div class="d8"><button class="btn sm q" onclick="closeModal();removeStudent('${st.id}')">remove</button></div></div>`).join("")||'<p class="sub">No students yet.</p>'}
   ${SITE?`<div class="row" style="margin-top:8px"><button class="btn sm" onclick="closeModal();linkStudentFlow()">＋ Add student — link an account</button></div>`
   :`<div class="row" style="margin-top:8px">
    <input id="naName" type="text" placeholder="Student name" style="flex:2;min-width:130px">
-   <input id="naNote" type="text" placeholder="MMR / focus (optional)" style="flex:2;min-width:130px">
-   <button class="btn sm" onclick="adminAddStudent()">Add student</button></div>`}
+   <input id="naNote" type="text" placeholder="MMR / focus (optional)" style="flex:2;min-width:130px"></div>
+  ${coachSelectHTML('naCoach')}
+  <div class="row" style="margin-top:8px"><button class="btn sm" onclick="adminAddStudent()">Add student</button></div>`}
   <button class="btn q" style="margin-top:14px" onclick="closeModal()">Close</button>`)}
 async function addCoach(){
  if(!isAdmin()){toast("Only the admin can add coaches");return}
@@ -576,11 +587,15 @@ function removeCoach(id){
  openModal(`<h2>Remove coach?</h2><p class="sub">${esc((S.coaches.find(c=>c.id===id)||{}).name||"")} loses coach access immediately.</p>
   <div class="row" style="margin-top:12px"><button class="btn" style="border-color:#5c3434;color:var(--loss)" onclick="S.students.forEach(x=>{if(x.coachId==='${id}')x.coachId=adminId()});S.coaches=S.coaches.filter(c=>c.id!=='${id}');closeModal();persist()">Remove</button>
   <button class="btn q" onclick="adminModal()">Cancel</button></div>`)}
+function reassignStudent(id,cid){
+ if(!isAdmin()){toast("Only the admin can reassign students");return}
+ const st=byId(id);if(!st||!S.coaches.some(c=>c.id===cid))return;
+ st.coachId=cid;persist();toast(esc(st.name)+" is now assigned to "+esc(coachName(cid)))}
 function adminAddStudent(){
  const n=$("naName").value.trim();if(!n){toast("Name required");return}
  if(S.students.some(x=>x.name.toLowerCase()===n.toLowerCase())){toast("That student already exists");return}
  S.students.push({id:uid(),name:n,note:$("naNote").value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
-  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:meCoach||adminId()});
+  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:pickedCoach('naCoach')});
  curStudent=S.students[S.students.length-1].id;closeModal();persist()}
 function linkCoachFlow(){
  if(!isAdmin()){toast("Only the admin can add coaches");return}
@@ -599,11 +614,12 @@ function linkStudentFlow(){
   openModal(`<h2>New student</h2><p class="sub">${esc(u.email)} · ${u.hasAgent?"agent paired ✓ — their games sync automatically":"no agent yet — they can install it later"}</p>
    <input id="lsName" type="text" placeholder="Display name — e.g. Alex" style="width:100%;margin-top:8px">
    <input id="lsNote" type="text" placeholder="MMR / focus (optional)" style="width:100%;margin-top:8px">
+   ${coachSelectHTML('lsCoach')}
    <div class="row" style="margin-top:12px"><button class="btn" onclick="(async function(){
      const n=$('lsName').value.trim();if(!n){toast('Name required');return}
      const st={id:uid(),name:n,note:$('lsNote').value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
       intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:'none'},games:[],
-      coachId:meCoach||adminId(),userId:'${u.userId}',email:'${esc(u.email)}'};
+      coachId:pickedCoach('lsCoach'),userId:'${u.userId}',email:'${esc(u.email)}'};
      S.students.push(st);curStudent=st.id;
      await refreshGamesFor(st);
      closeModal();persist()})()">Add student</button>
@@ -613,10 +629,11 @@ function addStudentModal(){
  openModal(`<h2>Add student</h2>
  <input id="nsName" type="text" placeholder="Their name" style="width:100%;margin-top:8px">
  <input id="nsNote" type="text" placeholder="MMR / focus (optional)" style="width:100%;margin-top:8px">
+ ${coachSelectHTML('nsCoach')}
  <div class="row" style="margin-top:12px"><button class="btn" onclick="addStudent()">Add</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
 function addStudent(){const n=$("nsName").value.trim();if(!n){toast("Name required");return}
  S.students.push({id:uid(),name:n,note:$("nsNote").value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
-  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:meCoach||adminId()});
+  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:pickedCoach('nsCoach')});
  curStudent=S.students[S.students.length-1].id;closeModal();persist()}
 function removeStudent(id){
  const st=byId(id);
@@ -699,7 +716,7 @@ function focusHTML(st){
     ${it.done?`<p class="sub"><b style="color:var(--ink)">Rank:</b> ${esc(it.rank||"—")} · ${esc(it.region||"")} · ${esc(it.race||"")}<br>
      <b style="color:var(--ink)">Wants most:</b> ${esc(it.goal||"—")}<br>
      <b style="color:var(--ink)">Time:</b> ${esc(it.hours||"?")} h/week<br>
-     ${(it.styles&&it.styles.length)?`<b style="color:var(--ink)">Opponents would call them:</b> ${esc(it.styles.join(", "))}<br>`:""}
+     ${(it.styles&&it.styles.length)?`<b style="color:var(--ink)">How they try to play:</b> ${esc(it.styles.join(", "))}<br>`:""}
      ${it.builds?`<b style="color:var(--ink)">vs Terran:</b> ${esc((it.builds.vsT||[]).join(", ")||"—")}<br>
      <b style="color:var(--ink)">vs Zerg:</b> ${esc((it.builds.vsZ||[]).join(", ")||"—")}<br>
      <b style="color:var(--ink)">vs Protoss:</b> ${esc((it.builds.vsP||[]).join(", ")||"—")}<br>`
@@ -1160,7 +1177,7 @@ function inboxHTML(st){
    ${AL.derived?'<span class="pill b">auto</span>':'<span class="sub">no synced games yet</span>'}
   </div>
   <div class="row" style="margin-top:11px">
-   <label><input type="file" accept=".json,application/json" style="display:none" onchange="importAgentSync('${st.id}',this)"><span class="iconbtn" style="cursor:pointer">⇪ Import agent sync</span></label>
+   ${SITE?"":`<label><input type="file" accept=".json,application/json" style="display:none" onchange="importAgentSync('${st.id}',this)"><span class="iconbtn" style="cursor:pointer">⇪ Import agent sync</span></label>`}
    ${st.agent&&st.agent.lastSync?`<span class="sub">last sync ${fmtD(st.agent.lastSync)}${st.agent.latestGame?" · latest game "+esc(st.agent.latestGame):""}</span>`:""}
   </div>
   ${SITE?`<p class="sub" style="margin-top:6px">Live from ${esc(st.name)}'s agent uploads${st.userId?"":" — link their sc2tools.com account to enable"}.</p>`
@@ -1254,7 +1271,7 @@ function studentHTML(){
    <div class="sub">coached by ${esc(coachName(st.coachId))}</div></div>
    <button class="btn" style="margin-left:auto" onclick="submitModal('${st.id}')">⇪ Submit replays</button></div>
   ${tabs}${body}
-  <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and your coach. Questions go in your Discord channel.</p>
+  <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and ${esc(coachName(st.coachId))}. Questions go in your Discord channel.</p>
  </div>`}
 function intakeHTML(st){
  if(!INTAKE)INTAKE={rank:"",region:"Americas",race:"Protoss",goal:"",hours:"4",styles:[],builds:{vsT:[],vsZ:[],vsP:[]},question:""};
@@ -1282,8 +1299,8 @@ function intakeHTML(st){
    <div class="choices" style="margin-top:6px">${["Protoss","Terran","Zerg","Random"].map(r=>`<button class="choice ${INTAKE.race===r?"on":""}" onclick="INTAKE.race='${r}';render()">${r}</button>`).join("")}</div></div>
   <div style="margin-top:12px"><label class="sub">What do you want most?</label>
    <div class="choices" style="margin-top:6px">${["Improve game understanding","Learn new builds","Tighten existing builds"].map(g=>`<button class="choice ${INTAKE.goal===g?"on":""}" onclick="INTAKE.goal='${g}';render()">${g}</button>`).join("")}</div></div>
-  <div style="margin-top:12px"><label class="sub">From your opponent's perspective, how would they describe your play? (you can select more than one)</label>
-   <div class="choices" style="margin-top:6px">${["Macro Player","Cheesy Player","Timing Attack Style Player","Tactical Player","Micro Player","Thinking Player","Ape"].map(x=>`<button class="choice ${INTAKE.styles.includes(x)?"on":""}" onclick="(function(){const i=INTAKE.styles.indexOf('${x}');if(i>=0)INTAKE.styles.splice(i,1);else INTAKE.styles.push('${x}');render()})()">${x}</button>`).join("")}</div></div>
+  <div style="margin-top:12px"><label class="sub">How do you try to play? (select as many or as few as fit)</label>
+   <div style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:5px">${["Macro Player","Cheesy Player","Timing Attack Style Player","Tactical Player","Micro Player","Thinking Player","Ape Style"].map(x=>`<label class="sub" style="display:flex;gap:8px;align-items:center;cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:var(--field);${INTAKE.styles.includes(x)?"border-color:var(--gold-dim);color:var(--gold)":""}"><input type="checkbox" ${INTAKE.styles.includes(x)?"checked":""} onchange="(function(){const i=INTAKE.styles.indexOf('${x}');if(i>=0)INTAKE.styles.splice(i,1);else INTAKE.styles.push('${x}');render()})()">${x}</label>`).join("")}</div></div>
   <div style="margin-top:12px"><label class="sub">Realistic practice time per week</label>
    <div class="choices" style="margin-top:6px">${["2","4","10","20+"].map(h=>`<button class="choice ${INTAKE.hours===h?"on":""}" onclick="INTAKE.hours='${h}';render()">${h} hours</button>`).join("")}</div></div>
   <div style="margin-top:14px"><label class="sub" style="font-weight:600;color:var(--ink)">Your current build orders — pick from the lists or type your own; add as many as you actually play. "I don't have one" is a useful answer.</label>
@@ -1291,7 +1308,7 @@ function intakeHTML(st){
   <div style="margin-top:14px"><label class="sub">One to three things you are most interested in improving in or understanding</label>
    <textarea rows="3" style="margin-top:6px" placeholder="1. …&#10;2. …&#10;3. …" oninput="INTAKE.question=this.value">${esc(INTAKE.question)}</textarea></div>
   <div class="row" style="margin-top:14px"><button class="btn" onclick="finishIntake('${st.id}')">Finish setup →</button>
-   <span class="sub">Your coach reads every word of this.</span></div>
+   <span class="sub">${esc(coachName(st.coachId))} reads every word of this.</span></div>
  </div>
  <div class="card"><h3>Get your replays syncing</h3>
   <p class="sub">Install the <a href="https://sc2tools.com" target="_blank" rel="noopener">SC2 Tools agent</a> and pair it with your account — every ladder game you play uploads and classifies automatically, so coaching runs on your real current games. Until then, the “Submit replays” button up top is the manual path.</p></div>`}
@@ -1310,13 +1327,13 @@ function weekHTML(st,pendingWS){
   <div>${focusCardHTML(st.focus,true)}${receiptLine(st)}</div>
   <div>
    <div class="card" style="margin-bottom:12px"><h3>Replays</h3>
-    ${isOn?`<p class="sub"><span class="pill w">agent connected</span> Your games sync to ${esc(S.coach)} automatically — just play.${st.agent.lastSync?" Last sync "+fmtD(st.agent.lastSync)+".":""} Use “Submit replays” only for specific games you want looked at.</p>`
+    ${isOn?`<p class="sub"><span class="pill w">agent connected</span> Your games sync to ${esc(coachName(st.coachId))} automatically — just play.${st.agent.lastSync?" Last sync "+fmtD(st.agent.lastSync)+".":""} Use “Submit replays” only for specific games you want looked at.</p>`
      :`<p class="sub"><span class="pill r">agent not set up</span> Install the <a href="https://sc2tools.com" target="_blank" rel="noopener">SC2 Tools agent</a> so your games sync automatically — until then, use “Submit replays” after each session.</p>`}
    </div>
-   ${pendingWS.length?"":`<div class="card" style="margin-bottom:12px"><h3>Check-ins</h3><p class="sub">Nothing waiting. When ${esc(S.coach)} sends a check-in, it appears here.</p></div>`}
+   ${pendingWS.length?"":`<div class="card" style="margin-bottom:12px"><h3>Check-ins</h3><p class="sub">Nothing waiting. When ${esc(coachName(st.coachId))} sends a check-in, it appears here.</p></div>`}
   </div>
  </div>
- ${pendingWS.map(w=>`<div class="card" style="margin-top:14px"><h3>Check-in from your coach</h3>${wsFillHTML(st,w)}</div>`).join("")}
+ ${pendingWS.map(w=>`<div class="card" style="margin-top:14px"><h3>Check-in from ${esc(coachName(st.coachId))}</h3>${wsFillHTML(st,w)}</div>`).join("")}
  ${(st.worksheets||[]).filter(w=>w.state==="submitted").slice(0,2).map(w=>`<div class="card" style="margin-top:14px"><div class="sent">${esc(w.title)} — sent ✓ ${fmtD(w.submittedAt)}</div></div>`).join("")}`}
 function myBuildsHTML(st){
  return `<div class="card">
@@ -1332,13 +1349,13 @@ function myBuildsHTML(st){
     </details>
     ${(()=>{const rl=b.refLink||L.refLink,rg=b.refGame||L.refGame,ra=b.ref||L.refAsset;
       if(rl)return `<div style="margin-top:6px"><a href="${esc(rl)}" target="_blank" rel="noopener">▸ watch the coach execute it${rg?" — "+esc(rg.m+" vs "+rg.o):""}</a></div>`;
-      if(rg)return `<div class="mu" style="margin-top:6px">reference game: ${esc(rg.m)} vs ${esc(rg.o)} · ${esc(rg.d)} — ask your coach to open it in session</div>`;
-      if(ra&&S.assets[ra])return `<div style="margin-top:6px"><button class="btn sm" onclick="saveDownload(S.assets['${ra}'].n+'.txt',S.assets['${ra}'].b64,true)">⇩ reference replay</button> <span class="sub">remove the .txt ending after saving</span></div>`;
+      if(rg)return `<div class="mu" style="margin-top:6px">reference game: ${esc(rg.m)} vs ${esc(rg.o)} · ${esc(rg.d)} — ask ${esc(coachName(st.coachId))} to open it in session</div>`;
+      if(ra&&S.assets[ra])return `<div style="margin-top:6px"><button class="btn sm" onclick="saveDownload(S.assets['${ra}'].n+'.txt',S.assets['${ra}'].b64,true)">⇩ reference replay</button> <span class="sub">${SITE?"":"remove the .txt ending after saving"}</span></div>`;
       return ""})()}
-   </div>`}).join(""):'<div class="empty">No builds assigned yet — your coach assigns them when the time is right.</div>'}
+   </div>`}).join(""):`<div class="empty">No builds assigned yet — ${esc(coachName(st.coachId))} assigns them when the time is right.</div>`}
  </div>`}
 function myShelfHTML(st){
- return `<div class="card"><h3>From ${esc(S.coach)} · your shelf</h3>
+ return `<div class="card"><h3>From ${esc(coachName(st.coachId))} · your shelf</h3>
   <p class="sub">Everything here was made or picked for you.</p>
   <div style="margin-top:10px">${(st.shelf||[]).length?st.shelf.map(it=>shelfItemHTML(st,it,false)).join(""):'<div class="empty">Nothing yet.</div>'}</div>
  </div>`}
@@ -1361,7 +1378,7 @@ function wsFillHTML(st,w){
    return `<div class="block" style="border-left-color:${a!=null&&a!==""?"var(--win)":"var(--gold-dim)"}">
     <div class="bh"><span class="ty" style="color:var(--mute)">Q${i+1}</span></div>
     <div style="font-weight:600;margin-bottom:2px">${esc(b.q)}</div>${body}</div>`}).join("")+
-  `<button class="btn" style="margin-top:6px" onclick="submitWS('${st.id}','${w.id}')" ${busy?"disabled":""}>Send to ${esc(S.coach)}</button>`}
+  `<button class="btn" style="margin-top:6px" onclick="submitWS('${st.id}','${w.id}')" ${busy?"disabled":""}>Send to ${esc(coachName(st.coachId))}</button>`}
 const w2=(sid,wid)=>byId(sid).worksheets.find(x=>x.id===wid);
 function wsReplayPick(sid,wid,bid){
  pickFiles(".SC2Replay",true,async fs=>{
@@ -1386,7 +1403,7 @@ function submitModal(sid){
  const st=byId(sid);
  const has=(st.games||[]).length;
  openModal(`<h2>Submit replays</h2>
-  <p class="sub">${has?`Your agent already syncs your games — pick the ones you want ${esc(S.coach)} to review, no re-upload needed. Upload files only for games that aren't synced.`
+  <p class="sub">${has?`Your agent already syncs your games — pick the ones you want ${esc(coachName(st.coachId))} to review, no re-upload needed. Upload files only for games that aren't synced.`
    :`Fastest path: the SC2 Tools agent syncs your games so you just pick them — no uploading. Until it's connected, upload the files.`}</p>
   <div class="row" style="margin-top:12px">
    <button class="btn ${has?"":"q"}" onclick="closeModal();subSynced('${sid}')">🎮 Pick from my synced games</button>
@@ -1447,7 +1464,7 @@ function subUploadModal(sid){
  pendingFiles=[];
  const st=byId(sid);
  openModal(`<h2>Submit replays</h2>
-  <p class="sub">Send a whole session at once. Tag which build you were playing so your coach knows what to look for.</p>
+  <p class="sub">Send a whole session at once. Tag which build you were playing so ${esc(coachName(st.coachId))} knows what to look for.</p>
   <div class="drop" id="dropZ" style="margin-top:10px" onclick="subPick()">Drop .SC2Replay files here — or click to choose (multiple OK)</div>
   <div class="filelist" id="subList"></div>
   <select id="subBuild" style="width:100%;margin-top:10px">
@@ -1490,7 +1507,7 @@ function render(){
   ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button>
   ${SITE?"":`<button class="iconbtn" onclick="signOut()">switch user</button>`}`:""}</div>`;
  if(preview)top+=`<div class="banner">PREVIEW — not published with saving enabled; changes stay in this tab only</div>`;
- if(readOnly)top+=`<div class="banner r">VIEW-ONLY — ask ${esc(S.coach)} to share this page with edit access</div>`;
+ if(readOnly)top+=`<div class="banner r">VIEW-ONLY — ask ${esc(myCoachName())} to share this page with edit access</div>`;
  if(busy)top+=`<div class="banner">Saving…</div>`;
  let body="";
  if(!S.setup)body=setupHTML();
