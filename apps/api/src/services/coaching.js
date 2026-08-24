@@ -16,6 +16,7 @@
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { gamesMatchStage } = require("../util/parseQuery");
 const { randomUUID } = require("node:crypto");
 
 const DOC_ID = "locker";
@@ -390,6 +391,133 @@ class CoachingService {
         b: typeof g.myBuild === "string" ? g.myBuild : "",
       }))
       .filter((g) => g.d);
+  }
+
+  /**
+   * Privacy-minimal ranked-record summary for the Coaching performance view.
+   * The route supplies a server-resolved student userId and forces ranked 1v1
+   * through the shared filter builder. One slim-row scan produces both the
+   * overall W/L headline and the exact own-race/opponent-race matrix; no replay
+   * assets, opponent identities, or heavy game-details are read.
+   *
+   * @param {string} userId
+   * @param {Record<string, any>} filters
+   * @returns {Promise<{
+   *   summary:{games:number,wins:number,losses:number,winRate:number,
+   *     classifiedGames:number,unclassifiedGames:number},
+   *   matchups:Array<{
+   *     matchup:string,myRace:string,opponentRace:string,
+   *     games:number,wins:number,losses:number,winRate:number
+   *   }>
+   * }>}
+   */
+  async performanceRecord(userId, filters) {
+    const match = gamesMatchStage(userId, filters || {});
+    const [root = {}] = await this.db.games
+      .aggregate([
+        { $match: match },
+        {
+          $addFields: {
+            _coachingResult: coachingResultExpr(),
+            _coachingMyRace: coachingRaceExpr("$myRace"),
+            _coachingOpponentRace: coachingRaceExpr("$opponent.race"),
+          },
+        },
+        {
+          $facet: {
+            summary: [
+              { $match: { _coachingResult: { $in: ["win", "loss"] } } },
+              {
+                $group: {
+                  _id: null,
+                  games: { $sum: 1 },
+                  wins: {
+                    $sum: {
+                      $cond: [{ $eq: ["$_coachingResult", "win"] }, 1, 0],
+                    },
+                  },
+                  losses: {
+                    $sum: {
+                      $cond: [{ $eq: ["$_coachingResult", "loss"] }, 1, 0],
+                    },
+                  },
+                },
+              },
+              { $project: { _id: 0, games: 1, wins: 1, losses: 1 } },
+            ],
+            matchups: [
+              {
+                $match: {
+                  _coachingResult: { $in: ["win", "loss"] },
+                  _coachingMyRace: { $in: ["P", "T", "Z"] },
+                  _coachingOpponentRace: { $in: ["P", "T", "Z"] },
+                },
+              },
+              {
+                $group: {
+                  _id: {
+                    myRace: "$_coachingMyRace",
+                    opponentRace: "$_coachingOpponentRace",
+                  },
+                  games: { $sum: 1 },
+                  wins: {
+                    $sum: {
+                      $cond: [{ $eq: ["$_coachingResult", "win"] }, 1, 0],
+                    },
+                  },
+                  losses: {
+                    $sum: {
+                      $cond: [{ $eq: ["$_coachingResult", "loss"] }, 1, 0],
+                    },
+                  },
+                },
+              },
+              { $sort: { "_id.myRace": 1, "_id.opponentRace": 1 } },
+            ],
+          },
+        },
+      ])
+      .toArray();
+    const totals = Array.isArray(root.summary) ? root.summary[0] : null;
+    const games = nonNegativeInteger(totals && totals.games);
+    const wins = nonNegativeInteger(totals && totals.wins);
+    const losses = nonNegativeInteger(totals && totals.losses);
+    const matchupRows = (Array.isArray(root.matchups) ? root.matchups : [])
+      .map((row) => {
+        const myRace = coachingRaceLetter(row && row._id && row._id.myRace);
+        const opponentRace = coachingRaceLetter(
+          row && row._id && row._id.opponentRace,
+        );
+        const rowGames = nonNegativeInteger(row && row.games);
+        const rowWins = nonNegativeInteger(row && row.wins);
+        const rowLosses = nonNegativeInteger(row && row.losses);
+        return {
+          matchup: `${myRace}v${opponentRace}`,
+          myRace,
+          opponentRace,
+          games: rowGames,
+          wins: rowWins,
+          losses: rowLosses,
+          winRate: rowGames > 0 ? rowWins / rowGames : 0,
+        };
+      })
+      .filter((row) => row.myRace !== "U" && row.opponentRace !== "U")
+      .sort((a, b) => coachingMatchupOrder(a.matchup) - coachingMatchupOrder(b.matchup));
+    const classifiedGames = Math.min(
+      games,
+      matchupRows.reduce((total, row) => total + row.games, 0),
+    );
+    return {
+      summary: {
+        games,
+        wins,
+        losses,
+        winRate: games > 0 ? wins / games : 0,
+        classifiedGames,
+        unclassifiedGames: games - classifiedGames,
+      },
+      matchups: matchupRows,
+    };
   }
 
   /**
@@ -1213,6 +1341,88 @@ function toDay(d) {
 /** @param {string} s @returns {string} */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const COACHING_MATCHUP_ORDER = new Map([
+  ["PvP", 0], ["PvT", 1], ["PvZ", 2],
+  ["ZvP", 3], ["ZvT", 4], ["ZvZ", 5],
+  ["TvP", 6], ["TvT", 7], ["TvZ", 8],
+]);
+
+/** @returns {Record<string, any>} */
+function coachingResultExpr() {
+  return {
+    $switch: {
+      branches: [
+        {
+          case: {
+            $in: [
+              { $toLower: { $ifNull: ["$result", ""] } },
+              ["victory", "win"],
+            ],
+          },
+          then: "win",
+        },
+        {
+          case: {
+            $in: [
+              { $toLower: { $ifNull: ["$result", ""] } },
+              ["defeat", "loss"],
+            ],
+          },
+          then: "loss",
+        },
+      ],
+      default: "other",
+    },
+  };
+}
+
+/** @param {string} field @returns {Record<string, any>} */
+function coachingRaceExpr(field) {
+  const firstLetter = {
+    $toUpper: {
+      $substrCP: [
+        {
+          $convert: {
+            input: field,
+            to: "string",
+            onError: "",
+            onNull: "",
+          },
+        },
+        0,
+        1,
+      ],
+    },
+  };
+  return {
+    $switch: {
+      branches: [
+        { case: { $eq: [firstLetter, "P"] }, then: "P" },
+        { case: { $eq: [firstLetter, "T"] }, then: "T" },
+        { case: { $eq: [firstLetter, "Z"] }, then: "Z" },
+      ],
+      default: "U",
+    },
+  };
+}
+
+/** @param {unknown} value @returns {number} */
+function nonNegativeInteger(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+}
+
+/** @param {unknown} value @returns {"P"|"T"|"Z"|"U"} */
+function coachingRaceLetter(value) {
+  const letter = String(value || "").trim().slice(0, 1).toUpperCase();
+  return letter === "P" || letter === "T" || letter === "Z" ? letter : "U";
+}
+
+/** @param {string} matchup @returns {number} */
+function coachingMatchupOrder(matchup) {
+  return COACHING_MATCHUP_ORDER.get(matchup) ?? Number.MAX_SAFE_INTEGER;
 }
 
 /** @param {ConstructorParameters<typeof CoachingService>[0]} deps */

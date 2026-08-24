@@ -147,7 +147,7 @@ canvas.shot{width:100%;border-radius:8px;border:1px solid var(--line);display:bl
 .rec{display:inline-flex;align-items:center;gap:8px}
 .rec .dot{width:10px;height:10px;border-radius:50%;background:var(--loss);animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.25}}
-@media(prefers-reduced-motion:reduce){.rec .dot{animation:none}button{transition:none}.empty-primary:hover,.roster-action:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.rec .dot,.perf-skeleton i{animation:none}button{transition:none}.empty-primary:hover,.roster-action:hover{transform:none}}
 a{color:var(--blue)}
 .empty{border:1.5px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mute)}
 .creator{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,color-mix(in srgb,var(--panel2) 94%,var(--blue) 6%),var(--panel));padding:18px 19px;margin-bottom:16px}
@@ -187,13 +187,38 @@ a{color:var(--blue)}
 .choice.on{border-color:var(--gold-dim);color:var(--gold);background:#d4a84315}
 .lanegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:9px}
 .lanegrid label{display:block;font-size:11.5px;color:var(--mute);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--disp);font-weight:600}
-@media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}.spark-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.creator-head{flex-direction:column}.creator-actions{justify-content:flex-start}.template-grid{grid-template-columns:1fr}}
+.performance-shell{display:flex;flex-direction:column;gap:14px}
+.performance-hero{position:relative;z-index:6;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;overflow:visible;border:1px solid var(--line);border-radius:15px;background:linear-gradient(140deg,color-mix(in srgb,var(--panel2) 91%,var(--blue) 9%),var(--panel));padding:18px 19px}
+.performance-hero::after{content:"";position:absolute;z-index:-1;width:230px;height:230px;right:-120px;top:-155px;border-radius:50%;background:var(--blue);opacity:.07;pointer-events:none}
+.performance-title{min-width:0;max-width:650px}.performance-title h2{margin:3px 0 5px;font-size:23px;letter-spacing:-.035em}.performance-title p{margin:0;color:var(--mute);font-size:13.5px;line-height:1.55}
+.performance-actions{display:flex;flex:none;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.perf-date-wrap{position:relative}
+.perf-date-trigger{display:flex;min-height:42px;align-items:center;gap:9px;border:1px solid var(--line);border-radius:11px;background:var(--field);color:var(--ink);padding:6px 11px;text-align:left;box-shadow:0 1px 0 #0003}
+.perf-date-trigger:hover{border-color:var(--strong);background:var(--panel2)}.perf-date-trigger svg{width:17px;height:17px;flex:none;color:var(--blue);stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.perf-date-trigger span{display:block;line-height:1.18}.perf-date-trigger small{display:block;color:var(--mute);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}.perf-date-trigger b{display:block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-family:var(--disp);font-size:12.5px}
+.perf-date-scrim{display:none}.perf-date-panel{position:absolute;z-index:30;right:0;top:calc(100% + 8px);width:min(390px,calc(100vw - 34px));max-height:min(580px,75vh);overflow-y:auto;border:1px solid var(--strong);border-radius:14px;background:var(--panel);padding:14px;box-shadow:0 22px 60px #0009,var(--hard)}
+.perf-date-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:1px 1px 11px;border-bottom:1px solid var(--tline)}.perf-date-head h3{margin:0;color:var(--ink);font-size:16px;letter-spacing:-.02em;text-transform:none}.perf-date-head p{margin:2px 0 0;color:var(--mute);font-size:11.5px}.perf-date-close{display:grid;width:34px;height:34px;flex:none;place-items:center;border:1px solid var(--line);border-radius:999px;background:var(--field);color:var(--mute);font-size:18px;line-height:1}
+.perf-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:11px}.perf-preset{min-height:37px;border:1px solid var(--line);border-radius:9px;background:var(--field);color:var(--mute);padding:7px 9px;text-align:left;font-size:11.5px;font-weight:650}.perf-preset:hover{border-color:var(--strong);color:var(--ink)}.perf-preset.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--field));color:var(--blue)}
+.perf-custom{margin-top:11px;border-top:1px solid var(--tline);padding-top:11px}.perf-custom-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.perf-custom label{color:var(--mute);font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}.perf-custom input{display:block;width:100%;margin-top:4px;text-transform:none;letter-spacing:0;color-scheme:inherit}.perf-date-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:11px}.perf-timezone{display:flex;align-items:center;gap:6px;min-width:0;color:var(--mute);font-size:10.5px}.perf-timezone svg{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}.perf-timezone span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perf-scope-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:var(--mute);font-size:11.5px}.perf-scope-line .pill{margin:0}
+.perf-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.perf-kpi{min-width:0;border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:14px 15px}.perf-kpi .k{color:var(--mute);font-family:var(--disp);font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}.perf-kpi .v{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:5px;font-family:var(--mono);font-size:clamp(21px,3vw,29px);font-weight:800;letter-spacing:-.045em;line-height:1.05}.perf-kpi .n{display:block;margin-top:6px;color:var(--mute);font-size:10.5px;line-height:1.35}.perf-kpi[data-tone="good"] .v{color:var(--win)}.perf-kpi[data-tone="warn"] .v{color:var(--gold)}
+.perf-card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:17px 18px}.perf-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.perf-card-head h3{margin:0;color:var(--ink);font-size:17px;letter-spacing:-.02em;text-transform:none}.perf-card-head p{max-width:700px;margin:3px 0 0;color:var(--mute);font-size:12px;line-height:1.5}.perf-card-head .btn{flex:none}
+.perf-chart-wrap{overflow:hidden;border:1px solid var(--tline);border-radius:11px;background:linear-gradient(180deg,color-mix(in srgb,var(--field) 94%,var(--blue) 6%),var(--field));padding:9px 8px 4px}.perf-chart{display:block;width:100%;height:auto;min-height:210px}.perf-chart text{fill:var(--mute);font-family:var(--mono);font-size:9.5px}.perf-chart .gridline{stroke:var(--line);stroke-width:1;opacity:.75}.perf-chart .axisline{stroke:var(--strong);stroke-width:1}.perf-chart .series{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.perf-chart .point{stroke:var(--panel);stroke-width:2}
+.perf-legend{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.perf-legend-item{display:flex;align-items:center;gap:7px;border:1px solid var(--tline);border-radius:999px;background:var(--field);padding:4px 8px;color:var(--mute);font-size:10.5px}.perf-legend-item i{width:8px;height:8px;border-radius:50%;background:var(--series-color)}.perf-legend-item b{color:var(--ink);font-family:var(--mono);font-size:10.5px}.perf-coverage{margin:10px 0 0;color:var(--mute);font-size:11.5px;line-height:1.5}.perf-coverage b{color:var(--ink)}
+.perf-matchups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.perf-matchup{position:relative;overflow:hidden;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:12px 13px}.perf-matchup::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--mu-color,var(--blue));opacity:.8}.perf-matchup[data-race="P"]{--mu-color:#77a9ff}.perf-matchup[data-race="T"]{--mu-color:#f0b14c}.perf-matchup[data-race="Z"]{--mu-color:#c982ff}.perf-matchup-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.perf-matchup-head b{font-family:var(--mono);font-size:15px;letter-spacing:-.02em}.perf-matchup-head span{color:var(--mute);font-size:10px}.perf-matchup dl{display:grid;grid-template-columns:1fr 1fr;gap:7px 11px;margin:11px 0 0}.perf-matchup dl div{min-width:0}.perf-matchup dt{color:var(--mute);font-size:9.5px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.perf-matchup dd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:2px 0 0;color:var(--ink);font-family:var(--mono);font-size:13px;font-weight:700}.perf-matchup dd.good{color:var(--win)}.perf-matchup dd.bad{color:var(--loss)}.perf-matchup dd.na{color:var(--mute);font-family:var(--font-sans,'Hanken Grotesk'),ui-sans-serif,system-ui,sans-serif;font-size:11px;font-weight:600}.perf-measured-note{margin:9px 0 0;border-top:1px solid var(--tline);padding-top:7px;color:var(--mute);font-size:10px;line-height:1.4}
+.perf-state{border:1.5px dashed var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel) 92%,transparent);padding:44px 24px;text-align:center}.perf-state-icon{display:grid;width:48px;height:48px;place-items:center;margin:0 auto;border:1px solid var(--line);border-radius:14px;background:var(--panel2);color:var(--blue)}.perf-state-icon svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.perf-state h3{margin:15px 0 4px;color:var(--ink);font-size:19px;letter-spacing:-.02em;text-transform:none}.perf-state p{max-width:540px;margin:0 auto;color:var(--mute);font-size:12.5px;line-height:1.55}.perf-state .row{justify-content:center;margin-top:14px}
+.perf-skeleton{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.perf-skeleton i{display:block;height:92px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(100deg,var(--panel) 20%,var(--panel2) 42%,var(--panel) 64%);background-size:240% 100%;animation:perf-shimmer 1.4s ease-in-out infinite}.perf-skeleton i:last-child{grid-column:1/-1;height:280px}@keyframes perf-shimmer{to{background-position:-180% 0}}
+.student-disclosure{display:flex;align-items:flex-start;gap:11px;border:1px solid color-mix(in srgb,var(--blue) 42%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--panel2) 92%,var(--blue) 8%);padding:11px 13px;margin-bottom:13px}.student-disclosure-icon{display:grid;width:34px;height:34px;flex:none;place-items:center;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--blue)}.student-disclosure-icon svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.student-disclosure b{display:block;font-family:var(--disp);font-size:12.5px}.student-disclosure p{margin:2px 0 0;color:var(--mute);font-size:11.5px;line-height:1.48}
+.perf-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}.spark-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.creator-head{flex-direction:column}.creator-actions{justify-content:flex-start}.template-grid{grid-template-columns:1fr}.performance-hero{flex-direction:column}.performance-actions{width:100%;justify-content:flex-start}.perf-kpis,.perf-skeleton{grid-template-columns:repeat(2,minmax(0,1fr))}.perf-matchups{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){.wrap{padding:16px 12px 60px}.bar{padding:9px 12px;gap:8px}.bar .who{display:none}
  .site-tools{margin-bottom:-4px;padding:10px 12px 0}.site-presence{display:none}.side{padding:14px;border-radius:14px}.roster-actions{gap:7px}.roster-empty{min-height:350px;padding:42px 20px;border-radius:14px}.roster-empty p{font-size:13.5px}.empty-assurance{align-items:flex-start}
  .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.tabs button{white-space:nowrap}
  .modal{max-height:94vh;padding:15px 14px;border-radius:12px}.card{padding:13px 14px}
  .item{flex-wrap:wrap}.item .d8{width:100%;justify-content:flex-start}
- .btn{min-height:40px}.fbig{font-size:22px}.creator{padding:15px 14px}.spark-grid,.idea-grid{grid-template-columns:1fr}.creator-actions{width:100%}.creator-actions .btn{flex:1}.template-actions .btn{flex:1}.author-tools{align-items:stretch}.author-tools .label{width:100%}}
+ .btn{min-height:40px}.fbig{font-size:22px}.creator{padding:15px 14px}.spark-grid,.idea-grid{grid-template-columns:1fr}.creator-actions{width:100%}.creator-actions .btn{flex:1}.template-actions .btn{flex:1}.author-tools{align-items:stretch}.author-tools .label{width:100%}
+ .performance-hero{z-index:23;padding:15px 14px}.performance-title h2{font-size:21px}.performance-actions,.perf-date-wrap,.perf-date-trigger{width:100%}.perf-date-trigger{justify-content:flex-start}.perf-date-trigger b{max-width:none}.perf-date-scrim{display:block;position:fixed;z-index:70;inset:0;border:0;border-radius:0;background:#020409b8;backdrop-filter:blur(3px)}.perf-date-panel{position:fixed;z-index:71;inset:auto 0 0 0;width:100%;max-height:82dvh;border-width:1px 0 0;border-radius:18px 18px 0 0;padding:15px 14px max(15px,env(safe-area-inset-bottom,0px));box-shadow:0 -24px 70px #000b}.perf-date-panel::before{content:"";display:block;width:42px;height:4px;border-radius:99px;background:var(--strong);margin:0 auto 12px}.perf-presets{grid-template-columns:1fr 1fr}.perf-custom-grid{grid-template-columns:1fr}.perf-date-foot{align-items:stretch;flex-direction:column}.perf-date-foot .btn{width:100%}
+ .perf-kpis,.perf-skeleton{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.perf-kpi{padding:12px}.perf-kpi .v{font-size:22px}.perf-card{padding:14px 13px}.perf-card-head{flex-direction:column}.perf-card-head .btn{width:100%}.perf-chart-wrap{margin-inline:-3px}.perf-chart{min-height:180px}.perf-matchups{grid-template-columns:1fr}.perf-state{padding:34px 16px}.student-disclosure{padding:10px 11px}}
 @media(max-width:420px){.roster-actions{grid-template-columns:1fr}.student-list .st{min-width:174px}.roster-empty{min-height:330px;padding-inline:17px}.empty-primary{width:100%}}
 .bcard{border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--panel2);margin-bottom:9px}
 .bcard .nm{font-weight:600}.bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
@@ -594,15 +619,19 @@ function coachHTML(){
    <div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:26px">${esc(st.name)}</h2>
     <input type="text" value="${esc(st.note||"")}" placeholder="mmr / focus note" style="font-size:12.5px;max-width:220px" onchange="byId('${st.id}').note=this.value;persist()">
     <button class="btn sm q" style="margin-left:auto" onclick="removeStudent('${st.id}')">remove student</button></div>
-   <div class="tabs">
-    <button class="${tab==="focus"?"on":""}" onclick="tab='focus';render()">Weekly focus</button>
-    <button class="${tab==="worksheets"?"on":""}" onclick="tab='worksheets';render()">Worksheets</button>
-    <button class="${tab==="builds"?"on":""}" onclick="tab='builds';render()">Builds</button>
-    <button class="${tab==="shelf"?"on":""}" onclick="tab='shelf';render()">Shelf</button>
-    <button class="${tab==="inbox"?"on":""}" onclick="tab='inbox';render()">Inbox ${(st.submissions||[]).filter(x=>!x.exported).length?`<span class="ct">●</span>`:""}</button>
+   <div class="tabs" role="tablist" aria-label="${esc(st.name)} coaching sections">
+    <button role="tab" aria-selected="${tab==="focus"}" class="${tab==="focus"?"on":""}" onclick="setCoachTab('focus')">Weekly focus</button>
+    <button role="tab" aria-selected="${tab==="performance"}" class="${tab==="performance"?"on":""}" onclick="setCoachTab('performance')">Performance</button>
+    <button role="tab" aria-selected="${tab==="worksheets"}" class="${tab==="worksheets"?"on":""}" onclick="setCoachTab('worksheets')">Worksheets</button>
+    <button role="tab" aria-selected="${tab==="builds"}" class="${tab==="builds"?"on":""}" onclick="setCoachTab('builds')">Builds</button>
+    <button role="tab" aria-selected="${tab==="shelf"}" class="${tab==="shelf"?"on":""}" onclick="setCoachTab('shelf')">Shelf</button>
+    <button role="tab" aria-selected="${tab==="inbox"}" class="${tab==="inbox"?"on":""}" onclick="setCoachTab('inbox')">Inbox ${(st.submissions||[]).filter(x=>!x.exported).length?`<span class="ct">●</span>`:""}</button>
    </div>
-   ${(SITE&&st&&st.userId&&_lastGamesFetch!==st.id)?(_lastGamesFetch=st.id,refreshGamesFor(st).then(ok=>{if(ok)render()}),""):""}${tab==="focus"?focusHTML(st):tab==="worksheets"?wsCoachHTML(st):tab==="builds"?buildsHTML(st):tab==="shelf"?shelfCoachHTML(st):inboxHTML(st)}`}
+   ${(SITE&&st&&st.userId&&_lastGamesFetch!==st.id)?(_lastGamesFetch=st.id,refreshGamesFor(st).then(ok=>{if(ok)render()}),""):""}${tab==="focus"?focusHTML(st):tab==="performance"?performanceHTML(st):tab==="worksheets"?wsCoachHTML(st):tab==="builds"?buildsHTML(st):tab==="shelf"?shelfCoachHTML(st):inboxHTML(st)}`}
   </section></div></div>`}
+function setCoachTab(next){
+ if(PERF_SCOPE.open)setPerfDateOpen(false,false);
+ tab=next;render()}
 let UPK={q:"",cb:null,rows:[],requireAgent:false};
 function userPicker(title,requireAgent,cb){
  UPK={q:"",cb,rows:[],requireAgent};
@@ -638,6 +667,213 @@ async function refreshGamesFor(st){
   st.games=out.games||[];st.agent={status:st.games.length?"connected":"none",lastSync:new Date().toISOString(),latestGame:st.games[0]?st.games[0].d:null};
   return true;
  }catch(e){return false}}
+/* ----- selected-student performance (live, read-only, never persisted) ----- */
+const PERFORMANCE_MATCHUPS=["PvP","PvT","PvZ","ZvP","ZvT","ZvZ","TvP","TvT","TvZ"];
+const PERF_SERIES_COLORS=["var(--blue)","var(--gold)","var(--win)","#c982ff","var(--loss)","#77a9ff"];
+const PERF_SCOPE={preset:"current_season",cA:"",cB:"",open:false};
+const PERF_SEASON_CATALOG={status:"idle",items:[],promise:null,error:null};
+const PERF_CACHE=new Map();
+let PERF_REQUEST_SEQ=0,PERF_BODY_OVERFLOW=null;
+function perfTimeZone(){
+ try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"}catch(e){return"UTC"}}
+function perfLocalBoundary(day,end){
+ if(!day)return null;
+ const d=new Date(day+(end?"T23:59:59.999":"T00:00:00.000"));
+ return Number.isNaN(d.getTime())?null:d}
+function perfFallbackSeasons(){
+ return Array.from({length:8},(_,index)=>{const number=CUR_SEASON-index,range=seasonRangeJS(number);return {number,battlenetId:number,start:range[0],end:range[1],isCurrent:index===0,approx:true}})}
+function perfRollUpSeasons(rows){
+ const byId=new Map();
+ (Array.isArray(rows)?rows:[]).forEach(row=>{
+  const id=Number(row&&row.battlenetId);if(!Number.isFinite(id))return;
+  const start=typeof row.start==="string"&&!Number.isNaN(new Date(row.start).getTime())?row.start:null;
+  const end=typeof row.end==="string"&&!Number.isNaN(new Date(row.end).getTime())?row.end:null;
+  const found=byId.get(id)||{number:id,battlenetId:id,start:null,end:null,isCurrent:false,approx:false,_start:Infinity,_end:-Infinity};
+  const startMs=start?new Date(start).getTime():Infinity,endMs=end?new Date(end).getTime():-Infinity;
+  if(startMs<found._start){found.start=start;found._start=startMs}
+  if(endMs>found._end){found.end=end;found._end=endMs}
+  byId.set(id,found)
+ });
+ const seasons=[...byId.values()].sort((a,b)=>b.number-a.number),current=seasons[0];
+ seasons.forEach(s=>{s.isCurrent=s===current;delete s._start;delete s._end});
+ return seasons}
+async function ensurePerformanceSeasons(){
+ if(PERF_SEASON_CATALOG.status==="ready"||PERF_SEASON_CATALOG.status==="fallback")return PERF_SEASON_CATALOG.items;
+ if(PERF_SEASON_CATALOG.promise)return PERF_SEASON_CATALOG.promise;
+ if(!SITE){PERF_SEASON_CATALOG.status="fallback";PERF_SEASON_CATALOG.items=perfFallbackSeasons();return PERF_SEASON_CATALOG.items}
+ PERF_SEASON_CATALOG.status="loading";
+ PERF_SEASON_CATALOG.promise=siteApi("/seasons").then(payload=>{
+  const items=perfRollUpSeasons(payload&&payload.items);
+  if(!items.length)throw new Error("seasons_empty");
+  PERF_SEASON_CATALOG.status="ready";PERF_SEASON_CATALOG.items=items;PERF_SEASON_CATALOG.error=null;return items
+ }).catch(error=>{
+  PERF_SEASON_CATALOG.status="fallback";PERF_SEASON_CATALOG.items=perfFallbackSeasons();PERF_SEASON_CATALOG.error=error;return PERF_SEASON_CATALOG.items
+ }).finally(()=>{PERF_SEASON_CATALOG.promise=null});
+ return PERF_SEASON_CATALOG.promise}
+function perfSeasonForPreset(id){
+ const seasons=PERF_SEASON_CATALOG.items;
+ if(!seasons.length)return null;
+ if(id==="current_season")return seasons.find(s=>s.isCurrent)||seasons[0]||null;
+ if(id&&id.startsWith("season:")){const n=Number(id.slice(7));return seasons.find(s=>s.number===n)||null}
+ return null}
+function performancePresets(){
+ const seasons=PERF_SEASON_CATALOG.items,current=seasons.find(s=>s.isCurrent)||seasons[0];
+ const out=[{id:"current_season",l:current?"Season "+current.number+" · current":PERF_SEASON_CATALOG.status==="loading"||PERF_SEASON_CATALOG.status==="idle"?"Loading current season…":"Current season"}];
+ seasons.filter(s=>!s.isCurrent).slice(0,7).forEach(s=>out.push({id:"season:"+s.number,l:"Season "+s.number}));
+ out.push({id:"last_7d",l:"Last 7 days"},{id:"last_30d",l:"Last 30 days"},{id:"last_90d",l:"Last 90 days"},{id:"all",l:"All time"},{id:"custom",l:"Custom range…"});
+ return out}
+function perfCatalogDate(value,season,end){
+ if(!value)return null;
+ if(season&&season.approx&&/^\d{4}-\d{2}-\d{2}$/.test(value))return perfLocalBoundary(value,end);
+ const d=new Date(value);return Number.isNaN(d.getTime())?null:d}
+function perfScopeConfig(){
+ let a=null,b=null,since=null,until=null;
+ if(PERF_SCOPE.preset==="custom"){
+  a=PERF_SCOPE.cA||null;b=PERF_SCOPE.cB||null;since=perfLocalBoundary(a,false);until=perfLocalBoundary(b,true)
+ }else if(PERF_SCOPE.preset==="current_season"||PERF_SCOPE.preset.startsWith("season:")){
+  const season=perfSeasonForPreset(PERF_SCOPE.preset);
+  if(season){since=perfCatalogDate(season.start,season,false);until=perfCatalogDate(season.end,season,true);if(season.isCurrent){const now=new Date();if(!until||until>now)until=now}}
+ }else{
+  [a,b]=presetRange(PERF_SCOPE.preset,PERF_SCOPE.cA,PERF_SCOPE.cB);since=perfLocalBoundary(a,false);until=perfLocalBoundary(b,true)
+ }
+ const end=until||new Date(),start=since;
+ const span=start?Math.max(1,Math.ceil((end-start)/86400000)):9999;
+ const interval=span<=45?"day":span<=400?"week":"month";
+ return {since,until,sinceDay:a||null,untilDay:b||null,interval,tz:perfTimeZone()}}
+function perfPresetLabel(){
+ if(PERF_SCOPE.preset==="custom"){
+  const label=d=>{try{return new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}catch(e){return d}};
+  return PERF_SCOPE.cA&&PERF_SCOPE.cB?label(PERF_SCOPE.cA)+" – "+label(PERF_SCOPE.cB):"Custom range"}
+ return (performancePresets().find(x=>x.id===PERF_SCOPE.preset)||{l:"Current season"}).l}
+function perfRequestFor(st){
+ const scope=perfScopeConfig(),q=new URLSearchParams();
+ if(scope.since)q.set("since",scope.since.toISOString());
+ if(scope.until)q.set("until",scope.until.toISOString());
+ q.set("interval",scope.interval);q.set("tz",scope.tz);
+ const key=[st.id,scope.since?scope.since.toISOString():"",scope.until?scope.until.toISOString():"",scope.interval,scope.tz].join("|");
+ return {key,scope,path:"/coaching/students/"+encodeURIComponent(st.id)+"/performance?"+q.toString()}}
+function setPerfDateOpen(open,paint){
+ const next=!!open,mobile=typeof window!=="undefined"&&window.matchMedia&&window.matchMedia("(max-width: 540px)").matches;
+ if(next&&!PERF_SCOPE.open&&mobile){PERF_BODY_OVERFLOW=document.body.style.overflow;document.body.style.overflow="hidden"}
+ if(!next&&PERF_SCOPE.open&&PERF_BODY_OVERFLOW!==null){document.body.style.overflow=PERF_BODY_OVERFLOW;PERF_BODY_OVERFLOW=null}
+ PERF_SCOPE.open=next;if(paint!==false)render()}
+function perfSelectPreset(id){
+ if(!performancePresets().some(x=>x.id===id))return;
+ PERF_SCOPE.preset=id;
+ if(id==="custom"){
+  if(!PERF_SCOPE.cA||!PERF_SCOPE.cB){const r=presetRange("last_30d");PERF_SCOPE.cA=r[0]||"";PERF_SCOPE.cB=r[1]||""}
+  render();return}
+ setPerfDateOpen(false)}
+function perfApplyCustom(){
+ const a=($("perfCustomSince")||{}).value||PERF_SCOPE.cA,b=($("perfCustomUntil")||{}).value||PERF_SCOPE.cB;
+ if(!a||!b){toast("Choose a start and end date");return}
+ if(a>b){toast("The start date must be before the end date");return}
+ PERF_SCOPE.preset="custom";PERF_SCOPE.cA=a;PERF_SCOPE.cB=b;setPerfDateOpen(false)}
+function perfUseAllTime(){PERF_SCOPE.preset="all";setPerfDateOpen(false)}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&PERF_SCOPE.open)setPerfDateOpen(false)});
+async function ensurePerformance(st,force){
+ if(!SITE||!st||!st.id||!st.userId)return;
+ await ensurePerformanceSeasons();
+ const req=perfRequestFor(st),existing=PERF_CACHE.get(req.key);
+ if(!force&&existing&&(existing.status==="loading"||existing.status==="ready"))return;
+ const requestId=++PERF_REQUEST_SEQ;
+ PERF_CACHE.set(req.key,{status:"loading",requestId});
+ if(tab==="performance"&&curStudent===st.id)render();
+ try{
+  const data=await siteApi(req.path);
+  const current=PERF_CACHE.get(req.key);
+  if(!current||current.requestId!==requestId)return;
+  PERF_CACHE.set(req.key,{status:"ready",requestId,data});
+ }catch(error){
+  const current=PERF_CACHE.get(req.key);
+  if(!current||current.requestId!==requestId)return;
+  PERF_CACHE.set(req.key,{status:"error",requestId,error});
+ }
+ if(tab==="performance"&&curStudent===st.id&&perfRequestFor(st).key===req.key)render()}
+function perfRetry(sid){const st=byId(sid);if(st)ensurePerformance(st,true)}
+function perfGoFocus(){setPerfDateOpen(false,false);tab="focus";render()}
+function perfDateControl(){
+ const scope=perfScopeConfig(),presets=performancePresets();
+ return `<div class="perf-date-wrap">
+  <button class="perf-date-trigger" type="button" aria-haspopup="dialog" aria-expanded="${PERF_SCOPE.open}" aria-controls="perfDatePanel" onclick="setPerfDateOpen(!PERF_SCOPE.open)">
+   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg><span><small>Performance window</small><b>${esc(perfPresetLabel())}</b></span></button>
+  ${PERF_SCOPE.open?`<button class="perf-date-scrim" type="button" aria-label="Close date range" onclick="setPerfDateOpen(false)"></button>
+   <section class="perf-date-panel" id="perfDatePanel" role="dialog" aria-label="Choose performance date range">
+    <div class="perf-date-head"><div><h3>Performance window</h3><p>Ranked 1v1 replays · dates use your local time</p></div><button class="perf-date-close" type="button" aria-label="Close" onclick="setPerfDateOpen(false)">×</button></div>
+    <div class="perf-presets">${presets.filter(x=>x.id!=="custom").map(x=>`<button type="button" class="perf-preset ${PERF_SCOPE.preset===x.id?"on":""}" onclick="perfSelectPreset('${esc(x.id)}')">${esc(x.l)}</button>`).join("")}</div>
+    <div class="perf-custom"><button type="button" class="perf-preset ${PERF_SCOPE.preset==="custom"?"on":""}" style="width:100%" onclick="perfSelectPreset('custom')">Custom date range</button>
+     ${PERF_SCOPE.preset==="custom"?`<div class="perf-custom-grid"><label>From<input id="perfCustomSince" type="date" value="${esc(PERF_SCOPE.cA)}" max="${esc(PERF_SCOPE.cB||"")}"></label><label>Through<input id="perfCustomUntil" type="date" value="${esc(PERF_SCOPE.cB)}" min="${esc(PERF_SCOPE.cA||"")}"></label></div>`:""}
+    </div>
+    <div class="perf-date-foot"><div class="perf-timezone"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><span>${esc(scope.tz)}</span></div>${PERF_SCOPE.preset==="custom"?`<button class="btn" type="button" onclick="perfApplyCustom()">Apply dates</button>`:""}</div>
+   </section>`:""}</div>`}
+function perfHero(st){
+ const scope=perfScopeConfig();
+ return `<section class="performance-hero"><div class="performance-title"><div class="creator-kicker">Student performance</div><h2>${esc(st.name)} · real replay evidence</h2><p>Use verified ranked 1v1 results to prepare your coaching. Nothing here is automatically interpreted or sent to the student.</p></div>
+  <div class="performance-actions">${perfDateControl()}<button class="btn q" type="button" onclick="perfGoFocus()">Set weekly focus</button></div>
+  <span class="perf-visually-hidden">Dates are grouped in ${esc(scope.tz)}.</span></section>`}
+function perfState(icon,title,copy,actions){
+ const paths=icon==="link"?'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>':icon==="error"?'<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>':'<path d="M4 17l5-5 4 4 7-8"/><path d="M4 21h16"/>';
+ return `<div class="perf-state"><div class="perf-state-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg></div><h3>${esc(title)}</h3><p>${esc(copy)}</p>${actions?`<div class="row">${actions}</div>`:""}</div>`}
+function perfNum(value){if(value===null||value===undefined||value==="")return null;const n=Number(value);return Number.isFinite(n)?n:null}
+function perfInteger(value){const n=perfNum(value);return n===null?null:Math.round(n)}
+function perfMmrMark(value){return perfInteger(value&&typeof value==="object"?value.mmr:value)}
+function perfSigned(value,digits){
+ const n=perfNum(value);if(n===null)return"—";
+ const shown=digits?Number(n.toFixed(digits)):Math.round(n);return(shown>0?"+":"")+shown.toLocaleString()}
+function perfPct(value){const n=perfNum(value);return n===null?"—":(n*100).toFixed(1)+"%"}
+function perfBucketLabel(bucket){
+ try{return new Date(bucket).toLocaleDateString(undefined,{month:"short",day:"numeric"})}catch(e){return String(bucket||"")}}
+function perfTrendHTML(data){
+ const mmr=data&&data.mmr||{},raw=Array.isArray(mmr.series)?mmr.series:[];
+ const series=raw.map((s,index)=>({label:String(s.label||[s.region,s.ladderRace].filter(Boolean).join(" · ")||"Ladder "+(index+1)),region:s.region||"",race:s.ladderRace||"",color:PERF_SERIES_COLORS[index%PERF_SERIES_COLORS.length],points:(Array.isArray(s.points)?s.points:[]).map(p=>({bucket:String(p.bucket||""),open:perfNum(p.openMmr),close:perfNum(p.closeMmr),min:perfNum(p.minMmr),max:perfNum(p.maxMmr)})).filter(p=>p.bucket&&p.close!==null)})).filter(s=>s.points.length);
+ if(!series.length)return `<section class="perf-card"><div class="perf-card-head"><div><h3>Verified replay MMR</h3><p>No verified replay-rating points are available in this window. Missing measurement is shown as unavailable, never as a zero.</p></div></div>${perfState("trend","No verified MMR trend yet","The latest agent records MMR only when a ranked replay contains a trustworthy player rating. Play and sync more ranked 1v1 games to build this line.","")}</section>`;
+ const buckets=[...new Set(series.flatMap(s=>s.points.map(p=>p.bucket)))].sort(),values=series.flatMap(s=>s.points.flatMap(p=>[p.min,p.max,p.close]).filter(n=>n!==null));
+ let lo=Math.min(...values),hi=Math.max(...values);if(lo===hi){lo-=20;hi+=20}else{const pad=Math.max(10,(hi-lo)*.08);lo-=pad;hi+=pad}
+ const W=720,H=230,L=48,R=14,T=14,B=31,plotW=W-L-R,plotH=H-T-B;
+ const x=b=>L+(buckets.length===1?plotW/2:buckets.indexOf(b)*plotW/(buckets.length-1));
+ const y=v=>T+(hi-v)*plotH/(hi-lo);
+ const ticks=Array.from({length:5},(_,i)=>hi-(hi-lo)*i/4);
+ const grid=ticks.map(v=>`<line class="gridline" x1="${L}" y1="${y(v).toFixed(2)}" x2="${W-R}" y2="${y(v).toFixed(2)}"/><text x="${L-7}" y="${(y(v)+3).toFixed(2)}" text-anchor="end">${Math.round(v)}</text>`).join("");
+ const lines=series.map(s=>{const ordered=s.points.slice().sort((a,b)=>a.bucket.localeCompare(b.bucket)),d=ordered.map((p,i)=>(i?"L":"M")+x(p.bucket).toFixed(2)+" "+y(p.close).toFixed(2)).join(" "),last=ordered[ordered.length-1];return `<path class="series" d="${d}" stroke="${s.color}"/><circle class="point" cx="${x(last.bucket).toFixed(2)}" cy="${y(last.close).toFixed(2)}" r="4" fill="${s.color}"/>`}).join("");
+ const latest=perfMmrMark(mmr.latest),peak=perfMmrMark(mmr.peak),trough=perfMmrMark(mmr.trough),meta=mmr.seriesMeta&&typeof mmr.seriesMeta==="object"?mmr.seriesMeta:{},totalSeries=perfInteger(meta.total),returnedSeries=perfInteger(meta.returned),seriesTruncated=meta.truncated===true&&totalSeries!==null&&totalSeries>series.length;
+ const seriesScope=seriesTruncated?` Showing ${returnedSeries===null?series.length:returnedSeries} of ${totalSeries} verified ladder series in this window.`:"";
+ const summary=`${seriesTruncated?"Showing "+series.length+" of "+totalSeries:series.length} verified ladder ${series.length===1?"series":"series"}. ${latest===null?"Latest MMR unavailable.":"Latest "+latest.toLocaleString()+"."} ${peak===null?"":"Peak "+peak.toLocaleString()+". "}${trough===null?"":"Trough "+trough.toLocaleString()+"."}`;
+ return `<section class="perf-card"><div class="perf-card-head"><div><h3>Verified replay MMR trend</h3><p>Each line stays on one Battle.net region and selected ladder race. Gaps remain gaps; separate ladders are never joined into a false climb or drop.${seriesScope}</p></div></div>
+  <div class="perf-chart-wrap"><svg class="perf-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(summary)}"><title>${esc(summary)}</title>${grid}<line class="axisline" x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}"/><text x="${L}" y="${H-9}">${esc(perfBucketLabel(buckets[0]))}</text><text x="${W-R}" y="${H-9}" text-anchor="end">${esc(perfBucketLabel(buckets[buckets.length-1]))}</text>${lines}</svg><p class="perf-visually-hidden">${esc(summary)}</p></div>
+  <div class="perf-legend">${series.map(s=>`<span class="perf-legend-item" style="--series-color:${s.color}"><i aria-hidden="true"></i><span>${esc(s.label)}</span><b>${perfInteger(s.points[s.points.length-1].close).toLocaleString()}</b></span>`).join("")}</div>
+  <p class="perf-coverage"><b>How to read measured MMR:</b> movement is calculated only between consecutive verified replay ratings on the same account, region and ladder race. “Not measured” means there was no trustworthy pair; it does not mean the player gained zero MMR.</p></section>`}
+function perfMatchupsHTML(data){
+ const indexed=new Map((Array.isArray(data.matchups)?data.matchups:[]).map(row=>[String(row.matchup||""),row]));
+ const cards=PERFORMANCE_MATCHUPS.map(mu=>{const row=indexed.get(mu)||{},games=perfInteger(row.games),has=games!==null&&games>0,wins=has?(perfInteger(row.wins)??0):null,losses=has?(perfInteger(row.losses)??0):null,wr=has?perfNum(row.winRate):null,measured=perfInteger(row.measuredGames),net=measured!==null&&measured>0?perfNum(row.netMmr):null,avg=measured!==null&&measured>0?perfNum(row.avgDelta):null;
+  const netClass=net===null?"na":net>0?"good":net<0?"bad":"";
+  return `<article class="perf-matchup" data-race="${mu[0]}"><div class="perf-matchup-head"><b>${mu}</b><span>${has?games+" game"+(games===1?"":"s"):"No games"}</span></div><dl>
+   <div><dt>Record</dt><dd class="${has?"":"na"}">${has?wins+"–"+losses:"Not available"}</dd></div><div><dt>Win rate</dt><dd class="${wr===null?"na":""}">${wr===null?"Not available":perfPct(wr)}</dd></div>
+   <div><dt>Net measured MMR</dt><dd class="${netClass}">${net===null?"Not measured":perfSigned(net,0)}</dd></div><div><dt>Average measured Δ</dt><dd class="${avg===null?"na":avg>0?"good":avg<0?"bad":""}">${avg===null?"Not measured":perfSigned(avg,1)}</dd></div></dl>
+   <p class="perf-measured-note">${measured&&measured>0?measured+" game"+(measured===1?"":"s")+" with a verified same-ladder MMR transition.":"No verified same-ladder MMR transition in this window."}</p></article>`}).join("");
+ return `<section class="perf-card"><div class="perf-card-head"><div><h3>All nine matchups</h3><p>W/L and win rate use synced ranked 1v1 games. MMR figures use only verified same-ladder transitions, so sparse cells stay explicitly unmeasured.</p></div></div><div class="perf-matchups">${cards}</div></section>`}
+function perfReadyHTML(st,data){
+ const summary=data&&data.summary||{},games=perfInteger(summary.games);
+ if(games===null||games===0)return perfState("trend","No ranked 1v1 games in this window","There is no synced performance evidence for "+st.name+" in "+perfPresetLabel()+". Widen the range, or confirm their SC2 Tools agent is paired and syncing.",`<button class="btn" type="button" onclick="perfUseAllTime()">View all time</button><button class="btn q" type="button" onclick="perfRetry('${st.id}')">Refresh</button>`);
+ const wins=perfInteger(summary.wins)??0,losses=perfInteger(summary.losses)??0,wr=perfNum(summary.winRate),unclassified=perfInteger(summary.unclassifiedGames)??0,latest=perfMmrMark(data.mmr&&data.mmr.latest),scope=data.scope||perfScopeConfig(),scopeZone=scope.tz||perfTimeZone();
+ const tone=wr===null?"":wr>=.55?"good":wr<.45?"warn":"";
+ const gameNote=unclassified>0?`${unclassified.toLocaleString()} ${unclassified===1?"game lacks":"games lack"} complete P/T/Z race data and ${unclassified===1?"is":"are"} excluded from matchup cells`:"Every classified game rolls into a matchup cell";
+ return `<div class="perf-scope-line"><span class="pill b">ranked 1v1</span><span>${esc(perfPresetLabel())}</span><span aria-hidden="true">·</span><span>${esc(scopeZone)}</span><span aria-hidden="true">·</span><span>updated from synced replays</span></div>
+  <section class="perf-kpis" aria-label="${esc(st.name)} performance summary"><article class="perf-kpi"><span class="k">Games</span><span class="v">${games.toLocaleString()}</span><span class="n">${gameNote}</span></article>
+   <article class="perf-kpi"><span class="k">Record</span><span class="v">${wins.toLocaleString()}–${losses.toLocaleString()}</span><span class="n">Wins and losses; undecided games are not invented</span></article>
+   <article class="perf-kpi" data-tone="${tone}"><span class="k">Win rate</span><span class="v">${wr===null?"—":perfPct(wr)}</span><span class="n">Based on the returned ranked 1v1 sample</span></article>
+   <article class="perf-kpi"><span class="k">Latest verified MMR</span><span class="v">${latest===null?"—":latest.toLocaleString()}</span><span class="n">${latest===null?"No verified replay rating in this window":"Never substituted from a current profile lookup"}</span></article></section>
+  ${perfTrendHTML(data)}${perfMatchupsHTML(data)}`}
+function performanceHTML(st){
+ if((!SITE||!st.userId)&&PERF_SEASON_CATALOG.status!=="ready"&&PERF_SEASON_CATALOG.status!=="fallback")ensurePerformanceSeasons().then(()=>{if(tab==="performance"&&curStudent===st.id)render()});
+ const hero=perfHero(st);
+ if(!SITE)return `<div class="performance-shell">${hero}${perfState("link","Live performance needs SC2 Tools","This standalone Locker does not have access to an account replay database. Open the Coaching section on sc2tools.com to load real student performance.","")}</div>`;
+ if(!st.userId)return `<div class="performance-shell">${hero}${perfState("link","Link this student’s SC2 Tools account","Performance becomes available after this roster student is attached to their real SC2 Tools account. No sample or estimated data will be shown.","")}</div>`;
+ if(PERF_SEASON_CATALOG.status!=="ready"&&PERF_SEASON_CATALOG.status!=="fallback"){ensurePerformance(st,false);return `<div class="performance-shell">${hero}<div class="perf-skeleton" aria-label="Loading the live season catalog and ${esc(st.name)} performance"><i></i><i></i><i></i><i></i><i></i></div></div>`}
+ const req=perfRequestFor(st),entry=PERF_CACHE.get(req.key);
+ if(!entry){ensurePerformance(st,false);return `<div class="performance-shell">${hero}<div class="perf-skeleton" aria-label="Loading ${esc(st.name)} performance"><i></i><i></i><i></i><i></i><i></i></div></div>`}
+ if(entry.status==="loading")return `<div class="performance-shell">${hero}<div class="perf-skeleton" aria-label="Loading ${esc(st.name)} performance"><i></i><i></i><i></i><i></i><i></i></div></div>`;
+ if(entry.status==="error")return `<div class="performance-shell">${hero}${perfState("error","Performance could not load","The request failed without changing "+st.name+"’s access or coaching data. Try again when the connection is stable.",`<button class="btn" type="button" onclick="perfRetry('${st.id}')">Try again</button>`)}</div>`;
+ return `<div class="performance-shell">${hero}${perfReadyHTML(st,entry.data||{})}</div>`}
 function adminModal(){
  openModal(`<h2>Admin</h2>
   <h3 style="margin-top:10px">Coaches</h3>
@@ -1419,6 +1655,9 @@ async function changePin(){
  if(!S.coaches[0]||c===S.coaches[0])S.pin=h;  // keep legacy field in step for the primary
  closeModal();persist()}
 let INTAKE=null;
+function studentPerformanceDisclosure(st){
+ const coach=coachName(st.coachId);
+ return `<aside class="student-disclosure" aria-label="Performance data shared with ${esc(coach)}"><span class="student-disclosure-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/></svg></span><div><b>Your performance data is shared with ${esc(coach)}</b><p>While this coaching attachment is active, ${esc(coach)} can view your synced ranked 1v1 win/loss record, verified replay MMR history, and matchup trends. This access ends when the coaching attachment is removed.</p></div></aside>`}
 function studentHTML(){
  const st=byId(meId);
  if(!st)return `<div class="gate"><h1>Locker not found</h1><p class="sub">Your locker may have been removed. Ask your coach.</p><button class="btn q" onclick="signOut()">Back</button></div>`;
@@ -1436,7 +1675,7 @@ function studentHTML(){
    <span class="pill g">Your locker</span><h1 style="margin:4px 0 0;font-size:28px">${esc(st.name)}</h1>
    <div class="sub">coached by ${esc(coachName(st.coachId))}</div></div>
    <button class="btn" style="margin-left:auto" onclick="submitModal('${st.id}')">⇪ Submit replays</button></div>
-  ${tabs}${body}
+  ${studentPerformanceDisclosure(st)}${tabs}${body}
   <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and ${esc(coachName(st.coachId))}. Questions go in your Discord channel.</p>
  </div>`}
 function intakeHTML(st){

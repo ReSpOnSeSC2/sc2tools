@@ -119,6 +119,71 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     expect(p.avgDelta).toBeCloseTo(25);
   });
 
+  test("opt-in exact mode groups concrete played and opponent races in one result", async () => {
+    const t0 = new Date("2026-05-09T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "p-anchor",
+        date: new Date(t0),
+        myRace: "Protoss",
+        myLadderRace: "Protoss",
+        myMmr: 4500,
+        result: "Victory",
+        opponent: { race: "Zerg", mmr: 4500 },
+      }),
+      makeGame({
+        gameId: "t-anchor",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myRace: "Terran",
+        myLadderRace: "Terran",
+        myMmr: 3500,
+        result: "Defeat",
+        opponent: { race: "Zerg", mmr: 3500 },
+      }),
+      makeGame({
+        gameId: "p-next",
+        date: new Date(t0 + 10 * MIN_AGO),
+        myRace: "Protoss",
+        myLadderRace: "Protoss",
+        myMmr: 4512,
+        result: "Victory",
+        opponent: { race: "Terran", mmr: 4512 },
+      }),
+      makeGame({
+        gameId: "t-next",
+        date: new Date(t0 + 15 * MIN_AGO),
+        myRace: "Terran",
+        myLadderRace: "Terran",
+        myMmr: 3491,
+        result: "Defeat",
+        opponent: { race: "Protoss", mmr: 3491 },
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {}, {
+      groupByOwnRace: true,
+    });
+
+    expect(out.matchups).toEqual([
+      expect.objectContaining({
+        matchup: "PvZ",
+        myRace: "P",
+        opponentRace: "Z",
+        netMmr: 12,
+        pairs: 1,
+      }),
+      expect.objectContaining({
+        matchup: "TvZ",
+        myRace: "T",
+        opponentRace: "Z",
+        netMmr: -9,
+        pairs: 1,
+      }),
+    ]);
+    expect(out.dailySwings.measuredGames).toBe(2);
+    expect(out.coverage.reduce((sum, row) => sum + row.measuredGames, 0)).toBe(2);
+  });
+
   test(
     "MMR moves whose sign contradicts the result are quarantined",
     async () => {

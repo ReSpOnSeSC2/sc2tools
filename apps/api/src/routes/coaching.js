@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { parseFilters } = require("../util/parseQuery");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -20,6 +21,7 @@ const express = require("express");
  *   GET  /coaching/state                   — full state (admin/coach) or scoped (student)
  *   PUT  /coaching/state                   — CAS write {state, rev} (admin/coach)
  *   GET  /coaching/users?q=                — signed-up directory + live agent check (admin/coach)
+ *   GET  /coaching/students/:studentId/performance — ranked replay performance for an attached student
  *   GET  /coaching/students/:userId/games  — slim game list (admin/coach, or the student themself)
  *   GET  /coaching/calendar                — availability, bookings, and student-local slot instants
  *   PUT  /coaching/calendar/availability   — publish recurring coach hours
@@ -32,6 +34,7 @@ const express = require("express");
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: import('express').Request) => boolean,
  *   coaching: import('../services/coaching').CoachingService,
+ *   aggregations: import('../services/types').AggregationsService,
  *   users: {getSummary(userId: string): Promise<{userId: string, clerkUserId: string|null, email: string|null}>},
  *   logger?: import('pino').Logger,
  * }} deps
@@ -281,6 +284,117 @@ function buildCoachingRouter(deps) {
   });
 
   router.get(
+    "/coaching/students/:studentId/performance",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        // Device credentials are intended for replay ingestion and must never
+        // become a bearer token for another player's analytics.
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+
+        const roster = await deps.coaching.getRoster();
+        const matchingStudents = (Array.isArray(roster.students)
+          ? roster.students
+          : [])
+          .filter((student) => student && student.id === req.params.studentId);
+        if (matchingStudents.length !== 1) {
+          coachingNotFound(res);
+          return;
+        }
+        const student = matchingStudents[0];
+        const targetUserId = typeof student.userId === "string"
+          ? student.userId.trim()
+          : "";
+        const allowed = cr.role === "admin"
+          || (cr.role === "coach"
+            && Boolean(cr.coachId)
+            && student.coachId === cr.coachId)
+          || (cr.role === "student"
+            && cr.studentId === student.id
+            && targetUserId === auth.userId);
+        if (!targetUserId || !allowed) {
+          coachingNotFound(res);
+          return;
+        }
+
+        const coach = (Array.isArray(roster.coaches) ? roster.coaches : [])
+          .find((candidate) => candidate && candidate.id === student.coachId);
+        const filters = {
+          ...parseFilters(req.query),
+          // This view is deliberately narrower than the global analytics
+          // controls. Coaching decisions must not mix custom/team games into
+          // the ranked 1v1 record, even if those query params are forged.
+          mapPool: "ladder",
+          gameSize: "1v1",
+        };
+        const interval = coachingInterval(req.query.interval);
+        const tz = coachingTimeZone(req.query.tz);
+        const [rawRecord, rawMmr, overallNet] = await Promise.all([
+          deps.coaching.performanceRecord(targetUserId, filters),
+          deps.aggregations.mmrProgression(
+            targetUserId,
+            { interval, tz },
+            filters,
+          ),
+          // Opt-in exact matchup mode retains the canonical adjacency and
+          // coverage facets while producing all P/T/Z × P/T/Z rows from the
+          // same single window scan.
+          deps.aggregations.netMmrByMatchup(targetUserId, filters, {
+            tz,
+            groupByOwnRace: true,
+          }),
+        ]);
+        const record = sanitizeCoachingRecord(rawRecord);
+        const netByMatchup = coachingNetByMatchup(overallNet);
+        const matchups = record.matchups.map((row) => {
+          const net = netByMatchup.get(row.matchup);
+          return {
+            matchup: row.matchup,
+            myRace: row.myRace,
+            opponentRace: row.opponentRace,
+            games: row.games,
+            wins: row.wins,
+            losses: row.losses,
+            winRate: row.winRate,
+            netMmr: net ? net.netMmr : null,
+            measuredGames: net ? net.measuredGames : 0,
+            avgDelta: net ? net.avgDelta : null,
+          };
+        });
+
+        res.json({
+          student: {
+            id: student.id,
+            name: safeDisplayName(student.name, "Student"),
+            coach: coach ? {
+              id: coach.id,
+              name: safeDisplayName(coach.name, "Coach"),
+            } : null,
+          },
+          scope: {
+            since: isoDateOrNull(filters.since),
+            until: isoDateOrNull(filters.until),
+            interval,
+            tz,
+          },
+          summary: record.summary,
+          matchups,
+          mmr: sanitizeCoachingMmr(rawMmr, interval),
+          dailySwings: sanitizeCoachingDailySwings(overallNet, tz),
+          coverage: sanitizeCoachingNetCoverage(overallNet),
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
     "/coaching/students/:userId/games",
     withRole,
     async (req, res, next) => {
@@ -425,6 +539,350 @@ function pickAssetsForStudents(state, students) {
     if (blob.includes(id)) out[id] = asset;
   }
   return out;
+}
+
+const COACHING_MMR_COVERAGE_KEYS = [
+  "filteredGames",
+  "numericMmrGames",
+  "verifiedReplayMmrGames",
+  "untrustedNumericMmrGames",
+  "unavailableMmrGames",
+  "missingMmrGames",
+  "excludedNonRanked1v1Games",
+  "missingAccountGames",
+  "missingLadderRaceGames",
+  "eligibleGames",
+];
+
+const COACHING_NET_DROP_KEYS = [
+  "excludedNonRanked1v1",
+  "missingIdentity",
+  "missingMyMmr",
+  "untrustedMyMmr",
+  "terminalGame",
+  "nextMissingMyMmr",
+  "nextUntrustedMyMmr",
+  "outlierSwing",
+  "signMismatch",
+  "unsupportedResult",
+];
+
+const COACHING_MMR_SERIES_LIMIT = 12;
+
+/** @param {import('express').Response} res */
+function coachingNotFound(res) {
+  res.status(404).json({ error: "not_found" });
+}
+
+/** @param {unknown} raw @returns {'day'|'week'|'month'} */
+function coachingInterval(raw) {
+  const value = String(raw || "day").toLowerCase();
+  if (value === "week" || value === "month") return value;
+  return "day";
+}
+
+/** @param {unknown} raw @returns {string} */
+function coachingTimeZone(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return "UTC";
+  const value = raw.trim();
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return value;
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Allowlist exact own-race/opponent-race net-MMR rows returned by the
+ * canonical single-window aggregation. Only aggregate values leave this
+ * boundary.
+ * @param {unknown} raw
+ * @returns {Map<string,{netMmr:number|null,measuredGames:number,avgDelta:number|null}>}
+ */
+function coachingNetByMatchup(raw) {
+  const out = new Map();
+  const root = asRecord(raw);
+  const rows = Array.isArray(root.matchups) ? root.matchups : [];
+  for (const rawRow of rows) {
+    const row = asRecord(rawRow);
+    const myRace = coachingRace(row.myRace, false);
+    const opponentRace = coachingRace(row.opponentRace, false);
+    if (!myRace || !opponentRace) continue;
+    const measuredGames = nonNegativeCount(row.pairs ?? row.games);
+    out.set(`${myRace}v${opponentRace}`, {
+      netMmr: measuredGames > 0 ? finiteNumber(row.netMmr) : null,
+      measuredGames,
+      avgDelta: measuredGames > 0 ? finiteNumber(row.avgDelta) : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Reconcile the all-decided headline with the concrete nine-matchup matrix.
+ * Unknown/missing race values remain visible as unclassified rather than
+ * disappearing or diluting a matchup's win rate.
+ * @param {unknown} raw
+ */
+function sanitizeCoachingRecord(raw) {
+  const root = asRecord(raw);
+  const rows = Array.isArray(root.matchups) ? root.matchups : [];
+  const matchups = rows.map((value) => {
+    const row = asRecord(value);
+    const myRace = coachingRace(row.myRace, false);
+    const opponentRace = coachingRace(row.opponentRace, false);
+    if (!myRace || !opponentRace) return null;
+    const wins = nonNegativeCount(row.wins);
+    const losses = nonNegativeCount(row.losses);
+    const games = wins + losses;
+    return {
+      matchup: `${myRace}v${opponentRace}`,
+      myRace,
+      opponentRace,
+      games,
+      wins,
+      losses,
+      winRate: games > 0 ? wins / games : 0,
+    };
+  }).filter((row) => row !== null);
+  const summary = asRecord(root.summary);
+  const wins = nonNegativeCount(summary.wins);
+  const losses = nonNegativeCount(summary.losses);
+  const games = wins + losses;
+  const classifiedGames = Math.min(
+    games,
+    matchups.reduce((total, row) => total + row.games, 0),
+  );
+  return {
+    summary: {
+      games,
+      wins,
+      losses,
+      winRate: games > 0 ? wins / games : 0,
+      classifiedGames,
+      unclassifiedGames: games - classifiedGames,
+    },
+    matchups,
+  };
+}
+
+/**
+ * The canonical MMR service necessarily partitions by Battle.net account.
+ * This allowlist removes those identifiers and constructs non-identifying
+ * labels from region + played race, adding only an ordinal when needed.
+ * @param {unknown} raw
+ * @param {'day'|'week'|'month'} requestedInterval
+ */
+function sanitizeCoachingMmr(raw, requestedInterval) {
+  const root = asRecord(raw);
+  const source = Array.isArray(root.series)
+    ? root.series
+    : Array.isArray(root.accounts) ? root.accounts : [];
+  const prepared = source.slice(0, COACHING_MMR_SERIES_LIMIT).map((value) => {
+    const row = asRecord(value);
+    const region = coachingRegion(row.region);
+    const ladderRace = coachingRace(row.ladderRace, true) || "U";
+    return { row, region, ladderRace, key: `${region}|${ladderRace}` };
+  });
+  /** @type {Map<string,number>} */
+  const totals = new Map();
+  for (const item of prepared) {
+    totals.set(item.key, (totals.get(item.key) || 0) + 1);
+  }
+  /** @type {Map<string,number>} */
+  const seen = new Map();
+  const series = prepared.map((item) => {
+    const ordinal = (seen.get(item.key) || 0) + 1;
+    seen.set(item.key, ordinal);
+    const baseLabel = `${item.region} · ${coachingRaceName(item.ladderRace)}`;
+    const label = (totals.get(item.key) || 0) > 1
+      ? `${baseLabel} ${ordinal}`
+      : baseLabel;
+    return {
+      label,
+      region: item.region,
+      ladderRace: item.ladderRace,
+      points: sanitizeMmrPoints(item.row.points),
+      peak: sanitizeMmrMark(item.row.peak),
+      trough: sanitizeMmrMark(item.row.trough),
+      latest: sanitizeMmrMark(item.row.latest),
+    };
+  });
+  return {
+    interval: coachingInterval(root.interval || requestedInterval),
+    series,
+    seriesMeta: {
+      total: source.length,
+      returned: series.length,
+      truncated: source.length > series.length,
+      limit: COACHING_MMR_SERIES_LIMIT,
+    },
+    peak: sanitizeMmrMark(root.peak),
+    trough: sanitizeMmrMark(root.trough),
+    latest: sanitizeMmrMark(root.latest),
+    coverage: numericAllowlist(root.coverage, COACHING_MMR_COVERAGE_KEYS),
+  };
+}
+
+/** @param {unknown} raw */
+function sanitizeMmrPoints(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((value) => {
+    const row = asRecord(value);
+    const bucket = isoDateOrNull(row.bucket);
+    const openMmr = finiteNumber(row.openMmr);
+    const closeMmr = finiteNumber(row.closeMmr);
+    const minMmr = finiteNumber(row.minMmr);
+    const maxMmr = finiteNumber(row.maxMmr);
+    if (!bucket || openMmr === null || closeMmr === null
+      || minMmr === null || maxMmr === null) return null;
+    return {
+      bucket,
+      openMmr,
+      closeMmr,
+      minMmr,
+      maxMmr,
+      wins: nonNegativeCount(row.wins),
+      losses: nonNegativeCount(row.losses),
+      total: nonNegativeCount(row.total),
+    };
+  }).filter(Boolean);
+}
+
+/** @param {unknown} raw */
+function sanitizeMmrMark(raw) {
+  const row = asRecord(raw);
+  const bucket = isoDateOrNull(row.bucket);
+  const mmr = finiteNumber(row.mmr);
+  return bucket && mmr !== null ? { bucket, mmr } : null;
+}
+
+/** @param {unknown} raw @param {string} tz */
+function sanitizeCoachingDailySwings(raw, tz) {
+  const daily = asRecord(asRecord(raw).dailySwings);
+  const regions = (Array.isArray(daily.regions) ? daily.regions : [])
+    .map((value) => {
+      const row = asRecord(value);
+      return {
+        region: coachingRegion(row.region),
+        bestGain: sanitizeDailySwing(row.bestGain),
+        biggestLoss: sanitizeDailySwing(row.biggestLoss),
+        measuredDays: nonNegativeCount(row.measuredDays),
+        measuredGames: nonNegativeCount(row.measuredGames),
+      };
+    });
+  return {
+    timezone: tz,
+    bestGain: sanitizeDailySwing(daily.bestGain),
+    biggestLoss: sanitizeDailySwing(daily.biggestLoss),
+    measuredDays: nonNegativeCount(daily.measuredDays),
+    measuredGames: nonNegativeCount(daily.measuredGames),
+    regions,
+  };
+}
+
+/** @param {unknown} raw */
+function sanitizeDailySwing(raw) {
+  const row = asRecord(raw);
+  const day = isoDateOrNull(row.day);
+  if (!day) return null;
+  return {
+    day,
+    netMmr: finiteNumber(row.netMmr) ?? 0,
+    measuredGames: nonNegativeCount(row.measuredGames),
+    wins: nonNegativeCount(row.wins),
+    losses: nonNegativeCount(row.losses),
+  };
+}
+
+/** @param {unknown} raw */
+function sanitizeCoachingNetCoverage(raw) {
+  const root = asRecord(raw);
+  const rows = Array.isArray(root.coverage) ? root.coverage : [];
+  return {
+    totalGames: nonNegativeCount(root.totalGames),
+    eligibleGames: nonNegativeCount(root.eligibleGames),
+    measuredGames: rows
+      .reduce((sum, value) => {
+        const row = asRecord(value);
+        return sum + nonNegativeCount(row.measuredGames);
+      }, 0),
+    dropped: numericAllowlist(root.dropped, COACHING_NET_DROP_KEYS),
+    byOpponentRace: rows.map((value) => {
+      const row = asRecord(value);
+      return {
+        opponentRace: coachingRace(row.race, true) || "U",
+        totalGames: nonNegativeCount(row.totalGames),
+        eligibleGames: nonNegativeCount(row.eligibleGames),
+        measuredGames: nonNegativeCount(row.measuredGames),
+        dropped: numericAllowlist(row.dropped, COACHING_NET_DROP_KEYS),
+      };
+    }),
+  };
+}
+
+/** @param {unknown} raw @param {string[]} keys */
+function numericAllowlist(raw, keys) {
+  const row = asRecord(raw);
+  return Object.fromEntries(keys.map((key) => [key, nonNegativeCount(row[key])]));
+}
+
+/** @param {unknown} value @param {boolean} allowUnknown */
+function coachingRace(value, allowUnknown) {
+  const race = String(value || "").trim().slice(0, 1).toUpperCase();
+  if (race === "P" || race === "T" || race === "Z") {
+    return race;
+  }
+  if (allowUnknown && race === "R") return "R";
+  return allowUnknown ? "U" : null;
+}
+
+/** @param {unknown} value */
+function coachingRegion(value) {
+  const region = String(value || "").trim().toUpperCase();
+  return ["NA", "EU", "KR", "CN", "SEA"].includes(region) ? region : "U";
+}
+
+/** @param {string} race */
+function coachingRaceName(race) {
+  return ({ P: "Protoss", T: "Terran", Z: "Zerg", R: "Random" })[race]
+    || "Unknown race";
+}
+
+/** @param {unknown} value @param {string} fallback */
+function safeDisplayName(value, fallback) {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  return value.trim().slice(0, 160);
+}
+
+/** @param {unknown} value @returns {string|null} */
+function isoDateOrNull(value) {
+  const date = value instanceof Date
+    ? value
+    : typeof value === "string" || typeof value === "number"
+      ? new Date(value)
+      : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+}
+
+/** @param {unknown} value @returns {number|null} */
+function finiteNumber(value) {
+  const number = typeof value === "number" ? value : Number.NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
+/** @param {unknown} value @returns {number} */
+function nonNegativeCount(value) {
+  const number = finiteNumber(value);
+  return number !== null && number > 0 ? Math.floor(number) : 0;
+}
+
+/** @param {unknown} value @returns {Record<string, any>} */
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? /** @type {Record<string, any>} */ (value)
+    : {};
 }
 
 module.exports = { buildCoachingRouter };

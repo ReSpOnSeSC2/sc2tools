@@ -685,7 +685,7 @@ class AggregationsService {
   async oppStrategyMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" }); }
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
   async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
-  /** @param {string} userId @param {object} filters @param {{tz?: string}} [opts] */
+  /** @param {string} userId @param {object} filters @param {{tz?: string, groupByOwnRace?: boolean}} [opts] */
   async netMmrByMatchup(userId, filters, opts) { return trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters, opts); }
   /** @param {string} userId @param {object} filters @param {object} [opts] */
   async netMmrByOpponent(userId, filters, opts) { return trendsInsights.netMmrByOpponent(this._trendsDeps(), userId, filters, opts); }

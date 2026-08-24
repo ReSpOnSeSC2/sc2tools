@@ -16,6 +16,7 @@
 
 const {
   regionFromToonHandleExpr,
+  raceLetterExpr,
   myLadderRaceExpr,
   oppRaceSwitch,
 } = require("./trendsRegionExpr");
@@ -94,6 +95,10 @@ function netMmrPairStages(deps, userId, filters) {
         _bucket: deps.bucketSwitch(),
         _myRegion: regionFromToonHandleExpr("$myToonHandle"),
         _myLadderRace: myLadderRaceExpr(),
+        // Kept separate from the selected ladder race: Random players are
+        // partitioned by their Random queue but coached on the concrete race
+        // they actually spawned as in this replay.
+        _myPlayedRace: raceLetterExpr("$myRace"),
         _oppRace: oppRaceSwitch(),
         _hasMyAccount: hasNonEmptyString("$myToonHandle"),
         _hasMyMmr: { $isNumber: "$myMmr" },
@@ -400,10 +405,24 @@ function regionalSwingOutput() {
  * @param {Deps} deps
  * @param {string} userId
  * @param {object} filters
- * @param {{tz?: string}} [opts]
+ * @param {{tz?: string, groupByOwnRace?: boolean}} [opts]
  */
 async function netMmrByMatchup(deps, userId, filters, opts = {}) {
   const timezone = deps.pickTimezone(opts.tz);
+  const groupByOwnRace = opts.groupByOwnRace === true;
+  const keptPairMatch = groupByOwnRace
+    ? {
+      _dropReason: null,
+      _myPlayedRace: { $in: ["P", "T", "Z"] },
+      _oppRace: { $in: ["P", "T", "Z"] },
+    }
+    : { _dropReason: null };
+  const keptPairGroupId = groupByOwnRace
+    ? { myRace: "$_myPlayedRace", opponentRace: "$_oppRace" }
+    : "$_oppRace";
+  const keptPairSort = groupByOwnRace
+    ? { "_id.myRace": 1, "_id.opponentRace": 1 }
+    : { netMmr: -1 };
   const [root = {}] = await deps.games
     .aggregate([
       ...netMmrPairStages(deps, userId, filters),
@@ -415,10 +434,10 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
             { $sort: { _id: 1 } },
           ],
           keptPairs: [
-            { $match: { _dropReason: null } },
+            { $match: keptPairMatch },
             {
               $group: {
-                _id: "$_oppRace",
+                _id: keptPairGroupId,
                 netMmr: { $sum: "$_delta" },
                 pairs: { $sum: 1 },
                 wins: {
@@ -430,7 +449,7 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
                 avgDelta: { $avg: "$_delta" },
               },
             },
-            { $sort: { netMmr: -1 } },
+            { $sort: keptPairSort },
           ],
           // Daily records reuse the exact accepted replay pairs above.
           // The delta belongs to the current (anchor) replay's local day;
@@ -539,8 +558,7 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
   }));
   const matchups = keptPairs.map((row) => {
     const pairs = row.pairs ?? row.games ?? 0;
-    return {
-      race: row._id,
+    const metrics = {
       netMmr: Math.round(row.netMmr),
       avgDelta: Math.round(row.avgDelta * 10) / 10,
       pairs,
@@ -549,6 +567,15 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
       wins: row.wins,
       losses: row.losses,
       winRate: pairs ? row.wins / pairs : 0,
+    };
+    if (!groupByOwnRace) return { race: row._id, ...metrics };
+    const myRace = row && row._id && row._id.myRace;
+    const opponentRace = row && row._id && row._id.opponentRace;
+    return {
+      matchup: `${myRace}v${opponentRace}`,
+      myRace,
+      opponentRace,
+      ...metrics,
     };
   });
 

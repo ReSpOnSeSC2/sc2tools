@@ -693,7 +693,7 @@ export interface AggregationsService {
   netMmrByMatchup(
     userId: string,
     filters: object,
-    opts?: { tz?: string },
+    opts?: { tz?: string; groupByOwnRace?: boolean },
   ): Promise<object>;
   netMmrByOpponent(
     userId: string,
