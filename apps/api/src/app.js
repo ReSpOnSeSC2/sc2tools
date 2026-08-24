@@ -105,6 +105,8 @@ const { loadAllMigrations } = require("./db/migrations");
 const { buildHealthRouter } = require("./routes/health");
 const { buildMetricsRouter } = require("./routes/metrics");
 const { buildMeRouter } = require("./routes/me");
+const { buildCoachingRouter } = require("./routes/coaching");
+const { buildCoachingService } = require("./services/coaching");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
@@ -919,6 +921,17 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   const onAdminGranted = (clerkUserId) => {
     if (clerkUserId) adminIds.add(clerkUserId);
   };
+  // Coaching Locker — quiet, role-gated; see routes/coaching.js.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildCoachingRouter({
+      auth,
+      isAdmin,
+      users: services.users,
+      coaching: buildCoachingService({ db: deps.db }),
+      logger: deps.logger,
+    }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({

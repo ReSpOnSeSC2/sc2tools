@@ -104,6 +104,7 @@ async function connect({ uri, dbName }, observability = {}) {
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
     close: () => client.close(),
