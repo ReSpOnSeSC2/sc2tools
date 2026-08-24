@@ -3,8 +3,10 @@
 const express = require("express");
 
 // Whole-state payloads carry embedded media (voice memos, images,
-// small replays) as base64 — mirror the Locker's own ~12MB budget.
-const STATE_BODY_LIMIT = "16mb";
+// small replays) as base64. Body parsing is owned by the app-level
+// parser: isCoachingStateJson() in app.js grants PUT /coaching/state
+// its 16mb ceiling (behind pre-parse auth); everything else stays on
+// the small default.
 
 /**
  * /v1/coaching — the Coaching Locker's backend.
@@ -30,8 +32,11 @@ const STATE_BODY_LIMIT = "16mb";
  */
 function buildCoachingRouter(deps) {
   const router = express.Router();
-  router.use(auth());
-  router.use(express.json({ limit: STATE_BODY_LIMIT }));
+  // Path-scoped on purpose: this router mounts at the shared /v1
+  // prefix, so a bare router.use() would run for every /v1 request
+  // passing through on its way to routers mounted later — 401ing the
+  // public routes (community, ladder meta, chatbot, ...) downstream.
+  router.use("/coaching", auth());
 
   function auth() {
     return deps.auth;

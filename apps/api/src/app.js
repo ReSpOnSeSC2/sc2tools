@@ -146,6 +146,10 @@ const {
 
 const REPLAY_JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 const DEFAULT_JSON_LIMIT = "256kb";
+// The Coaching Locker saves its whole state document in one
+// authenticated PUT; embedded media (voice memos, annotated frames,
+// small replays) ride along as base64 under the Locker's ~12MB budget.
+const COACHING_JSON_LIMIT = "16mb";
 
 /**
  * Large authenticated JSON writes share the replay admission lane. The sound
@@ -166,6 +170,22 @@ function isLargeAuthenticatedJson(req) {
     return true;
   }
   return /^\/(?:v1\/)?games\/[^/]+\/(?:apm-curve|macro-breakdown|opp-build-order)$/.test(path);
+}
+
+/**
+ * PUT /v1/coaching/state — the Coaching Locker's whole-state save.
+ * Same pre-parse contract as replay ingestion: the credential is
+ * verified before the multi-megabyte body is allowed to parse.
+ *
+ * @param {import('express').Request} req
+ */
+function isCoachingStateJson(req) {
+  if (req.method !== "PUT") return false;
+  const path = String(req.originalUrl || req.url || "")
+    .split("?", 1)[0]
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  return path === "/v1/coaching/state" || path === "/coaching/state";
 }
 
 /**
@@ -724,7 +744,7 @@ function applyBaseMiddleware(app, deps, auth) {
   // the body timeout and deny every paired agent. The games router verifies
   // again after parsing, keeping this early gate independent of route state.
   app.use((req, res, next) => {
-    if (!isLargeAuthenticatedJson(req)) {
+    if (!isLargeAuthenticatedJson(req) && !isCoachingStateJson(req)) {
       next();
       return;
     }
@@ -746,12 +766,17 @@ function applyBaseMiddleware(app, deps, auth) {
   // unauthenticated client could open many parallel 5 MiB JSON requests to an
   // unrelated route and fill the V8 heap before route auth ever ran.
   const replayJson = express.json({ limit: REPLAY_JSON_LIMIT });
+  const coachingJson = express.json({ limit: COACHING_JSON_LIMIT });
   const ordinaryJson = express.json({
     limit: DEFAULT_JSON_LIMIT,
     verify: captureSignedWebhookRawBody,
   });
   app.use((req, res, next) => {
-    const parser = isLargeAuthenticatedJson(req) ? replayJson : ordinaryJson;
+    const parser = isLargeAuthenticatedJson(req)
+      ? replayJson
+      : isCoachingStateJson(req)
+        ? coachingJson
+        : ordinaryJson;
     parser(req, res, next);
   });
 }
