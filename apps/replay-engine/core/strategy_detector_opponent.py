@@ -60,13 +60,25 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         upgrades = [e for e in enemy_events if e["type"] == "upgrade"]
         main_loc = self._get_main_base_loc(buildings)
 
-        # 1. Custom JSON evaluation
+        # 1. Custom JSON evaluation. Versioned rules describe the build
+        # holder's race in ``race`` and the other player's race in
+        # ``vs_race``. For an opponent-perspective build that partner is the
+        # user (``my_race``), not the opponent race encoded in ``matchup``.
         for cb in self.custom_builds:
             if cb.get("race") == race or cb.get("race") == "Any":
-                cb_matchup = cb.get("matchup", "vs Any")
-                if cb_matchup == "vs Any" or cb_matchup == matchup:
-                    if self.check_custom_rules(cb.get("rules", []), buildings, units, upgrades, main_loc):
-                        return cb["name"]
+                cb_vs_race = cb.get("vs_race")
+                if cb_vs_race is not None:
+                    if cb_vs_race not in ("Any", my_race):
+                        continue
+                else:
+                    cb_matchup = cb.get("matchup", "vs Any")
+                    if cb_matchup not in ("vs Any", matchup):
+                        continue
+                rules = cb.get("rules", [])
+                if rules and self.check_custom_rules(
+                    rules, buildings, units, upgrades, main_loc,
+                ):
+                    return cb["name"]
 
         # 2. Hardcoded race decision tree -- shared with the user-side
         # detector via classify_by_race so a build classifies the same

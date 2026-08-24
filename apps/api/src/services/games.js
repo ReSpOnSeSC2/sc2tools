@@ -252,6 +252,8 @@ class GamesService {
         || key.startsWith("_customBuildClassificationSequence.")
         || key === "_customBuildSlug"
         || key.startsWith("_customBuildSlug.")
+        || key === "_customOpponentStrategySlug"
+        || key.startsWith("_customOpponentStrategySlug.")
         || key === "_opponentBuildOrderWriteLease"
         || key.startsWith("_opponentBuildOrderWriteLease.")
       ) {
@@ -335,6 +337,7 @@ class GamesService {
       _customBuildReclassify: "",
       _customBuildClassificationSequence: "",
       _customBuildSlug: "",
+      _customOpponentStrategySlug: "",
       _opponentBuildOrderWriteLease: "",
     };
     for (const k of HEAVY_FIELDS) unset[k] = "";
@@ -508,6 +511,7 @@ class GamesService {
           _customBuildReclassify: "",
           _customBuildClassificationSequence: "",
           _customBuildSlug: "",
+          _customOpponentStrategySlug: "",
           _opponentBuildOrderWriteLease: "",
           resumedReplayCounterRepairedAt: "",
           resumedReplayMmrRepairedAt: "",

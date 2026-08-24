@@ -405,6 +405,11 @@ async function ensureIndexes(ctx) {
   // slug rather than the mutable display name. This keeps those reads as one
   // narrow index range even while an agent is syncing replay details.
   await ctx.games.createIndex({ userId: 1, _customBuildSlug: 1, date: -1 });
+  await ctx.games.createIndex({
+    userId: 1,
+    _customOpponentStrategySlug: 1,
+    date: -1,
+  });
   await ctx.games.createIndex({ userId: 1, "opponent.strategy": 1 });
   await ctx.games.createIndex({ userId: 1, map: 1, date: -1 });
 

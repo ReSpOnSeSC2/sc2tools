@@ -676,8 +676,8 @@ function buildCustomBuildsRouter(deps) {
   /**
    * GET /v1/custom-builds/stats
    *
-   * Aggregate W/L/winRate per saved build from the authoritative
-   * `_customBuildSlug` written by the durable reclassification worker.
+   * Aggregate W/L/winRate per saved build from the authoritative,
+   * perspective-specific provenance written by the durable worker.
    * This keeps the card grid identical to the replay rows without reloading
    * every replay-analysis blob from object storage.
    */
@@ -966,12 +966,9 @@ function buildCustomBuildsRouter(deps) {
       // The key tracks replay freshness, not build edits. Invalidate now so a
       // rule/name change cannot serve the prior phase analysis for 60 seconds.
       phaseCacheBust(auth.userId, slug);
-      // Cloud-side reclassify so `myBuild` on stored games stays in sync
-      // with the saved rules. Without this, the BuildDetail view (live
-      // rule eval) and the opponent profile / Recent games table (reads
-      // stored `myBuild`) drift apart — the user sees their build matched
-      // 31 games here but the recent-games column still shows the
-      // agent's old auto-classifier label. Skipped when perGame isn't
+      // Cloud-side reclassify so the saved definition's declared replay axis
+      // stays in sync with its rules. Without this, the BuildDetail preview
+      // and the replay/strategy analytics drift apart. Skipped when perGame isn't
       // wired (e.g. tests bootstrapping without it) so the save itself
       // never fails on a missing dependency.
       let reclassify = null;

@@ -1019,13 +1019,37 @@ class CommunityService {
         {
           $match: {
             userId,
-            _customBuildSlug: { $in: sourceSlugs },
+            $or: [
+              { _customBuildSlug: { $in: sourceSlugs } },
+              { _customOpponentStrategySlug: { $in: sourceSlugs } },
+            ],
             isResumedFromReplay: { $ne: true },
           },
         },
         {
+          // A replay can match one authored build on each perspective. Unwind
+          // both provenance slots so published cards get the correct owner
+          // totals without making the two builds compete for one count.
+          $project: {
+            result: 1,
+            _customReplaySlugs: {
+              $setUnion: [
+                {
+                  $filter: {
+                    input: ["$_customBuildSlug", "$_customOpponentStrategySlug"],
+                    as: "slug",
+                    cond: { $in: ["$$slug", sourceSlugs] },
+                  },
+                },
+                [],
+              ],
+            },
+          },
+        },
+        { $unwind: "$_customReplaySlugs" },
+        {
           $group: {
-            _id: "$_customBuildSlug",
+            _id: "$_customReplaySlugs",
             total: { $sum: 1 },
             wins: {
               $sum: {

@@ -1439,7 +1439,7 @@ describe("custom-build rule scan memory safety", () => {
       expect(committed.myBuild).toBe("Newer build");
       expect(committed._customBuildClassificationSequence).toBe(20);
       expect(committed._customBuildReclassify).toBeUndefined();
-      expect(committed._schemaVersion).toBe(6);
+      expect(committed._schemaVersion).toBe(7);
     },
   );
 
@@ -1607,6 +1607,7 @@ describe("custom-build rule scan memory safety", () => {
       myBuild: "Fresh replay label",
       // Agent input must never be able to retain or forge custom ownership.
       _customBuildSlug: "forged-by-agent",
+      _customOpponentStrategySlug: "forged-opponent-by-agent",
     });
     releaseStage.resolve();
 
@@ -1616,8 +1617,9 @@ describe("custom-build rule scan memory safety", () => {
     expect(row.myBuild).toBe("Fresh replay label");
     expect(row._customBuildRevision).not.toBe(originalRevision);
     expect(row._customBuildSlug).toBeUndefined();
+    expect(row._customOpponentStrategySlug).toBeUndefined();
     expect(row._customBuildReclassify).toBeUndefined();
-    expect(row._schemaVersion).toBe(6);
+    expect(row._schemaVersion).toBe(7);
   });
 
   test("an opponent-log recompute fences out a verdict from the old detail", async () => {
@@ -1730,7 +1732,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(row._customBuildRevision).not.toBe(revisionDuringWrite);
     expect(row._customBuildSlug).toBe("old-opponent-build");
     expect(row._customBuildReclassify).toBeUndefined();
-    expect(row._schemaVersion).toBe(6);
+    expect(row._schemaVersion).toBe(7);
   });
 
   test("an opponent-log recompute blocks a classifier started during detail I/O", async () => {
@@ -1746,11 +1748,12 @@ describe("custom-build rule scan memory safety", () => {
       gameId,
       date,
       myRace: "Protoss",
-      opponent: { race: "Terran" },
+      opponent: { race: "Terran", strategy: "Trusted opponent strategy" },
       myBuild: "Trusted custom label",
       _customBuildSlug: "trusted-custom-build",
+      _customOpponentStrategySlug: "trusted-opponent-build",
       _customBuildRevision: originalRevision,
-      _schemaVersion: 6,
+      _schemaVersion: 7,
     });
 
     let storedOpponentLog = ["[0:17] SupplyDepot"];
@@ -1808,6 +1811,8 @@ describe("custom-build rule scan memory safety", () => {
     const duringWrite = await games.findOne({ userId, gameId });
     expect(duringWrite.myBuild).toBe("Trusted custom label");
     expect(duringWrite._customBuildSlug).toBe("trusted-custom-build");
+    expect(duringWrite.opponent.strategy).toBe("Trusted opponent strategy");
+    expect(duringWrite._customOpponentStrategySlug).toBe("trusted-opponent-build");
     expect(duringWrite._customBuildClassificationSequence)
       .toBe(Number.MAX_SAFE_INTEGER);
     expect(duringWrite._customBuildReclassify).toBeUndefined();
@@ -1819,12 +1824,14 @@ describe("custom-build rule scan memory safety", () => {
       jobSequence: 78,
     });
     const completed = await games.findOne({ userId, gameId });
-    expect(completed.myBuild).toBe("Updated opponent verdict");
-    expect(completed._customBuildSlug).toBe("updated-after-write");
+    expect(completed.myBuild).toBe("Trusted custom label");
+    expect(completed._customBuildSlug).toBe("trusted-custom-build");
+    expect(completed.opponent.strategy).toBe("Updated opponent verdict");
+    expect(completed._customOpponentStrategySlug).toBe("updated-after-write");
     expect(completed._customBuildRevision).not.toBe(preFence._customBuildRevision);
     expect(completed._customBuildClassificationSequence).toBe(78);
     expect(completed._customBuildReclassify).toBeUndefined();
-    expect(completed._schemaVersion).toBe(6);
+    expect(completed._schemaVersion).toBe(7);
   });
 
   test("unproven equal-name and prior-name tags survive nonmatch and rename scans", async () => {
@@ -1908,7 +1915,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(result).toEqual(expect.objectContaining({ matched: 1, tagged: 1 }));
     expect(stored.myBuild).toBe("Shared display name");
     expect(stored._customBuildSlug).toBe("claim-collision");
-    expect(stored._schemaVersion).toBe(6);
+    expect(stored._schemaVersion).toBe(7);
 
     const publicGames = new GamesService({ games });
     const [listed, fetched, many] = await Promise.all([
@@ -2014,7 +2021,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(result).toEqual(expect.objectContaining({ cleared: 1 }));
     expect(stored.myBuild).toBeUndefined();
     expect(stored._customBuildSlug).toBeUndefined();
-    expect(stored._schemaVersion).toBe(6);
+    expect(stored._schemaVersion).toBe(7);
   });
 
   test("deleting a build never clears an unproven legacy name collision", async () => {
@@ -2116,7 +2123,7 @@ describe("custom-build rule scan memory safety", () => {
       .toEqual(expect.objectContaining({ matched: 0, tagged: 0 }));
   });
 
-  test("an equal-priority unknown contender preserves the existing game tag", async () => {
+  test("an unknown opponent candidate does not block an equal-priority user match", async () => {
     const userId = "u-equal-unknown-detail";
     await db.collection("games").insertOne({
       userId,
@@ -2125,8 +2132,8 @@ describe("custom-build rule scan memory safety", () => {
       myRace: "Protoss",
       opponent: { race: "Terran" },
       buildLog: ["[0:17] Pylon"],
-      // The opponent log is unavailable, so its equally specific build could
-      // outrank the known user-side match once that detail becomes available.
+      // The opponent log is unavailable. That uncertainty belongs only to the
+      // opponent strategy axis and must not block a definite user-side match.
       myBuild: "Existing classifier label",
     });
     const perGame = new PerGameComputeService({ games: db.collection("games") });
@@ -2163,9 +2170,12 @@ describe("custom-build rule scan memory safety", () => {
       userId,
       gameId: "equal-unknown-detail",
     });
-    expect(game.myBuild).toBe("Existing classifier label");
+    expect(game.myBuild).toBe("Known user pylon");
+    expect(game._customBuildSlug).toBe("known-user-pylon");
+    expect(game.opponent.strategy).toBeUndefined();
+    expect(game._customOpponentStrategySlug).toBeUndefined();
     expect(result.perBuild.find((row) => row.name === "Known user pylon"))
-      .toEqual(expect.objectContaining({ matched: 1, tagged: 0 }));
+      .toEqual(expect.objectContaining({ matched: 1, tagged: 1 }));
     expect(result.perBuild.find(
       (row) => row.name === "Unknown opponent depot equal",
     )).toEqual(expect.objectContaining({ matched: 0, tagged: 0 }));

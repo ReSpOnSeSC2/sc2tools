@@ -90,7 +90,10 @@ const REGISTRY = Object.freeze({
     //      carry server-private revision/staging/order/provenance/detail-write
     //      lease fields; historical rows
     //      remain valid and acquire them lazily on their next replay write.
-    currentVersion: 6,
+    // v7 — split opponent-side custom-strategy provenance from the user's
+    //      custom-build provenance so one replay can carry both classifications
+    //      without either axis overwriting the other.
+    currentVersion: 7,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.GAME_DETAILS]: {

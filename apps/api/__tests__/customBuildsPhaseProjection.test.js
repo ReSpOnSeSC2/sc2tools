@@ -28,7 +28,9 @@ describe("custom-build phase projection", () => {
           includeMacroBreakdown: true,
           filters,
           match: {
-            _customBuildSlug: "phase-projection",
+            [rulePerspective === "opponent"
+              ? "_customOpponentStrategySlug"
+              : "_customBuildSlug"]: "phase-projection",
             "opponent.strategy": "Terran - Bio",
           },
           metadataFilter: expect.any(Function),

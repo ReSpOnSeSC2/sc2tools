@@ -469,7 +469,16 @@ export interface CustomBuildsService {
     opts?: { expectedRevision?: string | null },
   ): Promise<
     | null
-    | { gameId: string; matched: number; chosen: string | null; ruleCount: number }
+    | {
+        gameId: string;
+        matched: number;
+        chosen: string | null;
+        chosenByPerspective?: {
+          you: string | null;
+          opponent: string | null;
+        };
+        ruleCount: number;
+      }
   >;
 }
 
@@ -487,6 +496,9 @@ export interface PerGameComputeServiceListedGame {
   /** Server-owned replay payload revision used to fence background writes. */
   customBuildRevision?: string | null;
   customBuildSlug?: string | null;
+  /** Opponent-perspective custom-build provenance. Kept separate so the same
+   * replay can carry both a user build and an opponent strategy match. */
+  customOpponentStrategySlug?: string | null;
   /** Server-private opponent-detail writer lease, exposed only to internal
    * classifier pages so destructive work can defer until the blob is stable. */
   opponentBuildOrderWriteLease?: {

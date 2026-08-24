@@ -5,10 +5,12 @@
  * /v1/custom-builds/:slug/reclassify and /v1/custom-builds/reclassify-all
  * integration tests.
  *
- * Spec: reclassify writes `myBuild` on stored games to whatever build's
- * rules they match — without touching the agent. Cleared tags are
- * scoped to builds the user owns; tags from other sources (community
- * builds, agent classifier) are never disturbed.
+ * Spec: reclassification writes each saved build to the axis its persisted
+ * perspective describes: `myBuild` for the user's opener and
+ * `opponent.strategy` for the opponent's opener. Each axis has independent
+ * slug provenance so one replay can match one custom build on both sides.
+ * Cleared tags are scoped to builds the user owns; tags from other sources
+ * (community builds, agent classifier) are never disturbed.
  */
 
 const request = require("supertest");
@@ -209,6 +211,117 @@ describe("POST /v1/custom-builds/:slug/reclassify", () => {
 
     const stale = await db.games.findOne({ userId, gameId: "g-stale-tag" });
     expect(stale.myBuild).toBeUndefined();
+  });
+
+  test("opponent-perspective reclassify updates only the opponent strategy axis", async () => {
+    const userId = await bootstrap();
+
+    await services.games.upsert(userId, {
+      gameId: "g-opponent-ghost",
+      date: new Date("2026-05-03T12:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "PvT - Blink Pressure",
+      buildLog: PROTOSS_OPENER,
+      oppBuildLog: [...TERRAN_OPP_OPENER, "[4:00] GhostAcademy"],
+      result: "Victory",
+      map: "Equilibrium LE",
+      opponent: {
+        displayName: "ghostTerran",
+        race: "Terran",
+        strategy: "TvP - Reaper Expand",
+      },
+    });
+
+    const put = await withAuth(
+      request(app).put("/v1/custom-builds/tvp-ghost-opener").send({
+        slug: "tvp-ghost-opener",
+        name: "TvP Ghost Opener",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "opponent",
+        rules: [{ type: "before", name: "BuildGhostAcademy", time_lt: 300 }],
+      }),
+    );
+    expect(put.status).toBe(200);
+    expect(put.body.reclassify).toMatchObject({
+      status: "queued",
+      generation: expect.any(String),
+    });
+    await waitForJob(db, userId, put.body.reclassify.generation);
+
+    const row = await db.games.findOne({
+      userId,
+      gameId: "g-opponent-ghost",
+    });
+    expect(row.myBuild).toBe("PvT - Blink Pressure");
+    expect(row._customBuildSlug).toBeUndefined();
+    expect(row.opponent.strategy).toBe("TvP Ghost Opener");
+    expect(row._customOpponentStrategySlug).toBe("tvp-ghost-opener");
+
+    // The Build Order view reads these labels through the per-game API. Keep
+    // this contract perspective-specific too: a captured opponent opener must
+    // not replace the Protoss build shown for the user.
+    const buildOrder = await withAuth(
+      request(app).get("/v1/games/g-opponent-ghost/build-order"),
+    );
+    expect(buildOrder.status).toBe(200);
+    expect(buildOrder.body).toEqual(expect.objectContaining({
+      my_build: "PvT - Blink Pressure",
+      opp_strategy: "TvP Ghost Opener",
+    }));
+  });
+
+  test("opponent reclassify repairs a legacy opponent tag written onto my build", async () => {
+    const userId = await bootstrap();
+    const slug = "tvp-three-rax-legacy-repair";
+
+    await services.games.upsert(userId, {
+      gameId: "g-opponent-legacy-three-rax",
+      date: new Date("2026-05-03T13:00:00Z"),
+      myRace: "Protoss",
+      myBuild: "3 Rax",
+      buildLog: PROTOSS_OPENER,
+      oppBuildLog: [...TERRAN_OPP_OPENER, "[3:00] EngineeringBay"],
+      result: "Victory",
+      map: "Equilibrium LE",
+      opponent: {
+        displayName: "legacyTerran",
+        race: "Terran",
+        strategy: "TvP - Reaper Expand",
+      },
+    });
+    // This reproduces the legacy corruption exactly. Provenance is normally
+    // server-owned, so seed it directly rather than through replay ingest.
+    await db.games.updateOne(
+      { userId, gameId: "g-opponent-legacy-three-rax" },
+      { $set: { _customBuildSlug: slug } },
+    );
+
+    const put = await withAuth(
+      request(app).put(`/v1/custom-builds/${slug}`).send({
+        slug,
+        name: "3 Rax",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "opponent",
+        rules: [{
+          type: "before",
+          name: "BuildEngineeringBay",
+          time_lt: 240,
+        }],
+      }),
+    );
+    expect(put.status).toBe(200);
+    await waitForJob(db, userId, put.body.reclassify.generation);
+
+    const repaired = await db.games.findOne({
+      userId,
+      gameId: "g-opponent-legacy-three-rax",
+    });
+    expect(repaired.myBuild).toBeUndefined();
+    expect(repaired._customBuildSlug).toBeUndefined();
+    expect(repaired.opponent.strategy).toBe("3 Rax");
+    expect(repaired._customOpponentStrategySlug).toBe(slug);
   });
 
   test("returns 404 for an unknown slug", async () => {
@@ -460,6 +573,122 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     expect(row.myBuild).toBe("Specific build (3 rules)");
   });
 
+  test("classifies the user's build and opponent strategy independently on one replay", async () => {
+    const userId = await bootstrap();
+
+    await services.games.upsert(userId, {
+      gameId: "g-dual-axis-history",
+      date: new Date("2026-05-04T12:00:00Z"),
+      myRace: "Zerg",
+      myBuild: "ZvT - Agent Macro",
+      buildLog: [
+        "[0:00] Drone",
+        "[0:13] Overlord",
+        "[0:45] SpawningPool",
+      ],
+      oppBuildLog: [
+        "[0:00] SCV",
+        "[0:17] SupplyDepot",
+        "[1:00] Barracks",
+      ],
+      result: "Victory",
+      map: "Dual Axis LE",
+      opponent: {
+        race: "Terran",
+        displayName: "dualTerran",
+        strategy: "TvZ - Agent Reaper",
+      },
+    });
+
+    const own = await withAuth(
+      request(app).put("/v1/custom-builds/zvt-pool-first").send({
+        slug: "zvt-pool-first",
+        name: "ZvT Pool First",
+        race: "Zerg",
+        vsRace: "Terran",
+        perspective: "you",
+        rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 60 }],
+        reclassify: false,
+      }),
+    );
+    expect(own.status).toBe(200);
+    const opponent = await withAuth(
+      request(app).put("/v1/custom-builds/tvz-one-rax").send({
+        slug: "tvz-one-rax",
+        name: "TvZ One Rax",
+        race: "Terran",
+        vsRace: "Zerg",
+        perspective: "opponent",
+        rules: [{ type: "before", name: "BuildBarracks", time_lt: 90 }],
+        reclassify: false,
+      }),
+    );
+    expect(opponent.status).toBe(200);
+
+    const res = await withAuth(
+      request(app).post("/v1/custom-builds/reclassify-all").send({}),
+    );
+    expect(res.status).toBe(202);
+    await waitForJob(db, userId, res.body.job.generation);
+
+    const row = await db.games.findOne({
+      userId,
+      gameId: "g-dual-axis-history",
+    });
+    expect(row.myBuild).toBe("ZvT Pool First");
+    expect(row._customBuildSlug).toBe("zvt-pool-first");
+    expect(row.opponent.strategy).toBe("TvZ One Rax");
+    expect(row._customOpponentStrategySlug).toBe("tvz-one-rax");
+
+    // The analytics axes consumed by the Builds and Strategies sections must
+    // expose the same independent classifications. An opponent capture must
+    // never leak into `/v1/builds`, and both labels must meet in the cross-tab.
+    const [builds, strategies, crossTab, customStats, opponentDossier] =
+      await Promise.all([
+        withAuth(request(app).get("/v1/builds")),
+        withAuth(request(app).get("/v1/opp-strategies")),
+        withAuth(request(app).get("/v1/build-vs-strategy")),
+        withAuth(request(app).get("/v1/custom-builds/stats")),
+        withAuth(request(app).get("/v1/custom-builds/tvz-one-rax/matches")),
+      ]);
+    for (const response of [
+      builds,
+      strategies,
+      crossTab,
+      customStats,
+      opponentDossier,
+    ]) {
+      expect(response.status).toBe(200);
+    }
+    expect(builds.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "ZvT Pool First", total: 1 }),
+    ]));
+    expect(builds.body).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "TvZ One Rax" }),
+    ]));
+    expect(strategies.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "TvZ One Rax", total: 1 }),
+    ]));
+    expect(strategies.body).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "ZvT Pool First" }),
+    ]));
+    expect(crossTab.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        my_build: "ZvT Pool First",
+        opp_strat: "TvZ One Rax",
+        total: 1,
+      }),
+    ]));
+    expect(customStats.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slug: "zvt-pool-first", total: 1 }),
+      expect.objectContaining({ slug: "tvz-one-rax", total: 1 }),
+    ]));
+    expect(opponentDossier.body).toEqual(expect.objectContaining({
+      slug: "tvz-one-rax",
+      totals: expect.objectContaining({ total: 1 }),
+    }));
+  });
+
   test("ingest auto-tags a freshly-uploaded replay against saved builds", async () => {
     // The lived-in case the user complained about: post a fresh
     // replay via POST /v1/games and the agent's auto-classifier
@@ -509,5 +738,73 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     // myBuild was overwritten from the agent's auto label to the
     // user's saved build name as part of the ingest pipeline.
     expect(row.myBuild).toBe("PvR Ingest Oracle");
+  });
+
+  test("ingest tagSingleGame classifies both axes without one overwriting the other", async () => {
+    const userId = await bootstrap();
+
+    const own = await withAuth(
+      request(app).put("/v1/custom-builds/zvr-ingest-extractor").send({
+        slug: "zvr-ingest-extractor",
+        name: "ZvR Ingest Extractor",
+        race: "Zerg",
+        vsRace: "Random",
+        perspective: "you",
+        rules: [{ type: "before", name: "BuildExtractor", time_lt: 60 }],
+        reclassify: false,
+      }),
+    );
+    expect(own.status).toBe(200);
+    const opponent = await withAuth(
+      request(app).put("/v1/custom-builds/rvz-ingest-bunker").send({
+        slug: "rvz-ingest-bunker",
+        name: "RvZ Ingest Bunker",
+        race: "Random",
+        vsRace: "Zerg",
+        perspective: "opponent",
+        rules: [{ type: "before", name: "BuildBunker", time_lt: 180 }],
+        reclassify: false,
+      }),
+    );
+    expect(opponent.status).toBe(200);
+
+    const post = await withAuth(
+      request(app)
+        .post("/v1/games")
+        .set("content-type", "application/json")
+        .send({
+          gameId: "g-ingest-dual-axis",
+          date: "2026-05-06T00:00:00Z",
+          result: "Victory",
+          map: "Dual Ingest LE",
+          myRace: "Zerg",
+          myBuild: "ZvR - Agent Pool",
+          buildLog: [
+            "[0:00] Drone",
+            "[0:40] Extractor",
+          ],
+          oppBuildLog: [
+            "[0:00] SCV",
+            "[2:30] Bunker",
+          ],
+          opponent: {
+            displayName: "ingestDualOpp",
+            race: "Random",
+            strategy: "RvZ - Agent Mystery",
+            pulseId: "1-S2-9-99998",
+          },
+        }),
+    );
+    expect(post.status).toBe(202);
+    expect(post.body.accepted).toHaveLength(1);
+
+    const row = await db.games.findOne({
+      userId,
+      gameId: "g-ingest-dual-axis",
+    });
+    expect(row.myBuild).toBe("ZvR Ingest Extractor");
+    expect(row._customBuildSlug).toBe("zvr-ingest-extractor");
+    expect(row.opponent.strategy).toBe("RvZ Ingest Bunker");
+    expect(row._customOpponentStrategySlug).toBe("rvz-ingest-bunker");
   });
 });

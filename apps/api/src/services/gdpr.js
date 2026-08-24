@@ -708,8 +708,9 @@ class GdprService {
               delete restored._customBuildClassificationSequence;
               delete restored._opponentBuildOrderWriteLease;
               restored._customBuildRevision = randomUUID();
-              // Preserve `_customBuildSlug`: unlike transient stage/order
-              // state, it is durable ownership provenance for `myBuild`.
+              // Preserve both perspective-specific provenance fields: unlike
+              // transient stage/order state, they are durable ownership
+              // metadata for `myBuild` and `opponent.strategy`.
               stampVersion(restored, COLLECTIONS.GAMES);
             }
             return restored;

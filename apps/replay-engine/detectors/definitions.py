@@ -176,12 +176,9 @@ def load_custom_builds() -> Dict[str, List[Dict]]:
           ``target: "Self" | "Opponent"`` explicitly. Routed into the
           matching bucket.
       v3 (Stage 7.5+, SPA build-editor output): entries omit ``target``
-          and instead carry ``vs_race`` plus v3-style rules
-          (``before / count_min`` etc.). The SPA only authors user-side
-          builds today, so v3 entries default into the ``Self`` bucket.
-          The race-aware matcher in
-          ``detectors.user.UserBuildDetector.detect_my_build`` honours
-          ``vs_race`` at evaluation time.
+          and carry ``perspective`` plus v3-style rules. Explicit opponent
+          entries route to ``Opponent``; missing perspective remains
+          ``Self`` for backwards compatibility.
 
     Anything with an unrecognised ``target`` is dropped silently to keep
     a single typo from crashing the detector at startup.
@@ -200,8 +197,10 @@ def load_custom_builds() -> Dict[str, List[Dict]]:
         if target in builds:
             builds[target].append(b)
         elif target is None:
-            # v3 SPA-authored entries are user-side by default. The Stage 7.5
-            # editor never sets `target`, so this is the documented path.
-            builds["Self"].append(b)
+            perspective = b.get("perspective")
+            if perspective in (None, "you"):
+                builds["Self"].append(b)
+            elif perspective == "opponent":
+                builds["Opponent"].append(b)
         # else: unrecognised target — silently drop.
     return builds

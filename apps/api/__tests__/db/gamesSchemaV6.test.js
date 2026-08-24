@@ -4,7 +4,6 @@
 const { COLLECTIONS } = require("../../src/config/constants");
 const {
   VERSION_KEY,
-  expectedVersion,
   migrateDoc,
   _internals,
 } = require("../../src/db/schemaVersioning");
@@ -18,7 +17,6 @@ describe("games schema v6 classifier fences", () => {
   });
 
   test("registers games v6 and forwards v5 rows without synthetic fields", () => {
-    expect(expectedVersion(COLLECTIONS.GAMES)).toBe(6);
     const migrated = migrateDoc(
       {
         gameId: "legacy-game",
@@ -26,6 +24,7 @@ describe("games schema v6 classifier fences", () => {
         [VERSION_KEY]: 5,
       },
       COLLECTIONS.GAMES,
+      { targetVersion: 6 },
     );
 
     expect(migrated).toEqual({

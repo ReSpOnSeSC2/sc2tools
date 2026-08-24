@@ -3,16 +3,12 @@ Loader for user-authored Spawning Tool build orders (Stage 7.4 v2).
 
 This module owns three concerns:
 
-1. **Backwards compat.** The existing parser at
-   ``core.sc2_replay_parser.parse_replay`` still calls
-   :func:`load_custom_builds` and expects the v1 shape
-   ``{"Opponent": [...], "Self": [...]}`` so the rules-engine
-   detectors keep working. We preserve that signature -- after a
-   v1->v2 migration the buckets simply come back empty (no
-   v1-style rules left on disk), and the existing race-tree
-   classifier handles every game. The new v2 classifier kicks in
-   via the ``/api/custom-builds/reclassify`` endpoint and the
-   :mod:`scripts.build_classify_cli` CLI.
+1. **Detector routing.** The parser calls :func:`load_custom_builds`
+   and expects ``{"Opponent": [...], "Self": [...]}``. Legacy v1
+   entries use ``target``; v3 entries use ``perspective``. Missing
+   ``perspective`` remains user-side for backwards compatibility.
+   Keeping this split at the disk boundary prevents an opponent build
+   from ever entering the user's build detector.
 
 2. **v2 access.** :func:`load_custom_builds_v2` returns the new
    shape on disk, and :func:`load_community_cache` returns the
@@ -174,12 +170,13 @@ def _is_v1(data: Dict[str, Any]) -> bool:
 
 
 def load_custom_builds() -> Dict[str, List[Dict]]:
-    """Load v1-shaped custom builds for the legacy parser detectors.
+    """Load custom builds bucketed for the two replay detectors.
 
-    After Stage 7.4 the on-disk file is migrated to v2 and this
-    function returns empty buckets -- the rules-engine path is a
-    no-op for new builds, and the v2 classifier handles them via
-    :func:`load_custom_builds_v2`.
+    Legacy entries declare ``target: Self|Opponent``. Versioned SPA
+    entries declare ``perspective: you|opponent``; older versioned
+    entries without that field are user-side. An invalid explicit
+    perspective is dropped rather than allowed to classify either
+    side of a replay.
 
     Returns:
         ``{"Opponent": [...], "Self": [...]}``.
@@ -197,6 +194,14 @@ def load_custom_builds() -> Dict[str, List[Dict]]:
         target = entry.get("target")
         if target in out:
             out[target].append(entry)
+            continue
+        if target is not None:
+            continue
+        perspective = entry.get("perspective")
+        if perspective in (None, "you"):
+            out["Self"].append(entry)
+        elif perspective == "opponent":
+            out["Opponent"].append(entry)
     return out
 
 
@@ -318,6 +323,9 @@ def _translate_one_v1_build(
     return {
         "id": _slug_for(name, entry.get("target", "Opponent")),
         "name": name,
+        "perspective": (
+            "you" if entry.get("target") == "Self" else "opponent"
+        ),
         "race": race,
         "vs_race": _MATCHUP_TO_VS_RACE.get(matchup, "Any"),
         "tier": None,

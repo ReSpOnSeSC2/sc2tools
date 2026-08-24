@@ -652,13 +652,20 @@ describe("community + gdpr integration", () => {
         result: "Victory",
         _customBuildSlug: "my-build",
       });
+      await db.games.insertOne({
+        userId: "u_a",
+        gameId: "community-classified-opponent-1",
+        date: new Date("2026-08-13T12:01:00Z"),
+        result: "Defeat",
+        _customOpponentStrategySlug: "my-build",
+      });
       const mine = await request(app)
         .get("/v1/community/my-build-stats")
         .set("authorization", "Bearer user-a");
       expect(mine.status).toBe(200);
       expect(mine.body.items).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ total: 1, wins: 1, losses: 0 }),
+          expect.objectContaining({ total: 2, wins: 1, losses: 1 }),
         ]),
       );
       expect(mine.body.items[0].sourceSlug).toBeUndefined();

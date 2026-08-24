@@ -397,21 +397,28 @@ function StrategyGamesView({
  * "PvP — DT vs Stargate" wants their Trends, Maps, and Activity tabs
  * to reflect the same scope.
  */
-function StrategyFiltersBar() {
+export function StrategyFiltersBar() {
   const { filters, setFilters, dbRev } = useFilters();
   // Pull the universe of builds + opponent strategies the user has
   // games for, so the dropdowns only show options that will actually
-  // produce results. We pull these without the build/strategy/race
-  // filters applied so toggling one doesn't empty the other.
+  // produce results. Build options retain their existing independent
+  // universe, while opponent-strategy options are scoped to the selected
+  // opponent race. Strategy names are not a reliable source of race
+  // metadata (especially for custom labels), so this must be filtered by
+  // the API's canonical opponent.race field.
   const baseQuery = useMemo(() => {
     const { build, opp_strategy, race, opp_race, ...rest } = filters;
+    return filtersToQuery(rest);
+  }, [filters]);
+  const strategyOptionsQuery = useMemo(() => {
+    const { build, opp_strategy, race, ...rest } = filters;
     return filtersToQuery(rest);
   }, [filters]);
   const buildsResp = useApi<Array<{ name: string; total: number }>>(
     `/v1/builds${baseQuery}#${dbRev}`,
   );
   const stratsResp = useApi<Array<{ name: string; total: number }>>(
-    `/v1/opp-strategies${baseQuery}#${dbRev}`,
+    `/v1/opp-strategies${strategyOptionsQuery}#${dbRev}`,
   );
 
   const buildOptions = useMemo(
@@ -492,7 +499,15 @@ function StrategyFiltersBar() {
         <FilterSelect
           label="Opp race"
           value={filters.opp_race ?? ""}
-          onChange={(v) => update({ opp_race: v || undefined })}
+          onChange={(v) =>
+            update({
+              opp_race: v || undefined,
+              // A strategy selected for the previous race would leave an
+              // impossible hidden intersection after the option list
+              // refetches. Clear both fields in one context update.
+              opp_strategy: undefined,
+            })
+          }
           options={RACE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))}
         />
         <FilterSelect

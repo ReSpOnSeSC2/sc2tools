@@ -82,6 +82,23 @@ function gamesV6toV5(doc) {
   return next;
 }
 
+/**
+ * Games v7 adds an optional opponent-perspective provenance field. Existing
+ * v6 rows remain valid and acquire it only when an opponent custom strategy
+ * is classified.
+ * @param {Record<string, any>} doc
+ */
+function gamesV6toV7(doc) {
+  return { ...doc };
+}
+
+/** @param {Record<string, any>} doc */
+function gamesV7toV6(doc) {
+  const next = { ...doc };
+  delete next._customOpponentStrategySlug;
+  return next;
+}
+
 const REGISTRATIONS = [
   {
     collection: COLLECTIONS.OPPONENTS,
@@ -100,6 +117,15 @@ const REGISTRATIONS = [
     backward: gamesV6toV5,
     description:
       "August-2026: add optional server-private custom-build classification fences.",
+  },
+  {
+    collection: COLLECTIONS.GAMES,
+    fromVersion: 6,
+    toVersion: 7,
+    forward: gamesV6toV7,
+    backward: gamesV7toV6,
+    description:
+      "August-2026: add independent opponent custom-strategy provenance.",
   },
 ];
 
@@ -137,6 +163,8 @@ module.exports = {
     opponentsV2toV1,
     gamesV5toV6,
     gamesV6toV5,
+    gamesV6toV7,
+    gamesV7toV6,
     alreadyRegistered,
   },
 };

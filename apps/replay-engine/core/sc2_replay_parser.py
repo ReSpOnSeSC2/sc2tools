@@ -40,7 +40,7 @@ except (ImportError, ModuleNotFoundError):
         pass
 
 from .build_definitions import BUILD_DEFINITIONS
-from .custom_builds import load_custom_builds, load_custom_builds_v2
+from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 
@@ -479,16 +479,12 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     ctx.opp_events = opp_events
     ctx.extract_stats = ext_stats
 
-    # v1 (legacy Spawning-Tool) buckets are split by `target` (Self/Opponent);
-    # v3 (rules-engine) builds live in custom_builds.json{builds:[...]} with
-    # `vs_race` instead of `matchup`. The SPA writes v3. We feed v3 into the
-    # USER's detector since user-authored builds are by definition the user's
-    # own openings; the detector self-filters via vs_race + rule evaluation.
+    # Legacy builds are split by `target`; v3 builds are split by their saved
+    # `perspective`. The loader defaults older v3 entries to the user side but
+    # never lets an explicit opponent build enter the user's detector.
     custom = load_custom_builds()
-    v3_payload = load_custom_builds_v2()
-    v3_user_builds = v3_payload.get("builds", []) if isinstance(v3_payload, dict) else []
     opp_detector = OpponentStrategyDetector(custom["Opponent"])
-    my_detector = UserBuildDetector(custom["Self"] + v3_user_builds)
+    my_detector = UserBuildDetector(custom["Self"])
 
     matchup = f"vs {ctx.opponent.race}"
     # Pass the parsed game length so both detectors can short-circuit

@@ -33,6 +33,40 @@ const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
 const CUSTOM_BUILD_ACTIVE_LIMIT = 100;
 
+/** @param {any} build @returns {"you"|"opponent"} */
+function buildPerspective(build) {
+  return build && build.perspective === "opponent" ? "opponent" : "you";
+}
+
+/** @param {"you"|"opponent"} perspective */
+function customBuildProvenanceField(perspective) {
+  return perspective === "opponent"
+    ? "_customOpponentStrategySlug"
+    : "_customBuildSlug";
+}
+
+/** @param {any} game @param {"you"|"opponent"} perspective */
+function customBuildSlugForGame(game, perspective) {
+  if (!game || typeof game !== "object") return null;
+  if (perspective === "opponent") {
+    return game.customOpponentStrategySlug
+      || game._customOpponentStrategySlug
+      || null;
+  }
+  return game.customBuildSlug || game._customBuildSlug || null;
+}
+
+/** @param {any} game @param {"you"|"opponent"} perspective */
+function customBuildNameForGame(game, perspective) {
+  if (!game || typeof game !== "object") return null;
+  if (perspective === "opponent") {
+    return game.opponent && typeof game.opponent === "object"
+      ? game.opponent.strategy || null
+      : null;
+  }
+  return game.myBuild || null;
+}
+
 // Return the established private-library contract without fetching arbitrary
 // legacy children. Dotted array leaves are intentional: a historical
 // signature/step item may contain a multi-megabyte field that no supported UI
@@ -213,17 +247,16 @@ function runnableReclassificationMatch(now) {
  * community DB via a separate flow.
  *
  * Rule evaluation:
- *   The /v1/builds endpoint groups stored games by `myBuild`, which
- *   only reflects what the agent classified at upload time. A custom
- *   build the user just saved has zero matching games until the agent
- *   reclassifies, leaving the BuildCard stuck on "0 games" even though
- *   the live preview pinged "1 match".
+ *   Analytics read the user's opener from `myBuild` and the opponent's
+ *   strategy from `opponent.strategy`. A newly saved definition has zero
+ *   matching games until cloud reclassification writes the corresponding
+ *   axis, even when its live preview already found a match.
  *
  *   Editor previews still evaluate draft rules live. Once replay matching
  *   completes, `evaluateBuild` and `evaluateAllStats` read the durable
- *   `_customBuildSlug` provenance instead. That makes individual replay rows,
- *   library totals, and dossiers share one source of truth without repeatedly
- *   hydrating large replay-analysis blobs from object storage.
+ *   perspective-specific provenance instead. That makes individual replay
+ *   rows, library totals, and dossiers share one source of truth without
+ *   repeatedly hydrating large replay-analysis blobs from object storage.
  */
 class CustomBuildsService {
   /**
@@ -1050,14 +1083,16 @@ class CustomBuildsService {
     if (!build) return null;
     const rules = extractRules(build);
     const games = this._gamesCollection();
+    const perspective = buildPerspective(build);
+    const provenanceField = customBuildProvenanceField(perspective);
     const baseMatch = {
       userId,
-      _customBuildSlug: slug,
+      [provenanceField]: slug,
       isResumedFromReplay: { $ne: true },
     };
     const resumedMatch = {
       userId,
-      _customBuildSlug: slug,
+      [provenanceField]: slug,
       isResumedFromReplay: true,
     };
     const aggregate = games.aggregate(
@@ -1081,10 +1116,18 @@ class CustomBuildsService {
                 },
               },
             ],
-            byMatchup: classifiedGroupFacet(customBuildMatchupExpression()),
+            byMatchup: classifiedGroupFacet(
+              customBuildMatchupExpression(perspective),
+            ),
             byMap: classifiedGroupFacet({ $ifNull: ["$map", "Unknown"] }),
+            // For one of the user's own builds, the useful comparison is the
+            // opponent strategy. For an opponent-side custom strategy, flip
+            // the axis so the dossier shows which of the user's builds faced it.
             byStrategy: classifiedGroupFacet({
-              $ifNull: ["$opponent.strategy", "Unknown"],
+              $ifNull: [
+                perspective === "opponent" ? "$myBuild" : "$opponent.strategy",
+                "Unknown",
+              ],
             }),
             recent: [
               { $limit: RECENT_GAMES_LIMIT },
@@ -1317,6 +1360,7 @@ class CustomBuildsService {
    *   limit: number,
    *   pageSize: number,
    *   perspective: "you"|"opponent",
+   *   cohortPerspective: "you"|"opponent",
    *   slug: string,
    *   phasePerspective: "you"|"opponent",
    *   strategyName: string|null,
@@ -1343,7 +1387,7 @@ class CustomBuildsService {
       ),
     })) {
       for (const game of page.games) {
-        if (game.customBuildSlug !== opts.slug) continue;
+        if (customBuildSlugForGame(game, opts.cohortPerspective) !== opts.slug) continue;
         if (opts.strategyName && game?.opponent?.strategy !== opts.strategyName) continue;
         if (games.length >= PHASE_GAME_SAMPLE_LIMIT) {
           truncated = true;
@@ -1388,7 +1432,7 @@ class CustomBuildsService {
     // BvS cell, 13 in the WHAT YOU TYPICALLY DO header" discrepancy.
     /** @type {Record<string, any>} */
     const matchPushdown = {
-      _customBuildSlug: slug,
+      [customBuildProvenanceField(storedPerspective)]: slug,
       ...(strategyName ? { "opponent.strategy": strategyName } : {}),
     };
     // ``filters`` is consumed by the real perGameCompute implementation
@@ -1401,6 +1445,7 @@ class CustomBuildsService {
         limit: PHASE_GAME_SAMPLE_LIMIT + 1,
         pageSize: 25,
         perspective: phasePerspective,
+        cohortPerspective: storedPerspective,
         phasePerspective,
         slug,
         strategyName,
@@ -1471,29 +1516,44 @@ class CustomBuildsService {
   async evaluateAllStats(userId, opts = {}) {
     const builds = await this._listForClassification(userId);
     if (builds.length === 0) return [];
-    const slugs = builds.map((build) => build.slug).filter(Boolean);
-    const rows = await this._gamesCollection().aggregate(
-      [
-        {
-          $match: {
-            userId,
-            _customBuildSlug: { $in: slugs },
-            isResumedFromReplay: { $ne: true },
-          },
+    const byPerspective = {
+      you: builds.filter((build) => buildPerspective(build) === "you"),
+      opponent: builds.filter((build) => buildPerspective(build) === "opponent"),
+    };
+    const rowSets = await Promise.all(
+      /** @type {Array<"you"|"opponent">} */ (["you", "opponent"]).map(
+        async (perspective) => {
+          const slugs = byPerspective[perspective]
+            .map((build) => build.slug)
+            .filter(Boolean);
+          if (slugs.length === 0) return [];
+          const provenanceField = customBuildProvenanceField(perspective);
+          return this._gamesCollection().aggregate(
+            [
+              {
+                $match: {
+                  userId,
+                  [provenanceField]: { $in: slugs },
+                  isResumedFromReplay: { $ne: true },
+                },
+              },
+              { $addFields: { _customBuildResult: customBuildResultBucket() } },
+              {
+                $group: {
+                  _id: `$${provenanceField}`,
+                  wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
+                  losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
+                  total: { $sum: 1 },
+                  lastPlayed: { $max: "$date" },
+                },
+              },
+            ],
+            { allowDiskUse: true, ...(opts.signal ? { signal: opts.signal } : {}) },
+          ).toArray();
         },
-        { $addFields: { _customBuildResult: customBuildResultBucket() } },
-        {
-          $group: {
-            _id: "$_customBuildSlug",
-            wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
-            losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
-            total: { $sum: 1 },
-            lastPlayed: { $max: "$date" },
-          },
-        },
-      ],
-      { allowDiskUse: true, ...(opts.signal ? { signal: opts.signal } : {}) },
-    ).toArray();
+      ),
+    );
+    const rows = rowSets.flat();
     const bySlug = new Map(rows.map((row) => [String(row._id || ""), row]));
     return builds.map(
       (b) => {
@@ -1549,12 +1609,11 @@ class CustomBuildsService {
   /**
    * Reclassify the user's stored games against ONE saved build.
    *
-   * For each game whose stored events satisfy the build's rules (and
-   * whose matchup matches the build's race/vsRace gate), set the
-   * game document's `myBuild` to the build's name. For games that
-   * were previously tagged with this build's name but no longer
-   * match, clear the tag (only when `replace` is true) so the
-   * standard /v1/builds aggregations stay accurate.
+   * For each game whose stored events satisfy the build's rules (and whose
+   * matchup matches the race/vsRace gate), write the saved definition to its
+   * declared axis: `myBuild` for "you", or `opponent.strategy` for
+   * "opponent". When `replace` is true, clear only stale ownership on that
+   * same axis so the analytics aggregations remain accurate.
    *
    * Important: we never push back to the agent. The cloud already has
    * each uploaded game's parsed buildLog/oppBuildLog, so reclassification
@@ -1590,7 +1649,10 @@ class CustomBuildsService {
     const replace = opts.replace !== false;
     const rules = extractRules(build);
     const buildName = build.name || build.slug;
-    const perspective = build.perspective === "opponent" ? "opponent" : "you";
+    const perspective = buildPerspective(build);
+    const otherPerspective = perspective === "opponent" ? "you" : "opponent";
+    const provenanceField = customBuildProvenanceField(perspective);
+    const otherProvenanceField = customBuildProvenanceField(otherPerspective);
     const runId = randomUUID();
     const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const gamesCollection = this._gamesCollection();
@@ -1607,16 +1669,27 @@ class CustomBuildsService {
       signal: opts.signal,
       metadataFilter: (g) => gameMatchesBuildMatchup(
         normaliseGameRaces(g), build, perspective,
-      ) || g.customBuildSlug === slug || g._customBuildSlug === slug,
+      ) || customBuildSlugForGame(g, perspective) === slug
+        || customBuildSlugForGame(g, otherPerspective) === slug,
     })) {
       if (opts.signal && opts.signal.aborted) throw abortError();
       assertStableOpponentBuildOrderPage(page.games);
       scanned += page.candidates;
       const matched = [];
       const stale = [];
+      const staleOtherPerspective = [];
       for (const g of page.games) {
         const inMatchup = gameMatchesBuildMatchup(g, build, perspective);
-        const owned = g.customBuildSlug === slug;
+        const owned = customBuildSlugForGame(g, perspective) === slug;
+        const ownedOnOtherPerspective =
+          customBuildSlugForGame(g, otherPerspective) === slug;
+        // Perspective used to be ignored when committing a match. Clean that
+        // legacy claim even when this replay still matches on the correct side,
+        // so an opponent strategy can never remain visible as the user's build
+        // (and vice versa after an edited build changes perspective).
+        if (ownedOnOtherPerspective && g.gameId) {
+          staleOtherPerspective.push(g);
+        }
         if (!inMatchup) {
           if (replace && owned && g.gameId) stale.push(g);
           continue;
@@ -1629,7 +1702,8 @@ class CustomBuildsService {
       matchedCount += matched.length;
       const toTag = matched
         .filter((g) => (
-          g.myBuild !== buildName || g.customBuildSlug !== slug
+          customBuildNameForGame(g, perspective) !== buildName
+          || customBuildSlugForGame(g, perspective) !== slug
         ) && Boolean(g.gameId))
         .map((g) => ({
           gameId: g.gameId,
@@ -1653,6 +1727,7 @@ class CustomBuildsService {
                   sequence: jobSequence,
                   mode: "single",
                   slug,
+                  perspective,
                   action: "set",
                   desiredBuild: buildName,
                   desiredSlug: slug,
@@ -1673,7 +1748,7 @@ class CustomBuildsService {
               filter: {
                 userId,
                 gameId: g.gameId,
-                _customBuildSlug: slug,
+                [provenanceField]: slug,
                 ...customBuildRevisionMatch(g.customBuildRevision || null),
               },
               update: {
@@ -1683,8 +1758,38 @@ class CustomBuildsService {
                 $addToSet: { _customBuildReclassify: {
                    runId,
                   sequence: jobSequence,
+                   mode: "single",
+                  slug,
+                  perspective,
+                  action: "clear",
+                } },
+              },
+            },
+          })),
+          { ordered: false },
+        );
+        cleared += staged.matchedCount || 0;
+      }
+      if (staleOtherPerspective.length > 0) {
+        const staged = await gamesCollection.bulkWrite(
+          staleOtherPerspective.map((g) => ({
+            updateOne: {
+              filter: {
+                userId,
+                gameId: g.gameId,
+                [otherProvenanceField]: slug,
+                ...customBuildRevisionMatch(g.customBuildRevision || null),
+              },
+              update: {
+                $set: {
+                  _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+                },
+                $addToSet: { _customBuildReclassify: {
+                  runId,
+                  sequence: jobSequence,
                   mode: "single",
                   slug,
+                  perspective: otherPerspective,
                   action: "clear",
                 } },
               },
@@ -1751,14 +1856,17 @@ class CustomBuildsService {
       ord,
       name: build.name || build.slug,
       rules: extractRules(build),
-      perspective: /** @type {"you"|"opponent"} */ (
-        build.perspective === "opponent" ? "opponent" : "you"
-      ),
+      perspective: buildPerspective(build),
     }));
     const ownedSlugs = new Set([
       ...descriptors.map((d) => d.build.slug).filter(Boolean),
       ...Object.keys(opts.previousNamesBySlug || {}),
     ]);
+    const expectedPerspectiveBySlug = new Map(
+      descriptors
+        .filter((descriptor) => descriptor.build.slug)
+        .map((descriptor) => [descriptor.build.slug, descriptor.perspective]),
+    );
     const perBuild = descriptors.map((d) => ({
       slug: d.build.slug,
       name: d.name,
@@ -1784,85 +1892,105 @@ class CustomBuildsService {
         assertStableOpponentBuildOrderPage(page.games);
         if (opts.assertLease) await opts.assertLease();
         scanned += page.candidates;
-        /** @type {Map<string, {name: string, slug: string, rows: Array<{gameId: string, revision: string|null}>}>} */
+        /** @type {Map<string, {name: string, slug: string, perspective: "you"|"opponent", rows: Array<{gameId: string, revision: string|null}>}>} */
         const desiredGroups = new Map();
-        /** @type {Array<{gameId: string, revision: string|null}>} */
+        /** @type {Array<{gameId: string, revision: string|null, perspective: "you"|"opponent"}>} */
         const clearGames = [];
         for (const game of page.games) {
-          let best = null;
-          const unknownContenders = [];
-          for (const descriptor of descriptors) {
-            if (!gameMatchesBuildMatchup(
-              game,
-              descriptor.build,
-              descriptor.perspective,
-            )) continue;
-            const verdict = evaluateGameRules(
-              game,
-              descriptor.rules,
-              descriptor.perspective,
+          // The user's build and the opponent's strategy are independent axes.
+          // Pick one closest winner per side so an opponent-side rule can never
+          // compete with (or overwrite) the user's own build classification.
+          for (const perspective of /** @type {Array<"you"|"opponent">} */ (
+            ["you", "opponent"]
+          )) {
+            const currentSlug = customBuildSlugForGame(game, perspective);
+            const expectedPerspective = typeof currentSlug === "string"
+              ? expectedPerspectiveBySlug.get(currentSlug)
+              : undefined;
+            const wrongAxisClaim = !!expectedPerspective
+              && expectedPerspective !== perspective;
+            let best = null;
+            const unknownContenders = [];
+            for (const descriptor of descriptors) {
+              if (descriptor.perspective !== perspective) continue;
+              if (!gameMatchesBuildMatchup(
+                game,
+                descriptor.build,
+                perspective,
+              )) continue;
+              const verdict = evaluateGameRules(
+                game,
+                descriptor.rules,
+                perspective,
+              );
+              if (verdict === "unknown") {
+                unknownContenders.push(descriptor);
+                continue;
+              }
+              if (verdict !== "pass") continue;
+              perBuild[descriptor.ord].matched += 1;
+              if (!best || descriptorOutranks(descriptor, best)) {
+                best = descriptor;
+              }
+            }
+
+            // Missing detail on one side must defer only that side. A valid
+            // user-side result can still commit while opponent detail is absent,
+            // and vice versa.
+            const winnerIsUncertain = best && unknownContenders.some(
+              (candidate) => descriptorOutranks(candidate, best),
             );
-            if (verdict === "unknown") {
-              unknownContenders.push(descriptor);
+            if (winnerIsUncertain || (!best && unknownContenders.length > 0)) {
+              // A provenance slug whose saved definition belongs to the other
+              // side is definitively corrupt even if this side's new winner is
+              // temporarily unknown. Clear that legacy claim unconditionally;
+              // this is a perspective migration, not clearUnmatched behavior.
+              if (wrongAxisClaim && game.gameId) {
+                clearGames.push({
+                  gameId: game.gameId,
+                  revision: game.customBuildRevision || null,
+                  perspective,
+                });
+              }
+              deferred += 1;
               continue;
             }
-            if (verdict !== "pass") continue;
-            perBuild[descriptor.ord].matched += 1;
-            if (
-              !best
-              || descriptor.rules.length > best.rules.length
-              || (
-                descriptor.rules.length === best.rules.length
-                && descriptor.ord < best.ord
-              )
+
+            if (best && game.gameId) {
+              // A matching tag is already correct and needs no staged write.
+              if (
+                customBuildNameForGame(game, perspective) === best.name
+                && customBuildSlugForGame(game, perspective) === best.build.slug
+              ) continue;
+              const groupKey = `${perspective}|${best.build.slug}`;
+              const group = desiredGroups.get(groupKey) || /** @type {{name: string, slug: string, perspective: "you"|"opponent", rows: Array<{gameId: string, revision: string|null}>}} */ ({
+                name: best.name,
+                slug: best.build.slug,
+                perspective,
+                rows: [],
+              });
+              group.rows.push({
+                gameId: game.gameId,
+                revision: game.customBuildRevision || null,
+              });
+              desiredGroups.set(groupKey, group);
+            } else if (
+              (wrongAxisClaim || clearUnmatched)
+              && game.gameId
+              && typeof currentSlug === "string"
+              && ownedSlugs.has(currentSlug)
             ) {
-              best = descriptor;
+              clearGames.push({
+                gameId: game.gameId,
+                revision: game.customBuildRevision || null,
+                perspective,
+              });
             }
-          }
-
-          // A missing detail side is safe to ignore only when every unknown
-          // contender is lower priority than the known winner. Otherwise the
-          // closest-match result is genuinely unknown, so preserve the game's
-          // current tag until a later run can hydrate and score that side.
-          const winnerIsUncertain = best && unknownContenders.some(
-            (candidate) => descriptorOutranks(candidate, best),
-          );
-          if (winnerIsUncertain || (!best && unknownContenders.length > 0)) {
-            deferred += 1;
-            continue;
-          }
-
-          if (best && game.gameId) {
-            // A matching tag is already correct and needs no staged write.
-            if (
-              game.myBuild === best.name
-              && game.customBuildSlug === best.build.slug
-            ) continue;
-            const group = desiredGroups.get(best.build.slug) || /** @type {{name: string, slug: string, rows: Array<{gameId: string, revision: string|null}>}} */ ({
-              name: best.name,
-              slug: best.build.slug,
-              rows: [],
-            });
-            group.rows.push({
-              gameId: game.gameId,
-              revision: game.customBuildRevision || null,
-            });
-            desiredGroups.set(best.build.slug, group);
-          } else if (
-            clearUnmatched
-            && game.gameId
-            && typeof game.customBuildSlug === "string"
-            && ownedSlugs.has(game.customBuildSlug)
-          ) {
-            clearGames.push({
-              gameId: game.gameId,
-              revision: game.customBuildRevision || null,
-            });
           }
         }
 
-        // Stage both positive assignments and removals. Nothing touches
-        // `myBuild` until the iterator reaches a complete, successfully
+        // Stage both positive assignments and removals. Neither analytics
+        // axis changes until the iterator reaches a complete, successfully
         // hydrated EOF and the worker still owns its durable lease.
         for (const group of desiredGroups.values()) {
           if (opts.assertLease) await opts.assertLease();
@@ -1882,6 +2010,7 @@ class CustomBuildsService {
                      runId,
                     sequence: jobSequence,
                     mode: "all",
+                    perspective: group.perspective,
                     action: "set",
                     desiredBuild: group.name,
                     desiredSlug: group.slug,
@@ -1893,7 +2022,9 @@ class CustomBuildsService {
           );
           const stagedCount = staged.matchedCount || 0;
           tagged += stagedCount;
-          const descriptor = descriptors.find((d) => d.build.slug === group.slug);
+          const descriptor = descriptors.find((d) => (
+            d.build.slug === group.slug && d.perspective === group.perspective
+          ));
           if (descriptor) perBuild[descriptor.ord].tagged += stagedCount;
         }
         if (clearGames.length > 0) {
@@ -1904,7 +2035,9 @@ class CustomBuildsService {
                 filter: {
                   userId,
                   gameId: row.gameId,
-                  _customBuildSlug: { $in: [...ownedSlugs] },
+                  [customBuildProvenanceField(row.perspective)]: {
+                    $in: [...ownedSlugs],
+                  },
                   ...customBuildRevisionMatch(row.revision),
                 },
                 update: {
@@ -1915,6 +2048,7 @@ class CustomBuildsService {
                      runId,
                     sequence: jobSequence,
                     mode: "all",
+                    perspective: row.perspective,
                     action: "clear",
                   } },
                 },
@@ -1942,8 +2076,8 @@ class CustomBuildsService {
       if (opts.assertLease) await opts.assertLease();
 
       // Commit every staged decision in one server-side update. `$$REMOVE`
-      // clears definitive stale tags and also removes the private marker;
-      // set actions copy their staged desired value into `myBuild`.
+      // clears definitive stale tags and the private marker; set actions copy
+      // their desired value to the marker's declared perspective.
       await games.updateMany(
         { userId, "_customBuildReclassify.runId": runId },
         commitReclassifyRunPipeline(runId, jobSequence),
@@ -2115,6 +2249,7 @@ class CustomBuildsService {
    *   gameId: string,
    *   matched: number,
    *   chosen: string|null,
+   *   chosenByPerspective?: {you: string|null, opponent: string|null},
    *   ruleCount: number,
    * }>}
    */
@@ -2165,14 +2300,14 @@ class CustomBuildsService {
       oppEvents,
     };
 
-    /** @type {{name: string, slug: string, ruleCount: number, ord: number} | null} */
-    let best = null;
+    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, ord: number} | null>} */
+    const bestByPerspective = { you: null, opponent: null };
     let matchCount = 0;
     for (let i = 0; i < builds.length; i++) {
       const b = /** @type {any} */ (builds[i]);
       const rules = extractRules(b);
       if (rules.length === 0) continue;
-      const perspective = b.perspective === "opponent" ? "opponent" : "you";
+      const perspective = buildPerspective(b);
       if (!gameMatchesBuildMatchup(probe, b, perspective)) continue;
       const evs = perspective === "opponent" ? probe.oppEvents : probe.events;
       if (evs.length === 0) continue;
@@ -2185,21 +2320,41 @@ class CustomBuildsService {
       if (!result.pass) continue;
       matchCount += 1;
       const buildName = b.name || b.slug;
+      const best = bestByPerspective[perspective];
       if (
         !best ||
         rules.length > best.ruleCount ||
         (rules.length === best.ruleCount && i < best.ord)
       ) {
-        best = { name: buildName, slug: b.slug, ruleCount: rules.length, ord: i };
+        bestByPerspective[perspective] = {
+          name: buildName,
+          slug: b.slug,
+          ruleCount: rules.length,
+          ord: i,
+        };
       }
     }
 
-    if (!best) {
+    const userWinner = bestByPerspective.you;
+    const opponentWinner = bestByPerspective.opponent;
+    if (!userWinner && !opponentWinner) {
       return { gameId: probe.gameId, matched: 0, chosen: null, ruleCount: 0 };
     }
     // Always claim explicit provenance, including when the agent/community
     // label happens to have the same display name. The caller's payload cannot
     // be trusted to report this private server-owned field.
+    /** @type {Record<string, any>} */
+    const classifiedSet = {
+      _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+    };
+    if (userWinner) {
+      classifiedSet.myBuild = userWinner.name;
+      classifiedSet._customBuildSlug = userWinner.slug;
+    }
+    if (opponentWinner) {
+      classifiedSet["opponent.strategy"] = opponentWinner.name;
+      classifiedSet._customOpponentStrategySlug = opponentWinner.slug;
+    }
     const updateResult = await this._gamesCollection().updateOne(
       {
         userId,
@@ -2209,11 +2364,7 @@ class CustomBuildsService {
           : {}),
       },
       {
-        $set: {
-          myBuild: best.name,
-          _customBuildSlug: best.slug,
-          _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-        },
+        $set: classifiedSet,
         $unset: {
           _customBuildReclassify: "",
           _customBuildClassificationSequence: "",
@@ -2231,8 +2382,15 @@ class CustomBuildsService {
     return {
       gameId: probe.gameId,
       matched: matchCount,
-      chosen: best.name,
-      ruleCount: best.ruleCount,
+      chosen: userWinner?.name || opponentWinner?.name || null,
+      chosenByPerspective: {
+        you: userWinner?.name || null,
+        opponent: opponentWinner?.name || null,
+      },
+      ruleCount: Math.max(
+        userWinner?.ruleCount || 0,
+        opponentWinner?.ruleCount || 0,
+      ),
     };
   }
 
@@ -2585,15 +2743,35 @@ function reclassifyMarkersExpression() {
   };
 }
 
-/** @param {string} runId */
-function reclassifyDecisionExpression(runId) {
+/**
+ * @param {string} runId
+ * @param {"you"|"opponent"} [perspective]
+ */
+function reclassifyDecisionExpression(runId, perspective) {
+  /** @type {Record<string, any>} */
+  const condition = { $eq: ["$$marker.runId", runId] };
+  const scopedCondition = perspective
+    ? {
+      $and: [
+        condition,
+        {
+          // Markers written before perspective-aware classification all
+          // targeted myBuild, so missing perspective is legacy "you".
+          $eq: [
+            { $ifNull: ["$$marker.perspective", "you"] },
+            perspective,
+          ],
+        },
+      ],
+    }
+    : condition;
   return {
     $arrayElemAt: [
       {
         $filter: {
           input: reclassifyMarkersExpression(),
           as: "marker",
-          cond: { $eq: ["$$marker.runId", runId] },
+          cond: scopedCondition,
         },
       },
       0,
@@ -2639,58 +2817,75 @@ function newerReclassifyMarkersExpression(sequence) {
  */
 function commitReclassifyRunPipeline(runId, sequence) {
   const safeSequence = Math.max(0, Number(sequence) || 0);
-  const decision = reclassifyDecisionExpression(runId);
-  const canApply = {
-    $gte: [
-      { $ifNull: ["$$decision.sequence", safeSequence] },
-      { $ifNull: ["$_customBuildClassificationSequence", 0] },
-    ],
-  };
+  const sequenceDecision = reclassifyDecisionExpression(runId);
+  /**
+   * @param {"you"|"opponent"} perspective
+   * @param {any} currentValue
+   * @param {any} desiredValue
+   */
+  const sideValue = (perspective, currentValue, desiredValue) => ({
+    $let: {
+      vars: { decision: reclassifyDecisionExpression(runId, perspective) },
+      in: {
+        $cond: [
+          {
+            $and: [
+              { $eq: [{ $type: "$$decision" }, "object"] },
+              {
+                $gte: [
+                  { $ifNull: ["$$decision.sequence", safeSequence] },
+                  { $ifNull: ["$_customBuildClassificationSequence", 0] },
+                ],
+              },
+            ],
+          },
+          {
+            $cond: [
+              { $eq: ["$$decision.action", "set"] },
+              desiredValue,
+              "$$REMOVE",
+            ],
+          },
+          currentValue,
+        ],
+      },
+    },
+  });
   return [{
     $set: {
       _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-      myBuild: {
-        $let: {
-          vars: { decision },
-          in: {
-            $cond: [
-              canApply,
-              {
-                $cond: [
-                  { $eq: ["$$decision.action", "set"] },
-                  "$$decision.desiredBuild",
-                  "$$REMOVE",
-                ],
-              },
-              "$myBuild",
-            ],
-          },
-        },
-      },
-      _customBuildSlug: {
-        $let: {
-          vars: { decision },
-          in: {
-            $cond: [
-              canApply,
-              {
-                $cond: [
-                  { $eq: ["$$decision.action", "set"] },
-                  "$$decision.desiredSlug",
-                  "$$REMOVE",
-                ],
-              },
-              "$_customBuildSlug",
-            ],
-          },
-        },
-      },
+      myBuild: sideValue("you", "$myBuild", "$$decision.desiredBuild"),
+      _customBuildSlug: sideValue(
+        "you",
+        "$_customBuildSlug",
+        "$$decision.desiredSlug",
+      ),
+      "opponent.strategy": sideValue(
+        "opponent",
+        "$opponent.strategy",
+        "$$decision.desiredBuild",
+      ),
+      _customOpponentStrategySlug: sideValue(
+        "opponent",
+        "$_customOpponentStrategySlug",
+        "$$decision.desiredSlug",
+      ),
       _customBuildClassificationSequence: {
         $let: {
-          vars: { decision },
+          vars: { decision: sequenceDecision },
           in: {
             $cond: [
-              canApply,
+              {
+                $and: [
+                  { $eq: [{ $type: "$$decision" }, "object"] },
+                  {
+                    $gte: [
+                      { $ifNull: ["$$decision.sequence", safeSequence] },
+                      { $ifNull: ["$_customBuildClassificationSequence", 0] },
+                    ],
+                  },
+                ],
+              },
               { $ifNull: ["$$decision.sequence", safeSequence] },
               "$_customBuildClassificationSequence",
             ],
@@ -2867,8 +3062,11 @@ function classifiedGroupFacet(keyExpression) {
   ];
 }
 
-/** Build the same compact `PvT` matchup label the previous live evaluator used. */
-function customBuildMatchupExpression() {
+/**
+ * Build a compact matchup label from the saved build's perspective.
+ * @param {"you"|"opponent"} [perspective]
+ */
+function customBuildMatchupExpression(perspective = "you") {
   /** @param {string} field */
   const raceLetter = (field) => ({
     $let: {
@@ -2882,8 +3080,10 @@ function customBuildMatchupExpression() {
       },
     },
   });
+  const first = perspective === "opponent" ? "$opponent.race" : "$myRace";
+  const second = perspective === "opponent" ? "$myRace" : "$opponent.race";
   return {
-    $concat: [raceLetter("$myRace"), "v", raceLetter("$opponent.race")],
+    $concat: [raceLetter(first), "v", raceLetter(second)],
   };
 }
 

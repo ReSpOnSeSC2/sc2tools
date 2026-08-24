@@ -47,6 +47,14 @@
           "minLength": 1,
           "maxLength": 120
         },
+        "perspective": {
+          "type": "string",
+          "enum": [
+            "you",
+            "opponent"
+          ],
+          "description": "Replay side this definition classifies. Omitted legacy v3 entries default to 'you'."
+        },
         "race": {
           "type": "string",
           "enum": [

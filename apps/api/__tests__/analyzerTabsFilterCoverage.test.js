@@ -182,6 +182,17 @@ describe("analyzer tabs honour map_pool / game_size", () => {
     expect(ladder.map((s) => s.name)).toEqual(["T - Bio"]);
   });
 
+  test("/v1/opp-strategies narrows by opponent race", async () => {
+    const terran = await get("/v1/opp-strategies?opp_race=T");
+    expect(terran.map((s) => s.name)).toEqual(["T - Bio"]);
+
+    const protoss = await get("/v1/opp-strategies?opp_race=P");
+    expect(protoss.map((s) => s.name)).toEqual(["P - Cannon Rush"]);
+
+    const zerg = await get("/v1/opp-strategies?opp_race=Z");
+    expect(zerg.map((s) => s.name)).toEqual(["Z - FFA"]);
+  });
+
   test("/v1/timeseries totals reflect the filter", async () => {
     const sum = (ts) => ts.points.reduce((n, p) => n + p.total, 0);
     expect(sum(await get("/v1/timeseries"))).toBe(3);

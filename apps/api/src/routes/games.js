@@ -699,12 +699,9 @@ function buildGamesRouter(deps) {
             }
           }
         }
-        // Override the agent's built-in classifier when the user has a
-        // saved custom build whose rules match this replay. Without this
-        // the opponent profile / Recent games column always shows the
-        // agent's auto label even after the user named their opener and
-        // saved it — and a click-Reclassify pass would just be re-undone
-        // by the next upload. A storage failure here must remain retryable:
+        // Apply saved custom definitions to both independent replay axes after
+        // ingest: the user's build and the opponent's strategy. A storage
+        // failure here must remain retryable:
         // GamesService intentionally invalidates old custom provenance before
         // this hook evaluates the fresh payload. Acknowledging the replay in
         // that gap would make the agent advance permanently while the replay

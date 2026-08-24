@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.15.23
+
+### Fixed - perspective-safe custom build classification
+
+- Cached custom definitions now honor their saved `you` or `opponent`
+  perspective, so an opponent opener can never replace the user's own build
+  label, including in mirror matchups where both players share a race.
+- Opponent custom definitions now validate `vs_race` against the user's race,
+  while older definitions without an explicit perspective remain user-side for
+  backwards compatibility.
+- Ships bundled replay engine 1.5.9.
+
 ## 0.15.22
 
 ### Fixed - connected OBS B-roll and complete alert placement

@@ -884,6 +884,7 @@ class PerGameComputeService {
       myBuild: 1,
       _customBuildRevision: 1,
       _customBuildSlug: 1,
+      _customOpponentStrategySlug: 1,
       _opponentBuildOrderWriteLease: 1,
       myRace: 1,
       "opponent.displayName": 1,
@@ -1007,6 +1008,10 @@ class PerGameComputeService {
           customBuildSlug: typeof g._customBuildSlug === "string"
             ? g._customBuildSlug
             : null,
+          customOpponentStrategySlug:
+            typeof g._customOpponentStrategySlug === "string"
+              ? g._customOpponentStrategySlug
+              : null,
           opponentBuildOrderWriteLease:
             g._opponentBuildOrderWriteLease
               && typeof g._opponentBuildOrderWriteLease === "object"

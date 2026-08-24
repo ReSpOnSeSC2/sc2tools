@@ -33,10 +33,11 @@ from .event_extractor import extract_events, extract_macro_events, PlayerStatsEv
 from analytics.macro_score import compute_macro_score
 # Canonical detector stack — the detectors/ package is now a
 # compatibility shim over these, so import the source directly. The
-# v1+v3 custom-build loaders match the agent deep-parse path
+# custom-build loader returns perspective-safe detector buckets and
+# matches the agent deep-parse path
 # (core/sc2_replay_parser.py) so a bulk-imported replay classifies
 # identically to a live-parsed one.
-from .custom_builds import load_custom_builds, load_custom_builds_v2
+from .custom_builds import load_custom_builds
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 
 
@@ -116,12 +117,8 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
             return {'status': 'error', 'file_path': file_path, 'error': "No events extracted."}
 
         custom_data = load_custom_builds()
-        v3_payload = load_custom_builds_v2()
-        v3_user_builds = (
-            v3_payload.get("builds", []) if isinstance(v3_payload, dict) else []
-        )
         opp_detector = OpponentStrategyDetector(custom_data["Opponent"])
-        my_detector = UserBuildDetector(custom_data["Self"] + v3_user_builds)
+        my_detector = UserBuildDetector(custom_data["Self"])
 
         matchup = f"vs {opponent.play_race}"
         # Same kwargs as the agent deep-parse path: the game length
@@ -239,7 +236,12 @@ def debug_analyze_replay(file_path: str, player_name: str) -> str:
     my_detector = UserBuildDetector(custom_data["Self"])
 
     matchup = f"vs {opponent.play_race}"
-    opp_result = opp_detector.get_strategy_name(opponent.play_race, opp_events, matchup)
+    opp_result = opp_detector.get_strategy_name(
+        opponent.play_race,
+        opp_events,
+        matchup,
+        my_race=me.play_race,
+    )
     my_result = my_detector.detect_my_build(matchup, my_events, me.play_race)
 
     lines.append(f"\n  [OK] DETECTED MY BUILD: {my_result}")
