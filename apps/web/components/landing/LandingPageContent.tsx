@@ -75,8 +75,8 @@ function LandingHero() {
         <div className="lg:col-span-5 lg:pr-2">
           <p className="kicker">The complete StarCraft II companion</p>
           <h1 className="mt-5 font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
-            Turn every ladder game into{" "}
-            <em className="font-serif italic text-editorial">your next advantage.</em>
+            Built for ladder players,{" "}
+            <em className="font-serif italic text-editorial">by ladder players.</em>
           </h1>
           <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
             Play normally. SC2 Tools reads every replay, reconstructs the
