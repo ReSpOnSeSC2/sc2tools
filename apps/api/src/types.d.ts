@@ -21,6 +21,14 @@ declare global {
         // a request body field.
         tokenHash?: string;
       };
+      // Set by routes/coaching.js's withRole middleware — the caller's
+      // resolved coaching role from the Locker state document.
+      coachingRole?: {
+        role: "admin" | "coach" | "student" | "none";
+        coachId?: string;
+        studentId?: string;
+        rev: number;
+      };
       // Set lazily by routes/games.js: per-request dedup of
       // myToonHandle → users.pulseIds merge attempts so a batch upload
       // doesn't repeat the users.findOne for every game in the batch.

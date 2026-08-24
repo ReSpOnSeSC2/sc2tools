@@ -14,6 +14,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
  *   customBuildJobs: import('mongodb').Collection,
+ *   coaching: import('mongodb').Collection,
  *   devicePairings: import('mongodb').Collection,
  *   deviceTokens: import('mongodb').Collection,
  *   overlayTokens: import('mongodb').Collection,

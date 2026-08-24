@@ -31,9 +31,9 @@ class CoachingService {
     this.db = deps.db;
   }
 
-  /** @returns {Promise<{state: object, rev: number}>} */
+  /** @returns {Promise<{state: Record<string, any>, rev: number}>} */
   async getDoc() {
-    const doc = await this.db.coaching.findOne({ _id: DOC_ID });
+    const doc = await this.db.coaching.findOne(/** @type {any} */ ({ _id: DOC_ID }));
     if (!doc) return { state: emptyState(), rev: 0 };
     return { state: doc.state || emptyState(), rev: doc.rev || 0 };
   }
@@ -41,16 +41,16 @@ class CoachingService {
   /**
    * Compare-and-set write of the full state document.
    *
-   * @param {object} state
+   * @param {Record<string, any>} state
    * @param {number} expectedRev
-   * @returns {Promise<{ok: true, rev: number}|{ok: false, rev: number, state: object}>}
+   * @returns {Promise<{ok: true, rev: number}|{ok: false, rev: number, state: Record<string, any>}>}
    */
   async putState(state, expectedRev) {
     const next = (expectedRev || 0) + 1;
     const res = await this.db.coaching.updateOne(
-      expectedRev
+      /** @type {any} */ (expectedRev
         ? { _id: DOC_ID, rev: expectedRev }
-        : { _id: DOC_ID, rev: { $in: [0, null] } },
+        : { _id: DOC_ID, rev: { $in: [0, null] } }),
       {
         $set: { state, rev: next, updatedAt: new Date() },
         $setOnInsert: { createdAt: new Date() },
@@ -177,7 +177,7 @@ class CoachingService {
   }
 }
 
-/** @returns {object} */
+/** @returns {Record<string, any>} */
 function emptyState() {
   return {
     v: 1, setup: false, pin: null, coach: "ReSpOnSe",

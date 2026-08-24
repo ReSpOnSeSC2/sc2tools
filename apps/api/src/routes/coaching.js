@@ -24,7 +24,7 @@ const STATE_BODY_LIMIT = "16mb";
  *   auth: import('express').RequestHandler,
  *   isAdmin: (req: import('express').Request) => boolean,
  *   coaching: import('../services/coaching').CoachingService,
- *   users: {findById(userId: string): Promise<{userId: string, clerkUserId: string|null, email: string|null}>},
+ *   users: {getSummary(userId: string): Promise<{userId: string, clerkUserId: string|null, email: string|null}>},
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -37,11 +37,19 @@ function buildCoachingRouter(deps) {
     return deps.auth;
   }
 
-  /** Resolve role once per request. */
+  /**
+   * Resolve role once per request.
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @param {import('express').NextFunction} next
+   */
   async function withRole(req, res, next) {
     try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
       req.coachingRole = await deps.coaching.roleFor(
-        req.auth.userId,
+        auth.userId,
         deps.isAdmin(req),
       );
       next();
@@ -50,14 +58,29 @@ function buildCoachingRouter(deps) {
     }
   }
 
+  /**
+   * Auth + resolved role, non-optional — withRole always runs first.
+   *
+   * @param {import('express').Request} req
+   * @returns {{auth: NonNullable<import('express').Request['auth']>,
+   *   cr: NonNullable<import('express').Request['coachingRole']>}}
+   */
+  function ctx(req) {
+    const auth = req.auth;
+    const cr = req.coachingRole;
+    if (!auth || !cr) throw new Error("auth_required");
+    return { auth, cr };
+  }
+
   router.get("/coaching/me", withRole, async (req, res, next) => {
     try {
-      const me = await deps.users.findById(req.auth.userId);
+      const { auth, cr } = ctx(req);
+      const me = await deps.users.getSummary(auth.userId);
       res.json({
-        role: req.coachingRole.role,
-        coachId: req.coachingRole.coachId || null,
-        studentId: req.coachingRole.studentId || null,
-        userId: req.auth.userId,
+        role: cr.role,
+        coachId: cr.coachId || null,
+        studentId: cr.studentId || null,
+        userId: auth.userId,
         email: me.email,
       });
     } catch (err) {
@@ -67,17 +90,18 @@ function buildCoachingRouter(deps) {
 
   router.get("/coaching/state", withRole, async (req, res, next) => {
     try {
-      const { role, studentId } = req.coachingRole;
+      const { role, studentId } = ctx(req).cr;
       if (role === "none") { res.status(404).json({ error: "not_found" }); return; }
       const { state, rev } = await deps.coaching.getDoc();
       if (role === "student") {
-        const student = (state.students || []).find((s) => s.id === studentId);
+        const students = /** @type {any[]} */ (state.students || []);
+        const student = students.find((s) => s.id === studentId);
         res.json({
           rev,
           scoped: true,
           state: {
             coach: state.coach,
-            coaches: (state.coaches || []).map((c) => ({ id: c.id, name: c.name })),
+            coaches: /** @type {any[]} */ (state.coaches || []).map((c) => ({ id: c.id, name: c.name })),
             students: student ? [student] : [],
             customBuilds: state.customBuilds || [],
             assets: pickAssets(state, student),
@@ -93,7 +117,8 @@ function buildCoachingRouter(deps) {
 
   router.put("/coaching/state", withRole, async (req, res, next) => {
     try {
-      const { role } = req.coachingRole;
+      const { cr } = ctx(req);
+      const { role } = cr;
       // Students write too — worksheet answers, intake, submissions all
       // mutate state. Scoped-write safety for students is enforced by the
       // merge below; coaches/admin write the full document.
@@ -107,7 +132,7 @@ function buildCoachingRouter(deps) {
       let toWrite = incoming;
       const current = await deps.coaching.getDoc();
       if (role === "student") {
-        toWrite = mergeStudentWrite(current.state, incoming, req.coachingRole.studentId);
+        toWrite = mergeStudentWrite(current.state, incoming, cr.studentId);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
       } else if (role === "coach") {
         // Coaches never alter the coach roster — preserve it verbatim.
@@ -126,7 +151,7 @@ function buildCoachingRouter(deps) {
 
   router.get("/coaching/users", withRole, async (req, res, next) => {
     try {
-      const { role } = req.coachingRole;
+      const { role } = ctx(req).cr;
       if (role !== "admin" && role !== "coach") {
         res.status(404).json({ error: "not_found" }); return;
       }
@@ -142,9 +167,10 @@ function buildCoachingRouter(deps) {
     withRole,
     async (req, res, next) => {
       try {
-        const { role } = req.coachingRole;
+        const { auth, cr } = ctx(req);
+        const role = cr.role;
         const target = req.params.userId;
-        const self = target === req.auth.userId;
+        const self = target === auth.userId;
         if (!(role === "admin" || role === "coach" || (role === "student" && self))) {
           res.status(404).json({ error: "not_found" }); return;
         }
@@ -162,16 +188,16 @@ function buildCoachingRouter(deps) {
  * A student's write may only change THEIR OWN student record — and not
  * its coach assignment. Everything else comes from the server's copy.
  *
- * @param {object} serverState
- * @param {object} incoming
+ * @param {Record<string, any>} serverState
+ * @param {Record<string, any>} incoming
  * @param {string|undefined} studentId
- * @returns {object|null}
+ * @returns {Record<string, any>|null}
  */
 function mergeStudentWrite(serverState, incoming, studentId) {
   if (!studentId) return null;
-  const mineIncoming = (incoming.students || []).find((s) => s && s.id === studentId);
+  const mineIncoming = /** @type {any[]} */ (incoming.students || []).find((s) => s && s.id === studentId);
   if (!mineIncoming) return null;
-  const students = (serverState.students || []).map((s) => {
+  const students = /** @type {any[]} */ (serverState.students || []).map((s) => {
     if (!s || s.id !== studentId) return s;
     return { ...mineIncoming, coachId: s.coachId, userId: s.userId };
   });
@@ -185,9 +211,9 @@ function mergeStudentWrite(serverState, incoming, studentId) {
  * Only the assets a student's own view references — their shelf, their
  * builds' references, their submissions.
  *
- * @param {object} state
- * @param {object|undefined} student
- * @returns {object}
+ * @param {Record<string, any>} state
+ * @param {any} student
+ * @returns {Record<string, unknown>}
  */
 function pickAssets(state, student) {
   if (!student) return {};
