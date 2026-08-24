@@ -18,7 +18,8 @@ import { TABS, hrefForTab, type TabId } from "@/components/analyzer/tabs";
  * "Surfaces" are every signed-in destination in the product: the seven
  * analyzer sections plus Today, and the account-level pages that used
  * to hang off the marketing header (custom builds, meta, community,
- * agent, settings, admin).
+ * coaching, agent, settings, admin). Role-gated entries remain in this
+ * shared model and are filtered before either responsive nav renders.
  * ------------------------------------------------------------------ */
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -33,6 +34,8 @@ export type NavEntry = {
   group: "section" | "utility";
   /** Only rendered when /v1/me reports an admin. */
   adminOnly?: boolean;
+  /** Only rendered for a real admin, linked coach, or linked student. */
+  coachingOnly?: boolean;
   /** Signed-out visitors can reach these (shared community/meta links). */
   publicRoute?: boolean;
 };
@@ -57,6 +60,14 @@ const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Custom builds", icon: Library, group: "utility" },
   { key: "meta", href: "/meta", label: "Meta", icon: Globe2, group: "utility", publicRoute: true },
   { key: "community", href: "/community", label: "Community", icon: Users2, group: "utility", publicRoute: true },
+  {
+    key: "coaching",
+    href: "/coaching",
+    label: "Coaching",
+    icon: CalendarClock,
+    group: "utility",
+    coachingOnly: true,
+  },
   { key: "devices", href: "/devices", label: "Devices", icon: Cpu, group: "utility" },
   { key: "settings", href: "/settings", label: "Settings", icon: SlidersHorizontal, group: "utility" },
   { key: "admin", href: "/admin", label: "Admin", icon: ShieldCheck, group: "utility", adminOnly: true },
@@ -66,25 +77,6 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   TODAY_ENTRY,
   ...SECTION_ENTRIES,
   ...UTILITY_ENTRIES,
-];
-
-// Private, direct-link surfaces use the same desktop rail / mobile tab shell
-// without advertising themselves in either navigation menu. Coaching access
-// remains role-gated by its API; this entry exists only for shell ownership,
-// title resolution, and route protection.
-const PRIVATE_SURFACE_ENTRIES: readonly NavEntry[] = [
-  {
-    key: "coaching",
-    href: "/coaching",
-    label: "Coaching",
-    icon: CalendarClock,
-    group: "utility",
-  },
-];
-
-const ALL_SURFACE_ENTRIES: readonly NavEntry[] = [
-  ...NAV_ENTRIES,
-  ...PRIVATE_SURFACE_ENTRIES,
 ];
 
 /** The bottom tab bar carries the highest-traffic destinations. */
@@ -102,7 +94,7 @@ export const MOBILE_TAB_KEYS: readonly string[] = [
  */
 export function isAppSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return ALL_SURFACE_ENTRIES.some(
+  return NAV_ENTRIES.some(
     (e) => pathname === e.href || pathname.startsWith(`${e.href}/`),
   );
 }
@@ -110,7 +102,7 @@ export function isAppSurfacePath(pathname: string | null): boolean {
 /** Routes whose data is per-user and gated by middleware. */
 export function isProtectedSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return ALL_SURFACE_ENTRIES.some(
+  return NAV_ENTRIES.some(
     (e) =>
       !e.publicRoute &&
       (pathname === e.href || pathname.startsWith(`${e.href}/`)),
@@ -138,7 +130,7 @@ export function matchSurface(pathname: string | null): SurfaceMatch | null {
   }
 
   let best: NavEntry | null = null;
-  for (const entry of ALL_SURFACE_ENTRIES) {
+  for (const entry of NAV_ENTRIES) {
     if (pathname === entry.href || pathname.startsWith(`${entry.href}/`)) {
       if (!best || entry.href.length > best.href.length) best = entry;
     }

@@ -103,9 +103,16 @@ describe("app surface matching", () => {
     }
   });
 
-  it("keeps private coaching inside the app shell without advertising it in navigation", () => {
+  it("keeps Coaching in the shared nav model behind its membership gate", () => {
     expect(isAppSurfacePath("/coaching")).toBe(true);
     expect(matchSurface("/coaching")?.entry.key).toBe("coaching");
-    expect(NAV_ENTRIES.some((entry) => entry.href === "/coaching")).toBe(false);
+    const coaching = NAV_ENTRIES.find((entry) => entry.href === "/coaching");
+    expect(coaching).toMatchObject({
+      key: "coaching",
+      label: "Coaching",
+      group: "utility",
+      coachingOnly: true,
+    });
+    expect(MOBILE_TAB_KEYS).not.toContain("coaching");
   });
 });

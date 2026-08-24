@@ -46,6 +46,10 @@ type MeProbe = {
   games?: { total: number; latest: string | null };
 };
 
+type CoachingMeProbe = {
+  role: "admin" | "coach" | "student" | "none";
+};
+
 export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/app";
   const match = matchSurface(pathname);
@@ -64,9 +68,20 @@ export function AppChrome({ children }: { children: ReactNode }) {
   // rest of the app, so this costs nothing extra and is a no-op for
   // signed-out visitors on /meta and /community.
   const { data: me } = useApi<MeProbe>("/v1/me");
+  // This is the same authoritative role probe used by the Coaching page.
+  // It resolves persisted account links, fails closed for non-members, and
+  // SWR dedupes it when the user opens /coaching itself.
+  const { data: coachingMe } = useApi<CoachingMeProbe>("/v1/coaching/me");
+  const hasCoachingAccess =
+    me?.isAdmin === true ||
+    coachingMe?.role === "admin" ||
+    coachingMe?.role === "coach" ||
+    coachingMe?.role === "student";
 
   const entries = NAV_ENTRIES.filter(
-    (e) => !e.adminOnly || me?.isAdmin === true,
+    (e) =>
+      (!e.adminOnly || me?.isAdmin === true) &&
+      (!e.coachingOnly || hasCoachingAccess),
   );
   const sections = entries.filter((e) => e.group === "section");
   const utilities = entries.filter((e) => e.group === "utility");

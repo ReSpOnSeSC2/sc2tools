@@ -2,9 +2,10 @@
 
 // /coaching — the Coaching Locker, served natively from the site.
 //
-// Quiet by design: no nav link points here. Signed-out visitors are
-// sent to sign-in; signed-in accounts without a coaching role get the
-// Locker's own invite-only screen (the API answers 404 for them).
+// Quiet by design: the shared app navigation exposes this route only to
+// admins and accounts linked as a coach or student. Signed-out visitors are
+// sent to sign-in; direct visits from signed-in accounts without a coaching
+// role get the Locker's own invite-only screen.
 // Role resolution, state, the user directory and per-account agent
 // data all come from /v1/coaching/* with the caller's Clerk JWT.
 

@@ -8,6 +8,9 @@ const harness = vi.hoisted(() => ({
   me: { userId: "u1", isAdmin: false, games: { total: 50, latest: null } } as
     | Record<string, unknown>
     | undefined,
+  coachingMe: { role: "none" } as
+    | { role: "admin" | "coach" | "student" | "none" }
+    | undefined,
   signedIn: true,
 }));
 
@@ -22,7 +25,11 @@ vi.mock("@clerk/nextjs", () => ({
   SignedOut: ({ children }: { children: ReactNode }) =>
     harness.signedIn ? null : <>{children}</>,
 }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: harness.me }) }));
+vi.mock("@/lib/clientApi", () => ({
+  useApi: (path: string) => ({
+    data: path === "/v1/coaching/me" ? harness.coachingMe : harness.me,
+  }),
+}));
 vi.mock("@/components/SyncStatus", () => ({
   SyncStatus: () => <div data-testid="sync-status" />,
 }));
@@ -35,6 +42,7 @@ afterEach(() => {
   cleanup();
   harness.pathname = "/app";
   harness.me = { userId: "u1", isAdmin: false, games: { total: 50, latest: null } };
+  harness.coachingMe = { role: "none" };
   harness.signedIn = true;
 });
 
@@ -68,12 +76,43 @@ describe("AppChrome navigation", () => {
       expect(railHrefs()).toContain(href);
     }
     expect(railHrefs()).not.toContain("/admin");
+    expect(railHrefs()).not.toContain("/coaching");
   });
 
-  it("adds the admin destination only when /v1/me grants it", () => {
+  it("adds Admin and Coaching immediately when /v1/me grants admin access", () => {
     harness.me = { userId: "u1", isAdmin: true, games: { total: 1, latest: null } };
+    harness.coachingMe = undefined;
     render(<AppChrome>content</AppChrome>);
     expect(railHrefs()).toContain("/admin");
+    expect(railHrefs()).toContain("/coaching");
+  });
+
+  it.each(["coach", "student"] as const)(
+    "adds Coaching, but not Admin, for a linked %s account",
+    (role) => {
+      harness.coachingMe = { role };
+      render(<AppChrome>content</AppChrome>);
+
+      expect(railHrefs()).toContain("/coaching");
+      expect(railHrefs()).not.toContain("/admin");
+    },
+  );
+
+  it.each([undefined, { role: "none" as const }])(
+    "keeps Coaching hidden when membership is unresolved or absent",
+    (coachingMe) => {
+      harness.coachingMe = coachingMe;
+      render(<AppChrome>content</AppChrome>);
+      expect(railHrefs()).not.toContain("/coaching");
+    },
+  );
+
+  it("accepts the canonical admin coaching role even before /v1/me resolves", () => {
+    harness.me = undefined;
+    harness.coachingMe = { role: "admin" };
+    render(<AppChrome>content</AppChrome>);
+    expect(railHrefs()).toContain("/coaching");
+    expect(railHrefs()).not.toContain("/admin");
   });
 
   it.each([
@@ -83,6 +122,7 @@ describe("AppChrome navigation", () => {
     ["/community/builds/some-slug", "/community", "Community"],
     ["/meta", "/meta", "Meta"],
     ["/admin/users", "/admin", "Admin"],
+    ["/coaching", "/coaching", "Coaching"],
     ["/app/opponents/1-S2-1-99", "/app/opponents", "Opponents"],
   ])(
     "marks %s active on its rail entry and titles it in the context bar",
@@ -156,6 +196,34 @@ describe("AppChrome mobile navigation", () => {
     ]) {
       expect(sheetHrefs).toContain(href);
     }
+    expect(sheetHrefs).not.toContain("/coaching");
+  });
+
+  it.each(["coach", "student"] as const)(
+    "adds the linked %s Coaching destination to the mobile More sheet",
+    (role) => {
+      harness.pathname = "/coaching";
+      harness.coachingMe = { role };
+      render(<AppChrome>content</AppChrome>);
+
+      fireEvent.click(screen.getByRole("button", { name: /More/ }));
+      const sheet = screen.getByRole("dialog", { name: "More sections" });
+      const coaching = within(sheet).getByRole("link", { name: "Coaching" });
+      expect(coaching.getAttribute("href")).toBe("/coaching");
+      expect(coaching.getAttribute("aria-current")).toBe("page");
+    },
+  );
+
+  it("adds Coaching to the mobile More sheet for admins", () => {
+    harness.me = { userId: "u1", isAdmin: true, games: { total: 1, latest: null } };
+    harness.coachingMe = undefined;
+    render(<AppChrome>content</AppChrome>);
+
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(
+      within(screen.getByRole("dialog", { name: "More sections" }))
+        .getByRole("link", { name: "Coaching" }),
+    ).toBeTruthy();
   });
 
   it("closes the sheet on Escape", () => {
@@ -180,6 +248,7 @@ describe("AppChrome for signed-out visitors", () => {
     expect(screen.getByTestId("app-chrome-main")).toBeTruthy();
 
     expect(railHrefs()).toEqual(["/", "/meta", "/community"]);
+    expect(railHrefs()).not.toContain("/coaching");
 
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("link", { name: "Sign in" })).toBeTruthy();
