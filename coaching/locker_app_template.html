@@ -699,6 +699,7 @@ function focusHTML(st){
     ${it.done?`<p class="sub"><b style="color:var(--ink)">Rank:</b> ${esc(it.rank||"—")} · ${esc(it.region||"")} · ${esc(it.race||"")}<br>
      <b style="color:var(--ink)">Wants most:</b> ${esc(it.goal||"—")}<br>
      <b style="color:var(--ink)">Time:</b> ${esc(it.hours||"?")} h/week<br>
+     ${(it.styles&&it.styles.length)?`<b style="color:var(--ink)">Opponents would call them:</b> ${esc(it.styles.join(", "))}<br>`:""}
      ${it.builds?`<b style="color:var(--ink)">vs Terran:</b> ${esc((it.builds.vsT||[]).join(", ")||"—")}<br>
      <b style="color:var(--ink)">vs Zerg:</b> ${esc((it.builds.vsZ||[]).join(", ")||"—")}<br>
      <b style="color:var(--ink)">vs Protoss:</b> ${esc((it.builds.vsP||[]).join(", ")||"—")}<br>`
@@ -1256,7 +1257,8 @@ function studentHTML(){
   <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and your coach. Questions go in your Discord channel.</p>
  </div>`}
 function intakeHTML(st){
- if(!INTAKE)INTAKE={rank:"",region:"Americas",race:"Protoss",goal:"",hours:"4",builds:{vsT:[],vsZ:[],vsP:[]},question:""};
+ if(!INTAKE)INTAKE={rank:"",region:"Americas",race:"Protoss",goal:"",hours:"4",styles:[],builds:{vsT:[],vsZ:[],vsP:[]},question:""};
+ if(!INTAKE.styles)INTAKE.styles=[];
  const MUS2=[["vsT","vs Terran"],["vsZ","vs Zerg"],["vsP","vs Protoss"]];
  const pre=INTAKE_BUILDS[INTAKE.race]||{};
  const muRow=(k,label)=>{
@@ -1280,6 +1282,8 @@ function intakeHTML(st){
    <div class="choices" style="margin-top:6px">${["Protoss","Terran","Zerg","Random"].map(r=>`<button class="choice ${INTAKE.race===r?"on":""}" onclick="INTAKE.race='${r}';render()">${r}</button>`).join("")}</div></div>
   <div style="margin-top:12px"><label class="sub">What do you want most?</label>
    <div class="choices" style="margin-top:6px">${["Improve game understanding","Learn new builds","Tighten existing builds"].map(g=>`<button class="choice ${INTAKE.goal===g?"on":""}" onclick="INTAKE.goal='${g}';render()">${g}</button>`).join("")}</div></div>
+  <div style="margin-top:12px"><label class="sub">From your opponent's perspective, how would they describe your play? (you can select more than one)</label>
+   <div class="choices" style="margin-top:6px">${["Macro Player","Cheesy Player","Timing Attack Style Player","Tactical Player","Micro Player","Thinking Player","Ape"].map(x=>`<button class="choice ${INTAKE.styles.includes(x)?"on":""}" onclick="(function(){const i=INTAKE.styles.indexOf('${x}');if(i>=0)INTAKE.styles.splice(i,1);else INTAKE.styles.push('${x}');render()})()">${x}</button>`).join("")}</div></div>
   <div style="margin-top:12px"><label class="sub">Realistic practice time per week</label>
    <div class="choices" style="margin-top:6px">${["2","4","10","20+"].map(h=>`<button class="choice ${INTAKE.hours===h?"on":""}" onclick="INTAKE.hours='${h}';render()">${h} hours</button>`).join("")}</div></div>
   <div style="margin-top:14px"><label class="sub" style="font-weight:600;color:var(--ink)">Your current build orders — pick from the lists or type your own; add as many as you actually play. "I don't have one" is a useful answer.</label>
