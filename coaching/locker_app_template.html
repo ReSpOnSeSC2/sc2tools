@@ -150,6 +150,33 @@ canvas.shot{width:100%;border-radius:8px;border:1px solid var(--line);display:bl
 @media(prefers-reduced-motion:reduce){.rec .dot{animation:none}button{transition:none}.empty-primary:hover,.roster-action:hover{transform:none}}
 a{color:var(--blue)}
 .empty{border:1.5px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mute)}
+.creator{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,color-mix(in srgb,var(--panel2) 94%,var(--blue) 6%),var(--panel));padding:18px 19px;margin-bottom:16px}
+.creator::after{content:"";position:absolute;width:220px;height:220px;right:-130px;top:-135px;border-radius:50%;background:var(--blue);opacity:.055;pointer-events:none}
+.creator-head{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.creator-copy{max-width:650px}.creator-copy h2{margin:3px 0 5px;font-size:21px;letter-spacing:-.025em}.creator-copy p{margin:0;color:var(--mute);font-size:13.5px;line-height:1.55}
+.creator-kicker{color:var(--blue);font-family:var(--disp);font-size:10.5px;font-weight:800;letter-spacing:.15em;text-transform:uppercase}
+.creator-actions{display:flex;flex:none;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.spark-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:15px}
+.spark{min-width:0;border:1px solid var(--tline);border-radius:10px;background:color-mix(in srgb,var(--field) 88%,transparent);padding:10px 11px}
+.spark b{display:block;color:var(--ink);font-family:var(--disp);font-size:12px;letter-spacing:.01em}.spark span{display:block;color:var(--mute);font-size:11.5px;line-height:1.42;margin-top:3px}
+.spark-no{display:inline-flex;width:19px;height:19px;align-items:center;justify-content:center;border-radius:6px;background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue);font-family:var(--mono);font-size:9px;font-weight:800;margin-right:5px}
+.author-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:13px;padding-top:13px;border-top:1px solid var(--tline)}
+.author-tools .label{color:var(--mute);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-right:2px}
+.template-filter{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin-top:12px}
+.template-filter button{flex:none;border:1px solid var(--line);border-radius:999px;background:var(--field);color:var(--mute);padding:5px 11px;font-size:12px;font-weight:700}
+.template-filter button.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 18%,var(--field));color:var(--blue)}
+.template-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:4px}
+.template-card{display:flex;min-width:0;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:13px}
+.template-top{display:flex;align-items:center;gap:7px}.mu-badge{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:24px;border:1px solid var(--gold-dim);border-radius:7px;color:var(--gold);font-family:var(--mono);font-size:11px;font-weight:800}
+.template-card h3{margin:8px 0 3px;color:var(--ink);font-size:15px;letter-spacing:-.01em;text-transform:none}.template-card p{margin:0;color:var(--mute);font-size:12px;line-height:1.48}
+.template-meta{color:var(--blue);font-family:var(--mono);font-size:10.5px;margin-left:auto}.template-thinking{margin-top:9px;border-top:1px solid var(--tline);padding-top:8px}.template-thinking summary{cursor:pointer;color:var(--mute);font-size:11.5px;font-weight:700}.template-thinking ul,.template-thinking ol{margin:7px 0 0;padding-left:18px;color:var(--mute);font-size:11.5px}.template-thinking li+li{margin-top:5px}.template-qtype{color:var(--blue);font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;margin-right:4px}
+.template-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:auto;padding-top:11px}
+.idea-drawer{border:1px solid var(--line);border-radius:11px;background:var(--panel2);margin-top:11px;padding:0 12px}.idea-drawer summary{cursor:pointer;color:var(--blue);font-family:var(--disp);font-size:12.5px;font-weight:750;padding:10px 0}.idea-drawer[open] summary{border-bottom:1px solid var(--tline)}
+.idea-body{padding:11px 0}.idea-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.idea{border-left:2px solid var(--gold-dim);padding:2px 8px}.idea b{display:block;font-size:11.5px}.idea span{display:block;color:var(--mute);font-size:11.5px;line-height:1.4;margin-top:2px}
+.guide-sequence{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0 0;padding:0;list-style:none}.guide-sequence li{border:1px solid var(--tline);border-radius:7px;background:var(--field);color:var(--mute);padding:4px 7px;font-family:var(--mono);font-size:9.5px}
+.field-label{display:block;color:var(--mute);font-family:var(--disp);font-size:11.5px;font-weight:700;letter-spacing:.035em;margin-top:10px}.field-label input,.field-label textarea,.field-label select{display:block;width:100%;margin-top:4px;font-family:var(--font-sans,'Hanken Grotesk'),ui-sans-serif,system-ui,sans-serif;font-weight:400;letter-spacing:0}
+.private-draft{margin:7px 0 0;color:var(--mute);font-size:10.5px;white-space:pre-line}.private-draft::before{content:"PRIVATE NOTES";color:var(--blue);font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:.08em;margin-right:6px}
+.frameworks{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.frameworks button{border:1px solid var(--line);border-radius:999px;background:var(--field);color:var(--mute);padding:5px 10px;font-size:11.5px}.frameworks button:hover{border-color:var(--gold-dim);color:var(--gold)}
 .eyebrow2{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);font-weight:700;font-family:var(--disp)}
 .focuscard{border:2px solid var(--gold-dim);border-radius:12px;background:var(--panel2);padding:15px 17px}
 .fbig{font-family:var(--disp);font-size:26px;font-weight:800;line-height:1.12;margin:4px 0 6px;text-wrap:balance}
@@ -160,13 +187,13 @@ a{color:var(--blue)}
 .choice.on{border-color:var(--gold-dim);color:var(--gold);background:#d4a84315}
 .lanegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:9px}
 .lanegrid label{display:block;font-size:11.5px;color:var(--mute);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--disp);font-weight:600}
-@media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}}
+@media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}.spark-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.creator-head{flex-direction:column}.creator-actions{justify-content:flex-start}.template-grid{grid-template-columns:1fr}}
 @media(max-width:540px){.wrap{padding:16px 12px 60px}.bar{padding:9px 12px;gap:8px}.bar .who{display:none}
  .site-tools{margin-bottom:-4px;padding:10px 12px 0}.site-presence{display:none}.side{padding:14px;border-radius:14px}.roster-actions{gap:7px}.roster-empty{min-height:350px;padding:42px 20px;border-radius:14px}.roster-empty p{font-size:13.5px}.empty-assurance{align-items:flex-start}
  .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.tabs button{white-space:nowrap}
  .modal{max-height:94vh;padding:15px 14px;border-radius:12px}.card{padding:13px 14px}
  .item{flex-wrap:wrap}.item .d8{width:100%;justify-content:flex-start}
- .btn{min-height:40px}.fbig{font-size:22px}}
+ .btn{min-height:40px}.fbig{font-size:22px}.creator{padding:15px 14px}.spark-grid,.idea-grid{grid-template-columns:1fr}.creator-actions{width:100%}.creator-actions .btn{flex:1}.template-actions .btn{flex:1}.author-tools{align-items:stretch}.author-tools .label{width:100%}}
 @media(max-width:420px){.roster-actions{grid-template-columns:1fr}.student-list .st{min-width:174px}.roster-empty{min-height:330px;padding-inline:17px}.empty-primary{width:100%}}
 .bcard{border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--panel2);margin-bottom:9px}
 .bcard .nm{font-weight:600}.bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
@@ -184,6 +211,14 @@ details.bo{margin-top:7px}details.bo summary{cursor:pointer;color:var(--blue);fo
 const LIBRARY=__LIBRARY__;
 const INTAKE_BUILDS=__INTAKE_BUILDS__;
 const GAMES=__GAMES__;  /* coach game index from the agent/engine — regenerated each refresh */
+/* Immutable coaching starters. They contain no student data; using one clones fresh
+   block IDs into that student's real worksheet collection. */
+const AUTHORING_KITS=__AUTHORING_KITS__;
+const GUIDE=id=>(AUTHORING_KITS.universalGuides||[]).find(g=>g.id===id)||{prompts:[]};
+const PREMADE_WS=[
+ ...(AUTHORING_KITS.worksheetTemplates||[]).map(t=>({...t,mu:null,summary:t.description,minutes:10,coach:t.coachPrompts||[]})),
+ ...(AUTHORING_KITS.matchupKits||[]).map(k=>({...k.template,mu:k.matchup,summary:k.template.description,minutes:12,coach:k.template.coachPrompts||[],voice:k.voice,assignment:k.assignment}))
+];
 /* Season / date presets — mirrors apps/web/lib/datePresets.ts + seasonCatalog.ts.
    Fallback math only (anchor S67 @ 2026-04-01, ~91d, current clamped to today);
    the site swaps in the SC2Pulse-backed /v1/seasons catalog when ported. */
@@ -483,6 +518,10 @@ async function saveDownload(filename,dataB64OrText,isB64){
   if(e&&(e.code==="rejected_extension"||e.code==="extension_not_enabled")){toast("That file type can't be saved from this view",3000);return}
   toast("Download failed — try again")}}
 /* ---------- shared small components ---------- */
+const COMPOSER_GUIDES={focus:"guide-weekly-focus",worksheet:"guide-worksheet",notes:"guide-session-notes",voice:"guide-voice-memo",video:"guide-video",replay:"guide-replay-note",annotation:"guide-annotated-screenshot",pdf:"guide-pdf-practice-card",customBuild:"guide-custom-build"};
+function ideaDrawer(kind,open){const g=GUIDE(COMPOSER_GUIDES[kind]);if(!g.prompts.length)return"";
+ const supporting=g.helperCopy||g.structure||g.insertableStructure;
+ return `<details class="idea-drawer" ${open?"open":""}><summary>Ideas for your ${esc(String(g.label||kind).toLowerCase())}</summary><div class="idea-body"><div class="idea-grid">${g.prompts.map((p,i)=>`<div class="idea"><b>Question ${String(i+1).padStart(2,"0")}</b><span>${esc(p)}</span></div>`).join("")}</div>${g.recordingGuide?`<ol class="guide-sequence">${g.recordingGuide.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}${supporting?`<p class="private-draft">${esc(supporting)}</p>`:""}</div></details>`}
 function shelfItemHTML(st,it,coach){
  let body="";
  if(it.ty==="voice"&&it.asset)body=`<audio controls preload="none" src="${assetURL(it.asset)}"></audio>`;
@@ -755,6 +794,7 @@ function focusHTML(st){
  return `<div class="grid">
   <div class="card" style="margin-bottom:0"><h3>Set ${esc(st.name)}'s one focus</h3>
    <p class="sub">The student's week leads with exactly this — one focus, one action, one question. Everything else stays behind tabs.</p>
+   ${ideaDrawer("focus",false)}
    <div style="margin-top:10px">
     <input id="fT" type="text" placeholder="One focus — e.g. Build a trustworthy baseline" style="width:100%" value="${esc(f.title||"")}">
     <textarea id="fW" rows="2" placeholder="Why (one or two sentences, optional)" style="margin-top:8px">${esc(f.why||"")}</textarea>
@@ -820,6 +860,7 @@ function customBuildModal(editId,draft){
  const L=editId?S.customBuilds.find(x=>x.id===editId):null;
  CBDRAFT=draft||null;
  openModal(`<h2>${L?"Edit custom build":"New custom build"}</h2>
+  ${ideaDrawer("customBuild",false)}
   <input id="cbName" type="text" placeholder="Name — e.g. PvT — Fast DT into Phoenix" style="width:100%;margin-top:8px" value="${draft?esc(draft.name):L?esc(L.name):""}">
   <div class="row" style="margin-top:8px">
    <select id="cbMu"><option${L&&L.matchup==="PvT"?" selected":""}>PvT</option><option${L&&L.matchup==="PvZ"?" selected":""}>PvZ</option><option${L&&L.matchup==="PvP"?" selected":""}>PvP</option><option${L&&L.matchup==="Any"?" selected":""}>Any</option></select>
@@ -880,26 +921,42 @@ function refUpload(sid,i){
   byId(sid).builds[i].ref=addAsset(f.name,"application/octet-stream",b64);persist()})}
 /* ----- shelf tab (coach) ----- */
 function shelfCoachHTML(st){
- return `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="flex:1;margin:0">Add to ${esc(st.name)}'s shelf</h3>
-   ${S.shelfLibrary.length?`<button class="btn q sm" onclick="shelfLibraryPicker('${st.id}')">🗂 From library (${S.shelfLibrary.length})</button>`:""}</div>
-  <div class="row">
+ return `<section class="creator" aria-labelledby="content-studio-title"><div class="creator-head"><div class="creator-copy"><div class="creator-kicker">Coaching content studio</div><h2 id="content-studio-title">Make the next item earn attention</h2><p>Anchor it in evidence, teach one decision, then give ${esc(st.name)} a concrete way to apply it. The prompts below keep a useful message focused without flattening your coaching voice.</p></div>
+  <div class="creator-actions">${S.shelfLibrary.length?`<button class="btn q sm" onclick="shelfLibraryPicker('${st.id}')">Reusable library · ${S.shelfLibrary.length}</button>`:""}</div></div>
+  <div class="spark-grid" aria-label="Coaching content planning prompts">
+   <div class="spark"><b><span class="spark-no">01</span>Observe</b><span>What actually repeated in the games?</span></div>
+   <div class="spark"><b><span class="spark-no">02</span>Interpret</b><span>Why did it matter before the visible outcome?</span></div>
+   <div class="spark"><b><span class="spark-no">03</span>Coach</b><span>What single cue and response should replace it?</span></div>
+   <div class="spark"><b><span class="spark-no">04</span>Verify</b><span>What will prove the idea transferred?</span></div>
+  </div><div class="author-tools"><span class="label">Choose the best format</span>
    <button class="btn q" onclick="noteModal('${st.id}')">＋ Session notes</button>
    <button class="btn q" onclick="voiceModal('${st.id}')">🎙 Voice memo</button>
    <button class="btn q" onclick="videoModal('${st.id}')">🎬 Video</button>
    <button class="btn q" onclick="annotate(null,'${st.id}')">🖊 Annotated screenshot</button>
    <button class="btn q" onclick="replayShelfModal('${st.id}')">⚔ Replay + note</button>
    <button class="btn q" onclick="pdfModal('${st.id}')">📄 PDF</button>
-  </div></div>
+  </div></section>
  <div class="card"><h3>On the shelf</h3>
   ${(st.shelf||[]).length?st.shelf.map(it=>shelfItemHTML(st,it,true)).join(""):'<div class="empty">Empty — everything you add lands here, newest on top.</div>'}</div>`}
 function pushShelf(sid,item){const st=byId(sid);item.id=uid();item.d=now();st.shelf.unshift(item);persist()}
 function noteModal(sid){openModal(`<h2>Session notes</h2>
+ <p class="sub">Start from a proven structure or write in your own voice. Framework text stays editable.</p>
+ <div class="frameworks" aria-label="Session note frameworks"><button onclick="applyNoteFramework('guide-session-notes')">Session structure</button><button onclick="applyNoteFramework('guide-replay-note')">Replay structure</button><button onclick="applyNoteFramework('guide-pdf-practice-card')">Practice-card structure</button></div>
+ <div class="frameworks" aria-label="Matchup assignment starter"><select id="noteMu" aria-label="Matchup assignment"><option value="">Choose matchup assignment</option>${(AUTHORING_KITS.matchups||[]).map(x=>`<option>${x}</option>`).join("")}</select><button onclick="applyMatchupAssignment()">Add assignment</button></div>
+ ${ideaDrawer("notes",false)}
  <input id="mT" type="text" placeholder="Title — e.g. Session notes · Tuesday" style="width:100%;margin-top:8px">
  <textarea id="mN" rows="7" placeholder="What you covered, the fixes agreed, homework…" style="margin-top:8px"></textarea>
  <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'notes',t:$('mT').value.trim()||'Session notes',n:$('mN').value.trim()});closeModal()">Add to shelf</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+function appendField(id,value){const el=$(id);if(!el)return;el.value=el.value.trim()?el.value.replace(/\s+$/,"")+"\n\n"+value:value;el.focus()}
+function applyGuideToField(guideId,fieldId){const g=GUIDE(guideId),body=g.insertableStructure||g.structure;if(body)appendField(fieldId,body)}
+function applyNoteFramework(id){const g=GUIDE(id),body=g.insertableStructure||g.structure;if(!body)return;const t=$("mT");if(t&&!t.value)t.value=g.label||"Coaching note";appendField("mN",body)}
+function applyMatchupAssignment(){const mu=$("noteMu").value,t=PREMADE_WS.find(x=>x.mu===mu),a=t&&t.assignment;if(!a){toast("Choose a matchup first");return}const title=$("mT");if(title&&!title.value)title.value=a.title;appendField("mN",a.action)}
 /* voice */
 function voiceModal(sid){
  openModal(`<h2>Voice memo</h2><p class="sub">Records in your browser (max 90 s). If the mic is blocked, attach an audio file instead.</p>
+  ${ideaDrawer("voice",true)}
+  <div class="frameworks" aria-label="Matchup voice outline"><select id="voiceMu" aria-label="Matchup for voice outline"><option value="">Any matchup</option>${(AUTHORING_KITS.matchups||[]).map(x=>`<option>${x}</option>`).join("")}</select><button onclick="applyVoiceOutline()">Add speaking outline</button></div>
+  <label class="field-label">Private speaking outline<textarea id="mScript" rows="4" placeholder="Moment: …\nWhy it matters: …\nNext action: …\nFive-game challenge: …"></textarea></label><p class="private-draft">This outline helps you record; it is not shared or saved.</p>
   <div class="row" style="margin-top:10px" id="recRow">
    <button class="btn" id="recBtn" onclick="recToggle('${sid}')">● Start recording</button>
    <span id="recTime" class="sub"></span>
@@ -909,6 +966,8 @@ function voiceModal(sid){
   <input id="mT" type="text" placeholder="Title — e.g. Voice memo · your 4:00 gas" style="width:100%;margin-top:10px">
   <input id="mN" type="text" placeholder="One-line note (optional)" style="width:100%;margin-top:8px">
   <div class="row" style="margin-top:12px"><button class="btn" id="recSave" disabled onclick="voiceSave('${sid}')">Add to shelf</button><button class="btn q" onclick="recCancel();closeModal()">Cancel</button></div>`)}
+function applyVoiceOutline(){const mu=$("voiceMu").value||"the matchup";const t=PREMADE_WS.find(x=>x.mu===mu);const supplied=t&&t.voice&&t.voice.script;
+ const outline=supplied||GUIDE("guide-voice-memo").starterScript;if(outline)appendField("mScript",outline)}
 async function recToggle(sid){
  if(recState&&recState.rec&&recState.rec.state==="recording"){recState.rec.stop();return}
  try{
@@ -943,6 +1002,7 @@ function voiceSave(sid){
 /* video */
 function videoModal(sid){openModal(`<h2>Video</h2>
  <p class="sub">Best: record on Loom/Discord and paste the link. Small files (≤8 MB webm/mp4) can be stored right on the page.</p>
+ ${ideaDrawer("video",false)}
  <input id="mL" type="url" placeholder="https://loom.com/share/…" style="width:100%;margin-top:10px">
  <div class="row" style="margin-top:8px"><label><input type="file" accept="video/mp4,video/webm" style="display:none" onchange="videoFile(this)"><span class="iconbtn" style="cursor:pointer">…or attach video file</span></label><span id="vfName" class="sub"></span></div>
  <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:10px">
@@ -961,6 +1021,7 @@ function videoSave(sid){
 function replayShelfModal(sid){
  openModal(`<h2>Replay + note</h2>
   <p class="sub">If your agent already has the game, link it straight from your SC2 Tools database — no re-upload. Upload the file only when it isn't in the database.</p>
+  ${ideaDrawer("replay",true)}
   <div class="row" style="margin-top:12px">
    <button class="btn" onclick="closeModal();linkReplayModal('${sid}')">🔗 Link from SC2 Tools</button>
    <button class="btn q" onclick="closeModal();uploadReplayShelf('${sid}')">⇪ Upload .SC2Replay</button>
@@ -1025,8 +1086,9 @@ function pkSelect(i){
  const g=window._pkRes[i];const cb=PK.cb;closeModal();
  openModal(`<h2>${esc(g.m)}${g.o?" · vs "+esc(g.o):""}</h2>
   <p class="sub">${esc(g.d)}${g.b?" · "+esc(g.b):""}${g.res?" · "+(g.res==="W"?"Win":"Loss"):""}</p>
+  ${ideaDrawer("replay",false)}
   <input id="mT" type="text" style="width:100%;margin-top:8px" value="${esc(g.m+(g.o&&g.o!=="(uploaded)"?" vs "+g.o:"")+(g.res?" — "+(g.res==="W"?"Win":"Loss"):"")+(g.d?" ("+g.d+")":""))}">
-  <textarea id="mN" rows="3" placeholder="What to watch for, with timestamps…" style="margin-top:8px"></textarea>
+  <textarea id="mN" rows="4" placeholder="Trigger: what was visible?\nChoice: what did they do, and what was the better option?\nConsequence: what changed—and what should transfer next game?" style="margin-top:8px"></textarea>
   <input id="mL" type="url" placeholder="Optional: paste the game's sc2tools.com link" style="width:100%;margin-top:8px">
   <div class="row" style="margin-top:12px"><button class="btn" onclick="pkConfirm()">Add</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`);
  PK.sel=g;PK.cb=cb}
@@ -1037,6 +1099,7 @@ function pkConfirm(){
 function pkPaste(){
  const cb=PK.cb;closeModal();
  openModal(`<h2>Link a replay</h2>
+  ${ideaDrawer("replay",false)}
   <input id="mL" type="url" placeholder="https://…" style="width:100%;margin-top:8px">
   <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:8px">
   <textarea id="mN" rows="3" placeholder="What to watch for…" style="margin-top:8px"></textarea>
@@ -1052,8 +1115,9 @@ function uploadReplayShelf(sid){
   if(!checkBudget(f.size))return;
   const b64=await readFileB64(f);const id=addAsset(f.name,"application/octet-stream",b64);
   openModal(`<h2>Replay + note</h2><p class="sub">${esc(f.name)} · ${kb(f.size)}</p>
+   ${ideaDrawer("replay",false)}
    <input id="mT" type="text" placeholder="Title — e.g. Annotated replay · Ruby Rock PvT" style="width:100%;margin-top:8px">
-   <textarea id="mN" rows="3" placeholder="What to watch for, with timestamps…" style="margin-top:8px"></textarea>
+   <textarea id="mN" rows="4" placeholder="Trigger: what was visible?\nChoice: what did they do, and what was the better option?\nConsequence: what changed—and what should transfer next game?" style="margin-top:8px"></textarea>
    <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'replay',t:$('mT').value.trim()||'${esc(f.name)}',n:$('mN').value.trim(),asset:'${id}'});closeModal()">Add to shelf</button>
    <button class="btn q" onclick="delete S.assets['${id}'];closeModal()">Cancel</button></div>`)})}
 function pdfModal(sid){
@@ -1062,8 +1126,10 @@ function pdfModal(sid){
   if(!checkBudget(f.size))return;
   const b64=await readFileB64(f);const id=addAsset(f.name,"application/pdf",b64);
   openModal(`<h2>PDF</h2><p class="sub">${esc(f.name)} · ${kb(f.size)}</p>
+   ${ideaDrawer("pdf",false)}
+   <div class="frameworks"><button onclick="applyGuideToField('guide-pdf-practice-card','mN')">Insert one-page coaching outline</button></div>
    <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:8px" value="${esc(f.name.replace(/\.pdf$/i,""))}">
-   <input id="mN" type="text" placeholder="One-line note" style="width:100%;margin-top:8px">
+   <textarea id="mN" rows="5" placeholder="What this card teaches, how to use it, and how success will be measured…" style="margin-top:8px"></textarea>
    <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'pdf',t:$('mT').value.trim(),n:$('mN').value.trim(),asset:'${id}'});closeModal()">Add to shelf</button>
    <button class="btn q" onclick="delete S.assets['${id}'];closeModal()">Cancel</button></div>`)})}
 function pickFiles(accept,multiple,cb){
@@ -1072,9 +1138,14 @@ function pickFiles(accept,multiple,cb){
 /* ----- worksheets (coach) ----- */
 const TYNAME={mc:"Multiple choice",long:"Long answer",scale:"Scale 1–10",image:"Annotated image",replay:"Replay request"};
 function wsCoachHTML(st){
- return `<div class="card"><div class="row"><h3 style="flex:1;margin:0">Worksheets for ${esc(st.name)}</h3>
-   ${S.wsTemplates.length?`<button class="btn q" onclick="wsTemplatePicker('${st.id}')">🗂 From template (${S.wsTemplates.length})</button>`:""}
-   <button class="btn" onclick="newWS('${st.id}')">＋ New worksheet</button></div>
+ return `<section class="creator" aria-labelledby="worksheet-studio-title"><div class="creator-head"><div class="creator-copy"><div class="creator-kicker">Worksheet design studio</div><h2 id="worksheet-studio-title">Start with the coaching decision</h2><p>A strong worksheet is not homework for its own sake. It helps ${esc(st.name)} notice a cue, explain a choice, rehearse a response and bring back evidence.</p></div><div class="creator-actions"><button class="btn" onclick="wsTemplatePicker('${st.id}')">Explore template library</button><button class="btn q" onclick="guidedWSModal('${st.id}')">Guided planning</button></div></div>
+  <div class="spark-grid" aria-label="Worksheet planning prompts">
+   <div class="spark"><b><span class="spark-no">01</span>Evidence</b><span>What repeated across real games?</span></div>
+   <div class="spark"><b><span class="spark-no">02</span>Decision</b><span>Which cue should change their choice?</span></div>
+   <div class="spark"><b><span class="spark-no">03</span>Practice</b><span>What rep isolates that skill?</span></div>
+   <div class="spark"><b><span class="spark-no">04</span>Proof</b><span>What would demonstrate transfer?</span></div>
+  </div><div class="author-tools"><span class="label">Ways to begin</span><button class="btn q sm" onclick="wsTemplatePicker('${st.id}')">${(AUTHORING_KITS.matchups||[]).length} matchup decision labs + coaching starters</button><button class="btn q sm" onclick="newWS('${st.id}')">Start blank</button></div></section>
+ <div class="card"><div class="row"><h3 style="flex:1;margin:0">Drafts &amp; assignments for ${esc(st.name)}</h3></div>
   ${(st.worksheets||[]).length?st.worksheets.map(w=>`<div class="item" style="margin-top:10px"><div class="icon notes">WS</div>
    <div class="bd"><div class="t">${esc(w.title)}</div><div class="n">${w.blocks.length} questions · ${w.state==="draft"?"draft":w.state==="sent"?"waiting on "+esc(st.name):"submitted "+fmtD(w.submittedAt)}</div></div>
    <div class="d8">
@@ -1085,7 +1156,7 @@ function wsCoachHTML(st){
     <button class="btn sm q" onclick="byId('${st.id}').worksheets=byId('${st.id}').worksheets.filter(x=>x.id!=='${w.id}');persist()">delete</button></div></div>`).join("")
   :'<div class="empty" style="margin-top:10px">No worksheets yet. Build one: multiple choice, long answers, scales, replay requests, and screenshots you draw on.</div>'}</div>
  ${editingWS?wsEditorHTML(st):""}`}
-let editingWS=null,annoTarget=null;
+let editingWS=null,annoTarget=null,COACH_BRIEFS={};
 function newWS(sid){const st=byId(sid);
  const w={id:uid(),title:"Check-in — "+st.name,blocks:[],state:"draft",answers:{}};
  st.worksheets.unshift(w);editingWS=w.id;render()}
@@ -1095,24 +1166,58 @@ function saveWSTemplate(sid,wid){
  S.wsTemplates.unshift({id:uid(),title:w.title,blocks:JSON.parse(JSON.stringify(w.blocks))});
  persist()}
 function wsTemplatePicker(sid){
- openModal(`<h2>Worksheet templates</h2>
-  <p class="sub">Saved once, reusable for any student. Using one creates a fresh editable draft — answers never carry over.</p>
+ wsTemplatePickerFiltered(sid,"")}
+function wsTemplatePickerFiltered(sid,filter){
+ const groups=["","Core",...(AUTHORING_KITS.matchups||[])];
+ const system=PREMADE_WS.filter(t=>!filter||(filter==="Core"?!t.mu:t.mu===filter));
+ openModal(`<h2>Worksheet template library</h2>
+  <p class="sub">Production-ready starting points, never auto-sent. <b>Use as-is</b> adds an unchanged draft; <b>Customize</b> opens a fresh copy in the editor.</p>
+  <div class="template-filter" aria-label="Filter system templates">${groups.map(g=>`<button class="${filter===g?"on":""}" aria-pressed="${filter===g}" onclick="wsTemplatePickerFiltered('${sid}','${g}')">${g||"All"}</button>`).join("")}</div>
+  <div class="template-grid">${system.map(t=>`<article class="template-card"><div class="template-top"><span class="mu-badge">${esc(t.mu||"CORE")}</span><span class="template-meta">${t.blocks.length} prompts · ~${t.minutes||10} min</span></div><h3>${esc(t.title)}</h3><p>${esc(t.summary||t.description||"")}</p>
+   <details class="template-thinking"><summary>Preview ${t.blocks.length} student questions</summary><ol>${t.blocks.map(b=>`<li><span class="template-qtype">${esc(TYNAME[b.ty]||b.ty)}</span>${esc(b.q)}</li>`).join("")}</ol></details>
+   ${(t.coach||[]).length?`<details class="template-thinking"><summary>Private coach questions</summary><ul>${t.coach.map(q=>`<li>${esc(q)}</li>`).join("")}</ul></details>`:""}
+   <div class="template-actions"><button class="btn sm q" onclick="newWSFromPremade('${sid}','${t.id}',false)">Use as-is</button><button class="btn sm" onclick="newWSFromPremade('${sid}','${t.id}',true)">Customize</button></div></article>`).join("")||'<div class="empty">No system templates in this filter.</div>'}</div>
+  <h3 style="margin-top:18px">Your templates</h3><p class="sub">Templates you saved from previous worksheets remain private to this Locker.</p>
   ${S.wsTemplates.map(t=>`<div class="item"><div class="icon notes">TPL</div>
    <div class="bd"><div class="t">${esc(t.title)}</div><div class="n">${t.blocks.length} questions</div></div>
-   <div class="d8"><button class="btn sm" onclick="newWSFromTemplate('${sid}','${t.id}')">use</button>
-    <button class="btn sm q" onclick="S.wsTemplates=S.wsTemplates.filter(x=>x.id!=='${t.id}');persist()">delete</button></div></div>`).join("")||'<div class="empty">No templates yet — hit “save as template” on any worksheet.</div>'}
-  <button class="btn q" style="margin-top:8px" onclick="closeModal()">Close</button>`)}
-function newWSFromTemplate(sid,tid){
+   <div class="d8"><button class="btn sm q" onclick="newWSFromTemplate('${sid}','${t.id}',false)">Use as-is</button><button class="btn sm" onclick="newWSFromTemplate('${sid}','${t.id}',true)">Customize</button>
+    <button class="btn sm q" onclick="S.wsTemplates=S.wsTemplates.filter(x=>x.id!=='${t.id}');persist()">delete</button></div></div>`).join("")||'<div class="empty">No personal templates yet — save any worksheet here when you create one worth reusing.</div>'}
+  <button class="btn q" style="margin-top:10px" onclick="closeModal()">Close</button>`)}
+function freshTemplateBlocks(blocks){return JSON.parse(JSON.stringify(blocks||[])).map(b=>({...b,id:uid()}))}
+function newWSFromPremade(sid,tid,customize){
+ const t=PREMADE_WS.find(x=>x.id===tid);if(!t)return;
+ const w={id:uid(),title:t.title,blocks:freshTemplateBlocks(t.blocks),state:"draft",answers:{}};
+ byId(sid).worksheets.unshift(w);editingWS=customize?w.id:null;closeModal();persist();toast(customize?"Template copied — make it yours":"Unchanged draft added — review, then send")}
+function newWSFromTemplate(sid,tid,customize){
  const t=S.wsTemplates.find(x=>x.id===tid);if(!t)return;
- const blocks=JSON.parse(JSON.stringify(t.blocks)).map(b=>({...b,id:uid()}));
- byId(sid).worksheets.unshift({id:uid(),title:t.title,blocks,state:"draft",answers:{}});
- editingWS=byId(sid).worksheets[0].id;closeModal();render();toast("Draft created from template")}
+ const w={id:uid(),title:t.title,blocks:freshTemplateBlocks(t.blocks),state:"draft",answers:{}};
+ byId(sid).worksheets.unshift(w);editingWS=customize?w.id:null;closeModal();persist();toast(customize?"Template copied — make it yours":"Unchanged draft added — review, then send")}
+function guidedWSModal(sid){
+ openModal(`<h2>Plan before you build</h2><p class="sub">These are private, in-memory coach notes. They stay beside this draft for the current visit only and are never sent to the student or saved in their worksheet.</p>
+  <label class="field-label">Matchup<select id="gbMu"><option>Any matchup</option>${(AUTHORING_KITS.matchups||[]).map(x=>`<option>${x}</option>`).join("")}</select></label>
+  <label class="field-label">Evidence · What moment or pattern keeps repeating?<textarea id="gbEvidence" rows="2" placeholder="Replay, timestamp, or observable pattern…"></textarea></label>
+  <label class="field-label">Decision · What cue should change the student's choice?<textarea id="gbDecision" rows="2" placeholder="When they see…, they should… because…"></textarea></label>
+  <label class="field-label">Practice · What constrained repetition isolates it?<textarea id="gbPractice" rows="2" placeholder="Build, matchup, number of reps, or deliberate constraint…"></textarea></label>
+  <label class="field-label">Proof · What would show that the idea transferred?<textarea id="gbProof" rows="2" placeholder="A behavior, answer, replay moment, or process metric…"></textarea></label>
+  <div class="row" style="margin-top:13px"><button class="btn" onclick="startGuidedWS('${sid}')">Keep plan beside a draft</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+function startGuidedWS(sid){
+ const mu=$("gbMu").value,e=$("gbEvidence").value.trim(),d=$("gbDecision").value.trim(),p=$("gbPractice").value.trim(),proof=$("gbProof").value.trim();
+ if(!e&&!d&&!p&&!proof){toast("Add at least one coaching thought");return}
+ const w={id:uid(),title:(mu==="Any matchup"?"Coaching":""+mu)+" decision check-in",blocks:[
+  {id:uid(),ty:"long",q:"Describe the moment we discussed. Which facts were confirmed, and which parts were assumptions?"},
+  {id:uid(),ty:"long",q:"What visible cue should guide your next decision, and what will you do when you see it?"},
+  {id:uid(),ty:"scale",q:"Rate your confidence from 1–10: I can recognize this situation early enough to respond deliberately."},
+  {id:uid(),ty:"replay",q:"Attach representative games from your next practice set. Mark the timestamp where you recognized—or missed—the cue."}],state:"draft",answers:{}};
+ byId(sid).worksheets.unshift(w);COACH_BRIEFS[w.id]={mu,e,d,p,proof};editingWS=w.id;closeModal();persist()}
+function coachBriefHTML(wid){const b=COACH_BRIEFS[wid];if(!b)return"";const rows=[["Evidence",b.e],["Decision",b.d],["Practice",b.p],["Proof",b.proof]].filter(x=>x[1]);
+ return `<details class="idea-drawer" open><summary>Private coach plan · ${esc(b.mu)}</summary><div class="idea-body"><div class="idea-grid">${rows.map(x=>`<div class="idea"><b>${x[0]}</b><span>${esc(x[1])}</span></div>`).join("")}</div><p class="private-draft">In memory for this visit only. It will not appear in the student's worksheet.</p></div></details>`}
 function wsEditorHTML(st){
  const w=(st.worksheets||[]).find(x=>x.id===editingWS);if(!w)return "";
  const ro=w.state!=="draft";
  return `<div class="card"><div class="row"><h3 style="flex:1;margin:0">${ro?"Preview (already sent)":"Editing"} · ${esc(w.title)}</h3>
    ${ro?"":`<button class="btn" onclick="sendWS('${st.id}','${w.id}')">Send to ${esc(st.name)}</button>`}
-   <button class="btn q" onclick="editingWS=null;render()">close</button></div>
+   ${ro?"":`<button class="btn q" onclick="saveWSDraft('${st.id}','${w.id}')">Save draft</button>`}<button class="btn q" onclick="closeWSEditor('${st.id}','${w.id}')">close</button></div>
+  ${coachBriefHTML(w.id)}${ideaDrawer("worksheet",false)}
   ${ro?"":`<input type="text" value="${esc(w.title)}" style="width:100%;margin:10px 0" onchange="w_('${st.id}','${w.id}').title=this.value;persistSoft()">`}
   <div style="margin-top:10px">
   ${w.blocks.map((b,i)=>{
@@ -1131,6 +1236,8 @@ function wsEditorHTML(st){
   </div>${ro?"":'<p class="sub" style="margin-top:8px">Drafts save when you hit Send (or leave the editor).</p>'}</div>`}
 const w_=(sid,wid)=>byId(sid).worksheets.find(x=>x.id===wid);
 let softTimer=null;function persistSoft(){/* draft edits batch on send/close; keep in memory */}
+async function saveWSDraft(sid,wid){if(!w_(sid,wid))return;await persist();toast("Draft saved")}
+function closeWSEditor(sid,wid){editingWS=null;persist()}
 function addB(sid,wid,ty){const w=w_(sid,wid);
  const b={id:uid(),ty,q:ty==="mc"?"New multiple-choice question":ty==="long"?"New long-form question":ty==="scale"?"Rate 1–10:":ty==="image"?"What do you see in this frame?":"Play the assigned build; attach the games listed below."};
  if(ty==="mc")b.opts=["Option A","Option B"];if(ty==="image")b.img=null;
@@ -1138,6 +1245,9 @@ function addB(sid,wid,ty){const w=w_(sid,wid);
 function mvB(sid,wid,i,d){const w=w_(sid,wid);const j=i+d;if(j<0||j>=w.blocks.length)return;[w.blocks[i],w.blocks[j]]=[w.blocks[j],w.blocks[i]];render()}
 function sendWS(sid,wid){const w=w_(sid,wid);
  if(!w.blocks.length){toast("Add at least one question");return}
+ if(!String(w.title||"").trim()){toast("Give the worksheet a title before sending");return}
+ const empty=w.blocks.findIndex(b=>!String(b.q||"").trim());if(empty>=0){toast("Question "+(empty+1)+" needs text before sending");return}
+ const badMc=w.blocks.findIndex(b=>b.ty==="mc"&&(b.opts||[]).filter(o=>String(o||"").trim()).length<2);if(badMc>=0){toast("Multiple-choice question "+(badMc+1)+" needs at least two options");return}
  w.state="sent";editingWS=null;persist()}
 function reviewWS(sid,wid){const st=byId(sid);const w=w_(sid,wid);
  openModal(`<h2>${esc(w.title)}</h2><p class="sub">answers from ${esc(st.name)} · ${fmtD(w.submittedAt)}</p>
@@ -1157,6 +1267,7 @@ function annotate(target,shelfSid){
  annoTarget=target||{shelf:shelfSid};
  openModal(`<h2>Annotate a screenshot</h2>
   <p class="sub">Upload or paste (Ctrl+V) any screenshot — a game frame, a replay stats screen — then draw. The student sees exactly your markup.</p>
+  ${ideaDrawer("annotation",false)}
   <div class="annotools">
    <label><input type="file" accept="image/*" style="display:none" onchange="annoLoad(this.files[0])"><span>⇪ upload image</span></label>
    <button class="on" data-t="circle" onclick="annoTool('circle',this)">◯ circle</button>

@@ -14,6 +14,7 @@ import argparse, json, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "locker_app_template.html")
+AUTHORING_KITS = os.path.join(HERE, "authoring_kits.json")
 SITE_OUT = os.path.normpath(os.path.join(HERE, "..", "apps", "web", "public", "coaching", "locker-site.html"))
 BUILD_DEFS = os.path.normpath(os.path.join(HERE, "..", "apps", "replay-engine", "core", "build_definitions.py"))
 EXCL = ("Unclassified", "Game Too Short", "Standard Play", "Comp", "Macro Transition")
@@ -84,8 +85,12 @@ def main():
     t = open(TEMPLATE, encoding="utf-8").read()
     lib = esc(json.dumps(library(), separators=(",", ":")))
     ib = esc(json.dumps(intake_builds(), separators=(",", ":")))
+    authoring_kits = esc(json.dumps(json.load(open(AUTHORING_KITS, encoding="utf-8")), separators=(",", ":")))
 
-    base = t.replace("__LIBRARY__", lib).replace("__INTAKE_BUILDS__", ib).replace("__CUR_SEASON__", a.season)
+    base = (t.replace("__LIBRARY__", lib)
+             .replace("__INTAKE_BUILDS__", ib)
+             .replace("__AUTHORING_KITS__", authoring_kits)
+             .replace("__CUR_SEASON__", a.season))
 
     # site build: no embedded game index — the API is live
     os.makedirs(os.path.dirname(SITE_OUT), exist_ok=True)
