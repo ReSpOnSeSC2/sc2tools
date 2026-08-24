@@ -175,7 +175,10 @@ def test_accepted_game_journals_original_before_success_callback(
 
     class _ArchiveApi(_StubApi):
         def upload_replay_file(self, game_id: str, path: Path) -> bool:
-            assert path.name == "archive.SC2Replay"
+            # The journal canonicalizes path identity with ``normcase``.
+            # Depending on which archive-lane scheduling path wins, Windows
+            # may therefore hydrate this task with lowercase display casing.
+            assert path.samefile(job.file_path)
             events.append(f"archive:{game_id}")
             return True
 
