@@ -3,17 +3,17 @@
 <style id="css">
 @scope ([data-coaching-locker]) {
 :scope{
- --bg:#0a0d14;--panel:#101622;--panel2:#141c2b;--line:#202b3e;--ink:#d9e2f0;--mute:#7f8ca3;
- --gold:#d4a843;--gold-dim:#8a6f2f;--blue:#5aa7ff;--win:#43b581;--loss:#e06c6c;
- --field:#0d1320;--bar:#0c1019;--tline:#182234;color-scheme:dark;
- --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;--disp:'Rajdhani','IBM Plex Sans',sans-serif}
+ --bg:#06090e;--panel:#0c1017;--panel2:#111720;--line:#2c3848;--strong:#5c697c;--ink:#e7edf0;--mute:#9fadb9;
+ --gold:#f5b84a;--gold-dim:#8b692d;--blue:#3ce0d6;--accent:#157d8c;--accent-hover:#1f9eaf;--win:#3ec884;--loss:#ff6b6b;
+ --field:#111720;--bar:#0c1017;--tline:#1c2431;--hard:3px 3px 0 rgba(60,224,214,.22);--dot:rgba(150,200,205,.05);color-scheme:dark;
+ --mono:ui-monospace,SFMono-Regular,Consolas,monospace;--disp:var(--font-display,'Bricolage Grotesque'),ui-sans-serif,system-ui,sans-serif}
 :scope[data-lk="light"]{
- --bg:#eef1f6;--panel:#ffffff;--panel2:#f4f6fb;--line:#d8deea;--ink:#1b2331;--mute:#5c6b80;
- --gold:#8a6a14;--gold-dim:#b08d2e;--blue:#2464c4;--win:#1d8f5c;--loss:#c04747;
- --field:#fbfcfe;--bar:#ffffff;--tline:#e7ebf3;color-scheme:light}
+ --bg:#f4f6fa;--panel:#ffffff;--panel2:#f9fbfe;--line:#c5cddd;--strong:#0d121a;--ink:#0d121a;--mute:#3f4856;
+ --gold:#bf7c12;--gold-dim:#9a6818;--blue:#0e7d8c;--accent:#0e7d8c;--accent-hover:#096875;--win:#1c9c56;--loss:#d24449;
+ --field:#f9fbfe;--bar:#ffffff;--tline:#dde2ec;--hard:3px 3px 0 rgba(13,18,26,.9);--dot:rgba(15,30,45,.06);color-scheme:light}
 *,*::before,*::after{box-sizing:border-box}:scope{margin:0}
-:scope{background:var(--bg);color:var(--ink);font:14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;min-height:60vh}
-button{font:inherit;cursor:pointer}
+:scope{background-color:var(--bg);background-image:radial-gradient(var(--dot) 1.4px,transparent 1.5px);background-size:22px 22px;color:var(--ink);font:14.5px/1.55 var(--font-sans,'Hanken Grotesk'),ui-sans-serif,system-ui,sans-serif;min-height:60vh}
+button{font:inherit;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s,transform .15s}
 input,textarea,select{font:inherit;background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 10px}
 input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
 textarea{width:100%;resize:vertical}
@@ -25,25 +25,60 @@ h1,h2,h3{font-family:var(--disp)}
 .bar .sp{margin-left:auto}
 .iconbtn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:7px;padding:5px 12px;font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.05em}
 .iconbtn:hover{color:var(--ink)}
-.wrap{max-width:1120px;margin:0 auto;padding:22px 18px 70px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px 19px;margin-bottom:15px}
+.site-tools{display:flex;max-width:1180px;align-items:center;justify-content:flex-end;gap:8px;margin:0 auto -10px;padding:12px 18px 0}
+.site-presence{display:inline-flex;min-height:34px;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--panel);color:var(--mute);font-size:12px}
+.site-presence-dot{width:7px;height:7px;border-radius:99px;background:var(--win);box-shadow:0 0 0 3px color-mix(in srgb,var(--win) 14%,transparent)}
+.site-tools .iconbtn{min-height:34px;border-radius:999px;background:var(--panel);padding:5px 13px;letter-spacing:0}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 18px 76px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px}
 .card h2{margin:0 0 4px;font-size:20px;font-weight:700}
 .card h3{margin:0 0 8px;font-size:12.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--blue);font-weight:600}
 .sub{color:var(--mute);font-size:13px}
 .pill{display:inline-block;font-family:var(--disp);font-weight:600;font-size:11.5px;letter-spacing:.06em;border:1px solid var(--line);color:var(--mute);border-radius:4px;padding:1px 8px;margin-right:5px;vertical-align:middle}
 .pill.g{color:var(--gold);border-color:var(--gold-dim)}.pill.b{color:var(--blue);border-color:#2c4a75}
 .pill.w{color:var(--win);border-color:#2b5643}.pill.r{color:var(--loss);border-color:#5c3434}
-.btn{background:none;border:1px solid var(--gold-dim);color:var(--gold);border-radius:7px;padding:7px 15px;font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:13.5px}
-.btn:hover{background:#d4a84314}.btn:disabled{opacity:.45;cursor:default}
+.btn{background:none;border:1px solid var(--gold-dim);color:var(--gold);border-radius:999px;padding:8px 16px;font-family:var(--disp);font-weight:700;letter-spacing:-.01em;font-size:13.5px}
+.btn:hover{background:#f5b84a14}.btn:disabled{opacity:.45;cursor:default}
 .btn.q{border-color:var(--line);color:var(--mute)}.btn.q:hover{color:var(--ink)}
 .btn.sm{padding:3px 10px;font-size:12px}
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-@media(max-width:840px){.grid{grid-template-columns:1fr}.coach{grid-template-columns:1fr}.side{display:flex;overflow-x:auto;gap:7px}.side .st{min-width:150px}}
-.coach{display:grid;grid-template-columns:215px 1fr;gap:18px}
-.side .st{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--ink);margin-bottom:7px}
-.side .st.on{border-color:var(--gold-dim);background:var(--panel2)}
-.side .st .nm{font-weight:600}.side .st .mu{color:var(--mute);font-size:12px}
+.coach{display:grid;grid-template-columns:minmax(240px,268px) minmax(0,1fr);gap:20px;align-items:start}
+.side{position:sticky;top:74px;background:var(--panel);border:2px solid var(--strong);border-radius:16px;padding:16px;box-shadow:var(--hard);min-width:0}
+.roster-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:2px 2px 14px;border-bottom:1px solid var(--tline)}
+.roster-kicker{color:var(--blue);font-family:var(--disp);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.roster-title{margin:2px 0 0;font-family:var(--disp);font-size:21px;font-weight:800;letter-spacing:-.03em;line-height:1.2}
+.roster-count{display:inline-flex;min-width:30px;height:30px;align-items:center;justify-content:center;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--mute);font-family:var(--mono);font-size:12px;font-weight:700}
+.student-list{display:flex;flex-direction:column;gap:8px;padding:14px 0}
+.student-list.is-empty{display:none}.student-list.is-empty+.roster-actions{border-top:0}
+.side .st{display:flex;width:100%;min-width:0;align-items:center;gap:10px;text-align:left;background:transparent;border:1px solid transparent;border-radius:11px;padding:9px 10px;color:var(--ink);margin:0}
+.side .st:hover{background:var(--panel2);border-color:var(--line)}
+.side .st.on{border-color:var(--accent);background:var(--panel2);box-shadow:inset 3px 0 0 var(--blue)}
+.student-avatar{display:flex;width:34px;height:34px;flex:none;align-items:center;justify-content:center;border-radius:9px;background:var(--panel2);border:1px solid var(--line);color:var(--blue);font-family:var(--disp);font-size:12px;font-weight:800;letter-spacing:.02em}
+.student-copy{min-width:0;flex:1}.side .st .nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--disp);font-weight:700;line-height:1.25}.side .st .mu{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mute);font-size:12px;margin-top:2px}
+.student-chevron{color:var(--mute);font-size:18px;line-height:1}.side .st.on .student-chevron{color:var(--blue)}
+.roster-actions{display:grid;grid-template-columns:1fr;gap:8px;padding-top:14px;border-top:1px solid var(--tline)}
+.roster-action{display:flex;width:100%;align-items:center;gap:11px;text-align:left;border:1px solid var(--line);border-radius:11px;padding:10px 11px;background:var(--panel2);color:var(--ink)}
+.roster-action:hover{border-color:var(--strong);transform:translateY(-1px)}
+.roster-action.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+.roster-action.primary:hover{border-color:var(--accent-hover);background:var(--accent-hover)}
+.roster-action-icon{display:flex;width:32px;height:32px;flex:none;align-items:center;justify-content:center;border-radius:9px;background:#ffffff14;border:1px solid #ffffff24}
+.roster-action:not(.primary) .roster-action-icon{background:var(--panel);border-color:var(--line);color:var(--blue)}
+.roster-action svg,.empty-hero-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.roster-action .nm{display:block;font-family:var(--disp);font-weight:750;line-height:1.2}.roster-action .mu{display:block;font-size:11.5px;opacity:.78;margin-top:2px}
+.coach-main{min-width:0}
+.roster-empty{position:relative;isolation:isolate;display:flex;min-height:430px;overflow:hidden;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:var(--panel);border:2px solid var(--strong);border-radius:16px;padding:54px 28px;box-shadow:var(--hard)}
+.roster-empty::before{content:"";position:absolute;z-index:-1;width:360px;height:360px;border-radius:999px;background:radial-gradient(circle,var(--blue) 0,transparent 68%);opacity:.07;top:-190px;right:-100px;pointer-events:none}
+.empty-hero-icon{display:flex;width:58px;height:58px;align-items:center;justify-content:center;border-radius:17px;background:var(--panel2);border:1px solid var(--line);color:var(--blue);box-shadow:0 0 0 7px color-mix(in srgb,var(--blue) 8%,transparent)}
+.empty-hero-icon svg{width:27px;height:27px}
+.empty-eyebrow{margin-top:22px;color:var(--blue);font-family:var(--disp);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.roster-empty h2{max-width:520px;margin:7px 0 0;font-family:var(--disp);font-size:clamp(25px,3.2vw,36px);font-weight:800;letter-spacing:-.04em;line-height:1.08;text-wrap:balance}
+.roster-empty p{max-width:540px;margin:13px 0 0;color:var(--mute);font-size:14.5px;line-height:1.65;text-wrap:balance}
+.empty-primary{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:8px;margin-top:24px;border:2px solid var(--strong);border-radius:999px;padding:9px 20px;background:var(--accent);color:#fff;box-shadow:var(--hard);font-family:var(--disp);font-weight:800}
+.empty-primary:hover{background:var(--accent-hover);transform:translate(-1px,-1px);box-shadow:4px 4px 0 color-mix(in srgb,var(--strong) 80%,transparent)}
+.empty-primary svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.empty-assurance{display:flex;align-items:center;gap:7px;margin-top:17px;color:var(--mute);font-size:11.5px}.empty-assurance svg{width:14px;height:14px;color:var(--win);stroke:currentColor;fill:none;stroke-width:2}
+@media(max-width:840px){.grid{grid-template-columns:1fr}.coach{grid-template-columns:1fr;gap:16px}.side{position:static}.student-list{flex-direction:row;overflow-x:auto;scroll-snap-type:x proximity;margin:0 -4px;padding:14px 4px}.student-list .st{min-width:190px;scroll-snap-align:start}.roster-actions{grid-template-columns:1fr 1fr}.roster-empty{min-height:370px}}
 .tabs{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
 .tabs button{background:none;border:1px solid var(--line);border-radius:7px;color:var(--mute);padding:6px 14px;font-family:var(--disp);font-weight:600;letter-spacing:.05em}
 .tabs button.on{color:var(--gold);border-color:var(--gold-dim);background:var(--panel)}
@@ -112,7 +147,7 @@ canvas.shot{width:100%;border-radius:8px;border:1px solid var(--line);display:bl
 .rec{display:inline-flex;align-items:center;gap:8px}
 .rec .dot{width:10px;height:10px;border-radius:50%;background:var(--loss);animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.25}}
-@media(prefers-reduced-motion:reduce){.rec .dot{animation:none}}
+@media(prefers-reduced-motion:reduce){.rec .dot{animation:none}button{transition:none}.empty-primary:hover,.roster-action:hover{transform:none}}
 a{color:var(--blue)}
 .empty{border:1.5px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mute)}
 .eyebrow2{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);font-weight:700;font-family:var(--disp)}
@@ -127,10 +162,12 @@ a{color:var(--blue)}
 .lanegrid label{display:block;font-size:11.5px;color:var(--mute);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--disp);font-weight:600}
 @media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}}
 @media(max-width:540px){.wrap{padding:16px 12px 60px}.bar{padding:9px 12px;gap:8px}.bar .who{display:none}
+ .site-tools{margin-bottom:-4px;padding:10px 12px 0}.site-presence{display:none}.side{padding:14px;border-radius:14px}.roster-actions{gap:7px}.roster-empty{min-height:350px;padding:42px 20px;border-radius:14px}.roster-empty p{font-size:13.5px}.empty-assurance{align-items:flex-start}
  .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.tabs button{white-space:nowrap}
  .modal{max-height:94vh;padding:15px 14px;border-radius:12px}.card{padding:13px 14px}
  .item{flex-wrap:wrap}.item .d8{width:100%;justify-content:flex-start}
  .btn{min-height:40px}.fbig{font-size:22px}}
+@media(max-width:420px){.roster-actions{grid-template-columns:1fr}.student-list .st{min-width:174px}.roster-empty{min-height:330px;padding-inline:17px}.empty-primary{width:100%}}
 .bcard{border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--panel2);margin-bottom:9px}
 .bcard .nm{font-weight:600}.bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
 details.bo{margin-top:7px}details.bo summary{cursor:pointer;color:var(--blue);font-size:13px}
@@ -491,21 +528,30 @@ function addShelfFromLibrary(sid,tid){
  c.id=uid();c.d=now();byId(sid).shelf.unshift(c);closeModal();persist()}
 const byId=id=>S.students.find(s=>s.id===id);
 /* ---------- COACH ---------- */
+function studentInitials(name){
+ const words=String(name||"").trim().split(/\s+/).filter(Boolean);
+ return (words.length>1?words[0][0]+words[words.length-1][0]:(words[0]||"?").slice(0,2)).toUpperCase()
+}
 function coachHTML(){
  if(!coachOK)return gateHTML();
  const mine=myStudents();
  if((!curStudent||!mine.some(x=>x.id===curStudent))&&mine.length)curStudent=mine[0].id;
  const st=mine.some(x=>x.id===curStudent)?byId(curStudent):null;
  return `<div class="wrap"><div class="coach">
-  <div class="side">
-   <h3 style="margin:0 0 9px;font-family:var(--disp);color:var(--blue);font-size:12.5px;letter-spacing:.13em">ROSTER · ${myStudents().length}</h3>
-   ${myStudents().map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()">
-     <div class="nm">${esc(s.name)}</div><div class="mu">${esc(s.note||"")}${isAdmin()&&s.coachId!==meCoach?` · <span style="color:var(--blue)">${esc(coachName(s.coachId))}</span>`:""}${(s.submissions||[]).filter(x=>!x.exported).length?` · <span style="color:var(--gold)">${(s.submissions||[]).filter(x=>!x.exported).length} new replays</span>`:""}</div></button>`).join("")}
-   <button class="st" onclick="addStudentModal()"><div class="nm" style="color:var(--gold)">+ Add student</div></button>
-   <button class="st" onclick="adminModal()"><div class="nm" style="color:var(--mute)">⚙ Admin</div><div class="mu">coaches & students</div></button>
-  </div>
-  <div>
-  ${!st?`<div class="empty">Add your first student to begin.</div>`:`
+  <aside class="side" aria-label="Student roster">
+   <div class="roster-head"><div><div class="roster-kicker">Coaching</div><div class="roster-title">Your roster</div></div><span class="roster-count" aria-label="${mine.length} student${mine.length===1?"":"s"}">${mine.length}</span></div>
+   <div class="student-list ${mine.length?"":"is-empty"}">
+    ${mine.map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()" aria-pressed="${s.id===curStudent}">
+     <span class="student-avatar" aria-hidden="true">${esc(studentInitials(s.name))}</span><span class="student-copy">
+     <span class="nm">${esc(s.name)}</span><span class="mu">${esc(s.note||"No focus note")}${isAdmin()&&s.coachId!==meCoach?` · <span style="color:var(--blue)">${esc(coachName(s.coachId))}</span>`:""}${(s.submissions||[]).filter(x=>!x.exported).length?` · <span style="color:var(--gold)">${(s.submissions||[]).filter(x=>!x.exported).length} new replays</span>`:""}</span></span><span class="student-chevron" aria-hidden="true">›</span></button>`).join("")}
+   </div>
+   <div class="roster-actions">
+    <button class="roster-action primary" onclick="addStudentModal()"><span class="roster-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span><span class="nm">Add student</span><span class="mu">Link their SC2 Tools account</span></span></button>
+    <button class="roster-action" onclick="adminModal()"><span class="roster-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg></span><span><span class="nm">Manage team</span><span class="mu">Coaches &amp; students</span></span></button>
+   </div>
+  </aside>
+  <section class="coach-main" aria-label="Coaching locker workspace">
+  ${!st?`<section class="roster-empty"><div class="empty-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg></div><div class="empty-eyebrow">Locker setup</div><h2>Start with your first player</h2><p>Link a student’s SC2 Tools account to create their private coaching locker. You’ll be ready to set weekly focus, assign builds, and review replay work.</p><button class="empty-primary" onclick="addStudentModal()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add your first student</button><div class="empty-assurance"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Private by default · Account-linked access</div></section>`:`
    <div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:26px">${esc(st.name)}</h2>
     <input type="text" value="${esc(st.note||"")}" placeholder="mmr / focus note" style="font-size:12.5px;max-width:220px" onchange="byId('${st.id}').note=this.value;persist()">
     <button class="btn sm q" style="margin-left:auto" onclick="removeStudent('${st.id}')">remove student</button></div>
@@ -517,7 +563,7 @@ function coachHTML(){
     <button class="${tab==="inbox"?"on":""}" onclick="tab='inbox';render()">Inbox ${(st.submissions||[]).filter(x=>!x.exported).length?`<span class="ct">●</span>`:""}</button>
    </div>
    ${(SITE&&st&&st.userId&&_lastGamesFetch!==st.id)?(_lastGamesFetch=st.id,refreshGamesFor(st).then(ok=>{if(ok)render()}),""):""}${tab==="focus"?focusHTML(st):tab==="worksheets"?wsCoachHTML(st):tab==="builds"?buildsHTML(st):tab==="shelf"?shelfCoachHTML(st):inboxHTML(st)}`}
-  </div></div></div>`}
+  </section></div></div>`}
 let UPK={q:"",cb:null,rows:[],requireAgent:false};
 function userPicker(title,requireAgent,cb){
  UPK={q:"",cb,rows:[],requireAgent};
@@ -1509,12 +1555,14 @@ function openModal(inner){modalOpen=true;
 function closeModal(){modalOpen=false;const o=$("ovl");if(o)o.innerHTML="";recCancel()}
 function render(){
  const root=$("root");
- let top=`<div class="bar"><div class="logo">SC2 Tools <span>· Locker</span></div>
-  ${role?`<span class="who">${role==="coach"?esc((S.coaches.find(c=>c.id===meCoach)||S.coaches[0]||{name:S.coach}).name)+" (coach)":esc((byId(meId)||{}).name||"")}</span>`:""}
-  <span class="sp"></span>
-  ${SITE?"":`<button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${lockerHost().dataset.lk==="light"?"☾ dark":"☀ light"}</button>`}
-  ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button>
-  ${SITE?"":`<button class="iconbtn" onclick="signOut()">switch user</button>`}`:""}</div>`;
+ const who=role==="coach"?esc((S.coaches.find(c=>c.id===meCoach)||S.coaches[0]||{name:S.coach}).name):esc((byId(meId)||{}).name||"");
+ let top=SITE
+  ?(role&&S.setup?`<div class="site-tools"><span class="site-presence"><span class="site-presence-dot" aria-hidden="true"></span>${who} · ${role==="coach"?"Coach":"Student"}</span><button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Open Locker guide">Locker guide</button></div>`:"")
+  :`<div class="bar"><div class="logo">SC2 Tools <span>· Locker</span></div>
+   ${role?`<span class="who">${who}${role==="coach"?" (coach)":""}</span>`:""}
+   <span class="sp"></span>
+   <button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${lockerHost().dataset.lk==="light"?"☾ dark":"☀ light"}</button>
+   ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button><button class="iconbtn" onclick="signOut()">switch user</button>`:""}</div>`;
  if(preview)top+=`<div class="banner">PREVIEW — not published with saving enabled; changes stay in this tab only</div>`;
  if(readOnly)top+=`<div class="banner r">VIEW-ONLY — ask ${esc(myCoachName())} to share this page with edit access</div>`;
  if(busy)top+=`<div class="banner">Saving…</div>`;
