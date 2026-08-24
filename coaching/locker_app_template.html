@@ -180,6 +180,12 @@ function pkRange(){return presetRange(PK.preset,PK.cA,PK.cB)}
 let S; try{S=JSON.parse(document.getElementById("state0").textContent)}catch(e){S={v:1,setup:false,pin:null,coach:"ReSpOnSe",students:[],assets:{}}}
 if(!S.customBuilds)S.customBuilds=[];
 if(!S.wsTemplates)S.wsTemplates=[];
+if(!S.coaches||!S.coaches.length){S.coaches=S.pin?[{id:"c1",name:S.coach||"ReSpOnSe",pin:S.pin}]:[]}
+const adminId=()=>((S.coaches[0]||{}).id||"c1");
+const isAdmin=()=>meCoach===adminId();
+const coachName=id=>((S.coaches.find(c=>c.id===id)||S.coaches[0]||{name:S.coach}).name);
+(S.students||[]).forEach(st=>{if(!st.coachId)st.coachId=adminId()});
+const myStudents=()=>S.students.filter(st=>isAdmin()||st.coachId===meCoach);
 if(!S.shelfLibrary)S.shelfLibrary=[];
 /* migrate older records to the merged product model */
 (S.students||[]).forEach(st=>{
@@ -193,7 +199,7 @@ if(!S.shelfLibrary)S.shelfLibrary=[];
 const LIB=id=>LIBRARY.find(x=>x.id===id)||S.customBuilds.find(x=>x.id===id);
 const recStr=L=>L.custom?(L.record||"custom build"):(L.winrate+"% · "+L.games+" games");
 let artifactNS=null,downloadsNS=null,preview=false,readOnly=false;
-let role=null,meId=null,coachOK=false,tab="focus",curStudent=null,helpOpen=false,stuTab=null;
+let role=null,meId=null,coachOK=false,tab="focus",curStudent=null,helpOpen=false,stuTab=null,meCoach=null;
 let recState=null,pendingFiles=[],busy=false;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -242,7 +248,7 @@ async function boot(){
   downloadsNS=await claude.use("downloads");
   if(!artifactNS)preview=true;
  }
- role=ls.get("locker.role");meId=ls.get("locker.me");
+ role=ls.get("locker.role");meId=ls.get("locker.me");meCoach=ls.get("locker.coach")||null;
  coachOK=ss.get("locker.coachOK")==="1";
  // restore stashed draft after a reload
  render();
@@ -278,19 +284,22 @@ async function doSetup(){
  if(a.length<4){toast("Passcode needs at least 4 characters");return}
  if(a!==b){toast("Passcodes don't match");return}
  S.pin=await sha256(a);S.setup=true;
+ S.coaches=[{id:"c1",name:S.coach||"ReSpOnSe",pin:S.pin}];meCoach="c1";ls.set("locker.coach","c1");
  ls.set("locker.role","coach");ss.set("locker.coachOK","1");role="coach";coachOK=true;
  await persist();
 }
 function pickRole(r){
- if(r==="coach"){openModal(`<h2>Coach passcode</h2>
-  <input id="pinIn" type="password" style="width:100%;margin-top:8px" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryPin()">
+ if(r==="coach"){openModal(`<h2>Coach sign-in</h2>
+  ${S.coaches.length>1?`<select id="coachSel" style="width:100%;margin-top:8px">${S.coaches.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>`:""}
+  <input id="pinIn" type="password" placeholder="Passcode" style="width:100%;margin-top:8px" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryPin()">
   <div class="row" style="margin-top:12px"><button class="btn" onclick="tryPin()">Unlock</button>
   <button class="btn q" onclick="closeModal()">Cancel</button></div>`);
   setTimeout(()=>{const i=$("pinIn");if(i)i.focus()},50);return}
 }
 async function tryPin(){
  const v=$("pinIn").value;
- if(await sha256(v)===S.pin){coachOK=true;role="coach";ls.set("locker.role","coach");ss.set("locker.coachOK","1");closeModal();render();if(!ls.get("locker.walked.coach"))walkthrough()}
+ const sel=$("coachSel");const c=sel?S.coaches.find(x=>x.id===sel.value):S.coaches[0];
+ if(c&&await sha256(v)===c.pin){meCoach=c.id;ls.set("locker.coach",c.id);coachOK=true;role="coach";ls.set("locker.role","coach");ss.set("locker.coachOK","1");closeModal();render();if(!ls.get("locker.walked.coach"))walkthrough()}
  else toast("Wrong passcode")}
 function pickStudent(id){role="student";meId=id;stuTab=null;ls.set("locker.role","student");ls.set("locker.me",id);render();if(!ls.get("locker.walked.student"))walkthrough()}
 function signOut(){role=null;meId=null;coachOK=false;stuTab=null;ls.set("locker.role","");ls.set("locker.me","");ss.set("locker.coachOK","");render()}
@@ -333,7 +342,8 @@ function helpHTML(){
   <h4>Sharing with students</h4><p>Use the artifact viewer's share menu. Give each student <b>edit</b> access — that's what lets their worksheet answers and replay submissions save. View-only students can read but not submit.</p>
   <h4>Reviewing replays</h4><p>Inbox → “Export batch” downloads submissions as one .json bundle → run <span style="font-family:var(--mono)">python unpack_batch.py bundle.json</span> in your coaching folder to unpack the .SC2Replay files → watch them yourself, then put your feedback on the shelf as notes, voice memos, or a linked replay.</p>
   <h4>Voice & video</h4><p>Voice memos record right here (browser will ask for the mic; if it's blocked, attach an audio file instead). Video: paste a Loom/YouTube link, or attach a small file (≤8 MB) — big videos belong on Loom.</p>
-  <h4>Passcode</h4><div class="row"><button class="btn sm" onclick="helpOpen=false;render();changePinModal()">Change coach passcode</button></div>
+  <h4>Passcode & coaches</h4><div class="row"><button class="btn sm" onclick="helpOpen=false;render();changePinModal()">Change my passcode</button></div>
+  <p>Add or remove coaches (and students) in ⚙ Admin at the bottom of the roster. Each coach signs in with their own passcode.</p>
   <h4>Backups</h4><p>Download the whole Locker (students, shelves, worksheets, focus) as one JSON file, or restore from one.</p>
   <div class="row"><button class="btn sm" onclick="exportBackup()">⇩ Export backup</button>
   <label><input type="file" accept=".json,application/json" style="display:none" onchange="importBackup(this)"><span class="iconbtn" style="cursor:pointer">⇪ Restore backup</span></label></div>
@@ -418,14 +428,16 @@ const byId=id=>S.students.find(s=>s.id===id);
 /* ---------- COACH ---------- */
 function coachHTML(){
  if(!coachOK)return gateHTML();
- if(!curStudent&&S.students.length)curStudent=S.students[0].id;
- const st=byId(curStudent);
+ const mine=myStudents();
+ if((!curStudent||!mine.some(x=>x.id===curStudent))&&mine.length)curStudent=mine[0].id;
+ const st=mine.some(x=>x.id===curStudent)?byId(curStudent):null;
  return `<div class="wrap"><div class="coach">
   <div class="side">
-   <h3 style="margin:0 0 9px;font-family:var(--disp);color:var(--blue);font-size:12.5px;letter-spacing:.13em">ROSTER · ${S.students.length}</h3>
-   ${S.students.map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()">
-     <div class="nm">${esc(s.name)}</div><div class="mu">${esc(s.note||"")}${(s.submissions||[]).filter(x=>!x.exported).length?` · <span style="color:var(--gold)">${(s.submissions||[]).filter(x=>!x.exported).length} new replays</span>`:""}</div></button>`).join("")}
+   <h3 style="margin:0 0 9px;font-family:var(--disp);color:var(--blue);font-size:12.5px;letter-spacing:.13em">ROSTER · ${myStudents().length}</h3>
+   ${myStudents().map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()">
+     <div class="nm">${esc(s.name)}</div><div class="mu">${esc(s.note||"")}${isAdmin()&&s.coachId!==meCoach?` · <span style="color:var(--blue)">${esc(coachName(s.coachId))}</span>`:""}${(s.submissions||[]).filter(x=>!x.exported).length?` · <span style="color:var(--gold)">${(s.submissions||[]).filter(x=>!x.exported).length} new replays</span>`:""}</div></button>`).join("")}
    <button class="st" onclick="addStudentModal()"><div class="nm" style="color:var(--gold)">+ Add student</div></button>
+   <button class="st" onclick="adminModal()"><div class="nm" style="color:var(--mute)">⚙ Admin</div><div class="mu">coaches & students</div></button>
   </div>
   <div>
   ${!st?`<div class="empty">Add your first student to begin.</div>`:`
@@ -441,15 +453,63 @@ function coachHTML(){
    </div>
    ${tab==="focus"?focusHTML(st):tab==="worksheets"?wsCoachHTML(st):tab==="builds"?buildsHTML(st):tab==="shelf"?shelfCoachHTML(st):inboxHTML(st)}`}
   </div></div></div>`}
+function adminModal(){
+ openModal(`<h2>Admin</h2>
+  <h3 style="margin-top:10px">Coaches</h3>
+  ${isAdmin()?`<p class="sub">Only you (the admin) can add or remove coaches. Every coach needs the SC2 Tools agent installed — their database powers replay picking and admission. Coaches manage their own students.</p>
+  ${S.coaches.map(c=>`<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(c.name)}${c.id===meCoach?' <span class="pill g">you</span>':""}${c.id===S.coaches[0].id?' <span class="pill b">admin</span>':""}</div>
+    <div class="n">${S.students.filter(x=>x.coachId===c.id).length} student(s)</div></div>
+   <div class="d8">${c.id!==S.coaches[0].id?`<button class="btn sm q" onclick="removeCoach('${c.id}')">remove</button>`:""}</div></div>`).join("")}
+  <div class="row" style="margin-top:8px">
+   <input id="ncName" type="text" placeholder="Coach name" style="flex:1;min-width:120px">
+   <input id="ncP1" type="password" placeholder="Their passcode" style="flex:1;min-width:110px" autocomplete="new-password">
+   <input id="ncP2" type="password" placeholder="Repeat" style="flex:1;min-width:90px" autocomplete="new-password"></div>
+  <label class="sub" style="display:flex;gap:7px;align-items:flex-start;margin-top:7px;cursor:pointer"><input id="ncAgent" type="checkbox" style="margin-top:3px">This coach has the SC2 Tools agent installed and paired — required.</label>
+  <div class="row" style="margin-top:8px"><button class="btn sm" onclick="addCoach()">Add coach</button></div>`
+  :`<p class="sub">Coaches are managed by ${esc(coachName(adminId()))} (admin). You manage your own students below.</p>`}
+  <h3 style="margin-top:16px">${isAdmin()?"All students":"Your students"}</h3>
+  ${myStudents().map(st=>`<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(st.name)}</div><div class="n">${esc(st.note||"")}${isAdmin()?" · coach: "+esc(coachName(st.coachId)):""}</div></div>
+   <div class="d8"><button class="btn sm q" onclick="closeModal();removeStudent('${st.id}')">remove</button></div></div>`).join("")||'<p class="sub">No students yet.</p>'}
+  <div class="row" style="margin-top:8px">
+   <input id="naName" type="text" placeholder="Student name" style="flex:2;min-width:130px">
+   <input id="naNote" type="text" placeholder="MMR / focus (optional)" style="flex:2;min-width:130px">
+   <button class="btn sm" onclick="adminAddStudent()">Add student</button></div>
+  <button class="btn q" style="margin-top:14px" onclick="closeModal()">Close</button>`)}
+async function addCoach(){
+ if(!isAdmin()){toast("Only the admin can add coaches");return}
+ const n=$("ncName").value.trim(),a=$("ncP1").value,b=$("ncP2").value;
+ if(!n){toast("Name required");return}
+ if(!$("ncAgent")||!$("ncAgent").checked){toast("Coaches must have the SC2 Tools agent installed — confirm the checkbox");return}
+ if(a.length<4){toast("Passcode needs at least 4 characters");return}
+ if(a!==b){toast("Passcodes don't match");return}
+ if(S.coaches.some(c=>c.name.toLowerCase()===n.toLowerCase())){toast("That coach already exists");return}
+ S.coaches.push({id:uid(),name:n,pin:await sha256(a)});
+ closeModal();persist()}
+function removeCoach(id){
+ if(!isAdmin()){toast("Only the admin can remove coaches");return}
+ if(S.coaches.length<=1){toast("At least one coach is required");return}
+ if(id===adminId()){toast("The admin can't be removed");return}
+ openModal(`<h2>Remove coach?</h2><p class="sub">${esc((S.coaches.find(c=>c.id===id)||{}).name||"")} loses coach access immediately.</p>
+  <div class="row" style="margin-top:12px"><button class="btn" style="border-color:#5c3434;color:var(--loss)" onclick="S.students.forEach(x=>{if(x.coachId==='${id}')x.coachId=adminId()});S.coaches=S.coaches.filter(c=>c.id!=='${id}');closeModal();persist()">Remove</button>
+  <button class="btn q" onclick="adminModal()">Cancel</button></div>`)}
+function adminAddStudent(){
+ const n=$("naName").value.trim();if(!n){toast("Name required");return}
+ if(S.students.some(x=>x.name.toLowerCase()===n.toLowerCase())){toast("That student already exists");return}
+ S.students.push({id:uid(),name:n,note:$("naNote").value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
+  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:meCoach||adminId()});
+ curStudent=S.students[S.students.length-1].id;closeModal();persist()}
 function addStudentModal(){openModal(`<h2>Add student</h2>
  <input id="nsName" type="text" placeholder="Their name" style="width:100%;margin-top:8px">
  <input id="nsNote" type="text" placeholder="MMR / focus (optional)" style="width:100%;margin-top:8px">
  <div class="row" style="margin-top:12px"><button class="btn" onclick="addStudent()">Add</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
 function addStudent(){const n=$("nsName").value.trim();if(!n){toast("Name required");return}
  S.students.push({id:uid(),name:n,note:$("nsNote").value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
-  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"}});
+  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"},games:[],coachId:meCoach||adminId()});
  curStudent=S.students[S.students.length-1].id;closeModal();persist()}
-function removeStudent(id){openModal(`<h2>Remove ${esc(byId(id).name)}?</h2><p class="sub">Their locker, shelf, worksheets and submissions are deleted from the page. This publishes immediately.</p>
+function removeStudent(id){
+ const st=byId(id);
+ if(st&&!isAdmin()&&st.coachId!==meCoach){toast("Only "+esc(coachName(st.coachId))+" or the admin can remove this student");return}
+ openModal(`<h2>Remove ${esc(byId(id).name)}?</h2><p class="sub">Their locker, shelf, worksheets and submissions are deleted from the page. This publishes immediately.</p>
  <div class="row" style="margin-top:12px"><button class="btn" style="border-color:#5c3434;color:var(--loss)" onclick="S.students=S.students.filter(s=>s.id!=='${id}');curStudent=null;closeModal();persist()">Remove</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
 /* ----- builds tab ----- */
 function buildsHTML(st){
@@ -1051,7 +1111,11 @@ async function changePin(){
  const a=$("npA").value,b=$("npB").value;
  if(a.length<4){toast("At least 4 characters");return}
  if(a!==b){toast("Passcodes don't match");return}
- S.pin=await sha256(a);closeModal();persist()}
+ const h=await sha256(a);
+ const c=S.coaches.find(x=>x.id===meCoach)||S.coaches[0];
+ if(c)c.pin=h;
+ if(!S.coaches[0]||c===S.coaches[0])S.pin=h;  // keep legacy field in step for the primary
+ closeModal();persist()}
 let INTAKE=null;
 function studentHTML(){
  const st=byId(meId);
@@ -1068,7 +1132,7 @@ function studentHTML(){
  return `<div class="wrap">
   <div class="row" style="margin-bottom:12px"><div>
    <span class="pill g">Your locker</span><h1 style="margin:4px 0 0;font-size:28px">${esc(st.name)}</h1>
-   <div class="sub">coached by ${esc(S.coach)}</div></div>
+   <div class="sub">coached by ${esc(coachName(st.coachId))}</div></div>
    <button class="btn" style="margin-left:auto" onclick="submitModal('${st.id}')">⇪ Submit replays</button></div>
   ${tabs}${body}
   <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and your coach. Questions go in your Discord channel.</p>
@@ -1296,7 +1360,7 @@ function closeModal(){modalOpen=false;const o=$("ovl");if(o)o.innerHTML="";recCa
 function render(){
  const root=$("root");
  let top=`<div class="bar"><div class="logo">SC2 Tools <span>· Locker</span></div>
-  ${role?`<span class="who">${role==="coach"?esc(S.coach)+" (coach)":esc((byId(meId)||{}).name||"")}</span>`:""}
+  ${role?`<span class="who">${role==="coach"?esc((S.coaches.find(c=>c.id===meCoach)||S.coaches[0]||{name:S.coach}).name)+" (coach)":esc((byId(meId)||{}).name||"")}</span>`:""}
   <span class="sp"></span>
   <button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${document.documentElement.dataset.lk==="light"?"☾ dark":"☀ light"}</button>
   ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button>
