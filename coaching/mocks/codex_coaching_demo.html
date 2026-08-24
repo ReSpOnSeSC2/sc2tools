@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SC2 Tools · Private Coaching Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#070a10; --panel:#0e141d; --panel-2:#141c28; --panel-3:#1b2533;
+      --line:#2a384a; --line-strong:#52627a; --text:#e8eef4; --muted:#a6b2c0;
+      --dim:#7f8c9d; --gold:#f0bd57; --gold-soft:#342917; --cyan:#52ddd4;
+      --teal:#168395; --green:#56cf91; --red:#ff7777; --orange:#e6a251;
+      --shadow:4px 4px 0 rgba(82,221,212,.16);
+      --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+      --display:"Arial Narrow",Inter,ui-sans-serif,system-ui,sans-serif;
+      --mono:"Cascadia Code",Consolas,ui-monospace,monospace;
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.55 var(--sans)}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;background-image:radial-gradient(rgba(126,188,197,.07) 1.2px,transparent 1.3px);background-size:22px 22px;mask-image:linear-gradient(to bottom,#000,transparent 80%)}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+    h1,h2,h3,h4,p{margin-top:0}
+    h1,h2,h3,h4,.display{font-family:var(--display);letter-spacing:-.02em}
+    .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;min-height:62px;padding:10px 22px;border-bottom:2px solid var(--line);background:rgba(7,10,16,.94);backdrop-filter:blur(12px)}
+    .brand{font-family:var(--display);font-weight:900;letter-spacing:.08em;text-transform:uppercase}.brand b{color:var(--gold)}
+    .demo-label{color:var(--muted);font-size:12px}.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .toggle{display:flex;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+    .toggle button{border:0;border-radius:999px;background:transparent;color:var(--muted);padding:7px 13px;font-size:13px;font-weight:750}
+    .toggle button.on{background:var(--gold);color:#15100a}
+    .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+    .notice{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-left:4px solid var(--cyan);border-radius:10px;background:var(--panel);padding:12px 14px;color:var(--muted);font-size:13px}
+    .notice strong{color:var(--text)}
+    .hero{display:grid;grid-template-columns:1.25fr .75fr;gap:18px;margin:20px 0}
+    .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);font-weight:800}
+    .hero h1{font-size:clamp(34px,5vw,58px);line-height:.98;margin:8px 0 12px}.hero p{max-width:710px;color:var(--muted);font-size:17px}
+    .card{border:2px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+    .card.feature{border-color:var(--teal)}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:15px 17px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+    .card-body{padding:17px}.card h2{font-size:24px;margin-bottom:4px}.card h3{font-size:19px;margin-bottom:4px}
+    .pill{display:inline-flex;align-items:center;gap:6px;min-height:25px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);color:var(--muted);font-size:12px;font-weight:800}
+    .pill.gold{border-color:#806127;color:var(--gold);background:var(--gold-soft)}.pill.green{border-color:#2f7351;color:var(--green);background:#10251d}.pill.red{border-color:#7b3a3a;color:var(--red);background:#291616}.pill.cyan{border-color:#266f72;color:var(--cyan);background:#102325}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;border:2px solid var(--line-strong);border-radius:999px;background:var(--gold);color:#171108;padding:8px 18px;font-weight:850;box-shadow:3px 3px 0 rgba(240,189,87,.18)}
+    .btn:hover{filter:brightness(1.07)}.btn.secondary{background:var(--panel-2);color:var(--text);box-shadow:none}.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);box-shadow:none}.btn.small{min-height:34px;padding:5px 12px;font-size:13px}
+    .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px}.step{padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}.step b{display:block;color:var(--gold);font-family:var(--mono);font-size:12px}.step span{display:block;margin-top:3px;font-weight:750}.step small{color:var(--dim)}
+    .view-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:18px 0}.view-tabs button{border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);padding:8px 14px;font-weight:750}.view-tabs button.on{border-color:var(--gold);background:var(--gold-soft);color:var(--gold)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .field{margin-bottom:15px}.field label{display:block;margin-bottom:6px;color:var(--text);font-weight:750}.field .help{margin-top:4px;color:var(--dim);font-size:12px}
+    input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;background:#0a0f17;color:var(--text);padding:10px 11px}textarea{min-height:90px;resize:vertical}
+    .choices{display:flex;flex-wrap:wrap;gap:7px}.choice{border:1px solid var(--line);border-radius:999px;background:var(--panel-2);color:var(--muted);padding:7px 11px}.choice.on{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+    .checkrow{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:11px 12px}.checkrow input{width:auto;margin-top:4px}.checkrow span{color:var(--muted);font-size:13px}
+    .action-strip{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
+    .focus{border:2px solid var(--gold);border-radius:14px;background:linear-gradient(135deg,var(--gold-soft),var(--panel));padding:20px}.focus .big{font-family:var(--display);font-size:28px;line-height:1.08;font-weight:900;margin:5px 0 10px}.focus p{color:var(--muted)}
+    .plain-list{list-style:none;margin:0;padding:0}.plain-list li{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.plain-list li:last-child{border-bottom:0}.dot{width:9px;height:9px;margin-top:7px;border-radius:50%;background:var(--cyan);flex:none}
+    .shelf-item{display:grid;grid-template-columns:42px 1fr auto;gap:11px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line)}.shelf-item:last-child{border-bottom:0}.file-icon{display:flex;width:40px;height:40px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--gold);font:800 11px var(--mono)}.shelf-item p{margin:2px 0;color:var(--muted);font-size:13px}.shelf-item time{white-space:nowrap;color:var(--dim);font-size:11px}
+    .roster{display:grid;grid-template-columns:220px 1fr;gap:16px}.student-btn{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:11px 12px;margin-bottom:8px}.student-btn.on{border-color:var(--gold);background:var(--gold-soft)}.student-btn small{display:block;color:var(--muted)}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.kpi{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:12px}.kpi small{display:block;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}.kpi strong{display:block;margin-top:3px;font:900 25px var(--display)}
+    .lane-row{display:grid;grid-template-columns:110px 65px 1fr;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}.lane-row:last-child{border-bottom:0}.lane-row strong{font-family:var(--mono)}
+    .queue-item{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:12px;margin-bottom:9px}.queue-item .meta{color:var(--dim);font:12px var(--mono)}.queue-item p{margin:5px 0 0;color:var(--muted)}
+    .editor-stack{display:grid;gap:14px}.editor-card{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}.editor-card>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}.editor-card>header h3{margin:0}.editor-card>.editor-body{padding:14px}.editor-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.save-state{color:var(--green);font:12px var(--mono)}.mini-row{display:grid;grid-template-columns:95px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.mini-row:last-child{border-bottom:0}.mini-row small{color:var(--dim)}.danger{border-color:#7b3a3a;color:var(--red)}
+    details{border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:10px 12px}summary{cursor:pointer;font-weight:800;color:var(--text)}details p{margin:8px 0 0;color:var(--muted)}
+    .empty{border:1px dashed var(--line-strong);border-radius:12px;padding:18px;text-align:center;color:var(--muted)}
+    .toast{position:fixed;left:50%;bottom:22px;z-index:50;transform:translate(-50%,20px);opacity:0;pointer-events:none;border:1px solid #806127;border-radius:999px;background:#19140b;color:var(--gold);padding:9px 16px;font-weight:800;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}
+    .mobile-only{display:none}
+    @media(max-width:850px){.hero,.grid2,.roster{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}.steps,.kpis{grid-template-columns:1fr 1fr}.topbar{align-items:flex-start;flex-wrap:wrap}.top-actions{width:100%;margin-left:0}.demo-label{display:none}.roster-side{display:flex;gap:7px;overflow:auto}.student-btn{min-width:180px}.lane-row{grid-template-columns:90px 45px 1fr}}
+    @media(max-width:540px){.wrap{padding:20px 13px 60px}.steps,.kpis{grid-template-columns:1fr}.toggle{width:100%}.toggle button{flex:1}.top-actions{display:block}.top-actions>.btn{display:none}.hero h1{font-size:39px}.action-strip{align-items:stretch;flex-direction:column}.action-strip .btn{width:100%}.shelf-item{grid-template-columns:40px 1fr}.shelf-item time{grid-column:2}.lane-row{grid-template-columns:80px 42px 1fr;font-size:13px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.toast{transition:none}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><b>SC2 Tools</b> · Private Coaching</div>
+    <div class="demo-label">interactive concept · fictional data · no strategic advice</div>
+    <div class="top-actions">
+      <span class="save-state" id="saveStatus">Saved in this browser</span>
+      <div class="toggle" role="tablist" aria-label="Preview perspective">
+        <button id="studentToggle" class="on" role="tab" onclick="setView('student')">Student view</button>
+        <button id="coachToggle" role="tab" onclick="setView('coach')">Coach view</button>
+      </div>
+      <button class="btn ghost small" onclick="resetDemo()">Reset demo</button>
+    </div>
+  </header>
+  <main class="wrap" id="app"></main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const STORAGE_KEY = 'sc2-private-coaching-demo-v2';
+    const defaults = {
+      view: 'student', studentTab: 'start', coachTab: 'today', setupDone: false,
+      student: 'alex', priority: 'PvT', answers: {rank:'Diamond 1 · 4,380 MMR', region:'Americas', goal:'Play more consistently', hours:'6', pvt:'My current PvT build', pvz:'My current PvZ build', pvp:'My current PvP build', question:'I lose track of my plan once the opening gets messy.'},
+      profile: {name:'Alex', status:'Ready for baseline'},
+      focus: {title:'Build a trustworthy baseline', why:'No strategic change has been prescribed yet. Your coach first needs representative current-season games.', assignment:'Play 3–5 normal ladder games with your current builds. Do not restart or cherry-pick. Save every replay.', check:'After each game, write one sentence: “The first moment I stopped knowing my plan was ___.”', due:'Before kickoff'},
+      replayGate: {active:12, bridge:2, historical:41, quarantine:3, label:'Current-season registry checked'},
+      shelf: [
+        {kind:'NOTE',title:'Welcome note',body:'What to send before kickoff and how your current replays will be reviewed.',date:'today'},
+        {kind:'FORM',title:'Five-minute setup',body:'Your goals, available time, current builds, and one question.',date:'today'}
+      ]
+    };
+    function hydrate(candidate={}){
+      return {...defaults,...candidate,
+        answers:{...defaults.answers,...(candidate.answers||{})},
+        profile:{...defaults.profile,...(candidate.profile||{})},
+        focus:{...defaults.focus,...(candidate.focus||{})},
+        replayGate:{...defaults.replayGate,...(candidate.replayGate||{})},
+        shelf:Array.isArray(candidate.shelf)?candidate.shelf:structuredClone(defaults.shelf)
+      }
+    }
+    function loadState(){try{return hydrate(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'))}catch{return hydrate()}}
+    let state = loadState();
+    const fixedStudents = [
+      {id:'minh',name:'Minh',meta:'M3 · PvP question',status:'4 new replays'},
+      {id:'sofia',name:'Sofia',meta:'D3 · New student',status:'Intake incomplete'}
+    ];
+    function roster(){return [{id:'alex',name:state.profile.name,meta:`${state.answers.rank} · ${state.priority} question`,status:state.profile.status},...fixedStudents]}
+
+    const esc = value => String(value ?? '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+    function toast(message){const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(el.timer);el.timer=setTimeout(()=>el.classList.remove('show'),1800)}
+    function persist(message='Saved automatically'){
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      const el=document.getElementById('saveStatus');if(el){el.textContent=message;clearTimeout(el.timer);el.timer=setTimeout(()=>el.textContent='Saved in this browser',1500)}
+    }
+    function setView(view){state.view=view;document.getElementById('studentToggle').classList.toggle('on',view==='student');document.getElementById('coachToggle').classList.toggle('on',view==='coach');render()}
+    function setStudentTab(tab){state.studentTab=tab;render()}
+    function setCoachTab(tab){state.coachTab=tab;render()}
+    function setChoice(key,value){state.answers[key]=value;persist();render()}
+    function syncField(key,value){state.answers[key]=value;persist()}
+    function editProfile(key,value){state.profile[key]=value;persist()}
+    function editFocus(key,value){state.focus[key]=value;persist()}
+    function editGate(key,value){state.replayGate[key]=key==='label'?value:Math.max(0,Number(value)||0);persist()}
+    function completeSetup(){state.setupDone=true;state.studentTab='week';if(!state.shelf.some(x=>x.kind==='PLAN'))state.shelf.unshift({kind:'PLAN',title:'Baseline plan',body:'One current-replay collection task. No strategy change yet.',date:'just now'});persist();render();toast('Setup complete — one next action only')}
+    function publishFocus(){
+      const title=document.getElementById('focusTitle').value.trim();
+      const assignment=document.getElementById('focusAssignment').value.trim();
+      const question=document.getElementById('focusQuestion').value.trim();
+      const why=document.getElementById('focusWhy').value.trim();
+      const due=document.getElementById('focusDue').value.trim();
+      if(!title||!assignment){toast('Add a focus and assignment first');return}
+      state.focus.title=title;state.focus.assignment=assignment;state.focus.why=why||'Set by the coach after reviewing admitted current-season replays.';state.focus.check=question||'Submit one replay and one precise question.';state.focus.due=due||'This week';
+      state.shelf.unshift({kind:'PLAN',title:'New weekly action',body:title,date:'just now'});persist();toast(`Published to ${state.profile.name}’s simple student view`);render();
+    }
+    function addLockerItem(){
+      const kind=document.getElementById('lockerKind').value.trim().toUpperCase().slice(0,6)||'NOTE';
+      const title=document.getElementById('lockerTitle').value.trim();
+      const body=document.getElementById('lockerBody').value.trim();
+      if(!title||!body){toast('Add a title and short description');return}
+      state.shelf.unshift({kind,title,body,date:'just now'});persist();render();toast('Locker item added')
+    }
+    function removeLockerItem(index){if(!confirm('Remove this item from the demo locker?'))return;state.shelf.splice(index,1);persist();render();toast('Locker item removed')}
+    function exportData(){
+      const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`${state.profile.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')||'student'}-coaching-data.json`;link.click();URL.revokeObjectURL(url);toast('Backup downloaded')
+    }
+    function importData(file){
+      if(!file)return;const reader=new FileReader();reader.onload=()=>{try{state=hydrate(JSON.parse(reader.result));persist('Backup restored');render();toast('Backup restored')}catch{toast('That file is not valid coaching data')}};reader.readAsText(file)
+    }
+    function resetDemo(){if(!confirm('Reset all prototype edits stored in this browser?'))return;localStorage.removeItem(STORAGE_KEY);location.reload()}
+    function selectRoster(id){if(id==='alex'){state.student=id;render();return}toast('The working prototype is wired to one student; the production version opens a separate record here.')}
+
+    function shell(content){
+      return `
+        <div class="notice"><span>●</span><div><strong>This is a product mock, not a coaching diagnosis.</strong> The student sees basic questions and one next action. Replay evidence and coach administration stay behind the scenes.</div></div>
+        <section class="hero">
+          <div><div class="eyebrow">A small-roster coaching system</div><h1>Precision without the packet.</h1><p>Ask only what the coach needs, review only relevant current replays, assign one clear action, and keep the student’s private materials in one place.</p></div>
+          <div class="card feature"><div class="card-body"><span class="pill gold">3 of 5 private seats</span><h2 style="margin-top:12px">What it is</h2><p style="color:var(--muted)">A lightweight workspace connecting your database, your human review, and each student’s next action. The depth belongs to the coach—not the onboarding form.</p></div></div>
+        </section>
+        <section class="steps" aria-label="How it works">
+          <div class="step"><b>01</b><span>Ask</span><small>Five-minute setup</small></div>
+          <div class="step"><b>02</b><span>Review</span><small>Current replays only</small></div>
+          <div class="step"><b>03</b><span>Assign</span><small>One useful action</small></div>
+          <div class="step"><b>04</b><span>Check</span><small>Did it transfer?</small></div>
+        </section>
+        ${content}`
+    }
+
+    function studentView(){
+      const tabs=`<div class="view-tabs" role="tablist"><button class="${state.studentTab==='start'?'on':''}" onclick="setStudentTab('start')">Start here</button><button class="${state.studentTab==='week'?'on':''}" onclick="setStudentTab('week')">This week</button><button class="${state.studentTab==='locker'?'on':''}" onclick="setStudentTab('locker')">My locker <span class="pill" style="margin-left:5px">${state.shelf.length}</span></button></div>`;
+      const body=state.studentTab==='start'?studentStart():state.studentTab==='week'?studentWeek():studentLocker();
+      return shell(tabs+body)
+    }
+
+    function studentStart(){
+      if(state.setupDone)return `<div class="card feature"><div class="card-body"><span class="pill green">Setup complete</span><h2 style="margin-top:12px">That’s enough for now.</h2><p style="color:var(--muted)">Your coach has your goal, available time, current builds, and one real question. No reading assignment. No strategy overhaul.</p><button class="btn" onclick="setStudentTab('week')">See my one next action →</button></div></div>`;
+      return `<div class="grid2">
+        <section class="card feature"><div class="card-head"><div><div class="eyebrow">Five-minute setup</div><h2>Tell your coach the basics.</h2></div><span class="pill cyan">5 short sections</span></div><div class="card-body">
+          <div class="grid2"><div class="field"><label for="rank">Rank / MMR</label><input id="rank" value="${esc(state.answers.rank)}" oninput="syncField('rank',this.value)"></div><div class="field"><label for="region">Region</label><select id="region" onchange="syncField('region',this.value)"><option>Americas</option><option>Europe</option><option>Korea</option><option>Other / ask coach</option></select></div></div>
+          <div class="field"><label>What do you want most?</label><div class="choices">${['Play more consistently','Improve one matchup','Learn stable builds','Prepare for an event','Enjoy ladder more'].map(x=>`<button class="choice ${state.answers.goal===x?'on':''}" onclick="setChoice('goal','${x}')">${x}</button>`).join('')}</div></div>
+          <div class="field"><label for="hours">Realistic practice time each week</label><select id="hours" onchange="syncField('hours',this.value)"><option value="2">About 2 hours</option><option value="4">About 4 hours</option><option value="6" selected>About 6 hours</option><option value="8">8+ hours</option></select><div class="help">This changes workload, not the evidence.</div></div>
+          <div class="field"><label>Your current Protoss builds</label><div class="grid3"><input aria-label="Current PvT build" value="${esc(state.answers.pvt)}" oninput="syncField('pvt',this.value)"><input aria-label="Current PvZ build" value="${esc(state.answers.pvz)}" oninput="syncField('pvz',this.value)"><input aria-label="Current PvP build" value="${esc(state.answers.pvp)}" oninput="syncField('pvp',this.value)"></div><div class="help">“I don’t have one” is a useful answer. The form does not teach or replace your builds.</div></div>
+          <div class="field"><label for="question">One thing you genuinely want help understanding</label><textarea id="question" oninput="syncField('question',this.value)">${esc(state.answers.question)}</textarea></div>
+          <div class="checkrow"><input id="replays" type="checkbox" checked><span><strong style="color:var(--text)">Use my current-season replays for private coaching.</strong><br>Older or uncertain games stay excluded from current conclusions.</span></div>
+          <div class="action-strip"><span style="color:var(--dim);font-size:13px">You can revise privacy and recording choices separately.</span><button class="btn" onclick="completeSetup()">Finish setup →</button></div>
+        </div></section>
+        <aside class="card"><div class="card-head"><h3>What happens next</h3><span class="pill">No homework packet</span></div><div class="card-body"><ul class="plain-list"><li><i class="dot"></i><div><strong>Your replay sync is checked.</strong><br><span style="color:var(--muted)">Only the current eligible games enter the working set.</span></div></li><li><i class="dot"></i><div><strong>The coach prepares questions.</strong><br><span style="color:var(--muted)">Automation finds candidates; the coach decides what matters.</span></div></li><li><i class="dot"></i><div><strong>You get one next action.</strong><br><span style="color:var(--muted)">Not a wall of theory, a giant build library, or ten simultaneous fixes.</span></div></li></ul></div></aside>
+      </div>`
+    }
+
+    function studentWeek(){
+      return `<div class="grid2">
+        <section class="focus"><div class="eyebrow">Your one focus</div><div class="big">${esc(state.focus.title)}</div><p>${esc(state.focus.why)}</p><div class="card" style="box-shadow:none"><div class="card-body"><div class="eyebrow">Do this</div><p style="margin:6px 0 12px;color:var(--text)">${esc(state.focus.assignment)}</p><div class="eyebrow">One question after each game</div><p style="margin:6px 0 0;color:var(--text)">${esc(state.focus.check)}</p></div></div><div class="action-strip"><span class="pill gold">Due · ${esc(state.focus.due)}</span><button class="btn secondary" onclick="toast('Demo: replay submission opened')">Submit replay</button></div></section>
+        <aside class="card"><div class="card-head"><h3>Not changing this week</h3><span class="pill green">Protected focus</span></div><div class="card-body"><ul class="plain-list"><li><i class="dot"></i><div>Your hotkeys</div></li><li><i class="dot"></i><div>All three builds at once</div></li><li><i class="dot"></i><div>Your play style after one loss</div></li><li><i class="dot"></i><div>Anything based on obsolete replay results</div></li></ul><details style="margin-top:12px"><summary>Why keep the plan this small?</summary><p>A student should be able to find the current focus, exact action, and submission button in under a minute.</p></details></div></aside>
+      </div>`
+    }
+
+    function studentLocker(){
+      return `<section class="card"><div class="card-head"><div><div class="eyebrow">Private locker</div><h2>Only material chosen for ${esc(state.profile.name)}.</h2></div><span class="pill">No public feed</span></div><div class="card-body">${state.shelf.length?state.shelf.map(item=>`<div class="shelf-item"><div class="file-icon">${esc(item.kind)}</div><div><strong>${esc(item.title)}</strong><p>${esc(item.body)}</p></div><time>${esc(item.date)}</time></div>`).join(''):'<div class="empty">The coach has not added any private items yet.</div>'}</div></section>`
+    }
+
+    function coachView(){
+      const tabs=`<div class="view-tabs"><button class="${state.coachTab==='today'?'on':''}" onclick="setCoachTab('today')">Today</button><button class="${state.coachTab==='review'?'on':''}" onclick="setCoachTab('review')">Replay gate</button><button class="${state.coachTab==='publish'?'on':''}" onclick="setCoachTab('publish')">Set next action</button><button class="${state.coachTab==='manage'?'on':''}" onclick="setCoachTab('manage')">Edit student data</button></div>`;
+      const panel=state.coachTab==='today'?coachToday():state.coachTab==='review'?coachReview():state.coachTab==='publish'?coachPublish():coachManage();
+      return shell(`<div class="roster"><aside class="roster-side"><div class="eyebrow" style="margin-bottom:8px">Private roster</div>${roster().map(s=>`<button class="student-btn ${state.student===s.id?'on':''}" onclick="selectRoster('${s.id}')"><strong>${esc(s.name)}</strong><small>${esc(s.meta)}</small><small style="color:var(--gold);margin-top:3px">${esc(s.status)}</small></button>`).join('')}<p style="color:var(--dim);font-size:12px">This prototype fully wires one student record. The production version uses the same editor for each private student.</p></aside><div>${tabs}${panel}</div></div>`)
+    }
+
+    function coachToday(){return `<div class="kpis"><div class="kpi"><small>Private seats</small><strong>3 / 5</strong></div><div class="kpi"><small>Current replays</small><strong>${esc(state.replayGate.active)}</strong></div><div class="kpi"><small>Locker items</small><strong>${state.shelf.length}</strong></div><div class="kpi"><small>Stale cards</small><strong style="color:var(--red)">0</strong></div></div><div class="grid2" style="margin-top:16px"><section class="card feature"><div class="card-head"><div><div class="eyebrow">${esc(state.profile.name)} · before kickoff</div><h2>Preparation, not a packet.</h2></div><span class="pill gold">Coach workspace</span></div><div class="card-body"><ul class="plain-list"><li><i class="dot"></i><div><strong>Check replay eligibility.</strong><br><span style="color:var(--muted)">Current season first; older evidence remains separate.</span></div></li><li><i class="dot"></i><div><strong>Open games that may answer the player’s question.</strong><br><span style="color:var(--muted)">No automated diagnosis is sent directly.</span></div></li><li><i class="dot"></i><div><strong>Publish one next action.</strong><br><span style="color:var(--muted)">The student does not receive your entire analysis workspace.</span></div></li></ul><div class="editor-actions"><button class="btn" onclick="setCoachTab('review')">Open replay gate →</button><button class="btn secondary" onclick="setCoachTab('manage')">Edit student data</button></div></div></section><aside class="card"><div class="card-head"><h3>Student context</h3><span class="pill cyan">Student-provided</span></div><div class="card-body"><p><strong>Rank:</strong> ${esc(state.answers.rank)}</p><p><strong>Goal:</strong> ${esc(state.answers.goal)}</p><p><strong>Capacity:</strong> ${esc(state.answers.hours)} hours / week</p><p><strong>Question:</strong> ${esc(state.answers.question)}</p><details><summary>How this may be used</summary><p>Goals and capacity may change dose, pacing, and communication. They do not create a strategy claim or make an old replay current.</p></details></div></aside></div>`}
+
+    function coachReview(){const excluded=Number(state.replayGate.bridge)+Number(state.replayGate.historical)+Number(state.replayGate.quarantine);return `<div class="grid2"><section class="card feature"><div class="card-head"><div><div class="eyebrow">Coach-side only</div><h2>Replay admission</h2></div><span class="pill green">${esc(state.replayGate.label)}</span></div><div class="card-body"><div class="lane-row"><span class="pill green">Active</span><strong>${esc(state.replayGate.active)}</strong><span>Current-season candidates; human review still decides relevance.</span></div><div class="lane-row"><span class="pill gold">Bridge</span><strong>${esc(state.replayGate.bridge)}</strong><span>Last-season comparison only when no major patch intervened.</span></div><div class="lane-row"><span class="pill">Historical</span><strong>${esc(state.replayGate.historical)}</strong><span>Reference only; cannot drive a current recommendation.</span></div><div class="lane-row"><span class="pill red">Quarantine</span><strong>${esc(state.replayGate.quarantine)}</strong><span>No coaching use until provenance is repaired.</span></div><details style="margin-top:14px"><summary>What the student needs to see</summary><p>A one-line receipt: “${esc(state.replayGate.active)} current games admitted; ${esc(excluded)} older or uncertain games did not influence your current plan.” The full ledger stays coach-side.</p></details><button class="btn secondary" style="margin-top:14px" onclick="setCoachTab('manage')">Edit these counts</button></div></section><aside class="card"><div class="card-head"><h3>Review queue</h3><span class="pill">Example selection</span></div><div class="card-body"><div class="queue-item"><div class="meta">ACTIVE · CURRENT SEASON · PLAYER QUESTION</div><strong>Representative loss</strong><p>A candidate for review, not an automatic conclusion.</p></div><div class="queue-item"><div class="meta">ACTIVE · CURRENT SEASON · COMPARISON</div><strong>Uncomfortable win</strong><p>The same question may appear despite the result.</p></div><button class="btn" onclick="setCoachTab('publish')">Prepare one next action →</button></div></aside></div>`}
+
+    function coachPublish(){return `<div class="grid2"><section class="card feature"><div class="card-head"><div><div class="eyebrow">Coach judgment</div><h2>Publish only what ${esc(state.profile.name)} needs now.</h2></div><span class="pill gold">Editable draft</span></div><div class="card-body"><div class="field"><label for="focusTitle">One focus</label><input id="focusTitle" value="${esc(state.focus.title)}"></div><div class="field"><label for="focusWhy">Short reason</label><textarea id="focusWhy">${esc(state.focus.why)}</textarea></div><div class="field"><label for="focusAssignment">Exact action</label><textarea id="focusAssignment">${esc(state.focus.assignment)}</textarea></div><div class="field"><label for="focusQuestion">One question</label><textarea id="focusQuestion">${esc(state.focus.check)}</textarea></div><div class="field"><label for="focusDue">Due label</label><input id="focusDue" value="${esc(state.focus.due)}"></div><div class="checkrow"><input type="checkbox" checked><span>Keep replay provenance and detailed analysis in the coach workspace unless the student asks.</span></div><div class="action-strip"><span class="pill cyan">Student receives one card</span><button class="btn" onclick="publishFocus()">Publish to ${esc(state.profile.name)} →</button></div></div></section><aside class="card"><div class="card-head"><h3>Student preview</h3><span class="pill">Under one minute</span></div><div class="card-body"><div class="focus"><div class="eyebrow">Your one focus</div><div class="big">${esc(state.focus.title)}</div><p>${esc(state.focus.why)}</p></div><p style="color:var(--dim);margin-top:12px">No automated strategy verdict. No giant packet.</p><button class="btn secondary" onclick="setView('student');setStudentTab('week')">Open student view</button></div></aside></div>`}
+
+    function coachManage(){return `<div class="editor-stack">
+      <div class="notice"><span>✓</span><div><strong>Edit here—no code required.</strong> Changes save automatically in this browser and appear when you switch to Student view. Download a JSON backup before moving to another computer.</div></div>
+      <section class="editor-card"><header><h3>Student basics</h3><span class="pill cyan">Student-specific</span></header><div class="editor-body">
+        <div class="grid2"><div class="field"><label>Student name</label><input value="${esc(state.profile.name)}" oninput="editProfile('name',this.value)"></div><div class="field"><label>Status</label><input value="${esc(state.profile.status)}" oninput="editProfile('status',this.value)"></div></div>
+        <div class="grid2"><div class="field"><label>Rank / MMR</label><input value="${esc(state.answers.rank)}" oninput="syncField('rank',this.value)"></div><div class="field"><label>Region</label><input value="${esc(state.answers.region)}" oninput="syncField('region',this.value)"></div></div>
+        <div class="grid2"><div class="field"><label>Primary goal</label><input value="${esc(state.answers.goal)}" oninput="syncField('goal',this.value)"></div><div class="field"><label>Hours available each week</label><input type="number" min="0" value="${esc(state.answers.hours)}" oninput="syncField('hours',this.value)"></div></div>
+        <div class="field"><label>The player’s real question</label><textarea oninput="syncField('question',this.value)">${esc(state.answers.question)}</textarea></div>
+        <div class="field"><label>Current build names—not coaching prescriptions</label><div class="grid3"><input aria-label="PvT build" value="${esc(state.answers.pvt)}" oninput="syncField('pvt',this.value)"><input aria-label="PvZ build" value="${esc(state.answers.pvz)}" oninput="syncField('pvz',this.value)"><input aria-label="PvP build" value="${esc(state.answers.pvp)}" oninput="syncField('pvp',this.value)"></div></div>
+      </div></section>
+      <section class="editor-card"><header><h3>Current replay gate</h3><span class="pill gold">Keep seasons separate</span></header><div class="editor-body">
+        <div class="field"><label>Status label</label><input value="${esc(state.replayGate.label)}" oninput="editGate('label',this.value)"></div>
+        <div class="grid3"><div class="field"><label>Active / current</label><input type="number" min="0" value="${esc(state.replayGate.active)}" oninput="editGate('active',this.value)"></div><div class="field"><label>Bridge / last season</label><input type="number" min="0" value="${esc(state.replayGate.bridge)}" oninput="editGate('bridge',this.value)"></div><div class="field"><label>Historical</label><input type="number" min="0" value="${esc(state.replayGate.historical)}" oninput="editGate('historical',this.value)"></div></div>
+        <div class="field"><label>Quarantine / uncertain</label><input type="number" min="0" value="${esc(state.replayGate.quarantine)}" oninput="editGate('quarantine',this.value)"></div>
+        <div class="help">Bridge replays are only eligible when they are from the immediately previous season and no major patch intervened. They are never silently pooled with current-season data.</div>
+      </div></section>
+      <section class="editor-card"><header><h3>Student Locker</h3><span class="pill">${state.shelf.length} items</span></header><div class="editor-body">
+        <div class="grid3"><div class="field"><label>Type</label><select id="lockerKind"><option>NOTE</option><option>PLAN</option><option>LINK</option><option>VIDEO</option><option>BUILD</option></select></div><div class="field" style="grid-column:span 2"><label>Title</label><input id="lockerTitle" placeholder="Example: Session recap"></div></div>
+        <div class="field"><label>Short description</label><textarea id="lockerBody" placeholder="Why this is useful to this student"></textarea></div><button class="btn" onclick="addLockerItem()">Add to Locker</button>
+        <div style="margin-top:14px">${state.shelf.length?state.shelf.map((item,index)=>`<div class="mini-row"><span class="pill">${esc(item.kind)}</span><div><strong>${esc(item.title)}</strong><br><small>${esc(item.body)}</small></div><button class="btn ghost small danger" onclick="removeLockerItem(${index})">Remove</button></div>`).join(''):'<div class="empty">No Locker items yet.</div>'}</div>
+      </div></section>
+      <section class="editor-card"><header><h3>Backup and restore</h3><span class="pill green">Local prototype</span></header><div class="editor-body"><p style="color:var(--muted)">This demo saves to this browser only. Export a backup to move or preserve the student record. A real release would write to your authenticated database.</p><div class="editor-actions"><button class="btn secondary" onclick="exportData()">Download data backup</button><label class="btn secondary" for="importFile">Restore a backup</label><input id="importFile" type="file" accept="application/json" hidden onchange="importData(this.files[0]);this.value=''"> <button class="btn ghost small danger" onclick="resetDemo()">Reset demo data</button></div></div></section>
+    </div>`}
+
+    function render(){document.getElementById('studentToggle').classList.toggle('on',state.view==='student');document.getElementById('coachToggle').classList.toggle('on',state.view==='coach');document.getElementById('app').innerHTML=state.view==='student'?studentView():coachView()}
+    render();
+  </script>
+</body>
+</html>

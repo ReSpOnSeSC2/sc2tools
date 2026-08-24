@@ -1,0 +1,331 @@
+<!doctype html><html><head><meta charset="utf-8">
+<title>SC2 Tools Coaching — Opening Packet — Demo Student</title><style>
+@page { size: letter; margin: 16mm 14mm; }
+* { box-sizing: border-box; }
+body { font: 10.5pt/1.55 'Segoe UI', system-ui, sans-serif; color: #111827; margin: 0; background:#fff; }
+h1 { font-size: 21pt; margin: 0 0 2pt; letter-spacing: -.01em; }
+h2 { font-size: 13pt; margin: 18pt 0 6pt; color: #2563eb; border-bottom: 1.5pt solid #2563eb22; padding-bottom: 3pt; }
+h3 { font-size: 11pt; margin: 12pt 0 4pt; }
+.brand { color: #2563eb; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 8.5pt; }
+.mute { color: #6b7280; font-size: 9pt; }
+.tag { display:inline-block; background:#2563eb14; color:#2563eb; border-radius: 9pt; padding: 1pt 8pt; font-size: 8.5pt; font-weight:600; margin-right:4pt; }
+.tag.gold { background:#b8860b1a; color:#b8860b; }
+.tag.warn { background:#dc26261a; color:#b91c1c; }
+.card { border: 1pt solid #e5e7eb; border-radius: 8pt; padding: 10pt 12pt; margin: 8pt 0; page-break-inside: avoid; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+th { text-align: left; color: #6b7280; font-weight: 600; border-bottom: 1pt solid #d1d5db; padding: 2pt 6pt; }
+td { padding: 2pt 6pt; border-bottom: .5pt solid #f3f4f6; }
+.num { font-variant-numeric: tabular-nums; }
+.cols { display: flex; gap: 12pt; } .cols > div { flex: 1; }
+.cols table { font-size: 8pt; } .cols td, .cols th { padding: 1pt 5pt; line-height: 1.2; }
+.cols .card { padding: 6pt 9pt; margin: 4pt 0; } .cols h3 { margin: 4pt 0 3pt; }
+.buildhead p { margin: 3pt 0; }
+.callout { background: #2563eb0d; border-left: 3pt solid #2563eb; padding: 8pt 10pt; border-radius: 0 6pt 6pt 0; margin: 8pt 0; }
+.pb { page-break-before: always; }
+.qa { border-bottom: .75pt solid #d1d5db; height: 16pt; }
+ol li, ul li { margin: 3pt 0; }
+.grade-scale td { padding: 3pt 6pt; }
+footer { margin-top: 24pt; font-size: 8pt; color: #6b7280; }
+</style></head><body>
+
+<div class="brand">SC2 Tools Coaching · sc2tools.com</div>
+<h1>Welcome, Demo Student.</h1>
+<p class="mute">Personal opening packet · prepared by coach ReSpOnSe · season 68 · packet v1</p>
+
+<div class="callout"><b>The program in one sentence:</b> you will be run like a pro-team player —
+my builds from my current-season ladder games, automated execution grading on every replay you submit,
+and a personal analytics record that shows exactly what improved and when.</div>
+
+<h2>How this works</h2>
+<ol>
+<li><b>You get my real builds.</b> Each matchup section below is generated from my own ladder database
+(591 parsed games this cycle) — the exact game it came from is cited, and the benchmark
+timings are my medians, not copied guides.</li>
+<li><b>You play them on ladder</b> and drop your replays in your submission channel. Every replay is
+machine-graded against my benchmarks the same day: a letter grade, a milestone-by-milestone delta table,
+and focus points. I personally review and annotate your lowest and strongest replay each week.</li>
+<li><b>We meet weekly.</b> Sessions start from your data — the recurring deviation, the trend, one drill.
+No generic lectures.</li>
+<li><b>The packet is alive.</b> When the season rolls or the meta moves, this document regenerates and
+you get a changelog. Your build library stays current for as long as you train with me.</li>
+</ol>
+
+<h2>Your profile & goals</h2>
+<div class="card">
+<p><b>Current MMR:</b> PvT 4380 · PvZ 4310 · PvP 4450<br>
+<b>Focus matchups:</b> PvT, PvZ<br>
+<b>Assigned builds:</b> PvT - Phoenix into Robo, PvP - Strange&#x27;s 1 Gate Expand, PvZ - DT into 3 Stargate Void Ray</p>
+<ul><li>Stabilize PvT opening: Stargate and Robo within grace window in 8 of 10 games</li><li>Break 4500 in PvT by executing one build to automaticity</li><li>Stop probe cuts during Phoenix harass windows</li></ul>
+</div>
+
+<h2>How grading works</h2>
+<div class="cols">
+<div class="card"><h3>The report card</h3>
+<p>Each milestone in your assigned build has a target (my median). Hit it within <b>12 seconds</b> for
+full credit; credit decays to zero at 90 seconds off. Buildings weigh double, upgrades 1.5×, units 1×.
+The weighted average is your <b>Build Adherence Score</b>.</p>
+<table class="grade-scale"><tr><th>Score</th><th>Grade</th><th>Meaning</th></tr>
+<tr><td class="num">93+</td><td>A</td><td>Pro-level execution — we work on decisions</td></tr>
+<tr><td class="num">80–92</td><td>B</td><td>Solid — one or two leaks to close</td></tr>
+<tr><td class="num">60–79</td><td>C–D</td><td>The build isn't automatic yet — drill weeks</td></tr>
+<tr><td class="num">&lt;60</td><td>F</td><td>Wrong build or major derailment — we watch it together</td></tr></table>
+</div>
+<div class="card"><h3>Submitting replays</h3>
+<ol>
+<li>Play your <b>assigned</b> build for the matchup — grading is against that assignment.</li>
+<li>Drop the .SC2Replay in your private channel (or submission folder).</li>
+<li>Same day you get the report card. Cheese games under 4 minutes don't count against your trend.</li>
+<li>Aim for <b>10+ graded games per matchup per week</b>. Consistency beats volume.</li>
+</ol>
+<p class="mute">Scores are graded on trend, not absolutes — early weeks are your baseline, not a judgment.</p>
+</div>
+</div>
+
+<h2>Practice protocol</h2>
+<div class="card">
+<ul>
+<li><b>Warm-up (10 min):</b> one no-opponent build execution vs Elite AI or in-unit-tester — full build to 8:00, benchmarks open on second screen.</li>
+<li><b>Ladder block:</b> 3–5 games max per sitting, same build every game regardless of result.</li>
+<li><b>One-mistake review (2 min/game):</b> open the report card, find the single worst milestone, say out loud why it slipped, queue again.</li>
+<li><b>Stop rule:</b> two tilted losses in a row = end the block. Tilted reps train the wrong thing.</li>
+</ul>
+</div>
+
+
+<div class="pb buildhead">
+<h2 style="margin-top:0">PvT - Phoenix into Robo</h2>
+<p><span class="tag">PvT</span>
+<span class="tag gold">61.5% win rate · 117 games</span>
+<span class="tag">season 68</span> <span class='tag warn'>pre-season example — newest on record</span></p>
+<p class="mute">Reference game: White Rabbit LE vs PovertyTech (Terran) —
+2026-05-25, Win. Every timing below is from coach ReSpOnSe's real ladder games; the
+benchmark column is the <b>median across all 117 games</b> of this build.</p>
+<div class="cols">
+  <div class="card"><h3>Supply-by-supply opening</h3>
+    <table><tr><th>Supply</th><th>Clock</th><th>Action</th><th></th></tr><tr><td class='num'>14</td><td class='num'>0:19</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>15</td><td class='num'>0:42</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>17</td><td class='num'>0:50</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>19</td><td class='num'>1:19</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>20</td><td class='num'>1:33</td><td>CyberneticsCore</td><td class='mute'>building</td></tr>
+<tr><td class='num'>21</td><td class='num'>1:40</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>22</td><td class='num'>1:50</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>26</td><td class='num'>2:22</td><td>Stargate</td><td class='mute'>building</td></tr>
+<tr><td class='num'>26</td><td class='num'>2:27</td><td>Stalker</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>35</td><td class='num'>2:59</td><td>RoboticsFacility</td><td class='mute'>building</td></tr>
+<tr><td class='num'>35</td><td class='num'>3:00</td><td>Adept</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>42</td><td class='num'>3:29</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>42</td><td class='num'>3:33</td><td>Adept</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>45</td><td class='num'>3:40</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>46</td><td class='num'>3:43</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>46</td><td class='num'>3:47</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>48</td><td class='num'>4:01</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>54</td><td class='num'>4:03</td><td>Adept</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>54</td><td class='num'>4:08</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:11</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:14</td><td>WarpGateResearch</td><td class='mute'>upgrade</td></tr>
+<tr><td class='num'>59</td><td class='num'>4:25</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>60</td><td class='num'>4:35</td><td>Immortal</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>61</td><td class='num'>4:38</td><td>RoboticsBay</td><td class='mute'>building</td></tr>
+<tr><td class='num'>61</td><td class='num'>4:38</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>61</td><td class='num'>4:41</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>65</td><td class='num'>4:53</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>66</td><td class='num'>5:10</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>66</td><td class='num'>5:11</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>80</td><td class='num'>5:29</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>80</td><td class='num'>5:30</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>80</td><td class='num'>5:30</td><td>Zealot</td><td class='mute'>unit</td></tr></table>
+  </div>
+  <div class="card"><h3>Benchmarks you are graded on</h3>
+    <table><tr><th>Milestone</th><th>Median</th><th>@Supply</th><th>Spread</th><th>n</th></tr><tr><td>Pylon #1</td><td class='num'>0:19</td><td class='num'>14.0</td><td class='num'>±0s</td><td class='num mute'>117</td></tr>
+<tr><td>Gateway #1</td><td class='num'>0:38</td><td class='num'>15.0</td><td class='num'>±1s</td><td class='num mute'>117</td></tr>
+<tr><td>Assimilator #1</td><td class='num'>0:46</td><td class='num'>16.0</td><td class='num'>±0s</td><td class='num mute'>117</td></tr>
+<tr><td>Nexus #2</td><td class='num'>1:23</td><td class='num'>20.0</td><td class='num'>±1s</td><td class='num mute'>117</td></tr>
+<tr><td>CyberneticsCore</td><td class='num'>1:33</td><td class='num'>20.0</td><td class='num'>±1s</td><td class='num mute'>117</td></tr>
+<tr><td>Assimilator #2</td><td class='num'>1:41</td><td class='num'>21.0</td><td class='num'>±2s</td><td class='num mute'>117</td></tr>
+<tr><td>Pylon #2</td><td class='num'>1:51</td><td class='num'>21.0</td><td class='num'>±2s</td><td class='num mute'>117</td></tr>
+<tr><td>Stargate #1</td><td class='num'>2:27</td><td class='num'>26.0</td><td class='num'>±3s</td><td class='num mute'>117</td></tr>
+<tr><td>Stalker</td><td class='num'>2:29</td><td class='num'>26.0</td><td class='num'>±2s</td><td class='num mute'>115</td></tr>
+<tr><td>Adept</td><td class='num'>3:02</td><td class='num'>34.0</td><td class='num'>±3s</td><td class='num mute'>106</td></tr>
+<tr><td>Sentry</td><td class='num'>3:26</td><td class='num'>42.0</td><td class='num'>±5s</td><td class='num mute'>115</td></tr>
+<tr><td>Phoenix</td><td class='num'>3:30</td><td class='num'>43.0</td><td class='num'>±6s</td><td class='num mute'>117</td></tr>
+<tr><td>Gateway #2</td><td class='num'>3:44</td><td class='num'>46.0</td><td class='num'>±12s</td><td class='num mute'>117</td></tr>
+<tr><td>RoboticsFacility #1</td><td class='num'>3:58</td><td class='num'>47.0</td><td class='num'>±15s</td><td class='num mute'>117</td></tr>
+<tr><td>Assimilator #3</td><td class='num'>4:04</td><td class='num'>50.0</td><td class='num'>±11s</td><td class='num mute'>113</td></tr>
+<tr><td>Assimilator #4</td><td class='num'>4:11</td><td class='num'>51.0</td><td class='num'>±10s</td><td class='num mute'>111</td></tr>
+<tr><td>WarpGateResearch</td><td class='num'>4:22</td><td class='num'>54.0</td><td class='num'>±3s</td><td class='num mute'>116</td></tr>
+<tr><td>Zealot</td><td class='num'>4:55</td><td class='num'>63.0</td><td class='num'>±18s</td><td class='num mute'>99</td></tr>
+<tr><td>RoboticsBay</td><td class='num'>5:01</td><td class='num'>63.0</td><td class='num'>±12s</td><td class='num mute'>105</td></tr>
+<tr><td>Nexus #3</td><td class='num'>5:19</td><td class='num'>69.0</td><td class='num'>±22s</td><td class='num mute'>87</td></tr>
+<tr><td>Immortal</td><td class='num'>5:26</td><td class='num'>70.0</td><td class='num'>±16s</td><td class='num mute'>93</td></tr></table>
+    <h3 style="margin-top:8pt">Chrono plan (reference game)</h3>
+    <p class="mute">0:37 → Nexus · 2:09 → Gateway · 2:39 → Nexus · 5:13 → RoboticsFacility · 5:38 → RoboticsFacility · 5:59 → RoboticsFacility · 7:40 → TwilightCouncil</p>
+  </div>
+</div>
+</div>
+
+<div class="pb buildhead">
+<h2 style="margin-top:0">PvP - Strange&#x27;s 1 Gate Expand</h2>
+<p><span class="tag">PvP</span>
+<span class="tag gold">75.5% win rate · 49 games</span>
+<span class="tag">season 68</span> <span class='tag warn'>pre-season example — newest on record</span></p>
+<p class="mute">Reference game: White Rabbit LE vs NoCannonRush (Protoss) —
+2026-05-02, Win. Every timing below is from coach ReSpOnSe's real ladder games; the
+benchmark column is the <b>median across all 49 games</b> of this build.</p>
+<div class="cols">
+  <div class="card"><h3>Supply-by-supply opening</h3>
+    <table><tr><th>Supply</th><th>Clock</th><th>Action</th><th></th></tr><tr><td class='num'>14</td><td class='num'>0:28</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>15</td><td class='num'>0:49</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>17</td><td class='num'>0:58</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>17</td><td class='num'>1:03</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>20</td><td class='num'>1:30</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>20</td><td class='num'>1:39</td><td>CyberneticsCore</td><td class='mute'>building</td></tr>
+<tr><td class='num'>22</td><td class='num'>1:58</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>22</td><td class='num'>2:02</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>26</td><td class='num'>2:25</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>27</td><td class='num'>2:37</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>27</td><td class='num'>2:39</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>31</td><td class='num'>2:47</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>33</td><td class='num'>3:03</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>37</td><td class='num'>3:16</td><td>RoboticsFacility</td><td class='mute'>building</td></tr>
+<tr><td class='num'>38</td><td class='num'>3:26</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>41</td><td class='num'>3:35</td><td>WarpGateResearch</td><td class='mute'>upgrade</td></tr>
+<tr><td class='num'>41</td><td class='num'>3:37</td><td>TwilightCouncil</td><td class='mute'>building</td></tr>
+<tr><td class='num'>41</td><td class='num'>3:48</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>45</td><td class='num'>3:49</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>45</td><td class='num'>4:00</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>52</td><td class='num'>4:12</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>52</td><td class='num'>4:14</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>53</td><td class='num'>4:30</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>53</td><td class='num'>4:36</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>53</td><td class='num'>4:42</td><td>Immortal</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:47</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:49</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>59</td><td class='num'>5:00</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>59</td><td class='num'>5:01</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>59</td><td class='num'>5:13</td><td>Immortal</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>59</td><td class='num'>5:13</td><td>Stalker</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>63</td><td class='num'>5:18</td><td>Stalker</td><td class='mute'>unit</td></tr></table>
+  </div>
+  <div class="card"><h3>Benchmarks you are graded on</h3>
+    <table><tr><th>Milestone</th><th>Median</th><th>@Supply</th><th>Spread</th><th>n</th></tr><tr><td>Pylon #1</td><td class='num'>0:19</td><td class='num'>14.0</td><td class='num'>±0s</td><td class='num mute'>49</td></tr>
+<tr><td>Gateway #1</td><td class='num'>0:39</td><td class='num'>15.0</td><td class='num'>±1s</td><td class='num mute'>49</td></tr>
+<tr><td>Assimilator #1</td><td class='num'>0:46</td><td class='num'>16.0</td><td class='num'>±1s</td><td class='num mute'>49</td></tr>
+<tr><td>Nexus #2</td><td class='num'>1:22</td><td class='num'>19.0</td><td class='num'>±3s</td><td class='num mute'>49</td></tr>
+<tr><td>CyberneticsCore</td><td class='num'>1:32</td><td class='num'>20.0</td><td class='num'>±2s</td><td class='num mute'>49</td></tr>
+<tr><td>Assimilator #2</td><td class='num'>1:39</td><td class='num'>20.0</td><td class='num'>±2s</td><td class='num mute'>49</td></tr>
+<tr><td>Pylon #2</td><td class='num'>1:51</td><td class='num'>21.0</td><td class='num'>±2s</td><td class='num mute'>49</td></tr>
+<tr><td>Gateway #2</td><td class='num'>2:25</td><td class='num'>26.0</td><td class='num'>±7s</td><td class='num mute'>49</td></tr>
+<tr><td>Gateway #3</td><td class='num'>2:37</td><td class='num'>27.0</td><td class='num'>±11s</td><td class='num mute'>49</td></tr>
+<tr><td>Sentry</td><td class='num'>2:39</td><td class='num'>27.0</td><td class='num'>±4s</td><td class='num mute'>49</td></tr>
+<tr><td>WarpGateResearch</td><td class='num'>3:21</td><td class='num'>34.0</td><td class='num'>±5s</td><td class='num mute'>49</td></tr>
+<tr><td>Phoenix</td><td class='num'>3:27</td><td class='num'>36.0</td><td class='num'>±17s</td><td class='num mute'>35</td></tr>
+<tr><td>Stalker</td><td class='num'>3:35</td><td class='num'>37.0</td><td class='num'>±7s</td><td class='num mute'>49</td></tr>
+<tr><td>RoboticsFacility #1</td><td class='num'>4:02</td><td class='num'>44.0</td><td class='num'>±61s</td><td class='num mute'>29</td></tr>
+<tr><td>Assimilator #3</td><td class='num'>4:19</td><td class='num'>45.0</td><td class='num'>±30s</td><td class='num mute'>33</td></tr>
+<tr><td>Zealot</td><td class='num'>4:43</td><td class='num'>48.0</td><td class='num'>±25s</td><td class='num mute'>29</td></tr></table>
+    <h3 style="margin-top:8pt">Chrono plan (reference game)</h3>
+    <p class="mute">0:46 → Nexus · 1:09 → Nexus · 2:16 → CyberneticsCore · 3:13 → CyberneticsCore · 4:37 → TwilightCouncil · 4:56 → RoboticsFacility · 5:25 → RoboticsFacility · 5:46 → TwilightCouncil</p>
+  </div>
+</div>
+</div>
+
+<div class="pb buildhead">
+<h2 style="margin-top:0">PvZ - DT into 3 Stargate Void Ray</h2>
+<p><span class="tag">PvZ</span>
+<span class="tag gold">85.2% win rate · 27 games</span>
+<span class="tag">season 68</span> <span class='tag warn'>pre-season example — newest on record</span></p>
+<p class="mute">Reference game: White Rabbit LE vs JmaC (Zerg) —
+2026-05-09, Win. Every timing below is from coach ReSpOnSe's real ladder games; the
+benchmark column is the <b>median across all 27 games</b> of this build.</p>
+<div class="cols">
+  <div class="card"><h3>Supply-by-supply opening</h3>
+    <table><tr><th>Supply</th><th>Clock</th><th>Action</th><th></th></tr><tr><td class='num'>14</td><td class='num'>0:20</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>15</td><td class='num'>0:39</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>17</td><td class='num'>0:56</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>20</td><td class='num'>1:28</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>20</td><td class='num'>1:37</td><td>CyberneticsCore</td><td class='mute'>building</td></tr>
+<tr><td class='num'>21</td><td class='num'>1:49</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>21</td><td class='num'>1:53</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>27</td><td class='num'>2:32</td><td>Stalker</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>27</td><td class='num'>2:35</td><td>TwilightCouncil</td><td class='mute'>building</td></tr>
+<tr><td class='num'>29</td><td class='num'>2:45</td><td>Gateway</td><td class='mute'>building</td></tr>
+<tr><td class='num'>37</td><td class='num'>3:15</td><td>Sentry</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>37</td><td class='num'>3:16</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>38</td><td class='num'>3:22</td><td>DarkShrine</td><td class='mute'>building</td></tr>
+<tr><td class='num'>39</td><td class='num'>3:30</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>41</td><td class='num'>3:43</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>41</td><td class='num'>3:44</td><td>Assimilator</td><td class='mute'>building</td></tr>
+<tr><td class='num'>43</td><td class='num'>3:48</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>43</td><td class='num'>3:55</td><td>WarpGateResearch</td><td class='mute'>upgrade</td></tr>
+<tr><td class='num'>44</td><td class='num'>3:57</td><td>Stargate</td><td class='mute'>building</td></tr>
+<tr><td class='num'>44</td><td class='num'>4:01</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>44</td><td class='num'>4:01</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>48</td><td class='num'>4:11</td><td>Stalker</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>49</td><td class='num'>4:20</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:41</td><td>DarkTemplar</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:41</td><td>DarkTemplar</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:43</td><td>Stargate</td><td class='mute'>building</td></tr>
+<tr><td class='num'>55</td><td class='num'>4:45</td><td>Pylon</td><td class='mute'>building</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:52</td><td>Nexus</td><td class='mute'>building</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:53</td><td>Stargate</td><td class='mute'>building</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:55</td><td>Forge</td><td class='mute'>building</td></tr>
+<tr><td class='num'>57</td><td class='num'>4:57</td><td>Phoenix</td><td class='mute'>unit</td></tr>
+<tr><td class='num'>64</td><td class='num'>5:30</td><td>PhotonCannon</td><td class='mute'>building</td></tr></table>
+  </div>
+  <div class="card"><h3>Benchmarks you are graded on</h3>
+    <table><tr><th>Milestone</th><th>Median</th><th>@Supply</th><th>Spread</th><th>n</th></tr><tr><td>Pylon #1</td><td class='num'>0:20</td><td class='num'>14.0</td><td class='num'>±1s</td><td class='num mute'>27</td></tr>
+<tr><td>Gateway #1</td><td class='num'>0:39</td><td class='num'>15.0</td><td class='num'>±1s</td><td class='num mute'>27</td></tr>
+<tr><td>Assimilator #1</td><td class='num'>0:48</td><td class='num'>16.0</td><td class='num'>±1s</td><td class='num mute'>27</td></tr>
+<tr><td>Nexus #2</td><td class='num'>1:25</td><td class='num'>20.0</td><td class='num'>±2s</td><td class='num mute'>27</td></tr>
+<tr><td>CyberneticsCore</td><td class='num'>1:34</td><td class='num'>20.0</td><td class='num'>±1s</td><td class='num mute'>27</td></tr>
+<tr><td>Assimilator #2</td><td class='num'>1:45</td><td class='num'>21.0</td><td class='num'>±3s</td><td class='num mute'>27</td></tr>
+<tr><td>Pylon #2</td><td class='num'>1:52</td><td class='num'>21.0</td><td class='num'>±1s</td><td class='num mute'>27</td></tr>
+<tr><td>Stalker</td><td class='num'>2:32</td><td class='num'>27.0</td><td class='num'>±3s</td><td class='num mute'>27</td></tr>
+<tr><td>TwilightCouncil</td><td class='num'>2:34</td><td class='num'>27.0</td><td class='num'>±9s</td><td class='num mute'>27</td></tr>
+<tr><td>Gateway #2</td><td class='num'>2:44</td><td class='num'>29.0</td><td class='num'>±8s</td><td class='num mute'>27</td></tr>
+<tr><td>Sentry</td><td class='num'>3:11</td><td class='num'>35.0</td><td class='num'>±15s</td><td class='num mute'>27</td></tr>
+<tr><td>Gateway #3</td><td class='num'>3:11</td><td class='num'>37.0</td><td class='num'>±18s</td><td class='num mute'>15</td></tr>
+<tr><td>Phoenix</td><td class='num'>3:16</td><td class='num'>37.0</td><td class='num'>±17s</td><td class='num mute'>27</td></tr>
+<tr><td>DarkShrine</td><td class='num'>3:26</td><td class='num'>38.0</td><td class='num'>±9s</td><td class='num mute'>27</td></tr>
+<tr><td>Assimilator #3</td><td class='num'>3:43</td><td class='num'>39.0</td><td class='num'>±14s</td><td class='num mute'>27</td></tr>
+<tr><td>Assimilator #4</td><td class='num'>3:45</td><td class='num'>41.0</td><td class='num'>±11s</td><td class='num mute'>27</td></tr>
+<tr><td>WarpGateResearch</td><td class='num'>3:52</td><td class='num'>42.0</td><td class='num'>±2s</td><td class='num mute'>27</td></tr>
+<tr><td>Stargate #1</td><td class='num'>4:13</td><td class='num'>45.0</td><td class='num'>±14s</td><td class='num mute'>27</td></tr>
+<tr><td>Stargate #2</td><td class='num'>4:24</td><td class='num'>47.0</td><td class='num'>±11s</td><td class='num mute'>27</td></tr>
+<tr><td>Forge</td><td class='num'>4:26</td><td class='num'>48.5</td><td class='num'>±25s</td><td class='num mute'>26</td></tr>
+<tr><td>Stargate #3</td><td class='num'>4:39</td><td class='num'>50.0</td><td class='num'>±14s</td><td class='num mute'>27</td></tr>
+<tr><td>DarkTemplar</td><td class='num'>4:51</td><td class='num'>54.0</td><td class='num'>±11s</td><td class='num mute'>25</td></tr>
+<tr><td>Nexus #3</td><td class='num'>5:01</td><td class='num'>56.0</td><td class='num'>±9s</td><td class='num mute'>26</td></tr>
+<tr><td>PhotonCannon</td><td class='num'>5:25</td><td class='num'>66.0</td><td class='num'>±11s</td><td class='num mute'>17</td></tr>
+<tr><td>VoidRay</td><td class='num'>5:49</td><td class='num'>70.0</td><td class='num'>±5s</td><td class='num mute'>18</td></tr></table>
+    <h3 style="margin-top:8pt">Chrono plan (reference game)</h3>
+    <p class="mute">0:37 → Nexus · 2:14 → Gateway · 2:40 → Nexus · 5:17 → Stargate · 5:45 → Stargate · 7:47 → Stargate · 7:49 → Nexus · 7:51 → CyberneticsCore</p>
+  </div>
+</div>
+</div>
+
+<div class="pb"></div>
+<h2>Intake questionnaire (bring to session 1)</h2>
+<div class="card">
+<p>1. Current / peak MMR per matchup this season:</p><div class="qa"></div>
+<p>2. Three recent losses that <i>hurt</i> — map, matchup, what you think went wrong:</p><div class="qa"></div><div class="qa"></div><div class="qa"></div>
+<p>3. What do you blame most for lost games? (macro / builds / scouting / engagements / mental):</p><div class="qa"></div>
+<p>4. Practice hours per week you can actually commit:</p><div class="qa"></div>
+<p>5. Setup: camera hotkeys? rapid-fire? control-group layout? warp-in habit?</p><div class="qa"></div><div class="qa"></div>
+<p>6. Send 5 recent replays (any result) <b>before</b> our first call — your baseline report cards will be ready when we start.</p>
+</div>
+
+<h2>Logistics</h2>
+<div class="card">
+<ul>
+<li><b>Sessions:</b> weekly 60 min, booked via your scheduling link; 24-hour reschedule policy.</li>
+<li><b>SC2 Tools access:</b> your account includes the full app — opponent dossiers, auto build classification of your own games, and the OBS overlay. Activation steps arrive with your Discord invite.</li>
+<li><b>Between sessions:</b> unlimited replay submissions on assigned builds; questions in your private channel answered within 24h on weekdays.</li>
+<li><b>Roster:</b> this program takes a maximum of six students at a time.</li>
+</ul>
+</div>
+
+<footer>SC2 Tools Coaching · coach ReSpOnSe · generated from the season-68 build database ·
+StarCraft® II is a trademark of Blizzard Entertainment, Inc. SC2 Tools is an independent project,
+not affiliated with or endorsed by Blizzard Entertainment.</footer>
+</body></html>

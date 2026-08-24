@@ -1,0 +1,346 @@
+<title>SC2 Tools Locker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#0a0d14; --panel:#101622; --panel2:#141c2b; --line:#202b3e; --ink:#d9e2f0;
+  --mute:#7f8ca3; --gold:#d4a843; --gold-dim:#8a6f2f; --blue:#5aa7ff; --win:#43b581; --loss:#e06c6c;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace; --disp:'Rajdhani','IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;min-height:100vh}
+button{font:inherit;cursor:pointer}
+input,textarea,select{font:inherit;background:#0d1320;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 10px}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+textarea{width:100%;resize:vertical}
+h1,h2,h3,.d{font-family:var(--disp)}
+/* app bar */
+.bar{display:flex;align-items:center;gap:16px;padding:12px 22px;border-bottom:1px solid var(--line);background:#0c1019;position:sticky;top:0;z-index:5}
+.logo{font-family:var(--disp);font-weight:700;letter-spacing:.14em;color:var(--gold);font-size:15px;text-transform:uppercase}
+.logo span{color:var(--mute);font-weight:600}
+.viewtoggle{margin-left:auto;display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.viewtoggle button{background:none;border:0;color:var(--mute);padding:7px 16px;font-family:var(--disp);font-weight:600;letter-spacing:.06em;font-size:14px}
+.viewtoggle button.on{background:var(--panel2);color:var(--gold)}
+.mocknote{color:var(--mute);font-size:11.5px}
+.wrap{max-width:1120px;margin:0 auto;padding:24px 20px 70px}
+/* generic */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:20px;font-weight:700}
+.card h3{margin:0;font-size:13px;letter-spacing:.13em;text-transform:uppercase;color:var(--blue);font-weight:600}
+.sub{color:var(--mute);font-size:13px}
+.pill{display:inline-block;font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.06em;border:1px solid var(--line);color:var(--mute);border-radius:4px;padding:1px 9px;margin-right:6px}
+.pill.g{color:var(--gold);border-color:var(--gold-dim)} .pill.b{color:var(--blue);border-color:#2c4a75}
+.pill.w{color:var(--win);border-color:#2b5643} .pill.r{color:var(--loss);border-color:#5c3434}
+.btn{background:none;border:1px solid var(--gold-dim);color:var(--gold);border-radius:7px;padding:7px 16px;font-family:var(--disp);font-weight:700;letter-spacing:.07em;font-size:13.5px}
+.btn:hover{background:#d4a84314}
+.btn.q{border-color:var(--line);color:var(--mute)} .btn.q:hover{color:var(--ink)}
+.btn.sm{padding:3px 10px;font-size:12.5px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.side{display:none}}
+/* coach layout */
+.coach{display:grid;grid-template-columns:225px 1fr;gap:20px}
+.side .st{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--ink);margin-bottom:7px}
+.side .st.on{border-color:var(--gold-dim);background:var(--panel2)}
+.side .st .nm{font-weight:600} .side .st .mu{color:var(--mute);font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{background:none;border:1px solid var(--line);border-radius:7px;color:var(--mute);padding:6px 15px;font-family:var(--disp);font-weight:600;letter-spacing:.05em}
+.tabs button.on{color:var(--gold);border-color:var(--gold-dim);background:var(--panel)}
+/* shelf */
+.shelfitem{display:flex;gap:13px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px;background:var(--panel2)}
+.icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.04em;flex:none;border:1px solid var(--line)}
+.icon.voice{color:var(--gold);border-color:var(--gold-dim)} .icon.video{color:var(--blue)} .icon.pdf{color:var(--loss)} .icon.replay{color:var(--win)} .icon.notes{color:var(--ink)}
+.shelfitem .t{font-weight:600;font-size:14px} .shelfitem .n{color:var(--mute);font-size:13px;margin-top:2px}
+.shelfitem .d8{margin-left:auto;color:var(--mute);font-size:11.5px;white-space:nowrap;font-family:var(--mono)}
+.wave{display:inline-flex;gap:2px;align-items:flex-end;height:14px;margin-left:8px;vertical-align:middle}
+.wave i{width:3px;background:var(--gold-dim);border-radius:1px}
+/* builder blocks */
+.block{border:1px solid var(--line);border-left:3px solid var(--gold-dim);border-radius:9px;background:var(--panel2);padding:13px 15px;margin-bottom:11px}
+.block .bh{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.block .bh .ty{font-family:var(--disp);font-weight:700;font-size:11.5px;letter-spacing:.1em;color:var(--gold);text-transform:uppercase}
+.block .bh .tools{margin-left:auto;display:flex;gap:4px}
+.block .bh .tools button{background:none;border:1px solid var(--line);color:var(--mute);border-radius:5px;padding:1px 8px;font-size:12px}
+.block input.q{width:100%;font-weight:600}
+.opt{display:flex;gap:7px;align-items:center;margin-top:6px}
+.opt input[type=text]{flex:1}
+.addbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px}
+.addbar button{background:var(--panel);border:1px dashed var(--line);color:var(--mute);border-radius:7px;padding:6px 13px;font-size:13px}
+.addbar button:hover{color:var(--gold);border-color:var(--gold-dim)}
+/* annotate */
+.anno{position:relative;margin-top:9px}
+canvas.shot{width:100%;border-radius:8px;border:1px solid var(--line);display:block;touch-action:none;cursor:crosshair}
+.annotools{display:flex;gap:6px;margin-top:7px}
+.annotools button{background:var(--panel);border:1px solid var(--line);color:var(--mute);border-radius:6px;padding:4px 12px;font-size:12.5px}
+.annotools button.on{color:var(--gold);border-color:var(--gold-dim)}
+/* student locker */
+.hero{display:flex;align-items:flex-end;gap:18px;margin-bottom:18px;flex-wrap:wrap}
+.hero h1{font-size:34px;margin:0;line-height:1.05}
+.hero .mu{color:var(--mute)}
+.stat{font-family:var(--mono);font-size:13px;color:var(--mute)} .stat b{color:var(--ink);font-weight:500}
+.bcard{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel2);margin-bottom:9px}
+.bcard .nm{font-weight:600} .bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
+.spark{margin-top:4px}
+/* student worksheet */
+.mcq{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+.mcq label{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer;background:#0d1320}
+.mcq label:has(input:checked){border-color:var(--gold-dim);background:#d4a8430d}
+.drop{border:1.5px dashed var(--line);border-radius:9px;padding:18px;text-align:center;color:var(--mute);margin-top:9px;cursor:pointer}
+.drop.done{border-color:#2b5643;color:var(--win)}
+.scale{display:flex;gap:5px;margin-top:9px}
+.scale button{width:34px;height:34px;border-radius:7px;border:1px solid var(--line);background:#0d1320;color:var(--mute);font-family:var(--mono)}
+.scale button.on{border-color:var(--gold-dim);color:var(--gold);background:#d4a84312}
+.sent{border:1px solid #2b5643;background:#43b5810d;color:var(--win);border-radius:9px;padding:12px 15px;font-weight:600;font-family:var(--disp);letter-spacing:.04em}
+img.annoimg{width:100%;border-radius:8px;border:1px solid var(--line);display:block}
+.footer{color:var(--mute);font-size:12px;margin-top:26px;border-top:1px solid var(--line);padding-top:12px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--gold-dim);color:var(--gold);padding:8px 18px;border-radius:8px;font-family:var(--disp);font-weight:600;letter-spacing:.05em;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+
+<div class="bar">
+  <div class="logo">SC2 Tools <span>· Coaching</span></div>
+  <div class="mocknote">interactive mock — nothing here is saved or sent</div>
+  <div class="viewtoggle" role="tablist" aria-label="View">
+    <button id="vtC" class="on" onclick="setView('coach')">Coach view</button>
+    <button id="vtS" onclick="setView('student')">Student view</button>
+  </div>
+</div>
+<div class="wrap" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- demo data (in-memory only) ---------------- */
+const STUDENTS=[
+ {id:"alex",name:"Alex",mmr:"4.4k",matchups:"PvT focus",trend:[64,58,71,69,77,74,82,80,86],
+  builds:[{n:"PvT — Phoenix into Robo",wr:"61.5% · 117 games",tag:"assigned"},
+          {n:"PvZ — DT into 3 Stargate Void Ray",wr:"85.2% · 27 games",tag:"assigned"},
+          {n:"PvP — Strange's 1 Gate Expand",wr:"75.5% · 49 games",tag:"assigned"}],
+  shelf:[
+   {ty:"notes",t:"Session notes — Tuesday",n:"What we covered, the two fixes we agreed on, and your homework for the week. Skim before Thursday.",d:"today"},
+   {ty:"voice",t:"Voice memo — your 4:00 gas timing",n:"Same leak as last week, but only in games where you take harass. 90 seconds, listen before Thursday.",d:"today"},
+   {ty:"replay",t:"Annotated replay — Ruby Rock PvT (graded B+)",n:"Your best game this week. Watch my note at 7:40 about the army position.",d:"yesterday"},
+   {ty:"video",t:"Video — how I hold 2-base blink on Taito",n:"Recorded this for you after Tuesday's session. 6 min.",d:"3d ago"},
+   {ty:"pdf",t:"Your opening packet · v2",n:"Regenerated after we swapped your PvZ build. Old one is retired.",d:"1w ago"}],
+  next:"Thu 7:00 PM"},
+ {id:"minh",name:"Minh",mmr:"4.7k",matchups:"PvP focus",trend:[70,74,72,79,81,78,84],builds:[{n:"PvP — 2 Gate Expand",wr:"56% · 25 games",tag:"assigned"}],shelf:[{ty:"voice",t:"Voice memo — probe scout patterns",n:"Three things to look for vs proxy.",d:"2d ago"}],next:"Sat 11:00 AM"},
+ {id:"sofia",name:"Sofia",mmr:"4.1k",matchups:"All matchups",trend:[52,60,57,66,70],builds:[{n:"PvT — Robo First",wr:"68% · 25 games",tag:"assigned"}],shelf:[],next:"Mon 6:30 PM"}
+];
+let worksheet={title:"Week 3 check-in — Alex",shared:false,blocks:[
+ {id:1,ty:"mc",q:"When my Phoenix count hits 4, what do you look for before committing to lift harass?",opts:["Marine count in the mineral line","Whether ebay / turret is started","Medivac timing off the first Starport","I just go in"],ans:null},
+ {id:2,ty:"long",q:"You lost twice this week to mine drops after 6:00. In your own words — what is your standing response the moment the Medivac is spotted?",ans:""},
+ {id:3,ty:"scale",q:"Confidence executing the Phoenix-into-Robo opening without looking at notes (1–10):",ans:0},
+ {id:4,ty:"image",q:"I marked your army position at 7:40 in Tuesday's loss. What's wrong with this position, and where should it be?",ans:"",img:null},
+ {id:5,ty:"replay",q:"Play 3 PvT games this week using ONLY the assigned build. Attach the one where the opening felt worst.",ans:false}
+]};
+let view="coach",curStudent="alex",coachTab="worksheet",wsSubmitted=false,nextId=6;
+
+/* ---------------- helpers ---------------- */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1800)}
+function spark(vals,w=150,h=30){
+ const mx=100,pts=vals.map((v,i)=>`${(i/(vals.length-1)*(w-8)+4).toFixed(1)},${(h-4-(v/mx)*(h-8)).toFixed(1)}`);
+ const last=pts[pts.length-1].split(",");
+ return `<svg class="spark" width="${w}" height="${h}" aria-label="adherence trend">
+  <polyline points="${pts.join(" ")}" fill="none" stroke="#5aa7ff" stroke-width="1.6"/>
+  <circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="#d4a843"/></svg>`}
+const ICON={voice:"MEMO",video:"VID",pdf:"PDF",replay:"REP",notes:"NOTE"};
+function shelfHTML(items,coach){
+ if(!items.length)return `<div class="sub">Nothing on the shelf yet.</div>`;
+ return items.map((s,i)=>`<div class="shelfitem">
+   <div class="icon ${s.ty}">${ICON[s.ty]}</div>
+   <div><div class="t">${esc(s.t)}${s.ty==="voice"?waveHTML():""}</div><div class="n">“${esc(s.n)}”</div></div>
+   <div class="d8">${s.d}${coach?` &nbsp;<button class="btn sm q" onclick="delShelf(${i})">remove</button>`:""}</div>
+  </div>`).join("")}
+function waveHTML(){let b="";for(let i=0;i<14;i++)b+=`<i style="height:${4+((i*37)%11)}px"></i>`;return `<span class="wave">${b}</span>`}
+
+/* ---------------- coach view ---------------- */
+function coachHTML(){
+ const st=STUDENTS.find(s=>s.id===curStudent);
+ return `<div class="coach">
+  <div class="side">
+   <h3 style="margin:0 0 10px">Roster · ${STUDENTS.length} of 6</h3>
+   ${STUDENTS.map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()">
+     <div class="nm">${s.name}</div><div class="mu">${s.mmr} · ${s.matchups}</div></button>`).join("")}
+  </div>
+  <div>
+   <div class="hero"><h1>${st.name}</h1>
+    <div class="stat"><b>${st.mmr}</b> · ${st.matchups} · next session <b>${st.next}</b></div>
+    <div style="margin-left:auto">${spark(st.trend)}<div class="stat" style="text-align:right">adherence trend</div></div>
+   </div>
+   <div class="tabs">
+    <button class="${coachTab==="worksheet"?"on":""}" onclick="coachTab='worksheet';render()">Worksheet builder</button>
+    <button class="${coachTab==="shelf"?"on":""}" onclick="coachTab='shelf';render()">Shelf</button>
+    <button class="${coachTab==="grades"?"on":""}" onclick="coachTab='grades';render()">Grades</button>
+   </div>
+   ${coachTab==="worksheet"?builderHTML():coachTab==="shelf"?coachShelfHTML(st):gradesHTML()}
+  </div></div>`}
+
+function coachShelfHTML(st){
+ return `<div class="card"><h3>Curated shelf — what ${st.name} sees</h3>
+  <p class="sub">Everything here exists because you put it here, with a note. Voice memos and videos: record in Discord or Loom, drop the file or link.</p>
+  <div style="margin-top:12px">${shelfHTML(st.shelf,true)}</div>
+  <div class="row" style="margin-top:12px">
+   <select id="shTy"><option value="notes">Session notes</option><option value="voice">Voice memo</option><option value="video">Video</option><option value="replay">Annotated replay</option><option value="pdf">PDF</option></select>
+   <input id="shT" type="text" placeholder="Title" style="flex:1;min-width:160px">
+   <input id="shN" type="text" placeholder="Your note to them (one line)" style="flex:2;min-width:200px">
+   <button class="btn" onclick="addShelf()">Add to shelf</button>
+  </div></div>`}
+function addShelf(){const st=STUDENTS.find(s=>s.id===curStudent);
+ const t=$("shT").value.trim(),n=$("shN").value.trim();
+ if(!t){toast("Give it a title");return}
+ st.shelf.unshift({ty:$("shTy").value,t,n:n||"—",d:"today"});render();toast("On the shelf")}
+function delShelf(i){STUDENTS.find(s=>s.id===curStudent).shelf.splice(i,1);render()}
+
+function gradesHTML(){
+ const rows=[["Ruby Rock LE","PvT · Phoenix into Robo","B+","87.9"],["Taito Citadel LE","PvT · Phoenix into Robo","B","83.1"],
+  ["Old Republic LE","PvZ · DT → 3 SG Void Ray","A","93.6"],["White Rabbit LE","PvT · Phoenix into Robo","C+","76.2"]];
+ return `<div class="card"><h3>Graded replays — your eyes only</h3>
+  <p class="sub">Grader output stays private. You decide what reaches the shelf, and it always arrives with your voice on it.</p>
+  ${rows.map(r=>`<div class="shelfitem"><div class="icon replay">${r[2]}</div>
+   <div><div class="t">${r[0]}</div><div class="n">${r[1]} · adherence ${r[3]}</div></div>
+   <div class="d8"><button class="btn sm" onclick="toast('Report card + your note → shelf')">annotate & share</button></div></div>`).join("")}</div>`}
+
+/* ---------------- worksheet builder ---------------- */
+const TYNAME={mc:"Multiple choice",long:"Long answer",scale:"Scale 1–10",image:"Annotated image",replay:"Replay request"};
+function builderHTML(){
+ return `<div class="card">
+  <div class="row"><h3 style="flex:1">Worksheet builder</h3>
+   <span class="pill ${worksheet.shared?"w":""}">${worksheet.shared?"link active":"draft — not shared"}</span>
+   <button class="btn" onclick="shareWS()">${worksheet.shared?"Copy private link":"Share with Alex"}</button></div>
+  <p class="sub">Only you can create and share these. One student, one link, one response — intake, weekly check-in, or homework quiz, whatever this student needs.</p>
+  <input type="text" value="${esc(worksheet.title)}" onchange="worksheet.title=this.value" style="width:100%;margin:10px 0 14px;font-weight:600" aria-label="Worksheet title">
+  ${worksheet.blocks.map((b,i)=>blockEdit(b,i)).join("")}
+  <div class="addbar">
+   ${Object.entries(TYNAME).map(([k,v])=>`<button onclick="addBlock('${k}')">+ ${v}</button>`).join("")}
+  </div></div>`}
+function blockEdit(b,i){
+ let body="";
+ if(b.ty==="mc")body=b.opts.map((o,j)=>`<div class="opt"><span class="sub">${String.fromCharCode(65+j)}</span>
+   <input type="text" value="${esc(o)}" onchange="worksheet.blocks[${i}].opts[${j}]=this.value">
+   <button class="btn sm q" onclick="worksheet.blocks[${i}].opts.splice(${j},1);render()">×</button></div>`).join("")
+   +`<div style="margin-top:7px"><button class="btn sm q" onclick="worksheet.blocks[${i}].opts.push('New option');render()">+ option</button></div>`;
+ if(b.ty==="image")body=`<div class="anno"><canvas class="shot" id="cv${b.id}" width="900" height="380"></canvas>
+   <div class="annotools" id="tl${b.id}">
+    <button class="on" onclick="setTool(${b.id},'circle',this)">◯ circle</button>
+    <button onclick="setTool(${b.id},'arrow',this)">→ arrow</button>
+    <button onclick="setTool(${b.id},'pen',this)">✎ pen</button>
+    <button onclick="undoAnno(${b.id})">undo</button>
+    <span class="sub" style="margin-left:auto;align-self:center">draw on the frame — students see exactly this</span>
+   </div></div>`;
+ if(b.ty==="replay")body=`<div class="sub" style="margin-top:6px">Student gets a drop-zone. The file lands in your grader queue, not in chat scroll.</div>`;
+ if(b.ty==="scale")body=`<div class="sub" style="margin-top:6px">1–10 self-rating. Track it week over week.</div>`;
+ return `<div class="block"><div class="bh"><span class="ty">${TYNAME[b.ty]}</span>
+   <div class="tools">
+    <button title="move up" onclick="moveBlock(${i},-1)">↑</button>
+    <button title="move down" onclick="moveBlock(${i},1)">↓</button>
+    <button title="remove" onclick="worksheet.blocks.splice(${i},1);render()">✕</button></div></div>
+  <input class="q" type="text" value="${esc(b.q)}" onchange="worksheet.blocks[${i}].q=this.value" aria-label="Question text">
+  ${body}</div>`}
+function addBlock(ty){
+ const b={id:nextId++,ty,q:ty==="mc"?"New multiple-choice question":ty==="long"?"New long-form question":ty==="scale"?"Rate 1–10:":ty==="image"?"What do you see in this frame?":"Attach the replay where…",ans:ty==="long"||ty==="image"?"":ty==="scale"?0:ty==="replay"?false:null};
+ if(ty==="mc")b.opts=["Option A","Option B"];
+ if(ty==="image")b.img=null;
+ worksheet.blocks.push(b);render();
+ if(ty==="image")requestAnimationFrame(()=>initCanvas(b.id));}
+function moveBlock(i,d){const j=i+d;if(j<0||j>=worksheet.blocks.length)return;
+ const a=worksheet.blocks;[a[i],a[j]]=[a[j],a[i]];render()}
+function shareWS(){
+ worksheet.blocks.filter(b=>b.ty==="image").forEach(b=>{const cv=$("cv"+b.id);if(cv)b.img=cv.toDataURL()});
+ worksheet.shared=true;render();toast("Private link copied — only you can share it")}
+
+/* ---------------- canvas annotation ---------------- */
+const annoState={};
+function drawScene(ctx,w,h){
+ ctx.fillStyle="#0d1626";ctx.fillRect(0,0,w,h);
+ ctx.strokeStyle="#16233a";ctx.lineWidth=1;
+ for(let x=0;x<w;x+=45){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+ for(let y=0;y<h;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+ // ramp + bases
+ ctx.fillStyle="#1a2740";ctx.beginPath();ctx.moveTo(0,h*.72);ctx.lineTo(w*.3,h*.55);ctx.lineTo(w*.55,h*.62);ctx.lineTo(w,h*.5);ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.fill();
+ // nexus
+ ctx.fillStyle="#2c4a75";ctx.beginPath();ctx.arc(w*.15,h*.8,17,0,7);ctx.fill();
+ ctx.fillStyle="#223a5e";ctx.beginPath();ctx.arc(w*.47,h*.75,14,0,7);ctx.fill();
+ // your army (gold dots) clumped badly in the middle
+ ctx.fillStyle="#d4a843";
+ [[.42,.38],[.44,.41],[.46,.37],[.48,.42],[.45,.45],[.43,.44],[.47,.39],[.49,.44]].forEach(p=>{ctx.beginPath();ctx.arc(w*p[0],h*p[1],4.4,0,7);ctx.fill()});
+ // enemy bio (red) flanking wide
+ ctx.fillStyle="#e06c6c";
+ [[.68,.2],[.71,.23],[.74,.2],[.7,.27],[.76,.25],[.85,.42],[.88,.46],[.86,.5],[.9,.43]].forEach(p=>{ctx.beginPath();ctx.arc(w*p[0],h*p[1],3.6,0,7);ctx.fill()});
+ // minimap
+ ctx.fillStyle="#0a111d";ctx.fillRect(w-128,h-92,118,82);ctx.strokeStyle="#233350";ctx.strokeRect(w-128,h-92,118,82);
+ ctx.fillStyle="#d4a843";ctx.fillRect(w-118,h-38,7,7);ctx.fillStyle="#e06c6c";ctx.fillRect(w-40,h-84,7,7);
+ ctx.fillStyle="#54617a";ctx.font="11px 'IBM Plex Mono',monospace";ctx.fillText("7:40 · your PvT loss · Tuesday",12,20);}
+function initCanvas(id){
+ const cv=$("cv"+id);if(!cv)return;const ctx=cv.getContext("2d");
+ const st=annoState[id]=annoState[id]||{tool:"circle",shapes:[]};
+ const paint=()=>{drawScene(ctx,cv.width,cv.height);
+  ctx.strokeStyle="#f2c14e";ctx.lineWidth=3;ctx.lineCap="round";
+  st.shapes.forEach(s=>{ctx.beginPath();
+   if(s.t==="circle"){ctx.ellipse((s.x0+s.x1)/2,(s.y0+s.y1)/2,Math.abs(s.x1-s.x0)/2+6,Math.abs(s.y1-s.y0)/2+6,0,0,7);ctx.stroke()}
+   if(s.t==="arrow"){ctx.moveTo(s.x0,s.y0);ctx.lineTo(s.x1,s.y1);ctx.stroke();
+    const a=Math.atan2(s.y1-s.y0,s.x1-s.x0);
+    ctx.beginPath();ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x1-13*Math.cos(a-.45),s.y1-13*Math.sin(a-.45));
+    ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x1-13*Math.cos(a+.45),s.y1-13*Math.sin(a+.45));ctx.stroke()}
+   if(s.t==="pen"){ctx.moveTo(s.pts[0][0],s.pts[0][1]);s.pts.forEach(p=>ctx.lineTo(p[0],p[1]));ctx.stroke()}});};
+ st.paint=paint;paint();
+ const pos=e=>{const r=cv.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+  return [(p.clientX-r.left)*cv.width/r.width,(p.clientY-r.top)*cv.height/r.height]};
+ let cur=null;
+ const down=e=>{e.preventDefault();const[x,y]=pos(e);
+  cur=st.tool==="pen"?{t:"pen",pts:[[x,y]]}:{t:st.tool,x0:x,y0:y,x1:x,y1:y};st.shapes.push(cur)};
+ const move=e=>{if(!cur)return;e.preventDefault();const[x,y]=pos(e);
+  if(cur.t==="pen")cur.pts.push([x,y]);else{cur.x1=x;cur.y1=y}paint()};
+ const up=()=>{cur=null};
+ cv.onpointerdown=down;cv.onpointermove=move;cv.onpointerup=up;cv.onpointerleave=up;}
+function setTool(id,t,btn){annoState[id].tool=t;
+ [...$("tl"+id).querySelectorAll("button")].forEach(b=>b.classList.remove("on"));btn.classList.add("on")}
+function undoAnno(id){const st=annoState[id];if(st&&st.shapes.length){st.shapes.pop();st.paint()}}
+
+/* ---------------- student view ---------------- */
+function studentHTML(){
+ const st=STUDENTS[0]; // Alex is the demo student
+ return `<div class="hero"><div>
+   <div class="pill g">Your locker</div>
+   <h1>Alex</h1><div class="mu">coached by ReSpOnSe · next session <b style="color:var(--ink)">${st.next}</b></div></div>
+  <div style="margin-left:auto;text-align:right">${spark(st.trend,190,40)}
+   <div class="stat">build adherence, last ${st.trend.length} graded games · <b>${st.trend[st.trend.length-1]}</b> latest</div></div>
+ </div>
+ <div class="grid">
+  <div class="card" style="margin-bottom:0"><h3>Your assigned builds</h3>
+   ${st.builds.map(b=>`<div class="bcard"><div class="nm">${esc(b.n)}</div><div class="mu">coach's record: ${b.wr}</div></div>`).join("")}
+   <a class="sub" style="color:var(--blue)" href="#" onclick="toast('→ opens the build library');return false">Open the full build library →</a>
+  </div>
+  <div class="card" style="margin-bottom:0"><h3>From ReSpOnSe · your shelf</h3>
+   <p class="sub">Everything here was made or picked for you. Nothing auto-generated lands on this shelf.</p>
+   <div style="margin-top:10px">${shelfHTML(st.shelf,false)}</div>
+  </div>
+ </div>
+ <div class="card" style="margin-top:16px"><h3>Worksheet from your coach</h3>
+  ${wsSubmitted?`<div class="sent">Sent to ReSpOnSe ✓ — he'll bring it to Thursday's session.</div>`:studentWS()}
+ </div>
+ <div class="footer">SC2 Tools Coaching · private page — only you and your coach can see this · questions go in your Discord channel</div>`}
+function studentWS(){
+ return `<div class="sub" style="margin-bottom:6px"><b style="color:var(--ink)">${esc(worksheet.title)}</b> · ${worksheet.blocks.length} questions</div>`+
+  worksheet.blocks.map((b,i)=>{
+   let body="";
+   if(b.ty==="mc")body=`<div class="mcq">${b.opts.map((o,j)=>`<label><input type="radio" name="mc${b.id}" ${b.ans===j?"checked":""} onchange="worksheet.blocks[${i}].ans=${j}">${esc(o)}</label>`).join("")}</div>`;
+   if(b.ty==="long")body=`<textarea rows="3" placeholder="Your answer…" onchange="worksheet.blocks[${i}].ans=this.value">${esc(b.ans||"")}</textarea>`;
+   if(b.ty==="scale")body=`<div class="scale">${Array.from({length:10},(_,j)=>`<button class="${b.ans===j+1?"on":""}" onclick="worksheet.blocks[${i}].ans=${j+1};render()">${j+1}</button>`).join("")}</div>`;
+   if(b.ty==="image")body=`${b.img?`<img class="annoimg" src="${b.img}" alt="coach-annotated game frame">`:`<div class="sub">(coach's annotated frame appears here)</div>`}
+     <textarea rows="2" style="margin-top:8px" placeholder="What's wrong, and where should it be?" onchange="worksheet.blocks[${i}].ans=this.value">${esc(b.ans||"")}</textarea>`;
+   if(b.ty==="replay")body=`<div class="drop ${b.ans?"done":""}" onclick="worksheet.blocks[${i}].ans=true;render()">${b.ans?"replay_attached.SC2Replay ✓":"Drop your .SC2Replay here or click to attach"}</div>`;
+   return `<div class="block" style="border-left-color:${b.ans!==null&&b.ans!==""&&b.ans!==0&&b.ans!==false?"var(--win)":"var(--gold-dim)"}">
+     <div class="bh"><span class="ty" style="color:var(--mute)">Q${i+1}</span></div>
+     <div style="font-weight:600;margin-bottom:2px">${esc(b.q)}</div>${body}</div>`}).join("")+
+  `<button class="btn" style="margin-top:4px" onclick="wsSubmitted=true;render();toast('Sent to your coach')">Send to ReSpOnSe</button>`}
+
+/* ---------------- render ---------------- */
+function setView(v){
+ // carry live canvas annotations into the student-facing image before leaving coach view
+ if(view==="coach")worksheet.blocks.filter(b=>b.ty==="image").forEach(b=>{const cv=$("cv"+b.id);if(cv&&annoState[b.id]&&annoState[b.id].shapes.length)b.img=cv.toDataURL()});
+ view=v;$("vtC").classList.toggle("on",v==="coach");$("vtS").classList.toggle("on",v==="student");render()}
+function render(){
+ $("app").innerHTML=view==="coach"?coachHTML():studentHTML();
+ if(view==="coach"&&coachTab==="worksheet")worksheet.blocks.filter(b=>b.ty==="image").forEach(b=>initCanvas(b.id));}
+render();
+</script>

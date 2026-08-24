@@ -1,0 +1,16 @@
+{
+  "name": "Demo Student",
+  "packet_version": 1,
+  "mmr": {"PvT": 4380, "PvZ": 4310, "PvP": 4450},
+  "focus_matchups": ["PvT", "PvZ"],
+  "assigned_builds": [
+    "pvt---phoenix-into-robo",
+    "pvz---dt-into-3-stargate-void-ray",
+    "pvp---stranges-1-gate-expand"
+  ],
+  "goals": [
+    "Stabilize PvT opening: Stargate and Robo within grace window in 8 of 10 games",
+    "Break 4500 in PvT by executing one build to automaticity",
+    "Stop probe cuts during Phoenix harass windows"
+  ]
+}

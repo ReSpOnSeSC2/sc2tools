@@ -1,0 +1,1316 @@
+<meta charset="utf-8">
+<title>SC2 Tools Locker</title>
+<style id="css">
+:root{
+ --bg:#0a0d14;--panel:#101622;--panel2:#141c2b;--line:#202b3e;--ink:#d9e2f0;--mute:#7f8ca3;
+ --gold:#d4a843;--gold-dim:#8a6f2f;--blue:#5aa7ff;--win:#43b581;--loss:#e06c6c;
+ --field:#0d1320;--bar:#0c1019;--tline:#182234;color-scheme:dark;
+ --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;--disp:'Rajdhani','IBM Plex Sans',sans-serif}
+html[data-lk="light"]{
+ --bg:#eef1f6;--panel:#ffffff;--panel2:#f4f6fb;--line:#d8deea;--ink:#1b2331;--mute:#5c6b80;
+ --gold:#8a6a14;--gold-dim:#b08d2e;--blue:#2464c4;--win:#1d8f5c;--loss:#c04747;
+ --field:#fbfcfe;--bar:#ffffff;--tline:#e7ebf3;color-scheme:light}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;min-height:100vh}
+button{font:inherit;cursor:pointer}
+input,textarea,select{font:inherit;background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 10px}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+textarea{width:100%;resize:vertical}
+h1,h2,h3{font-family:var(--disp)}
+.bar{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--line);background:var(--bar);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.logo{font-family:var(--disp);font-weight:700;letter-spacing:.14em;color:var(--gold);font-size:15px;text-transform:uppercase}
+.logo span{color:var(--mute);font-weight:600}
+.bar .who{color:var(--mute);font-size:12.5px}
+.bar .sp{margin-left:auto}
+.iconbtn{background:none;border:1px solid var(--line);color:var(--mute);border-radius:7px;padding:5px 12px;font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.05em}
+.iconbtn:hover{color:var(--ink)}
+.wrap{max-width:1120px;margin:0 auto;padding:22px 18px 70px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px 19px;margin-bottom:15px}
+.card h2{margin:0 0 4px;font-size:20px;font-weight:700}
+.card h3{margin:0 0 8px;font-size:12.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--blue);font-weight:600}
+.sub{color:var(--mute);font-size:13px}
+.pill{display:inline-block;font-family:var(--disp);font-weight:600;font-size:11.5px;letter-spacing:.06em;border:1px solid var(--line);color:var(--mute);border-radius:4px;padding:1px 8px;margin-right:5px;vertical-align:middle}
+.pill.g{color:var(--gold);border-color:var(--gold-dim)}.pill.b{color:var(--blue);border-color:#2c4a75}
+.pill.w{color:var(--win);border-color:#2b5643}.pill.r{color:var(--loss);border-color:#5c3434}
+.btn{background:none;border:1px solid var(--gold-dim);color:var(--gold);border-radius:7px;padding:7px 15px;font-family:var(--disp);font-weight:700;letter-spacing:.06em;font-size:13.5px}
+.btn:hover{background:#d4a84314}.btn:disabled{opacity:.45;cursor:default}
+.btn.q{border-color:var(--line);color:var(--mute)}.btn.q:hover{color:var(--ink)}
+.btn.sm{padding:3px 10px;font-size:12px}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+@media(max-width:840px){.grid{grid-template-columns:1fr}.coach{grid-template-columns:1fr}.side{display:flex;overflow-x:auto;gap:7px}.side .st{min-width:150px}}
+.coach{display:grid;grid-template-columns:215px 1fr;gap:18px}
+.side .st{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--ink);margin-bottom:7px}
+.side .st.on{border-color:var(--gold-dim);background:var(--panel2)}
+.side .st .nm{font-weight:600}.side .st .mu{color:var(--mute);font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
+.tabs button{background:none;border:1px solid var(--line);border-radius:7px;color:var(--mute);padding:6px 14px;font-family:var(--disp);font-weight:600;letter-spacing:.05em}
+.tabs button.on{color:var(--gold);border-color:var(--gold-dim);background:var(--panel)}
+.tabs button .ct{color:var(--blue);font-size:11px}
+.item{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--panel2)}
+.icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:10.5px;letter-spacing:.03em;flex:none;border:1px solid var(--line);color:var(--mute)}
+.icon.voice{color:var(--gold);border-color:var(--gold-dim)}.icon.video{color:var(--blue)}.icon.pdf{color:var(--loss)}
+.icon.replay{color:var(--win)}.icon.notes{color:var(--ink)}.icon.image{color:var(--blue)}.icon.report{color:var(--gold);border-color:var(--gold-dim)}
+.item .bd{flex:1;min-width:0}.item .t{font-weight:600;font-size:14px}.item .n{color:var(--mute);font-size:13px;margin-top:2px;white-space:pre-wrap}
+.item .d8{color:var(--mute);font-size:11px;white-space:nowrap;font-family:var(--mono);display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.item audio{width:100%;margin-top:7px;height:34px}
+.item video{width:100%;margin-top:7px;border-radius:8px;max-height:340px;background:#000}
+.item img.att{max-width:100%;border-radius:8px;border:1px solid var(--line);margin-top:7px}
+.block{border:1px solid var(--line);border-left:3px solid var(--gold-dim);border-radius:9px;background:var(--panel2);padding:12px 14px;margin-bottom:10px}
+.block .bh{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.block .bh .ty{font-family:var(--disp);font-weight:700;font-size:11px;letter-spacing:.1em;color:var(--gold);text-transform:uppercase}
+.block .bh .tools{margin-left:auto;display:flex;gap:4px}
+.block .bh .tools button{background:none;border:1px solid var(--line);color:var(--mute);border-radius:5px;padding:1px 8px;font-size:12px}
+.block input.q{width:100%;font-weight:600}
+.opt{display:flex;gap:7px;align-items:center;margin-top:6px}.opt input[type=text]{flex:1}
+.addbar{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.addbar button{background:var(--panel);border:1px dashed var(--line);color:var(--mute);border-radius:7px;padding:6px 12px;font-size:13px}
+.addbar button:hover{color:var(--gold);border-color:var(--gold-dim)}
+.mcq{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+.mcq label{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer;background:var(--field)}
+.mcq label:has(input:checked){border-color:var(--gold-dim);background:#d4a8430d}
+.drop{border:1.5px dashed var(--line);border-radius:9px;padding:20px;text-align:center;color:var(--mute);cursor:pointer;transition:border-color .15s}
+.drop:hover,.drop.over{border-color:var(--gold-dim);color:var(--gold)}
+.scale{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+.scale button{width:33px;height:33px;border-radius:7px;border:1px solid var(--line);background:var(--field);color:var(--mute);font-family:var(--mono)}
+.scale button.on{border-color:var(--gold-dim);color:var(--gold);background:#d4a84312}
+.sent{border:1px solid #2b5643;background:#43b5810d;color:var(--win);border-radius:9px;padding:11px 14px;font-weight:600;font-family:var(--disp);letter-spacing:.04em}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+th{color:var(--mute);text-align:left;font-weight:500;border-bottom:1px solid var(--line);padding:3px 7px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+td{padding:2.5px 7px;border-bottom:1px solid var(--tline);white-space:nowrap}
+td.ok{color:var(--win)}td.warn{color:var(--gold)}td.late{color:var(--loss)}
+.tablewrap{overflow-x:auto}
+.gate{max-width:430px;margin:8vh auto;padding:0 18px}
+.gate h1{font-size:30px;margin:4px 0 2px}
+.gate .role{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 17px;color:var(--ink);margin-top:11px}
+.gate .role:hover{border-color:var(--gold-dim)}
+.gate .role .t{font-family:var(--disp);font-weight:700;font-size:17px}.gate .role .s{color:var(--mute);font-size:13px}
+.overlay{position:fixed;inset:0;background:#05070bd9;z-index:50;display:flex;align-items:center;justify-content:center;padding:18px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:20px 22px}
+.modal h2{margin:0 0 6px;font-size:21px}
+.helppanel{position:fixed;top:0;right:0;bottom:0;width:min(430px,92vw);background:var(--panel);border-left:1px solid var(--line);z-index:45;overflow-y:auto;padding:18px 20px;box-shadow:-18px 0 40px #0009}
+.helppanel h4{font-family:var(--disp);color:var(--gold);margin:16px 0 4px;font-size:15px;letter-spacing:.05em}
+.helppanel p{color:var(--mute);font-size:13.5px;margin:4px 0}
+canvas.shot{width:100%;border-radius:8px;border:1px solid var(--line);display:block;touch-action:none;cursor:crosshair;background:#0d1626}
+.annotools{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.annotools button,.annotools label span{background:var(--panel2);border:1px solid var(--line);color:var(--mute);border-radius:6px;padding:4px 11px;font-size:12.5px;cursor:pointer;display:inline-block}
+.annotools .on{color:var(--gold);border-color:var(--gold-dim)}
+.meter{height:6px;background:#1c2534;border-radius:3px;overflow:hidden;margin-top:5px}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-dim),var(--gold))}
+.meter.hot i{background:var(--loss)}
+.banner{background:#d4a8431a;border-bottom:1px solid var(--gold-dim);color:var(--gold);padding:6px 20px;font-size:12.5px;font-family:var(--disp);font-weight:600;letter-spacing:.05em}
+.banner.r{background:#e06c6c14;border-color:#5c3434;color:var(--loss)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--gold-dim);color:var(--gold);padding:8px 18px;border-radius:8px;font-family:var(--disp);font-weight:600;letter-spacing:.04em;opacity:0;transition:opacity .25s;pointer-events:none;z-index:99;max-width:88vw;text-align:center}
+.toast.show{opacity:1}
+.walk{max-width:560px}
+.walk .step{color:var(--mute);font-family:var(--mono);font-size:11.5px;letter-spacing:.08em}
+.walk p{font-size:14.5px}
+.filelist{margin-top:9px}
+.filelist .f{display:flex;gap:9px;align-items:center;font-family:var(--mono);font-size:12.5px;color:var(--mute);padding:4px 2px;border-bottom:1px solid var(--tline)}
+.filelist .f b{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.rec{display:inline-flex;align-items:center;gap:8px}
+.rec .dot{width:10px;height:10px;border-radius:50%;background:var(--loss);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.rec .dot{animation:none}}
+a{color:var(--blue)}
+.empty{border:1.5px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mute)}
+.eyebrow2{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);font-weight:700;font-family:var(--disp)}
+.focuscard{border:2px solid var(--gold-dim);border-radius:12px;background:var(--panel2);padding:15px 17px}
+.fbig{font-family:var(--disp);font-size:26px;font-weight:800;line-height:1.12;margin:4px 0 6px;text-wrap:balance}
+.fbox{border:1px solid var(--line);border-radius:9px;background:var(--field);padding:11px 13px}.fbox p{margin:4px 0 0}
+.fprot{margin-top:10px;border-top:1px solid var(--tline);padding-top:8px}
+.choices{display:flex;flex-wrap:wrap;gap:7px}
+.choice{border:1px solid var(--line);border-radius:999px;background:var(--field);color:var(--mute);padding:6px 12px;font-size:13px;cursor:pointer}
+.choice.on{border-color:var(--gold-dim);color:var(--gold);background:#d4a84315}
+.lanegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:9px}
+.lanegrid label{display:block;font-size:11.5px;color:var(--mute);margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--disp);font-weight:600}
+@media(max-width:840px){.lanegrid{grid-template-columns:1fr 1fr}}
+@media(max-width:540px){.wrap{padding:16px 12px 60px}.bar{padding:9px 12px;gap:8px}.bar .who{display:none}
+ .tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.tabs button{white-space:nowrap}
+ .modal{max-height:94vh;padding:15px 14px;border-radius:12px}.card{padding:13px 14px}
+ .item{flex-wrap:wrap}.item .d8{width:100%;justify-content:flex-start}
+ .btn{min-height:40px}.fbig{font-size:22px}}
+.bcard{border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--panel2);margin-bottom:9px}
+.bcard .nm{font-weight:600}.bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
+details.bo{margin-top:7px}details.bo summary{cursor:pointer;color:var(--blue);font-size:13px}
+</style>
+<div id="root"></div>
+<script id="state0" type="application/json">{"v":1,"setup":false,"pin":null,"coach":"ReSpOnSe","students":[],"assets":{}}</script>
+<script id="app">
+"use strict";
+/* ================= SC2 Tools Locker — production app =================
+   Persistence: the `artifact` capability — this page publishes new
+   versions of itself with state embedded. Downloads via `downloads`.
+   No servers, no mock data. */
+const LIBRARY=__LIBRARY__;
+const INTAKE_BUILDS=__INTAKE_BUILDS__;
+const GAMES=__GAMES__;  /* coach game index from the agent/engine — regenerated each refresh */
+/* Season / date presets — mirrors apps/web/lib/datePresets.ts + seasonCatalog.ts.
+   Fallback math only (anchor S67 @ 2026-04-01, ~91d, current clamped to today);
+   the site swaps in the SC2Pulse-backed /v1/seasons catalog when ported. */
+const CUR_SEASON=__CUR_SEASON__;
+function isoD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function seasonRangeJS(n){
+ const ANCHOR=67,A=new Date(2026,3,1).getTime(),LEN=91*86400000;
+ const start=new Date(A+(n-ANCHOR)*LEN);let end=new Date(start.getTime()+LEN-1);
+ const now=new Date();if(n>=CUR_SEASON||end>now)end=now;
+ return [isoD(start),isoD(end)]}
+function pkPresets(){
+ const out=[{id:"current_season",l:"Season "+CUR_SEASON+" (current)"}];
+ for(let n=CUR_SEASON-1;n>=CUR_SEASON-3;n--)out.push({id:"season:"+n,l:"Season "+n});
+ out.push({id:"all",l:"All time"},{id:"after_5_0_16",l:"After 5.0.16 · 8 workers"},
+  {id:"before_5_0_16",l:"Before 5.0.16 · 12 workers"},{id:"today",l:"Today"},
+  {id:"last_7d",l:"Last 7 days"},{id:"last_30d",l:"Last 30 days"},
+  {id:"last_90d",l:"Last 90 days"},{id:"custom",l:"Custom range…"});
+ return out}
+function presetRange(p,cA,cB){
+ const now=new Date();
+ const back=n=>{const d=new Date(now);d.setDate(d.getDate()-n);return isoD(d)};
+ if(p==="all")return[null,null];
+ if(p==="after_5_0_16")return["2026-06-22",null];
+ if(p==="before_5_0_16")return[null,"2026-06-22"];
+ if(p==="today")return[isoD(now),isoD(now)];
+ if(p==="last_7d")return[back(6),isoD(now)];
+ if(p==="last_30d")return[back(29),isoD(now)];
+ if(p==="last_90d")return[back(89),isoD(now)];
+ if(p==="custom")return[cA||null,cB||null];
+ if(p&&p.startsWith("season:"))return seasonRangeJS(parseInt(p.slice(7),10));
+ return seasonRangeJS(CUR_SEASON)}
+function pkRange(){return presetRange(PK.preset,PK.cA,PK.cB)}
+let S; try{S=JSON.parse(document.getElementById("state0").textContent)}catch(e){S={v:1,setup:false,pin:null,coach:"ReSpOnSe",students:[],assets:{}}}
+if(!S.customBuilds)S.customBuilds=[];
+if(!S.wsTemplates)S.wsTemplates=[];
+if(!S.shelfLibrary)S.shelfLibrary=[];
+/* migrate older records to the merged product model */
+(S.students||[]).forEach(st=>{
+ if(!st.intake)st.intake={done:false};
+ if(st.focus===undefined)st.focus=null;
+ if(!st.lanes)st.lanes={active:0,bridge:0,historical:0,quarantine:0};
+ if(!st.agent)st.agent={status:"none"};
+ if(!st.games)st.games=[];
+ (st.builds||[]).forEach(b=>{if(b.showRecord===undefined)b.showRecord=false});
+});
+const LIB=id=>LIBRARY.find(x=>x.id===id)||S.customBuilds.find(x=>x.id===id);
+const recStr=L=>L.custom?(L.record||"custom build"):(L.winrate+"% · "+L.games+" games");
+let artifactNS=null,downloadsNS=null,preview=false,readOnly=false;
+let role=null,meId=null,coachOK=false,tab="focus",curStudent=null,helpOpen=false,stuTab=null;
+let recState=null,pendingFiles=[],busy=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now());
+const now=()=>new Date().toISOString();
+const fmtD=iso=>{try{return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"})}catch(e){return ""}};
+const kb=n=>n>1048576?(n/1048576).toFixed(1)+" MB":Math.round(n/1024)+" KB";
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}},del(k){try{sessionStorage.removeItem(k)}catch(e){}}};
+function toast(m,ms){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),ms||2200)}
+async function sha256(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+function stateBytes(){return JSON.stringify(S).length}
+const BUDGET=12*1048576;
+/* ---------- persistence ---------- */
+function buildDoc(st){
+ const css=document.getElementById("css").textContent;
+ const app=document.getElementById("app").textContent;
+ const j=JSON.stringify(st).replace(/<\//g,"<\\/");
+ return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SC2 Tools Locker<\/title><style id="css">'+css+'<\/style><\/head><body><div id="root"><\/div><div class="toast" id="toast"><\/div><script id="state0" type="application/json">'+j+'<\/script><script id="app">'+app+'<\/script><\/body><\/html>';}
+async function persist(okMsg){
+ if(preview){toast("Preview mode — changes are not saved");render();return false}
+ if(readOnly){toast("This view is read-only — ask your coach for edit access");return false}
+ if(busy)return false; busy=true; render();
+ try{
+  await artifactNS.publish(buildDoc(S));
+  return true; // page reloads to the new version
+ }catch(e){
+  busy=false;
+  const c=e&&e.code;
+  if(c==="conflict"){toast("Someone saved a moment before you — reloading to the latest…");return false}
+  if(c==="not_writer"||c==="not_granted"||c==="consent_required"){readOnly=true;render();toast("You have view-only access. Ask "+esc(S.coach)+" to share this page with edit access so your work can save.",4200);return false}
+  if(c==="too_large"){toast("Storage limit reached — remove a large item (Storage panel in Help) and try again",4200);render();return false}
+  if(c==="rate_limited"){toast("Saving too fast — wait a few seconds and try again");render();return false}
+  toast("Save failed ("+(c||"error")+") — your work is still on screen; try again");render();return false}
+}
+/* ---------- boot ---------- */
+function toggleTheme(){
+ const light=document.documentElement.dataset.lk==="light";
+ if(light)delete document.documentElement.dataset.lk;else document.documentElement.dataset.lk="light";
+ ls.set("locker.theme",light?"dark":"light");render()}
+async function boot(){
+ if(ls.get("locker.theme")==="light")document.documentElement.dataset.lk="light";
+ if(!window.claude||!window.claude.use){preview=true}
+ else{
+  artifactNS=await claude.use("artifact");
+  downloadsNS=await claude.use("downloads");
+  if(!artifactNS)preview=true;
+ }
+ role=ls.get("locker.role");meId=ls.get("locker.me");
+ coachOK=ss.get("locker.coachOK")==="1";
+ // restore stashed draft after a reload
+ render();
+ if(!ls.get("locker.walked."+(role||""))&&role&&(role!=="coach"||coachOK)&&S.setup)walkthrough();
+}
+/* ---------- gate & setup ---------- */
+function gateHTML(){
+ if(!S.setup)return setupHTML();
+ return `<div class="gate">
+  <div class="logo">SC2 Tools <span>· Coaching</span></div>
+  <h1>The Locker</h1>
+  <p class="sub">Private coaching space run by ${esc(S.coach)}. Pick who you are — this device remembers.</p>
+  <button class="role" onclick="pickRole('coach')"><div class="t">I'm the coach</div><div class="s">${esc(S.coach)} — passcode required</div></button>
+  ${S.students.map(st=>`<button class="role" onclick="pickStudent('${st.id}')"><div class="t">${esc(st.name)}</div><div class="s">open my locker</div></button>`).join("")}
+  ${S.students.length===0?'<p class="sub" style="margin-top:14px">No students yet — the coach adds them from the coach view.</p>':""}
+ </div>`}
+function setupHTML(){
+ return `<div class="gate">
+  <div class="logo">SC2 Tools <span>· Coaching</span></div>
+  <h1>Set up your Locker</h1>
+  <p class="sub">One-time setup. You're the coach; students are added next.</p>
+  <div class="card" style="margin-top:14px">
+   <h3>Coach passcode</h3>
+   <p class="sub">Gates the coach screens on any device. Note: students you share edit access with could technically inspect this page's data — the passcode keeps honest people out of your prep, it is not bank-vault security.</p>
+   <input id="suPin" type="password" placeholder="Choose a passcode" style="width:100%;margin-top:8px" autocomplete="new-password">
+   <input id="suPin2" type="password" placeholder="Repeat it" style="width:100%;margin-top:8px" autocomplete="new-password">
+   <button class="btn" style="margin-top:12px" onclick="doSetup()" ${busy?"disabled":""}>Create my Locker</button>
+  </div>
+  ${preview?'<p class="sub">⚠ Preview mode — publish this page as an artifact with the artifact capability for saving to work.</p>':""}
+ </div>`}
+async function doSetup(){
+ const a=$("suPin").value,b=$("suPin2").value;
+ if(a.length<4){toast("Passcode needs at least 4 characters");return}
+ if(a!==b){toast("Passcodes don't match");return}
+ S.pin=await sha256(a);S.setup=true;
+ ls.set("locker.role","coach");ss.set("locker.coachOK","1");role="coach";coachOK=true;
+ await persist();
+}
+function pickRole(r){
+ if(r==="coach"){openModal(`<h2>Coach passcode</h2>
+  <input id="pinIn" type="password" style="width:100%;margin-top:8px" autocomplete="current-password" onkeydown="if(event.key==='Enter')tryPin()">
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="tryPin()">Unlock</button>
+  <button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+  setTimeout(()=>{const i=$("pinIn");if(i)i.focus()},50);return}
+}
+async function tryPin(){
+ const v=$("pinIn").value;
+ if(await sha256(v)===S.pin){coachOK=true;role="coach";ls.set("locker.role","coach");ss.set("locker.coachOK","1");closeModal();render();if(!ls.get("locker.walked.coach"))walkthrough()}
+ else toast("Wrong passcode")}
+function pickStudent(id){role="student";meId=id;stuTab=null;ls.set("locker.role","student");ls.set("locker.me",id);render();if(!ls.get("locker.walked.student"))walkthrough()}
+function signOut(){role=null;meId=null;coachOK=false;stuTab=null;ls.set("locker.role","");ls.set("locker.me","");ss.set("locker.coachOK","");render()}
+/* ---------- walkthrough & help ---------- */
+function walkSteps(){
+ if(role==="coach")return[
+  ["Welcome to your Locker","Your coaching command center. Each student gets a private, low-noise locker: one weekly focus up front, everything else behind tabs."],
+  ["Weekly focus","The spine of the system: one focus, one exact action, one question, a due date, and a 'not changing right now' list that protects the student from overload. You see a live preview of exactly the card they get before you publish."],
+  ["Students & builds","Add students in the left rail. In the Builds tab, assign openers from your real season library — students see your actual win rates — attach a reference replay so they can watch you execute it, or author custom builds by hand for experiments and student-specific variations."],
+  ["Worksheets","Build custom check-ins per student: multiple choice, long answers, 1–10 scales, replay requests, and annotated screenshots you draw on. Send it; their answers come back here."],
+  ["Shelf","The student's permanent feed from you: session notes, voice memos you record right here, videos (link or small file), annotated frames, PDFs. Everything carries your one-line note."],
+  ["Inbox & agent","The replay-admission card tracks each student's season basis from the SC2 Tools agent (current / bridge / historical / quarantine) — students see one honest receipt line. Submitted replays queue here for you to download and watch; every piece of feedback is yours, written or spoken, never automated."],
+  ["Sharing & saving","Share this page (top-right of the artifact viewer) with each student — give EDIT access or their submissions can't save. Every save publishes a new version for everyone. The ? button reopens help anytime."]];
+ return[
+  ["Welcome to your locker","One page, no noise: your week leads with a single focus and a single action from "+S.coach+". Builds, materials and check-ins live behind tabs when you need them. Discord stays the place to talk."],
+  ["Your builds","Openers your coach assigns when the time is right — full build order and the benchmark timings to aim for. No wall of theory on day one."],
+  ["Your shelf","Session notes, voice memos, videos and marked-up screenshots — each one made for you, with the coach's note. New items land on top."],
+  ["Replays","Best: install the SC2 Tools agent and your games sync automatically. Otherwise “Submit replays” sends a whole batch at once. Your coach watches them personally — feedback comes back on your shelf in his words."],
+  ["Worksheets","When a worksheet is waiting, answer it before your session — it's how the coach aims your next hour. The ? button reopens this tour anytime."]];
+}
+let walkI=0;
+function walkthrough(){walkI=0;ls.set("locker.walked."+role,"1");renderWalk()}
+function renderWalk(){
+ const steps=walkSteps();const [t,p]=steps[walkI];
+ openModal(`<div class="walk"><div class="step">STEP ${walkI+1} / ${steps.length}</div>
+  <h2>${esc(t)}</h2><p>${esc(p)}</p>
+  <div class="row" style="margin-top:14px">
+   ${walkI>0?'<button class="btn q" onclick="walkI--;renderWalk()">Back</button>':""}
+   ${walkI<steps.length-1?'<button class="btn" onclick="walkI++;renderWalk()">Next</button>'
+    :'<button class="btn" onclick="ls.set(\'locker.walked.\'+role,\'1\');closeModal()">Got it — let\'s go</button>'}
+   <button class="btn q" style="margin-left:auto" onclick="ls.set('locker.walked.'+role,'1');closeModal()">Skip tour</button>
+  </div></div>`)}
+function helpHTML(){
+ const used=stateBytes();
+ const assets=Object.entries(S.assets).map(([id,a])=>({id,...a})).sort((a,b)=>b.size-a.size).slice(0,12);
+ return `<div class="helppanel" role="dialog" aria-label="Help">
+  <div class="row"><h2 style="margin:0;flex:1">Help</h2><button class="iconbtn" onclick="helpOpen=false;render()">Close ✕</button></div>
+  <button class="btn q" style="margin-top:10px" onclick="helpOpen=false;render();walkthrough()">↻ Replay the walkthrough</button>
+  ${role==="coach"?`
+  <h4>Sharing with students</h4><p>Use the artifact viewer's share menu. Give each student <b>edit</b> access — that's what lets their worksheet answers and replay submissions save. View-only students can read but not submit.</p>
+  <h4>Reviewing replays</h4><p>Inbox → “Export batch” downloads submissions as one .json bundle → run <span style="font-family:var(--mono)">python unpack_batch.py bundle.json</span> in your coaching folder to unpack the .SC2Replay files → watch them yourself, then put your feedback on the shelf as notes, voice memos, or a linked replay.</p>
+  <h4>Voice & video</h4><p>Voice memos record right here (browser will ask for the mic; if it's blocked, attach an audio file instead). Video: paste a Loom/YouTube link, or attach a small file (≤8 MB) — big videos belong on Loom.</p>
+  <h4>Passcode</h4><div class="row"><button class="btn sm" onclick="helpOpen=false;render();changePinModal()">Change coach passcode</button></div>
+  <h4>Backups</h4><p>Download the whole Locker (students, shelves, worksheets, focus) as one JSON file, or restore from one.</p>
+  <div class="row"><button class="btn sm" onclick="exportBackup()">⇩ Export backup</button>
+  <label><input type="file" accept=".json,application/json" style="display:none" onchange="importBackup(this)"><span class="iconbtn" style="cursor:pointer">⇪ Restore backup</span></label></div>
+  <h4>SC2 Tools agent</h4><p>Each student's agent status lives in their Weekly-focus context card. Fill the replay-admission lanes automatically: run <span style="font-family:var(--mono)">agent_sync.py</span> over their replays (or your parsed.jsonl) and use “Import agent sync” in the Inbox — it sets the lanes, marks the agent connected and stamps the sync date. Replay shelf items and build references can link straight into sc2tools.com instead of carrying the file.</p>
+  <h4>Seasonal build refresh</h4><p>The build library is generated from your replay database. Each season, re-run the extractor and ask Claude to republish this page — the URL and all student data stay.</p>
+  <h4>Storage</h4><p>${kb(used)} used of ${kb(BUDGET)} budget. Largest stored files:</p>
+  <div class="meter ${used>BUDGET*0.8?"hot":""}"><i style="width:${Math.min(100,used/BUDGET*100)}%"></i></div>
+  ${assets.map(a=>`<div class="filelist"><div class="f"><b>${esc(a.n)}</b><span>${kb(a.size)}</span><button class="btn sm q" onclick="delAsset('${a.id}')">delete</button></div></div>`).join("")||'<p>No stored files yet.</p>'}
+  <h4>Forgot passcode?</h4><p>Ask Claude to republish the page with a reset — student data is preserved.</p>`
+  :`
+  <h4>Submitting replays</h4><p>“Submit replays” takes a whole batch: drag in every .SC2Replay from the session, tag the build you were playing, send once. Your coach watches them personally; feedback lands on your shelf.</p>
+  <h4>Worksheets</h4><p>Answer before your session. Long answers beat short ones — the coach reads everything.</p>
+  <h4>Downloading files</h4><p>Replay files download with a “.txt” ending added (a platform rule) — after saving, remove the .txt so it ends in .SC2Replay and it opens in StarCraft normally.</p>
+  <h4>Something not saving?</h4><p>You may have view-only access — ask your coach to re-share the page with edit access.</p>`}
+ </div>`}
+/* ---------- assets ---------- */
+function addAsset(name,mime,b64){const id=uid();S.assets[id]={n:name,mime,b64,size:Math.round(b64.length*0.75)};return id}
+function delAsset(id){
+ // refuse if referenced
+ const used=(JSON.stringify(S.students)+JSON.stringify(S.shelfLibrary||[])+JSON.stringify(S.customBuilds||[])).includes(id);
+ if(used){toast("That file is attached to a shelf item or build — remove that first");return}
+ delete S.assets[id];persist("deleted")}
+function assetURL(id){const a=S.assets[id];return a?"data:"+a.mime+";base64,"+a.b64:""}
+function readFileB64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=rej;r.readAsDataURL(f)})}
+function checkBudget(add){if(stateBytes()+add*1.34>BUDGET){toast("Not enough storage for that file — free space in Help → Storage",3600);return false}return true}
+async function saveDownload(filename,dataB64OrText,isB64){
+ if(!downloadsNS){toast("Downloads aren't available in this view");return}
+ try{
+  let data;
+  if(isB64){const bin=atob(dataB64OrText);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);data=u}
+  else data=dataB64OrText;
+  await downloadsNS.save({filename,data});toast("Saved ✓")
+ }catch(e){
+  if(e&&e.code==="declined")return;
+  if(e&&(e.code==="rejected_extension"||e.code==="extension_not_enabled")){toast("That file type can't be saved from this view",3000);return}
+  toast("Download failed — try again")}}
+/* ---------- shared small components ---------- */
+function shelfItemHTML(st,it,coach){
+ let body="";
+ if(it.ty==="voice"&&it.asset)body=`<audio controls preload="none" src="${assetURL(it.asset)}"></audio>`;
+ if(it.ty==="video")body=it.asset?`<video controls preload="none" src="${assetURL(it.asset)}"></video>`
+   :it.link?`<div style="margin-top:6px"><a href="${esc(it.link)}" target="_blank" rel="noopener">▸ Watch: ${esc(it.link)}</a></div>`:"";
+ if(it.ty==="image"&&it.asset)body=`<img class="att" src="${assetURL(it.asset)}" alt="annotated frame from coach">`;
+ if(it.ty==="replay"&&(it.link||it.game)){
+  const meta=it.game?`<div class="n" style="margin-top:4px">${esc(it.game.m)} · vs ${esc(it.game.o)} · ${esc(it.game.d)}${it.game.b?" · "+esc(it.game.b):""}</div>`:"";
+  body=meta+(it.link?`<div style="margin-top:5px"><a href="${esc(it.link)}" target="_blank" rel="noopener">▸ open this game in SC2 Tools</a></div>`:"");
+ }
+ else if(it.ty==="replay"&&it.asset){const a=S.assets[it.asset];
+  body=`<div class="row" style="margin-top:7px"><button class="btn sm" onclick="saveDownload('${esc(a.n)}.txt',S.assets['${it.asset}'].b64,true)">⇩ download replay</button><span class="sub">save, then remove the “.txt” ending</span></div>`}
+ if(it.ty==="pdf")body=it.asset?`<div class="row" style="margin-top:7px"><button class="btn sm" onclick="pdfDownload('${it.asset}')">⇩ download PDF</button></div>`
+   :it.link?`<div style="margin-top:6px"><a href="${esc(it.link)}" target="_blank" rel="noopener">▸ open: ${esc(it.link)}</a></div>`:"";
+ const ic={voice:"MEMO",video:"VID",pdf:"PDF",replay:"REP",notes:"NOTE",image:"IMG"}[it.ty]||"•";
+ return `<div class="item"><div class="icon ${it.ty}">${ic}</div>
+  <div class="bd"><div class="t">${esc(it.t)}</div>${it.n?`<div class="n">“${esc(it.n)}”</div>`:""}${body}</div>
+  <div class="d8">${fmtD(it.d)}${coach?` <button class="btn sm q" title="save for reuse with any student" onclick="saveShelfToLibrary('${st.id}','${it.id}')">＋ library</button> <button class="btn sm q" onclick="rmShelf('${st.id}','${it.id}')">remove</button>`:""}</div></div>`}
+async function pdfDownload(assetId){const a=S.assets[assetId];if(!a)return;
+ try{
+  const bin=atob(a.b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  await downloadsNS.save({filename:a.n,data:u});toast("Saved ✓")
+ }catch(e){
+  if(e&&e.code==="declined")return;
+  if(e&&e.code==="extension_not_enabled"){toast("PDF saving isn't enabled in this view — ask your coach to drop it in Discord too",3600);return}
+  toast("Download failed")}}
+function rmShelf(sid,iid){const st=byId(sid);st.shelf=st.shelf.filter(x=>x.id!==iid);persist()}
+function saveShelfToLibrary(sid,iid){
+ const it=byId(sid).shelf.find(x=>x.id===iid);if(!it)return;
+ const c=JSON.parse(JSON.stringify(it));delete c.id;delete c.d;
+ S.shelfLibrary.unshift({id:uid(),...c});persist()}
+function shelfLibraryPicker(sid){
+ openModal(`<h2>Shelf library</h2>
+  <p class="sub">Items saved for reuse — a welcome note, a fundamentals video, a practice-protocol card. Adding puts a copy on this student's shelf with today's date.</p>
+  ${S.shelfLibrary.map(t=>`<div class="item"><div class="icon ${t.ty}">${({voice:"MEMO",video:"VID",pdf:"PDF",replay:"REP",notes:"NOTE",image:"IMG"})[t.ty]||"•"}</div>
+   <div class="bd"><div class="t">${esc(t.t)}</div><div class="n">${esc(t.n||"")}</div></div>
+   <div class="d8"><button class="btn sm" onclick="addShelfFromLibrary('${sid}','${t.id}')">add</button>
+    <button class="btn sm q" onclick="S.shelfLibrary=S.shelfLibrary.filter(x=>x.id!=='${t.id}');persist()">delete</button></div></div>`).join("")||'<div class="empty">Empty — use “＋ library” on any shelf item to save it here.</div>'}
+  <button class="btn q" style="margin-top:8px" onclick="closeModal()">Close</button>`)}
+function addShelfFromLibrary(sid,tid){
+ const t=S.shelfLibrary.find(x=>x.id===tid);if(!t)return;
+ const c=JSON.parse(JSON.stringify(t));delete c.id;
+ c.id=uid();c.d=now();byId(sid).shelf.unshift(c);closeModal();persist()}
+const byId=id=>S.students.find(s=>s.id===id);
+/* ---------- COACH ---------- */
+function coachHTML(){
+ if(!coachOK)return gateHTML();
+ if(!curStudent&&S.students.length)curStudent=S.students[0].id;
+ const st=byId(curStudent);
+ return `<div class="wrap"><div class="coach">
+  <div class="side">
+   <h3 style="margin:0 0 9px;font-family:var(--disp);color:var(--blue);font-size:12.5px;letter-spacing:.13em">ROSTER · ${S.students.length}</h3>
+   ${S.students.map(s=>`<button class="st ${s.id===curStudent?"on":""}" onclick="curStudent='${s.id}';render()">
+     <div class="nm">${esc(s.name)}</div><div class="mu">${esc(s.note||"")}${(s.submissions||[]).filter(x=>!x.exported).length?` · <span style="color:var(--gold)">${(s.submissions||[]).filter(x=>!x.exported).length} new replays</span>`:""}</div></button>`).join("")}
+   <button class="st" onclick="addStudentModal()"><div class="nm" style="color:var(--gold)">+ Add student</div></button>
+  </div>
+  <div>
+  ${!st?`<div class="empty">Add your first student to begin.</div>`:`
+   <div class="row" style="margin-bottom:10px"><h2 style="margin:0;font-size:26px">${esc(st.name)}</h2>
+    <input type="text" value="${esc(st.note||"")}" placeholder="mmr / focus note" style="font-size:12.5px;max-width:220px" onchange="byId('${st.id}').note=this.value;persist()">
+    <button class="btn sm q" style="margin-left:auto" onclick="removeStudent('${st.id}')">remove student</button></div>
+   <div class="tabs">
+    <button class="${tab==="focus"?"on":""}" onclick="tab='focus';render()">Weekly focus</button>
+    <button class="${tab==="worksheets"?"on":""}" onclick="tab='worksheets';render()">Worksheets</button>
+    <button class="${tab==="builds"?"on":""}" onclick="tab='builds';render()">Builds</button>
+    <button class="${tab==="shelf"?"on":""}" onclick="tab='shelf';render()">Shelf</button>
+    <button class="${tab==="inbox"?"on":""}" onclick="tab='inbox';render()">Inbox ${(st.submissions||[]).filter(x=>!x.exported).length?`<span class="ct">●</span>`:""}</button>
+   </div>
+   ${tab==="focus"?focusHTML(st):tab==="worksheets"?wsCoachHTML(st):tab==="builds"?buildsHTML(st):tab==="shelf"?shelfCoachHTML(st):inboxHTML(st)}`}
+  </div></div></div>`}
+function addStudentModal(){openModal(`<h2>Add student</h2>
+ <input id="nsName" type="text" placeholder="Their name" style="width:100%;margin-top:8px">
+ <input id="nsNote" type="text" placeholder="MMR / focus (optional)" style="width:100%;margin-top:8px">
+ <div class="row" style="margin-top:12px"><button class="btn" onclick="addStudent()">Add</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+function addStudent(){const n=$("nsName").value.trim();if(!n){toast("Name required");return}
+ S.students.push({id:uid(),name:n,note:$("nsNote").value.trim(),builds:[],shelf:[],worksheets:[],submissions:[],
+  intake:{done:false},focus:null,lanes:{active:0,bridge:0,historical:0,quarantine:0},agent:{status:"none"}});
+ curStudent=S.students[S.students.length-1].id;closeModal();persist()}
+function removeStudent(id){openModal(`<h2>Remove ${esc(byId(id).name)}?</h2><p class="sub">Their locker, shelf, worksheets and submissions are deleted from the page. This publishes immediately.</p>
+ <div class="row" style="margin-top:12px"><button class="btn" style="border-color:#5c3434;color:var(--loss)" onclick="S.students=S.students.filter(s=>s.id!=='${id}');curStudent=null;closeModal();persist()">Remove</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+/* ----- builds tab ----- */
+function buildsHTML(st){
+ return `<div class="card"><h3>Assigned to ${esc(st.name)}</h3>
+  ${(st.builds||[]).length?st.builds.map((b,i)=>{const L=LIB(b.lib);if(!L)return "";
+   return `<div class="item"><div class="icon replay">BLD</div>
+    <div class="bd"><div class="t">${esc(L.name)}</div><div class="n">${L.custom?esc(recStr(L)):"your record: "+recStr(L)}${(b.ref||b.refLink||b.refGame)?` · reference: ${b.refGame?esc(b.refGame.m+" vs "+b.refGame.o):"attached"} ✓`:(L.refGame||L.refLink||L.refAsset)?" · build's reference ✓":""}</div>
+     <label class="sub" style="display:flex;gap:6px;align-items:center;margin-top:5px;cursor:pointer"><input type="checkbox" ${b.showRecord?"checked":""} onchange="byId('${st.id}').builds[${i}].showRecord=this.checked;persist()"> show my ladder record to the student <span class="sub">(off = they see the build, not the stats)</span></label></div>
+    <div class="d8">${(b.ref||b.refLink||b.refGame||L.refGame||L.refLink||L.refAsset)?"":`<button class="btn sm" onclick="attachRef('${st.id}',${i})">attach reference replay</button>`}
+     <button class="btn sm q" onclick="byId('${st.id}').builds.splice(${i},1);persist()">unassign</button></div></div>`}).join("")
+  :'<div class="empty">No builds assigned yet — pick from your library below.</div>'}</div>
+ <div class="card"><div class="row"><h3 style="flex:1;margin:0">Custom builds</h3>
+   <button class="btn sm" onclick="customBuildModal(null)">＋ Add custom build</button></div>
+  <p class="sub">Builds you author by hand — new experiments, student-specific variations, borrowed pro builds. They assign exactly like library builds and show the student the full order and benchmarks.</p>
+  ${S.customBuilds.length?S.customBuilds.map(L=>{const has=(st.builds||[]).some(b=>b.lib===L.id);
+   return `<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(L.name)} <span class="pill" style="margin-left:5px">custom</span></div><div class="n">${esc(L.matchup)} · ${esc(recStr(L))} · ${(L.order||[]).length} steps${(L.refGame||L.refLink||L.refAsset)?" · replay ✓":""}</div></div>
+   <div class="d8"><button class="btn sm q" onclick="customBuildModal('${L.id}')">edit</button>
+    ${has?'<span class="pill w">assigned</span>':`<button class="btn sm" onclick="assignBuild('${st.id}','${L.id}')">assign</button>`}
+    <button class="btn sm q" onclick="delCustomBuild('${L.id}')">delete</button></div></div>`}).join(""):""}
+ </div>
+ <div class="card"><h3>Your library — from your replay database</h3>
+  ${LIBRARY.map(L=>{const has=(st.builds||[]).some(b=>b.lib===L.id);
+   return `<div class="item" style="padding:8px 12px"><div class="bd"><div class="t" style="font-size:13.5px">${esc(L.name)}</div><div class="n">${L.winrate}% · ${L.games} games</div></div>
+   <div class="d8">${has?'<span class="pill w">assigned</span>':`<button class="btn sm" onclick="assignBuild('${st.id}','${L.id}')">assign</button>`}</div></div>`}).join("")}
+ </div>`}
+function assignBuild(sid,lib){byId(sid).builds.push({lib,ref:null,showRecord:false});persist()}
+/* ----- weekly focus (the spine of the student experience) ----- */
+function focusCardHTML(f,studentSide){
+ if(!f)return `<div class="empty">No focus published yet${studentSide?" — play normally and let your replays sync":""}.</div>`;
+ return `<div class="focuscard">
+  <div class="eyebrow2">Your one focus</div>
+  <div class="fbig">${esc(f.title)}</div>
+  ${f.why?`<p class="sub" style="margin:4px 0 10px">${esc(f.why)}</p>`:""}
+  <div class="fbox"><div class="eyebrow2">Do this</div><p>${esc(f.action)}</p>
+  ${f.check?`<div class="eyebrow2" style="margin-top:8px">One question after each game</div><p>${esc(f.check)}</p>`:""}</div>
+  <div class="row" style="margin-top:10px"><span class="pill g">due · ${esc(f.due||"this week")}</span>
+   ${f.updatedAt?`<span class="sub">set ${fmtD(f.updatedAt)}</span>`:""}</div>
+  ${(f.protected&&f.protected.length)?`<div class="fprot"><div class="eyebrow2">Not changing right now</div>
+   ${f.protected.map(p=>`<div class="sub">• ${esc(p)}</div>`).join("")}</div>`:""}
+ </div>`}
+function agentOn(st){return !!((st.games||[]).length||(st.agent&&st.agent.lastSync))}
+function computeLanes(st){
+ const gs=st.games||[];
+ if(!gs.length)return {...(st.lanes||{active:0,bridge:0,historical:0,quarantine:0}),derived:false};
+ const [aS]=seasonRangeJS(CUR_SEASON);
+ const [bS]=seasonRangeJS(CUR_SEASON-1);
+ const L={active:0,bridge:0,historical:0,quarantine:(st.lanes&&+st.lanes.quarantine)||0,derived:true};
+ gs.forEach(g=>{const d=g.d||"";if(d>=aS)L.active++;else if(d>=bS)L.bridge++;else L.historical++});
+ return L}
+function receiptLine(st){
+ const L=computeLanes(st);const cur=+L.active||0;const rest=(+L.bridge||0)+(+L.historical||0)+(+L.quarantine||0);
+ if(!cur&&!rest)return "";
+ const sync=arguments[0].agent&&arguments[0].agent.lastSync?` · synced ${fmtD(arguments[0].agent.lastSync)}`:"";
+ return `<p class="sub" style="margin-top:8px">Replay basis: <b style="color:var(--ink)">${cur} current-season games</b> admitted to your working set; ${rest} older or uncertain games did not influence this plan. <span class="pill b" style="margin-left:4px">via SC2 Tools agent${sync}</span></p>`}
+function focusHTML(st){
+ st.agent=st.agent||{status:"none"};st.lanes=st.lanes||{active:0,bridge:0,historical:0,quarantine:0};st.intake=st.intake||{done:false};
+ const f=st.focus||{};
+ const it=st.intake||{};
+ return `<div class="grid">
+  <div class="card" style="margin-bottom:0"><h3>Set ${esc(st.name)}'s one focus</h3>
+   <p class="sub">The student's week leads with exactly this — one focus, one action, one question. Everything else stays behind tabs.</p>
+   <div style="margin-top:10px">
+    <input id="fT" type="text" placeholder="One focus — e.g. Build a trustworthy baseline" style="width:100%" value="${esc(f.title||"")}">
+    <textarea id="fW" rows="2" placeholder="Why (one or two sentences, optional)" style="margin-top:8px">${esc(f.why||"")}</textarea>
+    <textarea id="fA" rows="3" placeholder="Exact action — e.g. Play 3–5 normal ladder games with your current builds. Save every replay." style="margin-top:8px">${esc(f.action||"")}</textarea>
+    <input id="fC" type="text" placeholder="One question after each game (optional)" style="width:100%;margin-top:8px" value="${esc(f.check||"")}">
+    <input id="fD" type="text" placeholder="Due — e.g. before Thursday" style="width:100%;margin-top:8px" value="${esc(f.due||"")}">
+    <textarea id="fP" rows="3" placeholder="Not changing right now — one per line (protects the student from overload)" style="margin-top:8px">${esc((f.protected||[]).join("\n"))}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="saveFocus('${st.id}')">Publish to ${esc(st.name)}</button>
+     ${st.focus?`<button class="btn q" onclick="byId('${st.id}').focus=null;persist()">clear focus</button>`:""}</div>
+   </div></div>
+  <div>
+   <div class="card"><h3>Student preview</h3>${focusCardHTML(st.focus,false)}${receiptLine(st)}</div>
+   <div class="card" style="margin-bottom:0"><h3>Student context</h3>
+    ${it.done?`<p class="sub"><b style="color:var(--ink)">Rank:</b> ${esc(it.rank||"—")} · ${esc(it.region||"")} · ${esc(it.race||"")}<br>
+     <b style="color:var(--ink)">Wants most:</b> ${esc(it.goal||"—")}<br>
+     <b style="color:var(--ink)">Time:</b> ${esc(it.hours||"?")} h/week<br>
+     ${it.builds?`<b style="color:var(--ink)">vs Terran:</b> ${esc((it.builds.vsT||[]).join(", ")||"—")}<br>
+     <b style="color:var(--ink)">vs Zerg:</b> ${esc((it.builds.vsZ||[]).join(", ")||"—")}<br>
+     <b style="color:var(--ink)">vs Protoss:</b> ${esc((it.builds.vsP||[]).join(", ")||"—")}<br>`
+     :`<b style="color:var(--ink)">Current builds:</b> ${esc([it.pvt,it.pvz,it.pvp].filter(Boolean).join(" · ")||"—")}<br>`}
+     <b style="color:var(--ink)">Improve / understand:</b> ${esc(it.question||"—")}</p>`
+    :`<p class="sub">Intake not completed yet — ${esc(st.name)} sees a five-minute setup on first visit.</p>`}
+    <div class="row" style="margin-top:8px"><span class="sub">SC2 Tools agent:</span>
+     ${agentOn(st)?`<span class="pill w">connected · ${(st.games||[]).length} games synced${st.agent.lastSync?" · "+fmtD(st.agent.lastSync):""}</span>`
+      :`<span class="pill r">not synced yet</span> <span class="sub">import their sync in the Inbox and this flips on its own</span>`}</div>
+   </div>
+  </div></div>`}
+function saveFocus(sid){
+ const t=$("fT").value.trim(),a=$("fA").value.trim();
+ if(!t||!a){toast("A focus and an exact action are required");return}
+ byId(sid).focus={title:t,why:$("fW").value.trim(),action:a,check:$("fC").value.trim(),
+  due:$("fD").value.trim(),protected:$("fP").value.split("\n").map(x=>x.trim()).filter(Boolean),updatedAt:now()};
+ persist()}
+/* ----- custom builds ----- */
+function parseSteps(text){
+ return String(text||"").split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{
+  const tm=l.match(/\b(\d{1,2}:\d{2})\b/);const c=tm?tm[1]:"";
+  let rest=tm?l.replace(tm[0],""):l;
+  const sm=rest.match(/^\s*(\d{1,3})\b/);const s=sm?sm[1]:"";
+  if(sm)rest=rest.replace(sm[0],"");
+  const n=rest.replace(/^[\s·|,-]+|[\s·|,-]+$/g,"");
+  return n?{s,c,n}:null}).filter(Boolean)}
+const stepsText=arr=>(arr||[]).map(o=>[o.s,o.c,o.n].filter(x=>x!=="").join("  ")).join("\n");
+let CBDRAFT=null;
+function readCbForm(){
+ return {name:$("cbName")?$("cbName").value:"",mu:$("cbMu")?$("cbMu").value:"PvT",
+  rec:$("cbRec")?$("cbRec").value:"",order:$("cbOrder")?$("cbOrder").value:"",bench:$("cbBench")?$("cbBench").value:"",
+  ref:CBDRAFT&&CBDRAFT.ref!==undefined?CBDRAFT.ref:undefined}}
+function cbAttachPick(editId){
+ CBDRAFT=readCbForm();
+ gamePicker("Pick the reference game",r=>{CBDRAFT.ref={game:r.game,link:r.link||null};customBuildModal(editId,CBDRAFT)},null)}
+function cbAttachUpload(editId){
+ CBDRAFT=readCbForm();closeModal();
+ pickFiles(".SC2Replay",false,async fs=>{const f=fs[0];
+  if(!f){customBuildModal(editId,CBDRAFT);return}
+  if(f.size>900*1024){toast("Replay too large (900 KB max)");customBuildModal(editId,CBDRAFT);return}
+  if(!checkBudget(f.size)){customBuildModal(editId,CBDRAFT);return}
+  const b64=await readFileB64(f);
+  CBDRAFT.ref={asset:addAsset(f.name,"application/octet-stream",b64)};
+  customBuildModal(editId,CBDRAFT)})}
+function customBuildModal(editId,draft){
+ const L=editId?S.customBuilds.find(x=>x.id===editId):null;
+ CBDRAFT=draft||null;
+ openModal(`<h2>${L?"Edit custom build":"New custom build"}</h2>
+  <input id="cbName" type="text" placeholder="Name — e.g. PvT — Fast DT into Phoenix" style="width:100%;margin-top:8px" value="${draft?esc(draft.name):L?esc(L.name):""}">
+  <div class="row" style="margin-top:8px">
+   <select id="cbMu"><option${L&&L.matchup==="PvT"?" selected":""}>PvT</option><option${L&&L.matchup==="PvZ"?" selected":""}>PvZ</option><option${L&&L.matchup==="PvP"?" selected":""}>PvP</option><option${L&&L.matchup==="Any"?" selected":""}>Any</option></select>
+   <input id="cbRec" type="text" placeholder="Record shown to student (optional) — e.g. 7-2 in testing" style="flex:1" value="${draft?esc(draft.rec):L?esc(L.record||""):""}">
+  </div>
+  <h3 style="margin-top:12px">Build order — one step per line</h3>
+  <p class="sub">Format is flexible: “14 0:19 Pylon”, “0:19 Pylon”, or just “Pylon”. Supply first, then clock, then the action.</p>
+  <textarea id="cbOrder" rows="10" style="font-family:var(--mono);font-size:12.5px" placeholder="14  0:19  Pylon
+15  0:42  Gateway
+17  0:50  Assimilator
+20  1:23  Nexus">${draft?esc(draft.order):L?esc(stepsText(L.order)):""}</textarea>
+  <h3 style="margin-top:12px">Benchmarks (optional) — the timings you'll hold them to</h3>
+  <textarea id="cbBench" rows="4" style="font-family:var(--mono);font-size:12.5px" placeholder="26  2:27  Stargate #1
+34  3:02  First Adept">${draft?esc(draft.bench):L?esc(stepsText((L.bench||[]).map(m=>({s:m.s,c:m.c,n:m.m})))):""}</textarea>
+  <h3 style="margin-top:12px">Reference replay (optional) — students see it with every assignment of this build</h3>
+  ${(()=>{const r=draft&&draft.ref!==undefined?draft.ref:(L?{game:L.refGame,link:L.refLink,asset:L.refAsset}:null);
+   const hasR=r&&(r.game||r.link||r.asset);
+   return `<p class="sub">${hasR?("Attached: "+esc(r.game?(r.game.m+" vs "+r.game.o+" ("+r.game.d+")"):r.link?r.link:(S.assets[r.asset]||{}).n||"replay file"))+" ✓":"None yet."}</p>
+   <div class="row"><button class="btn sm" onclick="cbAttachPick('${editId||""}')">🎮 Pick from my games</button>
+    <button class="btn sm q" onclick="cbAttachUpload('${editId||""}')">⇪ Upload file</button>
+    ${hasR?`<button class="btn sm q" onclick="CBDRAFT=readCbForm();CBDRAFT.ref=null;customBuildModal('${editId||""}',CBDRAFT)">remove</button>`:""}</div>`})()}
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="saveCustomBuild('${editId||""}')">${L?"Save changes":"Add build"}</button>
+  <button class="btn q" onclick="CBDRAFT=null;closeModal()">Cancel</button></div>`)}
+function saveCustomBuild(editId){
+ const name=$("cbName").value.trim();
+ if(!name){toast("Give the build a name");return}
+ const order=parseSteps($("cbOrder").value);
+ if(!order.length){toast("Add at least one build-order step");return}
+ const bench=parseSteps($("cbBench").value).map(o=>({m:o.n,c:o.c,s:o.s}));
+ const prev=editId?S.customBuilds.find(x=>x.id===editId):null;
+ const r=CBDRAFT&&CBDRAFT.ref!==undefined?CBDRAFT.ref:(prev?{game:prev.refGame,link:prev.refLink,asset:prev.refAsset}:null);
+ const obj={id:editId||"custom-"+uid(),custom:true,name,matchup:$("cbMu").value,
+  record:$("cbRec").value.trim()||null,winrate:null,games:null,order,bench,
+  refGame:(r&&r.game)||null,refLink:(r&&r.link)||null,refAsset:(r&&r.asset)||null};
+ CBDRAFT=null;
+ if(editId){const i=S.customBuilds.findIndex(x=>x.id===editId);if(i>=0)S.customBuilds[i]=obj}
+ else S.customBuilds.push(obj);
+ closeModal();persist()}
+function delCustomBuild(id){
+ if(JSON.stringify(S.students.map(s=>s.builds)).includes(id)){toast("Unassign it from every student first");return}
+ S.customBuilds=S.customBuilds.filter(x=>x.id!==id);persist()}
+function attachRef(sid,i){
+ openModal(`<h2>Reference replay</h2>
+  <div class="row" style="margin-top:10px">
+   <button class="btn" onclick="closeModal();refPick('${sid}',${i})">🎮 Pick from your games</button>
+   <button class="btn q" onclick="closeModal();refUpload('${sid}',${i})">⇪ Upload file</button>
+   <button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+function refPick(sid,i){
+ gamePicker("Pick the reference game",r=>{
+  const b=byId(sid).builds[i];
+  b.refGame=r.game;if(r.link)b.refLink=r.link;
+  persist()},sid)}
+function refUpload(sid,i){
+ pickFiles(".SC2Replay",false,async fs=>{const f=fs[0];if(!f)return;
+  if(f.size>900*1024){toast("Replay too large (900 KB max)");return}
+  if(!checkBudget(f.size))return;
+  const b64=await readFileB64(f);
+  byId(sid).builds[i].ref=addAsset(f.name,"application/octet-stream",b64);persist()})}
+/* ----- shelf tab (coach) ----- */
+function shelfCoachHTML(st){
+ return `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="flex:1;margin:0">Add to ${esc(st.name)}'s shelf</h3>
+   ${S.shelfLibrary.length?`<button class="btn q sm" onclick="shelfLibraryPicker('${st.id}')">🗂 From library (${S.shelfLibrary.length})</button>`:""}</div>
+  <div class="row">
+   <button class="btn q" onclick="noteModal('${st.id}')">＋ Session notes</button>
+   <button class="btn q" onclick="voiceModal('${st.id}')">🎙 Voice memo</button>
+   <button class="btn q" onclick="videoModal('${st.id}')">🎬 Video</button>
+   <button class="btn q" onclick="annotate(null,'${st.id}')">🖊 Annotated screenshot</button>
+   <button class="btn q" onclick="replayShelfModal('${st.id}')">⚔ Replay + note</button>
+   <button class="btn q" onclick="pdfModal('${st.id}')">📄 PDF</button>
+  </div></div>
+ <div class="card"><h3>On the shelf</h3>
+  ${(st.shelf||[]).length?st.shelf.map(it=>shelfItemHTML(st,it,true)).join(""):'<div class="empty">Empty — everything you add lands here, newest on top.</div>'}</div>`}
+function pushShelf(sid,item){const st=byId(sid);item.id=uid();item.d=now();st.shelf.unshift(item);persist()}
+function noteModal(sid){openModal(`<h2>Session notes</h2>
+ <input id="mT" type="text" placeholder="Title — e.g. Session notes · Tuesday" style="width:100%;margin-top:8px">
+ <textarea id="mN" rows="7" placeholder="What you covered, the fixes agreed, homework…" style="margin-top:8px"></textarea>
+ <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'notes',t:$('mT').value.trim()||'Session notes',n:$('mN').value.trim()});closeModal()">Add to shelf</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+/* voice */
+function voiceModal(sid){
+ openModal(`<h2>Voice memo</h2><p class="sub">Records in your browser (max 90 s). If the mic is blocked, attach an audio file instead.</p>
+  <div class="row" style="margin-top:10px" id="recRow">
+   <button class="btn" id="recBtn" onclick="recToggle('${sid}')">● Start recording</button>
+   <span id="recTime" class="sub"></span>
+   <label style="margin-left:auto"><input type="file" accept="audio/*" style="display:none" onchange="voiceFile('${sid}',this)"><span class="iconbtn" style="cursor:pointer">attach audio file</span></label>
+  </div>
+  <div id="recOut" style="margin-top:10px"></div>
+  <input id="mT" type="text" placeholder="Title — e.g. Voice memo · your 4:00 gas" style="width:100%;margin-top:10px">
+  <input id="mN" type="text" placeholder="One-line note (optional)" style="width:100%;margin-top:8px">
+  <div class="row" style="margin-top:12px"><button class="btn" id="recSave" disabled onclick="voiceSave('${sid}')">Add to shelf</button><button class="btn q" onclick="recCancel();closeModal()">Cancel</button></div>`)}
+async function recToggle(sid){
+ if(recState&&recState.rec&&recState.rec.state==="recording"){recState.rec.stop();return}
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  const mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"";
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime,audioBitsPerSecond:48000}:{});
+  const chunks=[];recState={rec,chunks,t0:Date.now(),b64:null,mime:rec.mimeType||"audio/webm"};
+  rec.ondataavailable=e=>chunks.push(e.data);
+  rec.onstop=async()=>{
+   stream.getTracks().forEach(t=>t.stop());clearInterval(recState.tick);
+   const blob=new Blob(chunks,{type:recState.mime});
+   if(blob.size>2.5*1048576){toast("Recording too large — keep it under ~90 s");return}
+   recState.b64=await readFileB64(blob);
+   $("recOut").innerHTML=`<audio controls src="data:${recState.mime};base64,${recState.b64}"></audio>`;
+   $("recBtn").textContent="● Re-record";$("recSave").disabled=false;$("recTime").textContent=""};
+  rec.start();
+  $("recBtn").innerHTML='<span class="rec"><span class="dot"></span> Stop</span>';
+  recState.tick=setInterval(()=>{const s=Math.floor((Date.now()-recState.t0)/1000);
+   $("recTime").textContent=s+"s / 90s";if(s>=90)rec.stop()},500);
+ }catch(e){toast("Microphone unavailable — attach an audio file instead",3600)}}
+async function voiceFile(sid,input){const f=input.files[0];if(!f)return;
+ if(f.size>2.5*1048576){toast("Audio file too large (2.5 MB max)");return}
+ recState={b64:await readFileB64(f),mime:f.type||"audio/webm"};
+ $("recOut").innerHTML=`<audio controls src="data:${recState.mime};base64,${recState.b64}"></audio>`;$("recSave").disabled=false}
+function recCancel(){if(recState&&recState.rec&&recState.rec.state==="recording")recState.rec.stop();recState=null}
+function voiceSave(sid){
+ if(!recState||!recState.b64)return;
+ if(!checkBudget(recState.b64.length))return;
+ const id=addAsset("voice-memo-"+Date.now()+".webm",recState.mime,recState.b64);
+ pushShelf(sid,{ty:"voice",t:$("mT").value.trim()||"Voice memo",n:$("mN").value.trim(),asset:id});
+ recState=null;closeModal()}
+/* video */
+function videoModal(sid){openModal(`<h2>Video</h2>
+ <p class="sub">Best: record on Loom/Discord and paste the link. Small files (≤8 MB webm/mp4) can be stored right on the page.</p>
+ <input id="mL" type="url" placeholder="https://loom.com/share/…" style="width:100%;margin-top:10px">
+ <div class="row" style="margin-top:8px"><label><input type="file" accept="video/mp4,video/webm" style="display:none" onchange="videoFile(this)"><span class="iconbtn" style="cursor:pointer">…or attach video file</span></label><span id="vfName" class="sub"></span></div>
+ <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:10px">
+ <input id="mN" type="text" placeholder="One-line note (optional)" style="width:100%;margin-top:8px">
+ <div class="row" style="margin-top:12px"><button class="btn" onclick="videoSave('${sid}')">Add to shelf</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`);window._vf=null}
+async function videoFile(input){const f=input.files[0];if(!f)return;
+ if(f.size>8*1048576){toast("Video too large — 8 MB max; use a Loom link for anything longer");return}
+ $("vfName").textContent=f.name+" ("+kb(f.size)+")";window._vf={b64:await readFileB64(f),mime:f.type,n:f.name}}
+function videoSave(sid){
+ const link=$("mL").value.trim();
+ if(!link&&!window._vf){toast("Paste a link or attach a file");return}
+ let asset=null;
+ if(window._vf){if(!checkBudget(window._vf.b64.length))return;asset=addAsset(window._vf.n,window._vf.mime,window._vf.b64)}
+ pushShelf(sid,{ty:"video",t:$("mT").value.trim()||"Video",n:$("mN").value.trim(),link:link||null,asset});window._vf=null;closeModal()}
+/* replay shelf item */
+function replayShelfModal(sid){
+ openModal(`<h2>Replay + note</h2>
+  <p class="sub">If your agent already has the game, link it straight from your SC2 Tools database — no re-upload. Upload the file only when it isn't in the database.</p>
+  <div class="row" style="margin-top:12px">
+   <button class="btn" onclick="closeModal();linkReplayModal('${sid}')">🔗 Link from SC2 Tools</button>
+   <button class="btn q" onclick="closeModal();uploadReplayShelf('${sid}')">⇪ Upload .SC2Replay</button>
+  </div>`)}
+let PK={q:"",mu:"",cb:null,src:null,sid:null,preset:"current_season",cA:"",cB:""};
+function pkCustomVis(){const el=$("pkCustom");if(el)el.style.display=PK.preset==="custom"?"flex":"none"}
+function studentGames(st){
+ const synced=(st.games||[]).map(g=>({d:g.d||"",m:g.m||"",o:g.o||"",res:g.res||"",b:g.b||""}));
+ const subs=(st.submissions||[]).map(x=>({d:(x.at||"").slice(0,10),m:String(x.name||"").replace(/\s*\(\d+\)\.SC2Replay$/i,"").replace(/\.SC2Replay$/i,""),o:"(uploaded)",res:"",b:x.build||""}));
+ return synced.concat(subs)}
+function gamePicker(title,cb,sid){
+ PK={q:"",mu:"",cb,src:null,sid,preset:"current_season",cA:"",cB:""};
+ const st=sid?byId(sid):null;
+ openModal(`<h2>${esc(title)}</h2>
+  <p class="sub">Whose replays?</p>
+  <div class="row" style="margin-top:12px">
+   <button class="btn" onclick="pkSetSrc('mine')">🎮 My replays</button>
+   ${st?`<button class="btn" onclick="pkSetSrc('student')">🎮 ${esc(st.name)}'s replays</button>`:""}
+   <button class="btn q" style="margin-left:auto" onclick="closeModal()">Cancel</button>
+  </div>`)}
+function pkSetSrc(src){
+ PK.src=src;
+ const st=PK.sid?byId(PK.sid):null;
+ const who=src==="mine"?"your database":esc((st||{}).name||"student")+"'s synced games and uploads";
+ openModal(`<h2>${src==="mine"?"My replays":esc((st||{}).name||"Student")+"'s replays"}</h2>
+  <div class="row" style="margin-top:2px">
+   <button class="btn sm q" onclick="gamePicker('Pick a game',PK.cb,PK.sid)">← whose replays</button>
+   <span class="sub">searching ${who}</span></div>
+  <div class="row" style="margin-top:10px">
+   <input type="text" placeholder="Opponent name…" style="flex:2;min-width:150px" oninput="PK.q=this.value;pkUpdate()">
+   <select style="flex:1;min-width:150px" onchange="PK.preset=this.value;pkCustomVis();pkUpdate()">
+    ${pkPresets().map(o=>`<option value="${o.id}" ${PK.preset===o.id?"selected":""}>${o.l}</option>`).join("")}</select>
+  </div>
+  <div class="row" id="pkCustom" style="margin-top:8px;display:${PK.preset==="custom"?"flex":"none"}">
+   <input type="date" style="flex:1" value="${esc(PK.cA||"")}" onchange="PK.cA=this.value;pkUpdate()">
+   <span class="sub">to</span>
+   <input type="date" style="flex:1" value="${esc(PK.cB||"")}" onchange="PK.cB=this.value;pkUpdate()">
+  </div>
+  <div class="choices" style="margin-top:8px">${["","PvT","PvZ","PvP"].map(m=>`<button class="choice ${m===""?"on":""}" data-mu="${m}" onclick="PK.mu='${m}';[...this.parentNode.children].forEach(c=>c.classList.remove('on'));this.classList.add('on');pkUpdate()">${m||"All"}</button>`).join("")}</div>
+  <div id="pkList" style="margin-top:10px;max-height:44vh;overflow-y:auto"></div>
+  <div class="row" style="margin-top:10px"><button class="btn q sm" onclick="pkPaste()">paste a link instead</button>
+   <button class="btn q" style="margin-left:auto" onclick="closeModal()">Cancel</button></div>`);
+ pkUpdate()}
+function pkUpdate(){
+ const q=PK.q.trim().toLowerCase();
+ const [since,until]=pkRange();
+ const pool=PK.src==="student"?studentGames(byId(PK.sid)):GAMES;
+ window._pkRes=pool.filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)&&(!PK.mu||(g.b||"").startsWith(PK.mu))).slice(0,30);
+ const el=$("pkList");if(!el)return;
+ el.innerHTML=window._pkRes.map((g,i)=>`<div class="item" style="padding:8px 11px">
+   <div class="bd"><div class="t" style="font-size:13.5px">${esc(g.m)}${g.o?" · vs "+esc(g.o):""} ${g.res?`<span class="pill ${g.res==="W"?"w":"r"}">${g.res==="W"?"Win":"Loss"}</span>`:""}</div>
+   <div class="n">${esc(g.d)} · ${esc(g.b||"")}</div></div>
+   <div class="d8"><button class="btn sm" onclick="pkSelect(${i})">select</button></div></div>`).join("")
+  ||(PK.src==="student"?'<div class="empty">Nothing here yet — import an agent sync for this student (Inbox tab), have them submit replays, or widen the date range (defaults to the current season).</div>'
+   :'<div class="empty">No games match — the range defaults to the current season; try “All time” or another range, or paste a link below.</div>')}
+function pkSelect(i){
+ const g=window._pkRes[i];const cb=PK.cb;closeModal();
+ openModal(`<h2>${esc(g.m)}${g.o?" · vs "+esc(g.o):""}</h2>
+  <p class="sub">${esc(g.d)}${g.b?" · "+esc(g.b):""}${g.res?" · "+(g.res==="W"?"Win":"Loss"):""}</p>
+  <input id="mT" type="text" style="width:100%;margin-top:8px" value="${esc(g.m+(g.o&&g.o!=="(uploaded)"?" vs "+g.o:"")+(g.res?" — "+(g.res==="W"?"Win":"Loss"):"")+(g.d?" ("+g.d+")":""))}">
+  <textarea id="mN" rows="3" placeholder="What to watch for, with timestamps…" style="margin-top:8px"></textarea>
+  <input id="mL" type="url" placeholder="Optional: paste the game's sc2tools.com link" style="width:100%;margin-top:8px">
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="pkConfirm()">Add</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+ PK.sel=g;PK.cb=cb}
+function pkConfirm(){
+ const g=PK.sel,cb=PK.cb;
+ const r={game:{d:g.d,m:g.m,o:g.o,b:g.b,res:g.res},title:$("mT").value.trim(),note:$("mN").value.trim(),link:$("mL").value.trim()||null};
+ closeModal();cb(r)}
+function pkPaste(){
+ const cb=PK.cb;closeModal();
+ openModal(`<h2>Link a replay</h2>
+  <input id="mL" type="url" placeholder="https://…" style="width:100%;margin-top:8px">
+  <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:8px">
+  <textarea id="mN" rows="3" placeholder="What to watch for…" style="margin-top:8px"></textarea>
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="(function(){const l=$('mL').value.trim();if(!/^https:\/\//.test(l)){toast('Link must start with https://');return}const r={game:null,title:$('mT').value.trim()||'Replay',note:$('mN').value.trim(),link:l};closeModal();window._pkcb(r)})()">Add</button>
+  <button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+ window._pkcb=cb}
+function linkReplayModal(sid){
+ gamePicker("Pick a game",r=>{
+  pushShelf(sid,{ty:"replay",t:r.title||"Replay",n:r.note,link:r.link,game:r.game})},sid)}
+function uploadReplayShelf(sid){
+ pickFiles(".SC2Replay",false,async fs=>{const f=fs[0];if(!f)return;
+  if(f.size>900*1024){toast("Replay too large (900 KB max)");return}
+  if(!checkBudget(f.size))return;
+  const b64=await readFileB64(f);const id=addAsset(f.name,"application/octet-stream",b64);
+  openModal(`<h2>Replay + note</h2><p class="sub">${esc(f.name)} · ${kb(f.size)}</p>
+   <input id="mT" type="text" placeholder="Title — e.g. Annotated replay · Ruby Rock PvT" style="width:100%;margin-top:8px">
+   <textarea id="mN" rows="3" placeholder="What to watch for, with timestamps…" style="margin-top:8px"></textarea>
+   <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'replay',t:$('mT').value.trim()||'${esc(f.name)}',n:$('mN').value.trim(),asset:'${id}'});closeModal()">Add to shelf</button>
+   <button class="btn q" onclick="delete S.assets['${id}'];closeModal()">Cancel</button></div>`)})}
+function pdfModal(sid){
+ pickFiles("application/pdf",false,async fs=>{const f=fs[0];if(!f)return;
+  if(f.size>4*1048576){toast("PDF too large (4 MB max)");return}
+  if(!checkBudget(f.size))return;
+  const b64=await readFileB64(f);const id=addAsset(f.name,"application/pdf",b64);
+  openModal(`<h2>PDF</h2><p class="sub">${esc(f.name)} · ${kb(f.size)}</p>
+   <input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:8px" value="${esc(f.name.replace(/\.pdf$/i,""))}">
+   <input id="mN" type="text" placeholder="One-line note" style="width:100%;margin-top:8px">
+   <div class="row" style="margin-top:12px"><button class="btn" onclick="pushShelf('${sid}',{ty:'pdf',t:$('mT').value.trim(),n:$('mN').value.trim(),asset:'${id}'});closeModal()">Add to shelf</button>
+   <button class="btn q" onclick="delete S.assets['${id}'];closeModal()">Cancel</button></div>`)})}
+function pickFiles(accept,multiple,cb){
+ const i=document.createElement("input");i.type="file";i.accept=accept;if(multiple)i.multiple=true;
+ i.onchange=()=>cb([...i.files]);i.click()}
+/* ----- worksheets (coach) ----- */
+const TYNAME={mc:"Multiple choice",long:"Long answer",scale:"Scale 1–10",image:"Annotated image",replay:"Replay request"};
+function wsCoachHTML(st){
+ return `<div class="card"><div class="row"><h3 style="flex:1;margin:0">Worksheets for ${esc(st.name)}</h3>
+   ${S.wsTemplates.length?`<button class="btn q" onclick="wsTemplatePicker('${st.id}')">🗂 From template (${S.wsTemplates.length})</button>`:""}
+   <button class="btn" onclick="newWS('${st.id}')">＋ New worksheet</button></div>
+  ${(st.worksheets||[]).length?st.worksheets.map(w=>`<div class="item" style="margin-top:10px"><div class="icon notes">WS</div>
+   <div class="bd"><div class="t">${esc(w.title)}</div><div class="n">${w.blocks.length} questions · ${w.state==="draft"?"draft":w.state==="sent"?"waiting on "+esc(st.name):"submitted "+fmtD(w.submittedAt)}</div></div>
+   <div class="d8">
+    ${w.state==="draft"?`<button class="btn sm" onclick="editWS('${st.id}','${w.id}')">edit</button><button class="btn sm" onclick="sendWS('${st.id}','${w.id}')">send</button>`:""}
+    ${w.state==="sent"?`<span class="pill b">sent</span><button class="btn sm q" onclick="editWS('${st.id}','${w.id}')">view</button>`:""}
+    ${w.state==="submitted"?`<span class="pill w">answered</span><button class="btn sm" onclick="reviewWS('${st.id}','${w.id}')">review answers</button>`:""}
+    <button class="btn sm q" onclick="saveWSTemplate('${st.id}','${w.id}')">save as template</button>
+    <button class="btn sm q" onclick="byId('${st.id}').worksheets=byId('${st.id}').worksheets.filter(x=>x.id!=='${w.id}');persist()">delete</button></div></div>`).join("")
+  :'<div class="empty" style="margin-top:10px">No worksheets yet. Build one: multiple choice, long answers, scales, replay requests, and screenshots you draw on.</div>'}</div>
+ ${editingWS?wsEditorHTML(st):""}`}
+let editingWS=null,annoTarget=null;
+function newWS(sid){const st=byId(sid);
+ const w={id:uid(),title:"Check-in — "+st.name,blocks:[],state:"draft",answers:{}};
+ st.worksheets.unshift(w);editingWS=w.id;render()}
+function editWS(sid,wid){editingWS=wid;render();}
+function saveWSTemplate(sid,wid){
+ const w=w_(sid,wid);
+ S.wsTemplates.unshift({id:uid(),title:w.title,blocks:JSON.parse(JSON.stringify(w.blocks))});
+ persist()}
+function wsTemplatePicker(sid){
+ openModal(`<h2>Worksheet templates</h2>
+  <p class="sub">Saved once, reusable for any student. Using one creates a fresh editable draft — answers never carry over.</p>
+  ${S.wsTemplates.map(t=>`<div class="item"><div class="icon notes">TPL</div>
+   <div class="bd"><div class="t">${esc(t.title)}</div><div class="n">${t.blocks.length} questions</div></div>
+   <div class="d8"><button class="btn sm" onclick="newWSFromTemplate('${sid}','${t.id}')">use</button>
+    <button class="btn sm q" onclick="S.wsTemplates=S.wsTemplates.filter(x=>x.id!=='${t.id}');persist()">delete</button></div></div>`).join("")||'<div class="empty">No templates yet — hit “save as template” on any worksheet.</div>'}
+  <button class="btn q" style="margin-top:8px" onclick="closeModal()">Close</button>`)}
+function newWSFromTemplate(sid,tid){
+ const t=S.wsTemplates.find(x=>x.id===tid);if(!t)return;
+ const blocks=JSON.parse(JSON.stringify(t.blocks)).map(b=>({...b,id:uid()}));
+ byId(sid).worksheets.unshift({id:uid(),title:t.title,blocks,state:"draft",answers:{}});
+ editingWS=byId(sid).worksheets[0].id;closeModal();render();toast("Draft created from template")}
+function wsEditorHTML(st){
+ const w=(st.worksheets||[]).find(x=>x.id===editingWS);if(!w)return "";
+ const ro=w.state!=="draft";
+ return `<div class="card"><div class="row"><h3 style="flex:1;margin:0">${ro?"Preview (already sent)":"Editing"} · ${esc(w.title)}</h3>
+   ${ro?"":`<button class="btn" onclick="sendWS('${st.id}','${w.id}')">Send to ${esc(st.name)}</button>`}
+   <button class="btn q" onclick="editingWS=null;render()">close</button></div>
+  ${ro?"":`<input type="text" value="${esc(w.title)}" style="width:100%;margin:10px 0" onchange="w_('${st.id}','${w.id}').title=this.value;persistSoft()">`}
+  <div style="margin-top:10px">
+  ${w.blocks.map((b,i)=>{
+   let body="";
+   if(b.ty==="mc")body=(b.opts||[]).map((o,j)=>ro?`<div class="opt sub">${String.fromCharCode(65+j)}. ${esc(o)}</div>`
+    :`<div class="opt"><span class="sub">${String.fromCharCode(65+j)}</span><input type="text" value="${esc(o)}" onchange="w_('${st.id}','${w.id}').blocks[${i}].opts[${j}]=this.value;persistSoft()"><button class="btn sm q" onclick="w_('${st.id}','${w.id}').blocks[${i}].opts.splice(${j},1);render()">×</button></div>`).join("")
+    +(ro?"":`<div style="margin-top:6px"><button class="btn sm q" onclick="w_('${st.id}','${w.id}').blocks[${i}].opts.push('New option');render()">+ option</button></div>`);
+   if(b.ty==="image")body=b.img?`<img class="att" src="${b.img}" alt="annotated frame">${ro?"":`<div style="margin-top:6px"><button class="btn sm q" onclick="annotate({sid:'${st.id}',wid:'${w.id}',bi:${i}})">re-annotate</button></div>`}`
+    :(ro?'<div class="sub">(no image)</div>':`<button class="btn sm" style="margin-top:6px" onclick="annotate({sid:'${st.id}',wid:'${w.id}',bi:${i}})">🖊 upload & annotate screenshot</button>`);
+   if(b.ty==="replay")body='<div class="sub" style="margin-top:5px">Student gets a multi-file drop-zone; files land in your Inbox tagged to this worksheet.</div>';
+   return `<div class="block"><div class="bh"><span class="ty">${TYNAME[b.ty]}</span>
+    ${ro?"":`<div class="tools"><button onclick="mvB('${st.id}','${w.id}',${i},-1)">↑</button><button onclick="mvB('${st.id}','${w.id}',${i},1)">↓</button><button onclick="w_('${st.id}','${w.id}').blocks.splice(${i},1);render()">✕</button></div>`}</div>
+    ${ro?`<div style="font-weight:600">${esc(b.q)}</div>`:`<input class="q" type="text" value="${esc(b.q)}" onchange="w_('${st.id}','${w.id}').blocks[${i}].q=this.value;persistSoft()">`}
+    ${body}</div>`}).join("")}
+  ${ro?"":`<div class="addbar">${Object.entries(TYNAME).map(([k,v])=>`<button onclick="addB('${st.id}','${w.id}','${k}')">+ ${v}</button>`).join("")}</div>`}
+  </div>${ro?"":'<p class="sub" style="margin-top:8px">Drafts save when you hit Send (or leave the editor).</p>'}</div>`}
+const w_=(sid,wid)=>byId(sid).worksheets.find(x=>x.id===wid);
+let softTimer=null;function persistSoft(){/* draft edits batch on send/close; keep in memory */}
+function addB(sid,wid,ty){const w=w_(sid,wid);
+ const b={id:uid(),ty,q:ty==="mc"?"New multiple-choice question":ty==="long"?"New long-form question":ty==="scale"?"Rate 1–10:":ty==="image"?"What do you see in this frame?":"Play the assigned build; attach the games listed below."};
+ if(ty==="mc")b.opts=["Option A","Option B"];if(ty==="image")b.img=null;
+ w.blocks.push(b);render()}
+function mvB(sid,wid,i,d){const w=w_(sid,wid);const j=i+d;if(j<0||j>=w.blocks.length)return;[w.blocks[i],w.blocks[j]]=[w.blocks[j],w.blocks[i]];render()}
+function sendWS(sid,wid){const w=w_(sid,wid);
+ if(!w.blocks.length){toast("Add at least one question");return}
+ w.state="sent";editingWS=null;persist()}
+function reviewWS(sid,wid){const st=byId(sid);const w=w_(sid,wid);
+ openModal(`<h2>${esc(w.title)}</h2><p class="sub">answers from ${esc(st.name)} · ${fmtD(w.submittedAt)}</p>
+  ${w.blocks.map((b,i)=>{const a=w.answers[b.id];
+   let av="";
+   if(b.ty==="mc")av=a!=null?esc(b.opts[a]??""):"<span class='sub'>—</span>";
+   else if(b.ty==="scale")av=a?`<b>${a}</b> / 10`:"—";
+   else if(b.ty==="replay")av=a&&a.count?`<span style="color:var(--win)">${a.count} replay(s) → Inbox</span>`:"—";
+   else av=a?`<div style="white-space:pre-wrap">${esc(a)}</div>`:"—";
+   return `<div class="block"><div class="bh"><span class="ty" style="color:var(--mute)">Q${i+1}</span></div>
+    <div style="font-weight:600">${esc(b.q)}</div>
+    ${b.ty==="image"&&b.img?`<img class="att" src="${b.img}" alt="">`:""}
+    <div style="margin-top:6px;color:var(--gold)">${av}</div></div>`}).join("")}
+  <button class="btn q" onclick="closeModal()">Close</button>`)}
+/* ----- annotation editor ----- */
+function annotate(target,shelfSid){
+ annoTarget=target||{shelf:shelfSid};
+ openModal(`<h2>Annotate a screenshot</h2>
+  <p class="sub">Upload or paste (Ctrl+V) any screenshot — a game frame, a replay stats screen — then draw. The student sees exactly your markup.</p>
+  <div class="annotools">
+   <label><input type="file" accept="image/*" style="display:none" onchange="annoLoad(this.files[0])"><span>⇪ upload image</span></label>
+   <button class="on" data-t="circle" onclick="annoTool('circle',this)">◯ circle</button>
+   <button data-t="arrow" onclick="annoTool('arrow',this)">→ arrow</button>
+   <button data-t="pen" onclick="annoTool('pen',this)">✎ pen</button>
+   <button onclick="annoUndo()">undo</button>
+  </div>
+  <canvas class="shot" id="annoCv" width="1200" height="560" style="margin-top:9px"></canvas>
+  ${annoTarget.shelf?`<input id="mT" type="text" placeholder="Title" style="width:100%;margin-top:9px"><input id="mN" type="text" placeholder="One-line note" style="width:100%;margin-top:8px">`:""}
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="annoSave()">Save annotation</button><button class="btn q" onclick="annoTarget=null;closeModal()">Cancel</button></div>`);
+ requestAnimationFrame(annoInit)}
+const anno={bg:null,shapes:[],tool:"circle"};
+function annoInit(){anno.bg=null;anno.shapes=[];anno.tool="circle";
+ const cv=$("annoCv"),ctx=cv.getContext("2d");
+ anno.paint=()=>{ctx.fillStyle="#0d1626";ctx.fillRect(0,0,cv.width,cv.height);
+  if(anno.bg){const im=anno.bg,r=Math.min(cv.width/im.width,cv.height/im.height);
+   ctx.drawImage(im,(cv.width-im.width*r)/2,(cv.height-im.height*r)/2,im.width*r,im.height*r)}
+  else{ctx.fillStyle="#54617a";ctx.font="16px 'IBM Plex Sans',sans-serif";ctx.textAlign="center";
+   ctx.fillText("Upload or paste a screenshot to begin",cv.width/2,cv.height/2);ctx.textAlign="left"}
+  ctx.strokeStyle="#f2c14e";ctx.lineWidth=4;ctx.lineCap="round";
+  anno.shapes.forEach(s=>{ctx.beginPath();
+   if(s.t==="circle"){ctx.ellipse((s.x0+s.x1)/2,(s.y0+s.y1)/2,Math.abs(s.x1-s.x0)/2+8,Math.abs(s.y1-s.y0)/2+8,0,0,7);ctx.stroke()}
+   if(s.t==="arrow"){ctx.moveTo(s.x0,s.y0);ctx.lineTo(s.x1,s.y1);ctx.stroke();
+    const a=Math.atan2(s.y1-s.y0,s.x1-s.x0);ctx.beginPath();
+    ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x1-16*Math.cos(a-.45),s.y1-16*Math.sin(a-.45));
+    ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x1-16*Math.cos(a+.45),s.y1-16*Math.sin(a+.45));ctx.stroke()}
+   if(s.t==="pen"){ctx.moveTo(s.pts[0][0],s.pts[0][1]);s.pts.forEach(p=>ctx.lineTo(p[0],p[1]));ctx.stroke()}})};
+ anno.paint();
+ const pos=e=>{const r=cv.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+  return [(p.clientX-r.left)*cv.width/r.width,(p.clientY-r.top)*cv.height/r.height]};
+ let cur=null;
+ cv.onpointerdown=e=>{if(!anno.bg)return;e.preventDefault();const[x,y]=pos(e);
+  cur=anno.tool==="pen"?{t:"pen",pts:[[x,y]]}:{t:anno.tool,x0:x,y0:y,x1:x,y1:y};anno.shapes.push(cur)};
+ cv.onpointermove=e=>{if(!cur)return;e.preventDefault();const[x,y]=pos(e);
+  if(cur.t==="pen")cur.pts.push([x,y]);else{cur.x1=x;cur.y1=y}anno.paint()};
+ cv.onpointerup=cv.onpointerleave=()=>{cur=null}}
+function annoTool(t,btn){anno.tool=t;document.querySelectorAll(".annotools [data-t]").forEach(b=>b.classList.remove("on"));btn.classList.add("on")}
+function annoUndo(){if(anno.shapes.length){anno.shapes.pop();anno.paint()}}
+function annoLoad(f){if(!f)return;const rd=new FileReader();
+ rd.onload=()=>{const im=new Image();im.onload=()=>{anno.bg=im;anno.shapes=[];anno.paint()};im.src=rd.result};rd.readAsDataURL(f)}
+document.addEventListener("paste",e=>{
+ if(!annoTarget)return;
+ const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith("image/"));
+ if(it)annoLoad(it.getAsFile())});
+function annoSave(){
+ if(!anno.bg){toast("Upload a screenshot first");return}
+ const cv=$("annoCv");
+ // flatten to JPEG, capped width for size
+ const out=document.createElement("canvas");const W=Math.min(1400,cv.width);
+ out.width=W;out.height=Math.round(cv.height*W/cv.width);
+ out.getContext("2d").drawImage(cv,0,0,out.width,out.height);
+ const dataURI=out.toDataURL("image/jpeg",0.85);
+ if(!checkBudget(dataURI.length))return;
+ if(annoTarget.shelf){
+  const b64=dataURI.split(",")[1];const id=addAsset("annotated-"+Date.now()+".jpg","image/jpeg",b64);
+  pushShelf(annoTarget.shelf,{ty:"image",t:$("mT").value.trim()||"Annotated frame",n:$("mN").value.trim(),asset:id});
+ }else{
+  const w=w_(annoTarget.sid,annoTarget.wid);w.blocks[annoTarget.bi].img=dataURI;render();toast("Annotation saved to the question");
+ }
+ annoTarget=null;if(annoTarget===null&&!editingWS)closeModal();else closeModal()}
+/* ----- inbox (coach) ----- */
+function inboxHTML(st){
+ const fresh=(st.submissions||[]).filter(x=>!x.exported),old=(st.submissions||[]).filter(x=>x.exported);
+ const freshUp=fresh.filter(x=>!x.synced&&x.b64),freshSync=fresh.filter(x=>x.synced);
+ const AL=computeLanes(st);
+ return `<div class="card"><h3>Replay admission — season basis</h3>
+  <p class="sub">Computed automatically from ${esc(st.name)}'s synced games — season windows match the site, so these roll over on their own. The student sees one receipt line, never the ledger.</p>
+  <div class="row" style="margin-top:10px">
+   <span class="pill w">active · this season ${AL.active}</span>
+   <span class="pill g">bridge · last season ${AL.bridge}</span>
+   <span class="pill">historical ${AL.historical}</span>
+   <span class="pill r">quarantine ${AL.quarantine}</span>
+   ${AL.derived?'<span class="pill b">auto</span>':'<span class="sub">no synced games yet</span>'}
+  </div>
+  <div class="row" style="margin-top:11px">
+   <label><input type="file" accept=".json,application/json" style="display:none" onchange="importAgentSync('${st.id}',this)"><span class="iconbtn" style="cursor:pointer">⇪ Import agent sync</span></label>
+   ${st.agent&&st.agent.lastSync?`<span class="sub">last sync ${fmtD(st.agent.lastSync)}${st.agent.latestGame?" · latest game "+esc(st.agent.latestGame):""}</span>`:""}
+  </div>
+  <p class="sub" style="margin-top:6px">Feed it: <span style="font-family:var(--mono)">python agent_sync.py &lt;replays|parsed.jsonl&gt; --student ${esc(st.name)} --season 68 --season-start &lt;date&gt;</span> → import the file. On sc2tools.com this becomes fully live from the agent's uploads.</p>
+  ${receiptLine(st)||'<p class="sub" style="margin-top:8px">Receipt appears to the student once counts are set.</p>'}
+ </div>
+ <div class="card"><div class="row"><h3 style="flex:1;margin:0">Replay inbox — ${esc(st.name)}</h3>
+   ${freshUp.length?`<button class="btn" onclick="exportBatch('${st.id}')">⇩ Export uploads (${freshUp.length}) as .json</button>`:""}</div>
+  <p class="sub">Two kinds arrive here: games the student <b>picked from their agent sync</b> (already in your database — open them in SC2 Tools, then hit “reviewed”), and <b>uploaded files</b> from students without the agent, which you export as one batch to watch.</p>
+  ${fresh.length?fresh.map(s=>`<div class="item"><div class="icon replay">${s.synced?"SYNC":"NEW"}</div>
+    <div class="bd"><div class="t">${esc(s.name)}</div>
+     <div class="n">${esc(s.build||"no build tag")}${s.synced?"":" · "+kb(s.size)} · asked ${fmtD(s.at)}${s.synced?' · <span style="color:var(--win)">already in your database — open it in SC2 Tools</span>':""}</div></div>
+    <div class="d8">${s.synced?`<button class="btn sm" onclick="(function(){const x=byId('${st.id}').submissions.find(z=>z.id==='${s.id}');x.exported=true;persist()})()">reviewed ✓</button>`:""}
+     <button class="btn sm q" onclick="rmSub('${st.id}','${s.id}')">discard</button></div></div>`).join("")
+   :'<div class="empty" style="margin-top:8px">No new submissions.</div>'}
+  ${old.length?`<details style="margin-top:8px"><summary class="sub" style="cursor:pointer">${old.length} exported earlier</summary>
+   ${old.map(s=>`<div class="item"><div class="icon replay">✓</div><div class="bd"><div class="t">${esc(s.name)}</div><div class="n">${esc(s.build||"")}</div></div>
+   <div class="d8"><button class="btn sm q" onclick="rmSub('${st.id}','${s.id}')">delete</button></div></div>`).join("")}</details>`:""}
+ </div>`}
+function rmSub(sid,id){const st=byId(sid);st.submissions=st.submissions.filter(x=>x.id!==id);persist()}
+async function exportBatch(sid){const st=byId(sid);
+ const fresh=st.submissions.filter(x=>!x.exported&&!x.synced&&x.b64);
+ const bundle={locker:"sc2tools-coaching",student:st.name,exported:now(),
+  items:fresh.map(s=>({name:s.name,build:s.build||null,b64:s.b64}))};
+ if(!downloadsNS){toast("Downloads unavailable in this view");return}
+ try{
+  await downloadsNS.save({filename:"replays-"+st.name.replace(/\W+/g,"_")+"-"+new Date().toISOString().slice(0,10)+".json",data:JSON.stringify(bundle)});
+  fresh.forEach(s=>{s.exported=true;delete s.b64});// free the bytes once exported
+  persist();
+ }catch(e){if(e&&e.code!=="declined")toast("Export failed — try again")}}
+/* ---------- STUDENT ---------- */
+function importAgentSync(sid,input){
+ const f=input.files&&input.files[0];if(!f)return;
+ const rd=new FileReader();
+ rd.onload=()=>{try{
+   const d=JSON.parse(rd.result);
+   if(d.locker!=="sc2tools-agent-sync"||!d.lanes)throw 0;
+   const st=byId(sid);
+   st.lanes={active:+d.lanes.active||0,bridge:+d.lanes.bridge||0,historical:+d.lanes.historical||0,quarantine:+d.lanes.quarantine||0};
+   st.agent={status:"connected",lastSync:d.generated||now(),latestGame:d.latest_game||null};
+   if(Array.isArray(d.games))st.games=d.games.slice(0,500);
+   persist()
+  }catch(e){toast("That file is not an agent-sync export")}};
+ rd.readAsText(f)}
+async function exportBackup(){
+ if(!downloadsNS){toast("Downloads unavailable in this view");return}
+ try{await downloadsNS.save({filename:"locker-backup-"+new Date().toISOString().slice(0,10)+".json",data:JSON.stringify(S,null,1)});toast("Backup saved ✓")}
+ catch(e){if(e&&e.code!=="declined")toast("Backup failed — try again")}}
+function importBackup(input){
+ const f=input.files&&input.files[0];if(!f)return;
+ const rd=new FileReader();
+ rd.onload=()=>{try{
+   const d=JSON.parse(rd.result);
+   if(!d||!Array.isArray(d.students)||typeof d.setup!=="boolean")throw 0;
+   window._restore=d;
+   openModal(`<h2>Restore backup?</h2><p class="sub">${d.students.length} student(s), ${Object.keys(d.assets||{}).length} stored file(s). This replaces the Locker's current contents for everyone.</p>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="doRestore()">Restore</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+  }catch(e){toast("That file is not a Locker backup")}};
+ rd.readAsText(f)}
+function doRestore(){S=window._restore;window._restore=null;closeModal();persist()}
+function changePinModal(){
+ openModal(`<h2>Change coach passcode</h2>
+  <input id="npA" type="password" placeholder="New passcode" style="width:100%;margin-top:8px" autocomplete="new-password">
+  <input id="npB" type="password" placeholder="Repeat it" style="width:100%;margin-top:8px" autocomplete="new-password">
+  <div class="row" style="margin-top:12px"><button class="btn" onclick="changePin()">Save</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`)}
+async function changePin(){
+ const a=$("npA").value,b=$("npB").value;
+ if(a.length<4){toast("At least 4 characters");return}
+ if(a!==b){toast("Passcodes don't match");return}
+ S.pin=await sha256(a);closeModal();persist()}
+let INTAKE=null;
+function studentHTML(){
+ const st=byId(meId);
+ if(!st)return `<div class="gate"><h1>Locker not found</h1><p class="sub">Your locker may have been removed. Ask your coach.</p><button class="btn q" onclick="signOut()">Back</button></div>`;
+ if(stuTab===null)stuTab=st.intake.done?"week":"start";
+ const pendingWS=(st.worksheets||[]).filter(w=>w.state==="sent");
+ const tabs=`<div class="tabs">
+   ${st.intake.done?"":`<button class="${stuTab==="start"?"on":""}" onclick="stuTab='start';render()">Start here</button>`}
+   <button class="${stuTab==="week"?"on":""}" onclick="stuTab='week';render()">This week ${pendingWS.length?'<span class="ct">●</span>':""}</button>
+   <button class="${stuTab==="builds"?"on":""}" onclick="stuTab='builds';render()">My builds</button>
+   <button class="${stuTab==="shelf"?"on":""}" onclick="stuTab='shelf';render()">My shelf ${(st.shelf||[]).length?`<span class="ct">${st.shelf.length}</span>`:""}</button>
+  </div>`;
+ const body=stuTab==="start"?intakeHTML(st):stuTab==="week"?weekHTML(st,pendingWS):stuTab==="builds"?myBuildsHTML(st):myShelfHTML(st);
+ return `<div class="wrap">
+  <div class="row" style="margin-bottom:12px"><div>
+   <span class="pill g">Your locker</span><h1 style="margin:4px 0 0;font-size:28px">${esc(st.name)}</h1>
+   <div class="sub">coached by ${esc(S.coach)}</div></div>
+   <button class="btn" style="margin-left:auto" onclick="submitModal('${st.id}')">⇪ Submit replays</button></div>
+  ${tabs}${body}
+  <p class="sub" style="margin-top:22px;border-top:1px solid var(--line);padding-top:11px">Private page — only you and your coach. Questions go in your Discord channel.</p>
+ </div>`}
+function intakeHTML(st){
+ if(!INTAKE)INTAKE={rank:"",region:"Americas",race:"Protoss",goal:"",hours:"4",builds:{vsT:[],vsZ:[],vsP:[]},question:""};
+ const MUS2=[["vsT","vs Terran"],["vsZ","vs Zerg"],["vsP","vs Protoss"]];
+ const pre=INTAKE_BUILDS[INTAKE.race]||{};
+ const muRow=(k,label)=>{
+  const opts=(pre[k]||[]).filter(n=>!INTAKE.builds[k].includes(n));
+  return `<div style="margin-top:10px"><label class="sub">${label}</label>
+   <div class="choices" style="margin-top:5px">${INTAKE.builds[k].map((n,i)=>`<button class="choice on" title="remove" onclick="INTAKE.builds['${k}'].splice(${i},1);render()">${esc(n)} ×</button>`).join("")||'<span class="sub">none yet</span>'}</div>
+   <div class="row" style="margin-top:6px">
+    <select id="pb_${k}" style="flex:2;min-width:170px"><option value="">— pick from known builds —</option>${opts.map(n=>`<option>${esc(n)}</option>`).join("")}</select>
+    <button class="btn sm q" onclick="addIntakeBuild('${k}',$('pb_${k}').value)">add</button>
+    <input id="cb_${k}" type="text" placeholder="or type your own" style="flex:2;min-width:150px" onkeydown="if(event.key==='Enter')addIntakeBuild('${k}',this.value)">
+    <button class="btn sm q" onclick="addIntakeBuild('${k}',$('cb_${k}').value)">add</button>
+   </div></div>`};
+ return `<div class="card"><h3>Five-minute setup</h3>
+  <p class="sub">Only what your coach actually needs. No homework packet follows — after this you get one clear action at a time.</p>
+  <div class="grid" style="margin-top:10px">
+   <div><label class="sub">Rank / MMR</label><input type="text" style="width:100%" placeholder="e.g. Diamond 1 · 4,380" value="${esc(INTAKE.rank)}" oninput="INTAKE.rank=this.value"></div>
+   <div><label class="sub">Region</label><select style="width:100%" onchange="INTAKE.region=this.value">
+    ${["Americas","Europe","Korea","Other"].map(r=>`<option ${INTAKE.region===r?"selected":""}>${r}</option>`).join("")}</select></div>
+  </div>
+  <div style="margin-top:12px"><label class="sub">Your race</label>
+   <div class="choices" style="margin-top:6px">${["Protoss","Terran","Zerg","Random"].map(r=>`<button class="choice ${INTAKE.race===r?"on":""}" onclick="INTAKE.race='${r}';render()">${r}</button>`).join("")}</div></div>
+  <div style="margin-top:12px"><label class="sub">What do you want most?</label>
+   <div class="choices" style="margin-top:6px">${["Improve game understanding","Learn new builds","Tighten existing builds"].map(g=>`<button class="choice ${INTAKE.goal===g?"on":""}" onclick="INTAKE.goal='${g}';render()">${g}</button>`).join("")}</div></div>
+  <div style="margin-top:12px"><label class="sub">Realistic practice time per week</label>
+   <div class="choices" style="margin-top:6px">${["2","4","10","20+"].map(h=>`<button class="choice ${INTAKE.hours===h?"on":""}" onclick="INTAKE.hours='${h}';render()">${h} hours</button>`).join("")}</div></div>
+  <div style="margin-top:14px"><label class="sub" style="font-weight:600;color:var(--ink)">Your current build orders — pick from the lists or type your own; add as many as you actually play. "I don't have one" is a useful answer.</label>
+   ${MUS2.map(([k,l])=>muRow(k,l)).join("")}</div>
+  <div style="margin-top:14px"><label class="sub">One to three things you are most interested in improving in or understanding</label>
+   <textarea rows="3" style="margin-top:6px" placeholder="1. …&#10;2. …&#10;3. …" oninput="INTAKE.question=this.value">${esc(INTAKE.question)}</textarea></div>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="finishIntake('${st.id}')">Finish setup →</button>
+   <span class="sub">Your coach reads every word of this.</span></div>
+ </div>
+ <div class="card"><h3>Get your replays syncing</h3>
+  <p class="sub">Install the <a href="https://sc2tools.com" target="_blank" rel="noopener">SC2 Tools agent</a> and pair it with your account — every ladder game you play uploads and classifies automatically, so coaching runs on your real current games. Until then, the “Submit replays” button up top is the manual path.</p></div>`}
+function addIntakeBuild(k,v){
+ v=String(v||"").trim();if(!v)return;
+ if(!INTAKE.builds[k].includes(v))INTAKE.builds[k].push(v);
+ render()}
+async function finishIntake(sid){
+ const st=byId(sid);st.intake={done:true,...INTAKE};stuTab="week";
+ const ok=await persist();if(ok===false&&!preview)return;INTAKE=null}
+function weekHTML(st,pendingWS){
+ const isOn=agentOn(st);
+ return `<div class="grid">
+  <div>${focusCardHTML(st.focus,true)}${receiptLine(st)}</div>
+  <div>
+   <div class="card" style="margin-bottom:12px"><h3>Replays</h3>
+    ${isOn?`<p class="sub"><span class="pill w">agent connected</span> Your games sync to ${esc(S.coach)} automatically — just play.${st.agent.lastSync?" Last sync "+fmtD(st.agent.lastSync)+".":""} Use “Submit replays” only for specific games you want looked at.</p>`
+     :`<p class="sub"><span class="pill r">agent not set up</span> Install the <a href="https://sc2tools.com" target="_blank" rel="noopener">SC2 Tools agent</a> so your games sync automatically — until then, use “Submit replays” after each session.</p>`}
+   </div>
+   ${pendingWS.length?"":`<div class="card" style="margin-bottom:12px"><h3>Check-ins</h3><p class="sub">Nothing waiting. When ${esc(S.coach)} sends a check-in, it appears here.</p></div>`}
+  </div>
+ </div>
+ ${pendingWS.map(w=>`<div class="card" style="margin-top:14px"><h3>Check-in from your coach</h3>${wsFillHTML(st,w)}</div>`).join("")}
+ ${(st.worksheets||[]).filter(w=>w.state==="submitted").slice(0,2).map(w=>`<div class="card" style="margin-top:14px"><div class="sent">${esc(w.title)} — sent ✓ ${fmtD(w.submittedAt)}</div></div>`).join("")}`}
+function myBuildsHTML(st){
+ return `<div class="card">
+  <h3>Your assigned builds</h3>
+  ${(st.builds||[]).length?st.builds.map(b=>{const L=LIB(b.lib);if(!L)return "";
+   return `<div class="bcard"><div class="nm">${esc(L.name)}</div>
+    ${b.showRecord?`<div class="mu">coach's ladder record: ${esc(recStr(L))} — context, not a promise</div>`:""}
+    <details class="bo"><summary>build order & benchmarks</summary>
+     <div class="tablewrap" style="margin-top:6px"><table><tr><th>Sup</th><th>Clock</th><th>Action</th></tr>
+      ${(L.order||[]).map(o=>`<tr><td>${o.s}</td><td>${o.c}</td><td style="white-space:normal">${esc(o.n)}</td></tr>`).join("")}</table></div>
+     ${(L.bench||[]).length?`<div class="tablewrap" style="margin-top:8px"><table><tr><th>Benchmark</th><th>Median</th><th>@Sup</th></tr>
+      ${L.bench.map(m=>`<tr><td style="white-space:normal">${esc(m.m)}</td><td>${m.c}</td><td>${m.s}</td></tr>`).join("")}</table></div>`:""}
+    </details>
+    ${(()=>{const rl=b.refLink||L.refLink,rg=b.refGame||L.refGame,ra=b.ref||L.refAsset;
+      if(rl)return `<div style="margin-top:6px"><a href="${esc(rl)}" target="_blank" rel="noopener">▸ watch the coach execute it${rg?" — "+esc(rg.m+" vs "+rg.o):""}</a></div>`;
+      if(rg)return `<div class="mu" style="margin-top:6px">reference game: ${esc(rg.m)} vs ${esc(rg.o)} · ${esc(rg.d)} — ask your coach to open it in session</div>`;
+      if(ra&&S.assets[ra])return `<div style="margin-top:6px"><button class="btn sm" onclick="saveDownload(S.assets['${ra}'].n+'.txt',S.assets['${ra}'].b64,true)">⇩ reference replay</button> <span class="sub">remove the .txt ending after saving</span></div>`;
+      return ""})()}
+   </div>`}).join(""):'<div class="empty">No builds assigned yet — your coach assigns them when the time is right.</div>'}
+ </div>`}
+function myShelfHTML(st){
+ return `<div class="card"><h3>From ${esc(S.coach)} · your shelf</h3>
+  <p class="sub">Everything here was made or picked for you.</p>
+  <div style="margin-top:10px">${(st.shelf||[]).length?st.shelf.map(it=>shelfItemHTML(st,it,false)).join(""):'<div class="empty">Nothing yet.</div>'}</div>
+ </div>`}
+/* worksheet fill (draft answers survive reloads via sessionStorage) */
+function draftKey(wid){return "locker.draft."+wid}
+function getDraft(w){try{return JSON.parse(ss.get(draftKey(w.id))||"{}")}catch(e){return{}}}
+function setDraft(w,blockId,val){const d=getDraft(w);d[blockId]=val;ss.set(draftKey(w.id),JSON.stringify(d))}
+function wsFillHTML(st,w){
+ const d=getDraft(w);
+ return `<div class="sub" style="margin-bottom:6px"><b style="color:var(--ink)">${esc(w.title)}</b> · ${w.blocks.length} questions · answers save when you press Send</div>`+
+  w.blocks.map((b,i)=>{
+   const a=d[b.id];let body="";
+   if(b.ty==="mc")body=`<div class="mcq">${(b.opts||[]).map((o,j)=>`<label><input type="radio" name="mc${b.id}" ${a===j?"checked":""} onchange="setDraft(w2('${st.id}','${w.id}'),'${b.id}',${j})">${esc(o)}</label>`).join("")}</div>`;
+   if(b.ty==="long")body=`<textarea rows="3" placeholder="Your answer…" onchange="setDraft(w2('${st.id}','${w.id}'),'${b.id}',this.value)">${esc(a||"")}</textarea>`;
+   if(b.ty==="scale")body=`<div class="scale">${Array.from({length:10},(_,j)=>`<button class="${a===j+1?"on":""}" onclick="setDraft(w2('${st.id}','${w.id}'),'${b.id}',${j+1});render()">${j+1}</button>`).join("")}</div>`;
+   if(b.ty==="image")body=`${b.img?`<img class="att" src="${b.img}" alt="coach-annotated frame">`:""}
+     <textarea rows="2" style="margin-top:8px" placeholder="Your read…" onchange="setDraft(w2('${st.id}','${w.id}'),'${b.id}',this.value)">${esc(a||"")}</textarea>`;
+   if(b.ty==="replay"){const c=(a&&a.count)||0;
+    body=`<div class="drop ${c?"":""}" style="margin-top:8px" onclick="wsReplayPick('${st.id}','${w.id}','${b.id}')">${c?c+" replay(s) attached ✓ — click to add more":"Click to attach your .SC2Replay files (multiple OK)"}</div>`}
+   return `<div class="block" style="border-left-color:${a!=null&&a!==""?"var(--win)":"var(--gold-dim)"}">
+    <div class="bh"><span class="ty" style="color:var(--mute)">Q${i+1}</span></div>
+    <div style="font-weight:600;margin-bottom:2px">${esc(b.q)}</div>${body}</div>`}).join("")+
+  `<button class="btn" style="margin-top:6px" onclick="submitWS('${st.id}','${w.id}')" ${busy?"disabled":""}>Send to ${esc(S.coach)}</button>`}
+const w2=(sid,wid)=>byId(sid).worksheets.find(x=>x.id===wid);
+function wsReplayPick(sid,wid,bid){
+ pickFiles(".SC2Replay",true,async fs=>{
+  const ok=[];
+  for(const f of fs){
+   if(f.size>900*1024){toast(f.name+" is too large — skipped");continue}
+   if(!checkBudget(f.size))break;
+   ok.push({id:uid(),name:f.name,size:f.size,b64:await readFileB64(f),build:"worksheet: "+w2(sid,wid).title,at:now(),exported:false})}
+  if(!ok.length)return;
+  const st=byId(sid);st.submissions.push(...ok);
+  const w=w2(sid,wid);const d=getDraft(w);const prev=(d[bid]&&d[bid].count)||0;
+  setDraft(w,bid,{count:prev+ok.length});
+  render();toast(ok.length+" replay(s) attached — they send with the worksheet")})}
+async function submitWS(sid,wid){
+ const st=byId(sid);const w=w2(sid,wid);const d=getDraft(w);
+ w.answers=d;w.state="submitted";w.submittedAt=now();
+ const ok=await persist();
+ if(ok!==false)ss.del(draftKey(w.id));}
+/* multi-replay submit */
+let SPK={q:"",preset:"current_season",cA:"",cB:"",picks:[]};
+function submitModal(sid){
+ const st=byId(sid);
+ const has=(st.games||[]).length;
+ openModal(`<h2>Submit replays</h2>
+  <p class="sub">${has?`Your agent already syncs your games — pick the ones you want ${esc(S.coach)} to review, no re-upload needed. Upload files only for games that aren't synced.`
+   :`Fastest path: the SC2 Tools agent syncs your games so you just pick them — no uploading. Until it's connected, upload the files.`}</p>
+  <div class="row" style="margin-top:12px">
+   <button class="btn ${has?"":"q"}" onclick="closeModal();subSynced('${sid}')">🎮 Pick from my synced games</button>
+   <button class="btn ${has?"q":""}" onclick="closeModal();subUploadModal('${sid}')">⇪ Upload files</button>
+   ${has?"":`<a class="btn" style="text-decoration:none" href="https://sc2tools.com" target="_blank" rel="noopener">⇩ Get the SC2 Tools agent</a>`}
+  </div>`)}
+function subSynced(sid){
+ SPK={q:"",preset:"current_season",cA:"",cB:"",picks:[]};
+ const st=byId(sid);
+ openModal(`<h2>Pick games for review</h2>
+  <div class="row" style="margin-top:8px">
+   <input type="text" placeholder="Opponent or map…" style="flex:2;min-width:140px" oninput="SPK.q=this.value;spkUpdate()">
+   <select style="flex:1;min-width:150px" onchange="SPK.preset=this.value;const c=$('spkCustom');if(c)c.style.display=this.value==='custom'?'flex':'none';spkUpdate()">
+    ${pkPresets().map(o=>`<option value="${o.id}">${o.l}</option>`).join("")}</select>
+  </div>
+  <div class="row" id="spkCustom" style="margin-top:8px;display:none">
+   <input type="date" style="flex:1" onchange="SPK.cA=this.value;spkUpdate()"><span class="sub">to</span>
+   <input type="date" style="flex:1" onchange="SPK.cB=this.value;spkUpdate()"></div>
+  <div id="spkList" style="margin-top:9px;max-height:38vh;overflow-y:auto"></div>
+  <div class="choices" id="spkPicks" style="margin-top:9px"></div>
+  <select id="spkBuild" style="width:100%;margin-top:9px">
+   <option value="">— which build were you playing? —</option>
+   ${(st.builds||[]).map(b=>{const L=LIB(b.lib);return L?`<option>${esc(L.name)}</option>`:""}).join("")}
+   <option>Other / not sure</option></select>
+  <div class="row" style="margin-top:11px"><button class="btn" id="spkGo" disabled onclick="spkSend('${sid}')">Request review (0)</button>
+   <button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+ spkUpdate()}
+function spkUpdate(){
+ const st=byId(role==="student"?meId:curStudent);
+ const q=SPK.q.trim().toLowerCase();
+ const [since,until]=presetRange(SPK.preset,SPK.cA,SPK.cB);
+ window._spkRes=(st.games||[]).filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)).slice(0,30);
+ const key=g=>g.d+"|"+g.m+"|"+g.o;
+ const el=$("spkList");if(!el)return;
+ el.innerHTML=window._spkRes.map((g,i)=>{const on=SPK.picks.some(p=>key(p)===key(g));
+  return `<div class="item" style="padding:7px 11px"><div class="bd">
+   <div class="t" style="font-size:13px">${esc(g.m)}${g.o?" · vs "+esc(g.o):""} ${g.res?`<span class="pill ${g.res==="W"?"w":"r"}">${g.res==="W"?"W":"L"}</span>`:""}</div>
+   <div class="n">${esc(g.d)}${g.b?" · "+esc(g.b):""}</div></div>
+   <div class="d8"><button class="btn sm ${on?"q":""}" onclick="spkToggle(${i})">${on?"remove":"add"}</button></div></div>`}).join("")
+  ||((byId(role==="student"?meId:curStudent).games||[]).length===0
+   ?`<div class="empty">No synced games yet — once the agent is installed and paired, every game you play shows up here on its own.<br><br>
+     <a class="btn" style="text-decoration:none" href="https://sc2tools.com" target="_blank" rel="noopener">⇩ Get the SC2 Tools agent</a>
+     &nbsp;<button class="btn q" onclick="closeModal();subUploadModal(role==='student'?meId:curStudent)">⇪ Upload files instead</button></div>`
+   :'<div class="empty">No synced games in this range — defaults to the current season; widen it above.</div>');
+ const pk=$("spkPicks");if(pk)pk.innerHTML=SPK.picks.map((g,i)=>`<button class="choice on" onclick="SPK.picks.splice(${i},1);spkUpdate()">${esc(g.m)} ${esc(g.d)} ×</button>`).join("");
+ const go=$("spkGo");if(go){go.disabled=!SPK.picks.length;go.textContent="Request review ("+SPK.picks.length+")"}}
+function spkToggle(i){
+ const g=window._spkRes[i];const key=x=>x.d+"|"+x.m+"|"+x.o;
+ const j=SPK.picks.findIndex(p=>key(p)===key(g));
+ if(j>=0)SPK.picks.splice(j,1);else{if(SPK.picks.length>=20){toast("20 per request max");return}SPK.picks.push(g)}
+ spkUpdate()}
+async function spkSend(sid){
+ const st=byId(sid);const build=$("spkBuild").value;
+ SPK.picks.forEach(g=>st.submissions.push({id:uid(),name:g.m+(g.o?" vs "+g.o:"")+" ("+g.d+")",size:0,
+  build:build||g.b||"",at:now(),exported:false,synced:true,game:{d:g.d,m:g.m,o:g.o,res:g.res,b:g.b}}));
+ SPK.picks=[];closeModal();await persist()}
+function subUploadModal(sid){
+ pendingFiles=[];
+ const st=byId(sid);
+ openModal(`<h2>Submit replays</h2>
+  <p class="sub">Send a whole session at once. Tag which build you were playing so your coach knows what to look for.</p>
+  <div class="drop" id="dropZ" style="margin-top:10px" onclick="subPick()">Drop .SC2Replay files here — or click to choose (multiple OK)</div>
+  <div class="filelist" id="subList"></div>
+  <select id="subBuild" style="width:100%;margin-top:10px">
+   <option value="">— which build were you playing? —</option>
+   ${(st.builds||[]).map(b=>{const L=LIB(b.lib);return L?`<option>${esc(L.name)}</option>`:""}).join("")}
+   <option>Other / not sure</option></select>
+  <div class="row" style="margin-top:12px"><button class="btn" id="subGo" disabled onclick="subSend('${sid}')">Send 0 replays</button><button class="btn q" onclick="closeModal()">Cancel</button></div>`);
+ const z=$("dropZ");
+ z.ondragover=e=>{e.preventDefault();z.classList.add("over")};
+ z.ondragleave=()=>z.classList.remove("over");
+ z.ondrop=e=>{e.preventDefault();z.classList.remove("over");subAdd([...e.dataTransfer.files])}}
+function subPick(){pickFiles(".SC2Replay",true,subAdd)}
+async function subAdd(fs){
+ for(const f of fs){
+  if(!/\.SC2Replay$/i.test(f.name)){toast(f.name+" isn't a .SC2Replay — skipped");continue}
+  if(f.size>900*1024){toast(f.name+" too large — skipped");continue}
+  if(pendingFiles.length>=20){toast("20 per batch max");break}
+  pendingFiles.push({name:f.name,size:f.size,b64:await readFileB64(f)})}
+ $("subList").innerHTML=pendingFiles.map((f,i)=>`<div class="f"><b>${esc(f.name)}</b><span>${kb(f.size)}</span><button class="btn sm q" onclick="pendingFiles.splice(${i},1);subAdd([])">×</button></div>`).join("");
+ const g=$("subGo");g.disabled=!pendingFiles.length;g.textContent="Send "+pendingFiles.length+" replay"+(pendingFiles.length===1?"":"s")}
+async function subSend(sid){
+ const total=pendingFiles.reduce((a,f)=>a+f.size,0);
+ if(!checkBudget(total))return;
+ const st=byId(sid);const build=$("subBuild").value;
+ pendingFiles.forEach(f=>st.submissions.push({id:uid(),name:f.name,size:f.size,b64:f.b64,build,at:now(),exported:false}));
+ pendingFiles=[];closeModal();
+ await persist()}
+/* ---------- modal & shell ---------- */
+let modalOpen=false;
+function openModal(inner){modalOpen=true;
+ let o=$("ovl");if(!o){o=document.createElement("div");o.id="ovl";document.body.appendChild(o)}
+ o.innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${inner}</div></div>`}
+function closeModal(){modalOpen=false;const o=$("ovl");if(o)o.innerHTML="";recCancel()}
+function render(){
+ const root=$("root");
+ let top=`<div class="bar"><div class="logo">SC2 Tools <span>· Locker</span></div>
+  ${role?`<span class="who">${role==="coach"?esc(S.coach)+" (coach)":esc((byId(meId)||{}).name||"")}</span>`:""}
+  <span class="sp"></span>
+  <button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${document.documentElement.dataset.lk==="light"?"☾ dark":"☀ light"}</button>
+  ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button>
+  <button class="iconbtn" onclick="signOut()">switch user</button>`:""}</div>`;
+ if(preview)top+=`<div class="banner">PREVIEW — not published with saving enabled; changes stay in this tab only</div>`;
+ if(readOnly)top+=`<div class="banner r">VIEW-ONLY — ask ${esc(S.coach)} to share this page with edit access</div>`;
+ if(busy)top+=`<div class="banner">Saving…</div>`;
+ let body="";
+ if(!S.setup)body=setupHTML();
+ else if(!role)body=gateHTML();
+ else if(role==="coach")body=coachHTML();
+ else body=studentHTML();
+ root.innerHTML=top+body+(helpOpen?helpHTML():"");
+}
+boot();
+</script>
+<div class="toast" id="toast"></div>
