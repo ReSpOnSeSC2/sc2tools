@@ -20,6 +20,8 @@ const { randomUUID } = require("node:crypto");
 
 const DOC_ID = "locker";
 const CALENDAR_PREFIX = "calendar:";
+const PRIMARY_COACH_ID = "c1";
+const PRIMARY_COACH_BOOTSTRAP_ATTEMPTS = 5;
 const USERS_PAGE = 20;
 const GAMES_CAP = 500;
 const SLOT_STEP_MINUTES = 30;
@@ -200,7 +202,18 @@ class CoachingService {
    *   coachId?: string, studentId?: string, rev: number}>}
    */
   async roleFor(userId, platformAdmin) {
-    const { coaches, students, rev } = await this.getRoster();
+    let roster = await this.getRoster();
+    // The first site-backed Locker can predate multi-coach account linking.
+    // A platform admin was still allowed into that Locker, but there was no
+    // durable coach row for scheduling to attach a calendar (or booking
+    // notifications) to. Claim that empty roster once, using the same `c1`
+    // identity as the legacy Locker client. The CAS write makes simultaneous
+    // first requests converge on one real coach instead of creating a
+    // request-local/synthetic actor.
+    if (platformAdmin && roster.coaches.length === 0) {
+      roster = await this._bootstrapPrimaryCoach(userId);
+    }
+    const { coaches, students, rev } = roster;
     const coach = coaches.find((c) => c && c.userId === userId);
     const adminCoach = coaches.length > 0 ? coaches[0] : null;
     if (platformAdmin || (adminCoach && adminCoach.userId === userId)) {
@@ -214,6 +227,68 @@ class CoachingService {
     const student = students.find((s) => s && s.userId === userId);
     if (student) return { role: "student", studentId: student.id, rev };
     return { role: "none", rev };
+  }
+
+  /**
+   * Persist the platform admin as the primary coach for an unclaimed Locker.
+   * Existing coach rosters are never changed. Students from the legacy
+   * single-coach shape receive the client-compatible `c1` assignment only
+   * when they do not already carry an explicit coachId.
+   *
+   * @param {string} userId
+   * @returns {Promise<{coaches:any[],students:any[],rev:number}>}
+   */
+  async _bootstrapPrimaryCoach(userId) {
+    let current = await this.getDoc();
+    for (let attempt = 0; attempt < PRIMARY_COACH_BOOTSTRAP_ATTEMPTS; attempt += 1) {
+      const currentCoaches = Array.isArray(current.state.coaches)
+        ? current.state.coaches
+        : [];
+      if (currentCoaches.length > 0) {
+        return rosterFromState(current.state, current.rev);
+      }
+
+      const students = Array.isArray(current.state.students)
+        ? current.state.students.map((student) => (
+          student && !student.coachId
+            ? { ...student, coachId: PRIMARY_COACH_ID }
+            : student
+        ))
+        : [];
+      const storedName = typeof current.state.coach === "string"
+        ? current.state.coach.trim()
+        : "";
+      const coach = {
+        id: PRIMARY_COACH_ID,
+        name: storedName || "Coach",
+        userId,
+      };
+      const nextState = {
+        ...current.state,
+        coaches: [coach],
+        students,
+      };
+      try {
+        const result = await this.putState(nextState, current.rev);
+        if (result.ok) {
+          return rosterFromState(nextState, result.rev);
+        }
+        current = { state: result.state, rev: result.rev };
+      } catch (error) {
+        // Two initial requests can both observe a missing document and race
+        // the upsert. The unique _id winner is authoritative; reread it.
+        if (!error || /** @type {any} */ (error).code !== 11000) throw error;
+        current = await this.getDoc();
+      }
+    }
+
+    const latest = await this.getRoster();
+    if (latest.coaches.length > 0) return latest;
+    throw coachingError(
+      409,
+      "coaching_setup_conflict",
+      "Coaching setup changed while it was being initialized. Reload and try again.",
+    );
   }
 
   /**
@@ -1110,6 +1185,19 @@ function emptyState() {
     v: 1, setup: false, pin: null, coach: "ReSpOnSe",
     coaches: [], students: [], assets: {}, customBuilds: [],
     wsTemplates: [], shelfLibrary: [],
+  };
+}
+
+/**
+ * @param {Record<string, any>} state
+ * @param {number} rev
+ * @returns {{coaches:any[],students:any[],rev:number}}
+ */
+function rosterFromState(state, rev) {
+  return {
+    coaches: Array.isArray(state.coaches) ? state.coaches : [],
+    students: Array.isArray(state.students) ? state.students : [],
+    rev,
   };
 }
 

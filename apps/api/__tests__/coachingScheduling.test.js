@@ -178,6 +178,76 @@ describe("coaching scheduling", () => {
       emits = [];
     });
 
+    test("atomically bootstraps an empty Locker for the platform admin", async () => {
+      await db.coaching.deleteMany({});
+
+      const roles = await Promise.all(
+        Array.from({ length: 8 }, () => service.roleFor("platform-admin", true)),
+      );
+
+      expect(roles).toEqual(Array.from({ length: 8 }, () => ({
+        role: "admin",
+        coachId: "c1",
+        rev: 1,
+      })));
+      const docs = await db.coaching.find({}).toArray();
+      expect(docs).toHaveLength(1);
+      expect(docs[0]).toMatchObject({
+        _id: "locker",
+        rev: 1,
+        state: {
+          coaches: [{ id: "c1", name: "ReSpOnSe", userId: "platform-admin" }],
+          students: [],
+        },
+      });
+      await expect(service.calendarFor("platform-admin", roles[0], "UTC"))
+        .resolves.toMatchObject({
+          role: "coach",
+          coach: { id: "c1", name: "ReSpOnSe" },
+          availability: null,
+        });
+    });
+
+    test("bootstraps a legacy Locker and assigns only students missing coachId", async () => {
+      await db.coaching.deleteMany({});
+      await db.coaching.insertOne({
+        _id: "locker",
+        rev: 7,
+        state: {
+          coach: "Legacy Coach",
+          coaches: [],
+          students: [
+            { id: "legacy-student", userId: "legacy-user" },
+            { id: "explicit-student", userId: "explicit-user", coachId: "preserved-id" },
+          ],
+        },
+      });
+
+      await expect(service.roleFor("platform-admin", true)).resolves.toEqual({
+        role: "admin",
+        coachId: "c1",
+        rev: 8,
+      });
+      const doc = await db.coaching.findOne({ _id: "locker" });
+      expect(doc.state.coaches).toEqual([
+        { id: "c1", name: "Legacy Coach", userId: "platform-admin" },
+      ]);
+      expect(doc.state.students).toEqual([
+        { id: "legacy-student", userId: "legacy-user", coachId: "c1" },
+        { id: "explicit-student", userId: "explicit-user", coachId: "preserved-id" },
+      ]);
+    });
+
+    test("does not let an unlinked non-admin claim an empty Locker", async () => {
+      await db.coaching.deleteMany({});
+
+      await expect(service.roleFor("ordinary-user", false)).resolves.toEqual({
+        role: "none",
+        rev: 0,
+      });
+      await expect(db.coaching.countDocuments({})).resolves.toBe(0);
+    });
+
     test("returns UTC slots that a student client can render in its own local timezone", async () => {
       const calendar = await service.calendarFor(
         "student-user-1",
