@@ -1,17 +1,18 @@
 <meta charset="utf-8">
 <title>SC2 Tools Locker</title>
 <style id="css">
-:root{
+@scope ([data-coaching-locker]) {
+:scope{
  --bg:#0a0d14;--panel:#101622;--panel2:#141c2b;--line:#202b3e;--ink:#d9e2f0;--mute:#7f8ca3;
  --gold:#d4a843;--gold-dim:#8a6f2f;--blue:#5aa7ff;--win:#43b581;--loss:#e06c6c;
  --field:#0d1320;--bar:#0c1019;--tline:#182234;color-scheme:dark;
  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;--disp:'Rajdhani','IBM Plex Sans',sans-serif}
-html[data-lk="light"]{
+:scope[data-lk="light"]{
  --bg:#eef1f6;--panel:#ffffff;--panel2:#f4f6fb;--line:#d8deea;--ink:#1b2331;--mute:#5c6b80;
  --gold:#8a6a14;--gold-dim:#b08d2e;--blue:#2464c4;--win:#1d8f5c;--loss:#c04747;
  --field:#fbfcfe;--bar:#ffffff;--tline:#e7ebf3;color-scheme:light}
-*{box-sizing:border-box}html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;min-height:100vh}
+*,*::before,*::after{box-sizing:border-box}:scope{margin:0}
+:scope{background:var(--bg);color:var(--ink);font:14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;min-height:60vh}
 button{font:inherit;cursor:pointer}
 input,textarea,select{font:inherit;background:var(--field);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 10px}
 input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
@@ -133,6 +134,7 @@ a{color:var(--blue)}
 .bcard{border:1px solid var(--line);border-radius:10px;padding:11px 14px;background:var(--panel2);margin-bottom:9px}
 .bcard .nm{font-weight:600}.bcard .mu{color:var(--mute);font-size:12.5px;font-family:var(--mono)}
 details.bo{margin-top:7px}details.bo summary{cursor:pointer;color:var(--blue);font-size:13px}
+}
 </style>
 <div id="root"></div>
 <script id="state0" type="application/json">{"v":1,"setup":false,"pin":null,"coach":"ReSpOnSe","students":[],"assets":{}}</script>
@@ -229,7 +231,7 @@ function buildDoc(st){
  const css=document.getElementById("css").textContent;
  const app=document.getElementById("app").textContent;
  const j=JSON.stringify(st).replace(/<\//g,"<\\/");
- return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SC2 Tools Locker<\/title><style id="css">'+css+'<\/style><\/head><body><div id="root"><\/div><div class="toast" id="toast"><\/div><script id="state0" type="application/json">'+j+'<\/script><script id="app">'+app+'<\/script><\/body><\/html>';}
+ return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SC2 Tools Locker<\/title><style id="css">'+css+'<\/style><\/head><body data-coaching-locker><div id="root"><\/div><div class="toast" id="toast"><\/div><script id="state0" type="application/json">'+j+'<\/script><script id="app">'+app+'<\/script><\/body><\/html>';}
 async function persist(okMsg){
  if(SITE){
   if(busy)return false;busy=true;render();
@@ -259,11 +261,18 @@ async function persist(okMsg){
 }
 /* ---------- boot ---------- */
 function toggleTheme(){
- const light=document.documentElement.dataset.lk==="light";
- if(light)delete document.documentElement.dataset.lk;else document.documentElement.dataset.lk="light";
+ const host=lockerHost();const light=host.dataset.lk==="light";
+ if(light)delete host.dataset.lk;else host.dataset.lk="light";
  ls.set("locker.theme",light?"dark":"light");render()}
+function lockerHost(){return SITE?(document.querySelector("[data-coaching-locker]")||document.body):document.body}
+function syncSiteTheme(){
+ if(!SITE)return;
+ const host=lockerHost(),siteRoot=parent.document.documentElement;
+ const apply=()=>{if(siteRoot.getAttribute("data-theme")==="light")host.dataset.lk="light";else delete host.dataset.lk};
+ apply();new MutationObserver(apply).observe(siteRoot,{attributes:true,attributeFilter:["data-theme"]})}
 async function boot(){
- if(ls.get("locker.theme")==="light")document.documentElement.dataset.lk="light";
+ if(SITE)syncSiteTheme();
+ else{document.body.setAttribute("data-coaching-locker","");if(ls.get("locker.theme")==="light")document.body.dataset.lk="light"}
  if(SITE){
   try{
    SITE_ME=await siteApi("/coaching/me");
@@ -1495,7 +1504,7 @@ async function subSend(sid){
 /* ---------- modal & shell ---------- */
 let modalOpen=false;
 function openModal(inner){modalOpen=true;
- let o=$("ovl");if(!o){o=document.createElement("div");o.id="ovl";document.body.appendChild(o)}
+ let o=$("ovl");if(!o){o=document.createElement("div");o.id="ovl";lockerHost().appendChild(o)}
  o.innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${inner}</div></div>`}
 function closeModal(){modalOpen=false;const o=$("ovl");if(o)o.innerHTML="";recCancel()}
 function render(){
@@ -1503,7 +1512,7 @@ function render(){
  let top=`<div class="bar"><div class="logo">SC2 Tools <span>· Locker</span></div>
   ${role?`<span class="who">${role==="coach"?esc((S.coaches.find(c=>c.id===meCoach)||S.coaches[0]||{name:S.coach}).name)+" (coach)":esc((byId(meId)||{}).name||"")}</span>`:""}
   <span class="sp"></span>
-  <button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${document.documentElement.dataset.lk==="light"?"☾ dark":"☀ light"}</button>
+  ${SITE?"":`<button class="iconbtn" onclick="toggleTheme()" aria-label="Toggle light or dark mode">${lockerHost().dataset.lk==="light"?"☾ dark":"☀ light"}</button>`}
   ${role&&S.setup?`<button class="iconbtn" onclick="helpOpen=!helpOpen;render()" aria-label="Help">?</button>
   ${SITE?"":`<button class="iconbtn" onclick="signOut()">switch user</button>`}`:""}</div>`;
  if(preview)top+=`<div class="banner">PREVIEW — not published with saving enabled; changes stay in this tab only</div>`;

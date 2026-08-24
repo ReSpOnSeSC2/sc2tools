@@ -953,7 +953,11 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
       isAdmin,
       users: services.users,
-      coaching: buildCoachingService({ db: deps.db }),
+      coaching: buildCoachingService({
+        db: deps.db,
+        io: deps.io,
+        logger: deps.logger,
+      }),
       logger: deps.logger,
     }),
   );

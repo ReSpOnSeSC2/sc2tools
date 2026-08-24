@@ -105,6 +105,7 @@ describe("app chrome routes", () => {
     "/settings",
     "/admin",
     "/admin/users",
+    "/coaching",
   ])(
     "keeps Clerk and site-wide concerns on %s without the marketing shell",
     (pathname) => {

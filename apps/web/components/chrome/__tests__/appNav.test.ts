@@ -24,6 +24,7 @@ describe("app surface matching", () => {
     "/settings",
     "/admin",
     "/admin/users/42",
+    "/coaching",
   ])("claims %s for the app chrome", (pathname) => {
     expect(isAppSurfacePath(pathname)).toBe(true);
   });
@@ -76,11 +77,13 @@ describe("app surface matching", () => {
     expect(surfaceTitle("/devices")).toBe("Devices");
     expect(surfaceTitle("/builds/anything")).toBe("Custom builds");
     expect(surfaceTitle("/admin/users")).toBe("Admin");
+    expect(surfaceTitle("/coaching")).toBe("Coaching");
   });
 
   it("separates public surfaces from the per-user ones", () => {
     expect(isProtectedSurfacePath("/settings")).toBe(true);
     expect(isProtectedSurfacePath("/app/macro")).toBe(true);
+    expect(isProtectedSurfacePath("/coaching")).toBe(true);
     expect(isProtectedSurfacePath("/meta")).toBe(false);
     expect(isProtectedSurfacePath("/community/builds/slug")).toBe(false);
   });
@@ -98,5 +101,11 @@ describe("app surface matching", () => {
     for (const key of MOBILE_TAB_KEYS) {
       expect(keys).toContain(key);
     }
+  });
+
+  it("keeps private coaching inside the app shell without advertising it in navigation", () => {
+    expect(isAppSurfacePath("/coaching")).toBe(true);
+    expect(matchSurface("/coaching")?.entry.key).toBe("coaching");
+    expect(NAV_ENTRIES.some((entry) => entry.href === "/coaching")).toBe(false);
   });
 });

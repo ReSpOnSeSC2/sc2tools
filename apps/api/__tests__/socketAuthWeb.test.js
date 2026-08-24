@@ -116,12 +116,13 @@ describe("attachSocketAuth (web tab)", () => {
       auth: { token: "jwt-placeholder" },
     });
     expect(socket.data.userId).toBeUndefined();
-    // Socket still joins the clerk room; auto-join to user room is
-    // simply skipped. The client can still claim a userId via
-    // subscribe:user (the backward-compat path).
+    // Socket still joins the clerk room, but a resolver failure must fail
+    // closed for private user rooms.
     io.runConnect(socket);
     expect(socket.rooms).toContain("clerk:user_clerk_abc");
     expect(socket.rooms).not.toContain("user:internal-u1");
+    socket.fire("subscribe:user", "another-user");
+    expect(socket.rooms).not.toContain("user:another-user");
   });
 
   test("subscribe:user is locked to the resolved userId", async () => {

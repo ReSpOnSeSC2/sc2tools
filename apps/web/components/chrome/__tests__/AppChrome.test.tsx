@@ -27,6 +27,9 @@ vi.mock("@/components/SyncStatus", () => ({
   SyncStatus: () => <div data-testid="sync-status" />,
 }));
 vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
+vi.mock("../CoachingBookingAlert", () => ({
+  CoachingBookingAlert: () => <div data-testid="coaching-alert-slot" />,
+}));
 
 afterEach(() => {
   cleanup();

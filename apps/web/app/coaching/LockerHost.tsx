@@ -21,28 +21,65 @@ declare global {
   }
 }
 
+// The classic Locker bundle declares top-level lexical bindings used by its
+// inline handlers. Those bindings cannot be declared twice in one document.
+// Keep one persistent inner host in the document for the page lifetime and
+// move it into a hidden parking node across route unmounts. Remaining in the
+// document also keeps async boot callbacks and the theme observer valid.
+let persistentLockerRoot: HTMLDivElement | null = null;
+let activeMountHost: HTMLDivElement | null = null;
+let lockerInitialized = false;
+
+function lockerParkingNode() {
+  let parking = document.getElementById("coaching-locker-parking") as HTMLDivElement | null;
+  if (!parking) {
+    parking = document.createElement("div");
+    parking.id = "coaching-locker-parking";
+    parking.hidden = true;
+    parking.setAttribute("aria-hidden", "true");
+    document.body.appendChild(parking);
+  }
+  return parking;
+}
+
+function parkLocker(host: HTMLDivElement) {
+  if (!persistentLockerRoot || activeMountHost !== host) return;
+  lockerParkingNode().appendChild(persistentLockerRoot);
+  activeMountHost = null;
+}
+
 export default function LockerHost() {
   const { getToken } = useAuth();
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
+    const host = hostRef.current;
+    if (!host) return;
     let cancelled = false;
 
-    async function mount() {
+    if (!persistentLockerRoot) {
+      persistentLockerRoot = document.createElement("div");
+      persistentLockerRoot.setAttribute("data-coaching-locker", "");
+    }
+    const lockerRoot = persistentLockerRoot;
+    host.appendChild(lockerRoot);
+    activeMountHost = host;
+
+    window.LOCKER_SITE = {
+      apiBase: API_BASE,
+      getToken: () => getToken(),
+    };
+
+    if (lockerInitialized) {
+      return () => parkLocker(host);
+    }
+
+    async function mount(target: HTMLDivElement) {
       const res = await fetch("/coaching/locker-site.html");
       if (!res.ok || cancelled || !hostRef.current) return;
       const text = await res.text();
       const doc = new DOMParser().parseFromString(text, "text/html");
 
-      window.LOCKER_SITE = {
-        apiBase: API_BASE,
-        getToken: () => getToken(),
-      };
-
-      const host = hostRef.current;
       // Styles + static skeleton first, script last — the app's boot
       // expects #root, #state0 and #toast to exist when it runs.
       for (const node of Array.from(doc.head.children).concat(
@@ -51,22 +88,25 @@ export default function LockerHost() {
         const tag = node.tagName.toLowerCase();
         if (tag === "meta" || tag === "title") continue;
         if (tag === "script") continue; // handled below, in order
-        host.appendChild(document.importNode(node, true));
+        target.appendChild(document.importNode(node, true));
       }
       for (const s of Array.from(doc.querySelectorAll("script"))) {
         const el = document.createElement("script");
         if (s.id) el.id = s.id;
         if (s.type) el.type = s.type;
         el.textContent = s.textContent;
-        host.appendChild(el);
+        target.appendChild(el);
       }
+      lockerInitialized = true;
+      activeMountHost = host;
     }
 
-    void mount();
+    void mount(lockerRoot);
     return () => {
       cancelled = true;
+      parkLocker(host);
     };
   }, [getToken]);
 
-  return <div ref={hostRef} data-coaching-locker />;
+  return <div ref={hostRef} />;
 }

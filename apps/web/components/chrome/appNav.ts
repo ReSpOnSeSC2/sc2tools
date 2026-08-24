@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  CalendarClock,
   Cpu,
   Globe2,
   Library,
@@ -67,6 +68,25 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   ...UTILITY_ENTRIES,
 ];
 
+// Private, direct-link surfaces use the same desktop rail / mobile tab shell
+// without advertising themselves in either navigation menu. Coaching access
+// remains role-gated by its API; this entry exists only for shell ownership,
+// title resolution, and route protection.
+const PRIVATE_SURFACE_ENTRIES: readonly NavEntry[] = [
+  {
+    key: "coaching",
+    href: "/coaching",
+    label: "Coaching",
+    icon: CalendarClock,
+    group: "utility",
+  },
+];
+
+const ALL_SURFACE_ENTRIES: readonly NavEntry[] = [
+  ...NAV_ENTRIES,
+  ...PRIVATE_SURFACE_ENTRIES,
+];
+
 /** The bottom tab bar carries the highest-traffic destinations. */
 export const MOBILE_TAB_KEYS: readonly string[] = [
   "today",
@@ -82,7 +102,7 @@ export const MOBILE_TAB_KEYS: readonly string[] = [
  */
 export function isAppSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return NAV_ENTRIES.some(
+  return ALL_SURFACE_ENTRIES.some(
     (e) => pathname === e.href || pathname.startsWith(`${e.href}/`),
   );
 }
@@ -90,7 +110,7 @@ export function isAppSurfacePath(pathname: string | null): boolean {
 /** Routes whose data is per-user and gated by middleware. */
 export function isProtectedSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return NAV_ENTRIES.some(
+  return ALL_SURFACE_ENTRIES.some(
     (e) =>
       !e.publicRoute &&
       (pathname === e.href || pathname.startsWith(`${e.href}/`)),
@@ -118,7 +138,7 @@ export function matchSurface(pathname: string | null): SurfaceMatch | null {
   }
 
   let best: NavEntry | null = null;
-  for (const entry of NAV_ENTRIES) {
+  for (const entry of ALL_SURFACE_ENTRIES) {
     if (pathname === entry.href || pathname.startsWith(`${entry.href}/`)) {
       if (!best || entry.href.length > best.href.length) best = entry;
     }

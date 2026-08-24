@@ -18,6 +18,7 @@ import {
   type NavEntry,
   type NavIcon,
 } from "./appNav";
+import { CoachingBookingAlert } from "./CoachingBookingAlert";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -185,6 +186,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
             ) : null}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              <SignedIn>
+                <CoachingBookingAlert compact />
+              </SignedIn>
               <ThemeToggle />
               <SignedIn>
                 <UserButton

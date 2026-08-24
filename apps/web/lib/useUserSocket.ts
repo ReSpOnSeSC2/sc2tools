@@ -38,34 +38,56 @@ export function useUserSocket(
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !handlers) return;
-    let cancelled = false;
     let socket: Socket | null = null;
-
-    (async () => {
-      let token: string | null = null;
-      try {
-        token = await getToken();
-      } catch {
-        // Token fetch failed (Clerk session lost) — give up; the
-        // hook will retry on the next mount cycle / sign-in.
-        return;
-      }
-      if (cancelled || !token) return;
-      socket = io(API_BASE, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-      });
-      for (const [event, fn] of Object.entries(handlers)) {
-        socket.on(event, fn);
-      }
-    })();
+    let retryTimer: number | null = null;
+    let authRetry = 0;
+    socket = io(API_BASE, {
+      // Socket.io invokes an auth callback for every fresh namespace
+      // connection, including transport reconnects. Clerk tokens can expire
+      // while a tab is open, so never pin the first token forever.
+      auth: async (done) => {
+        try {
+          const token = await getToken();
+          done(token ? { token } : {});
+        } catch {
+          done({});
+        }
+      },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+    });
+    for (const [event, fn] of Object.entries(handlers)) {
+      socket.on(event, fn);
+    }
+    const clearRetry = () => {
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      retryTimer = null;
+    };
+    const retryConnect = () => {
+      if (!socket || socket.connected || retryTimer !== null) return;
+      const delay = Math.min(30_000, 1000 * 2 ** Math.min(authRetry, 5));
+      authRetry += 1;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        socket?.connect();
+      }, delay);
+    };
+    socket.on("connect", () => {
+      authRetry = 0;
+      clearRetry();
+    });
+    // Namespace middleware failures do not enter Socket.io's transport-level
+    // reconnect loop. Retry them explicitly with a capped backoff so a brief
+    // Clerk/Mongo outage cannot silence realtime updates for the tab lifetime.
+    socket.on("connect_error", retryConnect);
+    window.addEventListener("online", retryConnect);
 
     return () => {
-      cancelled = true;
+      clearRetry();
+      window.removeEventListener("online", retryConnect);
       if (socket) {
         try {
           socket.disconnect();

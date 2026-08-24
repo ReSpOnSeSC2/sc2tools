@@ -9,11 +9,16 @@
 // data all come from /v1/coaching/* with the caller's Clerk JWT.
 
 import { RedirectToSignIn, useAuth } from "@clerk/nextjs";
-import LockerHost from "./LockerHost";
+import { Suspense } from "react";
+import CoachingWorkspace from "./CoachingWorkspace";
 
 export default function CoachingPage() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return null;
   if (!isSignedIn) return <RedirectToSignIn />;
-  return <LockerHost />;
+  return (
+    <Suspense fallback={null}>
+      <CoachingWorkspace />
+    </Suspense>
+  );
 }

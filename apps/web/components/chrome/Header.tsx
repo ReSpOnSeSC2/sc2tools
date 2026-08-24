@@ -9,6 +9,7 @@ import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useApi } from "@/lib/clientApi";
 import { MobileNav, type MobileNavLink } from "./MobileNav";
+import { CoachingBookingAlert } from "./CoachingBookingAlert";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -104,6 +105,9 @@ export function Header() {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            <SignedIn>
+              <CoachingBookingAlert />
+            </SignedIn>
             <div className="hidden lg:block">
               <ThemeToggle />
             </div>

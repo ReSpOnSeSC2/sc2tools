@@ -172,9 +172,9 @@ function attachSocketAuth(io, opts) {
           if (hit && typeof hit.userId === "string" && hit.userId.length > 0) {
             socket.data.userId = hit.userId;
           }
-        } catch (_err) {
-          // Resolution failures are non-fatal: the socket still
-          // connects, the client can fall back to subscribe:user.
+        } catch {
+          // Resolution failures are non-fatal for public/clerk-room events,
+          // but the socket must not be allowed to claim a private user room.
         }
       }
       next();
@@ -409,19 +409,17 @@ function attachSocketAuth(io, opts) {
     }
     // ``subscribe:user`` predates ``resolveClerkUser`` and let any
     // authenticated web client join any user room. When we DO have a
-    // resolved userId we lock the join down to the caller's own id;
-    // when we don't, we keep the legacy free-form join so tests and
-    // tiny deployments without the resolver wired still work.
+    // resolved userId we lock the join down to the caller's own id. The
+    // legacy free-form join exists only when no resolver was configured at
+    // all; a production resolver failure must fail closed.
     socket.on("subscribe:user", (userId) => {
       if (typeof userId !== "string" || userId.length === 0) return;
-      if (
-        typeof resolvedUserId === "string"
-        && resolvedUserId.length > 0
-        && userId !== resolvedUserId
-      ) {
+      if (typeof resolvedUserId === "string" && resolvedUserId.length > 0) {
+        if (userId !== resolvedUserId) return;
+        socket.join(`user:${userId}`);
         return;
       }
-      socket.join(`user:${userId}`);
+      if (!opts.resolveClerkUser) socket.join(`user:${userId}`);
     });
   });
 }
