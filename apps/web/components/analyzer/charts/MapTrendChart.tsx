@@ -15,6 +15,7 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MapArtwork } from "@/components/maps/MapArtwork";
+import { MapPreviewDialog } from "@/components/maps/MapPreviewDialog";
 import { wrColor } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 import { ChartTooltip } from "./ChartTooltip";
@@ -80,6 +81,7 @@ export function MapTrendChart({
     `/v1/timeseries/maps${filtersToQuery(params)}#${dbRev}`,
   );
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
+  const [previewMap, setPreviewMap] = useState<string | null>(null);
   const rollWindow = ROLL_BY_BUCKET[bucket];
 
   const { panels, totalGames, dateRange } = useMemo(
@@ -119,45 +121,59 @@ export function MapTrendChart({
     bucket === "day" ? "daily" : bucket === "week" ? "weekly" : "monthly";
 
   return (
-    <Card
-      title="Map performance over time"
-      right={
-        <div className="flex items-center gap-1 text-micro">
-          <span className="text-text-dim">Top</span>
-          {TOP_N_OPTIONS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setTopN(n)}
-              className={[
-                "rounded px-2 py-0.5",
-                topN === n
-                  ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                  : "bg-bg-elevated text-text-muted hover:text-text",
-              ].join(" ")}
-            >
-              {n}
-            </button>
+    <>
+      <Card
+        title="Map performance over time"
+        right={
+          <div className="flex items-center gap-1 text-micro">
+            <span className="text-text-dim">Top</span>
+            {TOP_N_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setTopN(n)}
+                className={[
+                  "rounded px-2 py-0.5",
+                  topN === n
+                    ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                    : "bg-bg-elevated text-text-muted hover:text-text",
+                ].join(" ")}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <p className="-mt-1 mb-3 text-caption text-text-dim">
+          One panel per top map (by volume) · faint = {intervalLabel} WR, bold
+          = {" "}
+          {rollWindow}-period rolling · dashed reference = that map's overall
+          WR.
+        </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {panels.map((p) => (
+            <MapPanel
+              key={p.label}
+              panel={p}
+              showYear={showYearTicks}
+              onOpenPreview={setPreviewMap}
+            />
           ))}
         </div>
-      }
-    >
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        One panel per top map (by volume) · faint = {intervalLabel} WR, bold ={" "}
-        {rollWindow}-period rolling · dashed reference = that map's overall WR.
-      </p>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {panels.map((p) => (
-          <MapPanel key={p.label} panel={p} showYear={showYearTicks} />
-        ))}
-      </div>
-    </Card>
+      </Card>
+      <MapPreviewDialog
+        mapName={previewMap}
+        onClose={() => setPreviewMap(null)}
+      />
+    </>
   );
 }
 
 function MapPanel({
   panel,
   showYear,
+  onOpenPreview,
 }: {
   panel: {
     label: string;
@@ -169,6 +185,7 @@ function MapPanel({
     overallWrPct: number;
   };
   showYear: boolean;
+  onOpenPreview: (mapName: string) => void;
 }) {
   const trendBadge =
     panel.recentDelta != null && panel.totalGames >= 6 ? (
@@ -192,12 +209,21 @@ function MapPanel({
           MapArtwork resolver falls back to an initials tile when a
           map has no image, so nothing here is ever placeholder data. */}
       <div className="mb-2 flex items-center gap-2.5">
-        <MapArtwork
-          mapName={panel.label}
-          size="md"
-          alt={panel.label}
-          className="rounded-lg"
-        />
+        <button
+          type="button"
+          aria-label={`View a larger image of ${panel.label}`}
+          aria-haspopup="dialog"
+          title={`View larger map: ${panel.label}`}
+          onClick={() => onOpenPreview(panel.label)}
+          className="group/map inline-flex min-h-11 min-w-11 shrink-0 cursor-zoom-in items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
+        >
+          <MapArtwork
+            mapName={panel.label}
+            size="md"
+            alt=""
+            className="rounded-lg"
+          />
+        </button>
         <div className="min-w-0 flex-1">
           <div
             className="truncate text-caption font-semibold text-text"

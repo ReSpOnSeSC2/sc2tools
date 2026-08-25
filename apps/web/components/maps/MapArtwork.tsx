@@ -30,6 +30,14 @@ const IMAGE_SIZES: Record<ArtworkSize, string> = {
   hero: "100vw",
 };
 
+const FALLBACK_TEXT_CLASSES: Record<ArtworkSize, string> = {
+  xs: "text-[9px]",
+  sm: "text-[9px]",
+  md: "text-xs",
+  card: "text-xl",
+  hero: "text-4xl sm:text-5xl",
+};
+
 const PREVIEW_WIDTH = 224;
 const PREVIEW_HEIGHT = 128;
 const PREVIEW_GAP = 8;
@@ -49,12 +57,14 @@ export function MapArtwork({
   className = "",
   eager = false,
   alt = "",
+  fit = "cover",
 }: {
   mapName: string | null | undefined;
   size?: ArtworkSize;
   className?: string;
   eager?: boolean;
   alt?: string;
+  fit?: "cover" | "contain";
 }) {
   const source = getMapImageUrl(mapName);
   const [failedSource, setFailedSource] = useState<string | null>(null);
@@ -64,12 +74,14 @@ export function MapArtwork({
   return (
     <span
       data-map-artwork={showImage ? "image" : "fallback"}
+      role={!showImage && alt ? "img" : undefined}
+      aria-label={!showImage && alt ? alt : undefined}
       className={`relative block shrink-0 overflow-hidden border border-border bg-bg-elevated ${SIZE_CLASSES[size]} ${className}`}
       style={fallbackStyle}
     >
       <span
         aria-hidden
-        className="absolute inset-0 grid place-items-center text-[9px] font-bold uppercase tracking-[0.08em] text-white/55"
+        className={`absolute inset-0 grid place-items-center font-bold uppercase tracking-[0.08em] text-white/55 ${FALLBACK_TEXT_CLASSES[size]}`}
       >
         {initials(mapName)}
       </span>
@@ -81,7 +93,9 @@ export function MapArtwork({
           decoding="async"
           sizes={IMAGE_SIZES[size]}
           onError={() => setFailedSource(source)}
-          className="absolute inset-0 h-full w-full object-cover motion-safe:transition-[filter,transform] motion-safe:duration-300 motion-safe:ease-out group-hover/map:scale-[1.06] group-hover/map:brightness-110"
+          className={`absolute inset-0 h-full w-full ${
+            fit === "contain" ? "object-contain" : "object-cover"
+          } motion-safe:transition-[filter,transform] motion-safe:duration-300 motion-safe:ease-out group-hover/map:scale-[1.06] group-hover/map:brightness-110`}
         />
       ) : null}
     </span>
