@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
-import { useFilters } from "@/lib/filterContext";
+import { filtersToQuery, useFilters } from "@/lib/filterContext";
 import { Card } from "@/components/ui/Card";
 import { BuildDossier } from "@/components/builds/BuildDossier";
 import { BuildPublishModal } from "@/components/builds/BuildPublishModal";
@@ -38,8 +38,13 @@ export function BuildEditorModal({
   onClose: () => void;
 }) {
   const { getToken } = useAuth();
-  const { bumpRev } = useFilters();
-  const apiPath = `/v1/builds/${encodeURIComponent(buildName)}`;
+  const { filters, bumpRev, dbRev } = useFilters();
+  // The row the user clicked came from /v1/builds under the active global
+  // game scope. Keep the dossier on that exact cohort instead of silently
+  // falling back to all-time/all-region data. The revision fragment remains
+  // client-side (browsers do not send URL fragments) but gives SWR a fresh
+  // cache identity after replay/build mutations.
+  const apiPath = `/v1/builds/${encodeURIComponent(buildName)}${filtersToQuery(filters)}#${dbRev}`;
 
   const [saved, setSaved] = useState<CustomBuild | null>(null);
   const [lookupDone, setLookupDone] = useState(false);

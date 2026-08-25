@@ -35,7 +35,7 @@ vi.mock("recharts", () => ({
 }));
 
 /** Two adjacent bands of the given width, starting at 4500. */
-function responseAt(width: 50 | 100 | 500) {
+function responseAt(width: 50 | 100 | 300 | 500) {
   return {
     bucketWidth: width,
     buckets: [
@@ -115,7 +115,7 @@ describe("OppMmrBucketsChart width toggle", () => {
     const group = screen.getByRole("group", { name: "Opponent MMR band width" });
     expect(
       Array.from(group.querySelectorAll("button")).map((b) => b.textContent),
-    ).toEqual(["Auto", "50", "100", "500"]);
+    ).toEqual(["Auto", "50", "100", "300", "500"]);
   });
 
   it("does not credit Auto with a width the user picked", () => {
@@ -154,6 +154,21 @@ describe("OppMmrBucketsChart width toggle", () => {
     expect(widthButton(at(500)).getAttribute("aria-pressed")).toBe("false");
     expect(widthButton(AUTO).textContent).toBe("Auto");
     expect(screen.getByText("4500–4549")).toBeTruthy();
+  });
+
+  it("offers 300-MMR bands and forwards that exact selection", () => {
+    useApiMock.mockReturnValue({ isLoading: false, data: responseAt(500) });
+    render(<OppMmrBucketsChart />);
+
+    useApiMock.mockReturnValue({ isLoading: false, data: responseAt(300) });
+    fireEvent.click(widthButton(at(300)));
+
+    expect(lastRequest()).toContain("bucket_width=300");
+    expect(widthButton(at(300)).getAttribute("aria-pressed")).toBe("true");
+    expect(widthButton(at(500)).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText(/Each bar = a 300-MMR band/)).toBeTruthy();
+    expect(screen.getByText("4500–4799")).toBeTruthy();
+    expect(screen.getByText("4800–5099")).toBeTruthy();
   });
 
   it("drills into the games behind a band at whatever width is showing", () => {

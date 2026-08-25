@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import {
+  useFilters,
+  filtersToQuery,
+  type AnalyzerFilters,
+} from "@/lib/filterContext";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
   useLocalStoragePositiveInt,
@@ -54,7 +58,33 @@ type GamesListResp = {
   }>;
 };
 
-type DrillFilter = { opp_strategy: string; build?: string };
+export type StrategyDrillFilter = { opp_strategy: string; build?: string };
+
+/**
+ * Build the request for a Strategies drill-down from one merged parameter
+ * object.  Keeping this as a single ``filtersToQuery`` call matters when a
+ * StrategyFiltersBar value (notably ``build`` / ``opp_strategy``) is already
+ * active: appending another copy by hand makes Express expose an array, which
+ * the API's string-only filter parser intentionally rejects.
+ *
+ * The clicked cell/card is authoritative for the two drill axes; every other
+ * analyzer filter is preserved verbatim so the dossier describes the same
+ * cohort as the row that opened it.
+ */
+export function strategyGamesPath(
+  filters: AnalyzerFilters,
+  drill: StrategyDrillFilter,
+  dbRev: number,
+): string {
+  const query = filtersToQuery({
+    ...filters,
+    opp_strategy: drill.opp_strategy,
+    build: drill.build ?? filters.build,
+    sort: "date_desc",
+    limit: 5000,
+  });
+  return `/v1/games-list${query}#${dbRev}`;
+}
 
 const LS_VIEW = "analyzer.strategies.view";
 const LS_MIN = "analyzer.strategies.minGames";
@@ -257,25 +287,17 @@ function StrategyGamesView({
   drill,
   onBack,
 }: {
-  drill: DrillFilter;
+  drill: StrategyDrillFilter;
   onBack: () => void;
 }) {
   const { filters, dbRev } = useFilters();
   const myName = useMyDisplayName();
-  const queryStr = useMemo(() => {
-    const merged: Record<string, unknown> = {
-      ...filters,
-      opp_strategy: drill.opp_strategy,
-      sort: "date_desc",
-      limit: 5000,
-    };
-    if (drill.build) merged.build = drill.build;
-    return filtersToQuery(merged);
-  }, [filters, drill]);
-
-  const { data, isLoading, error } = useApi<GamesListResp>(
-    `/v1/games-list${queryStr}#${dbRev}`,
+  const apiPath = useMemo(
+    () => strategyGamesPath(filters, drill, dbRev),
+    [filters, drill, dbRev],
   );
+
+  const { data, isLoading, error } = useApi<GamesListResp>(apiPath);
 
   const games = useMemo<ProfileGame[]>(() => {
     const raw = data?.games || [];
@@ -633,7 +655,7 @@ export function StrategiesTab() {
     isBvsView,
   );
   const [bvsMinGames, setBvsMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
-  const [drill, setDrill] = useState<DrillFilter | null>(null);
+  const [drill, setDrill] = useState<StrategyDrillFilter | null>(null);
 
   // Close the drill-down if global filters change so the user isn't
   // staring at stale rows.

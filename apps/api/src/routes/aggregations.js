@@ -223,7 +223,7 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // WR split by absolute opponent MMR, in clean 50-, 100- or
+  // WR split by absolute opponent MMR, in clean 50-, 100-, 300- or
   // 500-MMR bands. ``bucket_width`` may be any supported width or
   // "auto" (also the fallback for a missing or unrecognised param);
   // auto picks 50 for tight ranges and 100 for wide ones. The

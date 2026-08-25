@@ -53,11 +53,11 @@ function mountRouter() {
 }
 
 describe("opponent-MMR bucket widths", () => {
-  test("the offered widths are 50, 100 and 500, narrowest first", () => {
+  test("the offered widths are 50, 100, 300 and 500, narrowest first", () => {
     // The client mirrors this list in OppMmrBucketsChart.tsx and the
     // server rejects everything else back to "auto", so the order and
     // membership here are the contract both sides read.
-    expect([...OPP_MMR_BUCKET_WIDTHS]).toEqual([50, 100, 500]);
+    expect([...OPP_MMR_BUCKET_WIDTHS]).toEqual([50, 100, 300, 500]);
   });
 
   test("asOppMmrBucketWidth accepts every offered width, as number or text", () => {

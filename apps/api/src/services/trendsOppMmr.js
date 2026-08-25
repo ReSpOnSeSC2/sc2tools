@@ -28,7 +28,7 @@
 /**
  * A bucket width the opponent-MMR histogram knows how to draw, in MMR.
  *
- * @typedef {50 | 100 | 500} OppMmrBucketWidth
+ * @typedef {50 | 100 | 300 | 500} OppMmrBucketWidth
  */
 
 /**
@@ -44,7 +44,7 @@
  *
  * @type {ReadonlyArray<OppMmrBucketWidth>}
  */
-const OPP_MMR_BUCKET_WIDTHS = [50, 100, 500];
+const OPP_MMR_BUCKET_WIDTHS = [50, 100, 300, 500];
 /** Range threshold (in MMR) below which 50-wide bins read cleaner. */
 const OPP_MMR_AUTO_WIDTH_CUTOFF = 500;
 /** Safety cap so a malformed payload can't fan out to thousands of bins. */
@@ -111,8 +111,8 @@ function asOppMmrBucketWidth(raw) {
 }
 
 /**
- * Win rate bucketed by **absolute opponent MMR**, in clean 50-, 100-
- * or 500-MMR bands.
+ * Win rate bucketed by **absolute opponent MMR**, in clean 50-, 100-,
+ * 300-, or 500-MMR bands.
  *
  * Bucket width is either picked explicitly (``opts.bucketWidth`` =
  * any of ``OPP_MMR_BUCKET_WIDTHS``) or auto-chosen from the spread

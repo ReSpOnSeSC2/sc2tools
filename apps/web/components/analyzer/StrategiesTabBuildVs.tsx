@@ -465,14 +465,16 @@ function YouColumn({
   // the "All games" list below — without it the column scanned the
   // latest 1000 games regardless of the active timeframe.
   const { filters } = useFilters();
-  const filterQuery = filtersToQuery(filters);
-  const strategyParam = strategy
-    ? `&strategy=${encodeURIComponent(strategy)}`
-    : "";
-  const phaseParams = `perspective=you${strategyParam}`;
-  const phaseQuery = filterQuery
-    ? `${filterQuery}&${phaseParams}`
-    : `?${phaseParams}`;
+  // Build the complete query in one pass. In particular, don't append
+  // parameters to ``filtersToQuery(filters)``: when ``build`` is already
+  // selected in StrategyFiltersBar that can create duplicate keys, which
+  // Express parses as arrays and ``parseFilters`` correctly refuses as an
+  // ambiguous string filter.
+  const phaseQuery = filtersToQuery({
+    ...filters,
+    perspective: "you",
+    strategy: strategy || undefined,
+  });
   const customPath = slug
     ? `/v1/custom-builds/${encodeURIComponent(slug)}/compositions${phaseQuery}`
     : null;
@@ -573,12 +575,13 @@ function OpponentColumn({
   // the same timeframe / race / map / mmr / region scoping as the
   // "All games" list below.
   const { filters } = useFilters();
-  const filterQuery = filtersToQuery(filters);
-  const buildParam = build ? `&build=${encodeURIComponent(build)}` : "";
-  const phaseParams = `perspective=opponent${buildParam}`;
-  const phaseQuery = filterQuery
-    ? `${filterQuery}&${phaseParams}`
-    : `?${phaseParams}`;
+  const phaseQuery = filtersToQuery({
+    ...filters,
+    perspective: "opponent",
+    // The clicked matrix cell is authoritative. Object assignment replaces
+    // an active global build filter instead of serialising a second copy.
+    build: build || filters.build,
+  });
   const path = strategy
     ? `/v1/strategies/${encodeURIComponent(strategy)}/phases${phaseQuery}`
     : null;

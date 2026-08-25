@@ -47,7 +47,7 @@ type OppMmrBucket = {
  * rejects anything else back to "auto", so the two lists move
  * together.
  */
-const BUCKET_WIDTHS = [50, 100, 500] as const;
+const BUCKET_WIDTHS = [50, 100, 300, 500] as const;
 
 type BucketWidth = (typeof BUCKET_WIDTHS)[number];
 
@@ -76,12 +76,12 @@ const COLOR_BORDER_STRONG = "#2a3142";
 const COLOR_TEXT_DIM = "#6b7280";
 
 /**
- * Win rate by **absolute opponent MMR**, in clean 50-, 100- or
+ * Win rate by **absolute opponent MMR**, in clean 50-, 100-, 300- or
  * 500-MMR bands.
  *
  * The card opens on 500-wide bands, where every bar carries enough
  * games to mean something. A small toggle trades that sample back for
- * detail — 100- or 50-wide bands — or hands the choice to the server,
+ * detail — 300-, 100- or 50-wide bands — or hands the choice to the server,
  * which sizes bins from the data range (tight ranges of ≤500 MMR
  * end-to-end get 50-wide bins, wider ranges 100-wide, so the chart
  * never fans out into 30+ thin bars).

@@ -18,7 +18,10 @@ vi.mock("@/lib/filterContext", async () => {
   };
 });
 
-import { StrategyFiltersBar } from "../analyzer/StrategiesTab";
+import {
+  StrategyFiltersBar,
+  strategyGamesPath,
+} from "../analyzer/StrategiesTab";
 
 afterEach(() => {
   cleanup();
@@ -31,6 +34,64 @@ function readyResponse(data: unknown = []) {
 }
 
 describe("StrategyFiltersBar", () => {
+  it("carries the complete analyzer cohort into a strategy dossier exactly once", () => {
+    const path = strategyGamesPath(
+      {
+        preset: "current_season",
+        since: "2026-07-19T00:00:00.000Z",
+        until: "2026-08-25T23:59:59.999Z",
+        race: "P",
+        opp_race: "T",
+        map: "Ghost River",
+        mmr_min: 4200,
+        mmr_max: 5100,
+        // Deliberately use stale axis values to prove the clicked drill
+        // replaces them rather than appending duplicate query keys.
+        build: "Old build",
+        opp_strategy: "Old strategy",
+        regions: "EU,KR",
+        map_pool: "ladder",
+        game_size: "1v1",
+        min_minutes: 10,
+        max_minutes: 20,
+        exclude_too_short: true,
+      },
+      {
+        build: "PvT - Robo First",
+        opp_strategy: "TvP - Cyclone Push",
+      },
+      23,
+    );
+
+    const url = new URL(path, "https://sc2replaystats.test");
+    expect(url.pathname).toBe("/v1/games-list");
+    expect(url.hash).toBe("#23");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      since: "2026-07-19T00:00:00.000Z",
+      until: "2026-08-25T23:59:59.999Z",
+      race: "P",
+      opp_race: "T",
+      map: "Ghost River",
+      mmr_min: "4200",
+      mmr_max: "5100",
+      build: "PvT - Robo First",
+      opp_strategy: "TvP - Cyclone Push",
+      regions: "EU,KR",
+      map_pool: "ladder",
+      game_size: "1v1",
+      min_minutes: "10",
+      max_minutes: "20",
+      exclude_too_short: "true",
+      sort: "date_desc",
+      limit: "5000",
+    });
+    expect(url.searchParams.has("preset")).toBe(false);
+    expect(url.searchParams.getAll("build")).toEqual(["PvT - Robo First"]);
+    expect(url.searchParams.getAll("opp_strategy")).toEqual([
+      "TvP - Cyclone Push",
+    ]);
+  });
+
   it("scopes opponent-strategy options to the selected opponent race", () => {
     useFiltersMock.mockReturnValue({
       filters: {

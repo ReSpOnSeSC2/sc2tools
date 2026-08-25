@@ -149,7 +149,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Terran%20-%20Mech",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Terran+-+Mech",
         ),
       ]),
     );
@@ -157,7 +157,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent&build=Stargate%20Phoenix",
+          "/v1/strategies/Terran%20-%20Mech/phases?perspective=opponent&build=Stargate+Phoenix",
         ),
       ]),
     );
@@ -231,7 +231,7 @@ describe("BuildVsStrategyComparison", () => {
         // The fallback also carries the strategy filter so the cell-
         // scoped intersection holds in the auto-classified-label path.
         expect.stringContaining(
-          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you&strategy=Terran%20-%20Mech",
+          "/v1/builds/Some%20Agent%20Auto-Label/phases?perspective=you&strategy=Terran+-+Mech",
         ),
       ]),
     );
@@ -319,7 +319,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg%20-%203%20Base%20Macro",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg+-+3+Base+Macro",
         ),
       ]),
     );
@@ -349,7 +349,7 @@ describe("BuildVsStrategyComparison", () => {
     expect(callPaths).toEqual(
       expect.arrayContaining([
         expect.stringContaining(
-          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg%20-%203%20Base%20Macro",
+          "/v1/custom-builds/stargate-phoenix/compositions?perspective=you&strategy=Zerg+-+3+Base+Macro",
         ),
       ]),
     );
@@ -412,19 +412,31 @@ describe("BuildVsStrategyComparison", () => {
     ).toBeNull();
   });
 
-  it("threads the global filter bar (timeframe / race / map) into both phase URLs so the panel counts match the All-games list", () => {
+  it("threads the complete analyzer cohort into both phase URLs without duplicate drill axes", () => {
     // Regression guard for the "All games (292) but typical (573)"
     // mismatch users reported: the panels were scanning the latest
     // 1000 games regardless of the active filters, so they reported a
     // larger sample than the cell they were meant to describe. With
     // the filter bar threaded through, the panel URLs carry the same
-    // since/race/map query params the "All games" endpoint uses.
+    // complete cohort as the "All games" endpoint.
     useFiltersMock.mockImplementation(() => ({
       filters: {
         preset: "custom",
-        since: "2026-01-01",
+        since: "2026-07-19T00:00:00.000Z",
+        until: "2026-08-25T23:59:59.999Z",
         race: "P",
-        map: "ghost river",
+        opp_race: "T",
+        map: "Ghost River",
+        mmr_min: 4200,
+        mmr_max: 5100,
+        build: "Stargate Phoenix",
+        opp_strategy: "Terran - Mech",
+        regions: "EU,KR",
+        map_pool: "ladder",
+        game_size: "1v1",
+        min_minutes: 10,
+        max_minutes: 20,
+        exclude_too_short: true,
       },
       setFilters: () => {},
       dbRev: 0,
@@ -455,16 +467,45 @@ describe("BuildVsStrategyComparison", () => {
     );
     expect(leftUrl).toBeTruthy();
     expect(rightUrl).toBeTruthy();
-    // Filter params land before the phase params so the URL shape is
-    // ``?<filters>&perspective=<...>&<cross-axis>=<...>``.
-    expect(leftUrl).toContain("since=2026-01-01");
-    expect(leftUrl).toContain("race=P");
-    expect(leftUrl).toContain("map=ghost+river");
-    expect(leftUrl).toContain("perspective=you");
-    expect(rightUrl).toContain("since=2026-01-01");
-    expect(rightUrl).toContain("race=P");
-    expect(rightUrl).toContain("map=ghost+river");
-    expect(rightUrl).toContain("perspective=opponent");
+    const left = new URL(leftUrl as string, "https://sc2replaystats.test");
+    const right = new URL(rightUrl as string, "https://sc2replaystats.test");
+    const common = {
+      since: "2026-07-19T00:00:00.000Z",
+      until: "2026-08-25T23:59:59.999Z",
+      race: "P",
+      opp_race: "T",
+      map: "Ghost River",
+      mmr_min: "4200",
+      mmr_max: "5100",
+      build: "Stargate Phoenix",
+      opp_strategy: "Terran - Mech",
+      regions: "EU,KR",
+      map_pool: "ladder",
+      game_size: "1v1",
+      min_minutes: "10",
+      max_minutes: "20",
+      exclude_too_short: "true",
+    };
+    for (const [key, value] of Object.entries(common)) {
+      expect(left.searchParams.get(key), `left ${key}`).toBe(value);
+      expect(right.searchParams.get(key), `right ${key}`).toBe(value);
+      expect(left.searchParams.getAll(key), `left duplicate ${key}`).toEqual([
+        value,
+      ]);
+      expect(right.searchParams.getAll(key), `right duplicate ${key}`).toEqual([
+        value,
+      ]);
+    }
+    expect(left.searchParams.has("preset")).toBe(false);
+    expect(right.searchParams.has("preset")).toBe(false);
+    expect(left.searchParams.getAll("perspective")).toEqual(["you"]);
+    expect(left.searchParams.getAll("strategy")).toEqual(["Terran - Mech"]);
+    expect(right.searchParams.getAll("perspective")).toEqual(["opponent"]);
+    // Regression: this used to be two ``build`` params whenever the global
+    // build selector was active, causing Express to hand the route an array.
+    expect(right.searchParams.getAll("build")).toEqual([
+      "Stargate Phoenix",
+    ]);
   });
 
   it("renders the opp-signal sparse EmptyState when the right payload sets that flag", () => {

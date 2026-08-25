@@ -30,14 +30,9 @@ import { MatchupGameLengthCard } from "./charts/MatchupGameLengthCard";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
 import { ActivityCalendarChart } from "./charts/ActivityCalendarChart";
-import { MacroTrendChart } from "./charts/MacroTrendChart";
 import { MmrProgressionChart } from "./charts/MmrProgressionChart";
 import { MomentumChart } from "./charts/MomentumChart";
 import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
-import {
-  MixOverTimeChart,
-  type MixOpponentRace,
-} from "./charts/MixOverTimeChart";
 import { MapTrendChart } from "./charts/MapTrendChart";
 import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
 import { ChartTooltip } from "./charts/ChartTooltip";
@@ -46,11 +41,6 @@ const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
 const ROLL_N = 4;
 const MIN_PERIOD = 3;
-
-function mixOpponentRace(raw: string | undefined): MixOpponentRace {
-  const letter = String(raw || "").trim().charAt(0).toUpperCase();
-  return letter === "P" || letter === "T" || letter === "Z" ? letter : "";
-}
 
 /**
  * Resolved colour tokens for chart fills/strokes.
@@ -147,17 +137,8 @@ export function TrendsTab() {
   const { filters, dbRev } = useFilters();
   const [bucket, setBucket] = useState<string>(() => readLs(LS_BUCKET, "week"));
   const [rolling, setRolling] = useState<boolean>(() => readLs(LS_ROLL, true));
-  const [mixVsRace, setMixVsRace] = useState<MixOpponentRace>(() =>
-    mixOpponentRace(filters.opp_race),
-  );
   useEffect(() => writeLs(LS_BUCKET, bucket), [bucket]);
   useEffect(() => writeLs(LS_ROLL, rolling), [rolling]);
-  // The card-local selector starts from the global opponent-race scope,
-  // and follows it if another analyzer view changes that global filter.
-  useEffect(
-    () => setMixVsRace(mixOpponentRace(filters.opp_race)),
-    [filters.opp_race],
-  );
 
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
@@ -207,8 +188,6 @@ export function TrendsTab() {
 
   return (
     <div className="space-y-4">
-      {/* Skill Fingerprint — the identity artifact leading the tab. */}
-      <FingerprintCard />
       <div className="flex flex-wrap items-center gap-3">
         {kpis.streak.kind && kpis.streak.count > 0 && (
           <span
@@ -446,14 +425,35 @@ export function TrendsTab() {
               </ResponsiveContainer>
             </div>
           </Card>
+
           {/*
-           * The four enrichment charts the Trends tab gained in v0.5+:
-           * matchup-over-time, time-of-day heatmap, game-length WR,
-           * and the activity calendar. Each spans both columns on
-           * desktop (so the small-multiples and heatmap have room to
-           * breathe) but reflows to single column on mobile via the
-           * outer grid.
+           * Keep the outcome and rating views together directly beneath the
+           * headline win-rate chart. MMR progression also contains the Daily
+           * MMR Records panel, so this ordering reads from rating trajectory
+           * into matchup gains, opponent-MMR performance, and momentum.
            */}
+          <SectionDivider
+            title="Performance & MMR"
+            subtitle="Rating progress, matchup gains, opponent strength, and recent form."
+          />
+          <div className="md:col-span-2">
+            <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
+          <NetMmrByMatchupChart />
+          <OppMmrBucketsChart />
+          <div className="md:col-span-2">
+            <MomentumChart />
+          </div>
+
+          {/*
+           * Time, duration, and activity views follow the performance block.
+           * Full-width charts get room for small multiples on desktop while
+           * every card still reflows into one column on mobile.
+           */}
+          <SectionDivider
+            title="Time & activity"
+            subtitle="When you play, how long games run, and how activity changes over time."
+          />
           <div className="md:col-span-2">
             <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
           </div>
@@ -465,72 +465,21 @@ export function TrendsTab() {
           <div className="md:col-span-2">
             <ActivityCalendarChart />
           </div>
-
-          {/*
-           * v0.5.x "Player insight" charts. These go beyond "when did
-           * you play" to ask "how are you actually trending as a player":
-           * MMR climb, tilt/momentum, MMR spread, build & strategy mix,
-           * map performance, and net MMR per matchup. All share the
-           * global filter set and the bucket above.
-           */}
-          <SectionDivider
-            title="Player insights"
-            subtitle="Deeper signal on how you're trending, beyond when and how often you play."
-          />
-          <div className="md:col-span-2">
-            <MmrProgressionChart bucket={bucket as "day" | "week" | "month"} />
-          </div>
-          <div className="md:col-span-2">
-            <MacroTrendChart series={series} />
-          </div>
-          <NetMmrByMatchupChart />
-          <OppMmrBucketsChart />
-          <div className="md:col-span-2">
-            <MomentumChart />
-          </div>
-          <div className="md:col-span-2">
-            <MixOverTimeChart
-              endpoint="timeseries/my-builds"
-              title="Your build mix over time"
-              caption="Each cell = games on that build in a period, darker = more · spot stagnation or healthy experimentation at a glance."
-              bucket={bucket as "day" | "week" | "month"}
-              emptyTitle="No build mix yet"
-              emptySub="Build mix fills in once your replays carry classified myBuild values."
-              matchupFilter={{
-                opponentRace: mixVsRace,
-                onChange: setMixVsRace,
-              }}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <MixOverTimeChart
-              endpoint="timeseries/opp-strategies"
-              title="Strategies you're facing"
-              caption="Each cell = games against that strategy in a period, darker = more · watch the ladder meta shift around you."
-              bucket={bucket as "day" | "week" | "month"}
-              emptyTitle="No opponent strategy data yet"
-              emptySub="Strategy mix fills in once your replays carry classified opponent.strategy values."
-              matchupFilter={{
-                opponentRace: mixVsRace,
-                onChange: setMixVsRace,
-              }}
-            />
-          </div>
           <div className="md:col-span-2">
             <MapTrendChart bucket={bucket as "day" | "week" | "month"} />
           </div>
         </div>
       )}
+
+      {/* The identity artifact closes the tab, immediately after map trends. */}
+      <FingerprintCard />
     </div>
   );
 }
 
 /**
- * Subtle section break between the "behavioural" charts at the top
- * of the Trends tab (when/how often you play, by matchup, by length,
- * activity calendar) and the v0.5+ "player insight" cluster (MMR
- * climb, tilt, build mix, etc.). Spans both grid columns on desktop
- * and reflows on mobile.
+ * Subtle break between related chart groups. Spans both grid columns on
+ * desktop and reflows on mobile.
  */
 function SectionDivider({
   title,
