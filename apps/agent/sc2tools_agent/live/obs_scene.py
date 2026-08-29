@@ -111,6 +111,12 @@ class ObsSceneController:
         self._clock = clock
 
         self._lock = threading.RLock()
+        # Serialize config enable/disable with the actual OBS request without
+        # ever making the EventBus publisher wait on a network round-trip.
+        # A hot-disable that wins this lock guarantees no later request can
+        # escape from an already-awake worker.
+        self._apply_lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -165,9 +171,9 @@ class ObsSceneController:
 
     def _on_envelope(self, envelope: Dict[str, Any]) -> None:
         # Runs on the bridge's thread. Do the absolute minimum.
-        if not self._enabled:
-            return
         with self._lock:
+            if not self._enabled:
+                return
             self._inbox = envelope
         self._wake.set()
 
@@ -176,18 +182,23 @@ class ObsSceneController:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        if not self._enabled:
-            _log.info("obs_scene_controller_disabled")
-            return
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(
-            target=self._loop,
-            name="sc2tools-obs-scene",
-            daemon=True,
-        )
-        self._thread.start()
+        with self._lifecycle_lock:
+            with self._lock:
+                if not self._enabled:
+                    _log.info("obs_scene_controller_disabled")
+                    return
+                if self._thread is not None and self._thread.is_alive():
+                    return
+                self._stop.clear()
+                self._thread = threading.Thread(
+                    target=self._loop,
+                    name="sc2tools-obs-scene",
+                    daemon=True,
+                )
+                # Start while the state lock is held so a concurrent disable
+                # can never observe an assigned-but-unstarted Thread and try
+                # to join it.
+                self._thread.start()
         _log.info(
             "obs_scene_controller_started debounce_sec=%.1f map=%s",
             self._debounce,
@@ -197,11 +208,16 @@ class ObsSceneController:
         )
 
     def shutdown(self) -> None:
-        self._stop.set()
-        self._wake.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-            self._thread = None
+        with self._lifecycle_lock:
+            self._stop.set()
+            self._wake.set()
+            with self._lock:
+                thread = self._thread
+            if thread is not None:
+                thread.join(timeout=2.0)
+                with self._lock:
+                    if self._thread is thread:
+                        self._thread = None
 
     def set_config(
         self,
@@ -218,30 +234,41 @@ class ObsSceneController:
         Mirrors the ``upload.set_concurrency`` hot-swap precedent in
         ``runner._handle_save_settings``.
         """
-        with self._lock:
-            if scene_map is not None:
-                self._scene_map = dict(scene_map)
-                self._warned_missing.clear()
-                # The new map may resolve the current phase to a
-                # different scene; forget what we applied so the next
-                # envelope re-evaluates from scratch.
-                self._last_applied_scene = None
-            if debounce_sec is not None:
-                self._debounce = max(0.0, float(debounce_sec))
-            if switch_on_replays is not None:
-                self._switch_on_replays = switch_on_replays
-            if transition_name is not None:
-                self._transition_name = transition_name or None
-            if transition_duration_ms is not None:
-                self._transition_duration_ms = transition_duration_ms
-            self._pending_scene = None
-            self._manual_hold = False
-        if enabled is not None and enabled != self._enabled:
-            self._enabled = enabled
-            if enabled:
-                self.start()
-            else:
-                self.shutdown()
+        with self._lifecycle_lock:
+            # Match _apply's lock order. If a request is already in progress,
+            # disabling waits for that one request to settle; after this block
+            # returns no queued, pending, or newly-entering request can run.
+            with self._apply_lock:
+                with self._lock:
+                    if scene_map is not None:
+                        self._scene_map = dict(scene_map)
+                        self._warned_missing.clear()
+                        # The new map may resolve the current phase to a
+                        # different scene; forget what we applied so the next
+                        # envelope re-evaluates from scratch.
+                        self._last_applied_scene = None
+                    if debounce_sec is not None:
+                        self._debounce = max(0.0, float(debounce_sec))
+                    if switch_on_replays is not None:
+                        self._switch_on_replays = switch_on_replays
+                    if transition_name is not None:
+                        self._transition_name = transition_name or None
+                    if transition_duration_ms is not None:
+                        self._transition_duration_ms = transition_duration_ms
+                    enabled_changed = (
+                        enabled is not None
+                        and bool(enabled) != self._enabled
+                    )
+                    if enabled is not None:
+                        self._enabled = bool(enabled)
+                    self._inbox = None
+                    self._pending_scene = None
+                    self._manual_hold = False
+            if enabled_changed:
+                if self._enabled:
+                    self.start()
+                else:
+                    self.shutdown()
 
     # ------------------------------------------------------------------
     # Manual-override detection
@@ -297,6 +324,10 @@ class ObsSceneController:
 
     def _drain(self) -> None:
         with self._lock:
+            if not self._enabled:
+                self._inbox = None
+                self._pending_scene = None
+                return
             envelope, self._inbox = self._inbox, None
         if envelope is not None:
             self._consider(envelope)
@@ -308,6 +339,8 @@ class ObsSceneController:
             return
 
         with self._lock:
+            if not self._enabled:
+                return
             phase_changed = phase != self._last_phase
             self._last_phase = phase
             if phase_changed:
@@ -350,6 +383,9 @@ class ObsSceneController:
 
     def _fire_due_pending(self) -> None:
         with self._lock:
+            if not self._enabled:
+                self._pending_scene = None
+                return
             if self._pending_scene is None:
                 return
             if self._clock() < self._pending_at:
@@ -364,7 +400,17 @@ class ObsSceneController:
     # ------------------------------------------------------------------
 
     def _apply(self, scene: str, *, phase: str, reason: str) -> None:
+        # set_config(enabled=False) takes this same lock before flipping the
+        # gate and clearing work. That makes hot-disable a hard boundary: at
+        # most a request that had already begun can finish, and none can begin
+        # after the disable returns.
+        with self._apply_lock:
+            self._apply_enabled(scene, phase=phase, reason=reason)
+
+    def _apply_enabled(self, scene: str, *, phase: str, reason: str) -> None:
         with self._lock:
+            if not self._enabled:
+                return
             client = self._client
         if client is None:
             # ``attach_client`` was never called. Treat it the same as a

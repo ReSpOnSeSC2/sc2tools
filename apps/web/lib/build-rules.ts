@@ -40,6 +40,29 @@ export const RULES_MAX_PER_BUILD = 30;
 export const PREVIEW_DEBOUNCE_MS = 300;
 export const PREVIEW_PAGE_SIZE = 5;
 
+/**
+ * Exact proxy-rule target set emitted by replay-engine event_extractor.
+ * Mirrors the replay engine's emitted non-morph construction set and the
+ * API/schema allowlist;
+ * icon presence alone is intentionally insufficient (Marine has an icon and
+ * effect structures such as NydusWorm never become matchable build events).
+ */
+export const PROXY_ELIGIBLE_BUILDINGS: ReadonlySet<string> = new Set([
+  "Nexus", "Pylon", "Assimilator", "Gateway", "Forge",
+  "CyberneticsCore", "PhotonCannon", "TwilightCouncil", "Stargate",
+  "RoboticsFacility", "RoboticsBay", "TemplarArchive", "DarkShrine",
+  "FleetBeacon", "CommandCenter", "Refinery",
+  "Barracks", "Factory", "Starport", "EngineeringBay", "Armory",
+  "GhostAcademy",
+  "FusionCore", "TechLab", "Reactor", "BarracksTechLab",
+  "BarracksReactor", "FactoryTechLab", "FactoryReactor", "StarportTechLab",
+  "StarportReactor", "MissileTurret", "SensorTower", "Bunker",
+  "Hatchery", "SpawningPool", "EvolutionChamber",
+  "Extractor", "RoachWarren", "BanelingNest", "SpineCrawler",
+  "SporeCrawler", "HydraliskDen", "InfestationPit", "Spire",
+  "NydusNetwork", "NydusCanal", "UltraliskCavern",
+]);
+
 export type SkillLevelId =
   | "bronze"
   | "silver"
@@ -113,6 +136,8 @@ export const RULE_TYPE_TONE: Record<RuleType, RuleTypeTone> = {
 export interface BuildRuleBase {
   name: string;
   time_lt: number;
+  /** Restrict this rule to structures classified as proxies. */
+  proxy?: boolean;
 }
 export interface BuildRuleBefore extends BuildRuleBase {
   type: "before";
@@ -196,6 +221,7 @@ export interface SourceTimelineRow {
   race: string;
   category: string;
   isBuilding: boolean;
+  isProxy: boolean;
   isTech: boolean;
 }
 
@@ -211,6 +237,7 @@ interface EventLike {
   race?: string;
   category?: string;
   is_building?: boolean;
+  is_proxy?: boolean;
 }
 
 export function spaEventToWhat(ev: EventLike | null | undefined): string | null {
@@ -253,6 +280,7 @@ export function eventsToSourceRows(
       race: ev.race || "Neutral",
       category: ev.category || "unknown",
       isBuilding: !!ev.is_building,
+      isProxy: ev.is_proxy === true,
       isTech: isTechToken(what),
     });
   });
@@ -268,15 +296,17 @@ export function defaultRuleFor(
   name: string,
   timeLt: number,
   prevCount?: number,
+  proxyOnly = false,
 ): BuildRule {
   const t = clampRuleTime(timeLt || 1);
   const c = clampCount(prevCount == null ? 1 : prevCount);
-  if (type === "count_max") return { type, name, count: c, time_lt: t };
-  if (type === "count_exact") return { type, name, count: c, time_lt: t };
+  const proxy = proxyOnly ? { proxy: true as const } : {};
+  if (type === "count_max") return { type, name, count: c, time_lt: t, ...proxy };
+  if (type === "count_exact") return { type, name, count: c, time_lt: t, ...proxy };
   if (type === "count_min")
-    return { type, name, count: c < 1 ? 1 : c, time_lt: t };
-  if (type === "not_before") return { type, name, time_lt: t };
-  return { type: "before", name, time_lt: t };
+    return { type, name, count: c < 1 ? 1 : c, time_lt: t, ...proxy };
+  if (type === "not_before") return { type, name, time_lt: t, ...proxy };
+  return { type: "before", name, time_lt: t, ...proxy };
 }
 
 export function cycleRuleType(rule: BuildRule): BuildRule {
@@ -287,6 +317,7 @@ export function cycleRuleType(rule: BuildRule): BuildRule {
     rule.name,
     rule.time_lt,
     isCountRule(rule) ? rule.count : 1,
+    rule.proxy === true,
   );
 }
 
@@ -294,7 +325,18 @@ export function ruleFromEvent(ev: EventLike): BuildRule | null {
   const what = spaEventToWhat(ev);
   if (!what) return null;
   const t = clampRuleTime((Number(ev.time) || 0) + AUTO_PICK_TIME_BUFFER_SEC);
-  return { type: "before", name: what, time_lt: t };
+  return {
+    type: "before",
+    name: what,
+    time_lt: t,
+    ...(ev.is_building && ev.is_proxy === true ? { proxy: true } : {}),
+  };
+}
+
+/** True when a persisted SPA token resolves to a canonical structure. */
+export function isProxyStructureToken(name: string): boolean {
+  if (!/^Build[A-Za-z0-9]+$/.test(name)) return false;
+  return PROXY_ELIGIBLE_BUILDINGS.has(name.slice("Build".length));
 }
 
 export function isCountRule(
@@ -355,7 +397,7 @@ export interface FormattedRule {
 }
 
 export function formatRule(rule: BuildRule): FormattedRule {
-  const entity = humanizeRuleEntity(rule.name);
+  const entity = `${rule.proxy === true ? "Proxy " : ""}${humanizeRuleEntity(rule.name)}`;
   const time = formatTime(rule.time_lt);
   switch (rule.type) {
     case "before":
@@ -533,8 +575,11 @@ export function sanitiseRule(r: BuildRule | null | undefined): BuildRule | null 
   if (RULE_TYPES.indexOf(r.type) < 0) return null;
   if (typeof r.name !== "string" || !SIG_TOKEN_REGEX.test(r.name)) return null;
   const time_lt = clampRuleTime(r.time_lt);
+  const proxy = r.proxy === true && isProxyStructureToken(r.name)
+    ? { proxy: true as const }
+    : {};
   if (r.type === "count_max") {
-    return { type: "count_max", name: r.name, count: clampCount(r.count), time_lt };
+    return { type: "count_max", name: r.name, count: clampCount(r.count), time_lt, ...proxy };
   }
   if (r.type === "count_exact") {
     return {
@@ -542,6 +587,7 @@ export function sanitiseRule(r: BuildRule | null | undefined): BuildRule | null 
       name: r.name,
       count: clampCount(r.count),
       time_lt,
+      ...proxy,
     };
   }
   if (r.type === "count_min") {
@@ -550,12 +596,13 @@ export function sanitiseRule(r: BuildRule | null | undefined): BuildRule | null 
       name: r.name,
       count: Math.max(1, clampCount(r.count || 1)),
       time_lt,
+      ...proxy,
     };
   }
   if (r.type === "not_before") {
-    return { type: "not_before", name: r.name, time_lt };
+    return { type: "not_before", name: r.name, time_lt, ...proxy };
   }
-  return { type: "before", name: r.name, time_lt };
+  return { type: "before", name: r.name, time_lt, ...proxy };
 }
 
 function clipStrings(arr: ReadonlyArray<string> | null | undefined): string[] {

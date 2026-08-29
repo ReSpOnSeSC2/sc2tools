@@ -551,11 +551,13 @@ function buildGamesRouter(deps) {
         // session overlay through its separate profile/Pulse fallback.
         let created;
         let customBuildRevision = null;
+        let storedSpatial = game.spatial;
         try {
           if (typeof deps.games.upsertWithRevision === "function") {
             const stored = await deps.games.upsertWithRevision(userId, game);
             created = stored.created;
             customBuildRevision = stored.customBuildRevision;
+            storedSpatial = stored.spatial;
           } else {
             created = await deps.games.upsert(userId, game);
           }
@@ -702,13 +704,21 @@ function buildGamesRouter(deps) {
         // Apply saved custom definitions to both independent replay axes after
         // ingest: the user's build and the opponent's strategy. A storage
         // failure here must remain retryable:
-        // GamesService intentionally invalidates old custom provenance before
-        // this hook evaluates the fresh payload. Acknowledging the replay in
-        // that gap would make the agent advance permanently while the replay
-        // disappears from authoritative custom/community totals.
+        // GamesService preserves old custom provenance while patching fresh
+        // agent labels. This hook must finish the revision-fenced decision:
+        // set a definitive winner, clear a definitive nonmatch, or restore an
+        // active prior label+slug when evidence is unavailable. Acknowledging
+        // a failed hook could leave those fields incoherent permanently.
         if (deps.customBuilds && typeof deps.customBuilds.tagSingleGame === "function") {
           try {
-            await deps.customBuilds.tagSingleGame(userId, game, {
+            await deps.customBuilds.tagSingleGame(userId, {
+              ...game,
+              // Evaluate exactly the bounded evidence GamesService persisted.
+              // In particular, a malformed/truncated v1 candidate list has
+              // already lost its coverage stamp here and must not classify on
+              // ingest only to disagree with the next reclassification.
+              spatial: storedSpatial,
+            }, {
               expectedRevision: customBuildRevision,
             });
           } catch (e) {

@@ -95,6 +95,7 @@ const CUSTOM_BUILD_READ_PROJECTION = Object.freeze({
   "rules.name": 1,
   "rules.time_lt": 1,
   "rules.count": 1,
+  "rules.proxy": 1,
   skillLevel: 1,
   winConditions: 1,
   losesTo: 1,
@@ -120,6 +121,7 @@ const CUSTOM_BUILD_CLASSIFIER_PROJECTION = Object.freeze({
   "rules.name": 1,
   "rules.time_lt": 1,
   "rules.count": 1,
+  "rules.proxy": 1,
   "signature.unit": 1,
   "signature.count": 1,
   "signature.beforeSec": 1,
@@ -2242,6 +2244,11 @@ class CustomBuildsService {
    *   myBuild?: string|null,
    *   buildLog?: string[],
    *   oppBuildLog?: string[],
+   *   spatial?: {
+   *     my_proxies?: object[], opp_proxies?: object[],
+   *     my_proxy_classification_v?: number,
+   *     opp_proxy_classification_v?: number,
+   *   },
    *   opponent?: { race?: string|null }|null,
    * }} game
    * @param {{expectedRevision?: string|null}} [opts]
@@ -2256,7 +2263,35 @@ class CustomBuildsService {
   async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
     const builds = await this._listForClassification(userId);
-    if (builds.length === 0) return null;
+    if (builds.length === 0) {
+      const cleared = await this._gamesCollection().updateOne(
+        {
+          userId,
+          gameId: game.gameId,
+          ...(typeof opts.expectedRevision === "string"
+            ? { _customBuildRevision: opts.expectedRevision }
+            : {}),
+        },
+        {
+          $set: { _schemaVersion: expectedVersion(COLLECTIONS.GAMES) },
+          $unset: {
+            _customBuildSlug: "",
+            _customOpponentStrategySlug: "",
+            _customBuildReclassify: "",
+            _customBuildClassificationSequence: "",
+          },
+        },
+      );
+      if (
+        typeof opts.expectedRevision === "string"
+        && cleared.matchedCount === 0
+      ) {
+        const err = new Error("custom_build_tag_superseded");
+        /** @type {any} */ (err).code = "custom_build_tag_superseded";
+        throw err;
+      }
+      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
+    }
     // Parse the just-uploaded build logs into the same event shape the
     // rule evaluator expects. We pull this from the game payload (not
     // re-reading from Mongo) so this stays a pure post-write hook with
@@ -2276,17 +2311,18 @@ class CustomBuildsService {
       parseBuildLogLines(
         Array.isArray(game.buildLog) ? game.buildLog : [],
         catalog,
+        game.spatial?.my_proxies,
+        game.spatial?.my_proxy_classification_v === 1,
       ),
     );
     const oppEvents = eventsToStartTime(
       parseBuildLogLines(
         Array.isArray(game.oppBuildLog) ? game.oppBuildLog : [],
         catalog,
+        game.spatial?.opp_proxies,
+        game.spatial?.opp_proxy_classification_v === 1,
       ),
     );
-    if (events.length === 0 && oppEvents.length === 0) {
-      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
-    }
     const oppRace =
       game.opponent && typeof game.opponent === "object"
         ? game.opponent.race || null
@@ -2300,8 +2336,10 @@ class CustomBuildsService {
       oppEvents,
     };
 
-    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, ord: number} | null>} */
+    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, rules: readonly unknown[], ord: number} | null>} */
     const bestByPerspective = { you: null, opponent: null };
+    /** @type {Record<"you"|"opponent", Array<{name: string, slug: string, ruleCount: number, rules: readonly unknown[], ord: number}>>} */
+    const unknownByPerspective = { you: [], opponent: [] };
     let matchCount = 0;
     for (let i = 0; i < builds.length; i++) {
       const b = /** @type {any} */ (builds[i]);
@@ -2310,35 +2348,70 @@ class CustomBuildsService {
       const perspective = buildPerspective(b);
       if (!gameMatchesBuildMatchup(probe, b, perspective)) continue;
       const evs = perspective === "opponent" ? probe.oppEvents : probe.events;
-      if (evs.length === 0) continue;
+      const buildName = b.name || b.slug;
+      const descriptor = {
+        name: buildName,
+        slug: b.slug,
+        ruleCount: rules.length,
+        rules,
+        ord: i,
+      };
+      if (evs.length === 0) {
+        unknownByPerspective[perspective].push(descriptor);
+        continue;
+      }
       let result;
       try {
         result = evaluateRules(/** @type {any} */ (rules), evs);
       } catch (_e) {
+        unknownByPerspective[perspective].push(descriptor);
+        continue;
+      }
+      if (result.unavailable === true) {
+        unknownByPerspective[perspective].push(descriptor);
         continue;
       }
       if (!result.pass) continue;
       matchCount += 1;
-      const buildName = b.name || b.slug;
       const best = bestByPerspective[perspective];
       if (
         !best ||
         rules.length > best.ruleCount ||
         (rules.length === best.ruleCount && i < best.ord)
       ) {
-        bestByPerspective[perspective] = {
-          name: buildName,
-          slug: b.slug,
-          ruleCount: rules.length,
-          ord: i,
-        };
+        bestByPerspective[perspective] = descriptor;
+      }
+    }
+
+    // An unavailable higher-priority proxy contender makes the winner on that
+    // axis uncertain. Preserve the GamesService row instead of replacing an
+    // existing classification with a lower-priority generic build. The other
+    // perspective remains independent and may still commit.
+    const deferredByPerspective = { you: false, opponent: false };
+    for (const perspective of /** @type {Array<"you"|"opponent">} */ (
+      ["you", "opponent"]
+    )) {
+      const best = bestByPerspective[perspective];
+      if (unknownByPerspective[perspective].some(
+        (candidate) => !best || descriptorOutranks(candidate, best),
+      )) {
+        bestByPerspective[perspective] = null;
+        deferredByPerspective[perspective] = true;
       }
     }
 
     const userWinner = bestByPerspective.you;
     const opponentWinner = bestByPerspective.opponent;
-    if (!userWinner && !opponentWinner) {
-      return { gameId: probe.gameId, matched: 0, chosen: null, ruleCount: 0 };
+    let preservedDeferred = null;
+    if (deferredByPerspective.you || deferredByPerspective.opponent) {
+      preservedDeferred = await this._gamesCollection().findOne(
+        { userId, gameId: probe.gameId },
+        { projection: {
+          _id: 0,
+          _customBuildSlug: 1,
+          _customOpponentStrategySlug: 1,
+        } },
+      );
     }
     // Always claim explicit provenance, including when the agent/community
     // label happens to have the same display name. The caller's payload cannot
@@ -2347,6 +2420,11 @@ class CustomBuildsService {
     const classifiedSet = {
       _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
     };
+    /** @type {Record<string, string>} */
+    const classifiedUnset = {
+      _customBuildReclassify: "",
+      _customBuildClassificationSequence: "",
+    };
     if (userWinner) {
       classifiedSet.myBuild = userWinner.name;
       classifiedSet._customBuildSlug = userWinner.slug;
@@ -2354,6 +2432,59 @@ class CustomBuildsService {
     if (opponentWinner) {
       classifiedSet["opponent.strategy"] = opponentWinner.name;
       classifiedSet._customOpponentStrategySlug = opponentWinner.slug;
+    }
+    // GamesService preserves provenance slugs across a re-upload, but the raw
+    // agent labels are patched before this classifier runs. On a deferred
+    // axis, restore the active custom definition's display name together with
+    // its slug under the same revision fence; preserving only the slug would
+    // leave an internally inconsistent row.
+    if (deferredByPerspective.you && preservedDeferred?._customBuildSlug) {
+      const current = builds.find(
+        (build) => (
+          build.slug === preservedDeferred._customBuildSlug
+          && buildPerspective(build) === "you"
+        ),
+      );
+      if (current) {
+        classifiedSet.myBuild = current.name || current.slug;
+        classifiedSet._customBuildSlug = current.slug;
+      } else {
+        classifiedUnset._customBuildSlug = "";
+      }
+    }
+    if (
+      deferredByPerspective.opponent
+      && preservedDeferred?._customOpponentStrategySlug
+    ) {
+      const current = builds.find(
+        (build) => (
+          build.slug === preservedDeferred._customOpponentStrategySlug
+          && buildPerspective(build) === "opponent"
+        ),
+      );
+      if (current) {
+        classifiedSet["opponent.strategy"] = current.name || current.slug;
+        classifiedSet._customOpponentStrategySlug = current.slug;
+      } else {
+        classifiedUnset._customOpponentStrategySlug = "";
+      }
+    }
+    if (!userWinner && !deferredByPerspective.you) {
+      classifiedUnset._customBuildSlug = "";
+    }
+    if (!opponentWinner && !deferredByPerspective.opponent) {
+      classifiedUnset._customOpponentStrategySlug = "";
+    }
+    const hasDefinitiveMutation = Boolean(
+      userWinner
+      || opponentWinner
+      || Object.keys(classifiedSet).length > 1
+      || Object.keys(classifiedUnset).length > 2
+      || !deferredByPerspective.you
+      || !deferredByPerspective.opponent
+    );
+    if (!hasDefinitiveMutation) {
+      return { gameId: probe.gameId, matched: 0, chosen: null, ruleCount: 0 };
     }
     const updateResult = await this._gamesCollection().updateOne(
       {
@@ -2365,10 +2496,7 @@ class CustomBuildsService {
       },
       {
         $set: classifiedSet,
-        $unset: {
-          _customBuildReclassify: "",
-          _customBuildClassificationSequence: "",
-        },
+        $unset: classifiedUnset,
       },
     );
     if (
@@ -2999,7 +3127,9 @@ function evaluateGameRules(game, rules, perspective) {
     ? game.oppEvents || []
     : game.events || [];
   try {
-    return evaluateRules(rules, events).pass ? "pass" : "fail";
+    const result = evaluateRules(rules, events);
+    if (result.unavailable === true) return "unknown";
+    return result.pass ? "pass" : "fail";
   } catch (_err) {
     return "unknown";
   }

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://sc2tools.local/schemas/custom_builds.schema.json",
   "title": "Custom Builds File (v3)",
-  "description": "Local cache of user-authored SC2 build definitions. Version 3 shape introduced in Stage 7.5b: rule-based matching (boolean per-rule, all-must-pass) replaces the v2 signature scoring model. tier replaced by skill_level (SC2 ladder leagues). v2 files auto-migrate on first load with a .pre-v3-bak.<ts> backup. The 4 rule types are eval-honest: 'before' / 'not_before' work on any event name (buildings, units, upgrades, morphs); the UI picks an icon based on the name prefix. 'count_max' / 'count_min' count occurrences of a single name.",
+  "description": "Local cache of user-authored SC2 build definitions. Version 3 shape introduced in Stage 7.5b: rule-based matching (boolean per-rule, all-must-pass) replaces the v2 signature scoring model. tier replaced by skill_level (SC2 ladder leagues). v2 files auto-migrate on first load with a .pre-v3-bak.<ts> backup. The five rule types are eval-honest: 'before' / 'not_before' work on any event name (buildings, units, upgrades, morphs); the UI picks an icon based on the name prefix. Count rules count occurrences of a single name. Any structure rule may set proxy=true to require the canonical >50-world-unit owner-main distance classification.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,6 +22,28 @@
     }
   },
   "definitions": {
+    "proxyStructureName": {
+      "type": "string",
+      "enum": [
+        "BuildNexus", "BuildPylon", "BuildAssimilator", "BuildGateway",
+        "BuildForge", "BuildCyberneticsCore", "BuildPhotonCannon",
+        "BuildTwilightCouncil", "BuildStargate", "BuildRoboticsFacility",
+        "BuildRoboticsBay", "BuildTemplarArchive", "BuildDarkShrine",
+        "BuildFleetBeacon", "BuildCommandCenter", "BuildRefinery",
+        "BuildBarracks", "BuildFactory", "BuildStarport",
+        "BuildEngineeringBay", "BuildArmory",
+        "BuildGhostAcademy", "BuildFusionCore", "BuildTechLab",
+        "BuildReactor", "BuildBarracksTechLab", "BuildBarracksReactor",
+        "BuildFactoryTechLab", "BuildFactoryReactor", "BuildStarportTechLab",
+        "BuildStarportReactor", "BuildMissileTurret", "BuildSensorTower",
+        "BuildBunker", "BuildHatchery", "BuildSpawningPool",
+        "BuildEvolutionChamber", "BuildExtractor",
+        "BuildRoachWarren", "BuildBanelingNest", "BuildSpineCrawler",
+        "BuildSporeCrawler", "BuildHydraliskDen", "BuildInfestationPit",
+        "BuildSpire",
+        "BuildNydusNetwork", "BuildNydusCanal", "BuildUltraliskCavern"
+      ]
+    },
     "build": {
       "type": "object",
       "additionalProperties": false,
@@ -199,6 +221,17 @@
         "name",
         "time_lt"
       ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["proxy"],
+            "properties": {"proxy": {"const": true}}
+          },
+          "then": {
+            "properties": {"name": {"$ref": "#/definitions/proxyStructureName"}}
+          }
+        }
+      ],
       "properties": {
         "type": {
           "const": "before"
@@ -214,6 +247,10 @@
           "minimum": 1,
           "maximum": 1800,
           "description": "Event must occur before this time (seconds)."
+        },
+        "proxy": {
+          "type": "boolean",
+          "description": "When true, only structures more than 50 world units from their owner's main satisfy this rule."
         },
         "tol": {
           "type": "integer",
@@ -231,6 +268,17 @@
         "name",
         "time_lt"
       ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["proxy"],
+            "properties": {"proxy": {"const": true}}
+          },
+          "then": {
+            "properties": {"name": {"$ref": "#/definitions/proxyStructureName"}}
+          }
+        }
+      ],
       "properties": {
         "type": {
           "const": "not_before"
@@ -246,6 +294,10 @@
           "minimum": 1,
           "maximum": 1800,
           "description": "Event must NOT occur before this time."
+        },
+        "proxy": {
+          "type": "boolean",
+          "description": "When true, only structures more than 50 world units from their owner's main satisfy this rule."
         }
       }
     },
@@ -257,6 +309,17 @@
         "name",
         "count",
         "time_lt"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["proxy"],
+            "properties": {"proxy": {"const": true}}
+          },
+          "then": {
+            "properties": {"name": {"$ref": "#/definitions/proxyStructureName"}}
+          }
+        }
       ],
       "properties": {
         "type": {
@@ -278,6 +341,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 1800
+        },
+        "proxy": {
+          "type": "boolean",
+          "description": "When true, count only structures more than 50 world units from their owner's main."
         }
       }
     },
@@ -289,6 +356,17 @@
         "name",
         "count",
         "time_lt"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["proxy"],
+            "properties": {"proxy": {"const": true}}
+          },
+          "then": {
+            "properties": {"name": {"$ref": "#/definitions/proxyStructureName"}}
+          }
+        }
       ],
       "properties": {
         "type": {
@@ -310,6 +388,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 1800
+        },
+        "proxy": {
+          "type": "boolean",
+          "description": "When true, count only structures more than 50 world units from their owner's main."
         }
       }
     },
@@ -321,6 +403,17 @@
         "name",
         "count",
         "time_lt"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["proxy"],
+            "properties": {"proxy": {"const": true}}
+          },
+          "then": {
+            "properties": {"name": {"$ref": "#/definitions/proxyStructureName"}}
+          }
+        }
       ],
       "properties": {
         "type": {
@@ -342,6 +435,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 1800
+        },
+        "proxy": {
+          "type": "boolean",
+          "description": "When true, count only structures more than 50 world units from their owner's main."
         }
       }
     }

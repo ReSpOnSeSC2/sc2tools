@@ -1,5 +1,7 @@
 "use strict";
 
+const { isProxyEligibleBuilding } = require("./knownBuildings");
+
 /**
  * buildRulesEvaluator — Pure rule evaluator for v3 BuildEditor rules.
  *
@@ -15,6 +17,8 @@
  *   - "count_max"   : count of `name` events with time < `time_lt` ≤ `count`
  *   - "count_exact" : count of `name` events with time < `time_lt` === `count`
  *   - "count_min"   : count of `name` events with time < `time_lt` ≥ `count`
+ *   - `proxy: true`  : optional modifier; count only structures classified
+ *                      as proxied by the replay agent's canonical geometry
  *
  * Event matching uses the SPA token map: an event matches a rule when
  * its computed token (Build/Train/Research/Morph prefix) equals
@@ -173,10 +177,12 @@ function _unitPrereqMet(ev, earliestBuilds) {
 
 /**
  * @typedef {{type: 'before'|'not_before'|'count_max'|'count_exact'|'count_min',
- *            name: string, time_lt: number, count?: number}} BuildRule
+ *            name: string, time_lt: number, count?: number,
+ *            proxy?: boolean}} BuildRule
  *
  * @typedef {{time: number, name: string, race?: string, category?: string,
- *            is_building?: boolean}} ParsedEvent
+ *            is_building?: boolean, is_proxy?: boolean,
+ *            proxy_classification_known?: boolean}} ParsedEvent
  */
 
 /**
@@ -219,9 +225,17 @@ function eventToken(ev) {
  * @param {Map<string, number> | undefined} prereqIndex Always defined
  *   when `ruleNeedsPrereq` is true (the caller builds it lazily).
  * @param {boolean} ruleNeedsPrereq
+ * @param {boolean} proxyOnly
  * @returns {number}
  */
-function _countMatches(events, name, limit, prereqIndex, ruleNeedsPrereq) {
+function _countMatches(
+  events,
+  name,
+  limit,
+  prereqIndex,
+  ruleNeedsPrereq,
+  proxyOnly,
+) {
   let n = 0;
   for (const ev of events) {
     if (!ev) continue;
@@ -229,6 +243,7 @@ function _countMatches(events, name, limit, prereqIndex, ruleNeedsPrereq) {
     if (!Number.isFinite(t)) continue;
     if (t >= limit) continue;
     if (eventToken(ev) !== name) continue;
+    if (proxyOnly && ev.is_proxy !== true) continue;
     // Hallucination filter: drop unit events whose tech prerequisite
     // wasn't started by the unit's own time. Building/upgrade tokens
     // are unaffected because they are absent from
@@ -252,7 +267,7 @@ function _countMatches(events, name, limit, prereqIndex, ruleNeedsPrereq) {
  *   tech prerequisite isn't satisfied at the event's own time are
  *   skipped (anti-hallucination filter). When absent, the index is
  *   built lazily here so direct callers still get the same behaviour.
- * @returns {{ pass: boolean, reason?: string }}
+ * @returns {{ pass: boolean, unavailable?: boolean, reason?: string }}
  */
 function evaluateRule(rule, events, earliestBuilds) {
   if (!rule || typeof rule !== "object") {
@@ -269,26 +284,63 @@ function evaluateRule(rule, events, earliestBuilds) {
     UNIT_TECH_PREREQUISITES, _bareNoun(name),
   );
   const idx = needsPrereq && !earliestBuilds ? _earliestBuildTimes(events) : earliestBuilds;
-  const occurrencesBefore = _countMatches(events, name, limit, idx, needsPrereq);
+  const proxyOnly = rule.proxy === true;
+  if (
+    proxyOnly
+    && (
+      !/^Build[A-Za-z0-9]+$/.test(name)
+      || !isProxyEligibleBuilding(name.slice("Build".length))
+    )
+  ) {
+    return {
+      pass: false,
+      reason: `Proxy requirement is only valid for structure rules (${name})`,
+    };
+  }
+  if (
+    proxyOnly
+    && (
+      !events.some((event) => event?.is_building === true)
+      || events.some((event) => (
+        event?.is_building === true
+        && event?.proxy_classification_known !== true
+      ))
+    )
+  ) {
+    return {
+      pass: false,
+      unavailable: true,
+      reason: `Proxy classification unavailable for ${name}`,
+    };
+  }
+  const occurrencesBefore = _countMatches(
+    events,
+    name,
+    limit,
+    idx,
+    needsPrereq,
+    proxyOnly,
+  );
+  const subject = proxyOnly ? `proxied ${name}` : name;
   switch (rule.type) {
     case "before":
       if (occurrencesBefore >= 1) return { pass: true };
       return {
         pass: false,
-        reason: `${name} not built by ${formatTime(limit)}`,
+        reason: `${subject} not built by ${formatTime(limit)}`,
       };
     case "not_before":
       if (occurrencesBefore === 0) return { pass: true };
       return {
         pass: false,
-        reason: `${name} built before ${formatTime(limit)}`,
+        reason: `${subject} built before ${formatTime(limit)}`,
       };
     case "count_max": {
       const cap = Number(rule.count);
       if (occurrencesBefore <= cap) return { pass: true };
       return {
         pass: false,
-        reason: `${name} ≤ ${cap} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
+        reason: `${subject} ≤ ${cap} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
       };
     }
     case "count_exact": {
@@ -296,7 +348,7 @@ function evaluateRule(rule, events, earliestBuilds) {
       if (occurrencesBefore === target) return { pass: true };
       return {
         pass: false,
-        reason: `${name} = ${target} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
+        reason: `${subject} = ${target} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
       };
     }
     case "count_min": {
@@ -304,7 +356,7 @@ function evaluateRule(rule, events, earliestBuilds) {
       if (occurrencesBefore >= floor) return { pass: true };
       return {
         pass: false,
-        reason: `${name} ≥ ${floor} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
+        reason: `${subject} ≥ ${floor} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
       };
     }
     default:
@@ -319,7 +371,7 @@ function evaluateRule(rule, events, earliestBuilds) {
  *
  * @param {ReadonlyArray<BuildRule>} rules
  * @param {ReadonlyArray<ParsedEvent>} events
- * @returns {{ pass: boolean, almost: boolean, failedRule?: BuildRule, failedReason?: string }}
+ * @returns {{ pass: boolean, almost: boolean, unavailable?: boolean, failedRule?: BuildRule, failedReason?: string }}
  */
 function evaluateRules(rules, events) {
   if (!Array.isArray(rules) || rules.length === 0) {
@@ -329,14 +381,33 @@ function evaluateRules(rules, events) {
   const failures = [];
   /** @type {BuildRule|undefined} */
   let firstFailRule;
+  /** @type {BuildRule|undefined} */
+  let firstUnavailableRule;
+  let firstUnavailableReason;
   // Build the structure-time index once; every rule reuses it.
   const earliestBuilds = _earliestBuildTimes(events);
   for (const rule of rules) {
     const r = evaluateRule(rule, events, earliestBuilds);
     if (!r.pass) {
+      if (r.unavailable === true) {
+        if (!firstUnavailableRule) {
+          firstUnavailableRule = rule;
+          firstUnavailableReason = r.reason || "unknown";
+        }
+        continue;
+      }
       if (failures.length === 0) firstFailRule = rule;
       failures.push(r.reason || "unknown");
     }
+  }
+  if (failures.length === 0 && firstUnavailableRule) {
+    return {
+      pass: false,
+      almost: false,
+      unavailable: true,
+      failedRule: firstUnavailableRule,
+      failedReason: firstUnavailableReason,
+    };
   }
   if (failures.length === 0) return { pass: true, almost: false };
   if (failures.length === 1) {

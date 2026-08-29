@@ -27,8 +27,12 @@ function ev(name, time, opts = {}) {
   return { time, name, ...opts };
 }
 
-function building(name, time) {
-  return ev(name, time, { is_building: true, category: "building" });
+function building(name, time, opts = {}) {
+  return ev(name, time, {
+    is_building: true,
+    category: "building",
+    ...opts,
+  });
 }
 
 function unit(name, time) {
@@ -42,6 +46,102 @@ describe("eventToken token map", () => {
 
   test("units produce Build<X> by default (matches SPA writer)", () => {
     expect(eventToken(unit("Phoenix", 240))).toBe("BuildPhoenix");
+  });
+});
+
+describe("proxy-only rule modifier", () => {
+  const home = building("Barracks", 70, {
+    is_proxy: false,
+    proxy_classification_known: true,
+  });
+  const proxy = building("Barracks", 90, {
+    is_proxy: true,
+    proxy_classification_known: true,
+  });
+
+  test("ordinary rules remain backward compatible", () => {
+    expect(evaluateRule(
+      { type: "before", name: "BuildBarracks", time_lt: 80 },
+      [home],
+    ).pass).toBe(true);
+  });
+
+  test("before and not_before only consider canonically annotated proxies", () => {
+    const before = {
+      type: "before", name: "BuildBarracks", time_lt: 120, proxy: true,
+    };
+    expect(evaluateRule(before, [home]).pass).toBe(false);
+    expect(evaluateRule(before, [home, proxy]).pass).toBe(true);
+
+    const notBefore = {
+      type: "not_before", name: "BuildBarracks", time_lt: 100, proxy: true,
+    };
+    expect(evaluateRule(notBefore, [home]).pass).toBe(true);
+    expect(evaluateRule(notBefore, [home, proxy]).pass).toBe(false);
+  });
+
+  test.each([
+    ["count_min", 1, true],
+    ["count_exact", 1, true],
+    ["count_max", 0, false],
+  ])("%s counts only proxy instances", (type, count, pass) => {
+    expect(evaluateRule({
+      type, name: "BuildBarracks", time_lt: 120, count, proxy: true,
+    }, [home, proxy]).pass).toBe(pass);
+  });
+
+  test("rejects proxy modifiers on obvious non-structure tokens", () => {
+    expect(evaluateRule({
+      type: "not_before", name: "BuildMarine", time_lt: 120, proxy: true,
+    }, []).pass).toBe(false);
+  });
+
+  test("uses the replay-engine tracked structure set", () => {
+    expect(evaluateRule({
+      type: "before", name: "BuildNydusWorm", time_lt: 120, proxy: true,
+    }, [home]).pass).toBe(false);
+    expect(evaluateRule({
+      type: "before", name: "BuildSupplyDepot", time_lt: 120, proxy: true,
+    }, [home]).pass).toBe(false);
+    expect(evaluateRule({
+      type: "before", name: "BuildNydusNetwork", time_lt: 120, proxy: true,
+    }, [home]).unavailable).not.toBe(true);
+  });
+
+  test("negative proxy rules fail closed when legacy evidence is unknown", () => {
+    const rule = {
+      type: "not_before", name: "BuildBarracks", time_lt: 120, proxy: true,
+    };
+    expect(evaluateRule(rule, [building("Barracks", 70)]).pass).toBe(false);
+    expect(evaluateRule(rule, [
+      building("Barracks", 70, { is_proxy: false }),
+    ])).toEqual(expect.objectContaining({
+      pass: false,
+      unavailable: true,
+    }));
+    expect(evaluateRule({
+      type: "count_max",
+      name: "BuildBarracks",
+      time_lt: 120,
+      count: 0,
+      proxy: true,
+    }, [building("Barracks", 70)]).pass).toBe(false);
+  });
+
+  test("evaluateRules propagates unavailable unless another rule definitively fails", () => {
+    const unavailableProxy = {
+      type: "not_before", name: "BuildBarracks", time_lt: 120, proxy: true,
+    };
+    expect(evaluateRules(
+      [unavailableProxy],
+      [building("Barracks", 70)],
+    )).toEqual(expect.objectContaining({ pass: false, unavailable: true }));
+    const definitive = evaluateRules([
+      unavailableProxy,
+      { type: "before", name: "BuildFactory", time_lt: 120 },
+    ], [building("Barracks", 70)]);
+    expect(definitive.pass).toBe(false);
+    expect(definitive.unavailable).toBeUndefined();
   });
 });
 

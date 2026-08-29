@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.0
+
+### Added - proxy-aware custom builds
+
+- Replay extraction now reuses the production proxy geometry to identify the
+  exact building and timing of each proxy, and carries that evidence into
+  replay-created custom builds.
+- A custom-build building rule can explicitly require a proxied structure.
+  Preview matching, durable cloud reclassification, and the bundled replay
+  classifier all enforce the same optional requirement, while existing rules
+  remain unchanged.
+
+### Fixed - reliable stream alerts and scene-switch control
+
+- TikTok follows and public YouTube subscriptions now use a trusted cloud
+  receipt timestamp when an alert Browser Source joins or reconnects late, so
+  the centered hero alert and its saved Marine, Zealot, or other 3D visual are
+  not discarded while the event still appears in the chat timeline.
+- Turning off automatic OBS scene changes now hot-applies immediately,
+  atomically clears queued and debounced work, and closes the startup race
+  that could let a controller keep switching after it was disabled.
+- Ships bundled replay engine 1.6.0.
+
 ## 0.15.23
 
 ### Fixed - perspective-safe custom build classification

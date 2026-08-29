@@ -98,7 +98,8 @@ def _load_extractor():
         "out = extract_macro_events(r, my_pid=1, opp_pid=2); "
         "my_ev, _opp_ev, _stats = extract_events(r, my_pid=1); "
         "json.dump({'unit_timeline': out['unit_timeline'], "
-        "'player_stats': out['player_stats'], 'my_events': my_ev}, "
+        "'player_stats': out['player_stats'], 'my_events': my_ev, "
+        "'extract_stats': _stats}, "
         "sys.stdout)"
     ) % (_ROOT, _FIXTURE)
     res = subprocess.run(
@@ -123,6 +124,14 @@ def _alive_at(timeline: List[Dict[str, Any]], t: int, side: str) -> Dict[str, in
     if candidate is None:
         return {}
     return dict(candidate.get(side) or {})
+
+
+def test_neutral_ownerless_rows_do_not_invalidate_proxy_completeness():
+    """Real neutral resources raise generic pid_failed, not proxy_errors."""
+    stats = _load_extractor()["extract_stats"]
+    assert stats["errors"] == 0
+    assert stats["pid_failed"] > 0
+    assert stats["proxy_errors"] == 0
 
 
 def test_warpgate_adepts_are_tracked_in_unit_timeline():

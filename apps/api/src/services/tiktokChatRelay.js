@@ -385,7 +385,11 @@ class Channel {
         if (event && rememberBoundedId(this.seenEventIds, event.id)) {
           this.emit({
             type: "event",
-            event,
+            // Preserve both clocks. TikTok's createTime describes when the
+            // viewer acted; receivedAtMs describes when this relay first saw
+            // it. A second OBS surface may attach moments later and receive a
+            // replay-marked copy, which is still a valid missed live alert.
+            event: { ...event, receivedAtMs: Date.now() },
             ...(this.roomId ? { session: this.roomId } : {}),
           });
         }

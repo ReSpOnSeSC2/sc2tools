@@ -326,6 +326,71 @@ def test_disabled_controller_never_touches_obs():
         ctrl.shutdown()
 
 
+def test_hot_disable_cancels_pending_work_and_ignores_future_phases(
+    controller_factory,
+):
+    """Unchecking the live master gate is a hard runtime boundary."""
+    clock = FakeClock()
+    obs = FakeObs()
+    ctrl = controller_factory(client=obs, clock=clock, debounce_sec=3.0)
+
+    ctrl.listener(_envelope("match_in_progress"))
+    assert _wait_for(lambda: obs.calls == [SCENE_IN_GAME])
+    ctrl.listener(_envelope("menu"))
+    assert _wait_for(lambda: ctrl._pending_scene == SCENE_BETWEEN_GAMES)
+
+    ctrl.set_config(enabled=False)
+    assert ctrl._enabled is False
+    assert ctrl._thread is None
+    assert ctrl._inbox is None
+    assert ctrl._pending_scene is None
+
+    clock.advance(30.0)
+    ctrl.listener(_envelope("match_loading"))
+    time.sleep(0.1)
+    assert obs.calls == [SCENE_IN_GAME]
+
+
+def test_hot_disable_joins_an_inflight_switch_before_returning(
+    controller_factory,
+):
+    """No request may begin after set_config(enabled=False) returns."""
+    request_started = threading.Event()
+    release_request = threading.Event()
+
+    class BlockingObs(FakeObs):
+        def set_current_program_scene(self, name: str) -> None:
+            request_started.set()
+            assert release_request.wait(2.0)
+            super().set_current_program_scene(name)
+
+    obs = BlockingObs()
+    ctrl = controller_factory(client=obs, clock=FakeClock())
+    ctrl.listener(_envelope("match_loading"))
+    assert request_started.wait(1.0)
+
+    disabled = threading.Event()
+
+    def disable() -> None:
+        ctrl.set_config(enabled=False)
+        disabled.set()
+
+    thread = threading.Thread(target=disable)
+    thread.start()
+    # The one request that had already begun is allowed to settle; disable
+    # waits for it instead of returning while a future scene change is loose.
+    time.sleep(0.05)
+    assert not disabled.is_set()
+    release_request.set()
+    thread.join(timeout=2.0)
+    assert disabled.is_set()
+    assert obs.calls == [SCENE_IN_GAME]
+
+    ctrl.listener(_envelope("menu"))
+    time.sleep(0.1)
+    assert obs.calls == [SCENE_IN_GAME]
+
+
 def test_set_config_reapplies_a_new_map(controller_factory):
     obs = FakeObs(scenes=[SCENE_IN_GAME, SCENE_BETWEEN_GAMES, "Custom"])
     ctrl = controller_factory(client=obs, clock=FakeClock())

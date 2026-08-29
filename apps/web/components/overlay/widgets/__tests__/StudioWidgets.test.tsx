@@ -40,10 +40,21 @@ let mockAlerts: AlertConfig = {
 };
 const mockMultiChatArgs: Array<{ config?: unknown }> = [];
 const eventSoundSpy = vi.hoisted(() => vi.fn());
+const buildRefreshSpy = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/multichat/useEventSounds", () => ({
   useEventSounds: (...args: unknown[]) => eventSoundSpy(...args),
 }));
+
+vi.mock("../../useOverlayBuildRefresh", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../../useOverlayBuildRefresh")
+  >();
+  return {
+    ...actual,
+    useOverlayBuildRefresh: (args: unknown) => buildRefreshSpy(args),
+  };
+});
 
 vi.mock("@/lib/multichat/useStudioState", async (importOriginal) => {
   const actual =
@@ -586,6 +597,13 @@ describe("ChatAlertsWidget", () => {
   it("alerts a near-live replay when the alert surface joined seconds late", () => {
     vi.useFakeTimers();
     vi.setSystemTime(20_000);
+    mockAlerts = {
+      ...DEFAULT_ALERTS,
+      eventVisuals: {
+        ...DEFAULT_ALERTS.eventVisuals,
+        gift: "marine-skyfire-3d",
+      },
+    };
     mockChat = {
       ...mockChat,
       events: [
@@ -600,8 +618,105 @@ describe("ChatAlertsWidget", () => {
         },
       ],
     };
-    render(<ChatAlertsWidget token="tok" />);
+    const { container } = render(<ChatAlertsWidget token="tok" />);
     expect(screen.getByText("JustNowSupporter")).toBeTruthy();
+    expect(
+      container.querySelector('[data-alert-preset="marine-skyfire-3d"]'),
+    ).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("uses receipt time for late follows including the official YouTube subscriber kind", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    mockAlerts = {
+      ...DEFAULT_ALERTS,
+      eventVisuals: {
+        ...DEFAULT_ALERTS.eventVisuals,
+        follow: "zealot-dance-3d",
+      },
+    };
+    mockChat = {
+      ...mockChat,
+      events: [
+        {
+          platform: "tiktok",
+          id: "late-tiktok-follow",
+          kind: "follow",
+          user: "TikTokFollower",
+          detail: "followed",
+          // Provider time is intentionally old; this separate Browser Source
+          // first received the relay's replay only five seconds ago.
+          atMs: 1_000,
+          receivedAtMs: 95_000,
+          replayed: true,
+        },
+        {
+          platform: "youtube",
+          id: "late-youtube-sub",
+          // Public channel subscriptions are normalized by the production
+          // official integration as `follow` (paid memberships are `member`).
+          kind: "follow",
+          user: "YouTubeSubscriber",
+          detail: "subscribed",
+          atMs: 2_000,
+          receivedAtMs: 96_000,
+          replayed: true,
+        },
+      ],
+    };
+
+    const { container } = render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("TikTokFollower")).toBeTruthy();
+    expect(
+      container.querySelector('[data-alert-preset="zealot-dance-3d"]'),
+    ).toBeTruthy();
+
+    act(() => vi.advanceTimersByTime(8_000));
+    expect(screen.getByText("YouTubeSubscriber")).toBeTruthy();
+    expect(
+      container.querySelector('[data-alert-preset="zealot-dance-3d"]'),
+    ).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it("holds a delayed YouTube subscriber build reload through the receipt grace window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    mockChat = {
+      ...mockChat,
+      events: [{
+        platform: "youtube",
+        id: "subscriber:delayed-reload-guard",
+        kind: "follow",
+        user: "DelayedSubscriber",
+        detail: "subscribed on YouTube",
+        // The provider action is old, but this Browser Source received it only
+        // five seconds ago. Reloading after the eight-second card dwell would
+        // remount and duplicate the hero unless quietness uses receipt time.
+        atMs: 1_000,
+        receivedAtMs: 95_000,
+        replayed: true,
+        official: true,
+      }],
+    };
+
+    render(<ChatAlertsWidget token="tok" />);
+    expect(screen.getByText("DelayedSubscriber")).toBeTruthy();
+    expect(buildRefreshSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ safeToReload: false }),
+    );
+
+    act(() => vi.advanceTimersByTime(8_000));
+    expect(screen.queryByText("DelayedSubscriber")).toBeNull();
+    expect(buildRefreshSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ safeToReload: false }),
+    );
+
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(buildRefreshSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ safeToReload: true }),
+    );
     vi.useRealTimers();
   });
 

@@ -600,6 +600,9 @@ def _run_with_gui(
     initial_folders = _discover_replay_folders(cfg, state)
 
     cell = _RuntimeCell()
+    # ``--no-obs`` is an authoritative runtime prohibition, including GUI
+    # settings changes that arrive after the boot worker has started.
+    cell.no_obs = bool(no_obs)
     stop_event = threading.Event()
     request_stop_lock = threading.Lock()
     stop_called = {"value": False}
@@ -935,9 +938,27 @@ def _gui_boot_worker(
             cell.live_transport = None
             cell.live_metrics_logger = None
 
-        cell.obs_client, cell.obs_scene = _build_obs_switcher(
-            state=state, bridge=cell.live_bridge, log=log, no_obs=no_obs,
-        )
+        # Settings remains interactive while this boot worker is starting.
+        # Serialize construction with the checkbox's hot-apply path so an
+        # enable click cannot create one subscribed controller here and a
+        # second one in _apply_obs_settings (leaving the first alive after a
+        # later disable). Re-read the persisted gate before leaving the lock to
+        # close the inverse race: a disable that landed during construction.
+        with cell.obs_lock:
+            if cell.obs_scene is None:
+                cell.obs_client, cell.obs_scene = _build_obs_switcher(
+                    state=state,
+                    bridge=cell.live_bridge,
+                    log=log,
+                    no_obs=no_obs,
+                )
+            if cell.obs_scene is not None:
+                cell.obs_scene.set_config(
+                    scene_map=_effective_scene_map(state),
+                    enabled=state.obs_scene_switch_enabled,
+                    debounce_sec=state.obs_switch_debounce_sec,
+                    switch_on_replays=state.obs_switch_on_replays,
+                )
 
         upload.start()
         watcher.start()
@@ -1896,6 +1917,21 @@ def _apply_obs_settings(
     cell,
     log: logging.Logger,
 ) -> None:
+    """Serialize OBS settings with the GUI boot worker's construction path."""
+    obs_lock = getattr(cell, "obs_lock", None)
+    if obs_lock is None:
+        _apply_obs_settings_unlocked(state, payload, cell, log)
+        return
+    with obs_lock:
+        _apply_obs_settings_unlocked(state, payload, cell, log)
+
+
+def _apply_obs_settings_unlocked(
+    state: AgentState,
+    payload: SettingsPayload,
+    cell,
+    log: logging.Logger,
+) -> None:
     """Persist the Settings tab's OBS fields and hot-apply them.
 
     Follows the ``upload.set_concurrency`` precedent: a Save click
@@ -1904,8 +1940,37 @@ def _apply_obs_settings(
     actually changed — a Save that only re-mapped a scene shouldn't
     drop a healthy socket mid-stream.
     """
-    if payload.obs_scene_switch_enabled is not None:
-        state.obs_scene_switch_enabled = bool(payload.obs_scene_switch_enabled)
+    previous_obs = {
+        "obs_scene_switch_enabled": state.obs_scene_switch_enabled,
+        "obs_host": state.obs_host,
+        "obs_port": state.obs_port,
+        "obs_password": state.obs_password,
+        "obs_scene_map": dict(state.obs_scene_map),
+        "obs_switch_debounce_sec": state.obs_switch_debounce_sec,
+        "obs_switch_on_replays": state.obs_switch_on_replays,
+    }
+    previous_enabled = bool(state.obs_scene_switch_enabled)
+    desired_enabled = (
+        bool(payload.obs_scene_switch_enabled)
+        if payload.obs_scene_switch_enabled is not None
+        else previous_enabled
+    )
+    master_changed = desired_enabled != previous_enabled
+    forced_no_obs = bool(getattr(cell, "no_obs", False))
+    if forced_no_obs and master_changed and desired_enabled:
+        raise RuntimeError(
+            "Could not enable automatic OBS scene switching while "
+            "--no-obs is active",
+        )
+
+    def restore_previous_obs_state() -> None:
+        for field_name, value in previous_obs.items():
+            setattr(
+                state,
+                field_name,
+                dict(value) if field_name == "obs_scene_map" else value,
+            )
+
     conn_changed = False
     if payload.obs_host is not None and payload.obs_host != state.obs_host:
         state.obs_host = payload.obs_host
@@ -1939,41 +2004,101 @@ def _apply_obs_settings(
         # user just switched it ON, build and start the switcher now:
         # "Save, queue a game, nothing happened" was the old behaviour,
         # because the enable used to silently require an agent restart.
-        if not state.obs_scene_switch_enabled:
+        if not desired_enabled:
+            state.obs_scene_switch_enabled = False
+            return
+        if forced_no_obs:
+            # A persisted preference may remain on while this particular run
+            # was explicitly launched without OBS. Never let a later Settings
+            # save bypass that command-line safety boundary.
+            log.info("obs_scene_switch_disabled_via_flag")
             return
         bridge = getattr(cell, "live_bridge", None)
         if bridge is None:
             # --no-live, or the bridge failed to boot: no phase events
             # exist to react to, so a restart (with live enabled) is
             # genuinely required.
+            state.obs_scene_switch_enabled = desired_enabled
             log.info("obs_settings_saved_restart_required=true")
             return
+        # _build_obs_switcher reads the shared state gate. This assignment is
+        # provisional until construction and both runtime starts succeed.
+        state.obs_scene_switch_enabled = desired_enabled
         try:
             client, controller = _build_obs_switcher(
-                state=state, bridge=bridge, log=log,
+                state=state,
+                bridge=bridge,
+                log=log,
+                no_obs=forced_no_obs,
             )
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             log.exception("obs_switcher_late_build_failed")
+            if master_changed:
+                restore_previous_obs_state()
+                raise RuntimeError(
+                    "Could not enable automatic OBS scene switching",
+                ) from exc
             return
         if controller is None:
+            if master_changed:
+                restore_previous_obs_state()
+                raise RuntimeError(
+                    "Could not enable automatic OBS scene switching",
+                )
+            return
+        try:
+            if client is not None:
+                client.start()
+            controller.start()
+        except Exception as exc:  # noqa: BLE001
+            log.exception("obs_switcher_late_start_failed")
+            try:
+                controller.set_config(enabled=False)
+                controller.shutdown()
+            except Exception:  # noqa: BLE001
+                log.exception("obs_switcher_late_start_cleanup_failed")
+            if client is not None:
+                try:
+                    client.shutdown()
+                except Exception:  # noqa: BLE001
+                    log.exception("obs_client_late_start_cleanup_failed")
+            if master_changed:
+                restore_previous_obs_state()
+                raise RuntimeError(
+                    "Could not enable automatic OBS scene switching",
+                ) from exc
             return
         cell.obs_client = client
         cell.obs_scene = controller
-        if client is not None:
-            client.start()
-        controller.start()
         log.info("obs_scene_switch_started_from_settings")
         return
 
     try:
         controller.set_config(
             scene_map=_effective_scene_map(state),
-            enabled=state.obs_scene_switch_enabled,
+            enabled=desired_enabled,
             debounce_sec=state.obs_switch_debounce_sec,
             switch_on_replays=state.obs_switch_on_replays,
         )
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         log.exception("obs_controller_reconfigure_failed")
+        if master_changed:
+            restore_previous_obs_state()
+            try:
+                controller.set_config(
+                    scene_map=_effective_scene_map(state),
+                    enabled=previous_enabled,
+                    debounce_sec=state.obs_switch_debounce_sec,
+                    switch_on_replays=state.obs_switch_on_replays,
+                )
+            except Exception:  # noqa: BLE001
+                log.exception("obs_controller_toggle_rollback_failed")
+            action = "enable" if desired_enabled else "disable"
+            raise RuntimeError(
+                f"Could not {action} automatic OBS scene switching",
+            ) from exc
+    else:
+        state.obs_scene_switch_enabled = desired_enabled
     if conn_changed and client is not None:
         try:
             client.reconfigure(
@@ -2542,6 +2667,8 @@ class _RuntimeCell:
         "live_metrics_logger",
         "obs_client",
         "obs_scene",
+        "obs_lock",
+        "no_obs",
     )
 
     def __init__(self) -> None:
@@ -2562,6 +2689,11 @@ class _RuntimeCell:
         self.live_metrics_logger = None
         self.obs_client = None
         self.obs_scene = None
+        # The GUI thread can toggle OBS while the boot worker is constructing
+        # the controller. One lock prevents duplicate EventBus subscriptions
+        # and makes the persisted gate authoritative at startup.
+        self.obs_lock = threading.RLock()
+        self.no_obs = False
 
 
 class _Multiplexer:

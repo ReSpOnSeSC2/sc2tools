@@ -18,6 +18,7 @@ export function parseOfficialPlatformEvent(value: unknown): ChatEvent | null {
   const user = typeof raw.user === "string" ? raw.user.trim() : "";
   const detail = typeof raw.detail === "string" ? raw.detail.trim() : "";
   const atMs = Number(raw.atMs);
+  const receivedAtMs = Number(raw.receivedAtMs);
   if (
     !PLATFORMS.has(platform)
     || !id
@@ -36,6 +37,9 @@ export function parseOfficialPlatformEvent(value: unknown): ChatEvent | null {
       ? { amount: raw.amount.slice(0, 100) }
       : {}),
     atMs: Math.trunc(atMs),
+    ...(Number.isFinite(receivedAtMs) && receivedAtMs > 0
+      ? { receivedAtMs: Math.trunc(receivedAtMs) }
+      : {}),
     // This parser is fed only by the authenticated server replay/live socket.
     // Defaulting here keeps origin-aware coalescing safe across API upgrades.
     official: true,

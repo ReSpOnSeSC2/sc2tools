@@ -84,6 +84,10 @@ const GAME_SLIM_FIELDS = new Set([
   "myMmrSource",
   "myToonHandle",
   "top3Leaks",
+  // Small, Mongo-queryable Map Intel samples. Kept inline so heatmaps and
+  // proxy-aware custom-build reclassification can project them without a
+  // detail-store round trip.
+  "spatial",
   "_schemaVersion",
   // Pre-nested-agent aliases retained for upload/backfill compatibility.
   "duration",
@@ -207,7 +211,7 @@ class GamesService {
   /**
    * Insert or update a game record. Returns true if it was new.
    *
-   * Heavy fields (build logs, macroBreakdown, apmCurve, spatial) are
+   * Heavy fields (build logs, macroBreakdown, apmCurve, mapPlayback) are
    * peeled off the input and persisted into ``game_details`` via the
    * injected GameDetailsService. The slim row that lands in
    * ``games`` is roughly 3 kB instead of ~48 kB, which is what makes
@@ -229,7 +233,7 @@ class GamesService {
    * boolean continue to use `upsert` above.
    * @param {string} userId
    * @param {{gameId: string, date: string | Date} & Record<string, unknown>} game
-   * @returns {Promise<{created: boolean, customBuildRevision: string}>}
+   * @returns {Promise<{created: boolean, customBuildRevision: string, spatial?: Record<string, any>}>}
    */
   async upsertWithRevision(userId, game) {
     if (!game || !game.gameId) throw new Error("gameId required");
@@ -336,8 +340,6 @@ class GamesService {
       oppEarlyBuildLog: "",
       _customBuildReclassify: "",
       _customBuildClassificationSequence: "",
-      _customBuildSlug: "",
-      _customOpponentStrategySlug: "",
       _opponentBuildOrderWriteLease: "",
     };
     for (const k of HEAVY_FIELDS) unset[k] = "";
@@ -346,6 +348,14 @@ class GamesService {
     // re-uploads and must survive them; $setting the whole parent
     // object would erase the marker and retry Pulse misses forever.
     const slimSet = buildSlimSet(doc);
+    if (
+      Object.prototype.hasOwnProperty.call(doc, "spatial")
+      && !Object.prototype.hasOwnProperty.call(slimSet, "spatial")
+    ) {
+      // A fresh malformed/empty classifier payload must not leave an older
+      // positive coverage stamp attached to the new replay parse.
+      unset.spatial = "";
+    }
     // A fresh replay parse invalidates any background decision made from the
     // previous payload. Reclassification staging compares this opaque,
     // server-owned token before recording a decision.
@@ -408,6 +418,7 @@ class GamesService {
     return {
       created: res.upsertedCount === 1,
       customBuildRevision,
+      spatial: slimSet.spatial,
     };
   }
 
@@ -1801,6 +1812,7 @@ function buildSlimSet(doc) {
  * @param {unknown} value
  */
 function normalizeSlimField(key, value) {
+  if (key === "spatial") return sanitizeSpatial(value);
   if (key === "top3Leaks") return sanitizeTopLeakArray(value);
   if (key === "duration") return boundedNumber(value, 0, 24 * 60 * 60);
   if (key === "macro_score") return boundedNumber(value, 0, 100);
@@ -1809,6 +1821,103 @@ function normalizeSlimField(key, value) {
   if (key === "oppRace") return boundedString(value, 24);
   if (key === "opp_strategy") return boundedString(value, 200);
   return value;
+}
+
+/**
+ * Bound the agent's queryable spatial extract before it reaches the slim row.
+ * Unknown children are dropped so forward-compatible HTTP validation cannot
+ * turn a high-fan-out Mongo document into an unbounded payload.
+ * @param {unknown} value
+ * @returns {Record<string, any>|undefined}
+ */
+function sanitizeSpatial(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  /** @type {Record<string, any>} */
+  const out = {};
+  const raw = /** @type {Record<string, any>} */ (value);
+  const invalidProxyEvidence = { my: false, opp: false };
+  const bounds = raw.map_bounds;
+  if (bounds && typeof bounds === "object" && !Array.isArray(bounds)) {
+    const minX = boundedNumber(bounds.minX, -10_000, 10_000);
+    const minY = boundedNumber(bounds.minY, -10_000, 10_000);
+    const maxX = boundedNumber(bounds.maxX, -10_000, 10_000);
+    const maxY = boundedNumber(bounds.maxY, -10_000, 10_000);
+    if (
+      minX !== undefined && minY !== undefined
+      && maxX !== undefined && maxY !== undefined
+      && maxX > minX && maxY > minY
+    ) {
+      out.map_bounds = { minX, minY, maxX, maxY };
+    }
+  }
+  for (const field of [
+    "buildings", "my_proxies", "opp_proxies", "battles", "deaths",
+  ]) {
+    const proxySide = field === "my_proxies"
+      ? "my" : (field === "opp_proxies" ? "opp" : null);
+    if (!Array.isArray(raw[field])) {
+      if (
+        proxySide
+        && Object.prototype.hasOwnProperty.call(raw, field)
+      ) invalidProxyEvidence[proxySide] = true;
+      continue;
+    }
+    if (proxySide && raw[field].length > 2_000) {
+      invalidProxyEvidence[proxySide] = true;
+    }
+    const rows = [];
+    for (const item of raw[field].slice(0, 2_000)) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        if (proxySide) invalidProxyEvidence[proxySide] = true;
+        continue;
+      }
+      const x = boundedNumber(item.x, -10_000, 10_000);
+      const y = boundedNumber(item.y, -10_000, 10_000);
+      const proxyGeometryOutOfRange = proxySide && (
+        x === undefined || y === undefined
+        || x !== item.x || y !== item.y
+      );
+      if (x === undefined || y === undefined || proxyGeometryOutOfRange) {
+        if (proxySide) invalidProxyEvidence[proxySide] = true;
+        continue;
+      }
+      /** @type {Record<string, any>} */
+      const row = { x, y };
+      const time = boundedNumber(item.time, 0, 24 * 60 * 60);
+      const weight = boundedNumber(item.weight, 0, 1_000_000_000);
+      const name = boundedString(item.name, 80);
+      if (proxySide && (
+        time === undefined
+        || time !== item.time
+        || name === undefined
+        || !name.trim()
+        || name.length !== item.name.length
+      )) {
+        invalidProxyEvidence[proxySide] = true;
+        continue;
+      }
+      if (time !== undefined) row.time = time;
+      if (weight !== undefined) row.weight = weight;
+      if (name !== undefined) row.name = name;
+      rows.push(row);
+    }
+    out[field] = rows;
+  }
+  if (
+    raw.my_proxy_classification_v === 1
+    && !invalidProxyEvidence.my
+  ) {
+    out.my_proxy_classification_v = 1;
+  }
+  if (
+    raw.opp_proxy_classification_v === 1
+    && !invalidProxyEvidence.opp
+  ) {
+    out.opp_proxy_classification_v = 1;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** @param {string} key @param {unknown} value */

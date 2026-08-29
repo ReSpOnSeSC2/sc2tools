@@ -51,6 +51,13 @@ export interface ChatEvent {
   amount?: string;
   atMs: number;
   /**
+   * When SC2 Tools first received the provider action. This can be newer than
+   * ``atMs`` (notably for YouTube's delayed public-subscriber feed) and lets a
+   * late/reconnected alert surface distinguish a missed live alert from old
+   * retained history.
+   */
+  receivedAtMs?: number;
+  /**
    * True when a shared relay is catching a late surface up. Replayed events
    * still belong in the unified chat/Dock timeline, but must not fire a
    * second prominent alert or sound.

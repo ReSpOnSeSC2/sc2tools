@@ -6,7 +6,7 @@ import { CheckCircle2, Library } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { apiCall } from "@/lib/clientApi";
 import { slugifyBuildName, type BuildRuleLike } from "@/lib/build-events";
-import { SKILL_LEVELS } from "@/lib/build-rules";
+import { isProxyStructureToken, SKILL_LEVELS } from "@/lib/build-rules";
 import type { CustomBuild } from "@/components/builds/types";
 
 const RULE_TYPE_SET = new Set([
@@ -22,7 +22,7 @@ const SKILL_LEVEL_SET = new Set<string>(SKILL_LEVELS.map((l) => l.id));
 /**
  * Sanitise the v3 `rules` array from the community snapshot down to the
  * exact shape the /v1/custom-builds validator accepts
- * ({type, name, time_lt, count?}, additionalProperties: false). The
+ * ({type, name, time_lt, count?, proxy?}, additionalProperties: false). The
  * snapshot was validated when the author saved it, but it round-trips
  * through Mongo + the public API so we re-check rather than trust it.
  */
@@ -44,6 +44,7 @@ function sanitizeSnapshotRules(value: unknown): BuildRuleLike[] {
     if (Number.isFinite(count) && count >= 0 && count <= 200) {
       rule.count = count;
     }
+    if (r.proxy === true && isProxyStructureToken(name)) rule.proxy = true;
     out.push(rule);
   }
   return out;

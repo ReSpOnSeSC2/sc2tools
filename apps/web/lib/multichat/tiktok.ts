@@ -41,6 +41,7 @@ interface RelayEvent {
     detail: string;
     amount?: string;
     atMs: number;
+    receivedAtMs?: number;
   };
 }
 
@@ -103,6 +104,7 @@ export function createTikTokChat(
     }
     if (data.type === "event" && data.event) {
       const e = data.event;
+      const receivedAtMs = Number(e.receivedAtMs);
       // Unknown kinds (a newer relay) are skipped, not guessed at.
       if (!isChatEventKind(e.kind)) return;
       const sourceId = String(e.id);
@@ -117,6 +119,9 @@ export function createTikTokChat(
         detail: String(e.detail || ""),
         amount: e.amount != null ? String(e.amount) : undefined,
         atMs: Number.isFinite(e.atMs) ? e.atMs : Date.now(),
+        ...(Number.isFinite(receivedAtMs) && receivedAtMs > 0
+          ? { receivedAtMs: Math.trunc(receivedAtMs) }
+          : {}),
         ...(data.replay === true ? { replayed: true } : {}),
       });
     }

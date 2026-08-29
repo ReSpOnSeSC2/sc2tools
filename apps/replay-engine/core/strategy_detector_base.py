@@ -19,6 +19,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Tuple
 
+from .build_definitions import PROXY_ELIGIBLE_BUILDINGS
 from .strategy_detector_helpers import (
     UNIT_TECH_PREREQUISITES,
     count_real_units,
@@ -127,6 +128,9 @@ class BaseStrategyDetector:
               the live ``event_extractor`` events match. Cutoff is strict
               (``time < time_lt``) per the v3 contract in
               ``stream-overlay-backend/routes/custom_builds_helpers.js``.
+              ``proxy: true`` restricts the rule to structures for which the
+              canonical :meth:`_is_proxy` test passes at 50 world units from
+              the structure owner's main.
 
         Unknown rule types are treated as failures (NOT silently passed).
         Previously, an unknown type caused the for-loop to no-op and the
@@ -191,6 +195,57 @@ class BaseStrategyDetector:
                 "count_min",
             ):
                 norm_name = self._normalize_rule_name(raw_name)
+                proxy_only = rule.get("proxy") is True
+                if proxy_only and not (
+                    isinstance(raw_name, str)
+                    and raw_name.startswith("Build")
+                    and raw_name[len("Build"):] in PROXY_ELIGIBLE_BUILDINGS
+                ):
+                    return False
+                if proxy_only and (
+                    main_loc == (0.0, 0.0)
+                    or not all(
+                        isinstance(coord, (int, float))
+                        and not isinstance(coord, bool)
+                        and math.isfinite(float(coord))
+                        and float(coord) != 0.0
+                        for coord in main_loc
+                    )
+                ):
+                    # Missing owner-main geometry is unknown, not proof that
+                    # no proxy occurred. Fail closed for negative/count-zero
+                    # rules just as the cloud evaluator does for legacy rows.
+                    return False
+                if proxy_only:
+                    tol = rule.get("tol") if rtype == "before" else None
+                    for building in buildings:
+                        if building.get("name") != norm_name:
+                            continue
+                        event_time = building.get("time")
+                        if (
+                            not isinstance(event_time, (int, float))
+                            or isinstance(event_time, bool)
+                            or not math.isfinite(float(event_time))
+                        ):
+                            # Without a time we cannot prove the malformed
+                            # structure lies outside this rule's window.
+                            return False
+                        if isinstance(tol, (int, float)) and tol > 0:
+                            relevant = abs(event_time - time_lt) <= tol
+                        else:
+                            relevant = event_time < time_lt
+                        if relevant and not all(
+                            isinstance(building.get(axis), (int, float))
+                            and not isinstance(building.get(axis), bool)
+                            and math.isfinite(float(building[axis]))
+                            and float(building[axis]) != 0.0
+                            for axis in ("x", "y")
+                        ):
+                            # A missing coordinate is unknown, not evidence
+                            # that no matching proxy existed. This matters most
+                            # for negative/count-zero rules, which would
+                            # otherwise pass vacuously through _is_proxy's 0s.
+                            return False
                 # v3 events flatten buildings + units + upgrades into one
                 # stream. For unit events whose tech prerequisite is
                 # known, drop hallucinated occurrences (events whose
@@ -202,6 +257,11 @@ class BaseStrategyDetector:
                     name_ok = ev.get("name") == norm_name
                     if not name_ok:
                         return False
+                    if proxy_only:
+                        if ev not in buildings:
+                            return False
+                        if not self._is_proxy(ev, main_loc, 50.0):
+                            return False
                     if is_unit_with_prereq and ev in units:
                         if not unit_prereq_met(
                             norm_name, ev.get("time", 9999), buildings,

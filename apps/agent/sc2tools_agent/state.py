@@ -15,11 +15,19 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 
 STATE_FILENAME = "agent.json"
+
+# Every subsystem shares one mutable AgentState and persists the whole object.
+# Atomic replace protects readers from partial JSON, but without writer
+# serialization an older snapshot can replace a newer settings save after it.
+# Keep snapshot + fsync + replace in one process-wide critical section so the
+# last state mutation to call save_state is also the last durable write.
+_STATE_SAVE_LOCK = threading.RLock()
 
 
 @dataclass
@@ -371,23 +379,26 @@ def load_state(state_dir: Path) -> AgentState:
 
 
 def save_state(state_dir: Path, state: AgentState) -> None:
-    """Atomic write: tmp -> fsync -> rename."""
-    state_dir.mkdir(parents=True, exist_ok=True)
-    payload = _snapshot(state)
-    target = state_dir / STATE_FILENAME
-    fd, tmp_path = tempfile.mkstemp(prefix="agent.", suffix=".tmp", dir=str(state_dir))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2, sort_keys=True)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp_path, target)
-    except Exception:
+    """Serialize writers, then atomically write tmp -> fsync -> rename."""
+    with _STATE_SAVE_LOCK:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        payload = _snapshot(state)
+        target = state_dir / STATE_FILENAME
+        fd, tmp_path = tempfile.mkstemp(
+            prefix="agent.", suffix=".tmp", dir=str(state_dir),
+        )
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2, sort_keys=True)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, target)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
 
 def _snapshot(state: AgentState) -> dict:

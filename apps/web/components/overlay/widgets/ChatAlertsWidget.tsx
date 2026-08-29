@@ -154,13 +154,20 @@ export function ChatAlertsWidget({
   const [prominent, setProminent] = useState<ChatEvent | null>(null);
   const [history, setHistory] = useState<ChatEvent[]>([]);
   const feedTail = moderatedFeedEvents.at(-1);
+  // Provider occurrence time can be much older than first delivery (YouTube
+  // public subscriptions are polled). Use the same trusted receipt clock for
+  // both alert admission and the build-reload quiet window; otherwise a stale
+  // build could remount this source and replay the hero while its receipt is
+  // still inside the grace period.
+  const feedTailObservedAtMs = feedTail
+    ? (feedTail.receivedAtMs ?? feedTail.atMs)
+    : 0;
   const feedTailIdentity = feedTail
-    ? `${chatEventIdentity(feedTail)}:${feedTail.atMs}:${feedTail.amount ?? ""}`
+    ? `${chatEventIdentity(feedTail)}:${feedTailObservedAtMs}:${feedTail.amount ?? ""}`
     : "";
-  const feedTailAtMs = feedTail?.atMs ?? 0;
   const initiallyQuiet =
-    feedTailAtMs === 0
-    || Date.now() - feedTailAtMs >= ALERT_REPLAY_GRACE_MS;
+    feedTailObservedAtMs === 0
+    || Date.now() - feedTailObservedAtMs >= ALERT_REPLAY_GRACE_MS;
   const [feedQuietForReload, setFeedQuietForReload] = useState(initiallyQuiet);
   const [quietConfirmedTail, setQuietConfirmedTail] = useState<string | null>(
     () => initiallyQuiet ? feedTailIdentity : null,
@@ -193,13 +200,14 @@ export function ChatAlertsWidget({
   useEffect(() => {
     const firstObservation = !buildRefreshInitializedRef.current;
     buildRefreshInitializedRef.current = true;
-    if (feedTailAtMs === 0) {
+    if (feedTailObservedAtMs === 0) {
       setQuietConfirmedTail(feedTailIdentity);
       setFeedQuietForReload(true);
       return;
     }
     const remaining = firstObservation
-      ? ALERT_REPLAY_GRACE_MS - Math.max(0, Date.now() - feedTailAtMs)
+      ? ALERT_REPLAY_GRACE_MS
+        - Math.max(0, Date.now() - feedTailObservedAtMs)
       : ALERT_REPLAY_GRACE_MS;
     if (remaining <= 0) {
       setQuietConfirmedTail(feedTailIdentity);
@@ -212,7 +220,7 @@ export function ChatAlertsWidget({
       setFeedQuietForReload(true);
     }, remaining);
     return () => clearTimeout(timer);
-  }, [feedTailAtMs, feedTailIdentity]);
+  }, [feedTailObservedAtMs, feedTailIdentity]);
   const feedTailQuiet = overlayFeedTailIsQuiet(
     feedQuietForReload,
     feedTailIdentity,
@@ -226,7 +234,7 @@ export function ChatAlertsWidget({
       // the whole retained timeline into fresh sounds/toasts.
       if (
         event.replayed &&
-        Date.now() - event.atMs > ALERT_REPLAY_GRACE_MS
+        Date.now() - (event.receivedAtMs ?? event.atMs) > ALERT_REPLAY_GRACE_MS
       ) continue;
       const key = chatEventIdentity(event);
       if (seenRef.current.has(key)) {

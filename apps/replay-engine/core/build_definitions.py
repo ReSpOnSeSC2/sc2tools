@@ -315,6 +315,20 @@ SKIP_BUILDINGS: Set[str] = {
     "CreepTumorBurrowed", "CreepTumorQueen", "ShieldBattery",
 }
 
+# Actual construction/build-log tokens eligible for proxy-only custom rules.
+# Flying forms are state changes rather than construction events and are not
+# emitted by event_extractor's MORPH_BUILDINGS path.
+NON_BUILD_EVENT_STRUCTURES: Set[str] = {
+    "CommandCenterFlying", "OrbitalCommandFlying", "BarracksFlying",
+    "FactoryFlying", "StarportFlying",
+}
+PROXY_ELIGIBLE_BUILDINGS: Set[str] = (
+    KNOWN_BUILDINGS
+    - SKIP_BUILDINGS
+    - NON_BUILD_EVENT_STRUCTURES
+    - MORPH_BUILDINGS
+)
+
 # Sorted list of named builds (excluding catch-alls), suitable for seeding the DB.
 KNOWN_BUILDS: List[str] = sorted(list(set([
     k for k in BUILD_DEFINITIONS.keys()

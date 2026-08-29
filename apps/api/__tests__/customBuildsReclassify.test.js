@@ -807,4 +807,482 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     expect(row.opponent.strategy).toBe("RvZ Ingest Bunker");
     expect(row._customOpponentStrategySlug).toBe("rvz-ingest-bunker");
   });
+
+  test("fresh ingest classifies proxy-required builds on both perspectives", async () => {
+    const userId = await bootstrap();
+    expect((await withAuth(
+      request(app).put("/v1/custom-builds/tvp-proxy-rax").send({
+        slug: "tvp-proxy-rax",
+        name: "TvP Proxy Rax",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "you",
+        rules: [{
+          type: "before", name: "BuildBarracks", time_lt: 180, proxy: true,
+        }],
+        reclassify: false,
+      }),
+    )).status).toBe(200);
+    expect((await withAuth(
+      request(app).put("/v1/custom-builds/pvt-proxy-gate").send({
+        slug: "pvt-proxy-gate",
+        name: "PvT Proxy Gate",
+        race: "Protoss",
+        vsRace: "Terran",
+        perspective: "opponent",
+        rules: [{
+          type: "before", name: "BuildGateway", time_lt: 180, proxy: true,
+        }],
+        reclassify: false,
+      }),
+    )).status).toBe(200);
+
+    const post = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-ingest-dual-proxy",
+        date: "2026-05-07T00:00:00Z",
+        result: "Victory",
+        map: "Proxy Ingest LE",
+        myRace: "Terran",
+        myBuild: "TvP - Agent Mystery",
+        buildLog: ["[1:30] Barracks"],
+        oppBuildLog: ["[1:40] Gateway"],
+        spatial: {
+          my_proxy_classification_v: 1,
+          opp_proxy_classification_v: 1,
+          my_proxies: [{ name: "Barracks", time: 90, x: 80, y: 80 }],
+          opp_proxies: [{ name: "Gateway", time: 100, x: 20, y: 20 }],
+        },
+        opponent: {
+          displayName: "proxyDualOpp",
+          race: "Protoss",
+          strategy: "PvT - Agent Mystery",
+        },
+      }),
+    );
+    expect(post.status).toBe(202);
+
+    const row = await db.games.findOne({
+      userId,
+      gameId: "g-ingest-dual-proxy",
+    });
+    expect(row.spatial).toEqual(expect.objectContaining({
+      my_proxy_classification_v: 1,
+      opp_proxy_classification_v: 1,
+      my_proxies: [expect.objectContaining({
+        name: "Barracks", time: 90, x: 80, y: 80,
+      })],
+      opp_proxies: [expect.objectContaining({
+        name: "Gateway", time: 100, x: 20, y: 20,
+      })],
+    }));
+    expect(row.myBuild).toBe("TvP Proxy Rax");
+    expect(row.opponent.strategy).toBe("PvT Proxy Gate");
+  });
+
+  test("durable reclassify retains stored proxy evidence on both axes", async () => {
+    const userId = await bootstrap();
+    await services.games.upsert(userId, {
+      gameId: "g-history-dual-proxy",
+      date: new Date("2026-05-08T00:00:00Z"),
+      result: "Defeat",
+      map: "Proxy History LE",
+      myRace: "Zerg",
+      myBuild: "ZvT - Agent Mystery",
+      buildLog: ["[2:00] NydusNetwork"],
+      oppBuildLog: ["[3:00] FusionCore"],
+      spatial: {
+        my_proxy_classification_v: 1,
+        opp_proxy_classification_v: 1,
+        my_proxies: [{ name: "NydusNetwork", time: 120, x: 90, y: 90 }],
+        opp_proxies: [{ name: "FusionCore", time: 180, x: 20, y: 20 }],
+      },
+      opponent: {
+        displayName: "historyProxyOpp",
+        race: "Terran",
+        strategy: "TvZ - Agent Mystery",
+      },
+    });
+    expect((await db.games.findOne({
+      userId, gameId: "g-history-dual-proxy",
+    })).spatial).toEqual(expect.objectContaining({
+      my_proxy_classification_v: 1,
+      opp_proxy_classification_v: 1,
+      my_proxies: [expect.objectContaining({ name: "NydusNetwork" })],
+      opp_proxies: [expect.objectContaining({ name: "FusionCore" })],
+    }));
+    const ownSaved = await withAuth(
+      request(app).put("/v1/custom-builds/zvt-proxy-nydus").send({
+        slug: "zvt-proxy-nydus",
+        name: "ZvT Proxy Nydus",
+        race: "Zerg",
+        vsRace: "Terran",
+        perspective: "you",
+        rules: [{
+          type: "before", name: "BuildNydusNetwork", time_lt: 240, proxy: true,
+        }],
+        reclassify: false,
+      }),
+    );
+    expect(ownSaved.status).toBe(200);
+    const opponentSaved = await withAuth(
+      request(app).put("/v1/custom-builds/tvz-proxy-fusion").send({
+        slug: "tvz-proxy-fusion",
+        name: "TvZ Proxy Fusion",
+        race: "Terran",
+        vsRace: "Zerg",
+        perspective: "opponent",
+        rules: [{
+          type: "before", name: "BuildFusionCore", time_lt: 240, proxy: true,
+        }],
+        reclassify: false,
+      }),
+    );
+    expect(opponentSaved.status).toBe(200);
+
+    const queued = await withAuth(
+      request(app).post("/v1/custom-builds/reclassify-all").send({}),
+    );
+    expect(queued.status).toBe(202);
+    await waitForJob(db, userId, queued.body.job.generation);
+
+    const row = await db.games.findOne({
+      userId,
+      gameId: "g-history-dual-proxy",
+    });
+    expect(row.myBuild).toBe("ZvT Proxy Nydus");
+    expect(row._customBuildSlug).toBe("zvt-proxy-nydus");
+    expect(row.opponent.strategy).toBe("TvZ Proxy Fusion");
+    expect(row._customOpponentStrategySlug).toBe("tvz-proxy-fusion");
+  });
+
+  test("negative proxy rules defer legacy rows without coverage evidence", async () => {
+    const userId = await bootstrap();
+    const base = {
+      date: new Date("2026-05-09T00:00:00Z"),
+      result: "Victory",
+      map: "Proxy Coverage LE",
+      myRace: "Terran",
+      myBuild: "TvP - Agent Macro",
+      buildLog: ["[1:30] Barracks"],
+      oppBuildLog: [],
+      opponent: { displayName: "coverageOpp", race: "Protoss" },
+    };
+    await services.games.upsert(userId, {
+      ...base,
+      gameId: "g-proxy-coverage-legacy",
+      // Old spatial rows carried coordinates only. They cannot prove that a
+      // same-name structure was home, so negative rules must not claim it.
+      spatial: { my_proxies: [{ x: 80, y: 80 }] },
+    });
+    await services.games.upsert(userId, {
+      ...base,
+      gameId: "g-proxy-coverage-known-home",
+      spatial: { my_proxy_classification_v: 1 },
+    });
+    const saved = await withAuth(
+      request(app).put("/v1/custom-builds/tvp-no-early-proxy-rax").send({
+        slug: "tvp-no-early-proxy-rax",
+        name: "TvP No Early Proxy Rax",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "you",
+        rules: [{
+          type: "not_before",
+          name: "BuildBarracks",
+          time_lt: 180,
+          proxy: true,
+        }],
+        reclassify: false,
+      }),
+    );
+    expect(saved.status).toBe(200);
+    const queued = await withAuth(
+      request(app).post(
+        "/v1/custom-builds/tvp-no-early-proxy-rax/reclassify",
+      ).send({}),
+    );
+    expect(queued.status).toBe(202);
+    await waitForJob(db, userId, queued.body.generation);
+
+    const [legacy, knownHome] = await Promise.all([
+      db.games.findOne({ userId, gameId: "g-proxy-coverage-legacy" }),
+      db.games.findOne({ userId, gameId: "g-proxy-coverage-known-home" }),
+    ]);
+    expect(legacy.myBuild).toBe("TvP - Agent Macro");
+    expect(legacy._customBuildSlug).toBeUndefined();
+    expect(knownHome.myBuild).toBe("TvP No Early Proxy Rax");
+    expect(knownHome._customBuildSlug).toBe("tvp-no-early-proxy-rax");
+  });
+
+  test("ingest sanitization and reclassify preserve provenance on unknown proxy evidence", async () => {
+    const userId = await bootstrap();
+    for (const build of [
+      {
+        slug: "tvp-specific-proxy-rax",
+        name: "TvP Specific Proxy Rax",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "you",
+        rules: [
+          { type: "before", name: "BuildBarracks", time_lt: 180, proxy: true },
+          { type: "before", name: "BuildBarracks", time_lt: 180 },
+        ],
+      },
+      {
+        slug: "tvp-generic-rax",
+        name: "TvP Generic Rax",
+        race: "Terran",
+        vsRace: "Protoss",
+        perspective: "you",
+        rules: [
+          { type: "before", name: "BuildBarracks", time_lt: 180 },
+        ],
+      },
+      {
+        slug: "pvt-specific-proxy-gate",
+        name: "PvT Specific Proxy Gate",
+        race: "Protoss",
+        vsRace: "Terran",
+        perspective: "opponent",
+        rules: [
+          { type: "before", name: "BuildGateway", time_lt: 180, proxy: true },
+          { type: "before", name: "BuildGateway", time_lt: 180 },
+        ],
+      },
+      {
+        slug: "pvt-generic-gate",
+        name: "PvT Generic Gate",
+        race: "Protoss",
+        vsRace: "Terran",
+        perspective: "opponent",
+        rules: [
+          { type: "before", name: "BuildGateway", time_lt: 180 },
+        ],
+      },
+    ]) {
+      const saved = await withAuth(
+        request(app).put(`/v1/custom-builds/${build.slug}`).send({
+          ...build,
+          reclassify: false,
+        }),
+      );
+      expect(saved.status).toBe(200);
+    }
+
+    await db.games.insertOne({
+      userId,
+      gameId: "g-proxy-ingest-unknown",
+      date: new Date("2026-05-10T00:00:00Z"),
+      result: "Victory",
+      map: "Proxy Integrity LE",
+      myRace: "Terran",
+      myBuild: "TvP Specific Proxy Rax",
+      _customBuildSlug: "tvp-specific-proxy-rax",
+      opponent: {
+        displayName: "integrityOpp",
+        race: "Protoss",
+        strategy: "PvT Specific Proxy Gate",
+      },
+      _customOpponentStrategySlug: "pvt-specific-proxy-gate",
+    });
+
+    const post = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-proxy-ingest-unknown",
+        date: "2026-05-10T00:00:00Z",
+        result: "Victory",
+        map: "Proxy Integrity LE",
+        myRace: "Terran",
+        myBuild: "TvP - Agent Mystery",
+        buildLog: ["[1:30] Barracks"],
+        oppBuildLog: [],
+        spatial: {
+          my_proxy_classification_v: 1,
+          // Raw annotation could correlate this finite row, but GamesService
+          // rejects its out-of-contract geometry and must strip the stamp
+          // before immediate tagging sees it.
+          my_proxies: [{
+            name: "Barracks", time: 90, x: 20_001, y: 80,
+          }],
+        },
+        opponent: {
+          displayName: "integrityOpp",
+          race: "Protoss",
+          strategy: "PvT - Agent Mystery",
+        },
+      }),
+    );
+    expect(post.status).toBe(202);
+
+    let row = await db.games.findOne({
+      userId, gameId: "g-proxy-ingest-unknown",
+    });
+    expect(row.spatial.my_proxy_classification_v).toBeUndefined();
+    expect(row.spatial.my_proxies).toEqual([]);
+    expect(row.myBuild).toBe("TvP Specific Proxy Rax");
+    expect(row._customBuildSlug).toBe("tvp-specific-proxy-rax");
+    expect(row.opponent.strategy).toBe("PvT Specific Proxy Gate");
+    expect(row._customOpponentStrategySlug).toBe(
+      "pvt-specific-proxy-gate",
+    );
+
+    const queued = await withAuth(
+      request(app).post("/v1/custom-builds/reclassify-all").send({}),
+    );
+    expect(queued.status).toBe(202);
+    await waitForJob(db, userId, queued.body.job.generation);
+    row = await db.games.findOne({
+      userId, gameId: "g-proxy-ingest-unknown",
+    });
+    expect(row.myBuild).toBe("TvP Specific Proxy Rax");
+    expect(row._customBuildSlug).toBe("tvp-specific-proxy-rax");
+    expect(row.opponent.strategy).toBe("PvT Specific Proxy Gate");
+    expect(row._customOpponentStrategySlug).toBe(
+      "pvt-specific-proxy-gate",
+    );
+
+    // Both empty logs are unavailable, not a definitive nonmatch. A re-upload
+    // must restore both prior custom labels after GamesService patches the raw
+    // agent labels, while a first ingest with no prior tag invents nothing.
+    const emptyReupload = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-proxy-ingest-unknown",
+        date: "2026-05-10T00:00:00Z",
+        result: "Victory",
+        map: "Proxy Integrity LE",
+        myRace: "Terran",
+        myBuild: "TvP - Empty Agent Label",
+        buildLog: [],
+        oppBuildLog: [],
+        opponent: {
+          displayName: "integrityOpp",
+          race: "Protoss",
+          strategy: "PvT - Empty Agent Label",
+        },
+      }),
+    );
+    expect(emptyReupload.status).toBe(202);
+    row = await db.games.findOne({
+      userId, gameId: "g-proxy-ingest-unknown",
+    });
+    expect(row.myBuild).toBe("TvP Specific Proxy Rax");
+    expect(row._customBuildSlug).toBe("tvp-specific-proxy-rax");
+    expect(row.opponent.strategy).toBe("PvT Specific Proxy Gate");
+    expect(row._customOpponentStrategySlug).toBe(
+      "pvt-specific-proxy-gate",
+    );
+
+    const firstEmpty = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-proxy-first-empty",
+        date: "2026-05-11T00:00:00Z",
+        result: "Defeat",
+        map: "Proxy Integrity LE",
+        myRace: "Terran",
+        myBuild: "TvP - First Empty Agent",
+        buildLog: [],
+        oppBuildLog: [],
+        opponent: {
+          displayName: "firstEmptyOpp",
+          race: "Protoss",
+          strategy: "PvT - First Empty Agent",
+        },
+      }),
+    );
+    expect(firstEmpty.status).toBe(202);
+    const firstRow = await db.games.findOne({
+      userId, gameId: "g-proxy-first-empty",
+    });
+    expect(firstRow.myBuild).toBe("TvP - First Empty Agent");
+    expect(firstRow._customBuildSlug).toBeUndefined();
+    expect(firstRow.opponent.strategy).toBe("PvT - First Empty Agent");
+    expect(firstRow._customOpponentStrategySlug).toBeUndefined();
+
+    await db.games.insertOne({
+      userId,
+      gameId: "g-proxy-stale-axes",
+      date: new Date("2026-05-12T00:00:00Z"),
+      result: "Victory",
+      map: "Proxy Integrity LE",
+      myRace: "Terran",
+      myBuild: "Wrong Axis Label",
+      // Opponent definition incorrectly attached to the user's axis.
+      _customBuildSlug: "pvt-specific-proxy-gate",
+      opponent: {
+        displayName: "staleAxesOpp",
+        race: "Protoss",
+        strategy: "Deleted Opponent Label",
+      },
+      _customOpponentStrategySlug: "deleted-opponent-slug",
+    });
+    const staleAxes = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-proxy-stale-axes",
+        date: "2026-05-12T00:00:00Z",
+        result: "Victory",
+        map: "Proxy Integrity LE",
+        myRace: "Terran",
+        myBuild: "TvP - Stale Agent",
+        buildLog: [],
+        oppBuildLog: [],
+        opponent: {
+          displayName: "staleAxesOpp",
+          race: "Protoss",
+          strategy: "PvT - Stale Agent",
+        },
+      }),
+    );
+    expect(staleAxes.status).toBe(202);
+    const staleAxesRow = await db.games.findOne({
+      userId, gameId: "g-proxy-stale-axes",
+    });
+    expect(staleAxesRow.myBuild).toBe("TvP - Stale Agent");
+    expect(staleAxesRow._customBuildSlug).toBeUndefined();
+    expect(staleAxesRow.opponent.strategy).toBe("PvT - Stale Agent");
+    expect(staleAxesRow._customOpponentStrategySlug).toBeUndefined();
+
+    await db.customBuilds.deleteMany({ userId });
+    await db.games.insertOne({
+      userId,
+      gameId: "g-proxy-no-active-builds",
+      date: new Date("2026-05-13T00:00:00Z"),
+      result: "Victory",
+      map: "Proxy Integrity LE",
+      myRace: "Terran",
+      myBuild: "Old Custom User",
+      _customBuildSlug: "deleted-user-build",
+      opponent: {
+        displayName: "noBuildsOpp",
+        race: "Protoss",
+        strategy: "Old Custom Opponent",
+      },
+      _customOpponentStrategySlug: "deleted-opponent-build",
+    });
+    const noActive = await withAuth(
+      request(app).post("/v1/games").send({
+        gameId: "g-proxy-no-active-builds",
+        date: "2026-05-13T00:00:00Z",
+        result: "Victory",
+        map: "Proxy Integrity LE",
+        myRace: "Terran",
+        myBuild: "TvP - No Active Agent",
+        buildLog: [],
+        oppBuildLog: [],
+        opponent: {
+          displayName: "noBuildsOpp",
+          race: "Protoss",
+          strategy: "PvT - No Active Agent",
+        },
+      }),
+    );
+    expect(noActive.status).toBe(202);
+    const noActiveRow = await db.games.findOne({
+      userId, gameId: "g-proxy-no-active-builds",
+    });
+    expect(noActiveRow.myBuild).toBe("TvP - No Active Agent");
+    expect(noActiveRow._customBuildSlug).toBeUndefined();
+    expect(noActiveRow.opponent.strategy).toBe("PvT - No Active Agent");
+    expect(noActiveRow._customOpponentStrategySlug).toBeUndefined();
+  });
 });

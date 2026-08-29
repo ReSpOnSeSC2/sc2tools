@@ -322,7 +322,7 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
     if me is None or opp is None:
         return None
 
-    my_events, opp_events, _ = extract_events(replay, me.pid)
+    my_events, opp_events, extract_stats = extract_events(replay, me.pid)
 
     stats_by_pid: Dict[int, List[Dict]] = {me.pid: [], opp.pid: []}
     try:
@@ -491,6 +491,10 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "result": me.result,
         "my_events": sorted_my_events,
         "opp_events": sorted_opp_events,
+        # Completeness evidence for consumers that make negative assertions
+        # from these lists. A partial tracker iterator must never be mistaken
+        # for an authoritative "no proxy" result.
+        "extract_stats": extract_stats,
         "my_stats": stats_by_pid[me.pid],
         "opp_stats": stats_by_pid[opp.pid],
         "my_units": tracks.get("my_units", []),

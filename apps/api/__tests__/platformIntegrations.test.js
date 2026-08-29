@@ -1478,7 +1478,12 @@ describe("official OAuth and delivery contracts", () => {
         return {
           sort() { return this; },
           limit() { return this; },
-          async toArray() { return rows.map((row) => ({ event: row.event })); },
+          async toArray() {
+            return rows.map((row) => ({
+              event: row.event,
+              receivedAt: row.receivedAt,
+            }));
+          },
         };
       },
     };
@@ -1492,13 +1497,46 @@ describe("official OAuth and delivery contracts", () => {
     );
     // Provider occurrence time can predate the replay window; receipt time is
     // what determines whether an event was missed by a disconnected overlay.
-    const event = { platform: "twitch", id: "e1", kind: "follow", user: "Alpha", detail: "followed", atMs: NOW - 30 * 60 * 1000 };
+    // Exercise the production public-subscriber path. YouTube normalizes a
+    // public subscription to `follow` (memberships are a separate event), and
+    // its publishedAt can already be older than the overlay replay window when
+    // polling first surfaces it.
+    const event = normalizeYoutubeSubscriber({
+      id: "e1",
+      subscriberSnippet: { title: "Alpha" },
+      snippet: {
+        publishedAt: new Date(NOW - 30 * 60 * 1000).toISOString(),
+      },
+    });
+    expect(event).toMatchObject({
+      platform: "youtube",
+      id: "subscriber:e1",
+      kind: "follow",
+    });
     expect(await service.publish("user-1", event)).toBe(true);
-    expect(emitted[0]).toMatchObject({ room: "overlay:overlay-1", name: "overlay:platformEvent", persisted: 1 });
+    expect(emitted[0]).toMatchObject({
+      room: "overlay:overlay-1",
+      name: "overlay:platformEvent",
+      payload: {
+        platform: "youtube",
+        id: "subscriber:e1",
+        kind: "follow",
+        atMs: event.atMs,
+        receivedAtMs: NOW,
+      },
+      persisted: 1,
+    });
     expect(await service.publish("user-1", event)).toBe(false);
     expect(emitted).toHaveLength(1);
     expect(await service.recentForUser("user-1")).toEqual([
-      expect.objectContaining({ id: "e1", replayed: true }),
+      expect.objectContaining({
+        platform: "youtube",
+        id: "subscriber:e1",
+        kind: "follow",
+        atMs: event.atMs,
+        receivedAtMs: NOW,
+        replayed: true,
+      }),
     ]);
     expect(replayFilter).toEqual({
       userId: "user-1",

@@ -173,6 +173,84 @@ describe("custom-build rule scan memory safety", () => {
     },
   );
 
+  test("paged reclassification retains proxy evidence for both sides", async () => {
+    const userId = "u-proxy-paged";
+    await db.collection("games").insertOne({
+      userId,
+      gameId: "proxy-paged-1",
+      date: new Date("2026-08-13T13:30:00.000Z"),
+      myRace: "Terran",
+      opponent: { race: "Protoss" },
+      spatial: {
+        my_proxy_classification_v: 1,
+        opp_proxy_classification_v: 1,
+        my_proxies: [{ name: "Barracks", time: 90, x: 80, y: 80 }],
+        opp_proxies: [{ name: "Gateway", time: 100, x: 20, y: 20 }],
+      },
+    });
+    const gameDetails = {
+      findMany: jest.fn(async () => new Map([[
+        "proxy-paged-1",
+        {
+          buildLog: ["[1:30] Barracks"],
+          oppBuildLog: ["[1:40] Gateway"],
+        },
+      ]])),
+    };
+    const service = new PerGameComputeService(
+      { games: db.collection("games") },
+      { gameDetails },
+    );
+
+    const output = [];
+    for await (const page of service.iterateRulePreviewPages(userId, {
+      perspective: "both",
+      pageSize: 10,
+    })) {
+      output.push(...page.games);
+    }
+    expect(output).toHaveLength(1);
+    expect(output[0].events[0].is_proxy).toBe(true);
+    expect(output[0].oppEvents[0].is_proxy).toBe(true);
+  });
+
+  test("GamesService strips v1 from null and oversized proxy evidence", async () => {
+    const games = db.collection("games");
+    const service = new GamesService({ games });
+    const base = {
+      date: new Date("2026-08-13T14:00:00.000Z"),
+      myRace: "Terran",
+      opponent: { race: "Protoss" },
+    };
+    await service.upsert("u-proxy-sanitize", {
+      ...base,
+      gameId: "proxy-null",
+      spatial: {
+        my_proxy_classification_v: 1,
+        my_proxies: null,
+      },
+    });
+    await service.upsert("u-proxy-sanitize", {
+      ...base,
+      gameId: "proxy-oversized",
+      spatial: {
+        my_proxy_classification_v: 1,
+        my_proxies: Array.from({ length: 2_001 }, (_, i) => ({
+          name: "Barracks",
+          time: 90 + i,
+          x: 80,
+          y: 80,
+        })),
+      },
+    });
+
+    const nullRow = await games.findOne({ gameId: "proxy-null" });
+    expect(nullRow.spatial).toBeUndefined();
+    const oversized = await games.findOne({ gameId: "proxy-oversized" });
+    expect(oversized.spatial.my_proxy_classification_v).toBeUndefined();
+    expect(oversized.spatial.my_proxies).toHaveLength(2_000);
+  });
+
   test("the Mongo detail store projects away unrequested heavy fields", async () => {
     const collection = db.collection("game_details_projection");
     const store = new MongoDetailsStore({ gameDetails: collection });
@@ -1605,7 +1683,9 @@ describe("custom-build rule scan memory safety", () => {
       myRace: "Protoss",
       opponent: { race: "Terran" },
       myBuild: "Fresh replay label",
-      // Agent input must never be able to retain or forge custom ownership.
+      // Agent input must never be able to forge custom ownership. Existing
+      // server-owned provenance survives until revision-fenced tagging can
+      // restore or clear it without a transient evidence gap erasing it.
       _customBuildSlug: "forged-by-agent",
       _customOpponentStrategySlug: "forged-opponent-by-agent",
     });
@@ -1616,7 +1696,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(result).toEqual(expect.objectContaining({ matched: 1, tagged: 0 }));
     expect(row.myBuild).toBe("Fresh replay label");
     expect(row._customBuildRevision).not.toBe(originalRevision);
-    expect(row._customBuildSlug).toBeUndefined();
+    expect(row._customBuildSlug).toBe("old-custom-build");
     expect(row._customOpponentStrategySlug).toBeUndefined();
     expect(row._customBuildReclassify).toBeUndefined();
     expect(row._schemaVersion).toBe(7);

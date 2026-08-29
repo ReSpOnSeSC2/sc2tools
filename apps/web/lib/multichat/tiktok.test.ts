@@ -142,6 +142,7 @@ describe("TikTok SSE chat", () => {
         detail: "sent a Rose",
         amount: "5 diamonds",
         atMs: 1_786_839_000_100,
+        receivedAtMs: 1_786_839_000_500,
       },
     });
     expect(onEvent).toHaveBeenCalledWith({
@@ -152,6 +153,7 @@ describe("TikTok SSE chat", () => {
       detail: "sent a Rose",
       amount: "5 diamonds",
       atMs: 1_786_839_000_100,
+      receivedAtMs: 1_786_839_000_500,
       replayed: true,
     });
 

@@ -129,8 +129,13 @@ function RowContent({
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block break-words text-body text-text">
+        <span className="flex flex-wrap items-center gap-1.5 break-words text-body text-text">
           {row.displayName}
+          {row.isProxy ? (
+            <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-warning">
+              Proxy
+            </span>
+          ) : null}
         </span>
         {notes ? (
           <span className="mt-0.5 block text-caption text-text-dim">

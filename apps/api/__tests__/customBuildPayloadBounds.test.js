@@ -16,6 +16,11 @@ const {
   CustomBuildsService,
   CUSTOM_BUILD_ACTIVE_LIMIT,
 } = require("../src/services/customBuilds");
+const {
+  PROXY_ELIGIBLE_BUILDING_NAMES,
+} = require("../src/services/knownBuildings");
+const fs = require("node:fs");
+const path = require("node:path");
 const { CommunityService } = require("../src/services/community");
 
 const minimalBuild = (extra = {}) => ({
@@ -62,6 +67,72 @@ describe("custom/community build payload bounds", () => {
     expect(result.value.steps).toEqual([
       { supply: 14, time: "0:18", action: "Pylon" },
     ]);
+  });
+
+  test("proxy rule modifier is bounded, persisted, and structure-only", () => {
+    const valid = validateCustomBuild(minimalBuild({
+      rules: [{
+        type: "before",
+        name: "BuildBarracks",
+        time_lt: 120,
+        proxy: true,
+      }],
+    }));
+    expect(valid).toEqual(expect.objectContaining({ valid: true }));
+    expect(valid.value.rules).toEqual([{
+      type: "before",
+      name: "BuildBarracks",
+      time_lt: 120,
+      proxy: true,
+    }]);
+
+    const invalid = validateCustomBuild(minimalBuild({
+      rules: [{
+        type: "not_before",
+        name: "BuildMarine",
+        time_lt: 120,
+        proxy: true,
+      }],
+    }));
+    expect(invalid.valid).toBe(false);
+
+    for (const name of [
+      "BuildNydusWorm",
+      "BuildSupplyDepot",
+      "BuildShieldBattery",
+      "BuildBarracksFlying",
+      "BuildWarpGate",
+      "BuildLair",
+    ]) {
+      expect(validateCustomBuild(minimalBuild({
+        rules: [{
+          type: "before", name, time_lt: 120, proxy: true,
+        }],
+      })).valid).toBe(false);
+    }
+    expect(validateCustomBuild(minimalBuild({
+      rules: [{
+        type: "before",
+        name: "BuildNydusNetwork",
+        time_lt: 120,
+        proxy: true,
+      }],
+    })).valid).toBe(true);
+
+    expect(publicBuildSnapshot({ rules: valid.value.rules }).rules).toEqual(
+      valid.value.rules,
+    );
+  });
+
+  test("API proxy eligibility exactly matches the local JSON schema", () => {
+    const schema = JSON.parse(fs.readFileSync(path.resolve(
+      __dirname,
+      "../../replay-engine/data/custom_builds.schema.json",
+    ), "utf8"));
+    const schemaNames = schema.definitions.proxyStructureName.enum
+      .map((token) => token.slice("Build".length))
+      .sort();
+    expect([...PROXY_ELIGIBLE_BUILDING_NAMES].sort()).toEqual(schemaNames);
   });
 
   test("validation preserves bounded legacy steps and rejects oversized arrays", () => {
@@ -132,6 +203,7 @@ describe("custom/community build payload bounds", () => {
     expect(projection).toEqual(expect.objectContaining({
       "build.signature.unit": 1,
       "build.rules.name": 1,
+      "build.rules.proxy": 1,
       "build.steps.action": 1,
     }));
 

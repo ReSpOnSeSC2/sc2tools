@@ -924,6 +924,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._refresh_stats()
             self._refresh_pairing_card()
             self._populate_settings()
+            # Unlike the other draft fields, this is a live safety switch: a
+            # streamer who unchecks it expects the agent to stop driving OBS
+            # now, not after finding and pressing Save at the bottom of the
+            # page. Connect only after population so seeding the saved value
+            # cannot write state during window construction.
+            self._obs_enable_last_saved = self._obs_enable_check.isChecked()
+            self._obs_enable_check.toggled.connect(
+                self._toggle_obs_scene_switch,
+            )
             self._tail_log_now()
 
             # Periodic log tail. Watchdog FS events on Windows are
@@ -1959,7 +1968,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._obs_enable_check.setToolTip(
                 "Requires obs-websocket, which ships with OBS 28 and "
                 "later: OBS → Tools → WebSocket Server Settings → "
-                "Enable WebSocket server.",
+                "Enable WebSocket server. This switch applies immediately.",
             )
             outer.addWidget(self._obs_enable_check)
 
@@ -2608,6 +2617,36 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             except Exception as exc:  # noqa: BLE001
                 log.exception("gui_save_settings_failed")
                 self._settings_status.setText(f"Save failed: {exc}")
+
+        def _toggle_obs_scene_switch(self, enabled: bool) -> None:
+            """Persist and hot-apply the OBS master gate immediately."""
+            desired = bool(enabled)
+            if desired == self._obs_enable_last_saved:
+                return
+            try:
+                # A partial payload changes only the gate. Connection fields,
+                # scene mappings, and other unsaved form edits remain drafts.
+                ui._on_save_settings(SettingsPayload(
+                    obs_scene_switch_enabled=desired,
+                ))
+            except Exception as exc:  # noqa: BLE001
+                log.exception("gui_obs_scene_toggle_failed")
+                self._obs_enable_check.blockSignals(True)
+                self._obs_enable_check.setChecked(
+                    self._obs_enable_last_saved,
+                )
+                self._obs_enable_check.blockSignals(False)
+                self._settings_status.setText(
+                    f"Could not {'enable' if desired else 'disable'} "
+                    f"automatic scene switching: {exc}",
+                )
+                return
+            self._obs_enable_last_saved = desired
+            self._settings_status.setText(
+                "Automatic scene switching on"
+                if desired
+                else "Automatic scene switching off",
+            )
 
         def _copy_pairing_code(self) -> None:
             code = self._pairing_code_label.text()

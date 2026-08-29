@@ -84,6 +84,156 @@ def test_returns_none_when_resolver_misses(_stub_pulse_resolver):
     assert out is None
 
 
+def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
+    monkeypatch,
+):
+    """Proxy evidence comes from build-log events and reuses one replay walk."""
+    import sc2tools_agent.replay_pipeline as pipeline
+
+    calls: list[tuple[str, str]] = []
+    playback = {
+        "map_name": "Boundary Test",
+        "game_length": 300.0,
+        "bounds": {"x_min": 0, "x_max": 200, "y_min": 0, "y_max": 200},
+        "spawn_locations": [],
+        "extract_stats": {
+            "errors": 0, "pid_failed": 147, "proxy_errors": 0,
+            "processed": 10,
+        },
+        "my_events": [
+            {"type": "building", "name": "CommandCenter", "time": 0, "x": 10, "y": 10},
+            {"type": "building", "name": "Barracks", "time": 60, "x": 40, "y": 10},
+            # Exactly 50 is not a proxy; the canonical predicate is strict >.
+            {"type": "building", "name": "Factory", "time": 90, "x": 60, "y": 10},
+            {"type": "building", "name": "Starport", "time": 120, "x": 61, "y": 10},
+            # Spatial playback may retain structures intentionally omitted
+            # from buildLog. They stay in the heatmap but cannot become proxy
+            # rule evidence because no local/cloud evaluator can match them.
+            {"type": "building", "name": "SupplyDepot", "time": 130, "x": 70, "y": 10},
+            {"type": "unit", "name": "Marine", "time": 80, "x": 100, "y": 10},
+        ],
+        "opp_events": [
+            {"type": "building", "name": "CommandCenter", "time": 0, "x": 150, "y": 150},
+            {"type": "building", "name": "Barracks", "time": 70, "x": 99, "y": 150},
+        ],
+        # Deliberately conflicting lifecycle names prove proxy evidence uses
+        # the canonical event/buildLog source instead of morph-renamed rows.
+        "my_buildings": [
+            {"name": "OrbitalCommand", "born": 0, "x": 10, "y": 10},
+        ],
+        "opp_buildings": [],
+        "my_stats": [],
+        "opp_stats": [],
+        "my_units": [],
+        "opp_units": [],
+        "resources": [],
+        "ability_casts": [],
+    }
+
+    class PlaybackModule:
+        DEFAULT_BOUNDS = playback["bounds"]
+
+        @staticmethod
+        def build_playback_data(file_path: str, player_name: str):
+            calls.append((file_path, player_name))
+            return playback
+
+        @staticmethod
+        def detect_battle_markers(*_args):
+            return []
+
+    # Use the real replay-engine BaseStrategyDetector implementation so this
+    # locks the same >50 geometry as live classification.
+    real_detector_mod = pipeline._load_sc2ra_package_module(
+        "strategy_detector_base",
+    )
+
+    def load_module(name):
+        if name == "map_playback_data":
+            return PlaybackModule
+        if name == "strategy_detector_base":
+            return real_detector_mod
+        raise AssertionError(name)
+
+    monkeypatch.setattr(pipeline, "_load_sc2ra_package_module", load_module)
+    ctx = SimpleNamespace(
+        file_path=Path("C:/replays/p2.SC2Replay"),
+        me=SimpleNamespace(name="SelectedPlayerTwo", pid=2),
+        opponent=SimpleNamespace(name="PlayerOne", pid=1),
+    )
+
+    spatial = pipeline._compute_spatial_extract(ctx)
+    assert spatial is not None
+    assert calls == [(str(ctx.file_path), "SelectedPlayerTwo")]
+    assert spatial["map_bounds"] == {
+        "minX": 0.0, "minY": 0.0, "maxX": 200.0, "maxY": 200.0,
+    }
+    assert spatial["my_proxy_classification_v"] == 1
+    assert spatial["opp_proxy_classification_v"] == 1
+    assert [row["name"] for row in spatial["my_proxies"]] == ["Starport"]
+    assert [row["name"] for row in spatial["opp_proxies"]] == ["Barracks"]
+    assert [row["name"] for row in spatial["buildings"]] == [
+        "CommandCenter", "Barracks", "Factory", "Starport", "SupplyDepot",
+    ]
+
+    # The map payload consumes the same cached raw playback; enabling spatial
+    # must not double the replay parse cost on a full resync.
+    pipeline._compute_map_playback(ctx)
+    assert calls == [(str(ctx.file_path), "SelectedPlayerTwo")]
+
+    # A single malformed tracked building makes this side incomplete. It may
+    # still render in other playback surfaces, but no v1 coverage stamp can be
+    # emitted because negative/count-zero rules must fail closed.
+    playback["my_events"].append({
+        "type": "building", "name": "Gateway", "time": 140, "x": 80,
+    })
+    malformed_ctx = SimpleNamespace(
+        file_path=Path("C:/replays/malformed.SC2Replay"),
+        me=SimpleNamespace(name="SelectedPlayerTwo", pid=2),
+        opponent=SimpleNamespace(name="PlayerOne", pid=1),
+    )
+    malformed = pipeline._compute_spatial_extract(malformed_ctx)
+    assert malformed is not None
+    assert "my_proxy_classification_v" not in malformed
+    assert "my_proxies" not in malformed
+    assert malformed["opp_proxy_classification_v"] == 1
+
+    # Partial tracker extraction can hide an unseen proxy. Iterator errors or
+    # owner/name resolution failures therefore invalidate both v1 stamps even
+    # when the partial lists still contain otherwise valid buildings.
+    playback["my_events"].pop()
+    playback["my_events"].append({
+        "type": "building", "name": "Gateway", "time": 140,
+        "x": 0, "y": 80,
+    })
+    zero_ctx = SimpleNamespace(
+        file_path=Path("C:/replays/zero-coordinate.SC2Replay"),
+        me=SimpleNamespace(name="SelectedPlayerTwo", pid=2),
+        opponent=SimpleNamespace(name="PlayerOne", pid=1),
+    )
+    zero_geometry = pipeline._compute_spatial_extract(zero_ctx)
+    assert zero_geometry is not None
+    assert "my_proxy_classification_v" not in zero_geometry
+    playback["my_events"].pop()
+    for stats in (
+        {"errors": 1, "pid_failed": 0, "proxy_errors": 1},
+        {"errors": 0, "pid_failed": 1, "proxy_errors": 1},
+    ):
+        playback["extract_stats"] = stats
+        unhealthy_ctx = SimpleNamespace(
+            file_path=Path(
+                f"C:/replays/unhealthy-{stats['errors']}-"
+                f"{stats['proxy_errors']}.SC2Replay",
+            ),
+            me=SimpleNamespace(name="SelectedPlayerTwo", pid=2),
+            opponent=SimpleNamespace(name="PlayerOne", pid=1),
+        )
+        unhealthy = pipeline._compute_spatial_extract(unhealthy_ctx)
+        assert unhealthy is not None
+        assert "my_proxy_classification_v" not in unhealthy
+        assert "opp_proxy_classification_v" not in unhealthy
+
+
 def test_swallows_resolver_exceptions(_stub_pulse_resolver):
     from sc2tools_agent.replay_pipeline import _resolve_pulse_character_id
 

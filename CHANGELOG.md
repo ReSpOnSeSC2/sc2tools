@@ -11,6 +11,19 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Centered stream alerts no longer disappear while the chat timeline still
+  records the event** — TikTok follows and public YouTube subscriptions now
+  carry a trusted cloud receipt timestamp for late-mount and reconnect replay
+  decisions. Provider occurrence time remains intact for display and dedupe,
+  but an older provider clock can no longer suppress the prominent alert or
+  its configured Marine, Zealot, or other 3D visual.
+- **Turning off automatic OBS scene changes takes effect immediately** — the
+  agent atomically disables the running controller, cancels inbox and
+  debounced scene work, and guards the startup handoff so no later phase can
+  switch scenes after the setting is cleared.
+
 ### Changed
 
 - **Every analyzer section is now a real URL** — the dashboard's seven
@@ -61,6 +74,14 @@ corresponding GitHub Release.
   untouched — they inherit the new chrome and the wider canvas.
 
 ### Added
+
+- **Custom builds can identify and require proxy buildings** — replay-created
+  rules reuse the existing 50-unit proxy geometry and preserve the matched
+  building and timing as proxy evidence. The editor exposes an optional
+  proxy-only requirement for building rules, and preview, cloud
+  reclassification, ingest-time tagging, community copies, and the bundled
+  replay classifier all evaluate that same flag without changing older saved
+  builds.
 
 - **"Win rate by opponent MMR" now groups in 500-MMR brackets, and opens
   that way** — across a real ladder spread the old 50/100-wide bands fanned

@@ -10,6 +10,7 @@ Build-scenes round-trips return to the GUI.
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -142,6 +143,92 @@ def test_save_hot_applies_to_a_running_switcher() -> None:
     assert cfg["scene_map"] == {"menu": "Chill"}
     assert cfg["debounce_sec"] == 2.0
     assert cfg["switch_on_replays"] is True
+
+
+def test_disabling_hot_applies_false_to_a_running_switcher() -> None:
+    controller, client = FakeController(), FakeClient()
+    state = AgentState(obs_scene_switch_enabled=True)
+
+    _apply_obs_settings(
+        state,
+        SettingsPayload(obs_scene_switch_enabled=False),
+        _cell(controller, client),
+        _LOG,
+    )
+
+    assert state.obs_scene_switch_enabled is False
+    assert controller.configs[-1]["enabled"] is False
+
+
+def test_no_obs_flag_rejects_a_later_gui_enable() -> None:
+    """The command-line safety gate remains authoritative after boot."""
+    cell = runner._RuntimeCell()
+    cell.no_obs = True
+    cell.live_bridge = SimpleNamespace(
+        bus=SimpleNamespace(subscribe=lambda _cb: None),
+    )
+    state = AgentState(obs_scene_switch_enabled=False)
+
+    with pytest.raises(RuntimeError, match="--no-obs is active"):
+        _apply_obs_settings(
+            state,
+            SettingsPayload(obs_scene_switch_enabled=True),
+            cell,
+            _LOG,
+        )
+
+    assert state.obs_scene_switch_enabled is False
+    assert cell.obs_scene is None
+    assert cell.obs_client is None
+
+
+def test_concurrent_startup_enable_builds_only_one_subscribed_controller(
+    monkeypatch,
+) -> None:
+    """GUI hot-enable racing boot must not leave an orphan switcher alive."""
+    build_calls: List[int] = []
+
+    class _Client:
+        def start(self) -> None:
+            pass
+
+    class _Controller(FakeController):
+        listener = object()
+
+        def start(self) -> None:
+            pass
+
+    controller = _Controller()
+
+    def build(**_kwargs: Any):
+        build_calls.append(1)
+        return _Client(), controller
+
+    monkeypatch.setattr(runner, "_build_obs_switcher", build)
+    cell = runner._RuntimeCell()
+    cell.live_bridge = SimpleNamespace(bus=SimpleNamespace(subscribe=lambda _cb: None))
+    state = AgentState()
+    barrier = threading.Barrier(3)
+
+    def enable() -> None:
+        barrier.wait()
+        _apply_obs_settings(
+            state,
+            SettingsPayload(obs_scene_switch_enabled=True),
+            cell,
+            _LOG,
+        )
+
+    threads = [threading.Thread(target=enable) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join(timeout=2.0)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert len(build_calls) == 1
+    assert cell.obs_scene is controller
 
 
 def test_all_blank_scene_map_falls_back_to_the_defaults() -> None:

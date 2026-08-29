@@ -2,6 +2,10 @@
 
 const AjvModule = require("ajv");
 const addFormatsModule = require("ajv-formats");
+const {
+  PROXY_ELIGIBLE_BUILDING_NAMES,
+  isProxyEligibleBuilding,
+} = require("../services/knownBuildings");
 
 const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
 const addFormats =
@@ -120,6 +124,26 @@ const BUILD_SCHEMA = {
         type: "object",
         additionalProperties: false,
         required: ["type", "name", "time_lt"],
+        allOf: [{
+          if: {
+            required: ["proxy"],
+            properties: { proxy: { const: true } },
+          },
+          then: {
+            // SPA structure tokens use Build<X>. Reject obvious unit,
+            // upgrade, and morph tokens instead of accepting a proxy-only
+            // not_before rule that would vacuously pass forever.
+            properties: {
+              name: {
+                type: "string",
+                enum: Array.from(
+                  PROXY_ELIGIBLE_BUILDING_NAMES,
+                  (name) => `Build${name}`,
+                ),
+              },
+            },
+          },
+        }],
         properties: {
           type: {
             type: "string",
@@ -139,6 +163,10 @@ const BUILD_SCHEMA = {
           },
           time_lt: { type: "integer", minimum: 1, maximum: 1800 },
           count: { type: "integer", minimum: 0, maximum: 200 },
+          // Optional modifier for structure rules. Absent/false preserves
+          // every existing v3 rule's semantics; true requires an event the
+          // replay agent classified as proxied.
+          proxy: { type: "boolean" },
         },
       },
     },
@@ -208,6 +236,24 @@ function validateCustomBuild(raw) {
     );
     return { valid: false, errors: errs };
   }
+  const invalidProxyRule = Array.isArray(value.rules)
+    ? value.rules.find((rule) => (
+      rule?.proxy === true
+      && (
+        typeof rule.name !== "string"
+        || !rule.name.startsWith("Build")
+        || !isProxyEligibleBuilding(rule.name.slice("Build".length))
+      )
+    ))
+    : null;
+  if (invalidProxyRule) {
+    return {
+      valid: false,
+      errors: [
+        `/rules proxy is only valid for a known structure (${invalidProxyRule.name})`,
+      ],
+    };
+  }
   return { valid: true, value };
 }
 
@@ -237,7 +283,7 @@ function boundedBuildClone(raw) {
   out.rules = boundedObjectArray(
     raw.rules,
     RULES_MAX_ITEMS,
-    ["type", "name", "time_lt", "count"],
+    ["type", "name", "time_lt", "count", "proxy"],
   );
   out.steps = boundedObjectArray(
     raw.steps,

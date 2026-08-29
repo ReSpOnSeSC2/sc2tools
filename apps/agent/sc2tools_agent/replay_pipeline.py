@@ -13,6 +13,7 @@ the uploader (validated cloud JSON). It NEVER mutates the replay file.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import sys
@@ -1147,6 +1148,47 @@ def _build_log_from_events(
     return full, early
 
 
+_RAW_MAP_PLAYBACK_CACHE_ATTR = "_sc2tools_raw_map_playback_cache"
+
+
+def _raw_map_playback(ctx: Any, playback_mod: Any) -> Optional[Dict[str, Any]]:
+    """Build the perspective-aware playback once for both cloud extracts.
+
+    Spatial extraction and the interactive map payload are produced in the
+    same upload pass. The replay walk is expensive, so cache its raw result on
+    that parse context (including ``None`` failures) and let both consumers
+    reuse it. The cache key includes the selected player because that name is
+    what the engine uses to assign my_events versus opp_events.
+    """
+    me = getattr(ctx, "me", None)
+    replay_path = getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)
+    player_name = getattr(me, "name", None) if me is not None else None
+    if not replay_path or not player_name:
+        return None
+    key = (str(replay_path), str(player_name))
+    cached = getattr(ctx, _RAW_MAP_PLAYBACK_CACHE_ATTR, None)
+    if (
+        isinstance(cached, tuple)
+        and len(cached) == 2
+        and cached[0] == key
+    ):
+        return cached[1]
+    try:
+        # Production signature is (file_path, player_name). The selected
+        # perspective must be passed or player-2 uploads invert ownership.
+        playback = playback_mod.build_playback_data(*key)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("map_playback_build_failed: %s", exc)
+        playback = None
+    try:
+        setattr(ctx, _RAW_MAP_PLAYBACK_CACHE_ATTR, (key, playback))
+    except Exception:  # noqa: BLE001
+        # A slots-only third-party context remains supported; it merely loses
+        # the optimization and both additive outputs still fail independently.
+        pass
+    return playback
+
+
 def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     """Extract per-replay spatial events for the cloud Map Intel heatmaps.
 
@@ -1175,37 +1217,43 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     if me is None or opp is None:
         return None
     try:
-        from core.map_playback_data import (  # type: ignore
-            DEFAULT_BOUNDS,
-            bounds_for as _bounds_for,
-            build_playback_data as _build_playback_data,
-            centroid as _centroid,
-            detect_battle_markers as _detect_battle_markers,
-        )
+        playback_mod = _load_sc2ra_package_module("map_playback_data")
     except Exception as exc:  # noqa: BLE001
         log.debug("spatial_imports_unavailable: %s", exc)
         return None
     try:
-        from detectors.base import BaseStrategyDetector  # type: ignore
+        detector_mod = _load_sc2ra_package_module("strategy_detector_base")
+        BaseStrategyDetector = detector_mod.BaseStrategyDetector
+        proxy_eligible_buildings = set(
+            detector_mod.PROXY_ELIGIBLE_BUILDINGS,
+        )
     except Exception:
         BaseStrategyDetector = None  # type: ignore
+        proxy_eligible_buildings = set()
     replay_path = getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)
-    if not replay_path:
+    player_name = getattr(me, "name", None)
+    if not replay_path or not player_name:
         # parse_deep populates ctx.raw but build_playback_data wants a
         # filesystem path. If neither is available we skip rather than
         # raise — the rest of the upload still goes through.
         return None
-    try:
-        playback = _build_playback_data(str(replay_path))
-    except Exception as exc:  # noqa: BLE001
-        log.debug("build_playback_data_failed: %s", exc)
-        return None
+    playback = _raw_map_playback(ctx, playback_mod)
     if not playback:
         return None
+    extract_stats = playback.get("extract_stats")
+    extraction_complete = bool(
+        isinstance(extract_stats, dict)
+        and extract_stats.get("errors") == 0
+        and extract_stats.get("proxy_errors") == 0
+    )
 
     map_bounds = None
     try:
-        b = _bounds_for(playback) or DEFAULT_BOUNDS
+        # build_playback_data already resolved authoritative bounds via the
+        # production bounds_for(map_name, events, replay) call. Reuse the
+        # result; calling bounds_for with the playback dict is the wrong
+        # signature and used to silently drop map_bounds.
+        b = playback.get("bounds") or playback_mod.DEFAULT_BOUNDS
         if isinstance(b, dict):
             map_bounds = {
                 "minX": float(b.get("x_min", 0.0)),
@@ -1223,62 +1271,73 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     my_pid = getattr(me, "pid", None)
     opp_pid = getattr(opp, "pid", None)
 
-    my_buildings: list = []
-    opp_buildings: list = []
-    for entry in playback.get("buildings") or []:
-        if not isinstance(entry, dict):
-            continue
-        x = entry.get("x")
-        y = entry.get("y")
-        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-            continue
-        owner = entry.get("owner_pid", entry.get("pid"))
-        sample = {"x": float(x), "y": float(y)}
-        born = entry.get("born_t")
-        if isinstance(born, (int, float)):
-            sample["time"] = float(born)
-        unit_name = entry.get("name") or entry.get("unit_type")
-        if unit_name:
-            sample["name"] = str(unit_name)
-        if owner == my_pid:
-            my_buildings.append(sample)
-        elif owner == opp_pid:
-            opp_buildings.append(sample)
+    my_buildings, opp_buildings = _spatial_building_sides(
+        playback,
+        my_pid,
+        opp_pid,
+    )
+    my_proxy_source_complete = _proxy_event_side_complete(
+        playback,
+        "my_events",
+        proxy_eligible_buildings,
+        extraction_complete,
+    )
+    opp_proxy_source_complete = _proxy_event_side_complete(
+        playback,
+        "opp_events",
+        proxy_eligible_buildings,
+        extraction_complete,
+    )
 
     if my_buildings:
         out["buildings"] = my_buildings
 
-    # Proxy detection: a building is a "proxy" when it sits closer to
-    # the opponent's main than to ours. We use the SPA's
-    # BaseStrategyDetector._is_proxy threshold (50 world units) so the
-    # cloud and offline view classify identically.
+    # These rows come from my_events / opp_events, not the lifecycle lists.
+    # They are the exact events that produced buildLog, so name/time pairs
+    # still correlate after lifecycle morph renames such as CC -> Orbital.
+    # Proxy detection deliberately calls the replay engine's canonical
+    # BaseStrategyDetector helper. Built-in strategy rules and custom-build
+    # rules therefore share the exact same meaning: a structure more than
+    # 50 world units from its owner's first town hall is proxied.
     if BaseStrategyDetector is not None and (my_buildings or opp_buildings):
-        try:
-            my_main = _main_base_loc(my_buildings)
-            opp_main = _main_base_loc(opp_buildings)
-            if my_main and opp_main:
-                opp_proxies = [
-                    p
-                    for p in opp_buildings
-                    if _euclid(p, my_main) < 50.0
+        detector = BaseStrategyDetector(custom_builds=[])
+        for prefix, rows, source_complete in (
+            ("my", my_buildings, my_proxy_source_complete),
+            ("opp", opp_buildings, opp_proxy_source_complete),
+        ):
+            if not rows or not source_complete:
+                continue
+            try:
+                main_xy = detector._get_main_base_loc(rows)
+                if main_xy == (0.0, 0.0):
+                    continue
+                proxies = [
+                    row
+                    for row in rows
+                    if row.get("name") in proxy_eligible_buildings
+                    if detector._is_proxy(row, main_xy, 50.0)
                 ]
-                my_proxies = [
-                    p
-                    for p in my_buildings
-                    if _euclid(p, opp_main) < 50.0
-                ]
-                if my_proxies:
-                    out["my_proxies"] = my_proxies
-                if opp_proxies:
-                    out["opp_proxies"] = opp_proxies
-        except Exception as exc:  # noqa: BLE001
-            log.debug("proxy_classification_failed: %s", exc)
+                # The stamp is emitted only after every source building event
+                # had finite x/y/time and a canonical name. It therefore means
+                # complete classifiability for this side, not merely that one
+                # positive proxy was found.
+                out[f"{prefix}_proxy_classification_v"] = 1
+                if proxies:
+                    out[f"{prefix}_proxies"] = proxies
+            except Exception as exc:  # noqa: BLE001
+                log.debug("%s_proxy_classification_failed: %s", prefix, exc)
 
     # Battle + death-zone markers — same _detect_battle_markers helper
     # the SPA uses, normalised to {x, y, weight} so the cloud's
     # gridder can drop them straight into the heatmap.
     try:
-        markers = _detect_battle_markers(playback) or []
+        markers = playback_mod.detect_battle_markers(
+            playback.get("my_stats") or [],
+            playback.get("opp_stats") or [],
+            playback.get("my_events") or [],
+            playback.get("opp_events") or [],
+            float(playback.get("game_length") or 0.0),
+        ) or []
     except Exception as exc:  # noqa: BLE001
         log.debug("detect_battle_markers_failed: %s", exc)
         markers = []
@@ -1322,45 +1381,141 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     return out or None
 
 
-def _main_base_loc(buildings: list) -> Optional[Dict[str, float]]:
-    """Pick the canonical "main base" point for the given side.
-
-    First Nexus / CommandCenter / Hatchery wins. Falls back to the
-    earliest building if no town hall is present (rare — happens on
-    parsing failure).
-    """
-    townhall_names = {
-        "Nexus", "CommandCenter", "Hatchery", "OrbitalCommand",
-        "PlanetaryFortress", "Lair", "Hive",
-    }
-    earliest: Optional[Dict[str, Any]] = None
-    earliest_t = float("inf")
-    for b in buildings:
-        if not isinstance(b, dict):
-            continue
-        name = b.get("name")
-        t = b.get("time", float("inf"))
-        if name in townhall_names and isinstance(t, (int, float)) and t < earliest_t:
-            earliest = b
-            earliest_t = float(t)
-    if earliest is None:
-        for b in buildings:
-            t = b.get("time", float("inf")) if isinstance(b, dict) else float("inf")
-            if isinstance(t, (int, float)) and t < earliest_t:
-                earliest = b
-                earliest_t = float(t)
-    if earliest is None:
+def _spatial_building_sample(entry: Any) -> Optional[Dict[str, Any]]:
+    """Normalize one replay-engine building lifecycle row for spatial use."""
+    if not isinstance(entry, dict):
         return None
-    return {"x": float(earliest["x"]), "y": float(earliest["y"])}
+    x = entry.get("x")
+    y = entry.get("y")
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        return None
+    sample: Dict[str, Any] = {"x": float(x), "y": float(y)}
+    born = entry.get(
+        "time",
+        entry.get("born", entry.get("born_t", entry.get("t"))),
+    )
+    if isinstance(born, (int, float)):
+        sample["time"] = float(born)
+    unit_name = entry.get("name") or entry.get("unit_type")
+    if unit_name:
+        sample["name"] = str(unit_name)
+    subtype = entry.get("subtype")
+    if isinstance(subtype, str) and subtype:
+        sample["subtype"] = subtype
+    return sample
 
 
-def _euclid(a: Dict[str, Any], b: Dict[str, Any]) -> float:
-    try:
-        dx = float(a["x"]) - float(b["x"])
-        dy = float(a["y"]) - float(b["y"])
-        return (dx * dx + dy * dy) ** 0.5
-    except (KeyError, TypeError, ValueError):
-        return float("inf")
+def _proxy_event_side_complete(
+    playback: Dict[str, Any],
+    key: str,
+    proxy_eligible_buildings: set,
+    extraction_complete: bool,
+) -> bool:
+    """Whether one playback side can safely carry proxy-classifier v1.
+
+    Version 1 is a completeness assertion used by negative and count-zero
+    custom rules. It is deliberately stricter than the heatmap normalizer:
+    every canonical building event must retain name, time and finite geometry.
+    Lifecycle fallbacks are not stamped because morph renames no longer
+    correlate exactly to the build log.
+    """
+    if not extraction_complete:
+        return False
+    events = playback.get(key)
+    if not isinstance(events, list):
+        return False
+    found = False
+    for entry in events:
+        if not isinstance(entry, dict) or entry.get("type") != "building":
+            continue
+        raw_name = entry.get("name") or entry.get("unit_type")
+        if raw_name not in proxy_eligible_buildings:
+            # event_extractor deliberately removes these from buildLog, so
+            # they cannot participate in a custom proxy rule or correlation.
+            continue
+        found = True
+        sample = _spatial_building_sample(entry)
+        if sample is None:
+            return False
+        raw_time = entry.get(
+            "time",
+            entry.get("born", entry.get("born_t", entry.get("t"))),
+        )
+        if not all(
+            isinstance(entry.get(axis), (int, float))
+            and not isinstance(entry.get(axis), bool)
+            and math.isfinite(float(entry[axis]))
+            and float(entry[axis]) != 0.0
+            for axis in ("x", "y")
+        ):
+            return False
+        name = sample.get("name")
+        if not isinstance(name, str) or not name.strip():
+            return False
+        if (
+            not isinstance(raw_time, (int, float))
+            or isinstance(raw_time, bool)
+            or not math.isfinite(float(raw_time))
+        ):
+            return False
+    return found
+
+
+def _spatial_building_sides(
+    playback: Dict[str, Any],
+    my_pid: Any,
+    opp_pid: Any,
+) -> tuple[list, list]:
+    """Return normalized (mine, opponent) building rows.
+
+    Current replay-engine payloads expose the canonical build-log source as
+    side-specific event lists. Lifecycle rows are only a compatibility
+    fallback because morphs rename them without updating their born time.
+    """
+    my_events = playback.get("my_events")
+    opp_events = playback.get("opp_events")
+    if isinstance(my_events, list) or isinstance(opp_events, list):
+        mine = [
+            sample
+            for entry in (my_events if isinstance(my_events, list) else [])
+            if isinstance(entry, dict) and entry.get("type") == "building"
+            if (sample := _spatial_building_sample(entry)) is not None
+        ]
+        theirs = [
+            sample
+            for entry in (opp_events if isinstance(opp_events, list) else [])
+            if isinstance(entry, dict) and entry.get("type") == "building"
+            if (sample := _spatial_building_sample(entry)) is not None
+        ]
+        return mine, theirs
+
+    my_source = playback.get("my_buildings")
+    opp_source = playback.get("opp_buildings")
+    if isinstance(my_source, list) or isinstance(opp_source, list):
+        mine = [
+            sample
+            for entry in (my_source if isinstance(my_source, list) else [])
+            if (sample := _spatial_building_sample(entry)) is not None
+        ]
+        theirs = [
+            sample
+            for entry in (opp_source if isinstance(opp_source, list) else [])
+            if (sample := _spatial_building_sample(entry)) is not None
+        ]
+        return mine, theirs
+
+    mine: list = []
+    theirs: list = []
+    for entry in playback.get("buildings") or []:
+        sample = _spatial_building_sample(entry)
+        if sample is None or not isinstance(entry, dict):
+            continue
+        owner = entry.get("owner_pid", entry.get("pid", entry.get("owner")))
+        if owner == my_pid or owner == "me":
+            mine.append(sample)
+        elif owner == opp_pid or owner == "opp":
+            theirs.append(sample)
+    return mine, theirs
 
 
 # ── Map playback (the cloud's vespene-style replayer) ────────────────
@@ -1559,15 +1714,10 @@ def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
         return None
     try:
         mod = _load_sc2ra_package_module("map_playback_data")
-        build_playback = mod.build_playback_data
     except Exception as exc:  # noqa: BLE001
         log.warning("map_playback_imports_unavailable: %s", exc)
         return None
-    try:
-        playback = build_playback(str(replay_path), str(player_name))
-    except Exception as exc:  # noqa: BLE001
-        log.debug("map_playback_build_failed: %s", exc)
-        return None
+    playback = _raw_map_playback(ctx, mod)
     if not playback:
         return None
     try:

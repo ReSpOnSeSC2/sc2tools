@@ -55,6 +55,7 @@ const PUBLIC_BUILD_LEAF_FIELDS = Object.freeze([
   "rules.name",
   "rules.time_lt",
   "rules.count",
+  "rules.proxy",
   "schemaVersion",
   "skillLevel",
   "winConditions",
@@ -158,7 +159,7 @@ function publicBuildMongoExpression(path = "$build") {
     rules: mongoObjectArray(
       `${path}.rules`,
       RULES_MAX_ITEMS,
-      ["type", "name", "time_lt", "count"],
+      ["type", "name", "time_lt", "count", "proxy"],
     ),
     schemaVersion: mongoBoundedNumber(`${path}.schemaVersion`),
     skillLevel: mongoBoundedString(`${path}.skillLevel`, 32),
@@ -202,6 +203,9 @@ function mongoObjectArray(path, max, fields) {
         break;
       case "time":
         item[field] = mongoBoundedStringOrNumber(leaf, 20);
+        break;
+      case "proxy":
+        item[field] = mongoBoundedBoolean(leaf);
         break;
       default:
         item[field] = mongoBoundedNumber(leaf, field === "supply");
@@ -259,6 +263,17 @@ function mongoBoundedNumber(path, allowNull = false) {
           ...(allowNull ? [{ $eq: [{ $type: path }, "null"] }] : []),
         ],
       },
+      path,
+      null,
+    ],
+  };
+}
+
+/** @param {string} path */
+function mongoBoundedBoolean(path) {
+  return {
+    $cond: [
+      { $eq: [{ $type: path }, "bool"] },
       path,
       null,
     ],
@@ -338,6 +353,7 @@ function copyRules(out, value) {
     copyString(row, "name", raw.name, 80);
     copyInteger(row, "time_lt", raw.time_lt, 1, 1800);
     copyInteger(row, "count", raw.count, 0, 200);
+    if (typeof raw.proxy === "boolean") row.proxy = raw.proxy;
     rows.push(row);
   }
   out.rules = rows;

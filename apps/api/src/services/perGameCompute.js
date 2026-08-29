@@ -25,6 +25,10 @@ const {
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 const BUILD_LOG_NOISE_RE = /^(Beacon|Reward|Spray)/;
+// Spatial lifecycle timestamps retain fractions while buildLog lines are
+// formatted to whole seconds. This covers that quantization without letting
+// normally distinct structure starts bleed together.
+const PROXY_EVENT_TIME_TOLERANCE_SEC = 2;
 
 /** @param {number} ms */
 function wait(ms) {
@@ -174,6 +178,7 @@ class PerGameComputeService {
       "opponent.displayName": 1,
       "opponent.race": 1,
       "opponent.strategy": 1,
+      spatial: 1,
     };
     for (const field of fields) slimProjection[field] = 1;
     const [slim, fromStore] = await Promise.all([
@@ -239,12 +244,24 @@ class PerGameComputeService {
       && merged.buildLog.length > 0;
     const oppBuildLogPresent = Array.isArray(merged.oppBuildLog)
       && merged.oppBuildLog.length > 0;
-    const rawEvents = parseBuildLogLines(merged.buildLog || [], this.catalog);
-    const rawEarly = parseBuildLogLines(readEarlyBuildLog(merged), this.catalog);
-    const rawOpp = parseBuildLogLines(merged.oppBuildLog || [], this.catalog);
+    const myProxies = merged.spatial?.my_proxies;
+    const oppProxies = merged.spatial?.opp_proxies;
+    const myProxyCoverage = merged.spatial?.my_proxy_classification_v === 1;
+    const oppProxyCoverage = merged.spatial?.opp_proxy_classification_v === 1;
+    const rawEvents = parseBuildLogLines(
+      merged.buildLog || [], this.catalog, myProxies, myProxyCoverage,
+    );
+    const rawEarly = parseBuildLogLines(
+      readEarlyBuildLog(merged), this.catalog, myProxies, myProxyCoverage,
+    );
+    const rawOpp = parseBuildLogLines(
+      merged.oppBuildLog || [], this.catalog, oppProxies, oppProxyCoverage,
+    );
     const rawOppEarly = parseBuildLogLines(
       readOppEarlyBuildLog(merged),
       this.catalog,
+      oppProxies,
+      oppProxyCoverage,
     );
     // Diagnostic reason codes for the UI's empty state. ``not_extracted``
     // = the agent hasn't uploaded a build log for this side yet (the
@@ -750,6 +767,7 @@ class PerGameComputeService {
       macroScore: 1,
       apm: 1,
       spq: 1,
+      spatial: 1,
     };
     if (includeMacroBreakdown) {
       // Legacy fallback: a few pre-v0.4.3 docs still carry
@@ -827,9 +845,19 @@ class PerGameComputeService {
           // apply ``eventsToStartTime`` here (the single rule-eval
           // event source) so every downstream caller automatically
           // sees the right semantic.
-          events: eventsToStartTime(parseBuildLogLines(buildLog, this.catalog)),
+          events: eventsToStartTime(parseBuildLogLines(
+            buildLog,
+            this.catalog,
+            g.spatial?.my_proxies,
+            g.spatial?.my_proxy_classification_v === 1,
+          )),
           oppEvents: eventsToStartTime(
-            parseBuildLogLines(oppBuildLog, this.catalog),
+            parseBuildLogLines(
+              oppBuildLog,
+              this.catalog,
+              g.spatial?.opp_proxies,
+              g.spatial?.opp_proxy_classification_v === 1,
+            ),
           ),
           result: g.result || null,
           date: g.date || null,
@@ -886,6 +914,7 @@ class PerGameComputeService {
       _customBuildSlug: 1,
       _customOpponentStrategySlug: 1,
       _opponentBuildOrderWriteLease: 1,
+      spatial: 1,
       myRace: 1,
       "opponent.displayName": 1,
       "opponent.race": 1,
@@ -1030,9 +1059,19 @@ class PerGameComputeService {
           buildLog,
           oppBuildLog,
           events: perspective === "opponent" ? []
-            : eventsToStartTime(parseBuildLogLines(buildLog, this.catalog)),
+            : eventsToStartTime(parseBuildLogLines(
+              buildLog,
+              this.catalog,
+              g.spatial?.my_proxies,
+              g.spatial?.my_proxy_classification_v === 1,
+            )),
           oppEvents: perspective === "you" ? []
-            : eventsToStartTime(parseBuildLogLines(oppBuildLog, this.catalog)),
+            : eventsToStartTime(parseBuildLogLines(
+              oppBuildLog,
+              this.catalog,
+              g.spatial?.opp_proxies,
+              g.spatial?.opp_proxy_classification_v === 1,
+            )),
           result: g.result || null,
           date: g.date || null,
           map: g.map || null,
@@ -1254,9 +1293,17 @@ class MacroBackfillService {
  *
  * @param {string[]} lines
  * @param {{ lookup: (name: string) => object | null } | null} [catalog]
+ * @param {unknown} [proxyBuildings] Named/timed entries from the agent's
+ *   canonical spatial.my_proxies or spatial.opp_proxies list.
+ * @param {boolean} [proxyClassificationKnown]
  */
-function parseBuildLogLines(lines, catalog) {
-  /** @type {Array<{time: number, time_display: string, name: string, display: string, race: string, category: string, tier: number, is_building: boolean, comp: any}>} */
+function parseBuildLogLines(
+  lines,
+  catalog,
+  proxyBuildings,
+  proxyClassificationKnown = false,
+) {
+  /** @type {Array<{time: number, time_display: string, name: string, display: string, race: string, category: string, tier: number, is_building: boolean, is_proxy?: boolean, comp: any}>} */
   const events = [];
   if (!Array.isArray(lines)) return events;
   for (const line of lines) {
@@ -1307,7 +1354,190 @@ function parseBuildLogLines(lines, catalog) {
     });
   }
   events.sort((a, b) => a.time - b.time);
-  return events;
+  return annotateProxyBuildings(
+    events,
+    proxyBuildings,
+    proxyClassificationKnown,
+  );
+}
+
+/**
+ * Correlate canonical proxy classifications onto parsed build-order events.
+ * Proxy rows carry structure name + lifecycle time; one-to-one matching keeps
+ * a single forward Barracks from marking every Barracks in the replay. Older
+ * spatial rows without either field remain unclassified instead of guessed.
+ *
+ * @param {ReadonlyArray<any>} events
+ * @param {unknown} proxyBuildings
+ * @param {boolean} [proxyClassificationKnown]
+ * @returns {Array<any>}
+ */
+function annotateProxyBuildings(
+  events,
+  proxyBuildings,
+  proxyClassificationKnown = false,
+) {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  // The v1 stamp is the sole proof that this side was classified with the
+  // canonical owner-main >50 predicate. Pre-0.16 spatial rows can already
+  // contain names/times, but were generated with a different heuristic and
+  // must remain unknown (especially for negative/count-zero rules).
+  if (proxyClassificationKnown !== true) return [...events];
+  if (proxyBuildings != null && !Array.isArray(proxyBuildings)) {
+    return [...events];
+  }
+  const rawCandidates = Array.isArray(proxyBuildings) ? proxyBuildings : [];
+  const candidates = /** @type {Array<{name:string,time:number,x:number,y:number}>} */ (rawCandidates
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const time = row.time ?? row.born ?? row.born_t ?? row.t;
+      const x = row.x;
+      const y = row.y;
+      if (
+        !name || typeof time !== "number" || !Number.isFinite(time)
+        || typeof x !== "number" || !Number.isFinite(x)
+        || typeof y !== "number" || !Number.isFinite(y)
+      ) return null;
+      return { name, time, x, y };
+    })
+    .filter(Boolean));
+  // A stamped side is only complete when every positive proxy row survived
+  // sanitization and correlates to the exact build-log source. Otherwise we
+  // cannot safely label all unmatched structures "home", so fail closed.
+  if (candidates.length !== rawCandidates.length) return [...events];
+
+  const matchedEvents = new Set();
+  const matchedCandidates = new Set();
+  const candidatesByName = new Map();
+  candidates.forEach((candidate, candidateIndex) => {
+    const group = candidatesByName.get(candidate.name) || [];
+    group.push({ ...candidate, candidateIndex });
+    candidatesByName.set(candidate.name, group);
+  });
+  for (const [name, candidateGroup] of candidatesByName) {
+    /** @type {Array<{time:number,eventIndex:number}>} */
+    const eventGroup = [];
+    events.forEach((event, eventIndex) => {
+      const time = Number(event?.time);
+      if (
+        event?.is_building
+        && event.name === name
+        && Number.isFinite(time)
+      ) {
+        eventGroup.push({ time, eventIndex });
+      }
+    });
+    for (const pair of optimalProxyPairs(eventGroup, candidateGroup)) {
+      matchedEvents.add(pair.eventIndex);
+      matchedCandidates.add(pair.candidateIndex);
+    }
+  }
+
+  if (matchedCandidates.size !== candidates.length) return [...events];
+  const classifiedEvents = events.map((event) => ({
+    ...event,
+    proxy_classification_known: true,
+    ...(event?.is_building ? { is_proxy: false } : {}),
+  }));
+  return classifiedEvents.map((event, index) => (
+    matchedEvents.has(index) ? { ...event, is_proxy: true } : event
+  ));
+}
+
+/**
+ * Maximum-cardinality, minimum-total-delta assignment for one structure name.
+ *
+ * Both timelines are one-dimensional and sorted by time, so an optimal
+ * assignment is non-crossing. Dynamic programming therefore avoids the
+ * greedy edge case where two adjacent candidates compete for one event even
+ * though a complete valid assignment exists. Only the direction matrix is
+ * retained (one byte/cell); score rows are reused to keep reclassification
+ * memory bounded.
+ *
+ * @param {Array<{time:number,eventIndex:number}>} rawEvents
+ * @param {Array<{time:number,candidateIndex:number}>} rawCandidates
+ * @returns {Array<{eventIndex:number,candidateIndex:number}>}
+ */
+function optimalProxyPairs(rawEvents, rawCandidates) {
+  if (!rawEvents.length || !rawCandidates.length) return [];
+  const eventRows = [...rawEvents].sort((a, b) => (
+    a.time - b.time || a.eventIndex - b.eventIndex
+  ));
+  const candidateRows = [...rawCandidates].sort((a, b) => (
+    a.time - b.time || a.candidateIndex - b.candidateIndex
+  ));
+  const n = eventRows.length;
+  const m = candidateRows.length;
+  const width = m + 1;
+  const directions = new Uint8Array((n + 1) * width);
+  for (let j = 1; j <= m; j += 1) directions[j] = 2;
+
+  let previousCounts = new Uint16Array(width);
+  let previousCosts = new Float64Array(width);
+  for (let i = 1; i <= n; i += 1) {
+    const counts = new Uint16Array(width);
+    const costs = new Float64Array(width);
+    directions[i * width] = 1;
+    for (let j = 1; j <= m; j += 1) {
+      let bestCount = previousCounts[j];
+      let bestCost = previousCosts[j];
+      let direction = 1;
+      const leftCount = counts[j - 1];
+      const leftCost = costs[j - 1];
+      if (
+        leftCount > bestCount
+        || (leftCount === bestCount && leftCost < bestCost)
+      ) {
+        bestCount = leftCount;
+        bestCost = leftCost;
+        direction = 2;
+      }
+      const delta = Math.abs(
+        eventRows[i - 1].time - candidateRows[j - 1].time,
+      );
+      if (delta <= PROXY_EVENT_TIME_TOLERANCE_SEC) {
+        const matchCount = previousCounts[j - 1] + 1;
+        const matchCost = previousCosts[j - 1] + delta;
+        if (
+          matchCount > bestCount
+          || (
+            matchCount === bestCount
+            && matchCost <= bestCost + Number.EPSILON
+          )
+        ) {
+          bestCount = matchCount;
+          bestCost = matchCost;
+          direction = 3;
+        }
+      }
+      counts[j] = bestCount;
+      costs[j] = bestCost;
+      directions[i * width + j] = direction;
+    }
+    previousCounts = counts;
+    previousCosts = costs;
+  }
+
+  const pairs = [];
+  let i = n;
+  let j = m;
+  while (i > 0 || j > 0) {
+    const direction = directions[i * width + j];
+    if (direction === 3) {
+      pairs.push({
+        eventIndex: eventRows[i - 1].eventIndex,
+        candidateIndex: candidateRows[j - 1].candidateIndex,
+      });
+      i -= 1;
+      j -= 1;
+    } else if (direction === 2) {
+      j -= 1;
+    } else {
+      i -= 1;
+    }
+  }
+  return pairs.reverse();
 }
 
 /**
@@ -1381,6 +1611,7 @@ module.exports = {
   PerGameComputeService,
   MacroBackfillService,
   parseBuildLogLines,
+  annotateProxyBuildings,
   eventsToStartTime,
   // Exported so other services (dnaTimings, ml) consume the same
   // derivation logic instead of each rolling their own filter.

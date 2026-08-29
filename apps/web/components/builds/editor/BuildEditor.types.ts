@@ -91,6 +91,7 @@ export interface BuildEditorState {
     time: number;
     name: string;
     is_building?: boolean;
+    is_proxy?: boolean;
     race?: string;
     category?: string;
   }) => void;

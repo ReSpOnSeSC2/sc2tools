@@ -26,6 +26,11 @@ except ImportError:
     from core.timebase import event_seconds, infer_fps  # type: ignore
 
 try:
+    from .build_definitions import PROXY_ELIGIBLE_BUILDINGS
+except ImportError:
+    from core.build_definitions import PROXY_ELIGIBLE_BUILDINGS  # type: ignore
+
+try:
     from sc2reader.events.tracker import (
         UnitBornEvent,
         UnitInitEvent,
@@ -368,7 +373,15 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
     """
     my_events: List[Dict] = []
     opp_events: List[Dict] = []
-    stats = {'total': 0, 'pid_failed': 0, 'processed': 0, 'errors': 0}
+    stats = {
+        'total': 0,
+        'pid_failed': 0,
+        'processed': 0,
+        'errors': 0,
+        # Completeness-specific failures for negative proxy assertions.
+        # Generic pid_failed includes neutral resources and cannot gate v1.
+        'proxy_errors': 0,
+    }
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
     try:
@@ -377,10 +390,16 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
             if isinstance(event, UnitInitEvent):
                 pid = _get_owner_pid(event)
                 raw = _get_unit_type_name(event)
-                if pid is None or raw is None:
+                if raw is None:
                     stats['pid_failed'] += 1
+                    stats['proxy_errors'] += 1
                     continue
                 clean = _clean_building_name(raw)
+                if pid is None:
+                    stats['pid_failed'] += 1
+                    if clean in PROXY_ELIGIBLE_BUILDINGS:
+                        stats['proxy_errors'] += 1
+                    continue
                 x = getattr(event, 'x', 0)
                 y = getattr(event, 'y', 0)
 
@@ -394,10 +413,16 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
             elif isinstance(event, UnitBornEvent):
                 pid = _get_owner_pid(event)
                 raw = _get_unit_type_name(event)
-                if pid is None or raw is None:
+                if raw is None:
                     stats['pid_failed'] += 1
+                    stats['proxy_errors'] += 1
                     continue
                 clean = _clean_building_name(raw)
+                if pid is None:
+                    stats['pid_failed'] += 1
+                    if clean in PROXY_ELIGIBLE_BUILDINGS:
+                        stats['proxy_errors'] += 1
+                    continue
                 x = getattr(event, 'x', 0)
                 y = getattr(event, 'y', 0)
 
@@ -421,9 +446,14 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
             elif isinstance(event, UnitTypeChangeEvent):
                 pid = _get_owner_pid(event)
                 raw = _get_unit_type_name(event)
-                if pid is None or raw is None:
+                if raw is None:
+                    stats['proxy_errors'] += 1
                     continue
                 clean = _clean_building_name(raw)
+                if pid is None:
+                    if clean in PROXY_ELIGIBLE_BUILDINGS:
+                        stats['proxy_errors'] += 1
+                    continue
                 x = getattr(event.unit, 'x', 0) if getattr(event, 'unit', None) else 0
                 y = getattr(event.unit, 'y', 0) if getattr(event, 'unit', None) else 0
 
@@ -461,6 +491,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 stats['processed'] += 1
     except Exception:
         stats['errors'] += 1
+        stats['proxy_errors'] += 1
         # Graceful exit from broken iterator
         pass
 

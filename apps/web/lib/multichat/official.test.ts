@@ -13,6 +13,7 @@ describe("official platform event socket", () => {
       user: "Alpha",
       detail: "followed on Twitch",
       atMs: 123,
+      receivedAtMs: 456,
       official: true,
       replayed: true,
       dedupeKey: "support:follow:alpha",
@@ -24,6 +25,7 @@ describe("official platform event socket", () => {
       user: "Alpha",
       detail: "followed on Twitch",
       atMs: 123,
+      receivedAtMs: 456,
       official: true,
       replayed: true,
       dedupeKey: "support:follow:alpha",
@@ -71,10 +73,12 @@ describe("official platform event socket", () => {
       user: "Viewer",
       detail: "subscribed on YouTube",
       atMs: 456,
+      receivedAtMs: 789,
     });
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
       platform: "youtube",
       kind: "follow",
+      receivedAtMs: 789,
     }));
     handlers.get("overlay:platformEvent")?.({ bad: true });
     expect(onEvent).toHaveBeenCalledTimes(1);

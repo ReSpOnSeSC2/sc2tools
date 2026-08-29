@@ -12,6 +12,7 @@ import {
   clampCount,
   clampRuleTime,
   formatTime,
+  isProxyStructureToken,
   isCountRule,
   parseTimeInput,
   type BuildRule,
@@ -209,6 +210,11 @@ function SourceTimelinePanel({
                   <span className="hidden text-micro text-text-dim sm:inline">
                     {r.what}
                   </span>
+                  {r.isProxy ? (
+                    <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-warning">
+                      Proxy
+                    </span>
+                  ) : null}
                   {inRules ? (
                     <span className="text-micro font-semibold text-accent-cyan">
                       ✓ in rules
@@ -221,6 +227,7 @@ function SourceTimelinePanel({
                           time: r.t,
                           name: r.what,
                           is_building: r.isBuilding,
+                          is_proxy: r.isProxy,
                           race: r.race,
                           category: r.category,
                         })
@@ -322,9 +329,29 @@ function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
         value={rule.name}
         placeholder="BuildStargate"
         title="Event token (e.g. BuildStargate, ResearchBlink)"
-        onChange={(e) => onUpdate({ name: e.target.value.trim() })}
+        onChange={(e) => {
+          const name = e.target.value.trim();
+          onUpdate({
+            name,
+            ...(!isProxyStructureToken(name) ? { proxy: false } : {}),
+          });
+        }}
         className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
       />
+      <label
+        className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-micro text-text-muted"
+        title="Require this structure to be more than 50 world units from its owner's main."
+      >
+        <input
+          type="checkbox"
+          checked={rule.proxy === true}
+          disabled={!isProxyStructureToken(rule.name)}
+          onChange={(e) => onUpdate({ proxy: e.target.checked })}
+          aria-label={`Require ${rule.name || "this structure"} to be proxied`}
+          className="h-3.5 w-3.5 accent-[var(--accent)]"
+        />
+        Proxy only
+      </label>
       {isCount ? (
         <span className="text-micro text-text-dim">by</span>
       ) : rule.type === "not_before" ? (

@@ -189,6 +189,83 @@ describe("services/perGameCompute", () => {
       });
     });
 
+    test("correlates named/timed proxy evidence one-to-one", () => {
+      const events = parseBuildLogLines(
+        ["[1:00] Barracks", "[1:30] Barracks", "[1:40] Marine"],
+        null,
+        [
+          { name: "Barracks", time: 90.8, x: 80, y: 80 },
+        ],
+        true,
+      );
+      expect(events[0].is_proxy).toBe(false);
+      expect(events[1].is_proxy).toBe(true);
+      expect(events[2].is_proxy).toBeUndefined();
+    });
+
+    test("same-name correlation chooses the globally closest event", () => {
+      const events = parseBuildLogLines(
+        ["[1:30] Barracks", "[1:31] Barracks"],
+        null,
+        [{ name: "Barracks", time: 91.1, x: 80, y: 80 }],
+        true,
+      );
+      expect(events[0].is_proxy).toBe(false);
+      expect(events[1].is_proxy).toBe(true);
+    });
+
+    test("same-name correlation maximizes cardinality before timestamp cost", () => {
+      const events = parseBuildLogLines(
+        ["[1:30] Barracks", "[1:32] Barracks"],
+        null,
+        [
+          // Greedy closest-edge matching consumes 91.9 on the 92s event and
+          // strands 93.9. The complete assignment is 90↔91.9, 92↔93.9.
+          { name: "Barracks", time: 91.9, x: 80, y: 80 },
+          { name: "Barracks", time: 93.9, x: 81, y: 80 },
+        ],
+        true,
+      );
+      expect(events.map((event) => event.is_proxy)).toEqual([true, true]);
+    });
+
+    test("coverage stamp marks home structures false; legacy rows stay unknown", () => {
+      const classified = parseBuildLogLines(
+        ["[1:30] Barracks"], null, [], true,
+      );
+      expect(classified[0]).toMatchObject({
+        is_proxy: false,
+        proxy_classification_known: true,
+      });
+
+      const legacy = parseBuildLogLines(
+        ["[1:30] Barracks"], null, [{ x: 80, y: 80 }], false,
+      );
+      expect(legacy[0].is_proxy).toBeUndefined();
+      expect(legacy[0].proxy_classification_known).toBeUndefined();
+    });
+
+    test("unstamped legacy and incomplete stamped candidates stay unknown", () => {
+      const legacyNamed = parseBuildLogLines(
+        ["[1:30] Barracks"],
+        null,
+        [{ name: "Barracks", time: 90, x: 80, y: 80 }],
+        false,
+      );
+      expect(legacyNamed[0].proxy_classification_known).toBeUndefined();
+
+      for (const candidates of [
+        [{ name: "Barracks", time: 90, x: 80 }],
+        [{ name: "Barracks", time: 200, x: 80, y: 80 }],
+      ]) {
+        const incomplete = parseBuildLogLines(
+          ["[1:30] Barracks"], null, candidates, true,
+        );
+        expect(incomplete[0].is_proxy).toBeUndefined();
+        expect(incomplete[0].proxy_classification_known).toBeUndefined();
+      }
+    });
+
     test("ignores lines that don't match the [m:ss] regex", () => {
       const events = parseBuildLogLines([
         "garbage",
@@ -515,6 +592,37 @@ describe("services/perGameCompute", () => {
       // Opponent Stalker: 30s build — finish 3:00 ⇒ start 2:30 (150s).
       const opp = new Map(g.oppEvents.map((e) => [e.name, e.time]));
       expect(opp.get("Stalker")).toBe(150);
+    });
+
+    test("projects spatial and annotates both preview perspectives", async () => {
+      let projection = null;
+      const collection = {
+        find(_match, opts) {
+          projection = opts.projection;
+          return {
+            sort: () => ({
+              limit: () => ({
+                toArray: async () => [{
+                  gameId: "proxy-preview",
+                  buildLog: ["[1:30] Barracks"],
+                  oppBuildLog: ["[1:40] Gateway"],
+                  spatial: {
+                    my_proxy_classification_v: 1,
+                    opp_proxy_classification_v: 1,
+                    my_proxies: [{ name: "Barracks", time: 90, x: 80, y: 80 }],
+                    opp_proxies: [{ name: "Gateway", time: 100, x: 20, y: 20 }],
+                  },
+                }],
+              }),
+            }),
+          };
+        },
+      };
+      const svc = new PerGameComputeService({ games: collection });
+      const [game] = await svc.listForRulePreview("u1");
+      expect(projection.spatial).toBe(1);
+      expect(game.events[0].is_proxy).toBe(true);
+      expect(game.oppEvents[0].is_proxy).toBe(true);
     });
 
     test("pushes the optional ``match`` predicate into the Mongo find so the limit caps matching games", async () => {

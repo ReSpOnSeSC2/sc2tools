@@ -53,6 +53,46 @@ const KNOWN_BUILDING_NAMES = new Set([
 ]);
 
 /**
+ * Structures eligible for the v3 ``proxy: true`` rule modifier.
+ *
+ * This intentionally mirrors the bundled replay engine's effective emitted
+ * set: known buildings minus skipped, flying-state, and zero-coordinate morph
+ * events. The broader catalog above also contains temporary, rich-resource,
+ * uprooted, and effect structures which the live Python classifier never
+ * records as safely matchable build events (for example NydusWorm).
+ * Keeping the proxy contract on this narrower set prevents the API from
+ * accepting a rule that can never match locally.
+ *
+ * Keep this set, the web editor's ``PROXY_ELIGIBLE_BUILDINGS``, and the local
+ * custom-build JSON schema's ``proxyStructureName`` enum in lockstep.
+ */
+const PROXY_ELIGIBLE_BUILDING_NAMES = new Set([
+  // Protoss
+  "Nexus", "Pylon", "Assimilator", "Gateway", "Forge",
+  "CyberneticsCore", "PhotonCannon", "TwilightCouncil",
+  "Stargate", "RoboticsFacility", "RoboticsBay", "TemplarArchive",
+  "DarkShrine", "FleetBeacon",
+  // Terran
+  "CommandCenter", "Refinery",
+  "Barracks", "Factory", "Starport",
+  "EngineeringBay", "Armory", "GhostAcademy", "FusionCore", "TechLab",
+  "Reactor", "BarracksTechLab", "BarracksReactor", "FactoryTechLab",
+  "FactoryReactor", "StarportTechLab", "StarportReactor", "MissileTurret",
+  "SensorTower", "Bunker",
+  // Zerg
+  "Hatchery", "SpawningPool", "EvolutionChamber",
+  "Extractor", "RoachWarren", "BanelingNest", "SpineCrawler",
+  "SporeCrawler", "HydraliskDen", "InfestationPit", "Spire",
+  "NydusNetwork", "NydusCanal", "UltraliskCavern",
+]);
+
+/** @param {string | null | undefined} name */
+function isProxyEligibleBuilding(name) {
+  return typeof name === "string"
+    && PROXY_ELIGIBLE_BUILDING_NAMES.has(name);
+}
+
+/**
  * @param {string | null | undefined} name
  * @returns {boolean}
  */
@@ -205,6 +245,8 @@ function isKnownUpgrade(name) {
 module.exports = {
   KNOWN_BUILDING_NAMES,
   isKnownBuilding,
+  PROXY_ELIGIBLE_BUILDING_NAMES,
+  isProxyEligibleBuilding,
   KNOWN_UPGRADE_NAMES,
   isKnownUpgrade,
 };

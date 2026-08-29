@@ -389,7 +389,8 @@ function InspectEvents({
             (r) =>
               r &&
               r.name &&
-              (e.name === r.name || `Build${e.name}` === r.name),
+              (e.name === r.name || `Build${e.name}` === r.name) &&
+              (r.proxy !== true || e.is_proxy === true),
           );
           return (
             <div
@@ -410,6 +411,11 @@ function InspectEvents({
               >
                 {e.display || e.name}
               </span>
+              {e.is_proxy ? (
+                <span className="rounded border border-warning/50 bg-warning/10 px-1 text-[10px] font-semibold uppercase tracking-wide text-warning">
+                  Proxy
+                </span>
+              ) : null}
             </div>
           );
         })}

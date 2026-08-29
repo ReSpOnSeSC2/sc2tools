@@ -588,6 +588,7 @@ describe("services/tiktokChatRelay", () => {
           id: "gift-1",
           kind: "gift",
           user: "supporter",
+          receivedAtMs: expect.any(Number),
         }),
       }),
     ]);

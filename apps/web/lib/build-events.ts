@@ -28,6 +28,8 @@ export interface BuildOrderEvent {
   category?: string;
   tier?: number;
   is_building?: boolean;
+  /** Canonical owner-main distance classification supplied by the agent. */
+  is_proxy?: boolean;
 }
 
 export type BuildEventCategory = "unit" | "building" | "upgrade" | "other";
@@ -49,6 +51,7 @@ export interface BuildEventRow {
   iconKind: IconKind | null;
   race?: string;
   supply?: number;
+  isProxy?: boolean;
 }
 
 const NAME_KEYWORDS: ReadonlyArray<{
@@ -376,6 +379,7 @@ export function normalizeBuildEvent(
     iconKind,
     iconPath,
     race: event?.race,
+    isProxy: event?.is_proxy === true,
   };
 }
 
@@ -437,6 +441,8 @@ export interface BuildSignatureItem {
   unit: string;
   count: number;
   beforeSec: number;
+  /** Display-only metadata when this row originated from a v3 rule. */
+  proxy?: boolean;
 }
 
 /**
@@ -509,6 +515,7 @@ export function signatureToRows(
       iconPath: match
         ? `${ICON_BASE}/${kindDir(match.iconKind)}/${match.iconName}.png`
         : null,
+      isProxy: item.proxy === true,
     });
   });
   return rows;
@@ -524,6 +531,7 @@ export interface BuildRuleLike {
   name: string;
   time_lt: number;
   count?: number;
+  proxy?: boolean;
 }
 
 /**
@@ -559,6 +567,7 @@ export function rulesToSignature(
       unit: name,
       count,
       beforeSec: Math.max(0, Math.floor(Number(r.time_lt) || 0)),
+      ...(r.proxy === true ? { proxy: true } : {}),
     });
   }
   items.sort((a, b) => a.beforeSec - b.beforeSec);

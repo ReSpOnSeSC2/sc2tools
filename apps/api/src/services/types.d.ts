@@ -185,7 +185,11 @@ export interface GamesService {
   upsertWithRevision?(
     userId: string,
     game: object & { gameId: string },
-  ): Promise<{ created: boolean; customBuildRevision: string }>;
+  ): Promise<{
+    created: boolean;
+    customBuildRevision: string;
+    spatial?: Record<string, unknown>;
+  }>;
   quarantineResumedReplay(
     userId: string,
     game: object & {
@@ -464,6 +468,12 @@ export interface CustomBuildsService {
       myBuild?: string | null;
       buildLog?: string[];
       oppBuildLog?: string[];
+      spatial?: {
+        my_proxies?: object[];
+        opp_proxies?: object[];
+        my_proxy_classification_v?: number;
+        opp_proxy_classification_v?: number;
+      };
       opponent?: { race?: string | null } | null;
     },
     opts?: { expectedRevision?: string | null },
@@ -488,6 +498,8 @@ export interface ParsedBuildLogEvent {
   race?: string;
   category?: string;
   is_building?: boolean;
+  is_proxy?: boolean;
+  proxy_classification_known?: boolean;
 }
 
 export interface PerGameComputeServiceListedGame {

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
+import sc2tools_agent.state as state_module
 from sc2tools_agent.state import (
     AgentState,
     count_synced,
@@ -427,8 +429,6 @@ def test_save_state_tolerates_concurrent_uploaded_writes(
     the upload queue's lock while save_state serialises the dataclass;
     a resize mid-``asdict`` used to raise RuntimeError and fail the
     batch's state commit. save_state now snapshots with a retry."""
-    import threading
-
     s = AgentState(uploaded={f"seed{i}.SC2Replay": "filtered" for i in range(50)})
     stop = threading.Event()
 
@@ -454,6 +454,63 @@ def test_save_state_tolerates_concurrent_uploaded_writes(
         stop.set()
         t.join(timeout=2)
     assert (tmp_path / "agent.json").exists()
+
+
+def test_concurrent_saves_cannot_replace_a_newer_settings_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """A slow older writer must not resurrect a setting after restart."""
+    state = AgentState(obs_scene_switch_enabled=True)
+    stale_dump_started = threading.Event()
+    release_stale_dump = threading.Event()
+    stale_done = threading.Event()
+    newer_done = threading.Event()
+    errors = []
+    real_dump = state_module.json.dump
+
+    def controlled_dump(payload, stream, **kwargs) -> None:
+        if (
+            payload["obs_scene_switch_enabled"] is True
+            and not stale_dump_started.is_set()
+        ):
+            stale_dump_started.set()
+            if not release_stale_dump.wait(2.0):
+                raise TimeoutError("test did not release the stale save")
+        real_dump(payload, stream, **kwargs)
+
+    monkeypatch.setattr(state_module.json, "dump", controlled_dump)
+
+    def persist(done: threading.Event) -> None:
+        try:
+            save_state(tmp_path, state)
+        except Exception as exc:  # pragma: no cover - asserted below
+            errors.append(exc)
+        finally:
+            done.set()
+
+    stale_writer = threading.Thread(target=persist, args=(stale_done,))
+    stale_writer.start()
+    assert stale_dump_started.wait(1.0)
+
+    # This models the GUI's immediate OBS toggle while an uploader/updater save
+    # is between snapshot and replace. The newer save must wait, take a fresh
+    # snapshot, and be the final atomic replacement.
+    state.obs_scene_switch_enabled = False
+    newer_writer = threading.Thread(target=persist, args=(newer_done,))
+    newer_writer.start()
+    try:
+        assert not newer_done.wait(0.1)
+    finally:
+        release_stale_dump.set()
+
+    stale_writer.join(timeout=2.0)
+    newer_writer.join(timeout=2.0)
+    assert stale_done.is_set()
+    assert newer_done.is_set()
+    assert errors == []
+    assert load_state(tmp_path).obs_scene_switch_enabled is False
+    assert list(tmp_path.glob("agent.*.tmp")) == []
 
 
 def test_load_state_reads_auto_update_flag(tmp_path: Path) -> None:
