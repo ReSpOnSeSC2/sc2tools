@@ -5,6 +5,7 @@ const addFormatsModule = require("ajv-formats");
 const {
   PROXY_ELIGIBLE_BUILDING_NAMES,
   isProxyEligibleBuilding,
+  isProxyEligibleSignatureUnit,
 } = require("../services/knownBuildings");
 
 const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
@@ -76,6 +77,9 @@ const BUILD_SCHEMA = {
           unit: { type: "string", maxLength: 80 },
           count: { type: "integer", minimum: 1, maximum: 200 },
           beforeSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
+          // Optional spatial modifier for legacy signature rows. As with v3
+          // rules, false/absent preserves the historical matching semantics.
+          proxy: { type: "boolean" },
         },
       },
     },
@@ -254,6 +258,19 @@ function validateCustomBuild(raw) {
       ],
     };
   }
+  const invalidProxySignature = Array.isArray(value.signature)
+    ? value.signature.find((item) => (
+      item?.proxy === true && !isProxyEligibleSignatureUnit(item.unit)
+    ))
+    : null;
+  if (invalidProxySignature) {
+    return {
+      valid: false,
+      errors: [
+        `/signature proxy is only valid for a known structure (${invalidProxySignature.unit})`,
+      ],
+    };
+  }
   return { valid: true, value };
 }
 
@@ -278,7 +295,7 @@ function boundedBuildClone(raw) {
   out.signature = boundedObjectArray(
     raw.signature,
     SIGNATURE_MAX_ITEMS,
-    ["unit", "count", "beforeSec"],
+    ["unit", "count", "beforeSec", "proxy"],
   );
   out.rules = boundedObjectArray(
     raw.rules,

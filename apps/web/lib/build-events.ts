@@ -441,7 +441,7 @@ export interface BuildSignatureItem {
   unit: string;
   count: number;
   beforeSec: number;
-  /** Display-only metadata when this row originated from a v3 rule. */
+  /** Require the structure event to be classified as proxied. */
   proxy?: boolean;
 }
 

@@ -6,7 +6,10 @@ import {
   eventsToSourceRows,
   formatRule,
   ruleFromEvent,
+  sanitiseDraft,
   sanitiseRule,
+  isProxyStructureLabel,
+  signatureUnitToRuleToken,
   PROXY_ELIGIBLE_BUILDINGS,
   type BuildRule,
 } from "./build-rules";
@@ -116,6 +119,23 @@ describe("formatRule", () => {
 });
 
 describe("proxy build rules", () => {
+  test("manual signature labels use the same proxy structure eligibility", () => {
+    expect(signatureUnitToRuleToken("Cybernetics Core")).toBe(
+      "BuildCyberneticsCore",
+    );
+    expect(signatureUnitToRuleToken("BuildBarracks")).toBe("BuildBarracks");
+    expect(signatureUnitToRuleToken("cyberneticscore")).toBe(
+      "BuildCyberneticsCore",
+    );
+    expect(signatureUnitToRuleToken("commandcenter")).toBe(
+      "BuildCommandCenter",
+    );
+    expect(isProxyStructureLabel("Cybernetics Core")).toBe(true);
+    expect(isProxyStructureLabel("photoncannon")).toBe(true);
+    expect(isProxyStructureLabel("spawningpool")).toBe(true);
+    expect(isProxyStructureLabel("Stalker")).toBe(false);
+  });
+
   test("save-from-replay carries canonical proxy evidence into the rule", () => {
     const event = {
       time: 90,
@@ -170,6 +190,29 @@ describe("proxy build rules", () => {
       time_lt: 120,
       proxy: true,
     })).toMatchObject({ proxy: true });
+  });
+
+  test("draft validation blocks an invalid proxy target instead of silently downgrading it", () => {
+    const result = sanitiseDraft({
+      name: "Proxy marine",
+      description: "",
+      race: "Terran",
+      vsRace: "Protoss",
+      skillLevel: null,
+      shareWithCommunity: false,
+      winConditions: [],
+      losesTo: [],
+      transitionsInto: [],
+      rules: [{
+        type: "before",
+        name: "BuildMarine",
+        time_lt: 120,
+        proxy: true,
+      }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.rules).toMatch(/known building token/i);
   });
 
   test("web proxy eligibility exactly matches the local JSON schema", () => {

@@ -11,6 +11,7 @@ const {
 } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
+const { ruleNameFromUnit } = require("./knownBuildings");
 const TimingCatalog = require("./timingCatalog");
 const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
 const {
@@ -83,6 +84,7 @@ const CUSTOM_BUILD_READ_PROJECTION = Object.freeze({
   "signature.unit": 1,
   "signature.count": 1,
   "signature.beforeSec": 1,
+  "signature.proxy": 1,
   "steps.supply": 1,
   "steps.time": 1,
   "steps.action": 1,
@@ -125,6 +127,7 @@ const CUSTOM_BUILD_CLASSIFIER_PROJECTION = Object.freeze({
   "signature.unit": 1,
   "signature.count": 1,
   "signature.beforeSec": 1,
+  "signature.proxy": 1,
   updatedAt: 1,
 });
 
@@ -2554,8 +2557,8 @@ async function tagGames(games, userId, gameIds, buildName) {
 /**
  * Pull a v3-shaped rules array from the saved build, falling back to
  * an empty list when neither rules nor a usable signature is present.
- * v2 signatures (unit/count/beforeSec) are converted to count_min
- * rules so old saved builds still match.
+ * v2 signatures (unit/count/beforeSec, plus the optional proxy modifier) are
+ * converted to count_min rules so old saved builds still match.
  *
  * @param {any} build
  * @returns {Array<import('./buildRulesEvaluator').BuildRule>}
@@ -2577,25 +2580,10 @@ function extractRules(build) {
         name: ruleNameFromUnit(s.unit),
         time_lt: Math.max(1, Number(s.beforeSec) || 60),
         count: Math.max(1, Number(s.count) || 1),
+        ...(s.proxy === true ? { proxy: true } : {}),
       }));
   }
   return [];
-}
-
-/**
- * Convert a free-form unit/building label into the canonical
- * eventToken form (e.g. "Stargate" → "BuildStargate"). Mirrors the
- * fallback in buildRulesEvaluator.eventToken.
- *
- * @param {string} raw
- */
-function ruleNameFromUnit(raw) {
-  const trimmed = String(raw || "").trim();
-  if (!trimmed) return "";
-  if (/^(Build|Train|Research|Morph)[A-Z]/.test(trimmed)) return trimmed;
-  const noun = trimmed.replace(/[^A-Za-z0-9]/g, "");
-  if (!noun) return "";
-  return "Build" + noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
 /**

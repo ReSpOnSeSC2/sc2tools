@@ -13,6 +13,7 @@ import { apiCall } from "@/lib/clientApi";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { useToast } from "@/components/ui/Toast";
 import { slugifyBuildName, type BuildSignatureItem } from "@/lib/build-events";
+import { isProxyStructureLabel } from "@/lib/build-rules";
 import {
   RACES,
   VS_RACES,
@@ -261,6 +262,15 @@ export function BuildEditorSheet({
       setError("Pick a name with at least one letter or number.");
       return;
     }
+    const invalidProxyRow = state.signature.find(
+      (row) => row.proxy === true && !isProxyStructureLabel(row.unit),
+    );
+    if (invalidProxyRow) {
+      setError(
+        "A proxy requirement must use a known building, such as Pylon, Gateway, Barracks, or Hatchery.",
+      );
+      return;
+    }
     const cleanSignature: BuildSignatureItem[] = state.signature
       .filter((r) => r.unit.trim().length > 0)
       .map((r) => ({
@@ -270,6 +280,7 @@ export function BuildEditorSheet({
           0,
           Math.min(24 * 60 * 60, Math.round(Number(r.beforeSec) || 0)),
         ),
+        ...(r.proxy === true ? { proxy: true } : {}),
       }));
     const payload: Partial<CustomBuild> & { slug: string; name: string; race: Race } = {
       slug,
@@ -419,7 +430,6 @@ export function BuildEditorSheet({
             Cancel
           </Button>
           <Button
-            onClick={handleSave}
             loading={saving}
             disabled={identityLoading}
             type="submit"
@@ -653,6 +663,7 @@ function SignatureRow({
   onRemove: () => void;
 }) {
   const [timeText, setTimeText] = useState(formatBeforeSec(row.beforeSec));
+  const proxyEligible = isProxyStructureLabel(row.unit);
 
   useEffect(() => {
     setTimeText(formatBeforeSec(row.beforeSec));
@@ -711,6 +722,38 @@ function SignatureRow({
       >
         <Trash2 className="h-4 w-4" aria-hidden />
       </button>
+      <label
+        className={[
+          "col-span-12 inline-flex min-h-[36px] items-center gap-2 rounded-md border px-3 py-2",
+          "sm:col-start-3 sm:col-span-9",
+          proxyEligible || row.proxy === true
+            ? "cursor-pointer"
+            : "cursor-not-allowed opacity-60",
+          row.proxy === true
+            ? "border-warning/50 bg-warning/10 text-warning"
+            : "border-border bg-bg-elevated/40 text-text-muted",
+        ].join(" ")}
+        title={
+          proxyEligible
+            ? "Require this structure to be more than 50 world units from its owner's main."
+            : row.proxy === true
+              ? "Enter a known building or turn this requirement off before saving."
+              : "Enter a known building to enable the proxy requirement."
+        }
+      >
+        <input
+          type="checkbox"
+          checked={row.proxy === true}
+          disabled={!proxyEligible && row.proxy !== true}
+          onChange={(e) => onChange({ proxy: e.target.checked })}
+          aria-label={`Require ${row.unit || "this building"} to be proxied`}
+          className="h-4 w-4 accent-accent-cyan"
+        />
+        <span className="text-caption font-semibold">Must be proxied</span>
+        <span className="text-micro text-text-dim">
+          More than 50 world units from its owner&apos;s main.
+        </span>
+      </label>
     </li>
   );
 }

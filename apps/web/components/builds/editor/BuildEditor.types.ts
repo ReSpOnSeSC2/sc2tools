@@ -98,6 +98,7 @@ export interface BuildEditorState {
   /** Add a custom rule of the given type. */
   addCustomRule: (
     type: BuildRule["type"],
+    options?: { proxyOnly?: boolean },
   ) => void;
 
   /** True when the draft differs from the pristine snapshot. */

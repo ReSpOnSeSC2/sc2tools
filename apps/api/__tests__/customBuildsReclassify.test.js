@@ -880,6 +880,77 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     expect(row.opponent.strategy).toBe("PvT Proxy Gate");
   });
 
+  test("legacy lowercase signature proxy rows classify only spatially-proxied structures", async () => {
+    const userId = await bootstrap();
+    const base = {
+      date: new Date("2026-05-07T12:00:00Z"),
+      result: "Victory",
+      map: "Legacy Proxy Signature LE",
+      myRace: "Zerg",
+      myBuild: "ZvP - Agent Pool",
+      buildLog: ["[0:55] SpawningPool"],
+      oppBuildLog: [],
+      opponent: { displayName: "legacyProxyOpp", race: "Protoss" },
+    };
+    await services.games.upsert(userId, {
+      ...base,
+      gameId: "g-legacy-signature-home-pool",
+      spatial: { my_proxy_classification_v: 1 },
+    });
+    await services.games.upsert(userId, {
+      ...base,
+      gameId: "g-legacy-signature-proxy-pool",
+      spatial: {
+        my_proxy_classification_v: 1,
+        my_proxies: [{ name: "SpawningPool", time: 55, x: 80, y: 80 }],
+      },
+    });
+
+    const saved = await withAuth(
+      request(app).put("/v1/custom-builds/zvp-legacy-proxy-pool").send({
+        slug: "zvp-legacy-proxy-pool",
+        name: "ZvP Legacy Proxy Pool",
+        race: "Zerg",
+        vsRace: "Protoss",
+        perspective: "you",
+        signature: [{
+          unit: "spawningpool",
+          count: 1,
+          beforeSec: 120,
+          proxy: true,
+        }],
+        reclassify: false,
+      }),
+    );
+    expect(saved.status).toBe(200);
+    expect((await db.customBuilds.findOne({
+      userId,
+      slug: "zvp-legacy-proxy-pool",
+    })).signature).toEqual([{
+      unit: "spawningpool",
+      count: 1,
+      beforeSec: 120,
+      proxy: true,
+    }]);
+
+    const queued = await withAuth(
+      request(app)
+        .post("/v1/custom-builds/zvp-legacy-proxy-pool/reclassify")
+        .send({}),
+    );
+    expect(queued.status).toBe(202);
+    await waitForJob(db, userId, queued.body.generation);
+
+    const [home, proxy] = await Promise.all([
+      db.games.findOne({ userId, gameId: "g-legacy-signature-home-pool" }),
+      db.games.findOne({ userId, gameId: "g-legacy-signature-proxy-pool" }),
+    ]);
+    expect(home.myBuild).toBe("ZvP - Agent Pool");
+    expect(home._customBuildSlug).toBeUndefined();
+    expect(proxy.myBuild).toBe("ZvP Legacy Proxy Pool");
+    expect(proxy._customBuildSlug).toBe("zvp-legacy-proxy-pool");
+  });
+
   test("durable reclassify retains stored proxy evidence on both axes", async () => {
     const userId = await bootstrap();
     await services.games.upsert(userId, {

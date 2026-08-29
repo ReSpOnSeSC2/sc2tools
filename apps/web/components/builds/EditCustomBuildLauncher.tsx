@@ -9,6 +9,7 @@ import {
   RACE_OPTIONS,
   VS_RACE_OPTIONS,
   SKILL_LEVELS,
+  isProxyStructureToken,
   type BuildEditorDraft,
   type BuildRule,
   type RaceLite,
@@ -142,18 +143,24 @@ function toInitialDraft(
  *      (lowercase) so we re-derive display + category via
  *      normalizeBuildName; tokens are best-effort.
  */
-function docToEvents(doc: SavedBuildDoc): BuildOrderEvent[] {
+export function docToEvents(doc: SavedBuildDoc): BuildOrderEvent[] {
   const fromRules = rulesToSignature(
     Array.isArray(doc.rules) ? doc.rules : [],
   );
   if (fromRules.length > 0) {
-    return fromRules.map((item) => ({
-      time: Math.max(0, Math.floor(item.beforeSec)),
-      // Already a canonical Build/Train/Research/Morph token —
-      // spaEventToWhat passes it through unchanged.
-      name: item.unit,
-      display: humanizeBuildName(item.unit) || item.unit,
-    }));
+    return fromRules.map((item) => {
+      const isBuilding = isProxyStructureToken(item.unit);
+      return {
+        time: Math.max(0, Math.floor(item.beforeSec)),
+        // Already a canonical Build/Train/Research/Morph token —
+        // spaEventToWhat passes it through unchanged.
+        name: item.unit,
+        display: humanizeBuildName(item.unit) || item.unit,
+        category: isBuilding ? "building" : undefined,
+        is_building: isBuilding,
+        is_proxy: item.proxy === true,
+      };
+    });
   }
   const signature = Array.isArray(doc.signature) ? doc.signature : [];
   const events: BuildOrderEvent[] = [];
@@ -170,6 +177,7 @@ function docToEvents(doc: SavedBuildDoc): BuildOrderEvent[] {
       display: count > 1 ? `${displayName} ×${count}` : displayName,
       category,
       is_building: category === "building",
+      is_proxy: item.proxy === true,
     });
   }
   events.sort((a, b) => a.time - b.time);

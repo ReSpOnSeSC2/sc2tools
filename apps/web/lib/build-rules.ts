@@ -63,6 +63,10 @@ export const PROXY_ELIGIBLE_BUILDINGS: ReadonlySet<string> = new Set([
   "NydusNetwork", "NydusCanal", "UltraliskCavern",
 ]);
 
+const PROXY_BUILDING_BY_NORMALIZED: ReadonlyMap<string, string> = new Map(
+  Array.from(PROXY_ELIGIBLE_BUILDINGS, (name) => [name.toLowerCase(), name]),
+);
+
 export type SkillLevelId =
   | "bronze"
   | "silver"
@@ -339,6 +343,30 @@ export function isProxyStructureToken(name: string): boolean {
   return PROXY_ELIGIBLE_BUILDINGS.has(name.slice("Build".length));
 }
 
+/**
+ * Resolve the free-form labels used by the manual custom-build editor to the
+ * same canonical token shape consumed by the rules evaluator. Keeping this
+ * conversion here (rather than teaching each editor its own building list)
+ * makes proxy eligibility identical in both custom-build surfaces.
+ */
+export function signatureUnitToRuleToken(unit: string): string {
+  const trimmed = String(unit || "").trim();
+  if (!trimmed) return "";
+  if (/^(Train|Research|Morph)[A-Z]/.test(trimmed)) return trimmed;
+  const buildingLabel = trimmed.replace(/^Build/i, "");
+  const noun = buildingLabel.replace(/[^A-Za-z0-9]/g, "");
+  if (!noun) return "";
+  const canonical = PROXY_BUILDING_BY_NORMALIZED.get(noun.toLowerCase());
+  if (canonical) return `Build${canonical}`;
+  if (/^Build[A-Z][A-Za-z0-9]*$/.test(trimmed)) return trimmed;
+  return `Build${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
+}
+
+/** True when a manual build-step label can carry a proxy requirement. */
+export function isProxyStructureLabel(unit: string): boolean {
+  return isProxyStructureToken(signatureUnitToRuleToken(unit));
+}
+
 export function isCountRule(
   r: BuildRule,
 ): r is BuildRuleCountMax | BuildRuleCountExact | BuildRuleCountMin {
@@ -525,10 +553,16 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
     errors.name = `Max ${NAME_MAX_CHARS} chars.`;
   }
   const description = String(draft.description || "").slice(0, DESC_MAX_CHARS);
-  const rules = (Array.isArray(draft.rules) ? draft.rules : [])
+  const draftRules = Array.isArray(draft.rules) ? draft.rules : [];
+  const invalidProxyRule = draftRules.find(
+    (rule) => rule?.proxy === true && !isProxyStructureToken(rule.name),
+  );
+  const rules = draftRules
     .map(sanitiseRule)
     .filter((r): r is BuildRule => r !== null);
-  if (rules.length === 0) {
+  if (invalidProxyRule) {
+    errors.rules = `Proxy requirement needs a known building token (for example BuildPylon or BuildBarracks).`;
+  } else if (rules.length === 0) {
     errors.rules = "Need at least one rule.";
   } else if (rules.length > RULES_MAX_PER_BUILD) {
     errors.rules = `At most ${RULES_MAX_PER_BUILD} rules.`;

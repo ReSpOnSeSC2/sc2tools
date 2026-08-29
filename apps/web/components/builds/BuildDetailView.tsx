@@ -28,6 +28,7 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildEditorSheet } from "./BuildEditorSheet";
+import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import type { CustomBuild } from "./types";
 
@@ -166,12 +167,23 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         />
       ) : null}
 
-      <BuildEditorSheet
-        open={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        build={build}
-        onSaved={handleSaved}
-      />
+      {Array.isArray(build.rules) && build.rules.length > 0 ? (
+        <EditCustomBuildLauncher
+          build={editorOpen ? build : null}
+          onClose={() => setEditorOpen(false)}
+          onSaved={async (saved) => {
+            await handleSaved(saved);
+            setEditorOpen(false);
+          }}
+        />
+      ) : (
+        <BuildEditorSheet
+          open={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          build={build}
+          onSaved={handleSaved}
+        />
+      )}
       <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}

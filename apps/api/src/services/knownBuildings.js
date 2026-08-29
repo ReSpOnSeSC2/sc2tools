@@ -86,10 +86,50 @@ const PROXY_ELIGIBLE_BUILDING_NAMES = new Set([
   "NydusNetwork", "NydusCanal", "UltraliskCavern",
 ]);
 
+const KNOWN_BUILDING_BY_NORMALIZED = new Map(
+  Array.from(KNOWN_BUILDING_NAMES, (name) => [name.toLowerCase(), name]),
+);
+
 /** @param {string | null | undefined} name */
 function isProxyEligibleBuilding(name) {
   return typeof name === "string"
     && PROXY_ELIGIBLE_BUILDING_NAMES.has(name);
+}
+
+/**
+ * Convert a free-form signature label into the canonical replay event token.
+ * Legacy custom builds store bare labels (for example ``Stargate``), while
+ * newer callers may already send ``BuildStargate``. Keeping this conversion
+ * beside the building catalog gives validation and classification one shared
+ * interpretation of those values.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function ruleNameFromUnit(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  if (/^(Train|Research|Morph)[A-Z]/.test(trimmed)) return trimmed;
+  const buildingLabel = trimmed.replace(/^Build/i, "");
+  const noun = buildingLabel.replace(/[^A-Za-z0-9]/g, "");
+  if (!noun) return "";
+  const canonical = KNOWN_BUILDING_BY_NORMALIZED.get(noun.toLowerCase());
+  if (canonical) return `Build${canonical}`;
+  if (/^Build[A-Z][A-Za-z0-9]*$/.test(trimmed)) return trimmed;
+  return "Build" + noun.charAt(0).toUpperCase() + noun.slice(1);
+}
+
+/**
+ * Whether a legacy signature label resolves to a structure for which replay
+ * spatial classification can provide deterministic proxy evidence.
+ *
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+function isProxyEligibleSignatureUnit(raw) {
+  const token = ruleNameFromUnit(raw);
+  return token.startsWith("Build")
+    && isProxyEligibleBuilding(token.slice("Build".length));
 }
 
 /**
@@ -247,6 +287,8 @@ module.exports = {
   isKnownBuilding,
   PROXY_ELIGIBLE_BUILDING_NAMES,
   isProxyEligibleBuilding,
+  ruleNameFromUnit,
+  isProxyEligibleSignatureUnit,
   KNOWN_UPGRADE_NAMES,
   isKnownUpgrade,
 };

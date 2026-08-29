@@ -8,6 +8,7 @@
  * without bumping the schema validator.
  */
 import type { BuildSignatureItem } from "@/lib/build-events";
+import type { BuildRule } from "@/lib/build-rules";
 import type { Race, VsRace } from "@/lib/race";
 
 export type {
@@ -32,6 +33,8 @@ export interface CustomBuild {
   /** Anonymous publication is an explicit opt-in. */
   publishAnonymously?: boolean;
   signature?: BuildSignatureItem[];
+  /** Advanced v3 match rules authored by the rich custom-build editor. */
+  rules?: BuildRule[];
   /** ISO timestamp of the last write. */
   updatedAt?: string;
   createdAt?: string;

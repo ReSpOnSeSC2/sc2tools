@@ -322,13 +322,22 @@ export function useBuildEditorState(
   );
 
   const addCustomRule = useCallback(
-    (type: BuildRule["type"]) => {
+    (
+      type: BuildRule["type"],
+      options?: { proxyOnly?: boolean },
+    ) => {
       setDraft((d) => {
         if (d.rules.length >= RULES_MAX_PER_BUILD) {
           pushToast("warn", `Rule cap reached (${RULES_MAX_PER_BUILD}).`);
           return d;
         }
-        const blank = defaultRuleFor(type, "", 60, 1);
+        const blank = defaultRuleFor(
+          type,
+          "",
+          60,
+          1,
+          options?.proxyOnly === true,
+        );
         return { ...d, rules: [...d.rules, blank] };
       });
     },

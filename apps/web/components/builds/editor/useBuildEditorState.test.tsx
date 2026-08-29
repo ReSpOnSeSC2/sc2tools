@@ -80,6 +80,23 @@ afterEach(() => {
 });
 
 describe("useBuildEditorState preview requests", () => {
+  it("creates a blank proxy-only rule without losing the proxy intent", () => {
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft }),
+    );
+
+    act(() => {
+      result.current.addCustomRule("before", { proxyOnly: true });
+    });
+
+    expect(result.current.draft.rules.at(-1)).toEqual({
+      type: "before",
+      name: "",
+      time_lt: 60,
+      proxy: true,
+    });
+  });
+
   it("aborts a superseded request and prevents its stale result from winning", async () => {
     const first = deferred<BuildEditorPreviewResult>();
     const second = deferred<BuildEditorPreviewResult>();

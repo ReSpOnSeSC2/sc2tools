@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Star, X } from "lucide-react";
+import { MapPin, Plus, Star, X } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import {
   RULE_TYPES,
@@ -128,6 +128,20 @@ export function BuildEditorRules({
             {b.label}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => addCustomRule("before", { proxyOnly: true })}
+          disabled={ruleCap}
+          title="Add a building rule that only matches when the structure is more than 50 world units from its owner's main."
+          className={[
+            "inline-flex min-h-[32px] items-center gap-1 rounded-md border border-warning/50",
+            "bg-warning/15 px-2 py-1 text-caption font-medium text-warning transition-colors",
+            "hover:bg-warning/25 disabled:cursor-not-allowed disabled:opacity-50",
+          ].join(" ")}
+        >
+          <MapPin className="h-3.5 w-3.5" aria-hidden />
+          Proxy building
+        </button>
       </div>
     </section>
   );
@@ -287,7 +301,7 @@ function RulesListPanel({
           <ul role="list" className="divide-y divide-border">
             {rules.map((r, idx) => (
               <RuleRow
-                key={`${r.name}-${idx}`}
+                key={idx}
                 rule={r}
                 onUpdate={(patch) => updateRule(idx, patch)}
                 onCycle={() => cycleRule(idx)}
@@ -315,69 +329,83 @@ interface RuleRowProps {
 function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
   const tone = RULE_TYPE_TONE[rule.type];
   const isCount = isCountRule(rule);
+  const proxyEligible = isProxyStructureToken(rule.name);
   return (
-    <li className="flex items-center gap-2 px-3 py-1.5 text-caption">
-      <CycleBadge
-        rule={rule}
-        tone={tone}
-        isCount={isCount}
-        onCycle={onCycle}
-        onCountChange={(next) => onUpdate({ count: next })}
-      />
-      <input
-        type="text"
-        value={rule.name}
-        placeholder="BuildStargate"
-        title="Event token (e.g. BuildStargate, ResearchBlink)"
-        onChange={(e) => {
-          const name = e.target.value.trim();
-          onUpdate({
-            name,
-            ...(!isProxyStructureToken(name) ? { proxy: false } : {}),
-          });
-        }}
-        className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
-      />
-      <label
-        className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-micro text-text-muted"
-        title="Require this structure to be more than 50 world units from its owner's main."
-      >
-        <input
-          type="checkbox"
-          checked={rule.proxy === true}
-          disabled={!isProxyStructureToken(rule.name)}
-          onChange={(e) => onUpdate({ proxy: e.target.checked })}
-          aria-label={`Require ${rule.name || "this structure"} to be proxied`}
-          className="h-3.5 w-3.5 accent-[var(--accent)]"
+    <li className="space-y-1.5 px-3 py-2 text-caption">
+      <div className="flex min-w-0 items-center gap-2">
+        <CycleBadge
+          rule={rule}
+          tone={tone}
+          isCount={isCount}
+          onCycle={onCycle}
+          onCountChange={(next) => onUpdate({ count: next })}
         />
-        Proxy only
-      </label>
-      {isCount ? (
-        <span className="text-micro text-text-dim">by</span>
-      ) : rule.type === "not_before" ? (
-        <span className="text-micro text-text-dim">
-          <span className="sm:hidden">not before</span>
-          <span className="hidden sm:inline">must not be built before</span>
-        </span>
-      ) : (
-        <span className="text-micro text-text-dim">
-          <span className="sm:hidden">by</span>
-          <span className="hidden sm:inline">must be built by</span>
-        </span>
-      )}
-      <TimeField
-        valueSec={rule.time_lt}
-        onChange={(next) => onUpdate({ time_lt: next })}
-        notBefore={rule.type === "not_before"}
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${rule.name}`}
-        className="px-1 text-text-dim hover:text-danger"
-      >
-        <X className="h-3.5 w-3.5" aria-hidden />
-      </button>
+        <input
+          type="text"
+          value={rule.name}
+          placeholder="BuildStargate"
+          title="Event token (e.g. BuildStargate, ResearchBlink)"
+          onChange={(e) => onUpdate({ name: e.target.value.trim() })}
+          className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove ${rule.name}`}
+          className="px-1 text-text-dim hover:text-danger"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <label
+          className={[
+            "inline-flex min-h-[28px] shrink-0 items-center gap-1.5 rounded-md border px-2 py-1",
+            proxyEligible || rule.proxy === true
+              ? "cursor-pointer"
+              : "cursor-not-allowed opacity-55",
+            rule.proxy === true
+              ? "border-warning/50 bg-warning/15 text-warning"
+              : "border-border bg-bg-elevated text-text-muted",
+          ].join(" ")}
+          title={
+            proxyEligible
+              ? "Require this structure to be more than 50 world units from its owner's main."
+              : rule.proxy === true
+                ? "Enter a known building token such as BuildPylon or turn this requirement off before saving."
+                : "Proxy requirements are available only for known building tokens such as BuildPylon or BuildBarracks."
+          }
+        >
+          <input
+            type="checkbox"
+            checked={rule.proxy === true}
+            disabled={!proxyEligible && rule.proxy !== true}
+            onChange={(e) => onUpdate({ proxy: e.target.checked })}
+            aria-label={`Require ${rule.name || "this structure"} to be proxied`}
+            className="h-3.5 w-3.5 accent-[var(--accent)]"
+          />
+          <MapPin className="h-3.5 w-3.5" aria-hidden />
+          <span className="font-medium">Must be proxied</span>
+        </label>
+        {isCount ? (
+          <span className="text-micro text-text-dim">by</span>
+        ) : rule.type === "not_before" ? (
+          <span className="text-micro text-text-dim">
+            <span className="sm:hidden">not before</span>
+            <span className="hidden sm:inline">must not be built before</span>
+          </span>
+        ) : (
+          <span className="text-micro text-text-dim">
+            <span className="sm:hidden">by</span>
+            <span className="hidden sm:inline">must be built by</span>
+          </span>
+        )}
+        <TimeField
+          valueSec={rule.time_lt}
+          onChange={(next) => onUpdate({ time_lt: next })}
+          notBefore={rule.type === "not_before"}
+        />
+      </div>
     </li>
   );
 }

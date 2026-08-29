@@ -124,6 +124,65 @@ describe("custom/community build payload bounds", () => {
     );
   });
 
+  test("legacy signature proxy modifier survives every bounded contract", () => {
+    const valid = validateCustomBuild(minimalBuild({
+      signature: [{
+        unit: "Nydus Network",
+        count: 1,
+        beforeSec: 180,
+        proxy: true,
+        unknownNested: "discard me",
+      }],
+    }));
+    expect(valid).toEqual(expect.objectContaining({ valid: true }));
+    expect(valid.value.signature).toEqual([{
+      unit: "Nydus Network",
+      count: 1,
+      beforeSec: 180,
+      proxy: true,
+    }]);
+
+    const canonicalToken = validateCustomBuild(minimalBuild({
+      signature: [{
+        unit: "BuildBarracks",
+        count: 1,
+        beforeSec: 120,
+        proxy: true,
+      }],
+    }));
+    expect(canonicalToken.valid).toBe(true);
+
+    for (const unit of [
+      "cyberneticscore",
+      "commandcenter",
+      "photoncannon",
+      "spawningpool",
+    ]) {
+      expect(validateCustomBuild(minimalBuild({
+        signature: [{ unit, count: 1, beforeSec: 120, proxy: true }],
+      })).valid).toBe(true);
+    }
+
+    for (const unit of [
+      "Marine",
+      "BuildMarine",
+      "Shield Battery",
+      "Nydus Worm",
+      "BuildBarracksFlying",
+    ]) {
+      const invalid = validateCustomBuild(minimalBuild({
+        signature: [{ unit, count: 1, beforeSec: 120, proxy: true }],
+      }));
+      expect(invalid.valid).toBe(false);
+      expect(invalid.errors).toEqual([
+        expect.stringContaining("proxy is only valid for a known structure"),
+      ]);
+    }
+
+    expect(publicBuildSnapshot({ signature: valid.value.signature }).signature)
+      .toEqual(valid.value.signature);
+  });
+
   test("API proxy eligibility exactly matches the local JSON schema", () => {
     const schema = JSON.parse(fs.readFileSync(path.resolve(
       __dirname,
@@ -202,6 +261,7 @@ describe("custom/community build payload bounds", () => {
     expect(projection).not.toHaveProperty("build");
     expect(projection).toEqual(expect.objectContaining({
       "build.signature.unit": 1,
+      "build.signature.proxy": 1,
       "build.rules.name": 1,
       "build.rules.proxy": 1,
       "build.steps.action": 1,
@@ -210,6 +270,9 @@ describe("custom/community build payload bounds", () => {
     const expression = publicBuildMongoExpression("$build");
     expect(expression.signature).toEqual(expect.objectContaining({
       $map: expect.any(Object),
+    }));
+    expect(expression.signature.$map.in.proxy).toEqual(expect.objectContaining({
+      $cond: expect.any(Array),
     }));
     expect(expression.steps).toEqual(expect.objectContaining({
       $map: expect.any(Object),
@@ -243,6 +306,9 @@ describe("custom/community build payload bounds", () => {
     expect(listProjection.signature).toEqual(expect.objectContaining({
       $map: expect.any(Object),
     }));
+    expect(listProjection.signature.$map.in.proxy).toEqual(
+      expect.objectContaining({ $cond: expect.any(Array) }),
+    );
     expect(listProjection.steps).toEqual(expect.objectContaining({
       $map: expect.any(Object),
     }));
@@ -252,6 +318,9 @@ describe("custom/community build payload bounds", () => {
     expect(classifierProjection.rules).toEqual(expect.objectContaining({
       $map: expect.any(Object),
     }));
+    expect(classifierProjection.signature.$map.in.proxy).toEqual(
+      expect.objectContaining({ $cond: expect.any(Array) }),
+    );
     expect(classifierProjection).not.toHaveProperty("steps");
   });
 
@@ -314,7 +383,13 @@ describe("custom/community build payload bounds", () => {
         title: "Public build",
         build: {
           name: "Safe",
-          signature: [{ unit: "Probe", count: 1, beforeSec: 17, secret: "x" }],
+          signature: [{
+            unit: "Barracks",
+            count: 1,
+            beforeSec: 17,
+            proxy: true,
+            secret: "x",
+          }],
           secret: "x",
         },
       }]),
@@ -337,7 +412,12 @@ describe("custom/community build payload bounds", () => {
     }));
     expect(result.items[0].build).toEqual({
       name: "Safe",
-      signature: [{ unit: "Probe", count: 1, beforeSec: 17 }],
+      signature: [{
+        unit: "Barracks",
+        count: 1,
+        beforeSec: 17,
+        proxy: true,
+      }],
     });
   });
 });

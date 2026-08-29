@@ -51,6 +51,7 @@ const PUBLIC_BUILD_LEAF_FIELDS = Object.freeze([
   "signature.unit",
   "signature.count",
   "signature.beforeSec",
+  "signature.proxy",
   "rules.type",
   "rules.name",
   "rules.time_lt",
@@ -154,7 +155,7 @@ function publicBuildMongoExpression(path = "$build") {
     signature: mongoObjectArray(
       `${path}.signature`,
       SIGNATURE_MAX_ITEMS,
-      ["unit", "count", "beforeSec"],
+      ["unit", "count", "beforeSec", "proxy"],
     ),
     rules: mongoObjectArray(
       `${path}.rules`,
@@ -335,6 +336,7 @@ function copySignature(out, value) {
     copyString(row, "unit", raw.unit, 80);
     copyInteger(row, "count", raw.count, 1, 200);
     copyInteger(row, "beforeSec", raw.beforeSec, 0, 24 * 60 * 60);
+    if (typeof raw.proxy === "boolean") row.proxy = raw.proxy;
     rows.push(row);
   }
   out.signature = rows;
