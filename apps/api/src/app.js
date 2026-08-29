@@ -25,6 +25,7 @@ const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
 const { GamesService } = require("./services/games");
+const { ReplayLibraryService } = require("./services/replayLibrary");
 const { GameVodsService } = require("./services/gameVods");
 const { PulseMatchVodsService } = require("./services/pulseMatchVods");
 const { GameVodLinksService } = require("./services/gameVodLinks");
@@ -85,6 +86,7 @@ const { LadderMetaService } = require("./services/ladderMeta");
 const { buildLadderMetaRouter } = require("./routes/ladderMeta");
 const { PublicProfileService } = require("./services/publicProfile");
 const { buildPublicProfileRouter } = require("./routes/publicProfile");
+const { buildPublicReplaysRouter } = require("./routes/publicReplays");
 const { ChatbotService } = require("./services/chatbot");
 const { buildChatbotRouter } = require("./routes/chatbot");
 const {
@@ -109,6 +111,7 @@ const { buildCoachingRouter } = require("./routes/coaching");
 const { buildCoachingService } = require("./services/coaching");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
+const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const {
   buildInfrastructureCostsRouter,
@@ -385,6 +388,7 @@ function makeServices(deps) {
     pulseMmr,
     logger: deps.logger,
   });
+  const replayLibrary = new ReplayLibraryService(deps.db);
   // Timestamped game archives combine two independent public signals:
   // configured Twitch/YouTube channels matched by broadcast interval, and
   // SC2Pulse's participant-scoped Twitch index. The composite preserves
@@ -632,6 +636,7 @@ function makeServices(deps) {
     users,
     opponents,
     games,
+    replayLibrary,
     gameVods,
     gameDetails,
     replayFiles,
@@ -1011,6 +1016,19 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildPublicProfileRouter({ publicProfile: services.publicProfile }),
   );
+  // Separate default-off publication surface for replay rows, per-game
+  // analysis, matched stream POVs and short-lived original-replay downloads.
+  // It must mount in the public bundle before auth-eager routers.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPublicReplaysRouter({
+      replayLibrary: services.replayLibrary,
+      users: services.users,
+      gameVods: services.gameVods,
+      perGame: services.perGame,
+      replayFiles: services.replayFiles,
+    }),
+  );
   // Multichat overlay relays — overlay-token auth (path segment), no
   // Clerk session, so it mounts with the public bundle.
   app.use(
@@ -1084,6 +1102,17 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildFingerprintRouter({
       skillFingerprint: services.skillFingerprint,
+      auth,
+    }),
+  );
+  // Authenticated replay-library reads and the owner's default-off sharing
+  // switch. Every path in this router applies auth per route.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildReplaysRouter({
+      replayLibrary: services.replayLibrary,
+      users: services.users,
+      gameVods: services.gameVods,
       auth,
     }),
   );

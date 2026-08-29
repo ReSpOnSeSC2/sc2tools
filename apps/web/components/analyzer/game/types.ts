@@ -27,6 +27,8 @@ export interface GameSummary {
   myBuild?: string | null;
   myMmr?: number | null;
   durationSec?: number | null;
+  playerCount?: number | null;
+  matchFormat?: "1v1" | "team" | "ffa" | "other" | null;
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;

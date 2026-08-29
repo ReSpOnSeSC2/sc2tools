@@ -12,6 +12,7 @@ import {
 describe("app surface matching", () => {
   it.each([
     "/app",
+    "/app/replays",
     "/app/opponents",
     "/app/opponents/1-S2-1-99",
     "/app/game/g1",
@@ -36,6 +37,7 @@ describe("app surface matching", () => {
     "/welcome",
     "/legal/privacy",
     "/p/handle",
+    "/p/handle/replays",
     "/definitions",
     "/sign-in",
     "/overlay/token",
@@ -73,6 +75,7 @@ describe("app surface matching", () => {
   });
 
   it("titles each surface from its nav label", () => {
+    expect(surfaceTitle("/app/replays")).toBe("Replays");
     expect(surfaceTitle("/settings")).toBe("Settings");
     expect(surfaceTitle("/devices")).toBe("Devices");
     expect(surfaceTitle("/builds/anything")).toBe("Custom builds");
@@ -81,6 +84,7 @@ describe("app surface matching", () => {
   });
 
   it("separates public surfaces from the per-user ones", () => {
+    expect(isProtectedSurfacePath("/app/replays")).toBe(true);
     expect(isProtectedSurfacePath("/settings")).toBe(true);
     expect(isProtectedSurfacePath("/app/macro")).toBe(true);
     expect(isProtectedSurfacePath("/coaching")).toBe(true);
@@ -91,6 +95,7 @@ describe("app surface matching", () => {
   it("scopes analyzer-only concerns to /app", () => {
     expect(isAnalyzerPath("/app")).toBe(true);
     expect(isAnalyzerPath("/app/macro")).toBe(true);
+    expect(isAnalyzerPath("/app/replays")).toBe(true);
     expect(isAnalyzerPath("/settings")).toBe(false);
     expect(isAnalyzerPath("/builds")).toBe(false);
   });

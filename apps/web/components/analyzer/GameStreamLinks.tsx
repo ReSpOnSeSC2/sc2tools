@@ -35,10 +35,13 @@ export function GameStreamLinks({
   links,
   compact = false,
   className = "",
+  sharedPlayerName,
 }: {
   links?: readonly GameStreamLink[] | null;
   compact?: boolean;
   className?: string;
+  /** Public-share context: replaces recipient-confusing “You” labels. */
+  sharedPlayerName?: string | null;
 }) {
   const safeLinks = (links ?? []).flatMap((link, index) => {
     const href = safeTimestampedHref(link);
@@ -61,28 +64,35 @@ export function GameStreamLinks({
           (link) => link.perspective === perspective,
         );
         if (group.length === 0) return null;
-        const perspectiveLabel = perspective === "me" ? "You" : "Opponent";
         const groupPlayer = group
           .map((link) => link.playerName?.trim())
           .find(Boolean);
+        const publicName = sharedPlayerName?.trim();
+        const perspectiveLabel = perspective === "me"
+          ? publicName || "You"
+          : publicName ? groupPlayer || "Opponent" : "Opponent";
+        const shortLabel = perspective === "me"
+          ? publicName ? "Player" : "You"
+          : "Opp";
         return (
           <div
             key={perspective}
             role="group"
-            aria-label={`${perspectiveLabel} POV streams${
-              groupPlayer ? ` - ${groupPlayer}` : ""
-            }`}
+            aria-label={`${perspectiveLabel} POV streams`}
             className="inline-flex overflow-hidden rounded-md border border-border-strong bg-bg-elevated/75 shadow-sm"
           >
             <span className="inline-flex items-center border-r border-border-strong px-1.5 text-[10px] font-bold uppercase tracking-wide text-text-muted">
-              {perspective === "me" ? "You" : "Opp"}
+              {shortLabel}
             </span>
             {group.map((link, index) => {
               const platform = PLATFORM_LABEL[link.platform];
               const PlatformIcon = PLATFORM_ICON[link.platform];
               const offset = formatOffset(link.offsetSec * 1000);
               const player = link.playerName?.trim() ?? "";
-              const label = `Watch ${perspectiveLabel} POV on ${platform} at ${offset}${player ? ` - ${player}` : ""}`;
+              const playerSuffix = player && player !== perspectiveLabel
+                ? ` - ${player}`
+                : "";
+              const label = `Watch ${perspectiveLabel} POV on ${platform} at ${offset}${playerSuffix}`;
               return (
                 <a
                   key={link.key}

@@ -21,6 +21,7 @@ export function ReplayDownloadButton({
   sizeBytes,
   mobile = false,
   showLabel = false,
+  contextLabel,
 }: {
   gameId?: string | null;
   available?: boolean;
@@ -29,6 +30,8 @@ export function ReplayDownloadButton({
   mobile?: boolean;
   /** Show a visible label for roomy action bars; icon-only remains the default. */
   showLabel?: boolean;
+  /** Extra replay context for screen-reader action lists. */
+  contextLabel?: string;
 }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -84,13 +87,14 @@ export function ReplayDownloadButton({
     }
   }
 
-  const label = !canDownload
+  const baseLabel = !canDownload
     ? "Replay unavailable"
     : loading
       ? "Downloading replay"
       : state === "error"
         ? "Retry replay download"
         : "Download replay";
+  const label = contextLabel ? `${baseLabel} — ${contextLabel}` : baseLabel;
   const title = !canDownload
     ? unavailableMessage
     : state === "error"

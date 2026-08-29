@@ -6,6 +6,7 @@ import type { SVGProps } from "react";
 // icon is hand-drawn (not vendor lucide) and tuned to a Starcraft-
 // tactical visual language:
 //
+//   Replays      stacked replay cards with a play glyph
 //   Opponents    target-lock corner brackets framing a soldier head
 //   Strategies   crossed psi-blades with diamond emitter pommels
 //   Trends       HUD line graph rising across L-shaped axes
@@ -14,7 +15,7 @@ import type { SVGProps } from "react";
 //   Builds       Protoss-pylon hex outline with warp-energy bars
 //   Arcade       tactical scope reticle with compass ticks
 //
-// All seven share: 24x24 viewBox, currentColor stroke, 1.75 stroke
+// All eight share: 24x24 viewBox, currentColor stroke, 1.75 stroke
 // width, round caps + joins. That keeps them visually cohesive with
 // each other AND with the remaining lucide icons we still use in
 // other surfaces (settings cog, chevron, etc.). Filled accents use
@@ -31,6 +32,22 @@ const SVG_BASE = {
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
 };
+
+/**
+ * Replays — two offset archive cards with a solid play glyph on the
+ * foreground card. The stacked outline reads as a library/history rather
+ * than a live-video control, while the play mark keeps the replay meaning
+ * unmistakable at the rail's compact 18px size.
+ */
+export function ReplaysIcon(props: IconProps) {
+  return (
+    <svg {...SVG_BASE} {...props}>
+      <path d="M6 4h11a2 2 0 0 1 2 2v11" />
+      <path d="M5 7h11a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" />
+      <path d="M9 11l4.5 2.5L9 16z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 /**
  * Opponents — four tactical-HUD corner brackets framing a simple

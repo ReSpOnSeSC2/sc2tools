@@ -23,6 +23,11 @@ describe("routed section slugs", () => {
     expect(tabForSlug("battlefield")).toBeNull();
   });
 
+  it("routes the replay library at its sidebar label", () => {
+    expect(hrefForTab("replays")).toBe("/app/replays");
+    expect(tabForSlug("replays")?.id).toBe("replays");
+  });
+
   it("rejects unknown slugs and retired tab ids", () => {
     expect(tabForSlug("ml")).toBeNull();
     expect(tabForSlug("")).toBeNull();

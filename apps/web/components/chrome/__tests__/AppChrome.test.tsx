@@ -60,6 +60,7 @@ describe("AppChrome navigation", () => {
 
     for (const href of [
       "/app",
+      "/app/replays",
       "/app/opponents",
       "/app/strategies",
       "/app/trends",
@@ -116,6 +117,7 @@ describe("AppChrome navigation", () => {
   });
 
   it.each([
+    ["/app/replays", "/app/replays", "Replays"],
     ["/settings", "/settings", "Settings"],
     ["/devices", "/devices", "Devices"],
     ["/builds", "/builds", "Custom builds"],
@@ -184,6 +186,7 @@ describe("AppChrome mobile navigation", () => {
       a.getAttribute("href"),
     );
     for (const href of [
+      "/app/replays",
       "/app/strategies",
       "/app/trends",
       "/app/macro",

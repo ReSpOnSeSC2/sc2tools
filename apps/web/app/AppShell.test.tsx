@@ -93,6 +93,7 @@ describe("token-auth broadcast routes", () => {
 describe("app chrome routes", () => {
   it.each([
     "/app",
+    "/app/replays",
     "/app/opponents",
     "/app/game/g1",
     "/app/macro",
@@ -159,4 +160,30 @@ describe("normal and protected routes", () => {
     expect(screen.getByTestId("clerk-provider")).toBeTruthy();
     expect(route.clerkRenders).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("public replay capability routes", () => {
+  it.each([
+    "/p/opaque-share-id/replays",
+    "/p/opaque-share-id/replays/01JREPLAY",
+  ])("does not mount analytics on %s", (pathname) => {
+    renderAt(pathname);
+
+    expect(screen.getByTestId("route-content")).toBeTruthy();
+    expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+    expect(screen.getByTestId("site-header")).toBeTruthy();
+    expect(screen.getByTestId("site-footer")).toBeTruthy();
+    expect(screen.getByTestId("cookie-banner")).toBeTruthy();
+    expect(screen.queryByTestId("google-analytics")).toBeNull();
+    expect(screen.getByTestId("service-worker")).toBeTruthy();
+  });
+
+  it.each(["/", "/app/replays", "/p/opaque-share-id/replays-archive"])(
+    "keeps analytics mounted on the non-capability path %s",
+    (pathname) => {
+      renderAt(pathname);
+
+      expect(screen.getByTestId("google-analytics")).toBeTruthy();
+    },
+  );
 });

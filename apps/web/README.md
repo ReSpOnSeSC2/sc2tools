@@ -20,7 +20,9 @@ npm run dev
 | /                   | public | Landing                                |
 | /sign-in, /sign-up  | public | Clerk's hosted UI                      |
 | /download           | public | Agent install instructions             |
-| /app                | clerk  | Analyzer (opponents tab + sync status) |
+| /app                | clerk  | Today dashboard + replay analysis      |
+| /app/replays        | clerk  | Replay library and share controls      |
+| /p/[handle]/replays | public | Shareable player replay list           |
 | /devices            | clerk  | Pair / list / revoke agents             |
 | /streaming          | clerk  | Overlay tokens                         |
 | /builds             | clerk  | User's custom-build library            |

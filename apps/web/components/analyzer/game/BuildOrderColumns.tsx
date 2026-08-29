@@ -17,6 +17,8 @@ export interface BuildOrderColumnsProps {
   oppLabel?: string | null;
   myStatus?: "ok" | "empty" | "not_extracted";
   oppStatus?: "ok" | "empty" | "not_extracted";
+  myHeadingLabel?: string;
+  opponentHeadingLabel?: string;
   loading?: boolean;
   /** Optional action row rendered at the top of the MY column body
    *  (e.g. the Ghost Build "Arm this build" affordance). */
@@ -48,6 +50,8 @@ export function BuildOrderColumns({
   oppLabel,
   myStatus,
   oppStatus,
+  myHeadingLabel = "You",
+  opponentHeadingLabel = "Opponent",
   loading,
   myAction,
 }: BuildOrderColumnsProps) {
@@ -81,14 +85,14 @@ export function BuildOrderColumns({
     <Card title="Build orders" data-testid="build-order-columns">
       <div className="grid gap-4 md:grid-cols-2">
         <BuildColumn
-          heading={`You — ${(myLabel || "").trim() || "Unclassified"}`}
+          heading={`${myHeadingLabel} — ${(myLabel || "").trim() || "Unclassified"}`}
           rows={myRows}
           status={myStatus}
           testId="build-column-me"
           action={myAction}
         />
         <BuildColumn
-          heading={`Opponent — ${(oppLabel || "").trim() || "Unknown"}`}
+          heading={`${opponentHeadingLabel} — ${(oppLabel || "").trim() || "Unknown"}`}
           rows={oppRows}
           status={oppStatus}
           testId="build-column-opp"

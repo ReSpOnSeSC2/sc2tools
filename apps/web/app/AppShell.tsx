@@ -18,6 +18,15 @@ const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
 
 /**
+ * Public replay URLs contain an opaque capability token. Never mount analytics
+ * on those routes so the token (or replay filters in the query string) cannot
+ * be disclosed to the analytics provider as page-view metadata.
+ */
+function isPublicReplayRoute(pathname: string | null): boolean {
+  return Boolean(pathname && /^\/p\/[^/]+\/replays(?:\/|$)/.test(pathname));
+}
+
+/**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
  *
  * `/overlay/*` and `/dock/*` use the token in the URL as their credential.
@@ -40,6 +49,7 @@ const MAIN_CLASS =
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isTokenSurface = isTokenAuthRoute(pathname);
+  const analyticsAllowed = !isPublicReplayRoute(pathname);
 
   if (isTokenSurface) {
     return (
@@ -63,7 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </a>
           <AppChrome>{children}</AppChrome>
           <CookieBanner />
-          <GoogleAnalytics />
+          {analyticsAllowed ? <GoogleAnalytics /> : null}
           <ServiceWorkerRegister />
         </ToastProvider>
       </ClerkProvider>
@@ -85,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
         <Footer />
         <CookieBanner />
-        <GoogleAnalytics />
+        {analyticsAllowed ? <GoogleAnalytics /> : null}
         <ServiceWorkerRegister />
       </ToastProvider>
     </ClerkProvider>

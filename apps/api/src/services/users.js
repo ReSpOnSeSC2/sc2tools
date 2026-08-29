@@ -5,6 +5,9 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
+const REPLAY_SHARE_ID_BYTES = 24;
+const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
+
 /**
  * User service. The `users` collection maps Clerk user ids → our
  * internal user ids (stable UUIDs). Internal ids decouple our DB from
@@ -207,6 +210,156 @@ class UsersService {
       email: typeof doc.email === "string" && doc.email.length > 0
         ? doc.email
         : null,
+    };
+  }
+
+  /**
+   * Read the replay-library sharing switch without involving (or exposing)
+   * the user's broader profile document. Active links use an opaque random
+   * identifier instead of an account id. A legacy enabled row without that
+   * identifier is repaired on read before a link is returned.
+   *
+   * @param {string} userId
+   * @returns {Promise<{enabled: boolean, handle: string|null}>}
+   */
+  async getReplaySharing(userId) {
+    const doc = await this.db.users.findOne(
+      { userId },
+      {
+        projection: {
+          _id: 0,
+          userId: 1,
+          "replaySharing.enabled": 1,
+          "replaySharing.shareId": 1,
+        },
+      },
+    );
+    const handle = validReplayShareId(doc?.replaySharing?.shareId);
+    if (doc?.replaySharing?.enabled === true && !handle) {
+      return this.setReplaySharing(userId, true);
+    }
+    const enabled = doc?.replaySharing?.enabled === true && Boolean(handle);
+    return { enabled, handle: enabled ? handle : null };
+  }
+
+  /**
+   * Atomically update only the replay-library sharing switch. In particular,
+   * this must not call updateProfile(): that method intentionally replaces
+   * profile fields and would make a privacy toggle capable of clearing them.
+   *
+   * @param {string} userId
+   * @param {boolean} enabled
+   * Enabling an already-active link is idempotent. Disabling removes its
+   * opaque id, so a later re-enable creates a different link and previously
+   * revoked recipients do not silently regain access.
+   *
+   * @returns {Promise<{enabled: boolean, handle: string|null}>}
+   */
+  async setReplaySharing(userId, enabled) {
+    if (typeof enabled !== "boolean") {
+      const err = /** @type {Error & {status: number, code: string}} */ (
+        new Error("enabled_must_be_boolean")
+      );
+      err.status = 400;
+      err.code = "invalid_replay_sharing";
+      throw err;
+    }
+    if (!enabled) {
+      const result = await this.db.users.updateOne(
+        { userId },
+        {
+          $set: {
+            "replaySharing.enabled": false,
+            "replaySharing.updatedAt": new Date(),
+          },
+          $unset: { "replaySharing.shareId": "" },
+        },
+      );
+      if (result.matchedCount === 0) throw replaySharingUserNotFound();
+      return { enabled: false, handle: null };
+    }
+
+    // A duplicate random id is cryptographically improbable, but the unique
+    // index is authoritative. Retry both that case and a concurrent first
+    // enable; the winner's active id is returned on the next read.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const current = await this.db.users.findOne(
+        { userId },
+        {
+          projection: {
+            _id: 0,
+            userId: 1,
+            "replaySharing.enabled": 1,
+            "replaySharing.shareId": 1,
+          },
+        },
+      );
+      if (!current) throw replaySharingUserNotFound();
+      const currentHandle = validReplayShareId(current.replaySharing?.shareId);
+      if (current.replaySharing?.enabled === true && currentHandle) {
+        return { enabled: true, handle: currentHandle };
+      }
+
+      const shareId = crypto.randomBytes(REPLAY_SHARE_ID_BYTES).toString("base64url");
+      try {
+        const result = await this.db.users.updateOne(
+          {
+            userId,
+            $or: [
+              { "replaySharing.enabled": { $ne: true } },
+              { "replaySharing.shareId": { $not: REPLAY_SHARE_ID_RE } },
+            ],
+          },
+          {
+            $set: {
+              "replaySharing.enabled": true,
+              "replaySharing.shareId": shareId,
+              "replaySharing.updatedAt": new Date(),
+            },
+          },
+        );
+        if (result.matchedCount > 0) return { enabled: true, handle: shareId };
+      } catch (err) {
+        if (/** @type {any} */ (err)?.code !== 11000) throw err;
+      }
+    }
+    const err = /** @type {Error & {status: number, code: string}} */ (
+      new Error("replay_sharing_conflict")
+    );
+    err.status = 503;
+    err.code = "replay_sharing_conflict";
+    throw err;
+  }
+
+  /**
+   * Resolve an explicitly shared replay library. Malformed, unknown, and
+   * private handles all return null so the public route can answer with the
+   * same neutral 404 and never disclose whether a private account exists.
+   *
+   * @param {string} handle
+   * @returns {Promise<{userId: string, profile: {handle: string, displayName: string}} | null>}
+   */
+  async resolveReplaySharing(handle) {
+    if (!validReplayShareId(handle)) return null;
+    const doc = await this.db.users.findOne(
+      {
+        "replaySharing.shareId": handle,
+        "replaySharing.enabled": true,
+      },
+      { projection: { _id: 0, userId: 1, displayName: 1 } },
+    );
+    if (!doc || typeof doc.userId !== "string") return null;
+    const publicName = typeof doc.displayName === "string"
+      ? doc.displayName
+        .normalize("NFKC")
+        .replace(/[\u0000-\u001f\u007f]/g, "")
+        .trim()
+        .slice(0, 80)
+      : "";
+    const displayName = publicName || "SC2 Player";
+    return {
+      userId: doc.userId,
+      profile: { handle, displayName },
     };
   }
 
@@ -975,6 +1128,23 @@ function normalisePulseIdList(raw) {
     if (out.length >= 20) break;
   }
   return out;
+}
+
+/** @param {unknown} value @returns {string|null} */
+function validReplayShareId(value) {
+  return typeof value === "string" && REPLAY_SHARE_ID_RE.test(value)
+    ? value
+    : null;
+}
+
+/** @returns {Error & {status:number,code:string}} */
+function replaySharingUserNotFound() {
+  const err = /** @type {Error & {status:number,code:string}} */ (
+    new Error("user_not_found")
+  );
+  err.status = 404;
+  err.code = "user_not_found";
+  return err;
 }
 
 module.exports = { UsersService };

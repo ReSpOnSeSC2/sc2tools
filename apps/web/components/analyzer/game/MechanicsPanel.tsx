@@ -19,6 +19,8 @@ export interface MechanicsPanelProps {
   loading?: boolean;
   /** Scrubs the timeline — supply-block window chips jump the cursor. */
   onSeek?: (timeSec: number) => void;
+  /** Neutral public copy can replace the owner-only backfill instruction. */
+  emptyDescription?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ export function MechanicsPanel({
   game,
   loading,
   onSeek,
+  emptyDescription,
 }: MechanicsPanelProps) {
   const raw = breakdown?.raw;
   const race = computeEffectiveRace(breakdown?.race ?? game?.myRace, raw);
@@ -134,7 +137,10 @@ export function MechanicsPanel({
         <EmptyStatePanel
           size="sm"
           title="No macro breakdown for this game"
-          description="Ask the desktop agent to recompute (Macro tab → backfill) and this panel fills in."
+          description={
+            emptyDescription ||
+            "Ask the desktop agent to recompute (Macro tab → backfill) and this panel fills in."
+          }
         />
       </Card>
     );

@@ -43,6 +43,8 @@ export interface InteractiveTimelineProps {
   onScrub: (time: number) => void;
   myName?: string | null;
   oppName?: string | null;
+  /** Public/share surfaces can replace owner-centric "My" labels. */
+  perspectiveLabel?: string | null;
 }
 
 /**
@@ -64,6 +66,7 @@ export function InteractiveTimeline({
   onScrub,
   myName,
   oppName,
+  perspectiveLabel,
 }: InteractiveTimelineProps) {
   const sliderId = useId();
   const points = useMemo(
@@ -93,6 +96,10 @@ export function InteractiveTimeline({
   const hasEconomy = points.some(
     (p) => p.myMinerals !== null || p.mySupply !== null,
   );
+  const perspectiveName = perspectiveLabel?.trim() || null;
+  const myArmyLabel = perspectiveName
+    ? `${possessiveName(perspectiveName)} army`
+    : "My army";
 
   if (points.length === 0) {
     return (
@@ -117,7 +124,11 @@ export function InteractiveTimeline({
   return (
     <Card title="Game timeline" data-testid="interactive-timeline">
       <div className="space-y-3">
-        <Legend hasArmy={hasArmy} hasEconomy={hasEconomy} />
+        <Legend
+          hasArmy={hasArmy}
+          hasEconomy={hasEconomy}
+          myArmyLabel={myArmyLabel}
+        />
 
         <div
           role="img"
@@ -175,7 +186,7 @@ export function InteractiveTimeline({
                       </div>
                       <TooltipRow
                         dot={COLOR_MY_ARMY}
-                        label="My army"
+                        label={myArmyLabel}
                         value={r.myArmy}
                       />
                       <TooltipRow
@@ -225,7 +236,7 @@ export function InteractiveTimeline({
                 yAxisId="value"
                 type="monotone"
                 dataKey="myArmy"
-                name="My army value"
+                name={`${myArmyLabel} value`}
                 stroke={COLOR_MY_ARMY}
                 strokeWidth={2}
                 dot={false}
@@ -297,10 +308,16 @@ export function InteractiveTimeline({
         </div>
 
         {battles.length > 0 ? (
-          <BattleStrip battles={battles} onScrub={onScrub} />
+          <BattleStrip
+            battles={battles}
+            onScrub={onScrub}
+            perspectiveName={perspectiveName}
+          />
         ) : null}
 
-        {readout ? <MomentReadoutBar readout={readout} /> : null}
+        {readout ? (
+          <MomentReadoutBar readout={readout} myArmyLabel={myArmyLabel} />
+        ) : null}
 
         {/* Visually-hidden data summary for screen readers. */}
         <div className="sr-only" data-testid="timeline-sr-summary">
@@ -309,7 +326,7 @@ export function InteractiveTimeline({
             <ul>
               {battles.map((b) => (
                 <li key={`sr-battle-${b.start}`}>
-                  Fight at {formatGameClock(b.start)}: you lost {b.myLoss} army
+                  Fight at {formatGameClock(b.start)}: {perspectiveName || "you"} lost {b.myLoss} army
                   value, opponent lost {b.oppLoss}.
                 </li>
               ))}
@@ -349,15 +366,17 @@ function TooltipRow({
 function Legend({
   hasArmy,
   hasEconomy,
+  myArmyLabel,
 }: {
   hasArmy: boolean;
   hasEconomy: boolean;
+  myArmyLabel: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-text-muted">
       {hasArmy ? (
         <>
-          <LegendItem color={COLOR_MY_ARMY} label="My army value" />
+          <LegendItem color={COLOR_MY_ARMY} label={`${myArmyLabel} value`} />
           <LegendItem color={COLOR_OPP_ARMY} label="Opponent army value" />
         </>
       ) : null}
@@ -404,9 +423,11 @@ function LegendItem({
 function BattleStrip({
   battles,
   onScrub,
+  perspectiveName,
 }: {
   battles: BattleMarker[];
   onScrub: (time: number) => void;
+  perspectiveName: string | null;
 }) {
   return (
     <div
@@ -419,7 +440,7 @@ function BattleStrip({
           key={`battle-btn-${b.start}`}
           type="button"
           onClick={() => onScrub(b.start)}
-          aria-label={`Jump to fight at ${formatGameClock(b.start)} — you lost ${b.myLoss} army value, opponent lost ${b.oppLoss}`}
+          aria-label={`Jump to fight at ${formatGameClock(b.start)} — ${perspectiveName || "you"} lost ${b.myLoss} army value, opponent lost ${b.oppLoss}`}
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-border bg-bg-elevated px-3 text-caption text-text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Swords className="h-3.5 w-3.5 text-danger" aria-hidden />
@@ -438,8 +459,10 @@ function BattleStrip({
 /** "At this moment" readout bar under the chart. */
 function MomentReadoutBar({
   readout,
+  myArmyLabel,
 }: {
   readout: NonNullable<ReturnType<typeof readoutAt>>;
+  myArmyLabel: string;
 }) {
   return (
     <div
@@ -453,7 +476,7 @@ function MomentReadoutBar({
         readout.mySupplyCap !== null ? ` of ${Math.round(readout.mySupplyCap)}` : ""
       }, minerals ${
         readout.myMinerals !== null ? Math.round(readout.myMinerals) : "unknown"
-      }, my army ${
+      }, ${myArmyLabel} ${
         readout.myArmy !== null ? Math.round(readout.myArmy) : "unknown"
       }, opponent army ${
         readout.oppArmy !== null ? Math.round(readout.oppArmy) : "unknown"
@@ -479,7 +502,7 @@ function MomentReadoutBar({
         value={readout.myMinerals !== null ? Math.round(readout.myMinerals) : "—"}
       />
       <ReadoutStat
-        label="My army"
+        label={myArmyLabel}
         value={readout.myArmy !== null ? Math.round(readout.myArmy) : "—"}
         color={COLOR_MY_ARMY}
       />
@@ -490,6 +513,10 @@ function MomentReadoutBar({
       />
     </div>
   );
+}
+
+function possessiveName(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`;
 }
 
 function ReadoutStat({

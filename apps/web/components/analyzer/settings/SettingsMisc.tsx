@@ -26,6 +26,7 @@ const DEFAULT_MISC: Misc = {};
 // TabIds or the Today route ignores the preference (the old "ml"
 // entry pointed at a tab that no longer exists).
 const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "replays", label: "Replays" },
   { value: "opponents", label: "Opponents" },
   { value: "strategies", label: "Strategies" },
   { value: "trends", label: "Trends" },

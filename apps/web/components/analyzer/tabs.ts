@@ -5,11 +5,13 @@ import {
   MacroIcon,
   MapsIcon,
   OpponentsIcon,
+  ReplaysIcon,
   StrategiesIcon,
   TrendsIcon,
 } from "./icons/NavIcons";
 
 export type TabId =
+  | "replays"
   | "opponents"
   | "strategies"
   | "trends"
@@ -28,6 +30,7 @@ export type TabDef = {
 };
 
 export const TABS: readonly TabDef[] = [
+  { id: "replays", label: "Replays", icon: ReplaysIcon, description: "Browse, filter, and share your replay history." },
   { id: "opponents", label: "Opponents", icon: OpponentsIcon, description: "Drill into the players you've faced." },
   { id: "strategies", label: "Strategies", icon: StrategiesIcon, description: "Build vs strategy and per-strategy results." },
   { id: "trends", label: "Trends", icon: TrendsIcon, description: "Win-rate trajectory across periods." },
@@ -48,6 +51,7 @@ export const TABS: readonly TabDef[] = [
  * ------------------------------------------------------------------ */
 
 export type SectionSlug =
+  | "replays"
   | "opponents"
   | "strategies"
   | "trends"
@@ -57,6 +61,7 @@ export type SectionSlug =
   | "arcade";
 
 const TAB_TO_SLUG: Record<TabId, SectionSlug> = {
+  replays: "replays",
   opponents: "opponents",
   strategies: "strategies",
   trends: "trends",
@@ -67,6 +72,7 @@ const TAB_TO_SLUG: Record<TabId, SectionSlug> = {
 };
 
 const SLUG_TO_TAB: Record<SectionSlug, TabId> = {
+  replays: "replays",
   opponents: "opponents",
   strategies: "strategies",
   trends: "trends",

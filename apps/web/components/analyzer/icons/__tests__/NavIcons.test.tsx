@@ -6,6 +6,7 @@ import {
   MacroIcon,
   MapsIcon,
   OpponentsIcon,
+  ReplaysIcon,
   StrategiesIcon,
   TrendsIcon,
 } from "../NavIcons";
@@ -33,6 +34,7 @@ describe("NavIcons", () => {
   afterEach(() => cleanup());
 
   const ICONS = [
+    ["ReplaysIcon", ReplaysIcon],
     ["OpponentsIcon", OpponentsIcon],
     ["StrategiesIcon", StrategiesIcon],
     ["TrendsIcon", TrendsIcon],

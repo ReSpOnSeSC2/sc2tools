@@ -18,6 +18,19 @@ export interface UserSummary {
   email: string | null;
 }
 
+export interface ReplaySharingState {
+  enabled: boolean;
+  handle: string | null;
+}
+
+export interface ReplayPublicIdentity {
+  userId: string;
+  profile: {
+    handle: string;
+    displayName: string;
+  };
+}
+
 export interface UsersService {
   ensureFromClerk(clerkUserId: string): Promise<{ userId: string }>;
   touch(userId: string): Promise<void>;
@@ -27,6 +40,12 @@ export interface UsersService {
     profile: { [K in keyof UserProfile]?: string | null },
   ): Promise<UserProfile>;
   getSummary(userId: string): Promise<UserSummary>;
+  getReplaySharing(userId: string): Promise<ReplaySharingState>;
+  setReplaySharing(
+    userId: string,
+    enabled: boolean,
+  ): Promise<ReplaySharingState>;
+  resolveReplaySharing(handle: string): Promise<ReplayPublicIdentity | null>;
   setEmail(userId: string, email: string): Promise<void>;
   upsertFromWebhook(clerkUserId: string, email: string | null): Promise<boolean>;
   grantAdmin(
@@ -52,6 +71,58 @@ export interface UsersService {
     },
   ): Promise<boolean>;
   repairLastKnownMmrAfterResumedReplay(userId: string): Promise<boolean>;
+}
+
+export interface ReplayLibraryItem {
+  gameId: string | null;
+  date: string | null;
+  result: string | null;
+  map: string | null;
+  durationSec: number | null;
+  playerCount: number | null;
+  matchFormat: "1v1" | "team" | "ffa" | "other" | null;
+  myRace: string | null;
+  myMmr: number | null;
+  myBuild: string | null;
+  macroScore: number | null;
+  opponent: {
+    displayName: string | null;
+    race: string | null;
+    mmr: number | null;
+    strategy: string | null;
+  };
+  matchup: string | null;
+  replayAvailable: boolean;
+  replaySizeBytes: number | null;
+}
+
+export interface ReplayLibraryService {
+  list(
+    userId: string,
+    opts?: {
+      filters?: Record<string, unknown>;
+      result?: unknown;
+      matchup?: unknown;
+      search?: unknown;
+      limit?: unknown;
+      cursor?: unknown;
+      sort?: unknown;
+    },
+  ): Promise<{
+    items: ReplayLibraryItem[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    /** Private server-only inputs for GameVodLinksService. */
+    sourceGames: Array<Record<string, unknown>>;
+  }>;
+  getDetail(
+    userId: string,
+    gameId: string,
+  ): Promise<{
+    game: ReplayLibraryItem;
+    /** Private server-only input for GameVodLinksService. */
+    sourceGame: Record<string, unknown>;
+  } | null>;
 }
 
 export interface OpponentsService {

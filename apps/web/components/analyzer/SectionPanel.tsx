@@ -5,6 +5,7 @@ import { ArcadeTab } from "./ArcadeTab";
 import { BattlefieldTab } from "./BattlefieldTab";
 import { BuildsTab } from "./BuildsTab";
 import { MacroTab } from "./MacroTab";
+import { ReplayLibrary } from "./replays/ReplayLibrary";
 import { StrategiesTab } from "./StrategiesTab";
 import { TrendsTab } from "./TrendsTab";
 
@@ -15,6 +16,8 @@ import { TrendsTab } from "./TrendsTab";
  */
 export function SectionPanel({ tab }: { tab: Exclude<TabId, "opponents"> }) {
   switch (tab) {
+    case "replays":
+      return <ReplayLibrary />;
     case "strategies":
       return <StrategiesTab />;
     case "trends":
