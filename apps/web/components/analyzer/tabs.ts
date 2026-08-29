@@ -30,13 +30,13 @@ export type TabDef = {
 };
 
 export const TABS: readonly TabDef[] = [
-  { id: "replays", label: "Replays", icon: ReplaysIcon, description: "Browse, filter, and share your replay history." },
   { id: "opponents", label: "Opponents", icon: OpponentsIcon, description: "Drill into the players you've faced." },
   { id: "strategies", label: "Strategies", icon: StrategiesIcon, description: "Build vs strategy and per-strategy results." },
   { id: "trends", label: "Trends", icon: TrendsIcon, description: "Win-rate trajectory across periods." },
   { id: "macro", label: "Macro", icon: MacroIcon, description: "Your macro report: leaks priced in minerals, and where macro wins games." },
   { id: "battlefield", label: "Maps", icon: MapsIcon, description: "Maps and matchup performance." },
   { id: "builds", label: "Builds", icon: BuildsIcon, description: "Your builds, performance, and editor." },
+  { id: "replays", label: "Replays", icon: ReplaysIcon, description: "Browse, filter, and share your replay history." },
   { id: "arcade", label: "Arcade", icon: ArcadeIcon, description: "Quizzes and games that go deeper than the charts." },
 ] as const;
 

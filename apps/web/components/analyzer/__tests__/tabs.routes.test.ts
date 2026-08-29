@@ -28,6 +28,14 @@ describe("routed section slugs", () => {
     expect(tabForSlug("replays")?.id).toBe("replays");
   });
 
+  it("keeps Replays between Builds and Arcade in shared navigation", () => {
+    expect(TABS.map((tab) => tab.id).slice(-3)).toEqual([
+      "builds",
+      "replays",
+      "arcade",
+    ]);
+  });
+
   it("rejects unknown slugs and retired tab ids", () => {
     expect(tabForSlug("ml")).toBeNull();
     expect(tabForSlug("")).toBeNull();
