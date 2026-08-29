@@ -389,22 +389,6 @@ function makeServices(deps) {
     logger: deps.logger,
   });
   const replayLibrary = new ReplayLibraryService(deps.db);
-  // Timestamped game archives combine two independent public signals:
-  // configured Twitch/YouTube channels matched by broadcast interval, and
-  // SC2Pulse's participant-scoped Twitch index. The composite preserves
-  // whichever source is healthy and deduplicates them into at most one icon
-  // per platform/player perspective.
-  const directGameVods = new GameVodsService({
-    users,
-    pulseIntel,
-    log: deps.logger,
-  });
-  const pulseMatchVods = new PulseMatchVodsService({ logger: deps.logger });
-  const gameVods = new GameVodLinksService({
-    archives: directGameVods,
-    pulseMatches: pulseMatchVods,
-    log: deps.logger,
-  });
   const pairings = new DevicePairingsService(deps.db);
   const overlayTokens = new OverlayTokensService(deps.db);
   const platformIntegrations = new PlatformIntegrationsService(deps.db, {
@@ -412,6 +396,22 @@ function makeServices(deps) {
     overlayTokens,
     io: deps.io,
     logger: deps.logger,
+  });
+  // Timestamped game archives combine the user's official YouTube uploads,
+  // public configured-channel fallbacks, and SC2Pulse's participant-scoped
+  // Twitch index. The composite preserves whichever source is healthy and
+  // deduplicates them into at most one icon per platform/player perspective.
+  const directGameVods = new GameVodsService({
+    users,
+    pulseIntel,
+    platformIntegrations,
+    log: deps.logger,
+  });
+  const pulseMatchVods = new PulseMatchVodsService({ logger: deps.logger });
+  const gameVods = new GameVodLinksService({
+    archives: directGameVods,
+    pulseMatches: pulseMatchVods,
+    log: deps.logger,
   });
   // TikTok chat relay for the multichat overlay widget — one upstream
   // TikTok connection per streamer username, fanned out to every OBS

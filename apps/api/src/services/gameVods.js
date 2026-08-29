@@ -35,6 +35,7 @@ const PULSE_FETCH_CONCURRENCY = 5;
 const MAX_HTML_CHARS = 8_000_000;
 const MAX_GAME_DURATION_SEC = 24 * 60 * 60;
 const MAX_VIDEO_DURATION_SEC = 7 * 24 * 60 * 60;
+const YOUTUBE_SIMULCAST_TOLERANCE_MS = 5 * 60 * 1000;
 
 const PAGE_HEADERS = Object.freeze({
   "User-Agent":
@@ -52,6 +53,8 @@ const PAGE_HEADERS = Object.freeze({
  *   videoId: string,
  *   startMs: number,
  *   endMs: number,
+ *   orientation?: 'horizontal'|'portrait'|'unknown',
+ *   ongoing?: boolean,
  * }} ProviderVod
  */
 
@@ -60,6 +63,8 @@ const PAGE_HEADERS = Object.freeze({
  *   platform: VodPlatform,
  *   input: string,
  *   cacheKey: string,
+ *   oauthUserId?: string,
+ *   oauthRevision?: string,
  * }} ProviderChannel
  */
 
@@ -79,8 +84,19 @@ class GameVodsService {
    * @param {{
    *   users: {getPreferences: (userId: string, type: string) => Promise<Record<string, any>>},
    *   pulseIntel?: {getIntel: (pulseCharacterId: string|number) => Promise<object|null>} | null,
+   *   platformIntegrations?: {
+   *     getYoutubeConnectionRevision?: (userId:string) => Promise<string>,
+   *     resolveYoutubeGameVods: (
+   *       userId:string,
+   *       opts?:{
+   *         expectedHandle?:string,
+   *         expectedChannelId?:string,
+   *         expectedRevision?:string,
+   *       },
+   *     ) => Promise<Record<string,any>|null>,
+   *   } | null,
    *   fetchImpl?: typeof fetch,
-   *   log?: {warn?: Function} | null,
+   *   log?: {warn?: Function,info?: Function} | null,
    *   cacheTtlMs?: number,
    *   now?: () => number,
    * }} opts
@@ -91,6 +107,7 @@ class GameVodsService {
     }
     this.users = opts.users;
     this.pulseIntel = opts.pulseIntel || null;
+    this.platformIntegrations = opts.platformIntegrations || null;
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.log = opts.log || null;
     this.cacheTtlMs =
@@ -123,7 +140,24 @@ class GameVodsService {
     for (const game of normalizedGames) linksByGameId[game.gameId] = [];
 
     const prefs = await this.users.getPreferences(userId, "multichat");
-    const ownChannels = configuredOwnChannels(prefs);
+    let oauthRevision = "";
+    if (
+      prefs?.youtube?.channel
+      && typeof this.platformIntegrations?.getYoutubeConnectionRevision
+        === "function"
+    ) {
+      try {
+        oauthRevision = String(
+          await this.platformIntegrations.getYoutubeConnectionRevision(userId),
+        );
+      } catch {
+        oauthRevision = "";
+      }
+    }
+    const ownChannels = configuredOwnChannels(prefs).map((channel) =>
+      channel.platform === "youtube"
+        ? { ...channel, oauthUserId: userId, oauthRevision }
+        : channel);
     const sourcesByGame = new Map(
       normalizedGames.map((game) => [game.gameId, ownSources(ownChannels)]),
     );
@@ -167,6 +201,7 @@ class GameVodsService {
     for (const game of normalizedGames) {
       if (game.startMs === null) continue;
       const seen = new Set();
+      const seenYoutubePerspectives = new Set();
       for (const source of sourcesByGame.get(game.gameId) || []) {
         const vod = findContainingVod(
           archivesByChannel.get(providerKey(source.channel)) || [],
@@ -179,10 +214,19 @@ class GameVodsService {
         );
         const url = buildTimestampUrl(vod.platform, vod.videoId, offsetSec);
         if (!url) continue;
+        if (
+          vod.platform === "youtube"
+          && seenYoutubePerspectives.has(source.perspective)
+        ) {
+          continue;
+        }
         const dedupeKey =
           `${source.perspective}:${vod.platform}:${vod.videoId}:${offsetSec}`;
         if (seen.has(dedupeKey)) continue;
         seen.add(dedupeKey);
+        if (vod.platform === "youtube") {
+          seenYoutubePerspectives.add(source.perspective);
+        }
         linksByGameId[game.gameId].push({
           platform: vod.platform,
           videoId: vod.videoId,
@@ -304,7 +348,11 @@ class GameVodsService {
     if (typeof this.fetchImpl !== "function") throw new Error("fetch unavailable");
     return channel.platform === "twitch"
       ? this._fetchTwitchArchives(channel.input)
-      : this._fetchYoutubeArchives(channel.input);
+      : this._fetchYoutubeArchives(
+        channel.input,
+        channel.oauthUserId,
+        channel.oauthRevision,
+      );
   }
 
   /** @param {string} login @returns {Promise<ProviderVod[]>} */
@@ -329,9 +377,32 @@ class GameVodsService {
     return parseTwitchArchives(payload);
   }
 
-  /** @param {string} rawInput @returns {Promise<ProviderVod[]>} */
-  async _fetchYoutubeArchives(rawInput) {
+  /**
+   * Prefer the official uploads index only for the signed-in user's own saved
+   * channel. Any missing/failed OAuth path falls through to the existing
+   * public channel-page scraper, preserving fail-soft behavior.
+   *
+   * @param {string} rawInput
+   * @param {string|undefined} oauthUserId
+   * @param {string|undefined} oauthRevision
+   * @returns {Promise<ProviderVod[]>}
+   */
+  async _fetchYoutubeArchives(rawInput, oauthUserId, oauthRevision) {
+    // OAuth discovery and public scraping share one end-to-end budget so a
+    // slow official-provider failure cannot double the route latency.
     const deadlineMs = Date.now() + YOUTUBE_CHANNEL_BUDGET_MS;
+    if (
+      oauthUserId
+      && typeof this.platformIntegrations?.resolveYoutubeGameVods === "function"
+    ) {
+      const official = await this._fetchOfficialYoutubeArchives(
+        oauthUserId,
+        rawInput,
+        oauthRevision,
+      );
+      if (official !== null) return official;
+    }
+
     const normalized = normalizeYoutubeArchiveInput(rawInput);
     const ownerChannelIds = new Set();
     /** @type {string[]} */
@@ -399,6 +470,65 @@ class GameVodsService {
     return /** @type {ProviderVod[]} */ (parsed.filter(Boolean));
   }
 
+  /**
+   * @param {string} userId
+   * @param {string} configuredInput
+   * @param {string|undefined} oauthRevision
+   * @returns {Promise<ProviderVod[]|null>}
+   */
+  async _fetchOfficialYoutubeArchives(
+    userId,
+    configuredInput,
+    oauthRevision,
+  ) {
+    const configured = configuredYoutubeIdentity(configuredInput);
+    if (!configured) {
+      this._youtubeDiagnostic("oauth_identity_unverifiable");
+      return null;
+    }
+    let result;
+    try {
+      const expectedIdentity = configured?.type === "handle"
+        ? { expectedHandle: configured.value }
+        : configured?.type === "channel"
+          ? { expectedChannelId: configured.value }
+          : {};
+      result = await this.platformIntegrations?.resolveYoutubeGameVods(userId, {
+        ...expectedIdentity,
+        expectedRevision: oauthRevision || "",
+      });
+    } catch (err) {
+      this._warnOfficialYoutube(err);
+      this._youtubeDiagnostic("oauth_request_failed");
+      return null;
+    }
+    if (!result || typeof result !== "object") {
+      this._youtubeDiagnostic("oauth_unavailable");
+      return null;
+    }
+    const identity = matchConfiguredYoutubeIdentity(configuredInput, result);
+    if (!identity.matches) {
+      this._youtubeDiagnostic(identity.reason);
+      return null;
+    }
+    const vods = normalizeOfficialYoutubeVods(result.vods);
+    const counts = {
+      archiveCount: vods.length,
+      uploadsScanned: boundedDiagnosticCount(result.uploadsScanned),
+      pagesFetched: boundedDiagnosticCount(result.pagesFetched),
+      videoBatches: boundedDiagnosticCount(result.videoBatches),
+    };
+    // A valid channel may still have no livestreams in the bounded uploads
+    // window. Let the existing public channel scan have one chance to find an
+    // active or unusually old stream before caching an empty answer.
+    if (vods.length === 0) {
+      this._youtubeDiagnostic("oauth_no_livestreams", counts);
+      return null;
+    }
+    this._youtubeDiagnostic(null, counts);
+    return vods;
+  }
+
   /** @param {string} key @param {{fetchedAt: number, vods: ProviderVod[]}} entry */
   _touchCache(key, entry) {
     this._cache.delete(key);
@@ -421,6 +551,46 @@ class GameVodsService {
       "game_vod_lookup_failed",
     );
   }
+
+  /**
+   * @param {string|null} fallbackReason
+   * @param {Record<string,number>} [counts]
+   */
+  _youtubeDiagnostic(fallbackReason, counts = {}) {
+    this.log?.info?.(
+      {
+        provider: "youtube",
+        source: fallbackReason ? "public_scrape" : "official",
+        ...(fallbackReason ? { fallbackReason } : {}),
+        ...counts,
+      },
+      "game_vod_youtube_source_selected",
+    );
+  }
+
+  /**
+   * Official provider errors are logged without messages or credentials.
+   * @param {unknown} err
+   */
+  _warnOfficialYoutube(err) {
+    const rawCode = String(/** @type {any} */ (err)?.code || "");
+    const code = /^[a-z0-9_]{1,80}$/i.test(rawCode)
+      ? rawCode
+      : "youtube_official_failed";
+    const rawStatus = Number(/** @type {any} */ (err)?.status);
+    this.log?.warn?.(
+      {
+        provider: "youtube",
+        source: "official",
+        code,
+        ...(Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599
+          ? { status: rawStatus }
+          : {}),
+      },
+      "game_vod_lookup_failed",
+    );
+  }
+
 }
 
 /**
@@ -548,6 +718,143 @@ function normalizeYoutubeArchiveInput(raw) {
     streamsUrls: unique,
     cacheKey: `channel:${unique.join("|")}`,
   };
+}
+
+/**
+ * Bind an authenticated channel to the user's saved multichat channel before
+ * using private OAuth-derived results. Modern `@handle` and canonical
+ * `/channel/UC...` inputs are exact and safe to compare. Legacy `/c`, `/user`,
+ * root-name, and direct-video inputs are intentionally left to public scraping
+ * because the Data API response cannot prove they identify the same channel.
+ *
+ * @param {unknown} rawInput
+ * @param {Record<string,any>} official
+ * @returns {{matches:boolean,reason:string}}
+ */
+function matchConfiguredYoutubeIdentity(rawInput, official) {
+  const configured = configuredYoutubeIdentity(rawInput);
+  if (!configured) {
+    return { matches: false, reason: "oauth_identity_unverifiable" };
+  }
+  if (configured.type === "channel") {
+    const channelId = String(official?.channelId || "");
+    return channelId === configured.value
+      ? { matches: true, reason: "" }
+      : { matches: false, reason: "oauth_channel_mismatch" };
+  }
+  const officialHandle = youtubeCustomHandle(official?.customUrl);
+  if (official?.handleLookupAttempted === true) {
+    const channelId = String(official?.channelId || "");
+    const handleChannelId = String(official?.handleChannelId || "");
+    return channelId && handleChannelId && channelId === handleChannelId
+      ? { matches: true, reason: "" }
+      : { matches: false, reason: "oauth_handle_mismatch" };
+  }
+  return officialHandle === configured.value
+    ? { matches: true, reason: "" }
+    : { matches: false, reason: "oauth_handle_mismatch" };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{type:'channel'|'handle',value:string}|null}
+ */
+function configuredYoutubeIdentity(raw) {
+  const input = typeof raw === "string" ? raw.trim() : "";
+  if (!input) return null;
+  if (/^@[A-Za-z0-9._-]{2,60}$/.test(input)) {
+    return { type: "handle", value: input.toLowerCase() };
+  }
+  if (
+    /^[A-Za-z0-9._-]{2,60}$/.test(input)
+    && !/^[A-Za-z0-9_-]{11}$/.test(input)
+  ) {
+    return { type: "handle", value: `@${input.toLowerCase()}` };
+  }
+  if (!/^https?:\/\//i.test(input)) return null;
+  let parsed;
+  try {
+    parsed = new URL(input);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^(?:www\.|m\.)/, "");
+  if (parsed.protocol !== "https:" || host !== "youtube.com") return null;
+  let path = parsed.pathname.replace(/\/+$/, "");
+  while (/\/(?:live|streams|videos)$/i.test(path)) {
+    path = path.replace(/\/(?:live|streams|videos)$/i, "").replace(/\/+$/, "");
+  }
+  const channel = /^\/channel\/(UC[A-Za-z0-9_-]{22})$/.exec(path);
+  if (channel) return { type: "channel", value: channel[1] };
+  const handle = /^\/(\@[A-Za-z0-9._-]{2,60})$/.exec(path);
+  return handle
+    ? { type: "handle", value: handle[1].toLowerCase() }
+    : null;
+}
+
+/** @param {unknown} raw @returns {string|null} */
+function youtubeCustomHandle(raw) {
+  let input = typeof raw === "string" ? raw.trim() : "";
+  if (!input) return null;
+  if (/^(?:www\.|m\.)?youtube\.com\//i.test(input)) {
+    input = `https://${input}`;
+  }
+  if (/^https?:\/\//i.test(input)) {
+    let parsed;
+    try {
+      parsed = new URL(input);
+    } catch {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase().replace(/^(?:www\.|m\.)/, "");
+    if (parsed.protocol !== "https:" || host !== "youtube.com") return null;
+    input = parsed.pathname.replace(/^\/+|\/+$/g, "");
+  }
+  return /^@[A-Za-z0-9._-]{2,60}$/.test(input)
+    ? input.toLowerCase()
+    : null;
+}
+
+/** @param {unknown} rawVods @returns {ProviderVod[]} */
+function normalizeOfficialYoutubeVods(rawVods) {
+  if (!Array.isArray(rawVods)) return [];
+  /** @type {ProviderVod[]} */
+  const vods = [];
+  const seen = new Set();
+  for (const row of rawVods.slice(0, MAX_YOUTUBE_VIDEOS * 10)) {
+    const videoId = String(row?.videoId || "");
+    const startMs = Number(row?.startMs);
+    const endMs = Number(row?.endMs);
+    if (
+      !isYoutubeVideoId(videoId)
+      || seen.has(videoId)
+      || !Number.isFinite(startMs)
+      || !Number.isFinite(endMs)
+      || endMs <= startMs
+    ) {
+      continue;
+    }
+    seen.add(videoId);
+    const orientation = row?.orientation === "horizontal"
+      || row?.orientation === "portrait"
+      ? row.orientation
+      : "unknown";
+    vods.push({
+      platform: "youtube",
+      videoId,
+      startMs,
+      endMs,
+      orientation,
+      ongoing: row?.ongoing === true,
+    });
+  }
+  return vods;
+}
+
+/** @param {unknown} value */
+function boundedDiagnosticCount(value) {
+  const count = Math.floor(Number(value));
+  return Number.isFinite(count) ? Math.max(0, Math.min(10_000, count)) : 0;
 }
 
 /** @param {string} path @returns {boolean} */
@@ -763,9 +1070,40 @@ function findContainingVod(vods, atMs) {
     ) {
       continue;
     }
-    if (!best || vod.startMs > best.startMs) best = vod;
+    if (!best || preferContainingVod(vod, best)) best = vod;
   }
   return best;
+}
+
+/**
+ * YouTube can publish a horizontal and portrait simulcast with starts a few
+ * seconds apart. Prefer horizontal only while both streams contain this game;
+ * the containing filter in `findContainingVod` preserves a portrait-only
+ * prefix or tail. Unknown dimensions keep the established latest-start rule.
+ *
+ * @param {ProviderVod} candidate
+ * @param {ProviderVod} current
+ */
+function preferContainingVod(candidate, current) {
+  const nearSimulcast = candidate.platform === "youtube"
+    && current.platform === "youtube"
+    && Math.abs(candidate.startMs - current.startMs)
+      <= YOUTUBE_SIMULCAST_TOLERANCE_MS;
+  if (nearSimulcast) {
+    if (
+      candidate.orientation === "horizontal"
+      && current.orientation === "portrait"
+    ) {
+      return true;
+    }
+    if (
+      candidate.orientation === "portrait"
+      && current.orientation === "horizontal"
+    ) {
+      return false;
+    }
+  }
+  return candidate.startMs > current.startMs;
 }
 
 /**
@@ -876,7 +1214,10 @@ function addSource(sources, source) {
 
 /** @param {ProviderChannel} channel */
 function providerKey(channel) {
-  return `${channel.platform}:${channel.cacheKey}`;
+  const owner = channel.platform === "youtube" && channel.oauthUserId
+    ? `:oauth:${channel.oauthUserId}:${channel.oauthRevision || "none"}`
+    : "";
+  return `${channel.platform}:${channel.cacheKey}${owner}`;
 }
 
 /** @param {unknown} value @returns {string|null} */
@@ -962,6 +1303,8 @@ module.exports = {
   extractYoutubeChannelId,
   extractYoutubeVideoOwnerChannelId,
   parseYoutubeBroadcastDetails,
+  matchConfiguredYoutubeIdentity,
+  normalizeOfficialYoutubeVods,
   parseTwitchArchives,
   findContainingVod,
   buildTimestampUrl,

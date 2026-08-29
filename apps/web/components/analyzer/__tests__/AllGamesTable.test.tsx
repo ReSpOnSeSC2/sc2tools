@@ -235,6 +235,7 @@ describe("AllGamesTable game analysis entry point", () => {
       expect(link.getAttribute("href")).toBe(
         "https://www.twitch.tv/videos/42?t=1h2m3s",
       );
+      expect(link.className).toContain("text-[#9146ff]");
     });
     const youtubeLinks = screen.getAllByRole("link", {
       name: /Watch Opponent POV on YouTube at 2:05 - Barcode Rival/i,
@@ -244,6 +245,14 @@ describe("AllGamesTable game analysis entry point", () => {
       expect(link.getAttribute("href")).toBe(
         "https://youtu.be/AbCdEf12345?t=125s",
       );
+      expect(link.getAttribute("title")).toBe(
+        "Watch Opponent POV on YouTube at 2:05 - Barcode Rival",
+      );
+      expect(link.className).toContain("text-[#ff0000]");
+      expect(link.className).toContain("hover:bg-[#ff0000]/15");
+      expect(link.className).toContain("focus-visible:ring-[#ff0000]");
+      expect(link.className).not.toContain("text-[#9146ff]");
+      expect(link.querySelector("svg.lucide-youtube")).toBeTruthy();
     });
     expect(screen.getAllByText("You")).toHaveLength(2);
     expect(screen.getAllByText("Opp")).toHaveLength(2);

@@ -225,6 +225,9 @@ describe("BrollPlayer", () => {
     expect(players[0].dataset.clipId).toBe(players[1].dataset.clipId);
     expect(players[0].dataset.videoFormat).toBe("horizontal");
     expect(players[1].dataset.videoFormat).toBe("vertical");
+    const media = screen.getAllByTestId("broll-media");
+    expect(media[0].dataset.videoFit).toBe("cover");
+    expect(media[1].dataset.videoFit).toBe("cover");
   });
 
   it("falls back to the horizontal source when a clip has no vertical pair", async () => {
@@ -250,6 +253,16 @@ describe("BrollPlayer", () => {
       startSeconds: 91,
       endSeconds: 120,
     });
+    const media = screen.getByTestId("broll-media");
+    expect(media.dataset.videoFit).toBe("contain");
+    expect(media.style.width).toBe("100vw");
+    expect(media.style.height).toBe("56.25vw");
+    expect(media.style.minWidth).toBe("0px");
+    expect(media.style.minHeight).toBe("0px");
+    act(() => {
+      youtube.handlers().onStateChange({ target: youtube.player, data: 1 });
+    });
+    expect(screen.queryByText("LOADING HIGHLIGHT REEL")).toBeNull();
   });
 
   it("hides media while an orientation change reloads at the shared offset", async () => {

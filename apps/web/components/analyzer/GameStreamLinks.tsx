@@ -107,7 +107,7 @@ export function GameStreamLinks({
                     "inline-flex items-center justify-center transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset",
                     link.platform === "twitch"
                       ? "text-[#9146ff] hover:bg-[#9146ff]/15 hover:text-[#a970ff] focus-visible:ring-[#9146ff]"
-                      : "text-text hover:bg-bg-subtle hover:text-accent focus-visible:ring-accent",
+                      : "text-[#ff0000] hover:bg-[#ff0000]/15 hover:text-[#ff3333] focus-visible:ring-[#ff0000]",
                     index > 0 ? "border-l border-border-strong" : "",
                     compact ? "h-7 w-7" : "h-9 w-9",
                   ]

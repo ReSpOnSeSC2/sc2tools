@@ -432,6 +432,161 @@
         "videoId": "VrLV7mFS59g",
         "startSeconds": 3888
       }
+    },
+    {
+      "id": "yeOvfYg_LWo-748-802",
+      "title": "Base Defense at the Breaking Point",
+      "videoId": "yeOvfYg_LWo",
+      "startSeconds": 748,
+      "endSeconds": 802,
+      "vertical": {
+        "videoId": "uCfBdwHcP7U",
+        "startSeconds": 744
+      }
+    },
+    {
+      "id": "yeOvfYg_LWo-1532-1602",
+      "title": "Volley Through the Midfield",
+      "videoId": "yeOvfYg_LWo",
+      "startSeconds": 1532,
+      "endSeconds": 1602,
+      "vertical": {
+        "videoId": "uCfBdwHcP7U",
+        "startSeconds": 1528
+      }
+    },
+    {
+      "id": "yeOvfYg_LWo-2544-2614",
+      "title": "Choke-Point Breakthrough",
+      "videoId": "yeOvfYg_LWo",
+      "startSeconds": 2544,
+      "endSeconds": 2614,
+      "vertical": {
+        "videoId": "uCfBdwHcP7U",
+        "startSeconds": 2540
+      }
+    },
+    {
+      "id": "UO4jIbkM8eQ-1222-1287",
+      "title": "The Golden Army's Final Push",
+      "videoId": "UO4jIbkM8eQ",
+      "startSeconds": 1222,
+      "endSeconds": 1287,
+      "vertical": {
+        "videoId": "9yDSmY44QLQ",
+        "startSeconds": 1218
+      }
+    },
+    {
+      "id": "UO4jIbkM8eQ-2742-2812",
+      "title": "Snowfield Siege Breaker",
+      "videoId": "UO4jIbkM8eQ",
+      "startSeconds": 2742,
+      "endSeconds": 2812,
+      "vertical": {
+        "videoId": "9yDSmY44QLQ",
+        "startSeconds": 2738
+      }
+    },
+    {
+      "id": "UO4jIbkM8eQ-4640-4705",
+      "title": "Counterattack in Full Color",
+      "videoId": "UO4jIbkM8eQ",
+      "startSeconds": 4640,
+      "endSeconds": 4705,
+      "vertical": {
+        "videoId": "9yDSmY44QLQ",
+        "startSeconds": 4636
+      }
+    },
+    {
+      "id": "AQbMiqOCwr8-947-1017",
+      "title": "Golden Army Floods the Center",
+      "videoId": "AQbMiqOCwr8",
+      "startSeconds": 947,
+      "endSeconds": 1017,
+      "vertical": {
+        "videoId": "gHgdjWWqFFc",
+        "startSeconds": 947
+      }
+    },
+    {
+      "id": "AQbMiqOCwr8-2088-2158",
+      "title": "Hold the Snowfield",
+      "videoId": "AQbMiqOCwr8",
+      "startSeconds": 2088,
+      "endSeconds": 2158,
+      "vertical": {
+        "videoId": "gHgdjWWqFFc",
+        "startSeconds": 2088
+      }
+    },
+    {
+      "id": "AQbMiqOCwr8-2638-2698",
+      "title": "Red Army at the Gate",
+      "videoId": "AQbMiqOCwr8",
+      "startSeconds": 2638,
+      "endSeconds": 2698,
+      "vertical": {
+        "videoId": "gHgdjWWqFFc",
+        "startSeconds": 2638
+      }
+    },
+    {
+      "id": "KelX4RycY6Q-614-668",
+      "title": "Breaking the Terran Wall",
+      "videoId": "KelX4RycY6Q",
+      "startSeconds": 614,
+      "endSeconds": 668
+    },
+    {
+      "id": "KelX4RycY6Q-826-889",
+      "title": "Immortals vs Everything",
+      "videoId": "KelX4RycY6Q",
+      "startSeconds": 826,
+      "endSeconds": 889
+    },
+    {
+      "id": "VcPGKEoPBYk-162-200",
+      "title": "Adept Breaks In",
+      "videoId": "VcPGKEoPBYk",
+      "startSeconds": 162,
+      "endSeconds": 200
+    },
+    {
+      "id": "VcPGKEoPBYk-330-400",
+      "title": "Gold-Base Comeback",
+      "videoId": "VcPGKEoPBYk",
+      "startSeconds": 330,
+      "endSeconds": 400
+    },
+    {
+      "id": "A4x6gR7J-AY-152-200",
+      "title": "Hold the Wall",
+      "videoId": "A4x6gR7J-AY",
+      "startSeconds": 152,
+      "endSeconds": 200
+    },
+    {
+      "id": "A4x6gR7J-AY-235-298",
+      "title": "Four-Adept Counterattack",
+      "videoId": "A4x6gR7J-AY",
+      "startSeconds": 235,
+      "endSeconds": 298
+    },
+    {
+      "id": "Jkyjd8R7Qfs-380-418",
+      "title": "Two-Front Attack",
+      "videoId": "Jkyjd8R7Qfs",
+      "startSeconds": 380,
+      "endSeconds": 418
+    },
+    {
+      "id": "Jkyjd8R7Qfs-418-481",
+      "title": "The Third Base Falls",
+      "videoId": "Jkyjd8R7Qfs",
+      "startSeconds": 418,
+      "endSeconds": 481
     }
   ]
 }

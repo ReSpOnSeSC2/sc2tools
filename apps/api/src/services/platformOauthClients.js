@@ -31,6 +31,11 @@ const KICK_SCOPES = Object.freeze([
 const YOUTUBE_SCOPES = Object.freeze([
   "https://www.googleapis.com/auth/youtube.readonly",
 ]);
+const YOUTUBE_UPLOAD_PAGE_LIMIT = 3;
+const YOUTUBE_UPLOAD_PAGE_SIZE = 50;
+const YOUTUBE_VIDEO_BATCH_SIZE = 50;
+const YOUTUBE_ONGOING_GRACE_MS = 10 * 60 * 1000;
+const YOUTUBE_GAME_VODS_TIMEOUT_MS = 18_000;
 
 const KICK_EVENT_TYPES = Object.freeze([
   { name: "channel.followed", version: 1 },
@@ -403,6 +408,297 @@ async function listYoutubeRecentSubscribers(accessToken, fetchImpl = fetch) {
   return Array.isArray(json.items) ? json.items : [];
 }
 
+/**
+ * List recent livestream archives owned by the authenticated YouTube channel.
+ * The uploads playlist is the authoritative, channel-owned index; paging is
+ * capped at 150 uploads (three 50-item pages), which comfortably covers a
+ * typical SC2 season without turning a game-history request into an unbounded
+ * provider crawl. Video details are fetched in YouTube's maximum 50-id
+ * batches. Partial-response fields keep every response inside the shared
+ * bounded JSON reader.
+ *
+ * @param {string} accessToken
+ * @param {typeof fetch} [fetchImpl]
+ * @param {{
+ *   maxPages?:number,
+ *   nowMs?:number,
+ *   expectedHandle?:string,
+ *   expectedChannelId?:string,
+ *   signal?:AbortSignal,
+ * }} [opts]
+ * @returns {Promise<{
+ *   channelId:string,
+ *   customUrl:string,
+ *   handleLookupAttempted:boolean,
+ *   handleChannelId:string,
+ *   vods:Array<{
+ *     platform:'youtube',videoId:string,startMs:number,endMs:number,
+ *     orientation:'horizontal'|'portrait'|'unknown',ongoing:boolean,
+ *   }>,
+ *   uploadsScanned:number,
+ *   pagesFetched:number,
+ *   videoBatches:number,
+ * }>}
+ */
+async function listYoutubeGameVods(
+  accessToken,
+  fetchImpl = fetch,
+  opts = {},
+) {
+  const auth = { Authorization: `Bearer ${accessToken}` };
+  const timeoutSignal = AbortSignal.timeout(YOUTUBE_GAME_VODS_TIMEOUT_MS);
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, timeoutSignal])
+    : timeoutSignal;
+  const channelsUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
+  channelsUrl.searchParams.set("part", "contentDetails,snippet");
+  channelsUrl.searchParams.set("mine", "true");
+  channelsUrl.searchParams.set(
+    "fields",
+    "items(id,snippet/customUrl,contentDetails/relatedPlaylists/uploads)",
+  );
+  const channels = await fetchJson(
+    fetchImpl,
+    channelsUrl.toString(),
+    { headers: auth, signal },
+    "youtube_game_vods_channel",
+  );
+  const channel = Array.isArray(channels.items) ? channels.items[0] : null;
+  const channelId = String(channel?.id || "");
+  const uploadsPlaylistId = String(
+    channel?.contentDetails?.relatedPlaylists?.uploads || "",
+  );
+  if (!/^UC[A-Za-z0-9_-]{22}$/.test(channelId) || !uploadsPlaylistId) {
+    throw new PlatformOauthError(
+      "youtube_game_vods_channel_missing",
+      "YouTube did not return the authenticated channel uploads playlist",
+    );
+  }
+
+  const expectedChannelId = typeof opts.expectedChannelId === "string"
+    && /^UC[A-Za-z0-9_-]{22}$/.test(opts.expectedChannelId)
+    ? opts.expectedChannelId
+    : "";
+  if (expectedChannelId && expectedChannelId !== channelId) {
+    return {
+      channelId,
+      customUrl: String(channel?.snippet?.customUrl || ""),
+      handleLookupAttempted: false,
+      handleChannelId: "",
+      vods: [],
+      uploadsScanned: 0,
+      pagesFetched: 0,
+      videoBatches: 0,
+    };
+  }
+
+  const expectedHandle = normalizeYoutubeHandle(opts.expectedHandle);
+  let handleChannelId = "";
+  if (expectedHandle) {
+    const handleUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
+    handleUrl.searchParams.set("part", "id");
+    handleUrl.searchParams.set("forHandle", expectedHandle.slice(1));
+    handleUrl.searchParams.set("fields", "items/id");
+    const handleResult = await fetchJson(
+      fetchImpl,
+      handleUrl.toString(),
+      { headers: auth, signal },
+      "youtube_game_vods_handle",
+    );
+    handleChannelId = String(
+      Array.isArray(handleResult.items) ? handleResult.items[0]?.id || "" : "",
+    );
+    // A saved handle pointing at another channel cannot use this bearer. Stop
+    // before spending quota on that connected account's uploads and videos;
+    // the caller will fall back to the saved channel's public page instead.
+    if (handleChannelId !== channelId) {
+      return {
+        channelId,
+        customUrl: String(channel?.snippet?.customUrl || ""),
+        handleLookupAttempted: true,
+        handleChannelId,
+        vods: [],
+        uploadsScanned: 0,
+        pagesFetched: 0,
+        videoBatches: 0,
+      };
+    }
+  }
+
+  const requestedPages = Math.floor(Number(opts.maxPages));
+  const maxPages = Number.isFinite(requestedPages) && requestedPages > 0
+    ? Math.min(YOUTUBE_UPLOAD_PAGE_LIMIT, requestedPages)
+    : YOUTUBE_UPLOAD_PAGE_LIMIT;
+  const videoIds = [];
+  const seen = new Set();
+  let pageToken = "";
+  let pagesFetched = 0;
+  do {
+    const playlistUrl = new URL(
+      "https://www.googleapis.com/youtube/v3/playlistItems",
+    );
+    playlistUrl.searchParams.set("part", "contentDetails");
+    playlistUrl.searchParams.set("playlistId", uploadsPlaylistId);
+    playlistUrl.searchParams.set("maxResults", String(YOUTUBE_UPLOAD_PAGE_SIZE));
+    playlistUrl.searchParams.set(
+      "fields",
+      "nextPageToken,items/contentDetails/videoId",
+    );
+    if (pageToken) playlistUrl.searchParams.set("pageToken", pageToken);
+    const page = await fetchJson(
+      fetchImpl,
+      playlistUrl.toString(),
+      { headers: auth, signal },
+      "youtube_game_vods_uploads",
+    );
+    pagesFetched += 1;
+    for (const item of Array.isArray(page.items) ? page.items : []) {
+      const videoId = String(item?.contentDetails?.videoId || "");
+      if (!isYoutubeVideoId(videoId) || seen.has(videoId)) continue;
+      seen.add(videoId);
+      videoIds.push(videoId);
+      if (videoIds.length >= maxPages * YOUTUBE_UPLOAD_PAGE_SIZE) break;
+    }
+    pageToken = String(page.nextPageToken || "");
+  } while (
+    pageToken
+    && pagesFetched < maxPages
+    && videoIds.length < maxPages * YOUTUBE_UPLOAD_PAGE_SIZE
+  );
+
+  const detailRequests = [];
+  for (let start = 0; start < videoIds.length; start += YOUTUBE_VIDEO_BATCH_SIZE) {
+    const ids = videoIds.slice(start, start + YOUTUBE_VIDEO_BATCH_SIZE);
+    const videosUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+    videosUrl.searchParams.set("part", "liveStreamingDetails,player,snippet");
+    videosUrl.searchParams.set("id", ids.join(","));
+    videosUrl.searchParams.set("maxWidth", "1920");
+    videosUrl.searchParams.set("maxHeight", "1080");
+    videosUrl.searchParams.set(
+      "fields",
+      "items(id,liveStreamingDetails/actualStartTime," +
+        "liveStreamingDetails/actualEndTime,player/embedWidth," +
+        "player/embedHeight,snippet/liveBroadcastContent)",
+    );
+    detailRequests.push(fetchJson(
+      fetchImpl,
+      videosUrl.toString(),
+      { headers: auth, signal },
+      "youtube_game_vods_videos",
+    ));
+  }
+  const detailed = [];
+  const detailBatches = await Promise.all(detailRequests);
+  for (const batch of detailBatches) {
+    detailed.push(...parseYoutubeGameVodItems(batch, opts.nowMs));
+  }
+
+  return {
+    channelId,
+    customUrl: String(channel?.snippet?.customUrl || ""),
+    handleLookupAttempted: Boolean(expectedHandle),
+    handleChannelId,
+    vods: detailed.map(({ platform, videoId, startMs, endMs, width, height, ongoing }) => ({
+      platform,
+      videoId,
+      startMs,
+      endMs,
+      orientation: youtubeVodOrientation(width, height),
+      ongoing,
+    })),
+    uploadsScanned: videoIds.length,
+    pagesFetched,
+    videoBatches: detailBatches.length,
+  };
+}
+
+/**
+ * @param {Record<string,any>} payload
+ * @param {number} [nowMs]
+ * @returns {Array<{
+ *   platform:'youtube',videoId:string,startMs:number,endMs:number,
+ *   width:number|null,height:number|null,ongoing:boolean,
+ * }>}
+ */
+function parseYoutubeGameVodItems(payload, nowMs = Date.now()) {
+  /** @type {Array<{
+   *   platform:'youtube',videoId:string,startMs:number,endMs:number,
+   *   width:number|null,height:number|null,ongoing:boolean,
+   * }>} */
+  const vods = [];
+  for (const item of Array.isArray(payload?.items) ? payload.items : []) {
+    const videoId = String(item?.id || "");
+    const startMs = parseProviderDateMs(
+      item?.liveStreamingDetails?.actualStartTime,
+    );
+    if (!isYoutubeVideoId(videoId) || startMs === null) continue;
+    const actualEndMs = parseProviderDateMs(
+      item?.liveStreamingDetails?.actualEndTime,
+    );
+    if (
+      actualEndMs === null
+      && item?.snippet?.liveBroadcastContent !== "live"
+    ) {
+      continue;
+    }
+    const ongoingEndMs = Number.isFinite(nowMs)
+      ? Number(nowMs) + YOUTUBE_ONGOING_GRACE_MS
+      : Date.now() + YOUTUBE_ONGOING_GRACE_MS;
+    const endMs = actualEndMs === null
+      ? Math.max(startMs + 1, ongoingEndMs)
+      : actualEndMs;
+    if (endMs <= startMs) continue;
+    const width = positiveProviderNumber(item?.player?.embedWidth);
+    const height = positiveProviderNumber(item?.player?.embedHeight);
+    vods.push({
+      platform: "youtube",
+      videoId,
+      startMs,
+      endMs,
+      width,
+      height,
+      ongoing: actualEndMs === null,
+    });
+  }
+  return vods;
+}
+
+/**
+ * @param {number|null} width
+ * @param {number|null} height
+ * @returns {'horizontal'|'portrait'|'unknown'}
+ */
+function youtubeVodOrientation(width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return "unknown";
+  return Number(width) >= Number(height) ? "horizontal" : "portrait";
+}
+
+/** @param {unknown} value @returns {number|null} */
+function parseProviderDateMs(value) {
+  if (typeof value !== "string" || !value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** @param {unknown} value @returns {number|null} */
+function positiveProviderNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+/** @param {unknown} value @returns {string|null} */
+function normalizeYoutubeHandle(value) {
+  const handle = typeof value === "string" ? value.trim() : "";
+  return /^@[A-Za-z0-9._-]{2,60}$/.test(handle)
+    ? handle.toLowerCase()
+    : null;
+}
+
+/** @param {unknown} value */
+function isYoutubeVideoId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{11}$/.test(value);
+}
+
 /** @param {any} json @param {string} platform */
 function normalizeTokenResponse(json, platform) {
   if (!json || typeof json.access_token !== "string" || !json.access_token) {
@@ -452,4 +748,8 @@ module.exports = {
   refreshYoutubeToken,
   getYoutubeCurrentChannel,
   listYoutubeRecentSubscribers,
+  listYoutubeGameVods,
+  parseYoutubeGameVodItems,
+  YOUTUBE_UPLOAD_PAGE_LIMIT,
+  YOUTUBE_ONGOING_GRACE_MS,
 };

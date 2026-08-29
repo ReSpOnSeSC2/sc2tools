@@ -4,8 +4,8 @@
     "id": "UCZS3YP1mvpqyuU5vPvHVG7g",
     "name": "ReSpOnSe Gaming AND Fitness AND AI Music"
   },
-  "curatedAt": "2026-08-23",
-  "notes": "Landscape, self-owned SC2 gameplay only. Menus, long pauses, BRB screens, scoreboards, portrait duplicates, and third-party watch-party footage were excluded.",
+  "curatedAt": "2026-08-29",
+  "notes": "Self-owned, high-action SC2 gameplay only. Intros, menus, results, talking heads, long pauses, BRB screens, dead time, and third-party footage are excluded. Recent live clips use matched portrait simulcasts where available; edited uploads remain landscape-only.",
   "videos": [
     {
       "videoId": "99UKipUcV_s",
@@ -430,6 +430,169 @@
           "endSeconds": 3815,
           "verticalStartSeconds": 3888,
           "notes": "An uninterrupted climactic swarm-versus-fleet battle runs to the last safe frame before the talking-head transition."
+        }
+      ]
+    },
+    {
+      "videoId": "yeOvfYg_LWo",
+      "verticalVideoId": "uCfBdwHcP7U",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-28",
+      "notes": "Self-owned live gameplay paired to its portrait simulcast. Intro, results, talking-head segments and low-action stretches are excluded.",
+      "clips": [
+        {
+          "title": "Base Defense at the Breaking Point",
+          "startSeconds": 748,
+          "endSeconds": 802,
+          "verticalStartSeconds": 744,
+          "notes": "A sustained base defense reaches its breaking point before the action resets."
+        },
+        {
+          "title": "Volley Through the Midfield",
+          "startSeconds": 1532,
+          "endSeconds": 1602,
+          "verticalStartSeconds": 1528,
+          "notes": "Continuous volleys carry the fight through midfield with no dead time."
+        },
+        {
+          "title": "Choke-Point Breakthrough",
+          "startSeconds": 2544,
+          "endSeconds": 2614,
+          "verticalStartSeconds": 2540,
+          "notes": "The army forces a sustained breakthrough through the choke before the next lull."
+        }
+      ]
+    },
+    {
+      "videoId": "UO4jIbkM8eQ",
+      "verticalVideoId": "9yDSmY44QLQ",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-25",
+      "notes": "Self-owned live gameplay paired to its portrait simulcast. Intro, results, talking-head segments and low-action stretches are excluded.",
+      "clips": [
+        {
+          "title": "The Golden Army's Final Push",
+          "startSeconds": 1222,
+          "endSeconds": 1287,
+          "verticalStartSeconds": 1218,
+          "notes": "The golden army commits to a concentrated final push, cut before post-game."
+        },
+        {
+          "title": "Snowfield Siege Breaker",
+          "startSeconds": 2742,
+          "endSeconds": 2812,
+          "verticalStartSeconds": 2738,
+          "notes": "A sustained snowfield engagement breaks the defended position."
+        },
+        {
+          "title": "Counterattack in Full Color",
+          "startSeconds": 4640,
+          "endSeconds": 4705,
+          "verticalStartSeconds": 4636,
+          "notes": "A vivid counterattack stays in contact through its payoff and exits before the reset."
+        }
+      ]
+    },
+    {
+      "videoId": "AQbMiqOCwr8",
+      "verticalVideoId": "gHgdjWWqFFc",
+      "title": "GM Protoss TRYING TO IMPROVE — 2026-08-24",
+      "notes": "Self-owned live gameplay paired to its portrait simulcast. Intro, results, talking-head segments and low-action stretches are excluded.",
+      "clips": [
+        {
+          "title": "Golden Army Floods the Center",
+          "startSeconds": 947,
+          "endSeconds": 1017,
+          "verticalStartSeconds": 947,
+          "notes": "The golden army floods center into a continuous high-action engagement."
+        },
+        {
+          "title": "Hold the Snowfield",
+          "startSeconds": 2088,
+          "endSeconds": 2158,
+          "verticalStartSeconds": 2088,
+          "notes": "A sustained snowfield hold runs through repeated contact and a clean resolution."
+        },
+        {
+          "title": "Red Army at the Gate",
+          "startSeconds": 2638,
+          "endSeconds": 2698,
+          "verticalStartSeconds": 2638,
+          "notes": "The red army reaches the gate for a dense fight, cut before the following lull."
+        }
+      ]
+    },
+    {
+      "videoId": "KelX4RycY6Q",
+      "title": "Using A Randomizer For My Opener — 2026-08-28",
+      "notes": "Edited, self-owned landscape gameplay. High-action selections exclude the intro, results, talking-head segments and dead time; portrait playback uses the contained landscape presentation.",
+      "clips": [
+        {
+          "title": "Breaking the Terran Wall",
+          "startSeconds": 614,
+          "endSeconds": 668,
+          "notes": "A sustained push breaks into the fortified Terran position before the fight resets."
+        },
+        {
+          "title": "Immortals vs Everything",
+          "startSeconds": 826,
+          "endSeconds": 889,
+          "notes": "Immortals anchor a packed, effects-heavy fight through the choke."
+        }
+      ]
+    },
+    {
+      "videoId": "VcPGKEoPBYk",
+      "title": "PvP Proxy 1 Gate? — 2026-08-27",
+      "notes": "Edited, self-owned landscape gameplay. High-action selections exclude the intro, results, talking-head segments and dead time; portrait playback uses the contained landscape presentation.",
+      "clips": [
+        {
+          "title": "Adept Breaks In",
+          "startSeconds": 162,
+          "endSeconds": 200,
+          "notes": "The first Adept breach turns the proxy setup into immediate main-base combat."
+        },
+        {
+          "title": "Gold-Base Comeback",
+          "startSeconds": 330,
+          "endSeconds": 400,
+          "notes": "Counterplay builds into a sustained comeback attempt at the gold base."
+        }
+      ]
+    },
+    {
+      "videoId": "A4x6gR7J-AY",
+      "title": "PvZ Cracking 8 Pools — 2026-08-25",
+      "notes": "Edited, self-owned landscape gameplay. High-action selections exclude the intro, results, talking-head segments and dead time; portrait playback uses the contained landscape presentation.",
+      "clips": [
+        {
+          "title": "Hold the Wall",
+          "startSeconds": 152,
+          "endSeconds": 200,
+          "notes": "Zealot micro holds the entrance against the 8 Pool in continuous defense."
+        },
+        {
+          "title": "Four-Adept Counterattack",
+          "startSeconds": 235,
+          "endSeconds": 298,
+          "notes": "Four Adepts cross the map and turn the defense into a mineral-line counterattack."
+        }
+      ]
+    },
+    {
+      "videoId": "Jkyjd8R7Qfs",
+      "title": "I Tried AlphaStar's PvP Build on the 8-Worker Build... It Shouldn't Work — 2026-08-22",
+      "notes": "Edited, self-owned landscape gameplay. High-action selections exclude the intro, results, talking-head segments and dead time; portrait playback uses the contained landscape presentation.",
+      "clips": [
+        {
+          "title": "Two-Front Attack",
+          "startSeconds": 380,
+          "endSeconds": 418,
+          "notes": "The ground army and Oracles hit from two directions through the first collapse."
+        },
+        {
+          "title": "The Third Base Falls",
+          "startSeconds": 418,
+          "endSeconds": 481,
+          "notes": "The follow-through sustains pressure until the third base falls, ending before recap."
         }
       ]
     }

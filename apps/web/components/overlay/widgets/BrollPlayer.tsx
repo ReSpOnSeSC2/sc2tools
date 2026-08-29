@@ -146,6 +146,8 @@ export function BrollPlayer({
   const currentMedia = currentClip
     ? resolveClipMedia(currentClip, videoFormat)
     : null;
+  const containLandscapeFallback =
+    videoFormat === "vertical" && Boolean(currentClip && !currentClip.vertical);
   const currentKey = currentClip
     ? `${clipKey(currentClip)}:${videoFormat}`
     : "";
@@ -488,16 +490,22 @@ export function BrollPlayer({
       <div className="broll-fallback" style={fallbackStyle} aria-hidden="true">
         <StreamSetFallback active={!showMedia} />
         <div className="broll-set-shade" />
-        <div className="broll-standby">
-          <span className="broll-standby-kicker">SC2 TOOLS · ARCHIVE FEED</span>
-          <span>{standbyCopy}</span>
-        </div>
+        {!showMedia ? (
+          <div className="broll-standby">
+            <span className="broll-standby-kicker">SC2 TOOLS · ARCHIVE FEED</span>
+            <span>{standbyCopy}</span>
+          </div>
+        ) : null}
       </div>
       {playableClips.length > 0 ? (
         <div
           className="broll-media"
+          data-video-fit={containLandscapeFallback ? "contain" : "cover"}
           data-testid="broll-media"
-          style={{ opacity: showMedia ? 1 : 0 }}
+          style={{
+            opacity: showMedia ? 1 : 0,
+            ...(containLandscapeFallback ? containedLandscapeMediaStyle : {}),
+          }}
         >
           <div ref={mountRef} />
         </div>
@@ -841,6 +849,13 @@ const brollCss = `
     .broll-media { transition: none; }
   }
 `;
+
+const containedLandscapeMediaStyle: CSSProperties = {
+  width: "100vw",
+  height: "56.25vw",
+  minWidth: "0px",
+  minHeight: "0px",
+};
 
 const playerFrameStyle: CSSProperties = {
   position: "absolute",

@@ -199,6 +199,22 @@ class PlatformCredentialVault {
     };
   }
 
+  /**
+   * Read the opaque grant revision without loading or decrypting credentials.
+   * This is used for revision-aware provider caches on their hot path.
+   *
+   * @param {string} userId
+   * @param {'twitch'|'kick'|'youtube'} platform
+   */
+  async getConnectionRevision(userId, platform) {
+    assertPlatform(platform);
+    const row = await this.connections.findOne(
+      { userId, platform, connected: true },
+      { projection: { _id: 0, connectionRevision: 1 } },
+    );
+    return String(row?.connectionRevision || "");
+  }
+
   /** @param {Record<string, any>} row */
   statusFromRow(row) {
     return {

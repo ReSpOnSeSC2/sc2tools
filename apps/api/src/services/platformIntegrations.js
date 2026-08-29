@@ -9,6 +9,7 @@ const webhooksDefault = require("./platformWebhooks");
 /** @type {readonly Platform[]} */
 const PLATFORMS = Object.freeze(["twitch", "kick", "youtube"]);
 const TWITCH_TOKEN_VALIDATION_INTERVAL_MS = 60 * 60 * 1000;
+const YOUTUBE_GAME_VODS_RESOLVE_TIMEOUT_MS = 20_000;
 
 class PlatformIntegrationError extends Error {
   /** @param {number} status @param {string} code @param {string} message */
@@ -107,6 +108,213 @@ class PlatformIntegrationsService {
         ...(byPlatform.get(platform) || {}),
       })),
     };
+  }
+
+  /**
+   * Return only the opaque cache revision, never decrypted credentials.
+   * @param {string} userId
+   */
+  async getYoutubeConnectionRevision(userId) {
+    if (!userId || !this.isConfigured("youtube")) return "";
+    return this._vault().getConnectionRevision(userId, "youtube");
+  }
+
+  /**
+   * Resolve recent livestream archives for this user's authenticated YouTube
+   * channel without exposing the decrypted OAuth token to routes or callers.
+   * The connection lock serializes local refreshes, while revision checks
+   * discard work from a grant replaced on another API instance. One handoff
+   * retry lets a concurrent reconnect supply the current grant instead.
+   *
+   * @param {string} userId
+   * @param {{
+   *   expectedHandle?:string,
+   *   expectedChannelId?:string,
+   *   expectedRevision?:string,
+   * }} [opts]
+   * @returns {Promise<null|{
+   *   channelId:string,
+   *   customUrl:string,
+   *   handleLookupAttempted:boolean,
+   *   handleChannelId:string,
+   *   vods:Array<{
+   *     platform:'youtube',videoId:string,startMs:number,endMs:number,
+   *     orientation:'horizontal'|'portrait'|'unknown',ongoing:boolean,
+   *   }>,
+   *   uploadsScanned:number,
+   *   pagesFetched:number,
+   *   videoBatches:number,
+   * }>}
+   */
+  async resolveYoutubeGameVods(userId, opts = {}) {
+    if (!userId || !this.isConfigured("youtube")) return null;
+    return this._withConnectionLock(userId, "youtube", async () => {
+      const vault = this._vault();
+      // The lock intentionally covers provider I/O: a local reconnect or
+      // disconnect must not overtake a refresh and let old-account results
+      // escape. Bound the complete provider phase so that serialization can
+      // delay another connection mutation by at most twenty seconds.
+      const deadlineSignal = AbortSignal.timeout(
+        YOUTUBE_GAME_VODS_RESOLVE_TIMEOUT_MS,
+      );
+      /** @type {typeof fetch} */
+      const requestFetch = (url, init = {}) => this.fetchImpl(url, {
+        ...init,
+        signal: init.signal
+          ? AbortSignal.any([init.signal, deadlineSignal])
+          : deadlineSignal,
+      });
+      let row = await vault.getConnection(userId, "youtube");
+      for (let handoff = 0; row && handoff < 2; handoff += 1) {
+        const revision = row.connectionRevision;
+        if (
+          Object.prototype.hasOwnProperty.call(opts, "expectedRevision")
+          && revision !== String(opts.expectedRevision || "")
+        ) {
+          return null;
+        }
+        assertYoutubeReadonlyScope(
+          row.scopes,
+          this.oauth.YOUTUBE_SCOPES || oauthDefault.YOUTUBE_SCOPES,
+        );
+        let accessToken = row.accessToken;
+        let refreshed = false;
+        if (
+          row.expiresAt instanceof Date
+          && row.expiresAt.getTime() <= this.now() + 60_000
+        ) {
+          let replacement;
+          try {
+            replacement = await this._refreshYoutubeConnection(
+              userId,
+              row,
+              requestFetch,
+            );
+          } catch (err) {
+            const current = await vault.getConnection(userId, "youtube");
+            if (current?.connectionRevision !== revision) {
+              row = current;
+              continue;
+            }
+            throw err;
+          }
+          if (!replacement) {
+            row = await vault.getConnection(userId, "youtube");
+            continue;
+          }
+          accessToken = replacement.accessToken;
+          refreshed = true;
+        }
+
+        let result;
+        const expectedHandle = typeof opts.expectedHandle === "string"
+          && /^@[A-Za-z0-9._-]{2,60}$/.test(opts.expectedHandle)
+          ? opts.expectedHandle.toLowerCase()
+          : "";
+        const vodOptions = {
+          nowMs: this.now(),
+          ...(expectedHandle ? { expectedHandle } : {}),
+          ...(typeof opts.expectedChannelId === "string"
+            ? { expectedChannelId: opts.expectedChannelId }
+            : {}),
+        };
+        try {
+          result = await this.oauth.listYoutubeGameVods(
+            accessToken,
+            requestFetch,
+            vodOptions,
+          );
+        } catch (err) {
+          const current = await vault.getConnection(userId, "youtube");
+          if (current?.connectionRevision !== revision) {
+            row = current;
+            continue;
+          }
+          if (!refreshed && row.refreshToken && providerStatusIs(err, 401)) {
+            let replacement;
+            try {
+              replacement = await this._refreshYoutubeConnection(
+                userId,
+                row,
+                requestFetch,
+              );
+            } catch (refreshErr) {
+              const afterRefresh = await vault.getConnection(userId, "youtube");
+              if (afterRefresh?.connectionRevision !== revision) {
+                row = afterRefresh;
+                continue;
+              }
+              throw refreshErr;
+            }
+            if (!replacement) {
+              row = await vault.getConnection(userId, "youtube");
+              continue;
+            }
+            try {
+              result = await this.oauth.listYoutubeGameVods(
+                replacement.accessToken,
+                requestFetch,
+                vodOptions,
+              );
+            } catch (retryErr) {
+              const afterRetry = await vault.getConnection(userId, "youtube");
+              if (afterRetry?.connectionRevision !== revision) {
+                row = afterRetry;
+                continue;
+              }
+              throw retryErr;
+            }
+          } else {
+            throw err;
+          }
+        }
+        if (await vault.isConnectionCurrent(userId, "youtube", revision)) {
+          const sanitized = sanitizeYoutubeGameVodsResult(result);
+          if (sanitized.channelId !== String(row.platformUserId || "")) {
+            const error = new Error(
+              "The YouTube bearer identity no longer matches its connection",
+            );
+            Object.assign(error, {
+              code: "youtube_connection_identity_mismatch",
+              status: 409,
+            });
+            throw error;
+          }
+          return sanitized;
+        }
+        const current = await vault.getConnection(userId, "youtube");
+        row = current?.connectionRevision !== revision ? current : null;
+      }
+      return null;
+    });
+  }
+
+  /**
+   * Refresh one exact YouTube connection revision. A false return means a
+   * different grant won the cross-process compare-and-swap; callers must
+   * discard the returned provider token and reload the connection.
+   *
+   * @param {string} userId
+   * @param {Record<string,any>} row
+   * @param {typeof fetch} [fetchImpl]
+   * @returns {Promise<null|{accessToken:string}>}
+   */
+  async _refreshYoutubeConnection(userId, row, fetchImpl = this.fetchImpl) {
+    if (!row?.refreshToken) {
+      throw new Error("YouTube authorization expired; reconnect YouTube");
+    }
+    const refreshed = await this.oauth.refreshYoutubeToken(
+      this.config.youtube,
+      row.refreshToken,
+      fetchImpl,
+    );
+    const updated = await this._vault().updateTokens(
+      userId,
+      "youtube",
+      refreshed,
+      row.connectionRevision,
+    );
+    return updated ? { accessToken: refreshed.accessToken } : null;
   }
 
   /** @param {string} userId @param {Platform} platform */
@@ -943,6 +1151,74 @@ function assertTwitchRequiredScopes(granted, required) {
   );
   Object.assign(error, { code: "twitch_scopes_missing", status: 403 });
   throw error;
+}
+
+/** @param {unknown} granted @param {unknown} required */
+function assertYoutubeReadonlyScope(granted, required) {
+  const available = new Set(Array.isArray(granted) ? granted.map(String) : []);
+  const needed = Array.isArray(required) ? required.map(String) : [];
+  if (needed.every((scope) => available.has(scope))) return;
+  const error = new Error("Reconnect YouTube to grant read-only channel access");
+  Object.assign(error, { code: "youtube_scopes_missing", status: 403 });
+  throw error;
+}
+
+/**
+ * Keep the token-bearing provider boundary one-way: only the channel identity,
+ * bounded diagnostics, and normalized archive fields may leave this service.
+ * @param {unknown} raw
+ * @returns {{
+ *   channelId:string,
+ *   customUrl:string,
+ *   handleLookupAttempted:boolean,
+ *   handleChannelId:string,
+ *   vods:Array<{
+ *     platform:'youtube',videoId:string,startMs:number,endMs:number,
+ *     orientation:'horizontal'|'portrait'|'unknown',ongoing:boolean,
+ *   }>,
+ *   uploadsScanned:number,
+ *   pagesFetched:number,
+ *   videoBatches:number,
+ * }}
+ */
+function sanitizeYoutubeGameVodsResult(raw) {
+  const result = raw && typeof raw === "object"
+    ? /** @type {Record<string,any>} */ (raw)
+    : {};
+  /** @type {Array<{
+   *   platform:'youtube',videoId:string,startMs:number,endMs:number,
+   *   orientation:'horizontal'|'portrait'|'unknown',ongoing:boolean,
+   * }>} */
+  const vods = [];
+  for (const item of Array.isArray(result.vods) ? result.vods.slice(0, 300) : []) {
+    vods.push({
+      platform: "youtube",
+      videoId: String(item?.videoId || ""),
+      startMs: Number(item?.startMs),
+      endMs: Number(item?.endMs),
+      orientation: item?.orientation === "horizontal"
+        || item?.orientation === "portrait"
+        ? item.orientation
+        : "unknown",
+      ongoing: item?.ongoing === true,
+    });
+  }
+  return {
+    channelId: String(result.channelId || ""),
+    customUrl: String(result.customUrl || ""),
+    handleLookupAttempted: result.handleLookupAttempted === true,
+    handleChannelId: String(result.handleChannelId || ""),
+    vods,
+    uploadsScanned: diagnosticCount(result.uploadsScanned),
+    pagesFetched: diagnosticCount(result.pagesFetched),
+    videoBatches: diagnosticCount(result.videoBatches),
+  };
+}
+
+/** @param {unknown} value */
+function diagnosticCount(value) {
+  const count = Math.floor(Number(value));
+  return Number.isFinite(count) ? Math.max(0, Math.min(10_000, count)) : 0;
 }
 
 /** @param {unknown} err @param {...number} statuses */

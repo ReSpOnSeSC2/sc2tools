@@ -177,6 +177,9 @@ describe("official platform credential vault", () => {
       .toThrow();
     expect((await vault.getConnection("user-1", "twitch")).refreshToken)
       .toBe("refresh-secret");
+    expect(await vault.getConnectionRevision("user-1", "twitch"))
+      .toBe(stored.connectionRevision);
+    expect(await vault.getConnectionRevision("missing", "twitch")).toBe("");
   });
 
   test("OAuth state is one-time, expiring, and keeps PKCE verifier encrypted", async () => {
@@ -1336,6 +1339,312 @@ describe("official OAuth and delivery contracts", () => {
       kind: "follow",
       user: "New viewer",
     });
+  });
+
+  test("game VOD resolution keeps valid YouTube tokens inside a sanitized boundary", async () => {
+    const fake = fakeVaultDb();
+    const listYoutubeGameVods = jest.fn(async () => ({
+      channelId: "UC9OluGthYmZo0vsF9IjicFg",
+      customUrl: "@TestCaster",
+      accessToken: "provider-must-not-leak",
+      vods: [{
+        platform: "youtube",
+        videoId: "AbCdEf12345",
+        startMs: NOW - 60_000,
+        endMs: NOW + 60_000,
+        orientation: "unknown",
+        ongoing: false,
+        providerPayload: "discard-me",
+      }],
+      uploadsScanned: 1,
+      pagesFetched: 1,
+      videoBatches: 1,
+    }));
+    const service = new PlatformIntegrationsService(fake.db, {
+      config: {
+        enabled: true,
+        encryptionKey: KEY,
+        twitch: null,
+        kick: null,
+        youtube: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback",
+        },
+      },
+      now: () => NOW,
+      overlayTokens: { list: async () => [] },
+      oauth: { ...oauth, listYoutubeGameVods },
+    });
+    await service.vault.saveConnection("user-1", "youtube", {
+      accessToken: "valid-access-secret",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW + 3_600_000),
+      platformUserId: "UC9OluGthYmZo0vsF9IjicFg",
+      scopes: oauth.YOUTUBE_SCOPES,
+      metadata: { youtubeInitialized: true },
+    });
+
+    const result = await service.resolveYoutubeGameVods("user-1");
+
+    expect(listYoutubeGameVods).toHaveBeenCalledWith(
+      "valid-access-secret",
+      expect.any(Function),
+      { nowMs: NOW },
+    );
+    expect(result).toEqual({
+      channelId: "UC9OluGthYmZo0vsF9IjicFg",
+      customUrl: "@TestCaster",
+      handleLookupAttempted: false,
+      handleChannelId: "",
+      vods: [{
+        platform: "youtube",
+        videoId: "AbCdEf12345",
+        startMs: NOW - 60_000,
+        endMs: NOW + 60_000,
+        orientation: "unknown",
+        ongoing: false,
+      }],
+      uploadsScanned: 1,
+      pagesFetched: 1,
+      videoBatches: 1,
+    });
+    expect(JSON.stringify(result)).not.toContain("valid-access-secret");
+    expect(JSON.stringify(result)).not.toContain("provider-must-not-leak");
+    expect(JSON.stringify(result)).not.toContain("discard-me");
+  });
+
+  test("game VOD resolution rejects a bearer identity unlike the stored channel", async () => {
+    const fake = fakeVaultDb();
+    const service = new PlatformIntegrationsService(fake.db, {
+      config: {
+        enabled: true,
+        encryptionKey: KEY,
+        twitch: null,
+        kick: null,
+        youtube: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback",
+        },
+      },
+      now: () => NOW,
+      overlayTokens: { list: async () => [] },
+      oauth: {
+        ...oauth,
+        listYoutubeGameVods: async () => ({
+          channelId: "UCYxRlFDqcWM4y7FfpiAN3KQ",
+          customUrl: "@WrongAccount",
+          vods: [],
+        }),
+      },
+    });
+    await service.vault.saveConnection("user-1", "youtube", {
+      accessToken: "valid-access-secret",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW + 3_600_000),
+      platformUserId: "UC9OluGthYmZo0vsF9IjicFg",
+      scopes: oauth.YOUTUBE_SCOPES,
+      metadata: { youtubeInitialized: true },
+    });
+
+    await expect(service.resolveYoutubeGameVods("user-1"))
+      .rejects.toMatchObject({
+        code: "youtube_connection_identity_mismatch",
+        status: 409,
+      });
+  });
+
+  test("game VOD resolution refreshes an expired YouTube grant without exposing it", async () => {
+    const fake = fakeVaultDb();
+    const refreshYoutubeToken = jest.fn(async () => ({
+      accessToken: "fresh-access",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW + 3_600_000),
+      scopes: oauth.YOUTUBE_SCOPES,
+    }));
+    const listYoutubeGameVods = jest.fn(async (_accessToken) => ({
+      channelId: "UC9OluGthYmZo0vsF9IjicFg",
+      customUrl: "@TestCaster",
+      vods: [],
+      uploadsScanned: 0,
+      pagesFetched: 1,
+      videoBatches: 0,
+    }));
+    const service = new PlatformIntegrationsService(fake.db, {
+      config: {
+        enabled: true,
+        encryptionKey: KEY,
+        twitch: null,
+        kick: null,
+        youtube: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback",
+        },
+      },
+      now: () => NOW,
+      overlayTokens: { list: async () => [] },
+      oauth: { ...oauth, refreshYoutubeToken, listYoutubeGameVods },
+    });
+    await service.vault.saveConnection("user-1", "youtube", {
+      accessToken: "expired-access",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW - 1),
+      platformUserId: "UC9OluGthYmZo0vsF9IjicFg",
+      scopes: oauth.YOUTUBE_SCOPES,
+      metadata: { youtubeInitialized: true },
+    });
+
+    const result = await service.resolveYoutubeGameVods("user-1");
+    expect(result).toMatchObject({
+      channelId: "UC9OluGthYmZo0vsF9IjicFg",
+      pagesFetched: 1,
+    });
+    expect(refreshYoutubeToken).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "google-client" }),
+      "refresh-secret",
+      expect.any(Function),
+    );
+    expect(listYoutubeGameVods).toHaveBeenCalledWith(
+      "fresh-access",
+      expect.any(Function),
+      { nowMs: NOW },
+    );
+    expect(await service.vault.getConnection("user-1", "youtube"))
+      .toMatchObject({ accessToken: "fresh-access" });
+    expect(JSON.stringify(result)).not.toContain("fresh-access");
+    expect(JSON.stringify(result)).not.toContain("refresh-secret");
+  });
+
+  test("game VOD resolution refreshes and retries an unexpected YouTube 401", async () => {
+    const fake = fakeVaultDb();
+    const refreshYoutubeToken = jest.fn(async () => ({
+      accessToken: "fresh-after-401",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW + 3_600_000),
+      scopes: oauth.YOUTUBE_SCOPES,
+    }));
+    const listYoutubeGameVods = jest.fn()
+      .mockRejectedValueOnce(new oauth.PlatformOauthError(
+        "youtube_game_vods_channel",
+        "expired",
+        401,
+      ))
+      .mockResolvedValueOnce({
+        channelId: "UC9OluGthYmZo0vsF9IjicFg",
+        customUrl: "@TestCaster",
+        vods: [],
+        uploadsScanned: 0,
+        pagesFetched: 1,
+        videoBatches: 0,
+      });
+    const service = new PlatformIntegrationsService(fake.db, {
+      config: {
+        enabled: true,
+        encryptionKey: KEY,
+        twitch: null,
+        kick: null,
+        youtube: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback",
+        },
+      },
+      now: () => NOW,
+      overlayTokens: { list: async () => [] },
+      oauth: { ...oauth, refreshYoutubeToken, listYoutubeGameVods },
+    });
+    await service.vault.saveConnection("user-1", "youtube", {
+      accessToken: "unexpected-expired-access",
+      refreshToken: "refresh-secret",
+      expiresAt: new Date(NOW + 3_600_000),
+      platformUserId: "UC9OluGthYmZo0vsF9IjicFg",
+      scopes: oauth.YOUTUBE_SCOPES,
+      metadata: { youtubeInitialized: true },
+    });
+
+    await expect(service.resolveYoutubeGameVods("user-1"))
+      .resolves.toMatchObject({ customUrl: "@TestCaster" });
+    expect(listYoutubeGameVods.mock.calls.map((call) => call[0])).toEqual([
+      "unexpected-expired-access",
+      "fresh-after-401",
+    ]);
+    expect(refreshYoutubeToken).toHaveBeenCalledTimes(1);
+    expect(await service.vault.getConnection("user-1", "youtube"))
+      .toMatchObject({ accessToken: "fresh-after-401" });
+  });
+
+  test("game VOD refresh hands off to a concurrently replaced YouTube revision", async () => {
+    const fake = fakeVaultDb();
+    const listYoutubeGameVods = jest.fn(async (_accessToken) => ({
+      channelId: "UCYxRlFDqcWM4y7FfpiAN3KQ",
+      customUrl: "@NewCaster",
+      vods: [],
+      uploadsScanned: 0,
+      pagesFetched: 1,
+      videoBatches: 0,
+    }));
+    let service;
+    const refreshYoutubeToken = jest.fn(async () => {
+      await service.vault.saveConnection("user-1", "youtube", {
+        accessToken: "new-account-access",
+        refreshToken: "new-account-refresh",
+        expiresAt: new Date(NOW + 3_600_000),
+        platformUserId: "UCYxRlFDqcWM4y7FfpiAN3KQ",
+        scopes: oauth.YOUTUBE_SCOPES,
+        metadata: { youtubeInitialized: true },
+      });
+      return {
+        accessToken: "stale-refreshed-access",
+        refreshToken: "old-refresh",
+        expiresAt: new Date(NOW + 3_600_000),
+        scopes: oauth.YOUTUBE_SCOPES,
+      };
+    });
+    service = new PlatformIntegrationsService(fake.db, {
+      config: {
+        enabled: true,
+        encryptionKey: KEY,
+        twitch: null,
+        kick: null,
+        youtube: {
+          clientId: "google-client",
+          clientSecret: "google-secret",
+          redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback",
+        },
+      },
+      now: () => NOW,
+      overlayTokens: { list: async () => [] },
+      oauth: { ...oauth, refreshYoutubeToken, listYoutubeGameVods },
+    });
+    await service.vault.saveConnection("user-1", "youtube", {
+      accessToken: "old-expired-access",
+      refreshToken: "old-refresh",
+      expiresAt: new Date(NOW - 1),
+      platformUserId: "UC9OluGthYmZo0vsF9IjicFg",
+      scopes: oauth.YOUTUBE_SCOPES,
+      metadata: { youtubeInitialized: true },
+    });
+    const oldRevision = (await service.vault.getConnection(
+      "user-1",
+      "youtube",
+    )).connectionRevision;
+
+    await expect(service.resolveYoutubeGameVods("user-1", {
+      expectedRevision: oldRevision,
+    })).resolves.toBeNull();
+    expect(listYoutubeGameVods).not.toHaveBeenCalled();
+    await expect(service.resolveYoutubeGameVods("user-1"))
+      .resolves.toMatchObject({ customUrl: "@NewCaster" });
+    expect(listYoutubeGameVods).toHaveBeenCalledTimes(1);
+    expect(listYoutubeGameVods.mock.calls.map((call) => call[0]))
+      .toEqual(["new-account-access"]);
+    expect(await service.vault.getConnection("user-1", "youtube"))
+      .toMatchObject({
+        platformUserId: "UCYxRlFDqcWM4y7FfpiAN3KQ",
+        accessToken: "new-account-access",
+      });
   });
 
   test("a stale YouTube poll cannot publish or overwrite a reconnected account", async () => {

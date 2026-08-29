@@ -14,12 +14,14 @@ No system-wide install is required.
 
 ## Included Response Gaming reel
 
-This workspace already includes the first curated library:
+This workspace includes the current curated library:
 
-- `response-gaming-vods.json` — the editable source with 12 landscape VODs,
-  three paired vertical simulcasts, 56 selected ranges, and review notes.
-- `response-gaming-broll.json` — the ready-to-import Stream Dock file (53:48
-  total playback, including 10 landscape/portrait paired highlights).
+- `response-gaming-vods.json` — the editable source with 19 landscape sources
+  (15 live VODs and four edited uploads), six paired vertical simulcasts,
+  73 selected ranges, and review notes.
+- `response-gaming-broll.json` — the ready-to-import Stream Dock file (70:59
+  total playback, including 19 landscape/portrait paired highlights). The four
+  edited uploads remain landscape-only and use the contained portrait fallback.
 
 In the Stream Dock, open **Scenes → Manage highlight library**, choose the
 ready-to-import JSON file, then click Starting Soon or BRB. To extend it later,
