@@ -192,6 +192,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -283,6 +284,7 @@ describe("ReplayLibrary", () => {
 
   it("requires explicit consent before enabling sharing and copies the canonical public URL", async () => {
     render(<ReplayLibrary />);
+    expect(screen.queryByRole("button", { name: "Copy public replay page link" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Share replay page" }));
 
     expect(screen.getByRole("dialog", { name: "Share your replay archive" })).toBeTruthy();
@@ -315,5 +317,42 @@ describe("ReplayLibrary", () => {
     expect(screen.getByRole("link", { name: /Preview public page/i }).getAttribute("href")).toBe(
       `/players/${SHARE_HANDLE}/replays`,
     );
+  });
+
+  it("puts a persistent copy-link action directly below Sharing on", async () => {
+    sharingState = { enabled: true, handle: SHARE_HANDLE };
+    render(<ReplayLibrary />);
+
+    const actions = screen.getByRole("group", { name: "Replay sharing actions" });
+    const sharingButton = screen.getByRole("button", { name: "Sharing on" });
+    const copyButton = screen.getByRole("button", { name: "Copy public replay page link" });
+    expect(sharingButton.parentElement).toBe(actions);
+    expect(copyButton.parentElement).toBe(actions);
+    expect(sharingButton.nextElementSibling).toBe(copyButton);
+
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(mocks.clipboardWrite).toHaveBeenCalledWith(
+      `${window.location.origin}/players/${SHARE_HANDLE}/replays`,
+    ));
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+    expect(await screen.findByText("Copied")).toBeTruthy();
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Replay page link copied");
+  });
+
+  it("offers the canonical replay URL for manual copy when clipboard access fails", async () => {
+    sharingState = { enabled: true, handle: SHARE_HANDLE };
+    mocks.clipboardWrite.mockRejectedValue(new Error("clipboard_denied"));
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+    render(<ReplayLibrary />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy public replay page link" }));
+
+    await waitFor(() => expect(prompt).toHaveBeenCalledWith(
+      "Copy this replay page link",
+      `${window.location.origin}/players/${SHARE_HANDLE}/replays`,
+    ));
+    expect(mocks.apiCall).not.toHaveBeenCalled();
+    expect(mocks.toastSuccess).not.toHaveBeenCalledWith("Replay page link copied");
   });
 });

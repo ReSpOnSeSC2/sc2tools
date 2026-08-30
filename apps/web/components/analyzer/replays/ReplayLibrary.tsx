@@ -258,10 +258,16 @@ function ReplayShareControl() {
   const sharingReq = useApi<ReplaySharingResponse>("/v1/me/replay-sharing", { revalidateOnFocus: false });
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyResetTimer = useRef<number | null>(null);
   const sharing = sharingReq.data;
   const handle = sharing?.enabled ? sharing.handle : null;
   const path = handle ? `/players/${encodeURIComponent(handle)}/replays` : null;
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current);
+  }, []);
 
   async function setEnabled(enabled: boolean): Promise<ReplaySharingResponse | null> {
     if (saving) return null;
@@ -283,16 +289,23 @@ function ReplayShareControl() {
   }
 
   async function copyLink(targetHandle = handle) {
-    if (!targetHandle) return;
+    if (!targetHandle || copying) return;
     const targetPath = `/players/${encodeURIComponent(targetHandle)}/replays`;
     const href = `${window.location.origin}${targetPath}`;
+    setCopying(true);
     try {
       await navigator.clipboard.writeText(href);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current);
+      copyResetTimer.current = window.setTimeout(() => {
+        copyResetTimer.current = null;
+        setCopied(false);
+      }, 1800);
       toast.success("Replay page link copied");
     } catch {
       window.prompt("Copy this replay page link", href);
+    } finally {
+      setCopying(false);
     }
   }
 
@@ -305,14 +318,34 @@ function ReplayShareControl() {
 
   return (
     <>
-      <Button
-        variant={sharing?.enabled && handle ? "secondary" : "primary"}
-        onClick={() => setOpen(true)}
-        iconLeft={sharing?.enabled && handle ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
-        className="shrink-0"
+      <div
+        className="flex w-full shrink-0 flex-col gap-2 sm:w-auto"
+        role="group"
+        aria-label="Replay sharing actions"
       >
-        {sharing?.enabled && handle ? "Sharing on" : "Share replay page"}
-      </Button>
+        <Button
+          variant={sharing?.enabled && handle ? "secondary" : "primary"}
+          onClick={() => setOpen(true)}
+          disabled={saving}
+          iconLeft={sharing?.enabled && handle ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Share2 className="h-4 w-4" aria-hidden />}
+          className="w-full"
+        >
+          {sharing?.enabled && handle ? "Sharing on" : "Share replay page"}
+        </Button>
+        {sharing?.enabled && handle ? (
+          <Button
+            variant="ghost"
+            onClick={() => void copyLink()}
+            loading={copying}
+            disabled={saving}
+            iconLeft={copied ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            className="w-full"
+            aria-label="Copy public replay page link"
+          >
+            <span aria-live="polite">{copied ? "Copied" : "Copy link"}</span>
+          </Button>
+        ) : null}
+      </div>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
@@ -330,7 +363,7 @@ function ReplayShareControl() {
           ) : sharing?.enabled && handle ? (
             <>
               <Button variant="ghost" size="sm" onClick={() => void setEnabled(false)} loading={saving}>Turn off sharing</Button>
-              <Button size="sm" onClick={() => void copyLink()} iconLeft={copied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}>
+              <Button size="sm" onClick={() => void copyLink()} loading={copying} iconLeft={copied ? <Check className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}>
                 {copied ? "Copied" : "Copy link"}
               </Button>
             </>
