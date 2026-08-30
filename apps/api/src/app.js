@@ -1121,6 +1121,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildOpponentsRouter({
       opponents: services.opponents,
+      overlayLive: services.overlayLive,
       auth,
       pulseIntel: services.pulseIntel,
       pulseLinks: services.pulseLinks,

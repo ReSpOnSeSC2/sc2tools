@@ -142,6 +142,16 @@ export interface OpponentsService {
       mergeLinked?: boolean;
     },
   ): Promise<object | null>;
+  updateNotes(
+    userId: string,
+    pulseId: string,
+    input: { notes: string; notesReadAloud: boolean },
+  ): Promise<{
+    notes: string;
+    notesReadAloud: boolean;
+    opponentName: string;
+    pulseCharacterId: string | null;
+  } | null>;
   listGames(
     userId: string,
     pulseId: string,

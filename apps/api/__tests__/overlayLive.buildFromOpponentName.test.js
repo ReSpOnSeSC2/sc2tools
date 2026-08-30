@@ -38,6 +38,7 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
   afterEach(async () => {
     await db.games.deleteMany({});
     await db.opponents.deleteMany({});
+    await db.opponentNotes.deleteMany({});
     svc.clearEnrichmentCache();
   });
 
@@ -135,6 +136,58 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     expect(p.durationSec).toBeUndefined();
     expect(p.mmrDelta).toBeUndefined();
     expect(p.map).toBeUndefined();
+  });
+
+  test("loads the exact opponent note and read-aloud preference for the resolved toon identity", async () => {
+    await db.opponentNotes.insertOne({
+      userId: "u1",
+      pulseId: "1-S2-1-noted-foe",
+      notes: "Checks the natural at 2:10, then hides a proxy tech structure.",
+      notesReadAloud: true,
+    });
+
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "NotedFoe",
+      "Terran",
+      null,
+      "Protoss",
+      "1-S2-1-noted-foe",
+    );
+
+    expect(p.opponentNotes).toEqual({
+      text: "Checks the natural at 2:10, then hides a proxy tech structure.",
+      readAloud: true,
+    });
+  });
+
+  test("does not leak notes across users or toon identities and omits the field when none matches", async () => {
+    await db.opponentNotes.insertMany([
+      {
+        userId: "another-user",
+        pulseId: "1-S2-1-target-foe",
+        notes: "Private note owned by another streamer.",
+        notesReadAloud: true,
+      },
+      {
+        userId: "u1",
+        pulseId: "1-S2-1-different-foe",
+        notes: "Note for a different opponent.",
+        notesReadAloud: false,
+      },
+    ]);
+
+    const p = await svc.buildFromOpponentName(
+      "u1",
+      "TargetFoe",
+      "Zerg",
+      null,
+      "Protoss",
+      "1-S2-1-target-foe",
+    );
+
+    expect(p).toBeTruthy();
+    expect(p.opponentNotes).toBeUndefined();
   });
 
   test("falls back to displayNameSample when no pulse identifiers are provided (agent v0.6.0 / pre-Pulse)", async () => {

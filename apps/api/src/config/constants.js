@@ -31,6 +31,10 @@ const COLLECTIONS = Object.freeze({
   USERS: "users",
   PROFILES: "profiles",
   OPPONENTS: "opponents",
+  // User-authored scouting notes live separately from the derived
+  // opponents aggregate. Admin rebuilds can safely drop/recreate the
+  // aggregate without erasing notes the user wrote by hand.
+  OPPONENT_NOTES: "opponent_notes",
   GAMES: "games",
   // Per-game heavy fields (build logs, macroBreakdown, apmCurve,
   // spatial). Split out of ``games`` in v0.4.3 so list-page queries
@@ -125,6 +129,7 @@ const LIMITS = Object.freeze({
   // for accounts with tens of thousands of replays.
   OPPONENT_GAMES_PAGE_SIZE: 200,
   OPPONENT_GAMES_LIST_MAX: 200,
+  OPPONENT_NOTES_MAX_LENGTH: 500,
   PAIRING_CODE_TTL_SEC: 600,
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,

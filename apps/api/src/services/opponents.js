@@ -53,6 +53,7 @@ function regionLabelsToHandlePrefixes(labels) {
 }
 
 const OPPONENTS_VERSION = expectedVersion(COLLECTIONS.OPPONENTS);
+const OPPONENT_NOTES_VERSION = expectedVersion(COLLECTIONS.OPPONENT_NOTES);
 
 // Profile views load at most this many games (most recent first). An
 // opponent faced thousands of times would otherwise pull their entire
@@ -224,7 +225,11 @@ const PROFILE_GAME_ROW_PROJECTION = {
  */
 class OpponentsService {
   /**
-   * @param {{opponents: import('mongodb').Collection, games: import('mongodb').Collection}} db
+   * @param {{
+   *   opponents: import('mongodb').Collection,
+   *   opponentNotes: import('mongodb').Collection,
+   *   games: import('mongodb').Collection,
+   * }} db
    * @param {Buffer} pepper
    * @param {{
    *   gameDetails?: import('./gameDetails').GameDetailsService,
@@ -1064,6 +1069,88 @@ class OpponentsService {
   }
 
   /**
+   * Save the owning user's private scouting note for one opponent.
+   * Notes live outside the derived opponents aggregate so recounts keep
+   * user-authored data. A blank note removes the dedicated row entirely.
+   *
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {{notes: string, notesReadAloud: boolean}} input
+   * @returns {Promise<{
+   *   notes: string,
+   *   notesReadAloud: boolean,
+   *   opponentName: string,
+   *   pulseCharacterId: string|null,
+   * }|null>}
+   */
+  async updateNotes(userId, pulseId, input) {
+    if (
+      !input
+      || typeof input.notes !== "string"
+      || typeof input.notesReadAloud !== "boolean"
+      || input.notes.length > LIMITS.OPPONENT_NOTES_MAX_LENGTH
+    ) {
+      throw invalidOpponentNotes();
+    }
+
+    const opponent = /** @type {{
+     *   pulseId: string,
+     *   pulseCharacterId?: string,
+     *   displayNameSample?: string,
+     * }|null} */ (
+      await this.db.opponents.findOne(
+        { userId, pulseId },
+        {
+          projection: {
+            _id: 0,
+            pulseId: 1,
+            pulseCharacterId: 1,
+            displayNameSample: 1,
+          },
+        },
+      )
+    );
+    if (!opponent) return null;
+
+    // Match the profile/list name overlay so invalidation also clears
+    // name-keyed cache entries when an older opponents row is stale.
+    await this._overlayLatestNameFromGames(userId, [opponent]);
+    const notes = input.notes.trim();
+    const notesReadAloud = notes.length > 0 && input.notesReadAloud;
+    if (notes.length === 0) {
+      await this.db.opponentNotes.deleteOne({ userId, pulseId });
+    } else {
+      await this.db.opponentNotes.updateOne(
+        { userId, pulseId },
+        {
+          $setOnInsert: { userId, pulseId },
+          $set: {
+            notes,
+            notesReadAloud,
+            updatedAt: new Date(),
+            _schemaVersion: OPPONENT_NOTES_VERSION,
+          },
+        },
+        { upsert: true },
+      );
+    }
+
+    return {
+      notes,
+      notesReadAloud,
+      opponentName:
+        typeof opponent.displayNameSample === "string"
+          ? opponent.displayNameSample
+          : "",
+      pulseCharacterId:
+        typeof opponent.pulseCharacterId === "string"
+        && opponent.pulseCharacterId.length > 0
+          ? opponent.pulseCharacterId
+          : null,
+    };
+  }
+
+  /**
    * Cursor-page the complete replay history for one opponent without loading
    * any game-detail blobs. This is the data source for the dossier's All
    * replays table; the heavier `get` method remains capped for analytics.
@@ -1300,6 +1387,16 @@ class OpponentsService {
       { projection: OPPONENT_PROFILE_DOC_PROJECTION },
     );
     if (!doc) return null;
+    const noteDoc = this.db.opponentNotes
+      ? await this.db.opponentNotes.findOne(
+          { userId, pulseId },
+          { projection: { _id: 0, notes: 1, notesReadAloud: 1 } },
+        )
+      : null;
+    const notes = noteDoc && typeof noteDoc.notes === "string"
+      ? noteDoc.notes
+      : "";
+    const notesReadAloud = notes.length > 0 && noteDoc?.notesReadAloud === true;
     // Match games against either identity field. The opponents row
     // stores the canonical SC2Pulse character id; if a player ever
     // rebound their Battle.net (rotating the toon_handle while
@@ -1543,6 +1640,8 @@ class OpponentsService {
       // field see the same value.
       displayNameSample: authoritativeName || doc.displayNameSample || "",
       name: authoritativeName,
+      notes,
+      notesReadAloud,
       // Merged extras: the per-name breakdown (newest first) and the
       // group's revealed name — any identity's reveal (or the pro
       // nickname from the linkage) labels the whole player.
@@ -3479,6 +3578,16 @@ function selectProfileAnalyticalGames(scopedGames, filteredGames) {
 function invalidOpponentGamesCursor() {
   const err = /** @type {Error & {status: number, code: string}} */ (
     new Error("invalid opponent games cursor")
+  );
+  err.status = 400;
+  err.code = "bad_request";
+  return err;
+}
+
+/** @returns {Error & {status?: number, code?: string}} */
+function invalidOpponentNotes() {
+  const err = /** @type {Error & {status: number, code: string}} */ (
+    new Error("invalid opponent notes")
   );
   err.status = 400;
   err.code = "bad_request";

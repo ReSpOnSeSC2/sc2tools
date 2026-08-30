@@ -70,6 +70,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 2,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.OPPONENT_NOTES]: {
+    collection: COLLECTIONS.OPPONENT_NOTES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.GAMES]: {
     collection: COLLECTIONS.GAMES,
     // v2 — v0.4.3 storage trim: ``earlyBuildLog`` / ``oppEarlyBuildLog``

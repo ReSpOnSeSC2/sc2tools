@@ -151,6 +151,7 @@ describe("services/overlayLive.buildFromGame", () => {
   afterEach(async () => {
     await db.games.deleteMany({});
     await db.opponents.deleteMany({});
+    await db.opponentNotes.deleteMany({});
   });
 
   afterAll(async () => {
@@ -194,6 +195,22 @@ describe("services/overlayLive.buildFromGame", () => {
     expect(p.oppMmr).toBe(4250);
     expect(p.map).toBe("Goldenaura");
     expect(p.oppName).toBe("Foe");
+  });
+
+  test("buildFromGame includes the saved note for the game's exact opponent identity", async () => {
+    await db.opponentNotes.insertOne({
+      userId: "u1",
+      pulseId: "pulse-1",
+      notes: "Usually follows pool first with a fast roach transition.",
+      notesReadAloud: false,
+    });
+
+    const p = await svc.buildFromGame("u1", game());
+
+    expect(p.opponentNotes).toEqual({
+      text: "Usually follows pool first with a fast roach transition.",
+      readAloud: false,
+    });
   });
 
   test("derives league + tier from myMmr without an external rank service", async () => {

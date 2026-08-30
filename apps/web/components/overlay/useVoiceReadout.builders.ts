@@ -17,7 +17,7 @@ import type { LiveGameEnvelope, LiveGamePayload } from "./types";
  *
  * Both scouting builders produce the same sentence shape:
  *
- *   ``Facing <Name>, <Race>. <N> MMR. <H2H clause>. Good luck.``
+ *   ``Facing <Name>, <Race>. <N> MMR. <H2H clause>. [Opponent note.] Good luck.``
  *
  * They differ only in which payload they read from. The shared layout
  * lives in ``composeScoutingSentence`` so the post-game (Test fire)
@@ -35,6 +35,7 @@ export function buildScoutingLine(live: LiveGamePayload): string {
     race: live.oppRace,
     mmr: extractPositiveMmr(live.oppMmr),
     headToHead: live.headToHead,
+    opponentNotes: live.opponentNotes,
   });
 }
 
@@ -50,6 +51,7 @@ export function buildLiveGameScoutingLine(env: LiveGameEnvelope): string {
     race: env.opponent?.race,
     mmr: resolveLiveOpponentMmr(env),
     headToHead: env.streamerHistory?.headToHead,
+    opponentNotes: env.streamerHistory?.opponentNotes,
   });
 }
 
@@ -100,6 +102,7 @@ export function scoutingFingerprint(live: LiveGamePayload): string {
     live.headToHead?.wins ?? "",
     live.headToHead?.losses ?? "",
     live.bestAnswer?.build || "",
+    live.opponentNotes?.readAloud ? live.opponentNotes.text : "",
     live.isTest ? "T" : "",
   ].join("|");
 }
@@ -188,10 +191,14 @@ interface ScoutingParts {
   race: string | null | undefined;
   mmr: number | null;
   headToHead: { wins: number; losses: number } | null | undefined;
+  opponentNotes:
+    | { text: string; readAloud: boolean }
+    | null
+    | undefined;
 }
 
 /**
- * Compose the canonical scouting sentence from its four parts. Every
+ * Compose the canonical scouting sentence from its five parts. Every
  * utterance ends with ``Good luck.``; intermediate clauses are
  * omitted silently when their input is missing or malformed.
  */
@@ -201,8 +208,20 @@ function composeScoutingSentence(parts: ScoutingParts): string {
   if (mmr) segments.push(mmr);
   const h2h = formatH2hClause(parts.headToHead);
   if (h2h) segments.push(h2h);
+  const opponentNotes = formatOpponentNotesClause(parts.opponentNotes);
+  if (opponentNotes) segments.push(opponentNotes);
   segments.push("Good luck.");
   return segments.join(" ");
+}
+
+function formatOpponentNotesClause(
+  opponentNotes: ScoutingParts["opponentNotes"],
+): string | null {
+  if (opponentNotes?.readAloud !== true) return null;
+  const text = sanitizeForSpeech(opponentNotes.text);
+  if (!text) return null;
+  const punctuation = /[.!?]$/.test(text) ? "" : ".";
+  return `Opponent note: ${text}${punctuation}`;
 }
 
 function formatFacingClause(

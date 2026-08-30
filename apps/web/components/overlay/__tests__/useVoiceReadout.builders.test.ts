@@ -15,6 +15,31 @@ const base = (extra: Partial<LiveGamePayload> = {}): LiveGamePayload => ({
   ...extra,
 });
 
+type OpponentNotes = {
+  text: string;
+  readAloud: boolean;
+};
+
+type PayloadWithNotes = LiveGamePayload & {
+  opponentNotes: OpponentNotes;
+};
+
+const payloadWithNotes = (
+  extra: Partial<LiveGamePayload>,
+  opponentNotes: OpponentNotes,
+): PayloadWithNotes => ({ ...base(extra), opponentNotes });
+
+type StreamerHistoryWithNotes = NonNullable<
+  LiveGameEnvelope["streamerHistory"]
+> & {
+  opponentNotes: OpponentNotes;
+};
+
+const historyWithNotes = (
+  history: NonNullable<LiveGameEnvelope["streamerHistory"]>,
+  opponentNotes: OpponentNotes,
+): StreamerHistoryWithNotes => ({ ...history, opponentNotes });
+
 describe("buildScoutingLine", () => {
   it("speaks name + race when both present", () => {
     expect(buildScoutingLine(base())).toContain("Facing TestUser, Protoss.");
@@ -58,6 +83,23 @@ describe("buildScoutingLine", () => {
     const out = buildScoutingLine(base());
     expect(out).not.toContain("First meeting");
     expect(out).not.toMatch(/against them/);
+  });
+
+  it("reads a sanitized opponent note on the test-fire payload when enabled", () => {
+    const out = buildScoutingLine(
+      payloadWithNotes(
+        { headToHead: { wins: 3, losses: 1 } },
+        {
+          text: "**Proxy** [at natural](https://example.invalid) 🚨\nthen _BC_",
+          readAloud: true,
+        },
+      ),
+    );
+
+    expect(out).toContain("Opponent note: Proxy at natural then BC.");
+    expect(out).not.toContain("https://example.invalid");
+    expect(out).not.toContain("🚨");
+    expect(out.endsWith("Good luck.")).toBe(true);
   });
 
   it("guards against NaN/undefined wins/losses", () => {
@@ -397,6 +439,54 @@ describe("buildLiveGameScoutingLine", () => {
     expect(out).toContain("Facing Stranger, Zerg.");
     expect(out).not.toMatch(/MMR/);
     expect(out).toContain("First meeting.");
+    expect(out).toContain("Good luck.");
+  });
+
+  it("reads a sanitized opponent note from streamer history when enabled", () => {
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: { name: "NightMare", race: "Protoss" },
+        streamerHistory: historyWithNotes(
+          {
+            oppName: "NightMare",
+            oppRace: "Protoss",
+            headToHead: { wins: 2, losses: 3 },
+          },
+          {
+            text: "# Scout [the third](https://example.invalid) 🔍 before _4:30_",
+            readAloud: true,
+          },
+        ),
+      }),
+    );
+
+    expect(out).toContain("Opponent note: Scout the third before 4:30.");
+    expect(out).not.toContain("https://example.invalid");
+    expect(out).not.toContain("🔍");
+    expect(out.endsWith("Good luck.")).toBe(true);
+  });
+
+  it("does not speak opponent notes when read-aloud is disabled", () => {
+    const out = buildLiveGameScoutingLine(
+      envBase({
+        opponent: { name: "NightMare", race: "Protoss" },
+        streamerHistory: historyWithNotes(
+          {
+            oppName: "NightMare",
+            oppRace: "Protoss",
+            headToHead: { wins: 2, losses: 3 },
+          },
+          {
+            text: "This sentence must remain visual only.",
+            readAloud: false,
+          },
+        ),
+      }),
+    );
+
+    expect(out).not.toContain("Opponent note:");
+    expect(out).not.toContain("This sentence must remain visual only.");
+    expect(out).toContain("Facing NightMare, Protoss.");
     expect(out).toContain("Good luck.");
   });
 });

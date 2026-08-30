@@ -24,6 +24,24 @@ function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
   };
 }
 
+type OpponentNotes = {
+  text: string;
+  readAloud: boolean;
+};
+
+type StreamerHistoryWithNotes = NonNullable<
+  LiveGameEnvelope["streamerHistory"]
+> & {
+  opponentNotes: OpponentNotes;
+};
+
+function historyWithNotes(
+  history: NonNullable<LiveGameEnvelope["streamerHistory"]>,
+  opponentNotes: OpponentNotes,
+): StreamerHistoryWithNotes {
+  return { ...history, opponentNotes };
+}
+
 describe("ScoutingWidget — live envelope path", () => {
   it("renders nothing when there's no payload at all", () => {
     const { container } = render(
@@ -306,6 +324,68 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("YOUR BEST ANSWER");
     expect(container.textContent).toContain("66%");
     expect(container.textContent).toContain("CHEESE");
+  });
+
+  it("keeps the opponent notes panel visible when read-aloud is disabled", () => {
+    const env = envelope({
+      phase: "match_started",
+      opponent: { name: "NightMare", race: "Protoss" },
+      streamerHistory: historyWithNotes(
+        {
+          oppName: "NightMare",
+          oppRace: "Protoss",
+          headToHead: { wins: 2, losses: 3 },
+        },
+        {
+          text: "Checks the natural at 2:10, then hides a proxy tech structure.",
+          readAloud: false,
+        },
+      ),
+    });
+
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+
+    expect(container.textContent).toMatch(/opponent notes/i);
+    expect(container.textContent).toContain(
+      "Checks the natural at 2:10, then hides a proxy tech structure.",
+    );
+  });
+
+  it("caps the LAST GAMES list at three rows when notes consume card space", () => {
+    const env = envelope({
+      phase: "match_started",
+      opponent: { name: "DensityTest", race: "Terran" },
+      streamerHistory: historyWithNotes(
+        {
+          oppName: "DensityTest",
+          oppRace: "Terran",
+          headToHead: { wins: 1, losses: 4 },
+          recentGames: [
+            { result: "Win", lengthText: "10:01", map: "Map One LE" },
+            { result: "Loss", lengthText: "10:02", map: "Map Two LE" },
+            { result: "Win", lengthText: "10:03", map: "Map Three LE" },
+            { result: "Loss", lengthText: "10:04", map: "Map Four LE" },
+            { result: "Win", lengthText: "10:05", map: "Map Five LE" },
+          ],
+        },
+        {
+          text: "Expect a compact two-base timing after the first scout.",
+          readAloud: true,
+        },
+      ),
+    });
+
+    const { container } = render(
+      <ScoutingWidget live={null} liveGame={env} />,
+    );
+
+    expect(container.textContent).toContain("Map One LE");
+    expect(container.textContent).toContain("Map Two LE");
+    expect(container.textContent).toContain("Map Three LE");
+    expect(container.textContent).not.toContain("Map Four LE");
+    expect(container.textContent).not.toContain("Map Five LE");
   });
 
   it("hides entirely on a real post-game payload (live.result set, no isTest)", () => {

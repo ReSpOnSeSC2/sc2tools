@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { LIMITS } = require("../config/constants");
 const { parseFilters } = require("../util/parseQuery");
 
 /**
@@ -13,6 +14,7 @@ const { parseFilters } = require("../util/parseQuery");
  *   resolvePulseCharacterId?: (userId: string, pulseId: string) => Promise<string|null|undefined>,
  *   pulseLinks?: import('../services/pulseCharacterLinks').PulseCharacterLinkService,
  *   listPulseCharacterIds?: (userId: string) => Promise<string[]>,
+ *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  * }} deps
  */
 function buildOpponentsRouter(deps) {
@@ -188,6 +190,54 @@ function buildOpponentsRouter(deps) {
     }
   });
 
+  router.put("/opponents/:pulseId/notes", async (req, res, next) => {
+    try {
+      const auth = req.auth;
+      if (!auth) throw new Error("auth_required");
+      const errors = validateNotesBody(req.body);
+      if (errors.length > 0) {
+        res.status(400).json({ error: { code: "bad_request", details: errors } });
+        return;
+      }
+      const result = await deps.opponents.updateNotes(
+        auth.userId,
+        String(req.params.pulseId),
+        req.body,
+      );
+      if (!result) {
+        res.status(404).json({ error: { code: "not_found" } });
+        return;
+      }
+
+      if (
+        deps.overlayLive
+        && typeof deps.overlayLive.invalidateEnrichmentForOpponent === "function"
+      ) {
+        try {
+          deps.overlayLive.invalidateEnrichmentForOpponent(
+            auth.userId,
+            result.opponentName,
+            result.pulseCharacterId,
+          );
+        } catch (err) {
+          if (req.log && typeof req.log.warn === "function") {
+            req.log.warn(
+              { err, userId: auth.userId, pulseId: req.params.pulseId },
+              "overlay_enrichment_invalidate_failed",
+            );
+          }
+        }
+      }
+
+      res.set("Cache-Control", "private, no-store").json({
+        notes: result.notes,
+        notesReadAloud: result.notesReadAloud,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/opponents/:pulseId", async (req, res, next) => {
     try {
       const auth = req.auth;
@@ -219,6 +269,26 @@ function buildOpponentsRouter(deps) {
   });
 
   return router;
+}
+
+/** @param {unknown} raw @returns {string[]} */
+function validateNotesBody(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return ["body must be an object"];
+  }
+  const body = /** @type {Record<string, unknown>} */ (raw);
+  const errors = [];
+  if (typeof body.notes !== "string") {
+    errors.push("notes must be a string");
+  } else if (body.notes.length > LIMITS.OPPONENT_NOTES_MAX_LENGTH) {
+    errors.push(
+      `notes must contain at most ${LIMITS.OPPONENT_NOTES_MAX_LENGTH} characters`,
+    );
+  }
+  if (typeof body.notesReadAloud !== "boolean") {
+    errors.push("notesReadAloud must be a boolean");
+  }
+  return errors;
 }
 
 /** @param {unknown} raw @returns {number|undefined} */

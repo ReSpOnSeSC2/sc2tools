@@ -16,10 +16,12 @@ import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
  *   1. Header: large opponent name + small W-L H2H record / win-rate.
  *   2. Familiar / Rival label (gold) — only when this is a repeat
  *      opponent (`rival` populated by the cloud).
- *   3. "LAST GAMES" list — newest-first rows of (result-chip, length,
+ *   3. Private opponent notes — always visual when set, independent of
+ *      whether the streamer enabled read-aloud for this opponent.
+ *   4. "LAST GAMES" list — newest-first rows of (result-chip, length,
  *      map, YOU build, OPP build) for this matchup. Driven by the new
  *      cloud-derived `live.recentGames` field.
- *   4. Optional "YOUR BEST ANSWER" + "CHEESE" rows (kept compact for
+ *   5. Optional "YOUR BEST ANSWER" + "CHEESE" rows (kept compact for
  *      the bottom of the card so the LAST GAMES list dominates).
  *
  * Sized 600px wide on the bottom-center slot — matches the screenshot
@@ -78,7 +80,11 @@ export function ScoutingWidget({
     totalH2H > 0 ? Math.round((wins / totalH2H) * 100) : null;
 
   const rivalNote = formatRival(effective);
-  const recentGames = (effective.recentGames || []).slice(0, 5);
+  const opponentNoteText = effective.opponentNotes?.text?.trim() || null;
+  const recentGames = (effective.recentGames || []).slice(
+    0,
+    opponentNoteText ? 3 : 5,
+  );
   const bestAnswer = effective.bestAnswer || null;
   const cheeseHigh =
     typeof effective.cheeseProbability === "number"
@@ -90,7 +96,8 @@ export function ScoutingWidget({
     || recentGames.length > 0
     || bestAnswer != null
     || cheeseHigh
-    || rivalNote != null;
+    || rivalNote != null
+    || opponentNoteText != null;
   if (!hasAnyContent) return null;
 
   return (
@@ -157,8 +164,12 @@ export function ScoutingWidget({
         </div>
       ) : null}
 
+      {opponentNoteText ? (
+        <OpponentNotesCallout text={opponentNoteText} />
+      ) : null}
+
       {recentGames.length > 0 ? (
-        <div style={{ marginTop: rivalNote ? 0 : 10 }}>
+        <div style={{ marginTop: rivalNote || opponentNoteText ? 0 : 10 }}>
           <div
             style={{
               fontSize: 12,
@@ -215,6 +226,65 @@ export function ScoutingWidget({
         </FooterRow>
       ) : null}
     </WidgetShell>
+  );
+}
+
+function OpponentNotesCallout({ text }: { text: string }) {
+  return (
+    <div
+      data-testid="opponent-notes"
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        marginTop: 0,
+        marginBottom: 12,
+        padding: "10px 12px 11px",
+        border: "1px solid rgba(230,180,80,0.34)",
+        borderLeft: "3px solid #e6b450",
+        borderRadius: 8,
+        background:
+          "linear-gradient(135deg, rgba(230,180,80,0.13), rgba(92,200,255,0.055))",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          marginBottom: 5,
+          color: "#e6b450",
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: 1.35,
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "#e6b450",
+            boxShadow: "0 0 8px rgba(230,180,80,0.7)",
+            flexShrink: 0,
+          }}
+        />
+        OPPONENT NOTES
+      </div>
+      <div
+        style={{
+          color: "rgba(246,248,255,0.94)",
+          fontSize: 15,
+          fontWeight: 500,
+          lineHeight: 1.45,
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+        }}
+      >
+        {text}
+      </div>
+    </div>
   );
 }
 

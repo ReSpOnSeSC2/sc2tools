@@ -150,11 +150,43 @@ function cheeseProbability(strategy) {
   return 0.1;
 }
 
+/**
+ * Read the streamer's private notes for one resolved opponent identity.
+ * Notes are deliberately stored outside the derived ``opponents`` rows,
+ * so profile rebuilds cannot erase user-authored scouting context.
+ *
+ * Fail-soft by design: a missing collection or transient Mongo failure
+ * must never prevent the rest of the overlay payload from broadcasting.
+ *
+ * @param {import('mongodb').Collection | undefined} collection
+ * @param {string} userId
+ * @param {unknown} pulseId
+ * @returns {Promise<{text: string, readAloud: boolean} | null>}
+ */
+async function loadOpponentNotes(collection, userId, pulseId) {
+  if (!collection || !userId || pulseId === undefined || pulseId === null) {
+    return null;
+  }
+  const normalizedPulseId = String(pulseId).trim();
+  if (!normalizedPulseId) return null;
+
+  const row = await collection
+    .findOne(
+      { userId, pulseId: normalizedPulseId },
+      { projection: { _id: 0, notes: 1, notesReadAloud: 1 } },
+    )
+    .catch(() => null);
+  const text = typeof row?.notes === "string" ? row.notes.trim() : "";
+  if (!text) return null;
+  return { text, readAloud: row?.notesReadAloud === true };
+}
+
 class OverlayLiveService {
   /**
    * @param {{
    *   games: import('mongodb').Collection,
    *   opponents: import('mongodb').Collection,
+   *   opponentNotes?: import('mongodb').Collection,
    * }} db
    * @param {{
    *   opponents?: any,
@@ -275,6 +307,13 @@ class OverlayLiveService {
           )
           .catch(() => null)
       : null;
+
+    const opponentNotes = await loadOpponentNotes(
+      this.db.opponentNotes,
+      userId,
+      opp?.pulseId,
+    );
+    if (opponentNotes) payload.opponentNotes = opponentNotes;
 
     // SC2Pulse "revealed" name behind a barcode (when the community
     // linked the anonymised account to a known pro/main). Persisted on
@@ -637,6 +676,20 @@ class OverlayLiveService {
         if (oppRow) oppRow.matchedBy = "display_name";
       }
     }
+
+    // Notes belong to the exact toon identity the streamer edited. When
+    // the live envelope carries that handle, keep it authoritative even
+    // if Tier A matched an older row through the shared character id.
+    const notePulseId =
+      typeof opponentToonHandle === "string" && opponentToonHandle.trim()
+        ? opponentToonHandle
+        : oppRow?.pulseId;
+    const opponentNotes = await loadOpponentNotes(
+      this.db.opponentNotes,
+      userId,
+      notePulseId,
+    );
+    if (opponentNotes) payload.opponentNotes = opponentNotes;
 
     if (oppRow) {
       const wins = Number(oppRow.wins) || 0;

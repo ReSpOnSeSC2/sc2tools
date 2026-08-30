@@ -31,6 +31,10 @@ function buildSamplePayload(widget) {
     oppMmr: 4250,
     myMmr: 4310,
     mmrDelta: 22,
+    opponentNotes: {
+      text: "Checks the natural early, then hides proxy tech behind the third.",
+      readAloud: true,
+    },
     headToHead: { wins: 4, losses: 2 },
     streak: { kind: "win", count: 3 },
     cheeseProbability: 0.65,
@@ -192,6 +196,7 @@ const PER_WIDGET_KEYS = {
     "oppName",
     "oppRace",
     "headToHead",
+    "opponentNotes",
     "rival",
     "bestAnswer",
     "favOpening",

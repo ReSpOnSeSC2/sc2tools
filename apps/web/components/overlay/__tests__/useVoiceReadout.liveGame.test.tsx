@@ -117,6 +117,13 @@ function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
   };
 }
 
+function historyWithNotes(
+  history: NonNullable<LiveGameEnvelope["streamerHistory"]>,
+  opponentNotes: NonNullable<LiveGamePayload["opponentNotes"]>,
+): NonNullable<LiveGameEnvelope["streamerHistory"]> {
+  return { ...history, opponentNotes };
+}
+
 describe("useVoiceReadout — live envelope path", () => {
   let cap: Capture;
   beforeEach(() => {
@@ -206,6 +213,107 @@ describe("useVoiceReadout — live envelope path", () => {
     expect(text).toContain("6720 MMR.");
     expect(text).toContain("You're 3 and 1 against them, 75 percent win rate.");
     expect(text).toContain("Good luck.");
+  });
+
+  it("speaks an enabled enriched opponent note exactly once across repeated same-game envelopes", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const enriched = envelope({
+      gameKey: "notes-on-1",
+      phase: "match_started",
+      opponent: {
+        name: "NightMare",
+        race: "Protoss",
+        profile: { mmr: 6120 },
+      },
+      streamerHistory: historyWithNotes(
+        {
+          oppName: "NightMare",
+          oppRace: "Protoss",
+          matchup: "PvP",
+          headToHead: { wins: 2, losses: 3 },
+        },
+        {
+          text: "Scout the third before 4:30.",
+          readAloud: true,
+        },
+      ),
+    });
+    const repeated = { ...enriched, capturedAt: 1 };
+
+    const { rerender } = render(
+      <Harness
+        live={null}
+        liveGame={enriched}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0]?.text).toContain(
+      "Opponent note: Scout the third before 4:30.",
+    );
+
+    rerender(
+      <Harness
+        live={null}
+        liveGame={repeated}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(
+      cap.utterances.filter((utterance) =>
+        utterance.text.includes("Opponent note: Scout the third before 4:30."),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("never includes an opponent note whose read-aloud option is disabled", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const env = envelope({
+      gameKey: "notes-off-1",
+      phase: "match_started",
+      opponent: {
+        name: "NightMare",
+        race: "Protoss",
+        profile: { mmr: 6120 },
+      },
+      streamerHistory: historyWithNotes(
+        {
+          oppName: "NightMare",
+          oppRace: "Protoss",
+          matchup: "PvP",
+          headToHead: { wins: 2, losses: 3 },
+        },
+        {
+          text: "This sentence must remain visual only.",
+          readAloud: false,
+        },
+      ),
+    });
+
+    render(
+      <Harness
+        live={null}
+        liveGame={env}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
+    flush();
+
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    const text = cap.utterances[0]?.text || "";
+    expect(text).not.toContain("Opponent note:");
+    expect(text).not.toContain("This sentence must remain visual only.");
+    expect(text).toContain("Facing NightMare, Protoss.");
   });
 
   it("waits for MMR before firing when streamerHistory lands first (Peruano repro)", () => {

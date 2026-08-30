@@ -79,6 +79,8 @@ export type LiveGamePayload = {
   mmrDelta?: number;
   /** Head-to-head record vs this opponent. */
   headToHead?: { wins: number; losses: number };
+  /** Private scouting note; always visual, optionally included in TTS. */
+  opponentNotes?: { text: string; readAloud: boolean };
   /** Current win/loss streak. */
   streak?: { kind: "win" | "loss"; count: number };
   /** Cheese-likelihood score (0..1). */
@@ -525,6 +527,7 @@ export interface LiveGameEnvelope {
     | "oppMmr"
     | "matchup"
     | "headToHead"
+    | "opponentNotes"
     | "streak"
     | "cheeseProbability"
     | "predictedStrategies"

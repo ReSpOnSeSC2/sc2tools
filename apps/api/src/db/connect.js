@@ -10,6 +10,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   users: import('mongodb').Collection,
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
+ *   opponentNotes: import('mongodb').Collection,
  *   games: import('mongodb').Collection,
  *   gameDetails: import('mongodb').Collection,
  *   customBuilds: import('mongodb').Collection,
@@ -78,6 +79,7 @@ async function connect({ uri, dbName }, observability = {}) {
     users: db.collection(COLLECTIONS.USERS),
     profiles: db.collection(COLLECTIONS.PROFILES),
     opponents: db.collection(COLLECTIONS.OPPONENTS),
+    opponentNotes: db.collection(COLLECTIONS.OPPONENT_NOTES),
     games: db.collection(COLLECTIONS.GAMES),
     gameDetails: db.collection(COLLECTIONS.GAME_DETAILS),
     customBuilds: db.collection(COLLECTIONS.CUSTOM_BUILDS),
@@ -239,6 +241,10 @@ async function ensureIndexes(ctx) {
   // scans every opponents row for the user — Atlas Performance
   // Advisor flagged ~16k docs scanned per 5-doc result.
   await ctx.opponents.createIndex({ userId: 1, gameCount: -1 });
+  await ctx.opponentNotes.createIndex(
+    { userId: 1, pulseId: 1 },
+    { unique: true },
+  );
 
   await ctx.games.createIndex({ userId: 1, gameId: 1 }, { unique: true });
   await ctx.games.createIndex({ userId: 1, date: -1 });

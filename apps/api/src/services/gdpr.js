@@ -33,6 +33,7 @@ const USER_SCOPED_COLLECTIONS = [
   // (db key, file/json key)
   ["games", "games"],
   ["opponents", "opponents"],
+  ["opponentNotes", "opponentNotes"],
   ["customBuilds", "customBuilds"],
   ["overlayTokens", "overlayTokens"],
   ["deviceTokens", "deviceTokens"],

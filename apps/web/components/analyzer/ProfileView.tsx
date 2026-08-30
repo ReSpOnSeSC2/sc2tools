@@ -36,6 +36,10 @@ import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
 import { WhereGamesEndBar } from "./WhereGamesEndBar";
 import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
+import {
+  OpponentNotesCard,
+  type OpponentNotesValue,
+} from "./OpponentNotesCard";
 
 type OpponentProfileResp = {
   pulseId?: string;
@@ -64,6 +68,10 @@ type OpponentProfileResp = {
   // the in-replay value when SC2Pulse can't be reached. Null/absent
   // when no MMR has ever been recorded for this opponent.
   mmr?: number | null;
+  /** Private user-authored scouting notes for this exact opponent row. */
+  notes?: string;
+  /** Add the notes to TTS when this opponent is detected. */
+  notesReadAloud?: boolean;
   totals?: { wins: number; losses: number; total: number; winRate: number };
   byMap?: Record<string, { wins: number; losses: number }>;
   byStrategy?: Record<string, { wins: number; losses: number }>;
@@ -121,7 +129,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     (raw): raw is boolean => typeof raw === "boolean",
   );
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
-  const { data, isLoading } = useApi<OpponentProfileResp>(
+  const { data, isLoading, mutate } = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
   // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
@@ -244,6 +252,18 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           />
         </div>
       </div>
+
+      <OpponentNotesCard
+        pulseId={pulseId}
+        initialNotes={data.notes}
+        initialNotesReadAloud={data.notesReadAloud}
+        onSaved={(value: OpponentNotesValue) => {
+          void mutate(
+            { ...data, ...value },
+            { revalidate: false },
+          );
+        }}
+      />
 
       <RaceMmrPanel breakdown={races} isLoading={racesLoading} />
 
