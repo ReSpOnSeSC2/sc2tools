@@ -214,10 +214,18 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
 async function ensureIndexes(ctx) {
   await ctx.users.createIndex({ clerkUserId: 1 }, { unique: true });
   // Internal UUIDs remain unique account keys, but public replay links use a
-  // separate random id so URLs do not disclose those keys and can rotate on
-  // revocation. Sparse indexes preserve boot safety for legacy/default-off
-  // rows that have no sharing id.
+  // separate readable slug so URLs do not disclose those keys. The partial
+  // index ignores missing/null legacy values until they are lazily assigned a
+  // canonical string slug. ``shareId`` remains indexed only as a compatibility
+  // alias for active links created before player slugs shipped.
   await ctx.users.createIndex({ userId: 1 }, { unique: true, sparse: true });
+  await ctx.users.createIndex(
+    { "replaySharing.slug": 1 },
+    {
+      unique: true,
+      partialFilterExpression: { "replaySharing.slug": { $type: "string" } },
+    },
+  );
   await ctx.users.createIndex(
     { "replaySharing.shareId": 1 },
     { unique: true, sparse: true },

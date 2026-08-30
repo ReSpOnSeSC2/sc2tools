@@ -288,11 +288,12 @@ describe("ReplayLibrary", () => {
     expect(screen.getByRole("dialog", { name: "Share your replay archive" })).toBeTruthy();
     expect(screen.getByText(/Exactly what visitors can see/i)).toBeTruthy();
     expect(screen.getByText(/every synced replay in this archive/i)).toBeTruthy();
-    expect(screen.getByText(/downloads for archived original replay files/i)).toBeTruthy();
+    expect(screen.getByText(/download archived original replay files/i)).toBeTruthy();
+    expect(screen.getByText(/full Macro breakdown require.*sign in/i)).toBeTruthy();
     expect(screen.getByText(/can contain player\/account identifiers, chat, team information/i)).toBeTruthy();
     expect(screen.getByText(/temporary storage URL/i)).toBeTruthy();
-    expect(screen.getByText(/re-enabling creates a different opaque link/i)).toBeTruthy();
-    expect(screen.getByText(/A new opaque link is created when you turn sharing on/i)).toBeTruthy();
+    expect(screen.getByText(/player replay address stays assigned to you/i)).toBeTruthy();
+    expect(screen.getByText(/personal player replay address is created/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Turn on and copy link" }));
     await waitFor(() => {
@@ -306,13 +307,13 @@ describe("ReplayLibrary", () => {
         { revalidate: false },
       );
       expect(mocks.clipboardWrite).toHaveBeenCalledWith(
-        `${window.location.origin}/p/${SHARE_HANDLE}/replays`,
+        `${window.location.origin}/players/${SHARE_HANDLE}/replays`,
       );
     });
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Public replay page is live");
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Replay page link copied");
     expect(screen.getByRole("link", { name: /Preview public page/i }).getAttribute("href")).toBe(
-      `/p/${SHARE_HANDLE}/replays`,
+      `/players/${SHARE_HANDLE}/replays`,
     );
   });
 });

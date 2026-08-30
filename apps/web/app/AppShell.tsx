@@ -18,12 +18,16 @@ const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
 
 /**
- * Public replay URLs contain an opaque capability token. Never mount analytics
- * on those routes so the token (or replay filters in the query string) cannot
- * be disclosed to the analytics provider as page-view metadata.
+ * Shared replay URLs can carry a player slug plus replay filters. Keep those
+ * paths out of page-view analytics so a player's shared archive activity is
+ * not disclosed to the analytics provider. The /p form remains during the
+ * legacy-link redirect window.
  */
 function isPublicReplayRoute(pathname: string | null): boolean {
-  return Boolean(pathname && /^\/p\/[^/]+\/replays(?:\/|$)/.test(pathname));
+  return Boolean(
+    pathname
+      && /^\/(?:p|players)\/[^/]+\/replays(?:\/|$)/.test(pathname),
+  );
 }
 
 /**

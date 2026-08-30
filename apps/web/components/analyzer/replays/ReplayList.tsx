@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, BarChart3, Eye, Gauge, Swords } from "lucide-react";
+import {
+  ArrowUpRight,
+  BarChart3,
+  Eye,
+  Gauge,
+  LockKeyhole,
+  Swords,
+} from "lucide-react";
 import { GameStreamLinks } from "@/components/analyzer/GameStreamLinks";
 import { MacroBreakdownPanel } from "@/components/analyzer/macro/MacroBreakdownPanel";
 import type { PanelHeaderMeta } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
@@ -26,9 +33,9 @@ export interface ReplayListProps {
 }
 
 /**
- * Reusable replay presentation with an explicit capability boundary: signed-
- * in rows get private analysis and the macro modal; public rows use only
- * share-scoped analysis, macro and short-lived download endpoints.
+ * Reusable replay presentation with an explicit access boundary: signed-in
+ * owner rows use private analysis, while shared rows keep the list/download
+ * public and send macro/analysis clicks through a Clerk-protected detail URL.
  */
 export function ReplayList({
   items,
@@ -54,7 +61,7 @@ export function ReplayList({
   }
 
   const publicRoot = publicHandle
-    ? `/p/${encodeURIComponent(publicHandle)}/replays`
+    ? `/players/${encodeURIComponent(publicHandle)}/replays`
     : null;
 
   return (
@@ -167,12 +174,14 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
               <Gauge className="h-4 w-4" aria-hidden /> Macro
             </button>
           ) : (
-            <Link href={`${analysisHref}#macro-breakdown`} className={actionClass} aria-label={`Open macro breakdown for ${replayContext(game)}`}>
+            <Link href={`${analysisHref}#macro-breakdown`} className={actionClass} aria-label={`Sign in to open macro breakdown for ${replayContext(game)}`}>
               <Gauge className="h-4 w-4" aria-hidden /> Macro
+              <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden />
             </Link>
           )}
-          <Link href={analysisHref} className={actionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
+          <Link href={analysisHref} className={actionClass} aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}>
             <BarChart3 className="h-4 w-4" aria-hidden /> Analysis
+            {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
           </Link>
           {owner ? (
             <ReplayDownloadButton
@@ -216,7 +225,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
         </div>
         <Link
           href={analysisHref}
-          aria-label={`Open replay analysis for ${replayContext(game)}`}
+          aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-line bg-bg-elevated text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <ArrowUpRight className="h-4 w-4" aria-hidden />
@@ -239,12 +248,14 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
             <Gauge className="h-4 w-4" aria-hidden /> Macro breakdown
           </button>
         ) : (
-          <Link href={`${analysisHref}#macro-breakdown`} className={mobileActionClass} aria-label={`Open macro breakdown for ${replayContext(game)}`}>
+          <Link href={`${analysisHref}#macro-breakdown`} className={mobileActionClass} aria-label={`Sign in to open macro breakdown for ${replayContext(game)}`}>
             <Gauge className="h-4 w-4" aria-hidden /> Macro
+            <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden />
           </Link>
         )}
-        <Link href={analysisHref} className={mobileActionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
+        <Link href={analysisHref} className={mobileActionClass} aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}>
           <Eye className="h-4 w-4" aria-hidden /> Analysis
+          {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
         </Link>
         {owner ? (
           <div className="w-full sm:w-auto">

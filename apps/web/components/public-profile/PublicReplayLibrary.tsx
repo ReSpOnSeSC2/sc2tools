@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, ListFilter, Radio, Search, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Download,
+  ListFilter,
+  LockKeyhole,
+  Radio,
+  Search,
+  Share2,
+} from "lucide-react";
 import { ReplayList } from "@/components/analyzer/replays/ReplayList";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 import { Badge } from "@/components/ui/Badge";
@@ -24,7 +33,7 @@ export function PublicReplayLibrary({
   query: PublicReplayQuery;
 }) {
   const { profile, items, page } = data;
-  const root = `/p/${encodeURIComponent(profile.handle)}/replays`;
+  const root = `/players/${encodeURIComponent(profile.handle)}/replays`;
   const hasLocalFilters = Boolean(query.search || query.result || query.matchup || query.sort === "date_asc");
 
   return (
@@ -41,8 +50,18 @@ export function PublicReplayLibrary({
               </span>
             }
             title={`${profile.displayName}'s replays`}
-            description="A game-by-game record with downloadable replay files, replay analysis, macro breakdowns and timestamped stream POVs when a recording is available."
+            description="A game-by-game record with public replay downloads and timestamped stream POVs, plus signed-in replay analysis and macro breakdowns."
           />
+          <div className="mt-5 flex flex-col gap-2 rounded-xl border border-border bg-bg-elevated/55 p-3 text-caption text-text-muted sm:flex-row sm:items-center sm:gap-5">
+            <span className="inline-flex items-center gap-2">
+              <Download className="h-4 w-4 text-accent-cyan" aria-hidden />
+              View the list and download replays without an account
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <LockKeyhole className="h-4 w-4 text-warning" aria-hidden />
+              Sign in for Macro and Analysis
+            </span>
+          </div>
         </div>
       </Card>
 
@@ -133,7 +152,7 @@ export function PublicReplayLibrary({
       </Card>
 
       <p className="text-center text-micro text-text-dim">
-        Shared by {profile.displayName}. Page data omits SC2 Tools account and storage fields; downloading an original replay exposes its embedded metadata and a temporary storage URL.
+        Shared by {profile.displayName}. This list and its replay downloads are public; Macro and Analysis require an SC2 Tools sign-in. Page data omits SC2 Tools account and storage fields, while an original replay can expose metadata embedded by StarCraft II.
       </p>
     </article>
   );

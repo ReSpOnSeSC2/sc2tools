@@ -22,7 +22,8 @@ npm run dev
 | /download           | public | Agent install instructions             |
 | /app                | clerk  | Today dashboard + replay analysis      |
 | /app/replays        | clerk  | Replay library and share controls      |
-| /p/[handle]/replays | public | Shareable player replay list           |
+| /players/[slug]/replays | public | Shareable player replay list + downloads |
+| /players/[slug]/replays/[gameId] | clerk | Shared replay analysis + macro |
 | /devices            | clerk  | Pair / list / revoke agents             |
 | /streaming          | clerk  | Overlay tokens                         |
 | /builds             | clerk  | User's custom-build library            |

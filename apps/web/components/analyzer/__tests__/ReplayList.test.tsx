@@ -159,7 +159,7 @@ describe("ReplayList", () => {
     }));
   });
 
-  it("uses public analysis URLs and delegates downloads to the share-scoped control", () => {
+  it("uses protected analysis URLs and delegates downloads to the public share-scoped control", () => {
     const { container } = render(
       <ReplayList
         items={[REPLAY]}
@@ -169,9 +169,11 @@ describe("ReplayList", () => {
       />,
     );
 
-    const detailHref = "/p/coach%20name/replays/game%2F42";
+    const detailHref = "/players/coach%20name/replays/game%2F42";
     expect(container.querySelectorAll(`a[href="${detailHref}"]`)).toHaveLength(3);
     expect(container.querySelectorAll(`a[href="${detailHref}#macro-breakdown"]`)).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: /Sign in to open replay analysis/i })).toHaveLength(3);
+    expect(screen.getAllByRole("link", { name: /Sign in to open macro breakdown/i })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Download shared replay" })).toHaveLength(2);
     expect(downloadMock).not.toHaveBeenCalled();
     expect(publicDownloadMock).toHaveBeenCalledWith(expect.objectContaining({

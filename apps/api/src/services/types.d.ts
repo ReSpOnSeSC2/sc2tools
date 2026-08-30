@@ -20,12 +20,14 @@ export interface UserSummary {
 
 export interface ReplaySharingState {
   enabled: boolean;
+  /** Stable, human-facing replaySharing.slug; never the internal user id. */
   handle: string | null;
 }
 
 export interface ReplayPublicIdentity {
   userId: string;
   profile: {
+    /** Canonical slug even when the request used a legacy shareId alias. */
     handle: string;
     displayName: string;
   };

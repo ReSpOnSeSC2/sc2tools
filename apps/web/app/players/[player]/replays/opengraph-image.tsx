@@ -7,17 +7,17 @@ export const contentType = "image/png";
 export const revalidate = 0;
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ||
-  process.env.SC2TOOLS_API_BASE ||
-  "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_BASE
+  || process.env.SC2TOOLS_API_BASE
+  || "http://localhost:8080";
 
 export default async function ReplayOpenGraphImage({
   params,
 }: {
-  params: Promise<{ handle: string }>;
+  params: Promise<{ player: string }>;
 }) {
-  const { handle } = await params;
-  const archive = await loadArchive(handle);
+  const { player } = await params;
+  const archive = await loadArchive(player);
   const displayName = archive?.profile.displayName || "Shared replays";
   const latest = archive?.items[0];
 
@@ -38,7 +38,7 @@ export default async function ReplayOpenGraphImage({
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <div style={{ display: "flex", width: 14, height: 42, borderRadius: 7, background: "#3ce0d6" }} />
         <div style={{ display: "flex", fontSize: 30, fontWeight: 800, letterSpacing: 4, color: "#3ce0d6" }}>
-          SC2 TOOLS · REPLAYS
+          SC2 TOOLS · PLAYER REPLAYS
         </div>
       </div>
 
@@ -47,13 +47,15 @@ export default async function ReplayOpenGraphImage({
           {truncate(`${displayName}'s replay archive`, 38)}
         </div>
         <div style={{ display: "flex", fontSize: 31, color: "#9aa3b2" }}>
-          Public replay list · stream POVs · original replay downloads
+          Public replay list · stream POVs · original downloads
         </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
         <div style={{ display: "flex", fontSize: 25, color: "#9aa3b2" }}>
-          {latest?.map ? `Latest game · ${truncate(latest.map, 38)}` : "Sign in for analysis and macro breakdowns"}
+          {latest?.map
+            ? `Latest game · ${truncate(latest.map, 38)}`
+            : "Sign in for replay analysis and macro breakdowns"}
         </div>
         <div style={{ display: "flex", padding: "12px 22px", border: "2px solid #157d8c", borderRadius: 999, fontSize: 23, fontWeight: 700, color: "#3ce0d6" }}>
           View on SC2 Tools
@@ -64,10 +66,10 @@ export default async function ReplayOpenGraphImage({
   );
 }
 
-async function loadArchive(handle: string): Promise<ReplayLibraryResponse | null> {
+async function loadArchive(player: string): Promise<ReplayLibraryResponse | null> {
   try {
     const response = await fetch(
-      `${API_BASE}/v1/public/replays/${encodeURIComponent(handle)}?limit=1`,
+      `${API_BASE}/v1/public/replays/${encodeURIComponent(player)}?limit=1`,
       { headers: { accept: "application/json" }, cache: "no-store" },
     );
     if (!response.ok) return null;

@@ -38,6 +38,8 @@ describe("app surface matching", () => {
     "/legal/privacy",
     "/p/handle",
     "/p/handle/replays",
+    "/players/reaver-7a6b5c4d3e/replays",
+    "/players/reaver-7a6b5c4d3e/replays/game-1",
     "/definitions",
     "/sign-in",
     "/overlay/token",

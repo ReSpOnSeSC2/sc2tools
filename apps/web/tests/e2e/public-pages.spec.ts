@@ -18,6 +18,10 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/download", expectText: /download|agent/i },
   { path: "/community", expectText: /community|build/i },
   { path: "/donate", expectText: /donate|chip in|free/i },
+  {
+    path: "/players/test-player-0123456789/replays",
+    expectText: /replay archive|replays/i,
+  },
 ];
 
 for (const { path, expectText } of PAGES) {

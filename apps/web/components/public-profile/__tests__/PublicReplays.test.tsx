@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   ownerDownload: vi.fn(),
   publicDownload: vi.fn(),
   getJsonWithStatus: vi.fn(),
+  apiFetch: vi.fn(),
+  redirect: vi.fn(),
   toastSuccess: vi.fn(),
   timeline: vi.fn(),
   mechanics: vi.fn(),
@@ -22,10 +24,24 @@ vi.mock("next/navigation", () => ({
     (error as Error & { digest: string }).digest = "NEXT_NOT_FOUND";
     throw error;
   },
+  redirect: (href: string) => {
+    mocks.redirect(href);
+    const error = new Error("NEXT_REDIRECT");
+    (error as Error & { digest: string }).digest = "NEXT_REDIRECT";
+    throw error;
+  },
 }));
 
 vi.mock("@/lib/serverApi", () => ({
   getJsonWithStatus: (...args: unknown[]) => mocks.getJsonWithStatus(...args),
+}));
+
+vi.mock("@/lib/api", () => ({
+  apiFetch: (...args: unknown[]) => mocks.apiFetch(...args),
+}));
+
+vi.mock("@/lib/clientApi", () => ({
+  API_BASE: "https://api.sc2tools.test",
 }));
 
 vi.mock("@/components/analyzer/ReplayDownloadButton", () => ({
@@ -97,15 +113,18 @@ vi.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ toast: { success: mocks.toastSuccess } }),
 }));
 
-import PublicReplaysPage, {
+import PlayerReplaysPage, {
   generateMetadata as generateListMetadata,
-} from "@/app/p/[handle]/replays/page";
-import PublicReplayAnalysisPage, {
+} from "@/app/players/[player]/replays/page";
+import SharedReplayAnalysisPage, {
   generateMetadata as generateDetailMetadata,
-} from "@/app/p/[handle]/replays/[gameId]/page";
+} from "@/app/players/[player]/replays/[gameId]/page";
+import LegacyPublicReplaysPage from "@/app/p/[handle]/replays/page";
+
+const PLAYER_SLUG = "reaver-7a6b5c4d3e";
 
 const PUBLIC_LIST: ReplayLibraryResponse = {
-  profile: { handle: "coach/name", displayName: "Reaver" },
+  profile: { handle: PLAYER_SLUG, displayName: "Reaver" },
   items: [
     {
       gameId: "game/42",
@@ -161,6 +180,8 @@ afterEach(() => {
   mocks.ownerDownload.mockReset();
   mocks.publicDownload.mockReset();
   mocks.getJsonWithStatus.mockReset();
+  mocks.apiFetch.mockReset();
+  mocks.redirect.mockReset();
   mocks.toastSuccess.mockReset();
   mocks.timeline.mockReset();
   mocks.mechanics.mockReset();
@@ -188,15 +209,17 @@ describe("PublicReplayLibrary", () => {
     expect(screen.getAllByRole("button", { name: "Download shared replay" })).toHaveLength(2);
     expect(mocks.ownerDownload).not.toHaveBeenCalled();
     expect(mocks.publicDownload).toHaveBeenCalledWith(expect.objectContaining({
-      handle: "coach/name",
+      handle: PLAYER_SLUG,
       gameId: "game/42",
       available: true,
       sizeBytes: 123_456,
     }));
 
-    const detailHref = "/p/coach%2Fname/replays/game%2F42";
+    const detailHref = `/players/${PLAYER_SLUG}/replays/game%2F42`;
     expect(container.querySelectorAll(`a[href="${detailHref}"]`)).toHaveLength(3);
     expect(container.querySelectorAll(`a[href="${detailHref}#macro-breakdown"]`)).toHaveLength(2);
+    expect(screen.getByText(/View the list and download replays without an account/i)).toBeTruthy();
+    expect(screen.getByText(/Sign in for Macro and Analysis/i)).toBeTruthy();
 
     const older = new URL(
       screen.getByRole("link", { name: /Older replays/i }).getAttribute("href")!,
@@ -215,15 +238,15 @@ describe("PublicReplayLibrary", () => {
     );
     expect(newest.searchParams.has("cursor")).toBe(false);
     expect(newest.searchParams.get("search")).toBe("cannon rush");
-    expect(screen.getByText(/downloading an original replay exposes its embedded metadata/i)).toBeTruthy();
+    expect(screen.getByText(/This list and its replay downloads are public/i)).toBeTruthy();
   });
 });
 
 describe("public replay list route", () => {
   it("renders a 200 response and serializes only validated query parameters", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
-    const ui = await PublicReplaysPage({
-      params: Promise.resolve({ handle: "coach/name" }),
+    const ui = await PlayerReplaysPage({
+      params: Promise.resolve({ player: PLAYER_SLUG }),
       searchParams: Promise.resolve({
         search: "  cannon rush  ",
         result: "win",
@@ -237,23 +260,23 @@ describe("public replay list route", () => {
 
     expect(screen.getByRole("heading", { name: "Reaver's replays" })).toBeTruthy();
     expect(mocks.getJsonWithStatus).toHaveBeenCalledWith(
-      "/v1/public/replays/coach%2Fname?limit=25&sort=date_asc&search=cannon+rush&result=win&matchup=PvT&cursor=next%2Fpage",
+      `/v1/public/replays/${PLAYER_SLUG}?limit=25&sort=date_asc&search=cannon+rush&result=win&matchup=PvT&cursor=next%2Fpage`,
     );
     expect(screen.getAllByRole("button", { name: "Download shared replay" })).toHaveLength(2);
   });
 
   it("throws a real not-found sentinel for a private or missing archive", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
-    await expect(PublicReplaysPage({
-      params: Promise.resolve({ handle: "private" }),
+    await expect(PlayerReplaysPage({
+      params: Promise.resolve({ player: "private" }),
       searchParams: Promise.resolve({}),
     })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("renders transient unavailability instead of a soft deletion during an outage", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: null });
-    const ui = await PublicReplaysPage({
-      params: Promise.resolve({ handle: "coach" }),
+    const ui = await PlayerReplaysPage({
+      params: Promise.resolve({ player: "coach" }),
       searchParams: Promise.resolve({}),
     });
     render(ui);
@@ -262,12 +285,33 @@ describe("public replay list route", () => {
 
   it("does not turn an upstream service error into a false not-found", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 503 });
-    const ui = await PublicReplaysPage({
-      params: Promise.resolve({ handle: "coach" }),
+    const ui = await PlayerReplaysPage({
+      params: Promise.resolve({ player: "coach" }),
       searchParams: Promise.resolve({}),
     });
     render(ui);
     expect(screen.getByRole("heading", { level: 1, name: /Replay archive temporarily unavailable/i })).toBeTruthy();
+  });
+
+  it("normalizes a legacy handle to the canonical player slug", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
+    await expect(PlayerReplaysPage({
+      params: Promise.resolve({ player: "legacy-opaque-id" }),
+      searchParams: Promise.resolve({ result: "win" }),
+    })).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      `/players/${PLAYER_SLUG}/replays?result=win`,
+    );
+  });
+
+  it("redirects old /p replay links without dropping filters", async () => {
+    await expect(LegacyPublicReplaysPage({
+      params: Promise.resolve({ handle: "legacy token" }),
+      searchParams: Promise.resolve({ matchup: "PvT", result: ["win", "loss"] }),
+    })).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      "/players/legacy%20token/replays?matchup=PvT&result=win&result=loss",
+    );
   });
 });
 
@@ -275,55 +319,58 @@ describe("public replay list metadata", () => {
   it("uses public player identity and an encoded canonical on 200", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
     const metadata = await generateListMetadata({
-      params: Promise.resolve({ handle: "coach/name" }),
+      params: Promise.resolve({ player: PLAYER_SLUG }),
     });
     expect(String(metadata.title)).toContain("Reaver's StarCraft II replays");
-    expect(metadata.alternates?.canonical).toBe("/p/coach%2Fname/replays");
+    expect(metadata.alternates?.canonical).toBe(`/players/${PLAYER_SLUG}/replays`);
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
   });
 
   it("throws notFound before streaming metadata for a confirmed 404", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
     await expect(generateListMetadata({
-      params: Promise.resolve({ handle: "missing" }),
+      params: Promise.resolve({ player: "missing" }),
     })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("returns neutral noindex metadata when the API is unreachable", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: null });
     const metadata = await generateListMetadata({
-      params: Promise.resolve({ handle: "coach/name" }),
+      params: Promise.resolve({ player: PLAYER_SLUG }),
     });
     expect(String(metadata.description)).toMatch(/temporarily unavailable/i);
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
-    expect(metadata.alternates?.canonical).toBe("/p/coach%2Fname/replays");
+    expect(metadata.alternates?.canonical).toBe(`/players/${PLAYER_SLUG}/replays`);
   });
 });
 
-describe("public replay detail route", () => {
-  it("renders public analysis on 200 with only the share-scoped replay control", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_DETAIL, status: 200 });
-    const ui = await PublicReplayAnalysisPage({
-      params: Promise.resolve({ handle: "coach/name", gameId: "game/42" }),
+describe("authenticated shared replay detail route", () => {
+  it("loads share-scoped analysis with the signed-in server API client", async () => {
+    mocks.apiFetch.mockResolvedValue({
+      ok: true,
+      data: PUBLIC_DETAIL,
+      status: 200,
+    });
+    const ui = await SharedReplayAnalysisPage({
+      params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }),
     });
     render(ui);
 
+    expect(mocks.apiFetch).toHaveBeenCalledWith(
+      `/v1/public/replays/${PLAYER_SLUG}/game%2F42`,
+    );
     expect(screen.getByRole("heading", { name: "Reaver vs Rival" })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Back to Reaver's replays/i }).getAttribute("href")).toBe(
-      "/p/coach%2Fname/replays",
+      `/players/${PLAYER_SLUG}/replays`,
     );
     expect(screen.getByRole("button", { name: "Download shared replay" })).toBeTruthy();
     expect(mocks.ownerDownload).not.toHaveBeenCalled();
     expect(mocks.publicDownload).toHaveBeenCalledWith(expect.objectContaining({
-      handle: "coach/name",
+      handle: PLAYER_SLUG,
       gameId: "game/42",
       available: true,
       showLabel: true,
     }));
-    expect(screen.getByText(/downloading the original replay exposes its embedded metadata/i)).toBeTruthy();
-    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith(
-      "/v1/public/replays/coach%2Fname/game%2F42",
-    );
     expect(mocks.mechanics).toHaveBeenCalledWith(
       expect.objectContaining({
         emptyDescription: "Detailed macro mechanics were not captured for this replay.",
@@ -335,7 +382,8 @@ describe("public replay detail route", () => {
   });
 
   it("labels a team replay and its single modeled rival without implying 1v1", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({
+    mocks.apiFetch.mockResolvedValue({
+      ok: true,
       data: {
         ...PUBLIC_DETAIL,
         macroBreakdown: {
@@ -349,8 +397,8 @@ describe("public replay detail route", () => {
       },
       status: 200,
     });
-    const ui = await PublicReplayAnalysisPage({
-      params: Promise.resolve({ handle: "coach/name", gameId: "game/42" }),
+    const ui = await SharedReplayAnalysisPage({
+      params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }),
     });
     render(ui);
 
@@ -366,61 +414,59 @@ describe("public replay detail route", () => {
     );
   });
 
-  it("returns not-found for a confirmed missing public replay", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
-    await expect(PublicReplayAnalysisPage({
-      params: Promise.resolve({ handle: "coach", gameId: "missing" }),
+  it("returns not-found when sharing or the replay is missing", async () => {
+    mocks.apiFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      error: "not_found",
+    });
+    await expect(SharedReplayAnalysisPage({
+      params: Promise.resolve({ player: PLAYER_SLUG, gameId: "missing" }),
     })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("keeps a public replay URL transiently available during an API outage", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: null });
-    const ui = await PublicReplayAnalysisPage({
-      params: Promise.resolve({ handle: "coach", gameId: "game-42" }),
+  it("keeps an authenticated transient failure distinct from a missing replay", async () => {
+    mocks.apiFetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      error: "service_unavailable",
+    });
+    const ui = await SharedReplayAnalysisPage({
+      params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game-42" }),
     });
     render(ui);
-    expect(screen.getByRole("heading", { level: 1, name: /Replay analysis temporarily unavailable/i })).toBeTruthy();
+    expect(screen.getByRole("heading", {
+      name: "Replay analysis temporarily unavailable",
+    })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
-  it("keeps rate limiting and upstream failures distinct from missing replays", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 429 });
-    const ui = await PublicReplayAnalysisPage({
-      params: Promise.resolve({ handle: "coach", gameId: "game-42" }),
+  it("normalizes a legacy detail handle to the canonical player slug", async () => {
+    mocks.apiFetch.mockResolvedValue({
+      ok: true,
+      data: PUBLIC_DETAIL,
+      status: 200,
     });
-    render(ui);
-    expect(screen.getByRole("heading", { level: 1, name: /Replay analysis temporarily unavailable/i })).toBeTruthy();
+    await expect(SharedReplayAnalysisPage({
+      params: Promise.resolve({ player: "legacy-opaque-id", gameId: "game/42" }),
+    })).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      `/players/${PLAYER_SLUG}/replays/game%2F42`,
+    );
   });
 });
 
-describe("public replay detail metadata", () => {
-  it("describes the matchup and encodes both path segments on 200", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_DETAIL, status: 200 });
+describe("protected replay detail metadata", () => {
+  it("is generic, noindex and canonical without anonymously fetching analysis", async () => {
     const metadata = await generateDetailMetadata({
-      params: Promise.resolve({ handle: "coach/name", gameId: "game/42" }),
+      params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }),
     });
-    expect(String(metadata.title)).toContain("Reaver vs Rival — replay analysis");
+    expect(String(metadata.title)).toContain("Shared replay analysis");
+    expect(String(metadata.description)).toMatch(/Sign in/i);
     expect(metadata.alternates?.canonical).toBe(
-      "/p/coach%2Fname/replays/game%2F42",
+      `/players/${PLAYER_SLUG}/replays/game%2F42`,
     );
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
-  });
-
-  it("throws notFound for confirmed missing detail metadata", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
-    await expect(generateDetailMetadata({
-      params: Promise.resolve({ handle: "coach", gameId: "missing" }),
-    })).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("returns neutral noindex detail metadata when the API is unreachable", async () => {
-    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: null });
-    const metadata = await generateDetailMetadata({
-      params: Promise.resolve({ handle: "coach/name", gameId: "game/42" }),
-    });
-    expect(String(metadata.description)).toMatch(/temporarily unavailable/i);
-    expect(metadata.robots).toMatchObject({ index: false, follow: false });
-    expect(metadata.alternates?.canonical).toBe(
-      "/p/coach%2Fname/replays/game%2F42",
-    );
+    expect(mocks.getJsonWithStatus).not.toHaveBeenCalled();
   });
 });

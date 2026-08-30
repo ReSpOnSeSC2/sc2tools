@@ -5,8 +5,10 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
-const REPLAY_SHARE_ID_BYTES = 24;
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
+const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
+const REPLAY_SHARE_SLUG_MAX_LENGTH = 64;
+const REPLAY_SHARE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[a-f0-9]{10}$/;
 
 /**
  * User service. The `users` collection maps Clerk user ids → our
@@ -215,9 +217,9 @@ class UsersService {
 
   /**
    * Read the replay-library sharing switch without involving (or exposing)
-   * the user's broader profile document. Active links use an opaque random
-   * identifier instead of an account id. A legacy enabled row without that
-   * identifier is repaired on read before a link is returned.
+   * the user's broader profile document. Active links use a stable player slug
+   * instead of an account id. A legacy enabled row without a slug is repaired
+   * on read before a link is returned.
    *
    * @param {string} userId
    * @returns {Promise<{enabled: boolean, handle: string|null}>}
@@ -229,17 +231,19 @@ class UsersService {
         projection: {
           _id: 0,
           userId: 1,
+          displayName: 1,
           "replaySharing.enabled": 1,
+          "replaySharing.slug": 1,
           "replaySharing.shareId": 1,
         },
       },
     );
-    const handle = validReplayShareId(doc?.replaySharing?.shareId);
-    if (doc?.replaySharing?.enabled === true && !handle) {
-      return this.setReplaySharing(userId, true);
+    if (doc?.replaySharing?.enabled !== true) {
+      return { enabled: false, handle: null };
     }
-    const enabled = doc?.replaySharing?.enabled === true && Boolean(handle);
-    return { enabled, handle: enabled ? handle : null };
+    const slug = validReplayShareSlug(doc.replaySharing?.slug)
+      || await this._ensureActiveReplaySharingSlug(userId);
+    return { enabled: Boolean(slug), handle: slug };
   }
 
   /**
@@ -249,9 +253,11 @@ class UsersService {
    *
    * @param {string} userId
    * @param {boolean} enabled
-   * Enabling an already-active link is idempotent. Disabling removes its
-   * opaque id, so a later re-enable creates a different link and previously
-   * revoked recipients do not silently regain access.
+   * Enabling an already-active link is idempotent. The canonical player slug
+   * is retained while disabled and across profile-name changes, so every
+   * player has one stable, human-facing replay URL. A legacy opaque share id
+   * is removed on disable; it remains an alias only until its owner revokes
+   * the old link.
    *
    * @returns {Promise<{enabled: boolean, handle: string|null}>}
    */
@@ -279,9 +285,9 @@ class UsersService {
       return { enabled: false, handle: null };
     }
 
-    // A duplicate random id is cryptographically improbable, but the unique
+    // A duplicate suffix is cryptographically improbable, but the unique
     // index is authoritative. Retry both that case and a concurrent first
-    // enable; the winner's active id is returned on the next read.
+    // enable; the winner's canonical slug is returned on the next read.
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const current = await this.db.users.findOne(
         { userId },
@@ -289,36 +295,50 @@ class UsersService {
           projection: {
             _id: 0,
             userId: 1,
+            displayName: 1,
             "replaySharing.enabled": 1,
+            "replaySharing.slug": 1,
             "replaySharing.shareId": 1,
           },
         },
       );
       if (!current) throw replaySharingUserNotFound();
-      const currentHandle = validReplayShareId(current.replaySharing?.shareId);
-      if (current.replaySharing?.enabled === true && currentHandle) {
-        return { enabled: true, handle: currentHandle };
+      const currentSlug = validReplayShareSlug(current.replaySharing?.slug);
+      if (currentSlug) {
+        if (current.replaySharing?.enabled !== true) {
+          const result = await this.db.users.updateOne(
+            { userId, "replaySharing.slug": currentSlug },
+            {
+              $set: {
+                "replaySharing.enabled": true,
+                "replaySharing.updatedAt": new Date(),
+              },
+            },
+          );
+          if (result.matchedCount === 0) continue;
+        }
+        return { enabled: true, handle: currentSlug };
       }
 
-      const shareId = crypto.randomBytes(REPLAY_SHARE_ID_BYTES).toString("base64url");
+      const slug = createReplayShareSlug(current.displayName);
       try {
         const result = await this.db.users.updateOne(
           {
             userId,
             $or: [
-              { "replaySharing.enabled": { $ne: true } },
-              { "replaySharing.shareId": { $not: REPLAY_SHARE_ID_RE } },
+              { "replaySharing.slug": { $exists: false } },
+              { "replaySharing.slug": { $not: REPLAY_SHARE_SLUG_RE } },
             ],
           },
           {
             $set: {
               "replaySharing.enabled": true,
-              "replaySharing.shareId": shareId,
+              "replaySharing.slug": slug,
               "replaySharing.updatedAt": new Date(),
             },
           },
         );
-        if (result.matchedCount > 0) return { enabled: true, handle: shareId };
+        if (result.matchedCount > 0) return { enabled: true, handle: slug };
       } catch (err) {
         if (/** @type {any} */ (err)?.code !== 11000) throw err;
       }
@@ -340,15 +360,37 @@ class UsersService {
    * @returns {Promise<{userId: string, profile: {handle: string, displayName: string}} | null>}
    */
   async resolveReplaySharing(handle) {
-    if (!validReplayShareId(handle)) return null;
-    const doc = await this.db.users.findOne(
-      {
-        "replaySharing.shareId": handle,
-        "replaySharing.enabled": true,
-      },
-      { projection: { _id: 0, userId: 1, displayName: 1 } },
-    );
+    const slug = validReplayShareSlug(handle);
+    const legacyShareId = validReplayShareId(handle);
+    if (!slug && !legacyShareId) return null;
+    const projection = {
+      _id: 0,
+      userId: 1,
+      displayName: 1,
+      "replaySharing.slug": 1,
+    };
+    // A 32-character legacy id can theoretically also satisfy the slug
+    // grammar. Canonical slugs take precedence, then the legacy alias is
+    // attempted only on a miss so one string cannot resolve ambiguously.
+    let doc = slug
+      ? await this.db.users.findOne(
+        { "replaySharing.slug": slug, "replaySharing.enabled": true },
+        { projection },
+      )
+      : null;
+    if (!doc && legacyShareId) {
+      doc = await this.db.users.findOne(
+        {
+          "replaySharing.shareId": legacyShareId,
+          "replaySharing.enabled": true,
+        },
+        { projection },
+      );
+    }
     if (!doc || typeof doc.userId !== "string") return null;
+    const canonicalSlug = validReplayShareSlug(doc.replaySharing?.slug)
+      || await this._ensureActiveReplaySharingSlug(doc.userId);
+    if (!canonicalSlug) return null;
     const publicName = typeof doc.displayName === "string"
       ? doc.displayName
         .normalize("NFKC")
@@ -359,8 +401,59 @@ class UsersService {
     const displayName = publicName || "SC2 Player";
     return {
       userId: doc.userId,
-      profile: { handle, displayName },
+      profile: { handle: canonicalSlug, displayName },
     };
+  }
+
+  /**
+   * Lazily migrate an enabled legacy share to a canonical player slug. The
+   * update predicate includes ``enabled: true`` so a concurrent disable wins
+   * and this read path can never resurrect a revoked library.
+   *
+   * @param {string} userId
+   * @returns {Promise<string|null>}
+   */
+  async _ensureActiveReplaySharingSlug(userId) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const current = await this.db.users.findOne(
+        { userId, "replaySharing.enabled": true },
+        {
+          projection: {
+            _id: 0,
+            userId: 1,
+            displayName: 1,
+            "replaySharing.slug": 1,
+          },
+        },
+      );
+      if (!current) return null;
+      const currentSlug = validReplayShareSlug(current.replaySharing?.slug);
+      if (currentSlug) return currentSlug;
+
+      const nextSlug = createReplayShareSlug(current.displayName);
+      try {
+        const result = await this.db.users.updateOne(
+          {
+            userId,
+            "replaySharing.enabled": true,
+            $or: [
+              { "replaySharing.slug": { $exists: false } },
+              { "replaySharing.slug": { $not: REPLAY_SHARE_SLUG_RE } },
+            ],
+          },
+          {
+            $set: {
+              "replaySharing.slug": nextSlug,
+              "replaySharing.updatedAt": new Date(),
+            },
+          },
+        );
+        if (result.matchedCount > 0) return nextSlug;
+      } catch (err) {
+        if (/** @type {any} */ (err)?.code !== 11000) throw err;
+      }
+    }
+    return null;
   }
 
   /**
@@ -1135,6 +1228,39 @@ function validReplayShareId(value) {
   return typeof value === "string" && REPLAY_SHARE_ID_RE.test(value)
     ? value
     : null;
+}
+
+/** @param {unknown} value @returns {string|null} */
+function validReplayShareSlug(value) {
+  return typeof value === "string"
+    && value.length <= REPLAY_SHARE_SLUG_MAX_LENGTH
+    && REPLAY_SHARE_SLUG_RE.test(value)
+    ? value
+    : null;
+}
+
+/**
+ * Build a readable but collision-resistant player URL segment. The random
+ * suffix is deliberately lowercase hexadecimal so links are unambiguous when
+ * copied between case-sensitive and case-insensitive clients.
+ *
+ * @param {unknown} displayName
+ * @returns {string}
+ */
+function createReplayShareSlug(displayName) {
+  const suffix = crypto
+    .randomBytes(REPLAY_SHARE_SLUG_SUFFIX_BYTES)
+    .toString("hex");
+  const maxBaseLength = REPLAY_SHARE_SLUG_MAX_LENGTH - suffix.length - 1;
+  const base = (typeof displayName === "string" ? displayName : "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, maxBaseLength)
+    .replace(/-+$/g, "") || "player";
+  return `${base}-${suffix}`;
 }
 
 /** @returns {Error & {status:number,code:string}} */

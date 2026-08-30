@@ -31,6 +31,18 @@ function makeDeps(overrides = {}) {
     replayFiles: {
       prepareDownload: jest.fn(),
     },
+    auth: (
+      /** @type {import("express").Request} */ req,
+      /** @type {import("express").Response} */ res,
+      /** @type {import("express").NextFunction} */ next,
+    ) => {
+      if (req.get("Authorization") !== "Bearer viewer") {
+        res.status(401).json({ error: { code: "missing_token" } });
+        return;
+      }
+      req.auth = { userId: "signed-in-viewer", source: "clerk" };
+      next();
+    },
     rateLimitPerMinute: 1_000,
     ...overrides,
   };
@@ -157,7 +169,7 @@ describe("public replay archive routes", () => {
     );
   });
 
-  test("serves sanitized public analysis without private detail fields", async () => {
+  test("requires sign-in for analysis and reads the shared owner's data", async () => {
     const deps = makeDeps();
     deps.replayLibrary.getDetail.mockResolvedValue({
       game: {
@@ -196,11 +208,18 @@ describe("public replay archive routes", () => {
       raw_log: "secret",
     });
 
-    const response = await request(makeApp(deps)).get(
-      "/v1/public/replays/owner-1/g1",
-    );
+    await request(makeApp(deps))
+      .get("/v1/public/replays/owner-1/g1")
+      .expect(401);
+
+    const response = await request(makeApp(deps))
+      .get("/v1/public/replays/owner-1/g1")
+      .set("Authorization", "Bearer viewer");
 
     expect(response.status).toBe(200);
+    expect(deps.replayLibrary.getDetail).toHaveBeenCalledWith("owner-1", "g1");
+    expect(deps.perGame.macroBreakdown).toHaveBeenCalledWith("owner-1", "g1");
+    expect(deps.perGame.buildOrder).toHaveBeenCalledWith("owner-1", "g1");
     expect(response.body.game).toMatchObject({
       gameId: "g1",
       replayAvailable: true,

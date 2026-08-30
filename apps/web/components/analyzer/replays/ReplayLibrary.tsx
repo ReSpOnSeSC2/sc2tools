@@ -261,7 +261,7 @@ function ReplayShareControl() {
   const [copied, setCopied] = useState(false);
   const sharing = sharingReq.data;
   const handle = sharing?.enabled ? sharing.handle : null;
-  const path = handle ? `/p/${encodeURIComponent(handle)}/replays` : null;
+  const path = handle ? `/players/${encodeURIComponent(handle)}/replays` : null;
 
   async function setEnabled(enabled: boolean): Promise<ReplaySharingResponse | null> {
     if (saving) return null;
@@ -284,7 +284,7 @@ function ReplayShareControl() {
 
   async function copyLink(targetHandle = handle) {
     if (!targetHandle) return;
-    const targetPath = `/p/${encodeURIComponent(targetHandle)}/replays`;
+    const targetPath = `/players/${encodeURIComponent(targetHandle)}/replays`;
     const href = `${window.location.origin}${targetPath}`;
     try {
       await navigator.clipboard.writeText(href);
@@ -317,7 +317,7 @@ function ReplayShareControl() {
         open={open}
         onClose={() => setOpen(false)}
         title="Share your replay archive"
-        description="A private-by-default link for teammates, coaches and viewers."
+        description="A private-by-default player page for teammates, coaches and viewers."
         size="md"
         footer={
           sharingReq.isLoading ? (
@@ -351,8 +351,8 @@ function ReplayShareControl() {
               <div className="flex items-start gap-3">
                 {sharing?.enabled && handle ? <Tv2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden /> : <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />}
                 <div className="min-w-0">
-                  <p className="font-semibold text-text">{sharing?.enabled && handle ? "Your page is public to anyone with the link" : "Your replay archive is private"}</p>
-                  <p className="mt-1 break-all font-mono text-micro text-text-muted">{path || "A new opaque link is created when you turn sharing on."}</p>
+                  <p className="font-semibold text-text">{sharing?.enabled && handle ? "Your player replay page is public" : "Your replay archive is private"}</p>
+                  <p className="mt-1 break-all font-mono text-micro text-text-muted">{path || "Your personal player replay address is created when you turn sharing on."}</p>
                   {path ? (
                     <Link href={path} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md text-caption font-semibold text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                       Preview public page <ExternalLink className="h-3.5 w-3.5" aria-hidden />
@@ -365,13 +365,13 @@ function ReplayShareControl() {
             <div className="space-y-2">
               <h3 className="flex items-center gap-2 text-caption font-semibold text-text"><ShieldCheck className="h-4 w-4 text-accent-cyan" aria-hidden /> Exactly what visitors can see</h3>
               <p className="text-caption leading-relaxed text-text-muted">
-                Turning this on shares every synced replay in this archive—not only games visible under your current dashboard filters. Visitors can see replay dates, maps, results, player display names and races, game-time MMR, detected builds and strategies, macro metrics, matched Twitch or YouTube VOD links, public analysis and macro breakdowns, and downloads for archived original replay files.
+                Turning this on shares every synced replay in this archive—not only games visible under your current dashboard filters. Anyone can see replay dates, maps, results, player display names and races, game-time MMR, detected builds and strategies, macro scores, matched Twitch or YouTube VOD links, and download archived original replay files. Replay Analysis and the full Macro breakdown require the visitor to sign in to SC2 Tools.
               </p>
               <p className="text-caption leading-relaxed text-text-muted">
                 An original .SC2Replay can contain player/account identifiers, chat, team information, and other data Blizzard embeds in the file. Starting a download also gives that visitor a temporary storage URL, which can reveal the storage host and object path until it expires in about one minute.
               </p>
               <p className="text-caption leading-relaxed text-text-muted">
-                Turn sharing off at any time to disable the page and new downloads. That share-page URL is revoked; re-enabling creates a different opaque link. A download URL already issued before revocation can continue working until its one-minute expiry.
+                Turn sharing off at any time to disable the page, analysis access and new downloads. Your player replay address stays assigned to you and becomes available again if you re-enable sharing. A download URL already issued before sharing is disabled can continue working until its one-minute expiry.
               </p>
             </div>
           </div>

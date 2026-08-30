@@ -162,10 +162,11 @@ describe("normal and protected routes", () => {
   });
 });
 
-describe("public replay capability routes", () => {
+describe("shared player replay routes", () => {
   it.each([
-    "/p/opaque-share-id/replays",
-    "/p/opaque-share-id/replays/01JREPLAY",
+    "/players/reaver-7a6b5c4d3e/replays",
+    "/players/reaver-7a6b5c4d3e/replays/01JREPLAY",
+    "/p/legacy-opaque-share-id/replays",
   ])("does not mount analytics on %s", (pathname) => {
     renderAt(pathname);
 
@@ -178,8 +179,8 @@ describe("public replay capability routes", () => {
     expect(screen.getByTestId("service-worker")).toBeTruthy();
   });
 
-  it.each(["/", "/app/replays", "/p/opaque-share-id/replays-archive"])(
-    "keeps analytics mounted on the non-capability path %s",
+  it.each(["/", "/app/replays", "/players/reaver/replays-archive"])(
+    "keeps analytics mounted outside shared replay paths at %s",
     (pathname) => {
       renderAt(pathname);
 

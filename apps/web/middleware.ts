@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { isSharedReplayDetailPath } from "./lib/replayRouteAccess";
 
 const isProtected = createRouteMatcher([
   "/app(.*)",
@@ -19,9 +20,19 @@ const isProtected = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  if (isProtected(req)) await auth.protect();
+  if (isProtected(req) || isSharedReplayDetailPath(req.nextUrl.pathname)) {
+    await auth.protect();
+  }
 });
 
 export const config = {
-  matcher: ["/((?!_next|.*\\..*).*)", "/(api|trpc)(.*)"],
+  matcher: [
+    "/((?!_next|.*\\..*).*)",
+    "/(api|trpc)(.*)",
+    // The general matcher skips dotted paths as static assets. Replay ids may
+    // contain dots, so explicitly run middleware for both replay URL families;
+    // isSharedReplayDetailPath still leaves their public list/assets alone.
+    "/players/(.*)",
+    "/p/(.*)",
+  ],
 };

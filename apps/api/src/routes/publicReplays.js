@@ -10,10 +10,11 @@ const rateLimit =
 const PUBLIC_REPLAYS_RATE_LIMIT_PER_MIN = 300;
 
 /**
- * Public, explicitly opt-in replay archive. The user requested shareable
- * rows plus public macro/analysis and Twitch/YouTube links; this router keeps
- * that capability behind a separate default-off switch and reconstructs
- * every response from allow-listed fields.
+ * Explicitly opt-in replay archive. Replay rows, matched Twitch/YouTube links,
+ * and original-file downloads are public once the owner enables sharing.
+ * Per-game analysis uses the standard account auth gate while still resolving
+ * data through the shared owner's identity. Every response is reconstructed
+ * from allow-listed fields.
  *
  * @param {{
  *   replayLibrary: import('../services/replayLibrary').ReplayLibraryService,
@@ -21,11 +22,18 @@ const PUBLIC_REPLAYS_RATE_LIMIT_PER_MIN = 300;
  *   gameVods: {resolveForGames(userId:string, games:object[], opts?:object): Promise<any>},
  *   perGame: import('../services/types').PerGameComputeService,
  *   replayFiles?: import('../services/replayFiles').ReplayFilesService|null,
+ *   auth: import('express').RequestHandler,
  *   rateLimitPerMinute?: number,
  * }} deps
  */
 function buildPublicReplaysRouter(deps) {
-  if (!deps?.replayLibrary || !deps?.users || !deps?.gameVods || !deps?.perGame) {
+  if (
+    !deps?.replayLibrary
+    || !deps?.users
+    || !deps?.gameVods
+    || !deps?.perGame
+    || typeof deps?.auth !== "function"
+  ) {
     throw new Error("buildPublicReplaysRouter: replay services required");
   }
   const router = express.Router();
@@ -39,7 +47,7 @@ function buildPublicReplaysRouter(deps) {
     standardHeaders: true,
     legacyHeaders: false,
     // Next server-renders public archives, so all viewers can share one web
-    // egress IP. Include the opaque archive id to prevent traffic to one
+    // egress IP. Include the player archive slug to prevent traffic to one
     // shared page from exhausting every player's replay-page bucket.
     keyGenerator: (/** @type {import('express').Request} */ req) =>
       `${req.ip}:${String(req.params.handle || "")}`,
@@ -91,6 +99,7 @@ function buildPublicReplaysRouter(deps) {
   router.get(
     "/public/replays/:handle/:gameId",
     limiter,
+    deps.auth,
     async (req, res, next) => {
       try {
         const shared = await deps.users.resolveReplaySharing(

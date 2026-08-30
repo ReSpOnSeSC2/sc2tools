@@ -32,7 +32,7 @@ export function PublicReplayAnalysis({ data }: { data: PublicReplayDetailRespons
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const { profile, game, macroBreakdown, buildOrder, streams } = data;
-  const root = `/p/${encodeURIComponent(profile.handle)}/replays`;
+  const root = `/players/${encodeURIComponent(profile.handle)}/replays`;
   const canonicalPath = `${root}/${encodeURIComponent(game.gameId)}`;
   const opponentName = game.opponent?.displayName?.trim() || "Unknown opponent";
   const matchup = matchupLabel(game.myRace, game.opponent?.race);

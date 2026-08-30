@@ -1027,6 +1027,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       gameVods: services.gameVods,
       perGame: services.perGame,
       replayFiles: services.replayFiles,
+      auth,
     }),
   );
   // Multichat overlay relays — overlay-token auth (path segment), no
