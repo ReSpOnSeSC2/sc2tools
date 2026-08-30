@@ -127,9 +127,13 @@ describe("ReplayList", () => {
     expect(screen.getAllByText("Crimson Court LE")).toHaveLength(2);
     expect(container.querySelectorAll('time[datetime="2026-08-28T21:04:00.000Z"]')).toHaveLength(2);
 
-    expect(
-      container.querySelectorAll<HTMLAnchorElement>('a[href="/app/game/game%2F42"]'),
-    ).toHaveLength(3);
+    const ownerAnalysisLinks = screen.getAllByRole("link", {
+      name: /Open replay analysis for/i,
+    });
+    expect(ownerAnalysisLinks).toHaveLength(3);
+    expect(ownerAnalysisLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(3).fill("/app/game/game%2F42"),
+    );
 
     const streamLinks = screen.getAllByRole("link", {
       name: /Watch You POV on YouTube at 0:37 - Reaver/i,
@@ -160,7 +164,7 @@ describe("ReplayList", () => {
   });
 
   it("uses protected analysis URLs and delegates downloads to the public share-scoped control", () => {
-    const { container } = render(
+    render(
       <ReplayList
         items={[REPLAY]}
         owner={false}
@@ -170,10 +174,20 @@ describe("ReplayList", () => {
     );
 
     const detailHref = "/players/coach%20name/replays/game%2F42";
-    expect(container.querySelectorAll(`a[href="${detailHref}"]`)).toHaveLength(3);
-    expect(container.querySelectorAll(`a[href="${detailHref}#macro-breakdown"]`)).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: /Sign in to open replay analysis/i })).toHaveLength(3);
-    expect(screen.getAllByRole("link", { name: /Sign in to open macro breakdown/i })).toHaveLength(2);
+    const analysisLinks = screen.getAllByRole("link", {
+      name: /Sign in to open replay analysis/i,
+    });
+    expect(analysisLinks).toHaveLength(3);
+    expect(analysisLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(3).fill(detailHref),
+    );
+    const macroLinks = screen.getAllByRole("link", {
+      name: /Sign in to open macro breakdown/i,
+    });
+    expect(macroLinks).toHaveLength(2);
+    expect(macroLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(2).fill(`${detailHref}#macro-breakdown`),
+    );
     expect(screen.getAllByRole("button", { name: "Download shared replay" })).toHaveLength(2);
     expect(downloadMock).not.toHaveBeenCalled();
     expect(publicDownloadMock).toHaveBeenCalledWith(expect.objectContaining({

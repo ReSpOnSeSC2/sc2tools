@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ReplayList } from "@/components/analyzer/replays/ReplayList";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
+import { PublicReplayShareButton } from "@/components/public-profile/PublicReplayShareButton";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -51,6 +52,12 @@ export function PublicReplayLibrary({
             }
             title={`${profile.displayName}'s replays`}
             description="A game-by-game record with public replay downloads and timestamped stream POVs, plus signed-in replay analysis and macro breakdowns."
+            actions={
+              <PublicReplayShareButton
+                path={root}
+                playerName={profile.displayName}
+              />
+            }
           />
           <div className="mt-5 flex flex-col gap-2 rounded-xl border border-border bg-bg-elevated/55 p-3 text-caption text-text-muted sm:flex-row sm:items-center sm:gap-5">
             <span className="inline-flex items-center gap-2">

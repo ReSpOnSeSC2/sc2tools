@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   PublicReplayDetailResponse,
   ReplayLibraryResponse,
@@ -111,6 +111,7 @@ vi.mock("@/components/analyzer/game/BuildOrderColumns", () => ({
 
 vi.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ toast: { success: mocks.toastSuccess } }),
+  useToastOptional: () => null,
 }));
 
 import PlayerReplaysPage, {
@@ -122,6 +123,10 @@ import SharedReplayAnalysisPage, {
 import LegacyPublicReplaysPage from "@/app/p/[handle]/replays/page";
 
 const PLAYER_SLUG = "reaver-7a6b5c4d3e";
+const originalNavigatorShare = Object.getOwnPropertyDescriptor(
+  navigator,
+  "share",
+);
 
 const PUBLIC_LIST: ReplayLibraryResponse = {
   profile: { handle: PLAYER_SLUG, displayName: "Reaver" },
@@ -186,11 +191,21 @@ afterEach(() => {
   mocks.timeline.mockReset();
   mocks.mechanics.mockReset();
   mocks.buildOrders.mockReset();
+  if (originalNavigatorShare) {
+    Object.defineProperty(navigator, "share", originalNavigatorShare);
+  } else {
+    Reflect.deleteProperty(navigator, "share");
+  }
 });
 
 describe("PublicReplayLibrary", () => {
-  it("renders share-safe replay rows and preserves filters across cursor links", () => {
-    const { container } = render(
+  it("renders share-safe replay rows and preserves filters across cursor links", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: share,
+    });
+    render(
       <PublicReplayLibrary
         data={PUBLIC_LIST}
         query={{
@@ -216,8 +231,29 @@ describe("PublicReplayLibrary", () => {
     }));
 
     const detailHref = `/players/${PLAYER_SLUG}/replays/game%2F42`;
-    expect(container.querySelectorAll(`a[href="${detailHref}"]`)).toHaveLength(3);
-    expect(container.querySelectorAll(`a[href="${detailHref}#macro-breakdown"]`)).toHaveLength(2);
+    const analysisLinks = screen.getAllByRole("link", {
+      name: /Sign in to open replay analysis/i,
+    });
+    expect(analysisLinks).toHaveLength(3);
+    expect(analysisLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(3).fill(detailHref),
+    );
+    const macroLinks = screen.getAllByRole("link", {
+      name: /Sign in to open macro breakdown/i,
+    });
+    expect(macroLinks).toHaveLength(2);
+    expect(macroLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(2).fill(`${detailHref}#macro-breakdown`),
+    );
+    expect(screen.getByRole("button", {
+      name: "Share Reaver's replay page",
+    })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", {
+      name: "Share Reaver's replay page",
+    }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      url: `${window.location.origin}/players/${PLAYER_SLUG}/replays`,
+    })));
     expect(screen.getByText(/View the list and download replays without an account/i)).toBeTruthy();
     expect(screen.getByText(/Sign in for Macro and Analysis/i)).toBeTruthy();
 
