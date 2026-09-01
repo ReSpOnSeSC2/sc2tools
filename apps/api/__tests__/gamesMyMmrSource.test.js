@@ -107,6 +107,73 @@ describe("GamesService game-time MMR compatibility", () => {
   });
 });
 
+describe("GamesService opponent identity signature storage", () => {
+  test("keeps a bounded private signature on the slim row", async () => {
+    await service.upsert(
+      "u1",
+      game({
+        opponent: {
+          pulseId: "barcode-target",
+          race: "Protoss",
+          playSignature: {
+            version: 1,
+            windowSec: 600,
+            controlGroups: {
+              events: 31,
+              activeSeconds: 600,
+              slots: [
+                { slot: 2, set: 4, add: 1, recall: 25, doubleTap: 3 },
+              ],
+              transitions: [{ from: 2, to: 4, count: 6 }],
+            },
+            build: {
+              milestones: [{ atSec: 70, name: "Gateway" }],
+            },
+          },
+        },
+      }),
+    );
+
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent.playSignature).toEqual({
+      version: 1,
+      windowSec: 600,
+      controlGroups: {
+        events: 31,
+        activeSeconds: 600,
+        slots: [
+          { slot: 2, set: 4, add: 1, recall: 25, doubleTap: 3 },
+        ],
+        transitions: [{ from: 2, to: 4, count: 6 }],
+      },
+      build: { milestones: [{ atSec: 70, name: "Gateway" }] },
+    });
+
+    const { items: [publicRow] } = await service.list("u1", { limit: 10 });
+    expect(publicRow.opponent).not.toHaveProperty("playSignature");
+  });
+
+  test("drops malformed signature branches on direct service writes", async () => {
+    await service.upsert(
+      "u1",
+      game({
+        opponent: {
+          pulseId: "barcode-target",
+          race: "Protoss",
+          playSignature: {
+            version: 99,
+            windowSec: 600,
+            build: { milestones: [{ atSec: 70, name: "Gateway" }] },
+          },
+        },
+      }),
+    );
+
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).not.toHaveProperty("playSignature");
+  });
+});
+
 describe("GamesService server-owned replay archive marker", () => {
   test("agent game upserts cannot forge or erase replayFile", async () => {
     const verified = {

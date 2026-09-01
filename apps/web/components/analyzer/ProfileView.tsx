@@ -17,7 +17,11 @@ import {
 } from "@/lib/opponentGroups";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
-import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
+import {
+  isBarcodeName,
+  pickPulseLabel,
+  sc2pulseCharacterUrl,
+} from "@/lib/sc2pulse";
 import { OpponentReplayHistory } from "./OpponentReplayHistory";
 import { LadderContextCard } from "./LadderContextCard";
 import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
@@ -40,6 +44,7 @@ import {
   OpponentNotesCard,
   type OpponentNotesValue,
 } from "./OpponentNotesCard";
+import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
 
 type OpponentProfileResp = {
   pulseId?: string;
@@ -202,6 +207,18 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         }))
         .sort((a, b) => b.total - a.total);
   const opponentName = data.name || data.pulseId || pulseId;
+  const resolvedMmr = races?.topMmr ?? data.mmr;
+  // Avoid the matcher request for normal readable profiles. The API repeats
+  // this eligibility gate authoritatively because race/MMR enrichment can
+  // finish between these parallel requests.
+  const identityCandidatesEnabled =
+    !racesLoading
+    && isBarcodeName(data.name || data.displayNameSample)
+    && !data.revealedName
+    && (
+      !data.pulseCharacterId
+      || !(typeof resolvedMmr === "number" && resolvedMmr > 0)
+    );
   const handleSelectGame = (id: string) => {
     setPendingGameId(id);
     setPendingGameSeq((n) => n + 1);
@@ -263,6 +280,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             { revalidate: false },
           );
         }}
+      />
+
+      <OpponentIdentityCandidates
+        pulseId={pulseId}
+        enabled={identityCandidatesEnabled}
+        race={data.oppRaceModal}
       />
 
       <RaceMmrPanel breakdown={races} isLoading={racesLoading} />

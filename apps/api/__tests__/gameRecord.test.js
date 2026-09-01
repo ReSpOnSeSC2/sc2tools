@@ -28,6 +28,80 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  test("accepts a bounded opponent behavioral signature", () => {
+    const r = validateGameRecord({
+      gameId: "identity-signature",
+      date: "2026-09-01T12:00:00.000Z",
+      result: "Defeat",
+      myRace: "Terran",
+      map: "Ultralove",
+      opponent: {
+        race: "Protoss",
+        playSignature: {
+          version: 1,
+          windowSec: 600,
+          controlGroups: {
+            events: 42,
+            activeSeconds: 600,
+            slots: [
+              { slot: 1, set: 3, add: 1, recall: 30, doubleTap: 4 },
+            ],
+            transitions: [{ from: 1, to: 4, count: 7 }],
+          },
+          build: {
+            milestones: [
+              { atSec: 70, name: "Gateway" },
+              { atSec: 105, name: "CyberneticsCore" },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(r.valid).toBe(true);
+  });
+
+  test.each([
+    { version: 2, windowSec: 600, build: { milestones: [{ atSec: 70, name: "Gateway" }] } },
+    { version: 1, windowSec: 600 },
+    {
+      version: 1,
+      windowSec: 600,
+      controlGroups: { events: 1, activeSeconds: 60, slots: [] },
+    },
+    {
+      version: 1,
+      windowSec: 600,
+      controlGroups: {
+        events: 1,
+        activeSeconds: 600,
+        slots: Array.from({ length: 11 }, (_, slot) => ({
+          slot: slot % 10,
+          set: 1,
+          add: 0,
+          recall: 0,
+          doubleTap: 0,
+        })),
+      },
+    },
+    {
+      version: 1,
+      windowSec: 600,
+      build: { milestones: [{ atSec: 601, name: "Gateway" }] },
+    },
+  ])("rejects an invalid or unbounded behavioral signature: %#", (playSignature) => {
+    const r = validateGameRecord({
+      gameId: "bad-identity-signature",
+      date: "2026-09-01T12:00:00.000Z",
+      result: "Defeat",
+      myRace: "Terran",
+      map: "Ultralove",
+      opponent: { race: "Protoss", playSignature },
+    });
+
+    expect(r.valid).toBe(false);
+  });
+
   test("fails fast without retaining one error per invalid heavy-array item", () => {
     const r = validateGameRecord({
       gameId: "bounded-validation-errors",

@@ -92,9 +92,15 @@ if (-not (Test-Path $VenvDir)) {
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 $VenvPip    = Join-Path $VenvDir "Scripts\pip.exe"
 
-Invoke-Step "Installing build deps" {
+Invoke-Step "Upgrading build tooling" {
     & $VenvPython -m pip install --upgrade pip wheel setuptools
+}
+
+Invoke-Step "Installing agent requirements" {
     & $VenvPip install -r (Join-Path $AgentRoot "requirements.txt")
+}
+
+Invoke-Step "Installing PyInstaller" {
     & $VenvPip install pyinstaller==6.11.0
 }
 

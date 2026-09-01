@@ -75,6 +75,19 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Unresolved barcode profiles now surface private identity leads** — when an
+  opponent has no dependable SC2Pulse identity or MMR, SC2 Tools compares a
+  bounded ten-minute fingerprint of their control-group habits and build-order
+  milestones with same-race opponents from that signed-in user's own replay
+  history. The profile presents up to five candidates with likelihood, pattern
+  match, sample strength, and explainable control-group / build / matchup
+  evidence, while reserving visible probability for another or unknown
+  player. These are
+  deliberately labeled as leads rather than confirmations; sparse evidence
+  lowers confidence, results are private and non-cacheable, and the behavior
+  signature is excluded from every public replay projection. New evidence is
+  collected by Windows Agent 0.16.1.
+
 - **Custom builds can identify and require proxy buildings** — replay-created
   rules reuse the existing 50-unit proxy geometry and preserve the matched
   building and timing as proxy evidence. The editor exposes an optional

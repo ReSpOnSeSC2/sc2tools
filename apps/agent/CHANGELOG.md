@@ -2,6 +2,42 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.1
+
+### Added - private barcode identity leads
+
+- New replay uploads include a compact, versioned behavior signature for each
+  opponent: the first ten minutes of control-group set, add, recall,
+  double-tap, and transition habits, plus a bounded sequence of build-order
+  milestones. Timing uses real game seconds and short games report their true
+  observation window, so fast games are not scored as if ten minutes of input
+  had been observed.
+- When an unresolved barcode has no dependable SC2Pulse identity or MMR, its
+  opponent profile can now compare that evidence with same-race opponents in
+  the signed-in user's own replay history and show up to five identity leads.
+  Every lead includes an honest likelihood estimate, an independent pattern
+  match score, sample strength, and separate control-group, build-order,
+  matchup, and timing evidence instead of presenting a guess as a confirmed
+  identity.
+- The result reserves explicit probability for "another or unknown player",
+  handles sparse evidence with lower confidence, and keeps a slow SC2Pulse
+  lookup off the profile's critical path. The matcher is owner-scoped,
+  responses are private and non-cacheable, and behavior signatures never
+  enter public replay projections.
+
+### Fixed - release packaging integrity
+
+- Clean installer builds now stop immediately if any dependency-install step
+  fails. A later successful PyInstaller install can no longer mask a failed
+  agent-requirements install and produce an incomplete Windows bundle.
+
+### Migration note
+
+- Behavior evidence begins with replays parsed by agent 0.16.1. Existing
+  replay rows remain valid and are ignored safely until they are reprocessed;
+  candidate quality grows as both unresolved and known opponents accumulate
+  signatures from this version.
+
 ## 0.16.0
 
 ### Added - proxy-aware custom builds

@@ -24,6 +24,9 @@ const { sanitiseRequestForLog } = require("./middleware/requestLogging");
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
 const { OpponentsService } = require("./services/opponents");
+const {
+  OpponentIdentityMatcherService,
+} = require("./services/opponentIdentityMatcher");
 const { GamesService } = require("./services/games");
 const { ReplayLibraryService } = require("./services/replayLibrary");
 const { GameVodsService } = require("./services/gameVods");
@@ -372,6 +375,13 @@ function makeServices(deps) {
       pulseLinks,
     },
   );
+  // Private unresolved-barcode matcher. It reads compact behavior evidence
+  // only from this user's own replay history; keeping it separate prevents an
+  // expensive candidate scan from ever slowing the core opponent dossier.
+  const opponentIdentityMatcher = new OpponentIdentityMatcherService(deps.db, {
+    logger: deps.logger,
+    pulseLinks,
+  });
   // GamesService persists heavy fields through GameDetailsService,
   // not directly to a collection — the indirection is what makes
   // the R2 swap a config change instead of a code change. It also
@@ -635,6 +645,7 @@ function makeServices(deps) {
   return {
     users,
     opponents,
+    opponentIdentityMatcher,
     games,
     replayLibrary,
     gameVods,
@@ -1121,6 +1132,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildOpponentsRouter({
       opponents: services.opponents,
+      identityMatcher: services.opponentIdentityMatcher,
       overlayLive: services.overlayLive,
       auth,
       pulseIntel: services.pulseIntel,

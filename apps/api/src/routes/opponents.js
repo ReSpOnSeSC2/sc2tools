@@ -9,6 +9,7 @@ const { parseFilters } = require("../util/parseQuery");
  *
  * @param {{
  *   opponents: import('../services/types').OpponentsService,
+ *   identityMatcher?: import('../services/opponentIdentityMatcher').OpponentIdentityMatcherService,
  *   auth: import('express').RequestHandler,
  *   pulseIntel?: import('../services/pulseOpponentIntel').PulseOpponentIntelService,
  *   resolvePulseCharacterId?: (userId: string, pulseId: string) => Promise<string|null|undefined>,
@@ -38,6 +39,37 @@ function buildOpponentsRouter(deps) {
       next(err);
     }
   });
+
+  // Private behavioral identity leads for an unresolved barcode. The matcher
+  // searches only this caller's own known opponents, hard-gates on race, and
+  // returns an explicit other/unknown probability alongside at most five
+  // candidates. Kept out of the main dossier response so ordinary profiles
+  // never pay for the bounded candidate scan.
+  router.get(
+    "/opponents/:pulseId/identity-candidates",
+    async (req, res, next) => {
+      try {
+        const auth = req.auth;
+        if (!auth) throw new Error("auth_required");
+        if (!deps.identityMatcher) {
+          res.status(503).json({ error: { code: "feature_unavailable" } });
+          return;
+        }
+        const result = await deps.identityMatcher.findCandidates(
+          auth.userId,
+          String(req.params.pulseId),
+          { limit: parseLimit(req.query.limit) },
+        );
+        if (!result) {
+          res.status(404).json({ error: { code: "not_found" } });
+          return;
+        }
+        res.set("Cache-Control", "private, no-store").json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   // Identity / MMR diagnostics for one of the caller's OWN opponents —
   // "why is the Pulse ID or MMR missing?". Read-only, no SC2Pulse

@@ -54,6 +54,9 @@ const OPPONENT_SLIM_FIELDS = new Set([
   "leagueId",
   "opening",
   "strategy",
+  // Compact, versioned opponent control-group/build signature. It remains
+  // queryable on the slim row so identity matching never fans out to R2.
+  "playSignature",
 ]);
 
 // The agent payload is forward-compatible at validation time, but the slim
@@ -1929,6 +1932,7 @@ function normalizeOpponentField(key, value) {
   if (key === "race") return boundedString(value, 24);
   if (key === "opening") return boundedString(value, 80);
   if (key === "strategy") return boundedString(value, 200);
+  if (key === "playSignature") return sanitizePlaySignature(value);
   if (key === "mmr") return boundedInteger(value, 0, 9999);
   if (key === "leagueId") return boundedInteger(value, 0, 100);
   if (
@@ -1939,6 +1943,84 @@ function normalizeOpponentField(key, value) {
     return typeof value === "boolean" ? value : undefined;
   }
   return undefined;
+}
+
+/**
+ * Bound the replay-derived identity signature before it reaches the slim row.
+ * HTTP validation already applies the same limits, but services are also used
+ * directly by imports/tests and must keep Mongo safe on their own.
+ *
+ * @param {unknown} value
+ * @returns {Record<string, any>|undefined}
+ */
+function sanitizePlaySignature(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = /** @type {Record<string, any>} */ (value);
+  if (raw.version !== 1) return undefined;
+  const windowSec = boundedInteger(raw.windowSec, 1, 10 * 60);
+  if (windowSec === undefined) return undefined;
+  /** @type {Record<string, any>} */
+  const out = { version: 1, windowSec };
+
+  const control = raw.controlGroups;
+  if (control && typeof control === "object" && !Array.isArray(control)) {
+    const events = boundedInteger(control.events, 1, 99999);
+    const activeSeconds = boundedInteger(control.activeSeconds, 1, 10 * 60);
+    const slots = [];
+    const seenSlots = new Set();
+    if (Array.isArray(control.slots)) {
+      for (const item of control.slots.slice(0, 10)) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const slot = boundedInteger(item.slot, 0, 9);
+        const set = boundedInteger(item.set, 0, 9999);
+        const add = boundedInteger(item.add, 0, 9999);
+        const recall = boundedInteger(item.recall, 0, 9999);
+        const doubleTap = boundedInteger(item.doubleTap, 0, 9999);
+        if (
+          slot === undefined || seenSlots.has(slot)
+          || set === undefined || add === undefined
+          || recall === undefined || doubleTap === undefined
+        ) continue;
+        seenSlots.add(slot);
+        slots.push({ slot, set, add, recall, doubleTap });
+      }
+    }
+    if (events !== undefined && activeSeconds !== undefined && slots.length > 0) {
+      /** @type {Record<string, any>} */
+      const clean = { events, activeSeconds, slots };
+      const transitions = [];
+      if (Array.isArray(control.transitions)) {
+        for (const item of control.transitions.slice(0, 12)) {
+          if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+          const from = boundedInteger(item.from, 0, 9);
+          const to = boundedInteger(item.to, 0, 9);
+          const count = boundedInteger(item.count, 1, 9999);
+          if (from === undefined || to === undefined || count === undefined) continue;
+          transitions.push({ from, to, count });
+        }
+      }
+      if (transitions.length > 0) clean.transitions = transitions;
+      out.controlGroups = clean;
+    }
+  }
+
+  const build = raw.build;
+  if (build && typeof build === "object" && !Array.isArray(build)) {
+    const milestones = [];
+    if (Array.isArray(build.milestones)) {
+      for (const item of build.milestones.slice(0, 18)) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const atSec = boundedInteger(item.atSec, 0, 10 * 60);
+        const name = boundedString(item.name, 64);
+        if (atSec === undefined || name === undefined || !name.trim()) continue;
+        milestones.push({ atSec, name: name.trim() });
+      }
+    }
+    if (milestones.length > 0) out.build = { milestones };
+  }
+  return out.controlGroups || out.build ? out : undefined;
 }
 
 /** @param {unknown} value @param {number} max */
