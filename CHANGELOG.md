@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Identity leads no longer disappear when an anonymous barcode has Pulse and
+  MMR data** — a resolved SC2Pulse character row and ladder rating enrich the
+  behavioral comparison but do not reveal the player behind an unreadable
+  name. Every barcode without a readable SC2Pulse reveal now gets the private
+  candidate panel, including the actionable re-sync state for older replays.
 - **Centered stream alerts no longer disappear while the chat timeline still
   records the event** — TikTok follows and public YouTube subscriptions now
   carry a trusted cloud receipt timestamp for late-mount and reconnect replay
@@ -75,8 +80,8 @@ corresponding GitHub Release.
 
 ### Added
 
-- **Unresolved barcode profiles now surface private identity leads** — when an
-  opponent has no dependable SC2Pulse identity or MMR, SC2 Tools compares a
+- **Unrevealed barcode profiles now surface private identity leads** — until an
+  opponent has a readable SC2Pulse reveal, SC2 Tools compares a
   bounded ten-minute fingerprint of their control-group habits and build-order
   milestones with same-race opponents from that signed-in user's own replay
   history. The profile presents up to five candidates with likelihood, pattern

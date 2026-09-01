@@ -51,13 +51,16 @@ describe("OpponentIdentityMatcherService", () => {
     await insertOpponent(db, {
       userId: "owner",
       pulseId: "target",
+      pulseCharacterId: "340886346",
       displayNameSample: "IIIIIIII",
       race: "Protoss",
+      mmr: 5391,
     });
     await insertGame(db, {
       userId: "owner",
       gameId: "target-game",
       pulseId: "target",
+      pulseCharacterId: "340886346",
       opponentRace: "Protoss",
       signature: playSignature({ slot: 2 }),
     });
@@ -115,6 +118,13 @@ describe("OpponentIdentityMatcherService", () => {
       status: "ready",
       calibrated: false,
       generatedAt: "2026-09-01T12:00:00.000Z",
+      eligibility: {
+        eligible: true,
+        isBarcode: true,
+        pulseResolved: true,
+        mmrPresent: true,
+        reasons: [],
+      },
       target: {
         pulseId: "target",
         race: "Protoss",
@@ -694,18 +704,18 @@ describe("opponent identity matcher primitives", () => {
   });
 
   test.each([
-    ["IIII1111", null, null, true],
-    ["IIII1111", "KnownPro", null, false],
-    ["Readable", null, null, false],
-    ["IIII1111", null, 4500, false],
+    ["IIII1111", null, null, null, true],
+    ["IIII1111", "KnownPro", null, null, false],
+    ["Readable", null, null, null, false],
+    ["IIII1111", null, 4500, "123", true],
   ])(
-    "eligibility for name=%s reveal=%s mmr=%s is %s",
-    (displayNameSample, revealedName, mmr, expected) => {
+    "eligibility for name=%s reveal=%s mmr=%s pulse=%s is %s",
+    (displayNameSample, revealedName, mmr, pulseCharacterId, expected) => {
       expect(identityEligibility({
         displayNameSample,
         revealedName,
         mmr,
-        pulseCharacterId: mmr ? "123" : null,
+        pulseCharacterId,
       }).eligible).toBe(expected);
     },
   );

@@ -95,6 +95,30 @@ type OpponentProfileResp = {
   games?: ProfileGame[];
 };
 
+/**
+ * Behavioral identity leads are useful until a barcode has a readable reveal.
+ * A Pulse character id and MMR describe the ladder character, but they do not
+ * identify the person behind an intentionally unreadable display name.
+ */
+export function hasUnrevealedBarcodeIdentity(
+  profile: Pick<
+    OpponentProfileResp,
+    | "name"
+    | "displayNameSample"
+    | "revealedName"
+    | "pulseCharacterId"
+    | "mmr"
+  >,
+): boolean {
+  const displayedName = profile.name || profile.displayNameSample;
+  const reveal =
+    typeof profile.revealedName === "string"
+      ? profile.revealedName.trim()
+      : "";
+  const hasReadableReveal = Boolean(reveal && !isBarcodeName(reveal));
+  return isBarcodeName(displayedName) && !hasReadableReveal;
+}
+
 export function ProfileView({
   pulseId,
   onBack,
@@ -207,18 +231,9 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         }))
         .sort((a, b) => b.total - a.total);
   const opponentName = data.name || data.pulseId || pulseId;
-  const resolvedMmr = races?.topMmr ?? data.mmr;
-  // Avoid the matcher request for normal readable profiles. The API repeats
-  // this eligibility gate authoritatively because race/MMR enrichment can
-  // finish between these parallel requests.
-  const identityCandidatesEnabled =
-    !racesLoading
-    && isBarcodeName(data.name || data.displayNameSample)
-    && !data.revealedName
-    && (
-      !data.pulseCharacterId
-      || !(typeof resolvedMmr === "number" && resolvedMmr > 0)
-    );
+  // Avoid the bounded matcher request for readable profiles. Pulse/MMR data
+  // enriches an anonymous barcode; only a readable reveal resolves it.
+  const identityCandidatesEnabled = hasUnrevealedBarcodeIdentity(data);
   const handleSelectGame = (id: string) => {
     setPendingGameId(id);
     setPendingGameSeq((n) => n + 1);

@@ -12,8 +12,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   milestones. Timing uses real game seconds and short games report their true
   observation window, so fast games are not scored as if ten minutes of input
   had been observed.
-- When an unresolved barcode has no dependable SC2Pulse identity or MMR, its
-  opponent profile can now compare that evidence with same-race opponents in
+- Until a barcode has a readable SC2Pulse reveal, its opponent profile can now
+  compare that evidence with same-race opponents in
   the signed-in user's own replay history and show up to five identity leads.
   Every lead includes an honest likelihood estimate, an independent pattern
   match score, sample strength, and separate control-group, build-order,

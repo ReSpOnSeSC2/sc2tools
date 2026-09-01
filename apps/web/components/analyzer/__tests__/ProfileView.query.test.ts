@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOpponentReplayHistoryQuery,
   buildProfileQuery,
+  hasUnrevealedBarcodeIdentity,
 } from "../ProfileView";
 
 function params(query: string): URLSearchParams {
@@ -9,6 +10,36 @@ function params(query: string): URLSearchParams {
 }
 
 describe("opponent profile query", () => {
+  it("offers identity leads for an unrevealed barcode with Pulse ID and MMR", () => {
+    expect(
+      hasUnrevealedBarcodeIdentity({
+        name: "||||||||",
+        revealedName: null,
+        pulseCharacterId: "340886346",
+        mmr: 5391,
+      }),
+    ).toBe(true);
+  });
+
+  it("stops offering identity leads once the barcode has a readable reveal", () => {
+    expect(
+      hasUnrevealedBarcodeIdentity({
+        name: "IIII1111",
+        revealedName: "KnownPro",
+        pulseCharacterId: "340886346",
+        mmr: 5391,
+      }),
+    ).toBe(false);
+    expect(
+      hasUnrevealedBarcodeIdentity({
+        name: "ReadablePlayer",
+        revealedName: null,
+        pulseCharacterId: null,
+        mmr: null,
+      }),
+    ).toBe(false);
+  });
+
   it("forwards the complete analyzer scope when drilling into a player", () => {
     const query = params(
       buildProfileQuery(

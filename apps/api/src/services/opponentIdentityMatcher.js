@@ -453,7 +453,10 @@ function identityEligibility(doc) {
   if (!pulseResolved) reasons.push("pulse_unresolved");
   if (!mmrPresent) reasons.push("mmr_missing");
   return {
-    eligible: isBarcode && !revealedName && reasons.length > 0,
+    // Pulse linkage and MMR identify/enrich the ladder character, not the
+    // person behind an unreadable display name. Keep them as diagnostics,
+    // but continue matching until SC2Pulse supplies a readable reveal.
+    eligible: isBarcode && !revealedName,
     isBarcode,
     pulseResolved,
     mmrPresent,

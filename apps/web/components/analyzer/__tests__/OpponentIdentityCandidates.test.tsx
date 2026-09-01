@@ -337,14 +337,14 @@ describe("OpponentIdentityCandidates", () => {
     );
   });
 
-  it("renders nothing when the backend rejects stale client eligibility", () => {
+  it("renders nothing when the backend rejects a readable profile", () => {
     harness.useApi.mockReturnValue(
       apiResult(
         response({
           status: "not_eligible",
           eligibility: {
             eligible: false,
-            isBarcode: true,
+            isBarcode: false,
             pulseResolved: true,
             mmrPresent: true,
             reasons: [],
