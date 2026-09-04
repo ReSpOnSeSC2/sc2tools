@@ -25,6 +25,13 @@ vi.mock("./LockerHost", () => ({
 vi.mock("./CoachingSchedule", () => ({
   default: () => <div data-testid="sessions-view">Sessions content</div>,
 }));
+vi.mock("./CoachingPractice", () => ({
+  default: ({ role }: { role: string }) => (
+    <div data-testid="practice-view" data-role={role}>
+      Practice content
+    </div>
+  ),
+}));
 
 import CoachingWorkspace from "./CoachingWorkspace";
 
@@ -36,6 +43,21 @@ afterEach(() => {
 });
 
 describe("CoachingWorkspace", () => {
+  it("opens a direct Practice link without eagerly mounting Locker", () => {
+    harness.search = "view=practice";
+    render(<CoachingWorkspace />);
+
+    expect(screen.getByTestId("practice-view").getAttribute("data-role")).toBe(
+      "coach",
+    );
+    expect(screen.queryByTestId("locker-host")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Practice" }).getAttribute(
+        "aria-current",
+      ),
+    ).toBe("page");
+  });
+
   it("opens a direct Sessions link without eagerly mounting Locker", () => {
     harness.search = "view=schedule";
     render(<CoachingWorkspace />);

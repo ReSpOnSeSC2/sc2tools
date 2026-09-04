@@ -114,12 +114,14 @@ _COMPOSITION_PHRASES = {
 #
 # Why we need this:
 #   A Sentry's Hallucination ability spawns illusory Phoenix / Void Ray /
-#   High Templar / Archon / Immortal / Colossus / Warp Prism units that
-#   show up in the replay events identically to real units. Without a
-#   prerequisite filter, a single Sentry hallucination would let us
-#   misclassify a 2-base Charge build as a Phoenix Opener, an Archon
-#   Drop, etc. The build is only that build if the relevant tech
-#   structure was actually built at some point.
+#   High Templar / Archon / Immortal / Colossus / Warp Prism units whose
+#   tracker birth rows otherwise look identical to real units. The extractor
+#   drops them when sc2reader exposes a positive hallucination flag; this
+#   prerequisite check is the fallback for unselected illusions where that
+#   flag is unavailable. Without it, a single Sentry hallucination would let
+#   us misclassify a 2-base Charge build as a Phoenix Opener, an Archon Drop,
+#   etc. The build is only that build if the relevant tech structure was
+#   actually built at some point.
 #
 # Keep this table in sync with the mirror in
 # SC2Replay-Analyzer/detectors/base.py.
@@ -219,20 +221,27 @@ def count_real_units(
 ) -> int:
     """Count `unit_name` events with time <= time_limit, excluding hallucinations.
 
-    A unit counts only when at least one prerequisite alternative for
-    that unit type is satisfied at the unit's own appearance time. This
-    is the function the build-classifier calls instead of a raw count to
-    keep Sentry hallucinations from triggering false positives.
+    A unit explicitly marked ``hallucinated`` never counts. Otherwise a
+    unit counts only when at least one prerequisite alternative for that
+    unit type is satisfied at the unit's own appearance time. This is the
+    function the build-classifier calls instead of a raw count to keep
+    Sentry hallucinations from triggering false positives. The prerequisite
+    check remains necessary because sc2reader can only expose the explicit
+    flag for hallucinations whose selection flags occur in the replay.
     """
     alternatives = UNIT_TECH_PREREQUISITES.get(unit_name)
     if not alternatives:
         return sum(
             1 for u in units
-            if u.get("name") == unit_name and u.get("time", 9999) <= time_limit
+            if u.get("name") == unit_name
+            and u.get("time", 9999) <= time_limit
+            and u.get("hallucinated") is not True
         )
     valid = 0
     for u in units:
         if u.get("name") != unit_name:
+            continue
+        if u.get("hallucinated") is True:
             continue
         t = u.get("time", 9999)
         if t > time_limit:

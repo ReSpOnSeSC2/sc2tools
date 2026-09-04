@@ -47,9 +47,10 @@ const VERB_PREFIX_RE = /^(Build|Train|Research|Morph)(?=[A-Z])/;
  *
  * Why: a Sentry's Hallucination ability spawns illusory Phoenix /
  * VoidRay / HighTemplar / Archon / Immortal / Colossus / WarpPrism
- * that look identical to real units in the event log. Without this
- * filter, a 2-base Charge / Templar build can register as a Phoenix
- * Opener.
+ * whose legacy build-log rows look identical to real units. New structured
+ * rows may carry `hallucinated: true`; this prerequisite heuristic is the
+ * fallback when they do not. Without it, a 2-base Charge / Templar build can
+ * register as a Phoenix Opener.
  *
  * Mirror of UNIT_TECH_PREREQUISITES in
  * reveal-sc2-opponent-main/core/strategy_detector.py and
@@ -160,6 +161,11 @@ function _earliestBuildTimes(events) {
  * @returns {boolean}
  */
 function _unitPrereqMet(ev, earliestBuilds) {
+  // Some ingestion paths can retain sc2reader's positive hallucination
+  // signal. It is authoritative even when the player also owns the unit's
+  // prerequisite structure; the structure heuristic below remains the
+  // fallback for legacy build-log rows that cannot carry this metadata.
+  if (ev.hallucinated === true) return false;
   const tok = eventToken(ev);
   if (typeof tok !== "string") return true;
   const bare = _bareNoun(tok);
@@ -182,6 +188,7 @@ function _unitPrereqMet(ev, earliestBuilds) {
  *
  * @typedef {{time: number, name: string, race?: string, category?: string,
  *            is_building?: boolean, is_proxy?: boolean,
+ *            hallucinated?: boolean,
  *            proxy_classification_known?: boolean}} ParsedEvent
  */
 

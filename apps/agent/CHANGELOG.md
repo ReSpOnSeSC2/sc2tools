@@ -2,6 +2,21 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.2
+
+### Fixed - hallucination-safe build classification
+
+- Explicitly hallucinated units are now excluded from replay extraction and
+  build classification, so a Sentry's hallucinated Phoenix or other Stargate
+  unit cannot change the player's detected build before a real Stargate exists.
+- Ships bundled replay engine 1.6.1.
+
+### Migration note
+
+- Existing replay rows parsed by an older agent are unchanged. Re-sync or
+  otherwise reprocess affected replays to replace classifications influenced by
+  hallucinated units.
+
 ## 0.16.1
 
 ### Added - private barcode identity leads

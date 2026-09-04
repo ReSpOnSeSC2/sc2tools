@@ -23,10 +23,6 @@ import {
   type PresetId,
 } from "@/lib/datePresets";
 
-interface DashboardKpiStripProps {
-  totalGames: number;
-}
-
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
 const WIN_RATE_PRESET_OPTIONS: PresetId[] = [
@@ -65,14 +61,14 @@ function writeStoredPreset(value: PresetId): void {
 
 /**
  * Top-of-dashboard KPI strip — Games today, customizable Win Rate,
- * Active Streak, and lifetime Total games.
+ * Active Streak, MMR, and the game count inside the active global filters.
  *
  * The Win Rate card has a preset picker so the user can ask "what's
  * my win rate this season?" or "in the last 30 days?" without
  * touching the global filter. Sticky per-tab choice via localStorage.
  */
-export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
-  const { filters, seasons } = useFilters();
+export function DashboardKpiStrip() {
+  const { filters, seasons, dbRev } = useFilters();
 
   // Keep this independent picker aligned with the global default so every
   // first-visit page view starts on the live 8-worker game version.
@@ -161,6 +157,28 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
     () => computeGamesToday(apiToPeriods(globalSeries.data, tz), tz),
     [globalSeries.data, tz],
   );
+
+  // Count the exact cohort selected in the global FilterBar. The lifetime
+  // synced-replay total already lives in the app header; repeating it here
+  // made the largest dashboard number disagree with the date range directly
+  // above it. Month buckets keep this count complete and compact even for an
+  // all-time window, while every global date / region / mode / length and
+  // drill-down constraint is carried through unchanged.
+  const selectedRangeQuery = useMemo(
+    () => filtersToQuery({ ...filters, interval: "month", tz }),
+    [filters, tz],
+  );
+  const selectedRangeSeries = useApi<ApiTimeseriesResponse>(
+    `/v1/timeseries${selectedRangeQuery}#${dbRev}`,
+  );
+  const selectedRangeTotal = useMemo(() => {
+    if (!selectedRangeSeries.data) return null;
+    return apiToPeriods(selectedRangeSeries.data, tz).reduce(
+      (sum, period) => sum + (period.games || 0),
+      0,
+    );
+  }, [selectedRangeSeries.data, tz]);
+  const selectedRangeLabel = shortLabelFor(filters.preset || "all", seasons);
 
   // /v1/streak walks games one-by-one to compute the consecutive
   // same-result streak. Pass the global "Hide too-short games"
@@ -254,11 +272,23 @@ export function DashboardKpiStrip({ totalGames }: DashboardKpiStripProps) {
       />
       <MmrPerRegionStat />
       <StatCard
-        label="Total games"
+        label="Games in range"
         value={
-          <span className="tabular-nums">{totalGames.toLocaleString()}</span>
+          selectedRangeTotal === null ? (
+            "—"
+          ) : (
+            <span className="tabular-nums">
+              {selectedRangeTotal.toLocaleString()}
+            </span>
+          )
         }
-        hint="Lifetime synced replays"
+        hint={
+          selectedRangeSeries.isLoading
+            ? "Loading selected range"
+            : selectedRangeSeries.error
+              ? "Unable to load selected range"
+              : selectedRangeLabel
+        }
         size="md"
       />
     </div>

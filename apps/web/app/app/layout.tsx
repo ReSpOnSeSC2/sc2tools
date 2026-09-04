@@ -69,8 +69,8 @@ function AnalyzerSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading dashboard">
       <div className="h-14 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
             className="rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard"
@@ -80,19 +80,8 @@ function AnalyzerSkeleton() {
           </div>
         ))}
       </div>
-      <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
-        <div className="divide-y divide-border">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex animate-pulse gap-4 p-4">
-              <div className="h-4 w-32 rounded bg-bg-elevated" />
-              <div className="h-4 w-12 rounded bg-bg-elevated" />
-              <div className="h-4 w-12 rounded bg-bg-elevated" />
-              <div className="h-4 w-24 rounded bg-bg-elevated" />
-              <div className="ml-auto h-4 w-16 rounded bg-bg-elevated" />
-            </div>
-          ))}
-        </div>
-      </div>
+      <div className="h-32 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
+      <div className="h-40 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
     </div>
   );
 }

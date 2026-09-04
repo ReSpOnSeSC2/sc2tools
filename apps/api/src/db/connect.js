@@ -438,6 +438,29 @@ async function ensureIndexes(ctx) {
   await ctx.games.createIndex({ userId: 1, "opponent.strategy": 1 });
   await ctx.games.createIndex({ userId: 1, map: 1, date: -1 });
 
+  // Coaching practice requirements live beside the Locker/calendar documents
+  // but are independently revisioned. These indexes keep role-scoped lists
+  // narrow and make a coach's clientRequestId an idempotency key.
+  await ctx.coaching.createIndex(
+    { kind: 1, coachId: 1, studentId: 1, createdAt: -1 },
+    { name: "coaching_assignment_coach_student" },
+  );
+  await ctx.coaching.createIndex(
+    { kind: 1, studentId: 1, createdAt: -1 },
+    { name: "coaching_assignment_student" },
+  );
+  await ctx.coaching.createIndex(
+    { kind: 1, coachId: 1, clientRequestId: 1 },
+    {
+      name: "coaching_assignment_request",
+      unique: true,
+      partialFilterExpression: {
+        kind: "game_requirement",
+        clientRequestId: { $type: "string" },
+      },
+    },
+  );
+
   await ctx.mlModels.createIndex({ userId: 1, kind: 1 }, { unique: true });
   await ctx.mlJobs.createIndex({ userId: 1, createdAt: -1 });
 

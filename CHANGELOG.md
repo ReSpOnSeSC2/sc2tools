@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Hallucinated units no longer alter detected builds** — replay extraction
+  and classification now discard explicit hallucinations, preventing a
+  Sentry-created Phoenix from selecting a Stargate style when no real Stargate
+  exists.
+- **Today's game total follows the active filters** — the large games KPI now
+  counts only replays in the selected date range and filter set, while the
+  header continues to show lifetime synced replays.
 - **Identity leads no longer disappear when an anonymous barcode has Pulse and
   MMR data** — a resolved SC2Pulse character row and ladder rating enrich the
   behavioral comparison but do not reveal the player behind an unreadable
@@ -31,6 +38,8 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Daily Pulse now appears before Ladder Pulse on Today** — the page and its
+  loading state share the same more useful information order.
 - **Every analyzer section is now a real URL** — the dashboard's seven
   client-side tabs became routes: `/app/opponents`, `/app/strategies`,
   `/app/trends`, `/app/macro`, `/app/maps`, `/app/builds`, `/app/arcade`,
@@ -80,6 +89,15 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Coaches can assign and review structured practice plans** — a coach can set
+  build-specific or total 1v1 game targets for a chosen timeframe, while both
+  coach and student see live progress and the coach receives the qualifying
+  replay evidence for review. Team games, free-for-alls, resumed games, and
+  non-1v1 customs do not count. Students must explicitly approve the exact
+  linked coach before performance or replay data is shared, can revoke access
+  immediately, and coaches must select the player's calendar time zone for
+  recurring targets. Account erasure also removes the user's coaching
+  assignments, bookings, consent relationship, and unshared Locker media.
 - **Unrevealed barcode profiles now surface private identity leads** — until an
   opponent has a readable SC2Pulse reveal, SC2 Tools compares a
   bounded ten-minute fingerprint of their control-group habits and build-order

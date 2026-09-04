@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarClock, LockKeyhole, PanelsTopLeft } from "lucide-react";
+import { CalendarClock, LockKeyhole, PanelsTopLeft, Target } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import LockerHost from "./LockerHost";
+import CoachingPractice from "./CoachingPractice";
 import CoachingSchedule from "./CoachingSchedule";
 
 type CoachingMe = {
@@ -14,14 +15,16 @@ type CoachingMe = {
   studentId: string | null;
 };
 
-type WorkspaceView = "locker" | "sessions";
+type WorkspaceView = "locker" | "practice" | "sessions";
 
 export default function CoachingWorkspace() {
   const { data, error, isLoading, mutate } = useApi<CoachingMe>("/v1/coaching/me");
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeView: WorkspaceView =
-    searchParams.get("view") === "schedule" ||
+    searchParams.get("view") === "practice"
+      ? "practice"
+      : searchParams.get("view") === "schedule" ||
     searchParams.get("section") === "sessions" ||
     searchParams.has("booking")
       ? "sessions"
@@ -85,7 +88,12 @@ export default function CoachingWorkspace() {
   const selectView = (next: WorkspaceView) => {
     setView(next);
     if (next === "locker") setLockerActivated(true);
-    const href = next === "sessions" ? "/coaching?view=schedule" : "/coaching";
+    const href =
+      next === "sessions"
+        ? "/coaching?view=schedule"
+        : next === "practice"
+          ? "/coaching?view=practice"
+          : "/coaching";
     router.replace(href, { scroll: false });
   };
 
@@ -104,6 +112,13 @@ export default function CoachingWorkspace() {
           Locker
         </WorkspaceTab>
         <WorkspaceTab
+          active={view === "practice"}
+          onClick={() => selectView("practice")}
+          icon={<Target className="h-4 w-4" aria-hidden />}
+        >
+          Practice
+        </WorkspaceTab>
+        <WorkspaceTab
           active={view === "sessions"}
           onClick={() => selectView("sessions")}
           icon={<CalendarClock className="h-4 w-4" aria-hidden />}
@@ -120,6 +135,7 @@ export default function CoachingWorkspace() {
           <LockerHost />
         </div>
       ) : null}
+      {view === "practice" ? <CoachingPractice role={data.role} /> : null}
       {view === "sessions" ? <CoachingSchedule /> : null}
     </div>
   );

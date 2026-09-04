@@ -184,6 +184,21 @@ describe("evaluateRule prereq filter — Phoenix needs Stargate", () => {
     expect(evaluateRule(rule, events).pass).toBe(true);
   });
 
+  test("explicitly flagged hallucination fails even with Stargate", () => {
+    const events = [
+      building("Nexus", 0),
+      building("Stargate", 200),
+      { ...unit("Phoenix", 280), hallucinated: true },
+    ];
+    const rule = {
+      type: "count_min",
+      name: "BuildPhoenix",
+      time_lt: 420,
+      count: 1,
+    };
+    expect(evaluateRule(rule, events).pass).toBe(false);
+  });
+
   test("Phoenix appearing BEFORE Stargate is dropped, even though Stargate exists later", () => {
     const events = [
       building("Nexus", 0),

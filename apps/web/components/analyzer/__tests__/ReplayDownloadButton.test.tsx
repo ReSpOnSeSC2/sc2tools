@@ -30,6 +30,32 @@ afterEach(() => {
 });
 
 describe("ReplayDownloadButton", () => {
+  it("uses the supplied authorized path for a delegated replay download", async () => {
+    apiCallMock.mockResolvedValue({
+      url: "https://replays.example.test/signed/coaching-game?token=secret",
+      filename: "coaching-game.SC2Replay",
+      expiresIn: 60,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    render(
+      <ReplayDownloadButton
+        gameId="game/42"
+        available
+        downloadPath="/v1/coaching/assignments/plan-1/games/game%2F42/replay-download"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download replay" }));
+
+    await waitFor(() => {
+      expect(apiCallMock).toHaveBeenCalledWith(
+        getTokenMock,
+        "/v1/coaching/assignments/plan-1/games/game%2F42/replay-download",
+      );
+    });
+  });
+
   it("requests a signed URL with Clerk auth and triggers a sanitized download", async () => {
     apiCallMock.mockResolvedValue({
       url: "https://replays.example.test/signed/game?token=secret",
@@ -114,7 +140,10 @@ describe("ReplayDownloadButton", () => {
     );
 
     const button = screen.getByRole("button", { name: "Replay unavailable" });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    button.focus();
+    expect(document.activeElement).toBe(button);
     expect(button.textContent).toContain("Replay unavailable");
     expect(
       screen.getByText(/Update to the latest desktop agent, then run Re-sync/i),

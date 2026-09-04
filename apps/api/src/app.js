@@ -975,6 +975,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
         io: deps.io,
         logger: deps.logger,
       }),
+      replayFiles: services.replayFiles,
       logger: deps.logger,
     }),
   );

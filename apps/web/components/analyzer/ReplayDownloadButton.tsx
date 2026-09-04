@@ -22,6 +22,8 @@ export function ReplayDownloadButton({
   mobile = false,
   showLabel = false,
   contextLabel,
+  downloadPath,
+  unavailableMessage,
 }: {
   gameId?: string | null;
   available?: boolean;
@@ -32,6 +34,10 @@ export function ReplayDownloadButton({
   showLabel?: boolean;
   /** Extra replay context for screen-reader action lists. */
   contextLabel?: string;
+  /** Authorized API route for delegated access (for example, coaching). */
+  downloadPath?: string;
+  /** Context-specific guidance when the original replay has not been archived. */
+  unavailableMessage?: string;
 }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -41,21 +47,27 @@ export function ReplayDownloadButton({
 
   const canDownload = available === true && !!gameId;
   const loading = state === "loading";
-  const unavailableMessage =
-    "Original replay unavailable. Update to the latest desktop agent, then run Re-sync.";
+  const resolvedUnavailableMessage = unavailableMessage
+    || "Original replay unavailable. Update to the latest desktop agent, then run Re-sync.";
   const sizeLabel = formatSize(sizeBytes);
 
   async function download(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
-    if (!canDownload || loading || !gameId) return;
+    if (!canDownload) {
+      toastContext?.toast.info("Replay unavailable", {
+        description: resolvedUnavailableMessage,
+      });
+      return;
+    }
+    if (loading || !gameId) return;
 
     setState("loading");
     setErrorMessage(null);
     try {
       const result = await apiCall<ReplayDownloadResponse>(
         getToken,
-        `/v1/games/${encodeURIComponent(gameId)}/replay-download`,
+        downloadPath || `/v1/games/${encodeURIComponent(gameId)}/replay-download`,
       );
       const href = safeSignedUrl(result?.url);
       if (!href) throw new Error("The replay download link was invalid.");
@@ -96,7 +108,7 @@ export function ReplayDownloadButton({
         : "Download replay";
   const label = contextLabel ? `${baseLabel} — ${contextLabel}` : baseLabel;
   const title = !canDownload
-    ? unavailableMessage
+    ? resolvedUnavailableMessage
     : state === "error"
       ? errorMessage || "Retry replay download"
       : `${filename ? `Download ${filename}` : "Download original replay"}${
@@ -108,13 +120,14 @@ export function ReplayDownloadButton({
       <button
         type="button"
         onClick={download}
-        disabled={!canDownload || loading}
+        disabled={loading}
+        aria-disabled={!canDownload || undefined}
         aria-label={label}
         aria-busy={loading || undefined}
         aria-describedby={statusId}
         title={title}
         className={[
-          "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed",
+          "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed aria-disabled:cursor-not-allowed",
           mobile
             ? "min-h-[44px] w-full gap-2 border-border-strong bg-bg-elevated/60 px-3 py-2 text-caption"
             : showLabel
@@ -157,7 +170,7 @@ export function ReplayDownloadButton({
         role={state === "error" ? "alert" : "status"}
       >
         {!canDownload
-          ? unavailableMessage
+          ? resolvedUnavailableMessage
           : state === "error"
             ? errorMessage
             : loading

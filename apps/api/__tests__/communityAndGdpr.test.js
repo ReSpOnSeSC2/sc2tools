@@ -7,6 +7,7 @@ const pino = require("pino");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
+const { CoachingService } = require("../src/services/coaching");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -1194,6 +1195,71 @@ describe("community + gdpr integration", () => {
         myRace: "Protoss",
         map: "Test Map",
       });
+      await db.coaching.updateOne(
+        { _id: "locker" },
+        {
+          $set: {
+            state: {
+              coaches: [
+                {
+                  id: "coach-export",
+                  name: "Coach",
+                  userId: "u_coach",
+                  email: "coach-private@example.test",
+                },
+                { id: "coach-other", name: "Other", userId: "u_other_coach" },
+              ],
+              students: [
+                { id: "student-export", name: "Player", userId: "u_a", coachId: "coach-export" },
+                { id: "student-other", name: "Private", userId: "u_other", coachId: "coach-other" },
+              ],
+            },
+          },
+        },
+        { upsert: true },
+      );
+      await db.coaching.insertMany([
+        {
+          _id: "assignment:export-mine",
+          kind: "game_requirement",
+          id: "export-mine",
+          studentUserId: "u_a",
+          coachUserId: "u_coach",
+          practiceSharingGrantId: "grant-must-not-export",
+          note: "My exported practice note",
+        },
+        {
+          _id: "assignment:export-other",
+          kind: "game_requirement",
+          id: "export-other",
+          studentUserId: "u_other",
+          coachUserId: "u_other_coach",
+          note: "Must not leak",
+        },
+        {
+          _id: "calendar:coach-export",
+          coachId: "coach-export",
+          coachName: "Coach",
+          coachUserId: "u_coach",
+          availability: { timeZone: "UTC", durations: [60], windows: [] },
+          bookings: [
+            {
+              id: "booking-mine",
+              studentId: "student-export",
+              studentUserId: "u_a",
+              studentName: "Player",
+              status: "booked",
+            },
+            {
+              id: "booking-other",
+              studentId: "student-other",
+              studentUserId: "u_other",
+              studentName: "Private",
+              status: "booked",
+            },
+          ],
+        },
+      ]);
 
       const res = await request(app)
         .get("/v1/me/export")
@@ -1205,6 +1271,68 @@ describe("community + gdpr integration", () => {
         (g) => g.gameId === "ga_export_test",
       );
       expect(myGame).toBeTruthy();
+      expect(res.body.data.coachingAssignments).toEqual([
+        expect.objectContaining({ id: "export-mine", note: "My exported practice note" }),
+      ]);
+      expect(res.body.data.coachingRelationships).toEqual([
+        expect.objectContaining({
+          role: "student",
+          student: expect.objectContaining({ id: "student-export", userId: "u_a" }),
+          coach: { id: "coach-export", name: "Coach" },
+        }),
+      ]);
+      expect(res.body.data.coachingCalendars).toEqual([
+        {
+          role: "student",
+          calendar: expect.objectContaining({
+            coachId: "coach-export",
+            bookings: [expect.objectContaining({ id: "booking-mine", studentUserId: "u_a" })],
+          }),
+        },
+      ]);
+      expect(JSON.stringify(res.body.data)).not.toContain("Must not leak");
+      expect(JSON.stringify(res.body.data)).not.toContain("student-other");
+      expect(JSON.stringify(res.body.data)).not.toContain("booking-other");
+      expect(JSON.stringify(res.body.data)).not.toContain("coach-private@example.test");
+
+      const coachExport = await services.gdpr.export("u_coach");
+      expect(coachExport.data.coachingAssignments).toEqual([
+        expect.objectContaining({ id: "export-mine" }),
+      ]);
+      expect(coachExport.data.coachingAssignments[0]).not.toHaveProperty("studentUserId");
+      expect(coachExport.data.coachingAssignments[0]).not.toHaveProperty("practiceSharingGrantId");
+      expect(coachExport.data.coachingCalendars).toHaveLength(1);
+      expect(coachExport.data.coachingCalendars[0]).toMatchObject({
+        role: "coach",
+        calendar: { coachId: "coach-export" },
+      });
+      expect(JSON.stringify(coachExport.data.coachingCalendars)).not.toContain("u_a");
+      expect(JSON.stringify(coachExport.data.coachingCalendars)).not.toContain("grant-must-not-export");
+      expect(JSON.stringify(coachExport.data.coachingRelationships)).not.toContain("u_a");
+    });
+
+    test("manual snapshots exclude non-restorable shared coaching data", async () => {
+      const userId = "u_snapshot_coaching";
+      await db.users.insertOne({
+        userId,
+        clerkUserId: "clerk_snapshot_coaching",
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      await db.coaching.insertOne({
+        _id: "assignment:snapshot-shared",
+        kind: "game_requirement",
+        id: "snapshot-shared",
+        studentUserId: userId,
+        coachUserId: "u_coach",
+      });
+
+      const snapshot = await services.gdpr.snapshot(userId);
+      const stored = await db.db.collection("user_backups").findOne({ id: snapshot.id });
+
+      expect(stored.payload.data).not.toHaveProperty("coachingAssignments");
+      expect(stored.payload.data).not.toHaveProperty("coachingRelationships");
+      expect(stored.payload.data).not.toHaveProperty("coachingCalendars");
     });
 
     test("delete wipes per-user records", async () => {
@@ -1229,6 +1357,340 @@ describe("community + gdpr integration", () => {
       expect(counts.users).toBe(1);
       const after = await db.games.countDocuments({ userId: "u_del" });
       expect(after).toBe(0);
+    });
+
+    test("delete erases coaching relationships and preserves unrelated data", async () => {
+      const userId = "u_del_coaching";
+      const clerkUserId = "clerk_del_coaching";
+      await db.users.insertOne({
+        userId,
+        clerkUserId,
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      await db.coaching.updateOne(
+        { _id: "locker" },
+        {
+          $set: {
+            rev: 40,
+            state: {
+              coaches: [
+                { id: "coach-delete", name: "Delete Coach", userId },
+                { id: "coach-keep", name: "Keep Coach", userId: "u_keep_coach" },
+              ],
+              students: [
+                {
+                  id: "student-delete",
+                  name: "Delete Student",
+                  userId,
+                  coachId: "coach-keep",
+                  shelf: [
+                    { asset: "asset-delete-only" },
+                    { asset: "asset-shared" },
+                  ],
+                  practiceSharing: {
+                    status: "accepted",
+                    studentUserId: userId,
+                    coachUserId: "u_keep_coach",
+                    grantId: "grant-delete-student",
+                  },
+                },
+                {
+                  id: "student-of-deleted-coach",
+                  name: "Linked Student",
+                  userId: "u_linked_student",
+                  coachId: "coach-delete",
+                  practiceSharing: {
+                    status: "accepted",
+                    studentUserId: "u_linked_student",
+                    coachUserId: userId,
+                    grantId: "grant-delete-coach",
+                  },
+                },
+                {
+                  id: "student-keep",
+                  name: "Keep Student",
+                  userId: "u_keep_student",
+                  coachId: "coach-keep",
+                  shelf: [
+                    { asset: "asset-shared" },
+                    { asset: "asset-keep" },
+                  ],
+                  practiceSharing: {
+                    status: "accepted",
+                    studentUserId: "u_keep_student",
+                    coachUserId: "u_keep_coach",
+                    grantId: "grant-keep",
+                  },
+                },
+              ],
+              assets: {
+                "asset-delete-only": { n: "private-replay.SC2Replay", b64: "private" },
+                "asset-shared": { n: "shared.pdf", b64: "shared" },
+                "asset-keep": { n: "keep.pdf", b64: "keep" },
+              },
+            },
+          },
+        },
+        { upsert: true },
+      );
+      await db.coaching.insertMany([
+        {
+          _id: "assignment:delete-as-student",
+          kind: "game_requirement",
+          studentUserId: userId,
+          coachUserId: "u_keep_coach",
+          createdByUserId: "u_keep_coach",
+        },
+        {
+          _id: "assignment:delete-as-coach",
+          kind: "game_requirement",
+          studentUserId: "u_linked_student",
+          coachUserId: userId,
+          createdByUserId: userId,
+        },
+        {
+          _id: "assignment:delete-as-creator",
+          kind: "game_requirement",
+          studentUserId: "u_keep_student",
+          coachUserId: "u_keep_coach",
+          createdByUserId: userId,
+        },
+        {
+          _id: "assignment:keep",
+          kind: "game_requirement",
+          studentUserId: "u_keep_student",
+          coachUserId: "u_keep_coach",
+          createdByUserId: "u_keep_coach",
+        },
+        {
+          _id: "calendar:delete-owned",
+          coachId: "coach-delete",
+          coachUserId: userId,
+          calendarRev: 2,
+          bookings: [],
+        },
+        {
+          _id: "calendar:delete-owned-legacy",
+          coachId: "coach-delete",
+          calendarRev: 1,
+          bookings: [],
+        },
+        {
+          _id: "calendar:keep",
+          coachId: "coach-keep",
+          coachUserId: "u_keep_coach",
+          calendarRev: 7,
+          bookings: [
+            {
+              id: "booking-delete-by-user",
+              studentId: "student-delete",
+              studentUserId: userId,
+            },
+            {
+              id: "booking-delete-legacy-id",
+              studentId: "student-delete",
+            },
+            {
+              id: "booking-keep",
+              studentId: "student-keep",
+              studentUserId: "u_keep_student",
+            },
+          ],
+        },
+        {
+          _id: "coaching-misc-keep",
+          kind: "other",
+          marker: "unrelated",
+          coachUserId: userId,
+          createdByUserId: userId,
+          studentUserId: "u_keep_student",
+        },
+      ]);
+
+      // Simulate already-authorized writes committing immediately after the
+      // first cleanup pass. deleteAll's final deterministic pass must remove
+      // all of them before the account row disappears.
+      const cleanup = services.gdpr._deleteCoachingData.bind(services.gdpr);
+      let cleanupPasses = 0;
+      const cleanupSpy = jest.spyOn(services.gdpr, "_deleteCoachingData")
+        .mockImplementation(async (...args) => {
+          const result = await cleanup(...args);
+          cleanupPasses += 1;
+          if (cleanupPasses === 1) {
+            await db.coaching.insertMany([
+              {
+                _id: "assignment:delete-late",
+                kind: "game_requirement",
+                studentUserId: "u_linked_late",
+                coachUserId: userId,
+                createdByUserId: userId,
+              },
+              {
+                _id: "calendar:delete-owned-late",
+                coachId: "coach-delete-late",
+                coachUserId: userId,
+                calendarRev: 0,
+                bookings: [],
+              },
+            ]);
+            await db.coaching.updateOne(
+              { _id: "calendar:keep" },
+              { $push: { bookings: {
+                id: "booking-delete-late",
+                studentId: "student-delete-late",
+                studentUserId: userId,
+              } } },
+            );
+            await db.coaching.updateOne(
+              { _id: "locker" },
+              {
+                $push: {
+                  "state.coaches": {
+                    id: "coach-delete-late",
+                    name: "Late Coach",
+                    userId,
+                  },
+                  "state.students": {
+                    id: "student-of-late-coach",
+                    name: "Late Linked Student",
+                    userId: "u_linked_late",
+                    coachId: "coach-delete-late",
+                    practiceSharing: {
+                      status: "accepted",
+                      studentUserId: "u_linked_late",
+                      coachUserId: userId,
+                      grantId: "grant-delete-late",
+                    },
+                  },
+                },
+              },
+            );
+          }
+          return result;
+        });
+      let counts;
+      try {
+        counts = await services.gdpr.deleteAll(userId);
+      } finally {
+        cleanupSpy.mockRestore();
+      }
+      expect(cleanupPasses).toBe(2);
+      expect(counts.coachingAssignments).toBe(4);
+      expect(counts.coachingCalendars).toBe(3);
+      expect(counts.coachingCalendarsScrubbed).toBe(2);
+      expect(counts.coachingLockerScrubbed).toBe(4);
+      expect(counts.coachingAssets).toBe(1);
+      expect(counts.coachingUnknownReferencesScrubbed).toBe(2);
+
+      const locker = await db.coaching.findOne({ _id: "locker" });
+      expect(locker.state.coaches).toEqual([
+        { id: "coach-keep", name: "Keep Coach", userId: "u_keep_coach" },
+      ]);
+      expect(locker.state.students.map((student) => student.id)).toEqual([
+        "student-of-deleted-coach",
+        "student-keep",
+        "student-of-late-coach",
+      ]);
+      const severedStudents = locker.state.students.filter((student) =>
+        student.id === "student-of-deleted-coach"
+        || student.id === "student-of-late-coach");
+      expect(severedStudents).toHaveLength(2);
+      for (const student of severedStudents) {
+        expect(student).not.toHaveProperty("coachId");
+        expect(student).not.toHaveProperty("practiceSharing");
+      }
+      expect(locker.state.assets).toEqual({
+        "asset-shared": { n: "shared.pdf", b64: "shared" },
+        "asset-keep": { n: "keep.pdf", b64: "keep" },
+      });
+      expect(JSON.stringify(locker)).not.toContain(userId);
+      expect(JSON.stringify(locker)).not.toContain("grant-delete");
+
+      expect(await db.coaching.countDocuments({
+        kind: "game_requirement",
+        $or: [
+          { studentUserId: userId },
+          { coachUserId: userId },
+          { createdByUserId: userId },
+        ],
+      })).toBe(0);
+      expect(await db.coaching.findOne({ _id: "assignment:keep" })).toBeTruthy();
+      expect(await db.coaching.findOne({ _id: "calendar:delete-owned" })).toBeNull();
+      expect(await db.coaching.findOne({ _id: "calendar:delete-owned-legacy" })).toBeNull();
+      expect(await db.coaching.findOne({ _id: "calendar:delete-owned-late" })).toBeNull();
+      const keptCalendar = await db.coaching.findOne({ _id: "calendar:keep" });
+      expect(keptCalendar.bookings).toEqual([
+        expect.objectContaining({ id: "booking-keep", studentUserId: "u_keep_student" }),
+      ]);
+      expect(keptCalendar.calendarRev).toBe(9);
+      const misc = await db.coaching.findOne({ _id: "coaching-misc-keep" });
+      expect(misc).toMatchObject({
+        kind: "other",
+        marker: "unrelated",
+        studentUserId: "u_keep_student",
+      });
+      expect(misc).not.toHaveProperty("coachUserId");
+      expect(misc).not.toHaveProperty("createdByUserId");
+
+      // Re-provisioning the same internal id simulates a retry after the first
+      // operation completed; every coaching cleanup becomes a safe no-op.
+      await db.users.insertOne({
+        userId,
+        clerkUserId,
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      const retry = await services.gdpr.deleteAll(userId);
+      expect(retry.coachingAssignments).toBe(0);
+      expect(retry.coachingCalendars).toBe(0);
+      expect(retry.coachingCalendarsScrubbed).toBe(0);
+      expect(retry.coachingLockerScrubbed).toBe(0);
+      expect(retry.coachingAssets).toBe(0);
+      expect(retry.coachingUnknownReferencesScrubbed).toBe(0);
+      expect(await db.coaching.findOne({ _id: "assignment:keep" })).toBeTruthy();
+      expect((await db.coaching.findOne({ _id: "calendar:keep" })).bookings).toHaveLength(1);
+    });
+
+    test("delete drains an active coaching writer before its final cleanup", async () => {
+      const userId = "u_del_coaching_race";
+      await db.users.insertOne({
+        userId,
+        clerkUserId: "clerk_del_coaching_race",
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+      });
+      let writerEntered;
+      const entered = new Promise((resolve) => { writerEntered = resolve; });
+      let resumeWriter;
+      const resume = new Promise((resolve) => { resumeWriter = resolve; });
+      const coaching = new CoachingService({ db });
+      const writer = coaching._withCoachingMutation([userId], async () => {
+        writerEntered();
+        await resume;
+        await db.coaching.insertOne({
+          _id: "assignment:delete-race",
+          kind: "game_requirement",
+          studentUserId: userId,
+          coachUserId: "u_keep_coach",
+          createdByUserId: "u_keep_coach",
+        });
+      });
+      await entered;
+
+      const deletion = services.gdpr.deleteAll(userId);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const fenced = await db.users.findOne({ userId });
+      expect(fenced._coachingMutations).toHaveLength(1);
+      expect(fenced).not.toHaveProperty("_gdprMutation");
+
+      resumeWriter();
+      await writer;
+      const counts = await deletion;
+      expect(counts.coachingAssignments).toBe(1);
+      expect(counts.users).toBe(1);
+      expect(await db.coaching.findOne({ _id: "assignment:delete-race" })).toBeNull();
+      expect(await db.users.findOne({ userId })).toBeNull();
     });
 
     test("delete purges backups, community content, pairings, leaderboard + scrubs admin events", async () => {

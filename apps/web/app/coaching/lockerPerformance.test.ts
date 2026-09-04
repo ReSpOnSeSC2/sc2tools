@@ -188,7 +188,10 @@ describe("Coaching Locker student performance", () => {
     expect(disclosure).toContain("synced ranked 1v1 win/loss record");
     expect(disclosure).toContain("verified replay MMR history");
     expect(disclosure).toContain("matchup trends");
-    expect(disclosure).toContain("This access ends when the coaching attachment is removed");
+    expect(disclosure).toContain("each qualifying ladder or custom 1v1 game");
+    expect(disclosure).toContain("download its archived original replay");
+    expect(disclosure).toContain("Only games played after an assignment is created can count");
+    expect(disclosure).toContain("This access ends immediately if you revoke practice sharing");
   });
 
   it("keeps the generated production Locker in sync with the reviewed source block", () => {

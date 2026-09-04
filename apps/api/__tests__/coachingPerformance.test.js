@@ -286,6 +286,25 @@ describe("GET /v1/coaching/students/:studentId/performance", () => {
     );
   });
 
+  test("denies an attached coach before approval and immediately after revocation", async () => {
+    for (const sharingStatus of ["pending", "revoked"]) {
+      const harness = performanceHarness({
+        auth: { userId: "coach-user", clerkUserId: "clerk-coach", source: "clerk" },
+        role: { role: "coach", coachId: "coach-1" },
+        sharingStatus,
+      });
+
+      const response = await request(harness.app)
+        .get("/v1/coaching/students/student-1/performance");
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ error: "not_found" });
+      expect(harness.coaching.performanceRecord).not.toHaveBeenCalled();
+      expect(harness.aggregations.mmrProgression).not.toHaveBeenCalled();
+      expect(harness.aggregations.netMmrByMatchup).not.toHaveBeenCalled();
+    }
+  });
+
   test("caps account-derived MMR series and uses one net-MMR scan without a race filter", async () => {
     const harness = performanceHarness({
       auth: { userId: "coach-user", clerkUserId: "clerk-coach", source: "clerk" },
@@ -372,7 +391,7 @@ describe("GET /v1/coaching/students/:studentId/performance", () => {
   });
 });
 
-function performanceHarness({ auth, role, seriesCount = 2 }) {
+function performanceHarness({ auth, role, seriesCount = 2, sharingStatus = "accepted" }) {
   const roster = {
     coaches: [
       { id: "coach-1", name: "Coach One", userId: "coach-user" },
@@ -390,6 +409,14 @@ function performanceHarness({ auth, role, seriesCount = 2 }) {
   const coaching = {
     roleFor: jest.fn(async () => role),
     getRoster: jest.fn(async () => roster),
+    practiceSharingFor: jest.fn(async () => ({
+      rev: 1,
+      relationships: role.role === "coach"
+        && role.coachId === "coach-1"
+        && auth.userId === "coach-user"
+        ? [{ student: { id: "student-1", name: "Student One" }, status: sharingStatus }]
+        : [],
+    })),
     performanceRecord: jest.fn(async () => ({
       summary: {
         games: 999,

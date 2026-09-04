@@ -363,6 +363,27 @@ def _get_unit_type_name(event) -> Optional[str]:
     return None
 
 
+def _is_explicit_hallucination(event) -> bool:
+    """Return whether sc2reader positively identified ``event`` as an illusion.
+
+    Tracker ``UnitBornEvent`` rows do not carry a separate hallucination bit,
+    but sc2reader applies the selection flags it observes to the shared
+    ``event.unit`` object while loading the replay. When bit 2 was observed,
+    ``Unit.hallucinated`` is true. Not every hallucination is selected, so a
+    false value means "unknown / ordinary" rather than proof the unit is real;
+    the strategy detector's tech-prerequisite guard remains the fallback for
+    those events.
+
+    A direct event attribute is accepted as well for compatibility with
+    alternate parsers and test fixtures that expose the same signal without a
+    fully populated sc2reader Unit object.
+    """
+    if getattr(event, "hallucinated", False) is True:
+        return True
+    unit = getattr(event, "unit", None)
+    return getattr(unit, "hallucinated", False) is True
+
+
 def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
     """Walk a replay's tracker events and split them by player.
 
@@ -378,6 +399,10 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
         'pid_failed': 0,
         'processed': 0,
         'errors': 0,
+        # Ground-truth hallucinations exposed by sc2reader's unit flags are
+        # discarded at the extraction boundary. The detector also applies a
+        # tech-prerequisite fallback for illusions whose flag was unavailable.
+        'hallucinated_units': 0,
         # Completeness-specific failures for negative proxy assertions.
         # Generic pid_failed includes neutral resources and cannot gate v1.
         'proxy_errors': 0,
@@ -434,6 +459,9 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 else:
                     if clean in SKIP_UNITS:
                         continue
+                    if _is_explicit_hallucination(event):
+                        stats['hallucinated_units'] += 1
+                        continue
                     # UnitBornEvent's ``second`` is the unit-emerges
                     # (FINISH) timestamp. Detection rules in
                     # ``opponent.py`` / ``user.py`` are calibrated against
@@ -476,6 +504,9 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if clean in KNOWN_BUILDINGS:
                     pass
                 elif clean not in SKIP_UNITS:
+                    if _is_explicit_hallucination(event):
+                        stats['hallucinated_units'] += 1
+                        continue
                     evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1

@@ -93,6 +93,44 @@ All routes are mounted under `/v1`.
 | POST   | /v1/import/extract-identities     | clerk        | Ask agent for identity dump      |
 | POST   | /v1/import/pick-folder            | clerk        | Ask agent to show folder picker  |
 
+### Coaching practice assignments
+
+These routes are invisible to accounts outside the Coaching Locker roster.
+Assignment progress is calculated from stored replays on every read; clients
+never submit counters or game associations. A roster link is not consent:
+practice assignments, performance, build suggestions, and replay evidence
+remain unavailable until the exact linked student account accepts sharing with
+the exact linked coach account. Revocation is checked again on every
+coach-facing read; the student retains their own plan history.
+
+`DELETE /v1/me` erases assignment rows involving the account, removes its
+bookings and coaching identity, severs consent relationships, removes any
+coach-owned calendar, and garbage-collects Locker media referenced only by the
+deleted student's record. Other students' coaching work and shared media are
+preserved.
+
+| Method | Path | Auth | Purpose |
+| ------ | ---- | ---- | ------- |
+| GET | /v1/coaching/practice-sharing | clerk coaching role | Read the live consent state visible to the caller |
+| POST | /v1/coaching/students/:studentId/practice-sharing/request | clerk coach/admin | Request or re-request student consent using Locker revision CAS |
+| POST | /v1/coaching/practice-sharing/respond | clerk student | Accept or reject the current pending relationship |
+| POST | /v1/coaching/practice-sharing/revoke | clerk student | Immediately revoke an accepted relationship |
+| GET | /v1/coaching/assignments | clerk coaching role | Page scoped assignments (`page`, `limit`) with live recurrence progress |
+| POST | /v1/coaching/students/:studentId/assignments | clerk coach/admin | Create an idempotent build or total-game requirement |
+| PUT | /v1/coaching/assignments/:assignmentId | clerk coach/admin | CAS-cancel an immutable requirement |
+| GET | /v1/coaching/assignments/:assignmentId/games | clerk coaching role | Page qualifying replay evidence on demand |
+| GET | /v1/coaching/assignments/:assignmentId/games/:gameId/replay-download | clerk coaching role | Authorize and sign a qualifying student's original replay |
+| GET | /v1/coaching/students/:studentId/performance | clerk coaching role | Read consent-gated ranked 1v1 performance |
+| GET | /v1/coaching/students/:userId/games | clerk coaching role | Read consent-gated 1v1 build suggestions |
+
+Create/update definitions use inclusive local `startsOn` and `endsOn` dates
+(`YYYY-MM-DD`) plus an IANA `timeZone`. Responses also include the resolved
+UTC `startsAt` (inclusive) and `endsAt` (exclusive) instants. Eligible games
+are non-resumed 1v1 replays, whether ladder or custom; team and FFA games are
+always excluded. Eligibility and recurring-calendar attribution use the replay
+start instant. Older rows without `startedAt` derive it from `date - durationSec`
+and fall back to `date` only when neither source is available.
+
 ### Spatial heatmaps (Stage C bucket 5)
 
 | Method | Path                                        | Purpose                                |

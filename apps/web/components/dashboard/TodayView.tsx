@@ -26,7 +26,7 @@ const DEFAULT_TAB_APPLIED_KEY = "sc2tools.defaultTabApplied";
 /**
  * TodayView — the /app landing surface. Everything here is the
  * between-games glance: the live game card while the agent reports a
- * running match, the KPI strip, Ladder Pulse, and the Daily Pulse strip
+ * running match, the KPI strip, Daily Pulse, and Ladder Pulse
  * whose cards deep-link into the routed sections.
  *
  * Also honours Settings → "Default tab": users who chose a section as
@@ -73,11 +73,7 @@ export function TodayView() {
         <LiveGamePanel />
       </ErrorBoundary>
 
-      <DashboardKpiStrip totalGames={me.games.total} />
-
-      <ErrorBoundary label="Ladder Pulse">
-        <LadderPulse />
-      </ErrorBoundary>
+      <DashboardKpiStrip />
 
       <ErrorBoundary label="the Daily Pulse strip">
         <DailyPulse
@@ -86,6 +82,10 @@ export function TodayView() {
             router.push(opponentDossierHref(pulseId))
           }
         />
+      </ErrorBoundary>
+
+      <ErrorBoundary label="Ladder Pulse">
+        <LadderPulse />
       </ErrorBoundary>
     </div>
   );

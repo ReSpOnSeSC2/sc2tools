@@ -1,14 +1,16 @@
 """Anti-hallucination prerequisite guard tests.
 
-Covers the rule defended against in the screenshot bug: a Sentry
-hallucinates a Phoenix in PvT and the user's build was being mis-tagged
-as "PvT - Phoenix Opener". The fix is two-fold and is exercised here:
+Covers the rule defended against in the reported bugs: a Sentry
+hallucinates Phoenix and the user's build is mis-tagged as a Phoenix
+opener/style in PvT or PvP. The fix is exercised at three layers here:
 
   1. ``count_real_units`` returns 0 for a Phoenix event whose
      prerequisite Stargate was never built before the unit appeared.
-  2. ``UserBuildDetector.detect_my_build`` no longer returns
+  2. A positive sc2reader hallucination flag wins even if a Stargate exists.
+  3. ``UserBuildDetector.detect_my_build`` no longer returns
      "PvT - Phoenix Opener" / "PvT - Phoenix into Robo" when the only
-     Phoenix in the replay was a Sentry hallucination.
+     Phoenix in the replay was a Sentry hallucination, or "PvP - Phoenix
+     Style" when multiple hallucinated Phoenix cross its unit threshold.
 
 Pure-function tests over fabricated event lists — no replay parsing,
 so this runs without sc2reader in the test environment.
@@ -150,6 +152,17 @@ class TestCountRealUnits:
         units = [_unit("Phoenix", 280), _unit("Phoenix", 320)]
         assert count_real_units("Phoenix", 420, units, buildings) == 2
 
+    def test_explicit_hallucination_is_rejected_even_with_stargate(self):
+        # The tech-prerequisite heuristic alone cannot distinguish an
+        # illusion once its owner has started the corresponding structure.
+        # sc2reader's positive unit flag is authoritative when available.
+        buildings = [_building("Stargate", 200)]
+        units = [
+            {**_unit("Phoenix", 280), "hallucinated": True},
+            _unit("Phoenix", 320),
+        ]
+        assert count_real_units("Phoenix", 420, units, buildings) == 1
+
     def test_mixed_phoenix_only_real_ones_count(self):
         # First Phoenix is a hallucination (no Stargate yet); second
         # Phoenix is real (Stargate is up).
@@ -228,6 +241,75 @@ class TestPvtPhoenixHallucinationRegression:
         assert "Phoenix" in result, (
             f"Expected a Phoenix-build classification, got {result!r}"
         )
+
+
+class TestPvpPhoenixHallucinationRegression:
+    """PvP Phoenix Style must require Phoenix that a Stargate could make."""
+
+    @pytest.fixture
+    def detector(self) -> UserBuildDetector:
+        return UserBuildDetector(custom_builds=[])
+
+    def test_multiple_phoenix_without_stargate_do_not_set_phoenix_style(
+        self, detector,
+    ):
+        events = [
+            _building("Nexus", 0),
+            _building("Pylon", 18),
+            _building("Gateway", 75),
+            _building("CyberneticsCore", 115),
+            _building("TwilightCouncil", 210),
+            _unit("Sentry", 180),
+            _unit("Sentry", 230),
+            # Two Hallucinate Phoenix casts can put four Phoenix tracker
+            # events on the field, enough to cross the style threshold.
+            _unit("Phoenix", 240),
+            _unit("Phoenix", 240),
+            _unit("Phoenix", 300),
+            _unit("Phoenix", 300),
+        ]
+        result = detector.detect_my_build(
+            "vs Protoss", events, my_race="Protoss",
+        )
+        assert result != "PvP - Phoenix Style"
+
+    def test_phoenix_before_later_stargate_do_not_set_phoenix_style(
+        self, detector,
+    ):
+        events = [
+            _building("Nexus", 0),
+            _building("Pylon", 18),
+            _building("Gateway", 75),
+            _building("CyberneticsCore", 115),
+            _unit("Sentry", 180),
+            _unit("Phoenix", 200),
+            _unit("Phoenix", 200),
+            _unit("Phoenix", 230),
+            _building("Stargate", 260),
+        ]
+        result = detector.detect_my_build(
+            "vs Protoss", events, my_race="Protoss",
+        )
+        assert result != "PvP - Phoenix Style"
+
+    def test_flagged_phoenix_do_not_set_style_even_after_stargate(
+        self, detector,
+    ):
+        events = [
+            _building("Nexus", 0),
+            _building("Pylon", 18),
+            _building("Gateway", 75),
+            _building("CyberneticsCore", 115),
+            _building("Stargate", 180),
+            _unit("Sentry", 220),
+            {**_unit("Phoenix", 240), "hallucinated": True},
+            {**_unit("Phoenix", 240), "hallucinated": True},
+            {**_unit("Phoenix", 300), "hallucinated": True},
+        ]
+        result = detector.detect_my_build(
+            "vs Protoss", events, my_race="Protoss",
+        )
+        assert result != "PvP - Phoenix Style"
 
 
 class TestPvt2BaseTemplarRequiresArchives:

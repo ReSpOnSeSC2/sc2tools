@@ -263,6 +263,8 @@ class BaseStrategyDetector:
                         if not self._is_proxy(ev, main_loc, 50.0):
                             return False
                     if is_unit_with_prereq and ev in units:
+                        if ev.get("hallucinated") is True:
+                            return False
                         if not unit_prereq_met(
                             norm_name, ev.get("time", 9999), buildings,
                         ):

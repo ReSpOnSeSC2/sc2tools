@@ -21,8 +21,17 @@ const { parseFilters } = require("../util/parseQuery");
  *   GET  /coaching/state                   — full state (admin/coach) or scoped (student)
  *   PUT  /coaching/state                   — CAS write {state, rev} (admin/coach)
  *   GET  /coaching/users?q=                — signed-up directory + live agent check (admin/coach)
- *   GET  /coaching/students/:studentId/performance — ranked replay performance for an attached student
- *   GET  /coaching/students/:userId/games  — slim game list (admin/coach, or the student themself)
+ *   GET  /coaching/practice-sharing        — live student-approved assignment/replay consent
+ *   POST /coaching/students/:id/practice-sharing/request — coach requests or re-requests consent
+ *   POST /coaching/practice-sharing/respond — student accepts/rejects a pending relationship
+ *   POST /coaching/practice-sharing/revoke  — student revokes an accepted relationship
+ *   GET  /coaching/assignments             — role-scoped requirements + live replay progress
+ *   POST /coaching/students/:id/assignments — create an idempotent practice requirement
+ *   PUT  /coaching/assignments/:id         — CAS-update or cancel a requirement
+ *   GET  /coaching/assignments/:id/games   — paged replay evidence
+ *   GET  /coaching/assignments/:id/games/:gameId/replay-download — authorized replay
+ *   GET  /coaching/students/:studentId/performance — consent-gated ranked replay performance
+ *   GET  /coaching/students/:userId/games  — consent-gated slim 1v1 list for build suggestions
  *   GET  /coaching/calendar                — availability, bookings, and student-local slot instants
  *   PUT  /coaching/calendar/availability   — publish recurring coach hours
  *   POST /coaching/calendar/bookings       — atomically book an attached coach
@@ -35,6 +44,7 @@ const { parseFilters } = require("../util/parseQuery");
  *   isAdmin: (req: import('express').Request) => boolean,
  *   coaching: import('../services/coaching').CoachingService,
  *   aggregations: import('../services/types').AggregationsService,
+ *   replayFiles?: import('../services/replayFiles').ReplayFilesService|null,
  *   users: {getSummary(userId: string): Promise<{userId: string, clerkUserId: string|null, email: string|null}>},
  *   logger?: import('pino').Logger,
  * }} deps
@@ -116,7 +126,7 @@ function buildCoachingRouter(deps) {
           state: {
             coach: state.coach,
             coaches: /** @type {any[]} */ (state.coaches || []).map((c) => ({ id: c.id, name: c.name })),
-            students: student ? [student] : [],
+            students: student ? [publicStudentState(student)] : [],
             customBuilds: state.customBuilds || [],
             assets: pickAssets(state, student),
           },
@@ -238,7 +248,7 @@ function buildCoachingRouter(deps) {
 
   router.put("/coaching/state", withRole, async (req, res, next) => {
     try {
-      const { cr } = ctx(req);
+      const { auth, cr } = ctx(req);
       const { role } = cr;
       // Students write too — worksheet answers, intake, submissions all
       // mutate state. Scoped-write safety for students is enforced by the
@@ -259,7 +269,11 @@ function buildCoachingRouter(deps) {
         toWrite = mergeCoachWrite(current.state, incoming, cr.coachId);
         if (!toWrite) { res.status(403).json({ error: "not_writer" }); return; }
       }
-      const out = await deps.coaching.putStateWithRosterGuard(toWrite, rev);
+      const out = await deps.coaching.putStateWithRosterGuard(
+        toWrite,
+        rev,
+        [auth.userId],
+      );
       if (!out.ok) {
         res.status(409).json({ error: "conflict", rev: out.rev, state: out.state });
         return;
@@ -282,6 +296,214 @@ function buildCoachingRouter(deps) {
       next(err);
     }
   });
+
+  router.get("/coaching/practice-sharing", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const { auth, cr } = ctx(req);
+      if (auth.source !== "clerk") {
+        coachingNotFound(res);
+        return;
+      }
+      res.json(await deps.coaching.practiceSharingFor(auth.userId, cr));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post(
+    "/coaching/students/:studentId/practice-sharing/request",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+        res.json(await deps.coaching.requestPracticeSharing(
+          auth.userId,
+          cr,
+          req.params.studentId,
+          req.body || {},
+        ));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.post("/coaching/practice-sharing/respond", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const { auth, cr } = ctx(req);
+      if (auth.source !== "clerk") {
+        coachingNotFound(res);
+        return;
+      }
+      res.json(await deps.coaching.respondPracticeSharing(
+        auth.userId,
+        cr,
+        req.body || {},
+      ));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/coaching/practice-sharing/revoke", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const { auth, cr } = ctx(req);
+      if (auth.source !== "clerk") {
+        coachingNotFound(res);
+        return;
+      }
+      res.json(await deps.coaching.revokePracticeSharing(
+        auth.userId,
+        cr,
+        req.body || {},
+      ));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/coaching/assignments", withRole, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const { auth, cr } = ctx(req);
+      if (auth.source !== "clerk") {
+        coachingNotFound(res);
+        return;
+      }
+      const studentId = typeof req.query.studentId === "string"
+        ? req.query.studentId
+        : undefined;
+      const page = Number(req.query.page);
+      const limit = Number(req.query.limit);
+      const result = await deps.coaching.listAssignments(
+        auth.userId,
+        cr,
+        { studentId, page, limit, paginated: true },
+      );
+      const pageResult = Array.isArray(result)
+        ? {
+          assignments: result,
+          page: Number.isInteger(page) && page > 0 ? page : 1,
+          limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 20,
+          hasMore: false,
+        }
+        : result;
+      res.json({ serverTime: new Date().toISOString(), ...pageResult });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post(
+    "/coaching/students/:studentId/assignments",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+        const assignment = await deps.coaching.createAssignment(
+          auth.userId,
+          cr,
+          req.params.studentId,
+          req.body || {},
+        );
+        res.status(201).json({ assignment });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.put(
+    "/coaching/assignments/:assignmentId",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+        const assignment = await deps.coaching.replaceAssignment(
+          auth.userId,
+          cr,
+          req.params.assignmentId,
+          req.body || {},
+        );
+        res.json({ assignment });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
+    "/coaching/assignments/:assignmentId/games",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+        res.json(await deps.coaching.assignmentGames(
+          auth.userId,
+          cr,
+          req.params.assignmentId,
+          { page: Number(req.query.page), limit: Number(req.query.limit) },
+        ));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get(
+    "/coaching/assignments/:assignmentId/games/:gameId/replay-download",
+    withRole,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
+      try {
+        const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
+        const owner = await deps.coaching.assignmentReplayOwner(
+          auth.userId,
+          cr,
+          req.params.assignmentId,
+          req.params.gameId,
+        );
+        if (!deps.replayFiles) {
+          const unavailable = /** @type {Error & {status:number,code:string}} */ (
+            new Error("Original replay storage is unavailable.")
+          );
+          unavailable.status = 503;
+          unavailable.code = "replay_storage_unavailable";
+          throw unavailable;
+        }
+        res.json(await deps.replayFiles.prepareDownload(owner.userId, owner.gameId));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.get(
     "/coaching/students/:studentId/performance",
@@ -310,13 +532,18 @@ function buildCoachingRouter(deps) {
         const targetUserId = typeof student.userId === "string"
           ? student.userId.trim()
           : "";
-        const allowed = cr.role === "admin"
-          || (cr.role === "coach"
-            && Boolean(cr.coachId)
-            && student.coachId === cr.coachId)
+        let allowed = cr.role === "admin"
           || (cr.role === "student"
             && cr.studentId === student.id
             && targetUserId === auth.userId);
+        if (cr.role === "coach" && cr.coachId && student.coachId === cr.coachId) {
+          const sharing = await deps.coaching.practiceSharingFor(auth.userId, cr);
+          allowed = sharing.relationships.some((/** @type {any} */ relationship) =>
+            relationship
+            && relationship.student?.id === student.id
+            && relationship.status === "accepted",
+          );
+        }
         if (!targetUserId || !allowed) {
           coachingNotFound(res);
           return;
@@ -398,19 +625,32 @@ function buildCoachingRouter(deps) {
     "/coaching/students/:userId/games",
     withRole,
     async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store, max-age=0");
       try {
         const { auth, cr } = ctx(req);
+        if (auth.source !== "clerk") {
+          coachingNotFound(res);
+          return;
+        }
         const role = cr.role;
         const target = req.params.userId;
         const self = target === auth.userId;
         let allowed = role === "admin" || (role === "student" && self);
         if (role === "coach" && cr.coachId) {
           const roster = await deps.coaching.getRoster();
-          allowed = roster.students.some((student) =>
+          const matchingStudents = roster.students.filter((student) =>
             student &&
             student.coachId === cr.coachId &&
             student.userId === target,
           );
+          if (matchingStudents.length === 1) {
+            const sharing = await deps.coaching.practiceSharingFor(auth.userId, cr);
+            allowed = sharing.relationships.some((/** @type {any} */ relationship) =>
+              relationship
+              && relationship.student?.id === matchingStudents[0].id
+              && relationship.status === "accepted",
+            );
+          }
         }
         if (!allowed) {
           res.status(404).json({ error: "not_found" }); return;
@@ -493,13 +733,39 @@ function mergeCoachWrite(serverState, incoming, coachId) {
 /** @param {Record<string, any>} state @param {string|undefined} coachId */
 function scopeCoachState(state, coachId) {
   const students = /** @type {any[]} */ (state.students || [])
-    .filter((student) => student && student.coachId === coachId);
+    .filter((student) => student && student.coachId === coachId)
+    .map(publicStudentState);
   return {
     ...state,
     coaches: /** @type {any[]} */ (state.coaches || [])
       .map((coach) => ({ id: coach.id, name: coach.name })),
     students,
     assets: pickAssetsForStudents(state, students),
+  };
+}
+
+/**
+ * Account-binding ids stay server-side. Scoped Locker clients only need the
+ * student's decision and timestamps; dedicated consent mutations resolve the
+ * live identities again before writing.
+ * @param {any} student
+ */
+function publicStudentState(student) {
+  if (!student || !student.practiceSharing || typeof student.practiceSharing !== "object") {
+    return student;
+  }
+  const sharing = student.practiceSharing;
+  return {
+    ...student,
+    practiceSharing: {
+      version: 1,
+      status: ["pending", "accepted", "rejected", "revoked"].includes(sharing.status)
+        ? sharing.status
+        : "pending",
+      requestedAt: sharing.requestedAt || null,
+      respondedAt: sharing.respondedAt || null,
+      revokedAt: sharing.revokedAt || null,
+    },
   };
 }
 

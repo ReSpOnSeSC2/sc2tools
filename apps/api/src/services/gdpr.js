@@ -6,6 +6,7 @@ const { COLLECTIONS } = require("../config/constants");
 
 const GDPR_MUTATION_LEASE_MS = 15 * 60 * 1000;
 const GDPR_MUTATION_RENEW_MS = 60 * 1000;
+const GDPR_COACHING_DRAIN_MS = 15 * 1000;
 
 /** @param {number} ms */
 function wait(ms) {
@@ -102,9 +103,10 @@ class GdprService {
    * keyed by collection — caller serializes / streams as needed.
    *
    * @param {string} userId
+   * @param {{includeSharedCoaching?: boolean}} [options]
    * @returns {Promise<{userId: string, exportedAt: string, data: Record<string, object[]>, user: object|null}>}
    */
-  async export(userId) {
+  async export(userId, options = {}) {
     /** @type {Record<string, object[]>} */
     const data = {};
     for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
@@ -113,6 +115,68 @@ class GdprService {
       data[jsonKey] = await coll
         .find({ userId }, { projection: { _id: 0 } })
         .toArray();
+    }
+    // Coaching uses a shared Locker document and relationship-specific
+    // assignment rows instead of a simple `{ userId }` collection. Export
+    // only the caller's portion of that shared state.
+    if (this.db.coaching && options.includeSharedCoaching !== false) {
+      const coaching = /** @type {any} */ (this.db.coaching);
+      const assignmentRows = await coaching.find(
+        {
+          kind: "game_requirement",
+          $or: [
+            { studentUserId: userId },
+            { coachUserId: userId },
+            { createdByUserId: userId },
+          ],
+        },
+        { projection: { _id: 0 } },
+      ).toArray();
+      data.coachingAssignments = assignmentRows.map((/** @type {any} */ row) =>
+        exportedCoachingAssignment(row, userId));
+      const locker = await coaching.findOne(
+        { _id: "locker" },
+        { projection: { _id: 0, "state.coaches": 1, "state.students": 1 } },
+      );
+      const coaches = /** @type {any[]} */ (
+        Array.isArray(locker?.state?.coaches) ? locker.state.coaches : []
+      );
+      const students = /** @type {any[]} */ (
+        Array.isArray(locker?.state?.students) ? locker.state.students : []
+      );
+      const ownCoaches = coaches.filter((row) => row && row.userId === userId);
+      const ownStudents = students.filter((row) => row && row.userId === userId);
+      const coachedIds = new Set(ownCoaches.map((row) => row.id).filter(Boolean));
+      data.coachingRelationships = [
+        ...ownCoaches.map((coach) => ({ role: "coach", coach })),
+        ...ownStudents.map((student) => ({
+          role: "student",
+          student,
+          coach: publicCoachingParty(
+            coaches.find((row) => row && row.id === student.coachId),
+          ),
+        })),
+        ...students
+          .filter((student) => student
+            && student.userId !== userId
+            && coachedIds.has(student.coachId))
+          .map((student) => ({
+            role: "coach_of_student",
+            student: publicCoachedStudent(student),
+          })),
+      ];
+      const calendarRows = await coaching.find(
+        {
+          _id: { $regex: "^calendar:" },
+          $or: [
+            { coachUserId: userId },
+            { "bookings.studentUserId": userId },
+          ],
+        },
+        { projection: { _id: 0 } },
+      ).toArray();
+      data.coachingCalendars = calendarRows.map((/** @type {any} */ calendar) =>
+        exportedCoachingCalendar(calendar, userId));
     }
     const user = await this.db.users.findOne(
       { userId },
@@ -164,6 +228,8 @@ class GdprService {
       await gdprFence.assert();
       counts.replayFiles = -1;
     }
+
+    addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
 
     await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
@@ -233,6 +299,11 @@ class GdprService {
       await this.replayFiles.deleteAllForUser(userId);
       await gdprFence.assert();
     }
+    // Close the equivalent coaching race: a request may have resolved its
+    // relationship immediately before the first Locker scrub and committed an
+    // assignment, calendar, or booking afterward. Re-read every shared
+    // coaching surface immediately before removing the account row.
+    addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
     await gdprFence.assert();
     clearInterval(gdprFence.timer);
     const userRes = await this.db.users.deleteOne({
@@ -245,6 +316,235 @@ class GdprService {
       await this._releaseMutationFence(userId, gdprFence);
       throw err;
     }
+  }
+
+  /**
+   * Remove the caller from the mixed-purpose coaching collection without
+   * disturbing unrelated coaches, students, assignments, or bookings.
+   *
+   * Calendars and bookings are removed before the Locker identities that let
+   * us resolve legacy coach/student ids. The final assignment delete happens
+   * after the Locker update so a fresh coaching mutation can no longer pass a
+   * live relationship check while account erasure is in progress. Every
+   * operation is a delete/pull and can therefore be retried safely.
+   *
+   * @param {string} userId
+   * @param {{assert: () => Promise<void>}} gdprFence
+   * @returns {Promise<Record<string, number>>}
+   */
+  async _deleteCoachingData(userId, gdprFence) {
+    const coaching = /** @type {any} */ (this.db.coaching);
+    if (!coaching) return {};
+
+    await gdprFence.assert();
+    const locker = await coaching.findOne(
+      { _id: "locker" },
+      {
+        projection: {
+          _id: 0,
+          "state.coaches": 1,
+          "state.students": 1,
+          "state.assets": 1,
+        },
+      },
+    );
+    const coaches = /** @type {any[]} */ (Array.isArray(locker?.state?.coaches)
+      ? locker.state.coaches
+      : []);
+    const students = /** @type {any[]} */ (Array.isArray(locker?.state?.students)
+      ? locker.state.students
+      : []);
+    const coachIds = coaches
+      .filter((coach) => coach && coach.userId === userId)
+      .map((coach) => coach.id)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    const removedStudents = students.filter((student) => student && (
+      student.userId === userId
+      || student.practiceSharing?.studentUserId === userId
+    ));
+    const studentIds = removedStudents
+      .map((student) => student.id)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    const candidateAssetIds = coachingStudentAssetIds(locker?.state, removedStudents);
+
+    const calendarCounts = await this._deleteCoachingCalendars(
+      userId,
+      coachIds,
+      studentIds,
+      gdprFence,
+    );
+    const scrubbedLocker = await this._scrubCoachingLocker(userId, coachIds, gdprFence);
+    const deletedAssets = await this._deleteUnreferencedCoachingAssets(
+      candidateAssetIds,
+      gdprFence,
+    );
+
+    await gdprFence.assert();
+    const assignments = await coaching.deleteMany({
+      kind: "game_requirement",
+      $or: [
+        { studentUserId: userId },
+        { coachUserId: userId },
+        { createdByUserId: userId },
+      ],
+    });
+    const unknownReferences = await this._scrubUnknownCoachingReferences(userId, gdprFence);
+
+    return {
+      coachingAssignments: assignments.deletedCount || 0,
+      coachingCalendars: calendarCounts.deleted,
+      coachingCalendarsScrubbed: calendarCounts.scrubbed,
+      coachingLockerScrubbed: scrubbedLocker,
+      coachingAssets: deletedAssets,
+      coachingUnknownReferencesScrubbed: unknownReferences,
+    };
+  }
+
+  /** @param {string} userId @param {string[]} coachIds @param {string[]} studentIds @param {{assert: () => Promise<void>}} gdprFence */
+  async _deleteCoachingCalendars(userId, coachIds, studentIds, gdprFence) {
+    const coaching = /** @type {any} */ (this.db.coaching);
+    /** @type {Record<string, any>[]} */
+    const ownedClauses = [{ coachUserId: userId }];
+    if (coachIds.length > 0) {
+      ownedClauses.push({
+        coachId: { $in: coachIds },
+        $or: [
+          { coachUserId: { $exists: false } },
+          { coachUserId: null },
+          { coachUserId: "" },
+        ],
+      });
+    }
+    await gdprFence.assert();
+    const deleted = await coaching.deleteMany({
+      _id: { $regex: "^calendar:" },
+      $or: ownedClauses,
+    });
+
+    /** @type {Record<string, any>[]} */
+    const bookingClauses = [{ studentUserId: userId }];
+    if (studentIds.length > 0) bookingClauses.push({ studentId: { $in: studentIds } });
+    const bookingMatch = bookingClauses.length === 1
+      ? bookingClauses[0]
+      : { $or: bookingClauses };
+    await gdprFence.assert();
+    const scrubbed = await coaching.updateMany(
+      { _id: { $regex: "^calendar:" }, bookings: { $elemMatch: bookingMatch } },
+      {
+        $pull: { bookings: bookingMatch },
+        $set: stampVersion({ updatedAt: new Date() }, COLLECTIONS.COACHING),
+        $inc: { calendarRev: 1 },
+      },
+    );
+    return { deleted: deleted.deletedCount || 0, scrubbed: scrubbed.modifiedCount || 0 };
+  }
+
+  /** @param {string} userId @param {string[]} coachIds @param {{assert: () => Promise<void>}} gdprFence */
+  async _scrubCoachingLocker(userId, coachIds, gdprFence) {
+    const coaching = /** @type {any} */ (this.db.coaching);
+    /** @type {Record<string, any>[]} */
+    const dependentClauses = [{ "practiceSharing.coachUserId": userId }];
+    if (coachIds.length > 0) dependentClauses.push({ coachId: { $in: coachIds } });
+    const dependentMatch = { $or: dependentClauses };
+    const dependentArrayFilter = { $or: [
+      { "dependent.practiceSharing.coachUserId": userId },
+      ...(coachIds.length > 0 ? [{ "dependent.coachId": { $in: coachIds } }] : []),
+    ] };
+    await gdprFence.assert();
+    const severed = await coaching.updateOne(
+      { _id: "locker", "state.students": { $elemMatch: dependentMatch } },
+      {
+        $unset: {
+          "state.students.$[dependent].coachId": "",
+          "state.students.$[dependent].practiceSharing": "",
+        },
+        $set: stampVersion({ updatedAt: new Date() }, COLLECTIONS.COACHING),
+        $inc: { rev: 1 },
+      },
+      { arrayFilters: [dependentArrayFilter] },
+    );
+
+    const ownStudentMatch = { $or: [
+      { userId },
+      { "practiceSharing.studentUserId": userId },
+    ] };
+    await gdprFence.assert();
+    const removed = await coaching.updateOne(
+      {
+        _id: "locker",
+        $or: [
+          { "state.coaches": { $elemMatch: { userId } } },
+          { "state.students": { $elemMatch: ownStudentMatch } },
+        ],
+      },
+      {
+        $pull: { "state.coaches": { userId }, "state.students": ownStudentMatch },
+        $set: stampVersion({ updatedAt: new Date() }, COLLECTIONS.COACHING),
+        $inc: { rev: 1 },
+      },
+    );
+    return (severed.modifiedCount || 0) + (removed.modifiedCount || 0);
+  }
+
+  /** @param {string[]} candidateIds @param {{assert: () => Promise<void>}} gdprFence */
+  async _deleteUnreferencedCoachingAssets(candidateIds, gdprFence) {
+    const coaching = /** @type {any} */ (this.db.coaching);
+    if (candidateIds.length === 0) return 0;
+    const deadline = Date.now() + 15_000;
+    for (;;) {
+      await gdprFence.assert();
+      const locker = await coaching.findOne({ _id: "locker" });
+      if (!locker || !locker.state) return 0;
+      const assets = locker.state.assets && typeof locker.state.assets === "object"
+        ? locker.state.assets
+        : {};
+      const referenced = coachingReferencedAssetIds(locker.state, candidateIds);
+      const removable = candidateIds.filter((id) => assets[id] && !referenced.has(id));
+      if (removable.length === 0) return 0;
+      const rev = Number(locker.rev) || 0;
+      const stamp = stampVersion({ updatedAt: new Date() }, COLLECTIONS.COACHING);
+      const result = await coaching.updateOne(
+        { _id: "locker", rev: rev > 0 ? rev : { $in: [0, null] } },
+        [{ $set: {
+          "state.assets": {
+            $arrayToObject: {
+              $filter: {
+                input: { $objectToArray: { $ifNull: ["$state.assets", {}] } },
+                as: "asset",
+                cond: { $eq: [{ $in: ["$$asset.k", removable] }, false] },
+              },
+            },
+          },
+          rev: { $add: [{ $ifNull: ["$rev", 0] }, 1] },
+          ...stamp,
+        } }],
+      );
+      if (result.modifiedCount === 1) return removable.length;
+      if (Date.now() >= deadline) throw new Error("gdpr_coaching_asset_cleanup_busy");
+      await wait(10);
+    }
+  }
+
+  /** @param {string} userId @param {{assert: () => Promise<void>}} gdprFence */
+  async _scrubUnknownCoachingReferences(userId, gdprFence) {
+    const coaching = /** @type {any} */ (this.db.coaching);
+    let scrubbed = 0;
+    for (const field of ["studentUserId", "coachUserId", "createdByUserId"]) {
+      await gdprFence.assert();
+      const result = await coaching.updateMany(
+        {
+          _id: { $ne: "locker", $not: { $regex: "^calendar:" } },
+          kind: { $ne: "game_requirement" },
+          [field]: userId,
+        },
+        {
+          $unset: { [field]: "" },
+          $set: stampVersion({ updatedAt: new Date() }, COLLECTIONS.COACHING),
+        },
+      );
+      scrubbed += result.modifiedCount || 0;
+    }
+    return scrubbed;
   }
 
   /**
@@ -582,7 +882,11 @@ class GdprService {
   }
 
   /**
-   * Take a manual snapshot. We store the export as a single document
+   * Take a manual snapshot. We store the user's restorable, directly scoped
+   * collections as a single document. Shared coaching records are deliberately
+   * excluded: restoring one party must never overwrite a student's consent or
+   * resurrect a coach's assignment history, and snapshots must not retain the
+   * other party's profile after account erasure.
    * in a "user_backups"-style collection scoped to the user — for
    * SC2-Tools volumes (a few hundred MB at most), Mongo handles this
    * fine, and it keeps GDPR export & restore symmetric.
@@ -591,7 +895,7 @@ class GdprService {
    * @returns {Promise<{id: string, createdAt: Date, sizeBytes: number}>}
    */
   async snapshot(userId) {
-    const exportData = await this.export(userId);
+    const exportData = await this.export(userId, { includeSharedCoaching: false });
     const json = JSON.stringify(exportData);
     const sizeBytes = Buffer.byteLength(json, "utf8");
     const id = `bk_${Date.now()}_${Math.floor(Math.random() * 1e6)
@@ -736,21 +1040,43 @@ class GdprService {
   /** @param {string} userId @param {string} kind */
   async _acquireMutationFence(userId, kind) {
     const id = randomUUID();
-    const now = new Date();
-    const claimed = await this.db.users.updateOne(
-      { userId, $or: [
-        { _gdprMutation: { $exists: false } },
-        { "_gdprMutation.leaseUntil": { $lte: now } },
-        { "_gdprMutation.leaseUntil": { $exists: false } },
-      ] },
-      { $set: { _gdprMutation: {
-        id,
-        kind,
-        startedAt: now,
-        leaseUntil: new Date(now.getTime() + GDPR_MUTATION_LEASE_MS),
-      } } },
-    );
-    if (claimed.matchedCount === 0) {
+    const deadline = Date.now() + GDPR_COACHING_DRAIN_MS;
+    for (;;) {
+      const now = new Date();
+      const claimed = await this.db.users.updateOne(
+        { userId, $and: [
+          { $or: [
+            { _gdprMutation: { $exists: false } },
+            { "_gdprMutation.leaseUntil": { $lte: now } },
+            { "_gdprMutation.leaseUntil": { $exists: false } },
+          ] },
+          { $or: [
+            { _coachingMutations: { $exists: false } },
+            { _coachingMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
+          ] },
+        ] },
+        { $set: { _gdprMutation: {
+          id,
+          kind,
+          startedAt: now,
+          leaseUntil: new Date(now.getTime() + GDPR_MUTATION_LEASE_MS),
+        } } },
+      );
+      if (claimed.matchedCount === 1) {
+        break;
+      }
+      const blocked = await this.db.users.findOne(
+        { userId },
+        { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1 } },
+      );
+      const activeCoaching = Array.isArray(blocked?._coachingMutations)
+        && blocked._coachingMutations.some((mutation) =>
+          mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now,
+        );
+      if (activeCoaching && !blocked?._gdprMutation && Date.now() < deadline) {
+        await wait(50);
+        continue;
+      }
       const err = new Error("gdpr_operation_busy");
       /** @type {any} */ (err).status = 409;
       throw err;
@@ -873,6 +1199,97 @@ function countsOf(data) {
     out[k] = Array.isArray(v) ? v.length : 0;
   }
   return out;
+}
+
+/** @param {Record<string, number>} target @param {Record<string, number>} next */
+function addDeletionCounts(target, next) {
+  for (const [key, value] of Object.entries(next)) {
+    target[key] = (target[key] || 0) + value;
+  }
+}
+
+/** @param {any} state @param {any[]} students */
+function coachingStudentAssetIds(state, students) {
+  const assets = state?.assets && typeof state.assets === "object" ? state.assets : {};
+  const references = JSON.stringify(students || []);
+  return Object.keys(assets).filter((id) => references.includes(id));
+}
+
+/** @param {any} state @param {string[]} candidateIds */
+function coachingReferencedAssetIds(state, candidateIds) {
+  const preserved = { ...(state || {}) };
+  delete preserved.assets;
+  const references = JSON.stringify(preserved);
+  return new Set(candidateIds.filter((id) => references.includes(id)));
+}
+
+/** Keep a related party identifiable without exporting their private Locker record. */
+function publicCoachingParty(/** @type {any} */ party) {
+  if (!party || typeof party !== "object") return null;
+  return {
+    id: typeof party.id === "string" ? party.id : null,
+    name: typeof party.name === "string" ? party.name : null,
+  };
+}
+
+/** A coach's DSAR may describe the relationship, never the student's full profile. */
+function publicCoachedStudent(/** @type {any} */ student) {
+  const sharing = student?.practiceSharing && typeof student.practiceSharing === "object"
+    ? student.practiceSharing
+    : null;
+  return {
+    ...publicCoachingParty(student),
+    coachId: typeof student?.coachId === "string" ? student.coachId : null,
+    practiceSharing: sharing ? {
+      policyVersion: typeof sharing.policyVersion === "string" ? sharing.policyVersion : null,
+      status: typeof sharing.status === "string" ? sharing.status : null,
+      requestedAt: sharing.requestedAt || null,
+      respondedAt: sharing.respondedAt || null,
+      revokedAt: sharing.revokedAt || null,
+    } : null,
+  };
+}
+
+/**
+ * Remove relationship secrets and the other party's internal account id.
+ * @param {any} assignment @param {string} userId
+ */
+function exportedCoachingAssignment(assignment, userId) {
+  const exported = { ...assignment };
+  delete exported.practiceSharingGrantId;
+  if (exported.studentUserId !== userId) delete exported.studentUserId;
+  if (exported.coachUserId !== userId) delete exported.coachUserId;
+  if (exported.createdByUserId !== userId) delete exported.createdByUserId;
+  return exported;
+}
+
+/**
+ * Export only scheduling data belonging to the caller, with shared ids redacted.
+ * @param {any} calendar @param {string} userId
+ */
+function exportedCoachingCalendar(calendar, userId) {
+  const ownsCalendar = calendar?.coachUserId === userId;
+  const allBookings = Array.isArray(calendar?.bookings) ? calendar.bookings : [];
+  const bookings = (ownsCalendar
+    ? allBookings
+    : allBookings.filter((/** @type {any} */ booking) => booking?.studentUserId === userId))
+    .map((/** @type {any} */ booking) => {
+      const exported = { ...booking };
+      if (exported.studentUserId !== userId) delete exported.studentUserId;
+      return exported;
+    });
+  if (!ownsCalendar) {
+    return {
+      role: "student",
+      calendar: {
+        coachId: calendar?.coachId || null,
+        coachName: calendar?.coachName || null,
+        bookings,
+      },
+    };
+  }
+  const exported = { ...calendar, bookings };
+  return { role: "coach", calendar: exported };
 }
 
 module.exports = {

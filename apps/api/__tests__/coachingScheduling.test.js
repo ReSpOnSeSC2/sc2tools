@@ -144,6 +144,12 @@ describe("coaching scheduling", () => {
 
     beforeEach(async () => {
       await Promise.all(Object.values(db).map((collection) => collection.deleteMany({})));
+      await db.users.insertMany([
+        { userId: "coach-user" },
+        { userId: "student-user-1" },
+        { userId: "student-user-2" },
+        { userId: "platform-admin" },
+      ]);
       await db.coaching.insertOne({
         _id: "locker",
         rev: 1,
@@ -436,6 +442,58 @@ describe("coaching scheduling", () => {
         startAt: "2026-08-25T14:00:00.000Z",
         durationMinutes: 60,
       })).rejects.toMatchObject({ code: "availability_missing" });
+    });
+
+    test("blocks calendar and booking writes involving an account under deletion", async () => {
+      await db.coaching.deleteOne({ _id: "calendar:coach-1" });
+      await db.users.updateOne(
+        { userId: "coach-user" },
+        { $set: { _gdprMutation: {
+          id: "deleting-coach",
+          leaseUntil: new Date("2099-01-01T00:00:00.000Z"),
+        } } },
+      );
+      await expect(service.saveAvailability("coach-user", coachRole, {
+        expectedRev: 0,
+        timeZone: "America/New_York",
+        durations: [30],
+        windows: [{ day: 1, start: "09:00", end: "12:00" }],
+      })).rejects.toMatchObject({
+        status: 409,
+        code: "account_deletion_in_progress",
+      });
+      expect(await db.coaching.findOne({ _id: "calendar:coach-1" })).toBeNull();
+
+      await db.users.updateOne(
+        { userId: "coach-user" },
+        { $unset: { _gdprMutation: "" } },
+      );
+      await service.saveAvailability("coach-user", coachRole, {
+        expectedRev: 0,
+        timeZone: "America/New_York",
+        durations: [30],
+        windows: Array.from({ length: 7 }, (_, day) => ({
+          day,
+          start: "00:00",
+          end: "24:00",
+        })),
+      });
+      const calendar = await service.calendarFor("student-user-1", studentOneRole, "UTC");
+      const slot = calendar.slots.find((item) => item.durationMinutes === 30);
+      await db.users.updateOne(
+        { userId: "student-user-1" },
+        { $set: { _gdprMutation: {
+          id: "deleting-student",
+          leaseUntil: new Date("2099-01-01T00:00:00.000Z"),
+        } } },
+      );
+      await expect(service.bookSession("student-user-1", studentOneRole, slot))
+        .rejects.toMatchObject({
+          status: 409,
+          code: "account_deletion_in_progress",
+        });
+      expect((await db.coaching.findOne({ _id: "calendar:coach-1" })).bookings)
+        .toEqual([]);
     });
 
     test("students can see only their own bookings", async () => {
