@@ -83,7 +83,7 @@ function buildClerkWebhookRouter(deps) {
         return;
       }
       const email = pickPrimaryEmail(user);
-      await deps.users.upsertFromWebhook(user.id, email);
+      await deps.users.upsertFromWebhook(user.id, email, { eventType: type });
       if (deps.logger) {
         deps.logger.info(
           { type, clerkUserId: user.id, hasEmail: Boolean(email) },

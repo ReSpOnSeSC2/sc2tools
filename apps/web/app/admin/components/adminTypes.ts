@@ -531,7 +531,7 @@ export type GlobalPlayerGamesResp = {
 export type AdminEventType = "user_signup" | "agent_download" | "user_message";
 
 export type AdminEventSignupPayload = {
-  clerkUserId: string;
+  clerkUserId: string | null;
   userId: string | null;
   email: string | null;
   source: string;
@@ -564,6 +564,7 @@ export type AdminEvent = {
     | AdminEventUserMessagePayload;
   createdAt: string;
   readAt: string | null;
+  anonymizedAt?: string;
 };
 
 export type AdminEventsListResp = {

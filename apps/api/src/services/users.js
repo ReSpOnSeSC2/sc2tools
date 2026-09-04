@@ -24,6 +24,10 @@ class UsersService {
    * @param {{
    *   adminEvents?: {
    *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
+   *     enrichSignupEmail?: (
+   *       identity: {userId?: string, clerkUserId?: string},
+   *       email: string,
+   *     ) => Promise<unknown>,
    *   } | null,
    * }} [opts]
    */
@@ -67,7 +71,10 @@ class UsersService {
       }
       throw err;
     }
-    this._recordSignup({ clerkUserId, userId, source: "first_touch" });
+    // Await the one-time write so any email discovered later in this same
+    // request can deterministically enrich the event instead of racing an
+    // unobserved fire-and-forget insert.
+    await this._recordSignup({ clerkUserId, userId, source: "first_touch" });
     return { userId, clerkUserId };
   }
 
@@ -470,6 +477,11 @@ class UsersService {
       { userId, email: { $ne: email } },
       { $set: { email, emailUpdatedAt: new Date() } },
     );
+    // The first authenticated request creates its signup event before /me
+    // performs the best-effort Clerk lookup. Converge that existing event
+    // now; this helper is update-only and cannot turn an old user into a
+    // fresh signup notification.
+    await this._enrichSignupEmail({ userId }, email);
   }
 
   /**
@@ -480,9 +492,10 @@ class UsersService {
    *
    * @param {string} clerkUserId
    * @param {string|null} email
+   * @param {{ eventType?: "user.created"|"user.updated" }} [opts]
    * @returns {Promise<boolean>}
    */
-  async upsertFromWebhook(clerkUserId, email) {
+  async upsertFromWebhook(clerkUserId, email, opts = {}) {
     if (!clerkUserId) return false;
     const now = new Date();
     /** @type {Record<string, unknown>} */
@@ -503,22 +516,38 @@ class UsersService {
       { $set: set, $setOnInsert: setOnInsert },
       { upsert: true },
     );
-    if (res.upsertedCount > 0) {
-      this._recordSignup({
+    if (opts.eventType !== "user.updated") {
+      // user.created is authoritative signup input even if first-touch won
+      // the users-row race. record() dedupes by Clerk id and fill-only
+      // enriches the existing event with this email.
+      const persisted = res.upsertedCount > 0
+        ? setOnInsert
+        : await this.db.users.findOne(
+            { clerkUserId },
+            { projection: { _id: 0, userId: 1 } },
+          );
+      await this._recordSignup({
         clerkUserId,
-        userId: String(setOnInsert.userId),
+        userId: persisted && persisted.userId
+          ? String(persisted.userId)
+          : null,
         email: typeof set.email === "string" ? set.email : null,
         source: "clerk_webhook",
       });
+    } else if (typeof set.email === "string") {
+      // A user.updated delivery may supply the email that an earlier
+      // first-touch event lacked, but must never create a new signup event
+      // for a pre-existing account.
+      await this._enrichSignupEmail({ clerkUserId }, set.email);
     }
     return res.modifiedCount > 0 || res.upsertedCount > 0;
   }
 
   /**
-   * Fire-and-forget signup event. Idempotent at the storage layer
-   * (unique partial index on ``payload.clerkUserId`` for signup
-   * events), so the webhook → first-touch race naturally collapses
-   * to a single feed entry.
+   * Best-effort signup event. Callers await the attempt so later email
+   * enrichment cannot overtake the initial insert. It remains idempotent at
+   * the storage layer (unique partial index on ``payload.clerkUserId``), so
+   * the webhook → first-touch race naturally collapses to a single row.
    *
    * @param {{
    *   clerkUserId: string,
@@ -527,11 +556,36 @@ class UsersService {
    *   source?: string,
    * }} payload
    */
-  _recordSignup(payload) {
-    if (!this.adminEvents || !payload || !payload.clerkUserId) return;
-    Promise.resolve(
-      this.adminEvents.record("user_signup", payload),
-    ).catch(() => {});
+  async _recordSignup(payload) {
+    if (!this.adminEvents || !payload || !payload.clerkUserId) return null;
+    try {
+      return await this.adminEvents.record("user_signup", payload);
+    } catch {
+      // Notification storage must never block account creation/auth. The
+      // concrete service logs its own Mongo failures; the catch also keeps
+      // narrow test doubles and future implementations best-effort.
+      return null;
+    }
+  }
+
+  /**
+   * Update-only email convergence for an already-recorded signup.
+   *
+   * @param {{ userId?: string, clerkUserId?: string }} identity
+   * @param {string} email
+   */
+  async _enrichSignupEmail(identity, email) {
+    if (
+      !this.adminEvents ||
+      typeof this.adminEvents.enrichSignupEmail !== "function"
+    ) {
+      return null;
+    }
+    try {
+      return await this.adminEvents.enrichSignupEmail(identity, email);
+    } catch {
+      return null;
+    }
   }
 
   /**

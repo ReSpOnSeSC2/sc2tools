@@ -8,6 +8,10 @@ import { Card } from "@/components/ui/Card";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
 import { AdminEventRow } from "../components/AdminEventRow";
+import {
+  mergeAdminEventFeed,
+  upsertLiveAdminEvent,
+} from "../components/adminEventFeed";
 import { useAdminEventsSocket } from "../components/useAdminEventsSocket";
 import type {
   AdminEvent,
@@ -59,10 +63,9 @@ export default function AdminNotificationsPage() {
         // matches; otherwise the cursor would jump unexpectedly.
         if (before !== null) return;
         if (filter !== "all" && event.type !== filter) return;
-        setLiveEvents((prev) => {
-          if (prev.some((e) => e.eventId === event.eventId)) return prev;
-          return [event, ...prev].slice(0, PAGE_SIZE);
-        });
+        setLiveEvents((prev) =>
+          upsertLiveAdminEvent(prev, event, PAGE_SIZE),
+        );
         counts.mutate();
       },
       [before, filter, counts],
@@ -75,20 +78,7 @@ export default function AdminNotificationsPage() {
 
   const merged = useMemo(() => {
     if (!data) return null;
-    if (liveEvents.length === 0) return data.items;
-    const seen = new Set<string>();
-    const out: AdminEvent[] = [];
-    for (const e of liveEvents) {
-      if (seen.has(e.eventId)) continue;
-      seen.add(e.eventId);
-      out.push(e);
-    }
-    for (const e of data.items) {
-      if (seen.has(e.eventId)) continue;
-      seen.add(e.eventId);
-      out.push(e);
-    }
-    return out.slice(0, PAGE_SIZE);
+    return mergeAdminEventFeed(data.items, liveEvents, PAGE_SIZE);
   }, [data, liveEvents]);
 
   async function markAllRead() {

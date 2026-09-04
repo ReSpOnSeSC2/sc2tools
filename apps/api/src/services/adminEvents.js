@@ -92,8 +92,18 @@ class AdminEventsService {
       const code = /** @type {any} */ (err)?.code;
       if (code === 11000 && type === EVENT_TYPES.USER_SIGNUP) {
         // Idempotent retry path — Clerk re-delivered a user.created
-        // webhook the dedupe index already accepted. Surface the
-        // existing row so the caller can still log a hit.
+        // webhook the dedupe index already accepted. If this delivery
+        // carries an email the first-touch event did not have yet,
+        // converge that one row in place rather than creating a second
+        // notification. The fill-only update preserves its source,
+        // timestamps, read state, and event id.
+        if (safePayload.email) {
+          const enriched = await this.enrichSignupEmail(
+            { clerkUserId: safePayload.clerkUserId },
+            safePayload.email,
+          );
+          if (enriched) return enriched;
+        }
         const existing = /** @type {AdminEventDoc | null} */ (
           await this.db.adminEvents.findOne(
             { type, "payload.clerkUserId": safePayload.clerkUserId },
@@ -141,11 +151,81 @@ class AdminEventsService {
       )
     );
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    // Older first-touch rows can pre-date the later Clerk email cache.
+    // Decorate those rows from the authoritative users collection in one
+    // query so existing notifications become useful without a migration.
+    // This is response-only: event history and GDPR-anonymized rows remain
+    // untouched.
+    const items = await this._hydrateSignupEmails(page);
     const nextBefore = hasMore && items.length > 0
       ? items[items.length - 1].createdAt
       : null;
     return { items, nextBefore };
+  }
+
+  /**
+   * Fill the email on an existing signup event. This method never inserts:
+   * it is safe to call for Clerk ``user.updated`` deliveries belonging to
+   * users whose signup predates the notification feed. Only a null/missing
+   * email is eligible, and anonymized events are explicitly excluded.
+   *
+   * A successful enrichment is rebroadcast with the original event id so a
+   * live admin client can replace its initial first-touch row. No-op calls
+   * do not emit anything.
+   *
+   * @param {{ userId?: unknown, clerkUserId?: unknown }} identity
+   * @param {unknown} rawEmail
+   * @returns {Promise<AdminEventDoc | null>}
+   */
+  async enrichSignupEmail(identity, rawEmail) {
+    const email = toCleanString(rawEmail, 254);
+    if (!email) return null;
+    const userId = toCleanString(identity && identity.userId, 64);
+    const clerkUserId = toCleanString(
+      identity && identity.clerkUserId,
+      64,
+    );
+    /** @type {Record<string, unknown>[]} */
+    const identities = [];
+    if (userId) identities.push({ "payload.userId": userId });
+    if (clerkUserId) {
+      identities.push({ "payload.clerkUserId": clerkUserId });
+    }
+    if (identities.length === 0) return null;
+
+    /** @type {Record<string, unknown>} */
+    const query = {
+      type: EVENT_TYPES.USER_SIGNUP,
+      anonymizedAt: { $exists: false },
+      // Equality with null also matches a missing field; the explicit empty
+      // string covers the earliest legacy rows before sanitisation was
+      // standardised.
+      "payload.email": { $in: [null, ""] },
+      ...(identities.length === 1
+        ? identities[0]
+        : { $or: identities }),
+    };
+    try {
+      const updated = /** @type {AdminEventDoc | null} */ (
+        await this.db.adminEvents.findOneAndUpdate(
+          query,
+          { $set: { "payload.email": email } },
+          { returnDocument: "after", projection: { _id: 0 } },
+        )
+      );
+      if (!updated) return null;
+      this._broadcast(updated);
+      return updated;
+    } catch (err) {
+      if (this.logger) {
+        this.logger.warn(
+          { err, userId: userId || null, clerkUserId: clerkUserId || null },
+          "admin_signup_email_enrichment_failed",
+        );
+      }
+      return null;
+    }
   }
 
   /**
@@ -218,6 +298,37 @@ class AdminEventsService {
       this.db.deviceTokens.countDocuments({ lastSeenAt: { $gte: weekAgo } }),
     ]);
     return { total, active24h, active7d };
+  }
+
+  /**
+   * Batch-decorate legacy signup rows whose durable event payload has no
+   * email but whose user record now does. Returns new event objects only
+   * for hydrated rows; never writes to either collection.
+   *
+   * @param {AdminEventDoc[]} items
+   * @returns {Promise<AdminEventDoc[]>}
+   */
+  async _hydrateSignupEmails(items) {
+    const targets = items.filter(signupNeedsEmail);
+    if (targets.length === 0) return items;
+    const query = signupEmailUserQuery(targets);
+    if (!query) return items;
+    try {
+      const users = await this.db.users
+        .find(
+          query,
+          { projection: { _id: 0, userId: 1, clerkUserId: 1, email: 1 } },
+        )
+        .toArray();
+      return hydrateSignupRows(items, users);
+    } catch (err) {
+      // Email decoration is optional. A users-collection blip must not hide
+      // the durable notification feed that was already read successfully.
+      if (this.logger) {
+        this.logger.warn({ err }, "admin_signup_email_hydration_failed");
+      }
+      return items;
+    }
   }
 
   /**
@@ -301,6 +412,70 @@ class AdminEventsService {
       }
     }
   }
+}
+
+/** @param {AdminEventDoc} item */
+function signupNeedsEmail(item) {
+  return Boolean(
+    item &&
+    item.type === EVENT_TYPES.USER_SIGNUP &&
+    !item.anonymizedAt &&
+    item.payload &&
+    (item.payload.email == null || item.payload.email === ""),
+  );
+}
+
+/**
+ * @param {AdminEventDoc[]} items
+ * @returns {Record<string, unknown> | null}
+ */
+function signupEmailUserQuery(items) {
+  const userIds = new Set();
+  const clerkUserIds = new Set();
+  for (const item of items) {
+    const userId = toCleanString(item.payload.userId, 64);
+    const clerkUserId = toCleanString(item.payload.clerkUserId, 64);
+    if (userId) userIds.add(userId);
+    if (clerkUserId) clerkUserIds.add(clerkUserId);
+  }
+  /** @type {Record<string, unknown>[]} */
+  const identities = [];
+  if (userIds.size > 0) {
+    identities.push({ userId: { $in: Array.from(userIds) } });
+  }
+  if (clerkUserIds.size > 0) {
+    identities.push({ clerkUserId: { $in: Array.from(clerkUserIds) } });
+  }
+  if (identities.length === 0) return null;
+  return identities.length === 1 ? identities[0] : { $or: identities };
+}
+
+/**
+ * @param {AdminEventDoc[]} items
+ * @param {Record<string, unknown>[]} users
+ * @returns {AdminEventDoc[]}
+ */
+function hydrateSignupRows(items, users) {
+  const byUserId = new Map();
+  const byClerkUserId = new Map();
+  for (const user of users) {
+    const email = toCleanString(user.email, 254);
+    if (!email) continue;
+    const userId = toCleanString(user.userId, 64);
+    const clerkUserId = toCleanString(user.clerkUserId, 64);
+    if (userId) byUserId.set(userId, email);
+    if (clerkUserId) byClerkUserId.set(clerkUserId, email);
+  }
+  return items.map((item) => {
+    if (!signupNeedsEmail(item)) return item;
+    const userId = toCleanString(item.payload.userId, 64);
+    const clerkUserId = toCleanString(item.payload.clerkUserId, 64);
+    const email =
+      (userId ? byUserId.get(userId) : null) ||
+      (clerkUserId ? byClerkUserId.get(clerkUserId) : null) ||
+      null;
+    return email ? { ...item, payload: { ...item.payload, email } } : item;
+  });
 }
 
 /**
@@ -396,6 +571,7 @@ function clampLimit(raw, fallback) {
  *   payload: Record<string, unknown>,
  *   createdAt: Date,
  *   readAt: Date | null,
+ *   anonymizedAt?: Date,
  * }} AdminEventDoc
  *
  * @typedef {{

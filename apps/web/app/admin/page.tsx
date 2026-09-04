@@ -13,6 +13,10 @@ import {
 } from "./components/format";
 import { ForbiddenCard, LoadingRows, MetricStat } from "./components/AdminFragments";
 import { AdminEventRow } from "./components/AdminEventRow";
+import {
+  mergeAdminEventFeed,
+  upsertLiveAdminEvent,
+} from "./components/adminEventFeed";
 import { useAdminEventsSocket } from "./components/useAdminEventsSocket";
 import type {
   AdminEvent,
@@ -47,10 +51,9 @@ export default function AdminDashboardPage() {
   useAdminEventsSocket(
     useCallback(
       (event: AdminEvent) => {
-        setLiveEvents((prev) => {
-          if (prev.some((e) => e.eventId === event.eventId)) return prev;
-          return [event, ...prev].slice(0, RECENT_FEED_SIZE);
-        });
+        setLiveEvents((prev) =>
+          upsertLiveAdminEvent(prev, event, RECENT_FEED_SIZE),
+        );
         counts.mutate();
       },
       [counts],
@@ -59,20 +62,7 @@ export default function AdminDashboardPage() {
 
   const merged = useMemo<AdminEvent[]>(() => {
     const base = recent.data?.items || [];
-    if (liveEvents.length === 0) return base.slice(0, RECENT_FEED_SIZE);
-    const seen = new Set<string>();
-    const out: AdminEvent[] = [];
-    for (const e of liveEvents) {
-      if (seen.has(e.eventId)) continue;
-      seen.add(e.eventId);
-      out.push(e);
-    }
-    for (const e of base) {
-      if (seen.has(e.eventId)) continue;
-      seen.add(e.eventId);
-      out.push(e);
-    }
-    return out.slice(0, RECENT_FEED_SIZE);
+    return mergeAdminEventFeed(base, liveEvents, RECENT_FEED_SIZE);
   }, [recent.data, liveEvents]);
 
   const forbidden =

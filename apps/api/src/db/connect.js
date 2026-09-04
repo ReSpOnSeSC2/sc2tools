@@ -495,19 +495,43 @@ async function ensureIndexes(ctx) {
   await ctx.arcadeLeaderboard.createIndex({ weekKey: 1, pnlPct: -1, updatedAt: 1 });
 
   // Admin notification feed. Reverse-chronological reads are the hot
-  // path; the unique partial index on user_signup events ensures a
-  // Clerk webhook retry or a webhook-then-ensureFromClerk race can
-  // never produce two signup rows for the same Clerk user id.
+  // path; the unique partial index on active user_signup events ensures a
+  // Clerk webhook retry or a webhook-then-ensureFromClerk race can never
+  // produce two signup rows for the same Clerk user id. GDPR keeps an
+  // anonymized event row for aggregate counts, so those rows (whose Clerk id
+  // has been cleared) must not participate in uniqueness.
   await ctx.adminEvents.createIndex({ createdAt: -1 });
   await ctx.adminEvents.createIndex({ type: 1, createdAt: -1 });
+  // Build the corrected index under a new name before removing the legacy
+  // one. This avoids both an IndexOptionsConflict on deployed databases and
+  // a window without duplicate protection while instances roll forward.
   await ctx.adminEvents.createIndex(
     { "payload.clerkUserId": 1 },
     {
       unique: true,
-      partialFilterExpression: { type: "user_signup" },
-      name: "user_signup_unique_clerk",
+      partialFilterExpression: {
+        type: "user_signup",
+        // Partial indexes do not support `$exists: false`; equality with
+        // null includes the missing field on active rows while excluding the
+        // Date stamped by GDPR anonymization.
+        anonymizedAt: null,
+        "payload.clerkUserId": { $type: "string" },
+      },
+      name: "user_signup_unique_active_clerk",
     },
   );
+  if (await ctx.adminEvents.indexExists("user_signup_unique_clerk")) {
+    try {
+      await ctx.adminEvents.dropIndex("user_signup_unique_clerk");
+    } catch (err) {
+      // Two application instances can observe the legacy index during a
+      // rolling deploy and race to remove it. The second removal is already
+      // at the desired state; every other failure remains fatal at startup.
+      const code = /** @type {any} */ (err)?.code;
+      const codeName = /** @type {any} */ (err)?.codeName;
+      if (code !== 27 && codeName !== "IndexNotFound") throw err;
+    }
+  }
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1 });
 
   // Global, cross-user SC2Pulse cache (services/pulseDirectory.js).

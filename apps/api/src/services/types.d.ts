@@ -49,7 +49,11 @@ export interface UsersService {
   ): Promise<ReplaySharingState>;
   resolveReplaySharing(handle: string): Promise<ReplayPublicIdentity | null>;
   setEmail(userId: string, email: string): Promise<void>;
-  upsertFromWebhook(clerkUserId: string, email: string | null): Promise<boolean>;
+  upsertFromWebhook(
+    clerkUserId: string,
+    email: string | null,
+    opts?: { eventType?: "user.created" | "user.updated" },
+  ): Promise<boolean>;
   grantAdmin(
     targetUserId: string,
     grantedByClerkId: string,

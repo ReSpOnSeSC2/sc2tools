@@ -86,11 +86,10 @@ function describe(event: AdminEvent): {
 } {
   if (event.type === "user_signup") {
     const p = event.payload as AdminEventSignupPayload;
+    const identity = p.email || p.clerkUserId || "Email unavailable";
     return {
       title: "New signup",
-      subtitle: p.email
-        ? `${p.email} · via ${humanSource(p.source)}`
-        : `${p.clerkUserId} · via ${humanSource(p.source)}`,
+      subtitle: `${identity} · via ${humanSource(p.source)}`,
     };
   }
   if (event.type === "user_message") {

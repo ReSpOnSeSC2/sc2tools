@@ -1789,6 +1789,56 @@ describe("community + gdpr integration", () => {
       expect(ev.anonymizedAt).toBeInstanceOf(Date);
     });
 
+    test("sequential account deletions anonymize every signup event", async () => {
+      const accounts = [
+        {
+          userId: "u_del_signup_one",
+          clerkUserId: "clerk_del_signup_one",
+          email: "delete-one@example.com",
+        },
+        {
+          userId: "u_del_signup_two",
+          clerkUserId: "clerk_del_signup_two",
+          email: "delete-two@example.com",
+        },
+      ];
+      const now = new Date();
+      await db.users.insertMany(
+        accounts.map(({ userId, clerkUserId }) => ({
+          userId,
+          clerkUserId,
+          createdAt: now,
+          lastSeenAt: now,
+        })),
+      );
+      await db.adminEvents.insertMany(
+        accounts.map(({ userId, clerkUserId, email }, index) => ({
+          eventId: `signup-delete-${index + 1}`,
+          type: "user_signup",
+          createdAt: now,
+          readAt: null,
+          payload: { clerkUserId, userId, email, source: "test" },
+        })),
+      );
+
+      for (const account of accounts) {
+        const counts = await services.gdpr.deleteAll(account.userId);
+        expect(counts.users).toBe(1);
+        expect(counts.adminEventsScrubbed).toBe(1);
+      }
+
+      const events = await db.adminEvents
+        .find({ eventId: { $in: ["signup-delete-1", "signup-delete-2"] } })
+        .sort({ eventId: 1 })
+        .toArray();
+      expect(events).toHaveLength(2);
+      for (const event of events) {
+        expect(event.payload.email).toBeNull();
+        expect(event.payload.clerkUserId).toBeNull();
+        expect(event.anonymizedAt).toBeInstanceOf(Date);
+      }
+    });
+
     test("wipeGames clears games + rebuilds opponents from the survivors", async () => {
       const userId = "u_wipe";
       await db.users.insertOne({
