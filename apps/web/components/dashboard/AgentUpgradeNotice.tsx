@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { Download, ShieldAlert } from "lucide-react";
+import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
+import {
+  FALLBACK_LATEST_AGENT_VERSION,
+  inactiveAgentMessage,
+} from "@/lib/agentNotice";
 import { useApi } from "@/lib/clientApi";
 
 export const REQUIRED_AGENT_VERSION = "0.15.20";
@@ -42,6 +47,12 @@ export function AgentUpgradeNotice({
 }: {
   initialAgent: InitialAgentStatus;
 }) {
+  // Always request Windows metadata, including from a phone: the local agent
+  // runs on the player's gaming PC, while this notice itself is responsive and
+  // can be read from either mobile or desktop.
+  const release = useReleaseInfo("windows");
+  const latestVersion = cleanVersion(release.data?.latest)
+    || FALLBACK_LATEST_AGENT_VERSION;
   const initialState = agentUpgradeNoticeState(
     initialAgent.paired
       ? [{
@@ -50,13 +61,18 @@ export function AgentUpgradeNotice({
         }]
       : [],
     Date.now(),
+    latestVersion,
   );
   const initiallyConfirmed = initialState.kind === "ready";
   const devices = useApi<DevicesResponse>(
     initiallyConfirmed ? null : "/v1/devices",
     {
       refreshInterval: (latest) =>
-        agentUpgradeNoticeState(latest?.items, Date.now()).kind === "ready"
+        agentUpgradeNoticeState(
+          latest?.items,
+          Date.now(),
+          latestVersion,
+        ).kind === "ready"
           ? 0
           : AGENT_STATUS_REFRESH_MS,
       revalidateOnFocus: true,
@@ -64,7 +80,11 @@ export function AgentUpgradeNotice({
   );
 
   const state = devices.data
-    ? agentUpgradeNoticeState(devices.data.items, Date.now())
+    ? agentUpgradeNoticeState(
+        devices.data.items,
+        Date.now(),
+        latestVersion,
+      )
     : initialState.kind === "ready"
       ? initialState
       : devices.isLoading
@@ -86,14 +106,16 @@ export function AgentUpgradeNotice({
           </span>
           <div className="min-w-0">
             <p className="text-micro font-semibold uppercase tracking-wider text-warning">
-              Required · Agent v{REQUIRED_AGENT_VERSION}+
+              Latest agent · v{latestVersion}
             </p>
             <h2 className="mt-0.5 text-body font-bold text-text">
               {state.title}
             </h2>
-            <p className="mt-0.5 text-caption leading-relaxed text-text-muted">
-              {state.message}
-            </p>
+            {state.message && (
+              <p className="mt-0.5 text-caption leading-relaxed text-text-muted">
+                {state.message}
+              </p>
+            )}
           </div>
         </div>
         <Link
@@ -111,27 +133,16 @@ export function AgentUpgradeNotice({
 export function agentUpgradeNoticeState(
   rawDevices: AgentDevice[] | undefined,
   nowMs: number,
+  latestVersion = FALLBACK_LATEST_AGENT_VERSION,
 ): NoticeState {
   if (!Array.isArray(rawDevices)) return checkingState();
   if (rawDevices.length === 0) {
-    return {
-      kind: "missing",
-      title: "Install the required desktop agent update",
-      message:
-        `Install and pair agent v${REQUIRED_AGENT_VERSION} or newer to keep replay syncing reliable.`,
-      action: "Download agent",
-    };
+    return inactiveAgentState("missing", latestVersion);
   }
 
   const latest = latestDevice(rawDevices);
   if (!isOnline(latest?.lastSeenAt, nowMs)) {
-    return {
-      kind: "offline",
-      title: "Start or update your desktop agent",
-      message:
-        `Your paired agent is offline. Open it so SC2 Tools can confirm v${REQUIRED_AGENT_VERSION} or newer.`,
-      action: "Download update",
-    };
+    return inactiveAgentState("offline", latestVersion);
   }
 
   const version = cleanVersion(latest?.agentVersion);
@@ -140,17 +151,20 @@ export function agentUpgradeNoticeState(
       kind: "unknown",
       title: "Agent update needs confirmation",
       message:
-        `Your connected agent has not reported its version yet. Install v${REQUIRED_AGENT_VERSION} or newer, then leave it running.`,
-      action: "Download update",
+        `Your connected agent has not reported its version yet. Install v${latestVersion}, then leave it running.`,
+      action: "Install latest agent",
     };
   }
+  // The release feed supplies the version named in the copy. Compatibility
+  // remains governed by the minimum supported version so an optional release
+  // does not create a permanent warning for every healthy older install.
   if (!isAgentVersionAtLeast(version, REQUIRED_AGENT_VERSION)) {
     return {
       kind: "outdated",
       title: "Update your SC2 Tools Agent",
       message:
-        `Connected agent v${version} is out of date. Install v${REQUIRED_AGENT_VERSION} or newer for reliable replay syncing.`,
-      action: "Download update",
+        `Connected agent v${version} is out of date. Install the latest agent, v${latestVersion}, to keep replay syncing.`,
+      action: "Install latest agent",
     };
   }
   return { kind: "ready" };
@@ -179,8 +193,20 @@ function checkingState(): NoticeState {
     kind: "checking",
     title: "Checking your connected agent",
     message:
-      `This notice closes automatically after a live agent reports v${REQUIRED_AGENT_VERSION} or newer.`,
-    action: "Download update",
+      "This notice closes automatically after the latest agent connects.",
+    action: "Install latest agent",
+  };
+}
+
+function inactiveAgentState(
+  kind: "missing" | "offline",
+  latestVersion: string,
+): NoticeState {
+  return {
+    kind,
+    title: inactiveAgentMessage(latestVersion),
+    message: "",
+    action: "Install latest agent",
   };
 }
 
@@ -207,7 +233,7 @@ function timestamp(value: string | null | undefined): number {
 
 function cleanVersion(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/^v/i, "");
   return trimmed || null;
 }
 

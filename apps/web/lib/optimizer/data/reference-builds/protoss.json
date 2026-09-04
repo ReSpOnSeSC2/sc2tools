@@ -458,7 +458,7 @@
       "name": "AlphaStar Style (Oracle/Robo)",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Stargate-first double oracle with a robo and forge all in place by ~8:30 over a fast third nexus - the AlphaStar oracle/robo composition with adept-heavy gateways.",
+      "description": "Stargate-first double oracle over a fast third Nexus, followed immediately by a Robotics Facility started by ~5:30 and a Forge - the AlphaStar oracle/robo composition with adept-heavy gateways.",
       "steps": ["Pylon", "Chrono:Nexus", "Gateway", "Assimilator", "Nexus", "CyberneticsCore", "Assimilator", "Pylon", "Adept", "Chrono:Gateway", "Stargate", "Adept", "Chrono:Gateway", "Chrono:Nexus", "Pylon", "Gateway", "Oracle", "Chrono:Stargate", "Nexus", "Oracle", "Chrono:Stargate", "Pylon", "RoboticsFacility", "WarpGateResearch", "Gateway", "Assimilator", "Assimilator", "Pylon", "Forge", "Adept", "Gateway", "Pylon", "Adept", "Observer", "Adept", "Pylon", "Immortal"],
       "definitionIds": ["pvz-alphastar-style-oracle-robo"]
     },
@@ -521,7 +521,7 @@
       "name": "Standard Blink Macro",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Stargate opener into three-base blink macro: oracle harass first, twilight after the stargate, blink stalkers and a fast third nexus by ~9:00.",
+      "description": "Stargate opener into three-base Blink macro: Oracle harass, then Twilight and the third Nexus establish the macro transition, with Blink as the first Twilight upgrade rather than a fast AlphaStar Robo.",
       "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "BlinkTech", "Stalker", "Nexus", "Pylon", "Stalker", "Stalker", "Gateway", "Pylon", "Stalker", "Stalker", "Pylon", "Stalker"],
       "definitionIds": ["pvz-standard-blink-macro"]
     },
@@ -530,7 +530,7 @@
       "name": "Standard Charge Macro",
       "race": "Protoss",
       "matchups": ["PvZ"],
-      "description": "Stargate opener into three-base charge macro: oracle harass first, twilight after the stargate, charge by ~9:00 with zealots flowing and the third nexus down.",
+      "description": "Stargate opener into three-base Charge macro: Oracle harass, then Twilight and the third Nexus establish the macro transition, with Charge as the first Twilight upgrade rather than a fast AlphaStar Robo.",
       "steps": ["Pylon", "Gateway", "Assimilator", "CyberneticsCore", "Adept", "Assimilator", "Pylon", "Nexus", "Stargate", "Oracle", "Adept", "Pylon", "TwilightCouncil", "Gateway", "WarpGateResearch", "ShieldBattery", "Charge", "Gateway", "Zealot", "Nexus", "Pylon", "Zealot", "Zealot", "Pylon", "Zealot", "Zealot"],
       "definitionIds": ["pvz-standard-charge-macro"]
     },

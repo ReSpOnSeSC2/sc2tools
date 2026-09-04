@@ -12,7 +12,7 @@ import { ImprovementPreview } from "@/components/landing/ProductShowcases";
 /* LE. Races, result and build timings are exactly as parsed — no   */
 /* mock data. Player gamertags are intentionally omitted (shown as  */
 /* "You" / "Opponent"). Internal unit/upgrade ids are shown under    */
-/* their in-game names (e.g. AdeptPiercingAttack → "Glaives").      */
+/* their in-game names (AdeptPiercingAttack → "Resonating Glaives"). */
 /* =============================================================== */
 
 interface BuildStep {
@@ -44,7 +44,7 @@ const SHOWCASE_YOU: ShowcasePlayer = {
     { t: "5:04", name: "Robotics Facility" },
     { t: "5:26", name: "Warp Gate (researching)" },
     { t: "5:45", name: "First Adept", key: true },
-    { t: "6:33", name: "Glaives upgrade", key: true },
+    { t: "6:33", name: "Resonating Glaives", key: true },
   ],
 };
 

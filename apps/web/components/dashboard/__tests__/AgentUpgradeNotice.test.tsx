@@ -9,31 +9,47 @@ import {
 
 const NOW = Date.parse("2026-08-13T17:00:00.000Z");
 const useApiMock = vi.fn();
+const useReleaseInfoMock = vi.fn();
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
 }));
 
+vi.mock("@/components/onboarding/useReleaseInfo", () => ({
+  useReleaseInfo: (...args: unknown[]) => useReleaseInfoMock(...args),
+}));
+
 beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(NOW);
   useApiMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
+  useReleaseInfoMock.mockReturnValue({
+    data: { latest: "0.16.3" },
+    isLoading: false,
+    error: null,
+  });
 });
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   useApiMock.mockReset();
+  useReleaseInfoMock.mockReset();
 });
 
 describe("agentUpgradeNoticeState", () => {
   it("handles missing, offline, and unknown devices conservatively", () => {
-    expect(agentUpgradeNoticeState([], NOW).kind).toBe("missing");
-    expect(
-      agentUpgradeNoticeState(
-        [{ agentVersion: "0.15.20", lastSeenAt: "2026-08-13T16:50:00Z" }],
-        NOW,
-      ).kind,
-    ).toBe("offline");
+    const missing = agentUpgradeNoticeState([], NOW);
+    const offline = agentUpgradeNoticeState(
+      [{ agentVersion: "0.15.20", lastSeenAt: "2026-08-13T16:50:00Z" }],
+      NOW,
+    );
+    expect(missing.kind).toBe("missing");
+    expect(offline.kind).toBe("offline");
+    if (missing.kind !== "missing" || offline.kind !== "offline") return;
+    expect(missing.title).toBe(
+      "SC2 Tools Agent v0.16.3 needs to be turned on or installed",
+    );
+    expect(offline.title).toBe(missing.title);
     expect(
       agentUpgradeNoticeState(
         [{ agentVersion: null, lastSeenAt: "2026-08-13T16:59:00Z" }],
@@ -45,7 +61,7 @@ describe("agentUpgradeNoticeState", () => {
   it("uses the most recently active device and requires a live heartbeat", () => {
     const state = agentUpgradeNoticeState(
       [
-        { agentVersion: "0.15.20", lastSeenAt: "2026-08-13T16:50:00Z" },
+        { agentVersion: "0.16.2", lastSeenAt: "2026-08-13T16:50:00Z" },
         { agentVersion: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" },
       ],
       NOW,
@@ -53,7 +69,7 @@ describe("agentUpgradeNoticeState", () => {
     expect(state.kind).toBe("outdated");
   });
 
-  it("becomes ready only for a live agent at or above 0.15.20", () => {
+  it("becomes ready for a live agent at or above the supported minimum", () => {
     expect(
       agentUpgradeNoticeState(
         [{ agentVersion: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" }],
@@ -64,6 +80,16 @@ describe("agentUpgradeNoticeState", () => {
       agentUpgradeNoticeState(
         [{ agentVersion: "0.15.20", lastSeenAt: "2026-08-13T16:59:30Z" }],
         NOW,
+      ).kind,
+    ).toBe("ready");
+  });
+
+  it("does not treat an optional newer release as a compatibility requirement", () => {
+    expect(
+      agentUpgradeNoticeState(
+        [{ agentVersion: "0.16.1", lastSeenAt: "2026-08-13T16:59:30Z" }],
+        NOW,
+        "0.17.4",
       ).kind,
     ).toBe("ready");
   });
@@ -96,15 +122,16 @@ describe("AgentUpgradeNotice", () => {
 
     expect(screen.getByText("Checking your connected agent")).toBeTruthy();
     expect(
-      screen.getByRole("link", { name: /download update/i }).getAttribute("href"),
+      screen.getByRole("link", { name: /install latest agent/i }).getAttribute("href"),
     ).toBe("/download");
     expect(useApiMock).toHaveBeenCalledWith("/v1/devices", {
       refreshInterval: expect.any(Function),
       revalidateOnFocus: true,
     });
+    expect(useReleaseInfoMock).toHaveBeenCalledWith("windows");
   });
 
-  it("polls while outdated and stops after live data reaches 0.15.20", () => {
+  it("polls while unsupported and stops at the supported minimum", () => {
     let response = {
       items: [
         { agentVersion: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" },
@@ -164,5 +191,39 @@ describe("AgentUpgradeNotice", () => {
 
     expect(screen.queryByLabelText("Required agent update")).toBeNull();
     expect(useApiMock).toHaveBeenCalledWith(null, expect.any(Object));
+  });
+
+  it("uses one clear inactive-agent message on mobile and desktop layouts", () => {
+    useApiMock.mockReturnValue({ data: { items: [] }, isLoading: false });
+    render(
+      <AgentUpgradeNotice
+        initialAgent={{ paired: false, version: null, lastSeenAt: null }}
+      />,
+    );
+
+    expect(screen.getByText(
+      "SC2 Tools Agent v0.16.3 needs to be turned on or installed",
+    )).toBeTruthy();
+    expect(screen.queryByText(/keep replay syncing/i)).toBeNull();
+    expect(screen.getByLabelText("Required agent update").className)
+      .not.toContain("hidden");
+  });
+
+  it("uses the live latest release instead of the bundled fallback", () => {
+    useReleaseInfoMock.mockReturnValue({
+      data: { latest: "0.17.4" },
+      isLoading: false,
+      error: null,
+    });
+    useApiMock.mockReturnValue({ data: { items: [] }, isLoading: false });
+    render(
+      <AgentUpgradeNotice
+        initialAgent={{ paired: false, version: null, lastSeenAt: null }}
+      />,
+    );
+
+    expect(screen.getByText(
+      "SC2 Tools Agent v0.17.4 needs to be turned on or installed",
+    )).toBeTruthy();
   });
 });

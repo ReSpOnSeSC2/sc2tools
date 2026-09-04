@@ -146,6 +146,37 @@ describe("sc2-icons — upgrade icon coverage", () => {
 });
 
 describe("build-events — upgrade rows flow through normalizeBuildEvent", () => {
+  it("shows the in-game Resonating Glaives name without changing the raw replay token", () => {
+    const raw = normalizeBuildEvent({
+      time: 180,
+      name: "AdeptPiercingAttack",
+      category: "upgrade",
+      is_building: false,
+    }, 0);
+    expect(raw.rawName).toBe("AdeptPiercingAttack");
+    expect(raw.displayName).toBe("Resonating Glaives");
+    expect(raw.iconPath).toBe("/icons/sc2/upgrades/resonatingglaives.png");
+
+    const staleDisplay = normalizeBuildEvent({
+      time: 180,
+      name: "AdeptPiercingAttack",
+      display: "Adept Piercing Attack",
+      category: "upgrade",
+      is_building: false,
+    }, 1);
+    expect(staleDisplay.rawName).toBe("AdeptPiercingAttack");
+    expect(staleDisplay.displayName).toBe("Resonating Glaives");
+
+    const staleName = normalizeBuildEvent({
+      time: 180,
+      name: "Adept Piercing Attack",
+      category: "upgrade",
+      is_building: false,
+    }, 2);
+    expect(staleName.displayName).toBe("Resonating Glaives");
+    expect(staleName.iconPath).toBe("/icons/sc2/upgrades/resonatingglaives.png");
+  });
+
   it("preserves category=upgrade from the API and resolves the icon", () => {
     const ev: BuildOrderEvent = {
       time: 180,

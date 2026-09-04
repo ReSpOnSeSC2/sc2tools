@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { normalizeBuildEvent } from "@/lib/build-events";
 import { docToEvents } from "./EditCustomBuildLauncher";
 
 describe("EditCustomBuildLauncher proxy round-trip", () => {
@@ -34,5 +35,26 @@ describe("EditCustomBuildLauncher proxy round-trip", () => {
       is_building: true,
       is_proxy: true,
     })]);
+  });
+
+  it("reconstructs a Glaives rule with a friendly display and its raw token intact", () => {
+    const events = docToEvents({
+      slug: "glaives",
+      rules: [{
+        type: "before",
+        name: "ResearchAdeptPiercingAttack",
+        time_lt: 330,
+      }],
+    });
+    expect(events).toEqual([expect.objectContaining({
+      name: "ResearchAdeptPiercingAttack",
+      display: "Research Resonating Glaives",
+    })]);
+    expect(normalizeBuildEvent(events[0], 0)).toMatchObject({
+      rawName: "ResearchAdeptPiercingAttack",
+      displayName: "Research Resonating Glaives",
+      category: "upgrade",
+      iconPath: "/icons/sc2/upgrades/resonatingglaives.png",
+    });
   });
 });

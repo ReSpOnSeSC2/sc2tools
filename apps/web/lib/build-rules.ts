@@ -474,6 +474,10 @@ function humanizeRuleEntity(name: string): string {
     /^(Build|Train|Research|Morph)(?=[A-Z])/,
     "",
   );
+  const normalized = stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+  if (normalized === "adeptpiercingattack" || normalized === "resonatingglaives") {
+    return "Resonating Glaives";
+  }
   return stripped.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
 

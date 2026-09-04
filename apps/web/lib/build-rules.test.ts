@@ -116,6 +116,21 @@ describe("formatRule", () => {
       time: "3:30",
     });
   });
+
+  test("uses the in-game Glaives label without changing the canonical rule token", () => {
+    const rule: BuildRule = {
+      type: "before",
+      name: "ResearchAdeptPiercingAttack",
+      time_lt: 330,
+    };
+    expect(formatRule(rule)).toEqual({
+      prefix: "",
+      entity: "Resonating Glaives",
+      connector: "before",
+      time: "5:30",
+    });
+    expect(rule.name).toBe("ResearchAdeptPiercingAttack");
+  });
 });
 
 describe("proxy build rules", () => {
@@ -235,5 +250,22 @@ describe("proxy build rules", () => {
     }]);
     expect(signature[0].proxy).toBe(true);
     expect(signatureToRows(signature)[0].isProxy).toBe(true);
+  });
+});
+
+describe("upgrade display names", () => {
+  test("community rule timeline displays Glaives while preserving its rule token", () => {
+    const signature = rulesToSignature([{
+      type: "before",
+      name: "ResearchAdeptPiercingAttack",
+      time_lt: 330,
+    }]);
+    expect(signature[0].unit).toBe("ResearchAdeptPiercingAttack");
+    expect(signatureToRows(signature)[0]).toMatchObject({
+      rawName: "ResearchAdeptPiercingAttack",
+      displayName: "Research Resonating Glaives",
+      category: "upgrade",
+      iconPath: "/icons/sc2/upgrades/resonatingglaives.png",
+    });
   });
 });

@@ -544,8 +544,8 @@ function buildMeRouter(deps) {
           id: "no_agent",
           severity: "warn",
           message:
-            "No SC2 agent is connected. Install and pair the desktop agent to start importing replays.",
-          cta: { label: "Connect agent", href: "/devices" },
+            "The latest SC2 Tools Agent needs to be turned on or installed.",
+          cta: { label: "Install latest agent", href: "/download" },
         });
       }
 

@@ -3,14 +3,20 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { DoctorBanner } from "../DoctorBanner";
 
 const useApiMock = vi.fn();
+const useReleaseInfoMock = vi.fn();
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
 }));
 
+vi.mock("@/components/onboarding/useReleaseInfo", () => ({
+  useReleaseInfo: (...args: unknown[]) => useReleaseInfoMock(...args),
+}));
+
 afterEach(() => {
   cleanup();
   useApiMock.mockReset();
+  useReleaseInfoMock.mockReset();
 });
 
 describe("DoctorBanner replay archive prompt", () => {
@@ -55,5 +61,49 @@ describe("DoctorBanner replay archive prompt", () => {
     const { container } = render(<DoctorBanner />);
 
     expect(container.firstChild).toBeNull();
+    expect(useReleaseInfoMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the latest-version message for a missing agent", () => {
+    useReleaseInfoMock.mockReturnValue({ data: { latest: "0.17.4" } });
+    useApiMock.mockReturnValue({
+      data: {
+        ok: false,
+        warnings: [{
+          id: "no_agent",
+          severity: "warn",
+          message: "legacy server copy",
+          cta: { label: "Install latest agent", href: "/download" },
+        }],
+      },
+    });
+
+    render(<DoctorBanner />);
+
+    expect(screen.getByText(
+      "SC2 Tools Agent v0.17.4 needs to be turned on or installed",
+    )).toBeTruthy();
+    expect(screen.queryByText("legacy server copy")).toBeNull();
+    expect(useReleaseInfoMock).toHaveBeenCalledWith("windows");
+  });
+
+  it("uses the bundled latest version while release metadata loads", () => {
+    useReleaseInfoMock.mockReturnValue({ data: undefined, isLoading: true });
+    useApiMock.mockReturnValue({
+      data: {
+        ok: false,
+        warnings: [{
+          id: "no_agent",
+          severity: "warn",
+          message: "legacy server copy",
+        }],
+      },
+    });
+
+    render(<DoctorBanner />);
+
+    expect(screen.getByText(
+      "SC2 Tools Agent v0.16.3 needs to be turned on or installed",
+    )).toBeTruthy();
   });
 });

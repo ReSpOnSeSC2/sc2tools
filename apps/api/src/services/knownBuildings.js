@@ -214,6 +214,25 @@ const KNOWN_UPGRADE_NAMES = new Set([
 ]);
 
 /**
+ * User-facing names for replay upgrade tokens whose sc2reader identifiers do
+ * not match the in-game StarCraft II label. Keep the raw token on parsed
+ * events for classifier and historical-data compatibility; this map is only
+ * used to choose the display string when the JSON catalog is unavailable.
+ */
+const KNOWN_UPGRADE_DISPLAY_NAMES = new Map([
+  ["AdeptPiercingAttack", "Resonating Glaives"],
+]);
+
+/**
+ * @param {string | null | undefined} name
+ * @returns {string}
+ */
+function knownUpgradeDisplayName(name) {
+  if (!name) return "";
+  return KNOWN_UPGRADE_DISPLAY_NAMES.get(name) || name;
+}
+
+/**
  * Patterns for the tiered weapons/armor/shields/carapace upgrades.
  * sc2reader emits multiple variants for the same in-game upgrade
  * depending on the replay's expansion / data version:
@@ -291,4 +310,5 @@ module.exports = {
   isProxyEligibleSignatureUnit,
   KNOWN_UPGRADE_NAMES,
   isKnownUpgrade,
+  knownUpgradeDisplayName,
 };

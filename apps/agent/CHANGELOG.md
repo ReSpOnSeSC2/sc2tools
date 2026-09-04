@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.3
+
+### Fixed - precise PvZ Stargate transitions
+
+- AlphaStar PvZ now requires Stargate into third Nexus into Robotics Facility,
+  with the Robo started by 5:30 and before Twilight. Macro games without that
+  Robo-first transition are separated by their first Twilight upgrade into
+  Blink, Charge, or Resonating Glaives.
+  Twilight may precede the third when that Nexus follows within four minutes,
+  and a later support Robo no longer steals those labels.
+- The replay token `AdeptPiercingAttack` remains stable internally but is now
+  shown to players by its proper in-game name, Resonating Glaives.
+- Ships bundled replay engine 1.6.2.
+
+### Migration note
+
+- Existing replay rows keep their stored classification. Re-sync or reprocess
+  affected PvZ replays to apply the refined AlphaStar and macro labels.
+
 ## 0.16.2
 
 ### Fixed - hallucination-safe build classification

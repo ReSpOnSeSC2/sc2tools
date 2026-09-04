@@ -21,6 +21,7 @@ const {
   KNOWN_BUILDING_NAMES,
   isKnownBuilding,
   isKnownUpgrade,
+  knownUpgradeDisplayName,
 } = require("./knownBuildings");
 
 const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
@@ -1345,7 +1346,9 @@ function parseBuildLogLines(
       time: minutes * 60 + seconds,
       time_display: `${minutes}:${String(seconds).padStart(2, "0")}`,
       name: rawName,
-      display: entry ? entry.display : rawName,
+      display: entry
+        ? entry.display
+        : (isUpgradeFallback ? knownUpgradeDisplayName(rawName) : rawName),
       race: entry ? entry.race : "Neutral",
       category,
       tier: entry ? entry.tier : 0,

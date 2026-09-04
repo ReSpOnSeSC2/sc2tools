@@ -171,6 +171,12 @@ describe("/v1/me/profile/battletag/detect", () => {
     const res = await withAuth(request(app).get("/v1/me/doctor"));
     const ids = res.body.warnings.map((w) => w.id);
     expect(ids).toContain("no_profile");
+    expect(res.body.warnings.find((w) => w.id === "no_agent")).toMatchObject({
+      severity: "warn",
+      message:
+        "The latest SC2 Tools Agent needs to be turned on or installed.",
+      cta: { label: "Install latest agent", href: "/download" },
+    });
   });
 
   test("replay archive status drives the update-and-resync doctor warning", async () => {

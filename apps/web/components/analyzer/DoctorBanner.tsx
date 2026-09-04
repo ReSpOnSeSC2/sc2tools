@@ -1,7 +1,12 @@
 "use client";
 
-import { useApi } from "@/lib/clientApi";
 import Link from "next/link";
+import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
+import {
+  FALLBACK_LATEST_AGENT_VERSION,
+  inactiveAgentMessage,
+} from "@/lib/agentNotice";
+import { useApi } from "@/lib/clientApi";
 
 type DoctorResp = {
   ok: boolean;
@@ -47,7 +52,7 @@ export function DoctorBanner() {
             key={w.id}
             className={`flex items-center justify-between gap-3 rounded border px-4 py-2 text-sm ${cls}`}
           >
-            <span>{w.message}</span>
+            <DoctorMessage warning={w} />
             {w.cta && (
               <Link
                 href={w.cta.href}
@@ -60,5 +65,28 @@ export function DoctorBanner() {
         );
       })}
     </ul>
+  );
+}
+
+function DoctorMessage({
+  warning,
+}: {
+  warning: NonNullable<DoctorResp["warnings"]>[number];
+}) {
+  if (warning.id !== "no_agent") return <span>{warning.message}</span>;
+  return <InactiveAgentMessage />;
+}
+
+function InactiveAgentMessage() {
+  // The Windows agent runs on the gaming PC, but this responsive warning can
+  // be read from either mobile or desktop. Fetch only for this warning so a
+  // healthy analyzer does not make an unnecessary release request.
+  const release = useReleaseInfo("windows");
+  return (
+    <span>
+      {inactiveAgentMessage(
+        release.data?.latest || FALLBACK_LATEST_AGENT_VERSION,
+      )}
+    </span>
   );
 }

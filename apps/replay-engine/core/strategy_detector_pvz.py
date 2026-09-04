@@ -14,7 +14,12 @@ from .strategy_detector_helpers import (
     DetectionContext,
     base_count_at,
     count_started_before,
+    nth_base_start,
 )
+
+
+ALPHASTAR_ROBO_DEADLINE_SECONDS = 5 * 60 + 30
+STANDARD_MACRO_THIRD_FOLLOW_WINDOW_SECONDS = 4 * 60
 
 
 def detect_pvz(ctx: DetectionContext) -> Optional[str]:
@@ -72,6 +77,48 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         glaive_time < 9999
         and glaive_time < blink_time
         and glaive_time < charge_time
+    )
+    blink_first_off_twilight = (
+        blink_time < 9999
+        and blink_time < glaive_time
+        and blink_time < charge_time
+    )
+    charge_first_off_twilight = (
+        charge_time < 9999
+        and charge_time < glaive_time
+        and charge_time < blink_time
+    )
+    third_nexus_time = nth_base_start(buildings, "Nexus", 3)
+    third_nexus_supports_macro = (
+        sg_time < third_nexus_time <= 540
+        and third_nexus_time
+        <= twilight_time + STANDARD_MACRO_THIRD_FOLLOW_WINDOW_SECONDS
+    )
+    stargate_into_glaives = (
+        stargate_first_tech
+        and twilight_time < robo_time
+        and glaive_first_off_twilight
+    )
+
+    # These three-base Twilight transitions are intentionally computed before
+    # the generic Stargate-into-Robo rule. Twilight must precede any support
+    # Robo: a genuinely early Robo remains a Robo transition even if Blink or
+    # Charge is researched later. The third follows the Stargate, but may
+    # precede Twilight or follow it within four minutes; a much later third is
+    # not retroactively called macro.
+    standard_blink_macro = (
+        stargate_first_tech
+        and sg_time < twilight_time < robo_time
+        and third_nexus_supports_macro
+        and blink_time <= 600
+        and blink_first_off_twilight
+    )
+    standard_charge_macro = (
+        stargate_first_tech
+        and sg_time < twilight_time < robo_time
+        and third_nexus_supports_macro
+        and charge_time <= 540
+        and charge_first_off_twilight
     )
 
     # Carrier / Tempest both require Stargate + Fleet Beacon.
@@ -150,17 +197,19 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - Rail's Disruptor Drop"
 
-    # Oracle (Stargate) + Robo + Forge composition. AlphaStar style is
-    # a STARGATE-first build (Oracles harass while Robo / Forge come up
-    # behind); without the opener guard a Twilight-first build that
-    # later picks up a Stargate + 2 Oracles + Robo + Forge by 8:30 on
-    # 3 bases would mis-fire here.
+    # AlphaStar's PvZ sequence is specifically Stargate -> fast third -> fast
+    # Robo. The third Nexus must already be started when the Robo begins, and
+    # that Robo must start by 5:30 and precede any Twilight Council. Two Oracles
+    # + a Forge still confirm the eventual Oracle/Robo composition, but a late
+    # or Twilight-following Robo is a normal three-base Stargate transition
+    # (Blink, Charge, or Glaives), not AlphaStar.
     if (
         stargate_first_tech
         and count_units("Oracle", 510) >= 2
-        and has_building("RoboticsFacility", 510)
+        and sg_time < third_nexus_time
+        < robo_time <= ALPHASTAR_ROBO_DEADLINE_SECONDS
+        and robo_time < twilight_time
         and has_building("Forge", 510)
-        and base_count_at(buildings, "Nexus", 510) >= 3
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
 
@@ -179,21 +228,17 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # 2 Oracles + Forge + 3 bases needed for AlphaStar Style) lands
     # here too.
     #
-    # `not glaive_first_off_twilight` is the same Glaives-hybrid guard
-    # carried by the 2/3 SG Phoenix and 2 SG Void Ray rules above: a
-    # Stargate-first opener whose FIRST Twilight upgrade is Glaives is
-    # fundamentally a Glaive Adept build (the Robo is Observer /
-    # Immortal support behind the Glaives), NOT a Stargate-into-Robo
-    # transition. Those builds -- e.g. Stargate -> Twilight (Glaives)
-    # -> Robo -- must fall through to PvZ - Stargate into Glaives
-    # below. Without this guard a Glaives-first build that added a Robo
-    # was stolen here purely on the Robo + one Stargate unit, even
-    # though the Robo came AFTER the Twilight and Glaives was the
-    # defining tech choice.
+    # `not stargate_into_glaives` guards the transition order: Stargate
+    # -> Twilight/Glaives -> Robo uses the Glaives label because the Robo
+    # is support, while Stargate -> Robo -> later Twilight/Glaives remains
+    # a Robo-first transition. The standard macro booleans apply the same
+    # ordering rule for Blink and Charge.
     if (
         stargate_first_tech
         and has_building("RoboticsFacility", 600)
-        and not glaive_first_off_twilight
+        and not stargate_into_glaives
+        and not standard_blink_macro
+        and not standard_charge_macro
         and (
             count_units("Phoenix", 600) >= 1
             or count_units("Oracle", 600) >= 1
@@ -262,17 +307,12 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Macro whenever Blink was researched second and a 3rd Nexus
     # was taken. The PvT - Stargate into Glaives rule has no gate
     # window for exactly this reason; this mirrors it. The
-    # ``twilight_time > sg_time`` clause pins Stargate as the first
-    # tech, ``glaive_first_off_twilight`` pins Glaives as the first
-    # upgrade (before Blink AND Charge), and a Robo follow-up has
-    # already been claimed by Stargate into Robo above -- so what
-    # reaches here is unambiguously a Glaives-first Stargate opener.
-    if (
-        sg_time < 9999
-        and twilight_time > sg_time
-        and twilight_time < 9999
-        and glaive_first_off_twilight
-    ):
+    # ``stargate_into_glaives`` requires Stargate as the first tech,
+    # Twilight before any Robo, and Glaives as the first upgrade (before
+    # Blink AND Charge). A later support Robo therefore cannot steal an
+    # otherwise clear Glaive Adept transition, while Robo-before-Twilight
+    # remains a genuine Stargate-into-Robo / AlphaStar path.
+    if stargate_into_glaives:
         return "PvZ - Stargate into Glaives"
 
     # Adept Glaives (Twilight First + Robo): Twilight is the
@@ -332,17 +372,9 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and count_units("DarkTemplar", 540) >= 1
     ):
         return "PvZ - DT Opener"
-    if (
-        sg_time < twilight_time
-        and has_upgrade_substr("Blink", 600)
-        and base_count_at(buildings, "Nexus", 540) >= 3
-    ):
+    if standard_blink_macro:
         return "PvZ - Standard Blink Macro"
-    if (
-        sg_time < twilight_time
-        and has_upgrade_substr("Charge", 540)
-        and base_count_at(buildings, "Nexus", 540) >= 3
-    ):
+    if standard_charge_macro:
         return "PvZ - Standard charge Macro"
 
     # Robo Opener: Robotics Facility is the FIRST tech building (before

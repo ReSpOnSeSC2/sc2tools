@@ -469,11 +469,11 @@ class DetectionContext:
         return min(times) if times else 9999
 
     def upgrade_time(self, *sub_names: str) -> float:
-        """Earliest research start where the upgrade name contains any
+        """Earliest research-completion event where the upgrade name contains any
         of ``sub_names``. sc2reader emits raw upgrade_type_name values
         ("AdeptPiercingAttack", "BlinkTech", "Charge") so callers pass
         the raw substring (and optionally a display-name fallback).
-        Returns 9999 when no matching upgrade was researched."""
+        Returns 9999 when no matching upgrade was completed."""
         times = [
             u["time"] for u in self.upgrades
             if any(s in u["name"] for s in sub_names)

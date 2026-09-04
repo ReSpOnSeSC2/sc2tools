@@ -237,7 +237,15 @@ function inferKindFromPath(path: string): IconKind | null {
  */
 function matchName(rawName: string): NameMatch | null {
   if (!rawName) return null;
-  const normalized = normalizeIconName(rawName);
+  // Custom-build rules retain their canonical action prefix so they can be
+  // round-tripped through the evaluator. Resolve the entity portion for icon
+  // and category purposes, otherwise ResearchAdeptPiercingAttack falls into
+  // the generic "adept" unit keyword before it can resolve as an upgrade.
+  const entityName = rawName.replace(
+    /^(Build|Train|Research|Morph)\s*(?=[A-Z])/,
+    "",
+  );
+  const normalized = normalizeIconName(entityName);
   const direct = getIconPath(normalized);
   if (direct) {
     const kind = inferKindFromPath(direct);
@@ -250,7 +258,7 @@ function matchName(rawName: string): NameMatch | null {
       return { iconName: resolvedKey, iconKind: kind };
     }
   }
-  const haystack = rawName.toLowerCase();
+  const haystack = entityName.toLowerCase();
   for (const entry of NAME_KEYWORDS) {
     if (haystack.indexOf(entry.kw) === -1) continue;
     const rel = `${kindDir(entry.kind)}/${entry.name}.png`;
@@ -276,6 +284,33 @@ function kindDir(kind: IconKind): string {
 }
 
 /**
+ * Replay identifiers stay canonical in event data because classifiers and
+ * historical replays depend on them. This display-only table corrects the
+ * identifiers whose sc2reader name differs from the in-game upgrade label,
+ * including stale spaced display values returned by older API versions.
+ */
+const BUILD_DISPLAY_OVERRIDES = new Map<string, string>([
+  ["adeptpiercingattack", "Resonating Glaives"],
+  ["resonatingglaives", "Resonating Glaives"],
+]);
+
+function buildDisplayOverride(name: string): string | null {
+  const normalized = name.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+  const direct = BUILD_DISPLAY_OVERRIDES.get(normalized);
+  if (direct) return direct;
+
+  // Saved-build rules carry an action prefix (for example,
+  // ``ResearchAdeptPiercingAttack``). Keep that canonical token intact while
+  // applying the same display-only override to its entity portion.
+  const action = /^(build|train|research|morph)(.+)$/.exec(normalized);
+  if (!action) return null;
+  const entityDisplay = BUILD_DISPLAY_OVERRIDES.get(action[2]);
+  if (!entityDisplay) return null;
+  const actionDisplay = action[1][0].toUpperCase() + action[1].slice(1);
+  return `${actionDisplay} ${entityDisplay}`;
+}
+
+/**
  * Convert a build-log raw name into the spaced human display form
  * we want shown in the timeline. "CommandCenter" → "Command Center",
  * "spawning_pool" → "Spawning Pool". When the API already provided
@@ -283,6 +318,8 @@ function kindDir(kind: IconKind): string {
  */
 export function humanizeBuildName(name: string): string {
   if (!name) return "";
+  const displayOverride = buildDisplayOverride(name);
+  if (displayOverride) return displayOverride;
   const cleaned = name.replace(/[_\-]+/g, " ").trim();
   // Insert spaces between camelCase boundaries.
   const spaced = cleaned.replace(
@@ -354,7 +391,11 @@ export function normalizeBuildEvent(
   const rawName = String(event?.name || "").trim();
   const apiDisplay = (event?.display || "").trim();
   const match = matchName(rawName);
-  const displayName = apiDisplay || humanizeBuildName(rawName) || rawName;
+  const displayName = buildDisplayOverride(apiDisplay)
+    || buildDisplayOverride(rawName)
+    || apiDisplay
+    || humanizeBuildName(rawName)
+    || rawName;
   const time = Number.isFinite(event?.time) ? Number(event.time) : 0;
   const apiCategory = event?.category;
   const category =

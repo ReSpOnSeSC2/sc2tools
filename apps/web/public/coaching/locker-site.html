@@ -313,6 +313,9 @@ let role=null,meId=null,coachOK=false,tab="focus",curStudent=null,helpOpen=false
 let recState=null,pendingFiles=[],busy=false;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const buildStepName=s=>String(s??"")
+ .replace(/\bResearchAdeptPiercingAttack\b/g,"Research Resonating Glaives")
+ .replace(/\b(?:AdeptPiercingAttack|Adept Piercing Attack)\b/g,"Resonating Glaives");
 const uid=()=>(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now());
 const now=()=>new Date().toISOString();
 const fmtD=iso=>{try{return new Date(iso).toLocaleDateString(undefined,{month:"short",day:"numeric"})}catch(e){return ""}};
@@ -1074,7 +1077,7 @@ function parseSteps(text){
   if(sm)rest=rest.replace(sm[0],"");
   const n=rest.replace(/^[\s·|,-]+|[\s·|,-]+$/g,"");
   return n?{s,c,n}:null}).filter(Boolean)}
-const stepsText=arr=>(arr||[]).map(o=>[o.s,o.c,o.n].filter(x=>x!=="").join("  ")).join("\n");
+const stepsText=arr=>(arr||[]).map(o=>[o.s,o.c,buildStepName(o.n)].filter(x=>x!=="").join("  ")).join("\n");
 let CBDRAFT=null;
 function readCbForm(){
  return {name:$("cbName")?$("cbName").value:"",mu:$("cbMu")?$("cbMu").value:"PvT",
@@ -1748,9 +1751,9 @@ function myBuildsHTML(st){
     ${b.showRecord?`<div class="mu">coach's ladder record: ${esc(recStr(L))} — context, not a promise</div>`:""}
     <details class="bo"><summary>build order & benchmarks</summary>
      <div class="tablewrap" style="margin-top:6px"><table><tr><th>Sup</th><th>Clock</th><th>Action</th></tr>
-      ${(L.order||[]).map(o=>`<tr><td>${o.s}</td><td>${o.c}</td><td style="white-space:normal">${esc(o.n)}</td></tr>`).join("")}</table></div>
+      ${(L.order||[]).map(o=>`<tr><td>${o.s}</td><td>${o.c}</td><td style="white-space:normal">${esc(buildStepName(o.n))}</td></tr>`).join("")}</table></div>
      ${(L.bench||[]).length?`<div class="tablewrap" style="margin-top:8px"><table><tr><th>Benchmark</th><th>Median</th><th>@Sup</th></tr>
-      ${L.bench.map(m=>`<tr><td style="white-space:normal">${esc(m.m)}</td><td>${m.c}</td><td>${m.s}</td></tr>`).join("")}</table></div>`:""}
+      ${L.bench.map(m=>`<tr><td style="white-space:normal">${esc(buildStepName(m.m))}</td><td>${m.c}</td><td>${m.s}</td></tr>`).join("")}</table></div>`:""}
     </details>
     ${(()=>{const rl=b.refLink||L.refLink,rg=b.refGame||L.refGame,ra=b.ref||L.refAsset;
       if(rl)return `<div style="margin-top:6px"><a href="${esc(rl)}" target="_blank" rel="noopener">▸ watch the coach execute it${rg?" — "+esc(rg.m+" vs "+rg.o):""}</a></div>`;

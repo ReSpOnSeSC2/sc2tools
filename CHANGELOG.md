@@ -13,6 +13,18 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **PvZ Stargate transitions now separate the four intended styles** —
+  AlphaStar requires Stargate into third Nexus into Robotics Facility, with
+  the Robo started by 5:30 and before Twilight; otherwise transition order and
+  the first Twilight upgrade distinguish Standard Blink, Standard Charge, and
+  Stargate into Glaives. Twilight may precede the third when that Nexus follows
+  within four minutes. A later support Robo no longer steals an established
+  Twilight macro label, and the raw `AdeptPiercingAttack` event now displays by
+  its proper in-game name, Resonating Glaives.
+- **Offline-agent guidance is now clear and current everywhere** — mobile and
+  desktop analyzer notices identify the latest stable agent version and simply
+  tell players to turn it on or install it; the version follows the live
+  release feed instead of remaining pinned to an old build.
 - **Hallucinated units no longer alter detected builds** — replay extraction
   and classification now discard explicit hallucinations, preventing a
   Sentry-created Phoenix from selecting a Stargate style when no real Stargate

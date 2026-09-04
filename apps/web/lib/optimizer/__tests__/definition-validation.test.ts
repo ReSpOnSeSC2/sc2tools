@@ -252,8 +252,11 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
   },
   "pvz-alphastar-style-oracle-robo": {
     doneBy: [["Oracle", 1, 510]],
-    startBy: [["RoboticsFacility", 0, 510], ["Forge", 0, 510], ["Nexus", 1, 510]],
-    order: [["Stargate", 0, "RoboticsFacility", 0]],
+    startBy: [["RoboticsFacility", 0, 330], ["Forge", 0, 510], ["Nexus", 1, 330]],
+    order: [
+      ["Stargate", 0, "Nexus", 1],
+      ["Nexus", 1, "RoboticsFacility", 0],
+    ],
   },
   "pvz-archon-drop": {
     order: [["Stargate", 0, "TwilightCouncil", 0]],
@@ -286,12 +289,18 @@ const DEFINITION_CHECKS: Record<string, DefCheck> = {
     absent: ["Stargate", "TwilightCouncil", "DarkShrine"],
   },
   "pvz-standard-blink-macro": {
-    order: [["Stargate", 0, "TwilightCouncil", 0]],
+    order: [
+      ["Stargate", 0, "Nexus", 1],
+      ["Stargate", 0, "TwilightCouncil", 0],
+    ],
     doneBy: [["BlinkTech", 0, 600]],
     startBy: [["Nexus", 1, 540]],
   },
   "pvz-standard-charge-macro": {
-    order: [["Stargate", 0, "TwilightCouncil", 0]],
+    order: [
+      ["Stargate", 0, "Nexus", 1],
+      ["Stargate", 0, "TwilightCouncil", 0],
+    ],
     doneBy: [["Charge", 0, 540]],
     startBy: [["Nexus", 1, 540]],
   },

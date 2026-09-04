@@ -34,7 +34,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - AlphaStar Style (Oracle/Robo)",
     description:
-      "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Oracles plus a Robotics Facility plus a Forge are all in place by 8:30, with 3+ Nexuses by 8:30 -- the AlphaStar Oracle / Robo / fast 3rd composition.",
+      "Detected if the Stargate is the FIRST tech building, followed by the third Nexus and then a Robotics Facility that begins by 5:30 and before any Twilight Council, with 2+ Oracles plus a Forge present by 8:30 -- the AlphaStar Oracle / fast-third / fast-Robo composition. A missing or later Robo is not AlphaStar and falls to the matching Blink-, Charge-, or Resonating-Glaives-first transition.",
   },
   {
     race: "Protoss",
@@ -90,21 +90,21 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Standard Blink Macro",
     description:
-      "Detected if Stargate goes down before Twilight Council, Blink is researched by 10:00, and 3+ Nexuses are taken by 9:00 -- Stargate opener into 3-base Blink macro.",
+      "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Blink is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Blink macro rather than AlphaStar.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Standard charge Macro",
     description:
-      "Detected if Stargate goes down before Twilight Council, Charge is researched by 9:00, and 3+ Nexuses are taken by 9:00 -- Stargate opener into 3-base Chargelot macro.",
+      "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 9:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Stargate into Glaives",
     description:
-      "Detected if a Stargate is built BEFORE any Twilight Council (pure ordering, no time threshold -- a slow Stargate opener that transitioned to Glaives still counts) and the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- a Phoenix or Oracle into Glaive Adept timing. Classification is purely order-based with no Gateway-count window: the Glaives-first signal IS the build, whether the player backs it with a handful of Gateways or warps a heavy 9+ Gateway mass-Adept timing. That Glaives-first ordering is what separates this from Stargate into Blink (Blink researched first) and is what keeps a Glaives-then-Blink build from being demoted to Standard Blink Macro.",
+      "Detected if a Stargate is the FIRST tech building, Twilight Council is added before any Robotics Facility, and the FIRST Twilight upgrade is Resonating Glaives (completed BEFORE Blink and Charge) -- a Stargate opener into Glaive Adepts. Classification is order-based with no Gateway-count window: a Robo added after Twilight is support and cannot steal the Glaives label, while Robo-before-Twilight remains AlphaStar or Stargate into Robo.",
   },
   {
     race: "Protoss",
@@ -139,7 +139,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Stargate into Robo",
     description:
-      "Detected if the Stargate is the FIRST tech building (built BEFORE any Twilight Council / Dark Shrine / Robotics Facility), at least 1 real Phoenix / Oracle / Void Ray is on the field by 10:00 (confirms the player actually used the Stargate, not just dropped one), AND a Robotics Facility is built by 10:00. The classic Stargate-into-Robo transition: Phoenix / Oracle harass off the opener, Robo follow-up for Immortal / Observer / Disruptor support. Glaives-first builds are excluded: if Resonating Glaives is the FIRST upgrade off the Twilight (the Robo is just Observer / Immortal support behind a Glaive Adept timing) the build is a Glaives build and lands on PvZ - Stargate into Glaives instead, even when a Robo is added. Sits between the pure 2/3 SG Phoenix rules (no Robo allowed) and the catch-all PvZ - Stargate Opener -- if you opened Stargate and added Robo without going Glaives-first, this is your label. PvZ counterpart of the PvT - Phoenix into Robo rule (renamed in PvZ to use the generic 'Stargate into' phrasing because the rule accepts any Stargate unit -- Phoenix / Oracle / Void Ray -- not just Phoenix specifically).",
+      "Detected if the Stargate is the FIRST tech building, at least 1 real Phoenix / Oracle / Void Ray is on the field by 10:00, and a Robotics Facility is built by 10:00. This is the generic Stargate-into-Robo transition only when a clearer three-base Twilight path is absent: Twilight-then-Glaives before the Robo uses PvZ - Stargate into Glaives, while a three-base Twilight build whose first upgrade is Blink or Charge keeps its Standard Blink / Charge Macro label even if a support Robo is added later. Twilight may precede the third only when that Nexus follows within four minutes.",
   },
   {
     race: "Protoss",

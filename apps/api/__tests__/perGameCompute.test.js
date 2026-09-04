@@ -80,6 +80,12 @@ describe("services/perGameCompute", () => {
       expect(byName.get("WarpGateResearch")?.is_building).toBe(false);
       expect(byName.get("BlinkTech")?.category).toBe("upgrade");
       expect(byName.get("AdeptPiercingAttack")?.category).toBe("upgrade");
+      expect(byName.get("AdeptPiercingAttack")?.name).toBe(
+        "AdeptPiercingAttack",
+      );
+      expect(byName.get("AdeptPiercingAttack")?.display).toBe(
+        "Resonating Glaives",
+      );
       expect(byName.get("ProtossGroundWeaponsLevel1")?.category).toBe("upgrade");
       expect(byName.get("Charge")?.category).toBe("upgrade");
       // Buildings and units stay correctly classified — upgrade fallback
