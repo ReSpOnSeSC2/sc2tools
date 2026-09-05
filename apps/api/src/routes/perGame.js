@@ -146,13 +146,16 @@ function buildPerGameRouter(deps) {
         res.status(202).json({ ok: true, requested: true, rebuild: job });
         return;
       }
-      let failure = { code: "agent_update_required", message: "Update and restart the desktop agent to rebuild this replay." };
+      let failure = { code: "agent_update_required", message: "Update the desktop agent to 0.16.9 or newer and restart it to generate accurate playback." };
       // Try one device at a time: only the computer holding this replay
       // should start a game engine process, even with several devices paired.
       for (const socket of devices.slice(0, 4)) {
         if (!bindPlaybackJobDevice(userId, gameId, job.requestId, socket.id)) break;
         try {
-          const ack = await socket.timeout(5000).emitWithAck("macro:recompute_request", {
+          // A dedicated event is a compatibility safety gate: 0.16.8 does
+          // not handle it, so an old agent cannot launch SC2 before the new
+          // default-off consent check runs. Never retry on the legacy event.
+          const ack = await socket.timeout(5000).emitWithAck("map-playback:recompute_request", {
             gameIds: [gameId], replayFidelity: "engine", requestId: job.requestId,
           });
           if (ack?.requestId !== job.requestId || ack?.gameId !== gameId) break;
@@ -161,6 +164,10 @@ function buildPerGameRouter(deps) {
             return;
           }
           if (ack?.code === "replay_not_found") failure = { code: ack.code, message: "The original replay file was not found on your connected desktop agent." };
+          else if (ack?.code === "replay_capture_disabled") {
+            failure = { code: ack.code, message: "Accurate replay capture is turned off in the desktop agent. Enable it in agent Settings when you are ready; it starts StarCraft II and uses substantial CPU." };
+            break;
+          }
           else if (ack?.code === "engine_busy") {
             failure = { code: ack.code, message: "The desktop agent is rebuilding another replay. Retry when it finishes." };
             break;
@@ -172,7 +179,7 @@ function buildPerGameRouter(deps) {
         }
       }
       updatePlaybackJob(userId, gameId, job.requestId, { status: "failed", ...failure });
-      res.status(failure.code === "replay_not_found" ? 409 : 503).json({ error: failure });
+      res.status(["replay_not_found", "replay_capture_disabled"].includes(failure.code) ? 409 : 503).json({ error: failure });
     } catch (err) {
       next(err);
     }

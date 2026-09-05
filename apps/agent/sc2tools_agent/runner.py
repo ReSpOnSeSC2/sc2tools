@@ -468,6 +468,9 @@ def _run_headless(
     if state.device_token:
         on_macro, on_opp, on_full_resync = make_recompute_handlers(
             state_dir=cfg.state_dir,
+            notify_capture_start=lambda message: _notify_replay_capture(
+                tray, console, None, message, log,
+            ),
             queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                 state, upload, paths, log, state_dir=cfg.state_dir,
             ),
@@ -647,6 +650,7 @@ def _run_with_gui(
         sync_filter_since=state.sync_filter_since,
         sync_filter_until=state.sync_filter_until,
         auto_update_enabled=state.auto_update_enabled,
+        replay_capture_enabled=state.replay_capture_enabled,
         obs_scene_switch_enabled=state.obs_scene_switch_enabled,
         obs_host=state.obs_host,
         obs_port=state.obs_port,
@@ -892,6 +896,9 @@ def _gui_boot_worker(
         if state.device_token:
             on_macro, on_opp, on_full_resync = make_recompute_handlers(
                 state_dir=cfg.state_dir,
+                notify_capture_start=lambda message: _notify_replay_capture(
+                    cell.tray, cell.console, cell.gui, message, log,
+                ),
                 queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
                     state, upload, paths, log, state_dir=cfg.state_dir,
                 ),
@@ -1208,6 +1215,25 @@ def _handle_choose_folder_gui(
         )
 
 
+def _notify_replay_capture(tray, console, gui, message: str, log) -> None:
+    """Announce each new engine recording, including while minimised."""
+    if gui is not None:
+        try:
+            gui.show_update_notice(message, sticky=False)
+        except Exception:
+            log.exception("replay_capture_gui_notice_failed")
+    if tray is not None:
+        try:
+            tray.show_notice(message, title="Accurate replay capture")
+        except Exception:
+            log.exception("replay_capture_tray_notice_failed")
+    if console is not None:
+        try:
+            console.on_status(message)
+        except Exception:
+            log.exception("replay_capture_console_notice_failed")
+
+
 def _handle_save_settings(
     cfg: AgentConfig,
     state: AgentState,
@@ -1409,7 +1435,15 @@ def _handle_save_settings(
 
     # ATOMIC: every in-memory mutation for this user action is now
     # complete. A single ``save_state`` commits the whole thing.
-    save_state(cfg.state_dir, state)
+    previous_capture_enabled = state.replay_capture_enabled
+    if payload.replay_capture_enabled is not None:
+        state.replay_capture_enabled = payload.replay_capture_enabled is True
+    try:
+        save_state(cfg.state_dir, state)
+    except Exception:
+        # A failed opt-in save must not leave the running agent enabled.
+        state.replay_capture_enabled = previous_capture_enabled
+        raise
 
     if folders_changed:
         folders = [Path(p) for p in state.replay_folders_override]

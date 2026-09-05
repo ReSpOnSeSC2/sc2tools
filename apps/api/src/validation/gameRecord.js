@@ -301,6 +301,9 @@ const GAME_SCHEMA = {
       type: "object",
       additionalProperties: true,
       properties: {
+        // Verified source identity from the saved observation artifact. Older
+        // recordings omit it; a known different source must remain replaceable.
+        replaySha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
         v: { type: "integer", minimum: 1, maximum: 10 },
         mapName: { type: "string", maxLength: 200 },
         gameLength: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },

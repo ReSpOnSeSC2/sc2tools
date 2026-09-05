@@ -53,7 +53,7 @@ test("dispatch is acknowledged, scoped, and repeated clicks reuse the active req
   const { app, device, web } = setup();
   const first = await request(app).post("/v1/games/queued/map-playback").send({ fidelity: "engine" });
   expect(first.status).toBe(202);
-  expect(device.emitWithAck).toHaveBeenCalledWith("macro:recompute_request", {
+  expect(device.emitWithAck).toHaveBeenCalledWith("map-playback:recompute_request", {
     gameIds: ["queued"], replayFidelity: "engine", requestId: first.body.rebuild.requestId,
   });
   expect(web.emitWithAck).not.toHaveBeenCalled();
@@ -82,6 +82,30 @@ test("legacy agents without an acknowledgement return an actionable update error
   const response = await request(app).post("/v1/games/old-agent/map-playback");
   expect(response.status).toBe(503);
   expect(response.body.error.code).toBe("agent_update_required");
+  expect(response.body.error.message).toContain("0.16.9");
+  expect(device.emitWithAck).toHaveBeenCalledTimes(1);
+  expect(device.emitWithAck.mock.calls[0][0]).toBe("map-playback:recompute_request");
+});
+
+test("disabled engine capture returns the opt-in hint and preserves existing playback", async () => {
+  const recording = { ok: true, v: 6, fidelity: { positions: "engine", complete: true } };
+  const { app, device } = setup({ result: recording, ack: { ok: false, code: "replay_capture_disabled" } });
+  const response = await request(app).post("/v1/games/disabled-capture/map-playback");
+  expect(response.status).toBe(409);
+  expect(response.body.error).toMatchObject({ code: "replay_capture_disabled", message: expect.stringMatching(/Settings.*CPU/) });
+  const existing = await request(app).get("/v1/games/disabled-capture/map-playback");
+  expect(existing.body).toMatchObject({ ...recording, rebuild: { status: "failed", code: "replay_capture_disabled" } });
+  expect(device.emitWithAck).toHaveBeenCalledTimes(1);
+});
+
+test("ordinary stats recomputation keeps using the macro event without engine fidelity", async () => {
+  const { app, io, device } = setup();
+  const emit = jest.fn();
+  io.to = jest.fn(() => ({ emit }));
+  const response = await request(app).post("/v1/games/stats-only/macro-breakdown").send({});
+  expect(response.status).toBe(202);
+  expect(emit).toHaveBeenCalledWith("macro:recompute_request", { gameIds: ["stats-only"] });
+  expect(device.emitWithAck).not.toHaveBeenCalled();
 });
 
 test("rebuild status is readable when an old game has no playback payload yet", async () => {

@@ -66,17 +66,38 @@ export function MacroBreakdownPanel({
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
 
-  const { data, error, isLoading, mutate } = useApi<MacroBreakdownData>(
+  const { data, error, isLoading, mutate, request } = useApi<MacroBreakdownData>(
     open ? `/v1/games/${encodeURIComponent(gameId)}/macro-breakdown` : null,
     { revalidateOnFocus: false },
   );
 
-  // The visible Recompute action and the map share one recording job. Its
-  // normal upload updates both map playback and the macro breakdown.
+  // Routine analysis reparses the replay. Engine recording is a separate,
+  // explicit action above the map and requires consent in the desktop agent.
   const replayController = useMapReplay(open ? gameId : null);
-  const recomputing = replayController.refreshing;
-  const recomputeMsg = replayController.refreshMessage || null;
-  const recompute = replayController.refresh;
+  const scope = useRef({ gameId, open, generation: 0, requesting: false });
+  if (scope.current.gameId !== gameId || scope.current.open !== open) {
+    scope.current = { gameId, open, generation: scope.current.generation + 1, requesting: false };
+  }
+  const generation = scope.current.generation;
+  const [analysis, setAnalysis] = useState({ generation: -1, pending: false, requested: false, message: "" });
+  const recomputing = analysis.generation === generation && analysis.pending;
+  const recomputeMsg = analysis.generation === generation ? analysis.message || null : null;
+  const recompute = async () => {
+    if (!open || scope.current.requesting) return;
+    scope.current.requesting = true;
+    const current = () => scope.current.generation === generation;
+    setAnalysis({ generation, pending: true, requested: false, message: "Requesting analysis recompute…" });
+    try {
+      await request({ method: "POST", body: JSON.stringify({}) });
+      if (current()) setAnalysis({ generation, pending: false, requested: true,
+        message: "Analysis recompute requested. Keep your desktop agent connected; results will refresh shortly. This does not start a StarCraft recording." });
+    } catch (failure) {
+      if (current()) setAnalysis({ generation, pending: false, requested: false,
+        message: (failure as { message?: string })?.message || "Could not request analysis. Please try again." });
+    } finally {
+      if (current()) scope.current.requesting = false;
+    }
+  };
   const completedRequest = useRef<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
 
@@ -85,6 +106,16 @@ export function MacroBreakdownPanel({
       setHighlightedKey(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || analysis.generation !== generation || !analysis.requested) return;
+    // The legacy analysis endpoint has no job status. Refresh at bounded
+    // intervals without reporting an upload as complete from a stale record.
+    const timers = [3000, 10000, 30000, 60000].map(delay => window.setTimeout(() => {
+      void mutate().catch(() => undefined);
+    }, delay));
+    return () => timers.forEach(timer => window.clearTimeout(timer));
+  }, [open, generation, analysis, mutate]);
 
   useEffect(() => {
     const requestId = replayController.completedRequestId;
@@ -311,7 +342,7 @@ function PanelFooter({
           disabled={recomputing}
           iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}
         >
-          {recomputing ? "Recording replay…" : "Recompute"}
+          {recomputing ? "Requesting…" : "Recompute"}
         </Button>
         <Button onClick={onClose}>Close</Button>
       </div>

@@ -2,6 +2,30 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.9
+
+### Changed - accurate capture is optional
+
+- Accurate replay capture is **off by default**, including upgrades from
+  earlier agents. Enable **Settings → Map replay → Accurate replay capture
+  (uses more CPU)** only when you want to record detailed movement, attacks,
+  spells and creep. Enabling requires acknowledgement that new recordings
+  run StarCraft II in the background and can use substantial CPU for several
+  minutes. Nothing is recorded automatically when you enable the setting.
+- The agent displays an enabled-state notice and announces when a new capture
+  starts. Turning the setting off stops an active capture and prevents new
+  engine launches. Complete cached recordings can still be reused while off.
+- The website's ordinary **Recompute** action updates analysis without
+  recording. **Generate accurate playback** is a separate explicit action,
+  with the CPU cost explained above the map. Reading a recorded replay does
+  not start StarCraft II.
+- The accurate-capture API uses a new event that older agents do not handle,
+  preventing pre-opt-in agents from starting an engine recording. Those
+  agents can continue normal syncing and analysis; accurate capture requires
+  0.16.9 or later. Existing recorded playback remains available.
+- A normal resync preserves an existing complete recording when another
+  computer only uploads sparse tracker playback. Other analysis still updates.
+
 ## 0.16.8
 
 ### Fixed - background recording windows

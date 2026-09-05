@@ -6,7 +6,8 @@ unit positions. The web replay marks this fallback and uses recorded anchors
 without inventing mining trips or movement routes.
 
 For detailed playback, the desktop agent can run the replay through the
-installed StarCraft II engine. This optional export captures actual unit
+installed StarCraft II engine. **Agent 0.16.9 leaves this off by default**, on
+both fresh installs and upgrades. This optional export captures actual unit
 positions, unit type changes, presence intervals, spell effect extents and
 global creep. On Windows, agent 0.16.8 starts its recorder off-screen without
 activation and keeps its capture windows out of view. It does not control an
@@ -17,12 +18,28 @@ recording do not launch StarCraft.
 
 ## Desktop app
 
-Open a game's map replay and select **Generate accurate playback**, or use
-**Recompute** in its Macro Breakdown. Both controls share the same recording
-and upload progress; reopening the panel resumes an active recording. Keep the
-updated desktop agent connected on the computer containing the original replay
-and StarCraft II installation. The packaged agent includes the protocol
-dependencies; users do not need Python or a separate pip installation.
+To opt in, open **agent Settings → Map replay → Accurate replay capture
+(uses more CPU)** and acknowledge the warning. A new recording starts
+StarCraft II in the background and can use substantial CPU for several minutes.
+It performs three simulation passes and can affect gaming performance. The
+agent uses below-normal process priority, but does not promise a CPU percentage
+cap. Leave capture off or wait until after playing if that workload is unwanted.
+
+Enabling the setting does not start recording or backfill old games. Open a
+game's map replay and select **Generate accurate playback** to request one.
+The agent announces each new capture and shows an enabled-state notice.
+Turning the setting off stops its active recorder and prevents new launches;
+the existing game process is not controlled. The runtime checks the setting
+before launch and during export. Complete cached recordings can still be
+reused with the setting off, without launching StarCraft II.
+
+**Recompute** in Macro Breakdown requests ordinary analysis only. It does not
+start engine capture. Standard syncing, imports and viewing recorded playback
+also do not start it. Reopening the map panel resumes an active accurate
+recording's progress. Keep the updated desktop agent connected on the computer
+containing the original replay and StarCraft II installation. The packaged
+agent includes the protocol dependencies; users do not need Python or a
+separate pip installation.
 
 The agent records the replay in the background, then uses its normal sync
 pipeline to upload the result. The page polls progress and reports recording,
@@ -77,11 +94,17 @@ artifacts leave the normal tracker playback available.
 
 ## Deployment
 
-Ship the API, web replay viewer and updated desktop agent together. The agent's
+Ship the API, web replay viewer and agent 0.16.9 together. The API sends the
+dedicated `map-playback:recompute_request` event, which older agents do not
+handle, so pre-opt-in agents cannot start a recording from the updated website.
+Accurate generation on those agents receives an update-required message;
+normal syncing and analysis remain supported. The agent's
 requirements pin the SC2 protocol, protobuf and WebSocket dependencies, and its
 PyInstaller spec collects their modules alongside the bundled replay engine.
-Older agents receive an explicit update-required response. Stored tracker
-payloads remain usable and gain observed playback when regenerated.
+Stored tracker payloads remain usable and gain observed playback when the user
+opts in and requests generation. No server capture worker or additional paid
+hosting is deployed. The agent version bump introduces the default-off setting
+and does not force anyone to enable capture.
 
 Rebuild progress is a bounded, temporary API-process cache. HTTP requests and
 the paired device socket must reach the same API instance; a scaled deployment

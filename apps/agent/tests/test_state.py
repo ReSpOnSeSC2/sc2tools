@@ -6,6 +6,8 @@ import json
 import threading
 from pathlib import Path
 
+import pytest
+
 import sc2tools_agent.state as state_module
 from sc2tools_agent.state import (
     AgentState,
@@ -522,6 +524,36 @@ def test_load_state_reads_auto_update_flag(tmp_path: Path) -> None:
     # Default (absent key) is enabled.
     (tmp_path / "agent.json").write_text(json.dumps({}), encoding="utf-8")
     assert load_state(tmp_path).auto_update_enabled is True
+
+
+def test_replay_capture_is_off_for_fresh_and_existing_installs(tmp_path: Path) -> None:
+    assert AgentState().replay_capture_enabled is False
+    assert load_state(tmp_path).replay_capture_enabled is False
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"device_token": "paired", "uploaded": {"game": "done"}}),
+        encoding="utf-8",
+    )
+    migrated = load_state(tmp_path)
+    assert migrated.replay_capture_enabled is False
+    assert migrated.device_token == "paired"
+    assert migrated.uploaded == {"game": "done"}
+
+
+@pytest.mark.parametrize("value", [False, None, "true", "false", 1, [], {}])
+def test_replay_capture_requires_explicit_boolean_true(tmp_path: Path, value) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"replay_capture_enabled": value}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).replay_capture_enabled is False
+
+
+def test_replay_capture_consent_survives_restart(tmp_path: Path) -> None:
+    state = AgentState(replay_capture_enabled=True)
+    save_state(tmp_path, state)
+    assert load_state(tmp_path).replay_capture_enabled is True
+    state.replay_capture_enabled = False
+    save_state(tmp_path, state)
+    assert load_state(tmp_path).replay_capture_enabled is False
 
 
 def test_upload_overrides_garbage_inputs_load_as_none(

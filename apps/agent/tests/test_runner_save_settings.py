@@ -136,6 +136,95 @@ def test_filter_change_clears_filtered_entries(tmp_path: Path) -> None:
     assert upload.resync_calls == 1
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+def test_replay_capture_toggle_persists_without_resync(tmp_path: Path, enabled: bool) -> None:
+    state = AgentState(replay_capture_enabled=not enabled)
+    upload = _StubUpload()
+    _handle_save_settings(
+        _cfg(tmp_path), state, SettingsPayload(replay_capture_enabled=enabled),
+        _cell(upload), logging.getLogger("test"),
+    )
+    assert state.replay_capture_enabled is enabled
+    assert load_state(tmp_path).replay_capture_enabled is enabled
+    assert upload.resync_calls == 0
+
+
+def test_unrelated_save_does_not_enable_replay_capture(tmp_path: Path) -> None:
+    state = AgentState()
+    _handle_save_settings(
+        _cfg(tmp_path), state, SettingsPayload(start_minimized=True),
+        _cell(), logging.getLogger("test"),
+    )
+    assert load_state(tmp_path).replay_capture_enabled is False
+
+
+def test_failed_capture_opt_in_save_restores_disabled_state(tmp_path: Path, monkeypatch) -> None:
+    state = AgentState()
+    save_state(tmp_path, state)
+
+    def fail_save(*_args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("sc2tools_agent.runner.save_state", fail_save)
+    with pytest.raises(OSError, match="disk full"):
+        _handle_save_settings(
+            _cfg(tmp_path), state, SettingsPayload(replay_capture_enabled=True),
+            _cell(), logging.getLogger("test"),
+        )
+    assert state.replay_capture_enabled is False
+    assert load_state(tmp_path).replay_capture_enabled is False
+
+
+def test_capture_notice_reaches_tray_even_if_gui_notice_fails() -> None:
+    from sc2tools_agent.runner import _notify_replay_capture
+
+    notices = []
+
+    def fail_gui(*_args, **_kwargs):
+        raise RuntimeError("window unavailable")
+
+    _notify_replay_capture(
+        SimpleNamespace(show_notice=lambda text, **kw: notices.append((text, kw))),
+        None, SimpleNamespace(show_update_notice=fail_gui), "CPU warning",
+        logging.getLogger("test"),
+    )
+    assert notices == [("CPU warning", {"title": "Accurate replay capture"})]
+
+
+def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypatch) -> None:
+    """Invoke the actual boot callback after its factory scope has returned."""
+    import threading
+    from unittest.mock import Mock
+    from sc2tools_agent import runner
+
+    class HandlersReached(BaseException):
+        pass
+
+    callbacks = {}
+
+    def register(**kwargs):
+        callbacks.update(kwargs)
+        raise HandlersReached()
+
+    for name in ("ApiClient", "UploadQueue", "ReplayWatcher", "ImportController", "Updater", "Heartbeat"):
+        monkeypatch.setattr(runner, name, Mock())
+    monkeypatch.setattr(runner, "probe_analyzer", lambda: (True, ""))
+    monkeypatch.setattr(runner, "_discover_replay_folders", lambda *_: [])
+    monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_: None)
+    monkeypatch.setattr(runner, "make_recompute_handlers", register)
+    cell = SimpleNamespace(tray=Mock(), console=Mock(), gui=Mock())
+    with pytest.raises(HandlersReached):
+        runner._gui_boot_worker(
+            cfg=_cfg(tmp_path), state=AgentState(device_token="t", user_id="u"),
+            cell=cell, ui=Mock(), stop_event=threading.Event(),
+            log=logging.getLogger("test"), no_live=True, no_obs=True,
+        )
+    callbacks["notify_capture_start"]("Capture is using CPU")
+    cell.gui.show_update_notice.assert_called_once_with("Capture is using CPU", sticky=False)
+    cell.tray.show_notice.assert_called_once_with("Capture is using CPU", title="Accurate replay capture")
+    cell.console.on_status.assert_called_once_with("Capture is using CPU")
+
+
 def test_obs_master_toggle_persists_and_hot_disables_immediately(
     tmp_path: Path,
 ) -> None:

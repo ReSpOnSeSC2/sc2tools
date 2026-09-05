@@ -2046,6 +2046,9 @@ def _compact_map_playback(
         "bounds": bounds,
     }
     fidelity = playback.get("fidelity")
+    replay_sha256 = playback.get("replaySha256")
+    if isinstance(replay_sha256, str) and re.fullmatch(r"[a-f0-9]{64}", replay_sha256):
+        out["replaySha256"] = replay_sha256
     observed = isinstance(fidelity, Mapping) and fidelity.get("positions") in ("tracker", "engine")
     engine = observed and fidelity["positions"] == "engine"
     engine_tracks: list = []

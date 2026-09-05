@@ -131,7 +131,7 @@ export function useMapReplay(gameId: string | null) {
         ? Math.min(now, Math.max(now - RECORDING_TIMEOUT_MS, updatedAt)) : now,
       refreshMessage: jobStatus === "uploading"
         ? "Recording finished. Uploading the map playback…"
-        : "Recording playback with StarCraft II. You can keep reviewing this game while it runs…",
+        : "Recording playback with StarCraft II. This can use significantly more CPU for several minutes. Turn off accurate capture in agent Settings → Map replay to stop it.",
     });
   }, [canRefresh, jobId, jobStatus, updatedAt, state.refreshing, state.requestId, state.startedAt, playback, patch]);
 
@@ -176,6 +176,8 @@ export function useMapReplay(gameId: string | null) {
       patch({ refreshMessage: "Could not check recording progress. Retrying while your desktop agent continues working…" });
     } else if (sameJob && jobStatus === "uploading") {
       patch({ refreshMessage: "Recording finished. Uploading the map playback…" });
+    } else if (sameJob && jobStatus === "processing" && jobMessage) {
+      patch({ refreshMessage: jobMessage });
     }
     const timer = window.setTimeout(() => {
       patch({ refreshing: false, refreshMessage: "Recording is still processing. Keep the desktop agent open and check back shortly." });
@@ -202,7 +204,7 @@ export function useMapReplay(gameId: string | null) {
       if (typeof requestId !== "string" || !requestId) {
         throw new Error("The rebuild was not acknowledged. Update the desktop agent and try again.");
       }
-      patch({ requestId, refreshMessage: "Recording playback with StarCraft II. You can keep reviewing this game while it runs…" });
+      patch({ requestId, refreshMessage: "Preparing playback. A new StarCraft recording can use significantly more CPU for several minutes; saved recordings are reused." });
       // An intermittent first GET must not cancel an accepted desktop job.
       await statusReq.mutate().catch(() => undefined);
     } catch (failure) {

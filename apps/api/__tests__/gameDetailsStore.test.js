@@ -41,6 +41,80 @@ const SAMPLE_BLOB = {
   apmCurve: { window_sec: 30, has_data: true, players: [] },
 };
 
+const RECORDED_PLAYBACK = {
+  v: 6, mapName: "Test map", gameLength: 600,
+  bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 },
+  units: [{ owner: "me", name: "Probe", born: 0, died: null, wp: [0, 20, 20, 600, 25, 25] }],
+  buildings: [], effects: [],
+  creep: { width: 2, height: 2, encoding: "rle", frames: [{ t: 0, runs: [] }] },
+  fidelity: { positions: "engine", paths: "observed", complete: true, attacks: "observed",
+    effects: "observed", creep: "observed", sampleSeconds: 0.1786, positionError: 0.15 },
+};
+const TRACKER_PLAYBACK = { v: 6, mapName: "Test map", gameLength: 600, units: [],
+  fidelity: { positions: "tracker", paths: "observed", complete: false } };
+
+function playbackPreservationContract(getStore) {
+  test("tracker and partial resyncs preserve recorded playback while updating other analytics", async () => {
+    const store = getStore();
+    const date = new Date();
+    await store.write("u1", "recorded", date, { mapPlayback: RECORDED_PLAYBACK, buildLog: ["old"] });
+    for (const incoming of [TRACKER_PLAYBACK, { ...RECORDED_PLAYBACK, fidelity: { ...RECORDED_PLAYBACK.fidelity, complete: false } }]) {
+      await store.write("u1", "recorded", date, { mapPlayback: incoming, buildLog: ["new $literal"] });
+      expect(await store.read("u1", "recorded")).toMatchObject({ mapPlayback: RECORDED_PLAYBACK, buildLog: ["new $literal"] });
+    }
+  });
+
+  test.each([
+    ["missing attack channel", { ...RECORDED_PLAYBACK, fidelity: { ...RECORDED_PLAYBACK.fidelity, attacks: "unavailable" } }],
+    ["partial capture", { ...RECORDED_PLAYBACK, fidelity: { ...RECORDED_PLAYBACK.fidelity, complete: false } }],
+    ["missing creep channel", { ...RECORDED_PLAYBACK, creep: null }],
+    ["empty recording", { ...RECORDED_PLAYBACK, units: [] }],
+    ["missing sample provenance", { ...RECORDED_PLAYBACK, fidelity: { ...RECORDED_PLAYBACK.fidelity, sampleSeconds: undefined } }],
+  ])("does not preserve %s as an authoritative recording", async (_name, invalid) => {
+    const store = getStore();
+    await store.write("u1", "unverified", new Date(), { mapPlayback: invalid });
+    await store.write("u1", "unverified", new Date(), { mapPlayback: TRACKER_PLAYBACK });
+    expect((await store.read("u1", "unverified")).mapPlayback).toEqual(TRACKER_PLAYBACK);
+  });
+
+  test("allows a new complete recorded version and known changed replay source", async () => {
+    const store = getStore();
+    const date = new Date();
+    const upgraded = { ...RECORDED_PLAYBACK, v: 7, replaySha256: "a".repeat(64) };
+    await store.write("u1", "upgraded", date, { mapPlayback: RECORDED_PLAYBACK });
+    await store.write("u1", "upgraded", date, { mapPlayback: upgraded });
+    expect((await store.read("u1", "upgraded")).mapPlayback).toEqual(upgraded);
+    await store.write("u1", "upgraded", date, { mapPlayback: { ...TRACKER_PLAYBACK, replaySha256: "a".repeat(64) } });
+    expect((await store.read("u1", "upgraded")).mapPlayback).toEqual(upgraded);
+    const changedSource = { ...TRACKER_PLAYBACK, replaySha256: "b".repeat(64) };
+    await store.write("u1", "upgraded", date, { mapPlayback: changedSource });
+    expect((await store.read("u1", "upgraded")).mapPlayback).toEqual(changedSource);
+  });
+
+  test("does not mix different map or duration identities or owner namespaces", async () => {
+    const store = getStore();
+    const date = new Date();
+    await store.write("u1", "same-id", date, { mapPlayback: RECORDED_PLAYBACK });
+    await store.write("u2", "same-id", date, { mapPlayback: TRACKER_PLAYBACK });
+    expect((await store.read("u1", "same-id")).mapPlayback).toEqual(RECORDED_PLAYBACK);
+    expect((await store.read("u2", "same-id")).mapPlayback).toEqual(TRACKER_PLAYBACK);
+    const otherGame = { ...TRACKER_PLAYBACK, gameLength: 700 };
+    await store.write("u1", "same-id", date, { mapPlayback: otherGame });
+    expect((await store.read("u1", "same-id")).mapPlayback).toEqual(otherGame);
+  });
+
+  test("concurrent complete and tracker updates retain the recording and other updates", async () => {
+    const store = getStore();
+    const date = new Date();
+    await store.write("u1", "racing", date, { mapPlayback: TRACKER_PLAYBACK });
+    await Promise.all([
+      store.write("u1", "racing", date, { mapPlayback: RECORDED_PLAYBACK }),
+      store.write("u1", "racing", date, { mapPlayback: TRACKER_PLAYBACK, buildLog: ["stats refresh"] }),
+    ]);
+    expect(await store.read("u1", "racing")).toMatchObject({ mapPlayback: RECORDED_PLAYBACK, buildLog: ["stats refresh"] });
+  });
+}
+
 describe("MongoDetailsStore", () => {
   /** @type {MongoMemoryServer} */
   let mongo;
@@ -50,6 +124,8 @@ describe("MongoDetailsStore", () => {
   let store;
   /** @type {import('mongodb').Collection} */
   let collection;
+
+  playbackPreservationContract(() => store);
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
@@ -295,6 +371,8 @@ describe("R2DetailsStore", () => {
   /** @type {R2DetailsStore} */
   let store;
 
+  playbackPreservationContract(() => store);
+
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
     mongoClient = new MongoClient(mongo.getUri());
@@ -441,6 +519,27 @@ describe("R2DetailsStore", () => {
       apmCurve: { has_data: true },
     });
     expect(s3.preconditionFailures).toBeGreaterThan(0);
+  });
+
+  test("R2 retries a stale tracker merge against the newly committed engine recording", async () => {
+    const date = new Date();
+    await store.write("u1", "race-upgrade", date, { mapPlayback: TRACKER_PLAYBACK });
+    const send = s3.send.bind(s3);
+    let insertedUpgrade = false;
+    s3.send = async command => {
+      if (command.constructor.name === "PutObjectCommand" && !insertedUpgrade) {
+        insertedUpgrade = true;
+        // Another instance commits after this writer's GET but before PUT.
+        await send(new (require("@aws-sdk/client-s3").PutObjectCommand)({
+          Bucket: "test-bucket", Key: store.keyFor("u1", "race-upgrade"),
+          Body: await gzip(Buffer.from(JSON.stringify({ mapPlayback: RECORDED_PLAYBACK }))),
+        }));
+      }
+      return send(command);
+    };
+    await store.write("u1", "race-upgrade", date, { mapPlayback: TRACKER_PLAYBACK, apmCurve: { updated: true } });
+    expect(s3.preconditionFailures).toBe(1);
+    expect(await store.read("u1", "race-upgrade")).toMatchObject({ mapPlayback: RECORDED_PLAYBACK, apmCurve: { updated: true } });
   });
 
   test("write removes legacy heavy fields from the Mongo metadata row", async () => {

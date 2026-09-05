@@ -36,6 +36,10 @@ class ObservationExportError(RuntimeError):
     """A bounded engine export failed; no incomplete artifact is published."""
 
 
+class ObservationExportCancelled(ObservationExportError):
+    """Explicit local opt-in was revoked; stop only the owned capture runtime."""
+
+
 def _external_windows_environment(environment: dict[str, str], bundle_root: str) -> dict[str, str]:
     """Remove only bundled DLL search entries from this child's environment."""
     child = environment.copy()
@@ -363,15 +367,47 @@ class ObservationAccumulator:
 
 
 class _Engine:
-    def __init__(self, install: Path, executable: Path, data_version: str | None, timeout: float):
+    def __init__(self, install: Path, executable: Path, data_version: str | None, timeout: float,
+                 cancel_requested: Callable[[], bool] | None = None):
         self.install, self.executable, self.data_version, self.timeout = install, executable, data_version, timeout
         self.process = None
         self.ws = None
         self.temp = None
         self.log = None
         self.request_id = 0
+        self.cancel_requested = cancel_requested
+        self._cancelled = threading.Event()
+        self._cancel_stop = threading.Event()
+        self._cancel_thread = None
+
+    def _check_cancelled(self):
+        if self.cancel_requested is not None:
+            try:
+                if self.cancel_requested():
+                    self._cancelled.set()
+            except Exception:
+                self._cancelled.set()
+        if self._cancelled.is_set():
+            raise ObservationExportCancelled("Replay capture was cancelled by the local setting")
+
+    def _watch_cancellation(self):
+        # A game can block inside recv() for up to two minutes. Keep watching
+        # the opt-in while that call waits, and terminate only our owned tree.
+        while not self._cancel_stop.wait(0.25):
+            try:
+                self._check_cancelled()
+            except ObservationExportCancelled:
+                try:
+                    if self.process is not None and self.process.poll() is None:
+                        self.process.terminate()
+                except Exception:
+                    # Normal context cleanup retries termination and closes
+                    # the kill-on-close Windows job even if this attempt fails.
+                    pass
+                return
 
     def __enter__(self):
+        self._check_cancelled()
         try:
             import websocket
             from s2clientprotocol import sc2api_pb2
@@ -399,10 +435,16 @@ class _Engine:
         cwd = self.install / "Support64" if os.name == "nt" else self.install
         self.log = (Path(self.temp.name) / "engine.log").open("wb")
         try:
+            self._check_cancelled()
             self.process = _launch_sc2(args, cwd=cwd, stdin=subprocess.DEVNULL,
                                        stdout=self.log, stderr=self.log, **kwargs)
+            if self.cancel_requested is not None:
+                self._cancel_thread = threading.Thread(target=self._watch_cancellation,
+                    name="SC2 capture cancellation", daemon=True)
+                self._cancel_thread.start()
             deadline = time.monotonic() + min(self.timeout, 60)
             while time.monotonic() < deadline:
+                self._check_cancelled()
                 if hasattr(self.process, "check_background"):
                     self.process.check_background()
                 if self.process.poll() is not None:
@@ -416,12 +458,13 @@ class _Engine:
                     time.sleep(0.25)
             raise ObservationExportError("SC2 local API did not start within 60 seconds")
         except BaseException as exc:
-            diagnostic = self.close(failed=True)
+            diagnostic = self.close(failed=not isinstance(exc, ObservationExportCancelled))
             if diagnostic is not None and isinstance(exc, Exception):
                 raise ObservationExportError(f"{exc} (SC2 diagnostic log: {diagnostic})") from exc
             raise
 
     def request(self, kind: str, **kwargs):
+        self._check_cancelled()
         if self.process is not None and hasattr(self.process, "check_background"):
             self.process.check_background()
         self.request_id += 1
@@ -432,7 +475,9 @@ class _Engine:
             self.ws.send(request.SerializeToString(), opcode=self.websocket.ABNF.OPCODE_BINARY)
             response = self.api.Response.FromString(self.ws.recv())
         except (OSError, self.websocket.WebSocketException) as exc:
+            self._check_cancelled()
             raise ObservationExportError(f"SC2 {kind} API connection failed: {exc}") from exc
+        self._check_cancelled()
         if response.error:
             raise ObservationExportError("; ".join(response.error))
         if response.id != self.request_id or response.WhichOneof("response") != kind:
@@ -473,6 +518,12 @@ class _Engine:
 
     def close(self, *, failed: bool = False):
         cleanup_error = None
+        self._cancel_stop.set()
+        if self._cancel_thread is not None:
+            self._cancel_thread.join(timeout=5)
+            if self._cancel_thread.is_alive():
+                cleanup_error = ObservationExportError("Could not stop the capture cancellation monitor")
+            self._cancel_thread = None
         if self.ws is not None:
             try:
                 self.ws.close()
@@ -524,7 +575,7 @@ class _Engine:
         return diagnostic
 
     def __exit__(self, _type, value, _traceback):
-        diagnostic = self.close(failed=value is not None)
+        diagnostic = self.close(failed=value is not None and not isinstance(value, ObservationExportCancelled))
         if diagnostic is not None and isinstance(value, Exception):
             raise ObservationExportError(f"{value} (SC2 diagnostic log: {diagnostic})") from value
 
@@ -564,11 +615,12 @@ def _frame_from_proto(observation, *, capture_creep: bool = True, capture_entiti
 
 def _capture_global_creep(install: Path, executable: Path, version: str, replay_path: Path,
                           map_width: int, map_height: int, step_loops: int, timeout_seconds: float,
-                          max_game_seconds: float | None, report: Callable[[str], None]) -> dict:
+                          max_game_seconds: float | None, report: Callable[[str], None],
+                          cancel_requested: Callable[[], bool] | None = None) -> dict:
     """A lightweight Everyone pass; participant feature creep is also masked."""
     from s2clientprotocol import sc2api_pb2
     started = time.monotonic()
-    with _Engine(install, executable, version, timeout_seconds) as engine:
+    with _Engine(install, executable, version, timeout_seconds, cancel_requested=cancel_requested) as engine:
         replay_info = engine.request("replay_info", replay_path=str(replay_path), download_data=False)
         engine.request("start_replay", replay_path=str(replay_path), observed_player_id=0, disable_fog=True,
             realtime=False, options=sc2api_pb2.InterfaceOptions(raw=True, show_cloaked=True,
@@ -615,6 +667,7 @@ def export_engine_observations(
     max_game_seconds: float | None = None,
     download_missing: bool = True,
     progress: Callable[[str], None] | None = None,
+    cancel_requested: Callable[[], bool] | None = None,
 ) -> dict:
     """Return a lossless local artifact with sampled authoritative positions.
 
@@ -630,6 +683,8 @@ def export_engine_observations(
         raise ValueError("Maximum game time must be positive")
     if not 1 <= my_pid <= 15:
         raise ValueError("Expected a participant player id")
+    if cancel_requested is not None and cancel_requested():
+        raise ObservationExportCancelled("Replay capture was cancelled before startup")
     import sc2reader
     from s2clientprotocol import data_pb2, sc2api_pb2
 
@@ -658,7 +713,7 @@ def export_engine_observations(
         if not installed:
             raise ObservationExportError(f"SC2 executable not found under {install}")
         report(f"Downloading replay engine {base} through Blizzard")
-        with _Engine(install, installed[0], None, timeout_seconds) as engine:
+        with _Engine(install, installed[0], None, timeout_seconds, cancel_requested=cancel_requested) as engine:
             engine.request("replay_info", replay_path=str(replay_path), download_data=True)
         if not executable.is_file():
             raise ObservationExportError(f"Blizzard did not provide required replay engine {base}")
@@ -671,7 +726,8 @@ def export_engine_observations(
     participants = {}
     for pass_index, perspective in enumerate(perspectives):
         report(f"Loading replay with {base}, perspective {pass_index + 1}/2")
-        with _Engine(install, executable, version, max(1, timeout_seconds - (time.monotonic() - started))) as engine:
+        with _Engine(install, executable, version, max(1, timeout_seconds - (time.monotonic() - started)),
+                     cancel_requested=cancel_requested) as engine:
             ping = engine.request("ping")
             if ping.base_build != int(base[4:]) or ping.data_version.upper() != version:
                 raise ObservationExportError("Launched engine version does not match this replay")
@@ -731,7 +787,8 @@ def export_engine_observations(
                                       "x_max": bounds.p1.x, "y_max": bounds.p1.y}}
     report("Capturing global creep")
     creep_result = _capture_global_creep(install, executable, version, replay_path, map_width, map_height,
-        creep_step_loops, max(1, timeout_seconds - (time.monotonic() - started)), max_game_seconds, report)
+        creep_step_loops, max(1, timeout_seconds - (time.monotonic() - started)), max_game_seconds, report,
+        cancel_requested=cancel_requested)
     result = {**pass_results[0], **map_details, "creep": creep_result["creep"]}
     for key in ("my_units", "opp_units", "my_buildings", "opp_buildings"):
         result[key] = pass_results[0][key] + pass_results[1][key]
@@ -809,6 +866,7 @@ def merge_precomputed_engine_playback(playback: dict, replay_path: str | Path, p
             if not all(isinstance(observed.get(key), list) for key in keys):
                 continue
             replacement = {key: observed[key] for key in (*keys, "bounds", "game_length", "fidelity", "creep", "effects") if key in observed}
+            replacement["replaySha256"] = artifact["replaySha256"]
             from .event_extractor import _canonical_unit_name
             def display_name(name):
                 # Cocoon aliases must not show the finished morph early.

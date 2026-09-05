@@ -57,6 +57,7 @@ const R2_DETAILS_MAX_COMPRESSED_BYTES = 7 * 1024 * 1024;
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
+const { preserveRecordedPlayback, mongoPlaybackReplacement } = require("./playbackPreservation");
 
 const UNSET_HEAVY_FIELDS = Object.freeze(
   Object.fromEntries(HEAVY_FIELDS.map((field) => [field, ""])),
@@ -106,9 +107,19 @@ class MongoDetailsStore {
     /** @type {Record<string, any>} */
     const set = { userId, gameId, date, ...blob };
     stampVersion(set, COLLECTIONS.GAME_DETAILS);
+    // A full sync can carry tracker playback even after another computer
+    // uploaded a complete recording. Evaluate preservation atomically inside
+    // Mongo, while still accepting updated stats/build logs in this write.
+    const update = blob.mapPlayback === undefined
+      ? { $setOnInsert: { createdAt: new Date() }, $set: set }
+      : [{ $set: {
+        ...Object.fromEntries(Object.entries(set).map(([key, value]) => [key, { $literal: value }])),
+        createdAt: { $ifNull: ["$createdAt", { $literal: new Date() }] },
+        mapPlayback: mongoPlaybackReplacement(blob.mapPlayback),
+      } }];
     await this.db.gameDetails.updateOne(
       { userId, gameId },
-      { $setOnInsert: { createdAt: new Date() }, $set: set },
+      update,
       { upsert: true, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
   }
@@ -397,6 +408,11 @@ class R2DetailsStore {
       const current = await this._readVersioned(userId, gameId, opts);
       if (opts.assertLease) await opts.assertLease();
       const merged = { ...(current?.blob || {}), ...blob };
+      // Re-evaluate on every ETag retry: a concurrent engine upload may have
+      // upgraded playback since the preceding read/conditional PUT failed.
+      if (current && blob.mapPlayback !== undefined && preserveRecordedPlayback(current.blob?.mapPlayback, blob.mapPlayback)) {
+        merged.mapPlayback = current.blob.mapPlayback;
+      }
       if (current && isDeepStrictEqual(current.blob, merged)) {
         // A Full Re-sync commonly sends a byte-for-byte equivalent analysis
         // blob. Preserve the optimistic-write contract without paying for

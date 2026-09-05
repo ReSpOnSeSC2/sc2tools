@@ -6,6 +6,7 @@ const harness = vi.hoisted(() => ({
   playback: null as Record<string, unknown> | null,
   macroError: null as { status: number; message?: string } | null,
   request: vi.fn(),
+  macroRequest: vi.fn(),
   playbackMutate: vi.fn(),
   statusMutate: vi.fn(),
   macroMutate: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("@/lib/clientApi", () => ({
       error: harness.macroError,
       isLoading: false,
       mutate: harness.macroMutate,
+      request: harness.macroRequest,
     };
     if (path?.endsWith("/map-playback/status")) {
       harness.mapPollInterval = options?.refreshInterval ?? 0;
@@ -44,8 +46,10 @@ vi.mock("@/lib/clientApi", () => ({
   },
 }));
 vi.mock("@/components/analyzer/game/MapReplaySection", () => ({
-  MapReplaySection: ({ controller }: { controller: { playback: { fidelity?: { positions?: string } } | null } }) => (
-    <div aria-label="Shared map playback">{controller.playback?.fidelity?.positions ?? "missing"}</div>
+  MapReplaySection: ({ controller }: { controller: { playback: { fidelity?: { positions?: string } } | null; refresh: () => void } }) => (
+    <div aria-label="Shared map playback">{controller.playback?.fidelity?.positions ?? "missing"}
+      <button onClick={controller.refresh}>Generate accurate playback</button>
+    </div>
   ),
 }));
 
@@ -68,16 +72,35 @@ beforeEach(() => {
   harness.playback = tracker;
   harness.macroError = null;
   harness.request.mockResolvedValue({ rebuild: { requestId: "recording-1" } });
+  harness.macroRequest.mockResolvedValue({ ok: true, requested: true });
   harness.playbackMutate.mockResolvedValue(undefined);
   harness.statusMutate.mockResolvedValue(undefined);
   harness.macroMutate.mockResolvedValue(undefined);
 });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("macro breakdown Recompute", () => {
-  it("records the replay through the map endpoint and refreshes analysis only after the recorded upload", async () => {
-    const view = render(<MacroBreakdownPanel {...props} />);
+  it("recomputes analysis without requesting engine capture and refreshes at bounded intervals", async () => {
+    vi.useFakeTimers();
+    render(<MacroBreakdownPanel {...props} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Recompute" })));
+    expect(harness.macroRequest).toHaveBeenCalledWith({ method: "POST", body: "{}" });
+    expect(harness.request).not.toHaveBeenCalled();
+    expect(harness.mapPollInterval).toBe(0);
+    expect(harness.statusMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toContain("does not start a StarCraft recording");
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(harness.macroMutate).toHaveBeenCalledTimes(4);
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(harness.macroMutate).toHaveBeenCalledTimes(4);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Recompute" })));
+    await act(async () => vi.advanceTimersByTime(3000));
+    expect(harness.macroMutate).toHaveBeenCalledTimes(5);
+  });
+
+  it("still refreshes analysis after a separately requested accurate recording finishes", async () => {
+    const view = render(<MacroBreakdownPanel {...props} />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Generate accurate playback" })));
     expect(harness.request).toHaveBeenCalledTimes(1);
     expect(harness.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(harness.paths).toContain("/v1/games/washout-game/map-playback");
@@ -85,21 +108,20 @@ describe("macro breakdown Recompute", () => {
     expect(harness.fullPollInterval).toBe(0);
     expect(harness.playbackMutate).not.toHaveBeenCalled();
     expect(harness.statusMutate).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "Recording replay…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(harness.macroRequest).not.toHaveBeenCalled();
     expect(harness.macroMutate).not.toHaveBeenCalled();
 
     harness.playback = recorded;
     view.rerender(<MacroBreakdownPanel {...props} />);
     await waitFor(() => expect(harness.macroMutate).toHaveBeenCalledTimes(1));
-    expect(screen.getByLabelText("Shared map playback").textContent).toBe("engine");
+    expect(screen.getByLabelText("Shared map playback").textContent).toContain("engine");
     expect(harness.mapPollInterval).toBe(0);
-    expect(screen.getByRole("status").textContent).toBe("Recorded playback is ready.");
     view.rerender(<MacroBreakdownPanel {...props} />);
     expect(harness.macroMutate).toHaveBeenCalledTimes(1);
   });
 
   it("shows an offline-agent failure instead of claiming a recompute was queued", async () => {
-    harness.request.mockRejectedValue(new Error("Open the SC2 Tools desktop agent, then retry."));
+    harness.macroRequest.mockRejectedValue(new Error("Open the SC2 Tools desktop agent, then retry."));
     render(<MacroBreakdownPanel {...props} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Recompute" })));
     expect(screen.getByRole("status").textContent).toContain("Open the SC2 Tools desktop agent");
@@ -108,20 +130,18 @@ describe("macro breakdown Recompute", () => {
     expect(harness.mapPollInterval).toBe(0);
   });
 
-  it("can generate playback when the macro breakdown is missing", async () => {
+  it("reparses a missing macro breakdown without requesting a new recording", async () => {
     harness.macroError = { status: 404 };
     harness.playback = null;
-    const view = render(<MacroBreakdownPanel {...props} />);
+    render(<MacroBreakdownPanel {...props} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Recompute" })));
-    expect(harness.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
-    harness.playback = recorded;
-    view.rerender(<MacroBreakdownPanel {...props} />);
-    await waitFor(() => expect(harness.macroMutate).toHaveBeenCalledTimes(1));
+    expect(harness.macroRequest).toHaveBeenCalledWith({ method: "POST", body: "{}" });
+    expect(harness.request).not.toHaveBeenCalled();
   });
 
-  it("does not apply a late recording acknowledgement to another game", async () => {
+  it("does not apply a late analysis acknowledgement to another game", async () => {
     let acknowledge!: (value: unknown) => void;
-    harness.request.mockImplementation(() => new Promise(resolve => { acknowledge = resolve; }));
+    harness.macroRequest.mockImplementation(() => new Promise(resolve => { acknowledge = resolve; }));
     const view = render(<MacroBreakdownPanel {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Recompute" }));
     view.rerender(<MacroBreakdownPanel {...props} gameId="other-game" />);

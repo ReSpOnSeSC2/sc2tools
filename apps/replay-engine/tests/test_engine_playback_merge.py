@@ -38,6 +38,7 @@ def test_engine_merge_maps_tracker_tags_and_spent_deaths(tmp_path, monkeypatch):
     assert unit["attacks"] == [6.2345, 8.7654]
     assert unit["aim"] == [6.2345, 25, 35]
     assert result["fidelity"]["attacks"] == "observed"
+    assert result["replaySha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
     assert result["ability_casts"] == [{"casterUnitId": str((1 << 32) + 123),
                                         "targetUnitId": str((1 << 32) + 123),
                                         "casterUnitIds": [str((1 << 32) + 123)]}]

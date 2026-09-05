@@ -82,6 +82,51 @@ def test_source_launch_preserves_environment_without_touching_dll_state(monkeypa
     assert calls == [((["SC2"],), {"env": environment})]
 
 
+def test_cancelled_capture_cannot_launch_or_read_a_replay(tmp_path, monkeypatch):
+    monkeypatch.setattr(exporter, "_launch_sc2", lambda *_a, **_k: pytest.fail("SC2 started after opt-out"))
+    with pytest.raises(exporter.ObservationExportCancelled):
+        with exporter._Engine(tmp_path, tmp_path / "SC2.exe", None, 10, cancel_requested=lambda: True):
+            pytest.fail("Cancelled engine entered")
+    with pytest.raises(exporter.ObservationExportCancelled):
+        exporter.export_engine_observations(tmp_path / "does-not-exist.SC2Replay", 1,
+                                            cancel_requested=lambda: True)
+
+
+def test_cancellation_stops_owned_engine_while_api_receive_is_blocked(tmp_path):
+    import threading
+    from unittest.mock import Mock
+    import websocket
+    from s2clientprotocol import sc2api_pb2
+    cancel, stopped, receiving = threading.Event(), threading.Event(), threading.Event()
+    process = Mock()
+    process.poll.side_effect = lambda: 1 if stopped.is_set() else None
+    process.terminate.side_effect = stopped.set
+    engine = exporter._Engine(tmp_path, tmp_path / "SC2.exe", None, 10, cancel_requested=cancel.is_set)
+    engine.process, engine.api, engine.websocket = process, sc2api_pb2, websocket
+    engine.ws = Mock()
+    def recv():
+        receiving.set()
+        assert stopped.wait(3), "Cancellation must not wait for the 120-second API timeout"
+        raise OSError("process stopped")
+    engine.ws.recv.side_effect = recv
+    engine._cancel_thread = threading.Thread(target=engine._watch_cancellation, daemon=True)
+    engine._cancel_thread.start()
+    def turn_off():
+        assert receiving.wait(2)
+        cancel.set()
+    controller = threading.Thread(target=turn_off, daemon=True)
+    controller.start()
+    try:
+        with pytest.raises(exporter.ObservationExportCancelled):
+            engine.request("observation")
+    finally:
+        engine.close()
+        controller.join(timeout=3)
+    process.terminate.assert_called_once()
+    process.close.assert_called_once()
+    assert engine._cancel_thread is None
+
+
 def test_background_launch_failure_never_falls_back_to_unprotected_popen(monkeypatch):
     from core import windows_capture_process
     monkeypatch.setattr(sys, "platform", "win32")
@@ -540,7 +585,7 @@ def test_export_separates_participant_effects_from_global_everyone_creep(tmp_pat
     perspectives = []
 
     class FakeEngine:
-        def __init__(self, *_args):
+        def __init__(self, *_args, cancel_requested=None):
             self.loop = 0
             self.pid = None
 

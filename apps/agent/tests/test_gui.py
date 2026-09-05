@@ -70,6 +70,7 @@ def test_settings_payload_defaults_to_none() -> None:
     assert p.autostart_enabled is None
     assert p.start_minimized is None
     assert p.auto_update_enabled is None
+    assert p.replay_capture_enabled is None
 
 
 def test_settings_payload_auto_update_round_trips() -> None:
@@ -80,6 +81,13 @@ def test_settings_payload_auto_update_round_trips() -> None:
 
     assert SettingsPayload(auto_update_enabled=True).auto_update_enabled is True
     assert SettingsPayload(auto_update_enabled=False).auto_update_enabled is False
+
+
+def test_settings_payload_replay_capture_keeps_explicit_opt_out() -> None:
+    from sc2tools_agent.ui.gui import SettingsPayload
+
+    assert SettingsPayload(replay_capture_enabled=True).replay_capture_enabled is True
+    assert SettingsPayload(replay_capture_enabled=False).replay_capture_enabled is False
 
 
 def test_settings_payload_round_trips_explicit_values(tmp_path: Path) -> None:

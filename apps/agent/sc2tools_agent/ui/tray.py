@@ -165,6 +165,12 @@ class TrayUI:
 
     # ---------------- callbacks from the runner ----------------
 
+    def show_notice(self, message: str, *, title: str = "SC2 Tools Agent") -> None:
+        """Show an OS notification without opening or focusing a window."""
+        icon = self._icon
+        if icon is not None and hasattr(icon, "notify"):
+            icon.notify(str(message), str(title))
+
     def show_pairing_code(self, code: str) -> None:
         with self._lock:
             self._status = f"pairing — code {code}"

@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Optional accurate replay capture** — agent **0.16.9**
+  (`agent-v0.16.9`) keeps StarCraft recording **off by default**. Users can
+  enable it in agent Settings after a CPU-use warning, receive a notice when
+  recording starts, and turn it off to stop capture. The website separates
+  normal analysis **Recompute** from **Generate accurate playback**. Older
+  agents cannot receive the new capture command; cached recordings remain
+  viewable and reusable, including after a normal resync. No server capture
+  hosting is enabled.
 - **Recorded map replay with native attacks** — agent **0.16.6**
   (`agent-v0.16.6`) records sampled unit paths, global creep, supported spell
   effects, and weapon activity through the installed StarCraft II engine.

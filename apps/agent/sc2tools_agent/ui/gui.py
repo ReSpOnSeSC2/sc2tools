@@ -377,6 +377,7 @@ class SettingsPayload:
         "sync_filter_since",
         "sync_filter_until",
         "auto_update_enabled",
+        "replay_capture_enabled",
         "obs_scene_switch_enabled",
         "obs_host",
         "obs_port",
@@ -403,6 +404,7 @@ class SettingsPayload:
         sync_filter_since: Optional[str] = None,
         sync_filter_until: Optional[str] = None,
         auto_update_enabled: Optional[bool] = None,
+        replay_capture_enabled: Optional[bool] = None,
         obs_scene_switch_enabled: Optional[bool] = None,
         obs_host: Optional[str] = None,
         obs_port: Optional[int] = None,
@@ -448,6 +450,7 @@ class SettingsPayload:
         # ``False`` turns the updater notify-only (the compatibility
         # floor in ``updater.update_is_mandatory`` still overrides).
         self.auto_update_enabled = auto_update_enabled
+        self.replay_capture_enabled = replay_capture_enabled
         # OBS auto scene switching. ``None`` means "no change" for each
         # field, same as everything above. ``obs_password`` uses the
         # empty string to mean "clear it" so a user can remove a saved
@@ -933,6 +936,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._obs_enable_check.toggled.connect(
                 self._toggle_obs_scene_switch,
             )
+            self._replay_capture_last_saved = (
+                self._replay_capture_check.isChecked()
+            )
+            self._replay_capture_check.toggled.connect(
+                self._toggle_replay_capture,
+            )
+            self._refresh_capture_notice()
             self._tail_log_now()
 
             # Periodic log tail. Watchdog FS events on Windows are
@@ -1112,6 +1122,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_notice.setWordWrap(True)
             self._update_notice.hide()
             grid.addWidget(self._update_notice, 2, 1, 1, 2)
+            self._replay_capture_notice = QtWidgets.QLabel(
+                "Accurate replay capture is on. Requested recordings run "
+                "StarCraft II on this PC and can use substantial CPU. "
+                "Turn it off in Settings at any time."
+            )
+            self._replay_capture_notice.setObjectName("muted")
+            self._replay_capture_notice.setWordWrap(True)
+            self._replay_capture_notice.hide()
+            grid.addWidget(self._replay_capture_notice, 3, 1, 1, 2)
             self._notice_timer = QtCore.QTimer(self)
             self._notice_timer.setSingleShot(True)
             self._notice_timer.timeout.connect(self._clear_update_notice)
@@ -1851,6 +1870,26 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("", self._autoupdate_check)
 
+            capture_block = QtWidgets.QWidget()
+            capture_v = QtWidgets.QVBoxLayout(capture_block)
+            capture_v.setContentsMargins(0, 0, 0, 0)
+            capture_v.setSpacing(6)
+            self._replay_capture_check = QtWidgets.QCheckBox(
+                "Accurate replay capture (uses more CPU)",
+            )
+            capture_v.addWidget(self._replay_capture_check)
+            capture_help = QtWidgets.QLabel(
+                "Off by default. When you request a recording on the website, "
+                "an uncached replay runs StarCraft II in the background on "
+                "this PC. It can use substantial CPU for several minutes "
+                "and affect a game or stream. Saved recordings play without "
+                "running StarCraft II again. This switch applies immediately."
+            )
+            capture_help.setObjectName("muted")
+            capture_help.setWordWrap(True)
+            capture_v.addWidget(capture_help)
+            form.addRow("Map replay", capture_block)
+
             v.addWidget(form_card)
             v.addWidget(self._build_obs_card())
 
@@ -2573,6 +2612,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
                 auto_update_enabled=self._autoupdate_check.isChecked(),
+                replay_capture_enabled=self._replay_capture_last_saved,
                 player_handle=self._handle_input.text().strip(),
                 parse_concurrency=int(self._concurrency_slider.value()),
                 upload_concurrency=checked_upload_conc,
@@ -2617,6 +2657,57 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             except Exception as exc:  # noqa: BLE001
                 log.exception("gui_save_settings_failed")
                 self._settings_status.setText(f"Save failed: {exc}")
+
+        def _refresh_capture_notice(self) -> None:
+            self._replay_capture_notice.setVisible(
+                self._replay_capture_last_saved,
+            )
+
+        def _toggle_replay_capture(self, enabled: bool) -> None:
+            desired = bool(enabled)
+            if desired == self._replay_capture_last_saved:
+                return
+            if desired:
+                answer = QtWidgets.QMessageBox.warning(
+                    self,
+                    "Enable accurate replay capture?",
+                    "When you request an uncached recording on the website, "
+                    "the agent runs StarCraft II in the background on this PC. "
+                    "It can use substantial CPU for several minutes and slow "
+                    "down your game or stream.\n\n"
+                    "Saved recordings can be reused without running "
+                    "StarCraft II again. You can turn this setting off at "
+                    "any time to stop capture.\n\nEnable this feature?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.No,
+                )
+                if answer != QtWidgets.QMessageBox.Yes:
+                    self._replay_capture_check.blockSignals(True)
+                    self._replay_capture_check.setChecked(False)
+                    self._replay_capture_check.blockSignals(False)
+                    return
+            try:
+                ui._on_save_settings(SettingsPayload(
+                    replay_capture_enabled=desired,
+                ))
+            except Exception as exc:  # noqa: BLE001
+                log.exception("gui_replay_capture_toggle_failed")
+                self._replay_capture_check.blockSignals(True)
+                self._replay_capture_check.setChecked(
+                    self._replay_capture_last_saved,
+                )
+                self._replay_capture_check.blockSignals(False)
+                self._settings_status.setText(
+                    f"Could not save replay capture setting: {exc}",
+                )
+                return
+            self._replay_capture_last_saved = desired
+            self._refresh_capture_notice()
+            self._settings_status.setText(
+                "Accurate replay capture on — requested recordings use more CPU"
+                if desired
+                else "Accurate replay capture off — stopping any active capture",
+            )
 
         def _toggle_obs_scene_switch(self, enabled: bool) -> None:
             """Persist and hot-apply the OBS master gate immediately."""
@@ -3031,6 +3122,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # the state field's default so a fresh install reads true.
             self._autoupdate_check.setChecked(
                 initial.auto_update_enabled is not False,
+            )
+            self._replay_capture_check.setChecked(
+                initial.replay_capture_enabled is True,
             )
             # Date-range filter — match the saved preset id back to the
             # combo entry. Unknown values silently fall through to "All

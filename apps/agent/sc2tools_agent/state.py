@@ -184,6 +184,12 @@ class AgentState:
     when the running version is below the feed's minSupportedVersion —
     a build the cloud no longer supports must update to keep working."""
 
+    replay_capture_enabled: bool = False
+    """Explicit consent to run StarCraft II for accurate replay capture.
+    Fresh installs and upgrades default off. Existing recorded playback can
+    still be reused without starting the game or requiring this permission.
+    """
+
     # ---- OBS scene switching (see live/obs_scene.py) ----
 
     obs_scene_switch_enabled: bool = False
@@ -360,6 +366,7 @@ def load_state(state_dir: Path) -> AgentState:
         sync_filter_until=_coerce_str(raw.get("sync_filter_until")),
         release_seen=release_seen,
         auto_update_enabled=raw.get("auto_update_enabled") is not False,
+        replay_capture_enabled=raw.get("replay_capture_enabled") is True,
         obs_scene_switch_enabled=bool(
             raw.get("obs_scene_switch_enabled") or False,
         ),
