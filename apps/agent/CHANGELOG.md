@@ -2,6 +2,37 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.6
+
+### Added - recorded map replay and attack animations
+
+- The map replay's **Generate accurate playback** action records the original
+  replay through the installed StarCraft II engine. It captures sampled unit
+  paths, morphs, transport presence, global creep, supported spell effects, and
+  weapon activity for both players.
+- The desktop agent bundles the required SC2 protocol dependencies, records in
+  the background, reports capture/upload progress, and preserves normal replay
+  playback while the recording is being generated.
+- The updated web viewer uses recorded weapon activity and observed targets
+  for attack timing and aiming, with 37 native attack animations and weapon
+  cues for models without an authored attack sequence.
+
+### Fixed - movement and unit lifecycle fidelity
+
+- Command destinations no longer masquerade as unit positions. Tracker playback
+  uses recorded anchors without inventing worker mining routes or movement.
+- Morphs, loaded units, spent workers, and recorded deaths no longer create
+  duplicate units or leave ghost units on the map. Spell and creep rendering
+  retain the timing and coverage supplied by the engine recording.
+
+### Migration note
+
+- Deploy the updated API and web viewer before distributing this agent. Keep
+  StarCraft II and the original replay on the paired computer, update the
+  agent, then select **Generate accurate playback** for each existing replay.
+  A normal Re-sync alone does not generate engine recordings. Older tracker
+  data remains usable; recorded positions interpolate between engine samples.
+
 ## 0.16.5
 
 ### Added - exact group membership and camera bookmarks

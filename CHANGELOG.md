@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Recorded map replay with native attacks** — agent **0.16.6**
+  (`agent-v0.16.6`) records sampled unit paths, global creep, supported spell
+  effects, and weapon activity through the installed StarCraft II engine.
+  The web viewer adds 37 native attack animations with observed aiming cues.
+  Update the agent and select **Generate accurate playback** for existing
+  games; the paired computer needs StarCraft II and the original replay.
 - **Exact barcode group and camera habits** — v3 signatures match unit/building
   membership for groups 0–9, verified same-unit group pairs, and opening setup
   order/timing. Camera evidence covers all eight bookmark slots, save order,
@@ -35,6 +41,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Replay movement no longer follows invented routes** — command targets are
+  no longer treated as unit positions, synthetic worker trips are removed,
+  and lifecycle handling prevents duplicate and ghost units. Agent notices
+  now use 0.16.6 while release metadata loads.
 - **Agent notices now fall back to the published 0.16.5 release** while live
   metadata loads. The version consistency check also compares the website's
   fallback with the agent package to prevent stale labels in future releases.

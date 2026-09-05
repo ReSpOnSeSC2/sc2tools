@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockReturnValue(NOW);
   useApiMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
   useReleaseInfoMock.mockReturnValue({
-    data: { latest: "0.16.5" },
+    data: { latest: "0.16.6" },
     isLoading: false,
     error: null,
   });
@@ -47,7 +47,7 @@ describe("agentUpgradeNoticeState", () => {
     expect(offline.kind).toBe("offline");
     if (missing.kind !== "missing" || offline.kind !== "offline") return;
     expect(missing.title).toBe(
-      "SC2 Tools Agent v0.16.5 needs to be turned on or installed",
+      "SC2 Tools Agent v0.16.6 needs to be turned on or installed",
     );
     expect(offline.title).toBe(missing.title);
     expect(
@@ -202,7 +202,7 @@ describe("AgentUpgradeNotice", () => {
     );
 
     expect(screen.getByText(
-      "SC2 Tools Agent v0.16.5 needs to be turned on or installed",
+      "SC2 Tools Agent v0.16.6 needs to be turned on or installed",
     )).toBeTruthy();
     expect(screen.queryByText(/keep replay syncing/i)).toBeNull();
     expect(screen.getByLabelText("Required agent update").className)
