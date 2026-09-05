@@ -95,15 +95,20 @@ def test_cancelled_capture_cannot_launch_or_read_a_replay(tmp_path, monkeypatch)
 def test_cancellation_stops_owned_engine_while_api_receive_is_blocked(tmp_path):
     import threading
     from unittest.mock import Mock
-    import websocket
-    from s2clientprotocol import sc2api_pb2
+    # This test exercises cancellation during a blocked transport read. The
+    # parser-only Linux job intentionally lacks the optional capture packages.
+    # Protocol serialization is outside this test; keep its boundary mocked.
+    protocol = Mock()
+    websocket = SimpleNamespace(
+        ABNF=SimpleNamespace(OPCODE_BINARY=2), WebSocketException=ConnectionError,
+    )
     cancel, stopped, receiving = threading.Event(), threading.Event(), threading.Event()
     process = Mock()
     process.poll.side_effect = lambda: 1 if stopped.is_set() else None
     process.terminate.side_effect = stopped.set
     engine = exporter._Engine(tmp_path, tmp_path / "SC2.exe", None, 10, cancel_requested=cancel.is_set)
-    engine.process, engine.api, engine.websocket = process, sc2api_pb2, websocket
-    engine.ws = Mock()
+    engine.process, engine.api, engine.websocket = process, protocol, websocket
+    transport = engine.ws = Mock()
     def recv():
         receiving.set()
         assert stopped.wait(3), "Cancellation must not wait for the 120-second API timeout"
@@ -124,6 +129,7 @@ def test_cancellation_stops_owned_engine_while_api_receive_is_blocked(tmp_path):
         controller.join(timeout=3)
     process.terminate.assert_called_once()
     process.close.assert_called_once()
+    transport.send.assert_called_once()
     assert engine._cancel_thread is None
 
 
