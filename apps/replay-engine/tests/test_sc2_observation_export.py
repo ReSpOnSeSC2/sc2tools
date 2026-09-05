@@ -111,6 +111,10 @@ def test_background_create_process_failure_releases_job_and_only_duplicated_hand
     import ctypes
     from ctypes import wintypes
     from core import windows_capture_process as windows
+    # This failure-path test mocks Win32 even on Linux CI. The CRT handle
+    # conversion must also be stubbed; real Windows integration tests below
+    # exercise actual handle inheritance separately.
+    monkeypatch.setitem(sys.modules, "msvcrt", SimpleNamespace(get_osfhandle=lambda descriptor: descriptor))
     closed, duplicated, deleted = [], [], []
 
     def duplicate(_parent, _source, _target, output, _access, inherit, _options):
