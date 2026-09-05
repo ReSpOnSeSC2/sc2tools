@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { DoctorBanner } from "../DoctorBanner";
+import { FALLBACK_LATEST_AGENT_VERSION } from "@/lib/agentNotice";
 
 const useApiMock = vi.fn();
 const useReleaseInfoMock = vi.fn();
@@ -103,7 +104,7 @@ describe("DoctorBanner replay archive prompt", () => {
     render(<DoctorBanner />);
 
     expect(screen.getByText(
-      "SC2 Tools Agent v0.16.8 needs to be turned on or installed",
+      `SC2 Tools Agent v${FALLBACK_LATEST_AGENT_VERSION} needs to be turned on or installed`,
     )).toBeTruthy();
   });
 });

@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FALLBACK_LATEST_AGENT_VERSION } from "@/lib/agentNotice";
 import {
   AGENT_STATUS_REFRESH_MS,
   AgentUpgradeNotice,
@@ -47,7 +48,7 @@ describe("agentUpgradeNoticeState", () => {
     expect(offline.kind).toBe("offline");
     if (missing.kind !== "missing" || offline.kind !== "offline") return;
     expect(missing.title).toBe(
-      "SC2 Tools Agent v0.16.8 needs to be turned on or installed",
+      `SC2 Tools Agent v${FALLBACK_LATEST_AGENT_VERSION} needs to be turned on or installed`,
     );
     expect(offline.title).toBe(missing.title);
     expect(
