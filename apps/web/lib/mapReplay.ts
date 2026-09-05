@@ -6,10 +6,36 @@
  * flat ``[t, x, y, …]`` arrays in SC2 world coordinates, building
  * placements, battle markers, spawn anchors, per-side stats series
  * and the map's playable bounds. Everything here is deterministic
- * math — interpolation, world→canvas projection, and the cluster
- * spreading that keeps stacked units readable — so the canvas
+ * math — interpolation and world→canvas projection — so the canvas
  * component stays a thin draw loop and the hard parts unit-test.
  */
+
+import { motionSample, sampleTrack } from "./replayMotion";
+
+export interface PlaybackForm {
+  t: number;
+  name: string;
+}
+
+export type ReplayUnitId = number | string;
+
+export interface ReplayCreep {
+  width: number;
+  height: number;
+  encoding: "rle";
+  frames: Array<{ t: number; runs: number[] }>;
+}
+
+export interface ReplayObservedEffect {
+  id: number;
+  name: string;
+  owner: "me" | "opp" | "neutral";
+  t: number;
+  end: number;
+  x: number;
+  y: number;
+  radius: number;
+}
 
 export interface PlaybackBounds {
   minX: number;
@@ -31,6 +57,11 @@ export interface PlaybackBattle {
 }
 
 export interface PlaybackBuilding {
+  /** Observed weapon cycles; aim contains only confirmed target positions. */
+  attacks?: number[];
+  aim?: number[];
+  id?: ReplayUnitId;
+  forms?: PlaybackForm[];
   owner: "me" | "opp";
   name: string;
   t: number;
@@ -43,6 +74,14 @@ export interface PlaybackBuilding {
 }
 
 export interface PlaybackUnit {
+  /** Observed weapon cycles; aim is flat [shotTime, targetX, targetY, …]. */
+  attacks?: number[];
+  aim?: number[];
+  /** Stable replay tag; type changes do not create a second unit. */
+  id?: ReplayUnitId;
+  /** Intervals spent in a transport or absent from engine observations. */
+  hidden?: number[];
+  forms?: PlaybackForm[];
   owner: "me" | "opp";
   name: string;
   born: number;
@@ -78,6 +117,10 @@ export interface ReplayCast {
   t: number;
   x?: number;
   y?: number;
+  casterUnitId?: ReplayUnitId;
+  casterUnitIds?: ReplayUnitId[];
+  targetUnitId?: ReplayUnitId;
+  source?: "command" | "observation";
 }
 
 export interface MapPlayback {
@@ -95,6 +138,18 @@ export interface MapPlayback {
    *  payloads have no casts at all and must keep rendering exactly as
    *  before, so this is undefined rather than an empty array there. */
   casts?: ReplayCast[];
+  creep?: ReplayCreep;
+  effects?: ReplayObservedEffect[];
+  fidelity?: {
+    positions: "tracker" | "engine";
+    paths: "observed";
+    creep: "estimated" | "observed";
+    effects?: "observed" | "unavailable";
+    attacks?: "observed" | "unavailable";
+    positionError?: number;
+    sampleSeconds?: number;
+    complete?: boolean;
+  };
   /** Per-side [t, armyValue, workers, supplyUsed] rows, ascending t. */
   stats: { me: number[][]; opp: number[][] };
 }
@@ -105,7 +160,9 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
   const b = p.bounds as Record<string, unknown> | undefined;
-  const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : NaN);
+  const num = (v: unknown): number =>
+    v !== null && v !== undefined && v !== "" && typeof v !== "boolean" && Number.isFinite(Number(v))
+      ? Number(v) : NaN;
   if (!b) return null;
   const bounds: PlaybackBounds = {
     minX: num(b.minX),
@@ -116,6 +173,8 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   if (
     !Number.isFinite(bounds.minX) ||
     !Number.isFinite(bounds.minY) ||
+    !Number.isFinite(bounds.maxX) ||
+    !Number.isFinite(bounds.maxY) ||
     bounds.maxX <= bounds.minX ||
     bounds.maxY <= bounds.minY
   ) {
@@ -123,20 +182,57 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   }
   const owner = (v: unknown): "me" | "opp" | null =>
     v === "me" || v === "opp" ? v : null;
+  const tag = (v: unknown): ReplayUnitId | undefined => {
+    if (typeof v === "string" && /^[0-9]{1,20}$/.test(v)) return v;
+    const n = num(v);
+    return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
+  };
+  const formsIn = (v: unknown): PlaybackForm[] | undefined => {
+    if (!Array.isArray(v)) return undefined;
+    const forms = v.slice(0, 512).filter((f) => f && Number.isFinite(num(f.t)) &&
+      num(f.t) >= 0 && typeof f.name === "string" && f.name.length > 0)
+      .map((f) => ({ t: num(f.t), name: f.name.slice(0, 40) as string }))
+      .sort((a, b) => a.t - b.t);
+    return forms.length ? forms : undefined;
+  };
+  const waypointsIn = (v: unknown, cap: number): number[] => {
+    if (!Array.isArray(v)) return [];
+    const points: Array<[number, number, number]> = [];
+    for (let i = 0; i + 2 < Math.min(v.length, cap * 3); i += 3) {
+      const point: [number, number, number] = [num(v[i]), num(v[i + 1]), num(v[i + 2])];
+      if (point.every(Number.isFinite) && point[0] >= 0) points.push(point);
+    }
+    points.sort((a, b) => a[0] - b[0]);
+    const flat: number[] = [];
+    for (const point of points) {
+      if (flat.length && flat[flat.length - 3] === point[0]) flat.splice(flat.length - 3, 3);
+      flat.push(...point);
+    }
+    return flat;
+  };
   const units: PlaybackUnit[] = [];
-  for (const u of Array.isArray(p.units) ? p.units.slice(0, 1200) : []) {
+  let remainingPoints = 200000;
+  let truncated = Array.isArray(p.units) && p.units.length > 4000;
+  let remainingAttacks = 200000;
+  const attacksIn = (r: Record<string, unknown>, born: number, died: number) => {
+    const coverage = p.fidelity as Record<string, unknown> | undefined;
+    if (coverage?.positions !== "engine" || coverage.attacks !== "observed" || !Array.isArray(r.attacks)) return {};
+    const shots = [...new Set(r.attacks.slice(0, Math.min(16384, remainingAttacks)).map(num)
+      .filter((t) => Number.isFinite(t) && t >= born && (!Number.isFinite(died) || t < died)))].sort((a, b) => a - b);
+    if (shots.length < r.attacks.length) truncated = true;
+    remainingAttacks -= shots.length;
+    const shotSet = new Set(shots);
+    const aim = waypointsIn(r.aim, shots.length).filter((_, i, points) => shotSet.has(points[i - i % 3]));
+    if (Array.isArray(r.aim) && aim.length < r.aim.length) truncated = true;
+    return { attacks: shots, ...(aim.length ? { aim } : {}) };
+  };
+  for (const u of Array.isArray(p.units) ? p.units.slice(0, 4000) : []) {
     if (!u || typeof u !== "object") continue;
     const r = u as Record<string, unknown>;
     const o = owner(r.owner);
-    const wpRaw = Array.isArray(r.wp) ? r.wp.slice(0, 3 * 400) : [];
-    const wp: number[] = [];
-    for (let i = 0; i + 2 < wpRaw.length; i += 3) {
-      const t = num(wpRaw[i]);
-      const x = num(wpRaw[i + 1]);
-      const y = num(wpRaw[i + 2]);
-      if (!Number.isFinite(t) || !Number.isFinite(x) || !Number.isFinite(y)) break;
-      wp.push(t, x, y);
-    }
+    const wp = waypointsIn(r.wp, Math.min(16384, remainingPoints));
+    if (Array.isArray(r.wp) && wp.length < r.wp.length) truncated = true;
+    remainingPoints -= wp.length / 3;
     if (!o || wp.length === 0) continue;
     // ``num`` alone is a trap for born/died: the wire encodes "still
     // alive" as ``died: null`` and ``Number(null)`` is 0, which would
@@ -145,6 +241,10 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     const born = r.born === null || r.born === undefined ? NaN : num(r.born);
     const died = r.died === null || r.died === undefined ? NaN : num(r.died);
     units.push({
+      ...(tag(r.id) !== undefined ? { id: tag(r.id) } : {}),
+      ...(formsIn(r.forms) ? { forms: formsIn(r.forms) } : {}),
+      ...(Array.isArray(r.hidden) ? { hidden: r.hidden.slice(0, 16384).map(num) } : {}),
+      ...attacksIn(r, Number.isFinite(born) ? born : wp[0], died),
       owner: o,
       name: typeof r.name === "string" ? r.name.slice(0, 40) : "",
       born: Number.isFinite(born) ? born : wp[0],
@@ -154,6 +254,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     });
   }
   const buildings: PlaybackBuilding[] = [];
+  if (Array.isArray(p.buildings) && p.buildings.length > 1000) truncated = true;
   for (const bd of Array.isArray(p.buildings) ? p.buildings.slice(0, 1000) : []) {
     if (!bd || typeof bd !== "object") continue;
     const r = bd as Record<string, unknown>;
@@ -161,17 +262,13 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     const x = num(r.x);
     const y = num(r.y);
     if (!o || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-    const movesRaw = Array.isArray(r.moves) ? r.moves.slice(0, 60) : [];
-    const moves: number[] = [];
-    for (let i = 0; i + 2 < movesRaw.length; i += 3) {
-      const mt = num(movesRaw[i]);
-      const mx = num(movesRaw[i + 1]);
-      const my = num(movesRaw[i + 2]);
-      if (!Number.isFinite(mt) || !Number.isFinite(mx) || !Number.isFinite(my)) break;
-      moves.push(mt, mx, my);
-    }
+    const moves = waypointsIn(r.moves, 16384);
+    if (Array.isArray(r.moves) && moves.length < r.moves.length) truncated = true;
     const bDied = r.died === null || r.died === undefined ? NaN : num(r.died);
     buildings.push({
+      ...(tag(r.id) !== undefined ? { id: tag(r.id) } : {}),
+      ...(formsIn(r.forms) ? { forms: formsIn(r.forms) } : {}),
+      ...attacksIn(r, Number.isFinite(num(r.t)) ? num(r.t) : 0, bDied),
       owner: o,
       name: typeof r.name === "string" ? r.name.slice(0, 40) : "",
       t: Number.isFinite(num(r.t)) ? num(r.t) : 0,
@@ -254,12 +351,14 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   // and the key is then omitted from the result entirely, so a v4
   // payload behaves exactly as it did before v5 existed.
   const casts: ReplayCast[] = [];
-  for (const cs of Array.isArray(p.casts) ? p.casts.slice(0, 800) : []) {
+  if (Array.isArray(p.casts) && p.casts.length > 2000) truncated = true;
+  for (const cs of Array.isArray(p.casts) ? p.casts.slice(0, 2000) : []) {
     if (!cs || typeof cs !== "object") continue;
     const r = cs as Record<string, unknown>;
     if (typeof r.a !== "string" || r.a.length === 0) continue;
     const t = num(r.t);
     if (!Number.isFinite(t)) continue;
+    if (num(r.o) !== 0 && num(r.o) !== 1) continue;
     const o = num(r.o) === 1 ? 1 : 0;
     const cast: ReplayCast = {
       o,
@@ -274,9 +373,58 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
       cast.x = x;
       cast.y = y;
     }
+    if (tag(r.casterUnitId) !== undefined) cast.casterUnitId = tag(r.casterUnitId);
+    if (tag(r.targetUnitId) !== undefined) cast.targetUnitId = tag(r.targetUnitId);
+    if (Array.isArray(r.casterUnitIds)) {
+      cast.casterUnitIds = [...new Set(r.casterUnitIds.slice(0, 128).map(tag)
+        .filter((id): id is ReplayUnitId => id !== undefined))];
+    }
+    if (r.source === "command" || r.source === "observation") cast.source = r.source;
     casts.push(cast);
   }
   if (units.length === 0 && buildings.length === 0) return null;
+  const f = p.fidelity as Record<string, unknown> | undefined;
+  const fidelity: MapPlayback["fidelity"] = f && (f.positions === "tracker" || f.positions === "engine")
+    ? { positions: f.positions, paths: "observed", creep: f.creep === "observed" ? "observed" : "estimated",
+      ...(f.effects === "observed" || f.effects === "unavailable" ? { effects: f.effects } : {}),
+      ...(f.attacks === "observed" || f.attacks === "unavailable" ? { attacks: f.attacks } : {}),
+      ...(Number.isFinite(num(f.positionError)) && num(f.positionError) >= 0 ? { positionError: num(f.positionError) } : {}),
+      ...(Number.isFinite(num(f.sampleSeconds)) && num(f.sampleSeconds) > 0 ? { sampleSeconds: num(f.sampleSeconds) } : {}),
+      ...(typeof f.complete === "boolean" || truncated ? { complete: !truncated && f.complete === true } : {}) } : undefined;
+  const cr = p.creep as Record<string, unknown> | undefined;
+  let creep: ReplayCreep | undefined;
+  if (cr && cr.encoding === "rle" && Number.isInteger(cr.width) && Number.isInteger(cr.height) &&
+      num(cr.width) > 0 && num(cr.height) > 0 && num(cr.width) <= 512 && num(cr.height) <= 512 && Array.isArray(cr.frames)) {
+    const width = num(cr.width), height = num(cr.height);
+    let runsLeft = 1000000;
+    if (cr.frames.length > 12000) truncated = true;
+    const frames: ReplayCreep["frames"] = [];
+    for (const rawFrame of cr.frames.slice(0, 12000)) {
+      if (!rawFrame || !Number.isFinite(num(rawFrame.t)) || num(rawFrame.t) < 0 || !Array.isArray(rawFrame.runs)) continue;
+      const runs: number[] = [];
+      if (rawFrame.runs.length > runsLeft || rawFrame.runs.length % 2) { truncated = true; break; }
+      let valid = true, previousEnd = 0;
+      for (let i = 0; i < rawFrame.runs.length; i += 2) {
+        const start = num(rawFrame.runs[i]), length = num(rawFrame.runs[i + 1]);
+        if (!Number.isInteger(start) || !Number.isInteger(length) || start < previousEnd || length <= 0 || start + length > width * height) { valid = false; break; }
+        runs.push(start, length);
+        previousEnd = start + length;
+      }
+      if (valid) { frames.push({ t: num(rawFrame.t), runs }); runsLeft -= runs.length; }
+      else truncated = true;
+    }
+    if (frames.length) creep = { width, height, encoding: "rle", frames: frames.sort((a, b) => a.t - b.t) };
+  }
+  const effects: ReplayObservedEffect[] = [];
+  if (Array.isArray(p.effects) && p.effects.length > 20000) truncated = true;
+  for (const e of Array.isArray(p.effects) ? p.effects.slice(0, 20000) : []) {
+    if (!e || (!owner(e.owner) && e.owner !== "neutral") || typeof e.name !== "string" ||
+        ![e.id, e.t, e.end, e.x, e.y, e.radius].every((n) => Number.isFinite(num(n))) ||
+        num(e.t) < 0 || num(e.end) <= num(e.t) || num(e.radius) < 0 || num(e.radius) > 100) { truncated = true; continue; }
+    effects.push({ id: num(e.id), name: e.name.slice(0, 80), owner: e.owner === "neutral" ? "neutral" : owner(e.owner)!,
+      t: num(e.t), end: num(e.end), x: num(e.x), y: num(e.y), radius: num(e.radius) });
+  }
+  if (fidelity && truncated) fidelity.complete = false;
   return {
     v: Number.isFinite(num(p.v)) ? num(p.v) : 1,
     mapName: typeof p.mapName === "string" ? p.mapName.slice(0, 120) : "",
@@ -287,6 +435,9 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     buildings,
     units,
     resources,
+    ...(fidelity ? { fidelity } : {}),
+    ...(creep ? { creep } : {}),
+    ...(Array.isArray(p.effects) ? { effects: effects.sort((a, b) => a.t - b.t) } : {}),
     ...(casts.length ? { casts } : {}),
     stats: { me: statsMe, opp: statsOpp },
   };
@@ -298,49 +449,33 @@ export function unitAliveAt(unit: PlaybackUnit, t: number): boolean {
   return unit.died === null || unit.died > t;
 }
 
-/**
- * Interpolated world position at time t from a flat waypoint array.
- * Clamps before the first and after the last waypoint (a unit sitting
- * still simply has no further waypoints).
- *
- * ``maxSpeed`` (world cells/sec) switches long gaps from a slow
- * constant drift to an arrive-on-time model: waypoints are sparse
- * anchors (a worker's known spot at a mineral line, then its known
- * spot at the next base minutes later), and naive lerp drags the unit
- * across the map for the whole gap — the "floating probes" artifact.
- * With a speed cap the unit HOLDS its last anchor (mining, building)
- * and departs at the latest moment that still arrives on time at the
- * unit's real movement speed. Gaps tighter than the cap degrade to
- * plain lerp, so understating a fast unit's speed is harmless.
- */
+/** Loaded units remain alive but have no map sprite while in cargo. */
+export function unitVisibleAt(unit: PlaybackUnit, t: number): boolean {
+  if (!unitAliveAt(unit, t)) return false;
+  for (let i = 0; i + 1 < (unit.hidden?.length ?? 0); i += 2) {
+    if (unit.hidden![i] <= t && t < unit.hidden![i + 1]) return false;
+  }
+  return true;
+}
+
+/** Resolve the form at the requested time; never show a future morph early. */
+export function unitNameAt(unit: { name: string; forms?: PlaybackForm[] }, t: number): string {
+  let name = unit.name;
+  for (const form of unit.forms ?? []) {
+    if (form.t > t) break;
+    name = form.name;
+  }
+  return name;
+}
+
+/** Shared observed-position sampler for sprites, effects and HUD. */
 export function unitPositionAt(
   wp: readonly number[],
   t: number,
   maxSpeed?: number,
 ): { x: number; y: number } | null {
-  if (wp.length < 3) return null;
-  if (t <= wp[0]) return { x: wp[1], y: wp[2] };
-  const last = wp.length - 3;
-  if (t >= wp[last]) return { x: wp[last + 1], y: wp[last + 2] };
-  // Linear scan is fine: compaction caps waypoints per unit at ~240.
-  for (let i = 0; i + 5 < wp.length; i += 3) {
-    const t0 = wp[i];
-    const t1 = wp[i + 3];
-    if (t < t0 || t > t1 || t1 <= t0) continue;
-    const x0 = wp[i + 1];
-    const y0 = wp[i + 2];
-    const x1 = wp[i + 4];
-    const y1 = wp[i + 5];
-    let depart = t0;
-    if (maxSpeed !== undefined && Number.isFinite(maxSpeed) && maxSpeed > 0) {
-      const travel = Math.hypot(x1 - x0, y1 - y0) / maxSpeed;
-      depart = Math.max(t0, t1 - travel);
-    }
-    if (t <= depart) return { x: x0, y: y0 };
-    const f = (t - depart) / (t1 - depart);
-    return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f };
-  }
-  return { x: wp[last + 1], y: wp[last + 2] };
+  const result = sampleTrack(wp, t, maxSpeed, motionSample());
+  return result ? { x: result.x, y: result.y } : null;
 }
 
 /**
@@ -512,12 +647,18 @@ const BUILDING_FLY_SPEED = 1.3;
  * Center is SHOWN at its old base, crawls across late, and sits at
  * the expansion it actually landed on.
  */
+const buildingTracks = new WeakMap<PlaybackBuilding, number[]>();
+
 export function buildingPositionAt(
   b: PlaybackBuilding,
   t: number,
 ): { x: number; y: number } {
   if (b.moves.length === 0) return { x: b.x, y: b.y };
-  const wp = [b.t, b.x, b.y, ...b.moves];
+  let wp = buildingTracks.get(b);
+  if (!wp) {
+    wp = [b.t, b.x, b.y, ...b.moves];
+    buildingTracks.set(b, wp);
+  }
   return unitPositionAt(wp, t, BUILDING_FLY_SPEED) ?? { x: b.x, y: b.y };
 }
 

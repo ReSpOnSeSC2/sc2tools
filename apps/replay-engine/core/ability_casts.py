@@ -6,7 +6,13 @@ on top of them — the spells. Each cast comes out as::
 
     {"owner": "me"|"opp", "ability": "<slug>", "t": <real seconds>,
      "x": <map cells>|None, "y": <map cells>|None,
-     "targetUnitId": <int>|None}
+     "targetUnitId": <int>|None, "casterUnitId": <int>,
+     "casterUnitIds": [<int>, ...], "source": "command"}
+
+Caster keys are optional. Selection masks and control-group recalls recover
+identities; the frontend samples their observed tracks. An ambiguous or
+unlocated order stays unplaced. Commands can be unsuccessful; confirmed live
+effects come from the separate engine observation layer.
 
 ``targetUnitId`` is the one camelCase key in this module: it is part of
 the documented cast contract the agent's compaction and the web
@@ -52,12 +58,13 @@ it is surfaced rather than silently dropped.
 
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from .timebase import event_seconds
+    from .timebase import event_seconds_precise as event_seconds
 except ImportError:  # pragma: no cover - see event_extractor for why
-    from core.timebase import event_seconds  # type: ignore
+    from core.timebase import event_seconds_precise as event_seconds  # type: ignore
 
 try:
     from sc2reader.events.game import (
@@ -165,6 +172,9 @@ ABILITY_SLUGS: Dict[str, str] = {
 
     # ---- Zerg ------------------------------------------------------
     "FungalGrowth": "FungalGrowth",
+    "Transfusion": "Transfusion",
+    "Transfuse": "Transfusion",
+    "SpawnLarva": "SpawnLarva",
     "RavagerCorrosiveBile": "CorrosiveBile",
     "CorrosiveBile": "CorrosiveBile",
     "BlindingCloud": "BlindingCloud",
@@ -244,7 +254,7 @@ _RESEARCH_NOT_CASTS = frozenset({
 # (BasicCommandEvent). Used to pick the caster out of the player's
 # active selection so a Stim or a Burrow can still be placed on the
 # map. A slug absent here is never position-guessed — it goes out with
-# x/y = None and the client attaches it to the unit itself.
+# x/y = None and the client only attaches it with a recorded identity.
 _CASTER_UNITS: Dict[str, frozenset] = {
     "Stim": frozenset({"Marine", "Marauder"}),
     "GuardianShield": frozenset({"Sentry"}),
@@ -266,6 +276,46 @@ _CASTER_UNITS: Dict[str, frozenset] = {
         "Zergling", "InfestedTerran",
     }),
 }
+
+# A target command does not encode a caster tag. Resolve it only when
+# exactly one compatible unit is selected; proximity is not evidence.
+_CASTER_UNITS.update({
+    "PsiStorm": frozenset({"HighTemplar"}),
+    "Feedback": frozenset({"HighTemplar"}),
+    "ForceField": frozenset({"Sentry"}),
+    "Blink": frozenset({"Stalker", "DarkTemplar"}),
+    "ChronoBoost": frozenset({"Nexus"}),
+    "MassRecall": frozenset({"Nexus", "Mothership", "MothershipCore"}),
+    "TimeWarp": frozenset({"Mothership", "MothershipCore"}),
+    "PurificationNova": frozenset({"Disruptor"}),
+    "Revelation": frozenset({"Oracle"}),
+    "StasisWard": frozenset({"Oracle"}),
+    "GravitonBeam": frozenset({"Phoenix"}),
+    "CalldownMULE": frozenset({"OrbitalCommand", "OrbitalCommandFlying"}),
+    "ScannerSweep": frozenset({"OrbitalCommand", "OrbitalCommandFlying"}),
+    "SupplyDrop": frozenset({"OrbitalCommand", "OrbitalCommandFlying"}),
+    "EMP": frozenset({"Ghost"}),
+    "Snipe": frozenset({"Ghost"}),
+    "Nuke": frozenset({"Ghost"}),
+    "Yamato": frozenset({"Battlecruiser"}),
+    "TacticalJump": frozenset({"Battlecruiser"}),
+    "CorrosiveBile": frozenset({"Ravager"}),
+    "FungalGrowth": frozenset({"Infestor"}),
+    "NeuralParasite": frozenset({"Infestor"}),
+    "InfestedTerran": frozenset({"Infestor"}),
+    "Abduct": frozenset({"Viper"}),
+    "BlindingCloud": frozenset({"Viper"}),
+    "ParasiticBomb": frozenset({"Viper"}),
+    "CausticSpray": frozenset({"Corruptor"}),
+    "Contaminate": frozenset({"Overseer"}),
+    "Transfusion": frozenset({"Queen"}),
+    "SpawnLarva": frozenset({"Queen"}),
+})
+
+# These orders apply to every compatible selected unit. Other abilities
+# use one selected caster; when several qualify its identity is unknown.
+_GROUP_SELF_CASTS = frozenset({"Stim", "Burrow", "Unburrow", "PulsarBeam", "Salvage"})
+_SELF_CASTS = _GROUP_SELF_CASTS | frozenset({"GuardianShield", "SpawnChangeling"})
 
 # Cap on distinct unmapped names reported back. A corrupt or
 # far-future replay must not turn the diagnostic into a memory leak.
@@ -355,7 +405,7 @@ def _cast_location(event) -> Tuple[Optional[float], Optional[float]]:
         x, y = float(loc[0]), float(loc[1])
     except (TypeError, ValueError):
         return None, None
-    if not (x or y):
+    if not math.isfinite(x) or not math.isfinite(y) or not (x or y):
         return None, None
     return x, y
 
@@ -401,37 +451,93 @@ def index_unit_tracks(tracks) -> Dict[int, Dict]:
                 "born": u.get("born") or 0.0,
                 "died": u.get("died"),
                 "waypoints": u.get("waypoints") or [],
+                "forms": u.get("forms") or [],
             }
     return index
 
 
-def _caster_location(
-    slug: str,
-    selection,
-    index: Dict[int, Dict],
-    t: float,
-) -> Tuple[Optional[float], Optional[float]]:
-    """Where the caster stood, for a self-cast with no target location.
-
-    Takes the player's active selection at the moment of the command
-    (tracked the same way ``extract_unit_tracks`` does it), keeps the
-    first selected unit that is both ALIVE at ``t`` and of a type that
-    can actually cast ``slug``, and interpolates its track. Returning
-    (None, None) is a perfectly good answer — the client then pins the
-    marker to the unit instead of to a guessed point.
-    """
+def _caster_ids(slug, selection, index, t, replay, frame) -> List[int]:
+    """Compatible selected identities, never a nearby/random unit."""
     wanted = _CASTER_UNITS.get(slug)
-    if not wanted or not selection or not index:
-        return None, None
+    if not wanted or not selection:
+        return []
+    candidates = []
+    objects = getattr(replay, "objects", None) or {}
     for uid in selection:
         rec = index.get(uid)
-        if rec is None or rec["name"] not in wanted:
+        if rec is not None:
+            if t < rec["born"] or (rec["died"] is not None and t >= rec["died"]):
+                continue
+            name = rec["name"]
+            for form in rec["forms"]:
+                if form.get("t", 0) <= t:
+                    name = form.get("name") or name
+        else:
+            # Structures are not in unit_tracks. sc2reader's object type
+            # history records their actual type at the command's frame.
+            obj = objects.get(uid)
+            if obj is None:
+                continue
+            born = getattr(obj, "started_at", None)
+            died = getattr(obj, "died_at", None)
+            if (born is not None and frame < born) or (died is not None and frame >= died):
+                continue
+            name = ""
+            for at, unit_type in (getattr(obj, "type_history", None) or {}).items():
+                if at <= frame:
+                    name = getattr(unit_type, "name", "")
+            if not name:
+                continue
+        name = name.replace("Burrowed", "").replace("LurkerMP", "Lurker")
+        if name not in wanted:
             continue
-        died = rec["died"]
-        if died is not None and t > died:
-            continue
-        return _position_at(rec["waypoints"], t)
-    return None, None
+        candidates.append(uid)
+    return candidates if slug in _GROUP_SELF_CASTS or len(candidates) == 1 else []
+
+
+def _deselect(ids, event) -> List[int]:
+    """Apply SC2 selection masks to the *existing* selection."""
+    mode = getattr(event, "mask_type", "None")
+    data = list(getattr(event, "mask_data", []) or [])
+    if mode in (None, "None"):
+        return list(ids)
+    if mode == "Mask":
+        return [uid for i, uid in enumerate(ids) if i >= len(data) or not data[i]]
+    if mode == "OneIndices":
+        removed = set(data)
+        return [uid for i, uid in enumerate(ids) if i not in removed]
+    if mode == "ZeroIndices":
+        return [ids[i] for i in data if isinstance(i, int) and 0 <= i < len(ids)]
+    return []
+
+
+def _update_selection(event, groups) -> bool:
+    """Track selection deltas and control group set/add/recall commands."""
+    is_selection = _SelectionEvent is not None and isinstance(event, _SelectionEvent)
+    update = getattr(event, "update_type", None)
+    if not is_selection and update not in (0, 1, 2, 4, 5):
+        return False
+    pid = _resolve_pid(event)
+    group = getattr(event, "control_group", -1)
+    if not pid or not isinstance(group, int) or not 0 <= group <= 10:
+        return True
+    banks = groups.setdefault(pid, {})
+    if is_selection:
+        previous = banks.get(group, []) if hasattr(event, "mask_type") else []
+        remaining = _deselect(previous, event)
+        banks[group] = sorted(set(remaining + list(getattr(event, "new_unit_ids", []) or [])))
+    elif update == 2:
+        banks[10] = _deselect(banks.get(group, []), event)
+    else:
+        active = banks.get(10, [])
+        existing = _deselect(banks.get(group, []), event) if update in (1, 5) else []
+        banks[group] = sorted(set(existing + active))
+        if update in (4, 5):
+            # Ctrl/Alt group steal removes selected tags from other banks.
+            for bank in list(banks):
+                if bank not in (group, 10):
+                    banks[bank] = [uid for uid in banks[bank] if uid not in active]
+    return True
 
 
 def extract_ability_casts(replay, my_pid, unit_tracks=None) -> Dict:
@@ -443,11 +549,10 @@ def extract_ability_casts(replay, my_pid, unit_tracks=None) -> Dict:
     non-casts (production, research, movement) are filtered out of it
     by ``_is_cast_candidate``.
 
-    ``unit_tracks`` is ``extract_unit_tracks``' return value. When
-    supplied, self-cast abilities (Stim, Burrow, Guardian Shield …)
-    that carry no target location are placed at the casting unit's
-    interpolated position; without it they go out with ``x``/``y`` of
-    ``None``.
+    ``unit_tracks`` is ``extract_unit_tracks``' return value. It is used
+    to validate caster identities and type at the command time. Self-cast
+    abilities keep null coordinates; the renderer uses that exact identity's
+    observed position instead of creating another interpolation here.
 
     Casts come back sorted by time. Every failure is contained to the
     single event that caused it — playback is additive and a weird
@@ -459,21 +564,11 @@ def extract_ability_casts(replay, my_pid, unit_tracks=None) -> Dict:
         return {"casts": casts, "unmapped": unmapped}
 
     index = index_unit_tracks(unit_tracks)
-    selections: Dict[int, List[int]] = {}
+    selections: Dict[int, Dict[int, List[int]]] = {}
 
     for ev in (getattr(replay, "events", None) or []):
         try:
-            # Active selection (control group 10) is what a
-            # BasicCommandEvent's caster is drawn from.
-            if _SelectionEvent is not None and isinstance(ev, _SelectionEvent):
-                if getattr(ev, "control_group", -1) != 10:
-                    continue
-                pid = _resolve_pid(ev)
-                if not pid:
-                    continue
-                new_ids = list(getattr(ev, "new_unit_ids", []) or [])
-                if new_ids:
-                    selections[pid] = new_ids
+            if _update_selection(ev, selections):
                 continue
 
             if not isinstance(ev, _CommandEvent):
@@ -484,6 +579,8 @@ def extract_ability_casts(replay, my_pid, unit_tracks=None) -> Dict:
                 continue
             link = getattr(ev, "ability_link", 0) or 0
             if link == 0:
+                continue
+            if (getattr(ev, "flag", None) or {}).get("set_autocast"):
                 continue
             pid = _resolve_pid(ev)
             if not pid:
@@ -506,19 +603,30 @@ def extract_ability_casts(replay, my_pid, unit_tracks=None) -> Dict:
 
             slug = _disambiguate(slug, ev)
             t = float(event_seconds(ev, replay))
+            if not math.isfinite(t) or t < 0:
+                continue
             x, y = _cast_location(ev)
-            if x is None:
-                x, y = _caster_location(slug, selections.get(pid), index, t)
             target_id = getattr(ev, "target_unit_id", None) or None
-
-            casts.append({
+            caster_ids = _caster_ids(
+                slug, selections.get(pid, {}).get(10, []), index, t,
+                replay, getattr(ev, "frame", 0),
+            )
+            cast = {
                 "owner": "me" if pid == my_pid else "opp",
                 "ability": slug,
                 "t": t,
                 "x": x,
                 "y": y,
                 "targetUnitId": target_id,
-            })
+                # Replay commands include unsuccessful orders. This is
+                # evidence of an order, not engine-confirmed impact/buff.
+                "source": "command",
+            }
+            if len(caster_ids) == 1:
+                cast["casterUnitId"] = caster_ids[0]
+            elif caster_ids:
+                cast["casterUnitIds"] = caster_ids
+            casts.append(cast)
         except Exception:
             continue
 

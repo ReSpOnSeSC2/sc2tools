@@ -117,6 +117,11 @@ HIDDEN = [
 # non-Python siblings (CSVs, JSONs). Both are idempotent against the
 # explicit HIDDEN entries above.
 HIDDEN += collect_submodules("sc2reader")
+# The observation exporter is loaded from bundled engine source at runtime,
+# so static analysis cannot discover its generated protocol imports.
+HIDDEN += collect_submodules("s2clientprotocol")
+HIDDEN += collect_submodules("google.protobuf")
+HIDDEN += collect_submodules("websocket")
 SC2READER_DATAS = collect_data_files("sc2reader")
 
 # sc2reader CSV game-data files (collected above). MUST be in DATAS

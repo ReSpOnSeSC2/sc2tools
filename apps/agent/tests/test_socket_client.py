@@ -16,6 +16,7 @@ callables embed the policy decisions:
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import List
 
@@ -153,3 +154,56 @@ def test_on_macro_full_resync_swallows_exceptions(tmp_path: Path) -> None:
     # event loop isn't left in a broken state.
     on_macro([f"g{i}" for i in range(20)])
     on_full("explicit")  # should not raise either
+
+
+def test_engine_rebuild_reports_missing_replay_without_queueing(tmp_path: Path) -> None:
+    _write_state(tmp_path, path_by_game_id={})
+    queued = []
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path, queue_resync_for_paths=queued.append)
+    assert on_macro(["missing"], replay_fidelity="engine") == {"ok": False, "code": "replay_not_found"}
+    assert queued == []
+
+
+def test_engine_rebuild_captures_before_queueing_and_reports_upload(tmp_path: Path) -> None:
+    replay = tmp_path / "engine.SC2Replay"
+    replay.write_text("test replay")
+    _write_state(tmp_path, path_by_game_id={"engine": str(replay)})
+    order = []
+    done = threading.Event()
+
+    def status(update):
+        order.append(update["status"])
+        if update["status"] == "complete":
+            done.set()
+
+    on_macro, _, _ = make_recompute_handlers(
+        state_dir=tmp_path, engine_capture=lambda path: order.append(("capture", path)),
+        queue_resync_for_paths=lambda paths: order.append(("queue", paths)),
+        upload_monitor=lambda _path, _previous: None,
+    )
+    assert on_macro(["engine"], replay_fidelity="engine", report_status=status)["ok"]
+    assert done.wait(2)
+    assert order == ["processing", ("capture", replay), ("queue", [replay]), "uploading", "complete"]
+
+
+def test_engine_capture_failure_does_not_upload_tracker_fallback_as_success(tmp_path: Path) -> None:
+    replay = tmp_path / "bad.SC2Replay"
+    replay.write_text("test replay")
+    _write_state(tmp_path, path_by_game_id={"bad": str(replay)})
+    failed = threading.Event()
+    updates, queued = [], []
+
+    def capture(_path):
+        raise RuntimeError("Required StarCraft build is unavailable")
+
+    def status(update):
+        updates.append(update)
+        if update["status"] == "failed":
+            failed.set()
+
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path, engine_capture=capture, queue_resync_for_paths=queued.append)
+    assert on_macro(["bad"], replay_fidelity="engine", report_status=status)["ok"]
+    assert failed.wait(2)
+    assert queued == []
+    assert updates[-1]["code"] == "engine_capture_failed"
+    assert "StarCraft build" in updates[-1]["message"]

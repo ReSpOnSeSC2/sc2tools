@@ -239,10 +239,9 @@ def test_owner_is_relative_to_the_requesting_player():
     ]
 
 
-def test_self_cast_is_placed_at_the_casting_units_position():
-    """Stim carries no target location. The caster is recovered from
-    the player's active selection and its position interpolated off
-    the same waypoint track the replayer animates."""
+def test_self_cast_preserves_identity_without_inventing_a_position():
+    """Stim carries no target location. Preserve the selected caster tag
+    so the renderer uses the same observed track as the unit itself."""
     mod, ev = _import_casts()
     tracks = {
         "my_units": [
@@ -258,9 +257,9 @@ def test_self_cast_is_placed_at_the_casting_units_position():
     out = mod.extract_ability_casts(_replay(events), MY_PID, tracks)
     cast = out["casts"][0]
     assert cast["ability"] == "Stim"
-    # Halfway along a 0->100s track that runs x 10 -> 110.
-    assert cast["x"] == 60.0
-    assert cast["y"] == 10.0
+    assert cast["casterUnitId"] == 7
+    assert cast["x"] is None
+    assert cast["y"] is None
 
 
 def test_self_cast_with_no_resolvable_caster_emits_a_null_position():
@@ -361,3 +360,92 @@ def test_extraction_survives_a_hostile_event():
 
     out = mod.extract_ability_casts(_replay([bad, boom]), MY_PID)
     assert [c["ability"] for c in out["casts"]] == ["PsiStorm"]
+
+
+def _marine_tracks(*ids):
+    return {"my_units": [
+        {"id": uid, "name": "Marine", "born": 0, "died": None,
+         "waypoints": [0, uid, 10, 100, uid + 10, 10]}
+        for uid in ids
+    ], "opp_units": []}
+
+
+def test_selection_additions_and_deselections_preserve_exact_group_recipients():
+    mod, ev = _import_casts()
+    first = _selection(ev.SelectionEvent, 1, pid=MY_PID, unit_ids=[7])
+    added = _selection(ev.SelectionEvent, 2, pid=MY_PID, unit_ids=[8])
+    added.mask_type, added.mask_data = "None", []
+    removed = _selection(ev.SelectionEvent, 4, pid=MY_PID, unit_ids=[])
+    removed.mask_type, removed.mask_data = "OneIndices", [0]
+    cleared = _selection(ev.SelectionEvent, 6, pid=MY_PID, unit_ids=[])
+    cleared.mask_type, cleared.mask_data = "Mask", [True]
+    events = [first, added,
+              _cmd(ev.CommandEvent, 3, pid=MY_PID, name="Stimpack"), removed,
+              _cmd(ev.CommandEvent, 5, pid=MY_PID, name="Stimpack"), cleared,
+              _cmd(ev.CommandEvent, 7, pid=MY_PID, name="Stimpack")]
+    casts = mod.extract_ability_casts(_replay(events), MY_PID, _marine_tracks(7, 8))["casts"]
+    assert casts[0]["casterUnitIds"] == [7, 8]
+    assert casts[0]["x"] is None
+    assert casts[1]["casterUnitId"] == 8
+    assert "casterUnitId" not in casts[2]
+    assert casts[2]["x"] is None
+
+
+def test_control_group_recall_uses_stored_selection_and_mask():
+    mod, ev = _import_casts()
+    selected = _selection(ev.SelectionEvent, 1, pid=MY_PID, unit_ids=[7, 8])
+    set_group = SimpleNamespace(frame=45, player=SimpleNamespace(pid=MY_PID),
+                                control_group=1, update_type=0)
+    cleared = _selection(ev.SelectionEvent, 3, pid=MY_PID, unit_ids=[])
+    recall = SimpleNamespace(frame=90, player=SimpleNamespace(pid=MY_PID),
+                             control_group=1, update_type=2, mask_type="ZeroIndices", mask_data=[1])
+    command = _cmd(ev.CommandEvent, 5, pid=MY_PID, name="Stimpack")
+    cast = mod.extract_ability_casts(_replay([selected, set_group, cleared, recall, command]),
+                                     MY_PID, _marine_tracks(7, 8))["casts"][0]
+    assert cast["casterUnitId"] == 8
+
+
+def test_single_caster_spell_does_not_guess_between_selected_casters():
+    mod, ev = _import_casts()
+    tracks = _marine_tracks(7, 8)
+    for unit in tracks["my_units"]:
+        unit["name"] = "HighTemplar"
+    selected = _selection(ev.SelectionEvent, 1, pid=MY_PID, unit_ids=[7, 8])
+    command = _cmd(ev.CommandEvent, 2, pid=MY_PID, name="PsionicStorm", loc=(80, 90))
+    cast = mod.extract_ability_casts(_replay([selected, command]), MY_PID, tracks)["casts"][0]
+    assert "casterUnitId" not in cast
+    assert "casterUnitIds" not in cast
+    assert (cast["x"], cast["y"]) == (80, 90)
+    assert cast["source"] == "command"
+
+
+def test_caster_validation_uses_type_at_cast_time_and_rejects_unborn_units():
+    mod, ev = _import_casts()
+    tracks = _marine_tracks(7, 8)
+    tracks["my_units"][0].update(name="Egg", forms=[{"t": 3, "name": "Marine"}])
+    tracks["my_units"][1]["born"] = 10
+    selected = _selection(ev.SelectionEvent, 1, pid=MY_PID, unit_ids=[7, 8])
+    casts = mod.extract_ability_casts(_replay([
+        selected, _cmd(ev.CommandEvent, 2, pid=MY_PID, name="Stimpack"),
+        _cmd(ev.CommandEvent, 4, pid=MY_PID, name="Stimpack"),
+    ]), MY_PID, tracks)["casts"]
+    assert "casterUnitId" not in casts[0]
+    assert casts[1]["casterUnitId"] == 7
+
+
+def test_subsecond_cast_order_and_autocast_toggle_are_preserved_correctly():
+    mod, ev = _import_casts()
+    command = _cmd(ev.CommandEvent, 10.5, pid=MY_PID, name="PsionicStorm", loc=(30, 40))
+    toggle = _cmd(ev.CommandEvent, 12, pid=MY_PID, name="Stimpack")
+    toggle.flag = {"set_autocast": True}
+    casts = mod.extract_ability_casts(_replay([command, toggle]), MY_PID)["casts"]
+    assert len(casts) == 1
+    assert abs(casts[0]["t"] - command.frame / FPS) < 0.001
+    assert casts[0]["t"] != round(casts[0]["t"])
+
+
+def test_nonfinite_spell_coordinates_never_escape_to_payload():
+    mod, ev = _import_casts()
+    command = _cmd(ev.CommandEvent, 10, pid=MY_PID, name="PsionicStorm", loc=(float("nan"), 40))
+    cast = mod.extract_ability_casts(_replay([command]), MY_PID)["casts"][0]
+    assert cast["x"] is None and cast["y"] is None

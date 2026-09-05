@@ -19,7 +19,7 @@ vi.mock("swr", () => ({
   default: harness.useSWR,
 }));
 
-import { API_BASE, useApi } from "../clientApi";
+import { API_BASE, apiCall, useApi } from "../clientApi";
 
 type MockSWRResult = {
   key: readonly [string, string, string] | null;
@@ -44,6 +44,16 @@ afterEach(() => {
 });
 
 describe("useApi authenticated cache identity", () => {
+  it("rejects refresh mutations after sign-out without sending an anonymous request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    harness.auth.isSignedIn = false;
+    harness.auth.userId = null;
+    const view = renderHook(() => useApi("/v1/private"));
+    await expect(view.result.current.request({ method: "POST" })).rejects.toThrow("sign in again");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("isolates the same API path by Clerk user without changing the fetch URL", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -79,5 +89,23 @@ describe("useApi authenticated cache identity", () => {
     harness.auth.userId = null;
     view.rerender();
     expect(current().key).toBeNull();
+  });
+});
+
+describe("client mutation errors", () => {
+  it.each(["<!DOCTYPE html><html>upstream stack trace</html>", '{"unexpected":"internal detail"}', '["proxy", "failure"]'])(
+    "does not expose raw server response %s", async raw => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(raw, { status: 502 })));
+      await expect(apiCall(harness.auth.getToken, "/v1/private", { method: "POST" })).rejects.toMatchObject({
+        status: 502, message: "Something went wrong on our side. Try again in a moment.",
+      });
+    },
+  );
+
+  it("preserves actionable API errors in envelopes with leading whitespace", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('  \n{"error":{"code":"agent_offline","message":"Open the desktop agent.","requestId":"r1"}}', { status: 503 })));
+    await expect(apiCall(harness.auth.getToken, "/v1/private", { method: "POST" })).rejects.toMatchObject({
+      status: 503, code: "agent_offline", message: "Open the desktop agent.", requestId: "r1",
+    });
   });
 });

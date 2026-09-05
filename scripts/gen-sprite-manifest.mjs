@@ -32,9 +32,12 @@ function argOf(flag, fallback) {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
-const unitsDir = argOf("--units", "/tmp/work/out/webp/units");
-const buildingsDir = argOf("--buildings", "/tmp/work/out/webp/buildings");
-const outFile = argOf("--out", "/tmp/rewrite/apps/web/lib/spriteManifest.generated.ts");
+const unitsDir = argOf("--units", "apps/web/public/sprites/units");
+const buildingsDir = argOf("--buildings", "apps/web/public/sprites/buildings");
+const outFile = argOf("--out", "apps/web/lib/spriteManifest.generated.ts");
+const attackLedger = argOf("--attacks", "tools/sc2-alert-renders/replay-attack-clips.json");
+const attackClips = fs.existsSync(attackLedger)
+  ? JSON.parse(fs.readFileSync(attackLedger, "utf8")).clips : {};
 /** Fall back to the PNG source trees when the webp conversion of a
  * given sprite has not landed yet — the geometry is identical. */
 const fallbackDirs = {
@@ -121,6 +124,13 @@ for (const [kind, dir] of [
     for (const [animName, anim] of Object.entries(sidecar.anims)) {
       anims[animName] = animMeta(sidecar, animName, anim);
     }
+    const attack = kind === "unit" ? attackClips[name] : null;
+    if (attack) {
+      if (attack.race !== race || attack.frameSize !== sidecar.frameSize || attack.facings !== sidecar.facings) {
+        throw new Error(`${name}: Attack atlas dimensions do not match the sprite contract`);
+      }
+      anims.Attack = animMeta(sidecar, "Attack", attack.animation);
+    }
     if (!anims.Stand) throw new Error(`${name}: no Stand anim`);
     entries.push({
       name,
@@ -134,6 +144,9 @@ for (const [kind, dir] of [
 }
 
 entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+if (!entries.length) {
+  throw new Error("No source sprite sidecars found; restore the baked asset tree before regenerating the manifest.");
+}
 
 const num = (v) => (Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4))));
 const lines = [];

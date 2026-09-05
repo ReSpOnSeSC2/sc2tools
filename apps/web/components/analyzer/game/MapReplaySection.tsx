@@ -25,7 +25,7 @@
  *    ``MusicControl`` only ever lived in ``ReplayStage``'s dock.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { sanitizeMapPlayback } from "@/lib/mapReplay";
 import { CompactReplayHost } from "./replay/CompactReplayHost";
@@ -66,14 +66,111 @@ export function MapReplaySection({
   buildName?: string | null;
   buildMatchPct?: number | null;
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState("");
+  const refreshStarted = useRef(0);
+  const [refreshRequestId, setRefreshRequestId] = useState<string | null>(null);
+  const refreshGeneration = useRef(0);
+  const startedWithEnginePlayback = useRef(false);
+  const requestedGame = useRef(gameId);
   const req = useApi<Record<string, unknown>>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback` : null,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, refreshInterval: refreshing ? 3000 : 0 },
   );
   const playback = useMemo(
     () => (req.data ? sanitizeMapPlayback(req.data) : null),
     [req.data],
   );
+
+  useEffect(() => {
+    requestedGame.current = gameId;
+    refreshGeneration.current += 1;
+    setRefreshRequestId(null);
+    setRefreshing(false);
+    setRefreshMessage("");
+    return () => { refreshGeneration.current += 1; };
+  }, [gameId]);
+  useEffect(() => {
+    if (!refreshing) return;
+    const rebuild = req.data?.rebuild as { status?: string; message?: string; requestId?: string } | undefined;
+    const sameJob = refreshRequestId !== null && rebuild?.requestId === refreshRequestId;
+    if (rebuild?.status === "failed" && sameJob) {
+      setRefreshing(false);
+      setRefreshMessage(rebuild.message || "Recording failed. Keep the desktop agent open and try again.");
+      return;
+    }
+    // An already cached engine payload cannot prove that a newly requested
+    // rebuild finished. Wait for this job's upload, or a first engine payload
+    // replacing tracker data, and never report success before its ACK.
+    if (refreshRequestId && playback?.fidelity?.positions === "engine" &&
+        playback.fidelity.complete === true && playback.fidelity.attacks === "observed" &&
+        (!startedWithEnginePlayback.current || (sameJob && rebuild?.status === "complete"))) {
+      setRefreshing(false);
+      setRefreshMessage("Recorded playback is ready.");
+      return;
+    }
+    if (rebuild?.status === "complete" && sameJob && playback?.fidelity?.positions === "engine") {
+      setRefreshing(false);
+      setRefreshMessage(playback.fidelity.attacks === "observed"
+        ? "Recorded playback is ready with reduced detail for this large replay."
+        : "Movement is ready, but this recording has no attack data. Update the desktop agent and generate playback again.");
+      return;
+    }
+    if (req.error && req.error.code !== "playback_not_computed") {
+      if ([401, 403].includes(req.error.status) || req.error.code === "game_not_found") {
+        setRefreshing(false);
+        setRefreshMessage(req.error.message || "This replay is no longer available. Sign in again and reopen it.");
+        return;
+      }
+      setRefreshMessage("Could not check recording progress. Retrying while your desktop agent continues working…");
+    } else if (sameJob && rebuild?.status === "uploading") {
+      setRefreshMessage("Recording finished. Uploading the map playback…");
+    }
+    const timer = window.setTimeout(() => {
+      setRefreshing(false);
+      setRefreshMessage("Recording is still processing. Keep the desktop agent open and check back shortly.");
+    }, Math.max(0, 18 * 60 * 1000 - (Date.now() - refreshStarted.current)));
+    return () => window.clearTimeout(timer);
+  }, [refreshing, refreshRequestId, playback, req.data, req.error]);
+
+  const refresh = async () => {
+    if (refreshing || !req.request) return;
+    const id = gameId;
+    const generation = ++refreshGeneration.current;
+    startedWithEnginePlayback.current = playback?.fidelity?.positions === "engine";
+    setRefreshing(true);
+    setRefreshRequestId(null);
+    setRefreshMessage("Preparing recorded playback with your desktop agent…");
+    refreshStarted.current = Date.now();
+    try {
+      const accepted = await req.request<{ requestId?: string; rebuild?: { requestId?: string } }>({ method: "POST", body: JSON.stringify({ fidelity: "engine" }) });
+      if (requestedGame.current !== id || refreshGeneration.current !== generation) return;
+      const requestId = accepted?.rebuild?.requestId ?? accepted?.requestId;
+      if (typeof requestId !== "string" || !requestId) {
+        throw new Error("The rebuild was not acknowledged. Update the desktop agent and try again.");
+      }
+      setRefreshRequestId(requestId);
+      setRefreshMessage("Recording playback with StarCraft II. You can keep reviewing this game while it runs…");
+      // A transient first GET failure must not cancel a job the agent has
+      // already accepted. SWR keeps polling and the status effect reports it.
+      await req.mutate().catch(() => undefined);
+    } catch (error) {
+      if (requestedGame.current !== id || refreshGeneration.current !== generation) return;
+      setRefreshing(false);
+      setRefreshMessage((error as { message?: string })?.message || "Could not refresh this replay. Check that your desktop agent is connected.");
+    }
+  };
+  const refreshControl = typeof req.request === "function" && (playback?.fidelity?.positions !== "engine" || playback?.fidelity?.complete === false || playback?.fidelity?.attacks !== "observed" || refreshing || refreshMessage) ? (
+    <div className="flex flex-wrap items-center gap-2 text-caption">
+      <button type="button" disabled={refreshing} onClick={refresh}
+        className="rounded-md border border-border bg-bg-elevated px-3 py-1.5 font-medium text-text hover:border-accent disabled:cursor-wait disabled:opacity-60">
+        {refreshing ? "Recording replay…" : "Generate accurate playback"}
+      </button>
+      <span role="status" className="text-text-dim">
+        {refreshMessage || "Uses StarCraft II and the replay file on your desktop."}
+      </span>
+    </div>
+  ) : null;
 
   const stageMaxH = maxHeightPx ?? (compact ? COMPACT_STAGE_MAX_H_PX : undefined);
 
@@ -100,10 +197,11 @@ export function MapReplaySection({
       <div className="rounded-lg border border-border bg-bg-elevated/40 p-4">
         <div className="text-body font-medium text-text">Map replay</div>
         <p className="mt-1 text-caption text-text-dim">
-          No playback data for this game — replays synced with the
-          latest desktop agent include a full map replay (unit
-          movements, buildings, and battles over time).
+          {req.error && req.error.status !== 404
+            ? req.error.message || "Could not load map playback. Check your connection and try again."
+            : "No playback data for this game — replays synced with the latest desktop agent include a full map replay (unit movements, buildings, and battles over time)."}
         </p>
+        {refreshControl}
       </div>
     );
   }
@@ -126,11 +224,13 @@ export function MapReplaySection({
           myRace={myRace}
           maxHeightPx={stageMaxH}
         />
+        {refreshControl}
       </section>
     );
   }
 
   return (
+    <div className="space-y-2">
     <ReplayStage
       playback={playback}
       gameId={gameId}
@@ -142,5 +242,7 @@ export function MapReplaySection({
       buildName={buildName}
       buildMatchPct={buildMatchPct}
     />
+    {refreshControl}
+    </div>
   );
 }

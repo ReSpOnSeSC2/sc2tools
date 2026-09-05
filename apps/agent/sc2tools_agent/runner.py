@@ -469,7 +469,7 @@ def _run_headless(
         on_macro, on_opp, on_full_resync = make_recompute_handlers(
             state_dir=cfg.state_dir,
             queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
-                state, upload, paths, log,
+                state, upload, paths, log, state_dir=cfg.state_dir,
             ),
             # Same semantics as the GUI's Re-sync button: drop the
             # uploaded cursor and have the watcher re-walk every replay
@@ -893,7 +893,7 @@ def _gui_boot_worker(
             on_macro, on_opp, on_full_resync = make_recompute_handlers(
                 state_dir=cfg.state_dir,
                 queue_resync_for_paths=lambda paths: _queue_replays_for_resync(
-                    state, upload, paths, log,
+                    state, upload, paths, log, state_dir=cfg.state_dir,
                 ),
                 full_resync=lambda: _handle_replay_archive_resync(
                     cfg, state, upload,
@@ -1125,6 +1125,8 @@ def _queue_replays_for_resync(
     upload: Optional[UploadQueue],
     paths: List[Path],
     log: logging.Logger,
+    *,
+    state_dir: Optional[Path] = None,
 ) -> None:
     """Drop selected paths from the upload cursor so the next sweep
     re-parses + re-uploads only those replays.
@@ -1141,8 +1143,8 @@ def _queue_replays_for_resync(
         key = str(p)
         if state.uploaded.pop(key, None) is not None:
             removed += 1
-    if removed == 0:
-        return
+    if state_dir is not None:
+        save_state(state_dir, state)
     upload.request_full_resync()
     log.info(
         "per_game_resync_queued count=%d total_requested=%d",

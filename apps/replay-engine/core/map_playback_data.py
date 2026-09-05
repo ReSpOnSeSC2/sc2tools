@@ -416,10 +416,8 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         print(f"map_playback: extract_unit_tracks failed: {exc}")
         tracks = {"my_units": [], "opp_units": []}
 
-    # game_length: take the MAX of the reported length, the latest event
-    # timestamp, and the latest unit waypoint / death timestamp. This
-    # catches units born after the surrender (e.g. a Carrier warp-in
-    # finishing 30s after the GG click) so they're visible in the bar.
+    # Use the replay's duration. Production commands are not future unit
+    # births, and must never extend the viewer beyond recorded gameplay.
     game_length = real_game_length(replay)
     last_ts = []
     for src in (my_events, opp_events,
@@ -482,11 +480,12 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
             )
         )
 
-    return {
+    playback = {
         "map_name": getattr(replay, "map_name", None),
         "game_length": game_length,
         "bounds": bounds,
         "me_name": me.name,
+        "me_pid": me.pid,
         "opp_name": opp.name,
         "result": me.result,
         "my_events": sorted_my_events,
@@ -505,4 +504,18 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         "opp_buildings": lifecycle.get(opp.pid, []),
         "ability_casts": cast_data.get("casts") or [],
         "unmapped_abilities": unmapped_abilities,
+        "fidelity": {
+            "positions": "tracker", "paths": "observed", "creep": "estimated",
+            # Complete means the available tracker stream was read, not that
+            # the replay contains every unit position or terrain creep cell.
+            "complete": tracks.get("complete", False),
+        },
     }
+    # Optional engine observations are keyed to the exact replay bytes and
+    # player perspective by the helper. Ordinary parsing never starts SC2.
+    try:
+        from .sc2_observation_export import merge_precomputed_engine_playback
+        playback = merge_precomputed_engine_playback(playback, file_path, player_name)
+    except Exception as exc:
+        print(f"map_playback: engine observations unavailable: {exc}")
+    return playback

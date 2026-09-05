@@ -1,0 +1,2689 @@
+{
+  "schemaVersion": 1,
+  "assetBase": "/replay-attacks",
+  "clips": {
+    "Adept": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          152.92479288264326
+        ],
+        "sheet": "Adept_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          235
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 339742,
+          "sha256": "0272c32a0676f9ec7a0890213e95300d3efc1a4b338d288892dd558f7d7fb059",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 348250,
+          "sha256": "01f2f64602bcd9510fb3be20fdd1eaa193499d835ca33c1422944cff2deddc27",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Archon": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 4.8,
+        "anchor": [
+          128,
+          189.58159891764325
+        ],
+        "sheet": "Archon_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          55
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 462586,
+          "sha256": "ff19362c14205197040204e259a5c65e533cd1d26ef5f9dd80e83639de7fb767",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 467320,
+          "sha256": "a768ff0ef2aa438d171ceb154a52d73c8a46f33b85ebd2552d626b048ecc7620",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Colossus": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 8.1,
+        "anchor": [
+          128,
+          181.9374311470691
+        ],
+        "sheet": "Colossus_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack 02",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 556476,
+          "sha256": "6527b3c871b8eef83ccba0993ec63bf71b92fbed5dee20de04ac438337705c0f",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 557986,
+          "sha256": "cb7ece528c941fd6a6c748f8951f2544254f4dbcf803f26f68b407facc8bf3ee",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "DarkTemplar": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          153.30699033994932
+        ],
+        "sheet": "DarkTemplar_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          34
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 308816,
+          "sha256": "f93d171228836293b5d3b9d5b3fb326a3aed824ad5ea2417d0b0cb8db9934fd6",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 311646,
+          "sha256": "3b0ccf89e7b73ca67262da1e3f7076de2f015ecc8f24b8e0b260bf0b10412171",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Immortal": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          164.0865812043886
+        ],
+        "sheet": "Immortal_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          70
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 556168,
+          "sha256": "461d5482fea690a06b66b678ac1ea7f39bb6febec936420f50e01ae2c65c8261",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 555956,
+          "sha256": "6f8a59b1ab0239bc47fd80f569164dcf5665bba234a06a6ed1f4f1868bd276b8",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Phoenix": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          130.4114415452287
+        ],
+        "sheet": "Phoenix_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 309006,
+          "sha256": "86ae5df99117fe388c779a833263a4b5f40dfdb72f11b12196ec63b0c33e4865",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 312766,
+          "sha256": "f717c2a6eb9a726d2bf5b14f516ad1ce97f97281da9849a09b0c26049616f435",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Probe": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 1.7,
+        "anchor": [
+          128,
+          170.3813606710995
+        ],
+        "sheet": "Probe_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          40
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 360496,
+          "sha256": "f180968b2e1b4056f48eb0413ce37802860f39a087678bc82d707513b282d5af",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 363396,
+          "sha256": "3c06c27f9d7a4ecdf598b22d94063c87aaa2d18a57cb51e7f1f38ded3a7b3930",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Sentry": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          155.80957299309807
+        ],
+        "sheet": "Sentry_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          60
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 329636,
+          "sha256": "492a34fb6ca3db0420c7c922ff0d1ed67890ac23924a95a26fc89a84b4f0e1f8",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 333710,
+          "sha256": "4f3b2f068c9bd924d98d0c62deeffed2b08b40071c4965502b37c872c1734cd6",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Stalker": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          151.49616514669881
+        ],
+        "sheet": "Stalker_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          70
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 501598,
+          "sha256": "53d0abb2b2c181ec38ca98603c4c8cdefe20026480a6fc5dbf479f9333b8aa54",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 502136,
+          "sha256": "e2687fc7586da21e588f35c910b76b24bf6c34c91d293596d06ba48844a21aef",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Tempest": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 4.8,
+        "anchor": [
+          128,
+          128.00000372333355
+        ],
+        "sheet": "Tempest_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          40
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 494206,
+          "sha256": "65dc991520e7ec1ea98962c8ade0a42d383137115df815b255ddf8c9ba7a8798",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 503692,
+          "sha256": "56d1e621bd2c28efbdd08962fd26415412f82444cb4cef2c010c58a8c185be39",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "VoidRay": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 10.434782608695652,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 6.25,
+        "anchor": [
+          128,
+          128.0
+        ],
+        "sheet": "VoidRay_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          23
+        ],
+        "authoredRange": [
+          0,
+          23
+        ],
+        "srcFrames": [
+          0.0,
+          2.875,
+          5.75,
+          8.625,
+          11.5,
+          14.375,
+          17.25,
+          20.125
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 290446,
+          "sha256": "03f1513477a40348a9be7733e4dc4df91c7657ec478e8572f4835cf983bb7e65",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 291636,
+          "sha256": "8da5801f3dbca1de451f8a79bad18bee4f9934f7700f9038a95166868ff68073",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Zealot": {
+      "race": "Protoss",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          152.37005829392817
+        ],
+        "sheet": "Zealot_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          60
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 299128,
+          "sha256": "9e77e8fcedfb95bf70ee74dc51f2f2bf713a5de7b9c4082c8774e1fe13abe18b",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 307408,
+          "sha256": "fa820f1412a3b781710cfd73fc6bdf33b65f340d91fe06c99a6f8d739c56a643",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Banshee": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          130.0416069352949
+        ],
+        "sheet": "Banshee_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          35
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 395956,
+          "sha256": "83466bc35dea519faab15339602ed8808dde55bd2dcd6082d410990f8aa7706a",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 399612,
+          "sha256": "504c0dba8f81ad3425757b1d5c0dd06cdbefe48d37f0a5eff73014ebf1961020",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Cyclone": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 26.666666666666668,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          148.3322239925987
+        ],
+        "sheet": "Cyclone_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          9
+        ],
+        "authoredRange": [
+          0,
+          9
+        ],
+        "srcFrames": [
+          0.0,
+          1.125,
+          2.25,
+          3.375,
+          4.5,
+          5.625,
+          6.75,
+          7.875
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 411612,
+          "sha256": "26ff26df6f5fc6386e64f8302f2ce4ded57d30ae4a4d3f5bcd2c4cc5f92daa0e",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 419672,
+          "sha256": "956cd70d322ddd2e25605c8135c188dc705f9163abf5f67957d99f4ac9ebed9a",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Ghost": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          154.49883167163745
+        ],
+        "sheet": "Ghost_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          100
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 162010,
+          "sha256": "52be9e7274b1451278d09824835a08d565c588c98cd791358e3997667e55d899",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 160540,
+          "sha256": "c6367515d469282520748bd79b10378986ddfb523a88d7785ff6ceb02c8c40df",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Hellbat": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          175.99725298295942
+        ],
+        "sheet": "Hellbat_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          70
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 502466,
+          "sha256": "c04f1f3e5cfc49c56e7edd596f4280ebfa4d1fa87b7126c47df21c0e8a933fa8",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 515138,
+          "sha256": "4f55a9e6699ced9665bcc3689301606335c86fd67604d41dbf099d3232246790",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Hellion": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          148.85212439821478
+        ],
+        "sheet": "Hellion_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 332020,
+          "sha256": "cf022883fea62dc6581d4cb37474eb92989892b67a770c978cd7cee98aa1cfe8",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 337706,
+          "sha256": "68d552196230e7e50fd1995f27d954d5af17a8df30362edd31ed7b77439e10ba",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Liberator": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          137.4207136051075
+        ],
+        "sheet": "Liberator_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack A",
+        "action": "Attack Sub",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 324820,
+          "sha256": "355d7caa47e50c9d5cc828b647089d8db2b7c6d1350418266aed6e8a099fc312",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 327896,
+          "sha256": "e2c677ba4fb562cc02316a76731a28bde197cbcc1098391ede4133317b97bcab",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Marauder": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.2,
+        "anchor": [
+          128,
+          168.15831513838333
+        ],
+        "sheet": "Marauder_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack Left",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          65
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 338204,
+          "sha256": "0c6a2ca8fde267f053ddcddc65aeac3dc14c300664c7e8107fddda97de55f261",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 341916,
+          "sha256": "ef06f4603547b0c618ca19ecd64bc905b65000b4871c8bf5c7d726e92b85a664",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Marine": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 1.3,
+        "anchor": [
+          128,
+          156.0649658349844
+        ],
+        "sheet": "Marine_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 469032,
+          "sha256": "cffaa989a178b3de814f8ea71bca8e83e2f2af03e4e84ee155e0b422e11bbe54",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 477566,
+          "sha256": "2ef6b8c6ab3585d6bfe0cd1ae149cecc43f23310675b8ef1148877c539e23e67",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "MULE": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          153.82515097953177
+        ],
+        "sheet": "MULE_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 376528,
+          "sha256": "9144fb0bf4294b6d512e7a336393020b0735d4ac22b9ce76959d33a33ca16642",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 379628,
+          "sha256": "a4afd28c3eb25ba3970a7f33cc87f30a3bc0a782de4e3890cc661a79d511cba7",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Reaper": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.2,
+        "anchor": [
+          128,
+          144.9194017757069
+        ],
+        "sheet": "Reaper_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          45
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 364380,
+          "sha256": "aa79b6d85f26e2a4016840b9e2018d60edb932725a2c0a387e93689a615faafd",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 372814,
+          "sha256": "73e24f629ef6e5f5743ab72115b4bbeb82d9544c06537240a599ff4c5ee0ac74",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "SCV": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          148.36372803805168
+        ],
+        "sheet": "SCV_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 309152,
+          "sha256": "6b2f6b12f1fcf939ea9db99923f3630ef0810c34ffbb918f7c96e6ba1237f60f",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 309760,
+          "sha256": "c6311cd3f286bd73970a007b2b8af7a6e2604528c258576475c4bd5f49d0383b",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "SiegeTank": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 4.8,
+        "anchor": [
+          128,
+          148.76838751633963
+        ],
+        "sheet": "SiegeTank_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 502362,
+          "sha256": "7ada9f4ad69bc0264421c7ba09d98937977b5c1ab99191a5b7ecbd43a3bd247b",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 508128,
+          "sha256": "d4c4b4e81d9ff559dae5dd3cc9eeaabccdaf0c1877e28b668b77338cdc5eb6d5",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Thor": {
+      "race": "Terran",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 8.1,
+        "anchor": [
+          128,
+          155.56670539761768
+        ],
+        "sheet": "Thor_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          110
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 476130,
+          "sha256": "b9a0b22db20d4e62a5eafef4012172e154344fa1e55c8c4304fbcec9e697a8c2",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 487256,
+          "sha256": "6e947b3e2b6047e5282dc0221785a9f376dbd1b74cbe1005cf27b339288cac53",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Corruptor": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          145.54895081391206
+        ],
+        "sheet": "Corruptor_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 397460,
+          "sha256": "a43613600f60e2846dd7a485dcbffe539c9d73850820a3e6c0665c9c46c7d51d",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 403262,
+          "sha256": "69d8e2eb676a639665d482de0e3c70805e3ae3529c819e6a3e20300c921a634c",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Drone": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.2,
+        "anchor": [
+          128,
+          147.08007274974477
+        ],
+        "sheet": "Drone_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          37
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 353680,
+          "sha256": "98ef71f9a4bd652f0496291836df3467ee3eb0ea5e8f5e466b3ac78d6c51cfe5",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 366106,
+          "sha256": "67ab0494b296affacb890428156c99035cf05f6dbd217ec1bd594192bc004979",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Hydralisk": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          150.2805780977816
+        ],
+        "sheet": "Hydralisk_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 421214,
+          "sha256": "15110372e389664d2a4313d957517e8cd59a650e8c4072e5007225ead793b84b",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 429432,
+          "sha256": "bf5240256aec7de5d7b754cd18be01ec1a997cfe9d342f326d141d8250576b77",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Infestor": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          153.96791654019742
+        ],
+        "sheet": "Infestor_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 436822,
+          "sha256": "9e8e0374b62d4596f4206a4f058fb4dd1510846dcd915466dfd373651f188dba",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 446092,
+          "sha256": "2b051f85c75923f4b362d4a6621fe5fe5efd1d02342f8dde543020178441a2ef",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Lurker": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.2,
+        "anchor": [
+          128,
+          121.6165324124423
+        ],
+        "sheet": "Lurker_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack Burrow",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          45
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 373390,
+          "sha256": "35bb576d0b1c195dbd0e2dc0cb0839faee790194d528ed5cdd60563f25e3270b",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 385670,
+          "sha256": "fe256b4c588b0f0dabe02a0de5183a867213c1f59494696b4b850d4858095e52",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Mutalisk": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 4.8,
+        "anchor": [
+          128,
+          156.18012475967407
+        ],
+        "sheet": "Mutalisk_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          40
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 303168,
+          "sha256": "addc67f1b751822991d4d1b75b5876fbc5f023073d048026deeb1e25ff5b1daa",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 308228,
+          "sha256": "bf88a62ee3514eff9e812c6bc8d98b1c892e01f80851a4e21f1cf88bc5ff23b0",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Queen": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 10.5,
+        "anchor": [
+          128,
+          134.0321967715309
+        ],
+        "sheet": "Queen_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          60
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 187778,
+          "sha256": "0d3454e7c1ebceaf9d54a40b2ea1e8cb044909fd27c13eb169506a50d87d64c4",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 189928,
+          "sha256": "fa4dd1000d21a66fe0db0b96018f31e165456c98e187adda363b4ee3b47962e8",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Ravager": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 4.8,
+        "anchor": [
+          128,
+          155.154278755188
+        ],
+        "sheet": "Ravager_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 367596,
+          "sha256": "8d860617a3d66f92ff4a0681893d3a5ace2108789c1c3612ce87133779316b39",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 370616,
+          "sha256": "92d4fe07785dd462c290fc452db9c1cf585820a66e468822b3cf533eccd00e09",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Roach": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.2,
+        "anchor": [
+          128,
+          153.73973048817027
+        ],
+        "sheet": "Roach_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 419570,
+          "sha256": "9f20002559610cfbfa2792eb9ed88b89eba36acc92c5a91c9677e6973d35a948",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 427810,
+          "sha256": "1be5289d92bb1940af2d2b8ce553c06de5136704728d60d6aa7462e7cd749d29",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "SwarmHost": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 3.7,
+        "anchor": [
+          128,
+          150.86649136929898
+        ],
+        "sheet": "SwarmHost_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 425948,
+          "sha256": "9554ecb7af639a7d23b031e8c53783f078a7a550c8082cd7d8d5082fc0983b4e",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 442946,
+          "sha256": "3e4e12d0ba5bbbe522abf3f5f8ea9a8c7cd3d78f9ac886a5633e32223e9a60c5",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Ultralisk": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 8.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 10.5,
+        "anchor": [
+          128,
+          127.08136712937127
+        ],
+        "sheet": "Ultralisk_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          30
+        ],
+        "authoredRange": [
+          0,
+          30
+        ],
+        "srcFrames": [
+          0.0,
+          3.75,
+          7.5,
+          11.25,
+          15.0,
+          18.75,
+          22.5,
+          26.25
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 265992,
+          "sha256": "659536c370942152435eba7089c1c4bf88acdaac8810d6e4e71b838984f78673",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 271374,
+          "sha256": "5ce79f830c02afdf8638f04d4d10c32e9f58c92da51b3946ecca22502604ace3",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    },
+    "Zergling": {
+      "race": "Zerg",
+      "frameSize": 256,
+      "facings": 8,
+      "animation": {
+        "frames": 8,
+        "fps": 15.0,
+        "sheetSize": [
+          2048,
+          2048
+        ],
+        "worldUnitsPerCell": 2.85,
+        "anchor": [
+          128,
+          140.94870343124657
+        ],
+        "sheet": "Zergling_red_Attack.webp"
+      },
+      "sourceAnimation": {
+        "group": "Attack",
+        "action": "full",
+        "srcRange": [
+          0,
+          16
+        ],
+        "authoredRange": [
+          0,
+          16
+        ],
+        "srcFrames": [
+          0.0,
+          2.0,
+          4.0,
+          6.0,
+          8.0,
+          10.0,
+          12.0,
+          14.0
+        ],
+        "srcFps": 30
+      },
+      "files": {
+        "red": {
+          "bytes": 193522,
+          "sha256": "15b23facbfbd29d3a4cb4c9a7ec1a6ce5010f64dbe95c3403c04bec542b1f349",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        "blue": {
+          "bytes": 196880,
+          "sha256": "565035874bfb82f8018341076820cd8f14ec581295a47c13963e5427a3d9ed28",
+          "distinctFramesPerFacing": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      }
+    }
+  },
+  "withoutAttackSequence": [
+    "Carrier",
+    "Disruptor",
+    "HighTemplar",
+    "Mothership",
+    "Observer",
+    "Oracle",
+    "WarpPrism",
+    "Battlecruiser",
+    "Medivac",
+    "Raven",
+    "Viking",
+    "WidowMine",
+    "Baneling",
+    "BroodLord",
+    "Overlord",
+    "Overseer",
+    "Viper"
+  ]
+}

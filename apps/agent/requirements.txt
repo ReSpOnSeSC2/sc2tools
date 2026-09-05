@@ -1,5 +1,11 @@
 requests==2.32.3
 sc2reader==1.8.0
+# Exact replay reconstruction uses the installed StarCraft simulation.
+# Ship its generated protocol and transport in the desktop agent so the
+# web rebuild action works without a separate user Python installation.
+s2clientprotocol==5.0.16.97563.0
+protobuf==3.20.3
+websocket-client==1.9.2
 watchdog==5.0.3
 pystray==0.19.5
 Pillow==11.0.0

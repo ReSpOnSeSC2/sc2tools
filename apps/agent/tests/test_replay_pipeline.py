@@ -1996,6 +1996,200 @@ def _unit_with_track(track, **extra):
     return unit
 
 
+def test_v6_keeps_stationary_observations_precise_time_and_identities():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "tracker", "paths": "observed", "creep": "estimated", "complete": True}
+    pb["my_units"] = [_unit_with_track([
+        (0.045, 20, 20), (100.04, 20, 20), (100.08, 21, 20), (115.0, 40, 20),
+    ], id=4194305, forms=[{"t": 110.05, "name": "Baneling"}])]
+    pb["opp_units"] = []
+    pb["ability_casts"] = [{"owner": "me", "ability": "Stim", "t": 100.04,
+                            "casterUnitIds": [4194305, 4194306], "source": "command"},
+                           {"owner": "me", "ability": "Feedback", "t": 100.08,
+                            "casterUnitId": 4194305, "targetUnitId": 4194307}]
+    out = _compact_map_playback(pb)
+    assert out["v"] == 6 and out["fidelity"]["complete"] is True
+    assert out["units"][0]["wp"][0::3] == [0.045, 100.04, 100.08, 115.0]
+    assert out["units"][0]["id"] == 4194305
+    assert out["units"][0]["forms"] == [{"t": 110.05, "name": "Baneling"}]
+    assert out["casts"][0]["casterUnitIds"] == [4194305, 4194306]
+    assert out["casts"][1]["targetUnitId"] == 4194307
+    assert out["casts"][1]["t"] == 100.08
+
+
+def test_v6_budget_exhaustion_reports_incomplete_and_preserves_endpoints(monkeypatch):
+    import sc2tools_agent.replay_pipeline as pipeline
+    monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 3)
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "tracker", "creep": "estimated", "complete": True}
+    pb["my_units"] = [_unit_with_track([(float(i), i, i) for i in range(5)],
+                                        id="18446744073709551615", hidden=[1, 2])]
+    pb["opp_units"] = []
+    out = pipeline._compact_map_playback(pb)
+    assert out["fidelity"]["complete"] is False
+    assert out["units"][0]["wp"][0::3] == [0.0, 2.0, 4.0]
+    assert out["units"][0]["id"] == "18446744073709551615"
+    assert out["units"][0]["hidden"] == [1, 2]
+
+
+def test_engine_track_compression_preserves_stops_and_time_aligned_position():
+    from sc2tools_agent.replay_pipeline import _compress_engine_track
+    points = [(i / 10, 0.0 if i <= 100 else (i - 100) / 10, 20.0) for i in range(201)]
+    kept = _compress_engine_track(points)
+    assert len(kept) < len(points) // 2
+    assert (10.0, 0.0, 20.0) in kept
+    assert max(b[0] - a[0] for a, b in zip(kept, kept[1:])) <= 2
+    for t, x, y in points:
+        for a, b in zip(kept, kept[1:]):
+            if a[0] <= t <= b[0]:
+                f = (t - a[0]) / (b[0] - a[0])
+                assert abs(a[1] + f * (b[1] - a[1]) - x) <= 0.025
+                assert abs(a[2] + f * (b[2] - a[2]) - y) <= 0.025
+                break
+
+
+def test_engine_wire_track_respects_reported_position_error_on_curves():
+    import math
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    # Nonuniform turns and speed changes are the important pathing case.
+    points = [(i * 0.1786, 50 + 7 * math.sin(i / 7), 60 + 4 * math.cos(i / 11)) for i in range(400)]
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "complete": True}
+    pb["my_units"] = [_unit_with_track(points, id="4294967301")]
+    pb["opp_units"] = []
+    out = _compact_map_playback(pb)
+    wp = out["units"][0]["wp"]
+    index = 0
+    for t, x, y in points:
+        t = round(t, 3)
+        while index + 3 < len(wp) and wp[index + 3] < t:
+            index += 3
+        if index + 3 >= len(wp):
+            continue
+        a, b = wp[index:index + 3], wp[index + 3:index + 6]
+        f = (t - a[0]) / (b[0] - a[0])
+        error = math.hypot(x - a[1] - f * (b[1] - a[1]), y - a[2] - f * (b[2] - a[2]))
+        assert error <= out["fidelity"]["positionError"]
+    assert out["fidelity"]["complete"] is True
+
+
+def test_v6_engine_preserves_observed_creep_and_effect_lifetimes():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "paths": "observed", "creep": "observed", "effects": "observed", "complete": True}
+    pb["creep"] = {"width": 2, "height": 3, "encoding": "rle", "frames": [
+        {"t": 0.05, "runs": [0, 2, 4, 2]}, {"t": 10.05, "runs": []},
+    ]}
+    pb["effects"] = [{"id": 1, "name": "PsiStorm", "owner": "me", "t": 20.05,
+                      "end": 22.05, "x": 20, "y": 30, "radius": 1.5},
+                     {"id": 2, "name": "ForceField", "owner": "neutral", "t": 30,
+                      "end": 40, "x": 50, "y": 60, "radius": 1.5}]
+    out = _compact_map_playback(pb)
+    assert out["creep"] == pb["creep"]
+    assert out["effects"] == pb["effects"]
+    assert out["fidelity"]["effects"] == "observed"
+    assert out["fidelity"]["complete"] is True
+
+
+def test_v6_global_budget_keeps_both_players_and_late_units(monkeypatch):
+    import sc2tools_agent.replay_pipeline as pipeline
+    monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 8)
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "tracker", "complete": True}
+    pb["my_units"] = [_unit_with_track([(i, 20, 30) for i in range(10)], id=1)]
+    pb["opp_units"] = [_unit_with_track([(i, 30, 40) for i in range(100, 110)], id=2)]
+    out = pipeline._compact_map_playback(pb)
+    assert len(out["units"]) == 2
+    assert sum(len(unit["wp"]) // 3 for unit in out["units"]) <= 8
+    assert out["units"][0]["wp"][0] == 0 and out["units"][0]["wp"][-3] == 9
+    assert out["units"][1]["wp"][0] == 100 and out["units"][1]["wp"][-3] == 109
+    assert out["fidelity"]["complete"] is False
+
+
+def test_v6_byte_budget_preserves_spell_events_and_track_endpoints(monkeypatch):
+    import json
+    import sc2tools_agent.replay_pipeline as pipeline
+    monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_BYTES", 5000)
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "tracker", "complete": True}
+    pb["my_units"] = [_unit_with_track([(i, 20 + i % 2, 30) for i in range(1000)], id=1)]
+    pb["opp_units"] = []
+    pb["ability_casts"] = [{"owner": "me", "ability": "PsiStorm", "t": i * 10,
+                            "x": 30, "y": 40} for i in range(50)]
+    out = pipeline._compact_map_playback(pb)
+    assert len(json.dumps(out, separators=(",", ":")).encode()) <= 5000
+    assert out["fidelity"]["complete"] is False
+    assert len(out["casts"]) == 50
+    assert out["units"][0]["wp"][0] == 0
+    assert out["units"][0]["wp"][-3] == 999
+
+
+def test_v6_observed_attacks_keep_exact_shot_times_and_matching_target_points():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "attacks": "observed", "complete": True}
+    pb["my_units"] = [_unit_with_track([(1, 20, 30), (10, 20, 30)], id="4294967301", died=11,
+                                      attacks=[1.2345, 3.4567],
+                                      aim=[1.2345, 30.1234, 40.5678])]
+    pb["opp_units"] = []
+    pb["my_buildings"] = [{"id": "4294967302", "name": "PhotonCannon", "born": 0,
+                            "x": 40, "y": 50, "attacks": [5.6789], "aim": [5.6789, 60, 70]}]
+    out = _compact_map_playback(pb)
+    assert out["fidelity"]["attacks"] == "observed"
+    assert out["fidelity"]["complete"] is True
+    assert out["units"][0]["attacks"] == [1.234, 3.457]
+    assert out["units"][0]["aim"] == [1.234, 30.123, 40.568]
+    assert out["buildings"][0]["attacks"] == [5.679]
+    assert out["buildings"][0]["aim"] == [5.679, 60, 70]
+
+
+def test_v6_attacks_reject_malformed_or_out_of_lifetime_samples():
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "attacks": "observed", "complete": True}
+    pb["my_units"] = [_unit_with_track([(10, 20, 30)], id="4294967301", died=20,
+                                      attacks=[9, 12, True, float("nan"), 12, 19, 20, 21],
+                                      aim=[11, 50, 60, 12, 30, 40, 19, float("inf"), 40])]
+    pb["opp_units"] = []
+    out = _compact_map_playback(pb)
+    assert out["units"][0]["attacks"] == [12, 19]
+    assert out["units"][0]["aim"] == [12, 30, 40]
+    assert out["fidelity"]["complete"] is False
+
+
+def test_v6_attack_budget_preserves_both_sides_and_matching_aim(monkeypatch):
+    import sc2tools_agent.replay_pipeline as pipeline
+    monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS", 8)
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "attacks": "observed", "complete": True}
+    pb["my_units"] = [_unit_with_track([(0, 20, 30)], id="4294967301", attacks=list(range(10)),
+                                      aim=[v for t in range(10) for v in (t, 40, 50)])]
+    pb["opp_units"] = [_unit_with_track([(0, 20, 30)], id="4294967302", attacks=list(range(100, 110)),
+                                       aim=[v for t in range(100, 110) for v in (t, 40, 50)])]
+    out = pipeline._compact_map_playback(pb)
+    assert sum(len(u["attacks"]) for u in out["units"]) == 8
+    assert out["units"][0]["attacks"][::3] == [0, 9]
+    assert out["units"][1]["attacks"][::3] == [100, 109]
+    assert all(u["aim"][::3] == u["attacks"] for u in out["units"])
+    assert out["fidelity"]["complete"] is False
+
+
+@pytest.mark.parametrize("fidelity", [
+    {"positions": "tracker", "complete": True},
+    {"positions": "engine", "complete": True},
+    {"positions": "engine", "attacks": "unavailable", "complete": True},
+])
+def test_tracker_payload_does_not_promote_unverified_attack_fields(fidelity):
+    from sc2tools_agent.replay_pipeline import _compact_map_playback
+    pb = _sample_playback()
+    pb["fidelity"] = fidelity
+    pb["my_units"][0]["attacks"] = [10]
+    out = _compact_map_playback(pb)
+    assert "attacks" not in out["units"][0]
+    assert out["fidelity"].get("attacks") != "observed"
+
+
 def _wp_of(out, name="Stalker"):
     return next(u for u in out["units"] if u["name"] == name)["wp"]
 

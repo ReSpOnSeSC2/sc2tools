@@ -1,24 +1,8 @@
 /**
- * replayMotion — pure motion maths for the sprite map replayer.
- *
- * The playback payload stores SPARSE waypoints: the upload pipeline
- * enforces a 2.0 s minimum gap and caps a unit at 240 waypoints. Drawn
- * naively that reads as teleporting; drawn with plain lerp it reads as
- * robots turning square corners. Everything here turns those sparse
- * anchors into a continuous position + velocity signal that the sprite
- * layer can drive facing and animation from:
- *
- *   sampleTrack()        position AND velocity, speed-capped hold plus
- *                        clamped Catmull-Rom through the neighbours
- *   facingFromVelocity() world velocity → one of the sheet's 8 facings,
- *                        with hysteresis so units don't strobe
- *   animFrameIndex()     game-time driven frame, so animation speed
- *                        tracks the 1x/4x/8x/16x playback speed
- *   miningCycleSample()  the hall → patch → hall worker loop
- *
- * Pure and deterministic: same inputs → same output, no RNG, no state.
- * Every function writes into a caller-owned ``out`` object so a
- * 500-unit frame allocates nothing.
+ * Deterministic replay motion and sprite animation. Positions are sampled
+ * only from recorded observations. Long gaps hold the last observation.
+ * The legacy mining helper remains for isolated presentation demos; the
+ * replay viewer does not use it to move workers.
  */
 
 export interface MotionSample {
@@ -35,206 +19,45 @@ export function motionSample(): MotionSample {
 
 /* ──────────────── waypoint tweening ──────────────── */
 
-/**
- * How far a Catmull-Rom tangent may reach, as a multiple of the
- * segment's own chord.
- *
- * Catmull-Rom through far-apart neighbours overshoots wildly. Clamping
- * each endpoint tangent to ``TANGENT_CLAMP × |chord|`` bounds how far
- * the curve can leave the straight chord. In the Hermite basis the
- * deviation from the chord is exactly
- *
- *     smooth · [ −u(2u−1)(u−1)·chord + h10·mB + h11·mC ]
- *
- * whose three terms peak at 0.0962, 0.1481 and 0.1481 of their
- * coefficients, so
- *
- *     |deviation| ≤ (0.0962 + 0.2963 · TANGENT_CLAMP) · |chord|
- *
- * — 0.348 × chord at 0.85. Enough curvature to round a corner, far too
- * little to swing a unit off the map. (Harness measures 0.263.)
- */
-export const TANGENT_CLAMP = 0.85;
-
-/**
- * Interpolated world position AND velocity at game-second ``t``.
- *
- * Three behaviours compose, in this order:
- *
- * 1. **Speed-capped departure** (inherited from ``unitPositionAt``): a
- *    unit HOLDS its last known anchor — mining, building, sieged — and
- *    departs at the last moment that still arrives on time at
- *    ``maxSpeed``. Without this a worker parked at one base and seen
- *    again at another minutes later drifts across the map for the
- *    whole gap ("floating probes").
- * 2. **Clamped Catmull-Rom** over the part of the segment it is
- *    actually moving, with tangents taken from the NEIGHBOURING
- *    waypoints in real time units (non-uniform / Overhauser form, so
- *    unequal gaps don't produce speed jumps), each clamped to
- *    ``TANGENT_CLAMP × chord``.
- * 3. **Smoothing weight**: the more of a segment is spent holding, the
- *    less curve is applied — a unit that waits then dashes moved with
- *    purpose and should travel straight. ``smooth = effective/span``,
- *    so a continuously-moving unit gets the full curve and a
- *    hold-then-dash gets a straight line.
- *
- * Clamps before the first and after the last waypoint (velocity 0).
- * Returns null only for an empty track.
- *
- * Speed guarantee: positions still ARRIVE ON TIME, but the Hermite
- * eases in and out rather than running at a constant rate, so the
- * momentary speed can exceed the segment average. Evaluating
- * ``|d01| + |d10| + |d11|`` over u ∈ [0,1] caps that at exactly 2× the
- * segment average (worst case at u = 0.5, where the basis derivatives
- * are 1.5, −0.25, −0.25); a realistic speed-capped dash measures
- * ~1.11×. That is presentation, not simulation — the ease reads as
- * acceleration out of a stop.
- */
+/** Sparse tracker samples cannot establish the route through an unobserved
+ * interval. Only tween nearby observations; never fabricate a late dash,
+ * curve around a waypoint, or animate a teleport across the terrain. */
+export const MAX_INTERPOLATION_GAP_SEC = 2;
 export function sampleTrack(
   wp: readonly number[],
   t: number,
   maxSpeed: number | undefined,
   out: MotionSample,
 ): MotionSample | null {
-  const n = (wp.length / 3) | 0;
-  if (n < 1) return null;
+  const n = Math.floor(wp.length / 3);
+  if (n < 1 || !Number.isFinite(t)) return null;
   out.vx = 0;
   out.vy = 0;
-  if (n === 1 || t <= wp[0]) {
-    out.x = wp[1];
-    out.y = wp[2];
-    return out;
-  }
-  const lastBase = (n - 1) * 3;
-  if (t >= wp[lastBase]) {
-    out.x = wp[lastBase + 1];
-    out.y = wp[lastBase + 2];
-    return out;
-  }
-  // Binary search beats the old linear scan: 240 waypoints × 500 units
-  // × 60 fps is 7.2 M comparisons/second, and scrubbing breaks any
-  // forward-cursor trick anyway. log2(240) ≈ 8 steps instead.
   let lo = 0;
-  let hi = n - 1;
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1;
-    if (wp[mid * 3] <= t) lo = mid;
+  let hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (wp[mid * 3] <= t) lo = mid + 1;
     else hi = mid;
   }
-  const bB = lo * 3;
-  const bC = bB + 3;
-  const tB = wp[bB];
-  const xB = wp[bB + 1];
-  const yB = wp[bB + 2];
-  const tC = wp[bC];
-  const xC = wp[bC + 1];
-  const yC = wp[bC + 2];
-  const span = tC - tB;
-  if (!(span > 0)) {
-    out.x = xC;
-    out.y = yC;
-    return out;
-  }
-
-  const chordX = xC - xB;
-  const chordY = yC - yB;
-  const chord = Math.hypot(chordX, chordY);
-
-  let depart = tB;
-  if (maxSpeed !== undefined && Number.isFinite(maxSpeed) && maxSpeed > 0) {
-    depart = Math.max(tB, tC - chord / maxSpeed);
-  }
-  const eff = tC - depart;
-  if (eff <= 0 || t <= depart) {
-    // Still holding the anchor: parked, mining, building, sieged.
-    out.x = xB;
-    out.y = yB;
-    return out;
-  }
-  const u = (t - depart) / eff;
-
-  // Endpoint velocities from the neighbours, in world units/second.
-  // One-sided (the chord's own velocity) at the ends of the track.
-  let vBx: number;
-  let vBy: number;
-  let vCx: number;
-  let vCy: number;
-  if (lo > 0) {
-    const bA = bB - 3;
-    const dt = tC - wp[bA];
-    const inv = dt > 0 ? 1 / dt : 0;
-    vBx = (xC - wp[bA + 1]) * inv;
-    vBy = (yC - wp[bA + 2]) * inv;
-  } else {
-    vBx = chordX / span;
-    vBy = chordY / span;
-  }
-  if (lo + 2 < n) {
-    const bD = bC + 3;
-    const dt = wp[bD] - tB;
-    const inv = dt > 0 ? 1 / dt : 0;
-    vCx = (wp[bD + 1] - xB) * inv;
-    vCy = (wp[bD + 2] - yB) * inv;
-  } else {
-    vCx = chordX / span;
-    vCy = chordY / span;
-  }
-
-  // Neighbour velocities → Hermite tangents over u ∈ [0,1]: the chain
-  // rule gives dP/du = v · eff. Clamp each against the chord, then
-  // blend toward the chord itself by the smoothing weight, so that:
-  //
-  //   smooth = 1 (moving the whole segment) → full non-uniform
-  //     Catmull-Rom, rounding the corner through the neighbours;
-  //   smooth = 0 (a long hold then a short dash) → mB = mC = chord,
-  //     which is EXACTLY the straight constant-speed line the old
-  //     lerp drew. A unit that waited and then moved moved on purpose.
-  //
-  // Blending after the clamp keeps the smooth=0 case exactly straight
-  // (clamping it would reintroduce a slight ease), and the deviation
-  // bound simply scales by ``smooth``.
-  const smooth = eff / span;
-  const limit = TANGENT_CLAMP * chord;
-  let mBx = vBx * eff;
-  let mBy = vBy * eff;
-  let mCx = vCx * eff;
-  let mCy = vCy * eff;
-  const mB = Math.hypot(mBx, mBy);
-  if (mB > limit && mB > 0) {
-    const f = limit / mB;
-    mBx *= f;
-    mBy *= f;
-  }
-  const mC = Math.hypot(mCx, mCy);
-  if (mC > limit && mC > 0) {
-    const f = limit / mC;
-    mCx *= f;
-    mCy *= f;
-  }
-  if (smooth < 1) {
-    const rest = 1 - smooth;
-    mBx = mBx * smooth + chordX * rest;
-    mBy = mBy * smooth + chordY * rest;
-    mCx = mCx * smooth + chordX * rest;
-    mCy = mCy * smooth + chordY * rest;
-  }
-
-  const u2 = u * u;
-  const u3 = u2 * u;
-  const h00 = 2 * u3 - 3 * u2 + 1;
-  const h10 = u3 - 2 * u2 + u;
-  const h01 = -2 * u3 + 3 * u2;
-  const h11 = u3 - u2;
-  out.x = h00 * xB + h10 * mBx + h01 * xC + h11 * mCx;
-  out.y = h00 * yB + h10 * mBy + h01 * yC + h11 * mCy;
-
-  const d00 = 6 * u2 - 6 * u;
-  const d10 = 3 * u2 - 4 * u + 1;
-  const d01 = -6 * u2 + 6 * u;
-  const d11 = 3 * u2 - 2 * u;
-  const invEff = 1 / eff;
-  out.vx = (d00 * xB + d10 * mBx + d01 * xC + d11 * mCx) * invEff;
-  out.vy = (d00 * yB + d10 * mBy + d01 * yC + d11 * mCy) * invEff;
+  const i = Math.max(0, lo - 1) * 3;
+  out.x = wp[i + 1];
+  out.y = wp[i + 2];
+  if (lo === 0 || lo === n) return out;
+  const next = i + 3;
+  const dt = wp[next] - wp[i];
+  const dx = wp[next + 1] - out.x;
+  const dy = wp[next + 2] - out.y;
+  // Tracker positions use integer map cells; allow two cells of
+  // quantization without turning a recall/blink into a walk animation.
+  const limit = maxSpeed && maxSpeed > 0 ? maxSpeed : 14;
+  if (!(dt > 0) || dt > MAX_INTERPOLATION_GAP_SEC ||
+      Math.hypot(dx, dy) > limit * dt + 2) return out;
+  const f = (t - wp[i]) / dt;
+  out.x += dx * f;
+  out.y += dy * f;
+  out.vx = dx / dt;
+  out.vy = dy / dt;
   return out;
 }
 

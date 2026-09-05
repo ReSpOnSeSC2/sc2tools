@@ -8,6 +8,7 @@ filter that prevents noise (workers, larva, locusts, etc.) from polluting
 downstream feature extraction.
 """
 
+import math
 import sys
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -15,7 +16,7 @@ try:
     # Normal package import: the agent's process picks up
     # ``core.event_extractor`` through ``sys.path`` and the relative
     # import resolves against the loaded ``core`` package.
-    from .timebase import event_seconds, infer_fps
+    from .timebase import event_seconds, event_seconds_precise, infer_fps
 except ImportError:
     # ``_load_sc2ra_module`` (apps/agent/.../replay_pipeline.py) loads
     # this file via ``importlib.util.spec_from_file_location`` under a
@@ -23,7 +24,7 @@ except ImportError:
     # package, which breaks relative imports. Fall back to the
     # absolute path — at that point ``sys.path`` already contains
     # ``apps/replay-engine`` so ``core.timebase`` resolves.
-    from core.timebase import event_seconds, infer_fps  # type: ignore
+    from core.timebase import event_seconds, event_seconds_precise, infer_fps  # type: ignore
 
 try:
     from .build_definitions import PROXY_ELIGIBLE_BUILDINGS
@@ -1742,24 +1743,10 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 # ---------------------------------------------------------------------------
 # Unit movement tracks (for the playback viewer)
 # ---------------------------------------------------------------------------
-# Combine three sources to get plausible per-unit movement:
-#   1. UnitBornEvent / UnitInitEvent  -> initial position waypoint
-#   2. UnitPositionsEvent             -> true-position waypoints (sparse,
-#                                        only damaged units, every 15s)
-#   3. TargetPointCommandEvent + the issuing player's current selection
-#      (tracked from SelectionEvent)  -> destination-point waypoints
-#   4. UnitDiedEvent                  -> died_t (unit disappears)
-# The browser linearly interpolates between consecutive waypoints to render
-# each unit at the current scrub time.
-
-try:
-    from sc2reader.events.game import (
-        TargetPointCommandEvent as _TargetPointCommandEvent,
-        SelectionEvent as _SelectionEvent,
-    )
-except Exception:
-    _TargetPointCommandEvent = None
-    _SelectionEvent = None
+# Birth, tracker position and death events contain observed positions.
+# Command targets describe intent, NOT the unit's position when clicked.
+# Replays do not contain a simulation of every unit's route or mining cycle;
+# never mix destinations into the observation stream to invent one.
 
 try:
     from sc2reader.events.tracker import UnitPositionsEvent as _UnitPositionsEvent
@@ -1799,13 +1786,8 @@ _UNIT_NAME_ALIASES = {
     "BroodLord": "BroodLord",
 }
 
-# Skip workers + transient fluff. Overlord, Overseer, Queen STAY -- the
-# user wants more units rendered, not fewer.
-# Workers (Drone/Probe/SCV/MULE) are intentionally NOT skipped --
-# they're tracked so the viewer can show them mining + shuttling
-# between mineral patches and townhalls. Worker waypoints are
-# downsampled to 1Hz in extract_unit_tracks below to keep the
-# payload tame.
+# Exclude UI artifacts and spell actors; spell visuals have their own layer.
+# Workers are included, but only where the tracker actually observed them.
 _SKIP_FOR_TRACKING = {
     "Larva", "Egg",
     # Selection beacons (army/idle/scout/...) are sc2reader artifacts,
@@ -1824,27 +1806,39 @@ _SKIP_FOR_TRACKING = {
     "LocustMP", "LocustMPFlying",
     "Spray", "SprayProtoss", "SprayTerran", "SprayZerg",
     "BanelingNestCocoon", "GreaterSpireCocoon",
+    "KD8Charge", "ForceField", "OracleStasisTrap", "DisruptorPhased",
 }
 
 
 _WORKER_NAMES = {"Drone", "Probe", "SCV", "MULE"}
 
 
-def _downsample_waypoints_1hz(waypoints):
-    """Keep at most one waypoint per integer game-second (the latest one).
+def _playback_building_name(raw):
+    name = _clean_building_name(raw or "")
+    if name in KNOWN_BUILDINGS:
+        return name
+    for suffix in ("Uprooted", "Flying"):
+        if name.endswith(suffix) and name[:-len(suffix)] in KNOWN_BUILDINGS:
+            return name[:-len(suffix)]
+    return None
 
-    Workers accumulate a destination waypoint for every rally/mineral
-    click while selected (plus 15-second ``UnitPositionsEvent``
-    snapshots when damaged). For the viewer we only need
-    second-resolution snapshots; collapsing to 1 Hz keeps a long game's
-    worker waypoint count bounded without visible quality loss.
-    """
-    if not waypoints:
-        return waypoints
-    by_sec = {}
-    for (t, x, y) in waypoints:
-        by_sec[int(t)] = (float(t), float(x), float(y))
-    return [by_sec[k] for k in sorted(by_sec)]
+
+def _trackable_unit_name(raw):
+    raw = _clean_building_name(raw or "")
+    if (not raw or raw.startswith(("Beacon", "Spray"))
+            or raw in _SKIP_FOR_TRACKING or _playback_building_name(raw)):
+        return None
+    return _canonical_unit_name(raw)
+
+
+def _playback_position(event):
+    """Only event-local coordinates are safe; event.unit.location is final state."""
+    x, y = getattr(event, "x", None), getattr(event, "y", None)
+    if not isinstance(x, (float, int)) or not isinstance(y, (float, int)):
+        return None
+    if not math.isfinite(x) or not math.isfinite(y):
+        return None
+    return float(x), float(y)
 
 
 def _canonical_unit_name(raw):
@@ -1855,333 +1849,193 @@ def _canonical_unit_name(raw):
     return _UNIT_NAME_ALIASES.get(name, name)
 
 
-def _resolve_command_pid_simple(event):
-    pl = getattr(event, "player", None)
-    pid = getattr(pl, "pid", None) if pl is not None else None
-    if pid:
-        return pid
-    for attr in ("control_player_id", "upkeep_player_id"):
-        v = getattr(event, attr, None)
-        if v:
-            return v
-    return None
-
-
 def extract_unit_tracks(replay, my_pid):
-    """Walk the replay once and produce per-unit movement tracks.
+    """Observed positions and lifetimes, with time-local unit forms.
 
-    Returns ``{"my_units": [...], "opp_units": [...]}``. Each entry::
-
-        {"id": int, "name": str, "born": float, "died": float|None,
-         "killer_pid": int|None,   # None = death wasn't a kill (morph/merge)
-         "waypoints": [t0, x0, y0, t1, x1, y1, ...]}   # flat for compactness
-
-    Buildings and SKIP-listed units are filtered out.
+    Commands are destinations, never observations. Shared sc2reader Units
+    contain final state, so only event-local coordinates and names are safe.
     """
-    units = {}
-    selections = {}
-    # Tracker unit_id_index -> uid, mirroring sc2reader's engine
-    # (``replay.active_units``). ``UnitPositionsEvent.positions`` rows
-    # carry the INDEX portion of the unit id, not the full unit_id —
-    # resolving them against unit_id-keyed records silently drops every
-    # snapshot. Indexes are recycled after death, so this map must track
-    # every born/died event (including unit types we don't record) or a
-    # stale entry would misattribute the next occupant's positions.
-    active_index = {}
+    units, active_index, identities = {}, {}, {}
+    complete = True
 
-    tracker = getattr(replay, "tracker_events", None) or []
+    def add_position(rec, t, xy):
+        if xy is not None:
+            row = (t, xy[0], xy[1])
+            if rec["waypoints"] and rec["waypoints"][-1][0] == t:
+                rec["waypoints"][-1] = row
+            else:
+                rec["waypoints"].append(row)
+
+    def start_unit(uid, identity, t, name):
+        rec = {"name": name, "owner_pid": identity["pid"], "born": t,
+               "died": None, "killer_pid": None, "waypoints": [], "forms": []}
+        # Morph events have no location. Keep the previous observation's
+        # original timestamp instead of pretending it is a new measurement.
+        if identity.get("position") is not None:
+            rec["waypoints"].append(identity["position"])
+        units[uid] = rec
+        return rec
+
     try:
-        for ev in tracker:
+        for ev in (getattr(replay, "tracker_events", None) or []):
             try:
+                t = event_seconds_precise(ev, replay)
+                if not math.isfinite(t) or t < 0:
+                    complete = False
+                    continue
+                uid = _resolve_unit_id(ev)
                 if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
-                    uid = getattr(ev, "unit_id", None)
-                    if uid is None:
-                        u = getattr(ev, "unit", None)
-                        uid = getattr(u, "id", None) if u is not None else None
                     if uid is None:
                         continue
                     idx = getattr(ev, "unit_id_index", None)
                     if idx is not None:
                         active_index[idx] = uid
-                    pid = _get_owner_pid(ev)
+                    pid = getattr(ev, "control_pid", None)
+                    if pid is None:
+                        pid = _get_owner_pid(ev)
                     raw = _get_unit_type_name(ev)
-                    if pid is None or raw is None:
+                    xy = _playback_position(ev)
+                    identity = identities.setdefault(uid, {"pid": pid, "raw": raw})
+                    identity.update(pid=pid, raw=raw)
+                    if xy is not None:
+                        identity["position"] = (t, *xy)
+                    name = _trackable_unit_name(raw)
+                    if not isinstance(pid, int) or pid <= 0 or not name:
                         continue
-                    name = _canonical_unit_name(raw)
-                    if name in KNOWN_BUILDINGS:
-                        continue
-                    if name in _SKIP_FOR_TRACKING:
-                        continue
-                    t = float(event_seconds(ev, replay))
-                    x = float(getattr(ev, "x", 0) or 0)
-                    y = float(getattr(ev, "y", 0) or 0)
                     rec = units.get(uid)
                     if rec is None:
-                        units[uid] = {
-                            "name": name, "owner_pid": pid, "born": t,
-                            "died": None,
-                            "waypoints": ([(t, x, y)] if (x or y) else []),
-                        }
+                        start_unit(uid, identity, t, name)
                     else:
-                        rec["name"] = name
-                        rec["owner_pid"] = pid
-                        rec["born"] = min(rec["born"], t)
-                        if x or y:
-                            rec["waypoints"].append((t, x, y))
-
+                        add_position(rec, t, xy)
                 elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
-                    t = float(event_seconds(ev, replay))
-                    for (unit_index, (x, y)) in (getattr(ev, "positions", []) or []):
-                        uid = active_index.get(unit_index)
-                        rec = units.get(uid) if uid is not None else None
-                        if rec is None:
+                    for unit_index, (x, y) in (getattr(ev, "positions", []) or []):
+                        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (x, y)):
+                            complete = False
                             continue
-                        # Coordinates are map cells. (Pre-2014 builds have
-                        # 4-point RESOLUTION — rounded, not scaled — and
-                        # sc2reader already rescales those on load.)
-                        rec["waypoints"].append((t, float(x), float(y)))
-
+                        uid = active_index.get(unit_index)
+                        identity = identities.get(uid)
+                        if identity is not None:
+                            identity["position"] = (t, float(x), float(y))
+                        rec = units.get(uid)
+                        if rec is not None and rec["died"] is None:
+                            add_position(rec, t, (float(x), float(y)))
                 elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
-                    uid = getattr(ev, "unit_id", None)
-                    if uid is None:
-                        u = getattr(ev, "unit", None)
-                        uid = getattr(u, "id", None) if u is not None else None
                     idx = getattr(ev, "unit_id_index", None)
-                    if idx is not None:
+                    if idx is not None and active_index.get(idx) == uid:
                         active_index.pop(idx, None)
                     rec = units.get(uid)
-                    if rec is not None:
-                        t = float(event_seconds(ev, replay))
+                    if rec is not None and rec["died"] is None:
                         rec["died"] = t
-                        # Who killed it. ``None`` means the death was NOT
-                        # a kill: a Drone morphing into a structure, a
-                        # Templar pair merging into an Archon, a MULE
-                        # expiring. Downstream loss accounting needs this
-                        # to tell resources SPENT from resources LOST.
-                        rec["killer_pid"] = getattr(ev, "killer_pid", None)
-                        # The death event carries the exact position of the
-                        # dying unit — the one guaranteed-precise anchor a
-                        # replay gives us mid-game. Without it a unit dies
-                        # wherever interpolation happened to leave it.
-                        x = float(getattr(ev, "x", 0) or 0)
-                        y = float(getattr(ev, "y", 0) or 0)
-                        if x or y:
-                            rec["waypoints"].append((t, x, y))
-
+                        rec["killer_pid"] = (getattr(ev, "killing_player_id", None)
+                                             or getattr(ev, "killer_pid", None))
+                        add_position(rec, t, _playback_position(ev))
                 elif isinstance(ev, UnitTypeChangeEvent):
-                    uid = getattr(ev, "unit_id", None)
-                    if uid is None:
-                        u = getattr(ev, "unit", None)
-                        uid = getattr(u, "id", None) if u is not None else None
+                    identity = identities.get(uid)
+                    raw = getattr(ev, "unit_type_name", None)
+                    if identity is None or not raw:
+                        continue
+                    identity["raw"] = raw
                     rec = units.get(uid)
-                    raw = _get_unit_type_name(ev)
-                    if rec is not None and raw:
-                        c = _canonical_unit_name(raw)
-                        if c not in KNOWN_BUILDINGS and c not in _SKIP_FOR_TRACKING:
-                            rec["name"] = c
+                    name = _trackable_unit_name(raw)
+                    if _playback_building_name(raw):
+                        if rec is not None and rec["died"] is None:
+                            rec["died"] = t
+                            rec["killer_pid"] = None
+                    elif rec is not None and rec["died"] is None:
+                        form = name or _clean_building_name(raw)
+                        previous = rec["forms"][-1]["name"] if rec["forms"] else rec["name"]
+                        if form != previous:
+                            rec["forms"].append({"t": round(t, 3), "name": form})
+                    elif name and isinstance(identity.get("pid"), int) and identity["pid"] > 0:
+                        start_unit(uid, identity, t, name)
             except Exception:
-                continue
+                complete = False
     except Exception:
-        pass
-
-    # Game-event pass: track selection + emit destination waypoints.
-    if _TargetPointCommandEvent is not None and _SelectionEvent is not None:
-        for ev in (getattr(replay, "events", None) or []):
-            try:
-                if isinstance(ev, _SelectionEvent):
-                    if getattr(ev, "control_group", -1) != 10:
-                        continue
-                    pid = _resolve_command_pid_simple(ev)
-                    if not pid:
-                        continue
-                    new_ids = list(getattr(ev, "new_unit_ids", []) or [])
-                    if new_ids:
-                        selections[pid] = set(new_ids)
-                    continue
-                if isinstance(ev, _TargetPointCommandEvent):
-                    pid = _resolve_command_pid_simple(ev)
-                    if not pid:
-                        continue
-                    sel = selections.get(pid)
-                    if not sel:
-                        continue
-                    t = float(event_seconds(ev, replay))
-                    x = float(getattr(ev, "x", 0) or 0)
-                    y = float(getattr(ev, "y", 0) or 0)
-                    if not (x or y):
-                        continue
-                    for uid in sel:
-                        rec = units.get(uid)
-                        if rec is None or rec.get("owner_pid") != pid:
-                            continue
-                        if rec.get("died") is not None and t > rec["died"]:
-                            continue
-                        rec["waypoints"].append((t, x, y))
-            except Exception:
-                continue
+        complete = False
 
     my_units, opp_units = [], []
     for uid, rec in units.items():
-        wps = rec["waypoints"]
-        if not wps:
+        if not rec["waypoints"]:
             continue
-        wps.sort(key=lambda p: p[0])
-        is_worker = rec["name"] in _WORKER_NAMES
-        # Workers shuttle mineral->base->mineral every ~6s and fire
-        # UnitPositionsEvent every game tick. Downsample to 1Hz so the
-        # per-tick noise compresses to one waypoint per game-second.
-        # Non-workers use the original "skip if barely moved" compaction
-        # so combat micro and unit pathing stay visible.
-        if is_worker:
-            wps = _downsample_waypoints_1hz(wps)
-            compact = wps
-        else:
-            compact = [wps[0]]
-            for (t, x, y) in wps[1:]:
-                (pt, px, py) = compact[-1]
-                if abs(x - px) < 0.5 and abs(y - py) < 0.5 and (t - pt) < 30:
-                    continue
-                compact.append((t, x, y))
         flat = []
-        for (t, x, y) in compact:
-            flat.extend([round(t, 2), round(x, 2), round(y, 2)])
+        # Stationary observations prove the unit had not moved yet. Do not
+        # decimate them or a later move starts retroactively at its birth.
+        for t, x, y in rec["waypoints"]:
+            flat.extend((round(t, 3), round(x, 3), round(y, 3)))
         out = {
-            "id": uid,
-            "name": rec["name"],
-            "is_worker": is_worker,
-            "born": round(rec["born"], 2),
-            "died": (round(rec["died"], 2) if rec["died"] is not None else None),
-            "killer_pid": rec.get("killer_pid"),
-            "waypoints": flat,
+            "id": uid, "name": rec["name"],
+            "is_worker": rec["name"] in _WORKER_NAMES,
+            "born": round(rec["born"], 3),
+            "died": round(rec["died"], 3) if rec["died"] is not None else None,
+            "killer_pid": rec.get("killer_pid"), "waypoints": flat,
         }
+        if rec["forms"]:
+            out["forms"] = rec["forms"]
         (my_units if rec["owner_pid"] == my_pid else opp_units).append(out)
-
-    return {"my_units": my_units, "opp_units": opp_units}
-
-
-_LIFTABLE_BUILDINGS = {
-    "CommandCenter", "OrbitalCommand", "Barracks", "Factory", "Starport",
-}
-
-
-def _is_land_ability(name):
-    """Terran lift-off Land commands ("Land", "LandCommandCenter",
-    "BarracksLand", …). Deliberately strict — rally points are also
-    TargetPointCommands issued with a hall selected and must never
-    read as a relocation."""
-    if not name:
-        return False
-    n = str(name).lower()
-    return n.startswith("land") or n.endswith("land")
+    return {"my_units": my_units, "opp_units": opp_units, "complete": complete}
 
 
 def extract_building_lifecycle(replay):
-    """Authoritative per-building lifecycle keyed off the tracker.
+    """Building lifetimes and positions observed by the replay tracker.
 
-    Returns ``{pid: [{name, born, x, y, moves, died}]}`` where
-    ``moves`` is a flat ``[t, x, y, …]`` of lift-off LANDING points.
-    Placement events alone put a flown Command Center at its
-    construction site forever — the viewer then shows no hall at the
-    expansion it actually sits on, and every SCV there loses its
-    mining anchor. The Land command's target point is the exact
-    landing spot, so tracking it (against the player's live
-    selection) pins relocated buildings where they really are.
-    ``died`` clears destroyed structures at the recorded second.
+    Landing commands can fail or be cancelled. They are never proof that a
+    building moved. Initial construction, tracker snapshots and death
+    coordinates are the only location sources used here.
     """
-    buildings = {}
-    tracker = getattr(replay, "tracker_events", None) or []
-    for ev in tracker:
+    buildings, active_index = {}, {}
+    for ev in (getattr(replay, "tracker_events", None) or []):
         try:
+            uid = _resolve_unit_id(ev)
+            t = event_seconds_precise(ev, replay)
             if isinstance(ev, (UnitBornEvent, UnitInitEvent)):
-                pid = _get_owner_pid(ev)
+                idx = getattr(ev, "unit_id_index", None)
+                if idx is not None:
+                    active_index[idx] = uid
+                pid = getattr(ev, "control_pid", None)
+                if pid is None:
+                    pid = _get_owner_pid(ev)
                 raw = _get_unit_type_name(ev)
-                if pid is None or raw is None:
+                name = _playback_building_name(raw)
+                xy = _playback_position(ev)
+                if uid is None or not pid or not name or xy is None:
                     continue
-                name = _clean_building_name(raw)
-                if name not in KNOWN_BUILDINGS:
-                    continue
-                uid = getattr(ev, "unit_id", None)
-                if uid is None:
-                    continue
-                x = float(getattr(ev, "x", 0) or 0)
-                y = float(getattr(ev, "y", 0) or 0)
                 if uid not in buildings:
                     buildings[uid] = {
-                        "pid": pid, "name": name,
-                        "born": float(event_seconds(ev, replay)),
-                        "x": x, "y": y, "moves": [], "died": None,
+                        "id": uid, "pid": pid, "name": name,
+                        "born": round(t, 3), "x": xy[0], "y": xy[1],
+                        "moves": [], "died": None, "forms": [],
                     }
+            elif _UnitPositionsEvent is not None and isinstance(ev, _UnitPositionsEvent):
+                for idx, (x, y) in (getattr(ev, "positions", []) or []):
+                    rec = buildings.get(active_index.get(idx))
+                    if rec is not None and rec["died"] is None and all(math.isfinite(v) for v in (x, y)):
+                        rec["moves"].extend((round(t, 3), float(x), float(y)))
             elif isinstance(ev, UnitTypeChangeEvent):
-                uid = getattr(ev, "unit_id", None)
                 rec = buildings.get(uid)
-                raw = _get_unit_type_name(ev)
-                if rec is None or not raw:
-                    continue
-                name = _clean_building_name(raw)
-                # Morph upgrades (CommandCenter -> OrbitalCommand,
-                # Hatchery -> Lair) rename the record; transient
-                # flying states do not.
-                if name in KNOWN_BUILDINGS and "Flying" not in raw:
-                    rec["name"] = name
+                raw = getattr(ev, "unit_type_name", None)
+                if rec is not None and raw:
+                    name = _clean_building_name(raw)
+                    previous = rec["forms"][-1]["name"] if rec["forms"] else rec["name"]
+                    if name != previous:
+                        rec["forms"].append({"t": round(t, 3), "name": name})
             elif UnitDiedEvent is not None and isinstance(ev, UnitDiedEvent):
-                uid = getattr(ev, "unit_id", None)
+                idx = getattr(ev, "unit_id_index", None)
+                if idx is not None and active_index.get(idx) == uid:
+                    active_index.pop(idx, None)
                 rec = buildings.get(uid)
                 if rec is not None:
-                    rec["died"] = float(event_seconds(ev, replay))
+                    rec["died"] = round(t, 3)
+                    xy = _playback_position(ev)
+                    if xy is not None:
+                        rec["moves"].extend((round(t, 3), *xy))
         except Exception:
             continue
-
-    # Game-event pass: live selection per player -> Land target points.
-    if _TargetPointCommandEvent is not None and _SelectionEvent is not None:
-        selections = {}
-        for ev in (getattr(replay, "events", None) or []):
-            try:
-                if isinstance(ev, _SelectionEvent):
-                    if getattr(ev, "control_group", -1) != 10:
-                        continue
-                    pid = _resolve_command_pid_simple(ev)
-                    if not pid:
-                        continue
-                    new_ids = list(getattr(ev, "new_unit_ids", []) or [])
-                    if new_ids:
-                        selections[pid] = set(new_ids)
-                    continue
-                if isinstance(ev, _TargetPointCommandEvent):
-                    if not _is_land_ability(getattr(ev, "ability_name", None)):
-                        continue
-                    pid = _resolve_command_pid_simple(ev)
-                    sel = selections.get(pid)
-                    if not pid or not sel:
-                        continue
-                    t = float(event_seconds(ev, replay))
-                    x = float(getattr(ev, "x", 0) or 0)
-                    y = float(getattr(ev, "y", 0) or 0)
-                    if not (x or y):
-                        continue
-                    for uid in sel:
-                        rec = buildings.get(uid)
-                        if rec is None or rec["pid"] != pid:
-                            continue
-                        if rec["name"] not in _LIFTABLE_BUILDINGS:
-                            continue
-                        if rec["died"] is not None and t > rec["died"]:
-                            continue
-                        rec["moves"].extend(
-                            [round(t, 1), round(x, 1), round(y, 1)],
-                        )
-            except Exception:
-                continue
-
     out = {}
     for rec in buildings.values():
-        out.setdefault(rec["pid"], []).append({
-            "name": rec["name"],
-            "born": rec["born"],
-            "x": rec["x"],
-            "y": rec["y"],
-            "moves": rec["moves"],
-            "died": rec["died"],
-        })
+        pid = rec.pop("pid")
+        if not rec["forms"]:
+            rec.pop("forms")
+        out.setdefault(pid, []).append(rec)
     return out
 
 

@@ -669,7 +669,7 @@ describe("validateGameRecord — mapPlayback casts (v5)", () => {
   });
 
   test("bounds the casts array", () => {
-    const tooMany = Array.from({ length: 801 }, () => ({
+    const tooMany = Array.from({ length: 2001 }, () => ({
       o: 0,
       a: "ChronoBoost",
       t: 1,
@@ -677,7 +677,7 @@ describe("validateGameRecord — mapPlayback casts (v5)", () => {
     const r = validateGameRecord(withPlayback({ ...BASE_PLAYBACK, casts: tooMany }));
     expect(r.valid).toBe(false);
 
-    const atCap = Array.from({ length: 800 }, () => ({
+    const atCap = Array.from({ length: 2000 }, () => ({
       o: 0,
       a: "ChronoBoost",
       t: 1,
@@ -685,5 +685,51 @@ describe("validateGameRecord — mapPlayback casts (v5)", () => {
     expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, casts: atCap })).valid).toBe(
       true,
     );
+  });
+});
+
+describe("validateGameRecord observed replay payloads", () => {
+  test("preserves observed attacks on units and defensive structures", () => {
+    const mapPlayback = {
+      ...BASE_PLAYBACK, v: 6,
+      fidelity: { positions: "engine", attacks: "observed", complete: true },
+      units: [{ id: "4294967301", name: "Marine", attacks: [10.125, 11.375], aim: [10.125, 20, 30] }],
+      buildings: [{ id: "4294967302", name: "PhotonCannon", attacks: [10.75], aim: [10.75, 40, 50] }],
+    };
+    const result = validateGameRecord(withPlayback(mapPlayback));
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(/** @type {any} */ (result.value).mapPlayback).toEqual(mapPlayback);
+  });
+
+  test.each([
+    { attacks: ["10.5"] },
+    { attacks: [-1] },
+    { attacks: Array.from({ length: 16385 }, () => 10) },
+    { aim: [10, "unknown", 20] },
+  ])("rejects malformed or oversized observed attacks: %j", (unit) => {
+    expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, units: [unit] })).valid).toBe(false);
+  });
+
+  test("preserves v6 observation identities, forms and spell references", () => {
+    const mapPlayback = {
+      ...BASE_PLAYBACK,
+      v: 6,
+      fidelity: { positions: "engine", paths: "observed", creep: "observed", complete: true },
+      units: [{ id: "18446744073709551615", owner: "me", name: "Zergling", born: 0.045,
+        died: null, wp: [0.045, 20, 30, 0.089, 21, 30],
+        forms: [{ t: 10.2, name: "Baneling" }], hidden: [3, 4] }],
+      casts: [{ o: 0, a: "Stim", t: 1.234, casterUnitIds: [4194305] }],
+      creep: { width: 2, height: 2, encoding: "rle", frames: [{ t: 0, runs: [1, 2] }] },
+    };
+    const result = validateGameRecord(withPlayback(mapPlayback));
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(/** @type {any} */ (result.value).mapPlayback).toEqual(mapPlayback);
+  });
+
+  test("accepts the v6 unit budget and rejects overflow", () => {
+    const units = Array.from({ length: 4000 }, (_, i) => ({ id: i + 1, wp: [0, 20, 30] }));
+    expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, v: 6, units })).valid).toBe(true);
+    units.push({ id: 4001, wp: [0, 20, 30] });
+    expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, v: 6, units })).valid).toBe(false);
   });
 });

@@ -2,6 +2,7 @@
 
 const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
+const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -378,6 +379,14 @@ function attachSocketAuth(io, opts) {
     if (socket.data.kind === "device") {
       const u = socket.data.userId;
       if (u) socket.join(`user:${u}`);
+      socket.on("map-playback:status", (payload) => {
+        if (!u || !payload || typeof payload.gameId !== "string" || typeof payload.requestId !== "string") return;
+        // A device can only update an existing request in its authenticated
+        // user's namespace. Request IDs reject stale or unsolicited updates.
+        if (updatePlaybackJob(u, payload.gameId, payload.requestId, payload, socket.id)) {
+          io.to(`user:${u}`).emit("map-playback:status", payload);
+        }
+      });
       // The agent emits this once per startup so the cloud can mark
       // the device as "online" and surface that in the dashboard.
       socket.emit("device:hello", { ok: true });

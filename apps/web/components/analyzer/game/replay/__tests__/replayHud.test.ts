@@ -157,6 +157,19 @@ describe("derived production queue", () => {
     expect(q.units.map((g) => g.name)).not.toContain("SpawningPool");
   });
 
+  it("starts observed structures at placement and removes cancelled construction", () => {
+    const observed = deriveReplayHud(payload({ v: 6, buildings: [
+      { owner: "me", name: "Nexus", t: 0, x: 10, y: 10, moves: [], died: null },
+      { owner: "me", name: "Pylon", t: 40, x: 15, y: 15, moves: [], died: 45 },
+      { owner: "me", name: "Gateway", t: 60, x: 18, y: 18, moves: [], died: null },
+    ] }));
+    expect(productionAt(observed, "me", 0).structures).toEqual([]);
+    expect(productionAt(observed, "me", 41).structures.map((g) => g.name)).toEqual(["Pylon"]);
+    expect(productionAt(observed, "me", 46).structures).toEqual([]);
+    expect(productionAt(observed, "me", 61).structures.map((g) => g.name)).toEqual(["Gateway"]);
+    expect(supplyCapAt(observed, "me", 100)).toBe(15 + 8); // initial Nexus and fixture Overlord; cancelled Pylon gives none
+  });
+
   it("never yields a negative start time", () => {
     for (const side of ["me", "opp"] as const) {
       for (const item of model.production[side]) {

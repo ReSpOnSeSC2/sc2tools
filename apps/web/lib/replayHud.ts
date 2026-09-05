@@ -47,6 +47,7 @@ import {
   isWorkerUnit,
   statsAt,
   unitAliveAt,
+  unitNameAt,
   unitPositionAt,
   type MapPlayback,
   type PlaybackUnit,
@@ -55,6 +56,13 @@ import {
 import { morphConsumedIndices, unitCost } from "./mapReplayLosses";
 
 export type ReplaySide = "me" | "opp";
+
+/** These are real map entities, but are not completed army units or production. */
+const TRANSIENT_FORMS = new Set([
+  "Larva", "Egg", "BanelingCocoon", "RavagerCocoon", "LurkerCocoon", "LurkerMPEgg",
+  "BroodLordCocoon", "OverseerCocoon", "TransportOverlordCocoon", "OverlordTransportCocoon",
+  "AdeptPhaseShift", "DisruptorPhased", "KD8Charge", "ForceField", "OracleStasisTrap",
+]);
 
 /* ──────────────── formatting ──────────────── */
 
@@ -437,14 +445,16 @@ export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
    * row so a Zergling pair reads as one line. */
   const raw: Array<Omit<BuildOrderEntry, "key" | "count" | "supply">> = [];
   for (const u of playback.units) {
-    if (!u.name) continue;
-    raw.push({
-      owner: u.owner,
-      kind: "unit",
-      name: u.name,
-      t: u.born,
-      isWorker: isWorkerUnit(u.name),
-    });
+    for (const form of [{ t: u.born, name: u.name }, ...(u.forms ?? [])]) {
+      if (!form.name || TRANSIENT_FORMS.has(form.name) || buildSeconds(form.name, "unit") === null) continue;
+      raw.push({
+        owner: u.owner,
+        kind: "unit",
+        name: form.name,
+        t: form.t,
+        isWorker: isWorkerUnit(form.name),
+      });
+    }
   }
   for (const b of playback.buildings) {
     if (!b.name) continue;
@@ -511,30 +521,36 @@ export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
   }
 
   /* ── derived production queue ──
-   * DERIVED: start = finish − known build time. A name with no build
+   * Unit completion gives an estimated start from its build time.
+   * v6 structures first appear at construction start, so their estimate
+   * runs forward from that observation. A name with no build
    * time (Larva, Egg, Broodling, Locust, MULE, Interceptor) is not
    * something a player queues, so it never enters the queue. */
   const production: Record<ReplaySide, ProductionItem[]> = { me: [], opp: [] };
   for (const u of playback.units) {
-    const dur = buildSeconds(u.name, "unit");
-    if (dur === null) continue;
-    production[u.owner].push({
-      owner: u.owner,
-      kind: "unit",
-      name: u.name,
-      start: Math.max(0, u.born - dur),
-      finish: u.born,
-    });
+    for (const form of [{ t: u.born, name: u.name }, ...(u.forms ?? [])]) {
+      const dur = buildSeconds(form.name, "unit");
+      if (dur === null) continue;
+      production[u.owner].push({
+        owner: u.owner,
+        kind: "unit",
+        name: form.name,
+        start: Math.max(0, form.t - dur),
+        finish: form.t,
+      });
+    }
   }
   for (const b of playback.buildings) {
     const dur = buildSeconds(b.name, "structure");
-    if (dur === null) continue;
+    if (dur === null || b.t === 0) continue;
+    const start = playback.v >= 6 ? b.t : Math.max(0, b.t - dur);
+    const finish = playback.v >= 6 ? b.t + dur : b.t;
     production[b.owner].push({
       owner: b.owner,
       kind: "structure",
       name: b.name,
-      start: Math.max(0, b.t - dur),
-      finish: b.t,
+      start,
+      finish: b.died === null ? finish : Math.min(finish, b.died),
     });
   }
   production.me.sort((a, b) => a.start - b.start);
@@ -551,14 +567,20 @@ export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
   for (const b of playback.buildings) {
     const give = SUPPLY_PROVIDED[b.name];
     if (!give) continue;
-    deltas[b.owner].push([b.t, give]);
+    const ready = playback.v >= 6 && b.t > 0
+      ? b.t + (buildSeconds(b.name, "structure") ?? 0) : b.t;
+    if (b.died !== null && b.died <= ready) continue;
+    deltas[b.owner].push([ready, give]);
     if (b.died !== null) deltas[b.owner].push([b.died, -give]);
   }
   for (const u of playback.units) {
-    const give = SUPPLY_PROVIDED[u.name];
-    if (!give) continue;
-    deltas[u.owner].push([u.born, give]);
-    if (u.died !== null) deltas[u.owner].push([u.died, -give]);
+    let previous = 0;
+    for (const form of [{ t: u.born, name: u.name }, ...(u.forms ?? [])]) {
+      const give = SUPPLY_PROVIDED[form.name] ?? 0;
+      if (give !== previous) deltas[u.owner].push([form.t, give - previous]);
+      previous = give;
+    }
+    if (u.died !== null && previous) deltas[u.owner].push([u.died, -previous]);
   }
   for (const side of ["me", "opp"] as const) {
     deltas[side].sort((a, b) => a[0] - b[0]);
@@ -585,7 +607,7 @@ export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
     // Same gate ``computeLosses`` uses: an unpriced name (Larva, Egg,
     // Broodling, Interceptor) is not a loss, so the HUD's kill count
     // and the replayer's own loss panel agree to the unit.
-    const cost = unitCost(u.name);
+    const cost = unitCost(unitNameAt(u, u.died));
     if (!cost) return;
     const pos = unitPositionAt(u.wp, u.died) ?? { x: 0, y: 0 };
     deathRows[u.owner].push({
@@ -906,12 +928,14 @@ export function compositionAt(
   for (const i of model.unitIndex[owner]) {
     const u = model.units[i];
     if (!unitAliveAt(u, t)) continue;
-    if (isWorkerUnit(u.name)) {
-      if (u.name !== "MULE") workers += 1;
+    const name = unitNameAt(u, t);
+    if (TRANSIENT_FORMS.has(name)) continue;
+    if (isWorkerUnit(name)) {
+      if (name !== "MULE") workers += 1;
       continue;
     }
     armyCount += 1;
-    counts.set(u.name, (counts.get(u.name) ?? 0) + 1);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   const army = [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
@@ -931,7 +955,8 @@ export function structuresAt(
     if (b.owner !== owner) continue;
     if (b.t > t) continue;
     if (b.died !== null && b.died <= t) continue;
-    counts.set(b.name, (counts.get(b.name) ?? 0) + 1);
+    const name = unitNameAt(b, t);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts.entries()]
     .map(([name, count]) => ({ name, count }))

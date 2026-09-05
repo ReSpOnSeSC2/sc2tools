@@ -49,10 +49,12 @@ import {
   buildingPositionAt,
   projectX,
   projectY,
-  unitAliveAt,
+  unitVisibleAt,
+  unitNameAt,
   unitMaxSpeed,
   type MapPlayback,
   type PlaybackBounds,
+  type ReplayObservedEffect,
 } from "@/lib/mapReplay";
 import { motionSample, phaseOffset, sampleTrack, type MotionSample } from "@/lib/replayMotion";
 
@@ -118,8 +120,8 @@ export interface SpellEffectSpec {
   z: SpellLayer;
   /** Anchor kind for missing coordinates and for following. */
   anchor: SpellAnchor;
-  /** Names that can host this ability, most likely first. Used to pin a
-   * cast with no coordinates, and (for ``beam``) to find the caster. */
+  /** Caster types, documented for the effect catalogue. Entity placement
+   * uses recorded IDs exclusively; this list never selects a host. */
   from?: readonly string[];
   /** Track the anchor entity while the effect lives, instead of sitting
    * at a frozen point. Only sensible for short unit-local effects. */
@@ -241,6 +243,8 @@ export const SPELL_EFFECTS: Readonly<Record<string, SpellEffectSpec>> = {
   // about where it landed: anchor "none", drawn only when placed.
   Contaminate:      { prim: "aura",    r: 2.6,  lead: 0,    life: 12,  color: NEURAL_PINK, alpha: 0.45, z: "ground",  anchor: "none" },
   InfestedTerran:   { prim: "pulse",   r: 1.5,  lead: 0,    life: 2,   color: CREEP_GREEN, alpha: 0.55, z: "overlay", anchor: "none",     from: INFESTOR },
+  Transfusion:      { prim: "pulse",   r: 1.8,  lead: 0,    life: 1.3, color: CREEP_GREEN, alpha: 0.75, z: "overlay", anchor: "none",     from: ["Queen"] },
+  SpawnLarva:       { prim: "aura",    r: 2.6,  lead: 0,    life: 2,   color: CREEP_GREEN, alpha: 0.5,  z: "ground",  anchor: "none",     from: ["Queen"] },
 };
 
 /**
@@ -293,15 +297,6 @@ const MIN_EFFECT_SCREEN_PX = 5;
 const MAX_LAYER_ALPHA = 2.2;
 /** Hard cap on simultaneously drawn effects; the most recent win. */
 const MAX_ACTIVE_EFFECTS = 48;
-/** How close (world units) a candidate entity must be to a cast's own
- * coordinates to be accepted as the thing the effect SITS ON. Beyond
- * this the cast keeps its point and simply does not follow anything. */
-const ANCHOR_SNAP_WORLD = 6;
-/** How far (world units) to look for the CASTER that a beam or a lobbed
- * projectile comes from. Wider than the snap because casters stand off:
- * a Ravager biles from 9, a Battlecruiser Yamatos from 10. The nearest
- * live candidate of the right type is the one that fired. */
-const CASTER_SEARCH_WORLD = 14;
 /** Lightning re-rolls per game second. Quantising to a tick is what
  * makes the crackle deterministic under scrubbing. */
 const CRACKLE_HZ = 14;
@@ -311,7 +306,7 @@ const STAMP_PX = 128;
 /** Owner tint, mirroring MapReplayer's ME_ARMY / OPP_ARMY. Duplicated
  * rather than imported because the component does not export them and
  * this module must not depend on the component. */
-const OWNER_COLOR = ["#3ec0c7", "#e05656"] as const;
+const OWNER_COLOR = ["#3ec0c7", "#e05656", "#bbc6d6"] as const;
 
 let enabled: boolean = SPELL_EFFECTS_ENABLED;
 /**
@@ -355,6 +350,8 @@ export function setSpellEffectsEnabled(on: boolean): void {
  *    • sort by cast time so the active window is a binary search.
  * ════════════════════════════════════════════════════════════════════ */
 
+interface EntityRef { index: number; building: boolean }
+
 interface CastTable {
   /** Cast times, ascending. The binary search runs on this. */
   t: Float64Array;
@@ -369,8 +366,11 @@ interface CastTable {
   y: Float64Array;
   /** Host entity index, or -1. Positive = index into ``units`` when
    * ``hostIsBuilding`` is 0, into ``buildings`` when it is 1. */
-  host: Int32Array;
-  hostIsBuilding: Uint8Array;
+  host: Array<EntityRef | null>;
+  caster: Array<EntityRef | null>;
+  casterId: Array<number | string | undefined>;
+  cx: Float64Array;
+  cy: Float64Array;
   /** Placement state: 0 = not resolved yet, 1 = placed, 2 = no honest
    * position exists, skip forever. See ``ensureResolved``. */
   state: Uint8Array;
@@ -378,86 +378,115 @@ interface CastTable {
    * the crackle/arc hashes are seeded from, and what the harness
    * compares a naive filter against. */
   src: Int32Array;
+  observed: Int32Array;
   n: number;
   /** ``owner|name`` → entity indices, built on first use. Only payloads
    * that actually need a host pay for them. */
-  unitsByName: Map<string, number[]> | null;
-  buildingsByName: Map<string, number[]> | null;
+  entities: Map<string, EntityRef[]> | null;
 }
 
 const castCache = new WeakMap<MapPlayback, CastTable | null>();
 
 /** Cheap ``owner|name`` → indices index, so host resolution is a map
  * lookup and a short scan instead of a pass over 1200 units per cast. */
-function nameIndex(
-  items: ReadonlyArray<{ owner: "me" | "opp"; name: string }>,
-): Map<string, number[]> {
-  const m = new Map<string, number[]>();
-  for (let i = 0; i < items.length; i += 1) {
-    const key = `${items[i].owner === "me" ? 0 : 1}|${items[i].name}`;
-    const bucket = m.get(key);
-    if (bucket) bucket.push(i);
-    else m.set(key, [i]);
-  }
-  return m;
-}
+const FOLLOW_TARGET = new Set([
+  "ChronoBoost", "GravitonBeam", "Snipe", "Yamato", "InterferenceMatrix",
+  "Lockdown", "ParasiticBomb", "CausticSpray", "Abduct", "NeuralParasite",
+  "Contaminate", "Transfusion", "SpawnLarva", "SupplyDrop",
+]);
+const SELF_EFFECTS = new Set([
+  "Stim", "Burrow", "Unburrow", "GuardianShield", "PulsarBeam", "SpawnChangeling", "Salvage",
+]);
 
 const buildSample: MotionSample = motionSample();
 
+/** Stable SC2 raw effect IDs. The engine's observed radius/lifetime wins
+ * over the command catalogue's illustrative timings. */
+const OBSERVED_SLUGS: Readonly<Record<number, string>> = {
+  1: "PsiStorm", 2: "GuardianShield", 3: "TimeWarp", 4: "TimeWarp",
+  5: "ThermalLance", 6: "ScannerSweep", 7: "Nuke",
+  8: "LiberatorZone", 9: "LiberatorZone", 10: "BlindingCloud",
+  11: "CorrosiveBile", 12: "LurkerSpines",
+};
+const OBSERVED_COMMAND_SLUGS = new Set(Object.values(OBSERVED_SLUGS));
+
+function observedSlug(effect: ReplayObservedEffect): string {
+  return OBSERVED_SLUGS[effect.id] ?? effect.name;
+}
+
+function observedSpec(effect: ReplayObservedEffect): SpellEffectSpec {
+  const slug = observedSlug(effect);
+  const base = SPELL_EFFECTS[slug] ?? UNKNOWN_EFFECT!;
+  return {
+    ...base,
+    // A live raw effect is already present. Never predict its impact.
+    prim: effect.id === 7 ? "pulse" : effect.id === 11 ? "field" : base.prim,
+    // Bile CP is the observed target marker, visible above the units or
+    // buildings it threatens; it is not a predicted ground impact.
+    z: effect.id === 11 ? "overlay" : base.z,
+    r: effect.radius, lead: 0, life: effect.end - effect.t,
+    fi: 0, fo: 0, follow: false, anchor: "none",
+  };
+}
+
 function buildCastTable(playback: MapPlayback): CastTable | null {
-  const casts = playback.casts;
-  if (!casts || casts.length === 0) return null;
-
-  // Sort indices by cast time; the wire order is usually already
-  // ascending, so this is near-free, but the binary search needs the
-  // guarantee, not the likelihood.
-  const order: number[] = new Array(casts.length);
-  for (let i = 0; i < casts.length; i += 1) order[i] = i;
-  order.sort((a, b) => casts[a].t - casts[b].t);
-
-  const t: number[] = [];
-  const span: number[] = [];
-  const spec: SpellEffectSpec[] = [];
-  const owner: number[] = [];
-  const src: number[] = [];
-  let maxSpan = 0;
-
-  for (const si of order) {
+  const casts = playback.casts ?? [];
+  const observed = playback.effects ?? [];
+  if (!casts.length && !observed.length) return null;
+  const entries: Array<{
+    t: number; span: number; spec: SpellEffectSpec; owner: number;
+    src: number; observed: number; casterId?: number | string;
+  }> = [];
+  const observedBySlug = new Map<string, ReplayObservedEffect[]>();
+  for (let oi = 0; oi < observed.length; oi += 1) {
+    const e = observed[oi];
+    if (![e.t, e.end, e.x, e.y, e.radius].every(Number.isFinite) || e.end <= e.t) continue;
+    const s = observedSpec(e);
+    entries.push({ t: e.t, span: s.life, spec: s, owner: e.owner === "neutral" ? 2 : e.owner === "opp" ? 1 : 0, src: -1 - oi, observed: oi });
+    const slug = observedSlug(e);
+    const bucket = observedBySlug.get(slug) ?? [];
+    bucket.push(e);
+    observedBySlug.set(slug, bucket);
+  }
+  for (let si = 0; si < casts.length; si += 1) {
     const c = casts[si];
+    if (!Number.isFinite(c.t)) continue;
     const known = SPELL_EFFECTS[c.a];
     const s = known ?? UNKNOWN_EFFECT;
-    // Unknown slug with no table entry and no coordinates: nothing
-    // honest to draw, and nothing to look it up by. Drop it here, so it
-    // never even enters the search window.
-    if (!s) continue;
-    if (!known && c.x === undefined) continue;
-
-    const sp = s.lead + s.life;
-    if (sp > maxSpan) maxSpan = sp;
-    t.push(c.t);
-    span.push(sp);
-    spec.push(s);
-    owner.push(c.o === 1 ? 1 : 0);
-    src.push(si);
+    if (!s || (!known && !Number.isFinite(c.x))) continue;
+    // Complete engine observations also prove the absence of a raw effect:
+    // a failed Storm order must not become a predicted Storm animation.
+    if (playback.fidelity?.effects === "observed" && playback.fidelity.complete === true &&
+        OBSERVED_COMMAND_SLUGS.has(c.a)) continue;
+    // Partial/legacy enrichment suppresses a command only when a matching
+    // effect is actually observed nearby during that command's window.
+    const matches = observedBySlug.get(c.a);
+    if (matches?.some(e => e.owner === (c.o === 1 ? "opp" : "me") &&
+        e.t >= c.t - 0.25 && e.t <= c.t + s.lead + s.life &&
+        Number.isFinite(c.x) && Number.isFinite(c.y) &&
+        Math.hypot(e.x - c.x!, e.y - c.y!) <= Math.max(1, e.radius))) continue;
+    const ids = c.casterUnitIds?.length ? c.casterUnitIds : [c.casterUnitId];
+    for (const id of ids) {
+      entries.push({ t: c.t, span: s.lead + s.life, spec: s, owner: c.o,
+        src: si, observed: -1, casterId: id });
+    }
   }
-
-  const n = t.length;
-  if (n === 0) return null;
+  entries.sort((a, b) => a.t - b.t);
+  const n = entries.length;
+  if (!n) return null;
   return {
-    t: Float64Array.from(t),
-    span: Float64Array.from(span),
-    maxSpan,
-    spec,
-    owner: Uint8Array.from(owner),
-    x: new Float64Array(n),
-    y: new Float64Array(n),
-    host: new Int32Array(n).fill(-1),
-    hostIsBuilding: new Uint8Array(n),
-    state: new Uint8Array(n),
-    src: Int32Array.from(src),
-    n,
-    unitsByName: null,
-    buildingsByName: null,
+    t: Float64Array.from(entries, e => e.t),
+    span: Float64Array.from(entries, e => e.span),
+    maxSpan: entries.reduce((max, e) => Math.max(max, e.span), 0),
+    spec: entries.map(e => e.spec),
+    owner: Uint8Array.from(entries, e => e.owner),
+    src: Int32Array.from(entries, e => e.src),
+    observed: Int32Array.from(entries, e => e.observed),
+    casterId: entries.map(e => e.casterId),
+    x: new Float64Array(n), y: new Float64Array(n),
+    cx: new Float64Array(n).fill(NaN), cy: new Float64Array(n).fill(NaN),
+    host: new Array(n).fill(null), caster: new Array(n).fill(null),
+    state: new Uint8Array(n), n, entities: null,
   };
 }
 
@@ -478,68 +507,84 @@ function buildCastTable(playback: MapPlayback): CastTable | null {
  * payload and the CAST's time (never of ``now``): it is memoised, not
  * accumulated, so the answer is the same whichever frame asks first.
  */
+function entityPosition(
+  playback: MapPlayback, ref: EntityRef, t: number, out: MotionSample,
+): MotionSample | null {
+  if (ref.building) {
+    const b = playback.buildings[ref.index];
+    if (!buildingAliveAt(b, t)) return null;
+    const p = b.moves.length ? buildingPositionAt(b, t) : b;
+    out.x = p.x;
+    out.y = p.y;
+    out.vx = 0;
+    out.vy = 0;
+    return out;
+  }
+  const u = playback.units[ref.index];
+  return unitVisibleAt(u, t) ? sampleTrack(u.wp, t, unitMaxSpeed(unitNameAt(u, t)), out) : null;
+}
+
+/** Exact tag lookup, including identities that morph between unit/building. */
+function resolveEntity(
+  table: CastTable, playback: MapPlayback, id: number | string | undefined,
+  t: number, owner?: 0 | 1,
+): EntityRef | null {
+  if (id === undefined) return null;
+  if (!table.entities) {
+    table.entities = new Map();
+    for (const building of [false, true]) {
+      const list = building ? playback.buildings : playback.units;
+      for (let index = 0; index < list.length; index += 1) {
+        const tag = list[index].id;
+        if (tag === undefined) continue;
+        const refs = table.entities.get(String(tag)) ?? [];
+        refs.push({ index, building });
+        table.entities.set(String(tag), refs);
+      }
+    }
+  }
+  for (const ref of table.entities.get(String(id)) ?? []) {
+    const item = ref.building ? playback.buildings[ref.index] : playback.units[ref.index];
+    if (owner !== undefined && item.owner !== (owner === 1 ? "opp" : "me")) continue;
+    if (entityPosition(playback, ref, t, buildSample)) return ref;
+  }
+  return null;
+}
+
+/** No position/identity means unplaceable. Old payloads keep located markers. */
 function ensureResolved(table: CastTable, i: number, playback: MapPlayback): boolean {
-  const st = table.state[i];
-  if (st !== 0) return st === 1;
-  const casts = playback.casts;
-  if (!casts) {
-    table.state[i] = 2;
-    return false;
+  if (table.state[i] !== 0) return table.state[i] === 1;
+  const observed = table.observed[i];
+  if (observed >= 0) {
+    const effect = playback.effects![observed];
+    table.x[i] = effect.x;
+    table.y[i] = effect.y;
+    table.state[i] = 1;
+    return true;
   }
-  const c = casts[table.src[i]];
+  const c = playback.casts?.[table.src[i]];
+  if (!c) return false;
   const s = table.spec[i];
-  const hasXY = c.x !== undefined && c.y !== undefined;
-  const o = table.owner[i];
-
-  // Three reasons to look for a host entity:
-  //   • PIN    — the cast has no coordinates and the row allows an
-  //              anchor, so the host's position becomes the effect's;
-  //   • RIDE   — the row follows, so the effect tracks a moving host;
-  //   • CASTER — a beam's origin or a lobbed projectile's launch point,
-  //              even though the impact point is already known.
-  // Rows with ``anchor: "none"`` never PIN (a Psi Storm with no
-  // coordinates is simply not drawn) but may still resolve a CASTER.
-  const needsCaster = hasXY && (s.prim === "beam" || s.tg === "arc" || s.tg === "charge");
-  const wantsHost =
-    s.from !== undefined &&
-    ((s.anchor !== "none" && !hasXY) || s.follow === true || needsCaster);
-
-  let hx = NaN;
-  let hy = NaN;
-  if (wantsHost && s.from) {
-    const isBuilding = s.anchor === "building";
-    if (isBuilding && !table.buildingsByName) {
-      table.buildingsByName = nameIndex(playback.buildings);
-    }
-    if (!isBuilding && !table.unitsByName) {
-      table.unitsByName = nameIndex(playback.units);
-    }
-    const res = resolveHost(
-      playback,
-      (isBuilding ? table.buildingsByName : table.unitsByName) as Map<string, number[]>,
-      isBuilding,
-      s.from,
-      o,
-      c.t,
-      hasXY ? (c.x as number) : NaN,
-      hasXY ? (c.y as number) : NaN,
-      s.follow === true ? ANCHOR_SNAP_WORLD : CASTER_SEARCH_WORLD,
-      table.src[i],
-    );
-    if (res) {
-      table.host[i] = res.index;
-      table.hostIsBuilding[i] = isBuilding ? 1 : 0;
-      hx = res.x;
-      hy = res.y;
-    }
+  const hasXY = Number.isFinite(c.x) && Number.isFinite(c.y);
+  const caster = resolveEntity(table, playback, table.casterId[i], c.t, c.o);
+  const target = resolveEntity(table, playback, c.targetUnitId, c.t);
+  table.caster[i] = caster;
+  if (caster) {
+    const p = entityPosition(playback, caster, c.t, buildSample);
+    if (p) { table.cx[i] = p.x; table.cy[i] = p.y; }
   }
-
-  // Impact point: the cast's own coordinates when it has them, else the
-  // host's position at cast time. A cast with neither is dropped —
-  // drawing a purple disc at the map corner would be a lie about the
-  // game, and (0,0) is a real map location.
-  const px = hasXY ? (c.x as number) : hx;
-  const py = hasXY ? (c.y as number) : hy;
+  let px = hasXY ? c.x as number : NaN;
+  let py = hasXY ? c.y as number : NaN;
+  if (target && FOLLOW_TARGET.has(c.a)) {
+    table.host[i] = target;
+  } else if (c.targetUnitId === undefined && caster && SELF_EFFECTS.has(c.a)) {
+    table.host[i] = caster;
+  }
+  if (!hasXY) {
+    const anchor = target ?? (SELF_EFFECTS.has(c.a) ? caster : null);
+    const p = anchor ? entityPosition(playback, anchor, c.t, buildSample) : null;
+    if (p) { px = p.x; py = p.y; }
+  }
   if (!Number.isFinite(px) || !Number.isFinite(py)) {
     table.state[i] = 2;
     return false;
@@ -548,94 +593,6 @@ function ensureResolved(table: CastTable, i: number, playback: MapPlayback): boo
   table.y[i] = py;
   table.state[i] = 1;
   return true;
-}
-
-/**
- * Find the entity that hosts a cast.
- *
- *   • WITH coordinates — the nearest live candidate of the right type
- *     within ``maxDist``. That is an association, not a guess: the
- *     closest Ravager to a bile impact is the one that fired it.
- *   • WITHOUT coordinates — a deterministic pick among the live
- *     candidates, seeded by the cast's own index so it never changes
- *     under scrubbing. This one IS a guess, and it is only reachable
- *     from ``anchor: "unit" | "building"`` rows — small unit-local
- *     pulses and structure auras. Every large area effect is
- *     ``anchor: "none"`` and is dropped instead.
- *
- * Runs once per payload, never per frame.
- */
-const hostScratch: number[] = [];
-const hostScratchX: number[] = [];
-const hostScratchY: number[] = [];
-
-function resolveHost(
-  playback: MapPlayback,
-  byName: Map<string, number[]>,
-  isBuilding: boolean,
-  names: readonly string[],
-  owner: number,
-  t: number,
-  x: number,
-  y: number,
-  maxDist: number,
-  seed: number,
-): { index: number; x: number; y: number } | null {
-  const haveXY = Number.isFinite(x) && Number.isFinite(y);
-  let bestIdx = -1;
-  let bestX = 0;
-  let bestY = 0;
-  let bestD = maxDist;
-  let live = 0;
-  for (const name of names) {
-    const bucket = byName.get(`${owner}|${name}`);
-    if (!bucket) continue;
-    for (const i of bucket) {
-      let ex: number;
-      let ey: number;
-      if (isBuilding) {
-        const b = playback.buildings[i];
-        if (!buildingAliveAt(b, t)) continue;
-        // Fast path: almost no structure ever lifts off, and
-        // buildingPositionAt allocates a point per call.
-        if (b.moves.length === 0) {
-          ex = b.x;
-          ey = b.y;
-        } else {
-          const p = buildingPositionAt(b, t);
-          ex = p.x;
-          ey = p.y;
-        }
-      } else {
-        const u = playback.units[i];
-        if (!unitAliveAt(u, t)) continue;
-        const p = sampleTrack(u.wp, t, unitMaxSpeed(u.name), buildSample);
-        if (!p) continue;
-        ex = p.x;
-        ey = p.y;
-      }
-      if (haveXY) {
-        const d = Math.hypot(ex - x, ey - y);
-        if (d < bestD) {
-          bestD = d;
-          bestIdx = i;
-          bestX = ex;
-          bestY = ey;
-        }
-      } else {
-        hostScratch[live] = i;
-        hostScratchX[live] = ex;
-        hostScratchY[live] = ey;
-        live += 1;
-      }
-    }
-  }
-  if (haveXY) {
-    return bestIdx >= 0 ? { index: bestIdx, x: bestX, y: bestY } : null;
-  }
-  if (live === 0) return null;
-  const j = Math.min(live - 1, Math.floor(phaseOffset(seed * 0x9e3779b1) * live));
-  return { index: hostScratch[j], x: hostScratchX[j], y: hostScratchY[j] };
 }
 
 function castsOf(playback: MapPlayback): CastTable | null {
@@ -691,6 +648,7 @@ export function activeCastIndices(
     const ct = table.t[i];
     if (ct > now) break;
     if (ct + table.span[i] < now) continue;
+    if (table.src[i] < 0 || (count > 0 && out[count - 1] === table.src[i])) continue;
     out[count] = table.src[i];
     count += 1;
   }
@@ -702,7 +660,9 @@ export interface ActiveSpellEffect {
   spec: SpellEffectSpec;
   /** Index into ``playback.casts``. */
   src: number;
-  owner: 0 | 1;
+  /** Engine observations use a negative src; commands retain their index. */
+  source: "command" | "observation";
+  owner: 0 | 1 | 2;
   /** Effect centre in world units (the host's LIVE position when the
    * spec follows, the frozen impact point otherwise). */
   wx: number;
@@ -741,7 +701,7 @@ function pushActive(): ActiveSpellEffect {
   let e = activePool[activeCount];
   if (!e) {
     e = {
-      spec: UNKNOWN_EFFECT as SpellEffectSpec, src: 0, owner: 0,
+      spec: UNKNOWN_EFFECT as SpellEffectSpec, src: 0, source: "command", owner: 0,
       wx: 0, wy: 0, cx: NaN, cy: NaN, age: 0, tel: -1, p: -1,
       alpha: 0, color: "#fff", colorHi: "#fff",
     };
@@ -819,6 +779,7 @@ export function activeSpellEffects(
     const age = now - ct;
     const s = table.spec[i];
     if (age > s.lead + s.life) continue;
+    if (table.observed[i] >= 0 && age >= s.life) continue;
     if (spellEnvelope(s, age) <= 0) continue;
     if (!ensureResolved(table, i, playback)) continue;
     windowScratch[live] = i;
@@ -839,7 +800,8 @@ export function activeSpellEffects(
     const e = pushActive();
     e.spec = s;
     e.src = table.src[i];
-    e.owner = table.owner[i] === 1 ? 1 : 0;
+    e.source = table.observed[i] >= 0 ? "observation" : "command";
+    e.owner = table.owner[i] === 2 ? 2 : table.owner[i] === 1 ? 1 : 0;
     e.age = age;
     e.tel = age < s.lead ? (s.lead > 0 ? age / s.lead : 0) : -1;
     e.p = age >= s.lead ? (s.life > 0 ? (age - s.lead) / s.life : 1) : -1;
@@ -851,43 +813,27 @@ export function activeSpellEffects(
     e.cx = NaN;
     e.cy = NaN;
 
-    // Host position, LIVE — a following pulse rides the unit that cast
-    // it, and a beam's origin tracks its caster.
-    const hostIdx = table.host[i];
-    if (hostIdx >= 0) {
-      let hx = NaN;
-      let hy = NaN;
-      if (table.hostIsBuilding[i] === 1) {
-        const b = playback.buildings[hostIdx];
-        if (buildingAliveAt(b, now)) {
-          if (b.moves.length === 0) {
-            hx = b.x;
-            hy = b.y;
-          } else {
-            const p = buildingPositionAt(b, now);
-            hx = p.x;
-            hy = p.y;
-          }
-        }
-      } else {
-        const u = playback.units[hostIdx];
-        if (unitAliveAt(u, now)) {
-          const p = sampleTrack(u.wp, now, unitMaxSpeed(u.name), drawSampleA);
-          if (p) {
-            hx = p.x;
-            hy = p.y;
-          }
-        }
+    // Target and caster are distinct identities. A Chrono aura rides
+    // its target; a Yamato beam starts at the recorded caster.
+    const host = table.host[i];
+    if (host) {
+      const p = entityPosition(playback, host, now, drawSampleA);
+      if (!p) {
+        activeCount -= 1;
+        continue;
       }
-      if (Number.isFinite(hx)) {
-        if (s.follow === true) {
-          e.wx = hx;
-          e.wy = hy;
-        } else {
-          e.cx = hx;
-          e.cy = hy;
-        }
+      if (s.follow === true || FOLLOW_TARGET.has(playback.casts![e.src].a)) {
+        e.wx = p.x;
+        e.wy = p.y;
       }
+    }
+    e.cx = table.cx[i];
+    e.cy = table.cy[i];
+    const caster = table.caster[i];
+    if (caster && (s.prim === "beam" || s.tg === "charge")) {
+      const p = entityPosition(playback, caster, now, drawSampleA);
+      e.cx = p?.x ?? NaN;
+      e.cy = p?.y ?? NaN;
     }
     alphaSum += a;
   }
@@ -1060,7 +1006,7 @@ export function drawSpellEffects(
 ): number {
   // v4 and older: no casts, no work, no behaviour change. This is the
   // hot path for the majority of stored games.
-  if (!enabled || !playback.casts || playback.casts.length === 0) return 0;
+  if (!enabled || (!playback.casts?.length && !playback.effects?.length)) return 0;
   const { list, count } = activeSpellEffects(playback, now);
   if (count === 0) return 0;
 
@@ -1097,7 +1043,9 @@ export function drawSpellEffects(
 
     const sx = projectX(dc.bounds, proj, e.wx);
     const sy = projectY(dc.bounds, proj, e.wy);
-    const R = radiusOf(s);
+    // Observed extents are game data. A readability floor is appropriate
+    // for command cues, but must not enlarge a recorded area of effect.
+    const R = e.source === "observation" ? s.r : radiusOf(s);
     // Cull off-screen. The margin covers a telegraph arc's apex and a
     // beam reaching in from a caster outside the effect's own radius.
     const margin = Math.max(R * 3, 12) * dc.k;
@@ -1105,7 +1053,12 @@ export function drawSpellEffects(
     if (sy + margin < cullY0 || sy - margin > cullY1) continue;
 
     if (telegraphing) drawTelegraph(e, sx, sy, R);
-    else drawPrim(e, sx, sy, R);
+    else {
+      drawPrim(e, sx, sy, R);
+      if (e.source === "observation" && s.prim !== "field" && s.prim !== "crackle") {
+        strokeCircle(e.colorHi, sx, sy, R, e.alpha * 0.55, 1.2);
+      }
+    }
     drawn += 1;
   }
   ctx.globalAlpha = 1;
@@ -1365,20 +1318,9 @@ function drawTelegraph(e: ActiveSpellEffect, sx: number, sy: number, R: number):
     return;
   }
 
-  if (style === "arc") {
-    // Origin: the caster if we know it, else a fixed bearing off the
-    // target so the projectile still comes from somewhere plausible.
-    let ox: number;
-    let oy: number;
-    if (Number.isFinite(e.cx)) {
-      ox = projectX(dc.bounds, dc.proj, e.cx);
-      oy = projectY(dc.bounds, dc.proj, e.cy);
-    } else {
-      const bearing = phaseOffset(e.src) * Math.PI * 2;
-      const d = Math.max(R * 4, 6) * dc.k;
-      ox = sx + Math.cos(bearing) * d;
-      oy = sy + Math.sin(bearing) * d;
-    }
+  if (style === "arc" && Number.isFinite(e.cx) && Number.isFinite(e.cy)) {
+    const ox = projectX(dc.bounds, dc.proj, e.cx);
+    const oy = projectY(dc.bounds, dc.proj, e.cy);
     // Parabolic lob: linear in the ground plane, a sine hop in screen Y.
     const px = ox + (sx - ox) * q;
     const lift = Math.max(R * 3, 5) * dc.k * Math.sin(Math.PI * q);

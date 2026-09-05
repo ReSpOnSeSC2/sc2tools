@@ -48,6 +48,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 170.4 },
       Walk: { frames: 8, fps: 12, cols: 8, rows: 8, suffix: "Walk", wupc: 1.7, ax: 128, ay: 163.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 152.9248 },
     },
   },
   "Archon": {
@@ -58,6 +59,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4.36, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 210.6 },
       Walk: { frames: 8, fps: 6.32, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 189 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 4.8, ax: 128, ay: 189.5816 },
     },
   },
   "Armory": {
@@ -123,6 +125,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 5.33, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 130.6 },
       Walk: { frames: 8, fps: 5.33, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 137.7 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 130.0416 },
     },
   },
   "Barracks": {
@@ -199,6 +202,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 6.25, ax: 128, ay: 198.2 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 6.25, ax: 128, ay: 198.1 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 8.1, ax: 128, ay: 181.9374 },
     },
   },
   "CommandCenter": {
@@ -218,6 +222,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.67, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 145.9 },
       Walk: { frames: 8, fps: 2.67, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 136.2 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 145.549 },
     },
   },
   "CreepTumor": {
@@ -255,6 +260,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.67, cols: 8, rows: 8, suffix: null, wupc: 2.2, ax: 128, ay: 154 },
       Walk: { frames: 8, fps: 6, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 148.7 },
+      Attack: { frames: 8, fps: 26.6667, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 148.3322 },
     },
   },
   "DarkShrine": {
@@ -274,6 +280,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 2.2, ax: 128, ay: 161.8 },
       Walk: { frames: 8, fps: 10.91, cols: 8, rows: 8, suffix: "Walk", wupc: 2.2, ax: 128, ay: 170.6 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 153.307 },
     },
   },
   "Disruptor": {
@@ -303,6 +310,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 156.1 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 1.7, ax: 128, ay: 161.6 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.2, ax: 128, ay: 147.0801 },
     },
   },
   "Egg": {
@@ -403,6 +411,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 5.33, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 197.1 },
       Walk: { frames: 8, fps: 12, cols: 8, rows: 8, suffix: "Walk", wupc: 2.2, ax: 128, ay: 161 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 154.4988 },
     },
   },
   "GhostAcademy": {
@@ -440,6 +449,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 5.33, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 167 },
       Walk: { frames: 8, fps: 9.23, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 159.8 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 175.9973 },
     },
   },
   "Hellion": {
@@ -450,6 +460,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 149 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 149.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 148.8521 },
     },
   },
   "HighTemplar": {
@@ -479,6 +490,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 3, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 138.4 },
       Walk: { frames: 8, fps: 4.8, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 145.8 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 150.2806 },
     },
   },
   "HydraliskDen": {
@@ -498,6 +510,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 159 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 149.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 164.0866 },
     },
   },
   "InfestationPit": {
@@ -536,6 +549,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 156.2 },
       Walk: { frames: 8, fps: 16, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 150.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 153.9679 },
     },
   },
   "Interceptor": {
@@ -574,6 +588,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 136.9 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 137.3 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 137.4207 },
     },
   },
   "Locust": {
@@ -604,6 +619,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 154.5 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 146.1 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.2, ax: 128, ay: 121.6165 },
     },
   },
   "LurkerDen": {
@@ -632,6 +648,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 160.4 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 157.6 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 153.8252 },
     },
   },
   "Marauder": {
@@ -642,6 +659,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.53, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 167.7 },
       Walk: { frames: 8, fps: 9.23, cols: 8, rows: 8, suffix: "Walk", wupc: 1.7, ax: 128, ay: 166.7 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.2, ax: 128, ay: 168.1583 },
     },
   },
   "Marine": {
@@ -652,6 +670,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 3, cols: 8, rows: 8, suffix: null, wupc: 1.3, ax: 128, ay: 175.9 },
       Walk: { frames: 8, fps: 12, cols: 8, rows: 8, suffix: "Walk", wupc: 1.3, ax: 128, ay: 169.3 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 1.3, ax: 128, ay: 156.065 },
     },
   },
   "Medivac": {
@@ -691,6 +710,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 4.8, ax: 128, ay: 155.2 },
       Walk: { frames: 8, fps: 3.69, cols: 8, rows: 8, suffix: "Walk", wupc: 4.8, ax: 128, ay: 156.3 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 4.8, ax: 128, ay: 156.1801 },
     },
   },
   "Nexus": {
@@ -795,6 +815,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 132 },
       Walk: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 131.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 130.4114 },
     },
   },
   "PhotonCannon": {
@@ -832,6 +853,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 6, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 169.2 },
       Walk: { frames: 8, fps: 3, cols: 8, rows: 8, suffix: "Walk", wupc: 1.7, ax: 128, ay: 175.8 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 1.7, ax: 128, ay: 170.3814 },
     },
   },
   "Pylon": {
@@ -851,6 +873,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 4.8, ax: 128, ay: 145.4 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 4.8, ax: 128, ay: 148.2 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 10.5, ax: 128, ay: 134.0322 },
     },
   },
   "Ravager": {
@@ -861,6 +884,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 153.9 },
       Walk: { frames: 8, fps: 4.8, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 142.9 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 4.8, ax: 128, ay: 155.1543 },
     },
   },
   "RavagerCocoon": {
@@ -899,6 +923,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 3, cols: 8, rows: 8, suffix: null, wupc: 2.2, ax: 128, ay: 147.8 },
       Walk: { frames: 8, fps: 6, cols: 8, rows: 8, suffix: "Walk", wupc: 2.2, ax: 128, ay: 152.6 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.2, ax: 128, ay: 144.9194 },
     },
   },
   "Refinery": {
@@ -918,6 +943,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 2.2, ax: 128, ay: 146.3 },
       Walk: { frames: 8, fps: 18.46, cols: 8, rows: 8, suffix: "Walk", wupc: 2.2, ax: 128, ay: 139.3 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.2, ax: 128, ay: 153.7397 },
     },
   },
   "RoachWarren": {
@@ -955,6 +981,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 2.2, ax: 128, ay: 160.7 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 2.2, ax: 128, ay: 149.2 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 148.3637 },
     },
   },
   "Sentry": {
@@ -965,6 +992,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 162.1 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 161.4 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 155.8096 },
     },
   },
   "ShieldBattery": {
@@ -983,6 +1011,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     facings: 8,
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 4.8, ax: 128, ay: 149 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 4.8, ax: 128, ay: 148.7684 },
     },
   },
   "SpawningPool": {
@@ -1029,6 +1058,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 148.1 },
       Walk: { frames: 8, fps: 12, cols: 8, rows: 8, suffix: "Walk", wupc: 4.8, ax: 128, ay: 129.8 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 151.4962 },
     },
   },
   "Stargate": {
@@ -1076,6 +1106,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 2.85, ax: 128, ay: 152.8 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 151.9 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 3.7, ax: 128, ay: 150.8665 },
     },
   },
   "TechLab": {
@@ -1094,6 +1125,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     facings: 8,
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 4.8, ax: 128, ay: 128 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 4.8, ax: 128, ay: 128 },
     },
   },
   "TemplarArchive": {
@@ -1113,6 +1145,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 8.1, ax: 128, ay: 159.7 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 8.1, ax: 128, ay: 164.3 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 8.1, ax: 128, ay: 155.5667 },
     },
   },
   "TransportOverlord": {
@@ -1142,6 +1175,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 8.1, ax: 128, ay: 149.6 },
       Walk: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Walk", wupc: 8.1, ax: 128, ay: 153.9 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 10.5, ax: 128, ay: 127.0814 },
     },
   },
   "UltraliskCavern": {
@@ -1181,6 +1215,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: null, wupc: 3.7, ax: 128, ay: 140.8 },
       Walk: { frames: 8, fps: 2, cols: 8, rows: 8, suffix: "Walk", wupc: 3.7, ax: 128, ay: 140.6 },
+      Attack: { frames: 8, fps: 10.4348, cols: 8, rows: 8, suffix: "Attack", wupc: 6.25, ax: 128, ay: 128 },
     },
   },
   "WarpGate": {
@@ -1229,6 +1264,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.4, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 160.9 },
       Walk: { frames: 8, fps: 10.91, cols: 8, rows: 8, suffix: "Walk", wupc: 1.7, ax: 128, ay: 158.7 },
+      Attack: { frames: 8, fps: 8, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 152.3701 },
     },
   },
   "Zergling": {
@@ -1239,6 +1275,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, SpriteSheetMeta>> = {
     anims: {
       Stand: { frames: 8, fps: 2.67, cols: 8, rows: 8, suffix: null, wupc: 1.7, ax: 128, ay: 154.4 },
       Walk: { frames: 8, fps: 4, cols: 8, rows: 8, suffix: "Walk", wupc: 2.85, ax: 128, ay: 137.1 },
+      Attack: { frames: 8, fps: 15, cols: 8, rows: 8, suffix: "Attack", wupc: 2.85, ax: 128, ay: 140.9487 },
     },
   },
 };

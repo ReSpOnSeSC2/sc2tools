@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional  # noqa: F401
 
 log = logging.getLogger(__name__)
+_ENGINE_REBUILD_LOCK = threading.Lock()
 
 
 class SocketClient:
@@ -137,7 +138,7 @@ class SocketClient:
             log.info("socket_client_disconnected")
 
         @sio.on("macro:recompute_request")
-        async def _on_macro(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001
+        async def _on_macro(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:  # noqa: ARG001
             game_ids: List[str] = []
             if isinstance(payload, dict):
                 raw = payload.get("gameIds")
@@ -147,9 +148,25 @@ class SocketClient:
                 return
             log.info("socket_client_macro_recompute count=%d", len(game_ids))
             try:
+                if isinstance(payload, dict) and payload.get("replayFidelity") == "engine":
+                    request_id = payload.get("requestId")
+                    if not isinstance(request_id, str) or not request_id or len(game_ids) != 1:
+                        return {"ok": False, "code": "invalid_request"}
+
+                    def report_status(update: Dict[str, Any]) -> None:
+                        if self._loop is not None and not self._loop.is_closed():
+                            asyncio.run_coroutine_threadsafe(sio.emit("map-playback:status", {
+                                **update, "gameId": game_ids[0], "requestId": request_id,
+                            }), self._loop)
+
+                    result = self._on_recompute_games(  # type: ignore[call-arg,func-returns-value]
+                        game_ids, replay_fidelity="engine", report_status=report_status,
+                    )
+                    return {**result, "requestId": request_id, "gameId": game_ids[0]}
                 self._on_recompute_games(game_ids)
             except Exception:  # noqa: BLE001
                 log.exception("recompute_callback_failed")
+                return {"ok": False, "code": "agent_update_required"}
 
         @sio.on("opp_build_order:recompute_request")
         async def _on_opp(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001
@@ -280,6 +297,8 @@ def make_recompute_handlers(
     state_dir: Optional[Path],
     queue_resync_for_paths: Callable[[List[Path]], None],
     full_resync: Optional[Callable[[], None]] = None,
+    engine_capture: Optional[Callable[[Path], Any]] = None,
+    upload_monitor: Optional[Callable[[Path, Any], None]] = None,
 ) -> tuple[
     Callable[[List[str]], None],
     Callable[[str], None],
@@ -310,6 +329,8 @@ def make_recompute_handlers(
     # always means the cloud's bulk backfill flow, where a full resync
     # is the right answer when nothing matches locally.
     BULK_THRESHOLD = 5
+    from .replay_capture import configure_observation_cache
+    configure_observation_cache(state_dir)
 
     def _resolve_paths(game_ids: List[str]) -> List[Path]:
         if not state_dir:
@@ -337,8 +358,55 @@ def make_recompute_handlers(
                 out.append(p)
         return out
 
-    def on_macro(game_ids: List[str]) -> None:
+    def on_macro(game_ids: List[str], *, replay_fidelity=None, report_status=None):
         paths = _resolve_paths(game_ids)
+        if replay_fidelity == "engine":
+            if len(game_ids) != 1 or len(paths) != 1 or not paths[0].is_file():
+                return {"ok": False, "code": "replay_not_found"}
+            if not _ENGINE_REBUILD_LOCK.acquire(blocking=False):
+                return {"ok": False, "code": "engine_busy"}
+
+            def report(update):
+                if report_status is not None:
+                    try:
+                        report_status(update)
+                    except Exception:
+                        log.exception("replay_rebuild_status_failed")
+
+            def rebuild():
+                phase = "processing"
+                try:
+                    report({"status": "processing"})
+                    if engine_capture is not None:
+                        engine_capture(paths[0])
+                    else:
+                        from .replay_capture import capture_exact_replay
+                        capture_exact_replay(paths[0], state_dir)
+                    from .state import load_state
+                    previous_marker = load_state(state_dir).uploaded.get(str(paths[0])) if state_dir else None
+                    # The normal parser loads the matching cached observation
+                    # artifact and the existing uploader replaces mapPlayback.
+                    queue_resync_for_paths(paths)
+                    phase = "uploading"
+                    report({"status": "uploading"})
+                    if upload_monitor is not None:
+                        upload_monitor(paths[0], previous_marker)
+                    else:
+                        from .replay_capture import wait_for_replay_upload
+                        wait_for_replay_upload(paths[0], state_dir, previous_marker)
+                    report({"status": "complete"})
+                except Exception as exc:
+                    log.exception("engine_replay_rebuild_failed")
+                    report({"status": "failed", "code": "replay_upload_failed" if phase == "uploading" else "engine_capture_failed", "message": str(exc)[:500]})
+                finally:
+                    _ENGINE_REBUILD_LOCK.release()
+
+            try:
+                threading.Thread(target=rebuild, name="sc2tools-replay-rebuild", daemon=True).start()
+            except Exception:
+                _ENGINE_REBUILD_LOCK.release()
+                raise
+            return {"ok": True, "status": "queued"}
         if paths:
             try:
                 queue_resync_for_paths(paths)

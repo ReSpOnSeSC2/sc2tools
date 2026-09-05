@@ -44,6 +44,20 @@ const UNIT_TIMELINE_SIDE_SCHEMA = {
   },
 };
 
+// Actual weapon-cycle observations are separate from attack commands. Both
+// units and defensive structures may carry these optional animation samples.
+const PLAYBACK_ATTACK_ENTITY_SCHEMA = {
+  type: "object",
+  additionalProperties: true,
+  properties: {
+    attacks: {
+      type: "array", maxItems: 16384,
+      items: { type: "number", minimum: 0, maximum: 24 * 60 * 60 },
+    },
+    aim: { type: "array", maxItems: 16384 * 3, items: { type: "number" } },
+  },
+};
+
 const GAME_SCHEMA = {
   type: "object",
   required: ["gameId", "date", "result", "myRace", "map"],
@@ -293,8 +307,8 @@ const GAME_SCHEMA = {
         bounds: { type: "object", additionalProperties: true },
         spawns: { type: "array", maxItems: 16 },
         battles: { type: "array", maxItems: 200 },
-        buildings: { type: "array", maxItems: 1000 },
-        units: { type: "array", maxItems: 1200 },
+        buildings: { type: "array", maxItems: 1000, items: PLAYBACK_ATTACK_ENTITY_SCHEMA },
+        units: { type: "array", maxItems: 4000, items: PLAYBACK_ATTACK_ENTITY_SCHEMA },
         resources: { type: "array", maxItems: 600 },
         // Ability / spell casts (v5 payloads; absent on v4 and older).
         // o = 0 me / 1 opponent, a = stable ability slug, t = game
@@ -305,7 +319,7 @@ const GAME_SCHEMA = {
         // entries individually before anything is drawn.
         casts: {
           type: "array",
-          maxItems: 800,
+          maxItems: 2000,
           items: {
             type: "object",
             additionalProperties: true,

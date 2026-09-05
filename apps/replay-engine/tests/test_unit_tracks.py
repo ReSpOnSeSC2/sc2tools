@@ -306,12 +306,13 @@ def _lifecycle_replay(tracker, game_events):
     return r
 
 
-def test_building_lifecycle_tracks_land_moves_and_ignores_rally():
+def test_building_lifecycle_uses_observations_not_land_or_rally_intent():
     ee, k = _import_extractor()
     cc = (20 << 18) | 1
     tracker = [
         _born(k.UnitBornEvent, 0, pid=1, name="CommandCenter", uid=cc,
               index=20, x=30, y=40),
+        _positions(k.UnitPositionsEvent, 320, [(20, (85, 86))]),
     ]
     game = [
         _select(k.SelectionEvent, 100, pid=1, ids=[cc]),
@@ -324,7 +325,7 @@ def test_building_lifecycle_tracks_land_moves_and_ignores_rally():
     out = ee.extract_building_lifecycle(_lifecycle_replay(tracker, game))
     (rec,) = out[1]
     assert rec["name"] == "CommandCenter"
-    assert rec["moves"] == [300.0, 90.0, 88.0]
+    assert rec["moves"] == [320.0, 85.0, 86.0]
     assert rec["died"] is None
 
 
@@ -352,9 +353,109 @@ def test_building_lifecycle_records_death_and_morph_rename():
     ]
     out = ee.extract_building_lifecycle(_lifecycle_replay(tracker, []))
     by_name = {r["name"]: r for r in out[1]}
-    assert "OrbitalCommand" in by_name
+    assert "CommandCenter" in by_name
     assert by_name["Barracks"]["died"] == 500.0
-    assert by_name["OrbitalCommand"]["died"] is None
+    assert by_name["CommandCenter"]["died"] is None
+    assert by_name["CommandCenter"]["forms"] == [
+        {"t": 200.0, "name": "CommandCenterFlying"},
+        {"t": 240.0, "name": "OrbitalCommand"},
+    ]
+
+
+def test_commands_never_become_unit_positions():
+    ee, k = _import_extractor()
+    uid = (8 << 18) | 1
+    replay = _make_replay([
+        _born(k.UnitBornEvent, 0, pid=1, name="Probe", uid=uid, index=8, x=30, y=40),
+        _positions(k.UnitPositionsEvent, 25, [(8, (32, 42))]),
+    ])
+    replay.events = [
+        _select(k.SelectionEvent, 1, pid=1, ids=[uid]),
+        _target_cmd(k.TargetPointCommandEvent, 5, pid=1, ability="Move", x=190, y=180),
+        _target_cmd(k.TargetPointCommandEvent, 6, pid=1, ability="BuildPylon", x=170, y=160),
+        _select(k.SelectionEvent, 7, pid=1, ids=[]),
+        _target_cmd(k.TargetPointCommandEvent, 8, pid=1, ability="PsiStorm", x=150, y=140),
+    ]
+    out = ee.extract_unit_tracks(replay, 1)
+    assert out["my_units"][0]["waypoints"] == [0.0, 30.0, 40.0, 25.0, 32.0, 42.0]
+    assert out["complete"] is True
+
+
+def test_all_beacons_and_spell_actors_are_excluded():
+    ee, k = _import_extractor()
+    names = ["BeaconClaim", "BeaconExpand", "BeaconFutureType", "ForceField", "KD8Charge", "DisruptorPhased", "OracleStasisTrap"]
+    replay = _make_replay([
+        _born(k.UnitBornEvent, 0, pid=1, name=name, uid=(i << 18) | 1,
+              index=i, x=30, y=40) for i, name in enumerate(names, 1)
+    ])
+    out = ee.extract_unit_tracks(replay, 1)
+    assert out["my_units"] == []
+    assert out["opp_units"] == []
+
+
+def _morph(klass, second, uid, name):
+    ev = klass()
+    ev.frame = second * 16
+    ev.unit_id = uid
+    ev.unit_type_name = name
+    return ev
+
+
+def test_morphs_keep_initial_identity_and_cocoon_interval():
+    ee, k = _import_extractor()
+    uid = (8 << 18) | 1
+    replay = _make_replay([
+        _born(k.UnitBornEvent, 10, pid=1, name="Zergling", uid=uid, index=8, x=30, y=40),
+        _morph(k.UnitTypeChangeEvent, 20, uid, "BanelingCocoon"),
+        _morph(k.UnitTypeChangeEvent, 30, uid, "Baneling"),
+        _died(k.UnitDiedEvent, 50, uid=uid, index=8, x=60, y=70),
+    ])
+    (unit,) = ee.extract_unit_tracks(replay, 1)["my_units"]
+    assert unit["name"] == "Zergling"
+    assert unit["born"] == 10.0 and unit["died"] == 50.0
+    assert unit["forms"] == [{"t": 20.0, "name": "BanelingCocoon"}, {"t": 30.0, "name": "Baneling"}]
+
+
+def test_drone_becoming_structure_closes_worker_lifetime():
+    ee, k = _import_extractor()
+    uid = (8 << 18) | 1
+    replay = _make_replay([
+        _born(k.UnitBornEvent, 0, pid=1, name="Drone", uid=uid, index=8, x=30, y=40),
+        _morph(k.UnitTypeChangeEvent, 20, uid, "Hatchery"),
+        _positions(k.UnitPositionsEvent, 40, [(8, (50, 60))]),
+        _died(k.UnitDiedEvent, 50, uid=uid, index=8, x=50, y=60),
+    ])
+    (unit,) = ee.extract_unit_tracks(replay, 1)["my_units"]
+    assert unit["died"] == 20.0 and unit["killer_pid"] is None
+    assert unit["waypoints"] == [0.0, 30.0, 40.0]
+
+
+def test_stationary_samples_and_subsecond_death_survive():
+    ee, k = _import_extractor()
+    uid = (8 << 18) | 1
+    born = _born(k.UnitBornEvent, 0, pid=1, name="Probe", uid=uid, index=8, x=30, y=40)
+    died = _died(k.UnitDiedEvent, 1, uid=uid, index=8, x=31, y=40)
+    born.frame = 1
+    died.frame = 3
+    replay = _make_replay([born, _positions(k.UnitPositionsEvent, 0.125, [(8, (30, 40))]), died])
+    (unit,) = ee.extract_unit_tracks(replay, 1)["my_units"]
+    assert unit["born"] == 0.062 and unit["died"] == 0.188
+    assert unit["waypoints"][0::3] == [0.062, 0.125, 0.188]
+
+
+def test_stale_death_does_not_evict_recycled_live_index():
+    ee, k = _import_extractor()
+    old, new = (8 << 18) | 1, (8 << 18) | 2
+    replay = _make_replay([
+        _born(k.UnitBornEvent, 0, pid=1, name="Marine", uid=old, index=8, x=30, y=40),
+        _died(k.UnitDiedEvent, 10, uid=old, index=8, x=31, y=40),
+        _born(k.UnitBornEvent, 20, pid=2, name="Drone", uid=new, index=8, x=100, y=110),
+        _died(k.UnitDiedEvent, 21, uid=old, index=8, x=31, y=40),
+        _positions(k.UnitPositionsEvent, 30, [(8, (101, 111))]),
+    ])
+    out = ee.extract_unit_tracks(replay, 1)
+    assert out["my_units"][0]["died"] == 10.0
+    assert out["opp_units"][0]["waypoints"][-3:] == [30.0, 101.0, 111.0]
 
 
 def test_real_game_length_uses_event_timebase():
@@ -369,3 +470,11 @@ def test_real_game_length_uses_event_timebase():
     # No frames -> falls back to the reported game_length.
     bare = SimpleNamespace(frames=None, game_length=SimpleNamespace(seconds=600))
     assert real_game_length(bare) == 600.0
+
+
+def test_precise_lotv_clock_does_not_infer_speed_from_rounded_duration():
+    from core.timebase import event_seconds_precise
+    replay = SimpleNamespace(frames=17847, length=SimpleNamespace(seconds=796),
+                             speed="Faster", expansion="LotV")
+    event = SimpleNamespace(frame=17847)
+    assert event_seconds_precise(event, replay) == 17847 / 22.4

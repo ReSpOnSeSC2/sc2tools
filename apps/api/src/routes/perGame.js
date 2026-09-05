@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { getPlaybackJob, startPlaybackJob, updatePlaybackJob, bindPlaybackJobDevice } = require("../services/replayPlaybackJobs");
 const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
@@ -78,9 +79,8 @@ function buildPerGameRouter(deps) {
     }
   });
 
-  // Map-playback payload for the vespene-style replayer. Read-only —
-  // the agent uploads it with the game record; there is no recompute
-  // path (older uploads simply don't have it).
+  // Engine rebuilds use the owned game's local replay and the normal upload
+  // pipeline. Job status keeps agent/runtime errors visible while polling.
   router.get("/games/:gameId/map-playback", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
@@ -91,11 +91,75 @@ function buildPerGameRouter(deps) {
         res.status(404).json({ error: { code: "game_not_found" } });
         return;
       }
+      const rebuild = getPlaybackJob(userId, String(req.params.gameId));
       if (out.ok === false && out.code === "not_computed") {
+        if (rebuild) {
+          res.json({ ...out, rebuild });
+          return;
+        }
         res.status(404).json({ error: { code: "playback_not_computed" } });
         return;
       }
-      res.json(out);
+      res.json({ ...out, ...(rebuild ? { rebuild } : {}) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post("/games/:gameId/map-playback", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const gameId = String(req.params.gameId);
+      // mapPlayback scopes its lookup by userId even when the detail is absent.
+      if (!await deps.perGame.mapPlayback(userId, gameId)) {
+        res.status(404).json({ error: { code: "game_not_found" } });
+        return;
+      }
+      const sockets = deps.io ? await deps.io.in(`user:${userId}`).fetchSockets() : [];
+      const devices = sockets.filter(socket => socket.data?.kind === "device");
+      if (!devices.length) {
+        res.status(503).json({ error: { code: "agent_offline", message: "Open the SC2 Tools desktop agent on the computer containing this replay, then retry." } });
+        return;
+      }
+      const pending = getPlaybackJob(userId, gameId);
+      if (pending?.deviceId && ["queued", "processing", "uploading"].includes(pending.status) &&
+          !devices.some(socket => socket.id === pending.deviceId)) {
+        updatePlaybackJob(userId, gameId, pending.requestId, {
+          status: "failed", code: "agent_disconnected", message: "The desktop agent disconnected during this rebuild. Retry with the agent open.",
+        });
+      }
+      const { job, existing } = startPlaybackJob(userId, gameId);
+      if (existing) {
+        res.status(202).json({ ok: true, requested: true, rebuild: job });
+        return;
+      }
+      let failure = { code: "agent_update_required", message: "Update and restart the desktop agent to rebuild this replay." };
+      // Try one device at a time: only the computer holding this replay
+      // should start a game engine process, even with several devices paired.
+      for (const socket of devices.slice(0, 4)) {
+        if (!bindPlaybackJobDevice(userId, gameId, job.requestId, socket.id)) break;
+        try {
+          const ack = await socket.timeout(5000).emitWithAck("macro:recompute_request", {
+            gameIds: [gameId], replayFidelity: "engine", requestId: job.requestId,
+          });
+          if (ack?.requestId !== job.requestId || ack?.gameId !== gameId) break;
+          if (ack.ok === true) {
+            res.status(202).json({ ok: true, requested: true, rebuild: getPlaybackJob(userId, gameId) });
+            return;
+          }
+          if (ack?.code === "replay_not_found") failure = { code: ack.code, message: "The original replay file was not found on your connected desktop agent." };
+          else if (ack?.code === "engine_busy") {
+            failure = { code: ack.code, message: "The desktop agent is rebuilding another replay. Retry when it finishes." };
+            break;
+          } else break;
+        } catch {
+          // A lost ACK may still mean work started. Do not dispatch the same
+          // replay to another machine when the first outcome is unknown.
+          break;
+        }
+      }
+      updatePlaybackJob(userId, gameId, job.requestId, { status: "failed", ...failure });
+      res.status(failure.code === "replay_not_found" ? 409 : 503).json({ error: failure });
     } catch (err) {
       next(err);
     }

@@ -80,7 +80,10 @@ export function spriteUrl(
 ): string {
   const dir = kind === "unit" ? "units" : "buildings";
   const suffix = anim ? `_${anim}` : "";
-  return `${SPRITE_BASE}/${dir}/${race}/${name}_${color}${suffix}.webp`;
+  // Authored attack sheets ship with the web release. Their URLs must not
+  // depend on a separately published CDN asset.
+  const base = anim === "Attack" ? "/replay-attacks" : SPRITE_BASE;
+  return `${base}/${dir}/${race}/${name}_${color}${suffix}.webp`;
 }
 
 /* ──────────────── name resolution ──────────────── */

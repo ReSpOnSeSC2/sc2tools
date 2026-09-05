@@ -20,6 +20,7 @@ import {
 } from "./optimizer/patch/profiles";
 import {
   unitAliveAt,
+  unitNameAt,
   unitPositionAt,
   type PlaybackBuilding,
   type PlaybackUnit,
@@ -246,19 +247,20 @@ export function computeLosses(
     const u = units[idx];
     if (u.owner !== owner || u.died === null || u.died > t) continue;
     if (consumed?.has(idx)) continue;
-    const cost = unitCost(u.name);
+    const name = unitNameAt(u, u.died);
+    const cost = unitCost(name);
     if (!cost) continue;
     count += 1;
     minerals += cost.minerals;
     gas += cost.gas;
-    const g = groups.get(u.name);
+    const g = groups.get(name);
     if (g) {
       g.count += 1;
       g.minerals += cost.minerals;
       g.gas += cost.gas;
     } else {
-      groups.set(u.name, {
-        name: u.name,
+      groups.set(name, {
+        name,
         count: 1,
         minerals: cost.minerals,
         gas: cost.gas,
@@ -310,7 +312,7 @@ export function workerCountAt(
 ): number {
   let n = 0;
   for (const u of units) {
-    if (u.owner === owner && REAL_WORKERS.has(u.name) && unitAliveAt(u, t)) {
+    if (u.owner === owner && REAL_WORKERS.has(unitNameAt(u, t)) && unitAliveAt(u, t)) {
       n += 1;
     }
   }

@@ -34,7 +34,7 @@ export function useApi<T>(
   const key = isLoaded && isSignedIn && userId && path
     ? (["authenticated-api", userId, path] as const)
     : null;
-  return useSWR<T, ClientApiError>(
+  const result = useSWR<T, ClientApiError>(
     key,
     async ([, , requestPath]: readonly [string, string, string]) => {
       const token = await getToken();
@@ -47,6 +47,15 @@ export function useApi<T>(
     },
     config,
   );
+  // Reuse the same authenticated resource path for explicit refresh actions.
+  // Keeping the token closure here avoids duplicating auth in data consumers.
+  return Object.assign(result, {
+    request: <R = unknown>(init: RequestInit): Promise<R> => {
+      if (!path) return Promise.reject(new Error("No resource selected."));
+      if (!key) return Promise.reject(new Error("You need to sign in again."));
+      return apiCall<R>(getToken, path, init);
+    },
+  });
 }
 
 /** For mutations. Returns the JSON or throws ClientApiError. */
@@ -94,7 +103,11 @@ async function buildApiError(res: Response): Promise<ClientApiError> {
   }
   return {
     status: res.status,
-    message: raw || res.statusText || `HTTP ${res.status}`,
+    // Reverse proxies may return an HTML error page, and older APIs may
+    // return an unfamiliar JSON envelope. Neither is useful UI copy.
+    message: /^\s*[<{\[]/.test(raw) || raw.length > 500
+      ? humanizeMessage(res.status, undefined, undefined)
+      : raw || res.statusText || `HTTP ${res.status}`,
   };
 }
 
@@ -104,6 +117,7 @@ function tryParseEnvelope(text: string): {
   requestId?: string;
   details?: string[];
 } | null {
+  text = text.trim();
   if (!text || text[0] !== "{") return null;
   try {
     const obj = JSON.parse(text) as unknown;

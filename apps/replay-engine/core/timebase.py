@@ -65,6 +65,24 @@ def event_seconds(event, replay) -> int:
     return int(round(frame / infer_fps(replay)))
 
 
+def event_seconds_precise(event, replay) -> float:
+    """Playback timestamp without rounding away subsecond event ordering.
+
+    Analytics intentionally uses integer seconds. Playback must preserve
+    frame ordering: rounding an init, morph and death to the same second
+    can show a unit before it exists or discard its final observation.
+    """
+    frame = getattr(event, "frame", None)
+    if frame is None:
+        frame = float(getattr(event, "second", 0) or 0) * 16.0
+    # SC2's length field is truncated to whole seconds. Inferring a frame
+    # rate from that rounded duration drifts by almost a second by game end.
+    # Modern Faster replays and the SC2 API use exactly 22.4 loops/second.
+    fps = (LOTV_FPS if getattr(replay, "speed", None) == "Faster"
+           and getattr(replay, "expansion", None) == "LotV" else infer_fps(replay))
+    return float(frame) / fps
+
+
 def real_game_length(replay) -> float:
     """The game's length in REAL seconds — the same timebase
     ``event_seconds`` puts on every event.

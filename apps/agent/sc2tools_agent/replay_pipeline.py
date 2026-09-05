@@ -12,6 +12,7 @@ the uploader (validated cloud JSON). It NEVER mutates the replay file.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -1701,6 +1702,17 @@ _PLAYBACK_MAX_RESOURCES = 600
 _PLAYBACK_MAX_BUILDING_MOVES = 20
 _PLAYBACK_MAX_CASTS = 400
 
+# Observed v6 tracks keep every timestamp, including stationary anchors.
+# This budget stays within the API's 5 MiB request limit for normal games.
+_PLAYBACK_OBSERVED_MAX_UNITS_PER_SIDE = 2000
+_PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT = 16384
+_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS = 200000
+_PLAYBACK_OBSERVED_MAX_CASTS = 2000
+_PLAYBACK_OBSERVED_MAX_BYTES = int(4.25 * 1024 * 1024)
+_PLAYBACK_ENGINE_POSITION_ERROR = 0.15
+_PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT = 16384
+_PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS = 200000
+
 # Ability casts ranked for the 400-cast budget. Tier 0 decides fights
 # and must survive truncation; tier 2 is the high-frequency macro /
 # micro chatter a viewer can lose without losing the story. Anything
@@ -1726,22 +1738,10 @@ _PLAYBACK_CAST_PRIORITY: Dict[str, int] = {
 }
 _PLAYBACK_CAST_DEFAULT_PRIORITY = 1
 
-# Ramer-Douglas-Peucker tolerance for unit tracks, in SC2 world units
-# (map cells). A playable area is ~100-200 cells across, so 3.0 is
-# roughly 2% of the map: every corner where the walked path bulges more
-# than three cells off the straight line SURVIVES, which is exactly the
-# cliff-hug / ramp detour the old fixed-2s decimation sampled away and
-# the reason units were drawn floating across unwalkable ground.
-#
-# The value is measured, not guessed. Across ten calibration replays
-# (17-36 minutes each, 7.3k tracks, 128k raw samples) the whole
-# mapPlayback payload lands within +2.9% of the 2s rule's bytes, while
-# the worst-case deviation between the drawn curve and the real track
-# drops from 144.6 cells to a hard 3.0 -- hard because RDP's error is
-# bounded BY the tolerance, where the time rule had no error term at
-# all. The knob is purely the payload/fidelity trade: 1.0 is a ~145x
-# fidelity win over the old rule but costs +17% bytes, 3.5 buys exact
-# byte parity for a 3.5-cell error.
+# Compatibility compression for pre-v6 engines. These old tracks mixed
+# command targets with observations and cannot promise route accuracy.
+# v6 tracker points bypass this spatial-only simplifier entirely; dense
+# engine observations use a time-aware error bound and heartbeat below.
 _PLAYBACK_WAYPOINT_EPSILON = 3.0
 # When the simplified track still busts the per-unit cap, epsilon grows
 # by this factor until it fits, then bisects back down to the tightest
@@ -1901,6 +1901,40 @@ def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _compress_engine_track(points: List[Tuple[float, float, float]]) -> List[Tuple[float, float, float]]:
+    """Bound time-aligned position error to 0.15 cells, gaps to 2 seconds.
+
+    Unlike spatial RDP this preserves stops and changes of speed. Only dense
+    SC2 observations use this compression; sparse tracker evidence is kept
+    untouched. Every emitted point remains an actual observation.
+    """
+    if len(points) <= 2:
+        return points
+    keep = {0, len(points) - 1}
+    stack = [(0, len(points) - 1)]
+    while stack:
+        lo, hi = stack.pop()
+        if hi <= lo + 1:
+            continue
+        t0, x0, y0 = points[lo]
+        t1, x1, y1 = points[hi]
+        span = t1 - t0
+        # Leave room for the final 0.001-cell wire-coordinate rounding.
+        far, error = -1, (_PLAYBACK_ENGINE_POSITION_ERROR - 0.001) ** 2
+        for i in range(lo + 1, hi):
+            t, x, y = points[i]
+            frac = (t - t0) / span if span > 0 else 0
+            distance = (x - x0 - frac * (x1 - x0)) ** 2 + (y - y0 - frac * (y1 - y0)) ** 2
+            if distance > error:
+                far, error = i, distance
+        if far < 0 and span > 2:
+            far = (lo + hi) // 2
+        if far >= 0:
+            keep.add(far)
+            stack.extend(((lo, far), (far, hi)))
+    return [points[i] for i in sorted(keep)]
+
+
 def _compact_map_playback(
     playback: Mapping[str, Any],
     battle_markers: Optional[list] = None,
@@ -1979,6 +2013,98 @@ def _compact_map_playback(
         "gameLength": float(playback.get("game_length") or 0.0),
         "bounds": bounds,
     }
+    fidelity = playback.get("fidelity")
+    observed = isinstance(fidelity, Mapping) and fidelity.get("positions") in ("tracker", "engine")
+    precision = 3 if observed else 1
+    if observed:
+        out["v"] = 6
+        out["fidelity"] = {
+            "positions": fidelity["positions"], "paths": "observed",
+            "creep": "observed" if fidelity.get("creep") == "observed" else "estimated",
+            "complete": fidelity.get("complete") is True,
+        }
+        if fidelity["positions"] == "engine":
+            out["fidelity"]["positionError"] = _PLAYBACK_ENGINE_POSITION_ERROR
+            if fidelity.get("effects") in ("observed", "unavailable"):
+                out["fidelity"]["effects"] = fidelity["effects"]
+            if fidelity.get("attacks") in ("observed", "unavailable"):
+                out["fidelity"]["attacks"] = fidelity["attacks"]
+            sample_seconds = fidelity.get("sampleSeconds")
+            if isinstance(sample_seconds, (int, float)) and math.isfinite(sample_seconds) and sample_seconds > 0:
+                out["fidelity"]["sampleSeconds"] = round(sample_seconds, 4)
+
+    def mark_incomplete():
+        if observed:
+            out["fidelity"]["complete"] = False
+
+    def copy_identity(source, target):
+        uid = source.get("id")
+        if (isinstance(uid, int) and not isinstance(uid, bool) and uid > 0) or (isinstance(uid, str) and uid.isdecimal() and len(uid) <= 20):
+            target["id"] = uid
+        forms = []
+        for form in source.get("forms") or []:
+            if not isinstance(form, Mapping):
+                continue
+            t, name = form.get("t"), form.get("name")
+            if isinstance(t, (float, int)) and math.isfinite(t) and isinstance(name, str) and name:
+                forms.append({"t": round(float(t), precision), "name": name})
+        if forms:
+            target["forms"] = forms
+        hidden = source.get("hidden")
+        if isinstance(hidden, (list, tuple)):
+            intervals = []
+            for i in range(0, len(hidden) - 1, 2):
+                a, b = hidden[i:i + 2]
+                if all(isinstance(v, (int, float)) and math.isfinite(v) for v in (a, b)) and 0 <= a <= b:
+                    intervals.extend((round(a, precision), round(b, precision)))
+            if intervals:
+                target["hidden"] = intervals
+        if observed and fidelity["positions"] == "engine" and fidelity.get("attacks") == "observed":
+            raw_attacks = source.get("attacks")
+            if isinstance(raw_attacks, (list, tuple)):
+                born, died = source.get("born", 0), source.get("died")
+                attacks = []
+                for t in raw_attacks:
+                    if (isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t)
+                            or t < 0 or (isinstance(born, (int, float)) and t < born)
+                            or (isinstance(died, (int, float)) and t >= died)):
+                        mark_incomplete()
+                        continue
+                    attacks.append(round(float(t), precision))
+                attacks = sorted(set(attacks))
+                if len(attacks) > _PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT:
+                    mark_incomplete()
+                    count = _PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT
+                    attacks = [attacks[round(i * (len(attacks) - 1) / (count - 1))] for i in range(count)]
+                if attacks:
+                    target["attacks"] = attacks
+                    shot_times = set(attacks)
+                    raw_aim = source.get("aim")
+                    if isinstance(raw_aim, (list, tuple)):
+                        aim = {}
+                        for i in range(0, len(raw_aim) - 2, 3):
+                            t, x, y = raw_aim[i:i + 3]
+                            if not all(not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v) for v in (t, x, y)):
+                                mark_incomplete()
+                                continue
+                            t = round(float(t), precision)
+                            if t in shot_times:
+                                aim[t] = (round(float(x), precision), round(float(y), precision))
+                        if aim:
+                            target["aim"] = [v for t in sorted(aim) for v in (t, *aim[t])]
+
+    def keep_attacks(record, count):
+        """Keep event endpoints throughout the game and their matching aim rows."""
+        attacks = record.get("attacks") or []
+        if len(attacks) <= count:
+            return
+        kept = ([attacks[round(i * (len(attacks) - 1) / (count - 1))] for i in range(count)]
+                if count > 1 else attacks[:max(0, count)])
+        record["attacks"] = kept
+        times = set(kept)
+        aim = record.get("aim") or []
+        if aim:
+            record["aim"] = [v for i in range(0, len(aim), 3) if aim[i] in times for v in aim[i:i + 3]]
 
     spawns = []
     for s in playback.get("spawn_locations") or []:
@@ -2050,24 +2176,40 @@ def _compact_map_playback(
         entry: Dict[str, Any] = {
             "o": 0 if owner == "me" else 1,
             "a": str(ability),
-            "t": round(float(t), 1),
+            "t": round(float(t), precision),
         }
         x, y = c.get("x"), c.get("y")
         # Omit rather than send nulls: a self-cast the engine could not
         # place is smaller as an absent key, and the web treats
         # "no coordinates" and "null coordinates" identically.
         if isinstance(x, (int, float)) and isinstance(y, (int, float)):
-            entry["x"] = round(float(x), 1)
-            entry["y"] = round(float(y), 1)
+            entry["x"] = round(float(x), precision)
+            entry["y"] = round(float(y), precision)
+        for key in ("casterUnitId", "targetUnitId"):
+            uid = c.get(key)
+            if ((isinstance(uid, int) and not isinstance(uid, bool) and uid > 0)
+                    or (isinstance(uid, str) and uid.isdecimal() and len(uid) <= 20)):
+                entry[key] = uid
+        caster_ids = c.get("casterUnitIds")
+        if isinstance(caster_ids, (tuple, list)):
+            ids = list(dict.fromkeys(uid for uid in caster_ids if
+                       (isinstance(uid, int) and not isinstance(uid, bool) and uid > 0)
+                       or (isinstance(uid, str) and uid.isdecimal() and len(uid) <= 20)))
+            if ids:
+                entry["casterUnitIds"] = ids
+        if c.get("source") in ("command", "engine"):
+            entry["source"] = c["source"]
         casts.append(entry)
-    if len(casts) > _PLAYBACK_MAX_CASTS:
+    cast_limit = _PLAYBACK_OBSERVED_MAX_CASTS if observed else _PLAYBACK_MAX_CASTS
+    if len(casts) > cast_limit:
+        mark_incomplete()
         def _tier(entry: Mapping[str, Any]) -> int:
             return _PLAYBACK_CAST_PRIORITY.get(
                 entry.get("a"), _PLAYBACK_CAST_DEFAULT_PRIORITY,
             )
         kept: list = []
         for tier in sorted({_tier(c) for c in casts}):
-            room = _PLAYBACK_MAX_CASTS - len(kept)
+            room = cast_limit - len(kept)
             if room <= 0:
                 break
             tier_casts = [c for c in casts if _tier(c) == tier]
@@ -2077,7 +2219,7 @@ def _compact_map_playback(
             kept.extend(tier_casts)
         kept.sort(key=lambda c: c["t"])
         casts = kept
-    if casts:
+    if casts or observed:
         out["casts"] = casts
 
     buildings: list = []
@@ -2097,27 +2239,32 @@ def _compact_map_playback(
                 if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
                     continue
                 if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
+                    mark_incomplete()
                     continue
                 per_side_counts[owner] += 1
                 entry: Dict[str, Any] = {
                     "owner": owner,
                     "name": str(e.get("name") or ""),
-                    "t": round(float(e.get("born") or 0.0), 1),
-                    "x": round(float(x), 1),
-                    "y": round(float(y), 1),
+                    "t": round(float(e.get("born") or 0.0), precision),
+                    "x": round(float(x), precision),
+                    "y": round(float(y), precision),
                 }
+                copy_identity(e, entry)
                 moves = e.get("moves")
                 if isinstance(moves, (list, tuple)) and moves:
+                    move_limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT if observed else _PLAYBACK_MAX_BUILDING_MOVES
+                    if len(moves) > move_limit * 3:
+                        mark_incomplete()
                     flat = [
-                        round(float(v), 1)
-                        for v in moves[:_PLAYBACK_MAX_BUILDING_MOVES * 3]
+                        round(float(v), precision)
+                        for v in moves[:move_limit * 3]
                         if isinstance(v, (int, float))
                     ]
                     if flat and len(flat) % 3 == 0:
                         entry["moves"] = flat
                 died = e.get("died")
                 if isinstance(died, (int, float)):
-                    entry["died"] = round(float(died), 1)
+                    entry["died"] = round(float(died), precision)
                 buildings.append(entry)
     else:
         for owner, key in (("me", "my_events"), ("opp", "opp_events")):
@@ -2144,7 +2291,9 @@ def _compact_map_playback(
         side = [u for u in (playback.get(key) or []) if isinstance(u, Mapping)]
         # When over the cap, keep the longest-lived units — they carry
         # the story; blips (canceled eggs, one-shot units) go first.
-        if len(side) > _PLAYBACK_MAX_UNITS_PER_SIDE:
+        unit_limit = _PLAYBACK_OBSERVED_MAX_UNITS_PER_SIDE if observed else _PLAYBACK_MAX_UNITS_PER_SIDE
+        if len(side) > unit_limit:
+            mark_incomplete()
             def _lifespan(u: Mapping[str, Any]) -> float:
                 born = u.get("born") or 0.0
                 died = u.get("died")
@@ -2153,7 +2302,7 @@ def _compact_map_playback(
                     return float(end) - float(born)
                 except (TypeError, ValueError):
                     return 0.0
-            side = sorted(side, key=_lifespan, reverse=True)[:_PLAYBACK_MAX_UNITS_PER_SIDE]
+            side = sorted(side, key=_lifespan, reverse=True)[:unit_limit]
         for u in side:
             wp_in = u.get("waypoints") or []
             track: List[Tuple[float, float, float]] = []
@@ -2168,6 +2317,10 @@ def _compact_map_playback(
                 try:
                     t, x, y = float(tri[0]), float(tri[1]), float(tri[2])
                 except (TypeError, ValueError, IndexError):
+                    mark_incomplete()
+                    continue
+                if not all(math.isfinite(v) for v in (t, x, y)):
+                    mark_incomplete()
                     continue
                 # Time has to stay strictly monotonic: the web walks the
                 # array forward and lerps on (t1 - t0), so a repeated or
@@ -2183,7 +2336,7 @@ def _compact_map_playback(
                 # collide once rounded — the zero-length lerp this guard
                 # exists to prevent. Rounding here is free for the
                 # simplifier, which only ever looks at x/y.
-                t = round(t, 1)
+                t = round(t, precision)
                 if last_t is not None and t <= last_t:
                     continue
                 last_t = t
@@ -2194,12 +2347,23 @@ def _compact_map_playback(
             # walked around a cliff keeps its corner, so the curve the
             # web draws follows the ground it walked on.
             wp: list = []
-            for t, x, y in _simplify_track(
-                track,
-                _PLAYBACK_WAYPOINT_EPSILON,
-                _PLAYBACK_MAX_WAYPOINTS_PER_UNIT,
-            ):
-                wp.extend((round(t, 1), round(x, 1), round(y, 1)))
+            if observed:
+                # Spatial RDP ignores time: it can erase a 10-minute stop
+                # on a straight line and draw movement throughout that stop.
+                # Preserve all observations unless the declared budget fills.
+                if fidelity["positions"] == "engine":
+                    track = _compress_engine_track(track)
+                limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT
+                if len(track) > limit:
+                    mark_incomplete()
+                    track = ([track[round(i * (len(track) - 1) / (limit - 1))] for i in range(limit)]
+                             if limit > 1 else track[:max(0, limit)])
+                kept_track = track
+            else:
+                kept_track = _simplify_track(track, _PLAYBACK_WAYPOINT_EPSILON,
+                                             _PLAYBACK_MAX_WAYPOINTS_PER_UNIT)
+            for t, x, y in kept_track:
+                wp.extend((round(t, precision), round(x, precision), round(y, precision)))
             if not wp:
                 continue
             born = u.get("born")
@@ -2207,10 +2371,11 @@ def _compact_map_playback(
             entry: Dict[str, Any] = {
                 "owner": owner,
                 "name": str(u.get("name") or ""),
-                "born": round(float(born), 1) if isinstance(born, (int, float)) else round(wp[0], 1),
-                "died": round(float(died), 1) if isinstance(died, (int, float)) else None,
+                "born": round(float(born), precision) if isinstance(born, (int, float)) else round(wp[0], precision),
+                "died": round(float(died), precision) if isinstance(died, (int, float)) else None,
                 "wp": wp,
             }
+            copy_identity(u, entry)
             # Spent death: the engine attributed this death and found no
             # killer (drone→structure morph, templar→archon merge, MULE
             # timeout). Only emitted when the engine provided the key —
@@ -2219,7 +2384,32 @@ def _compact_map_playback(
             if entry["died"] is not None and "killer_pid" in u and u.get("killer_pid") is None:
                 entry["sd"] = True
             units.append(entry)
+    if observed:
+        # Allocate a total budget across BOTH players. Never spend all the
+        # points on early units and silently remove the opponent/late game.
+        counts = [len(u["wp"]) // 3 for u in units]
+        if sum(counts) > _PLAYBACK_OBSERVED_MAX_TOTAL_POINTS:
+            mark_incomplete()
+            minimum = [min(n, 2) for n in counts]
+            remaining = max(0, _PLAYBACK_OBSERVED_MAX_TOTAL_POINTS - sum(minimum))
+            weights = sum(n - base for n, base in zip(counts, minimum))
+            for u, n, base in zip(units, counts, minimum):
+                limit = base + int(remaining * (n - base) / max(1, weights))
+                if n > limit and limit > 1:
+                    wp = u["wp"]
+                    u["wp"] = [value for i in range(limit)
+                               for value in wp[round(i * (n - 1) / (limit - 1)) * 3:round(i * (n - 1) / (limit - 1)) * 3 + 3]]
     out["units"] = units
+    if observed:
+        attackers = [record for record in [*units, *buildings] if record.get("attacks")]
+        counts = [len(record["attacks"]) for record in attackers]
+        if sum(counts) > _PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS:
+            mark_incomplete()
+            minimum = [min(n, 2) for n in counts]
+            remaining = max(0, _PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS - sum(minimum))
+            weight = sum(n - base for n, base in zip(counts, minimum))
+            for record, n, base in zip(attackers, counts, minimum):
+                keep_attacks(record, base + int(remaining * (n - base) / max(1, weight)))
 
     stats_out: Dict[str, list] = {}
     for owner, key in (("me", "my_stats"), ("opp", "opp_stats")):
@@ -2242,6 +2432,100 @@ def _compact_map_playback(
             ])
         stats_out[owner] = rows
     out["stats"] = stats_out
+
+    if observed and fidelity["positions"] == "engine":
+        creep = playback.get("creep")
+        if isinstance(creep, Mapping) and creep.get("encoding") == "rle":
+            width, height = creep.get("width"), creep.get("height")
+            if all(isinstance(v, int) and 0 < v <= 512 for v in (width, height)):
+                frames = []
+                for frame in creep.get("frames") or []:
+                    if not isinstance(frame, Mapping):
+                        mark_incomplete()
+                        continue
+                    t, runs = frame.get("t"), frame.get("runs")
+                    if (not isinstance(t, (int, float)) or not math.isfinite(t)
+                            or not isinstance(runs, (list, tuple)) or len(runs) % 2
+                            or len(runs) > width * height * 2):
+                        mark_incomplete()
+                        continue
+                    end = 0
+                    valid = True
+                    for i in range(0, len(runs), 2):
+                        start, length = runs[i:i + 2]
+                        if (not isinstance(start, int) or not isinstance(length, int)
+                                or start < end or length <= 0 or start + length > width * height):
+                            valid = False
+                            break
+                        end = start + length
+                    if valid:
+                        frames.append({"t": round(float(t), 3), "runs": list(runs)})
+                    else:
+                        mark_incomplete()
+                out["creep"] = {"width": width, "height": height, "encoding": "rle", "frames": frames}
+        effects = []
+        for effect in playback.get("effects") or []:
+            if not isinstance(effect, Mapping) or effect.get("owner") not in ("me", "opp", "neutral"):
+                mark_incomplete()
+                continue
+            if not all(isinstance(effect.get(k), (int, float)) and math.isfinite(effect[k]) for k in ("id", "t", "end", "x", "y", "radius")):
+                mark_incomplete()
+                continue
+            if effect["end"] < effect["t"] or effect["radius"] < 0:
+                mark_incomplete()
+                continue
+            effects.append({"id": int(effect["id"]), "name": str(effect.get("name") or "")[:80],
+                            "owner": effect["owner"], **{k: round(float(effect[k]), 3) for k in ("t", "end", "x", "y", "radius")}})
+        out["effects"] = effects
+
+    if observed:
+        def thinner(rows, ratio):
+            if len(rows) <= 2:
+                return rows
+            count = max(2, min(len(rows) - 1, int(len(rows) * ratio)))
+            return [rows[round(i * (len(rows) - 1) / (count - 1))] for i in range(count)]
+
+        # The entire upload also carries build logs and macro analytics.
+        # Reserve 0.75 MiB for those. If thinning is necessary, distribute it
+        # over the whole game and explicitly expose the fidelity reduction.
+        while True:
+            payload_size = len(json.dumps(out, separators=(",", ":"), allow_nan=False).encode("utf-8"))
+            if payload_size <= _PLAYBACK_OBSERVED_MAX_BYTES:
+                break
+            mark_incomplete()
+            # A few kilobytes over budget should not halve an entire game.
+            ratio = min(0.98, 0.98 * _PLAYBACK_OBSERVED_MAX_BYTES / payload_size)
+            changed = False
+            for unit in units:
+                wp = unit["wp"]
+                if len(wp) > 6:
+                    unit["wp"] = [v for row in thinner([wp[i:i + 3] for i in range(0, len(wp), 3)], ratio) for v in row]
+                    changed = True
+            for building in buildings:
+                moves = building.get("moves") or []
+                if len(moves) > 6:
+                    building["moves"] = [v for row in thinner([moves[i:i + 3] for i in range(0, len(moves), 3)], ratio) for v in row]
+                    changed = True
+            if changed:
+                continue
+            for record in [*units, *buildings]:
+                attacks = record.get("attacks") or []
+                if len(attacks) > 2:
+                    keep_attacks(record, max(2, int(len(attacks) * ratio)))
+                    changed = True
+            if changed:
+                continue
+            creep_frames = out.get("creep", {}).get("frames", [])
+            if len(creep_frames) > 2:
+                out["creep"]["frames"] = thinner(creep_frames, ratio)
+                changed = True
+            for key in ("effects", "casts"):
+                if len(out.get(key, [])) > 2:
+                    out[key] = thinner(out[key], ratio)
+                    changed = True
+            if not changed:
+                log.warning("map_playback_exceeds_upload_budget")
+                return None
 
     if not units and not buildings:
         return None

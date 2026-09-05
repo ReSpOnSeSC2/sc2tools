@@ -12,10 +12,9 @@
  * from the SC2 ``.m3`` models in Blender, 8 facings × 8 animation
  * frames per unit, at TRUE world scale — a Thor's cell is 8.1 world
  * units wide against a Marine's 1.3, so it draws 6.2× as large. Units
- * tween between their (≥2 s apart) waypoints on a clamped Catmull-Rom,
- * face the direction they are actually moving, and play Walk or Stand
- * accordingly; workers run a real hall → patch → hall mining cycle so
- * bases visibly bustle. Anything with no sheet (Larva, Egg, Broodling,
+ * follow recorded positions with bounded interpolation and face the
+ * observed direction of travel. Missing movement is held at the last
+ * observation; no mining routes or builder units are synthesized. Anything with no sheet (Larva, Egg, Broodling,
  * Interceptor, Changeling, Locust, creep tumours, …) falls back to the
  * old flat team-tinted icon, and then to a dot.
  *
@@ -45,17 +44,13 @@ import {
   isGasStructure,
   isTownHall,
   isWorkerUnit,
-  MINING_SNAP_RADIUS,
-  miningArcPosition,
-  nearestTownHall,
-  patchesNearHall,
-  patchMiningPosition,
   resourceAliveAt,
   projectX,
   projectY,
-  spreadClusters,
   statsAt,
   unitAliveAt,
+  unitNameAt,
+  unitVisibleAt,
   unitMaxSpeed,
   worldProjection,
   type MapPlayback,
@@ -63,8 +58,6 @@ import {
 } from "@/lib/mapReplay";
 import {
   animFrameIndex,
-  facingFromVelocity,
-  miningCycleSample,
   motionSample,
   phaseOffset,
   sampleTrack,
@@ -89,6 +82,9 @@ import {
   type LossSummary,
 } from "@/lib/mapReplayLosses";
 import { drawSpellEffects, spellEffectsVersion } from "@/lib/spellEffects";
+import { collectCreepSources, drawEstimatedCreep, type CreepSource } from "@/lib/replayCreep";
+import { drawObservedCreep } from "@/lib/replayObservedCreep";
+import { attackAt, attackFrame, drawWeaponEffects, unitFacingAt } from "@/lib/replayCombat";
 import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import { getIconPath, type IconKind } from "@/lib/sc2-icons";
@@ -166,24 +162,6 @@ const WIDEST_SPRITE_WORLD = 13.7;
 /* ──────────────── motion tuning ──────────────── */
 /** Above this world-units/second a unit plays its Walk cycle. */
 const WALK_SPEED_THRESHOLD = 0.45;
-/** A worker parked at a base is presented MINING. The snap radius is
- * unchanged (``MINING_SNAP_RADIUS``); these feather the handover so a
- * worker crossing its own base walks through instead of teleporting
- * onto the mineral line and back. */
-const MINING_FEATHER_WORLD = 3;
-/** Worker speed above which it is clearly travelling, not mining. */
-const MINING_IDLE_SPEED = 1.6;
-
-/* ──────────────── cluster spreading ────────────────
- *
- * Expressed in WORLD units now, not canvas px, so the spread is the
- * same physical size at every zoom and stage size. Deliberately small:
- * at true sprite scale, co-located units already read as a crowd, and
- * a large spread pops when a unit crosses a cell boundary.
- */
-const CLUSTER_CELL_WORLD = 1.2;
-const CLUSTER_SPACING_WORLD = 0.75;
-
 /* ──────────────── fog of war ──────────────── */
 const FOG_ALPHA = 0.5;
 /** Sight radii in world cells, loosely matching in-game vision. */
@@ -204,24 +182,8 @@ const FOG_RENDER_SCALE = 0.4;
  * render scale — a 4K stage gains nothing from a 4K fog. */
 const FOG_MAX_DPR = 2;
 
-/**
- * Margin, in world units, on the cheap "is this unit's whole track off
- * screen?" reject. It must cover everything that can put a unit's
- * PIXELS or its VISION on screen when its waypoints are not:
- *
- *   • the widest sprite cell on the ladder (13.7, the Mothership);
- *   • the mining cycle pulling a parked worker up to
- *     MINING_SNAP_RADIUS (12) toward its hall, whose SIGHT_WORKER (9)
- *     reveal then reaches a further 9 — 21 in total;
- *   • a unit's own SIGHT_UNIT (11) reveal.
- *
- * The mining case dominates, so the margin is the max of the three.
- */
-const CULL_MARGIN_WORLD = Math.max(
-  WIDEST_SPRITE_WORLD,
-  MINING_SNAP_RADIUS + SIGHT_WORKER,
-  SIGHT_UNIT,
-);
+/** Cover sprite footprints and vision for off-screen tracks. */
+const CULL_MARGIN_WORLD = Math.max(WIDEST_SPRITE_WORLD, SIGHT_UNIT);
 /**
  * Sight sources are deduped on a spatial grid. The cell is a fraction
  * of the reveal RADIUS rather than a fixed pixel count, so the dedupe
@@ -949,6 +911,18 @@ export function MapReplayer({
             aria-label={`Map playback of ${playback.mapName || "this game"}`}
           />
           <div
+            className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] rounded-md border border-white/10 bg-black/70 px-2 py-1 text-[10px] leading-snug text-white/80"
+            role="note"
+            aria-label="Replay accuracy"
+          >
+            {playback.fidelity?.positions === "engine"
+              ? "Recorded game playback"
+              : playback.v >= 6 ? "Limited position data · gaps hold last position" : "Older replay data · re-sync for accurate positions"}
+            {playback.fidelity?.complete === false ? " · partial recording" : ""}
+            {playback.fidelity?.positions === "engine" && playback.fidelity.attacks !== "observed" ? " · regenerate for attacks" : ""}
+            {!playback.creep && derivedOf(playback).creepSources.length > 0 ? " · estimated creep" : ""}
+          </div>
+          <div
             className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 p-1 backdrop-blur-sm"
             role="group"
             aria-label="Map view controls"
@@ -1248,14 +1222,12 @@ function resourceGlyph(kind: string, dpr: number): HTMLCanvasElement | null {
 /* ──────────────── per-payload derived data ──────────────── */
 
 interface Derived {
-  /** Worker unit name per side, for the builder-at-the-site cameo. */
-  workerName: Record<"me" | "opp", string | null>;
+  creepSources: CreepSource[];
   /** Track bounding box per unit, in world units — lets a zoomed-in
    * frame skip interpolating a unit that can never be on screen. */
   trackBox: Float32Array;
   /** Per-unit facing, carried across frames so the hysteresis in
    * ``facingFromVelocity`` has something to be sticky about. */
-  facings: Int8Array;
   /** Per-unit animation phase, so a pack of Zerglings never marches
    * in lockstep. Deterministic in the payload index. */
   phase: Float32Array;
@@ -1280,7 +1252,6 @@ const derivedCache = new WeakMap<MapPlayback, Derived>();
 function derivedOf(playback: MapPlayback): Derived {
   let d = derivedCache.get(playback);
   if (!d) {
-    const workerName: Record<"me" | "opp", string | null> = { me: null, opp: null };
     const n = playback.units.length;
     const trackBox = new Float32Array(n * 4);
     const phase = new Float32Array(n);
@@ -1291,7 +1262,6 @@ function derivedOf(playback: MapPlayback): Derived {
       const u = playback.units[i];
       const worker = isWorkerUnit(u.name);
       unitWorker[i] = worker ? 1 : 0;
-      if (worker && !workerName[u.owner]) workerName[u.owner] = u.name;
       const sprite = resolveSprite(u.name, "unit");
       unitStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
       // Carrier, SiegeTank and Tempest have no walk cycle; spriteAnim
@@ -1331,9 +1301,8 @@ function derivedOf(playback: MapPlayback): Derived {
       if (isGasStructure(b.name)) gasBuildings.push(b);
     }
     d = {
-      workerName,
+      creepSources: collectCreepSources(playback),
       trackBox,
-      facings: new Int8Array(n),
       phase,
       unitStand,
       unitWalk,
@@ -1346,15 +1315,6 @@ function derivedOf(playback: MapPlayback): Derived {
     derivedCache.set(playback, d);
   }
   return d;
-}
-
-/** How long after placement a builder worker is shown at the site.
- * SCVs construct the whole build; probes warp and leave; drones morph
- * INTO the building (no extra worker to show). */
-function builderWindowSec(workerName: string | null): number {
-  if (workerName === "SCV") return 17;
-  if (workerName === "Drone") return 0;
-  return 2.5;
 }
 
 /** Reusable offscreen fog canvas — resized on demand, redrawn each
@@ -1436,15 +1396,7 @@ function pushEntity(): DrawEntity {
 /** Scratch motion samples — module-level so the hot loop allocates
  * nothing per unit per frame. */
 const trackSample: MotionSample = motionSample();
-const cycleSample: MotionSample = motionSample();
-/** Reused hall bookkeeping. */
-interface Hall {
-  x: number;
-  y: number;
-  slots: Array<{ x: number; y: number }>;
-}
-const spreadInput: DrawEntity[] = [];
-const spreadSeeds: number[] = [];
+
 /** Fog reveal sources, pooled the same way as the entity list. */
 const fogX: number[] = [];
 const fogY: number[] = [];
@@ -1474,8 +1426,8 @@ function renderFrame(
   /* ── THE transform ──────────────────────────────────────────────
    * ``worldProjection`` is the single authority for world → canvas.
    * ``k`` is PIXELS PER WORLD UNIT; every length on screen derives
-   * from it — terrain rect, sprite cell width, cluster spacing, fog
-   * radii, mining geometry. Nothing in this file may size anything in
+   * from it — terrain rect, sprite cell width, effect and fog
+   * radii. Nothing in this file may size anything in
    * raw pixels that represents a world quantity.
    *
    *   canvasX = proj.ox + (worldX - bounds.minX) * k
@@ -1522,6 +1474,8 @@ function renderFrame(
   // rocks, towers — mined-out patches and broken rocks disappear at
   // their recorded death time.
   const derived = derivedOf(playback);
+  if (playback.creep) drawObservedCreep(ctx, bounds, proj, playback.creep, t);
+  else drawEstimatedCreep(ctx, bounds, proj, derived.creepSources, t);
   const minFurniturePx = MIN_FURNITURE_SCREEN_PX / view.z;
   const glyphPx = Math.max(minFurniturePx, RESOURCE_GLYPH_WORLD * k);
   const rocksPx = Math.max(minFurniturePx, ROCKS_GLYPH_WORLD * k);
@@ -1559,46 +1513,10 @@ function renderFrame(
     );
   }
 
-  // Friendly town halls standing at time t — the anchors the mining
-  // cycle runs between, with their live patch lists.
-  const halls: Record<"me" | "opp", Hall[]> = { me: [], opp: [] };
-  for (const b of playback.buildings) {
-    if (isTownHall(b.name) && buildingAliveAt(b, t)) {
-      // CURRENT position: a floated Command Center anchors mining at
-      // the expansion it landed on, not its construction site.
-      const pos = buildingPositionAt(b, t);
-      halls[b.owner].push({ x: pos.x, y: pos.y, slots: [] });
-    }
-  }
-  // Mining slots per hall: real patches when the payload carries
-  // resources, plus 3 gas slots per geyser a friendly gas building
-  // sits on. Older (v1) payloads leave slots empty → arc fallback.
-  if (playback.resources.length > 0) {
-    for (const side of ["me", "opp"] as const) {
-      for (const hall of halls[side]) {
-        const patches = patchesNearHall(playback.resources, hall, t);
-        const slots: Array<{ x: number; y: number }> = [...patches];
-        for (const r of playback.resources) {
-          if (r.kind !== "gas") continue;
-          if (Math.hypot(r.x - hall.x, r.y - hall.y) > 11) continue;
-          // Same test the draw pass above uses, so a geyser can never be
-          // hidden-as-tapped here and still counted as untapped there.
-          if (gasTappedAt(derived.gasBuildings, r, t, side)) slots.push(r, r, r);
-        }
-        hall.slots = slots;
-      }
-    }
-  }
-
-  const facings = derived.facings;
   const trackBox = derived.trackBox;
   entityCount = 0;
   fogCount = 0;
-  spreadInput.length = 0;
-  spreadSeeds.length = 0;
 
-  const clusterCellPx = CLUSTER_CELL_WORLD * k;
-  const clusterSpacingPx = CLUSTER_SPACING_WORLD * k;
   // Margin for the cheap track-bbox reject, in canvas px — see
   // CULL_MARGIN_WORLD for what it has to cover.
   const pad = CULL_MARGIN_WORLD * k;
@@ -1610,10 +1528,9 @@ function renderFrame(
   const units = playback.units;
   for (let idx = 0; idx < units.length; idx += 1) {
     const u = units[idx];
-    if (!unitAliveAt(u, t)) continue;
+    if (!unitVisibleAt(u, t)) continue;
     // Cheap reject: a unit whose whole track sits off screen can never
-    // be visible, so skip the interpolation entirely. Generous margin
-    // (the mining cycle can push a worker a few cells off its track).
+    // be visible, so skip the interpolation entirely.
     const bx0 = trackBox[idx * 4];
     if (bx0 !== Infinity) {
       const sx0 = projectX(bounds, proj, bx0) - pad;
@@ -1625,51 +1542,26 @@ function renderFrame(
       if (sx1 < cullX0 || sx0 > cullX1 || sy1 < cullY0 || sy0 > cullY1) continue;
     }
 
-    const pos = sampleTrack(u.wp, t, unitMaxSpeed(u.name), trackSample);
+    const name = unitNameAt(u, t);
+    const pos = sampleTrack(u.wp, t, unitMaxSpeed(name), trackSample);
     if (!pos) continue;
-    let wx = pos.x;
-    let wy = pos.y;
-    let vx = pos.vx;
-    let vy = pos.vy;
-    const worker = derived.unitWorker[idx] === 1;
-
-    if (worker) {
-      const hall = nearestTownHall(pos, halls[u.owner], MINING_SNAP_RADIUS) as Hall | null;
-      if (hall) {
-        // Feathered handover instead of a hard snap: fully mining when
-        // parked well inside the radius, fully on its own track when
-        // travelling or at the radius edge, blended in between — so a
-        // worker crossing its base walks through rather than popping
-        // onto the mineral line and back.
-        const dist = Math.hypot(hall.x - wx, hall.y - wy);
-        const speed = Math.hypot(vx, vy);
-        const nearW = clamp01((MINING_SNAP_RADIUS - dist) / MINING_FEATHER_WORLD);
-        const idleW = clamp01(1 - speed / MINING_IDLE_SPEED);
-        const mix = nearW * idleW;
-        if (mix > 0) {
-          const hallSlots = hall.slots;
-          const spot =
-            hallSlots && hallSlots.length > 0
-              ? patchMiningPosition(hallSlots[idx % hallSlots.length], hall, idx)
-              : miningArcPosition(hall, bounds, idx);
-          const c = miningCycleSample(hall, spot, t, idx, cycleSample);
-          wx += (c.x - wx) * mix;
-          wy += (c.y - wy) * mix;
-          vx += (c.vx - vx) * mix;
-          vy += (c.vy - vy) * mix;
-        }
-      }
-    }
+    const { x: wx, y: wy, vx, vy } = pos;
+    const worker = isWorkerUnit(name);
 
     const sx = projectX(bounds, proj, wx);
     const sy = projectY(bounds, proj, wy);
     pushFog(sx, sy, worker ? SIGHT_WORKER : SIGHT_UNIT);
 
-    // Walk when actually moving, Stand otherwise. Both handles were
-    // resolved up front; for a sprite with no walk cycle they are the
-    // same object, so this needs no extra check.
+    // Actual weapon cycles trigger a single Attack clip. Otherwise use
+    // observed movement to choose Walk or Stand.
     const walking = vx * vx + vy * vy > WALK_SPEED_THRESHOLD * WALK_SPEED_THRESHOLD;
-    const handle = walking ? derived.unitWalk[idx] : derived.unitStand[idx];
+    const formSprite = name !== u.name ? resolveSprite(name, "unit") : null;
+    const sprite = name !== u.name ? formSprite : derived.unitStand[idx]?.sprite;
+    const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
+    const attack = attackAt(u, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
+    const handle = attack && attackHandle ? attackHandle : name !== u.name
+      ? formSprite ? spriteAnim(formSprite, walking && hasWalk(formSprite) ? "Walk" : "Stand") : null
+      : walking ? derived.unitWalk[idx] : derived.unitStand[idx];
     let cellPx = handle
       ? handle.anim.wupc * k * SPRITE_WORLD_GAIN
       : (worker ? FALLBACK_WORKER_WORLD : FALLBACK_UNIT_WORLD) * k;
@@ -1678,10 +1570,7 @@ function renderFrame(
     if (sx + cellPx < cullX0 || sx - cellPx > cullX1) continue;
     if (sy + cellPx < cullY0 || sy - cellPx > cullY1) continue;
 
-    // Facing is stateful: the hysteresis in ``facingFromVelocity``
-    // keeps the previous bucket unless the heading has clearly left it.
-    const facing = facingFromVelocity(vx, vy, facings[idx]);
-    facings[idx] = facing;
+    const facing = unitFacingAt(u, t, pos, attack);
 
     const e = pushEntity();
     e.x = sx;
@@ -1691,37 +1580,15 @@ function renderFrame(
     e.color = u.owner === "me" ? ME_SHEET : OPP_SHEET;
     e.facing = facing;
     e.frame = handle
-      ? animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.phase[idx])
+      ? attack && handle === attackHandle ? attackFrame(attack.age, handle.anim.fps, handle.anim.frames)
+        : animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.phase[idx])
       : 0;
-    e.name = u.name;
+    e.name = name;
     e.iconKind = "unit";
     e.tint = u.owner === "me" ? ME_ARMY : OPP_ARMY;
     e.dot = u.owner === "me" ? (worker ? ME_WORKER : ME_ARMY) : worker ? OPP_WORKER : OPP_ARMY;
     e.alpha = handle ? 1 : worker ? 0.75 : 1;
     e.worker = worker;
-    // Every unit takes part in cluster spreading, mining workers
-    // included: they converge on a shared dock point at the hall, and
-    // that is exactly where a stack needs breaking up. (The old static
-    // presentation excluded them because their slots never moved.)
-    spreadInput.push(e);
-    spreadSeeds.push(idx);
-  }
-
-  // Spread co-located units onto a deterministic sunflower so a
-  // 20-stalker ball reads as 20 units, not one. Seeded by payload
-  // index so a death never reshuffles the survivors.
-  if (spreadInput.length > 1 && clusterSpacingPx > 0.5) {
-    const spread = spreadClusters(
-      spreadInput,
-      clusterCellPx,
-      clusterSpacingPx,
-      spreadSeeds,
-    );
-    for (let i = 0; i < spread.length; i += 1) {
-      const e = spreadInput[i];
-      e.x = spread[i].x;
-      e.y = spread[i].y;
-    }
   }
 
   /* ── Buildings ─────────────────────────────────────────────────── */
@@ -1737,7 +1604,12 @@ function renderFrame(
     // Buildings have facings: 1 — they never rotate — and their draw
     // size comes from the same worldUnitsPerCell ladder as units, so
     // the old hard-coded town-hall size bump is gone.
-    const handle = derived.buildingStand[bi];
+    const name = unitNameAt(b, t);
+    const formSprite = name !== b.name ? resolveSprite(name, "building") : null;
+    const sprite = name !== b.name ? formSprite : derived.buildingStand[bi]?.sprite;
+    const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
+    const attack = attackAt(b, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
+    const handle = attack && attackHandle ? attackHandle : name !== b.name ? formSprite ? spriteAnim(formSprite, "Stand") : null : derived.buildingStand[bi];
     let cellPx = handle
       ? handle.anim.wupc * k * SPRITE_WORLD_GAIN
       : FALLBACK_BUILDING_WORLD * k;
@@ -1753,47 +1625,16 @@ function renderFrame(
     e.color = b.owner === "me" ? ME_SHEET : OPP_SHEET;
     e.facing = 0;
     e.frame = handle
-      ? animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.buildingPhase[bi])
+      ? attack && handle === attackHandle ? attackFrame(attack.age, handle.anim.fps, handle.anim.frames)
+        : animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.buildingPhase[bi])
       : 0;
-    e.name = b.name;
+    e.name = name;
     e.iconKind = "building";
     e.tint = b.owner === "me" ? ME_ARMY : OPP_ARMY;
     e.dot = b.owner === "me" ? "rgba(62,192,199,0.75)" : "rgba(224,86,86,0.75)";
     e.alpha = 1;
     e.worker = false;
 
-    // Builder-at-the-site presentation: an SCV stays for the whole
-    // construction, a probe warps and leaves, a drone becomes the
-    // building. Skip the opening town hall (t=0 has no builder).
-    if (b.t > 1) {
-      const workerName = derived.workerName[b.owner];
-      const windowSec = builderWindowSec(workerName);
-      if (workerName && windowSec > 0 && t >= b.t && t <= b.t + windowSec) {
-        const wsprite = resolveSprite(workerName, "unit");
-        const whandle = wsprite ? spriteAnim(wsprite, "Stand") : null;
-        const wcell = Math.max(
-          minCellScenePx,
-          (whandle ? whandle.anim.wupc : FALLBACK_WORKER_WORLD) * k * SPRITE_WORLD_GAIN,
-        );
-        const we = pushEntity();
-        we.x = sx + cellPx * 0.32;
-        we.y = sy + cellPx * 0.06;
-        we.cellPx = wcell;
-        we.handle = whandle;
-        // Face the structure it is building (west, index 6).
-        we.facing = 6;
-        we.color = e.color;
-        we.frame = whandle
-          ? animFrameIndex(t, whandle.anim.fps, whandle.anim.frames, derived.buildingPhase[bi])
-          : 0;
-        we.name = workerName;
-        we.iconKind = "unit";
-        we.tint = e.tint;
-        we.dot = e.dot;
-        we.alpha = 0.9;
-        we.worker = true;
-      }
-    }
   }
 
   /* ── Fog of war ────────────────────────────────────────────────
@@ -1884,6 +1725,12 @@ function renderFrame(
     ) {
       continue;
     }
+    // Retain the loaded model while its first attack atlas is decoding.
+    if (e.handle?.name === "Attack") {
+      const idle = spriteAnim(e.handle.sprite, "Stand");
+      const idleSize = Math.max(minCellScenePx, idle.anim.wupc * k * SPRITE_WORLD_GAIN);
+      if (drawSprite(ctx, idle, e.color, e.facing, animFrameIndex(t, idle.anim.fps, idle.anim.frames, 0), e.x, e.y, idleSize)) continue;
+    }
     // No sheet for this name (or it hasn't decoded yet): the flat
     // team-tinted icon, then a bare dot.
     const size = e.cellPx;
@@ -1900,6 +1747,7 @@ function renderFrame(
   if (alpha !== 1) ctx.globalAlpha = 1;
 
   drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay");
+  drawWeaponEffects(ctx, playback, t, proj, view);
 
   // Battle pulses near their marker time — drawn last so the amber
   // ring reads over the sprites it is calling attention to.
@@ -1931,10 +1779,6 @@ function renderFrame(
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
   }
-}
-
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 /** Cached vignette gradient, per context — rebuilt only when the

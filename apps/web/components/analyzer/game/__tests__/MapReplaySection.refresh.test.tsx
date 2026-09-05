@@ -1,0 +1,132 @@
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MapReplaySection } from "../MapReplaySection";
+
+const harness = vi.hoisted(() => ({
+  api: {
+    data: null as unknown,
+    isLoading: false,
+    error: null as null | { status: number; code?: string; message: string },
+    request: vi.fn(),
+    mutate: vi.fn(),
+  },
+}));
+vi.mock("@/lib/clientApi", () => ({ useApi: () => harness.api }));
+vi.mock("../replay/ReplayStage", () => ({ ReplayStage: () => <div>Replay stage</div> }));
+vi.mock("../replay/CompactReplayHost", () => ({ CompactReplayHost: () => <div>Compact replay</div> }));
+
+function payload(positions = "tracker", complete = true, rebuild?: Record<string, string>) {
+  return {
+    v: 6, mapName: "Test", gameLength: 60,
+    bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 },
+    spawns: [], battles: [], units: [],
+    buildings: [{ owner: "me", name: "Nexus", t: 0, x: 20, y: 20 }],
+    fidelity: { positions, paths: "observed", creep: "estimated", attacks: positions === "engine" ? "observed" : "unavailable", complete },
+    ...(rebuild ? { rebuild } : {}),
+  };
+}
+function pending() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+const button = () => screen.getByRole("button", { name: /Generate accurate playback|Recording replay/ }) as HTMLButtonElement;
+
+beforeEach(() => {
+  harness.api.data = payload();
+  harness.api.error = null;
+  harness.api.request.mockReset();
+  harness.api.mutate.mockReset().mockResolvedValue(undefined);
+});
+afterEach(cleanup);
+
+describe("map playback rebuild progress", () => {
+  it("reports a completed recording without attacks and offers regeneration", async () => {
+    harness.api.request.mockResolvedValue({ requestId: "current" });
+    const view = render(<MapReplaySection gameId="g1" />);
+    await act(async () => fireEvent.click(button()));
+    const result = payload("engine", true, { requestId: "current", status: "complete" });
+    result.fidelity.attacks = "unavailable";
+    harness.api.data = result;
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.getByRole("status").textContent).toContain("no attack data");
+    expect(screen.queryByText("Recorded playback is ready.")).toBeNull();
+    expect(button().disabled).toBe(false);
+  });
+  it("waits for the acknowledged job instead of completing from cached engine data", async () => {
+    harness.api.data = payload("engine", false, { requestId: "old", status: "complete" });
+    const ack = pending();
+    harness.api.request.mockReturnValue(ack.promise);
+    const view = render(<MapReplaySection gameId="g1" />);
+    fireEvent.click(button());
+    expect(button().disabled).toBe(true);
+    harness.api.data = payload("engine", true, { requestId: "old", status: "complete" });
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.queryByText("Recorded playback is ready.")).toBeNull();
+    await act(async () => ack.resolve({ rebuild: { requestId: "new" } }));
+    expect(button().disabled).toBe(true);
+    expect(harness.api.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
+    harness.api.data = payload("engine", true, { requestId: "new", status: "complete" });
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.getByText("Recorded playback is ready.")).toBeTruthy();
+    expect(button().disabled).toBe(false);
+  });
+
+  it("ignores a late response after navigating away and back to the same game", async () => {
+    const first = pending(), second = pending();
+    harness.api.request.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const view = render(<MapReplaySection gameId="g1" />);
+    fireEvent.click(button());
+    view.rerender(<MapReplaySection gameId="g2" />);
+    view.rerender(<MapReplaySection gameId="g1" />);
+    fireEvent.click(button());
+    await act(async () => first.resolve({ requestId: "old" }));
+    expect(harness.api.mutate).not.toHaveBeenCalled();
+    expect(button().disabled).toBe(true);
+    await act(async () => second.resolve({ requestId: "current" }));
+    expect(harness.api.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports unacknowledged jobs and allows a retry", async () => {
+    harness.api.request.mockResolvedValue({ ok: true });
+    render(<MapReplaySection gameId="g1" />);
+    await act(async () => fireEvent.click(button()));
+    expect(screen.getByRole("status").textContent).toMatch(/not acknowledged/);
+    expect(button().disabled).toBe(false);
+    expect(harness.api.mutate).not.toHaveBeenCalled();
+  });
+
+  it("keeps polling an accepted rebuild after a transient GET failure", async () => {
+    harness.api.request.mockResolvedValue({ requestId: "current" });
+    harness.api.mutate.mockRejectedValue(new Error("temporary proxy failure"));
+    const view = render(<MapReplaySection gameId="g1" />);
+    await act(async () => fireEvent.click(button()));
+    expect(button().disabled).toBe(true);
+    harness.api.error = { status: 503, message: "temporary proxy failure" };
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.getByRole("status").textContent).toMatch(/Retrying while your desktop agent/);
+    expect(button().disabled).toBe(true);
+    harness.api.error = { status: 401, message: "You need to sign in again." };
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.getByRole("status").textContent).toBe("You need to sign in again.");
+    expect(button().disabled).toBe(false);
+  });
+
+  it("shows the current job's capture error even when an old game has no playback", async () => {
+    harness.api.data = null;
+    harness.api.request.mockResolvedValue({ requestId: "current" });
+    const view = render(<MapReplaySection gameId="g1" />);
+    await act(async () => fireEvent.click(button()));
+    harness.api.data = { ok: false, code: "not_computed", rebuild: {
+      requestId: "previous", status: "failed", message: "Old failure",
+    } };
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(button().disabled).toBe(true);
+    harness.api.data = { ok: false, code: "not_computed", rebuild: {
+      requestId: "current", status: "failed", message: "Install StarCraft II before recording playback.",
+    } };
+    view.rerender(<MapReplaySection gameId="g1" />);
+    expect(screen.getByRole("status").textContent).toBe("Install StarCraft II before recording playback.");
+    expect(button().disabled).toBe(false);
+  });
+});

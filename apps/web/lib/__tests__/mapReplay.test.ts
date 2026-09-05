@@ -117,31 +117,25 @@ describe("unit interpolation", () => {
     expect(unitPositionAt(wp, 999)).toEqual({ x: 60, y: 70 });
   });
 
-  it("interpolates linearly between waypoints", () => {
-    expect(unitPositionAt(wp, 125)).toEqual({ x: 35, y: 45 });
-    expect(unitPositionAt(wp, 135)).toEqual({ x: 50, y: 60 });
+  it("holds unobserved gaps instead of inventing routes", () => {
+    expect(unitPositionAt(wp, 125)).toEqual({ x: 30, y: 40 });
+    expect(unitPositionAt(wp, 135)).toEqual({ x: 40, y: 50 });
   });
 
-  it("speed cap holds the anchor then arrives on time (anti-float)", () => {
-    // 30-cell hop with a 5-minute gap: naive lerp drifts the whole
-    // window; capped at 5 cells/sec the unit sits still for 294 s and
-    // travels only during the final 6 s.
+  it("never invents a last-minute dash through a five-minute observation gap", () => {
     const sparse = [0, 10, 10, 300, 40, 10];
     expect(unitPositionAt(sparse, 150, 5)).toEqual({ x: 10, y: 10 });
     expect(unitPositionAt(sparse, 293, 5)).toEqual({ x: 10, y: 10 });
     const mid = unitPositionAt(sparse, 297, 5)!;
-    expect(mid.x).toBeCloseTo(25, 5);
+    expect(mid.x).toBe(10);
     expect(mid.y).toBe(10);
     expect(unitPositionAt(sparse, 300, 5)).toEqual({ x: 40, y: 10 });
-    // Without a cap the old drift behaviour is preserved.
-    expect(unitPositionAt(sparse, 150)).toEqual({ x: 25, y: 10 });
+    expect(unitPositionAt(sparse, 150)).toEqual({ x: 10, y: 10 });
   });
 
-  it("speed cap degrades to plain lerp inside tight gaps", () => {
-    // 30 cells in 5 s implies 6 cells/sec — faster than the cap, so
-    // depart clamps to the segment start and lerp takes over.
-    const tight = [0, 10, 10, 5, 40, 10];
-    expect(unitPositionAt(tight, 2.5, 5)).toEqual({ x: 25, y: 10 });
+  it("interpolates nearby observed positions at the recorded timing", () => {
+    const tight = [0, 10, 10, 1, 14, 10];
+    expect(unitPositionAt(tight, 0.5, 5)).toEqual({ x: 12, y: 10 });
   });
 
   it("unitMaxSpeed distinguishes workers from army", () => {
@@ -415,11 +409,7 @@ describe("buildings — lift/land moves and death (v3)", () => {
     expect(buildingAliveAt({ ...b, died: null }, 9999)).toBe(true);
   });
 
-  it("buildingPositionAt holds the site, flies late, lands on target", () => {
-    // CC built at (30,40), Land command at t=400 targeting (90,90):
-    // ~78 cells at 1.3 cells/s is a ~60 s flight, so the CC must hold
-    // its ORIGINAL base until ~t=340 — this is the "no CC anywhere"
-    // bug: the old renderer pinned it at (30,40) forever.
+  it("buildingPositionAt holds unknown flight intervals until an observed position", () => {
     const cc = {
       owner: "me" as const,
       name: "CommandCenter",
@@ -431,10 +421,9 @@ describe("buildings — lift/land moves and death (v3)", () => {
     };
     expect(buildingPositionAt(cc, 0)).toEqual({ x: 30, y: 40 });
     expect(buildingPositionAt(cc, 200)).toEqual({ x: 30, y: 40 });
-    // Mid-flight: strictly between the two anchor points.
+    // The route and departure time are unknown, so no flight is invented.
     const mid = buildingPositionAt(cc, 380);
-    expect(mid.x).toBeGreaterThan(30);
-    expect(mid.x).toBeLessThan(90);
+    expect(mid).toEqual({ x: 30, y: 40 });
     // At and after the landing time it sits at the new base.
     expect(buildingPositionAt(cc, 400)).toEqual({ x: 90, y: 90 });
     expect(buildingPositionAt(cc, 9999)).toEqual({ x: 90, y: 90 });
