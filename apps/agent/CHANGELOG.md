@@ -2,6 +2,31 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.7
+
+### Fixed - Macro Breakdown recording controls
+
+- The web viewer's **Recompute** action now generates recorded map playback
+  through the connected desktop agent and refreshes macro analysis after the
+  upload finishes. Previously it only reparsed the replay, so updating the
+  agent and clicking Recompute could still leave limited position data.
+- **Generate accurate playback** appears above the map on mobile and desktop,
+  including games without existing playback. Both controls share progress and
+  errors, and reopening Macro Breakdown resumes an active recording.
+
+### Fixed - Windows engine launch
+
+- The packaged agent launches StarCraft II without inheriting conflicting
+  bundled DLL search paths. Engine capture failures preserve a diagnostic log
+  and include its location in the reported error.
+
+### Migration note
+
+- Deploy the updated web viewer and install agent **0.16.7**. Keep StarCraft II
+  and the original replay on the paired computer, then select **Recompute** in
+  Macro Breakdown or **Generate accurate playback** above the map. A normal
+  Re-sync still reparses replays without generating engine recordings.
+
 ## 0.16.6
 
 ### Added - recorded map replay and attack animations

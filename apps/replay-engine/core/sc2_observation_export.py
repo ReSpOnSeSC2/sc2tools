@@ -13,22 +13,86 @@ import argparse
 import hashlib
 import json
 import math
+import ntpath
 import os
 from pathlib import Path
 import re
 import socket
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from typing import Any, Callable
 
 LOOPS_PER_SECOND = 22.4
 ARTIFACT_VERSION = 1
 MAX_ARTIFACT_BYTES = 128 * 1024 * 1024
+MAX_DIAGNOSTIC_BYTES = 256 * 1024
+_EXTERNAL_LAUNCH_LOCK = threading.Lock()
 
 
 class ObservationExportError(RuntimeError):
     """A bounded engine export failed; no incomplete artifact is published."""
+
+
+def _external_windows_environment(environment: dict[str, str], bundle_root: str) -> dict[str, str]:
+    """Remove only bundled DLL search entries from this child's environment."""
+    child = environment.copy()
+    root = ntpath.normcase(ntpath.abspath(bundle_root)).rstrip("\\")
+    for key in child:
+        if key.upper() != "PATH":
+            continue
+        kept = []
+        for entry in child[key].split(";"):
+            expanded = os.path.expandvars(entry.strip().strip('"'))
+            candidate = ntpath.normcase(ntpath.abspath(expanded)) if expanded else ""
+            if candidate != root and not candidate.startswith(root + "\\"):
+                kept.append(entry)
+        child[key] = ";".join(kept)
+    return child
+
+
+def _launch_sc2(args: list[str], **kwargs):
+    """Launch an external runtime without inheriting PyInstaller's DLL path.
+
+    SetDllDirectory is process-wide, so keep this window limited to Popen and
+    restore the exact previous directory even when process creation fails.
+    https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#windows
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return subprocess.Popen(args, **kwargs)
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_directory = kernel32.GetDllDirectoryW
+    get_directory.argtypes = [wintypes.DWORD, wintypes.LPWSTR]
+    get_directory.restype = wintypes.DWORD
+    set_directory = kernel32.SetDllDirectoryW
+    set_directory.argtypes = [wintypes.LPCWSTR]
+    set_directory.restype = wintypes.BOOL
+    environment = kwargs.get("env", dict(os.environ))
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        kwargs["env"] = _external_windows_environment(environment, str(bundle_root))
+    with _EXTERNAL_LAUNCH_LOCK:
+        length = get_directory(0, None)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        if length:
+            get_directory(len(buffer), buffer)
+        previous = buffer.value or None
+        if not set_directory(None):
+            raise ObservationExportError("Could not reset the frozen agent's DLL search path for StarCraft II")
+        process = None
+        try:
+            process = subprocess.Popen(args, **kwargs)
+            return process
+        finally:
+            if not set_directory(previous):
+                if process is not None and process.poll() is None:
+                    process.terminate()
+                raise ObservationExportError("Could not restore the frozen agent's DLL search path")
 
 
 def replay_digest(replay_path: str | Path) -> str:
@@ -319,8 +383,8 @@ class _Engine:
         cwd = self.install / "Support64" if os.name == "nt" else self.install
         self.log = (Path(self.temp.name) / "engine.log").open("wb")
         try:
-            self.process = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL,
-                                            stdout=self.log, stderr=self.log, **kwargs)
+            self.process = _launch_sc2(args, cwd=cwd, stdin=subprocess.DEVNULL,
+                                       stdout=self.log, stderr=self.log, **kwargs)
             deadline = time.monotonic() + min(self.timeout, 60)
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
@@ -333,8 +397,10 @@ class _Engine:
                 except (OSError, websocket.WebSocketException):
                     time.sleep(0.25)
             raise ObservationExportError("SC2 local API did not start within 60 seconds")
-        except BaseException:
-            self.close()
+        except BaseException as exc:
+            diagnostic = self.close(failed=True)
+            if diagnostic is not None and isinstance(exc, Exception):
+                raise ObservationExportError(f"{exc} (SC2 diagnostic log: {diagnostic})") from exc
             raise
 
     def request(self, kind: str, **kwargs):
@@ -356,7 +422,36 @@ class _Engine:
             raise ObservationExportError(f"SC2 {kind}: {body.error} {getattr(body, 'error_details', '')}")
         return body
 
-    def close(self):
+    def _preserve_failure_log(self) -> Path | None:
+        """Keep a bounded stdout/stderr log, never replay bytes or API payloads."""
+        if not self.temp:
+            return None
+        cache = os.environ.get("SC2TOOLS_OBSERVATION_DIR")
+        if cache:
+            destination = Path(cache) / "diagnostics"
+        else:
+            base = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir())
+            destination = base / "sc2tools" / "replay-observations" / "diagnostics"
+        try:
+            source = Path(self.temp.name) / "engine.log"
+            with source.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                length = stream.tell()
+                stream.seek(max(0, length - MAX_DIAGNOSTIC_BYTES))
+                tail = stream.read(MAX_DIAGNOSTIC_BYTES)
+            destination.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(mode="wb", dir=destination,
+                    prefix="sc2-engine-", suffix=".log", delete=False) as output:
+                output.write(b"StarCraft II process stdout/stderr. Replay and API payloads are not recorded.\n")
+                if length > MAX_DIAGNOSTIC_BYTES:
+                    output.write(b"[Earlier output omitted; retaining the final 256 KiB.]\n")
+                output.write(tail or b"[The engine produced no standard output before failure.]\n")
+                return Path(output.name).resolve()
+        except OSError:
+            # A diagnostic write must not hide the original capture failure.
+            return None
+
+    def close(self, *, failed: bool = False):
         if self.ws is not None:
             self.ws.close()
             self.ws = None
@@ -369,13 +464,19 @@ class _Engine:
                 self.process.wait(timeout=5)
         if self.log:
             self.log.close()
+            self.log = None
+        diagnostic = self._preserve_failure_log() if failed else None
         if self.temp:
             # TemporaryDirectory owns this exact directory; no user path can
             # influence the cleanup target.
             self.temp.cleanup()
+            self.temp = None
+        return diagnostic
 
-    def __exit__(self, *_):
-        self.close()
+    def __exit__(self, _type, value, _traceback):
+        diagnostic = self.close(failed=value is not None)
+        if diagnostic is not None and isinstance(value, Exception):
+            raise ObservationExportError(f"{value} (SC2 diagnostic log: {diagnostic})") from value
 
 
 def _frame_from_proto(observation) -> dict:

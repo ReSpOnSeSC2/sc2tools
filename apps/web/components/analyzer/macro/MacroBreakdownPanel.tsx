@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -10,9 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { useAuth } from "@clerk/nextjs";
 import { AlertCircle, RefreshCcw, X } from "lucide-react";
-import { useApi, apiCall } from "@/lib/clientApi";
+import { useApi } from "@/lib/clientApi";
+import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
 import { fmtDate } from "@/lib/format";
 import {
   computeEffectiveRace,
@@ -63,7 +62,6 @@ export function MacroBreakdownPanel({
   initialScore,
   headerMeta,
 }: MacroBreakdownPanelProps) {
-  const { getToken } = useAuth();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
@@ -73,17 +71,27 @@ export function MacroBreakdownPanel({
     { revalidateOnFocus: false },
   );
 
-  const [recomputing, setRecomputing] = useState(false);
-  const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+  // The visible Recompute action and the map share one recording job. Its
+  // normal upload updates both map playback and the macro breakdown.
+  const replayController = useMapReplay(open ? gameId : null);
+  const recomputing = replayController.refreshing;
+  const recomputeMsg = replayController.refreshMessage || null;
+  const recompute = replayController.refresh;
+  const completedRequest = useRef<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
-      setRecomputeMsg(null);
-      setRecomputing(false);
       setHighlightedKey(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    const requestId = replayController.completedRequestId;
+    if (!open || !requestId || completedRequest.current === requestId) return;
+    completedRequest.current = requestId;
+    void mutate().catch(() => undefined);
+  }, [open, replayController.completedRequestId, mutate]);
 
   useEffect(() => {
     if (!open) return;
@@ -115,28 +123,6 @@ export function MacroBreakdownPanel({
     };
   }, [open, onClose]);
 
-  const recompute = useCallback(async () => {
-    if (recomputing) return;
-    setRecomputeMsg(null);
-    setRecomputing(true);
-    try {
-      await apiCall<{ ok: boolean }>(
-        getToken,
-        `/v1/games/${encodeURIComponent(gameId)}/macro-breakdown`,
-        { method: "POST", body: JSON.stringify({}) },
-      );
-      setRecomputeMsg(
-        "Recompute requested. If your desktop agent is online and listening, it'll re-upload shortly. If nothing changes after a minute, open the agent app and click Resync.",
-      );
-      mutate();
-    } catch (err) {
-      const e = err as { message?: string };
-      setRecomputeMsg(e.message || "Recompute failed.");
-    } finally {
-      setRecomputing(false);
-    }
-  }, [getToken, gameId, mutate, recomputing]);
-
   if (!open) return null;
   if (typeof window === "undefined") return null;
 
@@ -165,7 +151,7 @@ export function MacroBreakdownPanel({
           meta={headerMeta}
           onClose={onClose}
         />
-        <div className="min-w-0 flex-1 px-4 py-5 pb-24 sm:px-6 sm:pb-5 lg:px-8">
+        <div className={`min-w-0 flex-1 px-4 py-5 ${recomputeMsg ? "pb-44" : "pb-24"} sm:px-6 sm:pb-5 lg:px-8`}>
           {isLoading ? (
             <LoadingState />
           ) : error ? (
@@ -183,6 +169,7 @@ export function MacroBreakdownPanel({
               highlightedKey={highlightedKey}
               onHighlight={setHighlightedKey}
               headerMeta={headerMeta}
+              replayController={replayController}
             />
           )}
         </div>
@@ -324,7 +311,7 @@ function PanelFooter({
           disabled={recomputing}
           iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}
         >
-          {recomputing ? "Recomputing…" : "Recompute"}
+          {recomputing ? "Recording replay…" : "Recompute"}
         </Button>
         <Button onClick={onClose}>Close</Button>
       </div>
@@ -343,6 +330,7 @@ function BreakdownBody({
   highlightedKey,
   onHighlight,
   headerMeta,
+  replayController,
 }: {
   data: MacroBreakdownData;
   gameId: string;
@@ -350,6 +338,7 @@ function BreakdownBody({
   highlightedKey: string | null;
   onHighlight: (key: string | null, leak: LeakItem | null) => void;
   headerMeta?: PanelHeaderMeta;
+  replayController: MapReplayController;
 }) {
   const score =
     typeof data.macro_score === "number"
@@ -396,10 +385,12 @@ function BreakdownBody({
         )}
       </section>
 
-      {/* Vespene-style map replay of this game — placed under the unit
-          roster, above the score. Silently absent for uploads that
-          pre-date the agent's playback support. */}
-      <MapReplaySection gameId={gameId} compact />
+      <MapReplaySection
+        gameId={gameId}
+        compact
+        controller={replayController}
+        myRace={headerMeta?.myRace ?? data.race ?? null}
+      />
 
       <Headline score={score} colourClass={headlineColour} />
 

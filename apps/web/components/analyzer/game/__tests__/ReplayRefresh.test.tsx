@@ -24,7 +24,7 @@ describe("accurate replay refresh", () => {
     await waitFor(() => expect(state.mutate).toHaveBeenCalled());
     expect(state.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(state.config.refreshInterval).toBe(3000);
-    state.data = { ...raw, fidelity: { ...raw.fidelity, positions: "engine", attacks: "observed" } };
+    state.data = { ...raw, fidelity: { ...raw.fidelity, positions: "engine", attacks: "observed" }, rebuild: { requestId: "r1", status: "complete" } };
     view.rerender(<MapReplaySection gameId="game1" />);
     expect(screen.getByRole("status").textContent).toBe("Recorded playback is ready.");
     expect(state.config.refreshInterval).toBe(0);
@@ -63,6 +63,6 @@ describe("accurate replay refresh", () => {
     expect(state.config.refreshInterval).toBe(0);
     expect(screen.getByRole("status").textContent).toContain("still processing");
     view.rerender(<MapReplaySection gameId="game2" />);
-    expect(screen.getByRole("status").textContent).toContain("Uses StarCraft II");
+    expect(screen.getByRole("status").textContent).toContain("only occasional unit positions");
   });
 });

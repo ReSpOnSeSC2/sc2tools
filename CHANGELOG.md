@@ -41,6 +41,17 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Macro Breakdown Recompute now records map playback** — the web action
+  previously only reparsed the replay, leaving limited position data even
+  after updating the agent. Recompute now shares the map's recording progress
+  and errors and refreshes macro analysis when the upload finishes. The
+  accurate-playback control sits above the map on mobile and desktop, remains
+  available for missing playback, and resumes active recordings on reopening.
+- **Packaged Windows engine launch avoids bundled DLL conflicts** — agent
+  **0.16.7** (`agent-v0.16.7`) starts StarCraft II with a clean DLL search path
+  and retains a diagnostic log location when capture fails. Deploy the updated
+  web viewer and install this agent before generating recorded playback. Agent
+  notices now use 0.16.7 while release metadata loads.
 - **Replay movement no longer follows invented routes** — command targets are
   no longer treated as unit positions, synthetic worker trips are removed,
   and lifecycle handling prevents duplicate and ghost units. Agent notices

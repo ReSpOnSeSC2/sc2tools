@@ -13,7 +13,9 @@ existing game process.
 
 ## Desktop app
 
-Open a game's map replay and select **Generate accurate playback**. Keep the
+Open a game's map replay and select **Generate accurate playback**, or use
+**Recompute** in its Macro Breakdown. Both controls share the same recording
+and upload progress; reopening the panel resumes an active recording. Keep the
 updated desktop agent connected on the computer containing the original replay
 and StarCraft II installation. The packaged agent includes the protocol
 dependencies; users do not need Python or a separate pip installation.
@@ -23,6 +25,9 @@ pipeline to upload the result. The page polls progress and reports recording,
 upload, missing-file, offline-agent and runtime failures. One recording runs per
 agent at a time. Existing tracker playback remains available during recording.
 The action uses the signed-in user's paired device and verifies game ownership.
+Agent 0.16.7 also isolates the external StarCraft process from the packaged
+agent's Windows DLL search paths. A capture failure preserves a bounded engine
+log in the observation cache's `diagnostics` directory and reports its location.
 
 ## Developer setup and standalone use
 

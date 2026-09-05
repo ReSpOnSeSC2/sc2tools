@@ -19,6 +19,117 @@ def accumulator():
         3: {"name": "Lair", "structure": True}}, {1: "PsiStormPersistent"}, 0.2)
 
 
+def test_external_windows_environment_removes_only_bundle_path_entries():
+    environment = {"Path": ';"C:/Agent/_internal";C:\\Agent\\_INTERNAL\\PySide6;C:\\Agent\\_internal-extra;C:\\Games;C:\\Windows',
+                   "SC2PATH": "D:/Games/StarCraft II", "OTHER": "untouched"}
+    original = environment.copy()
+    child = exporter._external_windows_environment(environment, "C:/Agent/_internal")
+    assert child["Path"] == ";C:\\Agent\\_internal-extra;C:\\Games;C:\\Windows"
+    assert child["SC2PATH"] == environment["SC2PATH"]
+    assert child["OTHER"] == "untouched"
+    assert environment == original
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_frozen_launch_restores_dll_directory_even_if_popen_fails(monkeypatch, fails):
+    import ctypes
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", "C:/Agent/_internal", raising=False)
+    monkeypatch.setenv("PATH", "C:/Agent/_internal;D:/UserTools;C:/Windows")
+    state = {"directory": "D:/ExistingDllDirectory", "calls": []}
+
+    def get_directory(length, buffer):
+        if length:
+            buffer.value = state["directory"] or ""
+        return len(state["directory"] or "")
+
+    def set_directory(path):
+        state["directory"] = path
+        state["calls"].append(path)
+        return True
+
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: SimpleNamespace(
+        GetDllDirectoryW=get_directory, SetDllDirectoryW=set_directory), raising=False)
+    process = object()
+
+    def popen(args, **kwargs):
+        assert args == ["C:/SC2/SC2_x64.exe"]
+        assert state["directory"] is None
+        assert kwargs["env"]["PATH"] == "D:/UserTools;C:/Windows"
+        assert exporter.os.environ["PATH"] == "C:/Agent/_internal;D:/UserTools;C:/Windows"
+        if fails:
+            raise OSError("process creation failed")
+        return process
+
+    monkeypatch.setattr(exporter.subprocess, "Popen", popen)
+    if fails:
+        with pytest.raises(OSError, match="process creation failed"):
+            exporter._launch_sc2(["C:/SC2/SC2_x64.exe"])
+    else:
+        assert exporter._launch_sc2(["C:/SC2/SC2_x64.exe"]) is process
+    assert state["calls"] == [None, "D:/ExistingDllDirectory"]
+    assert state["directory"] == "D:/ExistingDllDirectory"
+
+
+def test_source_launch_preserves_environment_without_touching_dll_state(monkeypatch):
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    calls = []
+    monkeypatch.setattr(exporter.subprocess, "Popen", lambda *args, **kwargs: calls.append((args, kwargs)) or "process")
+    environment = {"PATH": "C:/Agent/_internal;D:/UserTools"}
+    assert exporter._launch_sc2(["SC2"], env=environment) == "process"
+    assert calls == [((["SC2"],), {"env": environment})]
+
+
+def test_engine_startup_failure_retains_diagnostic_after_temp_cleanup(tmp_path, monkeypatch):
+    monkeypatch.setenv("SC2TOOLS_OBSERVATION_DIR", str(tmp_path / "cache"))
+    original_temp = exporter.tempfile.TemporaryDirectory
+    monkeypatch.setattr(exporter.tempfile, "TemporaryDirectory", lambda **kwargs: original_temp(dir=tmp_path, **kwargs))
+    monkeypatch.setitem(sys.modules, "websocket", SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "s2clientprotocol", SimpleNamespace(sc2api_pb2=SimpleNamespace()))
+
+    def launch(_args, **kwargs):
+        kwargs["stdout"].write(b"engine startup explanation\n")
+        return SimpleNamespace(returncode=17, poll=lambda: 17)
+
+    monkeypatch.setattr(exporter, "_launch_sc2", launch)
+    engine = exporter._Engine(tmp_path, tmp_path / "SC2_x64.exe", None, 10)
+    with pytest.raises(exporter.ObservationExportError) as error:
+        engine.__enter__()
+    assert "code 17" in str(error.value)
+    logs = list((tmp_path / "cache" / "diagnostics").glob("*.log"))
+    assert len(logs) == 1
+    assert str(logs[0].resolve()) in str(error.value)
+    assert b"engine startup explanation" in logs[0].read_bytes()
+    assert not list(tmp_path.glob("sc2-observation-*"))
+
+
+def test_engine_failure_log_is_bounded_and_success_has_no_diagnostic(tmp_path, monkeypatch):
+    monkeypatch.setenv("SC2TOOLS_OBSERVATION_DIR", str(tmp_path / "cache"))
+    for failed in (False, True):
+        engine = exporter._Engine(tmp_path, tmp_path / "SC2_x64.exe", None, 10)
+        engine.temp = exporter.tempfile.TemporaryDirectory(dir=tmp_path)
+        temp_path = Path(engine.temp.name)
+        engine.log = (temp_path / "engine.log").open("wb")
+        engine.log.write(b"a" * (exporter.MAX_DIAGNOSTIC_BYTES * 2) + b"last output")
+        if failed:
+            with pytest.raises(exporter.ObservationExportError) as error:
+                engine.__exit__(ValueError, ValueError("capture failed"), None)
+            logs = list((tmp_path / "cache" / "diagnostics").glob("*.log"))
+            assert len(logs) == 1
+            data = logs[0].read_bytes()
+            assert len(data) < exporter.MAX_DIAGNOSTIC_BYTES + 512
+            assert data.endswith(b"last output")
+            assert b"Earlier output omitted" in data
+            assert "capture failed" in str(error.value)
+            assert str(logs[0].resolve()) in str(error.value)
+        else:
+            engine.__exit__(None, None, None)
+            assert not (tmp_path / "cache" / "diagnostics").exists()
+        assert not temp_path.exists()
+
+
 def test_bitmap_runs_msb_first_and_row_boundary():
     # Width 4: y0 has x0,x3; y1 has x0,x1. The adjacent set bits across
     # the row edge are one span; the renderer must split at width.
