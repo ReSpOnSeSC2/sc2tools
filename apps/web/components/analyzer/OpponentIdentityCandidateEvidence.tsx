@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { Keyboard, ListChecks, ShieldQuestion } from "lucide-react";
+import { Activity, Keyboard, ListChecks, ShieldQuestion } from "lucide-react";
 
 import { Badge } from "@/components/ui";
 import type {
   BuildOrderMatchEvidence,
+  ActionMatchEvidence,
+  BehaviorMatchDimension,
   ControlGroupMatchEvidence,
   IdentityCandidate,
 } from "./OpponentIdentityCandidates";
@@ -12,12 +14,15 @@ import type {
 export function CandidateEvidenceDetails({
   id,
   candidate,
+  showReplayActions = false,
 }: {
   id: string;
   candidate: IdentityCandidate;
+  showReplayActions?: boolean;
 }) {
   const build = candidate.evidence.buildOrders;
   const control = candidate.evidence.controlGroups;
+  const actions = candidate.evidence.actions;
   return (
     <div id={id} className="mt-4 border-t border-border pt-4">
       <div className="grid gap-3 lg:grid-cols-2">
@@ -28,6 +33,18 @@ export function CandidateEvidenceDetails({
         >
           {build ? (
             <>
+              {build.detailLevel === "labels_only" ? (
+                <p className="mt-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-micro leading-relaxed text-warning">
+                  Only classified build labels can be compared. These common
+                  strategies provide little identity evidence without recorded opening timings.
+                </p>
+              ) : null}
+              {build.milestoneSamples ? (
+                <p className="mt-2 text-micro text-text-dim">
+                  Recorded opening timings: {finiteCount(build.milestoneSamples.target)} target games ·{" "}
+                  {finiteCount(build.milestoneSamples.candidate)} candidate games
+                </p>
+              ) : null}
               {build.sharedBuilds.length > 0 ? (
                 <EvidenceChips
                   label="Shared builds"
@@ -66,8 +83,35 @@ export function CandidateEvidenceDetails({
               values={control.matchedSlots.map((slot) => `Group ${slot}`)}
             />
           ) : null}
+          {control?.advancedSamples ? (
+            <p className="mt-3 text-micro leading-relaxed text-text-dim">
+              Detailed control-group evidence: {finiteCount(control.advancedSamples.target)} target games ·{" "}
+              {finiteCount(control.advancedSamples.candidate)} candidate games.
+              {control.advancedSamples.target === 0 || control.advancedSamples.candidate === 0
+                ? " Reprocess older replays to compare detailed timing and usage patterns."
+                : ""}
+            </p>
+          ) : null}
+          <DimensionComparison dimensions={control?.dimensions} title="Control-group measurements" />
         </EvidenceDetailCard>
       </div>
+
+      {showReplayActions || actions ? (
+        <div className="mt-3">
+          <EvidenceDetailCard
+            icon={<Activity className="h-4 w-4" aria-hidden />}
+            title="Replay-action habits"
+            evidence={actions}
+          >
+            <DimensionComparison dimensions={actions?.dimensions} title="Replay-action measurements" />
+          </EvidenceDetailCard>
+        </div>
+      ) : null}
+
+      <p className="mt-3 text-micro leading-relaxed text-text-dim">
+        Logical groups and game actions come from the replay. Physical keystrokes,
+        keyboard layout, and custom key bindings are not recorded.
+      </p>
 
       <div className="mt-3 flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/25 p-3 sm:flex-row sm:items-start sm:justify-between">
         <p className="text-caption leading-relaxed text-text-muted">
@@ -104,6 +148,7 @@ export function CandidateEvidenceDetails({
 type DetailEvidence =
   | BuildOrderMatchEvidence
   | ControlGroupMatchEvidence
+  | ActionMatchEvidence
   | null
   | undefined;
 
@@ -133,9 +178,24 @@ function EvidenceDetailCard({
       {evidence ? (
         <>
           <p className="mt-2 text-micro text-text-dim">
-            {finiteCount(evidence.targetSamples)} target samples ·{" "}
-            {finiteCount(evidence.candidateSamples)} candidate samples
+            {finiteCount(evidence.targetSamples)} target games ·{" "}
+            {finiteCount(evidence.candidateSamples)} candidate games
           </p>
+          {"targetEvents" in evidence && "candidateEvents" in evidence ? (
+            <p className="mt-1 text-micro text-text-dim">
+              Recorded events: {finiteCount(evidence.targetEvents).toLocaleString()} target ·{" "}
+              {finiteCount(evidence.candidateEvents).toLocaleString()} candidate
+            </p>
+          ) : null}
+          {"consistency" in evidence && evidence.consistency ? (
+            <p className="mt-1 text-micro leading-relaxed text-text-dim">
+              {"matchedSlots" in evidence
+                ? "Consistency of group usage across games"
+                : "Consistency of action mix across games"}: target{" "}
+              {formatConsistency(evidence.consistency.target)} · candidate{" "}
+              {formatConsistency(evidence.consistency.candidate)}.
+            </p>
+          ) : null}
           {children}
           {highlights.length > 0 ? (
             <ul className="mt-3 space-y-1.5 text-caption text-text-muted">
@@ -158,6 +218,80 @@ function EvidenceDetailCard({
       )}
     </section>
   );
+}
+
+function DimensionComparison({
+  dimensions,
+  title,
+}: {
+  dimensions?: BehaviorMatchDimension[];
+  title: string;
+}) {
+  if (!dimensions?.length) return null;
+
+  return (
+    <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-left text-micro">
+        <caption className="border-b border-border bg-bg-elevated/30 px-3 py-2 text-left font-semibold text-text">
+          {title}
+        </caption>
+        <thead className="border-b border-border text-text-dim">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-medium">Measurement</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Target</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Candidate</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Similarity</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {dimensions.map((dimension) => (
+            <tr key={dimension.key}>
+              <th scope="row" className="min-w-[8rem] px-3 py-2 align-top font-medium text-text-muted">
+                {dimension.label}
+              </th>
+              <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                <DimensionValue value={dimension.targetValue} unit={dimension.unit} samples={dimension.targetSamples} />
+              </td>
+              <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                <DimensionValue value={dimension.candidateValue} unit={dimension.unit} samples={dimension.candidateSamples} />
+              </td>
+              <td className="px-3 py-2 text-right align-top font-semibold tabular-nums text-accent-cyan">
+                {typeof dimension.score === "number" && Number.isFinite(dimension.score)
+                  ? formatPercent(dimension.score)
+                  : <span className="font-normal text-text-dim">Unavailable</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DimensionValue({ value, unit, samples }: {
+  value?: number;
+  unit?: string;
+  samples: number;
+}) {
+  const available = typeof value === "number" && Number.isFinite(value);
+  const count = finiteCount(samples);
+  return (
+    <>
+      {available ? <span className="whitespace-nowrap">{formatDimensionValue(value, unit)}</span> : null}
+      <span className={`whitespace-nowrap ${available ? "mt-0.5 block text-[0.625rem] text-text-dim" : ""}`}>
+        {count === 0 ? "No samples" : `${count} ${count === 1 ? "game" : "games"}`}
+      </span>
+    </>
+  );
+}
+
+function formatDimensionValue(value: number, unit?: string): string {
+  if (unit === "ratio") return formatPercent(value);
+  const number = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (unit === "per_minute") return `${number}/min`;
+  if (unit === "seconds") return `${number}s`;
+  if (!unit || unit === "count") return number;
+  return `${number} ${unit}`;
 }
 
 function EvidenceChips({ label, values }: { label: string; values: string[] }) {
@@ -189,6 +323,20 @@ function friendlyCaveat(caveat: string): string {
       return "Build-order evidence was unavailable for one side, so this lead relies on control-group habits.";
     case "single_target_replay":
       return "Only one target replay contributed evidence; treat this lead as especially tentative.";
+    case "labels_only_build_evidence":
+      return "Build similarity is based on shared strategy labels without comparable opening timings. Common strategies are weak identity evidence.";
+    case "legacy_control_group_signature":
+      return "Older replay signatures have limited control-group detail. Reprocessing the source replays adds timing and usage evidence.";
+    case "sparse_control_group_events":
+      return "Too few recorded control-group events are available for a dependable comparison of habits.";
+    case "sparse_action_events":
+      return "Too few recorded actions are available for a dependable comparison of action habits.";
+    case "inconsistent_behavior":
+      return "Behavior varies between the available games, reducing confidence in a consistent player pattern.";
+    case "ambiguous_candidates":
+      return "Other candidates have similarly close patterns; these results do not distinguish one player clearly.";
+    case "limited_candidate_search":
+      return "The comparison reached a search limit, so another matching player may be outside the evidence examined.";
     default:
       return caveat.replaceAll("_", " ");
   }
@@ -198,6 +346,12 @@ function finiteCount(value: number | null | undefined): number {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(0, Math.round(value))
     : 0;
+}
+
+function formatConsistency(value: number | null): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? formatPercent(value)
+    : "needs repeated games";
 }
 
 function formatPercent(value: number | null | undefined): string {

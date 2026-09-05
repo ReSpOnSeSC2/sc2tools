@@ -62,7 +62,7 @@ describe("validateGameRecord", () => {
   });
 
   test.each([
-    { version: 2, windowSec: 600, build: { milestones: [{ atSec: 70, name: "Gateway" }] } },
+    { version: 99, windowSec: 600, build: { milestones: [{ atSec: 70, name: "Gateway" }] } },
     { version: 1, windowSec: 600 },
     {
       version: 1,

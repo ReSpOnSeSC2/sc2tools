@@ -31,86 +31,7 @@ const BUILD_LOG_LINE_MAX_LENGTH = 256;
 // matcher. It lives on the slim game row, so every branch is explicitly
 // bounded even though the surrounding agent payload remains forward
 // compatible.
-const PLAY_SIGNATURE_SLOT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["slot", "set", "add", "recall", "doubleTap"],
-  properties: {
-    slot: { type: "integer", minimum: 0, maximum: 9 },
-    set: { type: "integer", minimum: 0, maximum: 9999 },
-    add: { type: "integer", minimum: 0, maximum: 9999 },
-    recall: { type: "integer", minimum: 0, maximum: 9999 },
-    doubleTap: { type: "integer", minimum: 0, maximum: 9999 },
-  },
-};
-
-const PLAY_SIGNATURE_TRANSITION_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["from", "to", "count"],
-  properties: {
-    from: { type: "integer", minimum: 0, maximum: 9 },
-    to: { type: "integer", minimum: 0, maximum: 9 },
-    count: { type: "integer", minimum: 1, maximum: 9999 },
-  },
-};
-
-const PLAY_SIGNATURE_MILESTONE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["atSec", "name"],
-  properties: {
-    atSec: { type: "integer", minimum: 0, maximum: 10 * 60 },
-    name: { type: "string", minLength: 1, maxLength: 64 },
-  },
-};
-
-const PLAY_SIGNATURE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["version", "windowSec"],
-  properties: {
-    version: { const: 1 },
-    windowSec: { type: "integer", minimum: 1, maximum: 10 * 60 },
-    controlGroups: {
-      type: "object",
-      additionalProperties: false,
-      required: ["events", "activeSeconds", "slots"],
-      properties: {
-        events: { type: "integer", minimum: 1, maximum: 99999 },
-        activeSeconds: { type: "integer", minimum: 1, maximum: 10 * 60 },
-        slots: {
-          type: "array",
-          minItems: 1,
-          maxItems: 10,
-          items: PLAY_SIGNATURE_SLOT_SCHEMA,
-        },
-        transitions: {
-          type: "array",
-          maxItems: 12,
-          items: PLAY_SIGNATURE_TRANSITION_SCHEMA,
-        },
-      },
-    },
-    build: {
-      type: "object",
-      additionalProperties: false,
-      required: ["milestones"],
-      properties: {
-        milestones: {
-          type: "array",
-          minItems: 1,
-          maxItems: 18,
-          items: PLAY_SIGNATURE_MILESTONE_SCHEMA,
-        },
-      },
-    },
-  },
-  anyOf: [
-    { required: ["controlGroups"] },
-    { required: ["build"] },
-  ],
-};
+const { PLAY_SIGNATURE_SCHEMA, validPlaySignatureSemantics } = require("./playSignature");
 
 const UNIT_TIMELINE_SIDE_SCHEMA = {
   type: "object",
@@ -422,6 +343,9 @@ function validateGameRecord(raw) {
       (e) => `${e.instancePath || "/"} ${e.message}`,
     );
     return { valid: false, errors: errs };
+  }
+  if (value.opponent?.playSignature && !validPlaySignatureSemantics(value.opponent.playSignature)) {
+    return { valid: false, errors: ["/opponent/playSignature contains duplicate or inconsistent replay evidence"] };
   }
   return { valid: true, value };
 }

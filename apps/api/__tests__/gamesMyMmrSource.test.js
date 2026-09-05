@@ -108,6 +108,29 @@ describe("GamesService game-time MMR compatibility", () => {
 });
 
 describe("GamesService opponent identity signature storage", () => {
+  test("re-sync replaces legacy evidence on the same row and preserves server identity", async () => {
+    const legacy = { version: 1, windowSec: 600,
+      build: { milestones: [{ atSec: 70, name: "Gateway" }] } };
+    const rich = { version: 2, windowSec: 600,
+      actions: { activeSeconds: 240, events: 42, commands: 20,
+        selectionChanges: 10, cameraMoves: 12, queuedCommands: 3,
+        repeatCommands: 2, actionIntervals: [5, 5, 5, 6, 10, 10] } };
+    expect(await service.upsert("u1", game({ opponent: {
+      pulseId: "barcode-target", playSignature: legacy,
+      pulseCharacterId: "1234", mmrLookupAttempted: true,
+    } }))).toBe(true);
+    expect(await service.upsert("u1", game({ opponent: {
+      pulseId: "barcode-target", playSignature: rich,
+    } }))).toBe(false);
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent.playSignature).toEqual(rich);
+    expect(stored.opponent.pulseCharacterId).toBe("1234");
+    expect(stored.opponent.mmrLookupAttempted).toBe(true);
+    const { items: [publicRow] } = await service.list("u1", { limit: 10 });
+    expect(publicRow.opponent).not.toHaveProperty("playSignature");
+    expect(await db.games.countDocuments({ userId: "u1" })).toBe(1);
+  });
+
   test("keeps a bounded private signature on the slim row", async () => {
     await service.upsert(
       "u1",

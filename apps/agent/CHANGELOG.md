@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.4
+
+### Added - detailed replay identity evidence
+
+- Version 2 opponent signatures add control-group steals, first-use timing,
+  phase usage, recall intervals, commands and abilities after recalls, queued
+  and repeated commands, selection observations, and camera cadence. Events
+  use canonical player ownership and real game seconds. The bounded summaries
+  contain replay observations, never physical keystrokes or key bindings.
+- Unsupported, corrupt, or overflowing evidence stays absent; valid independent
+  evidence families can still upload. Existing v1 signatures remain readable.
+
+### Migration note
+
+- Deploy the updated API before distributing this agent, then perform one full
+  Re-sync to replace older signatures for both barcodes and known opponents.
+  Updating the server alone cannot recover event details absent from old rows.
+
 ## 0.16.3
 
 ### Fixed - precise PvZ Stargate transitions

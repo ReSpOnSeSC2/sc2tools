@@ -27,6 +27,8 @@ type EvidenceMode =
   | "build_and_control_groups"
   | "control_groups_only"
   | "build_only"
+  | "actions_only"
+  | "behavioral"
   | "none";
 
 type EvidenceConfidence = "high" | "medium" | "low";
@@ -47,6 +49,9 @@ export type IdentityMatchTarget = {
   games: number;
   buildGames?: number;
   controlGroupGames?: number;
+  advancedControlGroupGames?: number;
+  actionGames?: number;
+  signatureVersion?: number;
   evidenceMode?: EvidenceMode;
   matchup?: string | null;
 };
@@ -58,15 +63,40 @@ export type BuildOrderMatchEvidence = {
   sharedBuilds: string[];
   sharedMilestones: Array<{ name: string; deltaSec: number }>;
   highlights: string[];
+  milestoneSamples?: { target: number; candidate: number };
+  detailLevel?: "labels_only" | "timed_milestones";
+  reliability?: number;
 };
 
-export type ControlGroupMatchEvidence = {
+export type BehaviorMatchDimension = {
+  key: string;
+  label: string;
+  score: number | null;
+  targetSamples: number;
+  candidateSamples: number;
+  targetValue?: number;
+  candidateValue?: number;
+  unit?: string;
+};
+
+type BehavioralEvidence = {
   score: number;
   targetSamples: number;
   candidateSamples: number;
-  matchedSlots: number[];
   highlights: string[];
+  dimensions?: BehaviorMatchDimension[];
+  targetEvents?: number;
+  candidateEvents?: number;
+  reliability?: number;
+  consistency?: { target: number | null; candidate: number | null };
 };
+
+export type ControlGroupMatchEvidence = BehavioralEvidence & {
+  matchedSlots: number[];
+  advancedSamples?: { target: number; candidate: number };
+};
+
+export type ActionMatchEvidence = BehavioralEvidence;
 
 export type IdentityCandidate = {
   rank: number;
@@ -93,6 +123,7 @@ export type IdentityCandidate = {
     coverage: number;
     buildOrders?: BuildOrderMatchEvidence | null;
     controlGroups?: ControlGroupMatchEvidence | null;
+    actions?: ActionMatchEvidence | null;
   };
   caveats: string[];
 };
@@ -116,6 +147,10 @@ export type OpponentIdentityCandidatesResponse = {
     truncated: boolean;
   };
   insufficiency?: { code: string; message: string };
+  assessment?: {
+    status: "insufficient" | "ambiguous" | "lead";
+    reason: string;
+  };
 };
 
 export interface OpponentIdentityCandidatesProps {
@@ -318,7 +353,7 @@ function UnavailableState({
       : "No credible same-race candidates yet";
   const fallback =
     kind === "insufficient"
-      ? "No build-order or control-group pattern can be compared yet."
+      ? "No build-order, control-group, or replay-action pattern can be compared yet."
       : "No opponent in your replay history has enough comparable evidence yet.";
 
   return (
@@ -351,10 +386,30 @@ function ReadyCandidates({
     <div className="space-y-4">
       <TargetEvidenceSummary response={response} />
 
+      {response.assessment ? (
+        <div
+          className="rounded-lg border border-border bg-bg-elevated/40 p-3 text-caption leading-relaxed text-text-muted"
+          aria-label="Identity evidence assessment"
+        >
+          <p className="font-semibold text-text">
+            {response.assessment.status === "insufficient"
+              ? "Evidence is too limited to identify a player"
+              : response.assessment.status === "ambiguous"
+                ? "Several players remain plausible"
+                : "Behavioral lead found"}
+          </p>
+          <p className="mt-1">{response.assessment.reason}</p>
+        </div>
+      ) : null}
+
       <ol className="space-y-3" aria-label="Ranked possible identity matches">
         {candidates.map((candidate, index) => (
           <li key={candidate.pulseId}>
-            <CandidateCard candidate={candidate} featured={index === 0} />
+            <CandidateCard
+              candidate={candidate}
+              featured={index === 0}
+              showReplayActions={(response.target.signatureVersion ?? 1) >= 2}
+            />
           </li>
         ))}
       </ol>
@@ -400,6 +455,20 @@ function TargetEvidenceSummary({
           <MiniStat label="Games scanned" value={scope.searchedGames} />
         </dl>
       </div>
+      {(target.signatureVersion ?? 1) >= 2 ? (
+        <p className="mt-3 text-micro leading-relaxed text-text-muted">
+          Target evidence: {finiteCount(target.buildGames)} build-order games ·{" "}
+          {finiteCount(target.controlGroupGames)} control-group games ·{" "}
+          {finiteCount(target.advancedControlGroupGames)} detailed control-group games ·{" "}
+          {finiteCount(target.actionGames)} replay-action games.
+        </p>
+      ) : null}
+      {target.games === 1 ? (
+        <p className="mt-3 text-micro leading-relaxed text-warning">
+          Only one target replay is available. More games are needed to distinguish
+          consistent habits from a single game&apos;s strategy.
+        </p>
+      ) : null}
       {scope.truncated ? (
         <p className="mt-3 border-t border-border pt-3 text-micro text-warning">
           The safety scan limit was reached. Results cover the newest bounded
@@ -426,9 +495,11 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 function CandidateCard({
   candidate,
   featured,
+  showReplayActions,
 }: {
   candidate: IdentityCandidate;
   featured: boolean;
+  showReplayActions: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const baseId = useId();
@@ -457,7 +528,7 @@ function CandidateCard({
         />
       ) : null}
 
-      <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(6.5rem,auto)_minmax(7rem,auto)] md:items-center xl:grid-cols-[minmax(0,1.1fr)_7.5rem_8rem_minmax(13rem,0.9fr)_auto]">
+      <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(6.5rem,auto)_minmax(7rem,auto)] md:items-center xl:grid-cols-[minmax(0,1.1fr)_7.5rem_8rem_auto]">
         <div className="flex min-w-0 items-start gap-3">
           <span
             className={[
@@ -515,12 +586,15 @@ function CandidateCard({
           tone="cyan"
         />
 
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2 md:col-span-3 xl:col-span-1">
+        <div className={`grid min-w-0 gap-2 md:col-span-3 xl:order-last xl:col-span-4 ${showReplayActions || candidate.evidence.actions ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <EvidenceBar
             label="Build-order pattern"
             score={candidate.evidence.buildOrders?.score}
             targetSamples={candidate.evidence.buildOrders?.targetSamples}
             candidateSamples={candidate.evidence.buildOrders?.candidateSamples}
+            detail={candidate.evidence.buildOrders?.detailLevel === "labels_only"
+              ? "Build labels only · no comparable opening timings"
+              : undefined}
           />
           <EvidenceBar
             label="Control-group habits"
@@ -528,6 +602,14 @@ function CandidateCard({
             targetSamples={candidate.evidence.controlGroups?.targetSamples}
             candidateSamples={candidate.evidence.controlGroups?.candidateSamples}
           />
+          {showReplayActions || candidate.evidence.actions ? (
+            <EvidenceBar
+              label="Replay-action habits"
+              score={candidate.evidence.actions?.score}
+              targetSamples={candidate.evidence.actions?.targetSamples}
+              candidateSamples={candidate.evidence.actions?.candidateSamples}
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 md:col-span-3 xl:col-span-1 xl:flex-col xl:items-stretch">
@@ -556,7 +638,7 @@ function CandidateCard({
       </div>
 
       {expanded ? (
-        <CandidateEvidenceDetails id={detailId} candidate={candidate} />
+        <CandidateEvidenceDetails id={detailId} candidate={candidate} showReplayActions={showReplayActions} />
       ) : null}
     </article>
   );
@@ -610,11 +692,13 @@ function EvidenceBar({
   score,
   targetSamples,
   candidateSamples,
+  detail,
 }: {
   label: string;
   score: number | undefined;
   targetSamples: number | undefined;
   candidateSamples: number | undefined;
+  detail?: string;
 }) {
   const available = Number.isFinite(score);
   const percentage = toPercentage(score);
@@ -645,9 +729,10 @@ function EvidenceBar({
       )}
       <p className="mt-1.5 text-[0.625rem] leading-relaxed text-text-dim">
         {available
-          ? `${finiteCount(targetSamples)} target · ${finiteCount(candidateSamples)} candidate`
+          ? `${finiteCount(targetSamples)} target games · ${finiteCount(candidateSamples)} candidate games`
           : "Not enough comparable evidence"}
       </p>
+      {detail ? <p className="mt-1 text-[0.625rem] leading-relaxed text-warning">{detail}</p> : null}
     </div>
   );
 }
@@ -742,11 +827,28 @@ function MethodologyDetails({
           rhythm, and activity rate. Missing evidence is omitted instead of
           treated as a mismatch.
         </p>
+        {(response.target.signatureVersion ?? 1) >= 2 ? (
+          <p>
+            Detailed replay evidence also compares how groups are assigned and
+            recalled over the game, switching patterns, and recorded action habits.
+            The evidence comparison shows which measurements were available on
+            each side; older replays may need reprocessing to add these details.
+          </p>
+        ) : null}
+        <p>
+          Replays record game actions and logical control-group numbers. They do
+          not record physical keystrokes, keyboard layout, or custom key bindings.
+          A matching group number does not establish that players pressed the same key.
+        </p>
         <p>
           <strong className="text-text">Pattern match</strong> is direct
           behavioral similarity. <strong className="text-text">Estimated
           likelihood</strong> also accounts for evidence quality and competes
           with every searched candidate and an explicit unknown hypothesis.
+          A shared build label alone provides little identity evidence, and one
+          replay cannot establish a consistent personal pattern.
+          Candidates are ranked by observed behavioral fit and measurement
+          quality; replay counts affect evidence strength and likelihood.
         </p>
         <p className="text-micro text-text-dim">
           Private scope: your replay history only · Method {response.methodologyVersion}
@@ -767,6 +869,10 @@ function evidenceModeLabel(mode: EvidenceMode | undefined): string {
       return "This comparison currently uses control-group habits only";
     case "build_only":
       return "This comparison currently uses build-order patterns only";
+    case "actions_only":
+      return "This comparison currently uses recorded replay-action habits only";
+    case "behavioral":
+      return "Build-order, control-group, and replay-action evidence is compared where available";
     default:
       return "Replay behavior evidence is still forming";
   }

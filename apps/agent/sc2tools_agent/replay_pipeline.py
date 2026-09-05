@@ -47,7 +47,7 @@ _EARLY_BUILD_LOG_CAP = 1000
 # the cloud's slim game row.  Ten minutes captures the hotkey layout and the
 # opening milestones that are most repeatable between games, while avoiding
 # late-game event volume and matchup-specific noise.
-_PLAY_SIGNATURE_VERSION = 1
+_PLAY_SIGNATURE_VERSION = 2
 _PLAY_SIGNATURE_WINDOW_SEC = 10 * 60
 _PLAY_SIGNATURE_BUILD_MILESTONES = 18
 _PLAY_SIGNATURE_BUILD_LINE_RE = re.compile(
@@ -1186,26 +1186,29 @@ def _compute_opponent_play_signature(
 ) -> Optional[Dict[str, Any]]:
     """Return a bounded opponent behavior signature for identity matching.
 
-    The signature is safe for the API's slim ``games`` collection: at most ten
-    control-group slots, twelve transitions and eighteen build milestones.
-    Either evidence family may be absent on legacy/corrupt replays; the other
-    still ships so the matcher can degrade honestly instead of fabricating a
-    zero-valued signal.
+    Fixed-size group, timing and command aggregates accompany at most eighteen
+    build milestones. Missing evidence families stay absent. Replay commands
+    describe logical actions, not the player's physical keyboard bindings.
     """
-    control_groups = _control_group_signature(
-        getattr(ctx, "raw", None),
-        opponent_pid=opponent_pid,
-        game_length_sec=getattr(ctx, "length_seconds", None),
-    )
+    from .play_signature import extract_behavior_signature
+
+    try:
+        behavior = extract_behavior_signature(
+            getattr(ctx, "raw", None),
+            opponent_pid=opponent_pid,
+            game_length_sec=getattr(ctx, "length_seconds", None),
+        )
+    except Exception as exc:  # noqa: BLE001 - optional evidence must not lose a replay
+        log.warning("play_signature_behavior_failed: %s", exc)
+        behavior = {}
     build = _build_milestone_signature(opp_build_log)
-    if control_groups is None and build is None:
+    if not behavior and build is None:
         return None
     signature: Dict[str, Any] = {
         "version": _PLAY_SIGNATURE_VERSION,
         "windowSec": _PLAY_SIGNATURE_WINDOW_SEC,
+        **behavior,
     }
-    if control_groups is not None:
-        signature["controlGroups"] = control_groups
     if build is not None:
         signature["build"] = build
     return signature
@@ -1217,176 +1220,30 @@ def _control_group_signature(
     opponent_pid: Any,
     game_length_sec: Any,
 ) -> Optional[Dict[str, Any]]:
-    """Summarize logical control-group behavior over the first ten minutes."""
-    try:
-        target_pid = int(opponent_pid)
-    except (TypeError, ValueError):
-        return None
-    if target_pid <= 0 or replay is None:
-        return None
-    try:
-        events = getattr(replay, "events", None) or []
-    except Exception:  # noqa: BLE001 - corrupt replay objects are fail-soft
-        return None
+    """Compatibility entry point for the versioned replay behavior extractor."""
+    from .play_signature import extract_behavior_signature
 
-    real_length: Optional[float] = None
-    try:
-        from core.timebase import infer_fps, real_game_length  # type: ignore
-        fps = float(infer_fps(replay))
-        if not math.isfinite(fps) or fps <= 0:
-            fps = 22.4
-        measured_length = float(real_game_length(replay))
-        if math.isfinite(measured_length) and measured_length > 0:
-            real_length = measured_length
-    except Exception:  # noqa: BLE001
-        fps = 22.4
-
-    # slot -> [set, add, recall, double-tap]
-    slots: Dict[int, List[int]] = {}
-    transitions: Dict[Tuple[int, int], int] = {}
-    last_recall_slot: Optional[int] = None
-    last_recall_sec: Optional[float] = None
-    total_events = 0
-
-    for event in events:
-        if _play_signature_event_pid(event) != target_pid:
-            continue
-        action = _control_group_action(event)
-        if action is None:
-            continue
-        raw_slot = getattr(
-            event,
-            "control_group",
-            getattr(event, "control_group_index", None),
-        )
-        try:
-            slot = int(raw_slot)
-        except (TypeError, ValueError):
-            continue
-        if slot < 0 or slot > 9:
-            continue
-        sec = _play_signature_event_seconds(event, fps)
-        if sec is None or sec < 0 or sec > _PLAY_SIGNATURE_WINDOW_SEC:
-            continue
-
-        bucket = slots.setdefault(slot, [0, 0, 0, 0])
-        if action == "set":
-            bucket[0] += 1
-        elif action == "add":
-            bucket[1] += 1
-        else:
-            bucket[2] += 1
-            if (
-                last_recall_slot == slot
-                and last_recall_sec is not None
-                and 0 <= sec - last_recall_sec <= 0.65
-            ):
-                bucket[3] += 1
-            if last_recall_slot is not None and last_recall_slot != slot:
-                key = (last_recall_slot, slot)
-                transitions[key] = transitions.get(key, 0) + 1
-            last_recall_slot = slot
-            last_recall_sec = sec
-        total_events += 1
-
-    if total_events <= 0:
-        return None
-    if real_length is not None:
-        raw_length = real_length
-    else:
-        try:
-            raw_length = float(game_length_sec)
-        except (TypeError, ValueError):
-            raw_length = float(_PLAY_SIGNATURE_WINDOW_SEC)
-    active_seconds = int(round(min(
-        float(_PLAY_SIGNATURE_WINDOW_SEC),
-        max(1.0, raw_length if math.isfinite(raw_length) else 1.0),
-    )))
-    public_slots = [
-        {
-            "slot": slot,
-            "set": min(9999, counts[0]),
-            "add": min(9999, counts[1]),
-            "recall": min(9999, counts[2]),
-            "doubleTap": min(9999, counts[3]),
-        }
-        for slot, counts in sorted(slots.items())
-    ]
-    public_transitions = [
-        {"from": pair[0], "to": pair[1], "count": min(9999, count)}
-        for pair, count in sorted(
-            transitions.items(),
-            key=lambda item: (-item[1], item[0][0], item[0][1]),
-        )[:12]
-    ]
-    out: Dict[str, Any] = {
-        "events": min(99999, total_events),
-        "activeSeconds": active_seconds,
-        "slots": public_slots,
-    }
-    if public_transitions:
-        out["transitions"] = public_transitions
-    return out
+    return extract_behavior_signature(
+        replay, opponent_pid=opponent_pid, game_length_sec=game_length_sec,
+    ).get("controlGroups")
 
 
 def _control_group_action(event: Any) -> Optional[str]:
-    """Classify sc2reader's concrete control-group event subclasses."""
-    try:
-        names = [base.__name__ for base in type(event).__mro__]
-    except (AttributeError, TypeError):
-        names = [type(event).__name__]
-    # Specific subclasses must be checked before their ControlGroupEvent base.
-    for name in names:
-        lowered = name.lower()
-        if "setcontrolgroup" in lowered:
-            return "set"
-        if "addtocontrolgroup" in lowered:
-            return "add"
-        if "getcontrolgroup" in lowered:
-            return "recall"
-    if any("controlgroup" in name.lower() for name in names):
-        update = getattr(
-            event,
-            "update_type",
-            getattr(event, "control_group_update", None),
-        )
-        try:
-            return {0: "set", 1: "add", 2: "recall"}.get(int(update))
-        except (TypeError, ValueError):
-            return None
-    return None
+    from .play_signature import control_group_action
+
+    return control_group_action(event)
 
 
 def _play_signature_event_pid(event: Any) -> Optional[int]:
-    """Resolve event ownership using canonical Player.pid first.
+    from .play_signature import event_pid
 
-    ``event.pid`` is a protocol user id on some sc2reader event shapes and can
-    be zero-based.  The player object's positive pid is the stable attribution
-    used throughout the replay engine.
-    """
-    player = getattr(event, "player", None)
-    value = getattr(player, "pid", None) if player is not None else None
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-        return value
-    value = getattr(event, "pid", None)
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-        return value
-    return None
+    return event_pid(event)
 
 
 def _play_signature_event_seconds(event: Any, fps: float) -> Optional[float]:
-    """Return real game seconds without sc2reader's legacy 16-fps skew."""
-    frame = getattr(event, "frame", None)
-    if frame is not None:
-        try:
-            return float(frame) / fps
-        except (TypeError, ValueError, ZeroDivisionError):
-            return None
-    raw = getattr(event, "second", None)
-    try:
-        return float(raw) * 16.0 / fps
-    except (TypeError, ValueError, ZeroDivisionError):
-        return None
+    from .play_signature import event_seconds
+
+    return event_seconds(event, fps)
 
 
 def _build_milestone_signature(lines: Any) -> Optional[Dict[str, Any]]:

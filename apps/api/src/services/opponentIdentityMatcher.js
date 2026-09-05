@@ -1,10 +1,12 @@
 "use strict";
 
+const { controlGroupComponent, actionComponent, validControlGroups, validActions } = require("./opponentBehavior");
+
 /** @typedef {'P'|'T'|'Z'} RaceCode */
 /** @typedef {Record<string, any>} LooseRecord */
 /** @typedef {{name: string, key: string, atSec: number}} Milestone */
 /** @typedef {Milestone[]} MilestoneSet */
-/** @typedef {{weight: number, target: number, candidate: number}} ComponentSample */
+/** @typedef {{weight: number, target: number, candidate: number, quality?: number}} ComponentSample */
 /**
  * @typedef {{
  *   key: string,
@@ -21,6 +23,9 @@
  * @typedef {{
  *   buildGames: number,
  *   controlGroupGames: number,
+ *   actionGames: number,
+ *   advancedControlGroupGames: number,
+ *   signatureVersion: number,
  *   evidenceMode: string,
  * }} EvidenceSummary
  */
@@ -39,7 +44,8 @@
  * Evidence
  * --------
  * New/reprocessed replays carry ``opponent.playSignature`` with bounded
- * logical control-group habits and opening milestones. Legacy rows still
+ * logical control-group habits, phase timing, command/selection/camera
+ * observations and opening milestones. Legacy rows still
  * contribute their classified ``strategy`` / ``opening`` labels. Missing
  * evidence remains missing and component weights are re-normalized.
  *
@@ -59,13 +65,14 @@ const MILESTONE_GAME_SAMPLE_LIMIT = 8;
 const DEFAULT_RESULT_LIMIT = 5;
 const MAX_RESULT_LIMIT = 5;
 const MIN_CREDIBLE_PATTERN_MATCH = 0.35;
-const METHODOLOGY_VERSION = "behavior_match_v1";
+const METHODOLOGY_VERSION = "behavior_match_v2";
 const DEFAULT_PULSE_LINK_DEADLINE_MS = 350;
 
 /** @type {Readonly<Record<string, number>>} */
 const COMPONENT_WEIGHTS = Object.freeze({
-  buildOrders: 0.55,
-  controlGroups: 0.45,
+  buildOrders: 0.20,
+  controlGroups: 0.55,
+  actions: 0.25,
 });
 
 /** @type {Readonly<Record<RaceCode, string>>} */
@@ -155,7 +162,7 @@ class OpponentIdentityMatcherService {
     }
 
     const targetEvidence = summarizeEvidence(targetGames);
-    if (targetEvidence.buildGames === 0 && targetEvidence.controlGroupGames === 0) {
+    if (targetEvidence.buildGames === 0 && targetEvidence.controlGroupGames === 0 && targetEvidence.actionGames === 0) {
       return {
         ...base,
         status: "insufficient_data",
@@ -235,14 +242,16 @@ class OpponentIdentityMatcherService {
       };
     }
 
-    const probabilityMass = attachOpenSetLikelihoods(scored, targetEvidence);
     scored.sort(candidateSort);
+    const assessment = assessCandidates(scored, candidateDocsResult.truncated || scan.truncated);
+    const probabilityMass = attachOpenSetLikelihoods(scored, targetEvidence);
     /** @type {LooseRecord[]} */
     const top = scored.slice(0, limit).map((candidate, index) => ({
       ...candidate,
+      likelihood: round4(candidate.likelihood),
       rank: index + 1,
     }));
-    const visibleMass = top.reduce(
+    const visibleMass = scored.slice(0, limit).reduce(
       (sum, candidate) => sum + finiteOr(candidate.likelihood, 0),
       0,
     );
@@ -254,6 +263,7 @@ class OpponentIdentityMatcherService {
     return {
       ...base,
       status: "ready",
+      assessment,
       target: {
         ...target,
         ...targetEvidence,
@@ -489,17 +499,25 @@ function targetSummary(doc, games, forcedRace) {
 function summarizeEvidence(games) {
   let buildGames = 0;
   let controlGroupGames = 0;
+  let actionGames = 0;
+  let advancedControlGroupGames = 0;
   for (const game of games) {
     if (gameHasBuildEvidence(game)) buildGames += 1;
     if (validControlGroups(game?.opponent?.playSignature?.controlGroups)) {
       controlGroupGames += 1;
+      if (game?.opponent?.playSignature?.version === 2) advancedControlGroupGames += 1;
     }
+    if (game?.opponent?.playSignature?.version === 2 && validActions(game.opponent.playSignature.actions)) actionGames += 1;
   }
   return {
     buildGames,
     controlGroupGames,
-    evidenceMode:
-      buildGames > 0 && controlGroupGames > 0
+    actionGames,
+    advancedControlGroupGames,
+    signatureVersion: 2,
+    evidenceMode: actionGames > 0
+      ? (buildGames > 0 || controlGroupGames > 0 ? "behavioral" : "actions_only")
+      : buildGames > 0 && controlGroupGames > 0
         ? "build_and_control_groups"
         : controlGroupGames > 0
           ? "control_groups_only"
@@ -609,14 +627,18 @@ function publicCandidateIdentity(group) {
  * @returns {LooseRecord|null}
  */
 function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
+  targetGames = distinctGames(targetGames);
+  const targetIds = new Set(targetGames.map((game) => cleanString(game.gameId)).filter(Boolean));
+  candidateGames = distinctGames(candidateGames).filter((game) => !targetIds.has(cleanString(game.gameId)));
   const buildOrders = buildOrderComponent(
     targetGames,
     candidateGames,
     targetFacingRace,
   );
   const controlGroups = controlGroupComponent(targetGames, candidateGames);
+  const actions = actionComponent(targetGames, candidateGames);
   /** @type {Record<string, LooseRecord|null>} */
-  const components = { buildOrders, controlGroups };
+  const components = { buildOrders, controlGroups, actions };
   let weighted = 0;
   let availableWeight = 0;
   for (const [key, component] of Object.entries(components)) {
@@ -635,6 +657,7 @@ function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
           weight: COMPONENT_WEIGHTS[key],
           target: component.targetSamples || 0,
           candidate: component.candidateSamples || 0,
+          quality: finiteOr(component.reliability, 1),
         }]
       : [],
   );
@@ -644,7 +667,12 @@ function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
     ...componentSamples.map((row) => row.candidate),
   );
   const reliability = evidenceReliability(componentSamples, coverage);
-  const rankScore = 0.5 + (patternMatch - 0.5) * reliability;
+  // Rank behavioral fit by the quality of what was observed. Sample depth
+  // belongs in confidence/likelihood, not the ordering: otherwise a heavily
+  // sampled lookalike outranks a much closer player with one stored replay.
+  const observationQuality = componentSamples.reduce((sum, row) =>
+    sum + row.weight * clamp01(row.quality ?? 1), 0) / availableWeight;
+  const rankScore = patternMatch * (0.5 + 0.5 * observationQuality);
   return {
     patternMatch: round4(patternMatch),
     rankScore: round6(rankScore),
@@ -665,9 +693,10 @@ function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
     evidence: {
       buildOrders,
       controlGroups,
+      actions,
       coverage: round4(coverage),
     },
-    caveats: candidateCaveats(buildOrders, controlGroups, targetSamples),
+    caveats: candidateCaveats(buildOrders, controlGroups, targetSamples, actions),
   };
 }
 
@@ -678,6 +707,7 @@ function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
  * @returns {LooseRecord|null}
  */
 function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
+  if (!targetFacingRace) return null;
   let target = targetGames.filter(gameHasBuildEvidence);
   let candidate = candidateGames.filter(gameHasBuildEvidence);
   if (targetFacingRace) {
@@ -720,10 +750,22 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
   );
   if (measures.length === 0) return null;
   const denominator = measures.reduce((sum, item) => sum + item.weight, 0);
-  const score = measures.reduce(
+  const rawScore = measures.reduce(
     (sum, item) => sum + finiteOr(item.value, 0) * item.weight,
     0,
   ) / denominator;
+  // A shared category is common across many players; it cannot represent a
+  // perfect behavioral fingerprint. Retain it as weak scouting evidence.
+  const detailLevel = milestones === null ? "labels_only" : "timed_milestones";
+  const score = milestones === null ? Math.min(0.55, rawScore * 0.55) : rawScore;
+  const milestoneDepth = Math.min(
+    mean(targetMilestones.map((rows) => rows.length)),
+    mean(candidateMilestones.map((rows) => rows.length)),
+  );
+  const reliability = milestones === null ? 0.15 :
+    (0.35 + 0.65 * Math.min(1, milestoneDepth / 8)) * Math.sqrt(
+      Math.min(targetMilestones.length / target.length, candidateMilestones.length / candidate.length),
+    );
   const sharedBuilds = sharedLabels(
     target.map((game) => game?.opponent?.strategy),
     candidate.map((game) => game?.opponent?.strategy),
@@ -745,6 +787,8 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
   }
   return {
     score: round4(clamp01(score)),
+    detailLevel,
+    reliability: round4(reliability),
     targetSamples: target.length,
     candidateSamples: candidate.length,
     milestoneSamples: {
@@ -755,132 +799,6 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
     sharedMilestones,
     highlights,
   };
-}
-
-/**
- * @param {LooseRecord[]} targetGames
- * @param {LooseRecord[]} candidateGames
- * @returns {LooseRecord|null}
- */
-function controlGroupComponent(targetGames, candidateGames) {
-  const target = aggregateControlGroups(targetGames);
-  const candidate = aggregateControlGroups(candidateGames);
-  if (!target || !candidate) return null;
-
-  const recall = jsSimilarity(target.recall, candidate.recall);
-  const actions = cosineSimilarity(target.actions, candidate.actions);
-  const activeSlots = jaccardSimilarity(target.activeSlots, candidate.activeSlots);
-  const transitions = cosineSimilarity(target.transitions, candidate.transitions);
-  const doubleTap = ratioSimilarity(target.doubleTapRate, candidate.doubleTapRate);
-  const eventRate = ratioSimilarity(target.eventsPerMinute, candidate.eventsPerMinute);
-  /** @type {{value: number|null, weight: number}[]} */
-  const measures = [
-    { value: recall, weight: 0.35 },
-    { value: actions, weight: 0.20 },
-    { value: activeSlots, weight: 0.15 },
-    { value: transitions, weight: 0.15 },
-    { value: doubleTap, weight: 0.075 },
-    { value: eventRate, weight: 0.075 },
-  ].filter(
-    (item) => typeof item.value === "number" && Number.isFinite(item.value),
-  );
-  if (measures.length === 0) return null;
-  const denominator = measures.reduce((sum, item) => sum + item.weight, 0);
-  const score = measures.reduce(
-    (sum, item) => sum + finiteOr(item.value, 0) * item.weight,
-    0,
-  ) / denominator;
-  const primaryTarget = topVectorIndices(target.recall, 3);
-  const primaryCandidate = new Set(topVectorIndices(candidate.recall, 4));
-  const matchedSlots = primaryTarget.filter((slot) => primaryCandidate.has(slot));
-  const highlights = [];
-  if (matchedSlots.length > 0) {
-    highlights.push(
-      `Same primary control ${matchedSlots.length === 1 ? "group" : "groups"}: ${matchedSlots.join(", ")}`,
-    );
-  }
-  if (doubleTap !== null && doubleTap >= 0.85) {
-    highlights.push("Similar control-group double-tap rhythm");
-  }
-  if (eventRate !== null && eventRate >= 0.85) {
-    highlights.push("Similar control-group activity rate");
-  }
-  return {
-    score: round4(clamp01(score)),
-    targetSamples: target.samples,
-    candidateSamples: candidate.samples,
-    matchedSlots,
-    highlights,
-  };
-}
-
-/**
- * @param {LooseRecord[]} games
- * @returns {LooseRecord|null}
- */
-function aggregateControlGroups(games) {
-  const recall = Array(10).fill(0);
-  const actions = Array(30).fill(0);
-  const transitions = Array(100).fill(0);
-  const activeSlots = new Set();
-  let events = 0;
-  let activeSeconds = 0;
-  let doubleTaps = 0;
-  let recalls = 0;
-  let samples = 0;
-  for (const game of games) {
-    const control = game?.opponent?.playSignature?.controlGroups;
-    if (!validControlGroups(control)) continue;
-    samples += 1;
-    events += boundedCount(control.events);
-    activeSeconds += Math.max(1, boundedCount(control.activeSeconds));
-    for (const row of control.slots) {
-      const slot = integerInRange(row?.slot, 0, 9);
-      if (slot === null) continue;
-      const set = boundedCount(row.set);
-      const add = boundedCount(row.add);
-      const recallCount = boundedCount(row.recall);
-      const doubleTapCount = boundedCount(row.doubleTap);
-      actions[slot * 3] += set;
-      actions[slot * 3 + 1] += add;
-      actions[slot * 3 + 2] += recallCount;
-      recall[slot] += recallCount;
-      recalls += recallCount;
-      doubleTaps += doubleTapCount;
-      if (set + add + recallCount > 0) activeSlots.add(slot);
-    }
-    for (const row of Array.isArray(control.transitions) ? control.transitions : []) {
-      const from = integerInRange(row?.from, 0, 9);
-      const to = integerInRange(row?.to, 0, 9);
-      if (from === null || to === null) continue;
-      transitions[from * 10 + to] += boundedCount(row.count);
-    }
-  }
-  if (samples === 0) return null;
-  return {
-    samples,
-    recall,
-    actions,
-    transitions,
-    activeSlots,
-    doubleTapRate: doubleTaps / Math.max(1, recalls),
-    eventsPerMinute: events / Math.max(1 / 60, activeSeconds / 60),
-  };
-}
-
-/**
- * @param {unknown} value
- * @returns {boolean}
- */
-function validControlGroups(value) {
-  const record = /** @type {LooseRecord|null} */ (
-    value && typeof value === "object" ? value : null
-  );
-  return Boolean(
-    record
-    && Array.isArray(record.slots)
-    && record.slots.length > 0,
-  );
 }
 
 /**
@@ -1104,51 +1022,6 @@ function jsSimilarity(left, right) {
 }
 
 /**
- * @param {number[]} left
- * @param {number[]} right
- * @returns {number|null}
- */
-function cosineSimilarity(left, right) {
-  let dot = 0;
-  let normLeft = 0;
-  let normRight = 0;
-  const length = Math.max(left.length, right.length);
-  for (let index = 0; index < length; index += 1) {
-    const a = Math.max(0, finiteOr(left[index], 0));
-    const b = Math.max(0, finiteOr(right[index], 0));
-    dot += a * b;
-    normLeft += a * a;
-    normRight += b * b;
-  }
-  if (normLeft <= 0 || normRight <= 0) return null;
-  return clamp01(dot / Math.sqrt(normLeft * normRight));
-}
-
-/**
- * @param {Set<number>} left
- * @param {Set<number>} right
- * @returns {number|null}
- */
-function jaccardSimilarity(left, right) {
-  if (!(left instanceof Set) || !(right instanceof Set)) return null;
-  const union = new Set([...left, ...right]);
-  if (union.size === 0) return null;
-  let intersection = 0;
-  for (const value of left) if (right.has(value)) intersection += 1;
-  return intersection / union.size;
-}
-
-/**
- * @param {number} left
- * @param {number} right
- * @returns {number|null}
- */
-function ratioSimilarity(left, right) {
-  if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
-  return Math.exp(-Math.abs(Math.log((left + 0.05) / (right + 0.05))));
-}
-
-/**
  * @param {LooseRecord[]} candidates
  * @param {EvidenceSummary} targetEvidence
  * @returns {{unknownLikelihood: number}}
@@ -1156,23 +1029,30 @@ function ratioSimilarity(left, right) {
 function attachOpenSetLikelihoods(candidates, targetEvidence) {
   const targetCoverage =
     (targetEvidence.buildGames > 0 ? COMPONENT_WEIGHTS.buildOrders : 0)
-    + (targetEvidence.controlGroupGames > 0 ? COMPONENT_WEIGHTS.controlGroups : 0);
+    + (targetEvidence.controlGroupGames > 0 ? COMPONENT_WEIGHTS.controlGroups : 0)
+    + (targetEvidence.actionGames > 0 ? COMPONENT_WEIGHTS.actions : 0);
   const targetReliability = (
     COMPONENT_WEIGHTS.buildOrders
       * Math.sqrt(Math.min(targetEvidence.buildGames, 5) / 5)
     + COMPONENT_WEIGHTS.controlGroups
       * Math.sqrt(Math.min(targetEvidence.controlGroupGames, 5) / 5)
+    + COMPONENT_WEIGHTS.actions
+      * Math.sqrt(Math.min(targetEvidence.actionGames, 5) / 5)
   ) * (0.55 + 0.45 * targetCoverage);
-  const unknownLogit = 1.1 + 1.4 * (1 - clamp01(targetReliability));
+  // Candidate hypotheses share a fixed total prior. Adding hundreds of weak
+  // lookalikes must not make the unknown-player hypothesis disappear.
+  const unknownLogit = 1.1 + 1.4 * (1 - clamp01(targetReliability))
+    + Math.log(Math.max(1, candidates.length));
   const logits = candidates.map(
-    (candidate) => 12 * (finiteOr(candidate.rankScore, 0.5) - 0.5),
+    (candidate) => 12 * (finiteOr(candidate.rankScore, 0.5) - 0.5)
+      * Math.sqrt(clamp01(candidate.evidenceQuality)),
   );
   logits.push(unknownLogit);
   const max = Math.max(...logits);
   const weights = logits.map((value) => Math.exp(value - max));
   const denominator = weights.reduce((sum, value) => sum + value, 0);
   for (let index = 0; index < candidates.length; index += 1) {
-    candidates[index].likelihood = round4(weights[index] / denominator);
+    candidates[index].likelihood = weights[index] / denominator;
   }
   return {
     unknownLikelihood: round4(weights[weights.length - 1] / denominator),
@@ -1189,7 +1069,7 @@ function evidenceReliability(componentSamples, coverage) {
   for (const row of componentSamples) {
     const target = Math.min(Math.max(0, row.target), 5) / 5;
     const candidate = Math.min(Math.max(0, row.candidate), 8) / 8;
-    sampleQuality += row.weight * Math.sqrt(target * candidate);
+    sampleQuality += row.weight * Math.sqrt(target * candidate) * clamp01(row.quality ?? 1);
   }
   return clamp01(sampleQuality * (0.55 + 0.45 * coverage));
 }
@@ -1212,7 +1092,7 @@ function confidenceBand({
   componentSamples,
 }) {
   const everyComponentDeep = componentSamples.every(
-    (row) => row.target >= 4 && row.candidate >= 5,
+    (row) => row.target >= 4 && row.candidate >= 5 && finiteOr(row.quality, 1) >= 0.65,
   );
   if (
     everyComponentDeep
@@ -1234,17 +1114,62 @@ function confidenceBand({
  * @param {LooseRecord|null} buildOrders
  * @param {LooseRecord|null} controlGroups
  * @param {number} targetSamples
+ * @param {LooseRecord|null} actions
  * @returns {string[]}
  */
-function candidateCaveats(buildOrders, controlGroups, targetSamples) {
+function candidateCaveats(buildOrders, controlGroups, targetSamples, actions) {
   /** @type {string[]} */
   const caveats = [];
-  if (!controlGroups) {
+  if (!controlGroups && buildOrders && !actions) {
     caveats.push("build_only_reprocess_for_control_groups");
   }
-  if (!buildOrders) caveats.push("control_groups_only_no_build_match");
+  if (!buildOrders && controlGroups && !actions) caveats.push("control_groups_only_no_build_match");
+  if (buildOrders?.detailLevel === "labels_only") caveats.push("labels_only_build_evidence");
+  if (controlGroups && (!controlGroups.advancedSamples?.target || !controlGroups.advancedSamples?.candidate)) {
+    caveats.push("legacy_control_group_signature");
+  }
+  if (controlGroups && (controlGroups.targetEvents / controlGroups.targetSamples < 80
+    || controlGroups.candidateEvents / controlGroups.candidateSamples < 80)) caveats.push("sparse_control_group_events");
+  if (actions && (actions.targetEvents / actions.targetSamples < 200
+    || actions.candidateEvents / actions.candidateSamples < 200)) caveats.push("sparse_action_events");
+  if ([controlGroups, actions].some((component) => component &&
+    [component.consistency?.target, component.consistency?.candidate].some((v) => typeof v === "number" && v < 0.5))) {
+    caveats.push("inconsistent_behavior");
+  }
   if (targetSamples <= 1) caveats.push("single_target_replay");
   return caveats;
+}
+
+/** @param {LooseRecord[]} games @returns {LooseRecord[]} */
+function distinctGames(games) {
+  const seen = new Set();
+  return games.filter((game) => {
+    const id = cleanString(game?.gameId);
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** @param {LooseRecord[]} candidates @param {boolean} truncated @returns {LooseRecord} */
+function assessCandidates(candidates, truncated) {
+  const best = candidates[0];
+  const next = candidates[1];
+  const ambiguous = Boolean(next && best.rankScore - next.rankScore < 0.03);
+  for (const candidate of candidates) {
+    if (ambiguous) candidate.caveats.push("ambiguous_candidates");
+    if (truncated) candidate.caveats.push("limited_candidate_search");
+    if ((ambiguous || truncated) && candidate.confidence === "high") candidate.confidence = "medium";
+  }
+  if (best.confidence === "low" || best.evidenceQuality < 0.28) {
+    return { status: "insufficient", reason: "More independent replays with detailed behavior are needed before an identity lead can be distinguished reliably." };
+  }
+  if (best.patternMatch < 0.72 || best.rankScore < 0.58) {
+    return { status: "insufficient", reason: "The searched players do not show a sufficiently close and well-supported behavioral match." };
+  }
+  if (ambiguous) return { status: "ambiguous", reason: "Several players have similarly strong evidence; the current replay history does not distinguish them." };
+  return { status: "lead", reason: "One candidate has a stronger behavioral lead in the searched history. This is not a verified identity." };
 }
 
 /**
@@ -1350,20 +1275,6 @@ function milestoneWeight(key) {
 }
 
 /**
- * @param {number[]} vector
- * @param {number} limit
- * @returns {number[]}
- */
-function topVectorIndices(vector, limit) {
-  return vector
-    .map((value, index) => ({ value, index }))
-    .filter((row) => row.value > 0)
-    .sort((a, b) => b.value - a.value || a.index - b.index)
-    .slice(0, limit)
-    .map((row) => row.index);
-}
-
-/**
  * @param {unknown} value
  * @returns {number|null}
  */
@@ -1381,20 +1292,6 @@ function validMmr(value) {
 function boundedCount(value) {
   const number = finiteNumber(value);
   return number === null ? 0 : Math.max(0, Math.min(99999, Math.round(number)));
-}
-
-/**
- * @param {unknown} value
- * @param {number} min
- * @param {number} max
- * @returns {number|null}
- */
-function integerInRange(value, min, max) {
-  const number = finiteNumber(value);
-  if (number === null || !Number.isInteger(number) || number < min || number > max) {
-    return null;
-  }
-  return number;
 }
 
 /**
@@ -1495,6 +1392,8 @@ module.exports = {
   identityEligibility,
   isBarcodeLikeName,
   scoreCandidate,
+  assessCandidates,
+  attachOpenSetLikelihoods,
   milestoneSequenceSimilarity,
   jsSimilarity,
 };

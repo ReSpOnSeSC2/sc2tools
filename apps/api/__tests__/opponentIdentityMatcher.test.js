@@ -357,11 +357,11 @@ describe("OpponentIdentityMatcherService", () => {
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({
       name: "KnownTerran",
-      patternMatch: 1,
+      patternMatch: 0.55,
       confidence: "low",
       evidence: {
         controlGroups: null,
-        coverage: 0.55,
+        coverage: 0.20,
       },
     });
     expect(result.candidates[0].caveats).toContain(

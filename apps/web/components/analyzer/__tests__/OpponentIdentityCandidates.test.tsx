@@ -263,6 +263,157 @@ describe("OpponentIdentityCandidates", () => {
     expect(screen.queryByText("Player 6")).toBeNull();
   });
 
+  it("shows the evidence assessment and separates label-only builds from detailed replay measurements", () => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      methodologyVersion: "behavior_match_v2",
+      assessment: {
+        status: "insufficient",
+        reason: "The target needs repeated behavioral evidence.",
+      },
+      target: {
+        ...response().target,
+        games: 1,
+        buildGames: 1,
+        controlGroupGames: 1,
+        advancedControlGroupGames: 1,
+        actionGames: 1,
+        signatureVersion: 2,
+        evidenceMode: "behavioral",
+      },
+      candidates: [candidate(1, {
+        evidence: {
+          coverage: 0.8,
+          buildOrders: {
+            ...base.evidence.buildOrders!,
+            score: 0.55,
+            detailLevel: "labels_only",
+            milestoneSamples: { target: 0, candidate: 0 },
+            sharedMilestones: [],
+          },
+          controlGroups: {
+            ...base.evidence.controlGroups!,
+            advancedSamples: { target: 1, candidate: 3 },
+            dimensions: [{
+              key: "event_rate",
+              label: "Control-group activity rate",
+              score: 0.94,
+              targetSamples: 1,
+              candidateSamples: 3,
+              targetValue: 34.6,
+              candidateValue: 32.5,
+              unit: "per_minute",
+            }],
+          },
+          actions: {
+            score: 0.72,
+            targetSamples: 1,
+            candidateSamples: 3,
+            targetEvents: 1200,
+            candidateEvents: 4500,
+            consistency: { target: null, candidate: 0.89 },
+            highlights: ["Similar action cadence"],
+            dimensions: [{
+              key: "command_rate",
+              label: "Recorded command rate",
+              score: 0.76,
+              targetSamples: 1,
+              candidateSamples: 3,
+              targetValue: 115,
+              candidateValue: 132,
+              unit: "per_minute",
+            }],
+          },
+        },
+        caveats: ["labels_only_build_evidence", "sparse_action_events"],
+      })],
+    })));
+
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+
+    expect(screen.getByLabelText("Identity evidence assessment").textContent)
+      .toContain("Evidence is too limited to identify a player");
+    expect(screen.getByText(/Only one target replay is available/)).toBeTruthy();
+    expect(screen.getByText(/1 detailed control-group games/)).toBeTruthy();
+    expect(screen.getByText("Build labels only · no comparable opening timings")).toBeTruthy();
+    expect(screen.getByRole("progressbar", { name: "Replay-action habits 72%" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    const controls = screen.getByRole("table", { name: "Control-group measurements" });
+    expect(within(controls).getByText("34.6/min")).toBeTruthy();
+    expect(within(controls).getByText("32.5/min")).toBeTruthy();
+    expect(within(controls).getByText("94%")).toBeTruthy();
+    const actions = screen.getByRole("table", { name: "Replay-action measurements" });
+    expect(within(actions).getByText("115/min")).toBeTruthy();
+    expect(screen.getByText(/Recorded events: 1,200 target · 4,500 candidate/)).toBeTruthy();
+    expect(screen.getByText(/target needs repeated games · candidate 89%/)).toBeTruthy();
+    expect(screen.getByText(/Consistency of action mix across games/)).toBeTruthy();
+    expect(screen.getByText(/Physical keystrokes,/)).toBeTruthy();
+    expect(screen.getByText(/Only classified build labels can be compared/)).toBeTruthy();
+    expect(screen.getByText(/Too few recorded actions/)).toBeTruthy();
+  });
+
+  it("keeps unavailable measurements distinct from zero similarity and exposes reprocessing gaps", () => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      target: { ...response().target, signatureVersion: 2 },
+      candidates: [candidate(1, {
+        evidence: {
+          ...base.evidence,
+          controlGroups: {
+            ...base.evidence.controlGroups!,
+            advancedSamples: { target: 0, candidate: 2 },
+            dimensions: [{
+              key: "phase_usage",
+              label: "Usage by game phase",
+              score: null,
+              targetSamples: 0,
+              candidateSamples: 2,
+            }, {
+              key: "double_tap",
+              label: "Double-tap rhythm",
+              score: 0,
+              targetSamples: 4,
+              candidateSamples: 7,
+              targetValue: 0,
+              candidateValue: 0.5,
+              unit: "ratio",
+            }],
+          },
+          actions: null,
+        },
+      })],
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+
+    expect(screen.getByText("Replay-action habits")).toBeTruthy();
+    expect(screen.queryByRole("progressbar", { name: /Replay-action habits/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    const table = screen.getByRole("table", { name: "Control-group measurements" });
+    const missing = within(table).getByRole("rowheader", { name: "Usage by game phase" }).closest("tr")!;
+    expect(within(missing).getByText("Unavailable")).toBeTruthy();
+    expect(within(missing).getByText("No samples")).toBeTruthy();
+    expect(within(missing).queryByText("0%")).toBeNull();
+    const zero = within(table).getByRole("rowheader", { name: "Double-tap rhythm" }).closest("tr")!;
+    expect(within(zero).getAllByText("0%")).toHaveLength(2);
+    expect(within(zero).getByText("50%")).toBeTruthy();
+    expect(screen.getByText(/Reprocess older replays to compare detailed timing/)).toBeTruthy();
+    expect(screen.getByText("This evidence channel was not available for both profiles.")).toBeTruthy();
+  });
+
+  it("renders an ambiguous assessment without promoting a candidate to a verified identity", () => {
+    harness.useApi.mockReturnValue(apiResult(response({
+      assessment: { status: "ambiguous", reason: "The leading patterns are similarly close." },
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+
+    expect(screen.getByText("Several players remain plausible")).toBeTruthy();
+    expect(screen.getByText("The leading patterns are similarly close.")).toBeTruthy();
+    expect(screen.getByText("Unverified")).toBeTruthy();
+  });
+
   it("keeps the card stable while candidates load", () => {
     harness.useApi.mockReturnValue(
       apiResult(null, { isLoading: true, isValidating: true }),

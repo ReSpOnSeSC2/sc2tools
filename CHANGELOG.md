@@ -11,8 +11,29 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Detailed barcode identity evidence** — v2 replay signatures compare group
+  assignments, steals, first-use times, usage by game phase, recall cadence,
+  commands after recalls, queued/repeated commands, and camera/selection
+  observations. Evidence details show measured values, sample counts, group
+  command names, missing channels, and consistency across games. All application
+  evidence comes from actual replays; physical keystrokes and key bindings are
+  unavailable. Ships in agent **0.16.4** (`agent-v0.16.4`); existing history
+  needs a full Re-sync with the updated agent.
+- **Offline identity retrieval audit** — reusable tools evaluate real replay
+  files with disjoint query/reference replays and the production scorer. The
+  report distinguishes same-account retrieval from unverified alternate-account
+  identity and uncalibrated probability estimates.
+
 ### Fixed
 
+- **Barcode matching no longer lets sample volume outweigh a closer fingerprint**
+  — ranking uses observed fit and measurement quality, while replay counts govern
+  confidence and likelihood. Generic build labels contribute limited evidence;
+  sparse or ambiguous comparisons cannot establish a strong identity lead. V1
+  replay signatures remain supported, and unknown-player probability remains
+  meaningful when the candidate pool grows.
 - **PvZ Stargate transitions now separate the four intended styles** —
   AlphaStar requires Stargate into third Nexus into Robotics Facility, with
   the Robo started by 5:30 and before Twilight; otherwise transition order and
