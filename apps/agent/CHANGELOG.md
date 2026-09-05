@@ -2,6 +2,41 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.8
+
+### Fixed - background recording windows
+
+- StarCraft recording starts off-screen without activation. The agent keeps
+  its owned capture windows out of view while the engine records the game.
+  The user's existing StarCraft process and window are not controlled.
+- The recorder's process tree is owned by the agent and stops when capture
+  finishes or the agent exits, including crashes. Progress and diagnostics
+  remain available in SC2 Tools.
+
+### Fixed - recorded paths in large replays
+
+- Recompute reuses a complete local recording when its replay hash, player,
+  format and observation channels match. Reanalysis and upload fixes no longer
+  run StarCraft again for a game that has already been recorded. Incomplete,
+  incompatible or lower-resolution recordings still trigger a new capture.
+- Large recordings preserve the first position after cargo release, morph
+  boundaries and movement discontinuities. Upload compression now adapts a
+  declared position error instead of dropping arbitrary route points, which
+  could place units far from their actual positions after recording.
+- Recordings that cannot fit safely report an explicit error instead of
+  silently publishing damaged movement tracks.
+- The website follows observed fast units and moving structures without
+  applying the sparse tracker movement limits.
+- Unit recording passes no longer request and decode unused minimap images
+  or score data. Global creep retains its dedicated observation pass.
+
+### Migration note
+
+- Install agent **0.16.8** and select **Recompute** for affected recordings.
+  The connected desktop agent reuses its saved recording or captures the replay;
+  users do not need to open it manually. Existing recordings remain available
+  online while regeneration runs.
+
 ## 0.16.7
 
 ### Fixed - Macro Breakdown recording controls

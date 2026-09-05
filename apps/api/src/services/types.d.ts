@@ -911,6 +911,7 @@ export interface StrategyPhasesService {
 }
 
 export interface PerGameComputeService {
+  hasGame(userId: string, gameId: string): Promise<boolean>;
   buildOrder(userId: string, gameId: string): Promise<object | null>;
   macroBreakdown(userId: string, gameId: string): Promise<object | null>;
   mapPlayback(userId: string, gameId: string): Promise<object | null>;

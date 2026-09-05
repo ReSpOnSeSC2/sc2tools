@@ -7,8 +7,10 @@ const harness = vi.hoisted(() => ({
   macroError: null as { status: number; message?: string } | null,
   request: vi.fn(),
   playbackMutate: vi.fn(),
+  statusMutate: vi.fn(),
   macroMutate: vi.fn(),
   mapPollInterval: 0,
+  fullPollInterval: 0,
   paths: [] as Array<string | null>,
 }));
 
@@ -21,12 +23,22 @@ vi.mock("@/lib/clientApi", () => ({
       isLoading: false,
       mutate: harness.macroMutate,
     };
-    if (path?.endsWith("/map-playback")) harness.mapPollInterval = options?.refreshInterval ?? 0;
+    if (path?.endsWith("/map-playback/status")) {
+      harness.mapPollInterval = options?.refreshInterval ?? 0;
+      return {
+        data: { rebuild: harness.playback?.rebuild ?? null },
+        isLoading: false,
+        error: null,
+        mutate: harness.statusMutate,
+      };
+    }
+    if (path?.endsWith("/map-playback")) harness.fullPollInterval = options?.refreshInterval ?? 0;
     return {
       data: path ? harness.playback : undefined,
       isLoading: false,
       error: null,
-      request: harness.request,
+      request: (init: RequestInit) => init.method === "GET"
+        ? Promise.resolve(harness.playback) : harness.request(init),
       mutate: harness.playbackMutate,
     };
   },
@@ -57,6 +69,7 @@ beforeEach(() => {
   harness.macroError = null;
   harness.request.mockResolvedValue({ rebuild: { requestId: "recording-1" } });
   harness.playbackMutate.mockResolvedValue(undefined);
+  harness.statusMutate.mockResolvedValue(undefined);
   harness.macroMutate.mockResolvedValue(undefined);
 });
 afterEach(() => cleanup());
@@ -69,6 +82,9 @@ describe("macro breakdown Recompute", () => {
     expect(harness.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(harness.paths).toContain("/v1/games/washout-game/map-playback");
     expect(harness.mapPollInterval).toBe(3000);
+    expect(harness.fullPollInterval).toBe(0);
+    expect(harness.playbackMutate).not.toHaveBeenCalled();
+    expect(harness.statusMutate).toHaveBeenCalledTimes(1);
     expect((screen.getByRole("button", { name: "Recording replay…" }) as HTMLButtonElement).disabled).toBe(true);
     expect(harness.macroMutate).not.toHaveBeenCalled();
 

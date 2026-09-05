@@ -9,7 +9,7 @@ vi.mock("@/lib/spriteSheets", () => {
   const sprite = { name: "Marine", meta: { kind: "unit", race: "Terran", frameSize: 256, facings: 8,
     anims: { Stand: anim, Walk: anim, Attack: anim } }, handles: {} };
   const handles = Object.fromEntries(["Stand", "Walk", "Attack"].map((name) => [name, { name, anim, sprite }]));
-  return { beginSpriteFrame: vi.fn(), drawSprite: spriteState.draw, hasWalk: () => true,
+  return { beginSpriteFrame: vi.fn(), endSpriteFrame: vi.fn(), drawSprite: spriteState.draw, hasWalk: () => true,
     resolveSprite: () => sprite, spriteAnim: (_s: unknown, name: string) => handles[name], spriteAssetsVersion: () => 0 };
 });
 

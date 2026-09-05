@@ -349,9 +349,20 @@ interface SheetEntry {
    * (a missing sheet is permanent, and retrying it every frame would
    * hammer the CDN). */
   failed: boolean;
+  loading: boolean;
+  queued: boolean;
+  bytes: number;
+  used: number;
+  /** A source drawn directly this frame cannot be evicted for its atlas. */
+  pinned: number;
 }
 
 const sheetCache = new Map<string, SheetEntry>();
+const SHEET_BYTE_BUDGET = 96 * 1024 * 1024;
+const MAX_SHEET_LOADS = 2;
+const sheetQueue: Array<{ url: string; entry: SheetEntry }> = [];
+let sheetBytes = 0;
+let sheetLoads = 0;
 
 /**
  * Bumped whenever a sheet or atlas finishes loading. The replayer's
@@ -365,42 +376,97 @@ export function spriteAssetsVersion(): number {
 }
 
 function ensureSheet(url: string): Decoded | null {
-  const hit = sheetCache.get(url);
-  if (hit) return hit.image;
   if (typeof Image === "undefined") return null; // non-DOM test envs
-  const entry: SheetEntry = { image: null, failed: false };
-  sheetCache.set(url, entry);
+  let entry = sheetCache.get(url);
+  if (!entry) {
+    entry = { image: null, failed: false, loading: false, queued: false,
+      bytes: 0, used: frameStamp, pinned: -1 };
+    sheetCache.set(url, entry);
+  }
+  entry.used = frameStamp;
+  if (entry.image) return entry.image;
+  if (!entry.failed && !entry.loading && !entry.queued) {
+    entry.queued = true;
+    sheetQueue.push({ url, entry });
+    pumpSheetLoads();
+  }
+  return null;
+}
+
+function pumpSheetLoads(): void {
+  while (sheetLoads < MAX_SHEET_LOADS && sheetQueue.length > 0) {
+    const { url, entry } = sheetQueue.shift()!;
+    entry.queued = false;
+    // A seek/pan can make a queued sheet obsolete before its turn. It can
+    // rejoin the queue if it becomes visible again, without background work.
+    if (entry.used < frameStamp - 1 || entry.image || entry.failed) continue;
+    entry.loading = true;
+    sheetLoads += 1;
+    loadSheet(url, entry);
+  }
+}
+
+function loadSheet(url: string, entry: SheetEntry): void {
   const img = new Image();
   // REQUIRED, not optional: cells are re-rasterised into an offscreen
   // canvas, so a tainted sheet would taint every atlas and then the
   // main canvas, killing any future screenshot/clip export.
   img.crossOrigin = "anonymous";
   img.decoding = "async";
+  let settled = false;
+  const finish = (decoded: Decoded | null) => {
+    if (settled) return;
+    settled = true;
+    img.onload = null;
+    img.onerror = null;
+    if (decoded !== img) img.removeAttribute("src");
+    entry.loading = false;
+    sheetLoads -= 1;
+    entry.image = decoded;
+    entry.failed = decoded === null;
+    if (decoded) {
+      const width = "naturalWidth" in decoded ? decoded.naturalWidth : decoded.width;
+      const height = "naturalHeight" in decoded ? decoded.naturalHeight : decoded.height;
+      entry.bytes = width * height * 4;
+      sheetBytes += entry.bytes;
+    }
+    version += 1;
+    pumpSheetLoads();
+  };
   img.onload = () => {
     // An ImageBitmap is a decoded, GPU-resident surface: blitting from
     // it skips the per-draw decode check an HTMLImageElement carries.
     if (typeof createImageBitmap === "function") {
-      createImageBitmap(img).then(
-        (bmp) => {
-          entry.image = bmp;
-          version += 1;
-        },
-        () => {
-          entry.image = img; // still perfectly drawable
-          version += 1;
-        },
-      );
+      try {
+        createImageBitmap(img).then(
+          (bmp) => finish(bmp),
+          () => finish(img), // still perfectly drawable
+        );
+      } catch {
+        finish(img);
+      }
     } else {
-      entry.image = img;
-      version += 1;
+      finish(img);
     }
   };
-  img.onerror = () => {
-    entry.failed = true;
-    version += 1;
-  };
+  img.onerror = () => finish(null);
   img.src = url;
-  return null;
+}
+
+function evictDecodedSheets(): void {
+  if (sheetBytes <= SHEET_BYTE_BUDGET) return;
+  const entries = [...sheetCache.values()]
+    .filter(entry => entry.image && entry.pinned !== frameStamp)
+    .sort((a, b) => a.used - b.used);
+  for (const entry of entries) {
+    if (sheetBytes <= SHEET_BYTE_BUDGET) break;
+    // Drawing an atlas no longer touches its original. Its decoded pixels
+    // can be released while the small, reusable atlas remains ready to draw.
+    if (entry.image && "close" in entry.image) entry.image.close();
+    entry.image = null;
+    sheetBytes -= entry.bytes;
+    entry.bytes = 0;
+  }
 }
 
 /* ──────────────── size-bucket atlases ──────────────── */
@@ -439,6 +505,7 @@ const atlasCache = new Map<string, Atlas>();
 let atlasBytes = 0;
 let frameStamp = 0;
 let buildsThisFrame = 0;
+let needsAtlasThisFrame = false;
 /** Device px per scene px for the current frame: view zoom × dpr. */
 let rasterScale = 1;
 
@@ -450,7 +517,20 @@ let rasterScale = 1;
 export function beginSpriteFrame(scale: number): void {
   frameStamp += 1;
   buildsThisFrame = 0;
+  needsAtlasThisFrame = false;
   rasterScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/** Finish after all sprites have drawn so the complete visible working set
+ * is protected. Budgets may exceed their target for that working set, but
+ * old replay history cannot accumulate decoded images indefinitely. */
+export function endSpriteFrame(): void {
+  evictAtlases();
+  evictDecodedSheets();
+  // Finish deferred atlas builds even in a paused replay. Once every drawn
+  // sheet has an atlas this stops, preserving the normal idle dirty check.
+  if (needsAtlasThisFrame && buildsThisFrame > 0) version += 1;
+  pumpSheetLoads();
 }
 
 /** Power-of-two bucket at or above the on-screen cell size. Returns 0
@@ -488,6 +568,7 @@ function evictAtlases(): void {
   const entries = [...atlasCache.entries()].sort((a, b) => a[1].used - b[1].used);
   for (const [key, atlas] of entries) {
     if (atlasBytes <= ATLAS_BYTE_BUDGET) break;
+    if (atlas.used === frameStamp) continue;
     atlasCache.delete(key);
     atlasBytes -= atlas.bytes;
     // Release the backing store promptly rather than waiting for GC.
@@ -545,8 +626,27 @@ function buildAtlas(
   const atlas: Atlas = { canvas, cell: bucket, bytes: outW * outH * 4, used: frameStamp };
   atlasCache.set(key, atlas);
   atlasBytes += atlas.bytes;
-  evictAtlases();
   return atlas;
+}
+
+/** Existing pixels can satisfy a draw even after its full-size source was
+ * evicted. Prefer a larger atlas over a smaller one to retain sharpness. */
+function cachedAtlasFor(url: string, bucket: number): Atlas | null {
+  const exact = atlasCache.get(`${url}|${bucket}`);
+  if (exact) {
+    exact.used = frameStamp;
+    return exact;
+  }
+  let best: Atlas | null = null;
+  const prefix = `${url}|`;
+  for (const [key, atlas] of atlasCache) {
+    if (!key.startsWith(prefix)) continue;
+    if (!best || (atlas.cell >= bucket && best.cell < bucket) ||
+        (atlas.cell >= bucket && best.cell >= bucket && atlas.cell < best.cell) ||
+        (atlas.cell < bucket && best.cell < bucket && atlas.cell > best.cell)) best = atlas;
+  }
+  if (best) best.used = frameStamp;
+  return best;
 }
 
 /** Best atlas available RIGHT NOW for this sheet at this bucket:
@@ -573,16 +673,7 @@ function atlasFor(
   }
   // Fall back to any cached size for this sheet so the unit still
   // draws (slightly soft or slightly oversampled) this frame.
-  let best: Atlas | null = null;
-  const prefix = `${url}|`;
-  for (const [k, atlas] of atlasCache) {
-    if (!k.startsWith(prefix)) continue;
-    if (!best || Math.abs(atlas.cell - bucket) < Math.abs(best.cell - bucket)) {
-      best = atlas;
-    }
-  }
-  if (best) best.used = frameStamp;
-  return best;
+  return cachedAtlasFor(url, bucket);
 }
 
 /* ──────────────── draw ──────────────── */
@@ -639,8 +730,6 @@ export function drawSprite(
   const meta = handle.sprite.meta;
   const anim = handle.anim;
   const url = color === "red" ? handle.redUrl : handle.blueUrl;
-  const image = ensureSheet(url);
-  if (!image) return false;
 
   // Buildings have a single facing and must never be rotated.
   const f = meta.facings > 1 ? ((facing % meta.facings) + meta.facings) % meta.facings : 0;
@@ -654,23 +743,43 @@ export function drawSprite(
   const dy = rect.y;
 
   const bucket = bucketFor(cellPx * rasterScale, meta.frameSize);
+  const cached = bucket > 0 ? cachedAtlasFor(url, bucket) : null;
+  if (cached && cached.cell >= bucket) {
+    const s = cached.cell;
+    ctx.drawImage(cached.canvas, col * s, row * s, s, s, dx, dy, cellPx, cellPx);
+    return true;
+  }
+  const image = ensureSheet(url);
+  if (!image) {
+    if (!cached) return false;
+    const s = cached.cell;
+    ctx.drawImage(cached.canvas, col * s, row * s, s, s, dx, dy, cellPx, cellPx);
+    return true;
+  }
   if (bucket > 0) {
     const atlas = atlasFor(url, image, meta, anim, bucket);
     if (atlas) {
+      if (atlas.cell < bucket) needsAtlasThisFrame = true;
       const s = atlas.cell;
       ctx.drawImage(atlas.canvas, col * s, row * s, s, s, dx, dy, cellPx, cellPx);
       return true;
     }
+    needsAtlasThisFrame = true;
   }
   // Zoomed in far enough that an atlas would be a near-copy of the
   // sheet (or the atlas budget is spent and nothing is cached yet):
   // blit the source cell directly.
   const fs = meta.frameSize;
+  const entry = sheetCache.get(url);
+  if (entry) entry.pinned = frameStamp;
   ctx.drawImage(image, col * fs, row * fs, fs, fs, dx, dy, cellPx, cellPx);
   return true;
 }
 
 /** Test/diagnostic hook: how much decoded atlas memory is live. */
-export function spriteAtlasStats(): { atlases: number; bytes: number; sheets: number } {
-  return { atlases: atlasCache.size, bytes: atlasBytes, sheets: sheetCache.size };
+export function spriteAtlasStats(): { atlases: number; bytes: number; sheets: number; decodedBytes: number; decodedSheets: number; loading: number; queued: number } {
+  return { atlases: atlasCache.size, bytes: atlasBytes, sheets: sheetCache.size,
+    decodedBytes: sheetBytes,
+    decodedSheets: [...sheetCache.values()].filter(entry => entry.image).length,
+    loading: sheetLoads, queued: sheetQueue.length };
 }

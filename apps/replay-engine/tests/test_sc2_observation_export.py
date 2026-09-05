@@ -82,6 +82,137 @@ def test_source_launch_preserves_environment_without_touching_dll_state(monkeypa
     assert calls == [((["SC2"],), {"env": environment})]
 
 
+def test_background_launch_failure_never_falls_back_to_unprotected_popen(monkeypatch):
+    from core import windows_capture_process
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+
+    def denied(*_args, **_kwargs):
+        raise OSError("window guardian denied")
+
+    monkeypatch.setattr(windows_capture_process, "launch_background_process", denied)
+    monkeypatch.setattr(exporter.subprocess, "Popen", lambda *_a, **_k: pytest.fail("visible fallback launched"))
+    with pytest.raises(OSError, match="window guardian denied"):
+        exporter._launch_sc2(["SC2"], background_windows=True)
+
+
+def test_standalone_exporter_resolves_background_launcher_without_package(monkeypatch):
+    import runpy
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setitem(sys.modules, "windows_capture_process", SimpleNamespace(
+        launch_background_process=lambda *_a, **_k: "background child"))
+    namespace = runpy.run_path(exporter.__file__, run_name="standalone_exporter_test")
+    assert not namespace["__package__"]
+    assert namespace["_launch_sc2"](["SC2"], background_windows=True) == "background child"
+
+
+def test_background_create_process_failure_releases_job_and_only_duplicated_handles(tmp_path, monkeypatch):
+    import ctypes
+    from ctypes import wintypes
+    from core import windows_capture_process as windows
+    closed, duplicated, deleted = [], [], []
+
+    def duplicate(_parent, _source, _target, output, _access, inherit, _options):
+        assert inherit is True
+        handle = 100 + len(duplicated)
+        ctypes.cast(output, ctypes.POINTER(wintypes.HANDLE))[0] = handle
+        duplicated.append(handle)
+        return True
+
+    def attributes(pointer, _count, _flags, size):
+        ctypes.cast(size, ctypes.POINTER(ctypes.c_size_t))[0] = 64
+        return pointer is not None
+
+    def create(_exe, _command, _psa, _tsa, inherit, flags, _env, _cwd, startup, _information):
+        startup = ctypes.cast(startup, ctypes.POINTER(windows._STARTUPINFOEXW)).contents
+        assert startup.StartupInfo.lpDesktop is None
+        assert flags & 0x80000 and flags & 0x4000 and flags & 0x4 and inherit is True
+        assert startup.StartupInfo.wShowWindow == 0
+        assert startup.lpAttributeList
+        return False
+
+    api = SimpleNamespace(error=lambda action: OSError(action),
+        kernel=SimpleNamespace(GetCurrentProcess=lambda: 1, DuplicateHandle=duplicate,
+            CreateJobObjectW=lambda *_a: 800, SetInformationJobObject=lambda *_a: True,
+            InitializeProcThreadAttributeList=attributes,
+            UpdateProcThreadAttribute=lambda _p, _f, attribute, handles, *_a: attribute == 0x20002 and list(handles) == duplicated,
+            DeleteProcThreadAttributeList=lambda pointer: deleted.append(pointer),
+            CloseHandle=lambda handle: closed.append(handle) or True, CreateProcessW=create))
+    monkeypatch.setattr(windows, "_WindowsAPI", lambda: api)
+    with (tmp_path / "capture.log").open("wb") as output:
+        with pytest.raises(OSError, match="background capture"):
+            windows.launch_background_process(["SC2"], stdout=output, stderr=output)
+        assert output.closed is False
+    assert duplicated == [100, 101, 102]
+    assert closed == [800, 100, 101, 102]
+    assert len(deleted) == 1
+
+
+def test_background_guard_enumeration_failure_is_not_silently_accepted():
+    import ctypes
+    from core import windows_capture_process as windows
+    guard = windows._BackgroundWindowGuard.__new__(windows._BackgroundWindowGuard)
+    guard.job = 800
+    guard._callback_type = lambda callback: callback
+    guard.api = SimpleNamespace(error=lambda action: OSError(action),
+        kernel=SimpleNamespace(QueryInformationJobObject=lambda *_a: True),
+        user=SimpleNamespace(EnumWindows=lambda *_a: False))
+    with pytest.raises(OSError, match="inspect owned capture windows"):
+        guard._scan()
+
+
+def test_background_guard_stop_error_cannot_skip_owned_job_cleanup():
+    from core import windows_capture_process as windows
+    calls = []
+    api = SimpleNamespace(error=lambda action: OSError(action), kernel=SimpleNamespace(
+        TerminateJobObject=lambda handle, _code: calls.append(("terminate", handle)) or True,
+        CloseHandle=lambda handle: calls.append(("close", handle)) or True))
+    guard = SimpleNamespace(stop=lambda: (_ for _ in ()).throw(OSError("guardian join failed")))
+    process = windows._CaptureProcess(api, 100, 17, ["SC2"], job=800, guard=guard)
+    process.returncode = 0
+    with pytest.raises(OSError, match="guardian join failed"):
+        process.close()
+    assert calls == [("terminate", 800), ("close", 800), ("close", 100)]
+    assert process._job is None and process._handle is None
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_engine_websocket_close_failure_still_reaps_child_and_desktop(tmp_path, monkeypatch, failed):
+    calls = []
+    state = {"finished": False}
+    engine = exporter._Engine(tmp_path, tmp_path / "SC2.exe", None, 10)
+    engine.temp = exporter.tempfile.TemporaryDirectory(dir=tmp_path)
+    temporary = Path(engine.temp.name)
+    engine.log = (temporary / "engine.log").open("wb")
+    monkeypatch.setenv("SC2TOOLS_OBSERVATION_DIR", str(tmp_path / "cache"))
+
+    def wait(timeout):
+        calls.append("wait")
+        if not state["finished"]:
+            raise exporter.subprocess.TimeoutExpired("SC2", timeout)
+
+    def kill():
+        calls.append("kill")
+        state["finished"] = True
+
+    def close_process():
+        assert state["finished"]
+        calls.append("close desktop")
+
+    engine.process = SimpleNamespace(poll=lambda: 0 if state["finished"] else None,
+        terminate=lambda: calls.append("terminate"), wait=wait, kill=kill, close=close_process)
+    engine.ws = SimpleNamespace(close=lambda: (_ for _ in ()).throw(ConnectionError("socket closed")))
+    if failed:
+        engine.close(failed=True)
+    else:
+        with pytest.raises(exporter.ObservationExportError, match="socket closed"):
+            engine.close()
+    assert calls == ["terminate", "wait", "kill", "wait", "close desktop"]
+    assert not temporary.exists()
+    assert engine.process is None and engine.ws is None and engine.log is None
+
+
 def test_engine_startup_failure_retains_diagnostic_after_temp_cleanup(tmp_path, monkeypatch):
     monkeypatch.setenv("SC2TOOLS_OBSERVATION_DIR", str(tmp_path / "cache"))
     original_temp = exporter.tempfile.TemporaryDirectory
@@ -236,6 +367,36 @@ def test_proto_adapter_uses_global_feature_creep_and_flips_y():
     frame = exporter._frame_from_proto(observation)
     assert frame["t"] == 10
     assert exporter.encode_bit_runs(frame["creep"]["data"], 4, 2) == [3, 2]
+
+
+def test_participant_proto_adapter_never_accesses_unused_feature_images():
+    # Deliberately omit feature_layer_data. Raw units, cooldowns, deaths and
+    # effects remain sufficient when the expensive feature renderer is off.
+    target = SimpleNamespace(tag=2, owner=2, unit_type=1, display_type=1,
+        pos=SimpleNamespace(x=30, y=40), weapon_cooldown=0, engaged_target_tag=0,
+        HasField=lambda name: name == "weapon_cooldown")
+    attacker = SimpleNamespace(tag=1, owner=1, unit_type=1, display_type=1,
+        pos=SimpleNamespace(x=20, y=30), weapon_cooldown=15, engaged_target_tag=2,
+        HasField=lambda name: name == "weapon_cooldown")
+    observation = SimpleNamespace(game_loop=224, raw_data=SimpleNamespace(
+        units=[attacker, target], event=SimpleNamespace(dead_units=[3]),
+        effects=[SimpleNamespace(effect_id=11, owner=1, radius=.5, pos=[SimpleNamespace(x=30, y=40)])]))
+    frame = exporter._frame_from_proto(observation, capture_creep=False)
+    assert frame["creep"] is None
+    assert frame["units"][0]["weapon_cooldown"] == 15
+    assert frame["units"][0]["target_position"] == (30, 40)
+    assert frame["dead_units"] == ["3"]
+    assert frame["effects"] == [{"id": 11, "owner": 1, "radius": .5, "positions": [(30, 40)]}]
+
+
+def test_global_creep_adapter_never_decodes_unused_unit_or_effect_channels():
+    # No raw_data member: the Everyone pass needs just the global bitmap.
+    creep = SimpleNamespace(size=SimpleNamespace(x=4, y=2), bits_per_pixel=1, data=bytes([0b10000001]))
+    observation = SimpleNamespace(game_loop=224,
+        feature_layer_data=SimpleNamespace(minimap_renders=SimpleNamespace(creep=creep)))
+    frame = exporter._frame_from_proto(observation, capture_entities=False)
+    assert exporter.encode_bit_runs(frame["creep"]["data"], 4, 2) == [3, 2]
+    assert frame["units"] == frame["effects"] == frame["dead_units"] == []
 
 
 def test_ownership_departure_closes_life_and_can_return_under_same_tag():
@@ -396,6 +557,12 @@ def test_export_separates_participant_effects_from_global_everyone_creep(tmp_pat
                 perspectives.append(self.pid)
                 assert self.pid in (0, 1, 2)
                 assert kwargs["disable_fog"] is True
+                assert kwargs["options"]["raw"] is True
+                if self.pid == 0:
+                    assert "feature_layer" in kwargs["options"]
+                else:
+                    assert "feature_layer" not in kwargs["options"]
+                    assert kwargs["options"]["score"] is False
                 return None
             if kind == "game_info":
                 return SimpleNamespace(map_name="Test map", start_raw=SimpleNamespace(map_size=SimpleNamespace(x=2, y=2),
@@ -418,7 +585,14 @@ def test_export_separates_participant_effects_from_global_everyone_creep(tmp_pat
             raise AssertionError(kind)
 
     monkeypatch.setattr(exporter, "_Engine", FakeEngine)
-    monkeypatch.setattr(exporter, "_frame_from_proto", lambda observation: observation.frame)
+    def adapt_frame(observation, *, capture_creep=True, capture_entities=True):
+        if len(perspectives) < 3:
+            assert capture_creep is False and capture_entities is True
+        else:
+            assert capture_creep is True and capture_entities is False
+        return observation.frame
+
+    monkeypatch.setattr(exporter, "_frame_from_proto", adapt_frame)
     artifact = exporter.export_engine_observations(replay_path, 2, sc2_path=tmp_path)
     result = artifact["playback"]
     assert perspectives == [2, 1, 0]

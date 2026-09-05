@@ -6,6 +6,7 @@ import { sanitizeMapPlayback } from "./mapReplay";
 
 const RECORDING_TIMEOUT_MS = 18 * 60 * 1000;
 const ACTIVE_STATUSES = new Set(["queued", "processing", "uploading"]);
+const FALLBACK_READ_AT_MS = [60_000, 5 * 60_000, 10 * 60_000, 17 * 60_000];
 
 type RecordingState = {
   epoch: number;
@@ -15,11 +16,14 @@ type RecordingState = {
   completedRequestId: string | null;
   startedAt: number;
   startedWithEnginePlayback: boolean;
+  loadedRequestId: string | null;
+  fallbackReads: number;
 };
 
 const emptyState = (epoch: number): RecordingState => ({
   epoch, refreshing: false, refreshMessage: "", requestId: null,
   completedRequestId: null, startedAt: 0, startedWithEnginePlayback: true,
+  loadedRequestId: null, fallbackReads: 0,
 });
 
 /** One recording controller shared by the replay panel and its host's actions. */
@@ -42,6 +46,10 @@ export function useMapReplay(gameId: string | null) {
 
   const req = useApi<Record<string, unknown>>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback` : null,
+    { revalidateOnFocus: false, refreshInterval: 0 },
+  );
+  const statusReq = useApi<Record<string, unknown>>(
+    gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback/status` : null,
     { revalidateOnFocus: false, refreshInterval: gameId && state.refreshing ? 3000 : 0 },
   );
   const playback = useMemo(
@@ -49,7 +57,7 @@ export function useMapReplay(gameId: string | null) {
     [gameId, req.data],
   );
   const canRefresh = !!gameId && typeof req.request === "function";
-  const rebuild = gameId ? req.data?.rebuild as {
+  const rebuild = gameId ? (statusReq.data?.rebuild ?? (statusReq.data ? undefined : req.data?.rebuild)) as {
     status?: string; message?: string; requestId?: string; updatedAt?: number;
   } | undefined : undefined;
   const jobId = typeof rebuild?.requestId === "string" && rebuild.requestId ? rebuild.requestId : null;
@@ -57,6 +65,59 @@ export function useMapReplay(gameId: string | null) {
   const jobMessage = rebuild?.message;
   const updatedAt = rebuild?.updatedAt;
   const error = gameId ? req.error : undefined;
+  const progressError = gameId ? statusReq.error ?? req.error : undefined;
+  const completionRead = useRef({ key: "", attempts: 0 });
+  const reloadPlayback = req.mutate;
+  const playbackRequest = useRef(req.request);
+  playbackRequest.current = req.request;
+  const readPlayback = useCallback(async (stillCurrent: () => boolean) => {
+    const readEpoch = scope.current.epoch;
+    const readGeneration = scope.current.request;
+    // SWR's no-argument mutate resolves cached data even when revalidation
+    // fails. Only a rejecting authenticated GET can prove this download ran.
+    const response = await playbackRequest.current<Record<string, unknown>>({ method: "GET" });
+    if (!stillCurrent() || scope.current.epoch !== readEpoch || scope.current.request !== readGeneration) return false;
+    await reloadPlayback(response, { revalidate: false });
+    return stillCurrent() && scope.current.epoch === readEpoch && scope.current.request === readGeneration;
+  }, [reloadPlayback]);
+
+  useEffect(() => {
+    if (!gameId || !state.refreshing || !state.requestId || jobId !== state.requestId ||
+        jobStatus !== "complete" || state.loadedRequestId === state.requestId) return;
+    const key = `${epoch}:${state.requestId}`;
+    if (completionRead.current.key !== key) completionRead.current = { key, attempts: 0 };
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    const load = async () => {
+      const attempt = completionRead.current;
+      if (cancelled || scope.current.epoch !== epoch || attempt.key !== key || attempt.attempts >= 3) return;
+      attempt.attempts += 1;
+      try {
+        const fresh = await readPlayback(() => !cancelled && scope.current.epoch === epoch);
+        if (fresh) patch({ loadedRequestId: state.requestId });
+      } catch {
+        if (cancelled || scope.current.epoch !== epoch) return;
+        patch({ refreshMessage: "Recording finished. Retrying the playback download…" });
+        if (attempt.attempts < 3) retryTimer = window.setTimeout(load, 30_000);
+        else patch({ refreshing: false, refreshMessage: "Recording finished, but playback could not be downloaded. Reopen this game to try again." });
+      }
+    };
+    void load();
+    return () => { cancelled = true; if (retryTimer !== undefined) window.clearTimeout(retryTimer); };
+  }, [gameId, epoch, state.refreshing, state.requestId, state.loadedRequestId, jobId, jobStatus, readPlayback, patch]);
+
+  useEffect(() => {
+    if (!gameId || !state.refreshing || !state.requestId || jobId === state.requestId ||
+        state.fallbackReads >= FALLBACK_READ_AT_MS.length) return;
+    // A restarted API may lose its in-memory job. Recheck the heavy record at
+    // four bounded milestones, never every status tick.
+    const generation = scope.current.request;
+    const timer = window.setTimeout(() => {
+      patch({ fallbackReads: state.fallbackReads + 1 });
+      void readPlayback(() => scope.current.epoch === epoch && scope.current.request === generation).catch(() => undefined);
+    }, Math.max(0, state.startedAt + FALLBACK_READ_AT_MS[state.fallbackReads] - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [gameId, epoch, state.refreshing, state.requestId, state.startedAt, state.fallbackReads, jobId, readPlayback, patch]);
 
   useEffect(() => {
     if (!canRefresh || !jobId || !ACTIVE_STATUSES.has(jobStatus || "") ||
@@ -91,7 +152,11 @@ export function useMapReplay(gameId: string | null) {
         refreshMessage: "Recorded playback is ready." });
       return;
     }
-    if (jobStatus === "complete" && sameJob && playback?.fidelity?.positions === "engine") {
+    if (jobStatus === "complete" && sameJob && state.loadedRequestId === state.requestId) {
+      if (playback?.fidelity?.positions !== "engine") {
+        patch({ refreshing: false, refreshMessage: "Recording finished, but recorded playback is unavailable. Generate playback again." });
+        return;
+      }
       const attacksObserved = playback.fidelity.attacks === "observed";
       patch({ refreshing: false,
         completedRequestId: attacksObserved ? state.requestId : null,
@@ -103,9 +168,9 @@ export function useMapReplay(gameId: string | null) {
       });
       return;
     }
-    if (error && error.code !== "playback_not_computed") {
-      if ([401, 403].includes(error.status) || error.code === "game_not_found") {
-        patch({ refreshing: false, refreshMessage: error.message || "This replay is no longer available. Sign in again and reopen it." });
+    if (progressError && progressError.code !== "playback_not_computed") {
+      if ([401, 403].includes(progressError.status) || progressError.code === "game_not_found") {
+        patch({ refreshing: false, refreshMessage: progressError.message || "This replay is no longer available. Sign in again and reopen it." });
         return;
       }
       patch({ refreshMessage: "Could not check recording progress. Retrying while your desktop agent continues working…" });
@@ -117,7 +182,7 @@ export function useMapReplay(gameId: string | null) {
     }, Math.max(0, RECORDING_TIMEOUT_MS - (Date.now() - state.startedAt)));
     return () => window.clearTimeout(timer);
   }, [gameId, state.refreshing, state.requestId, state.startedAt, state.startedWithEnginePlayback, playback,
-    jobId, jobStatus, jobMessage, error, patch]);
+    state.loadedRequestId, jobId, jobStatus, jobMessage, progressError, patch]);
 
   const refresh = async () => {
     if (!canRefresh || state.refreshing || scope.current.requesting) return;
@@ -125,6 +190,7 @@ export function useMapReplay(gameId: string | null) {
     scope.current.requesting = true;
     const isCurrent = () => scope.current.epoch === epoch && scope.current.request === generation;
     patch({ refreshing: true, requestId: null, completedRequestId: null,
+      loadedRequestId: null, fallbackReads: 0,
       startedWithEnginePlayback: playback?.fidelity?.positions === "engine",
       refreshMessage: "Preparing recorded playback with your desktop agent…", startedAt: Date.now() });
     try {
@@ -138,7 +204,7 @@ export function useMapReplay(gameId: string | null) {
       }
       patch({ requestId, refreshMessage: "Recording playback with StarCraft II. You can keep reviewing this game while it runs…" });
       // An intermittent first GET must not cancel an accepted desktop job.
-      await req.mutate().catch(() => undefined);
+      await statusReq.mutate().catch(() => undefined);
     } catch (failure) {
       if (!isCurrent()) return;
       patch({ refreshing: false, refreshMessage: (failure as { message?: string })?.message ||

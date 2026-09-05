@@ -144,6 +144,18 @@ describe("unit interpolation", () => {
     expect(unitMaxSpeed("Stalker")).toBeGreaterThan(unitMaxSpeed("Drone"));
   });
 
+  it("preserves observed Interceptor movement without the generic army speed hold", () => {
+    const flight = [840, 100, 100, 841, 114, 100];
+    expect(unitPositionAt(flight, 840.5, unitMaxSpeed("Interceptor", true))).toEqual({ x: 107, y: 100 });
+    expect(unitPositionAt(flight, 840.5, unitMaxSpeed("Interceptor"))).toEqual({ x: 100, y: 100 });
+  });
+
+  it("keeps teleport and missing-observation guards for engine tracks", () => {
+    const speed = unitMaxSpeed("Stalker", true);
+    expect(unitPositionAt([0, 10, 10, 0.18, 20, 10], 0.09, speed)).toEqual({ x: 10, y: 10 });
+    expect(unitPositionAt([0, 10, 10, 3, 20, 10], 1.5, speed)).toEqual({ x: 10, y: 10 });
+  });
+
   it("aliveAt respects born/died and immortal units", () => {
     const u = { owner: "me" as const, name: "Stalker", born: 120, died: 300, wp };
     expect(unitAliveAt(u, 119)).toBe(false);
@@ -441,6 +453,15 @@ describe("buildings — lift/land moves and death (v3)", () => {
     };
     expect(buildingPositionAt(pylon, 0)).toEqual({ x: 55, y: 66 });
     expect(buildingPositionAt(pylon, 5000)).toEqual({ x: 55, y: 66 });
+  });
+
+  it("follows observed uprooted structures without the tracker flying-building speed cap", () => {
+    const crawler = {
+      owner: "opp" as const, name: "SpineCrawlerUprooted", t: 10,
+      x: 30, y: 40, moves: [12, 38, 40], died: null,
+    };
+    expect(buildingPositionAt(crawler, 11, true)).toEqual({ x: 34, y: 40 });
+    expect(buildingPositionAt(crawler, 11)).toEqual({ x: 30, y: 40 });
   });
 });
 

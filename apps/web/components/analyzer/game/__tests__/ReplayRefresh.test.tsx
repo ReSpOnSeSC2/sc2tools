@@ -5,7 +5,9 @@ import { MapReplaySection } from "../MapReplaySection";
 const state = vi.hoisted(() => ({ data: null as any, config: null as any, request: vi.fn(), mutate: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (_: string, config: unknown) => {
   state.config = config;
-  return { data: state.data, isLoading: false, request: state.request, mutate: state.mutate };
+  return { data: state.data, isLoading: false,
+    request: (init: RequestInit) => init.method === "GET" ? Promise.resolve(state.data) : state.request(init),
+    mutate: state.mutate };
 } }));
 vi.mock("../replay/ReplayStage", () => ({ ReplayStage: () => <div>Replay stage</div> }));
 const raw = {

@@ -60,8 +60,16 @@ def _launch_sc2(args: list[str], **kwargs):
     restore the exact previous directory even when process creation fails.
     https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#windows
     """
+    background_windows = kwargs.pop("background_windows", False)
+    launch = subprocess.Popen
+    if sys.platform == "win32" and background_windows:
+        if __package__:
+            from .windows_capture_process import launch_background_process
+        else:
+            from windows_capture_process import launch_background_process
+        launch = launch_background_process
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
-        return subprocess.Popen(args, **kwargs)
+        return launch(args, **kwargs)
     import ctypes
     from ctypes import wintypes
 
@@ -86,12 +94,19 @@ def _launch_sc2(args: list[str], **kwargs):
             raise ObservationExportError("Could not reset the frozen agent's DLL search path for StarCraft II")
         process = None
         try:
-            process = subprocess.Popen(args, **kwargs)
+            process = launch(args, **kwargs)
             return process
         finally:
             if not set_directory(previous):
                 if process is not None and process.poll() is None:
                     process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
+                if process is not None and hasattr(process, "close"):
+                    process.close()
                 raise ObservationExportError("Could not restore the frozen agent's DLL search path")
 
 
@@ -377,7 +392,8 @@ class _Engine:
             startup = subprocess.STARTUPINFO()
             startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startup.wShowWindow = subprocess.SW_HIDE
-            kwargs.update(startupinfo=startup, creationflags=subprocess.CREATE_NO_WINDOW)
+            kwargs.update(startupinfo=startup, creationflags=subprocess.CREATE_NO_WINDOW,
+                          background_windows=True)
         if self.data_version:
             args += ["-dataVersion", self.data_version]
         cwd = self.install / "Support64" if os.name == "nt" else self.install
@@ -387,6 +403,8 @@ class _Engine:
                                        stdout=self.log, stderr=self.log, **kwargs)
             deadline = time.monotonic() + min(self.timeout, 60)
             while time.monotonic() < deadline:
+                if hasattr(self.process, "check_background"):
+                    self.process.check_background()
                 if self.process.poll() is not None:
                     raise ObservationExportError(f"SC2 exited before API startup (code {self.process.returncode})")
                 try:
@@ -404,6 +422,8 @@ class _Engine:
             raise
 
     def request(self, kind: str, **kwargs):
+        if self.process is not None and hasattr(self.process, "check_background"):
+            self.process.check_background()
         self.request_id += 1
         request = self.api.Request(id=self.request_id)
         body_type = getattr(self.api, "Request" + "".join(part.title() for part in kind.split("_")))
@@ -452,25 +472,55 @@ class _Engine:
             return None
 
     def close(self, *, failed: bool = False):
+        cleanup_error = None
         if self.ws is not None:
-            self.ws.close()
-            self.ws = None
-        if self.process is not None and self.process.poll() is None:
-            self.process.terminate()
             try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
+                self.ws.close()
+            except Exception as exc:
+                cleanup_error = exc
+            self.ws = None
+        if self.process is not None:
+            try:
+                if self.process.poll() is None:
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
+                        self.process.wait(timeout=5)
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
+            finally:
+                # Release the owned job/guardian after the process is reaped,
+                # including startup failures.
+                if hasattr(self.process, "close"):
+                    try:
+                        self.process.close()
+                    except Exception as exc:
+                        cleanup_error = cleanup_error or exc
+                try:
+                    if self.process.poll() is not None:
+                        self.process = None
+                except Exception as exc:
+                    cleanup_error = cleanup_error or exc
         if self.log:
-            self.log.close()
+            try:
+                self.log.close()
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
             self.log = None
         diagnostic = self._preserve_failure_log() if failed else None
         if self.temp:
             # TemporaryDirectory owns this exact directory; no user path can
             # influence the cleanup target.
-            self.temp.cleanup()
-            self.temp = None
+            try:
+                self.temp.cleanup()
+            except Exception as exc:
+                cleanup_error = cleanup_error or exc
+            else:
+                self.temp = None
+        if cleanup_error is not None and not failed:
+            raise ObservationExportError(f"Could not completely close the capture runtime: {cleanup_error}") from cleanup_error
         return diagnostic
 
     def __exit__(self, _type, value, _traceback):
@@ -479,12 +529,20 @@ class _Engine:
             raise ObservationExportError(f"{value} (SC2 diagnostic log: {diagnostic})") from value
 
 
-def _frame_from_proto(observation) -> dict:
+def _frame_from_proto(observation, *, capture_creep: bool = True, capture_entities: bool = True) -> dict:
+    frame = {"t": observation.game_loop / LOOPS_PER_SECOND, "units": [],
+             "dead_units": [], "effects": [], "creep": None}
+    if capture_creep:
+        # Only Everyone provides global creep. Participant passes need no
+        # feature images; don't access or decode them when not requested.
+        creep = observation.feature_layer_data.minimap_renders.creep
+        if creep.data:
+            frame["creep"] = {"width": creep.size.x, "height": creep.size.y,
+                              "bits_per_pixel": creep.bits_per_pixel,
+                              "data": flip_bitmap_rows(creep.data, creep.size.x, creep.size.y, creep.bits_per_pixel)}
+    if not capture_entities:
+        return frame
     raw = observation.raw_data
-    # Everyone perspective supplies global live units but an EMPTY raw creep
-    # map. Feature minimap creep is global and is rendered at native map size;
-    # flip rows once so exported indices remain ordinary SC2 world coordinates.
-    creep = observation.feature_layer_data.minimap_renders.creep
     visible_targets = {unit.tag: unit for unit in raw.units if unit.display_type == 1}
     units = []
     for unit in raw.units:
@@ -498,16 +556,10 @@ def _frame_from_proto(observation) -> dict:
             # enemy can supply an aim point. Hidden/snapshot positions cannot.
             row["target_position"] = (target.pos.x, target.pos.y)
         units.append(row)
-    return {
-        "t": observation.game_loop / LOOPS_PER_SECOND,
-        "units": units,
-        "dead_units": [str(tag) for tag in raw.event.dead_units],
-        "effects": [{"id": effect.effect_id, "owner": effect.owner, "radius": effect.radius,
-                     "positions": [(point.x, point.y) for point in effect.pos]} for effect in raw.effects],
-        "creep": {"width": creep.size.x, "height": creep.size.y,
-                  "bits_per_pixel": creep.bits_per_pixel,
-                  "data": flip_bitmap_rows(creep.data, creep.size.x, creep.size.y, creep.bits_per_pixel)} if creep.data else None,
-    }
+    frame.update(units=units, dead_units=[str(tag) for tag in raw.event.dead_units],
+                 effects=[{"id": effect.effect_id, "owner": effect.owner, "radius": effect.radius,
+                           "positions": [(point.x, point.y) for point in effect.pos]} for effect in raw.effects])
+    return frame
 
 
 def _capture_global_creep(install: Path, executable: Path, version: str, replay_path: Path,
@@ -537,7 +589,7 @@ def _capture_global_creep(install: Path, executable: Path, version: str, replay_
             loop = observation.game_loop
             if loop >= (1 << 31):
                 raise ObservationExportError("SC2 returned an invalid creep observation")
-            frame = _frame_from_proto(observation)
+            frame = _frame_from_proto(observation, capture_entities=False)
             if frame["creep"] is None:
                 raise ObservationExportError("Global engine creep observations are unavailable")
             accumulator.observe({"t": frame["t"], "creep": frame["creep"]})
@@ -631,12 +683,13 @@ def export_engine_observations(
             # positions but silently omits raw spell effects. A participant has
             # authoritative own units/effects plus snapshots of opponents; keep
             # only the active participant's entities to avoid those snapshots.
+            # Raw units/effects do not depend on rendered feature layers.
+            # Requesting full minimap images every four loops wastes engine
+            # rendering, local WebSocket traffic and protobuf work; all creep
+            # evidence comes from the separate, slower Everyone pass.
             engine.request("start_replay", replay_path=str(replay_path), observed_player_id=perspective, disable_fog=True,
-                           realtime=False, options=sc2api_pb2.InterfaceOptions(raw=True, score=True, show_cloaked=True,
-                           show_burrowed_shadows=True, show_placeholders=False, raw_crop_to_playable_area=False,
-                           feature_layer=sc2api_pb2.SpatialCameraSetup(width=24, resolution={"x": 16, "y": 16},
-                               minimap_resolution={"x": map_width, "y": map_height}, allow_cheating_layers=True,
-                               crop_to_playable_area=False)))
+                           realtime=False, options=sc2api_pb2.InterfaceOptions(raw=True, score=False, show_cloaked=True,
+                           show_burrowed_shadows=True, show_placeholders=False, raw_crop_to_playable_area=False))
             game_info = engine.request("game_info")
             if (game_info.start_raw.map_size.x, game_info.start_raw.map_size.y) != (map_width, map_height):
                 raise ObservationExportError("Engine map size differs from replay metadata; creep projection would be wrong")
@@ -644,7 +697,6 @@ def export_engine_observations(
             unit_data = {unit.unit_id: {"name": unit.name, "structure": data_pb2.Structure in unit.attributes} for unit in data.units}
             effects = {effect.effect_id: effect.name for effect in data.effects}
             accumulator = ObservationAccumulator(my_pid, unit_data, effects, step_loops / LOOPS_PER_SECOND)
-            next_creep = 0
             next_report = 0
             complete = False
             while True:
@@ -657,15 +709,12 @@ def export_engine_observations(
                     raise ObservationExportError("SC2 returned an invalid terminal observation")
                 # Even the participant feature minimap is visibility-filtered.
                 # Global creep comes from the dedicated Everyone pass below.
-                capture_creep = False
-                frame = _frame_from_proto(observation)
+                frame = _frame_from_proto(observation, capture_creep=False)
                 frame["departed_tags"] = [unit["tag"] for unit in frame["units"] if unit["owner"] != perspective
                                           and unit["tag"] in accumulator.units]
                 frame["units"] = [unit for unit in frame["units"] if unit["owner"] == perspective]
                 frame["effects"] = [effect for effect in frame["effects"] if effect["owner"] in (perspective, 0, 16)]
-                accumulator.observe(frame, capture_creep=capture_creep)
-                if capture_creep:
-                    next_creep = loop + creep_step_loops
+                accumulator.observe(frame, capture_creep=False)
                 if loop >= next_report:
                     report(f"Perspective {pass_index + 1}/2: {loop / LOOPS_PER_SECOND:.0f}s / {replay_info.game_duration_seconds:.0f}s")
                     next_report = loop + int(LOOPS_PER_SECOND * 60)

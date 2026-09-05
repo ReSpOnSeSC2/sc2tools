@@ -479,13 +479,13 @@ export function unitPositionAt(
 }
 
 /**
- * Per-unit movement-speed cap for the arrive-on-time interpolation,
- * in world cells/sec. Workers use their real base speed; everything
- * else gets a conservative army default — a genuinely faster unit
- * (speedlings, mutas) just clamps back to plain lerp inside tight
- * gaps, which is the old behaviour.
+ * Discontinuity guard for sparse tracker positions, in world cells/sec.
+ * Engine tracks already preserve actual movement and teleport boundaries;
+ * use the exporter's guard so fast units and speed upgrades do not freeze
+ * between valid samples. This is not a movement simulation speed.
  */
-export function unitMaxSpeed(name: string): number {
+export function unitMaxSpeed(name: string, observed = false): number {
+  if (observed) return 14;
   return isWorkerUnit(name) ? 3.94 : 5.5;
 }
 
@@ -640,18 +640,16 @@ export function gasTappedAt(
 const BUILDING_FLY_SPEED = 1.3;
 
 /**
- * Where the building stands at time t: its construction site until
- * the first lift-off landing, then each landing point in turn. The
- * hop between spots is interpolated at flying-building speed with
- * the same arrive-on-time model units use, so a floated Command
- * Center is SHOWN at its old base, crawls across late, and sits at
- * the expansion it actually landed on.
+ * Sample recorded building positions. Sparse tracker gaps hold their last
+ * anchor; observed engine movement uses the same discontinuity guard as
+ * units, including upgraded flying buildings and uprooted Zerg structures.
  */
 const buildingTracks = new WeakMap<PlaybackBuilding, number[]>();
 
 export function buildingPositionAt(
   b: PlaybackBuilding,
   t: number,
+  observed = false,
 ): { x: number; y: number } {
   if (b.moves.length === 0) return { x: b.x, y: b.y };
   let wp = buildingTracks.get(b);
@@ -659,7 +657,7 @@ export function buildingPositionAt(
     wp = [b.t, b.x, b.y, ...b.moves];
     buildingTracks.set(b, wp);
   }
-  return unitPositionAt(wp, t, BUILDING_FLY_SPEED) ?? { x: b.x, y: b.y };
+  return unitPositionAt(wp, t, observed ? 14 : BUILDING_FLY_SPEED) ?? { x: b.x, y: b.y };
 }
 
 export function patchMiningPosition(

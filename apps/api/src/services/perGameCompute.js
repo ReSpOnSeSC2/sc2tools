@@ -147,6 +147,15 @@ class PerGameComputeService {
   }
 
   /**
+   * Ownership check for status polling; never hydrates heavy replay data.
+   * @param {string} userId
+   * @param {string} gameId
+   */
+  async hasGame(userId, gameId) {
+    return !!await this.db.games.findOne({ userId, gameId }, { projection: { _id: 1 } });
+  }
+
+  /**
    * Read a game's heavy blob from the gameDetails store with a
    * back-compat fallback to the inline copy on the games doc. While
    * the v0.4.3 cutover migration is in flight, some legacy games

@@ -41,6 +41,24 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Background recording keeps its windows out of view** — agent **0.16.8**
+  starts its StarCraft recorder off-screen without activation and suppresses
+  only the capture's windows. The owned process tree stops when the agent
+  exits or crashes. Capture failures are reported in SC2 Tools.
+- **Large recorded replays preserve unit routes** — agent **0.16.8**
+  (`agent-v0.16.8`) replaces arbitrary budget thinning with bounded position
+  simplification that preserves cargo, morph and teleport boundaries. The
+  viewer also follows observed fast units and moving structures without
+  applying sparse tracker speed limits. Regenerate affected recordings with
+  **Recompute**; the desktop agent reuses a complete matching recording, or
+  captures the saved replay automatically when one is missing.
+- **Replay images release unused memory** — the viewer reuses scaled sprite
+  atlases, evicts historical decoded images and limits concurrent image loads.
+  Visible sprites remain protected to avoid repeated loading during battles
+  or zooming. Attack images remain loaded only when their animations are used.
+- **Recording progress avoids repeated replay downloads** — progress now uses
+  a small status response and fetches the recording after completion. Status
+  checks verify ownership without loading the large replay data from storage.
 - **Macro Breakdown Recompute now records map playback** — the web action
   previously only reparsed the replay, leaving limited position data even
   after updating the agent. Recompute now shares the map's recording progress

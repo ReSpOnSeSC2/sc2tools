@@ -9,6 +9,16 @@ const {
 } = require("../src/services/perGameCompute");
 
 describe("services/perGameCompute", () => {
+  test("ownership-only polling reads a projected slim row without the detail store", async () => {
+    const findOne = jest.fn().mockResolvedValue({ _id: "owned" });
+    const detailRead = jest.fn();
+    const service = new PerGameComputeService({ games: { findOne } }, { gameDetails: { findOne: detailRead } });
+    expect(await service.hasGame("u", "g")).toBe(true);
+    expect(findOne).toHaveBeenCalledWith({ userId: "u", gameId: "g" }, { projection: { _id: 1 } });
+    expect(detailRead).not.toHaveBeenCalled();
+    findOne.mockResolvedValue(null);
+    expect(await service.hasGame("other", "g")).toBe(false);
+  });
   describe("parseBuildLogLines", () => {
     test("returns [] for non-array input", () => {
       expect(parseBuildLogLines(null)).toEqual([]);

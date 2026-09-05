@@ -75,7 +75,7 @@ from .replay_finder import (
     find_replays_root,
 )
 from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud_ex
-from .state import AgentState
+from .state import AgentState, save_state
 from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
 
@@ -635,6 +635,14 @@ class ReplayWatcher:
 
     def _notify_skipped(self, path: Path, reason: Optional[str]) -> None:
         """Invoke the optional skip observer; never let it break parsing."""
+        if reason == "playback_budget_exceeded":
+            # A recording's upload monitor reads durable state. No upload is
+            # submitted for this terminal result, so there may be no later
+            # uploader save to make the marker visible to that monitor.
+            try:
+                save_state(self._cfg.state_dir, self._state)
+            except Exception:  # noqa: BLE001
+                log.exception("playback_budget_result_save_failed path=%s", path.name)
         cb = self._on_replay_skipped
         if cb is None:
             return

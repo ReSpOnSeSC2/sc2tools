@@ -938,7 +938,11 @@ def parse_replay_for_cloud_ex(
     # Compact map-playback payload for the cloud's vespene-style
     # replayer (unit movement tracks + buildings + battle markers).
     # Additive and best-effort like the spatial extract.
-    map_playback = _compute_map_playback(ctx)
+    try:
+        map_playback = _compute_map_playback(ctx)
+    except PlaybackBudgetExceeded as exc:
+        log.warning("map_playback_budget_exceeded: %s", exc)
+        return None, "playback_budget_exceeded"
 
     is_ladder = _is_ladder_game(ctx)
 
@@ -1710,8 +1714,13 @@ _PLAYBACK_OBSERVED_MAX_TOTAL_POINTS = 200000
 _PLAYBACK_OBSERVED_MAX_CASTS = 2000
 _PLAYBACK_OBSERVED_MAX_BYTES = int(4.25 * 1024 * 1024)
 _PLAYBACK_ENGINE_POSITION_ERROR = 0.15
+_PLAYBACK_ENGINE_MAX_POSITION_ERROR = 0.5
 _PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT = 16384
 _PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS = 200000
+
+
+class PlaybackBudgetExceeded(RuntimeError):
+    """The observed replay cannot fit without losing protected evidence."""
 
 # Ability casts ranked for the 400-cast budget. Tier 0 decides fights
 # and must survive truncation; tier 2 is the high-frequency macro /
@@ -1896,13 +1905,19 @@ def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
         except Exception:  # noqa: BLE001
             markers = []
         return _compact_map_playback(playback, markers)
+    except PlaybackBudgetExceeded:
+        raise
     except Exception as exc:  # noqa: BLE001
         log.debug("map_playback_compact_failed: %s", exc)
         return None
 
 
-def _compress_engine_track(points: List[Tuple[float, float, float]]) -> List[Tuple[float, float, float]]:
-    """Bound time-aligned position error to 0.15 cells, gaps to 2 seconds.
+def _compress_engine_track(
+    points: List[Tuple[float, float, float]],
+    position_error: Optional[float] = None,
+    boundaries: Optional[list] = None,
+) -> List[Tuple[float, float, float]]:
+    """Bound time-aligned error while protecting visibility and form changes.
 
     Unlike spatial RDP this preserves stops and changes of speed. Only dense
     SC2 observations use this compression; sparse tracker evidence is kept
@@ -1910,8 +1925,25 @@ def _compress_engine_track(points: List[Tuple[float, float, float]]) -> List[Tup
     """
     if len(points) <= 2:
         return points
+    from bisect import bisect_left
+
+    tolerance = _PLAYBACK_ENGINE_POSITION_ERROR if position_error is None else position_error
     keep = {0, len(points) - 1}
-    stack = [(0, len(points) - 1)]
+    times = [point[0] for point in points]
+    for boundary in boundaries or []:
+        if not isinstance(boundary, (int, float)) or not math.isfinite(boundary):
+            continue
+        i = bisect_left(times, round(boundary, 3))
+        # Both sides are essential: becoming visible must never resurrect
+        # a unit at its last location before entering a transport.
+        keep.update(j for j in (i - 1, i) if 0 <= j < len(points))
+    for i in range(1, len(points)):
+        a, b = points[i - 1], points[i]
+        dt = b[0] - a[0]
+        if dt > 2 or math.hypot(b[1] - a[1], b[2] - a[2]) > 14 * dt + 2:
+            keep.update((i - 1, i))
+    anchors = sorted(keep)
+    stack = list(zip(anchors, anchors[1:]))
     while stack:
         lo, hi = stack.pop()
         if hi <= lo + 1:
@@ -1920,7 +1952,7 @@ def _compress_engine_track(points: List[Tuple[float, float, float]]) -> List[Tup
         t1, x1, y1 = points[hi]
         span = t1 - t0
         # Leave room for the final 0.001-cell wire-coordinate rounding.
-        far, error = -1, (_PLAYBACK_ENGINE_POSITION_ERROR - 0.001) ** 2
+        far, error = -1, max(0, tolerance - 0.001) ** 2
         for i in range(lo + 1, hi):
             t, x, y = points[i]
             frac = (t - t0) / span if span > 0 else 0
@@ -2015,6 +2047,8 @@ def _compact_map_playback(
     }
     fidelity = playback.get("fidelity")
     observed = isinstance(fidelity, Mapping) and fidelity.get("positions") in ("tracker", "engine")
+    engine = observed and fidelity["positions"] == "engine"
+    engine_tracks: list = []
     precision = 3 if observed else 1
     if observed:
         out["v"] = 6
@@ -2036,6 +2070,10 @@ def _compact_map_playback(
     def mark_incomplete():
         if observed:
             out["fidelity"]["complete"] = False
+
+    def track_boundaries(source):
+        return [*(source.get("hidden") or []),
+                *(form.get("t") for form in source.get("forms") or [] if isinstance(form, Mapping))]
 
     def copy_identity(source, target):
         uid = source.get("id")
@@ -2073,9 +2111,7 @@ def _compact_map_playback(
                     attacks.append(round(float(t), precision))
                 attacks = sorted(set(attacks))
                 if len(attacks) > _PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT:
-                    mark_incomplete()
-                    count = _PLAYBACK_OBSERVED_MAX_ATTACKS_PER_UNIT
-                    attacks = [attacks[round(i * (len(attacks) - 1) / (count - 1))] for i in range(count)]
+                    raise PlaybackBudgetExceeded("A unit has more weapon events than the supported playback limit.")
                 if attacks:
                     target["attacks"] = attacks
                     shot_times = set(attacks)
@@ -2202,6 +2238,8 @@ def _compact_map_playback(
         casts.append(entry)
     cast_limit = _PLAYBACK_OBSERVED_MAX_CASTS if observed else _PLAYBACK_MAX_CASTS
     if len(casts) > cast_limit:
+        if engine:
+            raise PlaybackBudgetExceeded("The replay has more spell events than the supported playback limit.")
         mark_incomplete()
         def _tier(entry: Mapping[str, Any]) -> int:
             return _PLAYBACK_CAST_PRIORITY.get(
@@ -2239,6 +2277,8 @@ def _compact_map_playback(
                 if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
                     continue
                 if per_side_counts[owner] >= _PLAYBACK_MAX_BUILDINGS_PER_SIDE:
+                    if engine:
+                        raise PlaybackBudgetExceeded("The replay has more structures than the supported playback limit.")
                     mark_incomplete()
                     continue
                 per_side_counts[owner] += 1
@@ -2252,16 +2292,28 @@ def _compact_map_playback(
                 copy_identity(e, entry)
                 moves = e.get("moves")
                 if isinstance(moves, (list, tuple)) and moves:
-                    move_limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT if observed else _PLAYBACK_MAX_BUILDING_MOVES
-                    if len(moves) > move_limit * 3:
-                        mark_incomplete()
-                    flat = [
-                        round(float(v), precision)
-                        for v in moves[:move_limit * 3]
-                        if isinstance(v, (int, float))
-                    ]
-                    if flat and len(flat) % 3 == 0:
-                        entry["moves"] = flat
+                    if engine:
+                        track = []
+                        for i in range(0, len(moves) - 2, 3):
+                            t, mx, my = moves[i:i + 3]
+                            if all(isinstance(v, (int, float)) and math.isfinite(v) for v in (t, mx, my)):
+                                point = (round(t, precision), float(mx), float(my))
+                                if not track or point[0] > track[-1][0]:
+                                    track.append(point)
+                        boundaries = track_boundaries(e)
+                        engine_tracks.append((entry, "moves", track, boundaries))
+                        entry["moves"] = [round(v, precision) for point in _compress_engine_track(track, boundaries=boundaries) for v in point]
+                    else:
+                        move_limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT if observed else _PLAYBACK_MAX_BUILDING_MOVES
+                        if len(moves) > move_limit * 3:
+                            mark_incomplete()
+                        flat = [
+                            round(float(v), precision)
+                            for v in moves[:move_limit * 3]
+                            if isinstance(v, (int, float))
+                        ]
+                        if flat and len(flat) % 3 == 0:
+                            entry["moves"] = flat
                 died = e.get("died")
                 if isinstance(died, (int, float)):
                     entry["died"] = round(float(died), precision)
@@ -2293,6 +2345,8 @@ def _compact_map_playback(
         # the story; blips (canceled eggs, one-shot units) go first.
         unit_limit = _PLAYBACK_OBSERVED_MAX_UNITS_PER_SIDE if observed else _PLAYBACK_MAX_UNITS_PER_SIDE
         if len(side) > unit_limit:
+            if engine:
+                raise PlaybackBudgetExceeded("The replay has more units than the supported playback limit.")
             mark_incomplete()
             def _lifespan(u: Mapping[str, Any]) -> float:
                 born = u.get("born") or 0.0
@@ -2347,14 +2401,16 @@ def _compact_map_playback(
             # walked around a cliff keeps its corner, so the curve the
             # web draws follows the ground it walked on.
             wp: list = []
+            raw_track = track
+            boundaries = track_boundaries(u) if engine else []
             if observed:
                 # Spatial RDP ignores time: it can erase a 10-minute stop
                 # on a straight line and draw movement throughout that stop.
                 # Preserve all observations unless the declared budget fills.
-                if fidelity["positions"] == "engine":
-                    track = _compress_engine_track(track)
+                if engine:
+                    track = _compress_engine_track(track, boundaries=boundaries)
                 limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT
-                if len(track) > limit:
+                if len(track) > limit and not engine:
                     mark_incomplete()
                     track = ([track[round(i * (len(track) - 1) / (limit - 1))] for i in range(limit)]
                              if limit > 1 else track[:max(0, limit)])
@@ -2376,6 +2432,8 @@ def _compact_map_playback(
                 "wp": wp,
             }
             copy_identity(u, entry)
+            if engine:
+                engine_tracks.append((entry, "wp", raw_track, boundaries))
             # Spent death: the engine attributed this death and found no
             # killer (drone→structure morph, templar→archon merge, MULE
             # timeout). Only emitted when the engine provided the key —
@@ -2384,7 +2442,7 @@ def _compact_map_playback(
             if entry["died"] is not None and "killer_pid" in u and u.get("killer_pid") is None:
                 entry["sd"] = True
             units.append(entry)
-    if observed:
+    if observed and not engine:
         # Allocate a total budget across BOTH players. Never spend all the
         # points on early units and silently remove the opponent/late game.
         counts = [len(u["wp"]) // 3 for u in units]
@@ -2404,6 +2462,8 @@ def _compact_map_playback(
         attackers = [record for record in [*units, *buildings] if record.get("attacks")]
         counts = [len(record["attacks"]) for record in attackers]
         if sum(counts) > _PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS:
+            if engine:
+                raise PlaybackBudgetExceeded("The replay has more weapon events than the supported playback limit.")
             mark_incomplete()
             minimum = [min(n, 2) for n in counts]
             remaining = max(0, _PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS - sum(minimum))
@@ -2478,7 +2538,31 @@ def _compact_map_playback(
                             "owner": effect["owner"], **{k: round(float(effect[k]), 3) for k in ("t", "end", "x", "y", "radius")}})
         out["effects"] = effects
 
-    if observed:
+    if engine:
+        def within_engine_budget():
+            sizes = [len(entry[field]) // 3 for entry, field, _track, _boundaries in engine_tracks]
+            return (sum(sizes) <= _PLAYBACK_OBSERVED_MAX_TOTAL_POINTS
+                    and all(size <= _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT for size in sizes)
+                    and len(json.dumps(out, separators=(",", ":"), allow_nan=False).encode("utf-8")) <= _PLAYBACK_OBSERVED_MAX_BYTES)
+
+        # Recompress the original observations with a declared error bound.
+        # Uniform thinning can delete a cargo exit or a corner while retaining
+        # its timestamps, making units appear in the wrong place. Never apply
+        # it to engine data, and never sacrifice lives, spells, creep or shots.
+        tolerance = _PLAYBACK_ENGINE_POSITION_ERROR
+        while not within_engine_budget():
+            tolerance = round(tolerance + 0.05, 2)
+            if tolerance > _PLAYBACK_ENGINE_MAX_POSITION_ERROR:
+                raise PlaybackBudgetExceeded(
+                    "The recorded replay exceeds upload capacity at 0.5-cell accuracy. "
+                    "Its observation artifact and existing playback were preserved. "
+                    "A higher-capacity playback format is required before this replay can be uploaded.")
+            for entry, field, track, boundaries in engine_tracks:
+                entry[field] = [round(v, precision) for point in
+                                _compress_engine_track(track, tolerance, boundaries) for v in point]
+            out["fidelity"]["positionError"] = tolerance
+
+    if observed and not engine:
         def thinner(rows, ratio):
             if len(rows) <= 2:
                 return rows

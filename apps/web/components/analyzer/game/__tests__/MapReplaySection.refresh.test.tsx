@@ -12,11 +12,16 @@ const harness = vi.hoisted(() => ({
   },
   paths: [] as Array<string | null>,
   interval: 0,
+  statusMutate: vi.fn(),
 }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null, config: { refreshInterval: number }) => {
   harness.paths.push(path);
   harness.interval = config.refreshInterval;
-  return harness.api;
+  if (path?.endsWith("/status")) return { ...harness.api,
+    data: { rebuild: (harness.api.data as { rebuild?: unknown } | null)?.rebuild ?? null },
+    mutate: harness.statusMutate };
+  return { ...harness.api, request: (init: RequestInit) => init.method === "GET"
+    ? Promise.resolve(harness.api.data) : harness.api.request(init) };
 } }));
 vi.mock("../replay/ReplayStage", () => ({ ReplayStage: () => <div>Replay stage</div> }));
 vi.mock("../replay/CompactReplayHost", () => ({ CompactReplayHost: () => <div>Compact replay</div> }));
@@ -43,6 +48,7 @@ beforeEach(() => {
   harness.api.error = null;
   harness.api.request.mockReset();
   harness.api.mutate.mockReset().mockResolvedValue(undefined);
+  harness.statusMutate.mockReset().mockResolvedValue(undefined);
   harness.paths.length = 0;
   harness.api.isLoading = false;
 });
@@ -55,7 +61,8 @@ describe("map playback rebuild progress", () => {
     expect(button().compareDocumentPosition(screen.getByText("Compact replay")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain("only occasional unit positions");
     await act(async () => fireEvent.click(button()));
-    expect(harness.paths.every(path => path === "/v1/games/g1/map-playback")).toBe(true);
+    expect(new Set(harness.paths)).toEqual(new Set(["/v1/games/g1/map-playback", "/v1/games/g1/map-playback/status"]));
+    expect(harness.api.mutate).not.toHaveBeenCalled();
     expect(harness.api.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(harness.interval).toBe(3000);
     harness.api.data = payload("tracker", true, { requestId: "compact", status: "uploading" });
@@ -104,7 +111,7 @@ describe("map playback rebuild progress", () => {
     const result = payload("engine", true, { requestId: "current", status: "complete" });
     result.fidelity.attacks = "unavailable";
     harness.api.data = result;
-    view.rerender(<MapReplaySection gameId="g1" />);
+    await act(async () => view.rerender(<MapReplaySection gameId="g1" />));
     expect(screen.getByRole("status").textContent).toContain("no attack data");
     expect(screen.queryByText("Recorded playback is ready.")).toBeNull();
     expect(button().disabled).toBe(false);
@@ -123,7 +130,7 @@ describe("map playback rebuild progress", () => {
     expect(button().disabled).toBe(true);
     expect(harness.api.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     harness.api.data = payload("engine", true, { requestId: "new", status: "complete" });
-    view.rerender(<MapReplaySection gameId="g1" />);
+    await act(async () => view.rerender(<MapReplaySection gameId="g1" />));
     expect(screen.getByText("Recorded playback is ready.")).toBeTruthy();
     expect(button().disabled).toBe(false);
   });
@@ -140,7 +147,7 @@ describe("map playback rebuild progress", () => {
     expect(harness.api.mutate).not.toHaveBeenCalled();
     expect(button().disabled).toBe(true);
     await act(async () => second.resolve({ requestId: "current" }));
-    expect(harness.api.mutate).toHaveBeenCalledTimes(1);
+    expect(harness.statusMutate).toHaveBeenCalledTimes(1);
   });
 
   it("reports unacknowledged jobs and allows a retry", async () => {
@@ -154,7 +161,7 @@ describe("map playback rebuild progress", () => {
 
   it("keeps polling an accepted rebuild after a transient GET failure", async () => {
     harness.api.request.mockResolvedValue({ requestId: "current" });
-    harness.api.mutate.mockRejectedValue(new Error("temporary proxy failure"));
+    harness.statusMutate.mockRejectedValue(new Error("temporary proxy failure"));
     const view = render(<MapReplaySection gameId="g1" />);
     await act(async () => fireEvent.click(button()));
     expect(button().disabled).toBe(true);

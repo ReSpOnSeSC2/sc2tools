@@ -66,6 +66,7 @@ import {
 import {
   beginSpriteFrame,
   drawSprite,
+  endSpriteFrame,
   hasWalk,
   resolveSprite,
   spriteAnim,
@@ -1543,7 +1544,7 @@ function renderFrame(
     }
 
     const name = unitNameAt(u, t);
-    const pos = sampleTrack(u.wp, t, unitMaxSpeed(name), trackSample);
+    const pos = sampleTrack(u.wp, t, unitMaxSpeed(name, playback.fidelity?.positions === "engine"), trackSample);
     if (!pos) continue;
     const { x: wx, y: wy, vx, vy } = pos;
     const worker = isWorkerUnit(name);
@@ -1596,7 +1597,7 @@ function renderFrame(
   for (let bi = 0; bi < buildings.length; bi += 1) {
     const b = buildings[bi];
     if (!buildingAliveAt(b, t)) continue;
-    const bpos = buildingPositionAt(b, t);
+    const bpos = buildingPositionAt(b, t, playback.fidelity?.positions === "engine");
     const sx = projectX(bounds, proj, bpos.x);
     const sy = projectY(bounds, proj, bpos.y);
     pushFog(sx, sy, derived.buildingHall[bi] === 1 ? SIGHT_HALL : SIGHT_BUILDING);
@@ -1745,6 +1746,7 @@ function renderFrame(
     }
   }
   if (alpha !== 1) ctx.globalAlpha = 1;
+  endSpriteFrame();
 
   drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay");
   drawWeaponEffects(ctx, playback, t, proj, view);

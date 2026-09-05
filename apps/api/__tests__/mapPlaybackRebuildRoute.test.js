@@ -11,7 +11,7 @@ function setup({ result = { ok: true, v: 6 }, ack = { ok: true }, online = true 
     emitWithAck: jest.fn(async (_event, payload) => ({ ...ack, requestId: payload.requestId, gameId: payload.gameIds[0] })) };
   const web = { data: { kind: "web" }, emitWithAck: jest.fn() };
   const io = { in: jest.fn(() => ({ fetchSockets: async () => online ? [web, device] : [web] })) };
-  const perGame = { mapPlayback: jest.fn().mockResolvedValue(result) };
+  const perGame = { mapPlayback: jest.fn().mockResolvedValue(result), hasGame: jest.fn().mockResolvedValue(result !== null) };
   const app = express();
   app.use(express.json());
   app.use("/v1", buildPerGameRouter({ perGame, io, auth(req, _res, next) { req.auth = { userId: "u" }; next(); } }));
@@ -22,8 +22,24 @@ test("engine rebuild checks ownership before dispatching to a device", async () 
   const { app, perGame, device } = setup({ result: null });
   const response = await request(app).post("/v1/games/not-owned/map-playback").send({ fidelity: "engine" });
   expect(response.status).toBe(404);
-  expect(perGame.mapPlayback).toHaveBeenCalledWith("u", "not-owned");
+  expect(perGame.hasGame).toHaveBeenCalledWith("u", "not-owned");
+  expect(perGame.mapPlayback).not.toHaveBeenCalled();
   expect(device.emitWithAck).not.toHaveBeenCalled();
+});
+
+test("status polling checks ownership without loading playback, including an absent job", async () => {
+  const { app, perGame } = setup();
+  const response = await request(app).get("/v1/games/status-only/map-playback/status");
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ ok: true, rebuild: null });
+  expect(perGame.hasGame).toHaveBeenCalledWith("u", "status-only");
+  expect(perGame.mapPlayback).not.toHaveBeenCalled();
+  const started = await request(app).post("/v1/games/status-only/map-playback");
+  const polled = await request(app).get("/v1/games/status-only/map-playback/status");
+  expect(polled.body.rebuild.requestId).toBe(started.body.rebuild.requestId);
+  expect(perGame.mapPlayback).not.toHaveBeenCalled();
+  perGame.hasGame.mockResolvedValue(false);
+  expect((await request(app).get("/v1/games/status-only/map-playback/status")).status).toBe(404);
 });
 
 test("a connected browser does not count as an online desktop agent", async () => {

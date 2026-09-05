@@ -2074,6 +2074,92 @@ def test_engine_wire_track_respects_reported_position_error_on_curves():
     assert out["fidelity"]["complete"] is True
 
 
+@pytest.mark.parametrize("budget", ["points", "bytes"])
+def test_engine_adaptive_budget_keeps_cargo_exit_and_bounded_routes(monkeypatch, budget):
+    import bisect
+    import json
+    import math
+    import sc2tools_agent.replay_pipeline as pipeline
+
+    route = [(i * .1786, 50 + 7 * math.sin(i / 7), 60 + 4 * math.cos(i / 11)) for i in range(400)]
+    # Real Washout regression: uniform thinning deleted the first visible
+    # sample, placing an Interceptor 55 cells away after its carrier released it.
+    cargo = [(803.036, 108.532, 111.878), (804.286, 102.823, 123.692),
+             (804.464, 102.823, 123.692), (844.286, 58.911, 97.827),
+             (844.464, 57.201, 97.058), (844.643, 55.491, 96.288),
+             (844.821, 53.730, 95.662), (845.0, 52.326, 95.934),
+             (845.179, 53.933, 96.785), (845.357, 55.790, 97.034),
+             (845.536, 57.663, 97.103)]
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "attacks": "observed", "creep": "observed", "complete": True}
+    pb["my_units"] = [_unit_with_track(route, id="1", attacks=[1, 2], aim=[1, 25, 30],
+                                        forms=[{"t": 40.0064, "name": "StalkerBurrowed"}])]
+    pb["opp_units"] = [_unit_with_track(cargo, id="4466147329", name="Interceptor", hidden=[804.464, 844.286])]
+    pb["creep"] = {"width": 2, "height": 2, "encoding": "rle", "frames": [{"t": 0, "runs": [0, 2]}]}
+    original = pipeline._compact_map_playback(pb)
+    if budget == "points":
+        monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 120)
+    else:
+        monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_BYTES", int(len(json.dumps(original, separators=(",", ":")).encode()) * .87))
+    out = pipeline._compact_map_playback(pb)
+    assert .15 < out["fidelity"]["positionError"] <= .5
+    assert out["fidelity"]["complete"] is True
+    assert out["creep"] == original["creep"]
+    assert out["casts"] == original["casts"]
+    assert out["buildings"] == original["buildings"]
+    assert out["units"][0]["attacks"] == [1, 2]
+    assert out["units"][0]["aim"] == [1, 25, 30]
+    assert 40.006 in out["units"][0]["wp"][::3]
+    assert 844.286 in out["units"][1]["wp"][::3]
+    assert out["units"][1]["hidden"] == [804.464, 844.286]
+    for source, unit in zip((route, cargo), out["units"]):
+        wp = unit["wp"]
+        times = wp[::3]
+        for t, x, y in source:
+            t = round(t, 3)
+            index = max(0, bisect.bisect_right(times, t) - 1)
+            px, py = wp[index * 3 + 1:index * 3 + 3]
+            if index + 1 < len(times):
+                fraction = (t - times[index]) / (times[index + 1] - times[index])
+                px += (wp[index * 3 + 4] - px) * fraction
+                py += (wp[index * 3 + 5] - py) * fraction
+            assert math.hypot(px - x, py - y) <= out["fidelity"]["positionError"]
+        raw_gaps = {(round(a[0], 3), round(b[0], 3)) for a, b in zip(source, source[1:]) if b[0] - a[0] > 2}
+        assert all(b - a <= 2 or (a, b) in raw_gaps for a, b in zip(times, times[1:]))
+
+
+def test_engine_compressor_preserves_both_sides_of_teleport_and_form_boundary():
+    from sc2tools_agent.replay_pipeline import _compress_engine_track
+    points = [(i / 10, 1 + i / 10, 20.0) for i in range(20)]
+    points += [(2.0 + i / 10, 100 + i / 10, 20.0) for i in range(20)]
+    kept = _compress_engine_track(points, .5, boundaries=[1.1])
+    for t in (1.0, 1.1, 1.9, 2.0):
+        assert any(point[0] == t for point in kept)
+
+
+def test_engine_budget_failure_reaches_parser_without_publishing_partial_game(monkeypatch, tmp_path):
+    import sc2tools_agent.replay_pipeline as pipeline
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "complete": True}
+    pb["my_units"] = [_unit_with_track([(0, 20, 30), (100, 90, 80)], id="1", hidden=[1, 100])]
+    pb["opp_units"] = []
+    monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 1)
+    with pytest.raises(pipeline.PlaybackBudgetExceeded, match="0.5-cell accuracy"):
+        pipeline._compact_map_playback(pb)
+    ctx = SimpleNamespace(is_ai_game=False, me=SimpleNamespace(name="Me", result="Win"),
+                          opponent=SimpleNamespace(name="Opp"), file_path=tmp_path / "game.SC2Replay")
+    module = SimpleNamespace(detect_battle_markers=lambda *_a: [])
+    monkeypatch.setattr(pipeline, "_load_sc2ra_package_module", lambda _n: module)
+    monkeypatch.setattr(pipeline, "_raw_map_playback", lambda *_a: pb)
+    with pytest.raises(pipeline.PlaybackBudgetExceeded):
+        pipeline._compute_map_playback(ctx)
+    monkeypatch.setitem(sys.modules, "core.sc2_replay_parser", SimpleNamespace(parse_deep=lambda *_a: ctx))
+    monkeypatch.setattr(pipeline, "_compute_macro_breakdown", lambda *_a: (None, None))
+    monkeypatch.setattr(pipeline, "_compute_apm_curve", lambda *_a: None)
+    monkeypatch.setattr(pipeline, "_compute_spatial_extract", lambda *_a: None)
+    assert pipeline.parse_replay_for_cloud_ex(ctx.file_path, player_handle="Me") == (None, "playback_budget_exceeded")
+
+
 def test_v6_engine_preserves_observed_creep_and_effect_lifetimes():
     from sc2tools_agent.replay_pipeline import _compact_map_playback
     pb = _sample_playback()
@@ -2158,7 +2244,7 @@ def test_v6_attacks_reject_malformed_or_out_of_lifetime_samples():
     assert out["fidelity"]["complete"] is False
 
 
-def test_v6_attack_budget_preserves_both_sides_and_matching_aim(monkeypatch):
+def test_v6_attack_budget_rejects_instead_of_silently_dropping_recorded_shots(monkeypatch):
     import sc2tools_agent.replay_pipeline as pipeline
     monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_ATTACKS", 8)
     pb = _sample_playback()
@@ -2167,12 +2253,10 @@ def test_v6_attack_budget_preserves_both_sides_and_matching_aim(monkeypatch):
                                       aim=[v for t in range(10) for v in (t, 40, 50)])]
     pb["opp_units"] = [_unit_with_track([(0, 20, 30)], id="4294967302", attacks=list(range(100, 110)),
                                        aim=[v for t in range(100, 110) for v in (t, 40, 50)])]
-    out = pipeline._compact_map_playback(pb)
-    assert sum(len(u["attacks"]) for u in out["units"]) == 8
-    assert out["units"][0]["attacks"][::3] == [0, 9]
-    assert out["units"][1]["attacks"][::3] == [100, 109]
-    assert all(u["aim"][::3] == u["attacks"] for u in out["units"])
-    assert out["fidelity"]["complete"] is False
+    with pytest.raises(pipeline.PlaybackBudgetExceeded, match="weapon events"):
+        pipeline._compact_map_playback(pb)
+    assert pb["my_units"][0]["attacks"] == list(range(10))
+    assert pb["opp_units"][0]["attacks"] == list(range(100, 110))
 
 
 @pytest.mark.parametrize("fidelity", [

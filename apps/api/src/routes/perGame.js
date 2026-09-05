@@ -81,6 +81,20 @@ function buildPerGameRouter(deps) {
 
   // Engine rebuilds use the owned game's local replay and the normal upload
   // pipeline. Job status keeps agent/runtime errors visible while polling.
+  router.get("/games/:gameId/map-playback/status", async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const gameId = String(req.params.gameId);
+      if (!await deps.perGame.hasGame(userId, gameId)) {
+        res.status(404).json({ error: { code: "game_not_found" } });
+        return;
+      }
+      res.json({ ok: true, rebuild: getPlaybackJob(userId, gameId) || null });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/games/:gameId/map-playback", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
@@ -110,8 +124,7 @@ function buildPerGameRouter(deps) {
     try {
       const userId = requireAuth(req).userId;
       const gameId = String(req.params.gameId);
-      // mapPlayback scopes its lookup by userId even when the detail is absent.
-      if (!await deps.perGame.mapPlayback(userId, gameId)) {
+      if (!await deps.perGame.hasGame(userId, gameId)) {
         res.status(404).json({ error: { code: "game_not_found" } });
         return;
       }
