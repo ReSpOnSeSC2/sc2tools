@@ -7,6 +7,8 @@
 # A drift here means the engine reports a version that disagrees with the
 # canonical file, or the lookup fell back to the unknown sentinel, so we
 # hard-fail PRs the moment the two values diverge.
+# Also keeps the website's loading-state agent label aligned with the agent
+# package version so a release cannot leave an old version in that fallback.
 
 name: version-check
 
@@ -15,6 +17,8 @@ on:
     paths:
       - 'apps/replay-engine/VERSION'
       - 'apps/replay-engine/__init__.py'
+      - 'apps/agent/sc2tools_agent/__init__.py'
+      - 'apps/web/lib/agentNotice.ts'
       - '.github/workflows/version-check.yml'
   push:
     branches: [main]
@@ -49,6 +53,7 @@ jobs:
 
           python3 - <<'PY'
           import sys
+          import re
           from pathlib import Path
 
           version_path = Path('apps/replay-engine/VERSION')
@@ -71,4 +76,14 @@ jobs:
               sys.exit('ERROR: __version__ fell back to UNKNOWN sentinel '
                        '(VERSION file could not be read)')
           print('OK -- both sources agree on', file_version)
+
+          agent_init = Path('apps/agent/sc2tools_agent/__init__.py').read_text(encoding='utf-8')
+          web_notice = Path('apps/web/lib/agentNotice.ts').read_text(encoding='utf-8')
+          agent_match = re.search(r'^__version__\s*=\s*"(\d+\.\d+\.\d+)"', agent_init, re.MULTILINE)
+          web_match = re.search(r'^export const FALLBACK_LATEST_AGENT_VERSION\s*=\s*"(\d+\.\d+\.\d+)"', web_notice, re.MULTILINE)
+          if not agent_match or not web_match:
+              sys.exit('ERROR: missing agent package version or web fallback version')
+          if agent_match[1] != web_match[1]:
+              sys.exit(f'ERROR: agent version drift -- package {agent_match[1]}, web fallback {web_match[1]}')
+          print('OK -- agent package and web fallback agree on', agent_match[1])
           PY

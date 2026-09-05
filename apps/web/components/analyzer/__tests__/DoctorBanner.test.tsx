@@ -103,7 +103,7 @@ describe("DoctorBanner replay archive prompt", () => {
     render(<DoctorBanner />);
 
     expect(screen.getByText(
-      "SC2 Tools Agent v0.16.3 needs to be turned on or installed",
+      "SC2 Tools Agent v0.16.5 needs to be turned on or installed",
     )).toBeTruthy();
   });
 });
