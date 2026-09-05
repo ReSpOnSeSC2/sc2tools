@@ -2,6 +2,7 @@
 
 const AjvModule = require("ajv");
 const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
+const { groupMembershipFields, cameraSchema, validV3Semantics } = require("./playSignatureV3");
 
 /** @param {number} maximum @param {number} [minimum] */
 const integer = (maximum, minimum = 0) => ({ type: "integer", minimum, maximum });
@@ -80,7 +81,13 @@ const v2 = {
   ]),
   anyOf: [{ required: ["controlGroups"] }, { required: ["actions"] }, { required: ["build"] }],
 };
-const PLAY_SIGNATURE_SCHEMA = { anyOf: [v1, v2] };
+const v3 = {
+  ...object({ ...v2.properties, version: { const: 3 }, camera: cameraSchema,
+    controlGroups: object({ ...controlV2.properties, ...groupMembershipFields }, controlV2.required),
+  }, ["version", "windowSec"]),
+  anyOf: [...v2.anyOf, { required: ["camera"] }],
+};
+const PLAY_SIGNATURE_SCHEMA = { anyOf: [v1, v2, v3] };
 const validate = new Ajv({ allErrors: false }).compile(PLAY_SIGNATURE_SCHEMA);
 
 /**
@@ -93,7 +100,7 @@ const validate = new Ajv({ allErrors: false }).compile(PLAY_SIGNATURE_SCHEMA);
 function sanitizePlaySignature(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const raw = /** @type {Record<string, any>} */ (value);
-  const schema = raw.version === 1 ? v1 : raw.version === 2 ? v2 : null;
+  const schema = raw.version === 1 ? v1 : raw.version === 2 ? v2 : raw.version === 3 ? v3 : null;
   if (!schema) return undefined;
   try {
     const clean = copyContract(raw, schema);
@@ -140,7 +147,8 @@ function validPlaySignatureSemantics(signature) {
   const actions = signature.actions;
   if (control && (!unique(control.slots, (slot) => slot.slot)
     || !unique(control.transitions || [], (row) => `${row.from}:${row.to}`))) return false;
-  if (signature.version !== 2) return true;
+  if (signature.version === 1) return true;
+  if (signature.version === 3 && !validV3Semantics(signature)) return false;
   for (const family of [control, actions].filter(Boolean)) {
     if (family.activeSeconds > signature.windowSec) return false;
     const phases = family.phases || [];

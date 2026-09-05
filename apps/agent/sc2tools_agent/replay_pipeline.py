@@ -47,7 +47,7 @@ _EARLY_BUILD_LOG_CAP = 1000
 # the cloud's slim game row.  Ten minutes captures the hotkey layout and the
 # opening milestones that are most repeatable between games, while avoiding
 # late-game event volume and matchup-specific noise.
-_PLAY_SIGNATURE_VERSION = 2
+_PLAY_SIGNATURE_VERSION = 3
 _PLAY_SIGNATURE_WINDOW_SEC = 10 * 60
 _PLAY_SIGNATURE_BUILD_MILESTONES = 18
 _PLAY_SIGNATURE_BUILD_LINE_RE = re.compile(
@@ -1190,7 +1190,9 @@ def _compute_opponent_play_signature(
     build milestones. Missing evidence families stay absent. Replay commands
     describe logical actions, not the player's physical keyboard bindings.
     """
-    from .play_signature import extract_behavior_signature
+    from .play_signature import extract_behavior_signature, _clock
+    from .group_signature import extract_group_membership_signature
+    from .camera_signature import extract_camera_signature
 
     try:
         behavior = extract_behavior_signature(
@@ -1201,6 +1203,27 @@ def _compute_opponent_play_signature(
     except Exception as exc:  # noqa: BLE001 - optional evidence must not lose a replay
         log.warning("play_signature_behavior_failed: %s", exc)
         behavior = {}
+    replay = getattr(ctx, "raw", None)
+    length = getattr(ctx, "length_seconds", None)
+    if behavior.get("controlGroups"):
+        try:
+            membership = extract_group_membership_signature(
+                replay, opponent_pid=opponent_pid, game_length_sec=length,
+            )
+            if membership:
+                behavior["controlGroups"].update(membership)
+        except Exception as exc:  # noqa: BLE001 - independent optional channel
+            log.warning("play_signature_membership_failed: %s", exc)
+    if replay is not None:
+        try:
+            fps, active_seconds = _clock(replay, length)
+            camera = extract_camera_signature(
+                replay, opponent_pid=opponent_pid, fps=fps, active_seconds=active_seconds,
+            )
+            if camera is not None:
+                behavior["camera"] = camera
+        except Exception as exc:  # noqa: BLE001 - independent optional channel
+            log.warning("play_signature_camera_failed: %s", exc)
     build = _build_milestone_signature(opp_build_log)
     if not behavior and build is None:
         return None

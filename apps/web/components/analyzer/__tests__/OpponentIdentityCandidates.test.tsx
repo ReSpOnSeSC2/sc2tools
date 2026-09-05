@@ -414,6 +414,135 @@ describe("OpponentIdentityCandidates", () => {
     expect(screen.getByText("Unverified")).toBeTruthy();
   });
 
+  it("shows exact same-unit membership, slot zero, and actual opening order without implying both players match", () => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      methodologyVersion: "behavior_match_v3",
+      target: { ...response().target, signatureVersion: 3, membershipGames: 4, cameraGames: 4 },
+      candidates: [candidate(1, {
+        evidence: {
+          ...base.evidence,
+          controlGroups: {
+            ...base.evidence.controlGroups!,
+            membershipSamples: { target: 4, candidate: 7 },
+            membershipHabits: [{
+              unitType: "Nexus", slots: [0, 3], targetGames: 4, candidateGames: 0, targetFirstSec: 1.2,
+            }, {
+              unitType: "Nexus", slots: [3], targetGames: 4, candidateGames: 7, targetFirstSec: 0, candidateFirstSec: 2.8,
+            }],
+            openingExamples: {
+              target: [
+                { slot: 3, action: "set", atSec: 0, units: [{ name: "Nexus", count: 1 }] },
+                { slot: 0, action: "add", atSec: 1.2, units: [{ name: "Nexus", count: 1 }] },
+                { slot: 3, action: "recall", atSec: 1.5, units: [{ name: "Nexus", count: 1 }] },
+              ],
+              candidate: [{ slot: 3, action: "set", atSec: 2.8, units: [{ name: "Nexus", count: 2 }] }],
+            },
+          },
+        },
+      })],
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    const table = screen.getByRole("table", { name: "Units and buildings assigned to groups" });
+    const pair = within(table).getByRole("rowheader", { name: "Nexus Same unit · groups 0 + 3" }).closest("tr")!;
+    expect(within(pair).getByText("4 / 4 games")).toBeTruthy();
+    expect(within(pair).getByText("Not observed in 7 games")).toBeTruthy();
+    expect(within(pair).getByText("Typical first at 0:01.2")).toBeTruthy();
+    const single = within(table).getByRole("rowheader", { name: "Nexus Group 3" }).closest("tr")!;
+    expect(within(single).getByText("7 / 7 games")).toBeTruthy();
+    expect(within(single).getByText("Typical first at 0:00.0")).toBeTruthy();
+    const opening = screen.getByRole("list", { name: "Target opening" });
+    const steps = within(opening).getAllByRole("listitem");
+    expect(steps[0].textContent).toContain("0:00.0 · Set group 3");
+    expect(steps[1].textContent).toContain("0:01.2 · Add to group 0");
+    expect(steps[2].textContent).toContain("0:01.5 · Recall group 3");
+    expect(screen.getByRole("region", { name: "Opening group examples" })).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "Candidate opening" })).getByText("Nexus ×2")).toBeTruthy();
+    expect(screen.getByText(/These are individual game examples/)).toBeTruthy();
+    expect(screen.getByText(/Decoded group membership: 4 games/)).toBeTruthy();
+  });
+
+  it("distinguishes missing membership extraction from an observed absent habit", () => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      candidates: [candidate(1, {
+        evidence: {
+          ...base.evidence,
+          controlGroups: {
+            ...base.evidence.controlGroups!,
+            membershipSamples: { target: 0, candidate: 3 },
+            membershipHabits: [{ unitType: "Nexus", slots: [0], targetGames: 0, candidateGames: 3, candidateFirstSec: 0 }],
+          },
+        },
+      })],
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    const table = screen.getByRole("table", { name: "Units and buildings assigned to groups" });
+    expect(within(table).getByText("No decoded games")).toBeTruthy();
+    expect(within(table).queryByText(/Not observed/)).toBeNull();
+    expect(within(table).getByRole("rowheader", { name: "Nexus Group 0" })).toBeTruthy();
+    expect(screen.getByText(/Reprocess older replays to compare assigned units/)).toBeTruthy();
+  });
+
+  it("labels camera slot saves as decoded and position returns as inferred without claiming physical camera keys", () => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      candidates: [candidate(1, {
+        evidence: {
+          ...base.evidence,
+          actions: {
+            score: 0.8, targetSamples: 4, candidateSamples: 7, highlights: [],
+            cameraHabits: {
+              targetSamples: 4, candidateSamples: 7, returnAttribution: "position_only",
+              slots: [{
+                slot: 0, targetGames: 4, candidateGames: 7, targetFirstSaveSec: 0,
+                candidateFirstSaveSec: 3.8, targetSavesPerGame: 1, candidateSavesPerGame: 1.2,
+                targetReturnsPerGame: 0, candidateReturnsPerGame: 12.4,
+              }, { slot: 7, targetGames: 4, candidateGames: 0 }],
+            },
+          },
+        },
+      })],
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    const table = screen.getByRole("table", { name: "Camera bookmark slots" });
+    expect(within(table).getByRole("rowheader", { name: "Bookmark slot 0" })).toBeTruthy();
+    expect(within(table).getByRole("rowheader", { name: "Bookmark slot 7" })).toBeTruthy();
+    expect(within(table).getByText("Typical first at 0:00.0")).toBeTruthy();
+    expect(within(table).getByText("0 inferred returns/game")).toBeTruthy();
+    expect(within(table).getByText("12.4 inferred returns/game")).toBeTruthy();
+    expect(within(table).getByText("Not observed in 7 games")).toBeTruthy();
+    expect(screen.getByText(/it does not confirm a hotkey press/)).toBeTruthy();
+    expect(within(table).queryByText(/F[1-9]/)).toBeNull();
+  });
+
+  it.each([0, 3])("distinguishes zero camera saves from missing camera decoding with %i games", (samples) => {
+    const base = candidate();
+    harness.useApi.mockReturnValue(apiResult(response({
+      candidates: [candidate(1, {
+        evidence: {
+          ...base.evidence,
+          actions: {
+            score: 0.8, targetSamples: 4, candidateSamples: 7, highlights: [],
+            cameraHabits: { targetSamples: samples, candidateSamples: samples, returnAttribution: "position_only", slots: [] },
+          },
+        },
+      })],
+    })));
+    render(<OpponentIdentityCandidates pulseId="target" enabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare evidence" }));
+
+    expect(screen.getByText(samples
+      ? "No bookmark saves were observed in the decoded games."
+      : "No decoded camera bookmark evidence is available. Reprocess older replays to add it.")).toBeTruthy();
+  });
+
   it("keeps the card stable while candidates load", () => {
     harness.useApi.mockReturnValue(
       apiResult(null, { isLoading: true, isValidating: true }),

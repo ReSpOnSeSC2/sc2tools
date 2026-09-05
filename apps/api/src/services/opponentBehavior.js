@@ -37,7 +37,12 @@ function averageVector(rows) {
   return Array.from({ length: Math.max(0, ...rows.map((r) => r.length)) }, (_, i) => mean(rows.map((r) => r[i] || 0)));
 }
 /** @param {Row} signature @returns {boolean} */
-function supported(signature) { return signature?.version === 1 || signature?.version === 2; }
+function supported(signature) { return [1, 2, 3].includes(signature?.version); }
+/** @param {unknown} value @returns {boolean} */
+function validCamera(value) {
+  const row = /** @type {Row|null} */ (value && typeof value === "object" ? value : null);
+  return Boolean(row && count(row.activeSeconds) > 0 && count(row.events) > 0 && typeof row.saves === "number" && Array.isArray(row.slots));
+}
 /** @param {unknown} value @returns {boolean} */
 function validControlGroups(value) {
   const row = /** @type {Row|null} */ (value && typeof value === "object" ? value : null);
@@ -56,11 +61,41 @@ function validActions(value) {
 function observations(games, family) {
   return games.flatMap((game) => {
     const signature = game?.opponent?.playSignature;
-    if (!supported(signature) || (family === "actions" && signature.version !== 2)) return [];
+    if (!supported(signature) || (family === "actions" && signature.version < 2)) return [];
     const row = signature[family];
+    const camera = signature.version === 3 && validCamera(signature.camera) ? signature.camera : null;
+    if (family === "actions" && camera) {
+      return [validActions(row) ? { ...row, camera, version: signature.version }
+        : { activeSeconds: camera.activeSeconds, events: camera.events, camera, version: signature.version }];
+    }
     if (!(family === "actions" ? validActions(row) : validControlGroups(row))) return [];
     return [{ ...row, version: signature.version }];
   });
+}
+
+/** @param {Row} game @returns {boolean} */
+function legacyStealEvents(game) {
+  const signature = game?.opponent?.playSignature;
+  const slots = signature?.controlGroups?.slots;
+  return signature?.version === 2 && Array.isArray(slots)
+    && slots.slice(0, 10).some((/** @type {Row} */ slot) => count(slot?.stealSet) + count(slot?.stealAdd) > 0);
+}
+/** @param {Row[]} targetGames @param {Row[]} candidateGames @returns {boolean} */
+function hasIncompatibleLegacySteals(targetGames, candidateGames) {
+  const hasV3 = targetGames.some((game) => game?.opponent?.playSignature?.version === 3)
+    || candidateGames.some((game) => game?.opponent?.playSignature?.version === 3);
+  return hasV3 && (targetGames.some(legacyStealEvents) || candidateGames.some(legacyStealEvents));
+}
+/** @param {Row[]} targetGames @param {Row[]} candidateGames @returns {Row[][]} */
+function compatibleBehaviorGames(targetGames, candidateGames) {
+  if (!hasIncompatibleLegacySteals(targetGames, candidateGames)) return [targetGames, candidateGames];
+  // v2 counted automatic post-steal buffer transactions as player input. v3
+  // removes them from both control-group and action aggregates. Stored v2
+  // summaries cannot distinguish those records after the fact. Treat affected
+  // observations as unavailable until re-sync rather than a behavioral change.
+  // v2-only comparisons, v2 without steals, and established v1 behavior remain.
+  return [targetGames.filter((game) => !legacyStealEvents(game)),
+    candidateGames.filter((game) => !legacyStealEvents(game))];
 }
 
 /** @param {Row} row @param {string[]} fields @returns {number[]|null} */
@@ -134,8 +169,8 @@ function observedPhase(values, size) {
 
 /** @param {Row[]} left @param {Row[]} right @returns {Dimension[]} */
 function advancedControlDimensions(left, right) {
-  const a = left.filter((r) => r.version === 2);
-  const b = right.filter((r) => r.version === 2);
+  const a = left.filter((r) => r.version >= 2);
+  const b = right.filter((r) => r.version >= 2);
   const dims = [vectorDimension(a, b, (r) => r.slots.every((/** @type {Row} */ s) => typeof s.stealSet === "number" && typeof s.stealAdd === "number" && typeof s.clear === "number")
     ? slotVector(r, ["set", "add", "stealSet", "stealAdd", "clear"]) : null,
     "group_updates", "Set, add, steal and clear by slot", 0.10),
@@ -206,7 +241,7 @@ function abilityDimension(left, right, bySlot) {
 /** @param {Row[]} rows @param {number} slot @returns {string[]} */
 function primaryGroupAbilities(rows, slot) {
   const totals = new Map();
-  for (const row of rows.filter((r) => r.version === 2)) {
+  for (const row of rows.filter((r) => r.version >= 2)) {
     const matching = [...abilities(row, true)].filter(([key]) => key.startsWith(`${slot}:`));
     const total = matching.reduce((n, [, value]) => n + value, 0);
     for (const [key, value] of matching) {
@@ -258,21 +293,23 @@ function finishComponent(target, candidate, dimensions, stabilityFeature, eventT
 
 /** @param {Row[]} targetGames @param {Row[]} candidateGames @returns {Row|null} */
 function controlGroupComponent(targetGames, candidateGames) {
+  [targetGames, candidateGames] = compatibleBehaviorGames(targetGames, candidateGames);
   const a = observations(targetGames, "controlGroups"); const b = observations(candidateGames, "controlGroups");
   if (!a.length || !b.length) return null;
-  // v1 used unbounded transitions and looser double-tap semantics. Compare
-  // these channels only within the same version, preferring detailed v2.
-  const rhythmVersion = a.some((r) => r.version === 2) && b.some((r) => r.version === 2) ? 2 : 1;
-  const rhythmA = a.filter((r) => r.version === rhythmVersion);
-  const rhythmB = b.filter((r) => r.version === rhythmVersion);
+  // v1 used unbounded transitions and looser double-tap semantics. Prefer
+  // compatible v2/v3 observations after excluding legacy steal transactions.
+  const richRhythm = a.some((r) => r.version >= 2) && b.some((r) => r.version >= 2);
+  const rhythmA = a.filter((r) => richRhythm ? r.version >= 2 : r.version === 1);
+  const rhythmB = b.filter((r) => richRhythm ? r.version >= 2 : r.version === 1);
   const dimensions = [
     vectorDimension(a, b, (r) => slotVector(r, ["recall"]), "recall_slots", "Preferred recall slots", 0.14),
     vectorDimension(a, b, (r) => slotVector(r, ["set", "add", "recall"]), "slot_actions", "Set, add and recall by slot", 0.10),
     vectorDimension(rhythmA, rhythmB, transitionVector, "transitions", "Switching between groups", 0.07),
     scalarDimension(rhythmA, rhythmB, doubleTapRate, "double_tap", "Consecutive same-group recall rate", 0.05, "ratio", 0.2),
-    scalarDimension(a, b, (r) => Math.max(0, count(r.events) - (r.version === 2 ? r.slots.reduce((/** @type {number} */ sum, /** @type {Row} */ s) => sum + count(s.clear), 0) : 0))
+    scalarDimension(a, b, (r) => Math.max(0, count(r.events) - (r.version >= 2 ? r.slots.reduce((/** @type {number} */ sum, /** @type {Row} */ s) => sum + count(s.clear), 0) : 0))
       * 60 / Math.max(1, count(r.activeSeconds)), "event_rate", "Control-group actions per minute", 0.04, "per_minute"),
     ...advancedControlDimensions(a, b),
+    ...membershipDimensions(a, b),
   ];
   const result = finishComponent(a, b, dimensions, (r) => slotVector(r, ["set", "add", "recall", "stealSet", "stealAdd"]), 80);
   if (!result) return null;
@@ -286,20 +323,187 @@ function controlGroupComponent(targetGames, candidateGames) {
     return [`Group ${slot} commands after recall: target ${targetAbilities.join(", ")}; candidate ${candidateAbilities.join(", ")}`];
   });
   return { ...result, highlights: [...commandHighlights, ...result.highlights].slice(0, 6),
+    ...membershipDetails(a, b),
     matchedSlots: top(av).filter((slot) => top(bv).includes(slot)),
     advancedSamples: { target: a.filter(hasAdvancedControls).length, candidate: b.filter(hasAdvancedControls).length } };
 }
 
 /** @param {Row} row @returns {boolean} */
 function hasAdvancedControls(row) {
-  return row.version === 2 && Array.isArray(row.phases) && row.phases.length > 0
+  return row.version >= 2 && Array.isArray(row.phases) && row.phases.length > 0
     && Array.isArray(row.recallIntervals);
 }
 
 /** @param {Row} row @returns {number[]|null} */
 function actionMix(row) { return normalize([count(row.commands), count(row.selectionChanges), count(row.cameraMoves)]); }
+
+/** @param {Row} row @returns {boolean} */
+function hasMembership(row) {
+  return row.version === 3 && count(row.membershipCoverage?.decodedAssignments) > 0 && Array.isArray(row.unitAssignments);
+}
+/** @param {Row} row @returns {boolean} */
+function usableMembership(row) {
+  return hasMembership(row) && row.membershipCoverage.assignments > 0
+    && row.membershipCoverage.decodedAssignments / row.membershipCoverage.assignments >= 0.8;
+}
+/** @param {Row} row @param {boolean} shared @returns {Map<string,number>|null} */
+function membershipVector(row, shared) {
+  if (!usableMembership(row)) return null;
+  const out = new Map();
+  const source = shared ? (row.sharedAssignments || []) : row.unitAssignments;
+  if (!Array.isArray(source)) return null;
+  for (const entry of source.slice(0, shared ? 45 : 10)) {
+    const slots = shared ? entry.slots?.join(",") : String(entry.slot);
+    if (!slots) continue;
+    for (const unit of (entry.unitTypes || []).slice(0, shared ? 6 : 8)) {
+      if (typeof unit.name !== "string" || !count(unit.count)) continue;
+      out.set(`${slots}|${unit.name}`, count(unit.count));
+    }
+  }
+  if (shared && !out.size) {
+    // Zero overlap is meaningful only after sufficiently complete decoding.
+    const coverage = row.membershipCoverage;
+    if (coverage.assignments < 2 || coverage.selectionErrors || coverage.decodedAssignments !== coverage.assignments) return null;
+    out.set("no_shared_units", 1);
+  }
+  return out.size ? out : null;
+}
+/** @param {Row[]} left @param {Row[]} right @param {boolean} shared @returns {Dimension} */
+function membershipDistribution(left, right, shared) {
+  const keys = [...new Set([...left, ...right].flatMap((r) => [...(membershipVector(r, shared)?.keys() || [])]))];
+  return vectorDimension(left, right, (r) => {
+    const values = membershipVector(r, shared);
+    return values ? normalize(keys.map((key) => values.get(key) || 0)) : null;
+  }, shared ? "shared_unit_groups" : "assigned_unit_groups", shared ? "Same units assigned to multiple groups" : "Unit and building types assigned to each group", shared ? 0.12 : 0.20);
+}
+/** @param {Row} step @returns {string} */
+function setupToken(step) {
+  return `${step.slot}:${step.action}:${(step.units || []).map((/** @type {Row} */ unit) => unit.name).sort().join(",")}`;
+}
+/** @param {Row[]} left @param {Row[]} right @returns {number} */
+function openingSimilarity(left, right) {
+  const a = left.slice(0, 24); const b = right.slice(0, 24);
+  if (!a.length || !b.length) return 0;
+  let previous = Array(b.length + 1).fill(0);
+  for (const step of a) {
+    const next = [0];
+    for (let j = 0; j < b.length; j += 1) {
+      const match = setupToken(step) === setupToken(b[j]) ? Math.exp(-Math.abs(step.atSec - b[j].atSec) / 5) : 0;
+      next.push(Math.max(previous[j + 1], next[j], previous[j] + match));
+    }
+    previous = next;
+  }
+  return 2 * previous[b.length] / (a.length + b.length);
+}
+/** @param {Row[]} left @param {Row[]} right @returns {Dimension[]} */
+function membershipDimensions(left, right) {
+  const a = left.filter(usableMembership); const b = right.filter(usableMembership);
+  const openingA = a.filter((r) => r.openingSequence?.length > 0).slice(0, 4);
+  const openingB = b.filter((r) => r.openingSequence?.length > 0).slice(0, 4);
+  return [membershipDistribution(left, right, false), membershipDistribution(left, right, true), {
+    key: "opening_group_sequence", label: "Opening group setup order and timing", weight: 0.18,
+    targetSamples: openingA.length, candidateSamples: openingB.length,
+    score: openingA.length && openingB.length ? round(mean(openingA.flatMap((x) => openingB.map((y) => openingSimilarity(x.openingSequence, y.openingSequence))))) : null,
+  }];
+}
+/** @param {Row[]} rows @returns {Map<string,{unitType:string,slots:number[],games:number,times:number[]}>} */
+function summarizeMembership(rows) {
+  const out = new Map();
+  for (const row of rows.filter(hasMembership)) {
+    for (const shared of [false, true]) {
+      const source = shared ? row.sharedAssignments : row.unitAssignments;
+      for (const entry of (source || []).slice(0, shared ? 45 : 10)) {
+        const slots = shared ? entry.slots : [entry.slot];
+        for (const unit of entry.unitTypes || []) {
+          const key = `${slots.join(",")}|${unit.name}`;
+          const existing = out.get(key) || { unitType: unit.name, slots, games: 0, times: [] };
+          existing.games += 1;
+          // Shared firstAtSec describes the pair's first overlap. Do not
+          // attribute that time to a type that may have appeared later.
+          const time = shared ? (entry.unitTypes.length === 1 ? entry.firstAtSec : null)
+            : entry.firstAssignment?.units?.some((/** @type {Row} */ u) => u.name === unit.name) ? entry.firstAssignment.atSec : null;
+          if (typeof time === "number") existing.times.push(time);
+          out.set(key, existing);
+        }
+      }
+    }
+  }
+  return out;
+}
+/** @param {Row[]} left @param {Row[]} right @returns {Row} */
+function membershipDetails(left, right) {
+  const a = summarizeMembership(left); const b = summarizeMembership(right);
+  const keys = [...new Set([...a.keys(), ...b.keys()])];
+  const habits = keys.map((key) => {
+    const av = a.get(key); const bv = b.get(key); const row = av || bv;
+    return { unitType: row?.unitType, slots: row?.slots, targetGames: av?.games || 0, candidateGames: bv?.games || 0,
+      ...(av?.times.length ? { targetFirstSec: round(median(av.times)) } : {}),
+      ...(bv?.times.length ? { candidateFirstSec: round(median(bv.times)) } : {}) };
+  }).sort((a, b) => (b.slots?.length || 0) - (a.slots?.length || 0)
+    || Math.min(b.targetGames, b.candidateGames) - Math.min(a.targetGames, a.candidateGames)
+    || b.targetGames + b.candidateGames - a.targetGames - a.candidateGames
+    || String(a.unitType).localeCompare(String(b.unitType)));
+  return { membershipSamples: { target: left.filter(hasMembership).length, candidate: right.filter(hasMembership).length },
+    membershipHabits: habits.slice(0, 24), openingExamples: {
+      target: left.find((r) => hasMembership(r) && r.openingSequence?.length)?.openingSequence.slice(0, 12) || [],
+      candidate: right.find((r) => hasMembership(r) && r.openingSequence?.length)?.openingSequence.slice(0, 12) || [],
+    } };
+}
+/** @param {Row[]} left @param {Row[]} right @returns {Dimension[]} */
+function cameraDimensions(left, right) {
+  const a = left.filter((r) => r.camera); const b = right.filter((r) => r.camera);
+  const dimensions = [vectorDimension(a, b, (r) => {
+    const values = Array(9).fill(0);
+    for (const slot of r.camera.slots) values[slot.slot] += count(slot.saves);
+    if (!count(r.camera.saves)) values[8] = 1;
+    return normalize(values);
+  }, "camera_saved_slots", "Saved camera bookmark slots", 0.10),
+  vectorDimension(a, b, (r) => {
+    if (!r.camera.saveOrder?.length) return null;
+    const values = Array(64).fill(0);
+    r.camera.saveOrder.forEach((/** @type {number} */ slot, /** @type {number} */ index) => { values[index * 8 + slot] = 1; });
+    return normalize(values);
+  }, "camera_save_order", "Camera bookmark setup order", 0.05),
+  vectorDimension(a, b, (r) => histogram(r.camera.returnIntervals), "camera_return_intervals", "Rhythm of observed returns to saved positions", 0.03),
+  vectorDimension(a, b, (r) => {
+    const values = Array(48).fill(0);
+    for (const slot of r.camera.slots) {
+      if (!Array.isArray(slot.returnIntervals)) continue;
+      slot.returnIntervals.forEach((/** @type {unknown} */ value, /** @type {number} */ i) => { values[slot.slot * 6 + i] += count(value); });
+    }
+    return normalize(values);
+  }, "camera_slot_return_intervals", "Observed return rhythm for each camera bookmark", 0.03),
+  vectorDimension(a, b, (r) => {
+    const values = Array(64).fill(0);
+    for (const t of r.camera.transitions || []) values[t.from * 8 + t.to] += count(t.count);
+    return normalize(values);
+  }, "camera_return_transitions", "Observed switching between saved positions", 0.02)];
+  for (let slot = 0; slot < 8; slot += 1) {
+    dimensions.push(scalarDimension(a, b, (r) => r.camera.slots.find((/** @type {Row} */ s) => s.slot === slot)?.firstSaveSec ?? null,
+      `camera_first_save_${slot}`, `First save of camera bookmark ${slot}`, 0.005, "seconds", 15));
+  }
+  return dimensions;
+}
+/** @param {Row[]} left @param {Row[]} right @returns {Row} */
+function cameraDetails(left, right) {
+  const a = left.filter((r) => r.camera); const b = right.filter((r) => r.camera);
+  const slots = [];
+  for (let slot = 0; slot < 8; slot += 1) {
+    const av = a.flatMap((r) => r.camera.slots.filter((/** @type {Row} */ s) => s.slot === slot));
+    const bv = b.flatMap((r) => r.camera.slots.filter((/** @type {Row} */ s) => s.slot === slot));
+    if (!av.length && !bv.length) continue;
+    slots.push({ slot, targetGames: av.length, candidateGames: bv.length,
+      ...(a.length ? { targetSavesPerGame: round(av.reduce((n, s) => n + s.saves, 0) / a.length), targetReturnsPerGame: round(av.reduce((n, s) => n + s.returns, 0) / a.length) } : {}),
+      ...(b.length ? { candidateSavesPerGame: round(bv.reduce((n, s) => n + s.saves, 0) / b.length), candidateReturnsPerGame: round(bv.reduce((n, s) => n + s.returns, 0) / b.length) } : {}),
+      ...(av.length ? { targetFirstSaveSec: round(median(av.map((s) => s.firstSaveSec))) } : {}),
+      ...(bv.length ? { candidateFirstSaveSec: round(median(bv.map((s) => s.firstSaveSec))) } : {}),
+    });
+  }
+  return { targetSamples: a.length, candidateSamples: b.length, slots, returnAttribution: "position_only" };
+}
 /** @param {Row[]} targetGames @param {Row[]} candidateGames @returns {Row|null} */
 function actionComponent(targetGames, candidateGames) {
+  [targetGames, candidateGames] = compatibleBehaviorGames(targetGames, candidateGames);
   const a = observations(targetGames, "actions"); const b = observations(candidateGames, "actions");
   if (!a.length || !b.length) return null;
   const dimensions = [
@@ -309,14 +513,17 @@ function actionComponent(targetGames, candidateGames) {
     vectorDimension(a, b, (r) => normalize(["none", "point", "unit", "data"].map((key) => count(r.targetCommands?.[key]))), "command_targets", "Command target types", 0.10),
     scalarDimension(a, b, (r) => fraction(r, "queuedCommands", "commands"), "queued_commands", "Queued command share", 0.07, "ratio", 0.15),
     scalarDimension(a, b, (r) => fraction(r, "repeatCommands", "commands"), "repeated_commands", "Repeated command share", 0.07, "ratio", 0.2),
-    scalarDimension(a, b, (r) => count(r.commands) * 60 / Math.max(1, count(r.activeSeconds)), "command_rate", "Command events per minute", 0.08, "per_minute"),
+    scalarDimension(a, b, (r) => typeof r.commands === "number" ? count(r.commands) * 60 / Math.max(1, count(r.activeSeconds)) : null, "command_rate", "Command events per minute", 0.08, "per_minute"),
     abilityDimension(a, b, false),
+    ...cameraDimensions(a, b),
   ];
   for (const start of [0, 120, 300]) {
     dimensions.push(vectorDimension(a, b, (r) => { const p = fullPhase(r, start); return p ? observedPhase(actionMix(p), 3) : null; },
       `action_phase_${start}`, `Action mix at ${start / 60}–${start === 0 ? 2 : start === 120 ? 5 : 10} minutes`, 0.04));
   }
-  return finishComponent(a, b, dimensions, actionMix, 200);
+  const result = finishComponent(a, b, dimensions, actionMix, 200);
+  return result ? { ...result, cameraHabits: cameraDetails(a, b) } : null;
 }
 
-module.exports = { controlGroupComponent, actionComponent, validControlGroups, validActions };
+module.exports = { controlGroupComponent, actionComponent, validControlGroups, validActions, validCamera,
+  hasIncompatibleLegacySteals };

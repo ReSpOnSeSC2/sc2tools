@@ -146,7 +146,7 @@ def test_signature_degrades_to_whichever_evidence_family_exists():
         opponent_pid=2,
         opp_build_log=["[0:49] Gateway"],
     )
-    assert build_only["version"] == 2
+    assert build_only["version"] == 3
     assert "build" in build_only
     assert "controlGroups" not in build_only
 
@@ -176,7 +176,7 @@ def test_corrupt_behavior_stream_does_not_lose_valid_build_evidence(caplog):
         SimpleNamespace(raw=SimpleNamespace(events=42), length_seconds=600),
         opponent_pid=2, opp_build_log=["[0:50] Gateway"],
     )
-    assert signature == {"version": 2, "windowSec": 600,
+    assert signature == {"version": 3, "windowSec": 600,
                          "build": {"milestones": [{"atSec": 50, "name": "Gateway"}]}}
     assert "play_signature_behavior_failed" in caplog.text
 

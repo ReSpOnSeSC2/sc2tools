@@ -7,6 +7,7 @@ import type {
   ActionMatchEvidence,
   BehaviorMatchDimension,
   ControlGroupMatchEvidence,
+  ControlGroupOpeningStep,
   IdentityCandidate,
 } from "./OpponentIdentityCandidates";
 
@@ -92,6 +93,8 @@ export function CandidateEvidenceDetails({
                 : ""}
             </p>
           ) : null}
+          <MembershipComparison evidence={control} />
+          <OpeningComparison examples={control?.openingExamples} />
           <DimensionComparison dimensions={control?.dimensions} title="Control-group measurements" />
         </EvidenceDetailCard>
       </div>
@@ -103,6 +106,7 @@ export function CandidateEvidenceDetails({
             title="Replay-action habits"
             evidence={actions}
           >
+            <CameraComparison habits={actions?.cameraHabits} />
             <DimensionComparison dimensions={actions?.dimensions} title="Replay-action measurements" />
           </EvidenceDetailCard>
         </div>
@@ -151,6 +155,203 @@ type DetailEvidence =
   | ActionMatchEvidence
   | null
   | undefined;
+
+function MembershipComparison({ evidence }: { evidence?: ControlGroupMatchEvidence | null }) {
+  const samples = evidence?.membershipSamples;
+  if (!samples) return null;
+  const habits = (evidence?.membershipHabits || []).slice(0, 24);
+  return (
+    <div className="mt-3">
+      <p className="text-micro leading-relaxed text-text-dim">
+        Decoded group membership: {finiteCount(samples.target)} target games ·{" "}
+        {finiteCount(samples.candidate)} candidate games. Two groups in one row
+        mean the same unit was recorded in both groups. Typical first times are
+        medians across games where the habit was observed.
+        {!samples.target || !samples.candidate
+          ? " Reprocess older replays to compare assigned units and buildings."
+          : ""}
+      </p>
+      {habits.length ? (
+        <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-left text-micro">
+            <caption className="border-b border-border bg-bg-elevated/30 px-3 py-2 text-left font-semibold text-text">
+              Units and buildings assigned to groups
+            </caption>
+            <ComparisonHead label="Recorded membership" />
+            <tbody className="divide-y divide-border">
+              {habits.map((habit) => (
+                <tr key={`${habit.unitType}-${habit.slots.join("-")}`}>
+                  <th scope="row" className="min-w-[9rem] px-3 py-2 align-top font-medium text-text-muted">
+                    {habit.unitType}
+                    <span className="mt-0.5 block text-text-dim">
+                      {habit.slots.length > 1 ? "Same unit · groups " : "Group "}
+                      {habit.slots.join(" + ")}
+                    </span>
+                  </th>
+                  <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                    <HabitObservation games={habit.targetGames} samples={samples.target} firstSec={habit.targetFirstSec} />
+                  </td>
+                  <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                    <HabitObservation games={habit.candidateGames} samples={samples.candidate} firstSec={habit.candidateFirstSec} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-2 text-micro text-text-dim">No decoded assignment habits are available to display.</p>
+      )}
+    </div>
+  );
+}
+
+function HabitObservation({ games, samples, firstSec }: {
+  games: number;
+  samples: number;
+  firstSec?: number;
+}) {
+  const observed = finiteCount(games);
+  const total = finiteCount(samples);
+  if (!total) return <span>No decoded games</span>;
+  return (
+    <>
+      <span>{observed ? `${observed} / ${total} games` : `Not observed in ${total} games`}</span>
+      {observed > 0 && typeof firstSec === "number" && Number.isFinite(firstSec) ? (
+        <span className="mt-0.5 block whitespace-nowrap text-text-dim">Typical first at {formatGameTime(firstSec)}</span>
+      ) : null}
+    </>
+  );
+}
+
+function OpeningComparison({ examples }: { examples?: ControlGroupMatchEvidence["openingExamples"] }) {
+  if (!examples) return null;
+  return (
+    <section className="mt-3 rounded-lg border border-border p-3" aria-label="Opening group examples">
+      <h5 className="text-micro font-semibold text-text">Opening group examples</h5>
+      <p className="mt-1 text-micro leading-relaxed text-text-dim">
+        Recorded assignments and recalls from the newest replay with decoded opening actions on each side.
+        These are individual game examples; repeated habits are summarized above.
+      </p>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <OpeningSequence label="Target opening" steps={examples.target} />
+        <OpeningSequence label="Candidate opening" steps={examples.candidate} />
+      </div>
+    </section>
+  );
+}
+
+function OpeningSequence({ label, steps }: { label: string; steps: ControlGroupOpeningStep[] }) {
+  return (
+    <div>
+      <h6 className="text-micro font-semibold text-text-muted">{label}</h6>
+      {steps.length ? (
+        <ol className="mt-1 space-y-2 text-micro" aria-label={label}>
+          {steps.slice(0, 12).map((step, index) => (
+            <li key={`${step.atSec}-${step.slot}-${index}`} className="text-text-muted">
+              <span className="font-medium tabular-nums text-text">{formatGameTime(step.atSec)}</span>
+              {" · "}{assignmentAction(step.action)} group {step.slot}
+              <span className="block text-text-dim">
+                {step.units.length
+                  ? step.units.slice(0, 12).map((unit) => `${unit.name} ×${finiteCount(unit.count)}`).join(", ")
+                  : "Unit membership unavailable"}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : <p className="mt-1 text-micro text-text-dim">No decoded opening group actions</p>}
+    </div>
+  );
+}
+
+function assignmentAction(action: string): string {
+  switch (action) {
+    case "set": return "Set";
+    case "add": return "Add to";
+    case "stealSet": return "Steal into";
+    case "stealAdd": return "Steal and add to";
+    case "recall": return "Recall";
+    default: return "Update";
+  }
+}
+
+function CameraComparison({ habits }: { habits?: ActionMatchEvidence["cameraHabits"] }) {
+  if (!habits) return null;
+  return (
+    <section className="mt-3" aria-label="Camera bookmark evidence">
+      <p className="text-micro leading-relaxed text-text-dim">
+        Camera bookmark evidence: {finiteCount(habits.targetSamples)} target games ·{" "}
+        {finiteCount(habits.candidateSamples)} candidate games. Slots 0–7 are replay
+        identifiers. A return to a saved position is inferred from camera movement;
+        it does not confirm a hotkey press or identify a physical key. Typical
+        first times are medians across games where the bookmark was saved.
+      </p>
+      {habits.slots.length ? (
+        <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-left text-micro">
+            <caption className="border-b border-border bg-bg-elevated/30 px-3 py-2 text-left font-semibold text-text">
+              Camera bookmark slots
+            </caption>
+            <ComparisonHead label="Recorded slot" />
+            <tbody className="divide-y divide-border">
+              {habits.slots.slice(0, 8).map((slot) => (
+                <tr key={slot.slot}>
+                  <th scope="row" className="px-3 py-2 align-top font-medium text-text-muted">Bookmark slot {slot.slot}</th>
+                  <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                    <HabitObservation games={slot.targetGames} samples={habits.targetSamples} firstSec={slot.targetFirstSaveSec} />
+                    <CameraRates saves={slot.targetSavesPerGame} returns={slot.targetReturnsPerGame} />
+                  </td>
+                  <td className="px-3 py-2 text-right align-top tabular-nums text-text-muted">
+                    <HabitObservation games={slot.candidateGames} samples={habits.candidateSamples} firstSec={slot.candidateFirstSaveSec} />
+                    <CameraRates saves={slot.candidateSavesPerGame} returns={slot.candidateReturnsPerGame} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-2 text-micro text-text-dim">
+          {habits.targetSamples || habits.candidateSamples
+            ? "No bookmark saves were observed in the decoded games."
+            : "No decoded camera bookmark evidence is available. Reprocess older replays to add it."}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function CameraRates({ saves, returns }: { saves?: number; returns?: number }) {
+  return (
+    <>
+      {typeof saves === "number" && Number.isFinite(saves) ? (
+        <span className="mt-0.5 block text-text-dim">{formatDimensionValue(saves)} saves/game</span>
+      ) : null}
+      {typeof returns === "number" && Number.isFinite(returns) ? (
+        <span className="mt-0.5 block text-text-dim">{formatDimensionValue(returns)} inferred returns/game</span>
+      ) : null}
+    </>
+  );
+}
+
+function ComparisonHead({ label }: { label: string }) {
+  return (
+    <thead className="border-b border-border text-text-dim">
+      <tr>
+        <th scope="col" className="px-3 py-2 font-medium">{label}</th>
+        <th scope="col" className="px-3 py-2 text-right font-medium">Target</th>
+        <th scope="col" className="px-3 py-2 text-right font-medium">Candidate</th>
+      </tr>
+    </thead>
+  );
+}
+
+function formatGameTime(value: number): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "Unavailable";
+  const seconds = Math.round(value * 10) / 10;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
+}
 
 function EvidenceDetailCard({
   icon,
@@ -327,6 +528,8 @@ function friendlyCaveat(caveat: string): string {
       return "Build similarity is based on shared strategy labels without comparable opening timings. Common strategies are weak identity evidence.";
     case "legacy_control_group_signature":
       return "Older replay signatures have limited control-group detail. Reprocessing the source replays adds timing and usage evidence.";
+    case "legacy_steal_events_reprocess":
+      return "Older signatures containing group steals were excluded from behavior comparison because their automatic replay events cannot be separated. Re-sync those source replays to include them.";
     case "sparse_control_group_events":
       return "Too few recorded control-group events are available for a dependable comparison of habits.";
     case "sparse_action_events":

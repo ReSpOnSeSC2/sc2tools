@@ -171,6 +171,8 @@ def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_se
     events = getattr(replay, "events", None)
     if events is None:
         return {}
+    from .group_signature import steal_housekeeping_event_ids
+    housekeeping = steal_housekeeping_event_ids(events, opponent_pid=target_pid)
     fps, active_seconds = _clock(replay, game_length_sec)
     groups: dict[int, dict] = {}
     group_phases = [{"startSec": start, "endSec": min(end, active_seconds), "events": 0, "slots": {}} for start, end in PHASES if start < active_seconds]
@@ -187,7 +189,7 @@ def extract_behavior_signature(replay: Any, *, opponent_pid: Any, game_length_se
     total_group_events = 0
 
     for event in events:
-        if event_pid(event) != target_pid:
+        if id(event) in housekeeping or event_pid(event) != target_pid:
             continue
         sec = event_seconds(event, fps)
         if sec is None or sec < 0 or sec > active_seconds:

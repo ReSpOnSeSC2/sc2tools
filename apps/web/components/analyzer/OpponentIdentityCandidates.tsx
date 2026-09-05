@@ -50,6 +50,8 @@ export type IdentityMatchTarget = {
   buildGames?: number;
   controlGroupGames?: number;
   advancedControlGroupGames?: number;
+  membershipGames?: number;
+  cameraGames?: number;
   actionGames?: number;
   signatureVersion?: number;
   evidenceMode?: EvidenceMode;
@@ -94,9 +96,47 @@ type BehavioralEvidence = {
 export type ControlGroupMatchEvidence = BehavioralEvidence & {
   matchedSlots: number[];
   advancedSamples?: { target: number; candidate: number };
+  membershipSamples?: { target: number; candidate: number };
+  membershipHabits?: Array<{
+    unitType: string;
+    /** Two slots mean that the same decoded unit was present in both groups. */
+    slots: number[];
+    targetGames: number;
+    candidateGames: number;
+    targetFirstSec?: number;
+    candidateFirstSec?: number;
+  }>;
+  openingExamples?: {
+    target: ControlGroupOpeningStep[];
+    candidate: ControlGroupOpeningStep[];
+  };
 };
 
-export type ActionMatchEvidence = BehavioralEvidence;
+export type ControlGroupOpeningStep = {
+  slot: number;
+  action: string;
+  atSec: number;
+  units: Array<{ name: string; count: number }>;
+};
+
+export type ActionMatchEvidence = BehavioralEvidence & {
+  cameraHabits?: {
+    targetSamples: number;
+    candidateSamples: number;
+    returnAttribution: "position_only";
+    slots: Array<{
+      slot: number;
+      targetGames: number;
+      candidateGames: number;
+      targetFirstSaveSec?: number;
+      candidateFirstSaveSec?: number;
+      targetSavesPerGame?: number;
+      candidateSavesPerGame?: number;
+      targetReturnsPerGame?: number;
+      candidateReturnsPerGame?: number;
+    }>;
+  };
+};
 
 export type IdentityCandidate = {
   rank: number;
@@ -461,6 +501,12 @@ function TargetEvidenceSummary({
           {finiteCount(target.controlGroupGames)} control-group games ·{" "}
           {finiteCount(target.advancedControlGroupGames)} detailed control-group games ·{" "}
           {finiteCount(target.actionGames)} replay-action games.
+        </p>
+      ) : null}
+      {(target.signatureVersion ?? 1) >= 3 ? (
+        <p className="mt-1 text-micro leading-relaxed text-text-muted">
+          Decoded group membership: {finiteCount(target.membershipGames)} games ·{" "}
+          camera bookmark evidence: {finiteCount(target.cameraGames)} games.
         </p>
       ) : null}
       {target.games === 1 ? (
@@ -833,6 +879,17 @@ function MethodologyDetails({
             recalled over the game, switching patterns, and recorded action habits.
             The evidence comparison shows which measurements were available on
             each side; older replays may need reprocessing to add these details.
+          </p>
+        ) : null}
+        {(response.target.signatureVersion ?? 1) >= 3 ? (
+          <p>
+            Group membership compares units and buildings assigned to logical
+            groups 0–9, including the same unit in multiple groups. Opening
+            examples show recorded assignment and recall order and timing from one replay
+            per side; game counts show how often a membership habit was observed.
+            Camera evidence uses decoded bookmark slots 0–7. Returns to saved
+            positions are inferred from camera movement and do not prove a
+            camera hotkey was pressed.
           </p>
         ) : null}
         <p>

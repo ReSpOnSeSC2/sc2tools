@@ -97,7 +97,7 @@ describe("detailed replay behavior", () => {
   });
 
   test("empty or unsupported signatures remain unavailable", () => {
-    const a = replay("a"); const b = replay("b", { version: 3 });
+    const a = replay("a"); const b = replay("b", { version: 4 });
     expect(controlGroupComponent([a], [b])).toBeNull();
     b.opponent.playSignature.version = 2;
     b.opponent.playSignature.controlGroups.slots = [{ slot: 99, recall: 999 }];

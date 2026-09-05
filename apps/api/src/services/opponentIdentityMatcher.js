@@ -1,6 +1,6 @@
 "use strict";
 
-const { controlGroupComponent, actionComponent, validControlGroups, validActions } = require("./opponentBehavior");
+const { controlGroupComponent, actionComponent, validControlGroups, validActions, validCamera, hasIncompatibleLegacySteals } = require("./opponentBehavior");
 
 /** @typedef {'P'|'T'|'Z'} RaceCode */
 /** @typedef {Record<string, any>} LooseRecord */
@@ -25,6 +25,8 @@ const { controlGroupComponent, actionComponent, validControlGroups, validActions
  *   controlGroupGames: number,
  *   actionGames: number,
  *   advancedControlGroupGames: number,
+ *   membershipGames: number,
+ *   cameraGames: number,
  *   signatureVersion: number,
  *   evidenceMode: string,
  * }} EvidenceSummary
@@ -65,7 +67,7 @@ const MILESTONE_GAME_SAMPLE_LIMIT = 8;
 const DEFAULT_RESULT_LIMIT = 5;
 const MAX_RESULT_LIMIT = 5;
 const MIN_CREDIBLE_PATTERN_MATCH = 0.35;
-const METHODOLOGY_VERSION = "behavior_match_v2";
+const METHODOLOGY_VERSION = "behavior_match_v3";
 const DEFAULT_PULSE_LINK_DEADLINE_MS = 350;
 
 /** @type {Readonly<Record<string, number>>} */
@@ -501,20 +503,28 @@ function summarizeEvidence(games) {
   let controlGroupGames = 0;
   let actionGames = 0;
   let advancedControlGroupGames = 0;
+  let membershipGames = 0;
+  let cameraGames = 0;
   for (const game of games) {
     if (gameHasBuildEvidence(game)) buildGames += 1;
     if (validControlGroups(game?.opponent?.playSignature?.controlGroups)) {
       controlGroupGames += 1;
-      if (game?.opponent?.playSignature?.version === 2) advancedControlGroupGames += 1;
+      if (game?.opponent?.playSignature?.version >= 2) advancedControlGroupGames += 1;
+      if (game?.opponent?.playSignature?.version === 3
+        && game.opponent.playSignature.controlGroups.membershipCoverage?.decodedAssignments > 0) membershipGames += 1;
     }
-    if (game?.opponent?.playSignature?.version === 2 && validActions(game.opponent.playSignature.actions)) actionGames += 1;
+    const signature = game?.opponent?.playSignature;
+    if (signature?.version === 3 && validCamera(signature.camera)) cameraGames += 1;
+    if (signature?.version >= 2 && (validActions(signature.actions) || (signature.version === 3 && validCamera(signature.camera)))) actionGames += 1;
   }
   return {
     buildGames,
     controlGroupGames,
     actionGames,
     advancedControlGroupGames,
-    signatureVersion: 2,
+    membershipGames,
+    cameraGames,
+    signatureVersion: 3,
     evidenceMode: actionGames > 0
       ? (buildGames > 0 || controlGroupGames > 0 ? "behavioral" : "actions_only")
       : buildGames > 0 && controlGroupGames > 0
@@ -696,7 +706,8 @@ function scoreCandidate(targetGames, candidateGames, targetFacingRace) {
       actions,
       coverage: round4(coverage),
     },
-    caveats: candidateCaveats(buildOrders, controlGroups, targetSamples, actions),
+    caveats: [...candidateCaveats(buildOrders, controlGroups, targetSamples, actions),
+      ...(hasIncompatibleLegacySteals(targetGames, candidateGames) ? ["legacy_steal_events_reprocess"] : [])],
   };
 }
 

@@ -48,3 +48,6 @@ changes is not an untouched external benchmark for final accuracy claims.
 The evaluator exits nonzero if any extracted signature fails lossless storage
 validation or if no independent query/reference pairs exist. It does not enforce
 an arbitrary accuracy threshold or substitute generated examples for missing data.
+The report identifies the extracted signature versions. V3 includes reconstructed
+unit/group membership and camera bookmark evidence; older signatures cannot be
+upgraded from their stored counts and must be extracted again from source replays.

@@ -68,6 +68,7 @@ const rate = (predicate) => results.length ? results.filter(predicate).length / 
 const informative = results.filter((row) => row.candidateCount >= 2);
 const report = {
   formatVersion: 1, calibrated: false, source: corpus.source,
+  signatureVersions: [...new Set(corpus.rows.map((row) => row.signature?.version).filter(Number.isInteger))].sort((a, b) => a - b),
   evaluation: "disjoint_replay_same_account_retrieval", selection: corpus.selection,
   ranking: "production_rankScore_then_patternMatch", minimumPatternMatch: 0.35,
   limitations: ["Same-account replay labels do not verify identities across alternate accounts.",
