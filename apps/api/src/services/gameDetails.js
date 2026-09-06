@@ -127,6 +127,11 @@ class GameDetailsService {
         ? opts.fields
         : undefined,
       concurrency: 1,
+      // A single replay inspector must distinguish a missing object from a
+      // failed read. Bulk scans may skip failed objects; foreground reads
+      // must propagate them so the UI can offer a retry instead of claiming
+      // that the agent never uploaded these details.
+      strict: true,
       signal: opts.signal,
     });
     return one.get(gameId) || null;

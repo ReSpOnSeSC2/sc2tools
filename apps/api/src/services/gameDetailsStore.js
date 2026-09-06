@@ -406,12 +406,18 @@ class R2DetailsStore {
       // The ETag precondition makes this read/merge/write safe even when two
       // Render instances update different fields on the same replay.
       const current = await this._readVersioned(userId, gameId, opts);
+      // A backend cutover can leave older blobs in Mongo. Seed a first R2
+      // object from those fields before the successful write removes them
+      // from Mongo metadata; a partial recompute must not erase analytics.
+      const previous = current?.blob
+        || await this._readLegacyMongo(userId, gameId, opts)
+        || {};
       if (opts.assertLease) await opts.assertLease();
-      const merged = { ...(current?.blob || {}), ...blob };
+      const merged = { ...previous, ...blob };
       // Re-evaluate on every ETag retry: a concurrent engine upload may have
       // upgraded playback since the preceding read/conditional PUT failed.
-      if (current && blob.mapPlayback !== undefined && preserveRecordedPlayback(current.blob?.mapPlayback, blob.mapPlayback)) {
-        merged.mapPlayback = current.blob.mapPlayback;
+      if (blob.mapPlayback !== undefined && preserveRecordedPlayback(previous.mapPlayback, blob.mapPlayback)) {
+        merged.mapPlayback = previous.mapPlayback;
       }
       if (current && isDeepStrictEqual(current.blob, merged)) {
         // A Full Re-sync commonly sends a byte-for-byte equivalent analysis
@@ -513,12 +519,44 @@ class R2DetailsStore {
   /**
    * @param {string} userId
    * @param {string} gameId
-   * @param {{signal?: AbortSignal}} [opts]
+   * @param {{fields?: string[], signal?: AbortSignal}} [opts]
    * @returns {Promise<Record<string, any> | null>}
    */
   async read(userId, gameId, opts = {}) {
     const versioned = await this._readVersioned(userId, gameId, opts);
-    return versioned ? versioned.blob : null;
+    return versioned ? versioned.blob : this._readLegacyMongo(userId, gameId, opts);
+  }
+
+  /**
+   * Read unmigrated Mongo details only after a genuine R2 miss. Metadata
+   * already marked R2 must never resurrect an obsolete inline copy, and
+   * provider failures must never reach this fallback. Reads do not migrate
+   * or mutate data; the next successful normal write performs the cutover.
+   *
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {{fields?: string[], signal?: AbortSignal}} [opts]
+   * @returns {Promise<Record<string, any>|null>}
+   */
+  async _readLegacyMongo(userId, gameId, opts = {}) {
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+    const fields = normaliseReadFields(opts.fields) || [...HEAVY_FIELDS];
+    if (fields.length === 0) return null;
+    const legacy = await this.gameDetailsCollection.findOne(
+      { userId, gameId, storedIn: { $ne: STORE_KINDS.R2 } },
+      {
+        projection: Object.fromEntries([["_id", 0], ...fields.map((field) => [field, 1])]),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      },
+    );
+    if (opts.signal && opts.signal.aborted) throw detailsAbortError();
+    if (!legacy) return null;
+    const blob = selectReadFields(legacy, fields);
+    if (!Object.values(blob).some((value) => value !== null && value !== undefined)) return null;
+    if (Buffer.byteLength(JSON.stringify(blob), "utf8") > R2_DETAILS_MAX_JSON_BYTES) {
+      throw detailsObjectTooLargeError();
+    }
+    return blob;
   }
 
   /**
@@ -628,7 +666,7 @@ class R2DetailsStore {
           return;
         }
         try {
-          const blob = await this.read(userId, gid, { signal: opts.signal });
+          const blob = await this.read(userId, gid, { fields: fields || undefined, signal: opts.signal });
           if (blob !== null) {
             const selected = selectReadFields(blob, fields);
             if (
@@ -886,6 +924,9 @@ async function streamToBuffer(stream, maxBytes) {
  */
 function isNotFoundError(err) {
   if (!err) return false;
+  // A missing bucket is a provider/configuration failure, not a missing
+  // replay object. Do not conceal it with the legacy Mongo fallback.
+  if (err.name === "NoSuchBucket" || err.Code === "NoSuchBucket") return false;
   if (err.name === "NoSuchKey") return true;
   if (err.Code === "NoSuchKey") return true;
   if (err.$metadata && err.$metadata.httpStatusCode === 404) return true;

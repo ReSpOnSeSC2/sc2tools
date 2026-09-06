@@ -49,6 +49,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Older replay details remain readable after the R2 switch** — replay
+  inspectors now recover unmigrated analysis from Mongo when the R2 object
+  is absent, and partial updates preserve those saved fields. Current detail
+  records take precedence over stale inline copies. Storage failures show a
+  retryable error instead of a false missing-analysis message; admin empty
+  states explain why a summary score can exist without chart data. No agent
+  update or replay recompute is needed for analysis already in storage.
 - **Background recording keeps its windows out of view** — agent **0.16.8**
   starts its StarCraft recorder off-screen without activation and suppresses
   only the capture's windows. The owned process tree stops when the agent

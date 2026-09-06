@@ -191,26 +191,38 @@ class PerGameComputeService {
       spatial: 1,
     };
     for (const field of fields) slimProjection[field] = 1;
-    const [slim, fromStore] = await Promise.all([
-      opts.slim !== undefined
-        ? Promise.resolve(opts.slim)
-        : this.db.games.findOne(
-          { userId, gameId },
-          { projection: slimProjection },
-        ),
-      this.gameDetails
-        ? this.gameDetails.findOne(userId, gameId, {
+    const slim = opts.slim !== undefined
+      ? opts.slim
+      : await this.db.games.findOne(
+        { userId, gameId },
+        { projection: slimProjection },
+      );
+    // Check ownership/existence before storage I/O. An unrelated or deleted
+    // game stays a 404 even when the detail store is unavailable.
+    if (!slim) return { slim: null, blob: {} };
+    let fromStore = null;
+    if (this.gameDetails) {
+      try {
+        fromStore = await this.gameDetails.findOne(userId, gameId, {
           fields,
           signal: opts.signal,
-        })
-        : Promise.resolve(null),
-    ]);
+        });
+      } catch (cause) {
+        if (cause instanceof Error && cause.name === "AbortError") throw cause;
+        const err = /** @type {Error & {code: string, status: number}} */ (
+          new Error("game_details_unavailable", { cause })
+        );
+        err.code = "game_details_unavailable";
+        err.status = 503;
+        throw err;
+      }
+    }
     /** @type {Record<string, any>} */
     const blob = {};
     // Detail-store wins when it has a value (it's authoritative
     // post-cutover); the slim row supplies the legacy fallback.
     /** @type {Array<any>} */
-    const sources = [slim, fromStore];
+    const sources = [fromStore, slim];
     for (const k of fields) {
       for (const src of sources) {
         if (src && src[k] !== undefined) {
@@ -359,7 +371,7 @@ class PerGameComputeService {
       slim,
       fields: ["macroBreakdown"],
     });
-    const breakdown = blob.macroBreakdown || slim.macroBreakdown || null;
+    const breakdown = blob.macroBreakdown || null;
     if (!breakdown) return { ok: false, code: "not_computed" };
     return {
       ok: true,
@@ -398,7 +410,7 @@ class PerGameComputeService {
       slim,
       fields: ["apmCurve"],
     });
-    const curve = blob.apmCurve || slim.apmCurve || null;
+    const curve = blob.apmCurve || null;
     if (!curve) return { ok: false, code: "not_computed" };
     return {
       ok: true,

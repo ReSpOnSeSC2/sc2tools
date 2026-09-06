@@ -30,6 +30,7 @@ const {
   buildStoreFromConfig,
 } = require("../src/services/gameDetailsStore");
 const { COLLECTIONS } = require("../src/config/constants");
+const { GameDetailsService } = require("../src/services/gameDetails");
 
 const gunzip = promisify(zlib.gunzip);
 const gzip = promisify(zlib.gzip);
@@ -471,6 +472,138 @@ describe("R2DetailsStore", () => {
     });
   });
 
+  test("R2 misses serve unmigrated Mongo details without writing or exposing metadata", async () => {
+    await collection.insertOne({ userId: "u1", gameId: "legacy", date: new Date(), ...SAMPLE_BLOB });
+    const details = new GameDetailsService(store);
+    expect(await details.findOne("u1", "legacy")).toEqual(SAMPLE_BLOB);
+    expect(await details.findOne("u1", "legacy", { fields: ["buildLog"] }))
+      .toEqual({ buildLog: SAMPLE_BLOB.buildLog });
+    expect(await details.findOne("other-user", "legacy")).toBeNull();
+    expect(s3.putCalls).toBe(0);
+    expect(await collection.findOne({ userId: "u1", gameId: "legacy" }))
+      .toMatchObject(SAMPLE_BLOB);
+    const batch = await details.findMany("u1", ["legacy", "missing"], {
+      fields: ["macroBreakdown"], strict: true,
+    });
+    expect([...batch]).toEqual([["legacy", { macroBreakdown: SAMPLE_BLOB.macroBreakdown }]]);
+  });
+
+  test("R2-marked rows and metadata-only rows cannot resurrect old Mongo details", async () => {
+    await collection.insertMany([
+      { userId: "u1", gameId: "already-r2", storedIn: "r2", ...SAMPLE_BLOB },
+      { userId: "u1", gameId: "metadata", date: new Date(), _schemaVersion: 1 },
+      { userId: "u1", gameId: "null-fields", buildLog: null, macroBreakdown: null },
+    ]);
+    for (const gameId of ["already-r2", "metadata", "null-fields"]) {
+      expect(await store.read("u1", gameId)).toBeNull();
+    }
+    await store.write("u1", "already-r2", new Date(), { apmCurve: { has_data: false } });
+    expect(await store.read("u1", "already-r2"))
+      .toEqual({ apmCurve: { has_data: false } });
+  });
+
+  test("R2 data and provider errors never fall back to stale Mongo details", async () => {
+    await store.write("u1", "external", new Date(), SAMPLE_BLOB);
+    await collection.insertOne({ userId: "u1", gameId: "failed", ...SAMPLE_BLOB });
+    await collection.insertOne({ userId: "u1", gameId: "corrupt", ...SAMPLE_BLOB });
+    s3.objects.set(store.keyFor("u1", "corrupt"), { body: Buffer.from("bad-gzip"), etag: '"corrupt"' });
+    const lookup = jest.spyOn(collection, "findOne");
+    try {
+      expect(await store.read("u1", "external")).toEqual(SAMPLE_BLOB);
+      for (const [field, name, status] of [["name", "AccessDenied", 403], ["name", "ServiceUnavailable", 503], ["name", "RequestTimeout", 504], ["name", "NoSuchBucket", 404], ["Code", "NoSuchBucket", 404]]) {
+        const error = Object.assign(new Error("provider unavailable"), { [field]: name, $metadata: { httpStatusCode: status } });
+        s3.getErrors.set(store.keyFor("u1", "failed"), error);
+        await expect(store.read("u1", "failed")).rejects.toBe(error);
+        await expect(store.write("u1", "failed", new Date(), { buildLog: [] })).rejects.toBe(error);
+      }
+      await expect(store.read("u1", "corrupt"))
+        .rejects.toMatchObject({ code: "game_details_object_corrupt" });
+      expect(lookup).not.toHaveBeenCalled();
+    } finally {
+      lookup.mockRestore();
+    }
+  });
+
+  test("first partial R2 write preserves legacy analytics and recorded playback before clearing Mongo", async () => {
+    const legacy = { ...SAMPLE_BLOB, mapPlayback: RECORDED_PLAYBACK };
+    await collection.insertOne({ userId: "u1", gameId: "legacy", storedIn: "mongo", ...legacy });
+    await store.write("u1", "legacy", new Date(), {
+      apmCurve: { has_data: false }, mapPlayback: TRACKER_PLAYBACK,
+    });
+    expect(await store.read("u1", "legacy"))
+      .toEqual({ ...legacy, apmCurve: { has_data: false } });
+    const metadata = await collection.findOne({ userId: "u1", gameId: "legacy" });
+    expect(metadata.storedIn).toBe("r2");
+    for (const field of Object.keys(legacy)) expect(metadata).not.toHaveProperty(field);
+    expect(s3.putCalls).toBe(1);
+  });
+
+  test("failed first R2 write leaves every legacy field available in Mongo", async () => {
+    await collection.insertOne({ userId: "u1", gameId: "legacy", ...SAMPLE_BLOB });
+    s3.forcedConflicts = 10;
+    await expect(store.write("u1", "legacy", new Date(), { apmCurve: { has_data: false } }))
+      .rejects.toMatchObject({ name: "PreconditionFailed" });
+    expect(await store.read("u1", "legacy")).toEqual(SAMPLE_BLOB);
+    expect(await collection.findOne({ userId: "u1", gameId: "legacy" }))
+      .toMatchObject(SAMPLE_BLOB);
+    expect(s3.objects.size).toBe(0);
+  });
+
+  test("concurrent first partial writes keep legacy and both updated fields", async () => {
+    await collection.insertOne({ userId: "u1", gameId: "legacy", ...SAMPLE_BLOB });
+    const otherStore = new R2DetailsStore({ client: s3, bucket: "test-bucket", prefix: "details", gameDetailsCollection: collection });
+    await Promise.all([
+      store.write("u1", "legacy", new Date(), { apmCurve: { has_data: false } }),
+      otherStore.write("u1", "legacy", new Date(), { buildLog: ["[0:00] Hatchery"] }),
+    ]);
+    expect(await store.read("u1", "legacy")).toEqual({
+      ...SAMPLE_BLOB, apmCurve: { has_data: false }, buildLog: ["[0:00] Hatchery"],
+    });
+  });
+
+  test("legacy fallback projects requested fields and preserves existing size limits", async () => {
+    const oversized = { ...SAMPLE_BLOB, mapPlayback: { data: "X".repeat(7 * 1024 * 1024) } };
+    await collection.insertOne({ userId: "u1", gameId: "oversized-legacy", ...oversized });
+    const details = new GameDetailsService(store);
+    expect(await details.findOne("u1", "oversized-legacy", { fields: ["buildLog"] }))
+      .toEqual({ buildLog: SAMPLE_BLOB.buildLog });
+    await expect(details.findOne("u1", "oversized-legacy"))
+      .rejects.toMatchObject({ code: "game_details_object_too_large", status: 413 });
+    await expect(store.write("u1", "oversized-legacy", new Date(), { apmCurve: { has_data: false } }))
+      .rejects.toMatchObject({ code: "game_details_object_too_large", status: 413 });
+    expect(s3.putCalls).toBe(0);
+    expect(await collection.findOne({ userId: "u1", gameId: "oversized-legacy" }))
+      .toMatchObject(oversized);
+  });
+
+  test("legacy fallback stays within shared admission and honors cancellation", async () => {
+    const details = new GameDetailsService(store);
+    let active = 0;
+    let maximum = 0;
+    const lookup = jest.spyOn(collection, "findOne").mockImplementation(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise((resolve) => setImmediate(resolve));
+      active -= 1;
+      return { buildLog: SAMPLE_BLOB.buildLog };
+    });
+    try {
+      await Promise.all([1, 2, 3, 4].map((id) => details.findOne("u1", `legacy-${id}`)));
+      expect(maximum).toBe(2);
+      const controller = new AbortController();
+      lookup.mockImplementationOnce(async (_filter, opts) => {
+        expect(opts.signal).toBe(controller.signal);
+        controller.abort();
+        return SAMPLE_BLOB;
+      });
+      await expect(details.findOne("u1", "cancelled", { signal: controller.signal }))
+        .rejects.toMatchObject({ name: "AbortError" });
+      expect(details.bulkReadCapacitySnapshot()).toMatchObject({ active: 0, queued: 0 });
+    } finally {
+      lookup.mockRestore();
+    }
+  });
+
   test("unchanged writes validate the ETag without rewriting the R2 object", async () => {
     const date = new Date("2026-05-04T12:00:00Z");
     await store.write("u1", "g1", date, SAMPLE_BLOB);
@@ -626,6 +759,26 @@ describe("R2DetailsStore", () => {
       strict: true,
       tolerateCorruptObjects: true,
     })).rejects.toBe(transient);
+  });
+
+  test("single replay reads distinguish missing objects from storage failures", async () => {
+    const details = new GameDetailsService(store);
+    await store.write("u1", "valid", new Date(), SAMPLE_BLOB);
+    expect(await details.findOne("u1", "valid", { fields: ["buildLog"] }))
+      .toEqual({ buildLog: SAMPLE_BLOB.buildLog });
+    expect(await details.findOne("u1", "missing")).toBeNull();
+    expect(await details.findOne("other-user", "valid")).toBeNull();
+
+    for (const [name, status] of [["AccessDenied", 403], ["ServiceUnavailable", 503], ["RequestTimeout", 504]]) {
+      const error = Object.assign(new Error(name), { name, $metadata: { httpStatusCode: status } });
+      s3.getErrors.set(store.keyFor("u1", "failed"), error);
+      await expect(details.findOne("u1", "failed", { fields: ["macroBreakdown"] }))
+        .rejects.toBe(error);
+    }
+    s3.objects.set(store.keyFor("u1", "corrupt"), { body: Buffer.from("not-gzip"), etag: '"corrupt"' });
+    await expect(details.findOne("u1", "corrupt"))
+      .rejects.toMatchObject({ code: "game_details_object_corrupt" });
+    expect(details.bulkReadCapacitySnapshot()).toMatchObject({ active: 0, queued: 0 });
   });
 
   test("concurrent bulk readers share the global two-object memory ceiling", async () => {

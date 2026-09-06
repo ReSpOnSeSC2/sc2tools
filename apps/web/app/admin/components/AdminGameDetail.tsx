@@ -1,7 +1,8 @@
 "use client";
 
-import { useApi } from "@/lib/clientApi";
+import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { ResourcesOverTimeChart } from "@/components/analyzer/charts/ResourcesOverTimeChart";
 import { ChronoAllocationChart } from "@/components/analyzer/charts/ChronoAllocationChart";
@@ -85,13 +86,14 @@ export function AdminGameDetail({
     userId,
   )}/games/${encodeURIComponent(game.gameId)}`;
 
-  const { data, error, isLoading } = useApi<BuildOrderResp>(
+  const build = useApi<BuildOrderResp>(
     `${base}/build-order`,
     { revalidateOnFocus: false },
   );
   const macro = useApi<MacroBreakdownData>(`${base}/macro-breakdown`, {
     revalidateOnFocus: false,
   });
+  const { data, error, isLoading } = build;
 
   const myRace = coerceRace(data?.my_race || game.myRace);
   const oppRace = coerceRace(data?.opp_race || game.opponent.race);
@@ -136,13 +138,12 @@ export function AdminGameDetail({
           <Skeleton rows={4} />
         </Card>
       ) : error ? (
-        <Card padded>
-          <p className="text-caption text-danger">
-            {error.status === 404
-              ? "No build order stored for this game (the agent hasn't uploaded it)."
-              : `Failed to load build order: ${error.message}`}
-          </p>
-        </Card>
+        <DetailLoadError
+          label="Build order"
+          error={error}
+          retrying={build.isValidating}
+          onRetry={() => { void build.mutate().catch(() => {}); }}
+        />
       ) : data ? (
         <BuildOrderTimeline
           events={data.events || []}
@@ -152,19 +153,53 @@ export function AdminGameDetail({
           race={myRace}
           oppRace={oppRace}
           title={data.my_build ? `Build — ${data.my_build}` : "Build order"}
+          emptyStateTitle="Build steps unavailable"
+          emptyStateBody="The game summary is saved, but no build steps are stored for this replay. If the owner still has the .SC2Replay file, they can reprocess it with the desktop agent."
         />
       ) : null}
 
       <MacroPanel
         data={macro.data ?? null}
         isLoading={macro.isLoading}
-        notAvailable={macro.error?.status === 404 || macro.data?.ok === false}
+        notAvailable={macro.error?.code === "macro_not_computed" || macro.data?.ok === false}
         error={
-          macro.error && macro.error.status !== 404 ? macro.error.message : undefined
+          macro.error?.code !== "macro_not_computed" ? macro.error : undefined
         }
+        retrying={macro.isValidating}
+        onRetry={() => { void macro.mutate().catch(() => {}); }}
         myRace={myRace}
       />
     </div>
+  );
+}
+
+function DetailLoadError({
+  label,
+  error,
+  retrying,
+  onRetry,
+}: {
+  label: string;
+  error: ClientApiError;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const missingGame = error.code === "game_not_found";
+  return (
+    <Card padded>
+      <div role="alert" className="space-y-3">
+        <p className="text-caption text-danger">
+          {missingGame
+            ? "This game could not be found. Return to the game list and refresh."
+            : `${label} could not be loaded. ${error.message}`}
+        </p>
+        {!missingGame ? (
+          <Button variant="secondary" size="sm" loading={retrying} onClick={onRetry}>
+            Retry {label.toLowerCase()}
+          </Button>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 
@@ -173,12 +208,16 @@ function MacroPanel({
   isLoading,
   notAvailable,
   error,
+  retrying,
+  onRetry,
   myRace,
 }: {
   data: MacroBreakdownData | null;
   isLoading: boolean;
   notAvailable: boolean;
-  error?: string;
+  error?: ClientApiError;
+  retrying: boolean;
+  onRetry: () => void;
   myRace: Race;
 }) {
   if (isLoading && !data) {
@@ -190,17 +229,17 @@ function MacroPanel({
   }
   if (error) {
     return (
-      <Card padded>
-        <p className="text-caption text-danger">Macro breakdown: {error}</p>
-      </Card>
+      <DetailLoadError label="Macro breakdown" error={error} retrying={retrying} onRetry={onRetry} />
     );
   }
   if (notAvailable || !data) {
     return (
       <Card padded>
         <p className="text-caption text-text-muted">
-          No macro breakdown stored for this game (synced before the field
-          existed, or not yet re-parsed by the agent).
+          The game summary is saved, but its detailed macro analysis is
+          unavailable. A saved macro score does not include the chart data.
+          If the owner still has the .SC2Replay file, they can reprocess it
+          with the desktop agent.
         </p>
       </Card>
     );

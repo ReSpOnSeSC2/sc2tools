@@ -19,6 +19,68 @@ describe("services/perGameCompute", () => {
     findOne.mockResolvedValue(null);
     expect(await service.hasGame("other", "g")).toBe(false);
   });
+
+  describe("foreground replay details", () => {
+    const stored = {
+      buildLog: ["[0:00] Nexus", "[0:17] Pylon"],
+      oppBuildLog: ["[0:00] Hatchery"],
+      macroBreakdown: { raw: { sq: 74 }, stats_events: [{ t: 0 }] },
+      apmCurve: { window_sec: 30, has_data: true, players: [{ name: "You", samples: [] }] },
+    };
+
+    test.each(["legacy inline", "detail store"])("serves %s analytics using the game's owner", async (location) => {
+      const row = { gameId: "g", myRace: "Protoss", macroScore: 74, durationSec: 548 };
+      if (location === "legacy inline") Object.assign(row, stored);
+      const findOne = jest.fn(async ({ userId, gameId }) => (
+        userId === "owner" && gameId === "g" ? row : null
+      ));
+      const detailRead = jest.fn().mockResolvedValue(location === "detail store" ? stored : null);
+      const service = new PerGameComputeService({ games: { findOne } }, { gameDetails: { findOne: detailRead } });
+
+      expect(await service.buildOrder("owner", "g")).toMatchObject({
+        my_status: "ok", opp_status: "ok", events: [{ name: "Nexus" }, { name: "Pylon" }],
+      });
+      expect(await service.macroBreakdown("owner", "g")).toMatchObject({ ok: true, macro_score: 74, ...stored.macroBreakdown });
+      expect(await service.apmCurve("owner", "g")).toMatchObject({ ok: true, ...stored.apmCurve });
+      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({ fields: ["buildLog", "oppBuildLog"] }));
+      detailRead.mockClear();
+      expect(await service.buildOrder("other", "g")).toBeNull();
+      expect(await service.macroBreakdown("other", "g")).toBeNull();
+      expect(await service.apmCurve("other", "g")).toBeNull();
+      expect(detailRead).not.toHaveBeenCalled();
+    });
+
+    test("authoritative details replace empty or stale inline fields with a per-field legacy fallback", async () => {
+      const service = new PerGameComputeService({ games: { findOne: async () => ({
+        gameId: "g", buildLog: [], oppBuildLog: ["[0:00] Hatchery"],
+        macroBreakdown: null, apmCurve: { has_data: false },
+      }) } }, { gameDetails: { findOne: async () => ({
+        buildLog: stored.buildLog, macroBreakdown: stored.macroBreakdown, apmCurve: stored.apmCurve,
+      }) } });
+      expect(await service.buildOrder("u", "g")).toMatchObject({ my_status: "ok", opp_status: "ok" });
+      expect(await service.macroBreakdown("u", "g")).toMatchObject({ ok: true, ...stored.macroBreakdown });
+      expect(await service.apmCurve("u", "g")).toMatchObject({ ok: true, ...stored.apmCurve });
+    });
+
+    test.each(["buildOrder", "macroBreakdown", "apmCurve"])("%s reports read failure instead of absent analytics", async (method) => {
+      const cause = Object.assign(new Error("storage access denied"), { statusCode: 403 });
+      const service = new PerGameComputeService({ games: { findOne: async () => ({ gameId: "g" }) } }, {
+        gameDetails: { findOne: async () => { throw cause; } },
+      });
+      await expect(service[method]("u", "g")).rejects.toMatchObject({
+        status: 503, code: "game_details_unavailable", cause,
+      });
+    });
+
+    test("a genuine absence keeps the not-computed response", async () => {
+      const service = new PerGameComputeService({ games: { findOne: async () => ({ gameId: "g", macroScore: 74 }) } }, {
+        gameDetails: { findOne: async () => null },
+      });
+      expect(await service.buildOrder("u", "g")).toMatchObject({ my_status: "not_extracted", opp_status: "not_extracted", events: [] });
+      expect(await service.macroBreakdown("u", "g")).toEqual({ ok: false, code: "not_computed" });
+    });
+  });
+
   describe("parseBuildLogLines", () => {
     test("returns [] for non-array input", () => {
       expect(parseBuildLogLines(null)).toEqual([]);

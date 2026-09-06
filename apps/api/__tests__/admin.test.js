@@ -28,10 +28,13 @@
 const request = require("supertest");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const pino = require("pino");
+const { gzipSync } = require("zlib");
+const { Readable } = require("stream");
 
 const { connect } = require("../src/db/connect");
 const { buildApp } = require("../src/app");
 const { PulseMmrService } = require("../src/services/pulseMmr");
+const { R2DetailsStore } = require("../src/services/gameDetailsStore");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -468,6 +471,80 @@ describe("/v1/admin", () => {
     );
     expect(macro.status).toBe(404);
     expect(macro.body.error.code).toBe("macro_not_computed");
+  });
+
+  test.each(["inline", "mongo", "r2", "r2-legacy"])("admin reads another player's %s details without mistaking them for an empty replay", async (storage) => {
+    const owner = "another-player";
+    const gameId = "2025-11-25T12:33:25|Opponent|Tourmaline LE|548";
+    const details = {
+      buildLog: ["[0:00] CommandCenter", "[0:17] SupplyDepot"],
+      oppBuildLog: ["[0:00] CommandCenter", "[0:45] Barracks"],
+      macroBreakdown: { raw: { sq: 74 }, stats_events: [{ t: 30, minerals: 100 }] },
+    };
+    await db.games.insertOne({
+      userId: owner, gameId, myRace: "Terran", macroScore: 74, durationSec: 548,
+      ...(storage === "inline" ? details : {}),
+    });
+    const originalStore = services.gameDetails.store;
+    try {
+      if (storage === "mongo" || storage === "r2-legacy") {
+        await services.gameDetails.upsert(owner, gameId, new Date(), details);
+      }
+      if (storage === "r2" || storage === "r2-legacy") {
+        services.gameDetails.store = new R2DetailsStore({
+          client: { send: async (command) => {
+            expect(command.constructor.name).toBe("GetObjectCommand");
+            expect(command.input.Key).toBe(`details/${owner}/${encodeURIComponent(gameId)}.json.gz`);
+            if (storage === "r2-legacy") throw Object.assign(new Error("NoSuchKey"), { name: "NoSuchKey" });
+            return { Body: Readable.from([gzipSync(JSON.stringify(details))]), ETag: '"test"' };
+          } },
+          bucket: "test-bucket", prefix: "details", gameDetailsCollection: db.gameDetails,
+        });
+      }
+      const base = `/v1/admin/users/${owner}/games/${encodeURIComponent(gameId)}`;
+      const build = await asAdmin(request(app).get(`${base}/build-order`));
+      expect(build.status).toBe(200);
+      expect(build.body).toMatchObject({ my_status: "ok", opp_status: "ok" });
+      expect(build.body.events).toHaveLength(2);
+      const macro = await asAdmin(request(app).get(`${base}/macro-breakdown`));
+      expect(macro.status).toBe(200);
+      expect(macro.body).toMatchObject({ ok: true, macro_score: 74, ...details.macroBreakdown });
+
+      // Admin authorization does not change which player's record is loaded.
+      const wrongOwner = await asAdmin(request(app).get(
+        `/v1/admin/users/${adminUserId}/games/${encodeURIComponent(gameId)}/build-order`,
+      ));
+      expect(wrongOwner.status).toBe(404);
+      expect(wrongOwner.body.error.code).toBe("game_not_found");
+    } finally {
+      services.gameDetails.store = originalStore;
+    }
+  });
+
+  test.each([
+    ["access denied", { name: "AccessDenied", $metadata: { httpStatusCode: 403 } }],
+    ["missing bucket name", { name: "NoSuchBucket", $metadata: { httpStatusCode: 404 } }],
+    ["missing bucket code", { Code: "NoSuchBucket", $metadata: { httpStatusCode: 404 } }],
+  ])("admin detail storage failures (%s) return a retryable error, not missing build/macro states", async (_reason, providerError) => {
+    const gameId = "storage-failure";
+    await db.games.insertOne({ userId: adminUserId, gameId, macroScore: 74 });
+    const originalStore = services.gameDetails.store;
+    services.gameDetails.store = new R2DetailsStore({
+      client: { send: async () => { throw Object.assign(new Error("private provider diagnostic"), providerError); } },
+      bucket: "test-bucket", gameDetailsCollection: db.gameDetails,
+    });
+    try {
+      for (const panel of ["build-order", "macro-breakdown", "apm-curve"]) {
+        const res = await asAdmin(request(app).get(
+          `/v1/admin/users/${adminUserId}/games/${gameId}/${panel}`,
+        ));
+        expect(res.status).toBe(503);
+        expect(res.body.error).toMatchObject({ code: "game_details_unavailable", message: "internal_error" });
+        expect(JSON.stringify(res.body)).not.toContain("private provider diagnostic");
+      }
+    } finally {
+      services.gameDetails.store = originalStore;
+    }
   });
 
   test("rebuild-opponents drops + re-derives from games (counter fix)", async () => {
