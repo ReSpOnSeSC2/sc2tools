@@ -48,6 +48,11 @@ const VERSION_KEY = "_schemaVersion";
  * @type {Readonly<Record<string, SchemaSpec>>}
  */
 const REGISTRY = Object.freeze({
+  [COLLECTIONS.PLAYER_CHANNELS]: {
+    collection: COLLECTIONS.PLAYER_CHANNELS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.USERS]: {
     collection: COLLECTIONS.USERS,
     currentVersion: 1,

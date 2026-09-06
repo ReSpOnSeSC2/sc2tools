@@ -41,6 +41,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   adminEvents: import('mongodb').Collection,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
+ *   playerChannels: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -110,6 +111,7 @@ async function connect({ uri, dbName }, observability = {}) {
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
+    playerChannels: db.collection(COLLECTIONS.PLAYER_CHANNELS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -214,6 +216,11 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
  * @param {DbContext} ctx
  */
 async function ensureIndexes(ctx) {
+  await ctx.playerChannels.createIndex({ id: 1 }, { unique: true });
+  // Tombstones retain their identities; a refresh can never resurrect removed channels.
+  await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
+  await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });
+  await ctx.playerChannels.createIndex({ removed: 1, displayName: 1, id: 1 });
   await ctx.users.createIndex({ clerkUserId: 1 }, { unique: true });
   // Internal UUIDs remain unique account keys, but public replay links use a
   // separate readable slug so URLs do not disclose those keys. The partial
@@ -556,6 +563,8 @@ async function ensureIndexes(ctx) {
     { unique: true },
   );
   await ctx.pulseCharacterLinks.createIndex({ updatedAt: -1 });
+  await ctx.pulseCharacterLinks.createIndex({ accountId: 1 }, { sparse: true });
+  await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

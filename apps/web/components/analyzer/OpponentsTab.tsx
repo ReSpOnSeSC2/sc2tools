@@ -12,10 +12,9 @@ import {
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApi } from "@/lib/clientApi";
 import { useApiPaginated } from "@/lib/useApiPaginated";
-import {
-  useLocalStoragePositiveInt,
-  useLocalStorageState,
-} from "@/lib/useLocalStorageState";
+import { PlayerChannelLinks, type PlayerChannels } from "./PlayerChannelLinks";
+import { usePlayerChannels } from "./usePlayerChannels";
+import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocalStorageState";
 import { fmtAgo, fmtMmr, pct1, wrColor } from "@/lib/format";
 import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import {
@@ -29,10 +28,7 @@ import { Skeleton, EmptyState } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
-import {
-  useAllNetMmrOpponents,
-  type NetMmrOpponentRow,
-} from "@/lib/netMmrOpponents";
+import { useAllNetMmrOpponents, type NetMmrOpponentRow } from "@/lib/netMmrOpponents";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
 
@@ -215,6 +211,7 @@ export function OpponentsTab({
   );
 
   const mergedNameCount = normalised.length - groups.length;
+  const channelsFor = usePlayerChannels(normalised);
 
   const toggleGroup = (pulseId: string) => {
     setExpandedGroups((prev) => {
@@ -443,6 +440,7 @@ export function OpponentsTab({
                           name={o.revealedName}
                           displayedName={o.name}
                         />
+                        <PlayerChannelLinks channels={channelsFor(o) || o.identities.map(channelsFor).find(Boolean)} playerName={o.revealedName || o.name} compact />
                         {o.groupSize > 1 ? (
                           <AliasChip
                             group={o}
@@ -491,6 +489,7 @@ export function OpponentsTab({
                         <IdentityRow
                           key={identity.pulseId}
                           identity={identity}
+                          channels={channelsFor(identity)}
                           onOpen={onOpen}
                         />
                       ))
@@ -745,9 +744,11 @@ function AliasChip({
  */
 function IdentityRow({
   identity,
+  channels,
   onOpen,
 }: {
   identity: Opp;
+  channels?: PlayerChannels;
   onOpen: (pulseId: string) => void;
 }) {
   return (
@@ -769,6 +770,7 @@ function IdentityRow({
               <span className="italic text-text-dim">unnamed</span>
             )}
           </span>
+          <PlayerChannelLinks channels={channels} playerName={identity.revealedName || identity.name} compact />
         </span>
       </td>
       <PulseIdCell opp={identity} />

@@ -105,6 +105,8 @@ const { AdminEventsService } = require("./services/adminEvents");
 const { AnalyticsService } = require("./services/analytics");
 const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
+const { PlayerChannelsService } = require("./services/playerChannels");
+const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -342,6 +344,7 @@ function makeServices(deps) {
     new PulseCharacterLinkService(deps.db.pulseCharacterLinks, {
       logger: deps.logger,
     });
+  const playerChannels = new PlayerChannelsService(deps.db, { pulseLinks });
   // League-percentile benchmark tables — nightly aggregate over slim
   // game rows (jobs/leaguePercentilesRecomputeJob), served by
   // routes/benchmarks.js for the Macro tab's percentile framing.
@@ -414,6 +417,7 @@ function makeServices(deps) {
   const directGameVods = new GameVodsService({
     users,
     pulseIntel,
+    playerChannels,
     platformIntegrations,
     log: deps.logger,
   });
@@ -696,6 +700,7 @@ function makeServices(deps) {
     publicProfile,
     chatbot,
     pulseDirectory,
+    playerChannels,
   };
 }
 
@@ -963,6 +968,10 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     if (clerkUserId) adminIds.add(clerkUserId);
   };
   // Coaching Locker — quiet, role-gated; see routes/coaching.js.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildPlayerChannelsRouter({ playerChannels: services.playerChannels, auth, isAdmin }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildCoachingRouter({

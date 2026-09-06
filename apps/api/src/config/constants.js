@@ -89,6 +89,7 @@ const COLLECTIONS = Object.freeze({
   // userId — the linkage is public SC2Pulse data, fetched once and
   // shared by everyone. See ``services/pulseCharacterLinks.js``.
   PULSE_CHARACTER_LINKS: "pulse_character_links",
+  PLAYER_CHANNELS: "player_channels",
 });
 
 const LIMITS = Object.freeze({

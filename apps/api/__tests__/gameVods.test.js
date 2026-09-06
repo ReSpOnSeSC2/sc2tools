@@ -457,6 +457,93 @@ describe("official YouTube game VOD client", () => {
 });
 
 describe("GameVodsService", () => {
+  test("matches approved non-pro directory channels to broadcasts and never returns a channel-page fallback", async () => {
+    const playerChannels = {
+      resolve: jest.fn(async (players) => ({ players: players.map((identity) => ({ ...identity, id: "directory-player", displayName: "Creator", channels: { twitch: "https://www.twitch.tv/creator", youtube: "https://www.youtube.com/channel/UC9OluGthYmZo0vsF9IjicFg" } })) })),
+    };
+    const pulseIntel = { getIntel: jest.fn() };
+    const fetchImpl = jest.fn(async (url) => {
+      if (String(url).includes("gql.twitch.tv")) return jsonResponse(twitchPayload());
+      if (String(url).endsWith("/streams")) return htmlResponse('{"externalId":"UC9OluGthYmZo0vsF9IjicFg","videoId":"AbCdEf12345"}');
+      return htmlResponse(youtubeWatchPage());
+    });
+    const service = new GameVodsService({ users: { getPreferences: async () => ({}) }, playerChannels, pulseIntel, fetchImpl });
+    const opponent = { toonHandle: "1-S2-1-12345", displayName: "Creator" };
+    const result = await service.resolveForGames("viewer", [
+      { gameId: "during", startedAt: "2026-08-10T19:00:00.000Z", opponent },
+      { gameId: "outside", startedAt: "2026-08-10T21:00:00.000Z", opponent },
+    ], { includeOpponent: true });
+    expect(playerChannels.resolve).toHaveBeenCalledWith([{ toonHandle: "1-S2-1-12345" }]);
+    expect(pulseIntel.getIntel).not.toHaveBeenCalled();
+    expect(result.linksByGameId.during).toEqual([
+      expect.objectContaining({ perspective: "opponent", platform: "twitch", url: "https://www.twitch.tv/videos/1234567890?t=1h0m0s", offsetSec: 3600 }),
+      expect.objectContaining({ perspective: "opponent", platform: "youtube", url: "https://www.youtube.com/watch?v=AbCdEf12345&t=1800s", offsetSec: 1800 }),
+    ]);
+    expect(result.linksByGameId.outside).toEqual([]);
+    expect(result).not.toHaveProperty("channelsByGameId");
+  });
+
+  test("ReSpOnSe's approved toon works as the owner and as another user's opponent", async () => {
+    const getPreferences = jest.fn(async () => ({}));
+    const playerChannels = { resolve: jest.fn(async (players) => ({ players: players.map((identity) => ({ ...identity, id: "response", displayName: "ReSpOnSe", channels: { twitch: "https://www.twitch.tv/response" } })) })) };
+    const fetchImpl = jest.fn(async () => jsonResponse(twitchPayload()));
+    const service = new GameVodsService({ users: { getPreferences }, playerChannels, fetchImpl });
+    const own = await service.resolveForGames("response-owner", [{ gameId: "mine", startedAt: "2026-08-10T18:05:00.000Z", myToonHandle: "1-S2-1-267727" }]);
+    const other = await service.resolveForGames("different-viewer", [{ gameId: "opponent", startedAt: "2026-08-10T18:05:00.000Z", opponent: { toonHandle: "1-S2-1-267727" } }], { includeOpponent: true });
+    expect(own.linksByGameId.mine[0]).toMatchObject({ perspective: "me", playerName: "ReSpOnSe", offsetSec: 300 });
+    expect(other.linksByGameId.opponent[0]).toMatchObject({ perspective: "opponent", playerName: "ReSpOnSe", offsetSec: 300 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(getPreferences.mock.calls).toEqual([["response-owner", "multichat"], ["different-viewer", "multichat"]]);
+  });
+
+  test.each(["removed", "missing", "unavailable"])("directory %s preserves the appropriate Pulse fallback", async (mode) => {
+    const playerChannels = { resolve: jest.fn(async (players) => {
+      if (mode === "unavailable") throw new Error("directory unavailable");
+      return { players: players.map((identity) => ({ ...identity, ...(mode === "removed" ? { id: "removed-entry" } : {}), channels: {} })) };
+    }) };
+    const pulseIntel = { getIntel: jest.fn(async () => ({ pro: { nickname: "Pro", links: { twitch: "https://www.twitch.tv/proplayer" } } })) };
+    const fetchImpl = jest.fn(async () => jsonResponse(twitchPayload()));
+    const service = new GameVodsService({ users: { getPreferences: async () => ({}) }, playerChannels, pulseIntel, fetchImpl });
+    const result = await service.resolveForGames("viewer", [{ gameId: "game", startedAt: "2026-08-10T19:00:00.000Z", opponent: { pulseCharacterId: "42" } }], { includeOpponent: true });
+    expect(pulseIntel.getIntel).toHaveBeenCalledTimes(mode === "removed" ? 0 : 1);
+    expect(result.linksByGameId.game).toHaveLength(mode === "removed" ? 0 : 1);
+  });
+
+  test("explicit private own-channel preferences retain priority over directory discovery", async () => {
+    const playerChannels = { resolve: async (players) => ({ players: players.map((identity) => ({ ...identity, id: "own-entry", channels: { twitch: "https://www.twitch.tv/directorychannel" } })) }) };
+    const fetchImpl = jest.fn(async () => jsonResponse(twitchPayload()));
+    const service = new GameVodsService({ users: { getPreferences: async () => ({ twitch: { channel: "privatechoice" } }) }, playerChannels, fetchImpl });
+    const result = await service.resolveForGames("owner", [{ gameId: "game", startedAt: "2026-08-10T19:00:00.000Z", myToonHandle: "1-S2-1-267727" }]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1].body).toContain("privatechoice");
+    expect(fetchImpl.mock.calls[0][1].body).not.toContain("directorychannel");
+    expect(result.linksByGameId.game).toHaveLength(1);
+  });
+
+  test("directory discovery is bounded and ignores games with no usable start time", async () => {
+    const playerChannels = { resolve: jest.fn(async (players) => ({ players: players.map((identity, index) => ({ ...identity, id: String(index + 1), channels: { twitch: `https://www.twitch.tv/creator${index}` } })) })) };
+    const fetchImpl = jest.fn(async () => jsonResponse(twitchPayload()));
+    const service = new GameVodsService({ users: { getPreferences: async () => ({}) }, playerChannels, fetchImpl });
+    const games = Array.from({ length: 50 }, (_, index) => ({ gameId: String(index), startedAt: "2026-08-10T19:00:00.000Z", myToonHandle: `1-S2-1-${100 + index}`, opponent: { toonHandle: `2-S2-1-${100 + index}` } }));
+    await service.resolveForGames("viewer", games, { includeOpponent: true });
+    expect(playerChannels.resolve).toHaveBeenCalledTimes(1);
+    expect(playerChannels.resolve.mock.calls[0][0]).toHaveLength(16);
+    expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(16);
+    playerChannels.resolve.mockClear();
+    await service.resolveForGames("viewer", [{ gameId: "untimed", myToonHandle: "1-S2-1-267727" }], { includeOpponent: true });
+    expect(playerChannels.resolve).not.toHaveBeenCalled();
+  });
+
+  test("opponent channel discovery stays opt-in", async () => {
+    const playerChannels = { resolve: jest.fn() };
+    const fetchImpl = jest.fn();
+    const service = new GameVodsService({ users: { getPreferences: async () => ({}) }, playerChannels, fetchImpl });
+    const result = await service.resolveForGames("viewer", [{ gameId: "game", startedAt: "2026-08-10T19:00:00.000Z", opponent: { toonHandle: "1-S2-1-267727" } }]);
+    expect(playerChannels.resolve).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result.linksByGameId.game).toEqual([]);
+  });
+
   test("uses verified official YouTube archives with the exact game timestamp", async () => {
     const resolveYoutubeGameVods = jest.fn(async () => ({
       channelId: "UC9OluGthYmZo0vsF9IjicFg",

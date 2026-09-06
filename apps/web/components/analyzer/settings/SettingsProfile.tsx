@@ -21,6 +21,7 @@ import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
+import { SettingsPlayerChannels } from "./SettingsPlayerChannels";
 
 type ProfileRead = {
   battleTag?: string;
@@ -103,6 +104,7 @@ export function SettingsProfile() {
   const { data, isLoading, mutate } = useApi<ProfileRead>("/v1/me/profile");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [channelsDirty, setChannelsDirty] = useState(false);
 
   const serverDraft = useMemo(() => toDraft(data), [data]);
   const { draft, setDraft, dirty, reset, markSaved } = useDirtyForm<Draft>(
@@ -110,7 +112,7 @@ export function SettingsProfile() {
     DEFAULT_DRAFT,
   );
 
-  usePublishDirty("profile", dirty);
+  usePublishDirty("profile", dirty || channelsDirty);
 
   // Auto-fill BattleTag from SC2Pulse: when the field is empty but the
   // user has Pulse IDs, ask the API to resolve the owning account's
@@ -329,6 +331,12 @@ export function SettingsProfile() {
           />
         </Card>
       </Section>
+
+      <SettingsPlayerChannels
+        savedPulseIds={data?.pulseIds ?? []}
+        profileDirty={dirty}
+        onDirtyChange={setChannelsDirty}
+      />
 
       <SaveBar
         visible={dirty}

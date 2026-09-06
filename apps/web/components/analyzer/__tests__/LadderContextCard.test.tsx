@@ -79,7 +79,7 @@ describe("LadderContextCard", () => {
     expect(screen.getByText("Ladder context")).toBeTruthy();
   });
 
-  it("renders league, percentile, record, peak, pro identity and links", () => {
+  it("renders ladder context and pro identity without duplicating profile header channels", () => {
     useApiMock.mockReturnValue({ data: { intel: INTEL }, isLoading: false });
     render(<LadderContextCard pulseId="1-S2-1-1" />);
 
@@ -91,8 +91,7 @@ describe("LadderContextCard", () => {
     expect(screen.getByText(/Also plays as/)).toBeTruthy();
     expect(screen.getByText(/Smurf#456 \(US\)/)).toBeTruthy();
 
-    const twitch = screen.getByRole("link", { name: /Twitch/i });
-    expect(twitch.getAttribute("href")).toBe("https://twitch.tv/foe");
+    expect(screen.queryByRole("link", { name: /Twitch|YouTube/i })).toBeNull();
     const pulse = screen.getByRole("link", { name: /Full profile on SC2Pulse/i });
     expect(pulse.getAttribute("href")).toContain("id=111");
 

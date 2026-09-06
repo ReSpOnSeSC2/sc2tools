@@ -64,6 +64,12 @@ const NAV: ReadonlyArray<NavItem> = [
     icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 0c2.5 2.5 2.5 15.5 0 18m0-18C9.5 5.5 9.5 18.5 12 21M3.5 9h17M3.5 15h17",
   },
   {
+    href: "/admin/player-channels",
+    label: "Player channels",
+    description: "Shared Twitch and YouTube directory",
+    icon: "M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2m3 6a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2",
+  },
+  {
     href: "/admin/analytics",
     label: "Analytics",
     description: "Google Analytics traffic",

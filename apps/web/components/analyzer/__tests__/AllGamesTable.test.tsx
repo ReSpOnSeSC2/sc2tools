@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -53,6 +54,18 @@ afterEach(() => {
 });
 
 describe("AllGamesTable game analysis entry point", () => {
+  it("keeps directory-only channel links out of desktop and mobile game rows", async () => {
+    apiCallMock.mockResolvedValue({ configuredPlatforms: [], linksByGameId: {}, channelsByGameId: {
+      "game/42": [{ perspective: "opponent", playerName: "Harstem", channels: { youtube: "https://www.youtube.com/@Harstem" } }],
+    } });
+    await act(async () => {
+      render(<AllGamesTable games={[{ id: "game/42", date: "2026-07-10T12:00:00.000Z" }]} />);
+    });
+    expect(apiCallMock).toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: "Visit Harstem's YouTube channel" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "POV streams" })).toBeNull();
+    expect(screen.queryByLabelText("Game streams")).toBeNull();
+  });
   it("labels the destination and keeps its link separate from row expansion", () => {
     useApiMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
     const { container } = render(

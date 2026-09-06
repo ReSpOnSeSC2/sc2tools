@@ -67,6 +67,8 @@ const PURGE_ONLY_COLLECTIONS = [
   ["platformConnections", "userId"],
   ["platformOauthStates", "userId"],
   ["platformEvents", "userId"],
+  // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
+  ["playerChannels", "ownerUserId"],
 ];
 
 class GdprService {
@@ -182,6 +184,12 @@ class GdprService {
       { userId },
       { projection: { _id: 0 } },
     );
+    if (this.db.playerChannels) {
+      data.playerChannels = await this.db.playerChannels.find(
+        { ownerUserId: userId },
+        { projection: { _id: 0, updatedBy: 0 } },
+      ).toArray();
+    }
     return {
       userId,
       exportedAt: new Date().toISOString(),

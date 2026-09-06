@@ -62,6 +62,7 @@ const NOOP_LOGGER = {
  *   accountId: string | null,
  *   proId: string | null,
  *   proNickname: string | null,
+ *   toonHandle?: string | null,
  * }} CharacterLink
  */
 
@@ -119,10 +120,11 @@ class PulseCharacterLinkService {
    *
    * Never throws.
    *
-   * @param {Array<string|number>} characterIds
+ * @param {Array<string|number>} characterIds
+   * @param {{includeIdentity?:boolean}} [opts]
    * @returns {Promise<{ links: Map<string, CharacterLink>, partial: boolean }>}
    */
-  async getLinks(characterIds) {
+  async getLinks(characterIds, opts = {}) {
     /** @type {Map<string, CharacterLink>} */
     const links = new Map();
     const ids = sanitizeIds(characterIds);
@@ -133,7 +135,7 @@ class PulseCharacterLinkService {
     const needFetch = [];
     for (const id of ids) {
       const doc = cachedById.get(id);
-      if (doc && this._isFresh(doc)) {
+      if (doc && this._isFresh(doc) && (!opts.includeIdentity || doc.toonHandle || !doc.accountId)) {
         appendLink(links, doc);
       } else {
         needFetch.push(id);
@@ -188,6 +190,7 @@ class PulseCharacterLinkService {
             accountId: 1,
             proId: 1,
             proNickname: 1,
+            toonHandle: 1,
             fetchedAt: 1,
           },
         },
@@ -229,6 +232,7 @@ class PulseCharacterLinkService {
         accountId: entry ? entry.accountId : null,
         proId: entry ? entry.proId : null,
         proNickname: entry ? entry.proNickname : null,
+        toonHandle: entry?.toonHandle || null,
         fetchedAt: writeAt,
       };
       docs.push(doc);
@@ -244,6 +248,7 @@ class PulseCharacterLinkService {
               accountId: doc.accountId,
               proId: doc.proId,
               proNickname: doc.proNickname,
+              toonHandle: doc.toonHandle,
               fetchedAt: writeAt,
               updatedAt: writeAt,
             },
@@ -339,7 +344,10 @@ class PulseCharacterLinkService {
         typeof members.proNickname === "string" && members.proNickname
           ? members.proNickname
           : null;
-      out.set(id, { accountId, proId, proNickname });
+      const region = /** @type {Record<string,string>} */ ({ US: "1", NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" })[String(ch.region).toUpperCase()];
+      const toonHandle = region && /^\d+$/.test(String(ch.realm)) && /^\d+$/.test(String(ch.battlenetId))
+        ? `${region}-S2-${ch.realm}-${ch.battlenetId}` : null;
+      out.set(id, { accountId, proId, proNickname, toonHandle });
     }
     return out;
   }

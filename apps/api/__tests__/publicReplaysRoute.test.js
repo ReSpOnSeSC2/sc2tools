@@ -65,6 +65,23 @@ const testErrorHandler = (err, _req, res, _next) => {
 };
 
 describe("public replay archive routes", () => {
+  test("does not add generic channel buttons to replays without a matching recording", async () => {
+    const deps = makeDeps();
+    deps.replayLibrary.list.mockResolvedValue({
+      items: [{ gameId: "g1" }], sourceGames: [{ gameId: "g1", myToonHandle: "server-only" }], hasMore: false, nextCursor: null,
+    });
+    deps.gameVods.resolveForGames.mockResolvedValue({
+      linksByGameId: {}, channelsByGameId: { g1: [{
+        perspective: "opponent", playerName: "Harstem", userId: "secret", identities: ["secret"],
+        channels: { youtube: "https://www.youtube.com/@Harstem", twitch: "javascript:alert(1)", accessToken: "secret" },
+      }] },
+    });
+    const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1").expect(200);
+    expect(response.body.items[0]).not.toHaveProperty("playerChannels");
+    expect(response.body.items[0].streams).toEqual([]);
+    expect(JSON.stringify(response.body)).not.toMatch(/secret|server-only|identities|userId/);
+  });
+
   test("private, unknown and malformed handles share one neutral 404", async () => {
     const deps = makeDeps();
     deps.users.resolveReplaySharing.mockResolvedValue(null);

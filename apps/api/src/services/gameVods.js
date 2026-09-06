@@ -3,10 +3,10 @@
 /**
  * Timestamped Twitch / YouTube archives for replay games.
  *
- * The signed-in user's channels come only from their private multichat
- * preferences. Opponent channels, when requested, come only from SC2Pulse's
- * public pro-player links. The service never attempts to read another
- * SC2Tools user's preferences.
+ * Channel discovery combines the signed-in user's private multichat
+ * preferences, reviewed shared player channels, and SC2Pulse public pro-player
+ * links. Only broadcasts containing the game's start time become replay links.
+ * The service never reads another SC2Tools user's private preferences.
  *
  * Provider results are cached per channel and identical in-flight lookups are
  * shared. Every upstream failure degrades to an empty (or stale) archive list,
@@ -15,6 +15,7 @@
 
 const { TWITCH_WEB_CLIENT_ID } = require("./multichatViewers");
 const { normalizeYoutubeInput } = require("./youtubeLiveChat");
+const { normalizeIdentity } = require("./playerChannels");
 
 const TWITCH_GQL_URL = "https://gql.twitch.tv/gql";
 const TWITCH_ARCHIVES_QUERY =
@@ -26,6 +27,8 @@ const FETCH_TIMEOUT_MS = 12_000;
 const MAX_CACHE_ENTRIES = 500;
 const MAX_GAMES = 2_000;
 const MAX_OPPONENT_IDENTITIES = 12;
+const MAX_OWN_DIRECTORY_IDENTITIES = 4;
+const MAX_DIRECTORY_CHANNELS = 16;
 const MAX_OPPONENT_YOUTUBE_CHANNELS = 4;
 const MAX_YOUTUBE_VIDEOS = 30;
 const YOUTUBE_CHANNEL_BUDGET_MS = 20_000;
@@ -84,6 +87,7 @@ class GameVodsService {
    * @param {{
    *   users: {getPreferences: (userId: string, type: string) => Promise<Record<string, any>>},
    *   pulseIntel?: {getIntel: (pulseCharacterId: string|number) => Promise<object|null>} | null,
+   *   playerChannels?: {resolve: (players:any[]) => Promise<{players:any[]}>} | null,
    *   platformIntegrations?: {
    *     getYoutubeConnectionRevision?: (userId:string) => Promise<string>,
    *     resolveYoutubeGameVods: (
@@ -107,6 +111,7 @@ class GameVodsService {
     }
     this.users = opts.users;
     this.pulseIntel = opts.pulseIntel || null;
+    this.playerChannels = opts.playerChannels || null;
     this.platformIntegrations = opts.platformIntegrations || null;
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.log = opts.log || null;
@@ -162,8 +167,11 @@ class GameVodsService {
       normalizedGames.map((game) => [game.gameId, ownSources(ownChannels)]),
     );
 
+    const directoryOpponents = this.playerChannels
+      ? await this._addDirectorySources(normalizedGames, sourcesByGame, opts.includeOpponent === true)
+      : new Set();
     if (opts.includeOpponent === true && this.pulseIntel) {
-      await this._addOpponentSources(normalizedGames, sourcesByGame);
+      await this._addOpponentSources(normalizedGames, sourcesByGame, directoryOpponents);
     }
 
     /** @type {Map<string, ProviderChannel>} */
@@ -241,15 +249,75 @@ class GameVodsService {
     return { configuredPlatforms, linksByGameId };
   }
 
+  /** Shared channel URLs are discovery inputs only; they never enter the replay result.
+   * @param {Array<{gameId:string,raw:Record<string,any>,startMs:number|null}>} games
+   * @param {Map<string,Array<{channel:ProviderChannel,perspective:VodPerspective,playerName:string}>>} sourcesByGame
+   * @param {boolean} includeOpponent
+   * @returns {Promise<Set<string>>} Opponents with an authoritative directory entry.
+   */
+  async _addDirectorySources(games, sourcesByGame, includeOpponent) {
+    /** @type {Map<string,any>} */ const identities = new Map();
+    /** @type {Array<{gameId:string,key:string,perspective:VodPerspective}>} */ const participants = [];
+    const own = new Set();
+    const opponents = new Set();
+    for (const game of games) {
+      if (game.startMs === null) continue;
+      const perspectives = /** @type {VodPerspective[]} */ (includeOpponent ? ["me", "opponent"] : ["me"]);
+      for (const perspective of perspectives) {
+        const identity = gameDirectoryIdentity(game.raw, perspective);
+        if (!identity) continue;
+        const key = JSON.stringify(identity);
+        const seen = perspective === "me" ? own : opponents;
+        const limit = perspective === "me" ? MAX_OWN_DIRECTORY_IDENTITIES : MAX_OPPONENT_IDENTITIES;
+        if (!seen.has(key) && seen.size >= limit) continue;
+        seen.add(key);
+        identities.set(key, identity);
+        participants.push({ gameId: game.gameId, key, perspective });
+      }
+    }
+    const authoritative = new Set();
+    if (!identities.size) return authoritative;
+    let resolved;
+    try { resolved = await this.playerChannels?.resolve([...identities.values()]); } catch (err) {
+      this._warn(err, "player_directory");
+      return authoritative;
+    }
+    const resolvedPlayers = Array.isArray(resolved?.players) ? resolved.players : [];
+    const rows = new Map(resolvedPlayers.map((entry) => [JSON.stringify(gameDirectoryResultIdentity(entry)), entry]));
+    const channels = new Set();
+    const opponentYoutube = new Set();
+    for (const participant of participants) {
+      const row = rows.get(participant.key);
+      if (!row || typeof row.id !== "string" || !row.id) continue;
+      if (participant.perspective === "opponent") authoritative.add(participant.gameId);
+      const sources = sourcesByGame.get(participant.gameId);
+      if (!sources) continue;
+      for (const channel of publicProLinks(row.channels)) {
+        // A user's explicit private provider configuration retains precedence.
+        if (participant.perspective === "me" && sources.some((source) => source.perspective === "me" && source.channel.platform === channel.platform)) continue;
+        const key = providerKey(channel);
+        if (!channels.has(key) && channels.size >= MAX_DIRECTORY_CHANNELS) continue;
+        if (participant.perspective === "opponent" && channel.platform === "youtube") {
+          if (!opponentYoutube.has(key) && opponentYoutube.size >= MAX_OPPONENT_YOUTUBE_CHANNELS) continue;
+          opponentYoutube.add(key);
+        }
+        channels.add(key);
+        addSource(sources, { channel, perspective: participant.perspective, playerName: cleanPlayerName(row.displayName) || (participant.perspective === "me" ? "You" : "Opponent") });
+      }
+    }
+    return authoritative;
+  }
+
   /**
    * @param {Array<{gameId: string, raw: Record<string, any>, startMs: number|null}>} games
    * @param {Map<string, Array<{channel: ProviderChannel, perspective: VodPerspective, playerName: string}>>} sourcesByGame
+   * @param {Set<string>} [directoryOpponents]
    */
-  async _addOpponentSources(games, sourcesByGame) {
+  async _addOpponentSources(games, sourcesByGame, directoryOpponents = new Set()) {
     /** @type {Map<string, Array<{gameId: string, game: Record<string, any>}>>} */
     const byCharacter = new Map();
     for (const game of games) {
-      if (game.startMs === null) continue;
+      if (game.startMs === null || directoryOpponents.has(game.gameId)) continue;
       const characterId = cleanPulseCharacterId(
         game.raw?.opponent?.pulseCharacterId,
       );
@@ -282,7 +350,7 @@ class GameVodsService {
       },
     );
 
-    const opponentYoutubeChannels = new Set();
+    const opponentYoutubeChannels = new Set([...sourcesByGame.values()].flat().filter((source) => source.perspective === "opponent" && source.channel.platform === "youtube").map((source) => providerKey(source.channel)));
     for (const [characterId, rows] of byCharacter.entries()) {
       const intel = intelByCharacter.get(characterId);
       const links = publicProLinks(intel?.pro?.links);
@@ -1131,6 +1199,22 @@ function buildTimestampUrl(platform, videoId, offsetSec) {
     return `https://www.youtube.com/watch?v=${videoId}&t=${seconds}s`;
   }
   return null;
+}
+
+/** @param {Record<string,any>} game @param {VodPerspective} perspective */
+function gameDirectoryIdentity(game, perspective) {
+  const raw = perspective === "me"
+    ? { pulseCharacterId: game.myPulseCharacterId, toonHandle: game.myToonHandle }
+    : {
+      pulseCharacterId: game.opponent?.pulseCharacterId,
+      toonHandle: game.opponent?.toonHandle || (/^\d+-S2-\d+-\d+$/.test(game.opponent?.pulseId || "") ? game.opponent.pulseId : undefined),
+    };
+  return gameDirectoryResultIdentity(raw);
+}
+
+/** @param {any} raw */
+function gameDirectoryResultIdentity(raw) {
+  try { return normalizeIdentity(raw); } catch { return null; }
 }
 
 /** @param {Record<string, any>|null|undefined} prefs @returns {ProviderChannel[]} */

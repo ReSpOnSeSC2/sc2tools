@@ -1,0 +1,552 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-09-06T17:02:00.000Z",
+  "entries": [
+    {
+      "displayName": "Hupsaiya",
+      "proId": "414",
+      "channels": {
+        "twitch": "https://www.twitch.tv/hupsaiya",
+        "youtube": "https://www.youtube.com/channel/UCSASDKRSbOWvYZSkaoRTAiQ"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/414/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=414",
+        "https://www.youtube.com/channel/UCSASDKRSbOWvYZSkaoRTAiQ"
+      ],
+      "pulseCharacterIds": [
+        "108839",
+        "11091331",
+        "1499157",
+        "1541732",
+        "178968",
+        "237671",
+        "2509931",
+        "251524717",
+        "286350",
+        "3873067",
+        "495633"
+      ],
+      "toonHandles": [
+        "1-S2-1-11325096",
+        "1-S2-1-1897951",
+        "1-S2-1-20103950",
+        "1-S2-1-20845154",
+        "1-S2-1-4294590",
+        "1-S2-1-5114442",
+        "2-S2-1-1212753",
+        "2-S2-1-3649398",
+        "2-S2-1-7669907",
+        "3-S2-1-5833226",
+        "3-S2-2-1317584"
+      ]
+    },
+    {
+      "displayName": "MaNa",
+      "proId": "14",
+      "channels": {
+        "twitch": "https://www.twitch.tv/manaesportstv",
+        "youtube": "https://www.youtube.com/channel/UCpYa4jhRPdIS5QqsEedKxsQ"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/14/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=14",
+        "https://www.youtube.com/channel/UCpYa4jhRPdIS5QqsEedKxsQ"
+      ],
+      "pulseCharacterIds": [
+        "1020388",
+        "236399",
+        "340965798",
+        "340992922",
+        "341030996",
+        "341066695",
+        "341079312",
+        "341140342",
+        "468464",
+        "682565",
+        "8090588"
+      ],
+      "toonHandles": [
+        "1-S2-1-3766348",
+        "1-S2-1-4165877",
+        "2-S2-1-10263788",
+        "2-S2-1-10314892",
+        "2-S2-1-10397235",
+        "2-S2-1-10457879",
+        "2-S2-1-10483325",
+        "2-S2-1-10603965",
+        "2-S2-1-1995477",
+        "2-S2-1-377576",
+        "3-S2-2-1086941"
+      ]
+    },
+    {
+      "displayName": "Harstem",
+      "proId": "17",
+      "channels": {
+        "twitch": "https://www.twitch.tv/harstem",
+        "youtube": "https://www.youtube.com/channel/UCCRdB9rqzP2m7bPYb5drH_Q"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/17/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=17",
+        "https://www.youtube.com/channel/UCCRdB9rqzP2m7bPYb5drH_Q"
+      ],
+      "pulseCharacterIds": [
+        "2173608",
+        "236897",
+        "257704418",
+        "285233",
+        "340813729",
+        "677353",
+        "678060"
+      ],
+      "toonHandles": [
+        "1-S2-1-8019680",
+        "1-S2-1-8138623",
+        "1-S2-1-8325342",
+        "2-S2-1-6836532",
+        "2-S2-1-7100931",
+        "2-S2-1-7205799",
+        "3-S2-1-5267397"
+      ]
+    },
+    {
+      "displayName": "PiG",
+      "proId": "183",
+      "channels": {
+        "twitch": "https://www.twitch.tv/x5_pig",
+        "youtube": "https://www.youtube.com/channel/UC9OluGthYmZo0vsF9IjicFg"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/183/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=183",
+        "https://www.youtube.com/channel/UC9OluGthYmZo0vsF9IjicFg"
+      ],
+      "pulseCharacterIds": [
+        "1024969",
+        "107746",
+        "258049539",
+        "340777806",
+        "4195574",
+        "4286498",
+        "746210"
+      ],
+      "toonHandles": [
+        "1-S2-1-12284700",
+        "1-S2-1-2192180",
+        "1-S2-1-8087663",
+        "2-S2-1-3973800",
+        "3-S2-1-4045794",
+        "3-S2-1-5525597",
+        "3-S2-2-1054390"
+      ]
+    },
+    {
+      "displayName": "uThermal",
+      "proId": "38",
+      "channels": {
+        "twitch": "https://www.twitch.tv/uthermalsc2",
+        "youtube": "https://www.youtube.com/channel/UC--TKxqP8xJNymgrLe-thhA"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/38/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=38",
+        "https://www.youtube.com/channel/UC--TKxqP8xJNymgrLe-thhA"
+      ],
+      "pulseCharacterIds": [
+        "108741",
+        "1601549",
+        "1752279",
+        "236423",
+        "2369135",
+        "242368",
+        "242401",
+        "2509015",
+        "2840923",
+        "3104765",
+        "323655511",
+        "340913125",
+        "341001296",
+        "341076075",
+        "341083090",
+        "341189905",
+        "341189941",
+        "341279268",
+        "4286727",
+        "677558"
+      ],
+      "toonHandles": [
+        "1-S2-1-10279208",
+        "1-S2-1-10926827",
+        "1-S2-1-20760142",
+        "1-S2-1-3646588",
+        "1-S2-1-4354376",
+        "1-S2-1-6474658",
+        "1-S2-1-8716428",
+        "1-S2-1-9800431",
+        "1-S2-2-1270518",
+        "1-S2-2-441908",
+        "2-S2-1-1143713",
+        "2-S2-1-4073453",
+        "2-S2-1-5332187",
+        "2-S2-1-6400413",
+        "2-S2-1-6657480",
+        "2-S2-1-6792619",
+        "2-S2-1-7924340",
+        "2-S2-1-843502",
+        "3-S2-1-4194504",
+        "3-S2-1-4814705"
+      ]
+    },
+    {
+      "displayName": "Lambo",
+      "proId": "20",
+      "channels": {
+        "twitch": "https://www.twitch.tv/lamboking",
+        "youtube": "https://www.youtube.com/channel/UCo9wnFnX8sK0eYdX_16HKSw"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/20/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=20",
+        "https://www.youtube.com/channel/UCo9wnFnX8sK0eYdX_16HKSw"
+      ],
+      "pulseCharacterIds": [
+        "1601179",
+        "235621",
+        "2426107",
+        "26312163",
+        "341303397",
+        "677446"
+      ],
+      "toonHandles": [
+        "1-S2-1-3858508",
+        "1-S2-1-6428314",
+        "2-S2-1-10997670",
+        "2-S2-1-3437681",
+        "2-S2-1-5130449",
+        "2-S2-1-7604666"
+      ]
+    },
+    {
+      "displayName": "Lowko",
+      "proId": "535",
+      "channels": {
+        "twitch": "https://www.twitch.tv/lowkotv",
+        "youtube": "https://www.youtube.com/channel/UCZNTsLA6t6bRoj-5QRmqt_w"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/535/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=535",
+        "https://www.youtube.com/channel/UCZNTsLA6t6bRoj-5QRmqt_w"
+      ],
+      "pulseCharacterIds": [
+        "1019327",
+        "235893",
+        "236076",
+        "5734099"
+      ],
+      "toonHandles": [
+        "1-S2-1-4108892",
+        "1-S2-1-6397598",
+        "2-S2-1-227898",
+        "2-S2-1-5548600"
+      ]
+    },
+    {
+      "displayName": "HeroMarine",
+      "proId": "3",
+      "channels": {
+        "twitch": "https://www.twitch.tv/heromarine",
+        "youtube": "https://www.youtube.com/channel/UC7rv1GiWm9RCFK503h2nVaQ"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/3/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=3",
+        "https://www.youtube.com/channel/UC7rv1GiWm9RCFK503h2nVaQ"
+      ],
+      "pulseCharacterIds": [
+        "10200328",
+        "10284209",
+        "11142435",
+        "1255436",
+        "235726",
+        "242354",
+        "2426153",
+        "2475235",
+        "2612252",
+        "2918753",
+        "3001470",
+        "3061190",
+        "3145540",
+        "340896846",
+        "341008854",
+        "3960438",
+        "4014285",
+        "4028611",
+        "4189536",
+        "4286338",
+        "493798",
+        "6177865",
+        "682499",
+        "7519058",
+        "7746746",
+        "8387574",
+        "8968979",
+        "9419137",
+        "9524547"
+      ],
+      "toonHandles": [
+        "1-S2-1-10039195",
+        "1-S2-1-10052802",
+        "1-S2-1-10096328",
+        "1-S2-1-10380612",
+        "1-S2-1-10928248",
+        "1-S2-1-11024450",
+        "1-S2-1-12742704",
+        "1-S2-1-3301472",
+        "1-S2-1-8062667",
+        "1-S2-1-8277594",
+        "2-S2-1-1056928",
+        "2-S2-1-1536034",
+        "2-S2-1-2361139",
+        "2-S2-1-7069585",
+        "2-S2-1-7119549",
+        "2-S2-1-7691432",
+        "2-S2-1-7857116",
+        "2-S2-1-7858011",
+        "2-S2-1-7858057",
+        "2-S2-1-7858163",
+        "2-S2-1-7858301",
+        "2-S2-1-7863863",
+        "2-S2-1-7863993",
+        "2-S2-1-7881463",
+        "2-S2-1-8102419",
+        "2-S2-1-8733050",
+        "3-S2-1-4340639",
+        "3-S2-1-6151023",
+        "3-S2-1-6249372"
+      ]
+    },
+    {
+      "displayName": "Winter",
+      "proId": "517162",
+      "channels": {
+        "twitch": "https://www.twitch.tv/wintergaming",
+        "youtube": "https://www.youtube.com/channel/UCk3w4CQ_SlLH4V0-V6WjFZg"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/517162/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=517162",
+        "https://www.youtube.com/channel/UCk3w4CQ_SlLH4V0-V6WjFZg"
+      ],
+      "pulseCharacterIds": [
+        "105976",
+        "106098",
+        "140605087",
+        "1427168",
+        "1537092",
+        "1538096",
+        "1566960",
+        "1571414",
+        "1576906",
+        "1584709",
+        "1848906",
+        "204",
+        "234410",
+        "236708",
+        "237293",
+        "237302",
+        "2473082",
+        "257693052",
+        "258001867",
+        "340469473",
+        "340786061",
+        "340837946",
+        "340979050",
+        "341016628",
+        "341174176",
+        "3607391",
+        "4030889",
+        "4261419",
+        "4295",
+        "5030519",
+        "648595",
+        "734978",
+        "738123",
+        "81509"
+      ],
+      "toonHandles": [
+        "1-S2-1-10193862",
+        "1-S2-1-1084304",
+        "1-S2-1-12135557",
+        "1-S2-1-12662082",
+        "1-S2-1-20039937",
+        "1-S2-1-20182490",
+        "1-S2-1-20275956",
+        "1-S2-1-20609798",
+        "1-S2-1-20697179",
+        "1-S2-1-20723896",
+        "1-S2-1-3253596",
+        "1-S2-1-5334041",
+        "1-S2-1-6085412",
+        "1-S2-1-6223655",
+        "1-S2-1-7900258",
+        "1-S2-1-9026821",
+        "1-S2-1-9417279",
+        "2-S2-1-10315791",
+        "2-S2-1-3441725",
+        "2-S2-1-3453524",
+        "2-S2-1-4035971",
+        "2-S2-1-5335956",
+        "2-S2-1-5462163",
+        "2-S2-1-6919987",
+        "2-S2-1-8195896",
+        "2-S2-1-9956041",
+        "3-S2-1-4130060",
+        "3-S2-1-4158922",
+        "3-S2-1-4569410",
+        "3-S2-1-4758624",
+        "3-S2-1-4804829",
+        "3-S2-1-5310894",
+        "3-S2-1-6219115",
+        "3-S2-1-7518140"
+      ]
+    },
+    {
+      "displayName": "BerryCruncH",
+      "proId": "488",
+      "channels": {
+        "twitch": "https://www.twitch.tv/berry_crunch",
+        "youtube": "https://www.youtube.com/channel/UCgYV3u-T9I_1iYXG4K-JiHA"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/488/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=488",
+        "https://www.youtube.com/channel/UCgYV3u-T9I_1iYXG4K-JiHA",
+        "https://sc2tools.com/app/opponents/1-S2-1-1010182#h2h=timeline"
+      ],
+      "pulseCharacterIds": [
+        "108485",
+        "108882",
+        "1602259",
+        "2179926",
+        "340733246",
+        "3667162",
+        "4147109",
+        "4892418",
+        "494915",
+        "79679725",
+        "8008339"
+      ],
+      "toonHandles": [
+        "1-S2-1-1010182",
+        "1-S2-1-20087215",
+        "1-S2-1-3375051",
+        "1-S2-1-7802020",
+        "1-S2-1-8205455",
+        "1-S2-1-8837674",
+        "2-S2-1-3753276",
+        "2-S2-1-4449944",
+        "2-S2-1-6858236",
+        "2-S2-1-7588291",
+        "3-S2-2-1153772"
+      ]
+    },
+    {
+      "displayName": "Heaven",
+      "proId": "517339",
+      "channels": {
+        "twitch": "https://www.twitch.tv/heavensc",
+        "youtube": "https://www.youtube.com/channel/UCkWW-NsS78I39fHgdqwi_1w"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/517339/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=517339",
+        "https://www.youtube.com/channel/UCkWW-NsS78I39fHgdqwi_1w",
+        "https://sc2tools.com/app/opponents/1-S2-1-596714"
+      ],
+      "pulseCharacterIds": [
+        "21864",
+        "2500990",
+        "341068351",
+        "4139872"
+      ],
+      "toonHandles": [
+        "1-S2-1-20728767",
+        "1-S2-1-596714",
+        "2-S2-1-4636024",
+        "3-S2-1-4221241"
+      ]
+    },
+    {
+      "displayName": "Calyx",
+      "proId": null,
+      "channels": {
+        "youtube": "https://www.youtube.com/channel/UC6zSZ9cnTrN4vN4oWTGnnYA"
+      },
+      "sources": [
+        "https://www.youtube.com/channel/UC6zSZ9cnTrN4vN4oWTGnnYA",
+        "https://lotv.spawningtool.com/build/199709/",
+        "https://sc2pulse.nephest.com/sc2/api/group/character/full?characterId=340944865,341105584,341284585",
+        "https://sc2tools.com/app/opponents/1-S2-1-12581432#h2h=timeline"
+      ],
+      "pulseCharacterIds": [
+        "340944865",
+        "341105584",
+        "341284585"
+      ],
+      "toonHandles": [
+        "1-S2-1-12581432",
+        "2-S2-1-10537315",
+        "3-S2-1-8496074"
+      ]
+    },
+    {
+      "displayName": "ReSpOnSe",
+      "proId": "361",
+      "channels": {
+        "twitch": "https://www.twitch.tv/responsesc2",
+        "youtube": "https://www.youtube.com/channel/UCZS3YP1mvpqyuU5vPvHVG7g"
+      },
+      "sources": [
+        "https://sc2pulse.nephest.com/sc2/api/revealed/player/361/full",
+        "https://sc2pulse.nephest.com/sc2/api/characters?proPlayerId=361",
+        "https://www.youtube.com/channel/UCZS3YP1mvpqyuU5vPvHVG7g",
+        "https://www.youtube.com/watch?v=t0UVWSxFUoA"
+      ],
+      "pulseCharacterIds": [
+        "8970877",
+        "9034461",
+        "994428"
+      ],
+      "toonHandles": [
+        "1-S2-1-267727",
+        "2-S2-1-8780508",
+        "3-S2-1-6833017"
+      ]
+    },
+    {
+      "displayName": "Cubano",
+      "proId": null,
+      "channels": {
+        "twitch": "https://www.twitch.tv/cubanosc2",
+        "youtube": "https://www.youtube.com/channel/UCvm30CZsbWyFt8CaXBiZvUA"
+      },
+      "sources": [
+        "https://www.twitch.tv/cubanosc2/about",
+        "https://www.youtube.com/channel/UCvm30CZsbWyFt8CaXBiZvUA",
+        "https://sc2pulse.nephest.com/sc2/api/characters?accountId=257696061",
+        "https://sc2pulse.nephest.com/sc2/api/character-matches?toonHandle=1-S2-1-8085636&type=_1V1&limit=100&after=eyJ2IjoxLCJhIjpbIjIwMjYtMDgtMDJUMjM6MjM6MzVaIiwxLDU1MzcyLDFdfQ"
+      ],
+      "pulseCharacterIds": [
+        "257695962",
+        "341338524"
+      ],
+      "toonHandles": [
+        "1-S2-1-8085636",
+        "2-S2-1-11106114"
+      ]
+    }
+  ]
+}

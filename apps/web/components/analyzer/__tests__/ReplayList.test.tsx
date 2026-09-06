@@ -200,6 +200,69 @@ describe("ReplayList", () => {
       expect.objectContaining({ filename: expect.anything() }),
     );
     expect(screen.queryByRole("button", { name: /open macro breakdown/i })).toBeNull();
+    const streamLinks = screen.getAllByRole("link", {
+      name: "Watch Reaver POV on YouTube at 0:37",
+    });
+    expect(streamLinks).toHaveLength(2);
+    expect(streamLinks.map((link) => new URL(link.getAttribute("href")!).searchParams.get("t"))).toEqual(["37s", "37s"]);
+  });
+
+  it.each([true, false])("does not turn channel-only data into desktop or mobile recording buttons (owner=%s)", (owner) => {
+    // Extra legacy payload fields must never become per-game channel buttons.
+    const channelOnlyReplay = {
+      ...REPLAY,
+      streams: [],
+      playerChannels: [
+        {
+          perspective: "me",
+          playerName: "Reaver",
+          channels: {
+            twitch: "https://www.twitch.tv/reaver",
+            youtube: "https://www.youtube.com/@reaver",
+          },
+        },
+        {
+          perspective: "opponent",
+          playerName: "Rival",
+          channels: {
+            twitch: "https://www.twitch.tv/rival",
+            youtube: "https://www.youtube.com/@rival",
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      <ReplayList items={[channelOnlyReplay]} owner={owner} playerName="Reaver" publicHandle="shared" />,
+    );
+
+    expect(screen.getByLabelText("No matching stream recording")).toBeTruthy();
+    expect(screen.queryByLabelText("Game streams")).toBeNull();
+    expect(screen.queryByRole("link", { name: /YouTube|Twitch/i })).toBeNull();
+    expect(container.querySelectorAll('a[href*="youtube.com"], a[href*="twitch.tv"]')).toHaveLength(0);
+  });
+
+  it.each([true, false])("keeps matched Twitch recordings timestamped on desktop and mobile (owner=%s)", (owner) => {
+    const recordedReplay: ReplayLibraryItem = {
+      ...REPLAY,
+      streams: [{
+        platform: "twitch",
+        perspective: "me",
+        playerName: "Reaver",
+        url: "https://www.twitch.tv/videos/987654321",
+        offsetSec: 37,
+      }],
+    };
+    render(<ReplayList items={[recordedReplay]} owner={owner} playerName="Reaver" publicHandle="shared" />);
+
+    const links = screen.getAllByRole("link", {
+      name: owner ? "Watch You POV on Twitch at 0:37 - Reaver" : "Watch Reaver POV on Twitch at 0:37",
+    });
+    expect(links).toHaveLength(2);
+    links.forEach((link) => {
+      const href = new URL(link.getAttribute("href")!);
+      expect(href.pathname).toBe("/videos/987654321");
+      expect(href.searchParams.get("t")).toBe("0h0m37s");
+    });
   });
 
   it("normalizes result casing without mislabeling missing outcomes as draws", () => {

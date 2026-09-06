@@ -17,8 +17,8 @@ import { Card, Skeleton, Stat } from "@/components/ui/Card";
  * SC2Pulse ladder context for one opponent — the screen players used
  * to open in a separate SC2Pulse tab mid-queue: current league/tier,
  * ladder percentile, season record, peak MMR, a 90-day rating
- * sparkline, and (when the character is linked) the pro identity with
- * stream/social links plus known alternate accounts.
+ * sparkline, and (when the character is linked) the pro identity and
+ * known alternate accounts. Player channels live in the profile header.
  *
  * Renders nothing when the opponent's SC2Pulse character id hasn't
  * resolved yet (the backfill cron heals that over time) — the dossier
@@ -156,17 +156,6 @@ export function LadderContextCard({ pulseId }: { pulseId: string }) {
               ) : null}
               {intel.pro.team ? (
                 <span className="text-text-muted">· {intel.pro.team}</span>
-              ) : null}
-              {intel.pro.links.twitch ? (
-                <a
-                  href={intel.pro.links.twitch}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex min-h-[32px] items-center gap-1 text-accent hover:underline"
-                >
-                  Twitch
-                  <ExternalLink className="h-3 w-3" aria-hidden />
-                </a>
               ) : null}
             </div>
           ) : null}

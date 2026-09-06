@@ -45,6 +45,8 @@ import {
   type OpponentNotesValue,
 } from "./OpponentNotesCard";
 import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
+import { PlayerChannelLinks } from "./PlayerChannelLinks";
+import { usePlayerChannels } from "./usePlayerChannels";
 
 type OpponentProfileResp = {
   pulseId?: string;
@@ -200,6 +202,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   );
   const replayHistoryPath =
     `/v1/opponents/${encodeURIComponent(pulseId)}/games${replayHistoryQuery}`;
+  const channelProfileIdentity = {
+    pulseId: data?.pulseId || pulseId,
+    pulseCharacterId: data?.pulseCharacterId,
+    toonHandle: data?.toonHandle,
+  };
+  const channelsFor = usePlayerChannels([channelProfileIdentity]);
 
   if (isLoading) return <Skeleton rows={6} />;
   if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
@@ -231,6 +239,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         }))
         .sort((a, b) => b.total - a.total);
   const opponentName = data.name || data.pulseId || pulseId;
+  const playerChannels = channelsFor(channelProfileIdentity);
   // Avoid the bounded matcher request for readable profiles. Pulse/MMR data
   // enriches an anonymous barcode; only a readable reveal resolves it.
   const identityCandidatesEnabled = hasUnrevealedBarcodeIdentity(data);
@@ -241,10 +250,10 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <header aria-label="Opponent profile" className="flex flex-wrap items-end justify-between gap-4">
+        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-h2 font-semibold">{data.name || "unnamed"}</h1>
+            <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <RevealedChip
               name={data.revealedName}
               displayedName={data.name}
@@ -262,6 +271,14 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             toonHandle={data.toonHandle}
             pulseId={data.pulseId || pulseId}
           />
+          {playerChannels ? (
+            <div className="mt-3 [&_a]:min-h-11">
+              <PlayerChannelLinks
+                channels={playerChannels}
+                playerName={data.revealedName || data.name || data.displayNameSample}
+              />
+            </div>
+          ) : null}
           <MergedIdentitiesLine
             identities={data.mergedIdentities}
             mainName={data.name}
@@ -273,7 +290,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             community profile →
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4">
           <Stat label="Games" value={t.total || 0} />
           <Stat label="W" value={t.wins || 0} color="rgb(var(--success))" />
           <Stat label="L" value={t.losses || 0} color="rgb(var(--danger))" />
@@ -283,7 +300,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             color={wrColor(t.winRate, t.total)}
           />
         </div>
-      </div>
+      </header>
 
       <OpponentNotesCard
         pulseId={pulseId}
