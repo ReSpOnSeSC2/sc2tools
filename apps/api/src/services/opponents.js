@@ -238,6 +238,7 @@ class OpponentsService {
    *   pulseMmr?: any,
    *   pulseDirectory?: import('./pulseDirectory').PulseDirectoryService | null,
    *   pulseLinks?: import('./pulseCharacterLinks').PulseCharacterLinkService | null,
+   *   playerIdentities?: {resolveMany: (identities: any[]) => Promise<any[]>} | null,
    * }} [opts]
    *        When provided, the profile loader hydrates ``buildLog`` /
    *        ``oppBuildLog`` from the detail store for any game whose
@@ -286,6 +287,9 @@ class OpponentsService {
     // timelines as if all their names were one account. Optional:
     // without it merged profiles silently degrade to single-identity.
     this.pulseLinks = opts.pulseLinks || null;
+    // Approved global identity links are a read-time overlay. Stored
+    // opponent names, toon handles, games, and private notes stay intact.
+    this.playerIdentities = opts.playerIdentities || null;
   }
 
   /**
@@ -366,6 +370,7 @@ class OpponentsService {
       this._overlayLatestNameFromGames(userId, page),
       this._overlayLatestSeenFromGames(userId, page),
       this._overlayLatestMmrFromGames(userId, page),
+      this._overlayGlobalIdentities(page),
     ]);
     return { items: page, nextBefore };
   }
@@ -500,7 +505,31 @@ class OpponentsService {
     //     game in the same group carries the field). Same overlay
     //     used by the unfiltered path: zero outbound Pulse traffic.
     await this._overlayLatestMmrFromGames(userId, page);
+    await this._overlayGlobalIdentities(page);
     return { items: page, nextBefore };
+  }
+
+  /**
+   * Attach current admin-approved identities without changing replay
+   * evidence or writing the derived labels back to a user's rows.
+   * @private
+   * @param {Array<any>} rows
+   */
+  async _overlayGlobalIdentities(rows) {
+    for (const row of rows) delete row.globalIdentity;
+    if (!this.playerIdentities || rows.length === 0) return;
+    try {
+      const resolved = await this.playerIdentities.resolveMany(rows.map((row) => ({
+        pulseId: row.pulseId,
+        pulseCharacterId: row.pulseCharacterId,
+        toonHandle: row.toonHandle,
+      })));
+      rows.forEach((row, index) => {
+        if (resolved[index]?.groupKey) row.globalIdentity = resolved[index];
+      });
+    } catch (err) {
+      this.logger.warn({ err }, "opponents_global_identity_overlay_failed");
+    }
   }
 
   /**
@@ -984,15 +1013,15 @@ class OpponentsService {
   }
 
   /**
-   * Resolve the SC2Pulse-linked identity group the given opponent row
+   * Resolve the approved or SC2Pulse-linked group the given opponent row
    * belongs to, scoped to THIS user's opponents. Two rows are the same
    * player when SC2Pulse maps their character ids to the same
    * community-verified player (``proId``, which spans accounts) or,
    * failing that, the same Battle.net account (``accountId``).
    *
    * Returns ``null`` — meaning "profile stays single-identity" — when
-   * the links service isn't wired, this row has no resolved character
-   * id, the id has no known linkage, only one of the user's rows is in
+   * no identity service is wired, the row has no known linkage,
+   * only one of the user's rows is in
    * the group, or anything at all fails. A merged profile is an
    * enhancement, never a availability risk.
    *
@@ -1008,17 +1037,19 @@ class OpponentsService {
    * } | null>}
    */
   async _resolveLinkedIdentities(userId, doc) {
-    if (!this.pulseLinks) return null;
+    if (!this.pulseLinks && !this.playerIdentities) return null;
     const selfCid =
       typeof doc.pulseCharacterId === "string" && doc.pulseCharacterId
         ? doc.pulseCharacterId
         : null;
-    if (!selfCid) return null;
+    if (!selfCid && !this.playerIdentities) return null;
     try {
       /** @type {Array<any>} */
       const rows = await this.db.opponents
         .find(
-          { userId, pulseCharacterId: { $type: "string", $ne: "" } },
+          this.playerIdentities
+            ? { userId }
+            : { userId, pulseCharacterId: { $type: "string", $ne: "" } },
           {
             projection: {
               _id: 0,
@@ -1029,14 +1060,23 @@ class OpponentsService {
           },
         )
         .toArray();
-      const { links } = await this.pulseLinks.getLinks(
-        rows.map((r) => r.pulseCharacterId),
-      );
+      await this._overlayGlobalIdentities([doc, ...rows]);
+      // A Pulse outage must not disable already-approved local links.
+      let links = new Map();
+      if (this.pulseLinks) {
+        try {
+          ({ links } = await this.pulseLinks.getLinks(
+            rows.map((r) => r.pulseCharacterId).filter(Boolean),
+          ));
+        } catch (err) {
+          this.logger.warn({ err, userId }, "opponent_linked_pulse_lookup_failed");
+        }
+      }
       const selfLink = links.get(selfCid) || null;
-      const selfKey = linkGroupKey(selfLink);
+      const selfKey = doc.globalIdentity?.groupKey || linkGroupKey(selfLink);
       if (!selfKey) return null;
       const identities = rows.filter(
-        (r) => linkGroupKey(links.get(r.pulseCharacterId)) === selfKey,
+        (r) => (r.globalIdentity?.groupKey || linkGroupKey(links.get(r.pulseCharacterId))) === selfKey,
       );
       if (identities.length <= 1) return null;
       identities.sort((a, b) => lastSeenMs(b) - lastSeenMs(a));
@@ -1055,9 +1095,9 @@ class OpponentsService {
       return {
         identities: identities.map(serializeLinkedIdentity),
         pulseIds: identities.map((r) => r.pulseId),
-        characterIds: [...new Set(identities.map((r) => r.pulseCharacterId))],
+        characterIds: [...new Set(identities.map((r) => r.pulseCharacterId).filter(Boolean))],
         revealedName,
-        mainName: pickMergedMainName(identities, revealedName),
+        mainName: doc.globalIdentity?.displayName || pickMergedMainName(identities, revealedName),
       };
     } catch (err) {
       this.logger.warn(
@@ -1387,6 +1427,7 @@ class OpponentsService {
       { projection: OPPONENT_PROFILE_DOC_PROJECTION },
     );
     if (!doc) return null;
+    if (!opts.mergeLinked) await this._overlayGlobalIdentities([doc]);
     const noteDoc = this.db.opponentNotes
       ? await this.db.opponentNotes.findOne(
           { userId, pulseId },
@@ -1499,9 +1540,9 @@ class OpponentsService {
     // name they've played the most games under — so the heading
     // matches what the grouped Opponents list shows. Single-identity
     // profiles keep rule (i): the latest-game name.
-    const authoritativeName = linked
+    const authoritativeName = doc.globalIdentity?.displayName || (linked
       ? linked.mainName || latestGameName || doc.displayNameSample || ""
-      : latestGameName || doc.displayNameSample || "";
+      : latestGameName || doc.displayNameSample || "");
     // Cross-toon merge surfacing: if the rawGames span multiple toon
     // handles (the Battle.net rebind case), expose the merged set so
     // the SPA can render a "merged across N toons" disclosure chip
@@ -1635,10 +1676,11 @@ class OpponentsService {
     }
     return {
       ...doc,
-      // Overlay the row's displayNameSample with the authoritative
-      // latest-game name so downstream consumers that read either
-      // field see the same value.
-      displayNameSample: authoritativeName || doc.displayNameSample || "",
+      // An approved label belongs to the person, while the original
+      // account name remains available for barcode review/correction.
+      displayNameSample: doc.globalIdentity || linked
+        ? doc.displayNameSample || ""
+        : authoritativeName || doc.displayNameSample || "",
       name: authoritativeName,
       notes,
       notesReadAloud,

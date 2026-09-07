@@ -12,6 +12,7 @@ vi.mock("@/lib/useLocalStorageState", () => ({ useLocalStorageState: () => [true
 vi.mock("../OpponentNotesCard", () => ({ OpponentNotesCard: () => <section aria-label="Opponent notes" /> }));
 vi.mock("../OpponentReplayHistory", () => ({ OpponentReplayHistory: () => <section aria-label="Replay history" /> }));
 vi.mock("../OpponentIdentityCandidates", () => ({ OpponentIdentityCandidates: () => null }));
+vi.mock("../OpponentIdentitySubmission", () => ({ OpponentIdentitySubmission: () => <section aria-label="Player identity review" /> }));
 vi.mock("../OpponentDiagnosticsPanel", () => ({ OpponentDiagnosticsPanel: () => null }));
 vi.mock("../OpponentRaceMmr", () => ({ HeadlineMmrChip: () => null, RaceMmrPanel: () => null }));
 vi.mock("../LadderContextCard", () => ({ LadderContextCard: () => null }));
@@ -59,5 +60,19 @@ describe("opponent profile channel placement", () => {
     render(<ProfileView pulseId="2-S2-1-12345" onBack={vi.fn()} />);
     expect(screen.queryByRole("group", { name: /channels/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Twitch|YouTube/ })).toBeNull();
+  });
+
+  it("keeps identity correction available beside a confirmed barcode and labels its channels correctly", () => {
+    useApiMock.mockReturnValue({ data: {
+      name: "Confirmed player", displayNameSample: "IIIIllll", revealedName: "Old Pulse label",
+      globalIdentity: { groupKey: "identity:known", displayName: "Confirmed player", target: { key: "toon:1-S2-1-99" }, revision: 1 },
+      games: [],
+    }, isLoading: false });
+    channelsForMock.mockReturnValue({ twitch: "https://www.twitch.tv/confirmedplayer" });
+    render(<ProfileView pulseId="1-S2-1-123" onBack={vi.fn()} />);
+    expect(screen.getByLabelText("Player identity review")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Confirmed player" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Visit Confirmed player's Twitch channel" })).toBeTruthy();
+    expect(screen.queryByText("Old Pulse label")).toBeNull();
   });
 });

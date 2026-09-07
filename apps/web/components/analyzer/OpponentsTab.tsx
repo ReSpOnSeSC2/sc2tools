@@ -21,6 +21,7 @@ import {
   groupMatchesSearch,
   groupOpponentsByPlayer,
   LS_GROUP_BY_PLAYER,
+  type GlobalPlayerIdentity,
   type OpponentGroup,
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
@@ -44,6 +45,7 @@ type Opp = {
   // the community linked on sc2pulse.nephest.com. Absent for opponents
   // who aren't revealed.
   revealedName?: string | null;
+  globalIdentity?: GlobalPlayerIdentity | null;
   wins: number;
   losses: number;
   games: number;
@@ -181,6 +183,7 @@ export function OpponentsTab({
       groupOpponentsByPlayer(
         normalised,
         groupByPlayer ? pulseLinks?.links : null,
+        groupByPlayer,
       ),
     [normalised, groupByPlayer, pulseLinks],
   );

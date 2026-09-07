@@ -42,6 +42,9 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
+ *   playerIdentities: import('mongodb').Collection,
+ *   playerIdentitySubmissions: import('mongodb').Collection,
+ *   playerIdentityDirectory: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -112,6 +115,9 @@ async function connect({ uri, dbName }, observability = {}) {
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
     playerChannels: db.collection(COLLECTIONS.PLAYER_CHANNELS),
+    playerIdentities: db.collection(COLLECTIONS.PLAYER_IDENTITIES),
+    playerIdentitySubmissions: db.collection(COLLECTIONS.PLAYER_IDENTITY_SUBMISSIONS),
+    playerIdentityDirectory: db.collection(COLLECTIONS.PLAYER_IDENTITY_DIRECTORY),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -216,6 +222,19 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
  * @param {DbContext} ctx
  */
 async function ensureIndexes(ctx) {
+  await ctx.playerIdentities.createIndex({ sourceKeys: 1 }, { unique: true, sparse: true });
+  await ctx.playerIdentities.createIndex({ targetKeys: 1, active: 1 });
+  await ctx.playerIdentities.createIndex({ kind: 1 }, { unique: true, partialFilterExpression: { kind: "graph-revision" } });
+  await ctx.playerIdentitySubmissions.createIndex({ id: 1 }, { unique: true });
+  await ctx.playerIdentitySubmissions.createIndex({ userId: 1, sourceKey: 1 }, { unique: true, partialFilterExpression: { direct: false } });
+  await ctx.playerIdentitySubmissions.createIndex({ status: 1, createdAt: 1, id: 1 });
+  await ctx.games.createIndex({ userId: 1, "opponent.pulseId": 1, _id: -1 });
+  await ctx.games.createIndex({ userId: 1, "opponent.pulseCharacterId": 1, _id: -1 });
+  await ctx.playerIdentityDirectory.createIndex({ key: 1 }, { unique: true });
+  await ctx.playerIdentityDirectory.createIndex({ searchNames: 1, key: 1 });
+  await ctx.playerIdentityDirectory.createIndex({ identityKeys: 1 });
+  await ctx.opponents.createIndex({ lastSeen: 1 });
+  await ctx.pulseAccounts.createIndex({ updatedAt: 1 });
   await ctx.playerChannels.createIndex({ id: 1 }, { unique: true });
   // Tombstones retain their identities; a refresh can never resurrect removed channels.
   await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });

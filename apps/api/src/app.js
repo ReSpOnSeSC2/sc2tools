@@ -107,6 +107,8 @@ const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
 const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
+const { PlayerIdentitiesService } = require("./services/playerIdentities");
+const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -345,6 +347,8 @@ function makeServices(deps) {
       logger: deps.logger,
     });
   const playerChannels = new PlayerChannelsService(deps.db, { pulseLinks });
+  const playerIdentities = new PlayerIdentitiesService(deps.db);
+  playerChannels.playerIdentities = playerIdentities;
   // League-percentile benchmark tables — nightly aggregate over slim
   // game rows (jobs/leaguePercentilesRecomputeJob), served by
   // routes/benchmarks.js for the Macro tab's percentile framing.
@@ -376,6 +380,7 @@ function makeServices(deps) {
       pulseMmr,
       pulseDirectory,
       pulseLinks,
+      playerIdentities,
     },
   );
   // Private unresolved-barcode matcher. It reads compact behavior evidence
@@ -701,6 +706,7 @@ function makeServices(deps) {
     chatbot,
     pulseDirectory,
     playerChannels,
+    playerIdentities,
   };
 }
 
@@ -972,6 +978,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildPlayerChannelsRouter({ playerChannels: services.playerChannels, auth, isAdmin }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPlayerIdentitiesRouter({ playerIdentities: services.playerIdentities, auth, isAdmin }));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildCoachingRouter({

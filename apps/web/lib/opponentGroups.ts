@@ -53,6 +53,22 @@ export type PulseLinksResponse = {
   partial?: boolean;
 };
 
+/** Current approved player label, separate from the recorded account. */
+export type GlobalPlayerIdentity = {
+  groupKey: string;
+  displayName: string;
+  target: {
+    key: string;
+    pulseId?: string | null;
+    pulseCharacterId?: string | null;
+    toonHandle?: string | null;
+    displayName?: string | null;
+    race?: string | null;
+    region?: string | null;
+  };
+  revision?: string | number;
+};
+
 /** The row fields grouping reads and merges. Structural subset of the
  * Opponents tab's `Opp` row so the module stays decoupled from it. */
 export interface GroupableOpponent {
@@ -60,6 +76,7 @@ export interface GroupableOpponent {
   pulseCharacterId?: string | null;
   name?: string;
   revealedName?: string | null;
+  globalIdentity?: GlobalPlayerIdentity | null;
   wins: number;
   losses: number;
   games: number;
@@ -95,17 +112,17 @@ export type OpponentGroup<T extends GroupableOpponent> = T & {
  * with the merged totals so sorting and win-rate colouring reflect
  * the whole player.
  *
- * Pass `links` as null/undefined (or empty) to get singleton groups —
- * that's the "grouping off" and "links still loading" rendering path,
- * so the table shape never changes shape mid-load.
+ * Approved links are available independently of Pulse. Pass `enabled`
+ * as false to keep all rows separate while retaining approved labels.
  */
 export function groupOpponentsByPlayer<T extends GroupableOpponent>(
   rows: T[],
   links?: Record<string, PulseLink> | null,
+  enabled = true,
 ): OpponentGroup<T>[] {
   const buckets = new Map<string, T[]>();
   for (const row of rows) {
-    const key = groupKey(row, links);
+    const key = enabled ? groupKey(row, links) : `solo:${row.pulseId}`;
     const bucket = buckets.get(key);
     if (bucket) bucket.push(row);
     else buckets.set(key, [row]);
@@ -129,11 +146,13 @@ export function groupMatchesSearch<T extends GroupableOpponent>(
 ): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
+  if ((group.name || "").toLowerCase().includes(q)) return true;
   if ((group.revealedName || "").toLowerCase().includes(q)) return true;
   for (const identity of group.identities) {
     const withToon = identity as T & { toonHandle?: string | null };
     if (
       (identity.name || "").toLowerCase().includes(q)
+      || (identity.globalIdentity?.displayName || "").toLowerCase().includes(q)
       || (identity.pulseId || "").toLowerCase().includes(q)
       || (withToon.toonHandle || "").toLowerCase().includes(q)
       || String(identity.pulseCharacterId || "").toLowerCase().includes(q)
@@ -148,6 +167,7 @@ function groupKey(
   row: GroupableOpponent,
   links?: Record<string, PulseLink> | null,
 ): string {
+  if (row.globalIdentity?.groupKey) return row.globalIdentity.groupKey;
   const cid = row.pulseCharacterId ? String(row.pulseCharacterId) : "";
   const link = cid && links ? links[cid] : undefined;
   if (link?.proId) return `pro:${link.proId}`;
@@ -163,10 +183,12 @@ function mergeGroup<T extends GroupableOpponent>(
   );
   const primary = identities[0];
   if (identities.length === 1) {
+    const displayName = primary.globalIdentity?.displayName || primary.name || "";
     return {
       ...primary,
+      name: displayName,
       identities,
-      aliasNames: [],
+      aliasNames: collectAliases(identities, displayName),
       groupSize: 1,
     };
   }
@@ -227,6 +249,10 @@ function mergeGroup<T extends GroupableOpponent>(
  *   3. else the most-played name even if it's a barcode.
  */
 function pickDisplayName(identities: GroupableOpponent[]): string {
+  for (const identity of identities) {
+    const approvedName = identity.globalIdentity?.displayName.trim();
+    if (approvedName) return approvedName;
+  }
   for (const identity of identities) {
     const revealed = (identity.revealedName || "").trim();
     if (revealed) return revealed;

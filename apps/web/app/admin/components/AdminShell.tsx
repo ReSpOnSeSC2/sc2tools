@@ -64,6 +64,12 @@ const NAV: ReadonlyArray<NavItem> = [
     icon: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 0c2.5 2.5 2.5 15.5 0 18m0-18C9.5 5.5 9.5 18.5 12 21M3.5 9h17M3.5 15h17",
   },
   {
+    href: "/admin/player-identities",
+    label: "Player identities",
+    description: "Review barcode identity submissions",
+    icon: "M12 3a7 7 0 0 0-7 7m14 0a7 7 0 0 0-7-7m-4 8a4 4 0 0 1 8 0v4m-4-4v7m-4-3v3m8 1v2",
+  },
+  {
     href: "/admin/player-channels",
     label: "Player channels",
     description: "Shared Twitch and YouTube directory",

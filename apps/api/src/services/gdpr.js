@@ -69,6 +69,8 @@ const PURGE_ONLY_COLLECTIONS = [
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],
+  // Moderation state must not be restored from a client backup.
+  ["playerIdentitySubmissions", "userId"],
 ];
 
 class GdprService {
@@ -117,6 +119,11 @@ class GdprService {
       data[jsonKey] = await coll
         .find({ userId }, { projection: { _id: 0 } })
         .toArray();
+    }
+    if (this.db.playerIdentitySubmissions) {
+      data.playerIdentitySubmissions = await this.db.playerIdentitySubmissions.find(
+        { userId }, { projection: { _id: 0, reviewedBy: 0, evidenceMaxId: 0 } },
+      ).toArray();
     }
     // Coaching uses a shared Locker document and relationship-specific
     // assignment rows instead of a simple `{ userId }` collection. Export

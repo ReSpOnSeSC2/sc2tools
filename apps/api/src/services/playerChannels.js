@@ -106,6 +106,8 @@ class PlayerChannelsService {
     this.db = db;
     this.col = db.playerChannels;
     this.pulseLinks = opts.pulseLinks || null;
+    /** @type {import('./playerIdentities').PlayerIdentitiesService|null} */
+    this.playerIdentities = null;
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.seeds = opts.seeds === undefined ? loadSeeds() : opts.seeds;
     this.pulseSeeds = opts.seeds === undefined ? loadPulseSeeds() : [];
@@ -195,7 +197,9 @@ class PlayerChannelsService {
   /** @param {any[]} raw @returns {Promise<{players:any[]}>} */
   async resolve(raw) {
     if (!Array.isArray(raw) || raw.length > MAX_PLAYERS) throw channelError(400, "invalid_players", `Resolve at most ${MAX_PLAYERS} players at a time.`);
-    const players = raw.map(normalizeIdentity);
+    const requestedPlayers = raw.map(normalizeIdentity);
+    const confirmed = this.playerIdentities ? await this.playerIdentities.resolveMany(requestedPlayers) : [];
+    const players = requestedPlayers.map((player, index) => confirmed[index]?.target ? normalizeIdentity(confirmed[index].target) : player);
     if (!players.length) return { players: [] };
     await this.ensureSeeds();
     const directKeys = [...new Set(players.flatMap(identityKeys))];
@@ -216,7 +220,7 @@ class PlayerChannelsService {
       const candidates = direct.length ? direct : hits;
       // Conflicting aliases fail closed rather than advertising the wrong person's channel.
       const entry = candidates.length === 1 ? candidates[0] : null;
-      return { ...player, channels: entry && !entry.removed ? publicChannels(entry.channels) : {}, ...(entry ? { id: entry.id, displayName: entry.source === "self" ? entry.approvedDisplayName || entry.displayName : entry.displayName } : {}) };
+      return { ...requestedPlayers[index], channels: entry && !entry.removed ? publicChannels(entry.channels) : {}, ...(entry ? { id: entry.id, displayName: entry.source === "self" ? entry.approvedDisplayName || entry.displayName : entry.displayName } : {}) };
     }) };
   }
 

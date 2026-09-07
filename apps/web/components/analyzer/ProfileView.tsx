@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSWRConfig } from "swr";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
@@ -14,6 +15,7 @@ import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
   LS_GROUP_BY_PLAYER,
   type MergedIdentity,
+  type GlobalPlayerIdentity,
 } from "@/lib/opponentGroups";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
@@ -47,8 +49,10 @@ import {
 import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
 import { PlayerChannelLinks } from "./PlayerChannelLinks";
 import { usePlayerChannels } from "./usePlayerChannels";
+import { OpponentIdentitySubmission } from "./OpponentIdentitySubmission";
 
 type OpponentProfileResp = {
+  globalIdentity?: GlobalPlayerIdentity | null;
   pulseId?: string;
   pulseCharacterId?: string | null;
   toonHandle?: string | null;
@@ -144,6 +148,7 @@ export function ProfileView({
 }
 
 function ProfileBody({ pulseId }: { pulseId: string }) {
+  const { mutate: refreshCache } = useSWRConfig();
   // The shared analyzer scope applies to the profile as well as the
   // opponents list that led here. In particular, opening an opponent
   // must not silently re-introduce custom or team games after the list
@@ -242,7 +247,8 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   const playerChannels = channelsFor(channelProfileIdentity);
   // Avoid the bounded matcher request for readable profiles. Pulse/MMR data
   // enriches an anonymous barcode; only a readable reveal resolves it.
-  const identityCandidatesEnabled = hasUnrevealedBarcodeIdentity(data);
+  const identityCandidatesEnabled = !data.globalIdentity && hasUnrevealedBarcodeIdentity(data);
+  const identitySubmissionEnabled = Boolean(data.globalIdentity) || isBarcodeName(data.displayNameSample || data.name);
   const handleSelectGame = (id: string) => {
     setPendingGameId(id);
     setPendingGameSeq((n) => n + 1);
@@ -255,7 +261,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <RevealedChip
-              name={data.revealedName}
+              name={data.globalIdentity ? null : data.revealedName}
               displayedName={data.name}
             />
             <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} />
@@ -275,7 +281,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             <div className="mt-3 [&_a]:min-h-11">
               <PlayerChannelLinks
                 channels={playerChannels}
-                playerName={data.revealedName || data.name || data.displayNameSample}
+                playerName={data.globalIdentity?.displayName || data.revealedName || data.name || data.displayNameSample}
               />
             </div>
           ) : null}
@@ -313,6 +319,15 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           );
         }}
       />
+
+      {identitySubmissionEnabled ? (
+        <OpponentIdentitySubmission pulseId={pulseId} onChanged={() => {
+          void refreshCache((key) => Array.isArray(key) && (
+            key[0] === "player-channels"
+            || (key[0] === "authenticated-api" && typeof key[2] === "string" && key[2].startsWith("/v1/opponents"))
+          ));
+        }} />
+      ) : null}
 
       <OpponentIdentityCandidates
         pulseId={pulseId}
