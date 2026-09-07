@@ -4,6 +4,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
+import { sc2pulseCharacterUrl } from "@/lib/sc2pulse";
+import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
 
 export type PulseRaceRow = {
   race: string;
@@ -18,7 +20,28 @@ export type PulseRaceBreakdown = {
   races: PulseRaceRow[];
   topRace: string | null;
   topMmr: number | null;
+  ladderIdentity?: {
+    pulseCharacterId: string | null;
+    toonHandle: string | null;
+    displayName: string | null;
+    region: string | null;
+    confirmed: boolean;
+  };
 };
+
+/** Ignore a cached account response while an approved target changes. */
+function matchesConfirmedIdentity(
+  breakdown: PulseRaceBreakdown | undefined,
+  confirmedIdentity: GlobalPlayerIdentity | null | undefined,
+): boolean {
+  if (!confirmedIdentity) return true;
+  const source = breakdown?.ladderIdentity;
+  if (!source?.confirmed) return false;
+  const target = confirmedIdentity.target;
+  if (target.pulseCharacterId && source.pulseCharacterId !== target.pulseCharacterId) return false;
+  if (target.toonHandle && source.toonHandle !== target.toonHandle) return false;
+  return source.displayName === confirmedIdentity.displayName;
+}
 
 /**
  * Headline MMR for the opponent profile: their highest-rated race.
@@ -45,10 +68,13 @@ export function topHeadlineMmr(
 export function HeadlineMmrChip({
   breakdown,
   fallbackMmr,
+  confirmedIdentity,
 }: {
   breakdown: PulseRaceBreakdown | undefined;
   fallbackMmr?: number | null;
+  confirmedIdentity?: GlobalPlayerIdentity | null;
 }) {
+  if (!matchesConfirmedIdentity(breakdown, confirmedIdentity)) return null;
   const top = topHeadlineMmr(breakdown);
   if (top) {
     const race = coerceRace(top.race);
@@ -56,8 +82,10 @@ export function HeadlineMmrChip({
     return (
       <span
         role="note"
-        aria-label={`${race} MMR ${top.mmr}`}
-        title="Highest-rated race (live from SC2Pulse)"
+        aria-label={`${race} MMR ${top.mmr}${breakdown?.ladderIdentity?.confirmed ? ` for ${breakdown.ladderIdentity.displayName}'s main profile` : ""}`}
+        title={breakdown?.ladderIdentity?.confirmed
+          ? `Highest-rated race on ${breakdown.ladderIdentity.displayName}'s confirmed main profile (SC2Pulse)`
+          : "Highest-rated race on this account (SC2Pulse)"}
         className={`inline-flex items-center gap-1.5 rounded-full border ${tint.border} ${tint.bg} px-2 py-0.5 text-micro font-medium uppercase tracking-wider ${tint.text} tabular-nums`}
       >
         <Icon name={raceIconName(race)} kind="race" className="h-3.5 w-3.5" />
@@ -65,7 +93,7 @@ export function HeadlineMmrChip({
       </span>
     );
   }
-  if (typeof fallbackMmr === "number" && fallbackMmr > 0) {
+  if (!confirmedIdentity && !breakdown?.ladderIdentity?.confirmed && typeof fallbackMmr === "number" && fallbackMmr > 0) {
     return (
       <span
         role="note"
@@ -90,18 +118,30 @@ export function HeadlineMmrChip({
 export function RaceMmrPanel({
   breakdown,
   isLoading,
+  confirmedIdentity,
 }: {
   breakdown: PulseRaceBreakdown | undefined;
   isLoading: boolean;
+  confirmedIdentity?: GlobalPlayerIdentity | null;
 }) {
-  if (isLoading && !breakdown) {
+  const currentSource = matchesConfirmedIdentity(breakdown, confirmedIdentity);
+  if (isLoading && (!breakdown || !currentSource)) {
     return (
       <Card title="MMR by race">
         <Skeleton rows={3} />
       </Card>
     );
   }
-  if (!breakdown || !breakdown.resolved || breakdown.races.length === 0) {
+  if (!breakdown || !currentSource) return null;
+  if (!breakdown.resolved || breakdown.races.length === 0) {
+    if (breakdown.ladderIdentity?.confirmed) {
+      return (
+        <Card title="MMR by race">
+          <p className="text-caption text-text-muted">Current ladder ratings are unavailable for the confirmed main profile.</p>
+          <LadderMmrSource breakdown={breakdown} />
+        </Card>
+      );
+    }
     return null;
   }
   return (
@@ -152,9 +192,20 @@ export function RaceMmrPanel({
           </tbody>
         </table>
       </div>
-      <p className="mt-3 text-micro text-text-dim">
-        Live 1v1 ladder MMR from SC2Pulse · current season
-      </p>
+      <LadderMmrSource breakdown={breakdown} />
     </Card>
+  );
+}
+
+function LadderMmrSource({ breakdown }: { breakdown: PulseRaceBreakdown }) {
+  const source = breakdown.ladderIdentity;
+  return (
+    <p className="mt-3 text-micro text-text-dim">
+      SC2Pulse 1v1 ladder · current season
+      {source?.confirmed ? ` · ${source.displayName}'s confirmed main profile` : " · recorded account"}
+      {source?.pulseCharacterId ? (
+        <> · <a className="text-accent hover:underline" href={sc2pulseCharacterUrl(source.pulseCharacterId)} target="_blank" rel="noopener noreferrer">View SC2Pulse profile</a></>
+      ) : null}
+    </p>
   );
 }

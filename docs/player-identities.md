@@ -13,6 +13,8 @@ Administrators see immediate **Confirm identity** controls on the same card, inc
 
 Approved identities apply across users in opponent lists and profiles. The existing **Group same player** toggle controls aggregation of that user's games. Recorded names, source IDs, per-account notes, and replay records remain intact. Confirmed players inherit their target's approved channel directory links. Replay rows continue to show only actual matched recordings with timestamps.
 
+The played account name stays visible beside an **AKA** badge for the confirmed player. Current ladder ratings and ladder context use the confirmed target's main SC2Pulse profile, with a source label and link. The played account's Pulse/toon identifiers and each replay's game-time MMR remain unchanged. Cached ladder responses for a previous target are hidden while the updated profile loads.
+
 ## API
 
 All identity search and submission routes require authentication. Mutation and search rates are bounded; responses are private and uncached.

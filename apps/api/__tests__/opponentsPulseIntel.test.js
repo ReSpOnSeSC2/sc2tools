@@ -133,4 +133,19 @@ describe("GET /v1/opponents/:pulseId/pulse-intel", () => {
     const res = await getIntel("1-S2-1-33333");
     expect(res.status).toBe(404);
   });
+
+  test("confirmed barcode ladder context uses the approved main profile character", async () => {
+    const source = "2-S2-2-240434";
+    await db.opponents.insertOne({ userId, pulseId: source, toonHandle: source, pulseCharacterId: "8703807", displayNameSample: "IIlIIlIl" });
+    await db.playerIdentities.insertOne({
+      kind: "link", active: true, sourceKeys: [`toon:${source}`, "pulse:8703807"],
+      targetKeys: ["pulse:777"], groupKey: "identity:pulse:777", revision: 1,
+      target: { key: "pulse:777", pulseCharacterId: "777", displayName: "Strange" },
+    });
+    const res = await getIntel(source);
+    expect(res.status).toBe(200);
+    expect(res.body.intel).toEqual(FAKE_INTEL);
+    expect(intelCalls.at(-1)).toBe("777");
+    expect((await db.opponents.findOne({ userId, pulseId: source })).pulseCharacterId).toBe("8703807");
+  });
 });

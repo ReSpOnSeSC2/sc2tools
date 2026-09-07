@@ -239,6 +239,16 @@ export interface OpponentsService {
     region: string | null;
     gamesRestamped: number;
   } | null>;
+  resolveLadderIdentity(
+    userId: string,
+    pulseId: string,
+  ): Promise<{
+    pulseCharacterId: string | null;
+    toonHandle: string | null;
+    displayName: string | null;
+    region: string | null;
+    confirmed: boolean;
+  } | null>;
   getPulseRaceBreakdown(
     userId: string,
     pulseId: string,
@@ -253,6 +263,13 @@ export interface OpponentsService {
     }>;
     topRace: string | null;
     topMmr: number | null;
+    ladderIdentity: {
+      pulseCharacterId: string | null;
+      toonHandle: string | null;
+      displayName: string | null;
+      region: string | null;
+      confirmed: boolean;
+    };
   } | null>;
   repairResumedReplayCountersForUser(userId: string): Promise<number>;
 }

@@ -152,6 +152,7 @@ export function groupMatchesSearch<T extends GroupableOpponent>(
     const withToon = identity as T & { toonHandle?: string | null };
     if (
       (identity.name || "").toLowerCase().includes(q)
+      || (identity.revealedName || "").toLowerCase().includes(q)
       || (identity.globalIdentity?.displayName || "").toLowerCase().includes(q)
       || (identity.pulseId || "").toLowerCase().includes(q)
       || (withToon.toonHandle || "").toLowerCase().includes(q)
@@ -182,11 +183,15 @@ function mergeGroup<T extends GroupableOpponent>(
     (a, b) => timeOf(b.lastPlayed) - timeOf(a.lastPlayed),
   );
   const primary = identities[0];
+  const approvedIdentity = identities.find(
+    (identity) => identity.globalIdentity?.displayName.trim(),
+  )?.globalIdentity;
   if (identities.length === 1) {
-    const displayName = primary.globalIdentity?.displayName || primary.name || "";
+    const displayName = primary.name || "";
     return {
       ...primary,
       name: displayName,
+      revealedName: approvedIdentity?.displayName.trim() || primary.revealedName || null,
       identities,
       aliasNames: collectAliases(identities, displayName),
       groupSize: 1,
@@ -212,17 +217,20 @@ function mergeGroup<T extends GroupableOpponent>(
     mmrLost += identity.mmrLost || 0;
     mmrPairs += identity.mmrPairs || 0;
   }
-  const displayName = pickDisplayName(identities);
+  // An approved identity reveals who played the recorded account. Keep
+  // that account's name beside the AKA label, including barcode names.
+  const displayName = approvedIdentity ? primary.name || "" : pickDisplayName(identities);
   // The freshest rating we hold for this player, whichever identity
   // carried it — identities are already newest-first.
   const mmrCarrier = identities.find((i) => typeof i.mmr === "number");
-  const revealedName = identities
+  const revealedName = approvedIdentity?.displayName.trim() || identities
     .map((i) => (i.revealedName || "").trim())
     .find((n) => n.length > 0) || null;
   return {
     ...primary,
     name: displayName,
     revealedName,
+    globalIdentity: approvedIdentity || primary.globalIdentity,
     wins,
     losses,
     games,
@@ -249,10 +257,6 @@ function mergeGroup<T extends GroupableOpponent>(
  *   3. else the most-played name even if it's a barcode.
  */
 function pickDisplayName(identities: GroupableOpponent[]): string {
-  for (const identity of identities) {
-    const approvedName = identity.globalIdentity?.displayName.trim();
-    if (approvedName) return approvedName;
-  }
   for (const identity of identities) {
     const revealed = (identity.revealedName || "").trim();
     if (revealed) return revealed;

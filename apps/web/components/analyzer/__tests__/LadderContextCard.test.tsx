@@ -108,4 +108,23 @@ describe("LadderContextCard", () => {
       { revalidateOnFocus: false },
     );
   });
+
+  it("hides cached barcode ladder data after a main profile is confirmed", () => {
+    useApiMock.mockReturnValue({ data: { intel: INTEL }, isLoading: false });
+    const { container } = render(<LadderContextCard pulseId="1-S2-1-1" confirmedIdentity={{
+      groupKey: "identity:pulse:236671", displayName: "Strange",
+      target: { key: "pulse:236671", pulseCharacterId: "236671" },
+    }} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("labels matching approved main-profile data and retains its canonical Pulse link", () => {
+    useApiMock.mockReturnValue({ data: { intel: INTEL }, isLoading: false });
+    render(<LadderContextCard pulseId="1-S2-1-1" confirmedIdentity={{
+      groupKey: "identity:pulse:111", displayName: "Strange",
+      target: { key: "pulse:111", pulseCharacterId: "111" },
+    }} />);
+    expect(screen.getByText("SC2Pulse ladder data for Strange's confirmed main profile")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Full profile on SC2Pulse/ }).getAttribute("href")).toContain("id=111");
+  });
 });

@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton, Stat } from "@/components/ui/Card";
+import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
 
 /**
  * SC2Pulse ladder context for one opponent — the screen players used
@@ -77,7 +78,10 @@ const LEAGUE_TINT: Record<string, string> = {
   Grandmaster: "rgb(var(--warning))",
 };
 
-export function LadderContextCard({ pulseId }: { pulseId: string }) {
+export function LadderContextCard({ pulseId, confirmedIdentity }: {
+  pulseId: string;
+  confirmedIdentity?: GlobalPlayerIdentity | null;
+}) {
   const { data, isLoading } = useApi<PulseIntelResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-intel`,
     { revalidateOnFocus: false },
@@ -101,6 +105,9 @@ export function LadderContextCard({ pulseId }: { pulseId: string }) {
   }
   const intel = data?.intel;
   if (!intel) return null;
+  // SWR may still hold the barcode's previous response while the
+  // approval refreshes. A confirmed main profile must match exactly.
+  if (confirmedIdentity && intel.characterId !== confirmedIdentity.target.pulseCharacterId) return null;
 
   const league = intel.league;
   const tint = league ? LEAGUE_TINT[league.label] : undefined;
@@ -130,6 +137,11 @@ export function LadderContextCard({ pulseId }: { pulseId: string }) {
         </span>
       }
     >
+      {confirmedIdentity ? (
+        <p className="mb-3 text-caption text-text-muted">
+          SC2Pulse ladder data for {confirmedIdentity.displayName}&apos;s confirmed main profile
+        </p>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_minmax(200px,280px)]">
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

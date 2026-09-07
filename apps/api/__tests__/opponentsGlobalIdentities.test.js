@@ -79,7 +79,8 @@ describe("Approved global opponent identities", () => {
     await db.opponentNotes.insertOne({ userId: "u1", pulseId: SOURCE, notes: "Private source note" });
     await db.opponentNotes.insertOne({ userId: "u2", pulseId: SOURCE, notes: "Another user's note" });
     const profile = await service().get("u1", SOURCE, { mergeLinked: true });
-    expect(profile.name).toBe("KnownPlayer");
+    expect(profile.name).toBe("IIlIIlIl");
+    expect(profile.revealedName).toBe("KnownPlayer");
     expect(profile.displayNameSample).toBe("IIlIIlIl");
     expect(profile.globalIdentity).toEqual(APPROVED);
     expect(profile.totals).toMatchObject({ total: 3, wins: 2, losses: 1 });
@@ -94,7 +95,8 @@ describe("Approved global opponent identities", () => {
 
   test("every user sees the label even when they only faced the source account", async () => {
     const profile = await service().get("u2", SOURCE, { mergeLinked: true });
-    expect(profile.name).toBe("KnownPlayer");
+    expect(profile.name).toBe("IIlIIlIl");
+    expect(profile.revealedName).toBe("KnownPlayer");
     expect(profile.displayNameSample).toBe("IIlIIlIl");
     expect(profile.games.map((row) => row.id)).toEqual(["other-user-source"]);
     expect(profile.mergedIdentities).toBeUndefined();
@@ -125,13 +127,15 @@ describe("Approved global opponent identities", () => {
   test("grouping off preserves the approved label and unlink takes effect on the next read", async () => {
     const svc = service();
     const separate = await svc.get("u1", SOURCE);
-    expect(separate.name).toBe("KnownPlayer");
+    expect(separate.name).toBe("IIlIIlIl");
+    expect(separate.revealedName).toBe("KnownPlayer");
     expect(separate.games.map((row) => row.id)).toEqual(["source"]);
     expect(separate.mergedIdentities).toBeUndefined();
     active = false;
     const unlinked = await svc.get("u1", SOURCE, { mergeLinked: true });
     expect(unlinked.name).toBe("IIlIIlIl");
     expect(unlinked.globalIdentity).toBeUndefined();
+    expect(unlinked.revealedName).toBeNull();
     expect(unlinked.games.map((row) => row.id)).toEqual(["source"]);
   });
 
@@ -160,8 +164,10 @@ describe("Approved global opponent identities", () => {
     const svc = new OpponentsService(db, Buffer.alloc(32, 1), { playerIdentities: realResolver });
     const fromSource = await svc.get("u1", SOURCE, { mergeLinked: true });
     const fromTarget = await svc.get("u1", TARGET_ALT, { mergeLinked: true });
-    expect(fromSource.name).toBe("KnownPlayer");
-    expect(fromTarget.name).toBe("KnownPlayer");
+    expect(fromSource.name).toBe("IIlIIlIl");
+    expect(fromTarget.name).toBe("AltAccount");
+    expect(fromSource.revealedName).toBe("KnownPlayer");
+    expect(fromTarget.revealedName).toBe("KnownPlayer");
     expect(fromSource.games.map((row) => row.id).sort()).toEqual(["source", "target", "target-alt"]);
     expect(fromTarget.games.map((row) => row.id).sort()).toEqual(["source", "target", "target-alt"]);
     expect(fetchImpl).not.toHaveBeenCalled();

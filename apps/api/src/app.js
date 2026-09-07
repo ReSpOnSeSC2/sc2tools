@@ -19,7 +19,7 @@ const {
   buildReplayIngestAdmission,
 } = require("./middleware/replayIngestAdmission");
 const { captureSignedWebhookRawBody } = require("./middleware/jsonBody");
-const { sanitiseRequestForLog } = require("./middleware/requestLogging");
+const { sanitiseRequestForLog, sanitiseResponseForLog } = require("./middleware/requestLogging");
 
 const { UsersService } = require("./services/users");
 const { buildClerkClient, noopClerkClient } = require("./services/clerkClient");
@@ -30,6 +30,7 @@ const {
 const { GamesService } = require("./services/games");
 const { ReplayLibraryService } = require("./services/replayLibrary");
 const { GameVodsService } = require("./services/gameVods");
+const { PublicYoutubeVodsService } = require("./services/publicYoutubeVods");
 const { PulseMatchVodsService } = require("./services/pulseMatchVods");
 const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
@@ -420,6 +421,7 @@ function makeServices(deps) {
   // Twitch index. The composite preserves whichever source is healthy and
   // deduplicates them into at most one icon per platform/player perspective.
   const directGameVods = new GameVodsService({
+    publicYoutube: new PublicYoutubeVodsService({ collection: deps.db.publicYoutubeArchives, platformIntegrations, log: deps.logger }),
     users,
     pulseIntel,
     playerChannels,
@@ -732,7 +734,7 @@ function applyBaseMiddleware(app, deps, auth) {
       // header allowlist. Bearer/device credentials and path-carried overlay
       // tokens must never be copied into Render logs.
       wrapSerializers: false,
-      serializers: { req: sanitiseRequestForLog },
+      serializers: { req: sanitiseRequestForLog, res: sanitiseResponseForLog },
     }),
   );
   app.use(requestId);
@@ -1167,14 +1169,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       // undefined = not the caller's opponent (404), null = theirs but
       // the SC2Pulse character id hasn't resolved yet (card hidden).
       resolvePulseCharacterId: async (userId, pulseId) => {
-        const row = await deps.db.opponents.findOne(
-          { userId, pulseId },
-          { projection: { _id: 0, pulseCharacterId: 1 } },
-        );
-        if (!row) return undefined;
-        return typeof row.pulseCharacterId === "string" && row.pulseCharacterId
-          ? row.pulseCharacterId
-          : null;
+        const identity = await services.opponents.resolveLadderIdentity(userId, pulseId);
+        return identity ? identity.pulseCharacterId : undefined;
       },
     }),
   );

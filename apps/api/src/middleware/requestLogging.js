@@ -19,6 +19,13 @@ const SAFE_HEADER_NAMES = Object.freeze([
   "x-render-routing",
 ]);
 
+const SAFE_RESPONSE_HEADER_NAMES = Object.freeze([
+  "content-type",
+  "content-length",
+  "retry-after",
+  "x-request-id",
+]);
+
 const CREDENTIAL_PATH_SEGMENT =
   /\/(multichat|chatbot|overlay-tokens|device-pairings)\/[^/?#]+/giu;
 const SENSITIVE_QUERY_KEY = /(authorization|credential|key|secret|signature|token)/iu;
@@ -93,8 +100,27 @@ function sanitiseRequestForLog(req) {
   };
 }
 
+/**
+ * With wrapSerializers:false, Pino otherwise serializes the complete
+ * ServerResponse, including its request and raw authorization headers.
+ * Allowlist response metadata too; cookies, redirects, bodies and the
+ * response/request object graph are never operational log fields.
+ * @param {import('http').ServerResponse} res
+ * @returns {Record<string, unknown>}
+ */
+function sanitiseResponseForLog(res) {
+  /** @type {Record<string, string|string[]|number>} */
+  const headers = {};
+  for (const name of SAFE_RESPONSE_HEADER_NAMES) {
+    const value = res.getHeader(name);
+    if (typeof value === "string" || typeof value === "number" || Array.isArray(value)) headers[name] = value;
+  }
+  return { statusCode: res.headersSent ? res.statusCode : null, headers };
+}
+
 module.exports = {
   SAFE_HEADER_NAMES,
   sanitiseRequestForLog,
+  sanitiseResponseForLog,
   sanitiseRequestUrl,
 };

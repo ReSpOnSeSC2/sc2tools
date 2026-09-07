@@ -75,7 +75,46 @@ function youtubeWatchPage({
   });
 }
 
+function youtubeLiveWatchPage({
+  start = "2026-08-10T18:30:00.000Z",
+  channelId = "UC9OluGthYmZo0vsF9IjicFg",
+  isLiveNow = true,
+  end,
+} = {}) {
+  return `<script>var ytInitialPlayerResponse = ${JSON.stringify({
+    microformat: { playerMicroformatRenderer: { liveBroadcastDetails: {
+      startTimestamp: start,
+      isLiveNow,
+      ...(end ? { endTimestamp: end } : {}),
+    } } },
+    videoDetails: { videoId: "AbCdEf12345", channelId, lengthSeconds: "0", isLiveContent: true },
+  })};</script>`;
+}
+
 describe("services/gameVods pure helpers", () => {
+  test("a proven current main broadcast with zero duration gets a bounded live window", () => {
+    const now = Date.parse("2026-08-10T19:10:00Z");
+    expect(parseYoutubeBroadcastDetails(youtubeLiveWatchPage(), now)).toEqual({
+      startMs: Date.parse("2026-08-10T18:30:00Z"),
+      endMs: now,
+      ongoing: true,
+    });
+  });
+
+  test.each([
+    { isLiveNow: false },
+    { start: "2026-08-10T20:00:00Z" },
+    { isLiveNow: false, end: "2026-08-10T20:00:00Z" },
+  ])("isLiveContent alone or future timestamps cannot create a current broadcast: %j", (options) => {
+    expect(parseYoutubeBroadcastDetails(youtubeLiveWatchPage(options), Date.parse("2026-08-10T19:10:00Z"))).toBeNull();
+  });
+
+  test("recommendation live metadata cannot replace the main video's timing", () => {
+    const html = youtubeLiveWatchPage({ isLiveNow: false })
+      + '<script>var recommendation = {"liveBroadcastDetails":{"isLiveNow":true,"startTimestamp":"2026-08-10T18:00:00Z","endTimestamp":"2026-08-10T19:00:00Z"},"lengthSeconds":"3600"};</script>';
+    expect(parseYoutubeBroadcastDetails(html, Date.parse("2026-08-10T19:10:00Z"))).toBeNull();
+  });
+
   test("prefers exact startedAt and falls back to replay end minus duration", () => {
     expect(
       gameStartMs({
@@ -457,6 +496,122 @@ describe("official YouTube game VOD client", () => {
 });
 
 describe("GameVodsService", () => {
+  test("finds an owned current broadcast via /live when /streams omits its video id", async () => {
+    const fetchImpl = jest.fn(async (url) => String(url).endsWith("/streams")
+      ? htmlResponse('{"externalId":"UC9OluGthYmZo0vsF9IjicFg"}')
+      : htmlResponse(youtubeLiveWatchPage()));
+    const service = new GameVodsService({
+      users: { getPreferences: async () => ({ youtube: { channel: "@TestCaster" } }) },
+      fetchImpl,
+      now: () => Date.parse("2026-08-10T19:10:00Z"),
+    });
+    const result = await service.resolveForGames("owner", [
+      { gameId: "during", startedAt: "2026-08-10T19:00:00Z" },
+      { gameId: "before", startedAt: "2026-08-10T18:00:00Z" },
+      { gameId: "future", startedAt: "2026-08-10T20:00:00Z" },
+      { gameId: "unobserved", startedAt: "2026-08-10T19:10:01Z" },
+    ]);
+    expect(result.linksByGameId.during).toEqual([expect.objectContaining({ videoId: "AbCdEf12345", offsetSec: 1800, url: "https://www.youtube.com/watch?v=AbCdEf12345&t=1800s" })]);
+    expect(result.linksByGameId.before).toEqual([]);
+    expect(result.linksByGameId.future).toEqual([]);
+    expect(result.linksByGameId.unobserved).toEqual([]);
+    expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://www.youtube.com/@TestCaster/streams",
+      "https://www.youtube.com/@TestCaster/live",
+    ]);
+  });
+
+  test("refreshes ongoing observations after 30 seconds without predicting future stream time", async () => {
+    let now = Date.parse("2026-08-10T19:10:00Z");
+    const fetchImpl = jest.fn(async (url) => String(url).endsWith("/streams")
+      ? htmlResponse('{"externalId":"UC9OluGthYmZo0vsF9IjicFg"}')
+      : htmlResponse(youtubeLiveWatchPage()));
+    const service = new GameVodsService({ users: { getPreferences: async () => ({ youtube: { channel: "@TestCaster" } }) }, fetchImpl, now: () => now });
+    const games = [{ gameId: "justAfterObservation", startedAt: "2026-08-10T19:10:01Z" }];
+    expect((await service.resolveForGames("owner", games)).linksByGameId.justAfterObservation).toEqual([]);
+    now += 20_000;
+    expect((await service.resolveForGames("owner", games)).linksByGameId.justAfterObservation).toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    now += 11_000;
+    expect((await service.resolveForGames("owner", games)).linksByGameId.justAfterObservation).toEqual([expect.objectContaining({ videoId: "AbCdEf12345", offsetSec: 2401 })]);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  test("a watch 429 cancels active requests, stops queued fetches, and keeps old plus verified partial archives", async () => {
+    let now = Date.parse("2026-08-11T12:00:00Z");
+    let rateLimited = false;
+    let startedAfterLimit = 0;
+    const watchSignals = [];
+    const ids = Array.from({ length: 20 }, (_, i) => `VideoID${String(i).padStart(4, "0")}`);
+    const fetchImpl = jest.fn(async (url, init) => {
+      if (String(url).endsWith("/streams")) return htmlResponse(JSON.stringify({ externalId: "UC9OluGthYmZo0vsF9IjicFg", videos: ids.map((videoId) => ({ videoId })) }));
+      if (String(url).endsWith("/live")) return htmlResponse("");
+      if (rateLimited) startedAfterLimit++;
+      watchSignals.push(init.signal);
+      const id = new URL(url).searchParams.get("v");
+      if (id === ids[0]) return htmlResponse(youtubeWatchPage());
+      if (id === ids[1]) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        rateLimited = true;
+        return { ...htmlResponse("", false, 429), headers: { get: () => "120" } };
+      }
+      return new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+    });
+    const service = new GameVodsService({ users: { getPreferences: async () => ({}) }, fetchImpl, now: () => now, cacheTtlMs: 0 });
+    const channel = { platform: "youtube", input: "@TestCaster", cacheKey: "test-channel" };
+    const old = { platform: "youtube", videoId: "OldVideo123", startMs: Date.parse("2026-08-09T18:00:00Z"), endMs: Date.parse("2026-08-09T20:00:00Z") };
+    service._cache.set("youtube:test-channel", { fetchedAt: now - 600_000, vods: [old] });
+    const result = await service._archivesForChannel(channel);
+    expect(result.map((vod) => vod.videoId)).toEqual([ids[0], old.videoId]);
+    expect(startedAfterLimit).toBe(0);
+    expect(watchSignals.length).toBeLessThanOrEqual(5);
+    expect(watchSignals.slice(2).every((signal) => signal.aborted)).toBe(true);
+    expect(service._youtubeBackoffUntil).toBe(now + 120_000);
+    const calls = fetchImpl.mock.calls.length;
+    now += 60_000;
+    expect(await service._archivesForChannel(channel)).toEqual(result);
+    expect(await service._archivesForChannel({ ...channel, input: "@AnotherCaster", cacheKey: "other" })).toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(calls);
+  });
+
+  test("public scrape backoff does not disable an owner's official YouTube lookup", async () => {
+    const service = new GameVodsService({
+      users: { getPreferences: async () => ({ youtube: { channel: "@TestCaster" } }) },
+      fetchImpl: jest.fn(),
+      now: () => Date.parse("2026-08-11T12:00:00Z"),
+      platformIntegrations: { resolveYoutubeGameVods: async () => ({ channelId: "UC9OluGthYmZo0vsF9IjicFg", customUrl: "@TestCaster", vods: [{ videoId: "AbCdEf12345", startMs: Date.parse("2026-08-10T18:00:00Z"), endMs: Date.parse("2026-08-10T20:00:00Z") }] }) },
+    });
+    service._youtubeBackoffUntil = service.now() + 300_000;
+    const result = await service.resolveForGames("owner", [{ gameId: "game", startedAt: "2026-08-10T19:00:00Z" }]);
+    expect(result.linksByGameId.game).toEqual([expect.objectContaining({ videoId: "AbCdEf12345", offsetSec: 3600 })]);
+    expect(service.fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("a /live broadcast belonging to another channel is rejected", async () => {
+    const service = new GameVodsService({
+      users: { getPreferences: async () => ({ youtube: { channel: "@TestCaster" } }) },
+      fetchImpl: async (url) => String(url).endsWith("/streams")
+        ? htmlResponse('{"externalId":"UC9OluGthYmZo0vsF9IjicFg"}')
+        : htmlResponse(youtubeLiveWatchPage({ channelId: "UCEI2wK3_OWMUYBvQDgbL4sQ" })),
+      now: () => Date.parse("2026-08-10T19:10:00Z"),
+    });
+    const result = await service.resolveForGames("owner", [{ gameId: "game", startedAt: "2026-08-10T19:00:00Z" }]);
+    expect(result.linksByGameId.game).toEqual([]);
+  });
+
+  test("a failed /live probe preserves matching archived recordings", async () => {
+    const service = new GameVodsService({
+      users: { getPreferences: async () => ({ youtube: { channel: "@TestCaster" } }) },
+      fetchImpl: async (url) => {
+        if (String(url).endsWith("/streams")) return htmlResponse('{"externalId":"UC9OluGthYmZo0vsF9IjicFg","videoId":"AbCdEf12345"}');
+        if (String(url).endsWith("/live")) throw new Error("live probe unavailable");
+        return htmlResponse(youtubeWatchPage());
+      },
+    });
+    const result = await service.resolveForGames("owner", [{ gameId: "game", startedAt: "2026-08-10T19:00:00Z" }]);
+    expect(result.linksByGameId.game[0]).toMatchObject({ videoId: "AbCdEf12345", offsetSec: 1800 });
+  });
+
   test("matches approved non-pro directory channels to broadcasts and never returns a channel-page fallback", async () => {
     const playerChannels = {
       resolve: jest.fn(async (players) => ({ players: players.map((identity) => ({ ...identity, id: "directory-player", displayName: "Creator", channels: { twitch: "https://www.twitch.tv/creator", youtube: "https://www.youtube.com/channel/UC9OluGthYmZo0vsF9IjicFg" } })) })),

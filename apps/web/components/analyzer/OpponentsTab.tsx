@@ -41,9 +41,8 @@ type Opp = {
   toonHandle?: string | null;
   name?: string;
   displayNameSample?: string;
-  // SC2Pulse "revealed" identity behind a barcode — the pro/main name
-  // the community linked on sc2pulse.nephest.com. Absent for opponents
-  // who aren't revealed.
+  // Revealed identity behind a barcode, from Pulse or an approved
+  // community submission. The recorded account name stays separate.
   revealedName?: string | null;
   globalIdentity?: GlobalPlayerIdentity | null;
   wins: number;
@@ -267,7 +266,7 @@ export function OpponentsTab({
         </label>
         <label
           className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
-          title="Merge names SC2Pulse links to the same player into one row"
+          title="Merge accounts linked to the same player into one row"
         >
           <Toggle
             checked={groupByPlayer}
@@ -442,6 +441,7 @@ export function OpponentsTab({
                         <RevealedChip
                           name={o.revealedName}
                           displayedName={o.name}
+                          approved={!!o.globalIdentity}
                         />
                         <PlayerChannelLinks channels={channelsFor(o) || o.identities.map(channelsFor).find(Boolean)} playerName={o.revealedName || o.name} compact />
                         {o.groupSize > 1 ? (
@@ -727,7 +727,7 @@ function AliasChip({
       type="button"
       aria-expanded={expanded}
       aria-label={`${expanded ? "Hide" : "Show"} the ${group.groupSize} names this player uses`}
-      title={`Same player on SC2Pulse · also plays as ${group.aliasNames.join(", ")}`}
+      title={`Same player${group.globalIdentity ? " · confirmed identity" : " on SC2Pulse"} · also plays as ${group.aliasNames.join(", ")}`}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -754,6 +754,7 @@ function IdentityRow({
   channels?: PlayerChannels;
   onOpen: (pulseId: string) => void;
 }) {
+  const revealedName = identity.globalIdentity?.displayName.trim() || identity.revealedName;
   return (
     <tr
       onClick={() => onOpen(identity.pulseId)}
@@ -773,7 +774,8 @@ function IdentityRow({
               <span className="italic text-text-dim">unnamed</span>
             )}
           </span>
-          <PlayerChannelLinks channels={channels} playerName={identity.revealedName || identity.name} compact />
+          <RevealedChip name={revealedName} displayedName={identity.name} approved={!!identity.globalIdentity} />
+          <PlayerChannelLinks channels={channels} playerName={revealedName || identity.name} compact />
         </span>
       </td>
       <PulseIdCell opp={identity} />
@@ -830,7 +832,7 @@ function OpponentOpenButton({
 }
 
 /**
- * SC2Pulse "revealed" identity pill. For a barcode opponent the
+ * Revealed identity pill. For a barcode opponent the
  * displayed name is unreadable bars, so the revealed pro/main name is
  * the only human-legible identity — surface it inline next to the name.
  * Renders nothing when the opponent isn't revealed, or when the row
@@ -840,16 +842,18 @@ function OpponentOpenButton({
 function RevealedChip({
   name,
   displayedName,
+  approved = false,
 }: {
   name?: string | null;
   displayedName?: string;
+  approved?: boolean;
 }) {
   const tag = typeof name === "string" ? name.trim() : "";
   if (!tag || tag === (displayedName || "").trim()) return null;
   return (
     <span
       className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-accent-cyan/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
-      title={`Revealed on SC2Pulse as ${tag}`}
+      title={approved ? `Confirmed as ${tag}` : `Revealed on SC2Pulse as ${tag}`}
     >
       <span className="text-[0.6rem] font-medium uppercase tracking-wider opacity-70">
         aka

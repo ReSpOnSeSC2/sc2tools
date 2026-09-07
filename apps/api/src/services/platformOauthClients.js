@@ -409,6 +409,75 @@ async function listYoutubeRecentSubscribers(accessToken, fetchImpl = fetch) {
 }
 
 /**
+ * Read public livestream timing for explicitly discovered video IDs. OAuth
+ * may expose the caller's private videos, so public privacy is mandatory even
+ * when the requested IDs came from a public channel index. Upload/scheduled
+ * dates and duration never substitute for actual broadcast timing.
+ * https://developers.google.com/youtube/v3/docs/videos
+ * https://developers.google.com/youtube/v3/docs/videos/list
+ *
+ * @param {string} accessToken
+ * @param {typeof fetch} [fetchImpl]
+ * @param {{videoIds?:string[],nowMs?:number,signal?:AbortSignal}} [opts]
+ * @returns {Promise<Array<{
+ *   platform:'youtube',videoId:string,channelId:string,startMs:number,endMs:number,
+ *   ongoing:boolean,orientation:'unknown',
+ * }>>}
+ */
+async function listPublicYoutubeBroadcasts(accessToken, fetchImpl = fetch, opts = {}) {
+  const ids = normalizePublicYoutubeVideoIds(opts.videoIds);
+  if (!ids.length) return [];
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+  url.searchParams.set("part", "snippet,status,liveStreamingDetails,contentDetails");
+  url.searchParams.set("id", ids.join(","));
+  url.searchParams.set("fields", "items(id,snippet(channelId,liveBroadcastContent),status/privacyStatus,liveStreamingDetails(actualStartTime,actualEndTime),contentDetails/duration)");
+  const payload = await fetchJson(fetchImpl, url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  }, "youtube_public_broadcasts");
+  const nowMs = Number.isFinite(opts.nowMs) ? Number(opts.nowMs) : Date.now();
+  const requested = new Set(ids);
+  const seen = new Set();
+  /** @type {Array<{platform:'youtube',videoId:string,channelId:string,startMs:number,endMs:number,ongoing:boolean,orientation:'unknown'}>} */
+  const broadcasts = [];
+  for (const item of Array.isArray(payload?.items) ? payload.items.slice(0, YOUTUBE_VIDEO_BATCH_SIZE) : []) {
+    const videoId = String(item?.id || "");
+    const channelId = String(item?.snippet?.channelId || "");
+    if (!requested.has(videoId) || seen.has(videoId)
+      || !/^UC[A-Za-z0-9_-]{22}$/.test(channelId)
+      || item?.status?.privacyStatus !== "public"
+      || item?.snippet?.liveBroadcastContent === "upcoming") continue;
+    const details = item?.liveStreamingDetails;
+    const startMs = parseProviderDateMs(details?.actualStartTime);
+    if (startMs === null || startMs <= 0 || startMs >= nowMs) continue;
+    const actualEndMs = parseProviderDateMs(details?.actualEndTime);
+    if (details?.actualEndTime && actualEndMs === null) continue;
+    if (actualEndMs === null && item?.snippet?.liveBroadcastContent !== "live") continue;
+    const endMs = actualEndMs === null ? nowMs : actualEndMs;
+    if (endMs <= startMs || endMs > nowMs) continue;
+    seen.add(videoId);
+    broadcasts.push({
+      platform: "youtube", videoId, channelId, startMs, endMs,
+      ongoing: actualEndMs === null,
+      // Public thumbnail sizes do not establish the recording orientation.
+      orientation: "unknown",
+    });
+  }
+  return broadcasts;
+}
+
+/** @param {unknown} raw @returns {string[]} */
+function normalizePublicYoutubeVideoIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  const ids = new Set();
+  for (const id of raw) {
+    if (isYoutubeVideoId(id)) ids.add(id);
+    if (ids.size === YOUTUBE_VIDEO_BATCH_SIZE) break;
+  }
+  return [...ids];
+}
+
+/**
  * List recent livestream archives owned by the authenticated YouTube channel.
  * The uploads playlist is the authoritative, channel-owned index; paging is
  * capped at 150 uploads (three 50-item pages), which comfortably covers a
@@ -748,6 +817,8 @@ module.exports = {
   refreshYoutubeToken,
   getYoutubeCurrentChannel,
   listYoutubeRecentSubscribers,
+  listPublicYoutubeBroadcasts,
+  normalizePublicYoutubeVideoIds,
   listYoutubeGameVods,
   parseYoutubeGameVodItems,
   YOUTUBE_UPLOAD_PAGE_LIMIT,

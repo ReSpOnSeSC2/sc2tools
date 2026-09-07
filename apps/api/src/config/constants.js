@@ -56,6 +56,7 @@ const COLLECTIONS = Object.freeze({
   // Official OAuth connections live outside generic user preferences so
   // encrypted refresh/access tokens can never leak to an overlay response.
   PLATFORM_CONNECTIONS: "platform_connections",
+  PUBLIC_YOUTUBE_ARCHIVES: "public_youtube_archives",
   PLATFORM_OAUTH_STATES: "platform_oauth_states",
   PLATFORM_WEBHOOK_RECEIPTS: "platform_webhook_receipts",
   PLATFORM_EVENTS: "platform_events",

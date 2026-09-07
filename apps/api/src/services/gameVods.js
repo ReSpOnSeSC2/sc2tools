@@ -32,6 +32,8 @@ const MAX_DIRECTORY_CHANNELS = 16;
 const MAX_OPPONENT_YOUTUBE_CHANNELS = 4;
 const MAX_YOUTUBE_VIDEOS = 30;
 const YOUTUBE_CHANNEL_BUDGET_MS = 20_000;
+const YOUTUBE_ONGOING_CACHE_TTL_MS = 30_000;
+const YOUTUBE_RATE_LIMIT_BACKOFF_MS = 5 * 60 * 1000;
 const PROVIDER_FETCH_CONCURRENCY = 4;
 const YOUTUBE_FETCH_CONCURRENCY = 4;
 const PULSE_FETCH_CONCURRENCY = 5;
@@ -100,6 +102,7 @@ class GameVodsService {
    *     ) => Promise<Record<string,any>|null>,
    *   } | null,
    *   fetchImpl?: typeof fetch,
+   *   publicYoutube?: {resolveChannel:(userId:string,input:string)=>Promise<{vods:any[],fresh:boolean}>}|null,
    *   log?: {warn?: Function,info?: Function} | null,
    *   cacheTtlMs?: number,
    *   now?: () => number,
@@ -113,6 +116,7 @@ class GameVodsService {
     this.pulseIntel = opts.pulseIntel || null;
     this.playerChannels = opts.playerChannels || null;
     this.platformIntegrations = opts.platformIntegrations || null;
+    this.publicYoutube = opts.publicYoutube || null;
     this.fetchImpl = opts.fetchImpl || globalThis.fetch;
     this.log = opts.log || null;
     this.cacheTtlMs =
@@ -124,6 +128,9 @@ class GameVodsService {
     this._cache = new Map();
     /** @type {Map<string, Promise<ProviderVod[]>>} */
     this._inflight = new Map();
+    this._youtubeBackoffUntil = 0;
+    /** @type {Set<AbortController>} */
+    this._youtubePageRequests = new Set();
   }
 
   /**
@@ -199,9 +206,21 @@ class GameVodsService {
       Array.from(uniqueChannels.values()),
       PROVIDER_FETCH_CONCURRENCY,
       async (channel) => {
+        const publicDeadline = channel.platform === "youtube" && !channel.oauthUserId
+          ? Date.now() + YOUTUBE_CHANNEL_BUDGET_MS : undefined;
+        // Public API metadata is shared across users. Keep private own-channel
+        // OAuth archives in their existing user/revision-scoped cache.
+        let indexed = null;
+        if (channel.platform === "youtube" && !channel.oauthUserId && this.publicYoutube) {
+          try { indexed = await this.publicYoutube.resolveChannel(userId, channel.input); }
+          catch { this._warn(new Error("public index unavailable"), "youtube_index"); }
+        }
+        const archives = indexed?.fresh
+          ? indexed.vods
+          : [...(indexed?.vods || []), ...await this._archivesForChannel(channel, publicDeadline)];
         archivesByChannel.set(
           providerKey(channel),
-          await this._archivesForChannel(channel),
+          archives,
         );
       },
     );
@@ -382,25 +401,31 @@ class GameVodsService {
     }
   }
 
-  /** @param {ProviderChannel} channel @returns {Promise<ProviderVod[]>} */
-  _archivesForChannel(channel) {
+  /** @param {ProviderChannel} channel @param {number} [deadlineMs] @returns {Promise<ProviderVod[]>} */
+  _archivesForChannel(channel, deadlineMs) {
     const key = providerKey(channel);
     const cached = this._cache.get(key);
-    if (cached && this.now() - cached.fetchedAt < this.cacheTtlMs) {
+    const ttlMs = cached?.vods.some((vod) => vod.ongoing)
+      ? Math.min(this.cacheTtlMs, YOUTUBE_ONGOING_CACHE_TTL_MS)
+      : this.cacheTtlMs;
+    if (cached && this.now() - cached.fetchedAt < ttlMs) {
       this._touchCache(key, cached);
       return Promise.resolve(cached.vods);
     }
     const pending = this._inflight.get(key);
     if (pending) return pending;
 
-    const job = this._fetchArchives(channel)
+    const job = this._fetchArchives(channel, deadlineMs)
       .then((vods) => {
         this._touchCache(key, { fetchedAt: this.now(), vods });
         return vods;
       })
       .catch((err) => {
         this._warn(err, channel.platform, { channel: channel.cacheKey });
-        const vods = cached ? cached.vods : [];
+        const partial = /** @type {any} */ (err)?.partialVods;
+        const vods = Array.isArray(partial)
+          ? mergeVerifiedYoutubeVods(cached?.vods || [], partial)
+          : cached ? cached.vods : [];
         // Cache fail-soft answers too, preventing a broken provider from being
         // hammered by every open game table during the outage.
         this._touchCache(key, { fetchedAt: this.now(), vods });
@@ -411,8 +436,8 @@ class GameVodsService {
     return job;
   }
 
-  /** @param {ProviderChannel} channel @returns {Promise<ProviderVod[]>} */
-  async _fetchArchives(channel) {
+  /** @param {ProviderChannel} channel @param {number} [deadlineMs] @returns {Promise<ProviderVod[]>} */
+  async _fetchArchives(channel, deadlineMs) {
     if (typeof this.fetchImpl !== "function") throw new Error("fetch unavailable");
     return channel.platform === "twitch"
       ? this._fetchTwitchArchives(channel.input)
@@ -420,6 +445,7 @@ class GameVodsService {
         channel.input,
         channel.oauthUserId,
         channel.oauthRevision,
+        deadlineMs,
       );
   }
 
@@ -453,12 +479,14 @@ class GameVodsService {
    * @param {string} rawInput
    * @param {string|undefined} oauthUserId
    * @param {string|undefined} oauthRevision
+   * @param {number} [requestDeadlineMs]
    * @returns {Promise<ProviderVod[]>}
    */
-  async _fetchYoutubeArchives(rawInput, oauthUserId, oauthRevision) {
+  async _fetchYoutubeArchives(rawInput, oauthUserId, oauthRevision, requestDeadlineMs) {
     // OAuth discovery and public scraping share one end-to-end budget so a
     // slow official-provider failure cannot double the route latency.
-    const deadlineMs = Date.now() + YOUTUBE_CHANNEL_BUDGET_MS;
+    const deadlineMs = Math.min(requestDeadlineMs ?? Infinity, Date.now() + YOUTUBE_CHANNEL_BUDGET_MS);
+    if (deadlineMs <= Date.now()) throw new Error("youtube lookup deadline exceeded");
     if (
       oauthUserId
       && typeof this.platformIntegrations?.resolveYoutubeGameVods === "function"
@@ -470,24 +498,19 @@ class GameVodsService {
       );
       if (official !== null) return official;
     }
+    if (this._youtubeBackoffUntil > this.now()) throw youtubeBackoffError();
 
     const normalized = normalizeYoutubeArchiveInput(rawInput);
     const ownerChannelIds = new Set();
+    /** @type {ProviderVod|null} */
+    let liveVod = null;
     /** @type {string[]} */
     let videoIds = normalized.videoId ? [normalized.videoId] : [];
     if (!normalized.videoId) {
       for (const streamsUrl of normalized.streamsUrls) {
         const remainingMs = deadlineMs - Date.now();
         if (remainingMs <= 0) break;
-        const response = await this.fetchImpl(streamsUrl, {
-          headers: PAGE_HEADERS,
-          redirect: "follow",
-          signal: AbortSignal.timeout(Math.min(FETCH_TIMEOUT_MS, remainingMs)),
-        });
-        if (!response.ok) {
-          throw new Error(`youtube streams ${response.status}`);
-        }
-        const html = await readTextBounded(response, MAX_HTML_CHARS);
+        const html = await this._fetchYoutubePage(streamsUrl, Math.min(FETCH_TIMEOUT_MS, remainingMs));
         const ownerChannelId = extractYoutubeChannelId(html);
         if (ownerChannelId) ownerChannelIds.add(ownerChannelId);
         videoIds.push(...extractYoutubeVideoIds(html, MAX_YOUTUBE_VIDEOS));
@@ -498,6 +521,27 @@ class GameVodsService {
       // YouTube changes the page shape and we cannot identify the channel
       // owner, do not guess a player's POV from those broad candidates.
       if (ownerChannelIds.size === 0) return [];
+      // A current broadcast can be absent from the initial /streams render.
+      // Probe only this channel's /live route, with the same request deadline
+      // and exact owner check as ordinary candidates. Reuse the response so
+      // the probe never adds another watch request for the same video.
+      const remainingMs = deadlineMs - Date.now();
+      if (remainingMs > 0 && normalized.streamsUrls[0]) {
+        try {
+          const liveUrl = normalized.streamsUrls[0].replace(/\/streams$/, "/live");
+          const html = await this._fetchYoutubePage(liveUrl, Math.min(3000, remainingMs));
+          const player = extractYoutubeMainPlayer(html);
+          const videoId = player?.videoDetails?.videoId;
+          const owner = player?.videoDetails?.channelId;
+          const timing = parseYoutubeBroadcastDetails(html, this.now());
+          if (isYoutubeVideoId(videoId) && ownerChannelIds.has(owner) && timing?.ongoing === true) {
+            liveVod = { platform: "youtube", videoId, ...timing };
+            videoIds = [videoId, ...videoIds.filter((id) => id !== videoId)].slice(0, MAX_YOUTUBE_VIDEOS);
+          }
+        } catch (err) {
+          this._warn(err, "youtube_live_probe");
+        }
+      }
     }
 
     /** @type {Array<ProviderVod|null>} */
@@ -506,28 +550,22 @@ class GameVodsService {
       YOUTUBE_FETCH_CONCURRENCY,
       async (videoId) => {
         try {
+          if (liveVod?.videoId === videoId) return liveVod;
           const remainingMs = deadlineMs - Date.now();
-          if (remainingMs <= 0) return null;
-          const response = await this.fetchImpl(YOUTUBE_WATCH_URL + videoId, {
-            headers: PAGE_HEADERS,
-            redirect: "follow",
-            signal: AbortSignal.timeout(
-              Math.min(FETCH_TIMEOUT_MS, remainingMs),
-            ),
-          });
-          if (!response.ok) throw new Error(`youtube watch ${response.status}`);
-          const html = await readTextBounded(response, MAX_HTML_CHARS);
+          if (remainingMs <= 0 || this._youtubeBackoffUntil > this.now()) return null;
+          const html = await this._fetchYoutubePage(YOUTUBE_WATCH_URL + videoId, Math.min(FETCH_TIMEOUT_MS, remainingMs));
           if (!normalized.videoId) {
             const videoOwner = extractYoutubeVideoOwnerChannelId(html);
             if (!videoOwner || !ownerChannelIds.has(videoOwner)) return null;
           }
-          const timing = parseYoutubeBroadcastDetails(html);
+          const timing = parseYoutubeBroadcastDetails(html, this.now());
           if (!timing) return null;
           return {
             platform: "youtube",
             videoId,
             startMs: timing.startMs,
             endMs: timing.endMs,
+            ...(timing.ongoing ? { ongoing: true } : {}),
           };
         } catch (err) {
           this._warn(err, "youtube", { videoId });
@@ -535,7 +573,44 @@ class GameVodsService {
         }
       },
     );
-    return /** @type {ProviderVod[]} */ (parsed.filter(Boolean));
+    const vods = /** @type {ProviderVod[]} */ (parsed.filter(Boolean));
+    if (this._youtubeBackoffUntil > this.now()) throw youtubeBackoffError(vods);
+    return vods;
+  }
+
+  /** Public page requests share a provider backoff, while OAuth stays usable.
+   * @param {string} url @param {number} timeoutMs @returns {Promise<string>}
+   */
+  async _fetchYoutubePage(url, timeoutMs) {
+    if (this._youtubeBackoffUntil > this.now()) throw youtubeBackoffError();
+    const controller = new AbortController();
+    this._youtubePageRequests.add(controller);
+    try {
+      const response = await this.fetchImpl(url, {
+        headers: PAGE_HEADERS,
+        redirect: "follow",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, timeoutMs))]),
+      });
+      if (response.status === 429) {
+        const now = this.now();
+        const retryAfter = response.headers?.get?.("retry-after");
+        const retryMs = retryAfter && /^\d+$/.test(retryAfter)
+          ? Number(retryAfter) * 1000
+          : retryAfter ? Date.parse(retryAfter) - now : NaN;
+        const delayMs = Number.isFinite(retryMs)
+          ? Math.max(30_000, Math.min(30 * 60 * 1000, retryMs))
+          : YOUTUBE_RATE_LIMIT_BACKOFF_MS;
+        this._youtubeBackoffUntil = Math.max(this._youtubeBackoffUntil, now + delayMs);
+        // Cancel already-started requests and let queued workers stop before
+        // starting another request. One blocked viewer must not fan out 30 429s.
+        for (const active of this._youtubePageRequests) active.abort();
+        throw youtubeBackoffError();
+      }
+      if (!response.ok) throw new Error(`youtube page ${response.status}`);
+      return await readTextBounded(response, MAX_HTML_CHARS);
+    } finally {
+      this._youtubePageRequests.delete(controller);
+    }
   }
 
   /**
@@ -659,6 +734,23 @@ class GameVodsService {
     );
   }
 
+}
+
+/** @param {ProviderVod[]} [partialVods] */
+function youtubeBackoffError(partialVods = []) {
+  return Object.assign(new Error("youtube public requests rate limited"), {
+    code: "youtube_public_backoff",
+    partialVods,
+  });
+}
+
+/** Keep verified old recordings when a refresh was interrupted by throttling.
+ * @param {ProviderVod[]} previous @param {ProviderVod[]} partial @returns {ProviderVod[]}
+ */
+function mergeVerifiedYoutubeVods(previous, partial) {
+  const merged = new Map();
+  for (const vod of [...previous, ...partial]) merged.set(`${vod.platform}:${vod.videoId}`, vod);
+  return [...merged.values()].sort((a, b) => b.startMs - a.startMs).slice(0, MAX_YOUTUBE_VIDEOS * 2);
 }
 
 /**
@@ -1030,32 +1122,75 @@ async function readTextBounded(response, maxBytes) {
 /**
  * Parse true livestream timing from a YouTube watch page. `uploadDate` is
  * deliberately ignored: an ordinary upload must never be mistaken for a
- * stream archive. When `endTimestamp` is absent, the main video's duration is
- * the only accepted fallback.
+ * stream archive. An absent end is supported for a proven current live main
+ * video; archived streams still need a real end or positive video duration.
  *
  * @param {string} html
- * @returns {{startMs: number, endMs: number}|null}
+ * @param {number} [nowMs]
+ * @returns {{startMs: number, endMs: number, ongoing?:boolean}|null}
  */
-function parseYoutubeBroadcastDetails(html) {
-  if (typeof html !== "string" || !html) return null;
-  const markers = html.matchAll(
+function parseYoutubeBroadcastDetails(html, nowMs = Date.now()) {
+  if (typeof html !== "string" || !html || !Number.isFinite(nowMs)) return null;
+  const player = extractYoutubeMainPlayer(html);
+  const mainDetails = player?.microformat?.playerMicroformatRenderer?.liveBroadcastDetails;
+  // isLiveContent also describes old recordings. Only the main player's
+  // explicit current-live flag proves the broadcast through observation time.
+  if (mainDetails?.isLiveNow === true && !mainDetails.endTimestamp && isYoutubeVideoId(player?.videoDetails?.videoId)) {
+    const startMs = parseDateMs(mainDetails.startTimestamp);
+    if (startMs === null || startMs > nowMs || nowMs - startMs > MAX_VIDEO_DURATION_SEC * 1000) return null;
+    return { startMs, endMs: nowMs, ongoing: true };
+  }
+  // When the main player is available, recommendation/live-preview metadata
+  // elsewhere in the page cannot supply this video's broadcast timing.
+  const timingSource = player ? JSON.stringify({ liveBroadcastDetails: mainDetails || {} }) : html;
+  const markers = timingSource.matchAll(
     /\\?"liveBroadcastDetails\\?"\s*:\s*\{/g,
   );
   for (const marker of markers) {
-    const segment = html.slice(marker.index, marker.index + 2_000);
+    const segment = timingSource.slice(marker.index, marker.index + 2_000);
     const startRaw = extractPossiblyEscapedString(segment, "startTimestamp");
     const startMs = parseDateMs(startRaw);
-    if (startMs === null) continue;
+    if (startMs === null || startMs > nowMs) continue;
 
     const endRaw = extractPossiblyEscapedString(segment, "endTimestamp");
     let endMs = parseDateMs(endRaw);
     if (endMs === null || endMs <= startMs) {
-      const durationSec = youtubeDurationSec(html);
+      const durationSec = youtubeDurationSec(player ? JSON.stringify(player.videoDetails || {}) : html);
       if (durationSec === null) continue;
       endMs = startMs + durationSec * 1000;
     }
-    if (endMs <= startMs) continue;
+    if (endMs <= startMs || endMs > nowMs) continue;
     return { startMs, endMs };
+  }
+  return null;
+}
+
+/** Read only the main watch-player response, never recommendation players.
+ * @param {string} html @returns {Record<string,any>|null}
+ */
+function extractYoutubeMainPlayer(html) {
+  if (typeof html !== "string" || !html) return null;
+  const marker = /(?:\b(?:var\s+)?ytInitialPlayerResponse\s*=|window\["ytInitialPlayerResponse"\]\s*=)\s*\{/.exec(html);
+  const trimmed = html.trimStart();
+  const start = marker ? marker.index + marker[0].lastIndexOf("{") : trimmed.startsWith("{") ? html.indexOf("{") : -1;
+  if (start < 0) return null;
+  let depth = 0; let quoted = false; let escaped = false;
+  for (let i = start; i < html.length && i - start < MAX_HTML_CHARS; i++) {
+    const char = html[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') quoted = true;
+    else if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) {
+      try {
+        const value = JSON.parse(html.slice(start, i + 1));
+        return value && typeof value.videoDetails === "object" ? value : null;
+      } catch { return null; }
+    }
   }
   return null;
 }
@@ -1386,6 +1521,7 @@ module.exports = {
   extractYoutubeVideoIds,
   extractYoutubeChannelId,
   extractYoutubeVideoOwnerChannelId,
+  extractYoutubeMainPlayer,
   parseYoutubeBroadcastDetails,
   matchConfiguredYoutubeIdentity,
   normalizeOfficialYoutubeVods,

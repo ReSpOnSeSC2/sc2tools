@@ -1535,14 +1535,18 @@ class OpponentsService {
       && rawGames[0].opponent.displayName.length > 0
       ? rawGames[0].opponent.displayName
       : null;
-    // Merged profiles lead with the player's MOST-KNOWN name — the
+    // Approved identities keep the selected account name and expose
+    // the confirmed person through revealedName. Pulse-only merged
+    // profiles lead with the player's MOST-KNOWN name — the
     // SC2Pulse revealed/pro name when there is one, else the readable
     // name they've played the most games under — so the heading
     // matches what the grouped Opponents list shows. Single-identity
     // profiles keep rule (i): the latest-game name.
-    const authoritativeName = doc.globalIdentity?.displayName || (linked
-      ? linked.mainName || latestGameName || doc.displayNameSample || ""
-      : latestGameName || doc.displayNameSample || "");
+    const authoritativeName = doc.globalIdentity
+      ? doc.displayNameSample || latestGameName || ""
+      : (linked
+        ? linked.mainName || latestGameName || doc.displayNameSample || ""
+        : latestGameName || doc.displayNameSample || "");
     // Cross-toon merge surfacing: if the rawGames span multiple toon
     // handles (the Battle.net rebind case), expose the merged set so
     // the SPA can render a "merged across N toons" disclosure chip
@@ -1690,9 +1694,9 @@ class OpponentsService {
       ...(linked
         ? {
             mergedIdentities: linked.identities,
-            revealedName: linked.revealedName || doc.revealedName || null,
           }
         : {}),
+      revealedName: doc.globalIdentity?.displayName || linked?.revealedName || doc.revealedName || null,
       ...(mmrOverlay ? { mmr: mmrOverlay.mmr } : {}),
       ...(mmrOverlay && (doc.region == null || doc.region === "")
         ? { region: mmrOverlay.region }
@@ -3203,6 +3207,39 @@ class OpponentsService {
   }
 
   /**
+   * The account supplying current ladder data. An approved player
+   * identity changes this read target, never the recorded opponent.
+   * @param {string} userId
+   * @param {string} pulseId
+   * @returns {Promise<null | {pulseCharacterId:string|null, toonHandle:string|null, displayName:string|null, region:string|null, confirmed:boolean}>}
+   */
+  async resolveLadderIdentity(userId, pulseId) {
+    if (!userId) throw new Error("userId required");
+    if (typeof pulseId !== "string" || !pulseId) throw new Error("pulseId required");
+    const row = await this.db.opponents.findOne({ userId, pulseId }, {
+      projection: { _id: 0, pulseId: 1, pulseCharacterId: 1, toonHandle: 1, region: 1, displayNameSample: 1, revealedName: 1 },
+    });
+    if (!row) return null;
+    await this._overlayGlobalIdentities([row]);
+    const target = row.globalIdentity?.target || row;
+    const toonHandle = typeof target.toonHandle === "string" && target.toonHandle
+      ? target.toonHandle
+      : /^\d+-S2-\d+-\d+$/.test(target.pulseId || "") ? target.pulseId : null;
+    let pulseCharacterId = /^[1-9]\d*$/.test(String(target.pulseCharacterId || ""))
+      ? String(target.pulseCharacterId) : null;
+    if (!pulseCharacterId && toonHandle && typeof this.pulseDirectory?.getFreshResolution === "function") {
+      pulseCharacterId = await this.pulseDirectory.getFreshResolution(toonHandle);
+    }
+    return {
+      pulseCharacterId,
+      toonHandle,
+      displayName: row.globalIdentity?.displayName || row.revealedName || row.displayNameSample || null,
+      region: regionFromToonHandle(toonHandle) || (typeof target.region === "string" ? target.region : null),
+      confirmed: Boolean(row.globalIdentity),
+    };
+  }
+
+  /**
    * Per-race SC2Pulse 1v1 MMR breakdown for one of the caller's
    * opponents, plus ``topRace`` / ``topMmr`` (their highest-rated race)
    * for the profile header.
@@ -3219,42 +3256,24 @@ class OpponentsService {
    *   races: Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>,
    *   topRace: string|null,
    *   topMmr: number|null,
+   *   ladderIdentity: NonNullable<Awaited<ReturnType<OpponentsService['resolveLadderIdentity']>>>,
    * }>}
    */
   async getPulseRaceBreakdown(userId, pulseId) {
-    if (!userId) throw new Error("userId required");
-    if (typeof pulseId !== "string" || !pulseId) throw new Error("pulseId required");
-    const row = await this.db.opponents.findOne(
-      { userId, pulseId },
-      {
-        projection: {
-          _id: 0,
-          pulseId: 1,
-          pulseCharacterId: 1,
-          toonHandle: 1,
-          region: 1,
-        },
-      },
-    );
-    if (!row) return null;
+    const ladderIdentity = await this.resolveLadderIdentity(userId, pulseId);
+    if (!ladderIdentity) return null;
 
     /** @type {string[]} */
     const ids = [];
-    if (typeof row.pulseCharacterId === "string" && row.pulseCharacterId) {
-      ids.push(row.pulseCharacterId);
+    if (ladderIdentity.pulseCharacterId) {
+      ids.push(ladderIdentity.pulseCharacterId);
     }
-    if (typeof row.toonHandle === "string" && row.toonHandle) {
-      ids.push(row.toonHandle);
+    if (ladderIdentity.toonHandle) {
+      ids.push(ladderIdentity.toonHandle);
     }
 
-    const charId =
-      typeof row.pulseCharacterId === "string" && row.pulseCharacterId
-        ? row.pulseCharacterId
-        : null;
-    const toon =
-      typeof row.toonHandle === "string" && row.toonHandle
-        ? row.toonHandle
-        : null;
+    const charId = ladderIdentity.pulseCharacterId;
+    const toon = ladderIdentity.toonHandle;
 
     /** @type {Array<{race: string, mmr: number, games: number, league: string|null, region: string|null}>} */
     let races = [];
@@ -3280,9 +3299,7 @@ class OpponentsService {
       // the breakdown a region hint (authoritative from the toon handle,
       // falling back to the stored region) — it then queries only that
       // region's current season instead of all four.
-      const preferredRegion =
-        regionFromToonHandle(row.toonHandle)
-        || (typeof row.region === "string" ? row.region : null);
+      const preferredRegion = ladderIdentity.region;
       try {
         races = (await this.pulseMmr.getRaceBreakdown(ids, { preferredRegion })) || [];
       } catch {
@@ -3306,6 +3323,7 @@ class OpponentsService {
       races,
       topRace: top ? top.race : null,
       topMmr: top ? top.mmr : null,
+      ladderIdentity,
     };
   }
 }

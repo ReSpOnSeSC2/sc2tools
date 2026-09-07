@@ -26,6 +26,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   multichatPredictions: import('mongodb').Collection,
  *   multichatClipMoments: import('mongodb').Collection,
  *   platformConnections: import('mongodb').Collection,
+ *   publicYoutubeArchives: import('mongodb').Collection,
  *   platformOauthStates: import('mongodb').Collection,
  *   platformWebhookReceipts: import('mongodb').Collection,
  *   platformEvents: import('mongodb').Collection,
@@ -98,6 +99,7 @@ async function connect({ uri, dbName }, observability = {}) {
     multichatPredictions: db.collection(COLLECTIONS.MULTICHAT_PREDICTIONS),
     multichatClipMoments: db.collection(COLLECTIONS.MULTICHAT_CLIP_MOMENTS),
     platformConnections: db.collection(COLLECTIONS.PLATFORM_CONNECTIONS),
+    publicYoutubeArchives: db.collection(COLLECTIONS.PUBLIC_YOUTUBE_ARCHIVES),
     platformOauthStates: db.collection(COLLECTIONS.PLATFORM_OAUTH_STATES),
     platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
     platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
@@ -236,6 +238,7 @@ async function ensureIndexes(ctx) {
   await ctx.opponents.createIndex({ lastSeen: 1 });
   await ctx.pulseAccounts.createIndex({ updatedAt: 1 });
   await ctx.playerChannels.createIndex({ id: 1 }, { unique: true });
+  await ctx.publicYoutubeArchives.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   // Tombstones retain their identities; a refresh can never resurrect removed channels.
   await ctx.playerChannels.createIndex({ identityKeys: 1 }, { unique: true });
   await ctx.playerChannels.createIndex({ ownerUserId: 1 }, { sparse: true });

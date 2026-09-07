@@ -5,6 +5,11 @@ import { OpponentsTab } from "../OpponentsTab";
 const useApiMock = vi.fn();
 const useApiPaginatedMock = vi.fn();
 const useAllNetMmrOpponentsMock = vi.fn();
+const usePlayerChannelsMock = vi.fn();
+
+vi.mock("../usePlayerChannels", () => ({
+  usePlayerChannels: (...args: unknown[]) => usePlayerChannelsMock(...args),
+}));
 
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
@@ -31,10 +36,13 @@ vi.mock("@/lib/filterContext", async (importOriginal) => {
   };
 });
 
-vi.mock("@/lib/useLocalStorageState", () => ({
-  useLocalStoragePositiveInt: (_key: string, initial: number) => [initial, vi.fn()],
-  useLocalStorageState: <T,>(_key: string, initial: T) => [initial, vi.fn()],
-}));
+vi.mock("@/lib/useLocalStorageState", async () => {
+  const { useState } = await import("react");
+  return {
+    useLocalStoragePositiveInt: (_key: string, initial: number) => [initial, vi.fn()],
+    useLocalStorageState: <T,>(_key: string, initial: T) => useState(initial),
+  };
+});
 
 const opponents = [
   {
@@ -97,6 +105,7 @@ const impacts = [
 ];
 
 beforeEach(() => {
+  usePlayerChannelsMock.mockReturnValue(() => undefined);
   useApiMock.mockReturnValue({ data: { links: {}, partial: false } });
   useApiPaginatedMock.mockReturnValue({
     items: opponents,
@@ -273,5 +282,55 @@ describe("OpponentsTab MMR impact", () => {
     expect(
       screen.queryByText(/No verified opponent MMR pairs match/i),
     ).toBeNull();
+  });
+
+  it("keeps an approved barcode beside AKA with channels when grouped, expanded, or ungrouped", () => {
+    const barcode = "IIlIIlIl";
+    const globalIdentity = {
+      groupKey: "player:236671", displayName: "Strange",
+      target: { key: "pulse:236671", pulseCharacterId: "236671" },
+    };
+    useApiPaginatedMock.mockReturnValue({
+      items: [
+        { ...opponents[0], pulseId: "8703807", pulseCharacterId: "8703807", name: barcode, revealedName: "StaleName", globalIdentity, lastPlayed: "2026-09-07T00:00:00Z" },
+        { ...opponents[1], pulseId: "236671", pulseCharacterId: "236671", name: "MainAccount", globalIdentity, lastPlayed: "2026-09-01T00:00:00Z" },
+      ],
+      isLoading: false, error: null, pagesFetched: 1, hitMaxPages: false,
+    });
+    usePlayerChannelsMock.mockReturnValue(() => ({ twitch: "https://www.twitch.tv/strange", youtube: "https://www.youtube.com/@strange" }));
+    const onOpen = vi.fn();
+    render(<OpponentsTab onOpen={onOpen} />);
+    const table = screen.getByRole("table", { name: "Opponent history" });
+    const grouped = within(table).getByText(barcode).closest("tr")!;
+    expect(within(grouped).getByText("aka")).toBeTruthy();
+    expect(within(grouped).getByTitle("Confirmed as Strange").textContent).toBe("akaStrange");
+    expect(within(grouped).queryByText("StaleName")).toBeNull();
+    expect(within(grouped).getAllByRole("cell")[5].textContent).toBe("6");
+    expect(within(grouped).getByRole("link", { name: "Visit Strange's Twitch channel" }).getAttribute("href")).toBe("https://www.twitch.tv/strange");
+    expect(within(grouped).getByRole("link", { name: "Visit Strange's YouTube channel" })).toBeTruthy();
+    fireEvent.click(within(grouped).getByRole("button", { name: `Open ${barcode} opponent details` }));
+    expect(onOpen).toHaveBeenLastCalledWith("8703807");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show the 2 names this player uses" }));
+    const expanded = within(table).getAllByRole("row").filter((row) => row.className.includes("bg-bg-elevated/40"));
+    expect(expanded).toHaveLength(2);
+    const source = expanded.find((row) => within(row).queryByText(barcode))!;
+    expect(within(source).getByTitle("Confirmed as Strange")).toBeTruthy();
+    expect(within(source).getByRole("link", { name: "Visit Strange's YouTube channel" })).toBeTruthy();
+    expect(within(source).getAllByRole("cell")[5].textContent).toBe("3");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    const separate = within(table).getByText(barcode).closest("tr")!;
+    expect(within(separate).getByTitle("Confirmed as Strange")).toBeTruthy();
+    expect(within(separate).getByRole("link", { name: "Visit Strange's Twitch channel" })).toBeTruthy();
+    expect(within(separate).getAllByRole("cell")[5].textContent).toBe("3");
+    const search = screen.getByRole("textbox", { name: "Search opponents" });
+    fireEvent.change(search, { target: { value: "Strange" } });
+    expect(within(table).getByText(barcode)).toBeTruthy();
+    expect(within(table).getByText("MainAccount")).toBeTruthy();
+    fireEvent.change(search, { target: { value: barcode } });
+    expect(within(table).getByText(barcode)).toBeTruthy();
+    expect(within(table).queryByText("MainAccount")).toBeNull();
   });
 });

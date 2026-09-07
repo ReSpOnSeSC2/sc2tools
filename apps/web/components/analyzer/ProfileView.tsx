@@ -261,10 +261,11 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <RevealedChip
-              name={data.globalIdentity ? null : data.revealedName}
+              name={data.globalIdentity?.displayName || data.revealedName}
               displayedName={data.name}
+              confirmed={Boolean(data.globalIdentity)}
             />
-            <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} />
+            <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} confirmedIdentity={data.globalIdentity} />
             {/* The identities breakdown below supersedes the toons
                 disclosure — showing both would say the same thing
                 twice. */}
@@ -276,6 +277,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             pulseCharacterId={data.pulseCharacterId}
             toonHandle={data.toonHandle}
             pulseId={data.pulseId || pulseId}
+            recordedAccount={Boolean(data.globalIdentity)}
           />
           {playerChannels ? (
             <div className="mt-3 [&_a]:min-h-11">
@@ -335,13 +337,13 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         race={data.oppRaceModal}
       />
 
-      <RaceMmrPanel breakdown={races} isLoading={racesLoading} />
+      <RaceMmrPanel breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} />
 
       {/* SC2Pulse ladder context — league/percentile, season record,
           peak, 90-day MMR sparkline, pro identity + linked accounts.
           Fetched in parallel with the profile; renders nothing while
           the opponent's pulseCharacterId is still unresolved. */}
-      <LadderContextCard pulseId={pulseId} />
+      <LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity} />
 
       <OpponentDiagnosticsPanel
         collapsible
@@ -643,7 +645,7 @@ function MergedIdentitiesLine({
 }
 
 /**
- * SC2Pulse "revealed" identity pill for the profile heading. For a
+ * Confirmed or SC2Pulse-revealed identity pill for the profile heading. For a
  * barcode opponent the heading is unreadable bars; the revealed pro/main
  * name is the real identity. Renders nothing when not revealed — or
  * when the heading already IS the revealed name (a merged profile led
@@ -652,19 +654,21 @@ function MergedIdentitiesLine({
 function RevealedChip({
   name,
   displayedName,
+  confirmed = false,
 }: {
   name?: string | null;
   displayedName?: string;
+  confirmed?: boolean;
 }) {
   const tag = typeof name === "string" ? name.trim() : "";
   if (!tag || tag === (displayedName || "").trim()) return null;
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full bg-accent-cyan/15 px-2.5 py-0.5 text-caption font-semibold text-accent-cyan"
-      title={`Revealed on SC2Pulse as ${tag}`}
+      title={confirmed ? `Confirmed by an admin as ${tag}` : `Revealed on SC2Pulse as ${tag}`}
     >
       <span className="text-micro font-medium uppercase tracking-wider opacity-70">
-        revealed
+        AKA
       </span>
       {tag}
     </span>
@@ -682,10 +686,12 @@ function ProfilePulseLine({
   pulseCharacterId,
   toonHandle,
   pulseId,
+  recordedAccount = false,
 }: {
   pulseCharacterId?: string | null;
   toonHandle?: string | null;
   pulseId: string;
+  recordedAccount?: boolean;
 }) {
   const label = pickPulseLabel({ pulseCharacterId, toonHandle, pulseId });
   if (!label) {
@@ -696,7 +702,7 @@ function ProfilePulseLine({
   if (label.isPulseCharacterId) {
     return (
       <div className="flex flex-wrap items-center gap-2 font-mono text-caption text-text-dim">
-        <span>Pulse ID</span>
+        <span>{recordedAccount ? "Played account · Pulse ID" : "Pulse ID"}</span>
         <a
           href={sc2pulseCharacterUrl(label.value)}
           target="_blank"
