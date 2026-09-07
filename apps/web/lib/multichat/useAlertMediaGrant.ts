@@ -13,10 +13,9 @@
 //     app's useApi hook (which attaches the Clerk JWT) and publishes the grant
 //     with setAlertMediaGrant directly, so no raw fetch is needed here.
 //
-// A 403 (not an admin) or 503 (R2 not configured) is not an error condition:
-// the grant stays empty, every media lookup misses, and the renderer falls
-// back to code-native static art. So failures are swallowed deliberately, and
-// the hook never retries a 403 -- admin status does not change mid-session.
+// A 403 (not an admin) leaves an empty grant and stops polling. Other failures,
+// including 503 while media storage is unavailable, retry at the normal cadence
+// so a long-running OBS source recovers without needing a manual reload.
 
 import { useEffect } from "react";
 import { API_BASE } from "../clientApi";
@@ -34,13 +33,17 @@ const POLL_MS = 60_000;
 
 async function fetchGrant(url: string, signal: AbortSignal): Promise<boolean> {
   const res = await fetch(url, { signal, credentials: "omit" });
-  if (res.status === 403 || res.status === 503) {
-    // Expected for non-admins and unconfigured deployments. Stop asking.
+  if (signal.aborted) return false;
+  if (res.status === 403) {
+    // Access was denied. Clear any old grant and stop asking.
     setAlertMediaGrant(EMPTY_ALERT_MEDIA_GRANT);
     return false;
   }
   if (!res.ok) return true; // transient — leave the grant and retry later
-  setAlertMediaGrant(toAlertMediaGrant(await res.json()));
+  const grant = toAlertMediaGrant(await res.json());
+  // A token change or unmount may finish while the response body is parsing.
+  if (signal.aborted) return false;
+  setAlertMediaGrant(grant);
   return true;
 }
 
@@ -56,7 +59,7 @@ function useGrantFrom(url: string | null): void {
       if (grantNeedsRefresh(getAlertMediaGrant(), Date.now())) {
         try {
           const keepGoing = await fetchGrant(url, controller.signal);
-          if (!keepGoing) return; // 403/503 — do not reschedule
+          if (!keepGoing) return; // access denied or effect cleaned up
         } catch {
           // Network error or abort; fall through and retry on the next tick.
         }

@@ -742,6 +742,8 @@ def build_scenes(
                 transform=(
                     _manual_override_transform_for(item.rect)
                     if item.share_key == "manual_scene_override"
+                    else _chat_alert_transform_for(item.rect)
+                    if item.share_key == _CHAT_ALERTS_SHARE_KEY
                     else _transform_for(item.rect)
                 ),
             )
@@ -1271,7 +1273,7 @@ def repair_manual_scene_overrides(
             if scene_name not in changed:
                 changed.append(scene_name)
 
-        alert_transform = _transform_for(alert_rect)
+        alert_transform = _chat_alert_transform_for(alert_rect)
         if not _transform_matches_rect(alert.get("transform"), alert_rect):
             client.set_scene_item_transform(
                 scene_name=scene_name,
@@ -1497,7 +1499,7 @@ def repair_vertical_scene_chat_alerts(client: Any) -> bool:
         client.set_scene_item_transform(
             scene_name=VERTICAL_SCENE_NAME,
             item_id=int(alert["item_id"]),
-            transform=_transform_for(rect),
+            transform=_chat_alert_transform_for(rect),
         )
         changed = True
 
@@ -3368,13 +3370,13 @@ def _transform_fills_rect(raw: Any, rect: Rect) -> bool:
 
 
 def _transform_matches_rect(raw: Any, rect: Rect) -> bool:
-    """Whether a normal SCALE_INNER item matches the authored rectangle."""
+    """Whether an alert fits its rectangle without a stale crop or transform."""
     if not isinstance(raw, dict):
         return False
 
-    def _same_number(key: str, expected: int) -> bool:
+    def _same_number(key: str, expected: int, tolerance: float = 0.5) -> bool:
         try:
-            return abs(float(raw.get(key)) - float(expected)) < 0.5
+            return abs(float(raw.get(key)) - float(expected)) < tolerance
         except (TypeError, ValueError):
             return False
 
@@ -3387,11 +3389,18 @@ def _transform_matches_rect(raw: Any, rect: Rect) -> bool:
     return (
         _same_number("positionX", rect.x)
         and _same_number("positionY", rect.y)
+        and _same_number("rotation", 0, 0.001)
+        and _same_number("scaleX", 1, 0.001)
+        and _same_number("scaleY", 1, 0.001)
         and _same_int("alignment", _ALIGN_TOP_LEFT)
         and raw.get("boundsType") == "OBS_BOUNDS_SCALE_INNER"
         and _same_int("boundsAlignment", _ALIGN_CENTER)
         and _same_number("boundsWidth", rect.w)
         and _same_number("boundsHeight", rect.h)
+        and _same_int("cropLeft", 0)
+        and _same_int("cropRight", 0)
+        and _same_int("cropTop", 0)
+        and _same_int("cropBottom", 0)
     )
 
 
@@ -3525,6 +3534,26 @@ def _manual_override_transform_for(rect: Rect) -> Dict[str, Any]:
         "boundsAlignment": _ALIGN_CENTER,
         "boundsWidth": max(1, rect.w),
         "boundsHeight": max(1, rect.h),
+        "cropLeft": 0,
+        "cropRight": 0,
+        "cropTop": 0,
+        "cropBottom": 0,
+    }
+
+
+def _chat_alert_transform_for(rect: Rect) -> Dict[str, Any]:
+    """Reset an alert's transform while preserving aspect-fit bounds.
+
+    OBS merges transform patches. Moving a formerly cropped or rotated alert
+    into its bounds does not clear those fields, and a left crop can hide the
+    whole card even though most of its wide Browser Source stays on canvas.
+    Camera and game items retain their existing normal transform behavior.
+    """
+    return {
+        **_transform_for(rect),
+        "rotation": 0.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
         "cropLeft": 0,
         "cropRight": 0,
         "cropTop": 0,

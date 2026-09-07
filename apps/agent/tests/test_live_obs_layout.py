@@ -333,7 +333,8 @@ class LegacyObs(FakeObs):
     def set_scene_item_transform(self, **kw: Any) -> None:
         super().set_scene_item_transform(**kw)
         item = self._item(kw["scene_name"], kw["item_id"])
-        item["transform"] = dict(kw["transform"])
+        # OBS merges patches; omitted crop/rotation fields remain active.
+        item["transform"].update(kw["transform"])
 
     def set_scene_item_index(self, **kw: Any) -> None:
         super().set_scene_item_index(**kw)
@@ -1516,6 +1517,45 @@ def test_legacy_scene_repair_reenables_and_fully_resets_a_broken_cover() -> None
     assert manual_override_scenes_needing_update(obs) == []
 
 
+@pytest.mark.parametrize("damage", [
+    {"rotation": 17.0},
+    {"scaleX": -0.25},
+    {"scaleY": 0.8},
+    {"cropLeft": 600},
+    {"cropRight": 1792},
+    {"cropTop": 300},
+    {"cropBottom": 300},
+    {
+        "positionX": 0,
+        "positionY": 0,
+        "scaleX": 1.8889,
+        "scaleY": 1.8889,
+        "boundsType": "OBS_BOUNDS_NONE",
+    },
+])
+def test_legacy_scene_repair_restores_alert_visibility_from_stale_transforms(
+    damage: Dict[str, Any],
+) -> None:
+    obs = LegacyObs()
+    manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
+    repair_manual_scene_overrides(obs, browser_url=manual_url)
+    before = deepcopy(obs.scene_items)
+    alert = obs.scene_items[SCENE_BETWEEN_GAMES][-1]
+    expected_transform = dict(alert["transform"])
+    alert["transform"].update(damage)
+
+    assert manual_override_scenes_needing_update(obs) == [SCENE_BETWEEN_GAMES]
+    assert repair_manual_scene_overrides(obs, browser_url=manual_url) == [
+        SCENE_BETWEEN_GAMES,
+    ]
+    assert alert["transform"] == expected_transform
+    assert obs.scene_items == before
+    assert manual_override_scenes_needing_update(obs) == []
+    writes = len(obs.transforms)
+    assert repair_manual_scene_overrides(obs, browser_url=manual_url) == []
+    assert len(obs.transforms) == writes
+
+
 def test_manual_cover_stretches_even_if_reused_browser_dimensions_are_old() -> None:
     obs = LegacyObs()
     manual_url = f"{BASE_URL}/overlay/{TOKEN}/{MANUAL_OVERRIDE_BROWSER_PATH}"
@@ -1622,12 +1662,35 @@ def test_vertical_repair_reuses_live_alert_input_and_preserves_other_items() -> 
     assert final[-1]["transform"] == {
         "positionX": 60,
         "positionY": 107,
+        "rotation": 0.0,
+        "scaleX": 1.0,
+        "scaleY": 1.0,
         "alignment": 5,
         "boundsType": "OBS_BOUNDS_SCALE_INNER",
         "boundsAlignment": 0,
         "boundsWidth": 960,
         "boundsHeight": 720,
+        "cropLeft": 0,
+        "cropRight": 0,
+        "cropTop": 0,
+        "cropBottom": 0,
     }
+
+
+def test_vertical_repair_clears_alert_crop_without_changing_live_scene() -> None:
+    obs = VerticalAlertObs()
+    repair_vertical_scene_chat_alerts(obs)
+    before = deepcopy(obs.scene_items)
+    alert = obs.scene_items[VERTICAL_SCENE_NAME][-1]
+    alert["transform"].update({
+        "cropLeft": 600,
+        "rotation": 25.0,
+        "scaleY": -1.0,
+    })
+
+    assert repair_vertical_scene_chat_alerts(obs) is True
+    assert obs.scene_items == before
+    assert repair_vertical_scene_chat_alerts(obs) is False
 
 
 def test_vertical_repair_is_idempotent() -> None:
