@@ -96,7 +96,7 @@ describe("LadderContextCard", () => {
     expect(pulse.getAttribute("href")).toContain("id=111");
 
     expect(
-      screen.getByLabelText(/MMR over the last 90 days, currently 4100/),
+      screen.getByLabelText(/MMR over the last 90 days, latest recorded rating 4100/),
     ).toBeTruthy();
   });
 

@@ -25,8 +25,8 @@ vi.mock("../h2h/H2HTrendsSection", () => ({ H2HTrendsSection: () => null }));
 beforeEach(() => {
   useApiMock.mockReset(); usePlayerChannelsMock.mockReset(); channelsForMock.mockReset();
   usePlayerChannelsMock.mockReturnValue(channelsForMock);
-  useApiMock.mockImplementation((path: string) => ({
-    data: path.includes("pulse-races") ? undefined : { name: "Barcode", revealedName: "Harstem", pulseCharacterId: "994428", toonHandle: "2-S2-1-12345", games: [] },
+  useApiMock.mockImplementation((path: string | null) => ({
+    data: path?.includes("pulse-races") ? undefined : { name: "Barcode", revealedName: "Harstem", pulseCharacterId: "994428", toonHandle: "2-S2-1-12345", games: [] },
     isLoading: false,
   }));
 });
@@ -129,5 +129,23 @@ describe("opponent profile channel placement", () => {
     expect(screen.getByText("MMR by race")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View SC2Pulse profile" }).getAttribute("href")).toContain("id=236671");
     expect(screen.getByRole("link", { name: "8703807" }).getAttribute("href")).toContain("id=8703807");
+  });
+
+  it("shares ladder-context data to keep the confirmed main rating in the header when current-season races are unavailable", () => {
+    useApiMock.mockImplementation((path: string | null) => ({
+      data: path?.includes("pulse-races")
+        ? { ...confirmedRaces, resolved: false, races: [], topMmr: null, topRace: null }
+        : path?.includes("pulse-intel")
+          ? { intel: { characterId: "236671", current: { rating: 6305, lastPlayed: "2026-05-12T15:45:33Z" } } }
+          : confirmedProfile,
+      isLoading: false,
+    }));
+    render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
+    const header = screen.getByLabelText("Opponent profile");
+    expect(within(header).getByRole("heading", { name: "IIIIllll" })).toBeTruthy();
+    expect(within(header).getByTitle("Confirmed by an admin as Strange")).toBeTruthy();
+    expect(within(header).getByRole("note", { name: "Latest recorded SC2Pulse MMR 6305 for Strange's main profile" })).toBeTruthy();
+    expect(screen.queryByText("5,275")).toBeNull();
+    expect(useApiMock).toHaveBeenCalledWith("/v1/opponents/8703807/pulse-intel", { revalidateOnFocus: false });
   });
 });

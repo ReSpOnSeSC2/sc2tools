@@ -16,7 +16,7 @@ import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
 
 /**
  * SC2Pulse ladder context for one opponent — the screen players used
- * to open in a separate SC2Pulse tab mid-queue: current league/tier,
+ * to open in a separate SC2Pulse tab mid-queue: latest league/tier,
  * ladder percentile, season record, peak MMR, a 90-day rating
  * sparkline, and (when the character is linked) the pro identity and
  * known alternate accounts. Player channels live in the profile header.
@@ -146,7 +146,7 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat
-              label="Current MMR"
+              label="Latest MMR"
               value={intel.current ? intel.current.rating : "—"}
             />
             <Stat label="Season W-L" value={seasonRecord} />
@@ -201,7 +201,7 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
 
         {spark.length >= 2 ? (
           <figure
-            aria-label={`MMR over the last 90 days, currently ${
+            aria-label={`MMR over the last 90 days, latest recorded rating ${
               intel.current ? intel.current.rating : "unknown"
             }`}
             className="min-w-0"

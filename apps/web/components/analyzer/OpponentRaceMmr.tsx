@@ -29,12 +29,18 @@ export type PulseRaceBreakdown = {
   };
 };
 
+/** Latest team reported by Pulse; it may belong to an earlier season. */
+export type PulseLadderRating = {
+  characterId: string;
+  current: { rating: number; lastPlayed: string | null } | null;
+};
+
 /** Ignore a cached account response while an approved target changes. */
 function matchesConfirmedIdentity(
   breakdown: PulseRaceBreakdown | undefined,
   confirmedIdentity: GlobalPlayerIdentity | null | undefined,
 ): boolean {
-  if (!confirmedIdentity) return true;
+  if (!confirmedIdentity) return !breakdown?.ladderIdentity?.confirmed;
   const source = breakdown?.ladderIdentity;
   if (!source?.confirmed) return false;
   const target = confirmedIdentity.target;
@@ -46,7 +52,7 @@ function matchesConfirmedIdentity(
 /**
  * Headline MMR for the opponent profile: their highest-rated race.
  * Returns null when there's no resolved breakdown so the caller can
- * fall back to the single stored MMR.
+ * use a verified latest Pulse team or the recorded-account fallback.
  */
 export function topHeadlineMmr(
   b: PulseRaceBreakdown | undefined,
@@ -61,21 +67,23 @@ export function topHeadlineMmr(
 /**
  * Last-known MMR pill for the opponent profile header. When the
  * per-race breakdown resolved, shows their highest-rated race's MMR,
- * tinted with that race. Otherwise falls back to the single stored
- * ``fallbackMmr`` (the most-recent-game value) so behaviour matches the
- * pre-breakdown UI when SC2Pulse is unreachable.
+ * tinted with that race. A confirmed main can instead show its latest
+ * recorded Pulse team rating, without assigning a race/current season.
+ * Unconfirmed accounts retain the single stored ``fallbackMmr``.
  */
 export function HeadlineMmrChip({
   breakdown,
   fallbackMmr,
   confirmedIdentity,
+  ladderIntel,
 }: {
   breakdown: PulseRaceBreakdown | undefined;
   fallbackMmr?: number | null;
   confirmedIdentity?: GlobalPlayerIdentity | null;
+  ladderIntel?: PulseLadderRating | null;
 }) {
-  if (!matchesConfirmedIdentity(breakdown, confirmedIdentity)) return null;
-  const top = topHeadlineMmr(breakdown);
+  const sourceMatches = matchesConfirmedIdentity(breakdown, confirmedIdentity);
+  const top = sourceMatches ? topHeadlineMmr(breakdown) : null;
   if (top) {
     const race = coerceRace(top.race);
     const tint = raceTint(race);
@@ -93,6 +101,27 @@ export function HeadlineMmrChip({
       </span>
     );
   }
+  const targetCid = confirmedIdentity?.target.pulseCharacterId
+    || (sourceMatches && breakdown?.ladderIdentity?.confirmed ? breakdown.ladderIdentity.pulseCharacterId : null);
+  const latest = confirmedIdentity && targetCid && ladderIntel?.characterId === targetCid
+    ? ladderIntel.current : null;
+  if (latest && Number.isFinite(latest.rating) && latest.rating > 0) {
+    const lastPlayed = latest.lastPlayed ? new Date(latest.lastPlayed) : null;
+    const dateLabel = lastPlayed && Number.isFinite(lastPlayed.getTime())
+      ? ` · last played ${lastPlayed.toLocaleDateString()}` : "";
+    return (
+      <span
+        role="note"
+        aria-label={`Latest recorded SC2Pulse MMR ${Math.round(latest.rating)} for ${confirmedIdentity?.displayName}'s main profile`}
+        title={`Latest recorded SC2Pulse ladder rating${dateLabel}`}
+        className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-accent tabular-nums"
+      >
+        <span className="text-accent/70">Latest MMR</span>
+        <span>{fmtMmr(latest.rating)}</span>
+      </span>
+    );
+  }
+  if (!sourceMatches) return null;
   if (!confirmedIdentity && !breakdown?.ladderIdentity?.confirmed && typeof fallbackMmr === "number" && fallbackMmr > 0) {
     return (
       <span
@@ -137,7 +166,7 @@ export function RaceMmrPanel({
     if (breakdown.ladderIdentity?.confirmed) {
       return (
         <Card title="MMR by race">
-          <p className="text-caption text-text-muted">Current ladder ratings are unavailable for the confirmed main profile.</p>
+          <p className="text-caption text-text-muted">A current-season race breakdown is unavailable for this main profile.</p>
           <LadderMmrSource breakdown={breakdown} />
         </Card>
       );

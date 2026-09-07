@@ -31,6 +31,7 @@ import {
   HeadlineMmrChip,
   RaceMmrPanel,
   type PulseRaceBreakdown,
+  type PulseLadderRating,
 } from "./OpponentRaceMmr";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { PredictedStrategiesList } from "./PredictedStrategiesList";
@@ -176,6 +177,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
       `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-races`,
       { revalidateOnFocus: false },
     );
+  // Shares the LadderContextCard SWR key, so a confirmed main without
+  // current-season race teams can still show its latest recorded rating.
+  const { data: ladder } = useApi<{ intel: PulseLadderRating | null }>(
+    data?.globalIdentity ? `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-intel` : null,
+    { revalidateOnFocus: false },
+  );
   // Lifted filter state — clicking a row label in the H2H "Maps"
   // view, or a cell in the "Builds" matrix, narrows the All-games
   // table and the by-map / by-strategy summary cards below it. The
@@ -265,7 +272,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
               displayedName={data.name}
               confirmed={Boolean(data.globalIdentity)}
             />
-            <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} confirmedIdentity={data.globalIdentity} />
+            <HeadlineMmrChip breakdown={races} fallbackMmr={data.mmr} confirmedIdentity={data.globalIdentity} ladderIntel={ladder?.intel} />
             {/* The identities breakdown below supersedes the toons
                 disclosure — showing both would say the same thing
                 twice. */}
