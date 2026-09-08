@@ -83,7 +83,7 @@ function MusicControlImpl({ music }: { music: ReplayMusicApi }) {
         title="Music volume"
         /* Same track treatment as the scrubber (``.replay-range`` in
            app/globals.css) so the dock has one slider style, not two. */
-        className={`replay-range w-16 ${enabled ? "" : "opacity-50"}`}
+        className={`replay-range w-16 shrink-0 ${enabled ? "" : "opacity-50"}`}
         style={
           { "--replay-progress": `${Math.round(volume * 100)}%` } as CSSProperties
         }

@@ -156,71 +156,81 @@ function TransportDockImpl({
   return (
     <div
       data-testid="replay-transport"
-      className="flex shrink-0 items-center gap-2 border-t border-border bg-bg-surface/60 px-3 py-2"
+      className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-bg-surface/60 px-3 py-2"
     >
-      <button
-        type="button"
-        onClick={() => onSeek(0)}
-        aria-label="Skip to start"
-        title="Skip to start"
-        className={DOCK_BUTTON_CLASS}
-      >
-        <SkipBack className="h-4 w-4" aria-hidden />
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          // Restarting from the end is the obvious intent of pressing
-          // play on a finished replay.
-          if (!playing && t >= gameLength) onSeek(0);
-          onPlayingChange(!playing);
-        }}
-        aria-label={playing ? "Pause" : "Play"}
-        aria-pressed={playing}
-        title={playing ? "Pause" : "Play"}
-        className={`${DOCK_BUTTON_CLASS} border-accent-cyan/50 bg-accent-cyan/15 hover:border-accent-cyan hover:bg-accent-cyan/25`}
-      >
-        {playing ? (
-          <Pause className="h-4 w-4" aria-hidden />
-        ) : (
-          <Play className="h-4 w-4" aria-hidden />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={() => onSpeedChange(nextSpeed(speed))}
-        aria-label={`Playback speed ${speed} times. Click to cycle.`}
-        title="Playback speed"
-        className={`${DOCK_BUTTON_CLASS} tabular-nums`}
-      >
-        {speed}×
-      </button>
-
-      <div className="min-w-0 flex-1 pt-0.5">
-        <PhaseStrip phases={phases} gameLength={gameLength} />
-        <MarkerDots markers={markers} gameLength={gameLength} onSeek={onSeek} />
-        <input
-          type="range"
-          min={0}
-          max={Math.ceil(gameLength)}
-          step={1}
-          value={Math.round(Math.min(gameLength, Math.max(0, t)))}
-          onChange={(e) => onSeek(Number(e.target.value))}
-          aria-label="Playback position"
-          aria-valuetext={`${formatClock(t)} of ${formatClock(gameLength)}`}
-          className="replay-range"
-          style={{ "--replay-progress": `${progress}%` } as CSSProperties}
-        />
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onSeek(0)}
+          aria-label="Skip to start"
+          title="Skip to start"
+          className={DOCK_BUTTON_CLASS}
+        >
+          <SkipBack className="h-4 w-4" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            // Restarting from the end is the obvious intent of pressing
+            // play on a finished replay.
+            if (!playing && t >= gameLength) onSeek(0);
+            onPlayingChange(!playing);
+          }}
+          aria-label={playing ? "Pause" : "Play"}
+          aria-pressed={playing}
+          title={playing ? "Pause" : "Play"}
+          className={`${DOCK_BUTTON_CLASS} border-accent-cyan/50 bg-accent-cyan/15 hover:border-accent-cyan hover:bg-accent-cyan/25`}
+        >
+          {playing ? (
+            <Pause className="h-4 w-4" aria-hidden />
+          ) : (
+            <Play className="h-4 w-4" aria-hidden />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSpeedChange(nextSpeed(speed))}
+          aria-label={`Playback speed ${speed} times. Click to cycle.`}
+          title="Playback speed"
+          className={`${DOCK_BUTTON_CLASS} tabular-nums`}
+        >
+          {speed}×
+        </button>
       </div>
 
-      {/* ONE text run on purpose: hosts and tests read this label as
-          "8:42 / 21:07", and splitting the total into a child element
-          would break that into two nodes. */}
-      <span className="shrink-0 whitespace-nowrap text-caption font-semibold tabular-nums text-text">
-        {formatClock(t)} / {formatClock(gameLength)}
-      </span>
-      {music ? <MusicControl music={music} /> : null}
-      {children}
+      {/* A separate timeline row on phones. The basis also lets it wrap
+          in narrow desktop hosts before the controls squeeze it away. */}
+      <div className="order-first flex w-full min-w-0 items-center gap-2 md:order-none md:w-auto md:flex-[1_1_16rem]">
+        <div className="min-w-0 flex-1 pt-0.5">
+          <PhaseStrip phases={phases} gameLength={gameLength} />
+          <MarkerDots markers={markers} gameLength={gameLength} onSeek={onSeek} />
+          <input
+            type="range"
+            min={0}
+            max={Math.ceil(gameLength)}
+            step={1}
+            value={Math.round(Math.min(gameLength, Math.max(0, t)))}
+            onChange={(e) => onSeek(Number(e.target.value))}
+            aria-label="Playback position"
+            aria-valuetext={`${formatClock(t)} of ${formatClock(gameLength)}`}
+            className="replay-range block w-full"
+            style={{ "--replay-progress": `${progress}%` } as CSSProperties}
+          />
+        </div>
+
+        {/* ONE text run on purpose: hosts and tests read this label as
+            "8:42 / 21:07", and splitting the total into a child element
+            would break that into two nodes. */}
+        <span className="shrink-0 whitespace-nowrap text-caption font-semibold tabular-nums text-text">
+          {formatClock(t)} / {formatClock(gameLength)}
+        </span>
+      </div>
+      {music || children ? (
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {music ? <MusicControl music={music} /> : null}
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

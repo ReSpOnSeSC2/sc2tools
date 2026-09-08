@@ -557,11 +557,12 @@ a:hover {
  * portion is driven by ``--replay-progress``, set inline by the
  * component, so the fill tracks the playhead without a second element
  * stealing pointer events from the input.
+ * Width belongs to each input: the timeline fills its row, while the
+ * music slider stays compact.
  * ----------------------------------------------------------------- */
 .replay-scope input[type="range"].replay-range {
   -webkit-appearance: none;
   appearance: none;
-  width: 100%;
   height: 1.25rem;
   background: transparent;
   cursor: pointer;
