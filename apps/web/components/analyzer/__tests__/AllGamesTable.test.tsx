@@ -237,8 +237,9 @@ describe("AllGamesTable game analysis entry point", () => {
       );
     });
 
+    // The request can start before React commits the response to the table.
     expect(
-      screen.getByRole("columnheader", { name: "POV streams" }),
+      await screen.findByRole("columnheader", { name: "POV streams" }),
     ).toBeTruthy();
     const twitchLinks = screen.getAllByRole("link", {
       name: /Watch You POV on Twitch at 1:02:03 - Streamer/i,
