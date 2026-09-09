@@ -35,6 +35,10 @@ const LS_MIN_OPP = "analyzer.opponents.minGames";
 
 type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 
+type MmrImpactLeader = Pick<NetMmrOpponentRow,
+  "pulseId" | "toonHandle" | "name" | "displayName" | "netMmr" | "pairs"
+>;
+
 type Opp = {
   pulseId: string;
   pulseCharacterId?: string | null;
@@ -142,7 +146,7 @@ export function OpponentsTab({
   // and is only fetched while grouping is on. SWR-cached; `partial`
   // means the server is still warming its linkage cache and a later
   // visit will merge more rows.
-  const { data: pulseLinks } = useApi<PulseLinksResponse>(
+  const { data: pulseLinks, isLoading: isPulseLinksLoading } = useApi<PulseLinksResponse>(
     groupByPlayer ? "/v1/opponents/pulse-links" : null,
     { revalidateOnFocus: false },
   );
@@ -187,6 +191,36 @@ export function OpponentsTab({
     [normalised, groupByPlayer, pulseLinks],
   );
 
+  // The API leaders rank individual accounts. With grouping enabled, rank
+  // the same merged totals as the table, before its search/min-games/impact
+  // controls: these cards describe the entire globally filtered period.
+  const mmrLeaders = useMemo(() => {
+    if (!groupByPlayer) {
+      return {
+        mostWon: mmrImpactSummary?.mostMmrGainedFrom,
+        mostLost: mmrImpactSummary?.mostMmrLostTo,
+      };
+    }
+    const tracked = groups
+      .filter((group) => (group.mmrPairs || 0) > 0 && typeof group.netMmr === "number")
+      .map((group) => ({
+        ...group,
+        name: group.name || "unnamed opponent",
+        netMmr: group.netMmr ?? 0,
+        pairs: group.mmrPairs || 0,
+      }));
+    const byName = (a: MmrImpactLeader, b: MmrImpactLeader) =>
+      a.name.localeCompare(b.name) || (a.pulseId || "").localeCompare(b.pulseId || "");
+    return {
+      mostWon: tracked.filter((group) => group.netMmr > 0).sort((a, b) =>
+        b.netMmr - a.netMmr || (b.mmrWon || 0) - (a.mmrWon || 0) || byName(a, b),
+      )[0] ?? null,
+      mostLost: tracked.filter((group) => group.netMmr < 0).sort((a, b) =>
+        a.netMmr - b.netMmr || (b.mmrLost || 0) - (a.mmrLost || 0) || byName(a, b),
+      )[0] ?? null,
+    };
+  }, [groupByPlayer, groups, mmrImpactSummary]);
+
   // Client-side search across every identity in a group (names,
   // aliases, revealed name, pulse ids, toon handles). The backend
   // `search` query param is a no-op for the legacy endpoint, so
@@ -229,10 +263,11 @@ export function OpponentsTab({
   return (
     <div className="space-y-4">
       <MmrImpactLeaders
-        mostWon={mmrImpactSummary?.mostMmrGainedFrom}
-        mostLost={mmrImpactSummary?.mostMmrLostTo}
-        loading={isMmrImpactLoading}
-        unavailable={!!mmrImpactError}
+        mostWon={mmrLeaders.mostWon}
+        mostLost={mmrLeaders.mostLost}
+        loading={isMmrImpactLoading || (groupByPlayer && (isLoading || !!isPulseLinksLoading))}
+        unavailable={!!mmrImpactError || (groupByPlayer && !!error)}
+        incomplete={groupByPlayer && (hitMaxPages || hitMmrImpactMaxPages)}
         onOpen={onOpen}
       />
 
@@ -512,12 +547,14 @@ function MmrImpactLeaders({
   mostLost,
   loading,
   unavailable,
+  incomplete,
   onOpen,
 }: {
-  mostWon: NetMmrOpponentRow | null | undefined;
-  mostLost: NetMmrOpponentRow | null | undefined;
+  mostWon: MmrImpactLeader | null | undefined;
+  mostLost: MmrImpactLeader | null | undefined;
   loading: boolean;
   unavailable: boolean;
+  incomplete: boolean;
   onOpen: (pulseId: string) => void;
 }) {
   return (
@@ -549,7 +586,11 @@ function MmrImpactLeaders({
             role="alert"
             className="rounded-xl border-2 border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning sm:col-span-2"
           >
-            Opponent history loaded, but verified MMR impact is temporarily unavailable.
+            The verified MMR impact is temporarily unavailable.
+          </div>
+        ) : incomplete ? (
+          <div className="rounded-xl border-2 border-line bg-bg-surface px-4 py-3 text-sm text-text-muted sm:col-span-2">
+            Grouped MMR leaders need the complete opponent history. Narrow the global filters to see them.
           </div>
         ) : mostWon || mostLost ? (
           <>
@@ -580,7 +621,7 @@ function MmrLeaderCard({
   onOpen,
 }: {
   kind: "won" | "lost";
-  opponent: NetMmrOpponentRow | null | undefined;
+  opponent: MmrImpactLeader | null | undefined;
   onOpen: (pulseId: string) => void;
 }) {
   const won = kind === "won";

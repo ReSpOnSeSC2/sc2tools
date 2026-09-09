@@ -6,6 +6,7 @@ const useApiMock = vi.fn();
 const useApiPaginatedMock = vi.fn();
 const useAllNetMmrOpponentsMock = vi.fn();
 const usePlayerChannelsMock = vi.fn();
+const useFiltersMock = vi.fn();
 
 vi.mock("../usePlayerChannels", () => ({
   usePlayerChannels: (...args: unknown[]) => usePlayerChannelsMock(...args),
@@ -32,14 +33,14 @@ vi.mock("@/lib/filterContext", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/filterContext")>();
   return {
     ...actual,
-    useFilters: () => ({ filters: {}, dbRev: 7 }),
+    useFilters: () => useFiltersMock(),
   };
 });
 
 vi.mock("@/lib/useLocalStorageState", async () => {
   const { useState } = await import("react");
   return {
-    useLocalStoragePositiveInt: (_key: string, initial: number) => [initial, vi.fn()],
+    useLocalStoragePositiveInt: (_key: string, initial: number) => useState(initial),
     useLocalStorageState: <T,>(_key: string, initial: T) => useState(initial),
   };
 });
@@ -105,6 +106,7 @@ const impacts = [
 ];
 
 beforeEach(() => {
+  useFiltersMock.mockReturnValue({ filters: {}, dbRev: 7 });
   usePlayerChannelsMock.mockReturnValue(() => undefined);
   useApiMock.mockReturnValue({ data: { links: {}, partial: false } });
   useApiPaginatedMock.mockReturnValue({
@@ -136,6 +138,59 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+
+function mockGroupedImpacts(identitySource: "pulse" | "approved" = "pulse") {
+  const rows = [
+    { name: "StimPacker", netMmr: 115, mmrWon: 115, mmrLost: 0, pairs: 11 },
+    { name: "Gainer", netMmr: 80, mmrWon: 160, mmrLost: 80, pairs: 10 },
+    { name: "GainerAlt", netMmr: 60, mmrWon: 83, mmrLost: 23, pairs: 7 },
+    { name: "papito", netMmr: -111, mmrWon: 0, mmrLost: 111, pairs: 8 },
+    { name: "Loser", netMmr: -70, mmrWon: 0, mmrLost: 70, pairs: 6 },
+    { name: "LoserAlt", netMmr: -60, mmrWon: 0, mmrLost: 60, pairs: 5 },
+  ].map((row, index) => ({
+    ...impacts[0],
+    ...row,
+    pulseId: row.name.toLowerCase(),
+    pulseCharacterId: String(index + 1),
+    toonHandle: `1-S2-1-${index + 1}`,
+    avgDelta: row.netMmr / row.pairs,
+    lastPlayed: `2026-09-0${index + 1}T00:00:00.000Z`,
+  }));
+  const playerKey = (index: number) =>
+    index === 1 || index === 2 ? "gainer" : index === 4 || index === 5 ? "loser" : null;
+  useApiPaginatedMock.mockReturnValue({
+    items: rows.map((row, index) => ({
+      ...opponents[0],
+      ...row,
+      games: row.pairs,
+      ...(identitySource === "approved" && playerKey(index) ? {
+        globalIdentity: {
+          groupKey: `player:${playerKey(index)}`,
+          displayName: playerKey(index),
+          target: { key: `pulse:${row.pulseCharacterId}` },
+        },
+      } : {}),
+    })),
+    isLoading: false, error: null, pagesFetched: 1, hitMaxPages: false,
+  });
+  useApiMock.mockReturnValue({
+    data: {
+      links: identitySource === "pulse" ? Object.fromEntries(rows.map((row, index) => [
+        row.pulseCharacterId,
+        { accountId: playerKey(index), proId: null, proNickname: null },
+      ])) : {},
+      partial: false,
+    },
+  });
+  useAllNetMmrOpponentsMock.mockReturnValue({
+    items: rows,
+    summary: {
+      netMmr: 14, mmrWon: 358, mmrLost: 344, pairs: 47, opponents: 6,
+      mostMmrGainedFrom: rows[0], mostMmrLostTo: rows[3],
+    },
+    isLoading: false, error: null, pagesFetched: 1, hitMaxPages: false,
+  });
+}
 
 describe("OpponentsTab MMR impact", () => {
   it("joins verified impact, shows both leaders, and filters by net result", () => {
@@ -203,7 +258,64 @@ describe("OpponentsTab MMR impact", () => {
     expect(onOpen).toHaveBeenCalledWith("alpha");
   });
 
-  it("keeps leader cards authoritative when the client-side join is truncated", () => {
+  it.each(["pulse", "approved"] as const)("ranks %s player groups by net MMR and opens the same profile as the table", (identitySource) => {
+    mockGroupedImpacts(identitySource);
+    const onOpen = vi.fn();
+    render(<OpponentsTab onOpen={onOpen} />);
+    const table = screen.getByRole("table", { name: "Opponent history" });
+    for (const [kind, value, pairs] of [["won", "+140", 17], ["lost", "-130", 11]] as const) {
+      const card = screen.getByRole("button", { name: new RegExp(`most net MMR ${kind}$`) });
+      expect(within(card).getByText(value)).toBeTruthy();
+      expect(within(card).getByText(`${pairs} verified pairs`)).toBeTruthy();
+      const row = within(table).getByText(value, { selector: "span" }).closest("tr")!;
+      fireEvent.click(card);
+      const cardTarget = onOpen.mock.lastCall?.[0];
+      fireEvent.click(within(row).getByRole("button", { name: /opponent details$/ }));
+      expect(onOpen).toHaveBeenLastCalledWith(cardTarget);
+    }
+
+    fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
+    const mostWon = screen.getByRole("button", { name: "Open StimPacker, most net MMR won" });
+    expect(within(mostWon).getByText("+115")).toBeTruthy();
+    expect(within(mostWon).getByText("11 verified pairs")).toBeTruthy();
+    expect(within(screen.getByRole("button", { name: "Open papito, most net MMR lost" })).getByText("-111")).toBeTruthy();
+    expect(within(table).queryByText("+140")).toBeNull();
+  });
+
+  it("keeps grouped leaders scoped to global filters while table controls change", () => {
+    mockGroupedImpacts();
+    const filters = { since: "2026-09-01T00:00:00.000Z", until: "2026-09-07T00:00:00.000Z" };
+    useFiltersMock.mockReturnValue({ filters, dbRev: 7 });
+    render(<OpponentsTab onOpen={() => {}} />);
+    expect(useAllNetMmrOpponentsMock).toHaveBeenLastCalledWith(filters, 7);
+    expect(useApiPaginatedMock.mock.lastCall?.[0]).toContain("since=2026-09-01");
+    expect(useApiPaginatedMock.mock.lastCall?.[0]).toContain("until=2026-09-07");
+    fireEvent.change(screen.getByRole("textbox", { name: "Search opponents" }), { target: { value: "papito" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter opponents by MMR impact" }), { target: { value: "net-loss" } });
+    fireEvent.click(screen.getByRole("radio", { name: "20" }));
+    expect(within(screen.getByRole("table")).queryByText("+140")).toBeNull();
+    expect(within(screen.getByRole("button", { name: /most net MMR won$/ })).getByText("+140")).toBeTruthy();
+    expect(within(screen.getByRole("button", { name: /most net MMR lost$/ })).getByText("-130")).toBeTruthy();
+  });
+
+  it("updates grouped leaders and pair counts when the time period changes", () => {
+    mockGroupedImpacts();
+    const { rerender } = render(<OpponentsTab onOpen={() => {}} />);
+    const narrowerFilters = { since: "2026-09-05T00:00:00.000Z" };
+    useFiltersMock.mockReturnValue({ filters: narrowerFilters, dbRev: 8 });
+    useAllNetMmrOpponentsMock.mockReturnValue({
+      ...useAllNetMmrOpponentsMock.mock.results[0].value,
+      items: [{ ...impacts[0], pulseId: "stimpacker", toonHandle: "1-S2-1-1", pulseCharacterId: "1", netMmr: 12, pairs: 1, mmrWon: 12, mmrLost: 0 }],
+    });
+    rerender(<OpponentsTab onOpen={() => {}} />);
+    expect(useAllNetMmrOpponentsMock).toHaveBeenLastCalledWith(narrowerFilters, 8);
+    const card = screen.getByRole("button", { name: "Open StimPacker, most net MMR won" });
+    expect(within(card).getByText("+12")).toBeTruthy();
+    expect(within(card).getByText("1 verified pair")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /most net MMR lost$/ })).toBeNull();
+  });
+
+  it("keeps ungrouped leader cards authoritative when the client-side join is truncated", () => {
     useAllNetMmrOpponentsMock.mockReturnValue({
       items: [impacts[0]],
       summary: {
@@ -222,11 +334,42 @@ describe("OpponentsTab MMR impact", () => {
     });
 
     render(<OpponentsTab onOpen={() => {}} />);
+    fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
 
     expect(
       screen.getByRole("button", { name: "Open Beta, most net MMR lost" }),
     ).toBeTruthy();
     expect(screen.getByText(/Some MMR impact rows were omitted/i)).toBeTruthy();
+  });
+
+  it.each(["opponents", "impact"])("does not rank incomplete groups when %s pages are capped", (source) => {
+    mockGroupedImpacts();
+    const { rerender } = render(<OpponentsTab onOpen={() => {}} />);
+    const hook = source === "opponents" ? useApiPaginatedMock : useAllNetMmrOpponentsMock;
+    hook.mockReturnValue({ ...hook.mock.results[0].value, hitMaxPages: true });
+    rerender(<OpponentsTab onOpen={() => {}} />);
+    expect(screen.getByText(/Grouped MMR leaders need the complete opponent history/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /most net MMR (won|lost)$/ })).toBeNull();
+  });
+
+  it.each(["opponents", "impact", "links"])("waits for %s before showing grouped leaders", (source) => {
+    mockGroupedImpacts();
+    const { rerender } = render(<OpponentsTab onOpen={() => {}} />);
+    const hook = source === "opponents" ? useApiPaginatedMock : source === "impact" ? useAllNetMmrOpponentsMock : useApiMock;
+    hook.mockReturnValue({ ...hook.mock.results[0].value, isLoading: true });
+    rerender(<OpponentsTab onOpen={() => {}} />);
+    expect(screen.queryByRole("button", { name: /most net MMR (won|lost)$/ })).toBeNull();
+    expect(screen.queryByText(/No verified opponent MMR pairs match/)).toBeNull();
+  });
+
+  it("does not show empty or ungrouped leaders when opponent history fails", () => {
+    useApiPaginatedMock.mockReturnValue({
+      items: [], isLoading: false, error: new Error("offline"), pagesFetched: 0, hitMaxPages: false,
+    });
+    render(<OpponentsTab onOpen={() => {}} />);
+    expect(screen.getByRole("alert").textContent).toContain("verified MMR impact is temporarily unavailable");
+    expect(screen.queryByRole("button", { name: /most net MMR (won|lost)$/ })).toBeNull();
+    expect(screen.queryByText(/No verified opponent MMR pairs match/)).toBeNull();
   });
 
   it("keeps expanded identity rows aligned with the record-first columns", () => {
@@ -241,6 +384,10 @@ describe("OpponentsTab MMR impact", () => {
     });
 
     render(<OpponentsTab onOpen={() => {}} />);
+    const mostLost = screen.getByRole("button", { name: "Open Beta, most net MMR lost" });
+    expect(within(mostLost).getByText("-10")).toBeTruthy();
+    expect(within(mostLost).getByText("5 verified pairs")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /most net MMR won$/ })).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: /Show the 2 names this player uses/i }),
     );
