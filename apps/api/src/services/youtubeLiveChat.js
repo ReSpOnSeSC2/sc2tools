@@ -453,13 +453,19 @@ function normalizeYoutubeInput(raw) {
         return { videoId: v, pageUrls: [] };
       }
       const path = u.pathname.replace(/\/+$/, "");
-      const liveMatch = path.match(/^\/live\/([A-Za-z0-9_-]{11})$/);
+      const liveMatch = path.match(/^\/(?:live|shorts)\/([A-Za-z0-9_-]{11})$/);
       if (liveMatch) return { videoId: liveMatch[1], pageUrls: [] };
+      // Strip a channel tab, without stripping a legacy channel NAME like
+      // /user/live. Pasted /live URLs must not become /live/live.
+      const channelPath = path.replace(
+        /^(\/(?:@[^/]+|(?:channel|c|user)\/[^/]+))\/(?:live|streams|featured|videos|shorts)$/,
+        "$1",
+      );
       // Channel-ish URL — ask its /live page which video is on air.
       if (path) {
         return {
           videoId: null,
-          pageUrls: [`https://www.youtube.com${path}/live`],
+          pageUrls: [`https://www.youtube.com${channelPath}/live`],
         };
       }
     }

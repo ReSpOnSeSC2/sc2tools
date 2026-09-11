@@ -43,6 +43,8 @@ export interface PlatformViewers {
   /** Live viewers, or null when the count is unknown. */
   viewers: number | null;
   live: boolean;
+  /** Some broadcasts on this platform did not provide a current count. */
+  partial?: boolean;
   /** When the server completed this platform observation (cache-aware). */
   observedAtMs?: number;
   /** True only while a recent raid is waiting for the platform count. */
@@ -53,7 +55,7 @@ export interface ViewerCounts {
   platforms: PlatformViewers[];
   /** Sum of the KNOWN current per-platform counts; never lifetime views. */
   total: number;
-  /** True when at least one configured platform reported unknown. */
+  /** True when any configured platform or broadcast reported unknown. */
   partial: boolean;
   /** False until the first successful response — the UI stays blank. */
   loaded: boolean;
@@ -92,6 +94,7 @@ export function sanitizeViewerCounts(raw: unknown): ViewerCounts {
         platform: e.platform,
         viewers,
         live: Boolean(e.live),
+        ...(e.partial === true ? { partial: true } : {}),
         ...(Number.isFinite(observedAtMs) && observedAtMs > 0
           ? { observedAtMs: Math.floor(observedAtMs) }
           : {}),
@@ -105,8 +108,8 @@ export function sanitizeViewerCounts(raw: unknown): ViewerCounts {
   let total = 0;
   let partial = false;
   for (const p of platforms) {
-    if (p.viewers === null) partial = true;
-    else total += p.viewers;
+    if (p.viewers === null || p.partial) partial = true;
+    if (p.viewers !== null) total += p.viewers;
   }
   return { platforms, total, partial, loaded: true };
 }

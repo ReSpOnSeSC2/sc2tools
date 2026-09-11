@@ -189,13 +189,14 @@ export function DockChat({
                   data-testid={`dock-viewers-${p}`}
                   className="tabular-nums text-text"
                   title={
-                    `${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}` +
+                    `${platformViewers?.partial ? "At least " : ""}${count.toLocaleString("en-US")} currently watching on ${PLATFORM_META[p].label}` +
+                    (platformViewers?.partial ? " — some live stream counts are unavailable" : "") +
                     (platformViewers?.raidAdjusted
                       ? " — includes a recent raid while the platform count refreshes"
                       : "")
                   }
                 >
-                  {formatViewers(count)}
+                  {formatViewers(count)}{platformViewers?.partial ? "+" : ""}
                 </span>
               ) : null}
             </span>

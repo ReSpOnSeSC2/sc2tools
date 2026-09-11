@@ -19,7 +19,8 @@
  *     `livestream.viewer_count`. Same endpoint (and same Cloudflare
  *     exposure) as the chatroom resolver: when Cloudflare blocks the
  *     datacenter IP the count is reported UNKNOWN (null), never 0.
- *   - YouTube — the live watch page's `videoViewCountRenderer`
+ *   - YouTube — discover each active broadcast on the channel's Live tab,
+ *     then sum its watch page's `videoViewCountRenderer`, which
  *     carries `originalViewCount`, the "N watching now" concurrent
  *     figure. Scraped from the same page the chat resolver reads.
  *   - TikTok — no fetch at all: the relay already holds the webcast
@@ -40,6 +41,11 @@
 
 const { normalizeKickSlug } = require("./kickChannel");
 const { normalizeYoutubeInput } = require("./youtubeLiveChat");
+const {
+  parseEmbeddedJsonObject,
+  extractChannelLiveVideoIds,
+  extractWatchLiveState,
+} = require("./youtubeViewerPages");
 
 /** How long a fetched count is served before a refetch. */
 const CACHE_TTL_MS = 20_000;
@@ -55,6 +61,8 @@ const FETCH_TIMEOUT_MS = 10_000;
 const TWITCH_JSON_MAX_BYTES = 256 * 1024;
 const KICK_JSON_MAX_BYTES = 512 * 1024;
 const YOUTUBE_PAGE_MAX_BYTES = 4 * 1024 * 1024;
+/** Bound fan-out; watch pages are read sequentially under one deadline. */
+const YOUTUBE_MAX_LIVE_STREAMS = 8;
 
 /** Keep long-running processes bounded even when many channel names rotate. */
 const CACHE_MAX_ENTRIES = 256;
@@ -200,6 +208,7 @@ function unknownCount(platform) {
  *   platform: "twitch"|"kick"|"youtube"|"tiktok",
  *   viewers: number | null,
  *   live: boolean,
+ *   partial?: boolean,
  *   observedAtMs?: number,
  * }} PlatformViewers
  */
@@ -225,49 +234,6 @@ function toViewerCount(raw) {
   const n = typeof raw === "string" ? Number(raw.replace(/,/g, "")) : Number(raw);
   if (!Number.isFinite(n) || n < 0) return null;
   return Math.floor(n);
-}
-
-/**
- * Parse the JSON object beginning at `openBrace` without letting a
- * neighbouring renderer's fields leak into the match. YouTube embeds
- * these renderers as JSON inside the watch-page response.
- *
- * @param {string} source
- * @param {number} openBrace
- * @returns {Record<string, any> | null}
- */
-function parseEmbeddedJsonObject(source, openBrace) {
-  if (source[openBrace] !== "{") return null;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = openBrace; i < source.length; i += 1) {
-    const char = source[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (char === "\\") escaped = true;
-      else if (char === '"') inString = false;
-      continue;
-    }
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-    if (char === "{") depth += 1;
-    else if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        try {
-          const parsed = JSON.parse(source.slice(openBrace, i + 1));
-          return parsed && typeof parsed === "object" ? parsed : null;
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-  return null;
 }
 
 /** @param {Record<string, any>} renderer @returns {string} */
@@ -478,8 +444,8 @@ class MultichatViewersService {
     let total = 0;
     let partial = false;
     for (const p of platforms) {
-      if (p.viewers === null) partial = true;
-      else total += p.viewers;
+      if (p.viewers === null || p.partial) partial = true;
+      if (p.viewers !== null) total += p.viewers;
     }
     return { platforms, total, partial, atMs: this.now() };
   }
@@ -676,40 +642,74 @@ class MultichatViewersService {
 
   /** @param {string} channel @returns {Promise<PlatformViewers>} */
   async fetchYoutube(channel) {
-    /** @type {string[]} */
-    let urls;
+    let input;
     try {
-      const { videoId, pageUrls } = normalizeYoutubeInput(channel);
-      urls = videoId ? [WATCH_URL + videoId] : pageUrls;
+      input = normalizeYoutubeInput(channel);
     } catch {
-      return { platform: "youtube", viewers: null, live: false };
+      return unknownCount("youtube");
     }
-    for (const url of urls) {
-      const res = await this.fetchImpl(url, {
-        headers: PAGE_HEADERS,
-        redirect: "follow",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        await cancelBody(res.body);
-        throw new Error(`youtube page ${res.status}`);
-      }
-      const html = await readBoundedText(
-        res,
-        YOUTUBE_PAGE_MAX_BYTES,
-        "youtube",
-      );
-      const viewers = extractConcurrentViewers(html);
-      if (viewers !== null) {
-        return { platform: "youtube", viewers, live: true };
-      }
-      // The page loaded and simply carries no live stream — that is
-      // a definite "nobody is watching a stream that isn't on".
-      if (!/"isLive"\s*:\s*true/.test(html)) {
-        return { platform: "youtube", viewers: 0, live: false };
-      }
+    const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
+    if (input.videoId) {
+      return this.fetchYoutubeWatch(WATCH_URL + input.videoId, signal);
     }
-    return { platform: "youtube", viewers: null, live: false };
+    // /live can point at an old waiting room even while horizontal and
+    // vertical broadcasts are active. /streams lists both actual video IDs.
+    const liveUrl = input.pageUrls[0];
+    const html = await this.fetchYoutubePage(liveUrl.replace(/\/live$/, "/streams"), signal);
+    const ids = extractChannelLiveVideoIds(html);
+    if (ids === null) {
+      // Preserve a usable /live count if discovery changes, but don't claim
+      // that it covers every broadcast on the channel.
+      const fallback = await this.fetchYoutubeWatch(liveUrl, signal);
+      return fallback.viewers === null || !fallback.live
+        ? unknownCount("youtube")
+        : { ...fallback, partial: true };
+    }
+    let viewers = 0;
+    let known = ids.length === 0;
+    let live = false;
+    let partial = ids.length > YOUTUBE_MAX_LIVE_STREAMS;
+    for (const id of ids.slice(0, YOUTUBE_MAX_LIVE_STREAMS)) {
+      const count = await this.fetchYoutubeWatch(WATCH_URL + id, signal)
+        .catch(() => unknownCount("youtube"));
+      if (count.viewers === null) partial = true;
+      else {
+        known = true;
+        viewers += count.viewers;
+      }
+      live ||= count.live;
+    }
+    return {
+      platform: "youtube",
+      viewers: known ? viewers : null,
+      live,
+      ...(partial ? { partial: true } : {}),
+    };
+  }
+
+  /** @param {string} url @param {AbortSignal} signal @returns {Promise<string>} */
+  async fetchYoutubePage(url, signal) {
+    const pageUrl = new URL(url);
+    pageUrl.searchParams.set("hl", "en");
+    const res = await this.fetchImpl(pageUrl.toString(), {
+      headers: PAGE_HEADERS,
+      redirect: "follow",
+      signal,
+    });
+    if (!res.ok) {
+      await cancelBody(res.body);
+      throw new Error(`youtube page ${res.status}`);
+    }
+    return readBoundedText(res, YOUTUBE_PAGE_MAX_BYTES, "youtube");
+  }
+
+  /** @param {string} url @param {AbortSignal} signal @returns {Promise<PlatformViewers>} */
+  async fetchYoutubeWatch(url, signal) {
+    const html = await this.fetchYoutubePage(url, signal);
+    const state = extractWatchLiveState(html);
+    if (state === false) return { platform: "youtube", viewers: 0, live: false };
+    const viewers = extractConcurrentViewers(html);
+    return { platform: "youtube", viewers, live: state === true || viewers !== null };
   }
 
   /**
@@ -735,6 +735,7 @@ module.exports = {
   TWITCH_JSON_MAX_BYTES,
   KICK_JSON_MAX_BYTES,
   YOUTUBE_PAGE_MAX_BYTES,
+  YOUTUBE_MAX_LIVE_STREAMS,
   CACHE_MAX_ENTRIES,
   IN_FLIGHT_MAX_ENTRIES,
   IN_FLIGHT_MAX_SUBSCRIBERS,

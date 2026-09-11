@@ -34,6 +34,7 @@ const {
   TWITCH_JSON_MAX_BYTES,
   KICK_JSON_MAX_BYTES,
   YOUTUBE_PAGE_MAX_BYTES,
+  YOUTUBE_MAX_LIVE_STREAMS,
 } = require("../src/services/multichatViewers");
 const { TikTokChatRelay } = require("../src/services/tiktokChatRelay");
 
@@ -42,6 +43,34 @@ const fixture = (name) =>
 
 const LIVE_PAGE = fixture("youtubeLiveWatchPage.excerpt.html");
 const VOD_PAGE = fixture("youtubeVodWatchPage.excerpt.html");
+const DUAL_CHANNEL_PAGE = fixture("youtubeDualLiveChannel.excerpt.html");
+const WAITING_PAGE = fixture("youtubeWaitingWatchPage.excerpt.html");
+
+function channelPage(ids = []) {
+  return '<script>var ytInitialData = ' + JSON.stringify({
+    contents: { twoColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: {
+      selected: true,
+      endpoint: { commandMetadata: { webCommandMetadata: { url: "/@SomeChannel/streams" } } },
+      content: { richGridRenderer: { contents: ids.map((videoId) => ({
+        richItemRenderer: { content: { videoRenderer: {
+          videoId,
+          thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "LIVE" } }],
+        } } },
+      })) } },
+    } }] } },
+  }) + ';</script>';
+}
+
+function liveWatchPage(count) {
+  return JSON.stringify({
+    liveBroadcastDetails: { isLiveNow: true },
+    videoViewCountRenderer: {
+      viewCount: { runs: [{ text: `${count} watching now` }] },
+      isLive: true,
+      originalViewCount: String(count),
+    },
+  });
+}
 
 /** Response stub with only what the service reads. */
 const jsonRes = (body, ok = true, status = 200) => ({
@@ -283,12 +312,12 @@ describe("services/multichatViewers — per-platform lookups", () => {
     });
   });
 
-  test("youtube: resolves a handle's /live page, then the count", async () => {
+  test("youtube: discovers a handle's active broadcast, then reads its count", async () => {
     const urls = [];
     const svc = new MultichatViewersService({
       fetchImpl: async (url) => {
         urls.push(url);
-        return htmlRes(LIVE_PAGE);
+        return htmlRes(url.includes("/streams") ? channelPage(["abcABC12345"]) : LIVE_PAGE);
       },
     });
     await expect(svc.fetchYoutube("@SomeChannel")).resolves.toEqual({
@@ -296,12 +325,15 @@ describe("services/multichatViewers — per-platform lookups", () => {
       viewers: 1200,
       live: true,
     });
-    expect(urls).toEqual(["https://www.youtube.com/@SomeChannel/live"]);
+    expect(urls).toEqual([
+      "https://www.youtube.com/@SomeChannel/streams?hl=en",
+      "https://www.youtube.com/watch?v=abcABC12345&hl=en",
+    ]);
   });
 
   test("youtube: a channel that isn't streaming reports zero", async () => {
     const svc = new MultichatViewersService({
-      fetchImpl: async () => htmlRes(VOD_PAGE),
+      fetchImpl: async () => htmlRes(channelPage()),
     });
     await expect(svc.fetchYoutube("@SomeChannel")).resolves.toEqual({
       platform: "youtube",
@@ -471,6 +503,137 @@ describe("services/multichatViewers — per-platform lookups", () => {
     });
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(reads).toBe(2);
+  });
+});
+
+describe("YouTube simultaneous broadcasts", () => {
+  test("sums the real portrait and horizontal listings instead of the stale /live waiting room", async () => {
+    const urls = [];
+    const svc = new MultichatViewersService({ fetchImpl: async (url) => {
+      urls.push(url);
+      if (url.includes("/streams")) return htmlRes(DUAL_CHANNEL_PAGE);
+      if (url.includes("/live")) return htmlRes(WAITING_PAGE);
+      return htmlRes(liveWatchPage(url.includes("BTV9uqT4ur0") ? 7 : 12));
+    } });
+    await expect(svc.forConfig({ youtube: { enabled: true, channel: "@responsesc2" } }))
+      .resolves.toMatchObject({
+        platforms: [{ platform: "youtube", viewers: 19, live: true }],
+        total: 19, partial: false,
+      });
+    expect(urls).toEqual([
+      "https://www.youtube.com/@responsesc2/streams?hl=en",
+      "https://www.youtube.com/watch?v=BTV9uqT4ur0&hl=en",
+      "https://www.youtube.com/watch?v=4NTjE_j8a5o&hl=en",
+    ]);
+  });
+
+  test("counts a broadcast listed twice only once (including shared dual-format IDs)", async () => {
+    const fetchImpl = jest.fn(async (url) => htmlRes(url.includes("/streams")
+      ? channelPage(["AbCdEf12345", "AbCdEf12345", "aBcDeF12345"])
+      : liveWatchPage(3)));
+    const svc = new MultichatViewersService({ fetchImpl });
+    await expect(svc.lookup("youtube", "@channel")).resolves.toMatchObject({ viewers: 6 });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  test.each(["blocked", "hidden", "unrecognized"])(
+    "keeps the known stream and marks the platform and combined total partial when the other is %s",
+    async (failure) => {
+      const svc = new MultichatViewersService({ fetchImpl: async (url) => {
+        if (url.includes("/streams")) return htmlRes(DUAL_CHANNEL_PAGE);
+        if (url.includes("4NTjE_j8a5o")) return htmlRes(liveWatchPage(12));
+        if (failure === "blocked") return htmlRes("blocked", false, 403);
+        if (failure === "hidden") return htmlRes(liveWatchPage(99).replace("99 watching now", "99 views"));
+        return htmlRes("<html>consent required</html>");
+      } });
+      await expect(svc.forConfig({ youtube: { enabled: true, channel: "@responsesc2" } }))
+        .resolves.toMatchObject({
+          platforms: [{ platform: "youtube", viewers: 12, live: true, partial: true }],
+          total: 12, partial: true,
+        });
+    },
+  );
+
+  test("all stream counts missing stays unknown instead of returning zero", async () => {
+    const svc = new MultichatViewersService({ fetchImpl: async (url) =>
+      htmlRes(url.includes("/streams") ? DUAL_CHANNEL_PAGE : "consent") });
+    await expect(svc.lookup("youtube", "@responsesc2")).resolves.toMatchObject({
+      viewers: null, partial: true,
+    });
+  });
+
+  test("a stream ending between discovery and its watch-page fetch contributes zero", async () => {
+    const svc = new MultichatViewersService({ fetchImpl: async (url) => {
+      if (url.includes("/streams")) return htmlRes(DUAL_CHANNEL_PAGE);
+      if (url.includes("BTV9uqT4ur0")) return htmlRes(liveWatchPage(5));
+      return htmlRes(JSON.stringify({ liveBroadcastDetails: { isLiveNow: false } }) + VOD_PAGE);
+    } });
+    await expect(svc.lookup("youtube", "@responsesc2")).resolves.toEqual({
+      platform: "youtube", viewers: 5, live: true,
+    });
+  });
+
+  test("fallback to /live is explicitly partial when channel discovery is unrecognized", async () => {
+    const svc = new MultichatViewersService({ fetchImpl: async (url) =>
+      htmlRes(url.includes("/streams") ? "unknown page" : liveWatchPage(4)) });
+    await expect(svc.lookup("youtube", "@channel")).resolves.toEqual({
+      platform: "youtube", viewers: 4, live: true, partial: true,
+    });
+  });
+
+  test("a waiting-room shortcut cannot establish an offline channel after failed discovery", async () => {
+    const svc = new MultichatViewersService({ fetchImpl: async () => htmlRes(WAITING_PAGE) });
+    await expect(svc.lookup("youtube", "@channel")).resolves.toEqual({
+      platform: "youtube", viewers: null, live: false,
+    });
+  });
+
+  test("a direct video URL still reads only that video, and a waiting room has no current viewers", async () => {
+    const fetchImpl = jest.fn(async () => htmlRes(WAITING_PAGE));
+    const svc = new MultichatViewersService({ fetchImpl });
+    await expect(svc.lookup("youtube", "https://www.youtube.com/live/p9be2b535IA"))
+      .resolves.toEqual({ platform: "youtube", viewers: 0, live: false });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe("https://www.youtube.com/watch?v=p9be2b535IA&hl=en");
+  });
+
+  test("coalesces simultaneous docks, reuses cache, then rediscovers streams and decreasing counts", async () => {
+    let now = 1000;
+    let ids = ["BTV9uqT4ur0", "4NTjE_j8a5o"];
+    const fetchImpl = jest.fn(async (url) =>
+      htmlRes(url.includes("/streams") ? channelPage(ids) : liveWatchPage(8)));
+    const svc = new MultichatViewersService({ fetchImpl, now: () => now });
+    const results = await Promise.all([
+      svc.lookup("youtube", "@channel"), svc.lookup("youtube", "@channel"),
+    ]);
+    expect(results.map((r) => r.viewers)).toEqual([16, 16]);
+    await svc.lookup("youtube", "@channel");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    now += 20001;
+    ids = ["4NTjE_j8a5o"];
+    await expect(svc.lookup("youtube", "@channel")).resolves.toMatchObject({ viewers: 8 });
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
+  });
+
+  test("bounds discovery fan-out, shares a deadline, and fetches watch pages sequentially", async () => {
+    const ids = Array.from({ length: YOUTUBE_MAX_LIVE_STREAMS + 2 }, (_, i) => `video${String(i).padStart(6, "0")}`);
+    let active = 0;
+    let peak = 0;
+    const signals = new Set();
+    const fetchImpl = jest.fn(async (url, init) => {
+      signals.add(init.signal);
+      peak = Math.max(peak, ++active);
+      await Promise.resolve();
+      active--;
+      return htmlRes(url.includes("/streams") ? channelPage(ids) : liveWatchPage(1));
+    });
+    const svc = new MultichatViewersService({ fetchImpl });
+    await expect(svc.lookup("youtube", "@channel")).resolves.toMatchObject({
+      viewers: YOUTUBE_MAX_LIVE_STREAMS, partial: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(YOUTUBE_MAX_LIVE_STREAMS + 1);
+    expect(peak).toBe(1);
+    expect(signals.size).toBe(1);
   });
 });
 

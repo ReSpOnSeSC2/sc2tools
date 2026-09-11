@@ -305,6 +305,16 @@ describe("services/youtubeLiveChat", () => {
   });
 
   test("normalizeYoutubeInput handles every supported paste shape", () => {
+    for (const tab of ["live", "streams", "videos", "shorts"]) {
+      expect(yt.normalizeYoutubeInput(`https://www.youtube.com/@responsesc2/${tab}?hl=en`)).toEqual({
+        videoId: null, pageUrls: ["https://www.youtube.com/@responsesc2/live"],
+      });
+    }
+    expect(yt.normalizeYoutubeInput("https://www.youtube.com/shorts/BTV9uqT4ur0")).toEqual({
+      videoId: "BTV9uqT4ur0", pageUrls: [],
+    });
+    expect(yt.normalizeYoutubeInput("https://www.youtube.com/user/live").pageUrls)
+      .toEqual(["https://www.youtube.com/user/live/live"]);
     expect(yt.normalizeYoutubeInput("dQw4w9WgXcQ")).toEqual({
       videoId: "dQw4w9WgXcQ",
       pageUrls: [],

@@ -33,6 +33,25 @@ function renderDock(viewers?: ViewerCounts) {
 afterEach(cleanup);
 
 describe("dock viewer counts", () => {
+  it("retains an incomplete YouTube sum through sanitizing and labels it as a minimum", () => {
+    const viewers = sanitizeViewerCounts({
+      platforms: [
+        { platform: "twitch", viewers: 2, live: true },
+        { platform: "youtube", viewers: 12, live: true, partial: true },
+      ],
+      total: 14,
+      partial: true,
+    });
+    expect(viewers.partial).toBe(true);
+    expect(viewers.platforms[1].partial).toBe(true);
+    renderDock(viewers);
+    const youtube = screen.getByTestId("dock-viewers-youtube");
+    expect(youtube.textContent).toBe("12+");
+    expect(youtube.getAttribute("title")).toContain("some live stream counts are unavailable");
+    expect(screen.getByTestId("dock-viewers-total").textContent).toContain("14");
+    expect(screen.getByTestId("dock-viewers-total").textContent).toContain("watching now+");
+  });
+
   it("shows each platform's count and the combined total", () => {
     renderDock({
       platforms: [
