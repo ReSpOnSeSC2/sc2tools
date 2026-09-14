@@ -174,7 +174,7 @@ describe("AppChrome mobile navigation", () => {
     const bar = screen.getByRole("navigation", { name: "Quick sections" });
     expect(
       Array.from(bar.querySelectorAll("a")).map((a) => a.getAttribute("href")),
-    ).toEqual(["/app", "/app/opponents", "/app/maps", "/app/builds"]);
+    ).toEqual(["/app", "/app/opponents", "/app/trends", "/app/builds"]);
 
     // Settings isn't in the bar, so More carries the active treatment.
     const more = screen.getByRole("button", { name: /More/ });
@@ -188,7 +188,7 @@ describe("AppChrome mobile navigation", () => {
     for (const href of [
       "/app/replays",
       "/app/strategies",
-      "/app/trends",
+      "/app/maps",
       "/app/macro",
       "/app/arcade",
       "/builds",
@@ -200,6 +200,7 @@ describe("AppChrome mobile navigation", () => {
       expect(sheetHrefs).toContain(href);
     }
     expect(sheetHrefs).not.toContain("/coaching");
+    expect(sheetHrefs).not.toContain("/app/trends");
   });
 
   it.each(["coach", "student"] as const)(

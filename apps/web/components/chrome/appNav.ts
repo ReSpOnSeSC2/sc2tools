@@ -83,8 +83,8 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
 export const MOBILE_TAB_KEYS: readonly string[] = [
   "today",
   "opponents",
+  "trends",
   "builds",
-  "battlefield",
 ];
 
 /**
