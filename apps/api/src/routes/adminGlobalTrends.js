@@ -44,7 +44,7 @@ function handler(action) {
     try { res.json(await action(req.query)); } catch (err) {
       const failure = /** @type {any} */ (err);
       if (failure?.code === 50 || failure?.codeName === "MaxTimeMSExpired"
-        || ["MongoNetworkTimeoutError", "MongoNetworkError", "MongoServerSelectionError", "PoolClearedError", "MongoWaitQueueTimeoutError"].includes(failure?.name)
+        || ["MongoOperationTimeoutError", "MongoNetworkTimeoutError", "MongoNetworkError", "MongoServerSelectionError", "PoolClearedError", "MongoWaitQueueTimeoutError"].includes(failure?.name)
         || failure?.code === "global_trends_busy") {
         res.set("Retry-After", "5");
         res.status(503).json({ error: {

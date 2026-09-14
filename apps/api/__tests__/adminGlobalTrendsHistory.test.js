@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use strict";
 
-const { GlobalTrendsHistory, HISTORY_FRESH_MS } = require("../src/services/adminGlobalTrendsHistory");
+const { GlobalTrendsHistory, HISTORY_FRESH_MS, HISTORY_BUILD_TIMEOUT_MS } = require("../src/services/adminGlobalTrendsHistory");
 
 function deferred() {
   let resolve;
@@ -86,6 +86,10 @@ describe("Global Trends canonical-history lifecycle", () => {
     const { db, collection, history } = fixture(read);
     await expect(history.withSnapshot(async (snapshot) => snapshot.id)).rejects.toThrow("merge timed out");
     const pipeline = db.games.aggregate.mock.calls[0][0];
+    const options = db.games.aggregate.mock.calls[0][1];
+    expect(options).toMatchObject({ maxTimeMS: HISTORY_BUILD_TIMEOUT_MS, timeoutMS: HISTORY_BUILD_TIMEOUT_MS });
+    expect(HISTORY_BUILD_TIMEOUT_MS).toBeGreaterThan(30000);
+    expect(pipeline.at(-1).$merge).toMatchObject({ whenMatched: "fail", whenNotMatched: "insert" });
     const stamp = pipeline.at(-2).$set;
     expect(stamp._globalExpiresAt).toBeInstanceOf(Date);
     expect(stamp._globalSourceId).toBe("$_id");

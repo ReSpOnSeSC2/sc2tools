@@ -2,11 +2,11 @@
 
 const { randomUUID } = require("crypto");
 const { globalHistoryStages } = require("./adminGlobalTrendsScope");
-const { QUERY_MAX_TIME_MS } = require("./adminGlobalTrendsQueries");
 
 const HISTORY_COLLECTION = "admin_global_trends_history";
 const HISTORY_FRESH_MS = 5 * 60 * 1000;
 const HISTORY_TTL_MS = 30 * 60 * 1000;
+const HISTORY_BUILD_TIMEOUT_MS = 60000;
 
 /** @typedef {{id: string, revision: number, readers: number, cleanup: Promise<void> | null}} HistorySnapshot */
 
@@ -92,8 +92,16 @@ class GlobalTrendsHistory {
           _globalSourceId: "$_id",
           _id: { generation: id, source: "$_id" },
         } },
-        { $merge: { into: HISTORY_COLLECTION, on: "_id", whenMatched: "replace", whenNotMatched: "insert" } },
-      ], { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray());
+        // Every generation has fresh IDs, so bulk inserts avoid an upsert
+        // lookup per replay. A collision fails the unpublished generation.
+        { $merge: { into: HISTORY_COLLECTION, on: "_id", whenMatched: "fail", whenNotMatched: "insert" } },
+      ], {
+        allowDiskUse: true,
+        // Building all rows is a once-per-snapshot write, not a chart read.
+        // Driver CSOT replaces the client's 30s socket timer for this command
+        // and bounds both server work and its response to the same deadline.
+        maxTimeMS: HISTORY_BUILD_TIMEOUT_MS, timeoutMS: HISTORY_BUILD_TIMEOUT_MS,
+      }).toArray());
     } catch (err) {
       // A killed $merge can leave a partial generation. It is never published.
       await this.collection.deleteMany({ _globalSnapshotId: id }).catch(() => {});
@@ -123,4 +131,4 @@ class GlobalTrendsHistory {
   }
 }
 
-module.exports = { GlobalTrendsHistory, HISTORY_COLLECTION, HISTORY_FRESH_MS, HISTORY_TTL_MS };
+module.exports = { GlobalTrendsHistory, HISTORY_COLLECTION, HISTORY_FRESH_MS, HISTORY_TTL_MS, HISTORY_BUILD_TIMEOUT_MS };

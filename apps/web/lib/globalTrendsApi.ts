@@ -3,7 +3,8 @@
 import type { SWRConfiguration } from "swr";
 import { useApi, type ClientApiError } from "./clientApi";
 
-export const GLOBAL_TRENDS_REQUEST_OPTIONS = { timeoutMs: 60_000 };
+// Allow the initial shared history build, then each card's bounded query.
+export const GLOBAL_TRENDS_REQUEST_OPTIONS = { timeoutMs: 90_000 };
 export const GLOBAL_TRENDS_SWR_CONFIG = {
   revalidateOnFocus: false,
   // Manual retry keeps an unavailable API from collecting repeated heavy work.

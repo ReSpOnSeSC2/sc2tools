@@ -246,8 +246,8 @@ describe("admin Global Trends", () => {
     } finally { read.mockRestore(); sourceRead.mockRestore(); }
   });
 
-  test("Mongo timeout returns a retryable API error", async () => {
-    jest.spyOn(service, "players").mockRejectedValueOnce(Object.assign(new Error("query exceeded time limit"), { code: 50 }));
+  test.each([{ code: 50 }, { name: "MongoOperationTimeoutError" }])("Mongo timeout %p returns a retryable API error", async (failure) => {
+    jest.spyOn(service, "players").mockRejectedValueOnce(Object.assign(new Error("query exceeded time limit"), failure));
     const response = await request(app).get("/v1/admin/global-trends/players").set("Authorization", "admin-token").expect(503);
     expect(response.headers["retry-after"]).toBe("5");
     expect(response.body.error.code).toBe("global_trends_busy");

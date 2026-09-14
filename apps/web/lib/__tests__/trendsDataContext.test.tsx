@@ -60,7 +60,7 @@ describe("trends data boundary", () => {
     const { result } = renderHook(() => useTrendsApi("/v1/timeseries#2"), { wrapper: Wrapper });
     expect(useApiMock.mock.calls[0][0]).toContain("/v1/admin/global-trends/timeseries?");
     expect(useApiMock.mock.calls[0][1]).toMatchObject({ revalidateOnFocus: false, shouldRetryOnError: false });
-    expect(useApiMock.mock.calls[0][2]).toEqual({ timeoutMs: 60_000 });
+    expect(useApiMock.mock.calls[0][2]).toEqual({ timeoutMs: 90_000 });
     expect(result.current.request).toBe(useApiMock.mock.results[0].value.request);
     const a = trendsDataPath("/v1/timeseries", { mode: "global", cohort });
     const b = trendsDataPath("/v1/timeseries", { mode: "global", cohort: { ...cohort, excluded_players: ["another"] } });
