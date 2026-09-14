@@ -162,6 +162,7 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     expect(screen.getByLabelText("MMR difference band")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledWith();
   });
 
   it.each([false, true])("keeps the loading state between clearing a retry error and receiving data (global=%s)", (global) => {
@@ -181,6 +182,16 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     expect(screen.getByRole("status", { name: "Loading analysis games" })).toBeTruthy();
     expect(screen.queryByText("No games match this group")).toBeNull();
     expect(screen.getByText("Loading games…")).toBeTruthy();
+  });
+
+  it("retries a failed game drilldown without passing the click event into its cache", () => {
+    useApiMock.mockImplementation((path: string) => path.includes("/games?") ? { data: undefined, isLoading: false, error: { message: "Games request timed out" }, mutate: retry } : { data: fixture, isLoading: false, mutate: retry });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "View games for Near equal MMR" })[0]);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledWith();
   });
 
   it("shows zero coverage honestly and polls while real measurements are prepared", () => {
