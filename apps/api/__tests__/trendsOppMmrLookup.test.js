@@ -107,5 +107,12 @@ describe("opponent MMR fallback lookup", () => {
     expect(inputs).toEqual([{ total: 3 }]);
     expect(result.unknown.total).toBe(100);
     expect(result.buckets.reduce((total, bucket) => total + bucket.total, 0)).toBe(200);
+    const explain = await db.collection("games").aggregate(pipeline).explain("executionStats");
+    const join = explain.stages.find((stage) => stage.$lookup);
+    // Non-fallback groups must retain index bounds, rather than simplify to
+    // $expr:false and perform one full opponents scan per numeric rating.
+    expect(join.collectionScans).toBe(0);
+    expect(join.totalDocsExamined).toBe(1);
+    expect(join.indexesUsed).toContain("userId_1_pulseId_1");
   });
 });

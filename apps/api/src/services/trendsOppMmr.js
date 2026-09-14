@@ -232,25 +232,28 @@ async function resolveOppMmrBucketWidth(deps, match, requested, trustFloor) {
  * @param {Date} trustFloor
  */
 function oppMmrLookupStages(trustFloor) {
+  const needsFallback = { $and: [
+    { $gte: ["$date", trustFloor] },
+    { $not: [{ $isNumber: "$opponent.mmr" }] },
+    { $ne: [{ $ifNull: ["$opponent.pulseId", ""] }, ""] },
+  ] };
   return [
     {
       $lookup: {
         from: "opponents",
         let: {
-          uid: "$userId",
-          pid: { $ifNull: ["$opponent.pulseId", ""] },
-          needsFallback: { $and: [
-            { $gte: ["$date", trustFloor] },
-            { $not: [{ $isNumber: "$opponent.mmr" }] },
-            { $ne: [{ $ifNull: ["$opponent.pulseId", ""] }, ""] },
-          ] },
+          // Keep pure equality predicates in the foreign match. Adding a
+          // false needsFallback predicate makes Mongo fold away those index
+          // bounds and scan every opponent for each already-rated group.
+          // Boolean false cannot match stored string account identifiers.
+          uid: { $cond: [needsFallback, { $ifNull: ["$userId", false] }, false] },
+          pid: { $cond: [needsFallback, "$opponent.pulseId", false] },
         },
         pipeline: [
           {
             $match: {
               $expr: {
                 $and: [
-                  "$$needsFallback",
                   { $eq: ["$userId", "$$uid"] },
                   { $eq: ["$pulseId", "$$pid"] },
                 ],
