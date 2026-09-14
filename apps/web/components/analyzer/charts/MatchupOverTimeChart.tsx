@@ -22,6 +22,8 @@ import { ChartTooltip } from "./ChartTooltip";
 type MatchupPoint = {
   bucket: string;
   race: "P" | "T" | "Z" | "R" | "U";
+  myRace: "P" | "T" | "Z" | "R" | "U";
+  matchup: string;
   wins: number;
   losses: number;
   total: number;
@@ -34,6 +36,12 @@ type MatchupResponse = {
 };
 
 type RaceKey = "P" | "T" | "Z";
+const MATCHUP_ORDER = ["PvP", "PvZ", "PvT", "TvT", "TvZ", "TvP", "ZvZ", "ZvT", "ZvP"] as const;
+type MatchupKey = (typeof MATCHUP_ORDER)[number];
+
+function isPlayedMatchup(value: string): value is MatchupKey {
+  return MATCHUP_ORDER.includes(value as MatchupKey);
+}
 
 type PanelPoint = {
   date: string;
@@ -46,15 +54,17 @@ type PanelPoint = {
   rollingPct: number | null;
 };
 
-const RACE_META: ReadonlyArray<{
-  key: RaceKey;
-  label: string;
-  color: string;
-}> = [
-  { key: "P", label: "vs Protoss", color: "#7c8cff" },
-  { key: "T", label: "vs Terran", color: "#ff6b6b" },
-  { key: "Z", label: "vs Zerg", color: "#a78bfa" },
-];
+const RACE_META: Record<RaceKey, { label: string; color: string }> = {
+  P: { label: "Protoss", color: "#7c8cff" },
+  T: { label: "Terran", color: "#ff6b6b" },
+  Z: { label: "Zerg", color: "#a78bfa" },
+};
+
+const MATCHUP_META = MATCHUP_ORDER.map((key) => ({
+  key,
+  description: `${RACE_META[key[0] as RaceKey].label} vs ${RACE_META[key[2] as RaceKey].label}`,
+  color: RACE_META[key[2] as RaceKey].color,
+}));
 
 const ROLL_BY_BUCKET: Record<"day" | "week" | "month", number> = {
   day: 14,
@@ -63,7 +73,7 @@ const ROLL_BY_BUCKET: Record<"day" | "week" | "month", number> = {
 };
 
 /**
- * Win-rate vs each opponent race, faceted into four small charts.
+ * Win rate for each played race pairing, shown in separate small charts.
  *
  * Each panel shares the same X-axis (date buckets) and Y-axis (0-100%
  * win rate) so the eye can scan downward and spot which matchup is
@@ -84,7 +94,7 @@ export function MatchupOverTimeChart({
   const { filters, dbRev } = useFilters();
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
-    () => ({ ...filters, interval: bucket, tz }),
+    () => ({ ...filters, interval: bucket, tz, group_by: "matchup" }),
     [filters, bucket, tz],
   );
   const { data, isLoading, error, mutate } = useApi<MatchupResponse>(
@@ -94,8 +104,8 @@ export function MatchupOverTimeChart({
   const effectiveBucket = data?.interval ?? bucket;
   const rollWindow = ROLL_BY_BUCKET[effectiveBucket];
 
-  const seriesByRace = useMemo(() => {
-    const out: Record<RaceKey, PanelPoint[]> = { P: [], T: [], Z: [] };
+  const seriesByMatchup = useMemo(() => {
+    const out = new Map<MatchupKey, PanelPoint[]>();
     if (!data || !Array.isArray(data.points)) return out;
     const dateSet = new Set<string>();
     const byKey = new Map<string, MatchupPoint>();
@@ -103,13 +113,13 @@ export function MatchupOverTimeChart({
       const date = localDateKey(p.bucket, tz);
       if (!date) continue;
       dateSet.add(date);
-      byKey.set(`${date}|${p.race}`, p);
+      if (isPlayedMatchup(p.matchup)) byKey.set(`${date}|${p.matchup}`, p);
     }
     const dates = Array.from(dateSet).sort();
-    for (const race of RACE_META) {
+    for (const matchup of MATCHUP_META) {
       const series: Array<Omit<PanelPoint, "rollingPct">> = [];
       for (const date of dates) {
-        const p = byKey.get(`${date}|${race.key}`);
+        const p = byKey.get(`${date}|${matchup.key}`);
         if (p && p.total > 0) {
           series.push({
             date,
@@ -128,7 +138,9 @@ export function MatchupOverTimeChart({
           });
         }
       }
-      out[race.key] = withRollingWr(series, rollWindow);
+      if (series.some((p) => p.total > 0)) {
+        out.set(matchup.key, withRollingWr(series, rollWindow));
+      }
     }
     return out;
   }, [data, tz, rollWindow]);
@@ -136,8 +148,7 @@ export function MatchupOverTimeChart({
   const dateRange = useMemo(() => {
     let earliest: string | null = null;
     let latest: string | null = null;
-    for (const race of RACE_META) {
-      const series = seriesByRace[race.key];
+    for (const series of seriesByMatchup.values()) {
       for (const p of series) {
         if (p.total > 0) {
           if (!earliest || p.date < earliest) earliest = p.date;
@@ -146,7 +157,7 @@ export function MatchupOverTimeChart({
       }
     }
     return { earliest, latest };
-  }, [seriesByRace]);
+  }, [seriesByMatchup]);
 
   const showYearOnTicks = useMemo(() => {
     if (!dateRange.earliest || !dateRange.latest) return false;
@@ -171,13 +182,19 @@ export function MatchupOverTimeChart({
     (acc, p) => acc + (p.total || 0),
     0,
   );
+  const unassignedGames = (data?.points || []).reduce(
+    (sum, p) => sum + (isPlayedMatchup(p.matchup) ? 0 : p.total || 0),
+    0,
+  );
 
-  if (!data || totalGames === 0) {
+  if (!data || !seriesByMatchup.size) {
     return (
       <Card title="Win rate by matchup over time">
         <EmptyState
-          title="Not enough games yet"
-          sub="Per-race trend lines appear when the selected records include games for each matchup."
+          title={totalGames ? "Played races are not recorded" : "Not enough games yet"}
+          sub={totalGames
+            ? `${totalGames.toLocaleString()} selected game${totalGames === 1 ? " is" : "s are"} missing one or both concrete played races. Matchup trends need both races.`
+            : "Matchup trend lines appear when the selected records include games with both played races recorded."}
         />
       </Card>
     );
@@ -189,32 +206,39 @@ export function MatchupOverTimeChart({
   return (
     <Card title="Win rate by matchup over time">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        One panel per opponent race · faint line is the {intervalLabel} bucket,
+        One panel per played matchup, with the played race listed first. Random-queue games use the race actually played.
+        The faint line is the {intervalLabel} bucket,
         bold line is the volume-weighted {rollWindow}-period rolling average ·
         dashed reference is that matchup's overall WR.
       </p>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {RACE_META.map((race) => (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {MATCHUP_META.filter((matchup) => seriesByMatchup.has(matchup.key)).map((matchup) => (
           <MatchupPanel
-            key={race.key}
-            label={race.label}
-            color={race.color}
-            data={seriesByRace[race.key]}
+            key={matchup.key}
+            label={matchup.key}
+            description={matchup.description}
+            color={matchup.color}
+            data={seriesByMatchup.get(matchup.key)!}
             showYear={showYearOnTicks}
           />
         ))}
       </div>
+      {unassignedGames > 0 ? <p className="mt-3 text-micro text-text-dim">
+        {unassignedGames.toLocaleString()} selected game{unassignedGames === 1 ? " is" : "s are"} missing one or both concrete played races and cannot be assigned to these matchups.
+      </p> : null}
     </Card>
   );
 }
 
 function MatchupPanel({
   label,
+  description,
   color,
   data,
   showYear,
 }: {
   label: string;
+  description: string;
   color: string;
   data: PanelPoint[];
   showYear: boolean;
@@ -255,9 +279,12 @@ function MatchupPanel({
     recentWrPct == null ? null : recentWrPct - overallWrPct;
 
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated/50 p-3">
+    <section aria-label={`${label} win rate over time`} className="min-w-0 rounded-lg border border-border bg-bg-elevated/50 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-caption font-semibold text-text">{label}</span>
+        <div>
+          <h4 className="text-caption font-semibold text-text">{label}</h4>
+          <p className="text-micro text-text-dim">{description}</p>
+        </div>
         <div className="flex flex-wrap items-baseline gap-2 text-caption tabular-nums">
           {totalGames > 0 ? (
             <span style={{ color: wrColor(totalWins / totalGames, totalGames) }}>
@@ -370,7 +397,7 @@ function MatchupPanel({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </section>
   );
 }
 

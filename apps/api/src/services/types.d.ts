@@ -748,9 +748,21 @@ export interface AggregationsService {
   macroSummary(userId: string, filters: object): Promise<object>;
   matchupTimeseries(
     userId: string,
-    opts: object,
+    opts: { interval?: "day" | "week" | "month"; tz?: string; groupByOwnRace?: boolean },
     filters: object,
-  ): Promise<object>;
+  ): Promise<{
+    interval: "day" | "week" | "month";
+    points: Array<{
+      bucket: Date;
+      race: "P" | "T" | "Z" | "R" | "U";
+      myRace?: "P" | "T" | "Z" | "R" | "U";
+      matchup?: string;
+      wins: number;
+      losses: number;
+      total: number;
+      winRate: number;
+    }>;
+  }>;
   dayHourHeatmap(userId: string, opts: object, filters: object): Promise<object>;
   lengthBuckets(userId: string, filters: object): Promise<{
     buckets: Array<{

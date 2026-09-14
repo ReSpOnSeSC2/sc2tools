@@ -635,7 +635,7 @@ class AggregationsService {
   /**
    * Implementation in ``./trendsAggregations.js``.
    * @param {string} userId
-   * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
+   * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
    * @param {object} filters
    */
   async matchupTimeseries(userId, opts, filters) {

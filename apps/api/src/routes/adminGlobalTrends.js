@@ -76,7 +76,7 @@ function options(q, method) {
     lo: parseFiniteInt(q.lo), hi: parseFiniteInt(q.hi),
     opponentRace: typeof q.opp_race === "string" ? q.opp_race : undefined,
     myRace: typeof q.my_race === "string" ? q.my_race : undefined,
-    groupByOwnRace: method === "netMmrByMatchup" && q.group_by === "matchup",
+    groupByOwnRace: (method === "netMmrByMatchup" || method === "matchupTimeseries") && q.group_by === "matchup",
     search: typeof q.search === "string" ? q.search : "",
     minPairs: parseFiniteInt(q.min_pairs),
     sort: typeof q.sort === "string" ? q.sort : undefined,

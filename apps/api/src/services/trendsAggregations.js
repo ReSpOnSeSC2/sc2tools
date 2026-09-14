@@ -16,6 +16,8 @@
 
 const { LIMITS } = require("../config/constants");
 
+/** @typedef {Awaited<ReturnType<import('./types').AggregationsService['matchupTimeseries']>>['points'][number]} MatchupTimeseriesPoint */
+
 /**
  * @param {{
  *   games: import('mongodb').Collection,
@@ -25,30 +27,22 @@ const { LIMITS } = require("../config/constants");
  *   pickTimezone: (raw: unknown) => string,
  * }} deps
  * @param {string} userId
- * @param {{interval?: 'day'|'week'|'month', tz?: string}} opts
+ * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
  * @param {object} filters
  */
 async function matchupTimeseries(deps, userId, opts, filters) {
   const interval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
+  const groupByOwnRace = opts?.groupByOwnRace === true;
   const match = deps.gamesMatchStage(userId, filters);
-  const rows = await deps.games
+  const rows = /** @type {Array<Omit<MatchupTimeseriesPoint, 'winRate'>>} */ (await deps.games
     .aggregate([
       { $match: match },
       { $addFields: { _bucket: deps.bucketSwitch() } },
       {
         $addFields: {
-          _oppRace: {
-            $switch: {
-              branches: [
-                { case: { $eq: [{ $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } }, "P"] }, then: "P" },
-                { case: { $eq: [{ $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } }, "T"] }, then: "T" },
-                { case: { $eq: [{ $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } }, "Z"] }, then: "Z" },
-                { case: { $eq: [{ $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } }, "R"] }, then: "R" },
-              ],
-              default: "U",
-            },
-          },
+          _oppRace: raceLetterExpr("$opponent.race"),
+          ...(groupByOwnRace ? { _myRace: raceLetterExpr("$myRace") } : {}),
         },
       },
       {
@@ -56,26 +50,33 @@ async function matchupTimeseries(deps, userId, opts, filters) {
           _id: {
             bucket: { $dateTrunc: { date: "$date", unit: interval, timezone } },
             race: "$_oppRace",
+            ...(groupByOwnRace ? { myRace: "$_myRace" } : {}),
           },
           wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
           losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
           total: { $sum: 1 },
         },
       },
-      { $sort: { "_id.bucket": 1, "_id.race": 1 } },
-      { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * 5 },
+      { $sort: { "_id.bucket": 1, ...(groupByOwnRace ? { "_id.myRace": 1 } : {}), "_id.race": 1 } },
+      // Preserve every race pair within the bucket cap, including Random
+      // and Unknown rows so clients can report their coverage accurately.
+      { $limit: LIMITS.TIMESERIES_MAX_BUCKETS * (groupByOwnRace ? 25 : 5) },
       {
         $project: {
           _id: 0,
           bucket: "$_id.bucket",
           race: "$_id.race",
+          ...(groupByOwnRace ? {
+            myRace: "$_id.myRace",
+            matchup: { $concat: ["$_id.myRace", "v", "$_id.race"] },
+          } : {}),
           wins: 1,
           losses: 1,
           total: 1,
         },
       },
     ])
-    .toArray();
+    .toArray());
   return {
     interval,
     points: rows.map((r) => ({

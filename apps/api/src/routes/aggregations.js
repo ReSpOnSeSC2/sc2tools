@@ -128,8 +128,8 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // Win rate vs each opponent race over time. Powers the Trends tab's
-  // "matchup over time" small-multiples chart.
+  // Win rate over time. New clients request actual played matchups;
+  // existing clients retain their opponent-race response shape.
   router.get("/timeseries/matchups", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
@@ -144,7 +144,7 @@ function buildAggregationsRouter(deps) {
       res.json(
         await deps.aggregations.matchupTimeseries(
           userId,
-          { interval, tz },
+          { interval, tz, groupByOwnRace: req.query.group_by === "matchup" },
           filters,
         ),
       );
