@@ -2,26 +2,6 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## 0.16.10
-
-### Added - Blind Ladder
-
-- Optional native Windows loading-screen and chat protection, controlled by
-  one saved switch on Dashboard or Settings. An opaque loading cover displays
-  only the current opponent race when SC2 provides reliable data. Random is
-  never replaced with a race inferred from history or later game state.
-- Coverage setup edits loading, chat and result areas directly over the actual
-  SC2 window. Calibrated panels stay armed before loading; in-game chat is
-  covered while SC2's top-right player panel remains available for deliberate
-  reveal. Setup is required before the runtime reports coverage as active.
-- Covers follow the game window without taking keyboard focus or blocking
-  clicks. Windows/windowed-fullscreen support, foreground checks, aspect-ratio
-  validation, local API-loss handling and Ctrl+Shift+F9 emergency off are
-  included. Turning protection off always clears the current-run covers,
-  including when saving the preference fails.
-- This is a native display option; existing scouting widgets and voice keep
-  their own settings. See `docs/blind-ladder.md` for setup and validation limits.
-
 ## 0.16.9
 
 ### Changed - accurate capture is optional

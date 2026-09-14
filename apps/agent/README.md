@@ -20,31 +20,6 @@ No command line. No `.env` editing. The Settings tab inside the
 window covers API base URL, log level, replay folder override,
 auto-start on Windows login, and "start minimised to tray".
 
-### Optional Blind Ladder
-
-The Windows GUI includes a **Blind Ladder** switch on the Dashboard and in
-Settings. It hides native SC2 loading-screen identity/rank information and covers
-the configured in-game chat area, including your own messages and system text.
-SC2's normal top-right player panel remains usable as a deliberate reveal route.
-The setting saves immediately; turning it off removes the covers.
-
-First use requires **Set up coverage…** beside the Dashboard switch. Verify the
-actual loading, chat and score areas before queuing. Until setup is saved, the
-status reports that coverage needs setup. Use windowed or borderless SC2;
-exclusive fullscreen is unsupported. Loading panels stay armed over menu areas
-before a match, so they can obscure those parts of SC2's menu. The default loading
-view is a full opaque curtain with a real current race label when available.
-
-Use **Draw mode** during setup when the controls obscure an area. It temporarily
-collapses the controls, and completing a drag restores them. **Show controls**
-returns without drawing; **Escape** cancels.
-
-**Ctrl+Shift+F9 turns Blind Ladder off** and saves that choice. The feature uses
-ordinary Windows cover windows and SC2's local client API; it does not modify the
-game. It requires the GUI and does not change web widgets, voice or OBS sources.
-SC2 was not running during development validation, so real loading-screen coverage
-still needs the [live verification checklist](../../docs/blind-ladder.md).
-
 ## For developers - the source-install path
 
 ```bash
@@ -107,10 +82,10 @@ agent falls back gracefully to tray+console.
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Status badge (Active / Paused / Pairing / Error), Blind Ladder toggle and coverage setup, pairing code card (only visible until paired), Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
+| Dashboard | Status badge (Active / Paused / Pairing / Error), pairing code card (only visible until paired), Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
 | Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
 | Activity log | Live tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log` with a level filter (All / INFO+ / WARNING+ / ERROR only) and an Open Log Folder button. |
-| Settings | Blind Ladder explanation and immediate toggle, API base URL, log level, replay folder override, auto-start on Windows login, start-minimised checkbox. Edits persist atomically; most apply on next start. |
+| Settings | API base URL, log level, replay folder override, auto-start on Windows login, start-minimised checkbox. Edits persist atomically; most apply on next start. |
 
 Closing the window minimises it to the tray (the agent keeps running).
 **Quit** lives on the tray menu - that fully exits the process.

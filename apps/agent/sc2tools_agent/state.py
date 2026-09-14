@@ -20,8 +20,6 @@ from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .blind_mode import BlindModeConfig
-
 STATE_FILENAME = "agent.json"
 
 # Every subsystem shares one mutable AgentState and persists the whole object.
@@ -191,12 +189,6 @@ class AgentState:
     Fresh installs and upgrades default off. Existing recorded playback can
     still be reused without starting the game or requiring this permission.
     """
-
-    blind_mode_enabled: bool = False
-    """Explicit opt-in to the native Windows Blind Ladder screen covers."""
-
-    blind_mode_config: dict = field(default_factory=dict)
-    """Validated native screen coverage preferences; enabling is separate."""
 
     # ---- OBS scene switching (see live/obs_scene.py) ----
 
@@ -375,8 +367,6 @@ def load_state(state_dir: Path) -> AgentState:
         release_seen=release_seen,
         auto_update_enabled=raw.get("auto_update_enabled") is not False,
         replay_capture_enabled=raw.get("replay_capture_enabled") is True,
-        blind_mode_enabled=raw.get("blind_mode_enabled") is True,
-        blind_mode_config=_load_blind_mode_config(raw.get("blind_mode_config")),
         obs_scene_switch_enabled=bool(
             raw.get("obs_scene_switch_enabled") or False,
         ),
@@ -442,19 +432,8 @@ def _snapshot(state: AgentState) -> dict:
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
         obs_scene_map=dict(state.obs_scene_map),
-        blind_mode_config=_load_blind_mode_config(state.blind_mode_config),
     )
     return asdict(stable)
-
-
-def _load_blind_mode_config(raw: object) -> dict:
-    """Old/malformed settings fall back to conservative screen coverage."""
-    try:
-        config = BlindModeConfig.from_dict(raw).to_dict()
-    except (TypeError, ValueError):
-        config = BlindModeConfig().to_dict()
-    config.pop("enabled", None)
-    return config
 
 
 def _coerce_mmr(value: object) -> Optional[int]:

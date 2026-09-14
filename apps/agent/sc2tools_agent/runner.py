@@ -72,7 +72,7 @@ from .replay_finder import (
     find_replays_root,
 )
 from .replay_pipeline import probe_analyzer
-from .state import AgentState, _STATE_SAVE_LOCK, count_synced, load_state, save_state
+from .state import AgentState, count_synced, load_state, save_state
 from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
@@ -339,12 +339,6 @@ def _run_headless(
     api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
 
     console = ConsoleUI()
-    if state.blind_mode_enabled:
-        console.on_status(
-            "Blind Ladder is unavailable in console/tray-only mode. "
-            "Start the desktop GUI on Windows to protect the game screen.",
-        )
-        log.warning("blind_ladder_unavailable_without_gui")
     tray: Optional[TrayUI] = None
 
     stop_event = threading.Event()
@@ -657,8 +651,6 @@ def _run_with_gui(
         sync_filter_until=state.sync_filter_until,
         auto_update_enabled=state.auto_update_enabled,
         replay_capture_enabled=state.replay_capture_enabled,
-        blind_mode_enabled=state.blind_mode_enabled,
-        blind_mode_config=dict(state.blind_mode_config),
         obs_scene_switch_enabled=state.obs_scene_switch_enabled,
         obs_host=state.obs_host,
         obs_port=state.obs_port,
@@ -838,11 +830,6 @@ def _gui_boot_worker(
 
         folders_for_detect = _discover_replay_folders(cfg, state)
         _ensure_player_handle(api, cfg, state, folders_for_detect, log)
-        if cell.gui is not None and hasattr(cell.gui, "apply_blind_settings"):
-            cell.gui.apply_blind_settings(
-                state.blind_mode_enabled, dict(state.blind_mode_config),
-                read_player_handle_cache(cfg.state_dir) or None,
-            )
 
         # Forward-declared so the upload/watcher callbacks (constructed
         # first) can late-bind it; assigned right after the watcher.
@@ -1448,46 +1435,15 @@ def _handle_save_settings(
 
     # ATOMIC: every in-memory mutation for this user action is now
     # complete. A single ``save_state`` commits the whole thing.
-    blind_changed = (
-        payload.blind_mode_enabled is not None
-        or payload.blind_mode_config is not None
-    )
-    validated_blind_config = None
-    if payload.blind_mode_config is not None:
-        from .blind_mode import BlindModeConfig
-        validated_blind_config = BlindModeConfig.from_dict(
-            payload.blind_mode_config,
-        ).to_dict()
-        validated_blind_config.pop("enabled", None)
-    # Upload workers also save the shared AgentState. Keep these immediate
-    # switches and their rollback inside the writer lock so another worker
-    # cannot persist an uncommitted opt-in during a failed settings write.
-    with _STATE_SAVE_LOCK:
-        previous_capture_enabled = state.replay_capture_enabled
-        previous_blind_enabled = state.blind_mode_enabled
-        previous_blind_config = state.blind_mode_config
-        if validated_blind_config is not None:
-            state.blind_mode_config = validated_blind_config
-        if payload.blind_mode_enabled is not None:
-            state.blind_mode_enabled = payload.blind_mode_enabled is True
-        if payload.replay_capture_enabled is not None:
-            state.replay_capture_enabled = payload.replay_capture_enabled is True
-        try:
-            save_state(cfg.state_dir, state)
-        except Exception:
-            state.replay_capture_enabled = previous_capture_enabled
-            state.blind_mode_enabled = previous_blind_enabled
-            state.blind_mode_config = previous_blind_config
-            raise
-
-    if blind_changed or payload.player_handle is not None:
-        gui = getattr(cell, "gui", None)
-        if gui is not None and hasattr(gui, "apply_blind_settings"):
-            gui.apply_blind_settings(
-                state.blind_mode_enabled,
-                dict(state.blind_mode_config),
-                read_player_handle_cache(cfg.state_dir) or None,
-            )
+    previous_capture_enabled = state.replay_capture_enabled
+    if payload.replay_capture_enabled is not None:
+        state.replay_capture_enabled = payload.replay_capture_enabled is True
+    try:
+        save_state(cfg.state_dir, state)
+    except Exception:
+        # A failed opt-in save must not leave the running agent enabled.
+        state.replay_capture_enabled = previous_capture_enabled
+        raise
 
     if folders_changed:
         folders = [Path(p) for p in state.replay_folders_override]

@@ -378,8 +378,6 @@ class SettingsPayload:
         "sync_filter_until",
         "auto_update_enabled",
         "replay_capture_enabled",
-        "blind_mode_enabled",
-        "blind_mode_config",
         "obs_scene_switch_enabled",
         "obs_host",
         "obs_port",
@@ -407,8 +405,6 @@ class SettingsPayload:
         sync_filter_until: Optional[str] = None,
         auto_update_enabled: Optional[bool] = None,
         replay_capture_enabled: Optional[bool] = None,
-        blind_mode_enabled: Optional[bool] = None,
-        blind_mode_config: Optional[dict] = None,
         obs_scene_switch_enabled: Optional[bool] = None,
         obs_host: Optional[str] = None,
         obs_port: Optional[int] = None,
@@ -455,8 +451,6 @@ class SettingsPayload:
         # floor in ``updater.update_is_mandatory`` still overrides).
         self.auto_update_enabled = auto_update_enabled
         self.replay_capture_enabled = replay_capture_enabled
-        self.blind_mode_enabled = blind_mode_enabled
-        self.blind_mode_config = blind_mode_config
         # OBS auto scene switching. ``None`` means "no change" for each
         # field, same as everything above. ``obs_password`` uses the
         # empty string to mean "clear it" so a user can remove a saved
@@ -556,7 +550,6 @@ class GuiUI:
         self._signals = None
         self._started_event = threading.Event()
         self._pending_replay_archive_status: Optional[tuple[int, int]] = None
-        self._blind_controller = None
 
     # ---------------- public sink interface ----------------
 
@@ -636,51 +629,6 @@ class GuiUI:
 
     # ---------------- lifecycle ----------------
 
-    def apply_blind_settings(
-        self, enabled: bool, config: dict, user_name_hint: Optional[str],
-    ) -> None:
-        """Apply durable settings on the Qt thread, including tray/hotkey edits."""
-        self._initial_settings.blind_mode_enabled = enabled is True
-        self._initial_settings.blind_mode_config = dict(config)
-        self._initial_settings.player_handle = user_name_hint
-        if self._signals:
-            self._signals.blindSettings.emit(enabled is True, dict(config), user_name_hint)
-
-    def _start_blind_controller(self) -> None:
-        if self._window is None:
-            return
-        if sys.platform != "win32":
-            self._window._set_blind_status("Unavailable: Blind Ladder requires Windows.")
-            return
-        try:
-            from .blind_shield import BlindShieldController
-            initial = self._initial_settings
-            controller = BlindShieldController(
-                parent=self._window,
-                initial_enabled=initial.blind_mode_enabled is True,
-                config=initial.blind_mode_config or {},
-                user_name_hint=initial.player_handle or None,
-                on_enabled_changed=self._window._toggle_blind_mode,
-            )
-            self._blind_controller = controller
-            controller.statusChanged.connect(self._window._set_blind_status)
-            self._app.aboutToQuit.connect(controller.stop)
-            controller.start()
-        except Exception:
-            log.exception("blind_ladder_start_failed")
-            if self._blind_controller is not None:
-                try:
-                    self._blind_controller.stop()
-                except Exception:
-                    log.exception("blind_ladder_failed_start_cleanup")
-            self._blind_controller = None
-            self._window._blind_runtime_failed = True
-            self._window._refresh_blind_controls()
-            self._window._set_blind_status(
-                "Unavailable: screen covers could not start. Restart the agent and check Logs.",
-            )
-            self._window._blind_adjust_button.setEnabled(False)
-
     def run(self) -> int:
         """Build the Qt app + window and block on the event loop.
 
@@ -707,7 +655,6 @@ class GuiUI:
             QtWidgets=QtWidgets,
         )
         self._window = window
-        self._start_blind_controller()
 
         if self._pending_replay_archive_status is not None:
             self._signals.replayArchiveStatus.emit(
@@ -777,7 +724,6 @@ def _make_signals():
         replayArchiveStatus = QtCore.Signal(int, int)
         foldersChanged = QtCore.Signal(list)
         settingsStatus = QtCore.Signal(str)
-        blindSettings = QtCore.Signal(bool, object, object)
         # Result of a Test-connection or Build-scenes round-trip. The
         # payload dict carries ``kind`` plus whatever that operation
         # discovered; see ``_on_obs_probe_done``.
@@ -963,14 +909,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 maxlen=self.MAX_RECENT,
             )
             self._log_offset = 0
-            self._blind_enabled = ui._initial_settings.blind_mode_enabled is True
-            self._blind_saved_enabled = self._blind_enabled
-            self._blind_unsaved_off = False
-            self._blind_config = dict(ui._initial_settings.blind_mode_config or {})
-            self._blind_applied = None
-            self._blind_runtime_failed = False
-            self._blind_status_labels = []
-            self._blind_adjust_buttons = []
             # Active sync-filter chip on the status card. Sourced from
             # ``_initial_settings`` at boot and refreshed every time
             # the user clicks Save; never read from the live combo
@@ -1004,8 +942,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._replay_capture_check.toggled.connect(
                 self._toggle_replay_capture,
             )
-            self._blind_enable_check.toggled.connect(self._toggle_blind_mode)
-            self._refresh_blind_controls()
             self._refresh_capture_notice()
             self._tail_log_now()
 
@@ -1100,222 +1036,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addWidget(title)
 
             v.addWidget(self._build_status_card())
-            v.addWidget(self._build_blind_card(detailed=False))
             v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
             v.addWidget(self._build_stats_row())
             v.addWidget(self._build_action_row())
             v.addStretch(1)
 
-            scroller = QtWidgets.QScrollArea()
-            scroller.setWidgetResizable(True)
-            scroller.setFrameShape(QtWidgets.QFrame.NoFrame)
-            scroller.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-            scroller.setWidget(page)
-            return scroller
-
-        def _build_blind_card(self, *, detailed: bool) -> QtWidgets.QFrame:
-            card = QtWidgets.QFrame()
-            card.setObjectName("card")
-            layout = QtWidgets.QVBoxLayout(card)
-            layout.setContentsMargins(20, 16, 20, 16)
-            layout.setSpacing(8)
-            row = QtWidgets.QHBoxLayout()
-            title = QtWidgets.QLabel("Blind Ladder")
-            title.setObjectName("h2")
-            row.addWidget(title)
-            row.addStretch(1)
-            if detailed:
-                self._blind_enable_check = QtWidgets.QCheckBox("Enable Blind Ladder")
-                self._blind_enable_check.setChecked(self._blind_enabled)
-                row.addWidget(self._blind_enable_check)
-            else:
-                self._blind_toggle_button = QtWidgets.QPushButton()
-                self._blind_toggle_button.setObjectName("primary")
-                self._blind_toggle_button.clicked.connect(
-                    lambda: self._toggle_blind_mode(
-                        False if self._blind_unsaved_off else not self._blind_enabled,
-                    ),
-                )
-                row.addWidget(self._blind_toggle_button)
-                self._blind_dashboard_adjust_button = QtWidgets.QPushButton("Adjust coverage…")
-                self._blind_dashboard_adjust_button.clicked.connect(self._adjust_blind_coverage)
-                self._blind_adjust_buttons.append(self._blind_dashboard_adjust_button)
-                row.addWidget(self._blind_dashboard_adjust_button)
-            layout.addLayout(row)
-            copy = QtWidgets.QLabel(
-                "Play the game in front of you. Cover opponent identity and "
-                "rank on the SC2 loading screen; cover in-game chat."
-            )
-            copy.setWordWrap(True)
-            copy.setObjectName("muted")
-            layout.addWidget(copy)
-            status = QtWidgets.QLabel(self._blind_default_status())
-            status.setWordWrap(True)
-            status.setObjectName("muted")
-            layout.addWidget(status)
-            self._blind_status_labels.append(status)
-            if detailed:
-                details = QtWidgets.QLabel(
-                    "Knowing a name, rank or rating can change your expectations "
-                    "before the first worker moves. Blind Ladder gives you a way "
-                    "to focus on your decisions instead.\n\n"
-                    "During loading, an opaque cover hides player names, clan "
-                    "tags, portraits, league badges and ratings. A neutral race "
-                    "label appears when SC2 provides a reliable current "
-                    "matchup; Random stays Random. The full loading cover "
-                    "is the default.\n\n"
-                    "During play, the chat area is covered, including your own "
-                    "messages and system text inside that area. SC2's normal "
-                    "top-right player panel stays usable: opening it deliberately "
-                    "reveals the player information. The score area is covered "
-                    "after the match. Covers do not take keyboard focus or block "
-                    "game clicks.\n\n"
-                    "The switch saves immediately and stays set after restart. "
-                    "First use: click Set up coverage and check each covered "
-                    "area before queuing. Use windowed SC2, or confirm that a "
-                    "fullscreen-sized game is borderless rather than exclusive fullscreen. "
-                    "Protection stays unverified until that setup is saved. "
-                    "Turning it off removes the covers. Adjust coverage if your "
-                    "SC2 layout, resolution or interface scale needs different "
-                    "rectangles. The initial rectangles are starting points: "
-                    "check chat and panel coverage before queuing. Loading "
-                    "panels stay armed over the menu and may obscure parts "
-                    "of it; this covers their positions before loading begins. "
-                    "Use borderless/windowed SC2 for reliable desktop covers.\n\n"
-                    "Emergency off: Ctrl+Shift+F9 removes the covers and saves "
-                    "Blind Ladder as off. This shortcut only turns protection off.\n\n"
-                    "This protects the native game display. SC2Tools widgets, "
-                    "voice readouts, browser pages and stream chat keep their "
-                    "own settings. Replay syncing and analysis continue."
-                )
-                details.setWordWrap(True)
-                details.setObjectName("muted")
-                layout.addWidget(details)
-                self._blind_adjust_button = QtWidgets.QPushButton("Adjust coverage…")
-                self._blind_adjust_button.clicked.connect(self._adjust_blind_coverage)
-                self._blind_adjust_buttons.append(self._blind_adjust_button)
-                layout.addWidget(self._blind_adjust_button, alignment=QtCore.Qt.AlignLeft)
-            return card
-
-        def _blind_default_status(self) -> str:
-            if not self._blind_enabled:
-                return "Off — normal SC2 display."
-            if self._blind_config.get("coverage_verified") is not True:
-                return "Setup needed — choose Set up coverage before queuing."
-            return "On — waiting for screen protection to start."
-
-        def _set_blind_status(self, message: str) -> None:
-            if self._blind_unsaved_off:
-                message = (
-                    "Off for this run — could not save the off setting. "
-                    "Click Save off setting before restarting the agent."
-                )
-            for label in self._blind_status_labels:
-                label.setText(message)
-
-        def _refresh_blind_controls(self) -> None:
-            blocker = QtCore.QSignalBlocker(self._blind_enable_check)
-            self._blind_enable_check.setChecked(self._blind_enabled)
-            del blocker
-            self._blind_toggle_button.setText(
-                "Save off setting" if self._blind_unsaved_off else (
-                    "Turn Blind Ladder off" if self._blind_enabled else "Turn Blind Ladder on"
-                ),
-            )
-            supported = sys.platform == "win32"
-            toggle_available = supported and (not self._blind_runtime_failed or self._blind_enabled)
-            self._blind_enable_check.setEnabled(toggle_available)
-            self._blind_toggle_button.setEnabled(toggle_available)
-            for button in self._blind_adjust_buttons:
-                button.setEnabled(supported and not self._blind_runtime_failed)
-                button.setText(
-                    "Adjust coverage…" if self._blind_config.get("coverage_verified") is True
-                    else "Set up coverage…",
-                )
-            if not supported:
-                self._set_blind_status("Unavailable: Blind Ladder requires Windows.")
-
-        def _apply_blind_settings(self, enabled: bool, config: dict, user_name_hint) -> None:
-            self._blind_saved_enabled = enabled is True
-            if not self._blind_saved_enabled:
-                self._blind_unsaved_off = False
-            # A delayed boot/hint refresh must never undo an emergency stop
-            # whose persistence failed. Only a deliberate successful enable
-            # request below clears this current-run override.
-            self._blind_enabled = self._blind_saved_enabled and not self._blind_unsaved_off
-            self._blind_config = dict(config)
-            ui._initial_settings.blind_mode_enabled = self._blind_saved_enabled
-            ui._initial_settings.blind_mode_config = dict(config)
-            self._refresh_blind_controls()
-            signature = (self._blind_enabled, config, user_name_hint)
-            if ui._blind_controller is not None and signature != self._blind_applied:
-                # Settings arrive here only after the atomic state write succeeded.
-                controller = ui._blind_controller
-                controller.set_config(dict(config))
-                controller.set_user_name_hint(user_name_hint or None)
-                controller.set_enabled(self._blind_enabled)
-                self._blind_applied = (self._blind_enabled, dict(config), user_name_hint)
-            elif ui._blind_controller is None and sys.platform == "win32" and not self._blind_runtime_failed:
-                self._set_blind_status(self._blind_default_status())
-            if not self._blind_enabled:
-                self._set_blind_status("Off — normal SC2 display.")
-
-        def _toggle_blind_mode(self, enabled: bool) -> bool:
-            enabled = enabled is True
-            if enabled == self._blind_enabled and enabled == self._blind_saved_enabled:
-                self._refresh_blind_controls()
-                return True
-            if sys.platform != "win32":
-                self._refresh_blind_controls()
-                return False
-            if enabled and self._blind_runtime_failed:
-                return False
-            if not enabled:
-                # Removing screen obstruction is immediate, even if disk I/O
-                # later fails. Keep the saved value separate for an honest
-                # restart warning and an explicit retry button.
-                if ui._blind_controller is not None:
-                    ui._blind_controller.set_enabled(False)
-                self._blind_enabled = False
-                self._blind_unsaved_off = self._blind_saved_enabled
-            try:
-                ui._on_save_settings(SettingsPayload(blind_mode_enabled=enabled))
-            except Exception as exc:
-                log.exception("blind_ladder_save_failed")
-                self._refresh_blind_controls()
-                self._set_blind_status(f"Could not save Blind Ladder: {exc}. Previous setting retained.")
-                return False
-            self._blind_unsaved_off = False
-            self._apply_blind_settings(
-                enabled, ui._initial_settings.blind_mode_config or self._blind_config,
-                ui._initial_settings.player_handle,
-            )
-            return True
-
-        def _adjust_blind_coverage(self) -> None:
-            controller = ui._blind_controller
-            if controller is None:
-                self._set_blind_status("Coverage adjustment is unavailable until screen protection starts.")
-                return
-            previous = dict(self._blind_config)
-            try:
-                config = controller.calibrate(self)
-                if config is None:
-                    return
-                from ..blind_mode import BlindModeConfig
-                config = BlindModeConfig.from_dict(config).to_dict()
-                config.pop("enabled", None)
-                ui._on_save_settings(SettingsPayload(blind_mode_config=config))
-            except Exception as exc:
-                log.exception("blind_ladder_coverage_save_failed")
-                controller.set_config(previous)
-                self._set_blind_status(f"Could not save coverage: {exc}. Previous coverage retained.")
-                return
-            self._apply_blind_settings(
-                self._blind_enabled, config,
-                ui._initial_settings.player_handle,
-            )
+            return page
 
         def _build_replay_archive_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
@@ -1716,7 +1443,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             title = QtWidgets.QLabel("Settings")
             title.setObjectName("h1")
             v.addWidget(title)
-            v.addWidget(self._build_blind_card(detailed=True))
 
             form_card = QtWidgets.QFrame()
             form_card.setObjectName("card")
@@ -2583,7 +2309,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
-            signals.blindSettings.connect(self._apply_blind_settings)
             signals.obsProbeDone.connect(self._on_obs_probe_done)
             signals.quitRequested.connect(self._on_quit_requested)
             signals.showRequested.connect(self._on_show_requested)
