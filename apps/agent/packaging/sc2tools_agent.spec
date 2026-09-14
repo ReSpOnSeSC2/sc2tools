@@ -87,6 +87,10 @@ if TRAY_ICON.exists():
 # in v0.3.5 once probe_analyzer started executing the import chain at
 # boot; in earlier versions it failed silently per-replay.
 HIDDEN = [
+    # Native Blind Ladder is loaded only when the Windows Qt GUI starts.
+    "sc2tools_agent.blind_mode",
+    "sc2tools_agent.ui.blind_windows",
+    "sc2tools_agent.ui.blind_shield",
     "sc2reader",
     "sc2reader.engine",
     "sc2reader.events",
