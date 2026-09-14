@@ -187,13 +187,10 @@ export function TrendsTab() {
     };
   }, [series]);
 
-  if (!isGlobal && isLoading) return <Skeleton rows={4} />;
-  if (!isGlobal && error) return <TrendsRequestError title="Trends" retry={mutate} />;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        {!isGlobal && kpis.streak.kind && kpis.streak.count > 0 && (
+        {!isGlobal && !isLoading && !error && kpis.streak.kind && kpis.streak.count > 0 && (
           <span
             className={`rounded px-2 py-0.5 text-micro font-semibold tabular-nums ${
               kpis.streak.kind === "win"
@@ -250,17 +247,17 @@ export function TrendsTab() {
         </p>
       )}
 
-      {!isGlobal && series.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {isLoading || error || series.length === 0 ? (
             ["Games per period (W stacked on L)", "Win rate"].map((title) => error ? (
               <TrendsRequestError key={title} title={title} error={error} retry={mutate} />
             ) : (
               <Card key={title} title={title}>
                 {isLoading ? <div role="status" aria-label={`Loading ${title}`}><Skeleton rows={4} /></div>
-                  : <EmptyState title="No player game records match these filters" sub="Adjust the player selection or game filters to broaden this view." />}
+                  : <EmptyState
+                      title={isGlobal ? "No player game records match these filters" : "No games match these filters"}
+                      sub={isGlobal ? "Adjust the player selection or game filters to broaden this view." : "Adjust the game filters or upload more games to broaden this view."}
+                    />}
               </Card>
             ))
           ) : <>
@@ -490,8 +487,7 @@ export function TrendsTab() {
           <div className="md:col-span-2">
             <MapTrendChart bucket={bucket as "day" | "week" | "month"} />
           </div>
-        </div>
-      )}
+      </div>
 
       {/* The identity artifact closes the tab, immediately after map trends. */}
       {!isGlobal && <FingerprintCard />}

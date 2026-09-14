@@ -4,6 +4,7 @@ const { LIMITS } = require("../config/constants");
 const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
+const { TrendsRequests } = require("./trendsRequests");
 const {
   attachRecentByMap,
   attachRecentByMatchup,
@@ -35,6 +36,7 @@ class AggregationsService {
   /** @param {{games: import('mongodb').Collection}} db */
   constructor(db) {
     this.db = db;
+    this.trendsRequests = new TrendsRequests();
   }
 
   /**
@@ -414,9 +416,8 @@ class AggregationsService {
    * @param {object} filters
    */
   async timeseries(userId, opts, filters) {
-    return applyRaceGrouping(filters, (f) =>
-      this._timeseriesOnce(userId, opts, f),
-    );
+    return this.trendsRequests.run(["timeseries", userId, filters, opts], () =>
+      applyRaceGrouping(filters, (f) => this._timeseriesOnce(userId, opts, f)));
   }
 
   /**
@@ -590,7 +591,7 @@ class AggregationsService {
   async _fitInterval(match, requested) {
     if (requested === "month") return "month";
     const cap = LIMITS.TIMESERIES_MAX_BUCKETS;
-    const rows = await this.db.games
+    const rows = await this.trendsRequests.run(["dateRange", match], () => this.db.games
       .aggregate([
         { $match: match },
         {
@@ -601,7 +602,7 @@ class AggregationsService {
           },
         },
       ])
-      .toArray();
+      .toArray());
     const extremes = rows && rows[0];
     if (!extremes || !extremes.minDate || !extremes.maxDate) return requested;
     const min = extremes.minDate instanceof Date
@@ -637,7 +638,8 @@ class AggregationsService {
    * @param {object} filters
    */
   async matchupTimeseries(userId, opts, filters) {
-    return trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters);
+    return this.trendsRequests.run(["matchupTimeseries", userId, filters, opts], () =>
+      trendsAgg.matchupTimeseries(this._trendsDeps(), userId, opts, filters));
   }
 
   /**
@@ -647,7 +649,8 @@ class AggregationsService {
    * @param {object} filters
    */
   async dayHourHeatmap(userId, opts, filters) {
-    return trendsAgg.dayHourHeatmap(this._trendsDeps(), userId, opts, filters);
+    return this.trendsRequests.run(["dayHourHeatmap", userId, filters, opts], () =>
+      trendsAgg.dayHourHeatmap(this._trendsDeps(), userId, opts, filters));
   }
 
   /**
@@ -656,7 +659,8 @@ class AggregationsService {
    * @param {object} filters
    */
   async lengthBuckets(userId, filters) {
-    return trendsAgg.lengthBuckets(this._trendsDeps(), userId, filters);
+    return this.trendsRequests.run(["lengthBuckets", userId, filters], () =>
+      trendsAgg.lengthBuckets(this._trendsDeps(), userId, filters));
   }
 
   /**
@@ -666,29 +670,30 @@ class AggregationsService {
    * @param {object} filters
    */
   async activityCalendar(userId, opts, filters) {
-    return trendsAgg.activityCalendar(this._trendsDeps(), userId, opts, filters);
+    return this.trendsRequests.run(["activityCalendar", userId, filters, opts], () =>
+      trendsAgg.activityCalendar(this._trendsDeps(), userId, opts, filters));
   }
 
   // v0.5+ "Player Insight" aggregations. All thin delegators —
   // implementation in ``./trendsInsights.js``.
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
-  async mmrProgression(userId, opts, filters) { return trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters); }
+  async mmrProgression(userId, opts, filters) { return this.trendsRequests.run(["mmrProgression", userId, filters, opts], () => trendsInsights.mmrProgression(this._trendsDeps(), userId, opts, filters)); }
   /** @param {string} userId @param {object} filters @param {{sessionGapMinutes?: number}} [opts] */
-  async momentum(userId, filters, opts) { return trendsInsights.momentum(this._trendsDeps(), userId, filters, opts); }
+  async momentum(userId, filters, opts) { return this.trendsRequests.run(["momentum", userId, filters, opts], () => trendsInsights.momentum(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {object} filters @param {{bucketWidth?: number | "auto"}} [opts] */
-  async oppMmrBuckets(userId, filters, opts) { return trendsInsights.oppMmrBuckets(this._trendsDeps(), userId, filters, opts); }
+  async oppMmrBuckets(userId, filters, opts) { return this.trendsRequests.run(["oppMmrBuckets", userId, filters, opts], () => trendsInsights.oppMmrBuckets(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {object} filters @param {{lo?: number, hi?: number}} [opts] */
-  async oppMmrBucketGames(userId, filters, opts) { return trendsInsights.oppMmrBucketGames(this._trendsDeps(), userId, filters, opts); }
+  async oppMmrBucketGames(userId, filters, opts) { return this.trendsRequests.run(["oppMmrBucketGames", userId, filters, opts], () => trendsInsights.oppMmrBucketGames(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
-  async myBuildMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "myBuild", fallback: "Unknown" }); }
+  async myBuildMixOverTime(userId, opts, filters) { return this.trendsRequests.run(["myBuildMixOverTime", userId, filters, opts], () => trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "myBuild", fallback: "Unknown" })); }
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
-  async oppStrategyMixOverTime(userId, opts, filters) { return trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" }); }
+  async oppStrategyMixOverTime(userId, opts, filters) { return this.trendsRequests.run(["oppStrategyMixOverTime", userId, filters, opts], () => trendsInsights.mixOverTime(this._trendsDeps(), userId, opts, filters, { field: "opponent.strategy", fallback: "Unknown" })); }
   /** @param {string} userId @param {{interval?: 'day'|'week'|'month', tz?: string}} opts @param {object} filters */
-  async mapTrend(userId, opts, filters) { return trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters); }
+  async mapTrend(userId, opts, filters) { return this.trendsRequests.run(["mapTrend", userId, filters, opts], () => trendsInsights.mapTrend(this._trendsDeps(), userId, opts, filters)); }
   /** @param {string} userId @param {object} filters @param {{tz?: string, groupByOwnRace?: boolean}} [opts] */
-  async netMmrByMatchup(userId, filters, opts) { return trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters, opts); }
+  async netMmrByMatchup(userId, filters, opts) { return this.trendsRequests.run(["netMmrByMatchup", userId, filters, opts], () => trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {object} filters @param {object} [opts] */
-  async netMmrByOpponent(userId, filters, opts) { return trendsInsights.netMmrByOpponent(this._trendsDeps(), userId, filters, opts); }
+  async netMmrByOpponent(userId, filters, opts) { return this.trendsRequests.run(["netMmrByOpponent", userId, filters, opts], () => trendsInsights.netMmrByOpponent(this._trendsDeps(), userId, filters, opts)); }
 
   /** @private */
   _trendsDeps() {

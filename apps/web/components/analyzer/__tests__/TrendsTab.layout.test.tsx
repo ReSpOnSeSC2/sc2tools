@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TrendsTab } from "../TrendsTab";
 import { TrendsDataProvider } from "@/lib/trendsDataContext";
 import type { ApiTimeseriesResponse } from "@/lib/timeseries";
@@ -98,20 +98,34 @@ afterEach(() => {
 });
 
 describe("TrendsTab layout", () => {
-  it.each(["loading", "error", "empty"])("keeps every independent global trend section mounted when the overview is %s", (state) => {
+  it.each((["personal", "global"] as const).flatMap((mode) =>
+    ["loading", "error", "empty"].map((state) => ({ mode, state })),
+  ))("keeps every independent $mode trend section mounted when the overview is $state", ({ mode, state }) => {
+    const retry = vi.fn();
     useApiMock.mockReturnValueOnce({
       data: state === "empty" ? { interval: "week", points: [] } : undefined,
       isLoading: state === "loading",
       error: state === "error" ? { status: 0, code: "request_timeout", message: "The API took too long to respond." } : undefined,
-      mutate: vi.fn(),
+      mutate: retry,
     });
-    render(<TrendsDataProvider mode="global"><TrendsTab /></TrendsDataProvider>);
+    render(<TrendsDataProvider mode={mode}><TrendsTab /></TrendsDataProvider>);
     for (const title of ["Games per period (W stacked on L)", "Win rate", "MMR progression", "Net MMR by matchup", "Opponent MMR buckets", "Momentum", "Matchup over time", "Matchup game length", "Time of day", "Game length", "Activity calendar", "Map performance over time"]) {
       expect(screen.getByText(title), title).toBeTruthy();
     }
-    expect(screen.queryByTestId("skill-fingerprint")).toBeNull();
+    expect(Boolean(screen.queryByTestId("skill-fingerprint"))).toBe(mode === "personal");
+    expect(screen.getByRole("checkbox", { name: "Rolling WR (4)" })).toBeTruthy();
+    expect(screen.getByRole("combobox")).toBeTruthy();
     if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();
-    if (state === "error") expect(screen.getAllByRole("alert")[0].textContent).toContain("The API took too long to respond.");
+    if (state === "error") {
+      expect(screen.getAllByRole("alert")[0].textContent).toContain("The API took too long to respond.");
+      fireEvent.click(screen.getAllByRole("button", { name: "Retry" })[0]);
+      expect(retry).toHaveBeenCalledOnce();
+    }
+    if (state === "empty") {
+      const title = mode === "personal" ? "No games match these filters" : "No player game records match these filters";
+      expect(screen.getAllByText(title)).toHaveLength(2);
+      if (mode === "personal") expect(screen.queryByText(/Adjust the player selection/)).toBeNull();
+    }
   });
 
   it("labels the server's wider interval and explains it for global data", () => {
