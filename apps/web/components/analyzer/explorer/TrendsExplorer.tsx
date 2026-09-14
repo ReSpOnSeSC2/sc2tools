@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, BarChart3, ChartNoAxesCombined, Clock3, Crosshair, List, Repeat2, Timer, TrendingUp, Users } from "lucide-react";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
@@ -54,18 +54,29 @@ function ExplorerPanel({ view, controls, setControls }: { view: ExplorerView; co
   }, [filters, controls, view]);
   const queryString = filtersToQuery(query);
   const { data, isLoading, error, mutate } = useTrendsApi<ExplorerResponse>(`/v1/trends/explorer/${view}${queryString}#${dbRev}`, { refreshInterval: (latest) => latest?.preparation?.pendingGames ? 15000 : 0 });
+  // SWR can clear the prior error before isLoading flips during mutate().
+  // An absent response is still pending, never an empty analysis result.
+  const pending = isLoading || (!data && !error);
+  const optionScope = JSON.stringify({ filters, isGlobal, cohort });
+  const priorOptions = useRef<{ scope: string; options: ExplorerResponse["options"] } | null>(null);
+  useEffect(() => {
+    if (data?.options) priorOptions.current = { scope: optionScope, options: data.options };
+  }, [data?.options, optionScope]);
+  // Keep account choices visible during a comparison refresh. A new outer
+  // filter or population scope invalidates this options-only fallback.
+  const options = data?.options ?? (priorOptions.current?.scope === optionScope ? priorOptions.current.options : undefined);
   const identity = `${view}:${queryString}:${dbRev}:${JSON.stringify(cohort)}`;
   useEffect(() => { setSegment(null); }, [identity]);
   const currentRows = data?.rows ?? [];
   return <div className="min-w-0 space-y-5 p-4 sm:p-5">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><h4 className="text-sm font-semibold text-text">{item.title}</h4><p className="mt-1 max-w-3xl text-xs leading-relaxed text-text-muted">{item.description}</p></div><div className="inline-flex self-start rounded-lg border border-border bg-bg-elevated p-1" aria-label="Analysis display">{([{ id: "chart", label: "Chart", icon: BarChart3 }, { id: "table", label: "Data", icon: List }] as const).map(({ id, label, icon: Icon }) => <button type="button" key={id} aria-pressed={display === id} onClick={() => setDisplay(id)} className={`inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${display === id ? "bg-bg-surface text-accent shadow-sm" : "text-text-muted"}`}><Icon aria-hidden className="h-3.5 w-3.5" />{label}</button>)}</div></div>
-    <div className="rounded-xl border border-border bg-bg-elevated/30 p-3 sm:p-4"><ExplorerPanelControls view={view} values={controls} onChange={(next) => { setSegment(null); setControls(next); }} options={data?.options} isGlobal={isGlobal} /></div>
+    <div className="rounded-xl border border-border bg-bg-elevated/30 p-3 sm:p-4"><ExplorerPanelControls view={view} values={controls} onChange={(next) => { setSegment(null); setControls(next); }} options={options} isGlobal={isGlobal} /></div>
     {!error && data?.preparation?.pendingGames ? <div role="status" className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs leading-relaxed text-text-muted">Preparing measurements for {formatCount(data.preparation.pendingGames)} games. Available results appear below and update automatically.</div> : null}
-    {!isLoading && !error && data && !currentRows.some((row) => row.games > 0) ? <div className="grid grid-cols-2 gap-3"><ExplorerStat label="Games analyzed" value={formatCount(data.eligibleGames)} detail={`Of ${formatCount(data.totalGames)} selected games`} /><ExplorerStat label="Data coverage" value={data.totalGames ? formatRate(data.eligibleGames / data.totalGames) : "—"} detail="Missing measurements stay excluded" /></div> : null}
-    <div key={identity} aria-live="polite" aria-busy={isLoading}>
-      {error ? <ExplorerError message={error.message} retry={mutate} /> : isLoading ? <ExplorerLoading title={item.title} /> : !data || !currentRows.some((row) => row.games > 0) ? <EmptyState title="No eligible games for this analysis" sub={view === "execution" || view === "leads" ? "This analysis needs detailed replay measurements. Try another milestone, checkpoint, or filter selection. Missing measurements are never replaced with estimates." : view === "periods" ? "Try periods that contain games, or adjust the other page filters." : "Adjust the page filters or analysis settings to include more games."} /> : <ExplorerVisualization view={view} data={data} display={display} onSelect={setSegment} weighted={view === "groups" && controls.weight === "players"} />}
+    {!pending && !error && data && !currentRows.some((row) => row.games > 0) ? <div className="grid grid-cols-2 gap-3"><ExplorerStat label="Games analyzed" value={formatCount(data.eligibleGames)} detail={`Of ${formatCount(data.totalGames)} selected games`} /><ExplorerStat label="Data coverage" value={data.totalGames ? formatRate(data.eligibleGames / data.totalGames) : "—"} detail="Missing measurements stay excluded" /></div> : null}
+    <div key={identity} aria-live="polite" aria-busy={pending}>
+      {error ? <ExplorerError message={error.message} retry={mutate} /> : pending ? <ExplorerLoading title={item.title} /> : !data || !currentRows.some((row) => row.games > 0) ? <EmptyState title="No eligible games for this analysis" sub={view === "execution" || view === "leads" ? "This analysis needs detailed replay measurements. Try another milestone, checkpoint, or filter selection. Missing measurements are never replaced with estimates." : view === "periods" ? "Try periods that contain games, or adjust the other page filters." : "Adjust the page filters or analysis settings to include more games."} /> : <ExplorerVisualization view={view} data={data} display={display} onSelect={setSegment} weighted={view === "groups" && controls.weight === "players"} />}
     </div>
-    {!isLoading && !error && data?.notes?.length ? <details className="rounded-lg border border-border bg-bg-elevated/30 px-3 py-2"><summary className="min-h-8 cursor-pointer py-1 text-[11px] font-medium text-text-muted">Coverage and how to read this analysis</summary><ul className="space-y-1.5 pb-1 pl-4 pt-2 text-[11px] leading-relaxed text-text-dim">{data.notes.map((note, index) => <li key={index} className="list-disc">{note}</li>)}</ul></details> : null}
+    {!pending && !error && data?.notes?.length ? <details className="rounded-lg border border-border bg-bg-elevated/30 px-3 py-2"><summary className="min-h-8 cursor-pointer py-1 text-[11px] font-medium text-text-muted">Coverage and how to read this analysis</summary><ul className="space-y-1.5 pb-1 pl-4 pt-2 text-[11px] leading-relaxed text-text-dim">{data.notes.map((note, index) => <li key={index} className="list-disc">{note}</li>)}</ul></details> : null}
     {segment ? <ExplorerGamesModal key={`${identity}:${segment.key}`} view={view} query={query} dbRev={dbRev} segment={segment} onClose={() => setSegment(null)} /> : null}
   </div>;
 }

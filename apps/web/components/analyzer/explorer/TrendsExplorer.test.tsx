@@ -132,6 +132,29 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     expect(params().get("interval")).toBe("month");
   });
 
+  it("keeps account choices visible during a same-scope comparison reload", () => {
+    mount(true);
+    fireEvent.click(screen.getByRole("button", { name: "Compare groups" }));
+    fireEvent.change(screen.getByLabelText("Compare by"), { target: { value: "players" } });
+    fireEvent.click(within(screen.getByRole("group", { name: "Group A" })).getByRole("checkbox", { name: /Alpha/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Group B" })).getByRole("checkbox", { name: /Beta/ }));
+    useApiMock.mockReturnValue({ data: undefined, isLoading: true, mutate: retry });
+    fireEvent.click(screen.getByRole("button", { name: "Apply comparison" }));
+    expect(within(screen.getByRole("group", { name: "Group A" })).getByRole("checkbox", { name: /Alpha/ })).toBeTruthy();
+    expect(screen.queryByText("No player accounts available for this selection.")).toBeNull();
+    expect(screen.getByRole("status", { name: "Loading Compare player groups" })).toBeTruthy();
+  });
+
+  it("clears prior account options when the authorized player population changes", () => {
+    const rendered = mount(true);
+    fireEvent.click(screen.getByRole("button", { name: "Compare groups" }));
+    fireEvent.change(screen.getByLabelText("Compare by"), { target: { value: "players" } });
+    expect(within(screen.getByRole("group", { name: "Group A" })).getByRole("checkbox", { name: /Alpha/ })).toBeTruthy();
+    useApiMock.mockReturnValue({ data: undefined, isLoading: true, mutate: retry });
+    rendered.rerender(<FiltersContext.Provider value={filterValue}><TrendsDataProvider mode="global" cohort={{ excluded_players: "account-a,account-b" }}><TrendsExplorer /></TrendsDataProvider></FiltersContext.Provider>);
+    expect(screen.queryByRole("checkbox", { name: /Alpha/ })).toBeNull();
+  });
+
   it("keeps controls available on errors and retries only the active analysis", () => {
     useApiMock.mockReturnValue({ isLoading: false, error: { message: "Request timed out" }, mutate: retry });
     mount();
@@ -139,6 +162,25 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     expect(screen.getByLabelText("MMR difference band")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])("keeps the loading state between clearing a retry error and receiving data (global=%s)", (global) => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: undefined, mutate: retry });
+    mount(global);
+    expect(screen.getByRole("status", { name: "Loading Performance by MMR difference" })).toBeTruthy();
+    expect(screen.queryByText("No eligible games for this analysis")).toBeNull();
+    expect(screen.queryByText("Games analyzed")).toBeNull();
+    expect(screen.getByLabelText("MMR difference band")).toBeTruthy();
+  });
+
+  it("keeps game drilldowns loading when a retry has no response and no error yet", () => {
+    useApiMock.mockImplementation((path: string) => path.includes("/games?") ? { data: undefined, isLoading: false, error: undefined, mutate: retry } : { data: fixture, isLoading: false, mutate: retry });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "View games for Near equal MMR" })[0]);
+    expect(screen.getByRole("status", { name: "Loading analysis games" })).toBeTruthy();
+    expect(screen.queryByText("No games match this group")).toBeNull();
+    expect(screen.getByText("Loading games…")).toBeTruthy();
   });
 
   it("shows zero coverage honestly and polls while real measurements are prepared", () => {
