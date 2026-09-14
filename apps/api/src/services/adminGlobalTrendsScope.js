@@ -6,7 +6,7 @@ const { raceLetterExpr, myLadderRaceExpr } = require("./trendsRegionExpr");
 // Dedupe retains $$ROOT twice. Keep legacy detail blobs, signatures and
 // unrelated metadata out of those blocking sorts and accumulator tables.
 const GLOBAL_HISTORY_PROJECTION = Object.freeze({
-  _id: 1, userId: 1, gameId: 1, date: 1, updatedAt: 1,
+  _id: 1, userId: 1, gameId: 1, date: 1, startedAt: 1, updatedAt: 1,
   myToonHandle: 1, myRace: 1, myLadderRace: 1, myMmr: 1, myMmrSource: 1,
   isLadderGame: 1, isResumedFromReplay: 1, playerCount: 1, matchFormat: 1,
   result: 1, durationSec: 1, map: 1, myBuild: 1, macroScore: 1,
@@ -14,6 +14,7 @@ const GLOBAL_HISTORY_PROJECTION = Object.freeze({
   "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": 1,
   "opponent.displayName": 1, "opponent.pulseId": 1, "opponent.pulseCharacterId": 1,
   "opponent.toonHandle": 1, "opponent.region": 1,
+  "opponent.mmrSource": 1, "opponent.mmrLookupAttempted": 1,
 });
 
 const GLOBAL_ROSTER_PROJECTION = Object.freeze({

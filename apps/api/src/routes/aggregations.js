@@ -3,6 +3,7 @@
 const express = require("express");
 const { parseFilters, parseFiniteInt } = require("../util/parseQuery");
 const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
+const { parseExplorerOptions } = require("../services/trendsExplorer");
 
 /**
  * /v1 — analytics aggregations.
@@ -17,6 +18,16 @@ const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
 function buildAggregationsRouter(deps) {
   const router = express.Router();
   router.use(deps.auth);
+
+  router.get(["/trends/explorer/:view", "/trends/explorer/:view/games"], async (req, res, next) => {
+    try {
+      const userId = requireAuth(req).userId;
+      const opts = parseExplorerOptions(req.params.view, req.query);
+      opts.games = req.path.endsWith("/games");
+      res.set("Cache-Control", "private, no-store");
+      res.json(await deps.aggregations.explorer(userId, parseFilters(req.query), opts));
+    } catch (err) { next(err); }
+  });
 
   router.get("/summary", async (req, res, next) => {
     try {

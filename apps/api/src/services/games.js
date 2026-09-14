@@ -52,6 +52,7 @@ const OPPONENT_SLIM_FIELDS = new Set([
   "displayName",
   "race",
   "mmr",
+  "mmrSource",
   "leagueId",
   "opening",
   "strategy",
@@ -352,6 +353,7 @@ class GamesService {
     // re-uploads and must survive them; $setting the whole parent
     // object would erase the marker and retry Pulse misses forever.
     const slimSet = buildSlimSet(doc);
+    const protectOpponentMmr = normalizeOpponentMmrProvenance(slimSet);
     if (
       Object.prototype.hasOwnProperty.call(doc, "spatial")
       && !Object.prototype.hasOwnProperty.call(slimSet, "spatial")
@@ -365,13 +367,14 @@ class GamesService {
     // server-owned token before recording a decision.
     const customBuildRevision = crypto.randomUUID();
     slimSet._customBuildRevision = customBuildRevision;
-    const update = clearUnavailableMyMmr
+    let update = clearUnavailableMyMmr
       ? buildUnavailableMmrUpdate(slimSet, unset)
       : {
         $setOnInsert: { createdAt: new Date() },
         $set: slimSet,
         $unset: unset,
       };
+    if (protectOpponentMmr) update = protectStoredOpponentMmr(update, slimSet);
     if (this.gameDetails && Object.keys(heavy).length > 0) {
       // Commit the detail payload before creating the slim row. The route
       // uses the slim-row insert result as the exactly-once gate for
@@ -1808,6 +1811,52 @@ function buildSlimSet(doc) {
   return set;
 }
 
+/** Prevent a legacy numeric upload from inheriting an unrelated old replay
+ * marker. Missing incoming data preserves any already proven replay rating.
+ * @param {Record<string, any>} set */
+function normalizeOpponentMmrProvenance(set) {
+  const source = set["opponent.mmrSource"];
+  const value = set["opponent.mmr"];
+  if (source === "replay" && Number.isInteger(value) && value >= 500 && value <= 9999) return false;
+  if (source === "unavailable" || source === "replay") {
+    delete set["opponent.mmr"];
+    set["opponent.mmrSource"] = "unavailable";
+    return true;
+  }
+  if (typeof value === "number") {
+    set["opponent.mmrSource"] = "unverified";
+    return true;
+  }
+  return false;
+}
+
+/** Keep provenance and its numeric value atomic under concurrent resyncs.
+ * The existing approximate opponent rating remains available to older views;
+ * only verified replay evidence participates in historical MMR comparisons.
+ * @param {Record<string, any> | Record<string, any>[]} update
+ * @param {Record<string, any>} incoming
+ * @returns {Record<string, any>[]} */
+function protectStoredOpponentMmr(update, incoming) {
+  const pipeline = Array.isArray(update) ? update : [
+    { $set: { ...Object.fromEntries(Object.entries(update.$set).map(([key, value]) => [key, { $literal: value }])),
+      createdAt: { $ifNull: ["$createdAt", new Date()] } } },
+    { $unset: Object.keys(update.$unset) },
+  ];
+  const knownNumber = { $and: [{ $isNumber: "$opponent.mmr" }, { $gte: ["$opponent.mmr", 500] }, { $lte: ["$opponent.mmr", 9999] }] };
+  const keepReplay = { $and: [knownNumber, { $eq: ["$opponent.mmrSource", "replay"] }] };
+  const set = pipeline[0].$set;
+  if (typeof incoming["opponent.mmr"] === "number") {
+    set["opponent.mmr"] = { $cond: [keepReplay, "$opponent.mmr", { $literal: incoming["opponent.mmr"] }] };
+    set["opponent.mmrSource"] = { $cond: [keepReplay, "replay", "unverified"] };
+  } else {
+    set["opponent.mmrSource"] = { $cond: [keepReplay, "replay", { $cond: [
+      { $and: [knownNumber, { $eq: ["$opponent.mmrSource", "pulse"] }] }, "pulse",
+      { $cond: [{ $isNumber: "$opponent.mmr" }, "unverified", "unavailable"] },
+    ] }] };
+  }
+  return pipeline;
+}
+
 /**
  * Normalize every legacy/high-fan-out allow-listed field even when an
  * internal caller bypasses HTTP validation. Returning undefined drops an
@@ -1935,6 +1984,7 @@ function normalizeOpponentField(key, value) {
   if (key === "strategy") return boundedString(value, 200);
   if (key === "playSignature") return sanitizePlaySignature(value);
   if (key === "mmr") return boundedInteger(value, 0, 9999);
+  if (key === "mmrSource") return value === "replay" || value === "unavailable" ? value : undefined;
   if (key === "leagueId") return boundedInteger(value, 0, 100);
   if (
     key === "pulseLookupAttempted"

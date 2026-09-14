@@ -57,6 +57,10 @@ vi.mock("../FingerprintCard", () => ({
   ),
 }));
 
+vi.mock("../explorer/TrendsExplorer", () => ({
+  TrendsExplorer: () => <section>Explore performance</section>,
+}));
+
 vi.mock("../charts/MapTrendChart", () => ({
   MapTrendChart: () => (
     <section data-testid="map-performance">Map performance over time</section>
@@ -113,6 +117,7 @@ describe("TrendsTab layout", () => {
       expect(screen.getByText(title), title).toBeTruthy();
     }
     expect(Boolean(screen.queryByTestId("skill-fingerprint"))).toBe(mode === "personal");
+    expect(screen.getByText("Explore performance")).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Rolling WR (4)" })).toBeTruthy();
     expect(screen.getByRole("combobox")).toBeTruthy();
     if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();

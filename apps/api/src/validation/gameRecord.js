@@ -176,6 +176,10 @@ const GAME_SCHEMA = {
     opponent: {
       type: "object",
       additionalProperties: true,
+      allOf: [
+        { if: { required: ["mmrSource"], properties: { mmrSource: { const: "replay" } } }, then: { required: ["mmr"] } },
+        { if: { required: ["mmrSource"], properties: { mmrSource: { const: "unavailable" } } }, then: { not: { required: ["mmr"] } } },
+      ],
       properties: {
         // pulseId is the per-opponent storage key. Historically holds
         // the raw sc2reader toon_handle (region-realm-bnid); kept stable
@@ -210,6 +214,9 @@ const GAME_SCHEMA = {
         displayName: { type: "string", maxLength: 80 },
         race: { type: "string", maxLength: 24 },
         mmr: { type: "integer", minimum: 0, maximum: 9999 },
+        // Agent-authored provenance is distinct from the server's "pulse"
+        // enrichment label. Historical comparisons never substitute Pulse.
+        mmrSource: { type: "string", enum: ["replay", "unavailable"] },
         leagueId: { type: "integer", minimum: 0, maximum: 100 },
         opening: { type: "string", maxLength: 80 },
         strategy: { type: "string", maxLength: 200 },

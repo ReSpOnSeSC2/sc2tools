@@ -107,6 +107,50 @@ describe("GamesService game-time MMR compatibility", () => {
   });
 });
 
+describe("GamesService opponent rating provenance", () => {
+  test("keeps an explicit replay rating through missing and unverified older-client reuploads", async () => {
+    await service.upsert("u1", game({ opponent: { mmr: 4200, mmrSource: "replay" } }));
+    await service.upsert("u1", game({ opponent: { mmrSource: "unavailable", displayName: "Updated" } }));
+    await service.upsert("u1", game({ opponent: { mmr: 6000 } }));
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 4200, mmrSource: "replay", displayName: "Updated" });
+  });
+
+  test("bare older-client ratings remain available but never acquire replay provenance", async () => {
+    await service.upsert("u1", game({ opponent: { mmr: 6000 } }));
+    let stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 6000, mmrSource: "unverified" });
+    await service.upsert("u1", game({ opponent: { mmr: 4200, mmrSource: "replay" } }));
+    stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 4200, mmrSource: "replay" });
+  });
+
+  test("missing replay ratings preserve a Pulse approximation and its source for established views", async () => {
+    await db.games.insertOne({ ...game(), userId: "u1", date: new Date(game().date),
+      opponent: { mmr: 5000, mmrSource: "pulse", mmrLookupAttempted: true } });
+    await service.upsert("u1", game({ myMmrSource: "unavailable", opponent: { mmrSource: "unavailable" } }));
+    let stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 5000, mmrSource: "pulse", mmrLookupAttempted: true });
+    expect(stored.myMmrSource).toBe("unavailable");
+    await service.upsert("u1", game({ opponent: { mmr: 4500, mmrSource: "replay" } }));
+    stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 4500, mmrSource: "replay", mmrLookupAttempted: true });
+  });
+
+  test("marks a legacy stored number unverified on an explicit replay miss without deleting it", async () => {
+    await db.games.insertOne({ ...game(), userId: "u1", date: new Date(game().date), opponent: { mmr: 5000 } });
+    await service.upsert("u1", game({ opponent: { mmrSource: "unavailable" } }));
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toMatchObject({ mmr: 5000, mmrSource: "unverified" });
+  });
+
+  test("direct internal calls cannot label a small league enum as replay MMR", async () => {
+    await service.upsert("u1", game({ opponent: { mmr: 7, mmrSource: "replay" } }));
+    const stored = await db.games.findOne({ userId: "u1", gameId: "g1" });
+    expect(stored.opponent).toEqual({ mmrSource: "unavailable" });
+  });
+});
+
 describe("GamesService opponent identity signature storage", () => {
   test("re-sync replaces legacy evidence on the same row and preserves server identity", async () => {
     const legacy = { version: 1, windowSec: 600,

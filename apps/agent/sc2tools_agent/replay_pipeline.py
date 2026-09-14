@@ -952,6 +952,11 @@ def parse_replay_for_cloud_ex(
     }
     if opp.mmr is not None:
         opponent["mmr"] = int(opp.mmr)
+        opponent["mmrSource"] = "replay"
+    else:
+        # Explicit provenance keeps game-time comparisons separate from the
+        # API's optional current-Pulse opponent rating enrichment.
+        opponent["mmrSource"] = "unavailable"
     # League banding signal for the cloud's ladder-meta / benchmark
     # aggregations (both filter on ``opponent.leagueId``). The parser
     # normalizes the replay's initData enum to 0=Bronze..6=Grandmaster

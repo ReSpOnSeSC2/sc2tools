@@ -612,9 +612,62 @@ describe("R2DetailsStore", () => {
     await store.write("u1", "g1", date, SAMPLE_BLOB);
 
     expect(s3.putCalls).toBe(1);
-    expect(s3.headCalls).toBe(1);
+    // The unchanged-object check plus a summary metadata fence per write.
+    expect(s3.headCalls).toBe(3);
     expect(s3.objects.get(store.keyFor("u1", "g1"))).toBe(storedBefore);
     expect(await store.read("u1", "g1")).toEqual(SAMPLE_BLOB);
+  });
+
+  test("compact Trends facts survive out-of-order R2 metadata writes and a newer partial recompute", async () => {
+    const date = new Date();
+    let release;
+    let arrived;
+    const paused = new Promise((resolve) => { arrived = resolve; });
+    const barrier = new Promise((resolve) => { release = resolve; });
+    const writeMetadata = store._writeMetadata.bind(store);
+    const spy = jest.spyOn(store, "_writeMetadata").mockImplementation(async (...args) => {
+      arrived();
+      await barrier;
+      return writeMetadata(...args);
+    });
+    const older = store.write("u1", "ordered", date, {
+      buildLog: ["[2:30] Stalker"],
+      macroBreakdown: { stats_events: [{ time: 300, food_workers: 40 }], opp_stats_events: [{ time: 300, food_workers: 30 }] },
+    });
+    await paused;
+    const concurrent = new R2DetailsStore({ client: s3, bucket: "test-bucket", prefix: "details", gameDetailsCollection: collection });
+    await concurrent.write("u1", "ordered", date, { buildLog: ["[2:45] Stalker"] });
+    release();
+    await older;
+    spy.mockRestore();
+    const summary = (await collection.findOne({ userId: "u1", gameId: "ordered" })).trendsExplorerDetail;
+    expect(summary.build.milestones).toContainEqual({ id: "first:Stalker", sec: 165 });
+    expect(summary.leads.snapshots[0].workers).toEqual([40, 30]);
+    expect((await store.read("u1", "ordered")).buildLog).toEqual(["[2:45] Stalker"]);
+  });
+
+  test("historical R2 backfill projects the real source arrays and leaves the heavy object untouched", async () => {
+    const blob = { ...SAMPLE_BLOB, macroBreakdown: {
+      stats_events: [{ time: 300, food_workers: 40, army_value: 3000 }],
+      opp_stats_events: [{ time: 300, food_workers: 50, army_value: 2000 }],
+      bases: [], player_stats: { me: { mmr: 4500 }, opponent: { mmr: 4400 } },
+      unit_timeline: [{ doNotReturn: true }],
+    } };
+    await store.write("u1", "old-r2", new Date(), blob);
+    await collection.updateOne({ gameId: "old-r2" }, { $unset: { trendsExplorerDetail: "", trendsExplorerRevision: "" } });
+    const originalObject = s3.objects.get(store.keyFor("u1", "old-r2"));
+    const details = new GameDetailsService(store);
+    const { TrendsExplorerBackfill } = require("../src/services/trendsExplorerBackfill");
+    const backfill = new TrendsExplorerBackfill({ db: { gameDetails: collection }, gameDetails: details });
+    expect(await backfill.runBatch()).toMatchObject({ updated: 1, failed: 0 });
+    const saved = await collection.findOne({ gameId: "old-r2" });
+    expect(saved.trendsExplorerDetail.ratings).toEqual({ myMmr: 4500, opponentMmr: 4400 });
+    expect(saved.trendsExplorerDetail.leads.snapshots[0].workers).toEqual([40, 50]);
+    expect(s3.objects.get(store.keyFor("u1", "old-r2"))).toBe(originalObject);
+    expect(await details.findOne("u1", "old-r2", { fields: ["macroBreakdown.stats_events"] })).toEqual({
+      macroBreakdown: { stats_events: blob.macroBreakdown.stats_events },
+    });
+    await backfill.stop();
   });
 
   test("failed unchanged-object validation never stamps successful metadata", async () => {

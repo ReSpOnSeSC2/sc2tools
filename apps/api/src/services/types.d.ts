@@ -714,6 +714,7 @@ export interface OverlayTokensService {
 }
 
 export interface AggregationsService {
+  explorer(userId: string, filters: Record<string, any>, opts: ReturnType<typeof import('./trendsExplorer').parseExplorerOptions>): Promise<any>;
   summary(userId: string, filters: object): Promise<object>;
   matchups(userId: string, filters: object): Promise<object>;
   maps(userId: string, filters: object): Promise<object>;

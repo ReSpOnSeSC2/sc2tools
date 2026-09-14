@@ -3,6 +3,19 @@
 const { validateGameRecord } = require("../src/validation/gameRecord");
 
 describe("validateGameRecord", () => {
+  test.each([
+    [{ mmr: 4200, mmrSource: "replay" }, true],
+    [{ mmrSource: "unavailable" }, true],
+    [{ mmr: 4200 }, true],
+    [{ mmrSource: "replay" }, false],
+    [{ mmr: 4200, mmrSource: "unavailable" }, false],
+    [{ mmr: 4200, mmrSource: "pulse" }, false],
+    [{ mmr: 4200, mmrSource: "unverified" }, false],
+  ])("validates opponent replay provenance %p", (opponent, expected) => {
+    expect(validateGameRecord({ gameId: "provenance", date: "2026-09-01T12:00:00Z",
+      result: "Victory", myRace: "Protoss", map: "Arena", opponent }).valid).toBe(expected);
+  });
+
   test("validates in place instead of cloning heavy replay payloads", () => {
     const raw = {
       gameId: "memory-bounded",

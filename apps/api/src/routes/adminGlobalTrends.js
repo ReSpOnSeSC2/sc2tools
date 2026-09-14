@@ -3,6 +3,7 @@
 const express = require("express");
 const { parseFiniteInt } = require("../util/parseQuery");
 const { asOppMmrBucketWidth } = require("../services/trendsOppMmr");
+const { parseExplorerOptions } = require("../services/trendsExplorer");
 
 /** This router is mounted behind buildAdminRouter's authentication and
  * administrator allowlist. It exposes no mutation or arbitrary service call.
@@ -15,6 +16,13 @@ function buildAdminGlobalTrendsRouter(service) {
   });
   router.get("/players", handler((query) => service.players(query)));
   router.get("/filter-options", handler((query) => service.filterOptions(query)));
+  router.get(["/trends/explorer/:view", "/trends/explorer/:view/games"], (req, res, next) => {
+    handler((query) => {
+      const opts = parseExplorerOptions(req.params.view, query);
+      opts.games = req.path.endsWith("/games");
+      return service.run("explorer", query, opts);
+    })(req, res, next);
+  });
   const routes = {
     "/timeseries": "timeseries",
     "/timeseries/mmr": "mmrProgression",

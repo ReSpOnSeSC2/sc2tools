@@ -17,7 +17,7 @@ const INTERVAL_METHODS = new Set([
 ]);
 const ALLOWED_METHODS = new Set([
   ...INTERVAL_METHODS, "dayHourHeatmap", "activityCalendar", "lengthBuckets", "momentum",
-  "oppMmrBuckets", "oppMmrBucketGames", "netMmrByMatchup", "netMmrByOpponent", "mmrProgression",
+  "oppMmrBuckets", "oppMmrBucketGames", "netMmrByMatchup", "netMmrByOpponent", "mmrProgression", "explorer",
 ]);
 const NET_METHODS = new Set(["netMmrByMatchup", "netMmrByOpponent"]);
 
@@ -117,6 +117,16 @@ class AdminGlobalTrendsService {
       return agg[method](ADMIN_SCOPE, opts, filters);
     }
     const result = await /** @type {any} */ (agg)[method](ADMIN_SCOPE, filters, opts);
+    if (method === "explorer" && (opts.view === "groups" || opts.games)) {
+      const players = new Map((await this._players(snapshot)).map((p) => [p.playerId, p]));
+      if (result.options?.players) result.options.players = result.options.players.map((/** @type {any} */ row) => ({
+        ...row, label: players.get(row.id)?.displayName || row.label,
+        currentMmr: players.get(row.id)?.currentMmr ?? null,
+      }));
+      if (result.games) result.games = result.games.map((/** @type {any} */ row) => ({
+        ...row, playerName: players.get(row.playerId)?.displayName || row.playerName,
+      }));
+    }
     if (method === "oppMmrBucketGames") {
       const names = new Map((await this._players(snapshot)).map((p) => [p.playerId, p.displayName]));
       result.games = result.games.map((/** @type {any} */ game) => ({

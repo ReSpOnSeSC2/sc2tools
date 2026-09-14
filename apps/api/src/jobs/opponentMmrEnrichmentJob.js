@@ -408,9 +408,10 @@ async function attemptCandidate(context, row, cache, summary) {
  * @returns {Promise<{matched: boolean, failed: boolean}>}
  */
 async function stampMissingField(games, rowId, input) {
-  /** @type {Record<string, boolean|number>} */
+  /** @type {Record<string, boolean|number|string>} */
   const set = { [input.marker]: true };
   if (input.value !== null) set[input.field] = input.value;
+  if (input.field === "opponent.mmr" && input.value !== null) set["opponent.mmrSource"] = "pulse";
   try {
     const res = await games.updateOne(
       {

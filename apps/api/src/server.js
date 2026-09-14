@@ -34,6 +34,7 @@ const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
 const sentry = require("./util/sentry");
+const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 
 async function main() {
   const config = loadConfig();
@@ -299,6 +300,13 @@ async function main() {
   });
   ladderMetaJob.start();
 
+  // Derive compact chart facts from existing replay details in small batches.
+  // Normal uploads maintain these facts atomically; no reupload is needed.
+  const trendsExplorerBackfill = new TrendsExplorerBackfill({
+    db, gameDetails: /** @type {any} */ (services).gameDetails, logger,
+  });
+  trendsExplorerBackfill.start();
+
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -306,6 +314,7 @@ async function main() {
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
     runtimeCapacity.stop();
+    await trendsExplorerBackfill.stop();
     await /** @type {any} */ (services).platformIntegrations.stop();
     // True drain, in order: stop accepting connections, let in-flight
     // requests finish, THEN close Mongo — the old fire-and-forget

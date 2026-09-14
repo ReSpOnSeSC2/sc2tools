@@ -5,6 +5,7 @@ const { gamesMatchStage } = require("../util/parseQuery");
 const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
 const { TrendsRequests } = require("./trendsRequests");
+const { trendsExplorer } = require("./trendsExplorer");
 const {
   attachRecentByMap,
   attachRecentByMatchup,
@@ -694,6 +695,12 @@ class AggregationsService {
   async netMmrByMatchup(userId, filters, opts) { return this.trendsRequests.run(["netMmrByMatchup", userId, filters, opts], () => trendsInsights.netMmrByMatchup(this._trendsDeps(), userId, filters, opts)); }
   /** @param {string} userId @param {object} filters @param {object} [opts] */
   async netMmrByOpponent(userId, filters, opts) { return this.trendsRequests.run(["netMmrByOpponent", userId, filters, opts], () => trendsInsights.netMmrByOpponent(this._trendsDeps(), userId, filters, opts)); }
+
+  /** @param {string} userId @param {Record<string, any>} filters
+   * @param {ReturnType<import('./trendsExplorer').parseExplorerOptions>} opts */
+  async explorer(userId, filters, opts) {
+    return this.trendsRequests.run(["explorer", userId, filters, opts], () => trendsExplorer(this.db, userId, filters, opts));
+  }
 
   /** @private */
   _trendsDeps() {

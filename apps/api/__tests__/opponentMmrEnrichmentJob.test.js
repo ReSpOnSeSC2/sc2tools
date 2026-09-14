@@ -238,6 +238,7 @@ function pulseFake(responses = {}) {
       .toMatchObject({
         opponent: {
           mmr: 4521,
+          mmrSource: "pulse",
           mmrLookupAttempted: true,
           leagueLookupAttempted: true,
         },

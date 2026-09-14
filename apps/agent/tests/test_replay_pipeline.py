@@ -1460,8 +1460,9 @@ def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
     assert "macroScore" not in payload
 
 
+@pytest.mark.parametrize("opponent_mmr", [4400, None])
 def test_parse_replay_for_cloud_omits_league_id_for_non_ladder_games(
-    monkeypatch, tmp_path,
+    monkeypatch, tmp_path, opponent_mmr,
 ):
     """A Private/Public (custom) game must NOT stamp opponent.leagueId.
 
@@ -1480,7 +1481,7 @@ def test_parse_replay_for_cloud_omits_league_id_for_non_ladder_games(
     )
     opp = SimpleNamespace(
         pid=2, name="Opp", race="Zerg", result="Loss",
-        handle="1-S2-2-690921", mmr=4400, league_id=6,
+        handle="1-S2-2-690921", mmr=opponent_mmr, league_id=6,
     )
     fake_ctx = SimpleNamespace(
         game_id="2026-05-08T10:00:00|Opp|Goldenaura|300",
@@ -1519,7 +1520,12 @@ def test_parse_replay_for_cloud_omits_league_id_for_non_ladder_games(
     assert payload["isLadderGame"] is False
     # MMR still ships (it's real replay data either way); the league
     # banding signal does not.
-    assert payload["opponent"]["mmr"] == 4400
+    if opponent_mmr is None:
+        assert "mmr" not in payload["opponent"]
+        assert payload["opponent"]["mmrSource"] == "unavailable"
+    else:
+        assert payload["opponent"]["mmr"] == opponent_mmr
+        assert payload["opponent"]["mmrSource"] == "replay"
     assert "leagueId" not in payload["opponent"]
 
 

@@ -58,6 +58,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { preserveRecordedPlayback, mongoPlaybackReplacement } = require("./playbackPreservation");
+const { detailSummaryUpdate } = require("./trendsExplorerDetail");
 
 const UNSET_HEAVY_FIELDS = Object.freeze(
   Object.fromEntries(HEAVY_FIELDS.map((field) => [field, ""])),
@@ -105,7 +106,7 @@ class MongoDetailsStore {
     if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     if (opts.assertLease) await opts.assertLease();
     /** @type {Record<string, any>} */
-    const set = { userId, gameId, date, ...blob };
+    const set = { userId, gameId, date, ...blob, ...detailSummaryUpdate(blob) };
     stampVersion(set, COLLECTIONS.GAME_DETAILS);
     // A full sync can carry tracker playback even after another computer
     // uploaded a complete recording. Evaluate preservation atomically inside
@@ -145,6 +146,8 @@ class MongoDetailsStore {
           date: 0,
           createdAt: 0,
           _schemaVersion: 0,
+          trendsExplorerDetail: 0,
+          trendsExplorerRevision: 0,
         },
       },
     );
@@ -168,7 +171,7 @@ class MongoDetailsStore {
     const fields = normaliseReadFields(opts.fields);
     const projection = fields
       ? Object.fromEntries([["_id", 0], ["gameId", 1], ...fields.map((f) => [f, 1])])
-      : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0 };
+      : { _id: 0, userId: 0, date: 0, createdAt: 0, _schemaVersion: 0, trendsExplorerDetail: 0, trendsExplorerRevision: 0 };
     const cursor = this.db.gameDetails.find(
       { userId, gameId: { $in: gameIds } },
       { projection },
@@ -445,7 +448,9 @@ class R2DetailsStore {
           }
           throw err;
         }
-        await this._writeMetadata(userId, gameId, date, opts);
+        await this._writeMetadata(userId, gameId, date, opts, detailSummaryUpdate({
+          buildLog: merged.buildLog, macroBreakdown: merged.macroBreakdown,
+        }), current.etag);
         return;
       }
       const serialized = JSON.stringify(merged);
@@ -471,12 +476,14 @@ class R2DetailsStore {
       };
       if (current) put.IfMatch = current.etag;
       else put.IfNoneMatch = "*";
+      let writtenEtag;
       try {
         if (opts.assertLease) await opts.assertLease();
-        await this.client.send(
+        const written = await this.client.send(
           new this._sdk.PutObjectCommand(put),
           opts.signal ? { abortSignal: opts.signal } : undefined,
         );
+        writtenEtag = written.ETag;
       } catch (err) {
         if (opts.signal && opts.signal.aborted) throw detailsAbortError();
         if (
@@ -492,14 +499,17 @@ class R2DetailsStore {
       // (userId, gameId, date) tuple per game.
       if (opts.signal && opts.signal.aborted) throw detailsAbortError();
       if (opts.assertLease) await opts.assertLease();
-      await this._writeMetadata(userId, gameId, date, opts);
+      if (!writtenEtag) throw new Error("r2_details_missing_write_etag");
+      await this._writeMetadata(userId, gameId, date, opts, detailSummaryUpdate({
+        buildLog: merged.buildLog, macroBreakdown: merged.macroBreakdown,
+      }), writtenEtag);
       return;
     }
     throw new Error("r2_details_write_conflict");
   }
 
-  /** @param {string} userId @param {string} gameId @param {Date} date @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts] */
-  async _writeMetadata(userId, gameId, date, opts = {}) {
+  /** @param {string} userId @param {string} gameId @param {Date} date @param {{signal?: AbortSignal, assertLease?: () => Promise<void>}} [opts] @param {Record<string, any>} [summaryUpdate] @param {string} [expectedEtag] */
+  async _writeMetadata(userId, gameId, date, opts = {}, summaryUpdate = {}, expectedEtag) {
     if (opts.signal && opts.signal.aborted) throw detailsAbortError();
     if (opts.assertLease) await opts.assertLease();
     /** @type {Record<string, any>} */
@@ -514,6 +524,33 @@ class R2DetailsStore {
       },
       { upsert: true, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
+    if (!expectedEtag || Object.keys(summaryUpdate).length === 0) return;
+    // Object PUTs are ETag-serialized, but their later Mongo metadata writes
+    // can arrive out of order. A same-object HEAD plus Mongo revision CAS
+    // prevents a delayed writer from replacing newer compact facts. Derive
+    // from the full merged object so a newer partial writer carries every
+    // earlier source branch even when that earlier metadata write is skipped.
+    for (let attempt = 0; attempt < R2_WRITE_MAX_ATTEMPTS; attempt += 1) {
+      const previous = await this.gameDetailsCollection.findOne(
+        { userId, gameId }, { projection: { _id: 1, trendsExplorerRevision: 1 } },
+      );
+      if (!previous) return; // An account/game deletion won the race.
+      try {
+        if (opts.assertLease) await opts.assertLease();
+        await this.client.send(new this._sdk.HeadObjectCommand({
+          Bucket: this.bucket, Key: this.keyFor(userId, gameId), IfMatch: expectedEtag,
+        }), opts.signal ? { abortSignal: opts.signal } : undefined);
+      } catch (error) {
+        if (isConditionalWriteConflict(error) || isNotFoundError(error)) return;
+        throw error;
+      }
+      const updated = await this.gameDetailsCollection.updateOne({
+        _id: previous._id,
+        trendsExplorerRevision: previous.trendsExplorerRevision ?? { $exists: false },
+      }, { $set: summaryUpdate });
+      if (updated.matchedCount) return;
+    }
+    throw new Error("r2_details_summary_write_conflict");
   }
 
   /**
@@ -783,8 +820,12 @@ class R2DetailsStore {
  */
 function normaliseReadFields(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return null;
-  const allowed = new Set(HEAVY_FIELDS);
-  return [...new Set(raw.filter((f) => typeof f === "string" && allowed.has(f)))];
+  const allowed = new Set([...HEAVY_FIELDS,
+    "macroBreakdown.bases", "macroBreakdown.stats_events", "macroBreakdown.opp_stats_events",
+    "macroBreakdown.player_stats",
+  ]);
+  const fields = new Set(raw.filter((f) => typeof f === "string" && allowed.has(f)));
+  return [...fields].filter((field) => !field.includes(".") || !fields.has(field.split(".")[0]));
 }
 
 /** @param {Record<string, any>} blob @param {string[]|null} fields */
@@ -793,7 +834,13 @@ function selectReadFields(blob, fields) {
   /** @type {Record<string, any>} */
   const out = {};
   for (const field of fields) {
-    if (blob[field] !== undefined) out[field] = blob[field];
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".");
+      if (blob[parent]?.[child] !== undefined) {
+        if (!out[parent]) out[parent] = {};
+        out[parent][child] = blob[parent][child];
+      }
+    } else if (blob[field] !== undefined) out[field] = blob[field];
   }
   return out;
 }
@@ -810,6 +857,16 @@ function hasCorruptProjectedFields(blob, fields) {
     return false;
   }
   for (const field of fields) {
+    if (field.includes(".")) {
+      const [parent, child] = field.split(".");
+      if (blob[parent] === undefined) continue;
+      if (!blob[parent] || typeof blob[parent] !== "object" || Array.isArray(blob[parent])) return true;
+      const value = blob[parent][child];
+      if (value !== undefined && (child === "player_stats"
+        ? !value || typeof value !== "object" || Array.isArray(value)
+        : !Array.isArray(value))) return true;
+      continue;
+    }
     if (blob[field] === undefined) continue;
     if (field === "buildLog" || field === "oppBuildLog") {
       if (!Array.isArray(blob[field])) return true;
