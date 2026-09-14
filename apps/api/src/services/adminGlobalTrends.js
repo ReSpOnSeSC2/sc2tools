@@ -3,10 +3,11 @@
 const { AggregationsService } = require("./aggregations");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { myLadderRaceExpr } = require("./trendsRegionExpr");
-const { globalHistoryStages, parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
+const { parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
 const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlayers");
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
 const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, queryKey } = require("./adminGlobalTrendsQueries");
+const { GlobalTrendsHistory } = require("./adminGlobalTrendsHistory");
 
 // Never accepted from a query parameter. Only the private collection adapter
 // below can translate this marker; ordinary AggregationsService stays scoped.
@@ -25,6 +26,7 @@ class AdminGlobalTrendsService {
   constructor({ db }) {
     this.db = db;
     this.queries = new GlobalTrendsQueries();
+    this.history = new GlobalTrendsHistory(db, (work) => this.queries.execute(work));
     this.refreshedAfter = 0;
   }
 
@@ -38,31 +40,35 @@ class AdminGlobalTrendsService {
     if (!Number.isFinite(token) || token <= this.refreshedAfter || token > Date.now() + 60000) return;
     this.refreshedAfter = token;
     this.queries.clear();
+    this.history.invalidate();
   }
 
-  /** Shared by simultaneous chart requests; refresh promptly after uploads. */
-  async _players() {
-    const games = { aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => this._query(pipeline) };
-    return /** @type {Promise<Awaited<ReturnType<typeof readGlobalPlayers>>>} */ (this.queries.cached("roster", () =>
-      readGlobalPlayers({ ...this.db, games: /** @type {any} */ (games) })));
+  /** Shared by simultaneous chart requests within one canonical history.
+   * @param {import('./adminGlobalTrendsHistory').HistorySnapshot} snapshot */
+  async _players(snapshot) {
+    return /** @type {Promise<Awaited<ReturnType<typeof readGlobalPlayers>>>} */ (this.queries.cached(queryKey(["roster", snapshot.id]), () => {
+        const games = { aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => this._query(pipeline, this.history.collection) };
+        return readGlobalPlayers({ ...this.db, games: /** @type {any} */ (games) }, [{ $match: { _globalSnapshotId: snapshot.id } }]);
+      }));
   }
 
   /** @param {Record<string, unknown>} query */
   async players(query = {}) {
     this._refresh(query);
-    return paginatePlayers(await this._players(), parseGlobalTrendsFilters(query), query);
+    return this.history.withSnapshot(async (snapshot) => paginatePlayers(await this._players(snapshot), parseGlobalTrendsFilters(query), query));
   }
 
   /** @param {Record<string, unknown>} query */
   async filterOptions(query = {}) {
     this._refresh(query);
     const cohort = parseGlobalTrendsFilters(query);
-    return this.queries.cached(queryKey(["options", cohort]), () => this._filterOptions(cohort));
+    return this.history.withSnapshot((snapshot) => this.queries.cached(queryKey(["options", snapshot.id, cohort]), () => this._filterOptions(cohort, snapshot)));
   }
 
-  /** @param {import('./adminGlobalTrendsScope').Cohort} cohort */
-  async _filterOptions(cohort) {
-    const agg = await this._aggregations("filterOptions", cohort);
+  /** @param {import('./adminGlobalTrendsScope').Cohort} cohort
+   * @param {import('./adminGlobalTrendsHistory').HistorySnapshot} snapshot */
+  async _filterOptions(cohort, snapshot) {
+    const agg = await this._aggregations("filterOptions", cohort, snapshot);
     const [result] = await agg.db.games.aggregate([
       { $match: gamesMatchStage(ADMIN_SCOPE, {}) },
       { $facet: {
@@ -80,23 +86,25 @@ class AdminGlobalTrendsService {
     if (!ALLOWED_METHODS.has(method)) throw new Error("Unsupported global trends method");
     this._refresh(query);
     const cohort = parseGlobalTrendsFilters(query);
-    return this.queries.cached(queryKey(["result", method, cohort, opts]), () => this._run(method, cohort, opts));
+    return this.history.withSnapshot((snapshot) => this.queries.cached(queryKey(["result", snapshot.id, method, cohort, opts]), () => this._run(method, cohort, opts, snapshot)));
   }
 
   /** The adapter's only cursor operation is toArray. Delay acquisition until
    * execution, and coalesce identical range probes used by multiple charts.
-   * @param {Array<Record<string, any>>} pipeline */
-  _query(pipeline) {
+   * @param {Array<Record<string, any>>} pipeline
+   * @param {import('mongodb').Collection} collection */
+  _query(pipeline, collection) {
     const finalGroup = pipeline.at(-1)?.$group;
     const isRange = finalGroup?.first?.$min === "$date" && finalGroup?.last?.$max === "$date";
     const read = () => this.queries.execute(() =>
-      this.db.games.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray());
+      collection.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray());
     return { toArray: () => isRange ? this.queries.cached(queryKey(["range", pipeline]), read) : read() };
   }
 
-  /** @param {string} method @param {import('./adminGlobalTrendsScope').Cohort} cohort @param {Record<string, any>} opts */
-  async _run(method, cohort, opts) {
-    const agg = await this._aggregations(method, cohort);
+  /** @param {string} method @param {import('./adminGlobalTrendsScope').Cohort} cohort @param {Record<string, any>} opts
+   * @param {import('./adminGlobalTrendsHistory').HistorySnapshot} snapshot */
+  async _run(method, cohort, opts, snapshot) {
+    const agg = await this._aggregations(method, cohort, snapshot);
     const filters = cohort.filters;
     if (method === "mmrProgression") return globalMmrProgression(agg, ADMIN_SCOPE, filters, opts);
     if (INTERVAL_METHODS.has(method)) {
@@ -110,7 +118,7 @@ class AdminGlobalTrendsService {
     }
     const result = await /** @type {any} */ (agg)[method](ADMIN_SCOPE, filters, opts);
     if (method === "oppMmrBucketGames") {
-      const names = new Map((await this._players()).map((p) => [p.playerId, p.displayName]));
+      const names = new Map((await this._players(snapshot)).map((p) => [p.playerId, p.displayName]));
       result.games = result.games.map((/** @type {any} */ game) => ({
         ...game, playerName: names.get(game.playerId) || game.playerId,
       }));
@@ -118,23 +126,27 @@ class AdminGlobalTrendsService {
     return result;
   }
 
-  /** @param {string} method @param {import('./adminGlobalTrendsScope').Cohort} cohort */
-  async _aggregations(method, cohort) {
+  /** @param {string} method @param {import('./adminGlobalTrendsScope').Cohort} cohort
+   * @param {import('./adminGlobalTrendsHistory').HistorySnapshot} snapshot */
+  async _aggregations(method, cohort, snapshot) {
     /** @type {Record<string, any>} */
     const playerMatch = {};
     if (cohort.excludedPlayers.length) playerMatch.$nin = cohort.excludedPlayers;
     if (cohort.selection === "include") playerMatch.$in = cohort.includedPlayers;
     if (cohort.mmrMin !== undefined || cohort.mmrMax !== undefined || !cohort.includeUnrated) {
-      playerMatch.$in = (await this._players()).filter((p) => playerIncluded(p, cohort)).map((p) => p.playerId);
+      playerMatch.$in = (await this._players(snapshot)).filter((p) => playerIncluded(p, cohort)).map((p) => p.playerId);
     }
-    const prefix = globalHistoryStages(playerMatch);
+    const prefix = [{ $match: {
+      _globalSnapshotId: snapshot.id,
+      ...(Object.keys(playerMatch).length ? { _globalPlayerId: playerMatch } : {}),
+    } }, { $set: { _id: "$_globalSourceId" } }];
     const games = {
       aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => {
         // Fail closed if a newly reused helper does not carry the expected
         // explicit scope. No recursive rewrite touches nested lookup scopes.
         if (pipeline[0]?.$match?.userId !== ADMIN_SCOPE) throw new Error("Unscoped global trends pipeline");
         const stages = adaptPipeline(pipeline, method, cohort);
-        return this._query([...prefix, ...stages]);
+        return this._query([...prefix, ...stages], this.history.collection);
       },
     };
     const agg = new AggregationsService({ games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)) });

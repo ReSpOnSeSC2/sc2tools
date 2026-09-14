@@ -91,7 +91,7 @@ describe("admin Global Trends", () => {
     const mine = await new AggregationsService(db).timeseries("a", { interval: "day" }, {});
     expect(mine.points[0].total).toBe(2);
     await db.games.insertOne(game("b", B, "a1", 0, "Terran", 4990));
-    const opposingPerspective = await service.run("timeseries", {}, { interval: "day" });
+    const opposingPerspective = await service.run("timeseries", { refresh_after: Date.now() }, { interval: "day" });
     expect(opposingPerspective.points[0].total).toBe(6);
   });
 
@@ -234,14 +234,16 @@ describe("admin Global Trends", () => {
   });
 
   test("time charts share the same full-history range read", async () => {
-    const read = jest.spyOn(db.games, "aggregate");
+    const sourceRead = jest.spyOn(db.games, "aggregate");
+    const read = jest.spyOn(service.history.collection, "aggregate");
     try {
       await Promise.all(["timeseries", "mmrProgression", "matchupTimeseries", "mapTrend", "myBuildMixOverTime"]
         .map((method) => service.run(method, {}, { interval: "day", tz: "UTC" })));
       const rangeReads = read.mock.calls.filter(([pipeline]) => pipeline.at(-1)?.$group?.first?.$min === "$date");
       expect(rangeReads).toHaveLength(1);
+      expect(sourceRead).toHaveBeenCalledTimes(1);
       expect(read.mock.calls.every(([, options]) => options.maxTimeMS < 30000)).toBe(true);
-    } finally { read.mockRestore(); }
+    } finally { read.mockRestore(); sourceRead.mockRestore(); }
   });
 
   test("Mongo timeout returns a retryable API error", async () => {
@@ -249,5 +251,17 @@ describe("admin Global Trends", () => {
     const response = await request(app).get("/v1/admin/global-trends/players").set("Authorization", "admin-token").expect(503);
     expect(response.headers["retry-after"]).toBe("5");
     expect(response.body.error.code).toBe("global_trends_busy");
+  });
+
+  test("a new history generation cannot reuse previous roster membership or chart results", async () => {
+    const query = { player_mmr_min: "5500", include_unrated: "false" };
+    expect((await service.run("timeseries", query, { interval: "day" })).points).toEqual([]);
+    await db.games.insertOne(game("b", B, "new-rating", 45, "Terran", 6000));
+    // Simulate automatic snapshot expiry without clearing the result caches.
+    service.history.invalidate();
+    const result = await service.run("timeseries", query, { interval: "day" });
+    expect(result.points.reduce((sum, point) => sum + point.total, 0)).toBe(3);
+    const roster = await service.players({});
+    expect(roster.items.find((player) => player.playerId === B).currentMmr).toBe(6000);
   });
 });

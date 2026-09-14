@@ -235,12 +235,21 @@ function oppMmrLookupStages(trustFloor) {
     {
       $lookup: {
         from: "opponents",
-        let: { uid: "$userId", pid: "$opponent.pulseId" },
+        let: {
+          uid: "$userId",
+          pid: { $ifNull: ["$opponent.pulseId", ""] },
+          needsFallback: { $and: [
+            { $gte: ["$date", trustFloor] },
+            { $not: [{ $isNumber: "$opponent.mmr" }] },
+            { $ne: [{ $ifNull: ["$opponent.pulseId", ""] }, ""] },
+          ] },
+        },
         pipeline: [
           {
             $match: {
               $expr: {
                 $and: [
+                  "$$needsFallback",
                   { $eq: ["$userId", "$$uid"] },
                   { $eq: ["$pulseId", "$$pid"] },
                 ],

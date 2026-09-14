@@ -503,6 +503,10 @@ type MultiSeries = {
  * can stay readable without a wall of conditional JSX inside the
  * ResponsiveContainer.
  */
+function displayMmr(value: number, isGlobal: boolean) {
+  return (isGlobal ? Math.round(value) : value).toLocaleString();
+}
+
 function SingleSeriesChart({
   rows,
   yDomain,
@@ -572,7 +576,7 @@ function SingleSeriesChart({
                 {
                   key: "close",
                   label: isGlobal ? "Average MMR" : "Last recorded MMR",
-                  value: row.close.toLocaleString(),
+                  value: displayMmr(row.close, isGlobal),
                 },
               ]}
             />
@@ -704,7 +708,7 @@ function MmrHeadline({
   if (data.latest) {
     items.push({
       label: isGlobal ? "Latest average" : "Last recorded",
-      value: data.latest.mmr.toLocaleString(),
+      value: displayMmr(data.latest.mmr, isGlobal),
       color: COLOR_ACCENT,
     });
   }
@@ -715,7 +719,7 @@ function MmrHeadline({
     const delta = data.latest ? data.latest.mmr - data.peak.mmr : 0;
     items.push({
       label: isGlobal ? "Highest average" : "Peak",
-      value: data.peak.mmr.toLocaleString(),
+      value: displayMmr(data.peak.mmr, isGlobal),
       sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs peak`
         : undefined,
@@ -726,7 +730,7 @@ function MmrHeadline({
     const delta = data.latest ? data.latest.mmr - data.trough.mmr : 0;
     items.push({
       label: isGlobal ? "Lowest average" : "Trough",
-      value: data.trough.mmr.toLocaleString(),
+      value: displayMmr(data.trough.mmr, isGlobal),
       sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs trough`
         : undefined,

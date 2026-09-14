@@ -6,6 +6,7 @@ import { MmrProgressionChart } from "../MmrProgressionChart";
 import { MomentumChart } from "../MomentumChart";
 
 const useApiMock = vi.fn();
+const tooltipMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/clientApi", () => ({ useApi: (...args: unknown[]) => useApiMock(...args) }));
 vi.mock("recharts", () => {
   const Empty = () => null;
@@ -13,14 +14,40 @@ vi.mock("recharts", () => {
     ResponsiveContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     ComposedChart: ({ data, children }: { data: unknown; children?: ReactNode }) => <div><output data-testid="chart-values">{JSON.stringify(data)}</output><svg>{children}</svg></div>,
     Area: Empty, Line: Empty, Bar: Empty, Cell: Empty, Legend: Empty,
-    XAxis: Empty, YAxis: Empty, Tooltip: Empty, CartesianGrid: Empty,
+    XAxis: Empty, YAxis: Empty, Tooltip: (props: unknown) => { tooltipMock(props); return null; }, CartesianGrid: Empty,
     ReferenceDot: Empty, ReferenceLine: Empty,
   };
 });
 
-afterEach(() => { cleanup(); useApiMock.mockReset(); });
+afterEach(() => { cleanup(); useApiMock.mockReset(); tooltipMock.mockClear(); });
 
 describe("global trend semantics", () => {
+  it.each(["global", "personal"] as const)("formats %s MMR labels without changing the chart values", (mode) => {
+    const bucket = "2026-08-24T00:00:00Z";
+    const latest = 3754.067;
+    const highest = 4500.625;
+    const lowest = 2562.75;
+    const point = { bucket, openMmr: latest, closeMmr: latest, avgMmr: latest, minMmr: lowest, maxMmr: highest, wins: 6, losses: 4, total: 10 };
+    useApiMock.mockImplementation((path: string) => ({ isLoading: false, data: path.includes("/timeseries/mmr") ? {
+      interval: "week", points: [point], peak: { bucket, mmr: highest }, trough: { bucket, mmr: lowest }, latest: { bucket, mmr: latest },
+    } : undefined }));
+    render(<TrendsDataProvider mode={mode}><MmrProgressionChart bucket="week" /></TrendsDataProvider>);
+    const global = mode === "global";
+    const expected = (value: number) => (global ? Math.round(value) : value).toLocaleString();
+    for (const [label, value] of [
+      [global ? "Latest average" : "Last recorded", latest],
+      [global ? "Highest average" : "Peak", highest],
+      [global ? "Lowest average" : "Trough", lowest],
+    ] as const) {
+      expect(screen.getByText(label).nextElementSibling?.textContent).toBe(expected(value));
+    }
+    expect(screen.getByTestId("chart-values").textContent).toContain('"close":3754.067');
+    const tooltip = tooltipMock.mock.calls[0][0].content({ active: true, label: bucket, payload: [{ payload: { close: latest } }] });
+    const tooltipView = render(<div data-testid="mmr-tooltip">{tooltip}</div>);
+    expect(tooltipView.getByTestId("mmr-tooltip").textContent).toContain(expected(latest));
+    if (global) expect(tooltipView.getByTestId("mmr-tooltip").textContent).not.toContain(latest.toLocaleString());
+  });
+
   it("renders the population MMR average even if an account series is present", () => {
     const bucket = "2026-08-24T00:00:00Z";
     const point = { bucket, openMmr: 4400, closeMmr: 4400, avgMmr: 4500, minMmr: 3500, maxMmr: 5500, wins: 6, losses: 4, total: 10 };

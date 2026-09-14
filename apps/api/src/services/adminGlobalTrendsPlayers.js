@@ -7,10 +7,11 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 /** Read contributors, rather than opponents encountered by contributors.
  * There is no total-row cap: HTTP pagination happens after all identities
  * have been resolved, so search/MMR sorting always cover the entire roster.
- * @param {import('../db/connect').DbContext} db */
-async function readGlobalPlayers(db) {
+ * @param {import('../db/connect').DbContext} db
+ * @param {Array<Record<string, any>>} [historyStages] */
+async function readGlobalPlayers(db, historyStages = globalHistoryStages({}, GLOBAL_ROSTER_PROJECTION)) {
   const rows = await db.games.aggregate([
-    ...globalHistoryStages({}, GLOBAL_ROSTER_PROJECTION),
+    ...historyStages,
     { $group: {
       _id: "$_globalPlayerId", toonHandle: { $first: "$_globalToon" },
       userIds: { $addToSet: "$userId" }, gameCount: { $sum: 1 },
