@@ -11,6 +11,7 @@ const SUMMARY_READ_VIEWS = new Set([...DETAIL_VIEWS, "mmr-gap"]);
 const SEQUENCE_VIEWS = new Set(["breaks", "rematches"]);
 const DAY_MS = 86400000;
 const DETAIL_BATCH_SIZE = 2000;
+const DETAIL_BATCH_CONCURRENCY = 2;
 const SMALL_HISTORY_MAX = 2000;
 const HISTORY_GREW = Symbol("trendsExplorerHistoryGrew");
 // A private adapter hint, never parsed from request input or serialized as a
@@ -162,7 +163,7 @@ async function readRecords(db, userId, filters, opts, history = false, milestone
  * Correlated lookups repeatedly initialize a foreign pipeline for every game.
  * At global scale the real production join takes ~20 seconds even warm. Read
  * indexed batches instead, using identities from the already authorized and
- * deduplicated source rows. One batch is retained at a time; neither heavy
+ * deduplicated source rows. At most two compact batches are retained; neither heavy
  * replay blobs nor all games' milestone catalogues enter the result graph.
  * @param {import('mongodb').Collection} collection
  * @param {Array<Record<string, any>>} records
@@ -188,35 +189,56 @@ async function attachCompactDetails(collection, records, opts, milestoneIds) {
     { $ifNull: ["$trendsExplorerDetail.build.milestones.id", []] },
     { $ifNull: ["$trendsExplorerDetail.bases.milestones.id", []] },
   ] };
-  for (const [userId, games] of users) {
-    for (let offset = 0; offset < games.length; offset += DETAIL_BATCH_SIZE) {
-      const batch = games.slice(offset, offset + DETAIL_BATCH_SIZE);
-      /** @type {Map<string, Array<Record<string, any>>>} */
-      const byGame = new Map();
-      for (const record of batch) {
-        if (!byGame.has(record.gameId)) byGame.set(record.gameId, []);
-        byGame.get(record.gameId)?.push(record);
-      }
-      const rows = await collection.aggregate([
-        { $match: { userId, gameId: { $in: [...byGame.keys()] } } },
-        { $project: projection },
-        { $limit: byGame.size },
-      ], { maxTimeMS: 25000, batchSize: DETAIL_BATCH_SIZE }).toArray();
-      for (const row of rows) {
-        // Defend the in-memory merge as well as the database predicate. A
-        // coincident replay ID from another uploader never supplies facts.
-        if (row.userId !== userId || !byGame.has(row.gameId)) continue;
-        for (const record of byGame.get(row.gameId) || []) {
-          record.trendsExplorerDetail = row.trendsExplorerDetail;
-          record._detailExists = true;
-          record._detailPending = row._ready === false;
-        }
-        if (milestoneIds && Array.isArray(row._milestoneIds)) {
-          for (const id of row._milestoneIds) if (typeof id === "string") milestoneIds.add(id);
-        }
+  function* batches() {
+    for (const [userId, games] of users) {
+      for (let offset = 0; offset < games.length; offset += DETAIL_BATCH_SIZE) {
+        yield { userId, batch: games.slice(offset, offset + DETAIL_BATCH_SIZE) };
       }
     }
   }
+  const pending = batches();
+  let failed = false;
+  const worker = async () => {
+    while (!failed) {
+      const next = pending.next();
+      if (next.done) return;
+      const { userId, batch } = next.value;
+      try {
+        /** @type {Map<string, Array<Record<string, any>>>} */
+        const byGame = new Map();
+        for (const record of batch) {
+          if (!byGame.has(record.gameId)) byGame.set(record.gameId, []);
+          byGame.get(record.gameId)?.push(record);
+        }
+        const rows = await collection.aggregate([
+          { $match: { userId, gameId: { $in: [...byGame.keys()] } } },
+          { $project: projection },
+          { $limit: byGame.size },
+        ], { maxTimeMS: 25000, batchSize: DETAIL_BATCH_SIZE }).toArray();
+        for (const row of rows) {
+          // Defend the in-memory merge as well as the database predicate. A
+          // coincident replay ID from another uploader never supplies facts.
+          if (row.userId !== userId || !byGame.has(row.gameId)) continue;
+          for (const record of byGame.get(row.gameId) || []) {
+            record.trendsExplorerDetail = row.trendsExplorerDetail;
+            record._detailExists = true;
+            record._detailPending = row._ready === false;
+          }
+          if (milestoneIds && Array.isArray(row._milestoneIds)) {
+            for (const id of row._milestoneIds) if (typeof id === "string") milestoneIds.add(id);
+          }
+        }
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  // Drain the other in-flight batch before releasing analysis admission on
+  // failure, so abandoned metadata reads cannot accumulate behind retries.
+  const results = await Promise.allSettled(Array.from({ length: DETAIL_BATCH_CONCURRENCY }, () => worker()));
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
 }
 
 /** @param {ReturnType<typeof parseExplorerOptions>} opts */

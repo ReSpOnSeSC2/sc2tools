@@ -263,6 +263,86 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
     } finally { release(); await heavy; }
   });
 
+  test("compact batches overlap at most two reads and retain complete totals, preparation coverage, and milestone options", async () => {
+    const source = Array.from({ length: 4002 }, (_, index) => game("parallel-user", `parallel-${index}`, index));
+    await db.games.insertMany(source);
+    await db.gameDetails.insertMany(source.slice(0, 4001).map((row, index) => ({
+      userId: row.userId, gameId: row.gameId,
+      trendsExplorerDetail: index === 4000 ? { version: 1, ratings: {} } : {
+        version: 1, build: { available: true, milestones: [
+          { id: "first:Stalker", sec: 180 },
+          { id: index < 2000 ? "first:Zealot" : "first:Marine", sec: 200 },
+        ] },
+      },
+    })));
+    await db.gameDetails.insertOne({ userId: "other", gameId: "parallel-4001", trendsExplorerDetail: {
+      version: 1, build: { available: true, milestones: [{ id: "first:Stalker", sec: 100 }] },
+    } });
+    const original = db.gameDetails.aggregate.bind(db.gameDetails);
+    let release, started;
+    const held = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    let active = 0, maximum = 0, calls = 0;
+    const reads = jest.spyOn(db.gameDetails, "aggregate").mockImplementation((pipeline, options) => ({ toArray: async () => {
+      const number = ++calls;
+      maximum = Math.max(maximum, ++active);
+      if (calls === 2) started();
+      try {
+        if (number <= 2) await held;
+        return await original(pipeline, options).toArray();
+      } finally { active -= 1; }
+    } }));
+    const options = parseExplorerOptions("execution", { milestone: "first:Stalker" });
+    const pending = personal.explorer("parallel-user", {}, options);
+    try {
+      await entered;
+      expect(calls).toBe(2);
+      expect(active).toBe(2);
+      release();
+      const result = await pending;
+      expect(maximum).toBe(2);
+      expect(calls).toBe(3);
+      expect(result).toMatchObject({ totalGames: 4002, eligibleGames: 4000, preparation: { pendingGames: 1 } });
+      expect(result.options.milestones.map((row) => row.id)).toEqual(expect.arrayContaining(["first:Stalker", "first:Zealot", "first:Marine"]));
+      for (const [pipeline, cursor] of reads.mock.calls) {
+        expect(pipeline[0].$match.userId).toBe("parallel-user");
+        expect(pipeline[0].$match.gameId.$in.length).toBeLessThanOrEqual(2000);
+        expect(cursor.batchSize).toBe(2000);
+      }
+      const segment = result.rows[0];
+      const page = await personal.explorer("parallel-user", {}, { ...options, games: true, segment: segment.key, limit: 20 });
+      expect(page.total).toBe(segment.games);
+      expect(page.games).toHaveLength(20);
+    } finally { release(); await pending; reads.mockRestore(); }
+  });
+
+  test("a failed compact batch drains its in-flight sibling and stops assigning further work", async () => {
+    await db.games.insertMany(Array.from({ length: 4002 }, (_, index) => game("failure-user", `failure-${index}`, index)));
+    let rejectFirst, releaseSecond, started;
+    const first = new Promise((_resolve, reject) => { rejectFirst = reject; });
+    const second = new Promise((resolve) => { releaseSecond = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    let calls = 0, settled = false;
+    const reads = jest.spyOn(db.gameDetails, "aggregate").mockImplementation(() => ({ toArray: async () => {
+      const number = ++calls;
+      if (number === 2) started();
+      return number === 1 ? first : second;
+    } }));
+    const expected = new Error("metadata read failed");
+    const pending = personal.explorer("failure-user", {}, parseExplorerOptions("leads", {}))
+      .then(() => { settled = true; return null; }, (error) => { settled = true; return error; });
+    try {
+      await entered;
+      rejectFirst(expected);
+      await new Promise(setImmediate);
+      expect(settled).toBe(false);
+      expect(calls).toBe(2);
+      releaseSecond([]);
+      expect(await pending).toBe(expected);
+      expect(calls).toBe(2);
+    } finally { rejectFirst(expected); releaseSecond([]); await pending; reads.mockRestore(); }
+  });
+
   test("sequence admission counts intervening history even when the selected personal games are few", async () => {
     await db.games.insertMany(Array.from({ length: 2001 }, (_, index) => game("a", `old-${index}`, index, { map: "Archived" })));
     let release, started;
