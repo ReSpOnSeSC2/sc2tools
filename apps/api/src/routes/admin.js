@@ -28,11 +28,13 @@
  */
 
 const express = require("express");
+const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 
 /**
  * @param {{
  *   admin: import('../services/admin').AdminService,
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
+ *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   analytics: import('../services/analytics').AnalyticsService,
  *   gdpr: import('../services/gdpr').GdprService,
@@ -62,6 +64,8 @@ function buildAdminRouter(deps) {
     }
     next();
   });
+
+  router.use("/admin/global-trends", buildAdminGlobalTrendsRouter(deps.adminGlobalTrends));
 
   router.get("/admin/storage-stats", async (_req, res, next) => {
     try {

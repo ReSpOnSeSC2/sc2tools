@@ -982,6 +982,9 @@ async function applyRaceGrouping(filters, runOnce) {
 
 module.exports = {
   AggregationsService,
+  bucketSwitch,
+  pickInterval,
+  pickTimezone,
   RACES_PLAYED,
   RACE_LETTER_TO_NAME,
   RACE_NAME_TO_LETTER,

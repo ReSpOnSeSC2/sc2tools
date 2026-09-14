@@ -13,7 +13,8 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
@@ -63,7 +64,7 @@ const ORDER: LengthBucket[] = [
  */
 export function GameLengthWrChart() {
   const { filters, dbRev } = useFilters();
-  const { data, isLoading } = useApi<LengthBucketResponse>(
+  const { data, isLoading, error, mutate } = useApi<LengthBucketResponse>(
     `/v1/length-buckets${filtersToQuery(filters)}#${dbRev}`,
   );
 
@@ -99,6 +100,8 @@ export function GameLengthWrChart() {
   }, [data]);
 
   const totalGames = rows.reduce((acc, r) => acc + r.total, 0);
+
+  if (error) return <TrendsRequestError title="Win rate by game length" retry={mutate} />;
 
   if (isLoading) {
     return (

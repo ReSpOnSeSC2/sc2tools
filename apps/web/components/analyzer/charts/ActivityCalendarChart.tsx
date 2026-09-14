@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrRamp } from "@/lib/format";
@@ -46,7 +47,7 @@ export function ActivityCalendarChart({
   const { filters, dbRev } = useFilters();
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
-  const { data, isLoading } = useApi<ActivityResponse>(
+  const { data, isLoading, error, mutate } = useApi<ActivityResponse>(
     `/v1/activity-calendar${filtersToQuery(params)}#${dbRev}`,
   );
 
@@ -84,6 +85,8 @@ export function ActivityCalendarChart({
     0,
   );
 
+  if (error) return <TrendsRequestError title="Activity calendar" retry={mutate} />;
+
   if (isLoading) {
     return (
       <Card title="Activity calendar">
@@ -97,7 +100,7 @@ export function ActivityCalendarChart({
       <Card title="Activity calendar">
         <EmptyState
           title="No activity to plot"
-          sub="Once you've played at least one game, the calendar will fill in."
+          sub="The calendar fills in when the selected records include at least one game."
         />
       </Card>
     );

@@ -11,7 +11,8 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1 } from "@/lib/format";
@@ -131,10 +132,11 @@ function compactCoverageReasons(dropped: DroppedCoverage | undefined): string[] 
  * user-facing copy therefore calls these "measured games", not "pairs".
  */
 export function NetMmrByMatchupChart() {
+  const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
   const [selectedRace, setSelectedRace] = useState<NetMmrRace | null>(null);
   const tz = useMemo(() => clientTimezone(), []);
-  const { data, isLoading } = useApi<Response>(
+  const { data, isLoading, error, mutate } = useApi<Response>(
     netMmrByMatchupPath(filters, tz, dbRev),
   );
 
@@ -166,6 +168,8 @@ export function NetMmrByMatchupChart() {
     const padded = Math.ceil((reach * 1.15) / 10) * 10;
     return [-padded, padded];
   }, [rows]);
+
+  if (error) return <TrendsRequestError title="Net MMR by matchup" retry={mutate} />;
 
   if (isLoading) {
     return (
@@ -207,7 +211,7 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Your MMR gained (▶) or lost (◀) in games against each opponent race.
+        {isGlobal ? "Total" : "Your"} MMR gained (▶) or lost (◀) in games against each opponent race.
         Each game&apos;s change is measured from its starting MMR and the next
         uploaded replay&apos;s starting MMR on the same Battle.net account/server
         and selected ladder race. Missing or unverified readings break the

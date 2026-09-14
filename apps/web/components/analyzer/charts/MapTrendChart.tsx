@@ -11,7 +11,8 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MapArtwork } from "@/components/maps/MapArtwork";
@@ -77,12 +78,13 @@ export function MapTrendChart({
     () => ({ ...filters, interval: bucket, tz }),
     [filters, bucket, tz],
   );
-  const { data, isLoading } = useApi<MapResponse>(
+  const { data, isLoading, error, mutate } = useApi<MapResponse>(
     `/v1/timeseries/maps${filtersToQuery(params)}#${dbRev}`,
   );
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
-  const rollWindow = ROLL_BY_BUCKET[bucket];
+  const effectiveBucket = data?.interval ?? bucket;
+  const rollWindow = ROLL_BY_BUCKET[effectiveBucket];
 
   const { panels, totalGames, dateRange } = useMemo(
     () => shapeMaps(data?.points || [], tz, topN, rollWindow),
@@ -98,6 +100,8 @@ export function MapTrendChart({
     return dateRange.latest.slice(0, 4) !== String(new Date().getFullYear());
   }, [dateRange]);
 
+  if (error) return <TrendsRequestError title="Map performance over time" retry={mutate} />;
+
   if (isLoading) {
     return (
       <Card title="Map performance over time">
@@ -111,14 +115,14 @@ export function MapTrendChart({
       <Card title="Map performance over time">
         <EmptyState
           title="No map data to chart yet"
-          sub="Once you've played a few games on a handful of maps, per-map trend lines appear here."
+          sub="Per-map trend lines appear when the selected records include games across several maps."
         />
       </Card>
     );
   }
 
   const intervalLabel =
-    bucket === "day" ? "daily" : bucket === "week" ? "weekly" : "monthly";
+    effectiveBucket === "day" ? "daily" : effectiveBucket === "week" ? "weekly" : "monthly";
 
   return (
     <>

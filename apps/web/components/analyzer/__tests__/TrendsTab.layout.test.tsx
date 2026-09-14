@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { TrendsTab } from "../TrendsTab";
+import { TrendsDataProvider } from "@/lib/trendsDataContext";
 
 const useApiMock = vi.fn((_path: string) => ({
   data: {
@@ -95,6 +96,30 @@ afterEach(() => {
 });
 
 describe("TrendsTab layout", () => {
+  it("labels the server's wider interval and explains it for global data", () => {
+    useApiMock.mockReturnValueOnce({ data: { interval: "month", points: [{ bucket: "2026-08-01T00:00:00.000Z", wins: 3, losses: 0, total: 3, winRate: 1 }] }, isLoading: false });
+    render(<TrendsDataProvider mode="global"><TrendsTab /></TrendsDataProvider>);
+    expect(screen.getByText("Best month")).toBeTruthy();
+    expect(screen.getByText("Worst month")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Showing monthly periods");
+  });
+
+  it("keeps all trend groups but excludes fingerprints in global mode", () => {
+    useApiMock.mockReturnValueOnce({ data: { interval: "week", points: [{ bucket: "2026-08-24T00:00:00.000Z", wins: 3, losses: 0, total: 3, winRate: 1 }] }, isLoading: false });
+    render(<TrendsDataProvider mode="global" cohort={{ excluded_players: ["one"], excluded_races: ["Z"] }}><TrendsTab /></TrendsDataProvider>);
+
+    expect(screen.queryByTestId("skill-fingerprint")).toBeNull();
+    expect(screen.queryByText(/Winning streak/)).toBeNull();
+    expect(screen.getByTestId("map-performance")).toBeTruthy();
+    expect(screen.getByText("MMR progression")).toBeTruthy();
+    expect(screen.getByText("Momentum")).toBeTruthy();
+    expect(screen.getByText("Player game records")).toBeTruthy();
+    const path = String(useApiMock.mock.calls[0][0]);
+    expect(path).toContain("/v1/admin/global-trends/timeseries?");
+    expect(path).toContain("excluded_players=one");
+    expect(path).toContain("excluded_races=Z");
+  });
+
   it("groups rating and outcome charts ahead of time and calendar analysis", () => {
     render(<TrendsTab />);
 

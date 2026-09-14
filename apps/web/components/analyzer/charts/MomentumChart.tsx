@@ -13,7 +13,8 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
@@ -64,10 +65,13 @@ const COLOR_GRID = "#1f2533";
  * gap above zero".
  */
 export function MomentumChart() {
+  const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
-  const { data, isLoading } = useApi<MomentumResponse>(
+  const { data, isLoading, error, mutate } = useApi<MomentumResponse>(
     `/v1/momentum${filtersToQuery(filters)}#${dbRev}`,
   );
+
+  if (error) return <TrendsRequestError title="Tilt & momentum" retry={mutate} />;
 
   if (isLoading) {
     return (
@@ -82,7 +86,7 @@ export function MomentumChart() {
       <Card title="Tilt & momentum">
         <EmptyState
           title="Not enough games yet"
-          sub="Once you have a handful of back-to-back games on record, the post-win vs post-loss split fills in."
+          sub={isGlobal ? "The selected players need back-to-back games to measure post-win and post-loss performance." : "Once you have a handful of back-to-back games on record, the post-win vs post-loss split fills in."}
         />
       </Card>
     );
@@ -93,9 +97,9 @@ export function MomentumChart() {
   return (
     <Card title="Tilt & momentum">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Sessions split on a {data.sessionGapMinutes}-min gap · your overall
-        win rate is {baselinePct}% (the dashed line on the curve panel) so
-        swings read in context.
+        {isGlobal ? "Sessions are measured separately for each player account and ladder race, then combined. " : ""}
+        Sessions split on a {data.sessionGapMinutes}-min gap · {isGlobal ? "the cohort's" : "your"} overall
+        win rate is {baselinePct}% (the dashed line on the curve panel).
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TiltPanel
@@ -109,11 +113,13 @@ export function MomentumChart() {
           minSample={minSampleForCurve}
         />
       </div>
-      <TiltVerdict
-        baseline={data.baseline}
-        postWin={data.postWin}
-        postLoss={data.postLoss}
-      />
+      {!isGlobal && (
+        <TiltVerdict
+          baseline={data.baseline}
+          postWin={data.postWin}
+          postLoss={data.postLoss}
+        />
+      )}
     </Card>
   );
 }

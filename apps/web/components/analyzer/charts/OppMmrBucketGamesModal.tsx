@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, Skeleton } from "@/components/ui/Card";
 import { AllGamesTable } from "../AllGamesTable";
 import type { ProfileGame } from "../Last5GamesTimeline";
+import { fmtDate, fmtMinutes } from "@/lib/format";
 
 type Band = { lo: number; hi: number; wins: number; losses: number; total: number };
 
@@ -17,7 +18,7 @@ type Response = {
   hi: number | null;
   total: number;
   count: number;
-  games: ProfileGame[];
+  games: Array<ProfileGame & { playerId?: string; playerName?: string }>;
 };
 
 /**
@@ -37,7 +38,7 @@ export function OppMmrBucketGamesModal({
   onClose: () => void;
 }) {
   const { filters, dbRev } = useFilters();
-  const myName = useMyDisplayName();
+  const { isGlobal } = useTrendsDataScope();
   const open = band != null;
 
   const query = useMemo(() => {
@@ -78,7 +79,7 @@ export function OppMmrBucketGamesModal({
         />
       ) : (
         <>
-          <AllGamesTable games={games} myName={myName} />
+          {isGlobal ? <GlobalBucketGames games={games} /> : <PersonalBucketGames games={games} />}
           {data && data.total > games.length ? (
             <p className="mt-3 text-micro text-text-dim">
               Showing the {games.length.toLocaleString()} most recent of{" "}
@@ -88,5 +89,36 @@ export function OppMmrBucketGamesModal({
         </>
       )}
     </Modal>
+  );
+}
+
+function PersonalBucketGames({ games }: { games: ProfileGame[] }) {
+  const myName = useMyDisplayName();
+  return <AllGamesTable games={games} myName={myName} />;
+}
+
+/** Global drilldowns keep each player's perspective without personal replay actions. */
+function GlobalBucketGames({ games }: { games: Response["games"] }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table aria-label="Player game records in MMR band" className="w-full min-w-[680px] text-left text-xs">
+        <thead className="bg-bg-elevated text-micro uppercase tracking-wide text-text-dim">
+          <tr>{["Player", "Date", "Result", "Opponent", "Opponent MMR", "Map", "Length"].map((label) => <th key={label} scope="col" className="px-3 py-2 font-semibold">{label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {games.map((game, index) => (
+            <tr key={`${game.playerId ?? "player"}:${game.id ?? index}`} className="border-t border-border">
+              <th scope="row" className="max-w-40 truncate px-3 py-2 font-medium text-text" title={game.playerName || game.playerId}>{game.playerName || game.playerId || "Unknown player"}</th>
+              <td className="whitespace-nowrap px-3 py-2 text-text-muted">{fmtDate(game.date)}</td>
+              <td className={`px-3 py-2 font-medium ${/^(win|victory)$/i.test(game.result || "") ? "text-success" : /^(loss|defeat)$/i.test(game.result || "") ? "text-danger" : "text-text-muted"}`}>{game.result || "—"}</td>
+              <td className="max-w-40 truncate px-3 py-2 text-text-muted" title={game.opponent || undefined}>{game.opponent || "Unknown"}{game.opp_race ? ` (${game.opp_race})` : ""}</td>
+              <td className="px-3 py-2 tabular-nums text-text-muted">{game.opp_mmr?.toLocaleString() ?? "—"}</td>
+              <td className="max-w-44 truncate px-3 py-2 text-text-muted" title={game.map || undefined}>{game.map || "—"}</td>
+              <td className="whitespace-nowrap px-3 py-2 tabular-nums text-text-muted">{game.game_length ? fmtMinutes(game.game_length) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

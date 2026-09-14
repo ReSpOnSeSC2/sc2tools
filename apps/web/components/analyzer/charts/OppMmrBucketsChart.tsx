@@ -13,7 +13,8 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
@@ -98,7 +99,7 @@ export function OppMmrBucketsChart() {
     () => ({ ...filters, bucket_width: widthMode }),
     [filters, widthMode],
   );
-  const { data, isLoading } = useApi<Response>(
+  const { data, isLoading, error, mutate } = useApi<Response>(
     `/v1/opp-mmr-buckets${filtersToQuery(query)}#${dbRev}`,
   );
 
@@ -124,6 +125,8 @@ export function OppMmrBucketsChart() {
     };
   }, [data]);
 
+  if (error) return <TrendsRequestError title="Win rate by opponent MMR" retry={mutate} />;
+
   if (isLoading) {
     return (
       <Card title="Win rate by opponent MMR">
@@ -137,7 +140,7 @@ export function OppMmrBucketsChart() {
       <Card title="Win rate by opponent MMR">
         <EmptyState
           title="No MMR-tagged games"
-          sub="Once your replays carry opponent MMR, this chart will break your WR out by absolute MMR brackets."
+          sub="Replays with opponent MMR show win rate across absolute MMR brackets."
         />
       </Card>
     );
@@ -156,7 +159,7 @@ export function OppMmrBucketsChart() {
     >
       <p className="-mt-1 mb-3 text-caption text-text-dim">
         Each bar = a {data.bucketWidth}-MMR band of opponents · bars = games
-        played · line = win rate · dashed accent = your average across these
+        played · line = win rate · dashed accent = overall average across these
         opponents ({baselinePct}%). Only games from the last 12 months are
         bucketed — older ones lack a trustworthy game-time MMR (we&apos;d have
         to borrow the opponent&apos;s rating today), so they fall into the

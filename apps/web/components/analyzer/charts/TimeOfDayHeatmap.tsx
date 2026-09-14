@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { WR_TIERS, wrTier, wrTierTextColor } from "@/lib/format";
@@ -96,7 +97,7 @@ export function TimeOfDayHeatmap() {
     [hour12],
   );
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
-  const { data, isLoading } = useApi<HeatmapResponse>(
+  const { data, isLoading, error, mutate } = useApi<HeatmapResponse>(
     `/v1/timeseries/day-hour${filtersToQuery(params)}#${dbRev}`,
   );
   const [mode, setMode] = useState<"wr" | "volume">("wr");
@@ -136,6 +137,8 @@ export function TimeOfDayHeatmap() {
     return m;
   }, [grid]);
 
+  if (error) return <TrendsRequestError title="Performance by time of day" retry={mutate} />;
+
   if (isLoading) {
     return (
       <Card title="Performance by time of day">
@@ -149,7 +152,7 @@ export function TimeOfDayHeatmap() {
       <Card title="Performance by time of day">
         <EmptyState
           title="No games to plot"
-          sub="The day-of-week × hour heatmap fills in once you have a few games on record."
+          sub="The day-of-week × hour heatmap fills in when the selected records include games."
         />
       </Card>
     );

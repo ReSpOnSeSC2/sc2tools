@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import {
   fmtMinutes,
@@ -77,7 +78,7 @@ export function MatchupGameLengthCard() {
   const [timeFormat, setTimeFormat] = useState<PlaytimeFormat>(
     DEFAULT_PLAYTIME_FORMAT,
   );
-  const { data, isLoading } = useApi<LengthInsightsResponse>(
+  const { data, isLoading, error, mutate } = useApi<LengthInsightsResponse>(
     `/v1/length-buckets${filtersToQuery(filters)}#${dbRev}`,
   );
 
@@ -112,6 +113,8 @@ export function MatchupGameLengthCard() {
         ),
     [data],
   );
+
+  if (error) return <TrendsRequestError title="Time played by matchup" retry={mutate} />;
 
   if (isLoading) {
     return (

@@ -11,7 +11,8 @@ import {
   Line,
   ReferenceLine,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { wrColor } from "@/lib/format";
@@ -86,11 +87,12 @@ export function MatchupOverTimeChart({
     () => ({ ...filters, interval: bucket, tz }),
     [filters, bucket, tz],
   );
-  const { data, isLoading } = useApi<MatchupResponse>(
+  const { data, isLoading, error, mutate } = useApi<MatchupResponse>(
     `/v1/timeseries/matchups${filtersToQuery(params)}#${dbRev}`,
   );
 
-  const rollWindow = ROLL_BY_BUCKET[bucket];
+  const effectiveBucket = data?.interval ?? bucket;
+  const rollWindow = ROLL_BY_BUCKET[effectiveBucket];
 
   const seriesByRace = useMemo(() => {
     const out: Record<RaceKey, PanelPoint[]> = { P: [], T: [], Z: [] };
@@ -155,6 +157,8 @@ export function MatchupOverTimeChart({
     return dateRange.latest.slice(0, 4) !== String(new Date().getFullYear());
   }, [dateRange]);
 
+  if (error) return <TrendsRequestError title="Win rate by matchup over time" retry={mutate} />;
+
   if (isLoading) {
     return (
       <Card title="Win rate by matchup over time">
@@ -173,14 +177,14 @@ export function MatchupOverTimeChart({
       <Card title="Win rate by matchup over time">
         <EmptyState
           title="Not enough games yet"
-          sub="Once you've played a few games per matchup, the per-race trend lines will appear here."
+          sub="Per-race trend lines appear when the selected records include games for each matchup."
         />
       </Card>
     );
   }
 
   const intervalLabel =
-    bucket === "day" ? "daily" : bucket === "week" ? "weekly" : "monthly";
+    effectiveBucket === "day" ? "daily" : effectiveBucket === "week" ? "weekly" : "monthly";
 
   return (
     <Card title="Win rate by matchup over time">

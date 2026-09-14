@@ -14,7 +14,8 @@ import {
   ReferenceDot,
   ReferenceLine,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
@@ -27,6 +28,7 @@ import {
 
 type MmrPoint = {
   bucket: string;
+  avgMmr?: number;
   openMmr: number;
   closeMmr: number;
   minMmr: number;
@@ -212,13 +214,15 @@ export function MmrProgressionChart({
 }: {
   bucket: "day" | "week" | "month";
 }) {
+  const { isGlobal } = useTrendsDataScope();
+  const title = isGlobal ? "Average MMR over time" : "MMR progression";
   const { filters, dbRev } = useFilters();
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
     () => ({ ...filters, interval: bucket, tz }),
     [filters, bucket, tz],
   );
-  const { data, isLoading } = useApi<MmrResponse>(
+  const { data, isLoading, error, mutate } = useApi<MmrResponse>(
     `/v1/timeseries/mmr${filtersToQuery(params)}#${dbRev}`,
   );
   const {
@@ -235,12 +239,12 @@ export function MmrProgressionChart({
   // count is >= 2 — a single-account / single-region user keeps the
   // original look.
   const series = useMemo<LadderSeries[]>(
-    () => responseSeries(data),
-    [data],
+    () => isGlobal ? [] : responseSeries(data),
+    [data, isGlobal],
   );
   const regions = useMemo<RegionSeries[]>(
-    () => (Array.isArray(data?.regions) ? data!.regions! : []),
-    [data],
+    () => (!isGlobal && Array.isArray(data?.regions) ? data!.regions! : []),
+    [data, isGlobal],
   );
   const multiSeries: MultiSeries[] = useMemo(() => {
     if (series.length) {
@@ -288,7 +292,7 @@ export function MmrProgressionChart({
     if (!displayData || !Array.isArray(displayData.points)) return [];
     return displayData.points.map((p) => ({
       date: localDateKey(p.bucket, tz),
-      close: p.closeMmr,
+      close: isGlobal ? (p.avgMmr ?? p.closeMmr) : p.closeMmr,
       min: p.minMmr,
       max: p.maxMmr,
       band: [p.minMmr, p.maxMmr] as [number, number],
@@ -296,7 +300,7 @@ export function MmrProgressionChart({
       wins: p.wins,
       losses: p.losses,
     }));
-  }, [displayData, tz]);
+  }, [displayData, tz, isGlobal]);
 
   // Multi-series rows: one row per bucket, one column per series.
   // Missing buckets stay as ``null`` so Recharts skips them rather
@@ -331,9 +335,11 @@ export function MmrProgressionChart({
   const hasChartRows = multi ? multiRows.length > 0 : overallRows.length > 0;
   const coverageNotice = mmrCoverageNotice(data?.coverage);
 
+  if (error) return <TrendsRequestError title={title} retry={mutate} />;
+
   if (isLoading) {
     return (
-      <Card title="MMR progression">
+      <Card title={title}>
         <Skeleton rows={3} />
       </Card>
     );
@@ -342,8 +348,11 @@ export function MmrProgressionChart({
   if (!hasChartRows) {
     const copy = emptyMmrCopy(data?.coverage);
     return (
-      <Card title="MMR progression">
-        <EmptyState title={copy.title} sub={copy.sub} />
+      <Card title={title}>
+        <EmptyState
+          title={isGlobal ? "No verified ranked 1v1 MMR in this cohort" : copy.title}
+          sub={isGlobal ? "Select players and games with verified replay ratings to view their aggregate history." : copy.sub}
+        />
       </Card>
     );
   }
@@ -354,12 +363,17 @@ export function MmrProgressionChart({
   const effectiveBucket = data?.interval ?? bucket;
 
   return (
-    <Card title="MMR progression">
+    <Card title={title}>
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Last recorded verified ranked 1v1 MMR per {effectiveBucket} ·{" "}
-        {multi
-          ? "one line per Battle.net account and selected ladder race; peak / trough / last recorded per series below."
-          : "shaded band = min/max recorded within the bucket; markers highlight peak, trough, and last recorded."}
+        {isGlobal ? (
+          `Average of the last verified ranked 1v1 rating for each active account and ladder race per ${effectiveBucket}. Each account/race has equal weight; changes can reflect who played. Shading shows the recorded rating range.`
+        ) : (
+          <>Last recorded verified ranked 1v1 MMR per {effectiveBucket} ·{" "}
+            {multi
+              ? "one line per Battle.net account and selected ladder race; peak / trough / last recorded per series below."
+              : "shaded band = min/max recorded within the bucket; markers highlight peak, trough, and last recorded."}
+          </>
+        )}
       </p>
       {coverageNotice ? (
         <div
@@ -374,10 +388,10 @@ export function MmrProgressionChart({
           </p>
         </div>
       ) : null}
-      <MmrHeadline data={displayData} multiSeries={multiSeries} multi={multi} />
+      <MmrHeadline data={displayData} multiSeries={multiSeries} multi={multi} isGlobal={isGlobal} />
       <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
           {multi ? (
+            <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={multiRows}
               margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
@@ -447,20 +461,22 @@ export function MmrProgressionChart({
                 />
               ))}
             </ComposedChart>
+            </ResponsiveContainer>
           ) : (
             <SingleSeriesChart
               rows={overallRows}
               yDomain={yDomain}
               data={displayData}
               tz={tz}
+              isGlobal={isGlobal}
             />
           )}
-        </ResponsiveContainer>
       </div>
       <MmrDailySwings
         dailySwings={matchupData?.dailySwings}
         isLoading={dailySwingsLoading}
         unavailable={Boolean(dailySwingsError) && !matchupData?.dailySwings}
+        isGlobal={isGlobal}
       />
     </Card>
   );
@@ -492,6 +508,7 @@ function SingleSeriesChart({
   yDomain,
   data,
   tz,
+  isGlobal = false,
 }: {
   rows: Array<{
     date: string;
@@ -501,11 +518,13 @@ function SingleSeriesChart({
   yDomain: [number, number] | undefined;
   data: MmrResponse | undefined;
   tz: string;
+  isGlobal?: boolean;
 }) {
   const peakKey = data?.peak ? localDateKey(data.peak.bucket, tz) : null;
   const troughKey = data?.trough ? localDateKey(data.trough.bucket, tz) : null;
   const latestKey = data?.latest ? localDateKey(data.latest.bucket, tz) : null;
   return (
+    <ResponsiveContainer width="100%" height="100%">
     <ComposedChart
       data={rows}
       margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
@@ -552,7 +571,7 @@ function SingleSeriesChart({
               rows={[
                 {
                   key: "close",
-                  label: "Last recorded MMR",
+                  label: isGlobal ? "Average MMR" : "Last recorded MMR",
                   value: row.close.toLocaleString(),
                 },
               ]}
@@ -623,6 +642,7 @@ function SingleSeriesChart({
         />
       ) : null}
     </ComposedChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -630,10 +650,12 @@ function MmrHeadline({
   data,
   multiSeries,
   multi,
+  isGlobal = false,
 }: {
   data: MmrResponse | undefined;
   multiSeries: MultiSeries[];
   multi: boolean;
+  isGlobal?: boolean;
 }) {
   if (!data) return null;
   if (multi) {
@@ -681,7 +703,7 @@ function MmrHeadline({
   }> = [];
   if (data.latest) {
     items.push({
-      label: "Last recorded",
+      label: isGlobal ? "Latest average" : "Last recorded",
       value: data.latest.mmr.toLocaleString(),
       color: COLOR_ACCENT,
     });
@@ -692,9 +714,9 @@ function MmrHeadline({
   if (data.peak) {
     const delta = data.latest ? data.latest.mmr - data.peak.mmr : 0;
     items.push({
-      label: "Peak",
+      label: isGlobal ? "Highest average" : "Peak",
       value: data.peak.mmr.toLocaleString(),
-      sub: data.latest
+      sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs peak`
         : undefined,
       color: COLOR_SUCCESS,
@@ -703,9 +725,9 @@ function MmrHeadline({
   if (data.trough) {
     const delta = data.latest ? data.latest.mmr - data.trough.mmr : 0;
     items.push({
-      label: "Trough",
+      label: isGlobal ? "Lowest average" : "Trough",
       value: data.trough.mmr.toLocaleString(),
-      sub: data.latest
+      sub: data.latest && !isGlobal
         ? `last ${delta >= 0 ? "+" : ""}${delta} vs trough`
         : undefined,
       color: COLOR_DANGER,

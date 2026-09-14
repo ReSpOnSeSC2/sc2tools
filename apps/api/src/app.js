@@ -102,6 +102,7 @@ const {
 const { buildFingerprintRouter } = require("./routes/fingerprint");
 const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
+const { AdminGlobalTrendsService } = require("./services/adminGlobalTrends");
 const { AdminEventsService } = require("./services/adminEvents");
 const { AnalyticsService } = require("./services/analytics");
 const { buildPulseResolver } = require("./services/pulseResolver");
@@ -641,6 +642,7 @@ function makeServices(deps) {
     db: deps.db,
     pulseDirectory,
   });
+  const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db });
   // Google Analytics 4 reader for the admin Analytics tab. Pure
   // adapter over the GA4 Data API; ``config.analytics.enabled`` is
   // false when GA isn't wired up, in which case the routes return a
@@ -695,6 +697,7 @@ function makeServices(deps) {
     twitchChatBot,
     admin,
     adminGlobal,
+    adminGlobalTrends,
     adminEvents,
     analytics,
     pulseMmr,
@@ -1092,6 +1095,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildAdminRouter({
       admin: services.admin,
       adminGlobal: services.adminGlobal,
+      adminGlobalTrends: services.adminGlobalTrends,
       adminEvents: services.adminEvents,
       analytics: services.analytics,
       gdpr: services.gdpr,

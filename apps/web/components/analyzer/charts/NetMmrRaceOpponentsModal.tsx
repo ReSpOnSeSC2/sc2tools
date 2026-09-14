@@ -9,7 +9,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { pct1 } from "@/lib/format";
 import { useFilters } from "@/lib/filterContext";
 import {
@@ -69,11 +69,15 @@ export function NetMmrRaceOpponentsModal({
   onClose: () => void;
 }) {
   const { filters, dbRev } = useFilters();
+  const { isGlobal, cohort } = useTrendsDataScope();
+  const filterKey = JSON.stringify([filters, cohort]);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search.trim(), 250);
   const [minimumPairs, setMinimumPairs] = useState(1);
   const [ranking, setRanking] = useState<Ranking>("net-best");
   const [offset, setOffset] = useState(0);
+
+  useEffect(() => { setOffset(0); }, [filterKey]);
 
   useEffect(() => {
     setSearch("");
@@ -129,7 +133,7 @@ export function NetMmrRaceOpponentsModal({
       onClose={onClose}
       size="xl"
       title={`MMR by ${raceName} opponent`}
-      description="Accepted replay-to-replay MMR pairs under the current Analyzer filters. Positive values are MMR you took; negative values are MMR you lost."
+      description={isGlobal ? "Accepted replay-to-replay MMR changes across the selected players. Positive values are total MMR gained; negative values are total MMR lost. All cohort and game filters apply." : "Accepted replay-to-replay MMR pairs under the current Analyzer filters. Positive values are MMR you took; negative values are MMR you lost."}
     >
       {data?.summary ? <ImpactSummary summary={data.summary} /> : null}
 

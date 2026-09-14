@@ -14,7 +14,8 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { useApi } from "@/lib/clientApi";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
+import { TrendsRequestError } from "./charts/TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
@@ -134,6 +135,7 @@ function bestWorstPeriod(series: Period[], minGames: number) {
 }
 
 export function TrendsTab() {
+  const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
   const [bucket, setBucket] = useState<string>(() => readLs(LS_BUCKET, "week"));
   const [rolling, setRolling] = useState<boolean>(() => readLs(LS_ROLL, true));
@@ -145,13 +147,14 @@ export function TrendsTab() {
     () => ({ ...filters, interval: bucket, tz }),
     [filters, bucket, tz],
   );
-  const { data, isLoading } = useApi<ApiTimeseriesResponse>(
+  const { data, isLoading, error, mutate } = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${filtersToQuery(params)}#${dbRev}`,
   );
   const series: Period[] = useMemo(
     () => apiToPeriods(data, tz),
     [data, tz],
   );
+  const effectiveBucket = data?.interval ?? bucket;
 
   const enriched = useMemo(() => {
     const roll = rollingWinRate(series, ROLL_N);
@@ -185,11 +188,12 @@ export function TrendsTab() {
   }, [series]);
 
   if (isLoading) return <Skeleton rows={4} />;
+  if (error) return <TrendsRequestError title="Trends" retry={mutate} />;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        {kpis.streak.kind && kpis.streak.count > 0 && (
+        {!isGlobal && kpis.streak.kind && kpis.streak.count > 0 && (
           <span
             className={`rounded px-2 py-0.5 text-micro font-semibold tabular-nums ${
               kpis.streak.kind === "win"
@@ -228,7 +232,7 @@ export function TrendsTab() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
-          label="Games"
+          label={isGlobal ? "Player game records" : "Games"}
           value={kpis.totalGames}
         />
         <Stat
@@ -236,12 +240,18 @@ export function TrendsTab() {
           value={pct1(kpis.wr)}
           color={wrColor(kpis.wr, kpis.totalGames)}
         />
-        <Stat label={`Best ${bucket}`} value={kpis.bestLabel} />
-        <Stat label={`Worst ${bucket}`} value={kpis.worstLabel} />
+        <Stat label={`Best ${effectiveBucket}`} value={kpis.bestLabel} />
+        <Stat label={`Worst ${effectiveBucket}`} value={kpis.worstLabel} />
       </div>
 
+      {isGlobal && effectiveBucket !== bucket && (
+        <p role="status" className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-caption text-text-muted">
+          Showing {effectiveBucket === "month" ? "monthly" : effectiveBucket === "week" ? "weekly" : "daily"} periods to cover this date range. Choose a shorter range for finer detail.
+        </p>
+      )}
+
       {series.length === 0 ? (
-        <EmptyState />
+        isGlobal ? <EmptyState title="No player game records match these filters" sub="Adjust the player selection or game filters to broaden this view." /> : <EmptyState />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Card title="Games per period (W stacked on L)">
@@ -452,7 +462,7 @@ export function TrendsTab() {
            */}
           <SectionDivider
             title="Time & activity"
-            subtitle="When you play, how long games run, and how activity changes over time."
+            subtitle={isGlobal ? "When players play, how long games run, and how activity changes over time." : "When you play, how long games run, and how activity changes over time."}
           />
           <div className="md:col-span-2">
             <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
@@ -472,7 +482,7 @@ export function TrendsTab() {
       )}
 
       {/* The identity artifact closes the tab, immediately after map trends. */}
-      <FingerprintCard />
+      {!isGlobal && <FingerprintCard />}
     </div>
   );
 }

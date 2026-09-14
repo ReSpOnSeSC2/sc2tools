@@ -11,6 +11,7 @@ type Props = {
   dailySwings?: DailyMmrSwings;
   isLoading?: boolean;
   unavailable?: boolean;
+  isGlobal?: boolean;
 };
 
 /**
@@ -42,6 +43,7 @@ export function MmrDailySwings({
   dailySwings,
   isLoading = false,
   unavailable = false,
+  isGlobal = false,
 }: Props) {
   const regions = Array.isArray(dailySwings?.regions)
     ? dailySwings.regions
@@ -66,11 +68,16 @@ export function MmrDailySwings({
             Daily MMR records
           </h4>
           <p className="text-micro text-text-dim">
-            Verified net change from consecutive synced ranked 1v1 replay
-            readings, grouped by your local day
-            {multipleRegions
-              ? ". Records stay separate by your Battle.net region; opponent-region and all other selected filters still apply."
-              : " across the selected ladders."}
+            {isGlobal ? (
+              "Combined net MMR change across the selected players, measured within each account and ladder race and grouped by the selected local day and Battle.net region."
+            ) : (
+              <>Verified net change from consecutive synced ranked 1v1 replay
+                readings, grouped by your local day
+                {multipleRegions
+                  ? ". Records stay separate by your Battle.net region; opponent-region and all other selected filters still apply."
+                  : " across the selected ladders."}
+              </>
+            )}
           </p>
         </div>
         {summary && summary.measuredGames > 0 ? (
@@ -98,11 +105,11 @@ export function MmrDailySwings({
           role="status"
           className="rounded-lg bg-bg-elevated/45 px-3 py-2 text-xs text-text-dim"
         >
-          Daily MMR records are temporarily unavailable. Your progression chart
+          Daily MMR records are temporarily unavailable. The progression chart
           is unaffected.
         </div>
       ) : multipleRegions ? (
-        <div className="space-y-2" aria-label="MMR records by your Battle.net region">
+        <div className="space-y-2" aria-label={isGlobal ? "MMR records by Battle.net region" : "MMR records by your Battle.net region"}>
           {regions.map((region) => (
             <RegionDailySwings
               key={region.region}
