@@ -128,6 +128,15 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
     expect(result.options.players.map((p) => p.id)).toEqual([A]);
   });
 
+  test("partial summaries keep polling until the active source branch is prepared", async () => {
+    await db.gameDetails.updateOne({ userId: "a", gameId: "a1" }, { $set: { trendsExplorerDetail: { version: 1, ratings: {} } } });
+    for (const view of ["execution", "leads"]) {
+      const result = await personal.explorer("a", {}, parseExplorerOptions(view, {}));
+      expect(result.preparation.pendingGames).toBe(1);
+      expect(result.eligibleGames).toBe(0);
+    }
+  });
+
   test.each([{ a_since: "2026-02-30" }, { a_since: "2026-10-01", a_until: "2026-09-01" },
     { group_mode: "arbitrary" }, { a_min: "5000", a_max: "4000" }, { limit: "100000" }, { milestone: { $ne: null } }])("invalid controls fail closed: %j", async (bad) => {
     await request(app).get("/v1/trends/explorer/groups").query(bad).set("Authorization", "a").expect(400);

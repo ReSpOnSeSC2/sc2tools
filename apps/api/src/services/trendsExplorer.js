@@ -128,6 +128,7 @@ async function readRecords(db, userId, filters, opts, history = false) {
     } }, { $set: {
       trendsExplorerDetail: { $arrayElemAt: ["$_detail.trendsExplorerDetail", 0] },
       _detailExists: { $gt: [{ $size: "$_detail" }, 0] },
+      _detailPending: { $eq: [{ $arrayElemAt: ["$_detail._ready", 0] }, false] },
     } }, { $unset: "_detail" });
   }
   return db.games.aggregate(stages, { allowDiskUse: true, maxTimeMS: 25000 }).toArray();
@@ -154,8 +155,13 @@ function recordProjection(opts) {
  * multiplied by a global history can otherwise exhaust a small API heap.
  * @param {ReturnType<typeof parseExplorerOptions>} opts */
 function detailProjection(opts) {
+  const neededBranch = opts.view === "mmr-gap" ? "ratings" : opts.view === "leads" ? "leads"
+    : opts.milestone.endsWith("-base") ? "bases" : "build";
   /** @type {Record<string, any>} */
-  const projection = { _id: 0, "trendsExplorerDetail.version": 1 };
+  const projection = { _id: 0, "trendsExplorerDetail.version": 1, _ready: { $and: [
+    { $eq: ["$trendsExplorerDetail.version", 1] },
+    { $ne: [{ $type: `$trendsExplorerDetail.${neededBranch}` }, "missing"] },
+  ] } };
   if (opts.view === "mmr-gap") projection["trendsExplorerDetail.ratings"] = 1;
   else if (opts.view === "leads") {
     projection["trendsExplorerDetail.leads.available"] = 1;
@@ -287,13 +293,7 @@ function trendsExplorer(db, userId, filters, opts) {
       ], { maxTimeMS: 25000 }).toArray()).map((row) => row._id);
       milestones = await executionMilestones(db, userId, filters);
     }
-    const pendingGames = SUMMARY_READ_VIEWS.has(opts.view) ? selected.filter((record) => {
-      if (!record._detailExists) return false;
-      const detail = record.trendsExplorerDetail;
-      const branch = opts.view === "mmr-gap" ? "ratings" : opts.view === "leads" ? "leads"
-        : opts.milestone.endsWith("-base") ? "bases" : "build";
-      return detail?.version !== 1 || !detail?.[branch];
-    }).length : 0;
+    const pendingGames = selected.filter((record) => record._detailExists && record._detailPending).length;
     return {
       view: opts.view, totalGames: selected.length, eligibleGames: analysis.eligibleGames,
       rows: analysis.rows.map((/** @type {any} */ row) => { const { gameKeys: _keys, ...rest } = row; return rest; }),
