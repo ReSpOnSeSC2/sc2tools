@@ -169,7 +169,7 @@ export function NetMmrByMatchupChart() {
     return [-padded, padded];
   }, [rows]);
 
-  if (error) return <TrendsRequestError title="Net MMR by matchup" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Net MMR by matchup" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

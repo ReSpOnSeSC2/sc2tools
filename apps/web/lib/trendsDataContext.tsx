@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { SWRConfiguration } from "swr";
 import { useApi, type ClientApiError } from "@/lib/clientApi";
+import { GLOBAL_TRENDS_REQUEST_OPTIONS, GLOBAL_TRENDS_SWR_CONFIG } from "./globalTrendsApi";
 
 export type TrendsCohort = Record<
   string,
@@ -60,5 +61,7 @@ export function useTrendsApi<T>(
   config?: SWRConfiguration<T, ClientApiError>,
 ) {
   const scope = useContext(TrendsDataContext);
-  return useApi<T>(trendsDataPath(path, scope), config);
+  return useApi<T>(trendsDataPath(path, scope),
+    scope.mode === "global" ? { ...GLOBAL_TRENDS_SWR_CONFIG, ...config } : config,
+    scope.mode === "global" ? GLOBAL_TRENDS_REQUEST_OPTIONS : undefined);
 }

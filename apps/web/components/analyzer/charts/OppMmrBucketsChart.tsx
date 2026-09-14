@@ -125,7 +125,7 @@ export function OppMmrBucketsChart() {
     };
   }, [data]);
 
-  if (error) return <TrendsRequestError title="Win rate by opponent MMR" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Win rate by opponent MMR" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

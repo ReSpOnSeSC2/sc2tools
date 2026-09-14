@@ -71,7 +71,7 @@ export function MomentumChart() {
     `/v1/momentum${filtersToQuery(filters)}#${dbRev}`,
   );
 
-  if (error) return <TrendsRequestError title="Tilt & momentum" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Tilt & momentum" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

@@ -6,6 +6,7 @@ const { myLadderRaceExpr } = require("./trendsRegionExpr");
 const { globalHistoryStages, parseGlobalTrendsFilters, playerIncluded } = require("./adminGlobalTrendsScope");
 const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlayers");
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
+const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, queryKey } = require("./adminGlobalTrendsQueries");
 
 // Never accepted from a query parameter. Only the private collection adapter
 // below can translate this marker; ordinary AggregationsService stays scoped.
@@ -23,14 +24,7 @@ class AdminGlobalTrendsService {
   /** @param {{db: import('../db/connect').DbContext}} deps */
   constructor({ db }) {
     this.db = db;
-    /** @type {Promise<Awaited<ReturnType<typeof readGlobalPlayers>>> | null} */
-    this.roster = null;
-    this.rosterExpiresAt = 0;
-    this.activeQueries = 0;
-    /** @type {Array<() => void>} */
-    this.queryWaiters = [];
-    /** @type {Map<string, {expiresAt: number, promise: Promise<any>}>} */
-    this.results = new Map();
+    this.queries = new GlobalTrendsQueries();
     this.refreshedAfter = 0;
   }
 
@@ -43,21 +37,14 @@ class AdminGlobalTrendsService {
     const token = Number(query.refresh_after);
     if (!Number.isFinite(token) || token <= this.refreshedAfter || token > Date.now() + 60000) return;
     this.refreshedAfter = token;
-    this.roster = null;
-    this.rosterExpiresAt = 0;
-    this.results.clear();
+    this.queries.clear();
   }
 
   /** Shared by simultaneous chart requests; refresh promptly after uploads. */
   async _players() {
-    if (!this.roster || Date.now() >= this.rosterExpiresAt) {
-      this.rosterExpiresAt = Date.now() + 30000;
-      this.roster = readGlobalPlayers(this.db).catch((err) => {
-        this.roster = null;
-        throw err;
-      });
-    }
-    return this.roster;
+    const games = { aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => this._query(pipeline) };
+    return /** @type {Promise<Awaited<ReturnType<typeof readGlobalPlayers>>>} */ (this.queries.cached("roster", () =>
+      readGlobalPlayers({ ...this.db, games: /** @type {any} */ (games) })));
   }
 
   /** @param {Record<string, unknown>} query */
@@ -70,6 +57,11 @@ class AdminGlobalTrendsService {
   async filterOptions(query = {}) {
     this._refresh(query);
     const cohort = parseGlobalTrendsFilters(query);
+    return this.queries.cached(queryKey(["options", cohort]), () => this._filterOptions(cohort));
+  }
+
+  /** @param {import('./adminGlobalTrendsScope').Cohort} cohort */
+  async _filterOptions(cohort) {
     const agg = await this._aggregations("filterOptions", cohort);
     const [result] = await agg.db.games.aggregate([
       { $match: gamesMatchStage(ADMIN_SCOPE, {}) },
@@ -88,33 +80,18 @@ class AdminGlobalTrendsService {
     if (!ALLOWED_METHODS.has(method)) throw new Error("Unsupported global trends method");
     this._refresh(query);
     const cohort = parseGlobalTrendsFilters(query);
-    const key = JSON.stringify([method, cohort, opts]);
-    const cached = this.results.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.promise;
-    // Both net-MMR cards request the same data. Share their in-flight work,
-    // and bound simultaneous global scans across all admins to this service.
-    // The cache is short-lived, bounded, and contains admin read responses only.
-    while (this.results.size >= 64) {
-      const oldest = this.results.keys().next().value;
-      if (oldest !== undefined) this.results.delete(oldest);
-    }
-    const promise = this._withQuerySlot(() => this._run(method, cohort, opts)).catch((err) => {
-      this.results.delete(key);
-      throw err;
-    });
-    this.results.set(key, { expiresAt: Date.now() + 15000, promise });
-    return promise;
+    return this.queries.cached(queryKey(["result", method, cohort, opts]), () => this._run(method, cohort, opts));
   }
 
-  /** @param {() => Promise<any>} work */
-  async _withQuerySlot(work) {
-    if (this.activeQueries >= 3) await new Promise((resolve) => this.queryWaiters.push(() => resolve(undefined)));
-    else this.activeQueries += 1;
-    try { return await work(); } finally {
-      const next = this.queryWaiters.shift();
-      if (next) next();
-      else this.activeQueries -= 1;
-    }
+  /** The adapter's only cursor operation is toArray. Delay acquisition until
+   * execution, and coalesce identical range probes used by multiple charts.
+   * @param {Array<Record<string, any>>} pipeline */
+  _query(pipeline) {
+    const finalGroup = pipeline.at(-1)?.$group;
+    const isRange = finalGroup?.first?.$min === "$date" && finalGroup?.last?.$max === "$date";
+    const read = () => this.queries.execute(() =>
+      this.db.games.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray());
+    return { toArray: () => isRange ? this.queries.cached(queryKey(["range", pipeline]), read) : read() };
   }
 
   /** @param {string} method @param {import('./adminGlobalTrendsScope').Cohort} cohort @param {Record<string, any>} opts */
@@ -157,10 +134,17 @@ class AdminGlobalTrendsService {
         // explicit scope. No recursive rewrite touches nested lookup scopes.
         if (pipeline[0]?.$match?.userId !== ADMIN_SCOPE) throw new Error("Unscoped global trends pipeline");
         const stages = adaptPipeline(pipeline, method, cohort);
-        return this.db.games.aggregate([...prefix, ...stages], { allowDiskUse: true, maxTimeMS: 60000 });
+        return this._query([...prefix, ...stages]);
       },
     };
-    return new AggregationsService({ games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)) });
+    const agg = new AggregationsService({ games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)) });
+    // Every time chart now emits the same date-range probe. The query cache
+    // shares it across charts and requested intervals instead of rescanning.
+    /** @type {any} */ (agg)._fitInterval = (
+      /** @type {Record<string, any>} */ match,
+      /** @type {'day'|'week'|'month'} */ requested,
+    ) => fitGlobalInterval(agg.db.games, match, requested);
+    return agg;
   }
 }
 

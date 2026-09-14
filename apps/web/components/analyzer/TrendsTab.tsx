@@ -187,8 +187,8 @@ export function TrendsTab() {
     };
   }, [series]);
 
-  if (isLoading) return <Skeleton rows={4} />;
-  if (error) return <TrendsRequestError title="Trends" retry={mutate} />;
+  if (!isGlobal && isLoading) return <Skeleton rows={4} />;
+  if (!isGlobal && error) return <TrendsRequestError title="Trends" retry={mutate} />;
 
   return (
     <div className="space-y-4">
@@ -230,7 +230,7 @@ export function TrendsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {!isLoading && !error && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat
           label={isGlobal ? "Player game records" : "Games"}
           value={kpis.totalGames}
@@ -242,18 +242,28 @@ export function TrendsTab() {
         />
         <Stat label={`Best ${effectiveBucket}`} value={kpis.bestLabel} />
         <Stat label={`Worst ${effectiveBucket}`} value={kpis.worstLabel} />
-      </div>
+      </div>}
 
-      {isGlobal && effectiveBucket !== bucket && (
+      {isGlobal && !isLoading && !error && effectiveBucket !== bucket && (
         <p role="status" className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-caption text-text-muted">
           Showing {effectiveBucket === "month" ? "monthly" : effectiveBucket === "week" ? "weekly" : "daily"} periods to cover this date range. Choose a shorter range for finer detail.
         </p>
       )}
 
-      {series.length === 0 ? (
-        isGlobal ? <EmptyState title="No player game records match these filters" sub="Adjust the player selection or game filters to broaden this view." /> : <EmptyState />
+      {!isGlobal && series.length === 0 ? (
+        <EmptyState />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {isLoading || error || series.length === 0 ? (
+            ["Games per period (W stacked on L)", "Win rate"].map((title) => error ? (
+              <TrendsRequestError key={title} title={title} error={error} retry={mutate} />
+            ) : (
+              <Card key={title} title={title}>
+                {isLoading ? <div role="status" aria-label={`Loading ${title}`}><Skeleton rows={4} /></div>
+                  : <EmptyState title="No player game records match these filters" sub="Adjust the player selection or game filters to broaden this view." />}
+              </Card>
+            ))
+          ) : <>
           <Card title="Games per period (W stacked on L)">
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -435,6 +445,8 @@ export function TrendsTab() {
               </ResponsiveContainer>
             </div>
           </Card>
+
+          </>}
 
           {/*
            * Keep the outcome and rating views together directly beneath the

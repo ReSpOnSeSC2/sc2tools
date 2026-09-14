@@ -335,7 +335,7 @@ export function MmrProgressionChart({
   const hasChartRows = multi ? multiRows.length > 0 : overallRows.length > 0;
   const coverageNotice = mmrCoverageNotice(data?.coverage);
 
-  if (error) return <TrendsRequestError title={title} retry={mutate} />;
+  if (error) return <TrendsRequestError title={title} error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

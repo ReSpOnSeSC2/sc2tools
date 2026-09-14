@@ -1,6 +1,7 @@
 "use strict";
 
-const { globalHistoryStages, playerIncluded } = require("./adminGlobalTrendsScope");
+const { globalHistoryStages, playerIncluded, GLOBAL_ROSTER_PROJECTION } = require("./adminGlobalTrendsScope");
+const { QUERY_MAX_TIME_MS } = require("./adminGlobalTrendsQueries");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /** Read contributors, rather than opponents encountered by contributors.
@@ -9,7 +10,7 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  * @param {import('../db/connect').DbContext} db */
 async function readGlobalPlayers(db) {
   const rows = await db.games.aggregate([
-    ...globalHistoryStages(),
+    ...globalHistoryStages({}, GLOBAL_ROSTER_PROJECTION),
     { $group: {
       _id: "$_globalPlayerId", toonHandle: { $first: "$_globalToon" },
       userIds: { $addToSet: "$userId" }, gameCount: { $sum: 1 },
@@ -28,7 +29,7 @@ async function readGlobalPlayers(db) {
       from: db.users.collectionName, localField: "userIds", foreignField: "userId", as: "owners",
       pipeline: [{ $project: { _id: 0, displayName: 1 } }],
     } },
-  ], { allowDiskUse: true, maxTimeMS: 60000 }).toArray();
+  ], { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray();
   return rows.map((row) => shapePlayer(row));
 }
 

@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { TrendsTab } from "../TrendsTab";
 import { TrendsDataProvider } from "@/lib/trendsDataContext";
+import type { ApiTimeseriesResponse } from "@/lib/timeseries";
+import type { ClientApiError } from "@/lib/clientApi";
 
-const useApiMock = vi.fn((_path: string) => ({
+const useApiMock = vi.fn((_path: string): { data?: ApiTimeseriesResponse; isLoading: boolean; error?: ClientApiError; mutate?: () => unknown } => ({
   data: {
     interval: "week",
     points: [
@@ -96,6 +98,22 @@ afterEach(() => {
 });
 
 describe("TrendsTab layout", () => {
+  it.each(["loading", "error", "empty"])("keeps every independent global trend section mounted when the overview is %s", (state) => {
+    useApiMock.mockReturnValueOnce({
+      data: state === "empty" ? { interval: "week", points: [] } : undefined,
+      isLoading: state === "loading",
+      error: state === "error" ? { status: 0, code: "request_timeout", message: "The API took too long to respond." } : undefined,
+      mutate: vi.fn(),
+    });
+    render(<TrendsDataProvider mode="global"><TrendsTab /></TrendsDataProvider>);
+    for (const title of ["Games per period (W stacked on L)", "Win rate", "MMR progression", "Net MMR by matchup", "Opponent MMR buckets", "Momentum", "Matchup over time", "Matchup game length", "Time of day", "Game length", "Activity calendar", "Map performance over time"]) {
+      expect(screen.getByText(title), title).toBeTruthy();
+    }
+    expect(screen.queryByTestId("skill-fingerprint")).toBeNull();
+    if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();
+    if (state === "error") expect(screen.getAllByRole("alert")[0].textContent).toContain("The API took too long to respond.");
+  });
+
   it("labels the server's wider interval and explains it for global data", () => {
     useApiMock.mockReturnValueOnce({ data: { interval: "month", points: [{ bucket: "2026-08-01T00:00:00.000Z", wins: 3, losses: 0, total: 3, winRate: 1 }] }, isLoading: false });
     render(<TrendsDataProvider mode="global"><TrendsTab /></TrendsDataProvider>);

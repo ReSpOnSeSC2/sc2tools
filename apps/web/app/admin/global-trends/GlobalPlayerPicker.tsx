@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { Search, Users, X } from "lucide-react";
-import { useApi } from "@/lib/clientApi";
+import { useGlobalTrendsApi as useApi } from "@/lib/globalTrendsApi";
 import { filtersToQuery } from "@/lib/filterContext";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";

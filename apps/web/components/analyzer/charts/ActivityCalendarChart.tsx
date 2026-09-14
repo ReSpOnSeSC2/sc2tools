@@ -85,7 +85,7 @@ export function ActivityCalendarChart({
     0,
   );
 
-  if (error) return <TrendsRequestError title="Activity calendar" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Activity calendar" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

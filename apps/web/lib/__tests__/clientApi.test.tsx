@@ -41,6 +41,79 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe("opt-in API deadlines", () => {
+  function boundedFetcher(timeoutMs = 1000) {
+    const view = renderHook(() => useApi("/v1/admin/global-trends/timeseries", undefined, { timeoutMs }));
+    const swr = view.result.current as unknown as MockSWRResult;
+    return () => swr.fetcher(swr.key!);
+  }
+
+  it("times out a token lookup and never sends the late authenticated request", async () => {
+    vi.useFakeTimers();
+    let resolveToken!: (token: string) => void;
+    harness.auth.getToken.mockReturnValue(new Promise<string>((resolve) => { resolveToken = resolve; }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const rejected = expect(boundedFetcher()()).rejects.toMatchObject({ status: 0, code: "request_timeout" });
+    await vi.advanceTimersByTimeAsync(1000);
+    await rejected;
+    resolveToken("late-token");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("aborts a stalled fetch and presents a timeout instead of an AbortError", async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      requestSignal = init.signal!;
+      return new Promise((_resolve, reject) => {
+        requestSignal!.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      });
+    }));
+    const rejected = expect(boundedFetcher()()).rejects.toMatchObject({ code: "request_timeout" });
+    await vi.advanceTimersByTimeAsync(1000);
+    await rejected;
+    expect(requestSignal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("also settles a stalled response body", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => new Promise(() => {}) }));
+    const rejected = expect(boundedFetcher()()).rejects.toMatchObject({ code: "request_timeout" });
+    await vi.advanceTimersByTimeAsync(1000);
+    await rejected;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("clears successful deadlines and caller abort listeners for explicit requests", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }));
+    await expect(boundedFetcher()()).resolves.toEqual({ ok: true });
+    const caller = new AbortController();
+    const add = vi.spyOn(caller.signal, "addEventListener");
+    const remove = vi.spyOn(caller.signal, "removeEventListener");
+    const view = renderHook(() => useApi("/v1/admin/global-trends/timeseries", undefined, { timeoutMs: 1000 }));
+    await expect(view.result.current.request({ method: "POST", signal: caller.signal })).resolves.toEqual({ ok: true });
+    expect(remove).toHaveBeenCalledWith("abort", add.mock.calls[0][1]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("normalizes connection failures only when the caller opts in", async () => {
+    vi.useFakeTimers();
+    const networkError = new TypeError("Failed to fetch");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(networkError));
+    await expect(boundedFetcher()()).rejects.toMatchObject({ status: 0, code: "network_unavailable", message: expect.stringContaining("API is unavailable") });
+    const view = renderHook(() => useApi("/v1/timeseries"));
+    const swr = view.result.current as unknown as MockSWRResult;
+    await expect(swr.fetcher(swr.key!)).rejects.toBe(networkError);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe("useApi authenticated cache identity", () => {

@@ -21,10 +21,16 @@ export type ClientApiError = {
   details?: string[];
 };
 
+export type ClientApiRequestOptions = {
+  /** Opt-in deadline for authentication, the response, and its body. */
+  timeoutMs?: number;
+};
+
 /** SWR-style hook that auto-attaches the Clerk JWT. */
 export function useApi<T>(
   path: string | null,
   config?: SWRConfiguration<T, ClientApiError>,
+  requestOptions?: ClientApiRequestOptions,
 ) {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   // An authenticated response belongs to one Clerk account. Keeping userId in
@@ -37,13 +43,20 @@ export function useApi<T>(
   const result = useSWR<T, ClientApiError>(
     key,
     async ([, , requestPath]: readonly [string, string, string]) => {
-      const token = await getToken();
-      const res = await fetch(`${API_BASE}${requestPath}`, {
-        headers: token ? { authorization: `Bearer ${token}` } : undefined,
-        cache: "no-store",
-      });
-      if (!res.ok) throw await buildApiError(res);
-      return res.json();
+      const fetchResource = async (signal?: AbortSignal) => {
+        const token = await getToken();
+        signal?.throwIfAborted();
+        const res = await fetch(`${API_BASE}${requestPath}`, {
+          headers: token ? { authorization: `Bearer ${token}` } : undefined,
+          cache: "no-store",
+          ...(signal ? { signal } : {}),
+        });
+        if (!res.ok) throw await buildApiError(res);
+        return res.json();
+      };
+      return requestOptions?.timeoutMs
+        ? boundedApiRequest(fetchResource, requestOptions.timeoutMs)
+        : fetchResource();
     },
     config,
   );
@@ -53,7 +66,9 @@ export function useApi<T>(
     request: <R = unknown>(init: RequestInit): Promise<R> => {
       if (!path) return Promise.reject(new Error("No resource selected."));
       if (!key) return Promise.reject(new Error("You need to sign in again."));
-      return apiCall<R>(getToken, path, init);
+      return requestOptions?.timeoutMs
+        ? boundedApiRequest((signal) => apiCall<R>(getToken, path, { ...init, signal }), requestOptions.timeoutMs, init.signal)
+        : apiCall<R>(getToken, path, init);
     },
   });
 }
@@ -65,6 +80,7 @@ export async function apiCall<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const token = await getToken();
+  init.signal?.throwIfAborted();
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -77,6 +93,49 @@ export async function apiCall<T>(
   if (!res.ok) throw await buildApiError(res);
   if (res.status === 204) return null as unknown as T;
   return res.json();
+}
+
+/** A scoped deadline also settles a stalled token lookup or response body. */
+async function boundedApiRequest<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  callerSignal?: AbortSignal | null,
+): Promise<T> {
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) abortFromCaller();
+  else callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutError: ClientApiError = {
+    status: 0,
+    code: "request_timeout",
+    message: "The API took too long to respond. Try again, or narrow the date range and player selection.",
+  };
+  try {
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        reject(timeoutError);
+      }, timeoutMs);
+    });
+    // Promise.race retains rejection handlers on the operation after timeout.
+    return await Promise.race([operation(controller.signal), deadline]);
+  } catch (error) {
+    if (timedOut) throw timeoutError;
+    if (error instanceof TypeError) {
+      throw {
+        status: 0,
+        code: "network_unavailable",
+        message: "The API is unavailable or your connection was interrupted. Try again in a moment.",
+      } satisfies ClientApiError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 /**

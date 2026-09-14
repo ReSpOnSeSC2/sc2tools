@@ -41,7 +41,19 @@ function buildAdminGlobalTrendsRouter(service) {
  * @returns {import('express').RequestHandler} */
 function handler(action) {
   return async (req, res, next) => {
-    try { res.json(await action(req.query)); } catch (err) { next(err); }
+    try { res.json(await action(req.query)); } catch (err) {
+      const failure = /** @type {any} */ (err);
+      if (failure?.code === 50 || failure?.codeName === "MaxTimeMSExpired"
+        || ["MongoNetworkTimeoutError", "MongoNetworkError", "MongoServerSelectionError", "PoolClearedError", "MongoWaitQueueTimeoutError"].includes(failure?.name)
+        || failure?.code === "global_trends_busy") {
+        res.set("Retry-After", "5");
+        res.status(503).json({ error: {
+          code: "global_trends_busy", message: "Global Trends is taking longer than expected. Please try again shortly or narrow the player filters.",
+        } });
+        return;
+      }
+      next(err);
+    }
   };
 }
 

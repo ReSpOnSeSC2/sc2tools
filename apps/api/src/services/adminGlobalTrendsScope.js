@@ -3,6 +3,25 @@
 const { parseFilters, parseFiniteInt, parseBool, parseRaceLetter } = require("../util/parseQuery");
 const { raceLetterExpr, myLadderRaceExpr } = require("./trendsRegionExpr");
 
+// Dedupe retains $$ROOT twice. Keep legacy detail blobs, signatures and
+// unrelated metadata out of those blocking sorts and accumulator tables.
+const GLOBAL_HISTORY_PROJECTION = Object.freeze({
+  _id: 1, userId: 1, gameId: 1, date: 1, updatedAt: 1,
+  myToonHandle: 1, myRace: 1, myLadderRace: 1, myMmr: 1, myMmrSource: 1,
+  isLadderGame: 1, isResumedFromReplay: 1, playerCount: 1, matchFormat: 1,
+  result: 1, durationSec: 1, map: 1, myBuild: 1, macroScore: 1,
+  "top3Leaks.name": 1, "replayFile.sha256": 1,
+  "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": 1,
+  "opponent.displayName": 1, "opponent.pulseId": 1, "opponent.pulseCharacterId": 1,
+  "opponent.toonHandle": 1, "opponent.region": 1,
+});
+
+const GLOBAL_ROSTER_PROJECTION = Object.freeze({
+  _id: 1, userId: 1, gameId: 1, date: 1, updatedAt: 1,
+  myToonHandle: 1, myRace: 1, myLadderRace: 1, myMmr: 1, myMmrSource: 1,
+  isLadderGame: 1, playerCount: 1, "replayFile.sha256": 1,
+});
+
 /** @param {unknown} raw */
 function csv(raw) {
   const values = Array.isArray(raw) ? raw : [raw];
@@ -50,10 +69,12 @@ function trustedReplayMmrExpr() {
  * remain two observations. Legacy rows stay scoped to their uploader because
  * an account cannot safely be inferred from a name or another replay.
  * @param {Record<string, any>} [playerMatch]
+ * @param {Record<string, number>} [projection]
  * @returns {Array<Record<string, any>>} */
-function globalHistoryStages(playerMatch = {}) {
+function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
   return [
     { $match: { isResumedFromReplay: { $ne: true }, date: { $type: "date" } } },
+    { $project: projection },
     { $addFields: { _globalToon: stringExpr("$myToonHandle"), _globalTrustedMmr: trustedReplayMmrExpr() } },
     { $addFields: {
       _globalPlayerId: { $cond: [
@@ -103,4 +124,5 @@ function playerIncluded(player, cohort) {
 module.exports = {
   parseGlobalTrendsFilters, globalHistoryStages, playerIncluded,
   stringExpr, trustedReplayMmrExpr,
+  GLOBAL_HISTORY_PROJECTION, GLOBAL_ROSTER_PROJECTION,
 };

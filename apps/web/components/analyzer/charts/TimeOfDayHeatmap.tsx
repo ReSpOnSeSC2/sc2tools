@@ -137,7 +137,7 @@ export function TimeOfDayHeatmap() {
     return m;
   }, [grid]);
 
-  if (error) return <TrendsRequestError title="Performance by time of day" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Performance by time of day" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

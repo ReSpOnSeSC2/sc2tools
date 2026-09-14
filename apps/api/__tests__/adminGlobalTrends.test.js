@@ -8,6 +8,7 @@ const { connect } = require("../src/db/connect");
 const { AdminGlobalTrendsService } = require("../src/services/adminGlobalTrends");
 const { AggregationsService } = require("../src/services/aggregations");
 const { buildAdminRouter } = require("../src/routes/admin");
+const { globalHistoryStages, GLOBAL_ROSTER_PROJECTION } = require("../src/services/adminGlobalTrendsScope");
 
 const A = "1-S2-1-100";
 const B = "2-S2-1-200";
@@ -208,5 +209,45 @@ describe("admin Global Trends", () => {
     await service.run("timeseries", query, options);
     expect(read).not.toHaveBeenCalled();
     read.mockRestore();
+  });
+
+  test("deduplication drops legacy payloads before retaining rows and preserves every filter field", async () => {
+    await db.games.updateOne({ userId: "a", gameId: "a2" }, { $set: {
+      legacyBlob: "x".repeat(1024 * 1024), "opponent.playSignature": "y".repeat(1024 * 1024),
+      "opponent.region": "NA", "opponent.toonHandle": "1-S2-1-999",
+      top3Leaks: [{ name: "Supply", details: "z".repeat(1024 * 1024) }],
+    } });
+    const stages = globalHistoryStages();
+    expect(stages.findIndex((s) => s.$project)).toBeLessThan(stages.findIndex((s) => s.$sort));
+    const rows = await db.games.aggregate(stages).toArray();
+    const row = rows.find((r) => r.gameId === "a2");
+    expect(row.legacyBlob).toBeUndefined();
+    expect(row.opponent.playSignature).toBeUndefined();
+    expect(row.top3Leaks).toEqual([{ name: "Supply" }]);
+    expect(row.opponent).toMatchObject({ region: "NA", toonHandle: "1-S2-1-999" });
+    const rosterRows = await db.games.aggregate(globalHistoryStages({}, GLOBAL_ROSTER_PROJECTION)).toArray();
+    expect(rosterRows.find((r) => r.gameId === "a2").opponent).toBeUndefined();
+    const result = await service.run("timeseries", {
+      regions: "NA", leak: "Supply", map_pool: "ladder", game_size: "1v1", macro_min: "70", macro_max: "80",
+    }, { interval: "day" });
+    expect(result.points.reduce((total, p) => total + p.total, 0)).toBe(1);
+  });
+
+  test("time charts share the same full-history range read", async () => {
+    const read = jest.spyOn(db.games, "aggregate");
+    try {
+      await Promise.all(["timeseries", "mmrProgression", "matchupTimeseries", "mapTrend", "myBuildMixOverTime"]
+        .map((method) => service.run(method, {}, { interval: "day", tz: "UTC" })));
+      const rangeReads = read.mock.calls.filter(([pipeline]) => pipeline.at(-1)?.$group?.first?.$min === "$date");
+      expect(rangeReads).toHaveLength(1);
+      expect(read.mock.calls.every(([, options]) => options.maxTimeMS < 30000)).toBe(true);
+    } finally { read.mockRestore(); }
+  });
+
+  test("Mongo timeout returns a retryable API error", async () => {
+    jest.spyOn(service, "players").mockRejectedValueOnce(Object.assign(new Error("query exceeded time limit"), { code: 50 }));
+    const response = await request(app).get("/v1/admin/global-trends/players").set("Authorization", "admin-token").expect(503);
+    expect(response.headers["retry-after"]).toBe("5");
+    expect(response.body.error.code).toBe("global_trends_busy");
   });
 });

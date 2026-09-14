@@ -114,7 +114,7 @@ export function MatchupGameLengthCard() {
     [data],
   );
 
-  if (error) return <TrendsRequestError title="Time played by matchup" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Time played by matchup" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

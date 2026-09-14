@@ -101,7 +101,7 @@ export function GameLengthWrChart() {
 
   const totalGames = rows.reduce((acc, r) => acc + r.total, 0);
 
-  if (error) return <TrendsRequestError title="Win rate by game length" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Win rate by game length" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

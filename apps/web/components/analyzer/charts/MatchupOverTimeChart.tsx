@@ -157,7 +157,7 @@ export function MatchupOverTimeChart({
     return dateRange.latest.slice(0, 4) !== String(new Date().getFullYear());
   }, [dateRange]);
 
-  if (error) return <TrendsRequestError title="Win rate by matchup over time" retry={mutate} />;
+  if (error) return <TrendsRequestError title="Win rate by matchup over time" error={error} retry={mutate} />;
 
   if (isLoading) {
     return (

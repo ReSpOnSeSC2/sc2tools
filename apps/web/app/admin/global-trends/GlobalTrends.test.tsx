@@ -5,8 +5,8 @@ import { useFilters } from "@/lib/filterContext";
 import { useTrendsDataScope } from "@/lib/trendsDataContext";
 import { ALL_PLAYERS, populationQuery, selectPlayers } from "./globalTrendsState";
 
-const api = vi.hoisted(() => ({ useApi: vi.fn(), mutate: vi.fn() }));
-vi.mock("@/lib/clientApi", () => ({ useApi: api.useApi }));
+const api = vi.hoisted(() => ({ useApi: vi.fn(), access: vi.fn(), mutate: vi.fn() }));
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string, ...args: unknown[]) => path.startsWith("/v1/me#") ? api.access(path, ...args) : api.useApi(path, ...args) }));
 vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: { items: [] } }), rollUpSeasons: () => [] }));
 vi.mock("@/components/analyzer/TrendsTab", () => ({ TrendsTab: () => {
   const { filters } = useFilters();
@@ -23,6 +23,7 @@ const PLAYERS = [
 function scope() { return JSON.parse(screen.getByTestId("chart-scope").textContent!); }
 
 beforeEach(() => {
+  api.access.mockReturnValue({ data: { isAdmin: true }, error: undefined, isLoading: false, mutate: api.mutate });
   const options = { maps: ["Ancient Cistern"], builds: ["Gateway Expand"], strategies: ["Bio"] };
   const roster = { items: PLAYERS, total: 103, page: 0, limit: 50, hasMore: true, selectedTotal: 103 };
   api.useApi.mockImplementation((path: string) => ({
@@ -98,10 +99,57 @@ describe("Global Trends", () => {
   });
 
   it("never mounts population data or charts after an admin denial", () => {
-    api.useApi.mockReturnValue({ data: undefined, error: { status: 403, message: "Forbidden" }, isLoading: false });
+    api.access.mockReturnValue({ data: { isAdmin: false }, error: undefined, isLoading: false });
     render(<AdminGlobalTrendsPage />);
     expect(screen.queryByTestId("chart-scope")).toBeNull();
-    expect(api.useApi.mock.calls.every(([path]) => String(path).includes("filter-options"))).toBe(true);
+    expect(api.useApi).not.toHaveBeenCalled();
+  });
+
+  it("does not start heavy requests while access is loading or unavailable", () => {
+    api.access.mockReturnValue({ data: undefined, error: undefined, isLoading: true });
+    const view = render(<AdminGlobalTrendsPage />);
+    expect(screen.getByRole("status", { name: "Checking admin access" })).toBeTruthy();
+    expect(api.useApi).not.toHaveBeenCalled();
+    api.access.mockReturnValue({ data: undefined, error: { status: 0, message: "The API is unavailable." }, isLoading: false, mutate: api.mutate });
+    view.rerender(<AdminGlobalTrendsPage />);
+    expect(screen.getByRole("alert").textContent).toContain("The API is unavailable.");
+    expect(screen.queryByTestId("chart-scope")).toBeNull();
+    expect(api.useApi).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.mutate).toHaveBeenCalledOnce();
+  });
+
+  it.each(["loading", "error"])("loads players and charts independently while filter suggestions are %s", (state) => {
+    const roster = { items: PLAYERS, total: 3, selectedTotal: 3, hasMore: false };
+    api.useApi.mockImplementation((path: string) => path.includes("filter-options")
+      ? { data: undefined, isLoading: state === "loading", error: state === "error" ? { status: 0, message: "The API is unavailable." } : undefined, mutate: api.mutate }
+      : { data: roster, isLoading: false, mutate: api.mutate });
+    render(<AdminGlobalTrendsPage />);
+    expect(screen.getByText("5,210")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "All-player trend charts" })).toBeTruthy();
+    expect(scope().mode).toBe("global");
+    if (state === "error") {
+      fireEvent.click(screen.getByRole("button", { name: "Retry filter suggestions" }));
+      expect(api.mutate).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("retains unfinished player and game filters while refreshing suggestions", () => {
+    let refreshing = false;
+    const roster = { items: PLAYERS, total: 3, selectedTotal: 3, hasMore: false };
+    api.useApi.mockImplementation((path: string) => path.includes("filter-options")
+      ? { data: refreshing ? undefined : { maps: ["Ancient Cistern"], builds: [], strategies: [] }, isLoading: refreshing, mutate: api.mutate }
+      : { data: roster, isLoading: false, mutate: api.mutate });
+    render(<AdminGlobalTrendsPage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include Alpha (1-S2-1-111)" }));
+    fireEvent.change(screen.getByLabelText("Current player MMR · minimum"), { target: { value: "4500" } });
+    fireEvent.change(screen.getByLabelText("Map", { exact: true }), { target: { value: "Ancient Cistern" } });
+    refreshing = true;
+    fireEvent.click(screen.getByRole("button", { name: "Refresh data" }));
+    expect((screen.getByRole("checkbox", { name: "Include Alpha (1-S2-1-111)" }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Current player MMR · minimum") as HTMLInputElement).value).toBe("4500");
+    expect((screen.getByLabelText("Map", { exact: true }) as HTMLInputElement).value).toBe("Ancient Cistern");
+    expect(scope().mode).toBe("global");
   });
 
   it("shows applied population membership independently of manual selection", () => {
