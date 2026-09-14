@@ -181,6 +181,7 @@ async function resolveOppMmrBucketWidth(deps, match, requested, trustFloor) {
   const rows = await deps.games
     .aggregate([
       { $match: match },
+      ...groupOppMmrInputsStages(trustFloor),
       ...oppMmrLookupStages(trustFloor),
       { $match: { _oppMmr: { $type: "number" } } },
       {
@@ -315,6 +316,38 @@ function oppMmrLookupStages(trustFloor) {
   ];
 }
 
+/** Histograms need counts, not one correlated lookup per replay. Collapse
+ * old/unrated games, equal snapshot ratings, and repeated fallback accounts
+ * before joining. Fallback keys retain uploader and played race, preserving
+ * exactly the same effective MMR as the per-game drilldown.
+ * @param {Date} trustFloor */
+function groupOppMmrInputsStages(trustFloor) {
+  const unknown = { kind: "unknown" };
+  return [
+    { $group: {
+      _id: { $switch: {
+        branches: [
+          { case: { $lt: ["$date", trustFloor] }, then: unknown },
+          { case: { $isNumber: "$opponent.mmr" }, then: { kind: "snapshot", mmr: "$opponent.mmr" } },
+          { case: { $ne: [{ $ifNull: ["$opponent.pulseId", ""] }, ""] }, then: {
+            kind: "fallback", userId: "$userId", pulseId: "$opponent.pulseId",
+            race: { $toUpper: { $substrCP: [{ $ifNull: ["$opponent.race", ""] }, 0, 1] } },
+          } },
+        ],
+        default: unknown,
+      } },
+      wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
+      losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
+      total: { $sum: 1 },
+    } },
+    { $project: {
+      _id: 0, userId: "$_id.userId", date: { $literal: trustFloor },
+      opponent: { pulseId: "$_id.pulseId", race: "$_id.race", mmr: "$_id.mmr" },
+      wins: 1, losses: 1, total: 1,
+    } },
+  ];
+}
+
 /**
  * Pipeline that fans games into absolute-MMR bins of ``width``
  * plus an unknown rollup, in one $facet so the response is one
@@ -330,6 +363,7 @@ function oppMmrPipeline(deps, match, width, trustFloor) {
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
+    ...groupOppMmrInputsStages(trustFloor),
     ...oppMmrLookupStages(trustFloor),
     {
       $facet: {
@@ -343,14 +377,15 @@ function oppMmrPipeline(deps, match, width, trustFloor) {
           {
             $group: {
               _id: "$_bin",
-              wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-              losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-              total: { $sum: 1 },
-              avgMmr: { $avg: "$_oppMmr" },
+              wins: { $sum: "$wins" },
+              losses: { $sum: "$losses" },
+              total: { $sum: "$total" },
+              mmrTotal: { $sum: { $multiply: ["$_oppMmr", "$total"] } },
               minMmr: { $min: "$_oppMmr" },
               maxMmr: { $max: "$_oppMmr" },
             },
           },
+          { $addFields: { avgMmr: { $divide: ["$mmrTotal", "$total"] } } },
           { $sort: { _id: 1 } },
           { $limit: OPP_MMR_MAX_BUCKETS },
         ],
@@ -359,9 +394,9 @@ function oppMmrPipeline(deps, match, width, trustFloor) {
           {
             $group: {
               _id: null,
-              wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
-              losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
-              total: { $sum: 1 },
+              wins: { $sum: "$wins" },
+              losses: { $sum: "$losses" },
+              total: { $sum: "$total" },
             },
           },
         ],
@@ -434,6 +469,15 @@ async function oppMmrBucketGames(deps, userId, filters, opts = {}) {
     { $match: match },
     { $addFields: { _bucket: deps.bucketSwitch() } },
     { $match: { _bucket: { $in: ["win", "loss"] } } },
+    // Old games and numeric snapshots outside this band cannot appear in
+    // the result. Only unresolved, identifiable opponents need the join.
+    { $match: {
+      date: { $gte: trustFloor },
+      $or: [
+        { "opponent.mmr": { $type: "number", $gte: lo, $lt: hi } },
+        { "opponent.mmr": { $not: { $type: "number" } }, "opponent.pulseId": { $exists: true, $nin: [null, ""] } },
+      ],
+    } },
     ...oppMmrLookupStages(trustFloor),
     {
       $match: {
