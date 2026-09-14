@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   ReferenceLine,
   Cell,
+  Tooltip,
 } from "recharts";
 import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/netMmrOpponents";
 import { clientTimezone } from "@/lib/timeseries";
 import { NetMmrRaceOpponentsModal } from "./NetMmrRaceOpponentsModal";
+import { ChartTooltip } from "./ChartTooltip";
 
 type MatchupRow = {
   matchup: NetMmrMatchup;
@@ -255,10 +257,19 @@ export function NetMmrByMatchupChart() {
               tickMargin={4}
             />
             <ReferenceLine x={0} stroke={COLOR_TEXT_DIM} strokeOpacity={0.65} />
-            {/* No Tooltip: the footer cards already show
-                netMmr / games / WR / avg-per-game per matchup,
-                and on mobile recharts' floating tooltip lands on
-                top of the bars when the user taps to read them. */}
+            <Tooltip
+              cursor={false}
+              isAnimationActive={false}
+              content={({ active, payload, label }) => {
+                const value = payload?.[0]?.value;
+                if (!active || typeof value !== "number" || !Number.isFinite(value)) return null;
+                return <ChartTooltip header={label} rows={[{
+                  label: "Net MMR",
+                  value: `${value > 0 ? "+" : ""}${value.toLocaleString()}`,
+                  dot: value >= 0 ? COLOR_SUCCESS : COLOR_DANGER,
+                }]} />;
+              }}
+            />
             <Bar dataKey="netMmr" radius={[4, 4, 4, 4]} minPointSize={2}>
               {rows.map((r) => (
                 <Cell
