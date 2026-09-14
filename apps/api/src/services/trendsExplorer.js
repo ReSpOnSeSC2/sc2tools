@@ -10,6 +10,11 @@ const DETAIL_VIEWS = new Set(["execution", "leads"]);
 const SUMMARY_READ_VIEWS = new Set([...DETAIL_VIEWS, "mmr-gap"]);
 const SEQUENCE_VIEWS = new Set(["breaks", "rematches"]);
 const DAY_MS = 86400000;
+const DETAIL_BATCH_SIZE = 2000;
+// A private adapter hint, never parsed from request input or serialized as a
+// Mongo command field. Sequence context must retain intervening off-race games.
+const EXPLORER_SEQUENCE_HISTORY = Symbol("trendsExplorerSequenceHistory");
+/** @typedef {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} ExplorerDb */
 // Only compact source facts are read. Raw replay arrays never enter a chart
 // request, including installations whose detail blobs live in object storage.
 const PROJECTION = {
@@ -105,10 +110,10 @@ function parseExplorerOptions(view, q = {}, now = new Date()) {
 /** @param {Record<string, any>} record */
 function gameKey(record) { return `${record.userId}|${record.gameId}`; }
 
-/** @param {{games: import('mongodb').Collection}} db @param {string} userId
+/** @param {ExplorerDb} db @param {string} userId
  * @param {Record<string, any>} filters @param {ReturnType<typeof parseExplorerOptions>} opts
- * @param {boolean} [history] */
-async function readRecords(db, userId, filters, opts, history = false) {
+ * @param {boolean} [history] @param {Set<string>} [milestoneIds] */
+async function readRecords(db, userId, filters, opts, history = false, milestoneIds) {
   const scoped = { ...filters };
   if (opts.view === "periods") { delete scoped.since; delete scoped.until; }
   const pipeline = [{ $match: gamesMatchStage(userId, history ? {} : scoped) }];
@@ -118,7 +123,7 @@ async function readRecords(db, userId, filters, opts, history = false) {
   ] } });
   const stages = /** @type {Array<Record<string, any>>} */ (pipeline);
   stages.push({ $project: recordProjection(opts) });
-  if (SUMMARY_READ_VIEWS.has(opts.view)) {
+  if (SUMMARY_READ_VIEWS.has(opts.view) && !db.gameDetails) {
     stages.push({ $lookup: {
       from: "game_details", let: { uid: "$userId", gid: "$gameId" },
       pipeline: [{ $match: { $expr: { $and: [
@@ -131,7 +136,73 @@ async function readRecords(db, userId, filters, opts, history = false) {
       _detailPending: { $eq: [{ $arrayElemAt: ["$_detail._ready", 0] }, false] },
     } }, { $unset: "_detail" });
   }
-  return db.games.aggregate(stages, { allowDiskUse: true, maxTimeMS: 25000 }).toArray();
+  const aggregateOptions = { allowDiskUse: true, maxTimeMS: 25000,
+    ...(history && SEQUENCE_VIEWS.has(opts.view) ? { [EXPLORER_SEQUENCE_HISTORY]: true } : {}) };
+  const records = await db.games.aggregate(stages, aggregateOptions).toArray();
+  if (SUMMARY_READ_VIEWS.has(opts.view) && db.gameDetails) {
+    await attachCompactDetails(db.gameDetails, records, opts, milestoneIds);
+  }
+  return records;
+}
+
+/**
+ * Correlated lookups repeatedly initialize a foreign pipeline for every game.
+ * At global scale the real production join takes ~20 seconds even warm. Read
+ * indexed batches instead, using identities from the already authorized and
+ * deduplicated source rows. One batch is retained at a time; neither heavy
+ * replay blobs nor all games' milestone catalogues enter the result graph.
+ * @param {import('mongodb').Collection} collection
+ * @param {Array<Record<string, any>>} records
+ * @param {ReturnType<typeof parseExplorerOptions>} opts
+ * @param {Set<string>} [milestoneIds]
+ */
+async function attachCompactDetails(collection, records, opts, milestoneIds) {
+  /** @type {Map<string, Array<Record<string, any>>>} */
+  const users = new Map();
+  for (const record of records) {
+    record._detailExists = false;
+    record._detailPending = false;
+    // Malformed legacy IDs cannot establish a scoped source pair. They are
+    // unavailable, rather than unbounded empty-variable foreign scans.
+    if (typeof record.userId !== "string" || !record.userId
+      || typeof record.gameId !== "string" || !record.gameId) continue;
+    if (!users.has(record.userId)) users.set(record.userId, []);
+    users.get(record.userId)?.push(record);
+  }
+  /** @type {Record<string, any>} */
+  const projection = { ...detailProjection(opts), userId: 1, gameId: 1 };
+  if (milestoneIds) projection._milestoneIds = { $concatArrays: [
+    { $ifNull: ["$trendsExplorerDetail.build.milestones.id", []] },
+    { $ifNull: ["$trendsExplorerDetail.bases.milestones.id", []] },
+  ] };
+  for (const [userId, games] of users) {
+    for (let offset = 0; offset < games.length; offset += DETAIL_BATCH_SIZE) {
+      const batch = games.slice(offset, offset + DETAIL_BATCH_SIZE);
+      /** @type {Map<string, Array<Record<string, any>>>} */
+      const byGame = new Map();
+      for (const record of batch) {
+        if (!byGame.has(record.gameId)) byGame.set(record.gameId, []);
+        byGame.get(record.gameId)?.push(record);
+      }
+      const rows = await collection.aggregate([
+        { $match: { userId, gameId: { $in: [...byGame.keys()] } } },
+        { $project: projection },
+      ], { maxTimeMS: 25000 }).toArray();
+      for (const row of rows) {
+        // Defend the in-memory merge as well as the database predicate. A
+        // coincident replay ID from another uploader never supplies facts.
+        if (row.userId !== userId || !byGame.has(row.gameId)) continue;
+        for (const record of byGame.get(row.gameId) || []) {
+          record.trendsExplorerDetail = row.trendsExplorerDetail;
+          record._detailExists = true;
+          record._detailPending = row._ready === false;
+        }
+        if (milestoneIds && Array.isArray(row._milestoneIds)) {
+          for (const id of row._milestoneIds) if (typeof id === "string") milestoneIds.add(id);
+        }
+      }
+    }
+  }
 }
 
 /** @param {ReturnType<typeof parseExplorerOptions>} opts */
@@ -202,6 +273,30 @@ async function executionMilestones(db, userId, filters) {
     .sort().map((id) => ({ id, label: milestoneLabel(id) }));
 }
 
+/** Recover display ratings only after membership and pagination are settled.
+ * The source-page identities are server-derived; both uploader and replay ID
+ * stay in the join, including through the authenticated global adapter.
+ * @param {{games: import('mongodb').Collection}} db @param {string} userId
+ * @param {Array<Record<string, any>>} page */
+async function attachPageRatings(db, userId, page) {
+  const missing = page.filter((row) => !Object.prototype.hasOwnProperty.call(row.trendsExplorerDetail || {}, "ratings")
+    && (historicalMmr(row) === null || historicalOpponentMmr(row) === null));
+  if (!missing.length) return page;
+  const rows = await db.games.aggregate([
+    { $match: { ...gamesMatchStage(userId, {}), $and: [{ $or: missing.map((row) => ({ userId: row.userId, gameId: row.gameId })) }] } },
+    { $project: { _id: 0, userId: 1, gameId: 1 } },
+    { $lookup: { from: "game_details", let: { uid: "$userId", gid: "$gameId" }, pipeline: [
+      { $match: { $expr: { $and: [{ $eq: ["$userId", "$$uid"] }, { $eq: ["$gameId", "$$gid"] }] } } },
+      { $project: { _id: 0, "trendsExplorerDetail.ratings": 1 } }, { $limit: 1 },
+    ], as: "detail" } },
+    { $project: { userId: 1, gameId: 1, ratings: { $arrayElemAt: ["$detail.trendsExplorerDetail.ratings", 0] } } },
+  ], { maxTimeMS: 25000 }).toArray();
+  const ratings = new Map(rows.map((row) => [gameKey(row), row.ratings]));
+  return page.map((row) => ratings.has(gameKey(row))
+    ? { ...row, trendsExplorerDetail: { ...row.trendsExplorerDetail, ratings: ratings.get(gameKey(row)) } }
+    : row);
+}
+
 /** @param {Record<string, any>} row */
 function publicGame(row) {
   return {
@@ -240,11 +335,13 @@ async function admitted(work) {
   }
 }
 
-/** @param {{games: import('mongodb').Collection}} db @param {string} userId
+/** @param {ExplorerDb} db @param {string} userId
  * @param {Record<string, any>} filters @param {ReturnType<typeof parseExplorerOptions>} opts */
 function trendsExplorer(db, userId, filters, opts) {
   return admitted(async () => {
-    let selected = await readRecords(db, userId, filters, opts);
+    const milestoneIds = opts.view === "execution" && !opts.games && db.gameDetails
+      ? new Set(["second-base", "third-base"]) : undefined;
+    let selected = await readRecords(db, userId, filters, opts, false, milestoneIds);
     let records = selected;
     if (SEQUENCE_VIEWS.has(opts.view) && selected.length) {
       const keys = new Set(selected.map(gameKey));
@@ -262,8 +359,9 @@ function trendsExplorer(db, userId, filters, opts) {
       const keys = new Set(row.gameKeys || []);
       const games = selected.filter((record) => keys.has(gameKey(record)))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || String(a.gameId).localeCompare(String(b.gameId)));
+      const page = await attachPageRatings(db, userId, games.slice(opts.offset, opts.offset + opts.limit));
       return { total: games.length, offset: opts.offset, limit: opts.limit,
-        games: games.slice(opts.offset, opts.offset + opts.limit).map(publicGame) };
+        games: page.map(publicGame) };
     }
     const playerMap = new Map();
     if (opts.view === "groups") for (const row of selected) {
@@ -291,7 +389,9 @@ function trendsExplorer(db, userId, filters, opts) {
         { $match: gamesMatchStage(userId, remaining) },
         { $group: { _id: "$myBuild" } }, { $match: { _id: { $type: "string", $ne: "" } } }, { $sort: { _id: 1 } },
       ], { maxTimeMS: 25000 }).toArray()).map((row) => row._id);
-      milestones = await executionMilestones(db, userId, filters);
+      milestones = milestoneIds
+        ? [...milestoneIds].sort().map((id) => ({ id, label: milestoneLabel(id) }))
+        : await executionMilestones(db, userId, filters);
     }
     const pendingGames = selected.filter((record) => record._detailExists && record._detailPending).length;
     return {
@@ -310,4 +410,4 @@ function trendsExplorer(db, userId, filters, opts) {
   });
 }
 
-module.exports = { trendsExplorer, parseExplorerOptions, readRecords, publicGame, VIEWS };
+module.exports = { trendsExplorer, parseExplorerOptions, readRecords, publicGame, VIEWS, EXPLORER_SEQUENCE_HISTORY };

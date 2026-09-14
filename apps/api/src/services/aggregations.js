@@ -34,7 +34,7 @@ const RESULT_BUCKET_BRANCHES = [
  * /build-vs-strategy, /random-summary, and /timeseries endpoints.
  */
 class AggregationsService {
-  /** @param {{games: import('mongodb').Collection}} db */
+  /** @param {{games: import('mongodb').Collection, gameDetails?: import('mongodb').Collection}} db */
   constructor(db) {
     this.db = db;
     this.trendsRequests = new TrendsRequests();

@@ -109,6 +109,31 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
     expect(rematches.eligibleGames).toBe(1);
   });
 
+  test("global race exclusions cannot hide active intervening games from break history", async () => {
+    await db.games.deleteMany({});
+    await db.games.insertMany([
+      game("a", "prior-p", 0),
+      game("a", "intervening-t", 12, { myRace: "Terran", myLadderRace: "Terran", result: "Defeat" }),
+      game("a", "current-p", 24),
+      game("a", "next-p", 36),
+      game("b", "other-p", 5),
+    ]);
+    const options = parseExplorerOptions("breaks", {});
+    const cohort = { excluded_races: "T", included_players: A, player_selection: "include" };
+    const result = await global.run("explorer", cohort, options);
+    expect(result.totalGames).toBe(3);
+    expect(result.eligibleGames).toBe(1);
+    expect(result.rows.find((r) => r.key === "2-5").games).toBe(1);
+    expect(result.rows.find((r) => r.key === "5-15").games).toBe(0);
+    const drilldown = await global.run("explorer", cohort, { ...options, games: true, segment: "2-5" });
+    expect(drilldown.games.map((g) => g.id)).toEqual(["next-p"]);
+    const personalResult = await personal.explorer("a", { race: "P" }, options);
+    expect(personalResult.rows).toEqual(result.rows);
+    // Similarly named query input cannot enable the private adapter hint.
+    const forged = await global.run("explorer", { ...cohort, trendsExplorerSequenceHistory: "true" }, parseExplorerOptions("periods", query));
+    expect(forged.totalGames).toBe(3);
+  });
+
   test("comparison dates override only outer date filter and retain map filter", async () => {
     const response = await personal.explorer("a", { since: new Date("2027-01-01"), map: "Arena" }, parseExplorerOptions("periods", query));
     expect(response).toMatchObject({ totalGames: 2, eligibleGames: 2 });
@@ -120,6 +145,53 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
     await db.gameDetails.deleteMany({ userId: "a" });
     const result = await personal.explorer("a", {}, parseExplorerOptions("execution", {}));
     expect(result).toMatchObject({ totalGames: 3, eligibleGames: 0 });
+  });
+
+  test("period drilldowns recover the same historical ratings as MMR difference for only the requested page", async () => {
+    await db.games.updateOne({ userId: "a", gameId: "a1" }, { $set: {
+      myMmrSource: "unavailable", "opponent.mmr": 6000, "opponent.mmrSource": "pulse",
+    } });
+    await db.gameDetails.updateOne({ userId: "a", gameId: "a1" }, { $set: {
+      "trendsExplorerDetail.ratings": { myMmr: 4050, opponentMmr: 4150 },
+    } });
+    await db.gameDetails.updateOne({ userId: "copy", gameId: "a1" }, { $set: {
+      "trendsExplorerDetail.ratings": { myMmr: 7000, opponentMmr: 7500 },
+    } });
+    const gapOptions = parseExplorerOptions("mmr-gap", {});
+    const gap = await personal.explorer("a", {}, gapOptions);
+    const gapGames = await personal.explorer("a", {}, { ...gapOptions, games: true, segment: gap.rows[0].key });
+    expect(gapGames.games.find((g) => g.id === "a1")).toMatchObject({ myMmr: 4050, opponentMmr: 4150 });
+    const options = parseExplorerOptions("periods", { ...query, a_since: "2026-08-01", a_until: "2026-08-31", b_since: "2026-09-01", b_until: "2026-09-01" });
+    const aggregate = jest.spyOn(db.games, "aggregate");
+    const result = await personal.explorer("a", {}, { ...options, games: true, segment: "b", offset: 2, limit: 1 });
+    expect(result).toMatchObject({ total: 3, offset: 2, limit: 1,
+      games: [{ id: "a1", myMmr: 4050, opponentMmr: 4150 }] });
+    const lookups = aggregate.mock.calls.filter(([pipeline]) => pipeline.some((stage) => stage.$lookup?.from === "game_details"));
+    expect(lookups).toHaveLength(1);
+    expect(lookups[0][0][0].$match).toMatchObject({ userId: "a", $and: [{ $or: [{ userId: "a", gameId: "a1" }] }] });
+    expect(lookups[0][0].find((stage) => stage.$lookup).$lookup.pipeline[1].$project).toEqual({ _id: 0, "trendsExplorerDetail.ratings": 1 });
+    aggregate.mockRestore();
+  });
+
+  test("global period drilldowns recover ratings from the canonical uploader and retain cohort restrictions", async () => {
+    await db.games.deleteOne({ userId: "copy", gameId: "a1" });
+    await db.games.updateOne({ userId: "a", gameId: "a1" }, { $set: { "opponent.mmr": 6000, "opponent.mmrSource": "pulse" } });
+    await db.gameDetails.updateOne({ userId: "a", gameId: "a1" }, { $set: { "trendsExplorerDetail.ratings": { myMmr: 4100, opponentMmr: 4250 } } });
+    await db.gameDetails.updateOne({ userId: "copy", gameId: "a1" }, { $set: { "trendsExplorerDetail.ratings": { myMmr: 7000, opponentMmr: 7500 } } });
+    const opts = parseExplorerOptions("periods", query);
+    const result = await global.run("explorer", { excluded_players: B }, { ...opts, games: true, segment: "a", offset: 2, limit: 1 });
+    expect(result).toMatchObject({ total: 3, games: [{ id: "a1", playerId: A, myMmr: 4100, opponentMmr: 4250 }] });
+  });
+
+  test("period drilldowns keep unknown ratings absent and skip rating joins for pages already carrying replay proof", async () => {
+    const options = parseExplorerOptions("periods", query);
+    const aggregate = jest.spyOn(db.games, "aggregate");
+    await personal.explorer("a", {}, { ...options, games: true, segment: "a", limit: 1 });
+    expect(aggregate.mock.calls.some(([pipeline]) => pipeline.some((stage) => stage.$lookup?.from === "game_details"))).toBe(false);
+    aggregate.mockRestore();
+    await db.games.updateOne({ userId: "a", gameId: "a3" }, { $set: { "opponent.mmr": 6000, "opponent.mmrSource": "pulse" } });
+    const missing = await personal.explorer("a", {}, { ...options, games: true, segment: "a", limit: 1 });
+    expect(missing.games[0]).toMatchObject({ id: "a3", opponentMmr: null });
   });
 
   test("explicit account comparisons cannot reach another user's history", async () => {
@@ -135,6 +207,38 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
       expect(result.preparation.pendingGames).toBe(1);
       expect(result.eligibleGames).toBe(0);
     }
+  });
+
+  test.each(["mmr-gap", "execution", "leads"])("batched %s matches correlated source joins exactly, including preparation coverage and catalogues", async (view) => {
+    await db.gameDetails.insertOne({ userId: "a", gameId: "a2", trendsExplorerDetail: { version: 1, ratings: {} } });
+    const fallback = new AggregationsService({ games: db.games });
+    const options = parseExplorerOptions(view, { milestone: "first:Stalker", metric: "army", weight: "players" });
+    const expected = await fallback.explorer("a", {}, options);
+    const actual = await personal.explorer("a", {}, options);
+    expect(actual).toEqual(expected);
+  });
+
+  test("compact detail reads batch authorized source pairs without an all-history correlated lookup", async () => {
+    const source = Array.from({ length: 2001 }, (_, index) => game("batch-user", `batch-${index}`, index));
+    await db.games.insertMany(source);
+    const facts = { version: 1, ratings: { myMmr: 4100, opponentMmr: 4200 } };
+    await db.gameDetails.insertMany(source.map((row) => ({ userId: row.userId, gameId: row.gameId, trendsExplorerDetail: facts })));
+    const detailReads = jest.spyOn(db.gameDetails, "aggregate");
+    const gameReads = jest.spyOn(db.games, "aggregate");
+    const result = await personal.explorer("batch-user", {}, parseExplorerOptions("mmr-gap", {}));
+    expect(result.totalGames).toBe(2001);
+    expect(result.eligibleGames).toBe(2001);
+    expect(detailReads.mock.calls).toHaveLength(2);
+    for (const [pipeline] of detailReads.mock.calls) {
+      expect(pipeline[0].$match.userId).toBe("batch-user");
+      expect(pipeline[0].$match.gameId.$in.length).toBeLessThanOrEqual(2000);
+      expect(pipeline[0].$match.gameId.$in.every((id) => id.startsWith("batch-"))).toBe(true);
+      expect(pipeline[1].$project).not.toHaveProperty("buildLog");
+      expect(pipeline[1].$project).not.toHaveProperty("trendsExplorerDetail.build");
+    }
+    expect(gameReads.mock.calls.some(([pipeline]) => pipeline.some((stage) => stage.$lookup))).toBe(false);
+    detailReads.mockRestore();
+    gameReads.mockRestore();
   });
 
   test.each([{ a_since: "2026-02-30" }, { a_since: "2026-10-01", a_until: "2026-09-01" },

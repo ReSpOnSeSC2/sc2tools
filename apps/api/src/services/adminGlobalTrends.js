@@ -8,6 +8,7 @@ const { readGlobalPlayers, paginatePlayers } = require("./adminGlobalTrendsPlaye
 const { globalMmrProgression, fitGlobalInterval } = require("./adminGlobalTrendsMmr");
 const { GlobalTrendsQueries, QUERY_MAX_TIME_MS, queryKey } = require("./adminGlobalTrendsQueries");
 const { GlobalTrendsHistory } = require("./adminGlobalTrendsHistory");
+const { EXPLORER_SEQUENCE_HISTORY } = require("./trendsExplorer");
 
 // Never accepted from a query parameter. Only the private collection adapter
 // below can translate this marker; ordinary AggregationsService stays scoped.
@@ -151,15 +152,23 @@ class AdminGlobalTrendsService {
       ...(Object.keys(playerMatch).length ? { _globalPlayerId: playerMatch } : {}),
     } }, { $set: { _id: "$_globalSourceId" } }];
     const games = {
-      aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => {
+      aggregate: (/** @type {Array<Record<string, any>>} */ pipeline, /** @type {Record<PropertyKey, any>} */ options = {}) => {
         // Fail closed if a newly reused helper does not carry the expected
         // explicit scope. No recursive rewrite touches nested lookup scopes.
         if (pipeline[0]?.$match?.userId !== ADMIN_SCOPE) throw new Error("Unscoped global trends pipeline");
-        const stages = adaptPipeline(pipeline, method, cohort);
+        const stages = adaptPipeline(pipeline, method, cohort, options[EXPLORER_SEQUENCE_HISTORY] === true);
         return this._query([...prefix, ...stages], this.history.collection);
       },
     };
-    const agg = new AggregationsService({ games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)) });
+    const gameDetails = {
+      // Source pairs are derived only from the scoped snapshot rows. Keep
+      // these bounded metadata batches in the same database admission lane.
+      aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => this._query(pipeline, this.db.gameDetails),
+    };
+    const agg = new AggregationsService({
+      games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)),
+      gameDetails: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (gameDetails)),
+    });
     // Every time chart now emits the same date-range probe. The query cache
     // shares it across charts and requested intervals instead of rescanning.
     /** @type {any} */ (agg)._fitInterval = (
@@ -176,14 +185,16 @@ function distinctFacet(field) {
 }
 
 /** @param {Array<Record<string, any>>} pipeline @param {string} method
- * @param {import('./adminGlobalTrendsScope').Cohort} cohort */
-function adaptPipeline(pipeline, method, cohort) {
+ * @param {import('./adminGlobalTrendsScope').Cohort} cohort @param {boolean} [sequenceHistory] */
+function adaptPipeline(pipeline, method, cohort, sequenceHistory = false) {
   return pipeline.flatMap((stage, index) => {
     if (stage.$match?.userId === ADMIN_SCOPE) {
       const match = { ...stage.$match };
       delete match.userId;
-      // Net-MMR pairing must see full account history before race/date/etc.
-      if (cohort.excludedRaces.length && (!NET_METHODS.has(method) || index > 0)) {
+      // Context reads retain intervening races so active play is never
+      // counted as rest. Selected explorer rows still apply every exclusion.
+      const preserveHistory = method === "explorer" && sequenceHistory;
+      if (cohort.excludedRaces.length && (!NET_METHODS.has(method) || index > 0) && !preserveHistory) {
         match._globalPlayedRace = { $nin: cohort.excludedRaces };
       }
       return [{ $match: match }];
