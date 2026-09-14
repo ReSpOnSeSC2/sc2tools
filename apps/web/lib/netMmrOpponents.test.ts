@@ -15,6 +15,7 @@ describe("netMmrOpponentsPath", () => {
       },
       {
         opp_race: "P",
+        my_race: "T",
         search: "Dark player",
         min_pairs: 3,
         sort: "mmr_lost",
@@ -28,6 +29,7 @@ describe("netMmrOpponentsPath", () => {
     expect(path).toContain("/v1/mmr-by-matchup/opponents?");
     expect(path).toContain("race=T");
     expect(path).toContain("opp_race=P");
+    expect(path).toContain("my_race=T");
     expect(path).not.toContain("opp_race=Z");
     expect(path).not.toContain("preset=");
     expect(path).toContain("search=Dark+player");
@@ -51,7 +53,7 @@ describe("netMmrByMatchupPath", () => {
     );
 
     expect(path).toBe(
-      "/v1/mmr-by-matchup?race=Z&opp_race=P&since=2026-08-01T00%3A00%3A00.000Z&tz=America%2FNew_York#4",
+      "/v1/mmr-by-matchup?race=Z&opp_race=P&since=2026-08-01T00%3A00%3A00.000Z&tz=America%2FNew_York&group_by=matchup#4",
     );
   });
 });

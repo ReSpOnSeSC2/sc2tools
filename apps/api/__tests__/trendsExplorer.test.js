@@ -9,7 +9,7 @@ const { AggregationsService } = require("../src/services/aggregations");
 const { AdminGlobalTrendsService } = require("../src/services/adminGlobalTrends");
 const { buildAggregationsRouter } = require("../src/routes/aggregations");
 const { buildAdminRouter } = require("../src/routes/admin");
-const { parseExplorerOptions, VIEWS } = require("../src/services/trendsExplorer");
+const { parseExplorerOptions, trendsExplorer, VIEWS } = require("../src/services/trendsExplorer");
 const { extractDetailSummary } = require("../src/services/trendsExplorerDetail");
 
 const A = "1-S2-1-100", B = "2-S2-1-200";
@@ -224,21 +224,72 @@ describe("Trends explorer authorization, real Mongo filters and drilldowns", () 
     const facts = { version: 1, ratings: { myMmr: 4100, opponentMmr: 4200 } };
     await db.gameDetails.insertMany(source.map((row) => ({ userId: row.userId, gameId: row.gameId, trendsExplorerDetail: facts })));
     const detailReads = jest.spyOn(db.gameDetails, "aggregate");
-    const gameReads = jest.spyOn(db.games, "aggregate");
+    // Simulate an upload crossing the admission boundary after its size probe.
+    const gameReads = jest.spyOn(db.games, "aggregate").mockImplementationOnce(() => ({ toArray: async () => [{ games: 0 }] }));
     const result = await personal.explorer("batch-user", {}, parseExplorerOptions("mmr-gap", {}));
     expect(result.totalGames).toBe(2001);
     expect(result.eligibleGames).toBe(2001);
     expect(detailReads.mock.calls).toHaveLength(2);
-    for (const [pipeline] of detailReads.mock.calls) {
+    for (const [pipeline, options] of detailReads.mock.calls) {
       expect(pipeline[0].$match.userId).toBe("batch-user");
       expect(pipeline[0].$match.gameId.$in.length).toBeLessThanOrEqual(2000);
       expect(pipeline[0].$match.gameId.$in.every((id) => id.startsWith("batch-"))).toBe(true);
       expect(pipeline[1].$project).not.toHaveProperty("buildLog");
       expect(pipeline[1].$project).not.toHaveProperty("trendsExplorerDetail.build");
+      expect(pipeline.at(-1).$limit).toBe(pipeline[0].$match.gameId.$in.length);
+      expect(options.batchSize).toBe(2000);
     }
+    const sourceReads = gameReads.mock.calls.filter(([pipeline]) => pipeline.some((stage) => stage.$project));
+    expect(sourceReads).toHaveLength(2);
+    expect(sourceReads[0][0]).toContainEqual({ $limit: 2001 });
+    expect(sourceReads[1][0].some((stage) => stage.$limit)).toBe(false);
     expect(gameReads.mock.calls.some(([pipeline]) => pipeline.some((stage) => stage.$lookup))).toBe(false);
     detailReads.mockRestore();
     gameReads.mockRestore();
+  });
+
+  test("a filtered personal history finishes while a large global analysis is waiting on its source query", async () => {
+    await db.games.insertMany(Array.from({ length: 2001 }, (_, index) => game("a", `old-${index}`, index, { map: "Archived" })));
+    let release, started;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    const heavy = trendsExplorer({ games: { aggregate: () => ({ toArray: async () => {
+      started(); await blocked; return [];
+    } }) } }, "global", {}, parseExplorerOptions("leads", {}));
+    await entered;
+    try {
+      const result = await personal.explorer("a", { map: "Arena" }, parseExplorerOptions("leads", {}));
+      expect(result.totalGames).toBe(2);
+    } finally { release(); await heavy; }
+  });
+
+  test("sequence admission counts intervening history even when the selected personal games are few", async () => {
+    await db.games.insertMany(Array.from({ length: 2001 }, (_, index) => game("a", `old-${index}`, index, { map: "Archived" })));
+    let release, started;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    const heavy = trendsExplorer({ games: { aggregate: () => ({ toArray: async () => {
+      started(); await blocked; return [];
+    } }) } }, "global", {}, parseExplorerOptions("leads", {}));
+    await entered;
+    const originalAggregate = db.games.aggregate.bind(db.games);
+    let counted;
+    const probe = new Promise((resolve) => { counted = resolve; });
+    const reads = jest.spyOn(db.games, "aggregate").mockImplementation((pipeline, options) => {
+      if (pipeline.at(-1).$count) return { toArray: async () => {
+        const result = await originalAggregate(pipeline, options).toArray();
+        counted(); return result;
+      } };
+      return originalAggregate(pipeline, options);
+    });
+    const personalResult = personal.explorer("a", { map: "Arena" }, parseExplorerOptions("breaks", {}));
+    try {
+      await probe;
+      await new Promise(setImmediate);
+      expect(reads.mock.calls).toHaveLength(1);
+      expect(reads.mock.calls[0][0][0].$match).not.toHaveProperty("map");
+    } finally { release(); await heavy; reads.mockRestore(); }
+    expect((await personalResult).totalGames).toBe(2);
   });
 
   test.each([{ a_since: "2026-02-30" }, { a_since: "2026-10-01", a_until: "2026-09-01" },

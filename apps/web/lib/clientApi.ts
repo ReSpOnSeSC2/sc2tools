@@ -232,6 +232,8 @@ function humanizeMessage(
       return "Not found.";
     case "rate_limited":
       return "Too many requests — try again in a moment.";
+    case "trends_busy":
+      return "Another analysis is still running. Please try again shortly.";
     case "preview_unavailable":
       return "Live preview is temporarily unavailable.";
     case "bad_request":

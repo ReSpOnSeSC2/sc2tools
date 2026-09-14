@@ -22,8 +22,8 @@ const fixture: ExplorerResponse = {
   options: { players: [{ id: "account-a", label: "Alpha", currentMmr: 4510 }, { id: "account-b", label: "Beta", currentMmr: null }], builds: ["Two-base timing"], milestones: [{ id: "third-base", label: "Third base" }, { id: "first-upgrade", label: "First upgrade" }] },
 };
 const filterValue: FiltersValue = { filters: { race: "P", regions: "NA,EU", since: "2026-01-01", build: "Page build" }, setFilters: vi.fn(), dbRev: 9, bumpRev: vi.fn(), seasons: [] };
-function mount(global = false) {
-  return render(<FiltersContext.Provider value={filterValue}><TrendsDataProvider mode={global ? "global" : "personal"} cohort={global ? { excluded_players: "excluded-account", player_races: "P,T" } : {}}><TrendsExplorer /></TrendsDataProvider></FiltersContext.Provider>);
+function mount(global = false, isNearViewport = true) {
+  return render(<FiltersContext.Provider value={filterValue}><TrendsDataProvider mode={global ? "global" : "personal"} cohort={global ? { excluded_players: "excluded-account", player_races: "P,T" } : {}}><TrendsExplorer isNearViewport={isNearViewport} /></TrendsDataProvider></FiltersContext.Provider>);
 }
 function lastPath() { return useApiMock.mock.calls.at(-1)![0] as string; }
 function params(path = lastPath()) { return new URL(path, "https://example.test").searchParams; }
@@ -204,6 +204,31 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     const config = useApiMock.mock.calls[0][1];
     expect(config.refreshInterval({ preparation: { pendingGames: 18 } })).toBe(15000);
     expect(config.refreshInterval({ preparation: { pendingGames: 0 } })).toBe(0);
+  });
+
+  it.each([{ global: false, interval: 15000 }, { global: true, interval: 60000 }])("uses $interval ms for active preparation polling (global=$global)", ({ global, interval }) => {
+    mount(global);
+    const config = useApiMock.mock.calls[0][1];
+    expect(config.refreshInterval({ preparation: { pendingGames: 18 } })).toBe(interval);
+    expect(config.refreshInterval({ preparation: { pendingGames: 0 } })).toBe(0);
+  });
+
+  it.each([false, true])("pauses preparation polling offscreen without discarding results (global=%s)", (global) => {
+    mount(global, false);
+    expect(useApiMock.mock.calls[0][1].refreshInterval({ preparation: { pendingGames: 18 } })).toBe(0);
+    expect(screen.getByText("Games analyzed")).toBeTruthy();
+    expect(screen.getByText("60.0%")).toBeTruthy();
+  });
+
+  it.each([false, true])("pauses preparation polling during game drilldowns and resumes on close (global=%s)", (global) => {
+    useApiMock.mockImplementation((path: string) => path.includes("/games?") ? { data: { total: 0, offset: 0, limit: 20, games: [] }, isLoading: false, mutate: retry } : { data: { ...fixture, preparation: { pendingGames: 18 } }, isLoading: false, mutate: retry });
+    mount(global);
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "View games for Near equal MMR" })[0]);
+    const panelConfig = () => useApiMock.mock.calls.findLast(([path]) => !path.includes("/games?"))![1];
+    expect(panelConfig().refreshInterval({ preparation: { pendingGames: 18 } })).toBe(0);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    expect(panelConfig().refreshInterval({ preparation: { pendingGames: 18 } })).toBe(global ? 60000 : 15000);
   });
 
   it("paginates the exact selected games and retains the segment", () => {

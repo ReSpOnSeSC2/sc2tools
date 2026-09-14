@@ -82,6 +82,15 @@ afterEach(() => {
 });
 
 describe("NetMmrRaceOpponentsModal", () => {
+  it("labels the exact matchup and sends both played races without replacing the Analyzer race filter", () => {
+    render(<NetMmrRaceOpponentsModal race="Z" myRace="T" onClose={() => {}} />);
+    expect(screen.getByRole("dialog", { name: "TvZ MMR by opponent" })).toBeTruthy();
+    const url = new URL(String(useApiMock.mock.calls.at(-1)?.[0]), "https://test.local");
+    expect(url.searchParams.get("race")).toBe("P");
+    expect(url.searchParams.get("my_race")).toBe("T");
+    expect(url.searchParams.get("opp_race")).toBe("Z");
+  });
+
   it("shows mutually exclusive net leaders alongside gross and record columns", () => {
     render(<NetMmrRaceOpponentsModal race="P" onClose={() => {}} />);
 

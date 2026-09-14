@@ -9,6 +9,11 @@ import {
 } from "@/lib/filterContext";
 
 export type NetMmrRace = "P" | "T" | "Z" | "R" | "U";
+export type NetMmrPlayedRace = "P" | "T" | "Z";
+export type NetMmrMatchup = `${NetMmrPlayedRace}v${NetMmrPlayedRace}`;
+export const NET_MMR_MATCHUP_ORDER: readonly NetMmrMatchup[] = [
+  "PvP", "PvZ", "PvT", "TvT", "TvZ", "TvP", "ZvZ", "ZvT", "ZvP",
+];
 
 /** One local calendar day's accepted, verified MMR movement. */
 export type DailyMmrSwing = {
@@ -104,6 +109,7 @@ export type NetMmrOpponentsResponse = {
 
 export type NetMmrOpponentControls = {
   opp_race?: NetMmrRace;
+  my_race?: NetMmrPlayedRace;
   search?: string;
   min_pairs?: number;
   sort?: NetMmrOpponentSort;
@@ -141,6 +147,7 @@ export function netMmrByMatchupPath(
   const path = `/v1/mmr-by-matchup${filtersToQuery({
     ...filters,
     tz: timeZone,
+    group_by: "matchup",
   })}`;
   return typeof dbRev === "number" ? `${path}#${dbRev}` : path;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  ReferenceLine,
   Cell,
 } from "recharts";
 import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
@@ -18,14 +19,18 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { pct1 } from "@/lib/format";
 import {
   netMmrByMatchupPath,
+  NET_MMR_MATCHUP_ORDER,
   type NetMmrByMatchupResponseBase,
-  type NetMmrRace,
+  type NetMmrMatchup,
+  type NetMmrPlayedRace,
 } from "@/lib/netMmrOpponents";
 import { clientTimezone } from "@/lib/timeseries";
 import { NetMmrRaceOpponentsModal } from "./NetMmrRaceOpponentsModal";
 
 type MatchupRow = {
-  race: "P" | "T" | "Z" | "R" | "U";
+  matchup: NetMmrMatchup;
+  myRace: NetMmrPlayedRace;
+  opponentRace: NetMmrPlayedRace;
   netMmr: number;
   avgDelta: number;
   pairs?: number;
@@ -49,7 +54,7 @@ type DroppedCoverage = {
 };
 
 type MatchupCoverage = {
-  race: MatchupRow["race"];
+  matchup: string;
   totalGames: number;
   eligibleGames: number;
   measuredGames: number;
@@ -64,12 +69,8 @@ type Response = NetMmrByMatchupResponseBase & {
   dropped?: DroppedCoverage;
 };
 
-const RACE_META: Record<string, { label: string; color: string }> = {
-  P: { label: "vs Protoss", color: "#7c8cff" },
-  T: { label: "vs Terran", color: "#ff6b6b" },
-  Z: { label: "vs Zerg", color: "#a78bfa" },
-  R: { label: "vs Random", color: "#9aa3b2" },
-  U: { label: "Unknown", color: "#3a4252" },
+const RACE_NAMES: Record<NetMmrPlayedRace, string> = {
+  P: "Protoss", T: "Terran", Z: "Zerg",
 };
 
 const COLOR_SUCCESS = "#3ec07a";
@@ -121,7 +122,7 @@ function compactCoverageReasons(dropped: DroppedCoverage | undefined): string[] 
 /**
  * Net MMR per matchup.
  *
- * Attributes each verified next-MMR delta to the opponent race of the
+ * Attributes each verified next-MMR delta to the concrete matchup of the
  * anchor game. Pairing is account-, selected-race-, and queue-aware and
  * happens before display filters so hidden rows cannot be bridged.
  *
@@ -134,26 +135,35 @@ function compactCoverageReasons(dropped: DroppedCoverage | undefined): string[] 
 export function NetMmrByMatchupChart() {
   const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
-  const [selectedRace, setSelectedRace] = useState<NetMmrRace | null>(null);
+  const descriptionId = useId();
+  const [selectedMatchup, setSelectedMatchup] = useState<{
+    myRace: NetMmrPlayedRace; opponentRace: NetMmrPlayedRace;
+  } | null>(null);
   const tz = useMemo(() => clientTimezone(), []);
   const { data, isLoading, error, mutate } = useApi<Response>(
     netMmrByMatchupPath(filters, tz, dbRev),
   );
 
   const rows = useMemo(() => {
-    const coverageByRace = new Map(
-      (data?.coverage || []).map((row) => [row.race, row]),
+    const coverageByMatchup = new Map(
+      (data?.coverage || []).map((row) => [row.matchup, row]),
     );
-    const matchups = (data?.matchups || [])
-      .map((m) => ({ ...m, pairs: m.pairs ?? m.games }))
-      .filter((m) => m.pairs > 0);
-    return matchups
-      .map((m) => ({
-        ...m,
-        meta: RACE_META[m.race] || RACE_META.U,
-        coverage: coverageByRace.get(m.race),
-      }))
-      .sort((a, b) => b.netMmr - a.netMmr);
+    const measuredByMatchup = new Map((data?.matchups || []).map((row) => [row.matchup, row]));
+    return NET_MMR_MATCHUP_ORDER.flatMap((matchup) => {
+      const measured = measuredByMatchup.get(matchup);
+      const coverage = coverageByMatchup.get(matchup);
+      if (!measured && !coverage?.totalGames) return [];
+      const myRace = matchup[0] as NetMmrPlayedRace;
+      const opponentRace = matchup[2] as NetMmrPlayedRace;
+      const pairs = measured?.pairs ?? measured?.games ?? 0;
+      return [{
+        matchup, myRace, opponentRace, pairs, coverage,
+        label: `${RACE_NAMES[myRace]} vs ${RACE_NAMES[opponentRace]}`,
+        netMmr: pairs ? measured?.netMmr ?? null : null,
+        winRate: pairs ? measured?.winRate ?? null : null,
+        avgDelta: pairs ? measured?.avgDelta ?? null : null,
+      }];
+    });
   }, [data]);
 
   const xDomain = useMemo<[number, number]>(() => {
@@ -161,6 +171,7 @@ export function NetMmrByMatchupChart() {
     let mn = 0;
     let mx = 0;
     for (const r of rows) {
+      if (r.netMmr === null) continue;
       if (r.netMmr < mn) mn = r.netMmr;
       if (r.netMmr > mx) mx = r.netMmr;
     }
@@ -211,14 +222,15 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {isGlobal ? "Total" : "Your"} MMR gained (▶) or lost (◀) in games against each opponent race.
+        {isGlobal ? "Total" : "Your"} MMR gained (▶) or lost (◀) in each matchup, with the played race listed first.
+        Random-queue games use the race actually played.
         Each game&apos;s change is measured from its starting MMR and the next
         uploaded replay&apos;s starting MMR on the same Battle.net account/server
         and selected ladder race. Missing or unverified readings break the
         sequence; impossible result/delta signs and swings past ±150 are
         excluded and reported below.
       </p>
-      <div className="h-56">
+      <div style={{ height: Math.max(180, rows.length * 38 + 36) }} aria-label="Net MMR by played matchup">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={rows}
@@ -231,16 +243,18 @@ export function NetMmrByMatchupChart() {
               stroke={COLOR_TEXT_DIM}
               fontSize={11}
               domain={xDomain}
+              ticks={[xDomain[0], xDomain[0] / 2, 0, xDomain[1] / 2, xDomain[1]]}
               tickFormatter={(v: number) => (v > 0 ? `+${v}` : `${v}`)}
             />
             <YAxis
               type="category"
-              dataKey="meta.label"
+              dataKey="matchup"
               stroke={COLOR_TEXT_DIM}
               fontSize={12}
-              width={104}
+              width={48}
               tickMargin={4}
             />
+            <ReferenceLine x={0} stroke={COLOR_TEXT_DIM} strokeOpacity={0.65} />
             {/* No Tooltip: the footer cards already show
                 netMmr / games / WR / avg-per-game per matchup,
                 and on mobile recharts' floating tooltip lands on
@@ -248,8 +262,8 @@ export function NetMmrByMatchupChart() {
             <Bar dataKey="netMmr" radius={[4, 4, 4, 4]} minPointSize={2}>
               {rows.map((r) => (
                 <Cell
-                  key={r.race}
-                  fill={r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER}
+                  key={r.matchup}
+                  fill={r.netMmr === null ? COLOR_TEXT_DIM : r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER}
                   fillOpacity={0.85}
                 />
               ))}
@@ -257,7 +271,7 @@ export function NetMmrByMatchupChart() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
         {rows.map((r) => {
           const totalForRace = r.coverage?.totalGames;
           const measuredLabel =
@@ -268,43 +282,46 @@ export function NetMmrByMatchupChart() {
           return (
             <button
               type="button"
-              key={r.race}
+              key={r.matchup}
               aria-haspopup="dialog"
-              aria-expanded={selectedRace === r.race}
-              aria-label={`View MMR impact by ${r.meta.label.replace(/^vs /, "")} opponent`}
-              onClick={() => setSelectedRace(r.race)}
-              className="group rounded border border-border bg-bg-elevated/50 px-2.5 py-2 text-left transition-colors hover:border-accent/60 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              aria-expanded={selectedMatchup?.myRace === r.myRace && selectedMatchup?.opponentRace === r.opponentRace}
+              aria-label={r.pairs ? `View ${r.matchup} MMR impact by opponent` : `${r.matchup}: no measured MMR changes`}
+              aria-describedby={`${descriptionId}-${r.matchup}-net ${descriptionId}-${r.matchup}-metrics`}
+              disabled={!r.pairs}
+              onClick={() => setSelectedMatchup({ myRace: r.myRace, opponentRace: r.opponentRace })}
+              className="group rounded border border-border bg-bg-elevated/50 px-3 py-2.5 text-left transition-colors enabled:hover:border-accent/60 enabled:hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span
-                  className="truncate text-micro font-semibold"
-                  style={{ color: r.meta.color }}
+                  className="text-sm font-semibold text-text"
+                  title={r.label}
                 >
-                  {r.meta.label}
+                  {r.matchup}
                 </span>
                 <span
                   className="whitespace-nowrap text-sm font-semibold tabular-nums"
-                  style={{ color: r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER }}
+                  style={{ color: r.netMmr === null ? COLOR_TEXT_DIM : r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER }}
                 >
-                  {r.netMmr > 0 ? "+" : ""}
-                  {r.netMmr}
+                  {r.netMmr !== null && r.netMmr > 0 ? "+" : ""}
+                  {r.netMmr ?? "—"}
                 </span>
               </div>
-              <div className="mt-0.5 text-micro tabular-nums text-text-dim">
-                {measuredLabel} ·{" "}
-                {pct1(r.winRate)} WR · avg{" "}
-                {r.avgDelta > 0 ? "+" : ""}
-                {r.avgDelta}/game
+              <span id={`${descriptionId}-${r.matchup}-net`} className="sr-only">
+                {r.label}. {r.netMmr === null ? "No measured MMR change." : `Net MMR ${r.netMmr > 0 ? "+" : ""}${r.netMmr}.`}
+              </span>
+              <div id={`${descriptionId}-${r.matchup}-metrics`} className="mt-0.5 text-micro tabular-nums text-text-dim">
+                {measuredLabel}
+                {r.winRate !== null && r.avgDelta !== null ? <> · {pct1(r.winRate)} WR · avg {r.avgDelta > 0 ? "+" : ""}{r.avgDelta}/game</> : null}
               </div>
               {coverageReasons.length > 0 ? (
                 <div className="mt-1 text-micro leading-snug text-text-muted">
                   Not measured: {coverageReasons.join(" · ")}
                 </div>
               ) : null}
-              <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
+              {r.pairs ? <div className="mt-1.5 flex items-center justify-end gap-0.5 text-micro font-medium text-accent opacity-80 transition-opacity group-hover:opacity-100">
                 View opponents
                 <ChevronRight aria-hidden className="h-3.5 w-3.5" />
-              </div>
+              </div> : <div className="mt-1.5 text-micro text-text-muted">No measured MMR change yet</div>}
             </button>
           );
         })}
@@ -315,9 +332,13 @@ export function NetMmrByMatchupChart() {
         eligibleGames={data?.eligibleGames}
         dropped={data?.dropped}
       />
+      {(data?.coverage || []).some((row) => !NET_MMR_MATCHUP_ORDER.includes(row.matchup as NetMmrMatchup)) ? (
+        <p className="mt-1 text-micro text-text-dim">Games without both concrete played races remain in coverage totals and cannot be assigned to a matchup.</p>
+      ) : null}
       <NetMmrRaceOpponentsModal
-        race={selectedRace}
-        onClose={() => setSelectedRace(null)}
+        race={selectedMatchup?.opponentRace ?? null}
+        myRace={selectedMatchup?.myRace ?? null}
+        onClose={() => setSelectedMatchup(null)}
       />
     </Card>
   );

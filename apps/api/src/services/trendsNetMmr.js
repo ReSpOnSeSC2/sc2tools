@@ -420,6 +420,7 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
   const keptPairGroupId = groupByOwnRace
     ? { myRace: "$_myPlayedRace", opponentRace: "$_oppRace" }
     : "$_oppRace";
+  const matchupOrder = ["PvP", "PvZ", "PvT", "TvT", "TvZ", "TvP", "ZvZ", "ZvT", "ZvP"];
   const keptPairSort = groupByOwnRace
     ? { "_id.myRace": 1, "_id.opponentRace": 1 }
     : { netMmr: -1 };
@@ -430,7 +431,7 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
         $facet: {
           summary: [{ $group: coverageGroup(null) }],
           coverage: [
-            { $group: coverageGroup("$_oppRace") },
+            { $group: coverageGroup(keptPairGroupId) },
             { $sort: { _id: 1 } },
           ],
           keptPairs: [
@@ -550,7 +551,11 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
   const coverage = /** @type {Array<Record<string, any>>} */ (
     root.coverage || []
   ).map((row) => ({
-    race: row._id,
+    ...(groupByOwnRace ? {
+      matchup: `${row._id.myRace}v${row._id.opponentRace}`,
+      myRace: row._id.myRace,
+      opponentRace: row._id.opponentRace,
+    } : { race: row._id }),
     totalGames: row.totalGames || 0,
     eligibleGames: row.eligibleGames || 0,
     measuredGames: row.measuredGames || 0,
@@ -578,6 +583,14 @@ async function netMmrByMatchup(deps, userId, filters, opts = {}) {
       ...metrics,
     };
   });
+  if (groupByOwnRace) {
+    const rank = (/** @type {Record<string, any>} */ row) => {
+      const index = matchupOrder.indexOf(row.matchup || "");
+      return index === -1 ? matchupOrder.length : index;
+    };
+    matchups.sort((a, b) => rank(a) - rank(b));
+    coverage.sort((a, b) => rank(a) - rank(b));
+  }
 
   return {
     matchups,

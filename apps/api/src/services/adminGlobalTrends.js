@@ -93,12 +93,15 @@ class AdminGlobalTrendsService {
   /** The adapter's only cursor operation is toArray. Delay acquisition until
    * execution, and coalesce identical range probes used by multiple charts.
    * @param {Array<Record<string, any>>} pipeline
-   * @param {import('mongodb').Collection} collection */
-  _query(pipeline, collection) {
+   * @param {import('mongodb').Collection} collection
+   * @param {Record<string, any>} [options] */
+  _query(pipeline, collection, options = {}) {
     const finalGroup = pipeline.at(-1)?.$group;
     const isRange = finalGroup?.first?.$min === "$date" && finalGroup?.last?.$max === "$date";
     const read = () => this.queries.execute(() =>
-      collection.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS }).toArray());
+      collection.aggregate(pipeline, { allowDiskUse: true, maxTimeMS: QUERY_MAX_TIME_MS,
+        ...(Number.isInteger(options.batchSize) && options.batchSize > 0 ? { batchSize: options.batchSize } : {}),
+      }).toArray());
     return { toArray: () => isRange ? this.queries.cached(queryKey(["range", pipeline]), read) : read() };
   }
 
@@ -163,7 +166,7 @@ class AdminGlobalTrendsService {
     const gameDetails = {
       // Source pairs are derived only from the scoped snapshot rows. Keep
       // these bounded metadata batches in the same database admission lane.
-      aggregate: (/** @type {Array<Record<string, any>>} */ pipeline) => this._query(pipeline, this.db.gameDetails),
+      aggregate: (/** @type {Array<Record<string, any>>} */ pipeline, /** @type {Record<string, any>} */ options = {}) => this._query(pipeline, this.db.gameDetails, options),
     };
     const agg = new AggregationsService({
       games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)),

@@ -11,6 +11,8 @@ const SUMMARY_READ_VIEWS = new Set([...DETAIL_VIEWS, "mmr-gap"]);
 const SEQUENCE_VIEWS = new Set(["breaks", "rematches"]);
 const DAY_MS = 86400000;
 const DETAIL_BATCH_SIZE = 2000;
+const SMALL_HISTORY_MAX = 2000;
+const HISTORY_GREW = Symbol("trendsExplorerHistoryGrew");
 // A private adapter hint, never parsed from request input or serialized as a
 // Mongo command field. Sequence context must retain intervening off-race games.
 const EXPLORER_SEQUENCE_HISTORY = Symbol("trendsExplorerSequenceHistory");
@@ -110,10 +112,10 @@ function parseExplorerOptions(view, q = {}, now = new Date()) {
 /** @param {Record<string, any>} record */
 function gameKey(record) { return `${record.userId}|${record.gameId}`; }
 
-/** @param {ExplorerDb} db @param {string} userId
+/** @param {string} userId
  * @param {Record<string, any>} filters @param {ReturnType<typeof parseExplorerOptions>} opts
- * @param {boolean} [history] @param {Set<string>} [milestoneIds] */
-async function readRecords(db, userId, filters, opts, history = false, milestoneIds) {
+ * @param {boolean} [history] */
+function sourceMatchStages(userId, filters, opts, history = false) {
   const scoped = { ...filters };
   if (opts.view === "periods") { delete scoped.since; delete scoped.until; }
   const pipeline = [{ $match: gamesMatchStage(userId, history ? {} : scoped) }];
@@ -121,7 +123,17 @@ async function readRecords(db, userId, filters, opts, history = false, milestone
     { date: { $gte: opts.aSince, $lte: opts.aUntil } },
     { date: { $gte: opts.bSince, $lte: opts.bUntil } },
   ] } });
-  const stages = /** @type {Array<Record<string, any>>} */ (pipeline);
+  return /** @type {Array<Record<string, any>>} */ (pipeline);
+}
+
+/** @param {ExplorerDb} db @param {string} userId
+ * @param {Record<string, any>} filters @param {ReturnType<typeof parseExplorerOptions>} opts
+ * @param {boolean} [history] @param {Set<string>} [milestoneIds] @param {number} [rowBudget] */
+async function readRecords(db, userId, filters, opts, history = false, milestoneIds, rowBudget) {
+  const stages = sourceMatchStages(userId, filters, opts, history);
+  // This sentinel only guards small-lane admission. Exceeding it retries the
+  // entire analysis in the heavy lane; it never limits a returned chart.
+  if (rowBudget !== undefined) stages.push({ $limit: rowBudget + 1 });
   stages.push({ $project: recordProjection(opts) });
   if (SUMMARY_READ_VIEWS.has(opts.view) && !db.gameDetails) {
     stages.push({ $lookup: {
@@ -139,6 +151,7 @@ async function readRecords(db, userId, filters, opts, history = false, milestone
   const aggregateOptions = { allowDiskUse: true, maxTimeMS: 25000,
     ...(history && SEQUENCE_VIEWS.has(opts.view) ? { [EXPLORER_SEQUENCE_HISTORY]: true } : {}) };
   const records = await db.games.aggregate(stages, aggregateOptions).toArray();
+  if (rowBudget !== undefined && records.length > rowBudget) throw HISTORY_GREW;
   if (SUMMARY_READ_VIEWS.has(opts.view) && db.gameDetails) {
     await attachCompactDetails(db.gameDetails, records, opts, milestoneIds);
   }
@@ -187,7 +200,8 @@ async function attachCompactDetails(collection, records, opts, milestoneIds) {
       const rows = await collection.aggregate([
         { $match: { userId, gameId: { $in: [...byGame.keys()] } } },
         { $project: projection },
-      ], { maxTimeMS: 25000 }).toArray();
+        { $limit: byGame.size },
+      ], { maxTimeMS: 25000, batchSize: DETAIL_BATCH_SIZE }).toArray();
       for (const row of rows) {
         // Defend the in-memory merge as well as the database predicate. A
         // coincident replay ID from another uploader never supplies facts.
@@ -309,43 +323,59 @@ function publicGame(row) {
   };
 }
 
-/** A separate, small admission lane bounds retained source rows. It never
- * holds a database slot while waiting for the global query executor.
- * @type {Array<() => void>} */
-const waiting = [];
-let active = 0;
+/** One large analysis plus one bounded personal history may run together.
+ * Neither lane holds a database slot while waiting for admission.
+ * @typedef {{active: number, waiting: Array<() => void>}} AdmissionLane */
+/** @type {AdmissionLane} */
+const heavyLane = { active: 0, waiting: [] };
+/** @type {AdmissionLane} */
+const personalLane = { active: 0, waiting: [] };
 
-/** @param {() => Promise<any>} work */
-async function admitted(work) {
-  if (active >= 1) {
-    if (waiting.length >= 16) throw Object.assign(new Error("Trends is busy. Try again shortly."), { status: 503, expose: true });
+/** @param {() => Promise<any>} work @param {AdmissionLane} [lane] */
+async function admitted(work, lane = heavyLane) {
+  if (lane.active >= 1) {
+    if (lane.waiting.length >= 16) throw Object.assign(new Error("Trends is busy. Try again shortly."), { status: 503, code: "trends_busy", expose: true });
     await new Promise((resolve, reject) => {
       const ready = () => { clearTimeout(timer); resolve(undefined); };
       const timer = setTimeout(() => {
-        const i = waiting.indexOf(ready);
-        if (i >= 0) waiting.splice(i, 1);
-        reject(Object.assign(new Error("Trends is busy. Try again shortly."), { status: 503, expose: true }));
+        const i = lane.waiting.indexOf(ready);
+        if (i >= 0) lane.waiting.splice(i, 1);
+        reject(Object.assign(new Error("Trends is busy. Try again shortly."), { status: 503, code: "trends_busy", expose: true }));
       }, 25000);
-      waiting.push(ready);
+      lane.waiting.push(ready);
     });
-  } else active += 1;
+  } else lane.active += 1;
   try { return await work(); } finally {
-    const ready = waiting.shift();
-    if (ready) ready(); else active -= 1;
+    const ready = lane.waiting.shift();
+    if (ready) ready(); else lane.active -= 1;
   }
 }
 
 /** @param {ExplorerDb} db @param {string} userId
  * @param {Record<string, any>} filters @param {ReturnType<typeof parseExplorerOptions>} opts */
-function trendsExplorer(db, userId, filters, opts) {
-  return admitted(async () => {
+async function trendsExplorer(db, userId, filters, opts) {
+  // Only real personal collections offer countDocuments; the private global
+  // adapter deliberately does not. Match the exact scoped source read, except
+  // sequence analyses require all chronology even for a small game selection.
+  let smallHistory = false;
+  if (typeof db.games.countDocuments === "function") {
+    try {
+      const size = await db.games.aggregate([
+        ...sourceMatchStages(userId, filters, opts, SEQUENCE_VIEWS.has(opts.view)),
+        { $limit: SMALL_HISTORY_MAX + 1 }, { $count: "games" },
+      ], { maxTimeMS: 2500, batchSize: 1 }).toArray();
+      smallHistory = (size[0]?.games || 0) <= SMALL_HISTORY_MAX;
+    } catch { /* A failed size probe conservatively uses the heavy lane. */ }
+  }
+  /** @param {number} [rowBudget] */
+  const run = async (rowBudget) => {
     const milestoneIds = opts.view === "execution" && !opts.games && db.gameDetails
       ? new Set(["second-base", "third-base"]) : undefined;
-    let selected = await readRecords(db, userId, filters, opts, false, milestoneIds);
+    let selected = await readRecords(db, userId, filters, opts, false, milestoneIds, rowBudget);
     let records = selected;
     if (SEQUENCE_VIEWS.has(opts.view) && selected.length) {
       const keys = new Set(selected.map(gameKey));
-      records = await readRecords(db, userId, filters, opts, true);
+      records = await readRecords(db, userId, filters, opts, true, undefined, rowBudget);
       for (const record of records) record.matches = keys.has(gameKey(record));
       selected = records.filter((record) => record.matches);
     }
@@ -407,7 +437,12 @@ function trendsExplorer(db, userId, filters, opts) {
         milestones,
       },
     };
-  });
+  };
+  if (smallHistory) {
+    try { return await admitted(() => run(SMALL_HISTORY_MAX), personalLane); }
+    catch (error) { if (error !== HISTORY_GREW) throw error; }
+  }
+  return admitted(() => run());
 }
 
 module.exports = { trendsExplorer, parseExplorerOptions, readRecords, publicGame, VIEWS, EXPLORER_SEQUENCE_HISTORY };

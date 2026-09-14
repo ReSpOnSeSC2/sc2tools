@@ -817,6 +817,7 @@ export interface AggregationsService {
     filters: object,
     opts?: {
       opponentRace?: "P" | "T" | "Z" | "R" | "U";
+      myRace?: "P" | "T" | "Z" | "R" | "U";
       search?: string;
       minPairs?: number;
       sort?: string;

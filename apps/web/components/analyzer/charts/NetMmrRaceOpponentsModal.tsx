@@ -18,6 +18,7 @@ import {
   type NetMmrOpponentsResponse,
   type NetMmrOpponentSort,
   type NetMmrRace,
+  type NetMmrPlayedRace,
   type NetMmrSortOrder,
 } from "@/lib/netMmrOpponents";
 import { EmptyState, Skeleton } from "@/components/ui/Card";
@@ -63,9 +64,11 @@ const MIN_PAIR_OPTIONS = [1, 2, 3, 5, 10, 20] as const;
 
 export function NetMmrRaceOpponentsModal({
   race,
+  myRace,
   onClose,
 }: {
   race: NetMmrRace | null;
+  myRace?: NetMmrPlayedRace | null;
   onClose: () => void;
 }) {
   const { filters, dbRev } = useFilters();
@@ -84,7 +87,7 @@ export function NetMmrRaceOpponentsModal({
     setMinimumPairs(1);
     setRanking("net-best");
     setOffset(0);
-  }, [race]);
+  }, [race, myRace]);
 
   const rankingConfig =
     RANKING_OPTIONS.find((option) => option.value === ranking)
@@ -95,6 +98,7 @@ export function NetMmrRaceOpponentsModal({
       filters,
       {
         opp_race: race,
+        my_race: myRace ?? undefined,
         search: debouncedSearch || undefined,
         min_pairs: minimumPairs,
         sort: rankingConfig.sort,
@@ -111,6 +115,7 @@ export function NetMmrRaceOpponentsModal({
     minimumPairs,
     offset,
     race,
+    myRace,
     rankingConfig.order,
     rankingConfig.sort,
   ]);
@@ -132,7 +137,7 @@ export function NetMmrRaceOpponentsModal({
       open
       onClose={onClose}
       size="xl"
-      title={`MMR by ${raceName} opponent`}
+      title={myRace ? `${myRace}v${race} MMR by opponent` : `MMR by ${raceName} opponent`}
       description={isGlobal ? "Accepted replay-to-replay MMR changes across the selected players. Positive values are total MMR gained; negative values are total MMR lost. All cohort and game filters apply." : "Accepted replay-to-replay MMR pairs under the current Analyzer filters. Positive values are MMR you took; negative values are MMR you lost."}
     >
       {data?.summary ? <ImpactSummary summary={data.summary} /> : null}

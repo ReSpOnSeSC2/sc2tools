@@ -337,7 +337,7 @@ function buildAggregationsRouter(deps) {
     }
   });
 
-  // Net MMR gained / lost per opponent race. Surfaces matchups that
+  // Net MMR gained / lost per played race and opponent race. Surfaces matchups that
   // bleed MMR even at parity WR.
   router.get("/mmr-by-matchup", async (req, res, next) => {
     try {
@@ -345,7 +345,7 @@ function buildAggregationsRouter(deps) {
       const filters = parseFilters(req.query);
       const tz = typeof req.query.tz === "string" ? req.query.tz : undefined;
       res.json(
-        await deps.aggregations.netMmrByMatchup(userId, filters, { tz }),
+        await deps.aggregations.netMmrByMatchup(userId, filters, { tz, groupByOwnRace: req.query.group_by === "matchup" }),
       );
     } catch (err) {
       next(err);
@@ -361,6 +361,7 @@ function buildAggregationsRouter(deps) {
       const filters = parseFilters(req.query);
       const raceRaw = req.query.opp_race ?? req.query.oppRace;
       const opponentRace = parseNetMmrOpponentRace(raceRaw);
+      const myRace = parseNetMmrOpponentRace(req.query.my_race);
       const search =
         typeof req.query.search === "string" ? req.query.search : "";
       const minPairs = parseFiniteInt(req.query.min_pairs);
@@ -372,6 +373,7 @@ function buildAggregationsRouter(deps) {
       res.json(
         await deps.aggregations.netMmrByOpponent(userId, filters, {
           opponentRace,
+          myRace,
           search,
           minPairs,
           sort,

@@ -88,6 +88,40 @@ describe("net MMR by opponent", () => {
     ]);
   }
 
+  test("exact matchup drilldowns preserve Random-ladder adjacency and intersect active own-race filters", async () => {
+    const opponent = { race: "Zerg", toonHandle: "1-S2-1-same", displayName: "Same opponent" };
+    await db.games.insertMany([
+      { ...game("r-p", 0, 4000, "Victory", opponent), myLadderRace: "Random" },
+      { ...game("r-t", 10, 4020, "Defeat", opponent), myLadderRace: "Random", myRace: "Terran" },
+      { ...game("r-z", 20, 4010, "Victory", opponent), myLadderRace: "Random", myRace: "Zerg" },
+      { ...game("other", 0, 4000, "Victory", opponent), userId: "other" },
+      { ...game("other-next", 10, 4100, "Victory", opponent), userId: "other" },
+    ]);
+    const bars = await service.netMmrByMatchup("u1", {}, { groupByOwnRace: true });
+    for (const bar of bars.matchups) {
+      const result = await service.netMmrByOpponent("u1", {}, { myRace: bar.myRace, opponentRace: bar.opponentRace });
+      expect(result.summary).toMatchObject({ netMmr: bar.netMmr, pairs: bar.pairs, opponents: 1 });
+    }
+    const filtered = await service.netMmrByOpponent("u1", { until: new Date("2026-07-01T12:00:00Z") }, { myRace: "P", opponentRace: "Z" });
+    expect(filtered.summary).toMatchObject({ netMmr: 20, pairs: 1 });
+    const conflicting = await service.netMmrByOpponent("u1", { race: "T" }, { myRace: "P", opponentRace: "Z" });
+    expect(conflicting.items).toEqual([]);
+  });
+
+  test("malformed next replay IDs use the same exclusion as the parent matchup", async () => {
+    const opponent = { race: "Zerg", toonHandle: "1-S2-1-known" };
+    await db.games.insertMany([
+      game("anchor", 0, 4000, "Victory", opponent),
+      game(null, 10, 4020, "Victory", opponent),
+    ]);
+    const chart = await service.netMmrByMatchup("u1", {}, { groupByOwnRace: true });
+    expect(chart.matchups).toEqual([]);
+    expect(chart.dropped.terminalGame).toBe(2);
+    const drilldown = await service.netMmrByOpponent("u1", {}, { myRace: "P", opponentRace: "Z" });
+    expect(drilldown.items).toEqual([]);
+    expect(drilldown.summary.pairs).toBe(0);
+  });
+
   test("groups accepted pairs by stable opponent identity and reconciles to the race bar", async () => {
     await seedAcceptedPairs();
 
@@ -339,13 +373,13 @@ describe("GET /v1/mmr-by-matchup/opponents", () => {
     app.use("/v1", router);
 
     const res = await request(app).get(
-      "/v1/mmr-by-matchup?since=2026-01-01&tz=America%2FNew_York",
+      "/v1/mmr-by-matchup?since=2026-01-01&tz=America%2FNew_York&group_by=matchup",
     );
     expect(res.status).toBe(200);
     expect(netMmrByMatchup).toHaveBeenCalledWith(
       "u-route",
       expect.objectContaining({ since: expect.any(Date) }),
-      { tz: "America/New_York" },
+      { tz: "America/New_York", groupByOwnRace: true },
     );
   });
 
@@ -373,6 +407,7 @@ describe("GET /v1/mmr-by-matchup/opponents", () => {
       expect.objectContaining({ since: expect.any(Date) }),
       {
         opponentRace: "U",
+        myRace: undefined,
         search: "Alpha",
         minPairs: 3,
         sort: "mmr_lost",
@@ -398,13 +433,13 @@ describe("GET /v1/mmr-by-matchup/opponents", () => {
     app.use("/v1", router);
 
     const res = await request(app).get(
-      "/v1/mmr-by-matchup/opponents?opp_race=P",
+      "/v1/mmr-by-matchup/opponents?opp_race=P&my_race=T",
     );
     expect(res.status).toBe(200);
     expect(netMmrByOpponent).toHaveBeenCalledWith(
       "u-route",
       { oppRace: "P" },
-      expect.objectContaining({ opponentRace: "P" }),
+      expect.objectContaining({ opponentRace: "P", myRace: "T" }),
     );
   });
 });

@@ -171,6 +171,7 @@ describe("TrendsTab layout", () => {
       "Game length",
       "Activity calendar",
       "Map performance over time",
+      "Explore performance",
       "Skill fingerprint",
     ];
     const positions = orderedLabels.map((label) => {
@@ -187,18 +188,25 @@ describe("TrendsTab layout", () => {
     expect(screen.queryByText("Macro score over time")).toBeNull();
   });
 
-  it("ends with map performance followed directly by skill fingerprint and omits mix cards", () => {
-    render(<TrendsTab />);
+  it.each(["personal", "global"] as const)("places Explore performance after the original charts and before any fingerprint in %s mode", (mode) => {
+    render(<TrendsDataProvider mode={mode}><TrendsTab /></TrendsDataProvider>);
 
     const mapPerformance = screen.getByTestId("map-performance");
-    const skillFingerprint = screen.getByTestId("skill-fingerprint");
+    const skillFingerprint = screen.queryByTestId("skill-fingerprint");
+    const explorerSlot = screen.getByText("Explore performance").parentElement;
     const mapSlot = mapPerformance.parentElement;
     const chartGrid = mapSlot?.parentElement;
-    const trendsRoot = skillFingerprint.parentElement;
+    const trendsRoot = chartGrid?.parentElement;
 
     expect(chartGrid?.lastElementChild).toBe(mapSlot);
-    expect(skillFingerprint.previousElementSibling).toBe(chartGrid);
-    expect(trendsRoot?.lastElementChild).toBe(skillFingerprint);
+    expect(explorerSlot?.previousElementSibling).toBe(chartGrid);
+    if (mode === "personal") {
+      expect(skillFingerprint?.previousElementSibling).toBe(explorerSlot);
+      expect(trendsRoot?.lastElementChild).toBe(skillFingerprint);
+    } else {
+      expect(skillFingerprint).toBeNull();
+      expect(trendsRoot?.lastElementChild).toBe(explorerSlot);
+    }
     expect(screen.queryByText("Your build mix over time")).toBeNull();
     expect(screen.queryByText("Strategies you're facing")).toBeNull();
   });

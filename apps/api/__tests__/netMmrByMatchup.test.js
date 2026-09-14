@@ -182,6 +182,50 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     ]);
     expect(out.dailySwings.measuredGames).toBe(2);
     expect(out.coverage.reduce((sum, row) => sum + row.measuredGames, 0)).toBe(2);
+    expect(out.coverage).toEqual([
+      expect.objectContaining({ matchup: "PvZ", totalGames: 1, measuredGames: 1 }),
+      expect.objectContaining({ matchup: "PvT", totalGames: 1, measuredGames: 0, dropped: expect.objectContaining({ terminalGame: 1 }) }),
+      expect.objectContaining({ matchup: "TvZ", totalGames: 1, measuredGames: 1 }),
+      expect.objectContaining({ matchup: "TvP", totalGames: 1, measuredGames: 0, dropped: expect.objectContaining({ terminalGame: 1 }) }),
+    ]);
+  });
+
+  test("exact mode lists all nine played matchups in race order without mixing other uploaders", async () => {
+    const races = { P: "Protoss", T: "Terran", Z: "Zerg" };
+    const order = ["PvP", "PvZ", "PvT", "TvT", "TvZ", "TvP", "ZvZ", "ZvT", "ZvP"];
+    await db.games.insertMany(Object.entries(races).flatMap(([own, myRace]) => ["P", "T", "Z", "P"].map((opp, index) => makeGame({
+      gameId: `${own}-${index}`, myRace, myLadderRace: myRace,
+      date: new Date(Date.UTC(2026, 4, 9, 12, index * 10)),
+      myMmr: 4000 + index * 10,
+      opponent: { race: races[opp] },
+    }))));
+    await db.games.insertMany([
+      makeGame({ userId: "other", gameId: "other-1", myMmr: 4000 }),
+      makeGame({ userId: "other", gameId: "other-2", date: new Date("2026-05-09T12:10:00Z"), myMmr: 4100 }),
+    ]);
+    const result = await svc.netMmrByMatchup("u1", {}, { groupByOwnRace: true });
+    expect(result.matchups.map((row) => row.matchup)).toEqual(order);
+    expect(result.coverage.map((row) => row.matchup)).toEqual(order);
+    expect(result.matchups.every((row) => row.netMmr === 10 && row.pairs === 1)).toBe(true);
+    expect(result.totalGames).toBe(12);
+    expect(result.dailySwings.measuredGames).toBe(9);
+    expect(result.dropped.terminalGame).toBe(3);
+  });
+
+  test("Random ladder pairs across spawned races but attributes each anchor to its actual matchup", async () => {
+    await db.games.insertMany([
+      makeGame({ gameId: "random-p", myLadderRace: "Random", myRace: "Protoss", myMmr: 4000 }),
+      makeGame({ gameId: "random-t", myLadderRace: "Random", myRace: "Terran", myMmr: 4020, result: "Defeat", date: new Date("2026-05-09T12:10:00Z") }),
+      makeGame({ gameId: "random-z", myLadderRace: "Random", myRace: "Zerg", myMmr: 4010, date: new Date("2026-05-09T12:20:00Z") }),
+    ]);
+    const result = await svc.netMmrByMatchup("u1", {}, { groupByOwnRace: true });
+    expect(result.matchups).toEqual([
+      expect.objectContaining({ matchup: "PvZ", netMmr: 20, pairs: 1 }),
+      expect.objectContaining({ matchup: "TvZ", netMmr: -10, pairs: 1 }),
+    ]);
+    expect(result.coverage.find((row) => row.matchup === "ZvZ")).toMatchObject({ totalGames: 1, measuredGames: 0 });
+    const filtered = await svc.netMmrByMatchup("u1", { race: "P", until: new Date("2026-05-09T12:00:00Z") }, { groupByOwnRace: true });
+    expect(filtered.matchups).toEqual([expect.objectContaining({ matchup: "PvZ", netMmr: 20 })]);
   });
 
   test(

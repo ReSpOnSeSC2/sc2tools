@@ -166,6 +166,15 @@ describe("useApi authenticated cache identity", () => {
 });
 
 describe("client mutation errors", () => {
+  it("explains analysis queue limits without exposing server internals", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { code: "trends_busy", message: "internal_error" },
+    }), { status: 503 })));
+    await expect(apiCall(harness.auth.getToken, "/v1/trends/explorer/leads")).rejects.toMatchObject({
+      status: 503, code: "trends_busy", message: "Another analysis is still running. Please try again shortly.",
+    });
+  });
+
   it.each(["<!DOCTYPE html><html>upstream stack trace</html>", '{"unexpected":"internal detail"}', '["proxy", "failure"]'])(
     "does not expose raw server response %s", async raw => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(raw, { status: 502 })));

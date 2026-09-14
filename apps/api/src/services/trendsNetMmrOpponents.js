@@ -36,6 +36,7 @@ const SORT_FIELDS = /** @type {Readonly<Record<string, string>>} */ (Object.free
  * @typedef {import('./trendsNetMmr').Deps} Deps
  * @typedef {{
  *   opponentRace?: 'P'|'T'|'Z'|'R'|'U',
+ *   myRace?: 'P'|'T'|'Z'|'R'|'U',
  *   search?: string,
  *   minPairs?: number,
  *   sort?: string,
@@ -113,6 +114,7 @@ function opponentIdentityExpr() {
  */
 async function netMmrByOpponent(deps, userId, filters, opts = {}) {
   const opponentRace = pickOpponentRace(opts.opponentRace);
+  const myRace = pickOpponentRace(opts.myRace);
   const search = String(opts.search || "").trim().slice(0, 128);
   const minPairs = clampPositiveInt(opts.minPairs, 1, 1_000_000);
   const limit = clampPositiveInt(opts.limit, DEFAULT_LIMIT, MAX_LIMIT);
@@ -124,14 +126,17 @@ async function netMmrByOpponent(deps, userId, filters, opts = {}) {
     ...netMmrPairStages(deps, userId, filters),
     {
       $match: {
-        _pairCandidate: true,
-        _withinDeltaCap: true,
-        _resultSignMatches: true,
+        _dropReason: null,
       },
     },
   ];
   if (opponentRace) {
     pipeline.push({ $match: { _oppRace: opponentRace } });
+  }
+  if (myRace) {
+    // Attribution uses the anchor replay's spawned race. Keep this after
+    // the full-history window so Random ladder readings remain adjacent.
+    pipeline.push({ $match: { _myPlayedRace: myRace } });
   }
   pipeline.push(
     {

@@ -37,7 +37,7 @@ import { OppMmrBucketsChart } from "./charts/OppMmrBucketsChart";
 import { MapTrendChart } from "./charts/MapTrendChart";
 import { NetMmrByMatchupChart } from "./charts/NetMmrByMatchupChart";
 import { ChartTooltip } from "./charts/ChartTooltip";
-import { TrendsExplorer } from "./explorer/TrendsExplorer";
+import { DeferredTrendsExplorer } from "./explorer/DeferredTrendsExplorer";
 
 const LS_BUCKET = "analyzer.trends.bucket";
 const LS_ROLL = "analyzer.trends.rollingOn";
@@ -247,8 +247,6 @@ export function TrendsTab() {
           Showing {effectiveBucket === "month" ? "monthly" : effectiveBucket === "week" ? "weekly" : "daily"} periods to cover this date range. Choose a shorter range for finer detail.
         </p>
       )}
-
-      <TrendsExplorer />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {isLoading || error || series.length === 0 ? (
@@ -492,7 +490,9 @@ export function TrendsTab() {
           </div>
       </div>
 
-      {/* The identity artifact closes the tab, immediately after map trends. */}
+      <DeferredTrendsExplorer />
+
+      {/* The identity artifact closes the personal tab after the explorer. */}
       {!isGlobal && <FingerprintCard />}
     </div>
   );
