@@ -1,367 +1,127 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { WR_TIERS, wrTier, wrTierTextColor } from "@/lib/format";
 import { clientTimezone } from "@/lib/timeseries";
 
-type HeatmapCell = {
-  dow: number;
-  hour: number;
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-};
-
-type HeatmapResponse = {
-  timezone: string;
-  cells: HeatmapCell[];
-  totalGames: number;
-};
-
+type HeatmapCell = { dow: number; hour: number; wins: number; losses: number; total: number; winRate: number };
+type HeatmapResponse = { timezone: string; cells: HeatmapCell[]; totalGames: number };
+type CellAgg = { total: number; wins: number; losses: number };
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const MIN_RATE_GAMES = 20;
+const BLOCK_COUNT = 6;
 
-// Aggregate hours into 4-hour blocks so 7 rows × 6 columns fits cleanly
-// on mobile. The bucket boundaries are stable; only the rendered label
-// is locale-aware (see formatHourBlock).
-const HOUR_BLOCKS: ReadonlyArray<{ start: number; end: number }> = [
-  { start: 0, end: 4 },
-  { start: 4, end: 8 },
-  { start: 8, end: 12 },
-  { start: 12, end: 16 },
-  { start: 16, end: 20 },
-  { start: 20, end: 24 },
-];
-
-/**
- * Format a 4-hour block boundary for the heatmap column header.
- *
- * 24-hour locales: zero-padded numeric range, e.g. "08–12".
- * 12-hour locales: compact a/p meridiem so six columns fit on a phone
- * without overlapping. Both ends are suffixed when the block straddles
- * noon or midnight so "8a–12p" can't be misread as "8p–midnight"; when
- * both ends share a meridiem only the right side is suffixed.
- */
 function formatHourBlock(start: number, end: number, hour12: boolean): string {
-  if (!hour12) {
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    return `${pad(start)}–${pad(end)}`;
-  }
-  const meridiem = (h: number) => (h < 12 || h === 24 ? "a" : "p");
-  const display = (h: number) => {
-    const m = h % 12;
-    return m === 0 ? 12 : m;
-  };
-  const startMer = meridiem(start);
-  const endMer = meridiem(end);
-  if (startMer === endMer) {
-    return `${display(start)}–${display(end)}${endMer}`;
-  }
-  return `${display(start)}${startMer}–${display(end)}${endMer}`;
+  if (!hour12) return `${String(start).padStart(2, "0")}–${String(end).padStart(2, "0")}`;
+  const meridiem = (hour: number) => hour < 12 || hour === 24 ? "a" : "p";
+  const display = (hour: number) => hour % 12 || 12;
+  return meridiem(start) === meridiem(end)
+    ? `${display(start)}–${display(end)}${meridiem(end)}`
+    : `${display(start)}${meridiem(start)}–${display(end)}${meridiem(end)}`;
 }
 
-type CellAgg = {
-  total: number;
-  wins: number;
-  losses: number;
-};
+const rateClass = (rate: number) => rate < 0.45
+  ? "bg-warning/25 text-text"
+  : rate > 0.55 ? "bg-accent-cyan/30 text-text" : "bg-border text-text";
 
-/**
- * Day-of-week × hour-of-day heatmap. Cells are tinted by win-rate
- * (red → neutral → green) and sized by game count via opacity, so a
- * single 5-0 weekend blip doesn't dominate the picture the way a raw
- * red-green map would.
- *
- * Toggle between "Win rate" and "Volume" colour modes. Hovering a
- * cell shows the raw W-L counts.
- */
+/** Each mode encodes one measure. Sparse cells never advertise a strong win rate. */
 export function TimeOfDayHeatmap() {
   const { filters, dbRev } = useFilters();
+  const { isGlobal } = useTrendsDataScope();
+  const recordLabel = isGlobal ? "player game records" : "games";
   const tz = useMemo(() => clientTimezone(), []);
-  // Detect once: a `false` value here means the user's locale prefers
-  // 24-hour clock (en-GB, de-DE, …); the labels switch to "08 – 12"
-  // form. `Intl.DateTimeFormat()` reflects browser/OS locale settings.
   const hour12 = useMemo(() => {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().hour12 ?? true;
-    } catch {
-      return true;
-    }
+    try { return new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12 ?? true; }
+    catch { return true; }
   }, []);
-  const formattedBlocks = useMemo(
-    () => HOUR_BLOCKS.map((b) => formatHourBlock(b.start, b.end, hour12)),
-    [hour12],
-  );
+  const labels = useMemo(() => Array.from({ length: BLOCK_COUNT }, (_, i) => formatHourBlock(i * 4, (i + 1) * 4, hour12)), [hour12]);
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
-  const { data, isLoading, error, mutate } = useApi<HeatmapResponse>(
-    `/v1/timeseries/day-hour${filtersToQuery(params)}#${dbRev}`,
-  );
-  const [mode, setMode] = useState<"wr" | "volume">("wr");
-
-  const grid = useMemo(() => {
-    /** @type {CellAgg[][]} */
-    const out: CellAgg[][] = Array.from({ length: 7 }, () =>
-      HOUR_BLOCKS.map(() => ({ total: 0, wins: 0, losses: 0 })),
-    );
-    if (!data || !Array.isArray(data.cells)) return out;
-    for (const cell of data.cells) {
-      if (
-        !Number.isInteger(cell.dow) ||
-        !Number.isInteger(cell.hour) ||
-        cell.dow < 0 ||
-        cell.dow > 6 ||
-        cell.hour < 0 ||
-        cell.hour > 23
-      ) {
-        continue;
-      }
-      const blockIdx = HOUR_BLOCKS.findIndex(
-        (b) => cell.hour >= b.start && cell.hour < b.end,
-      );
-      if (blockIdx < 0) continue;
-      const slot = out[cell.dow][blockIdx];
+  const { data, isLoading, error, mutate } = useApi<HeatmapResponse>(`/v1/timeseries/day-hour${filtersToQuery(params)}#${dbRev}`);
+  const [mode, setMode] = useState<"wr" | "volume">("volume");
+  const [selection, setSelection] = useState<number | null>(null);
+  const cellRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const cells = useMemo(() => {
+    const out: CellAgg[] = Array.from({ length: 7 * BLOCK_COUNT }, () => ({ total: 0, wins: 0, losses: 0 }));
+    for (const cell of data?.cells ?? []) {
+      if (!Number.isInteger(cell.dow) || !Number.isInteger(cell.hour) || cell.dow < 0 || cell.dow > 6 || cell.hour < 0 || cell.hour > 23) continue;
+      const slot = out[cell.dow * BLOCK_COUNT + Math.floor(cell.hour / 4)];
       slot.total += cell.total || 0;
       slot.wins += cell.wins || 0;
       slot.losses += cell.losses || 0;
     }
     return out;
   }, [data]);
-
-  const maxTotal = useMemo(() => {
-    let m = 0;
-    for (const row of grid) for (const cell of row) if (cell.total > m) m = cell.total;
-    return m;
-  }, [grid]);
-
-  if (error) return <TrendsRequestError title="Performance by time of day" error={error} retry={mutate} />;
-
-  if (isLoading) {
-    return (
-      <Card title="Performance by time of day">
-        <Skeleton rows={3} />
-      </Card>
-    );
-  }
-
-  if (!data || data.totalGames === 0) {
-    return (
-      <Card title="Performance by time of day">
-        <EmptyState
-          title="No games to plot"
-          sub="The day-of-week × hour heatmap fills in when the selected records include games."
-        />
-      </Card>
-    );
-  }
+  const peakIndex = cells.reduce((best, cell, index) => cell.total > cells[best].total ? index : best, 0);
+  const selectedIndex = selection ?? peakIndex;
+  const selected = cells[selectedIndex];
+  const maxTotal = cells[peakIndex].total;
+  const selectedLabel = `${DAY_LABELS[Math.floor(selectedIndex / BLOCK_COUNT)]} ${labels[selectedIndex % BLOCK_COUNT]}`;
+  const onCellKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let next = index;
+    if (event.key === "ArrowRight") next = Math.min(cells.length - 1, index + 1);
+    else if (event.key === "ArrowLeft") next = Math.max(0, index - 1);
+    else if (event.key === "ArrowDown") next = Math.min(cells.length - 1, index + BLOCK_COUNT);
+    else if (event.key === "ArrowUp") next = Math.max(0, index - BLOCK_COUNT);
+    else if (event.key === "Home") next = Math.floor(index / BLOCK_COUNT) * BLOCK_COUNT;
+    else if (event.key === "End") next = Math.floor(index / BLOCK_COUNT) * BLOCK_COUNT + BLOCK_COUNT - 1;
+    else return;
+    event.preventDefault();
+    cellRefs.current[next]?.focus();
+  };
+  if (error) return <TrendsRequestError title="Activity by time of day" error={error} retry={mutate} />;
+  if (isLoading) return <Card title="Activity by time of day"><Skeleton rows={3} /></Card>;
+  if (!data || !maxTotal) return <Card title="Activity by time of day"><EmptyState title="No games to plot" sub="The day and time grid fills in when the selected records include games." /></Card>;
 
   return (
-    <Card
-      title="Performance by time of day"
-      right={
-        <div className="flex items-center gap-1 text-micro">
-          <button
-            type="button"
-            onClick={() => setMode("wr")}
-            className={[
-              "rounded px-2 py-0.5",
-              mode === "wr"
-                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                : "bg-bg-elevated text-text-muted hover:text-text",
-            ].join(" ")}
-          >
-            Win rate
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("volume")}
-            className={[
-              "rounded px-2 py-0.5",
-              mode === "volume"
-                ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-                : "bg-bg-elevated text-text-muted hover:text-text",
-            ].join(" ")}
-          >
-            Volume
-          </button>
-        </div>
-      }
-    >
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {(() => {
-          const apiTz = data.timezone || "UTC";
-          if (apiTz === tz) {
-            return (
-              <>
-                Times in your local timezone (
-                <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-micro text-text-muted">
-                  {apiTz}
-                </code>
-                ).
-              </>
-            );
-          }
-          return (
-            <>
-              Times in{" "}
-              <code className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-micro text-text-muted">
-                {apiTz}
-              </code>{" "}
-              (the API converted from your filters).
-            </>
-          );
-        })()}
-      </p>
-      <div className="overflow-x-auto">
-        <div className="inline-grid min-w-full" style={{ gridTemplateColumns: `auto repeat(${HOUR_BLOCKS.length}, minmax(0, 1fr))` }}>
-          <div />
-          {formattedBlocks.map((label, blockIdx) => (
-            <div
-              key={blockIdx}
-              className="whitespace-nowrap px-1 pb-1 text-center text-micro tabular-nums tracking-wide text-text-dim"
-            >
-              {label}
-            </div>
-          ))}
-          {DAY_LABELS.map((day, dowIdx) => (
-            <div className="contents" key={day}>
-              <div className="pr-2 text-right text-micro font-medium text-text-muted">
-                {day}
-              </div>
-              {grid[dowIdx].map((cell, blockIdx) => (
-                <HeatCell
-                  key={`${dowIdx}-${blockIdx}`}
-                  cell={cell}
-                  mode={mode}
-                  maxTotal={maxTotal}
-                  label={`${day} ${formattedBlocks[blockIdx]}`}
-                />
-              ))}
-            </div>
-          ))}
+    <Card title="Activity by time of day" className="min-w-0">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-caption text-text-muted">Four-hour blocks · {data.timezone || "UTC"}</p>
+        <div className="inline-flex rounded-lg border border-border bg-bg-elevated p-0.5" role="group" aria-label="Time of day measure">
+          {(["volume", "wr"] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value} onClick={() => setMode(value)} className={`min-h-11 rounded-md px-3 text-caption font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${mode === value ? "bg-accent text-white" : "text-text-muted hover:text-text"}`}>{value === "volume" ? "Games played" : "Win rate"}</button>)}
         </div>
       </div>
-      <Legend mode={mode} maxTotal={maxTotal} />
+      <p className="mb-3 text-micro leading-relaxed text-text-muted">
+        {mode === "volume" ? `Stronger color means more ${recordLabel}. Select a cell for its results.` : `Rates appear after ${MIN_RATE_GAMES} ${recordLabel} in a cell; smaller samples show a dash. Counts remain visible below each rate.`}
+      </p>
+      <div className="overflow-x-auto pb-1">
+        <table className="w-full min-w-[320px] table-fixed border-separate border-spacing-1 text-micro" aria-label={`Day and time by ${mode === "volume" ? "games played" : "win rate"}`}>
+          <thead><tr><th className="w-8"><span className="sr-only">Day</span></th>{labels.map((label) => <th scope="col" key={label} className="pb-1 font-medium tabular-nums text-text-muted">{label}</th>)}</tr></thead>
+          <tbody>{DAY_LABELS.map((day, dow) => <tr key={day}>
+            <th scope="row" className="text-left font-medium text-text-muted">{day}</th>
+            {cells.slice(dow * BLOCK_COUNT, (dow + 1) * BLOCK_COUNT).map((cell, block) => {
+              const index = dow * BLOCK_COUNT + block;
+              const rate = cell.total ? cell.wins / cell.total : 0;
+              const ready = cell.total >= MIN_RATE_GAMES;
+              const empty = cell.total === 0;
+              const details = empty ? "no games" : `${cell.total} ${recordLabel}, ${cell.wins} wins, ${cell.losses} losses, ${Math.round(rate * 100)}% win rate${!ready ? ", small sample" : ""}`;
+              return <td key={block} className="p-0">
+                <button type="button" ref={(node) => { cellRefs.current[index] = node; }} aria-label={`${day} ${labels[block]}: ${details}`} aria-pressed={index === selectedIndex} tabIndex={index === selectedIndex ? 0 : -1} onFocus={() => setSelection(index)} onClick={() => setSelection(index)} onKeyDown={(event) => onCellKeyDown(event, index)}
+                  className={`relative flex min-h-11 w-full flex-col items-center justify-center overflow-hidden rounded-md border text-micro tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${index === selectedIndex ? "border-text" : "border-transparent"} ${mode === "wr" && ready ? rateClass(rate) : "bg-bg-elevated text-text"}`}>
+                  {mode === "volume" && !empty && <span aria-hidden="true" className="absolute inset-0 bg-accent" style={{ opacity: 0.1 + cell.total / maxTotal * 0.5 }} />}
+                  <span className="relative font-semibold">{empty ? "·" : mode === "volume" ? cell.total.toLocaleString() : ready ? `${Math.round(rate * 100)}%` : "—"}</span>
+                  {mode === "wr" && !empty && <span className="relative text-[10px] leading-3 text-text-muted">{cell.total.toLocaleString()} {isGlobal ? "rec" : "g"}</span>}
+                </button>
+              </td>;
+            })}
+          </tr>)}</tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-micro text-text-muted" aria-label="Color legend">
+        {mode === "volume" ? <span>Few → many · busiest cell: {maxTotal.toLocaleString()} {recordLabel}</span> : <>
+          <span className="rounded bg-warning/25 px-2 py-1 text-text">Below 45%</span>
+          <span className="rounded bg-border px-2 py-1 text-text">45–55%</span>
+          <span className="rounded bg-accent-cyan/30 px-2 py-1 text-text">Above 55%</span>
+          <span className="self-center">— under {MIN_RATE_GAMES} {isGlobal ? "records" : "games"}</span>
+        </>}
+      </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3 text-caption">
+        <div className="flex flex-wrap items-baseline justify-between gap-2"><strong className="text-text">{selectedLabel}</strong><span className="tabular-nums text-text-muted">{selected.total.toLocaleString()} {recordLabel}</span></div>
+        {selected.total ? <p className="mt-1 tabular-nums text-text-muted">{selected.wins}W · {selected.losses}L{selected.total > selected.wins + selected.losses ? ` · ${selected.total - selected.wins - selected.losses} other` : ""} · {(selected.wins / selected.total * 100).toFixed(1)}% win rate{selected.total < MIN_RATE_GAMES ? " · Small sample" : ""}</p> : <p className="mt-1 text-text-muted">No selected games in this time block.</p>}
+      </div>
+      <p className="mt-2 text-micro leading-relaxed text-text-muted">These are observed results, not a best-time recommendation. Opponents and matchups can vary by time.{isGlobal ? " Results combine the selected players." : ""} Use arrow keys to explore the grid.</p>
     </Card>
   );
-}
-
-function HeatCell({
-  cell,
-  mode,
-  maxTotal,
-  label,
-}: {
-  cell: CellAgg;
-  mode: "wr" | "volume";
-  maxTotal: number;
-  label: string;
-}) {
-  const wr = cell.total ? cell.wins / cell.total : 0;
-  const vol = maxTotal ? cell.total / maxTotal : 0;
-  const empty = cell.total === 0;
-
-  // Win-rate mode: hue comes from the discrete tier the cell's win rate
-  // falls into (see WR_TIERS), so the eight legend bands are each
-  // distinguishable on the grid instead of collapsing at the old 30/65
-  // clamps. Intensity stays a volume dial so a 1-0 cell doesn't blare at
-  // full saturation, but the floor is high enough that low-volume cells
-  // still read as clearly tinted instead of washing out against the
-  // light theme.
-  const wrIntensity = empty ? 0 : 0.65 + Math.min(1, vol * 1.5) * 0.35;
-  const volIntensity = empty ? 0 : 0.18 + vol * 0.7;
-
-  const background = empty
-    ? "rgba(31, 37, 51, 0.4)"
-    : mode === "wr"
-      ? wrColor(wr, wrIntensity)
-      : `rgba(124, 140, 255, ${volIntensity.toFixed(3)})`;
-
-  const tooltipText =
-    cell.total === 0
-      ? `${label}: no games`
-      : `${label} • ${cell.wins} W – ${cell.losses} L • ${Math.round(wr * 100)}% win rate`;
-
-  return (
-    <div
-      className="m-0.5 flex aspect-square items-center justify-center rounded text-micro font-semibold tabular-nums text-text"
-      style={{ background }}
-      title={tooltipText}
-      aria-label={tooltipText}
-    >
-      <span className={empty ? "text-text-dim" : "text-text"}>
-        {empty ? "·" : cell.total}
-      </span>
-    </div>
-  );
-}
-
-function Legend({
-  mode,
-  maxTotal,
-}: {
-  mode: "wr" | "volume";
-  maxTotal: number;
-}) {
-  if (mode === "wr") {
-    return (
-      <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-micro text-text-dim">
-        <span className="mr-0.5">WR ramp:</span>
-        {WR_TIERS.filter((tier) => tier.inLegend).map((tier) => (
-          <span
-            key={tier.label}
-            className="rounded px-1.5 py-0.5 font-medium tabular-nums"
-            style={{
-              background: `rgb(${tier.rgb[0]}, ${tier.rgb[1]}, ${tier.rgb[2]})`,
-              color: wrTierTextColor(tier.rgb),
-            }}
-          >
-            {tier.label}
-          </span>
-        ))}
-        {/* Break to its own line on phones so seven swatches + the note
-            never crowd into an unreadable run; inline from sm up. */}
-        <span className="basis-full text-text-dim sm:ml-2 sm:basis-auto">
-          · cell number = games played
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 text-micro text-text-dim">
-      <span>Volume ramp:</span>
-      <span
-        className="rounded px-1.5 py-0.5 text-text"
-        style={{ background: "rgba(124, 140, 255, 0.18)" }}
-      >
-        few
-      </span>
-      <span
-        className="rounded px-1.5 py-0.5 text-text"
-        style={{ background: "rgba(124, 140, 255, 0.5)" }}
-      >
-        avg
-      </span>
-      <span
-        className="rounded px-1.5 py-0.5 text-white"
-        style={{ background: "rgba(124, 140, 255, 0.88)" }}
-      >
-        peak
-      </span>
-      <span className="ml-2">
-        · {maxTotal > 0 ? `peak = ${maxTotal} game${maxTotal === 1 ? "" : "s"}` : ""}
-      </span>
-    </div>
-  );
-}
-
-function wrColor(rate: number, intensity: number): string {
-  // Discrete eight-band tier ramp (deep red → neutral → deep green)
-  // so each legend swatch is visible on the grid. See `WR_TIERS` /
-  // `wrTier` in lib/format.ts. Intensity carries the volume signal.
-  const [r, g, b] = wrTier(rate).rgb;
-  return `rgba(${r}, ${g}, ${b}, ${intensity.toFixed(3)})`;
 }

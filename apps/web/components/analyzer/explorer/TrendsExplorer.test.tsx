@@ -132,6 +132,28 @@ describe("TrendsExplorer real data navigation and filtering", () => {
     expect(params().get("interval")).toBe("month");
   });
 
+  it.each([false, true])("keeps equal-player group weighting separate from execution timing (global=%s)", (global) => {
+    mount(global);
+    fireEvent.click(screen.getByRole("button", { name: "Compare groups" }));
+    fireEvent.change(screen.getByLabelText("Weight results"), { target: { value: "players" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply comparison" }));
+    expect(params().get("weight")).toBe("players");
+    expect(screen.getByText("player-weighted win rate")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Build execution" }));
+    // Execution exposes milestone/build/period controls. Without an explicit
+    // weight query, the endpoint computes one sample per game in either scope.
+    expect(params().get("weight")).toBeNull();
+    expect(screen.queryByLabelText("Weight results")).toBeNull();
+    expect(screen.getByText(/Latest period:/).textContent).toContain("median · 12 timing samples");
+    expect(screen.queryByText(/player-weighted median/)).toBeNull();
+    expect(screen.queryByText(/Each player has equal weight in the timing distribution/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Compare groups" }));
+    expect(params().get("weight")).toBe("players");
+    expect(screen.getByText("player-weighted win rate")).toBeTruthy();
+  });
+
   it("keeps account choices visible during a same-scope comparison reload", () => {
     mount(true);
     fireEvent.click(screen.getByRole("button", { name: "Compare groups" }));

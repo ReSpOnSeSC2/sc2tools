@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { OppMmrBucketsChart } from "../OppMmrBucketsChart";
+import { TrendsDataProvider } from "@/lib/trendsDataContext";
 
 const useApiMock = vi.fn();
 
@@ -86,6 +87,31 @@ afterEach(() => {
 });
 
 describe("OppMmrBucketsChart width toggle", () => {
+  it("shows sparse and empty brackets honestly with a game-weighted reference", () => {
+    const data = responseAt(500);
+    data.buckets[0] = { ...data.buckets[0], total: 1, wins: 1, losses: 0, winRate: 1 };
+    data.buckets[1] = { ...data.buckets[1], total: 4, wins: 0, losses: 4, winRate: 0 };
+    data.buckets.push({ ...data.buckets[1], lo: 5500, hi: 6000, total: 0, wins: 0, losses: 0 });
+    useApiMock.mockReturnValue({ isLoading: false, data });
+    render(<OppMmrBucketsChart />);
+    expect(screen.getByText("Rated opponents overall 20%")).toBeTruthy();
+    const empty = screen.getByText("5500–5999").closest("li")!;
+    expect(empty.textContent).toContain("No games");
+    expect(empty.textContent).toContain("—");
+    expect(empty.querySelector("button")).toBeNull();
+    const lossBand = screen.getByRole("button", { name: "List the 4 games against 5000–5499 MMR opponents" });
+    expect(lossBand.textContent).toContain("0%");
+    expect(lossBand.textContent).toContain("4 games · 0W · 4L");
+    expect(lossBand.textContent).toContain("Small sample");
+  });
+
+  it("labels global cohorts as player game records", () => {
+    useApiMock.mockReturnValue({ isLoading: false, data: responseAt(500) });
+    render(<TrendsDataProvider mode="global"><OppMmrBucketsChart /></TrendsDataProvider>);
+    expect(screen.getByRole("button", { name: "List the 40 player game records against 4500–4999 MMR opponents" })).toBeTruthy();
+    expect(screen.getByText("40 player game records · 30W · 10L")).toBeTruthy();
+  });
+
   it("opens on 500-MMR bands and asks the API for them", () => {
     useApiMock.mockReturnValue({ isLoading: false, data: responseAt(500) });
 
@@ -101,8 +127,8 @@ describe("OppMmrBucketsChart width toggle", () => {
     expect(widthButton(at(100)).getAttribute("aria-pressed")).toBe("false");
     expect(widthButton(AUTO).getAttribute("aria-pressed")).toBe("false");
 
-    // The caption and the tiles both describe 500-wide brackets.
-    expect(screen.getByText(/Each bar = a 500-MMR band/)).toBeTruthy();
+    // The caption and comparison rows both describe 500-wide brackets.
+    expect(screen.getByText(/Compare 500-MMR bands/)).toBeTruthy();
     expect(screen.getByText("4500–4999")).toBeTruthy();
     expect(screen.getByText("5000–5499")).toBeTruthy();
   });
@@ -139,7 +165,7 @@ describe("OppMmrBucketsChart width toggle", () => {
     expect(lastRequest()).toContain("bucket_width=auto");
     expect(widthButton(AUTO).getAttribute("aria-pressed")).toBe("true");
     expect(widthButton(AUTO).textContent).toBe("Auto(100)");
-    expect(screen.getByText(/Each bar = a 100-MMR band/)).toBeTruthy();
+    expect(screen.getByText(/Compare 100-MMR bands/)).toBeTruthy();
   });
 
   it("keeps the narrower widths one tap away", () => {
@@ -166,7 +192,7 @@ describe("OppMmrBucketsChart width toggle", () => {
     expect(lastRequest()).toContain("bucket_width=300");
     expect(widthButton(at(300)).getAttribute("aria-pressed")).toBe("true");
     expect(widthButton(at(500)).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByText(/Each bar = a 300-MMR band/)).toBeTruthy();
+    expect(screen.getByText(/Compare 300-MMR bands/)).toBeTruthy();
     expect(screen.getByText("4500–4799")).toBeTruthy();
     expect(screen.getByText("4800–5099")).toBeTruthy();
   });

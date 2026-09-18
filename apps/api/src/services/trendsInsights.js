@@ -792,7 +792,15 @@ async function mixOverTime(deps, userId, opts, filters, cfg) {
  * @param {object} filters
  */
 async function mapTrend(deps, userId, opts, filters) {
-  return mixOverTime(deps, userId, opts, filters, {
+  const requestedInterval = deps.pickInterval(opts && opts.interval);
+  const match = deps.gamesMatchStage(userId, filters);
+  // Daily map rows can reach the shared cross-tab cap on long histories.
+  // Widen using the same filtered range as the main win-rate series so the
+  // ascending limit cannot silently discard the player's recent games.
+  const interval = typeof deps.fitInterval === "function"
+    ? await deps.fitInterval(match, requestedInterval)
+    : requestedInterval;
+  return mixOverTime(deps, userId, { ...opts, interval }, filters, {
     field: "map",
     fallback: "Unknown",
   });

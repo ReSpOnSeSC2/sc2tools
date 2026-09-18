@@ -1,255 +1,57 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-  Cell,
-} from "recharts";
-import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { wrColor } from "@/lib/format";
-import { ChartTooltip } from "./ChartTooltip";
+import { WinRateComparison } from "./WinRateComparison";
 
-type LengthBucket =
-  | "0–3m"
-  | "3–6m"
-  | "6–9m"
-  | "9–12m"
-  | "12–15m"
-  | "15–20m"
-  | "20–25m"
-  | "25m+";
+type LengthBucket = "0–3m" | "3–6m" | "6–9m" | "9–12m" | "12–15m" | "15–20m" | "20–25m" | "25m+";
+type LengthBucketRow = { bucket: LengthBucket; wins: number; losses: number; total: number; winRate: number; avgSec: number };
+type LengthBucketResponse = { buckets: LengthBucketRow[] };
+const ORDER: LengthBucket[] = ["0–3m", "3–6m", "6–9m", "9–12m", "12–15m", "15–20m", "20–25m", "25m+"];
 
-type LengthBucketRow = {
-  bucket: LengthBucket;
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-  avgSec: number;
-};
-
-type LengthBucketResponse = {
-  buckets: LengthBucketRow[];
-};
-
-const ORDER: LengthBucket[] = [
-  "0–3m",
-  "3–6m",
-  "6–9m",
-  "9–12m",
-  "12–15m",
-  "15–20m",
-  "20–25m",
-  "25m+",
-];
-
-/**
- * WR by game-length bucket — surfaces patterns like "I coinflip in
- * long games" or "I close fast games well".
- *
- * Composed chart: bars are game counts (wins stacked on losses) using
- * the analyzer's WR colour ramp; the secondary axis carries the WR
- * line. A 50% reference line keeps the coinflip baseline visible.
- */
 export function GameLengthWrChart() {
   const { filters, dbRev } = useFilters();
-  const { data, isLoading, error, mutate } = useApi<LengthBucketResponse>(
-    `/v1/length-buckets${filtersToQuery(filters)}#${dbRev}`,
-  );
-
+  const { isGlobal } = useTrendsDataScope();
+  const { data, isLoading, error, mutate } = useApi<LengthBucketResponse>(`/v1/length-buckets${filtersToQuery(filters)}#${dbRev}`);
   const rows = useMemo(() => {
-    const byBucket = new Map<string, LengthBucketRow>();
-    for (const row of data?.buckets || []) {
-      byBucket.set(row.bucket, row);
-    }
-    return ORDER.map((b) => {
-      const row = byBucket.get(b);
-      if (row && row.total > 0) {
-        return {
-          bucket: b,
-          wins: row.wins,
-          losses: row.losses,
-          total: row.total,
-          // null (not 0) for empty buckets so the WR line skips them
-          // instead of nosediving to 0% and pretending we lost games
-          // we never played.
-          winRatePct: Math.round(row.winRate * 100) as number | null,
-          color: wrColor(row.winRate, row.total),
-        };
-      }
+    const byBucket = new Map((data?.buckets ?? []).map((row) => [row.bucket, row]));
+    return ORDER.map((bucket) => {
+      const row = byBucket.get(bucket);
       return {
-        bucket: b,
-        wins: 0,
-        losses: 0,
-        total: 0,
-        winRatePct: null as number | null,
-        color: "#3a4252",
+        key: bucket,
+        label: bucket,
+        rate: row && row.total > 0 ? row.winRate : null,
+        games: row?.total ?? 0,
+        wins: row?.wins ?? 0,
+        losses: row?.losses ?? 0,
       };
     });
   }, [data]);
-
-  const totalGames = rows.reduce((acc, r) => acc + r.total, 0);
+  const totalGames = rows.reduce((sum, row) => sum + row.games, 0);
+  const overallRate = totalGames > 0 ? rows.reduce((sum, row) => sum + row.wins, 0) / totalGames : null;
+  const hasOther = rows.some((row) => row.games > row.wins + row.losses);
 
   if (error) return <TrendsRequestError title="Win rate by game length" error={error} retry={mutate} />;
-
-  if (isLoading) {
-    return (
-      <Card title="Win rate by game length">
-        <Skeleton rows={3} />
-      </Card>
-    );
-  }
-
-  if (totalGames === 0) {
-    return (
-      <Card title="Win rate by game length">
-        <EmptyState
-          title="No games to bucket"
-          sub="Game-length analysis becomes useful once a few games of varied length are on record."
-        />
-      </Card>
-    );
-  }
+  if (isLoading) return <Card title="Win rate by game length"><Skeleton rows={3} /></Card>;
+  if (totalGames === 0) return (
+    <Card title="Win rate by game length">
+      <EmptyState title="No games to bucket" sub="Game-length analysis becomes useful once a few games of varied length are on record." />
+    </Card>
+  );
 
   return (
     <Card title="Win rate by game length">
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        Bar = games played · Line = win rate · 50% reference is the coinflip baseline.
+      <p className="-mt-1 mb-3 text-caption leading-relaxed text-text-muted">
+        Compare short and long games on the same scale. Each row includes its record, so a rare long game carries its sample size with it.
       </p>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 8, right: 24, bottom: 12, left: -8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2533" />
-            <XAxis
-              dataKey="bucket"
-              stroke="#6b7280"
-              fontSize={10}
-              tickMargin={6}
-              interval={0}
-              angle={-32}
-              textAnchor="end"
-              height={42}
-            />
-            <YAxis
-              yAxisId="games"
-              stroke="#6b7280"
-              fontSize={11}
-              allowDecimals={false}
-              label={{
-                value: "Games",
-                angle: -90,
-                position: "insideLeft",
-                style: { fill: "#6b7280", fontSize: 10 },
-                offset: 18,
-              }}
-            />
-            <YAxis
-              yAxisId="wr"
-              orientation="right"
-              stroke="#6b7280"
-              fontSize={11}
-              domain={[0, 100]}
-              tickFormatter={(v) => `${v}%`}
-              label={{
-                value: "WR",
-                angle: 90,
-                position: "insideRight",
-                style: { fill: "#6b7280", fontSize: 10 },
-                offset: 12,
-              }}
-            />
-            <ReferenceLine
-              yAxisId="wr"
-              y={50}
-              stroke="#3a4252"
-              strokeDasharray="2 4"
-            />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const r = payload[0].payload as {
-                  bucket: string;
-                  total: number;
-                  winRatePct: number | null;
-                };
-                return (
-                  <ChartTooltip
-                    header={r.bucket}
-                    rows={[
-                      {
-                        key: "wr",
-                        label: "Win rate",
-                        value: r.winRatePct == null ? "—" : `${r.winRatePct}%`,
-                      },
-                      {
-                        key: "games",
-                        label: "Games",
-                        value: `${r.total} game${r.total === 1 ? "" : "s"}`,
-                      },
-                    ]}
-                  />
-                );
-              }}
-            />
-            <Bar
-              yAxisId="games"
-              dataKey="total"
-              radius={[4, 4, 0, 0]}
-              minPointSize={3}
-            >
-              {rows.map((r) => (
-                <Cell key={r.bucket} fill={r.color} fillOpacity={0.85} />
-              ))}
-            </Bar>
-            <Line
-              yAxisId="wr"
-              type="linear"
-              dataKey="winRatePct"
-              stroke="#7c8cff"
-              strokeWidth={2.5}
-              dot={{ r: 3, fill: "#7c8cff" }}
-              connectNulls
-              isAnimationActive={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:grid-cols-8">
-        {rows.map((r) => (
-          <div
-            key={r.bucket}
-            className="rounded border border-border bg-bg-elevated/50 px-2.5 py-2"
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-x-1.5 gap-y-0.5">
-              <span className="whitespace-nowrap text-micro font-semibold text-text">
-                {r.bucket}
-              </span>
-              <span
-                className="whitespace-nowrap text-sm font-semibold tabular-nums"
-                style={{ color: r.color }}
-              >
-                {r.total > 0 ? `${r.winRatePct}%` : "—"}
-              </span>
-            </div>
-            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
-              {r.total > 0
-                ? `${r.wins}W · ${r.losses}L · ${r.total} games`
-                : "no games"}
-            </div>
-          </div>
-        ))}
-      </div>
+      <WinRateComparison rows={rows} baseline={overallRate} baselineLabel="All lengths" recordLabel={isGlobal ? "player game records" : "games"} ariaLabel="Win rate by recorded game duration" />
+      <p className="mt-3 border-t border-border pt-3 text-micro leading-relaxed text-text-dim">
+        Duration describes when games ended; it does not show that extending a game improves the chance of winning.
+        {hasOther ? " Other records have no win/loss result and remain in the win-rate denominator." : ""}
+      </p>
     </Card>
   );
 }

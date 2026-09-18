@@ -19,6 +19,7 @@ import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { formatTrendDate } from "@/lib/winRateTrend";
 import { ChartTooltip } from "./ChartTooltip";
 import { MmrDailySwings } from "./MmrDailySwings";
 import {
@@ -85,12 +86,12 @@ type MmrResponse = {
   latest: { bucket: string; mmr: number } | null;
 };
 
-const COLOR_ACCENT = "#7c8cff";
-const COLOR_SUCCESS = "#3ec07a";
-const COLOR_DANGER = "#ff6b6b";
-const COLOR_GRID = "#1f2533";
-const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
+const COLOR_ACCENT = "rgb(var(--accent))";
+const COLOR_SUCCESS = "rgb(var(--success))";
+const COLOR_DANGER = "rgb(var(--danger))";
+const COLOR_GRID = "rgb(var(--border))";
+const COLOR_TEXT_DIM = "rgb(var(--text-dim))";
+const COLOR_BG_SURFACE = "rgb(var(--bg-surface))";
 
 // Per-region base colours. The first account on a region uses the
 // base; any additional accounts on the same region cycle through the
@@ -116,6 +117,16 @@ const REGION_LABELS: Record<string, string> = {
 
 function regionLabel(region: string): string {
   return REGION_LABELS[region] || region;
+}
+
+/** Preserve local calendar spacing without reparsing a day in the browser timezone. */
+export function mmrCalendarTime(bucket: string, tz: string): number {
+  return Date.parse(`${localDateKey(bucket, tz)}T00:00:00.000Z`);
+}
+
+export function formatMmrDate(value: string | number | Date, includeYear = false): string {
+  const date = typeof value === "string" ? value.slice(0, 10) : (value instanceof Date ? value : new Date(value)).toISOString().slice(0, 10);
+  return formatTrendDate(date, includeYear);
 }
 
 /**
@@ -191,7 +202,7 @@ function responseSeries(data?: MmrResponse): LadderSeries[] {
 /**
  * MMR progression over time.
  *
- * Renders the closing MMR per bucket as a smooth line. When the
+ * Renders the last recorded MMR per bucket on a calendar-spaced line. When the
  * streamer has played on more than one Battle.net account (any
  * combination of regions or smurfs), the chart splits into one line
  * per account — labelled "<REGION> <bnid>" so a streamer with a
@@ -292,6 +303,7 @@ export function MmrProgressionChart({
     if (!displayData || !Array.isArray(displayData.points)) return [];
     return displayData.points.map((p) => ({
       date: localDateKey(p.bucket, tz),
+      time: mmrCalendarTime(p.bucket, tz),
       close: isGlobal ? (p.avgMmr ?? p.closeMmr) : p.closeMmr,
       min: p.minMmr,
       max: p.maxMmr,
@@ -313,7 +325,7 @@ export function MmrProgressionChart({
         const key = localDateKey(p.bucket, tz);
         let row = byDate.get(key);
         if (!row) {
-          row = { date: key };
+          row = { date: key, time: mmrCalendarTime(p.bucket, tz) };
           for (const other of multiSeries) row[other.key] = null;
           byDate.set(key, row);
         }
@@ -370,8 +382,8 @@ export function MmrProgressionChart({
         ) : (
           <>Last recorded verified ranked 1v1 MMR per {effectiveBucket} ·{" "}
             {multi
-              ? "one line per Battle.net account and selected ladder race; peak / trough / last recorded per series below."
-              : "shaded band = min/max recorded within the bucket; markers highlight peak, trough, and last recorded."}
+              ? "one line per Battle.net account and selected ladder race; cards show each ladder’s last recorded rating and range."
+              : "shading shows the recorded low–high range; markers highlight peak, trough, and last recorded."}
           </>
         )}
       </p>
@@ -393,12 +405,18 @@ export function MmrProgressionChart({
           {multi ? (
             <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
+              accessibilityLayer
               data={multiRows}
               margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
               <XAxis
-                dataKey="date"
+                dataKey="time"
+                type="number"
+                scale="utc"
+                domain={["dataMin", "dataMax"]}
+                ticks={multiRows.length === 1 ? [Number(multiRows[0].time)] : undefined}
+                tickFormatter={(value: number) => formatMmrDate(value)}
                 stroke={COLOR_TEXT_DIM}
                 fontSize={11}
                 minTickGap={28}
@@ -428,7 +446,7 @@ export function MmrProgressionChart({
                       };
                     });
                   if (!rows.length) return null;
-                  return <ChartTooltip header={String(label)} rows={rows} />;
+                  return <ChartTooltip header={formatMmrDate(label, true)} rows={rows} />;
                 }}
               />
               <Legend
@@ -444,12 +462,12 @@ export function MmrProgressionChart({
               {multiSeries.map((s) => (
                 <Line
                   key={s.key}
-                  type="monotone"
+                  type="linear"
                   dataKey={s.key}
                   name={s.key}
                   stroke={s.color}
                   strokeWidth={2.5}
-                  dot={false}
+                  dot={s.points.length <= 12 ? { r: 3, strokeWidth: 0 } : false}
                   connectNulls
                   activeDot={{
                     r: 4,
@@ -516,6 +534,7 @@ function SingleSeriesChart({
 }: {
   rows: Array<{
     date: string;
+    time: number;
     close: number;
     band: [number, number];
   }>;
@@ -524,24 +543,24 @@ function SingleSeriesChart({
   tz: string;
   isGlobal?: boolean;
 }) {
-  const peakKey = data?.peak ? localDateKey(data.peak.bucket, tz) : null;
-  const troughKey = data?.trough ? localDateKey(data.trough.bucket, tz) : null;
-  const latestKey = data?.latest ? localDateKey(data.latest.bucket, tz) : null;
+  const peakKey = data?.peak ? mmrCalendarTime(data.peak.bucket, tz) : null;
+  const troughKey = data?.trough ? mmrCalendarTime(data.trough.bucket, tz) : null;
+  const latestKey = data?.latest ? mmrCalendarTime(data.latest.bucket, tz) : null;
   return (
     <ResponsiveContainer width="100%" height="100%">
     <ComposedChart
+      accessibilityLayer
       data={rows}
       margin={{ top: 8, right: 24, bottom: 4, left: 4 }}
     >
-      <defs>
-        <linearGradient id="mmrFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={COLOR_ACCENT} stopOpacity={0.32} />
-          <stop offset="100%" stopColor={COLOR_ACCENT} stopOpacity={0} />
-        </linearGradient>
-      </defs>
       <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
       <XAxis
-        dataKey="date"
+        dataKey="time"
+        type="number"
+        scale="utc"
+        domain={["dataMin", "dataMax"]}
+        ticks={rows.length === 1 ? [rows[0].time] : undefined}
+        tickFormatter={(value: number) => formatMmrDate(value)}
         stroke={COLOR_TEXT_DIM}
         fontSize={11}
         minTickGap={28}
@@ -567,24 +586,30 @@ function SingleSeriesChart({
         cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
         content={({ active, payload, label }) => {
           if (!active || !payload || payload.length === 0) return null;
-          const row = payload[0].payload as { close: number };
+          const row = payload[0].payload as { close: number; band?: [number, number]; games?: number };
           if (row.close == null) return null;
           return (
             <ChartTooltip
-              header={String(label)}
+              header={formatMmrDate(label, true)}
               rows={[
                 {
                   key: "close",
                   label: isGlobal ? "Average MMR" : "Last recorded MMR",
                   value: displayMmr(row.close, isGlobal),
                 },
+                ...(row.band ? [{
+                  key: "range",
+                  label: "Recorded range",
+                  value: `${displayMmr(row.band[0], isGlobal)}–${displayMmr(row.band[1], isGlobal)}`,
+                }] : []),
+                ...(typeof row.games === "number" ? [{ key: "games", label: "Games with a rating", value: row.games.toLocaleString() }] : []),
               ]}
             />
           );
         }}
       />
       <Area
-        type="monotone"
+        type="linear"
         dataKey="band"
         stroke="none"
         fill={COLOR_ACCENT}
@@ -594,21 +619,12 @@ function SingleSeriesChart({
         activeDot={false}
         legendType="none"
       />
-      <Area
-        type="monotone"
-        dataKey="close"
-        stroke="none"
-        fill="url(#mmrFill)"
-        isAnimationActive={false}
-        activeDot={false}
-        legendType="none"
-      />
       <Line
-        type="monotone"
+        type="linear"
         dataKey="close"
         stroke={COLOR_ACCENT}
         strokeWidth={2.5}
-        dot={false}
+        dot={rows.length <= 12 ? { r: 3, strokeWidth: 0 } : false}
         activeDot={{ r: 5, fill: COLOR_ACCENT, stroke: COLOR_BG_SURFACE, strokeWidth: 2 }}
         isAnimationActive={false}
       />
@@ -764,12 +780,12 @@ function MmrHeadline({
 
 /**
  * Tight Y-domain that pads ~5% above/below the extremes so the line
- * doesn't hug the chart edges, but never lets the range collapse so
- * far that a 20-MMR swing looks like a cliff. Falls back to "auto"
+ * doesn't hug the chart edges, but keeps at least 100 MMR plus padding so
+ * a 20-MMR swing does not look like a cliff. Falls back to "auto"
  * when the series is empty (the empty-state already short-circuits
  * before we ever reach here, but the guard keeps the type honest).
  */
-function computeYDomain(rows: Array<{ min: number; max: number }>): [number, number] | undefined {
+export function computeYDomain(rows: Array<{ min: number; max: number }>): [number, number] | undefined {
   if (!rows.length) return undefined;
   let lo = Infinity;
   let hi = -Infinity;
@@ -778,9 +794,12 @@ function computeYDomain(rows: Array<{ min: number; max: number }>): [number, num
     if (r.max > hi) hi = r.max;
   }
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) return undefined;
-  const range = Math.max(hi - lo, 80);
+  // Expand the actual domain around its centre. Padding an 80-point
+  // "range" without moving the bounds still exaggerated tiny changes.
+  const range = Math.max(hi - lo, 100);
+  const centre = (lo + hi) / 2;
   const pad = Math.max(20, Math.round(range * 0.08));
-  return [Math.max(0, Math.floor((lo - pad) / 10) * 10), Math.ceil((hi + pad) / 10) * 10];
+  return [Math.max(0, Math.floor((centre - range / 2 - pad) / 10) * 10), Math.ceil((centre + range / 2 + pad) / 10) * 10];
 }
 
 /**

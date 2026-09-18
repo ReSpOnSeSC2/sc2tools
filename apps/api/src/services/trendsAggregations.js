@@ -25,16 +25,21 @@ const { LIMITS } = require("../config/constants");
  *   bucketSwitch: () => object,
  *   pickInterval: (raw: unknown) => 'day' | 'week' | 'month',
  *   pickTimezone: (raw: unknown) => string,
+ *   fitInterval?: (match: object, requested: 'day'|'week'|'month') => Promise<'day'|'week'|'month'>,
  * }} deps
  * @param {string} userId
  * @param {{interval?: 'day'|'week'|'month', tz?: string, groupByOwnRace?: boolean}} opts
  * @param {object} filters
  */
 async function matchupTimeseries(deps, userId, opts, filters) {
-  const interval = deps.pickInterval(opts && opts.interval);
+  const requestedInterval = deps.pickInterval(opts && opts.interval);
   const timezone = deps.pickTimezone(opts && opts.tz);
   const groupByOwnRace = opts?.groupByOwnRace === true;
   const match = deps.gamesMatchStage(userId, filters);
+  // Daily recent-form requests must retain the newest games on long histories.
+  const interval = typeof deps.fitInterval === "function"
+    ? await deps.fitInterval(match, requestedInterval)
+    : requestedInterval;
   const rows = /** @type {Array<Omit<MatchupTimeseriesPoint, 'winRate'>>} */ (await deps.games
     .aggregate([
       { $match: match },

@@ -1,25 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-} from "recharts";
-import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { MapPreviewDialog } from "@/components/maps/MapPreviewDialog";
-import { wrColor } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
-import { ChartTooltip } from "./ChartTooltip";
+import { buildWinRateTrend, type WinRatePeriod, type WinRateTrend } from "@/lib/winRateTrend";
+import { WinRateSampleSummary, WinRateTrendPlot } from "./WinRateTrendPlot";
 
 type MapPoint = {
   bucket: string;
@@ -34,71 +24,35 @@ type MapResponse = {
   points: MapPoint[];
 };
 
-type PanelPoint = {
-  date: string;
-  wins: number;
-  losses: number;
-  total: number;
-  winRatePct: number | null;
-  rollingPct: number | null;
-};
-
-const COLOR_GRID = "#1f2533";
-const COLOR_BORDER_STRONG = "#2a3142";
-const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_ACCENT = "#7c8cff";
+type MapPanelData = { label: string; trend: WinRateTrend };
 
 const TOP_N_OPTIONS = [4, 6, 8] as const;
 const DEFAULT_TOP_N = 6;
-const ROLL_BY_BUCKET: Record<"day" | "week" | "month", number> = {
-  day: 7,
-  week: 4,
-  month: 2,
-};
+const TARGET_GAMES = 20;
 
 /**
- * Per-map WR over time, rendered as a grid of small multiples for
- * the user's top-N maps by volume in the visible window.
- *
- * Each panel shares the same Y axis (0-100%) and the global X
- * axis (bucket dates) so the eye can scan across to spot a map
- * that's quietly dipped while the others held steady. The 50%
- * coinflip reference is on every panel; a dashed per-map line at
- * that map's overall WR shows whether the rolling trace is above
- * or below its own baseline.
+ * Compare map form at a consistent sample size. Keep the requested interval
+ * daily even when activity charts change grouping. Long API ranges can still
+ * widen, so samples always retain whole returned periods.
  */
-export function MapTrendChart({
-  bucket,
-}: {
-  bucket: "day" | "week" | "month";
-}) {
+export function MapTrendChart(_props: { bucket: "day" | "week" | "month" }) {
   const { filters, dbRev } = useFilters();
+  const { isGlobal } = useTrendsDataScope();
+  const recordLabel = isGlobal ? "player game records" : "games";
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(
-    () => ({ ...filters, interval: bucket, tz }),
-    [filters, bucket, tz],
+    () => ({ ...filters, interval: "day", tz }),
+    [filters, tz],
   );
   const { data, isLoading, error, mutate } = useApi<MapResponse>(
     `/v1/timeseries/maps${filtersToQuery(params)}#${dbRev}`,
   );
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
   const [previewMap, setPreviewMap] = useState<string | null>(null);
-  const effectiveBucket = data?.interval ?? bucket;
-  const rollWindow = ROLL_BY_BUCKET[effectiveBucket];
-
-  const { panels, totalGames, dateRange } = useMemo(
-    () => shapeMaps(data?.points || [], tz, topN, rollWindow),
-    [data, tz, topN, rollWindow],
+  const { panels, dateDomain } = useMemo(
+    () => shapeMaps(data?.points ?? [], tz, topN),
+    [data, tz, topN],
   );
-
-  const showYearTicks = useMemo(() => {
-    if (!dateRange.earliest || !dateRange.latest) return false;
-    // Spanning years — or ending in a past one — both need the year.
-    if (dateRange.earliest.slice(0, 4) !== dateRange.latest.slice(0, 4)) {
-      return true;
-    }
-    return dateRange.latest.slice(0, 4) !== String(new Date().getFullYear());
-  }, [dateRange]);
 
   if (error) return <TrendsRequestError title="Map performance over time" error={error} retry={mutate} />;
 
@@ -110,36 +64,39 @@ export function MapTrendChart({
     );
   }
 
-  if (totalGames === 0 || panels.length === 0) {
+  if (panels.length === 0) {
     return (
       <Card title="Map performance over time">
         <EmptyState
           title="No map data to chart yet"
-          sub="Per-map trend lines appear when the selected records include games across several maps."
+          sub="Map form appears when the selected records include games with map information."
         />
       </Card>
     );
   }
 
-  const intervalLabel =
-    effectiveBucket === "day" ? "daily" : effectiveBucket === "week" ? "weekly" : "monthly";
+  const periodLabel = data?.interval === "week" ? "weeks" : data?.interval === "month" ? "months" : "days";
 
   return (
     <>
-      <Card
-        title="Map performance over time"
-        right={
-          <div className="flex items-center gap-1 text-micro">
-            <span className="text-text-dim">Top</span>
+      <Card title="Map performance over time" className="min-w-0">
+        <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <p className="min-w-0 flex-1 basis-64 text-caption leading-relaxed text-text-muted">
+            Recent form from at least {TARGET_GAMES} {recordLabel} per map. Smaller samples stay in the building stage.
+          </p>
+          <div role="group" aria-label="Number of maps to show" className="flex shrink-0 items-center gap-1 text-caption">
+            <span className="mr-1 text-text-muted">Top</span>
             {TOP_N_OPTIONS.map((n) => (
               <button
                 key={n}
                 type="button"
+                aria-label={`Show top ${n} maps`}
+                aria-pressed={topN === n}
                 onClick={() => setTopN(n)}
                 className={[
-                  "rounded px-2 py-0.5",
+                  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-3 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface",
                   topN === n
-                    ? "bg-accent/20 text-accent ring-1 ring-accent/40"
+                    ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/40"
                     : "bg-bg-elevated text-text-muted hover:text-text",
                 ].join(" ")}
               >
@@ -147,72 +104,38 @@ export function MapTrendChart({
               </button>
             ))}
           </div>
-        }
-      >
-        <p className="-mt-1 mb-3 text-caption text-text-dim">
-          One panel per top map (by volume) · faint = {intervalLabel} WR, bold
-          = {" "}
-          {rollWindow}-period rolling · dashed reference = that map's overall
-          WR.
-        </p>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {panels.map((p) => (
-            <MapPanel
-              key={p.label}
-              panel={p}
-              showYear={showYearTicks}
-              onOpenPreview={setPreviewMap}
-            />
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {panels.map((panel) => (
+            <MapPanel key={panel.label} panel={panel} recordLabel={recordLabel} interval={data?.interval ?? "day"} dateDomain={dateDomain} onOpenPreview={setPreviewMap} />
           ))}
         </div>
+        <p className="mt-4 text-micro leading-relaxed text-text-dim">
+          Maps ranked by volume in this range. Samples keep whole {periodLabel}, so the count can exceed {TARGET_GAMES}. Each {isGlobal ? "player game record" : "game"} has equal weight.
+        </p>
       </Card>
-      <MapPreviewDialog
-        mapName={previewMap}
-        onClose={() => setPreviewMap(null)}
-      />
+      <MapPreviewDialog mapName={previewMap} onClose={() => setPreviewMap(null)} />
     </>
   );
 }
 
 function MapPanel({
   panel,
-  showYear,
+  recordLabel,
+  interval,
+  dateDomain,
   onOpenPreview,
 }: {
-  panel: {
-    label: string;
-    series: PanelPoint[];
-    totalGames: number;
-    totalWins: number;
-    recentDelta: number | null;
-    color: string;
-    overallWrPct: number;
-  };
-  showYear: boolean;
+  panel: MapPanelData;
+  recordLabel: string;
+  interval: "day" | "week" | "month";
+  dateDomain: [string, string] | undefined;
   onOpenPreview: (mapName: string) => void;
 }) {
-  const trendBadge =
-    panel.recentDelta != null && panel.totalGames >= 6 ? (
-      <span
-        className={
-          panel.recentDelta >= 3
-            ? "text-success"
-            : panel.recentDelta <= -3
-              ? "text-danger"
-              : "text-text-dim"
-        }
-        title={`Recent form vs overall: ${panel.recentDelta > 0 ? "+" : ""}${panel.recentDelta} pts`}
-      >
-        {panel.recentDelta > 0 ? "▲" : panel.recentDelta < 0 ? "▼" : "▬"}{" "}
-        {Math.abs(panel.recentDelta)}%
-      </span>
-    ) : null;
+  const { overall } = panel.trend;
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated/50 p-3">
-      {/* The map's real artwork thumbnail anchors the panel — the
-          MapArtwork resolver falls back to an initials tile when a
-          map has no image, so nothing here is ever placeholder data. */}
-      <div className="mb-2 flex items-center gap-2.5">
+    <div className="min-w-0 rounded-xl border border-border bg-bg-elevated/40 p-3 sm:p-4">
+      <div className="mb-3 flex min-w-0 items-center gap-2.5">
         <button
           type="button"
           aria-label={`View a larger image of ${panel.label}`}
@@ -221,268 +144,50 @@ function MapPanel({
           onClick={() => onOpenPreview(panel.label)}
           className="group/map inline-flex min-h-11 min-w-11 shrink-0 cursor-zoom-in items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-elevated"
         >
-          <MapArtwork
-            mapName={panel.label}
-            size="md"
-            alt=""
-            className="rounded-lg"
-          />
+          <MapArtwork mapName={panel.label} size="md" alt="" className="rounded-lg" />
         </button>
         <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-caption font-semibold text-text"
-            title={panel.label}
-          >
+          <h4 className="truncate text-caption font-semibold text-text" title={panel.label}>
             {panel.label}
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-caption tabular-nums">
-            <span className="font-semibold" style={{ color: panel.color }}>
-              {panel.overallWrPct}%
-            </span>
-            <span className="text-text-dim">
-              {panel.totalGames} game{panel.totalGames === 1 ? "" : "s"}
-            </span>
-            {trendBadge}
+          </h4>
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-micro tabular-nums text-text-muted">
+            <span>{overall.rate == null ? "—" : `${Math.round(overall.rate)}%`} overall</span>
+            <span>{overall.games.toLocaleString()} {overall.games === 1 ? recordLabel.slice(0, -1) : recordLabel}</span>
           </div>
         </div>
       </div>
-      <div className="h-36">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={panel.series}
-            margin={{ top: 4, right: 8, bottom: 0, left: -8 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
-            <XAxis
-              dataKey="date"
-              stroke={COLOR_TEXT_DIM}
-              fontSize={10}
-              tickFormatter={(v) => formatTick(v, showYear)}
-              minTickGap={32}
-              tickMargin={2}
-            />
-            <YAxis
-              stroke={COLOR_TEXT_DIM}
-              fontSize={10}
-              domain={[0, 100]}
-              ticks={[0, 50, 100]}
-              tickFormatter={(v) => `${v}%`}
-              width={36}
-            />
-            <ReferenceLine y={50} stroke={COLOR_BORDER_STRONG} strokeDasharray="2 4" />
-            <ReferenceLine
-              y={panel.overallWrPct}
-              stroke={panel.color}
-              strokeOpacity={0.5}
-              strokeDasharray="6 4"
-            />
-            <Tooltip
-              cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const p = payload[0].payload as PanelPoint;
-                const rows = [];
-                if (p.winRatePct != null) {
-                  rows.push({
-                    key: "period",
-                    label: "Win rate",
-                    value: `${p.winRatePct}% · ${p.total} game${
-                      p.total === 1 ? "" : "s"
-                    }`,
-                  });
-                }
-                if (p.rollingPct != null) {
-                  rows.push({
-                    key: "rolling",
-                    label: "Rolling",
-                    value: `${p.rollingPct}%`,
-                  });
-                }
-                if (!rows.length) return null;
-                return (
-                  <ChartTooltip
-                    header={`${panel.label} · ${formatTick(String(label), true)}`}
-                    rows={rows}
-                  />
-                );
-              }}
-            />
-            <Line
-              type="linear"
-              dataKey="winRatePct"
-              stroke={panel.color}
-              strokeOpacity={0.35}
-              strokeWidth={1.25}
-              dot={{ r: 1.5, strokeWidth: 0, fill: panel.color, fillOpacity: 0.4 }}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="rollingPct"
-              stroke={panel.color}
-              strokeWidth={2.4}
-              dot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      <WinRateSampleSummary trend={panel.trend} targetGames={TARGET_GAMES} compact recordLabel={recordLabel} interval={interval} />
+      <WinRateTrendPlot trend={panel.trend} compact label={`${panel.label} recent win rate`} recordLabel={recordLabel} interval={interval} dateDomain={dateDomain} />
     </div>
   );
 }
 
-function shapeMaps(
-  points: MapPoint[],
-  tz: string,
-  topN: number,
-  rollWindow: number,
-) {
-  const totals = new Map<string, number>();
-  let grandTotal = 0;
-  let earliest: string | null = null;
-  let latest: string | null = null;
-  for (const p of points) {
-    const t = p.total || 0;
-    totals.set(p.key, (totals.get(p.key) || 0) + t);
-    grandTotal += t;
-    const date = localDateKey(p.bucket, tz);
-    if (date && t > 0) {
-      if (!earliest || date < earliest) earliest = date;
-      if (!latest || date > latest) latest = date;
-    }
-  }
-  const top = [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, topN);
+function shapeMaps(points: MapPoint[], tz: string, topN: number): {
+  panels: MapPanelData[];
+  dateDomain: [string, string] | undefined;
+} {
+  const byMap = new Map<string, WinRatePeriod[]>();
   const dates = new Set<string>();
-  for (const p of points) {
-    const d = localDateKey(p.bucket, tz);
-    if (d) dates.add(d);
+  for (const point of points) {
+    const date = localDateKey(point.bucket, tz);
+    if (!date) continue;
+    dates.add(date);
+    const periods = byMap.get(point.key) ?? [];
+    // Keep every row: the shared helper coalesces duplicate map/date records.
+    periods.push({ date, wins: point.wins, losses: point.losses, games: point.total });
+    byMap.set(point.key, periods);
   }
   const sortedDates = [...dates].sort();
-  const byKey = new Map<string, MapPoint>();
-  for (const p of points) {
-    const d = localDateKey(p.bucket, tz);
-    if (!d) continue;
-    byKey.set(`${d}|${p.key}`, p);
-  }
-  const panels = top.map(([mapKey, mapTotal], idx) => {
-    let wins = 0;
-    const seriesRaw: Array<Omit<PanelPoint, "rollingPct">> = [];
-    for (const d of sortedDates) {
-      const p = byKey.get(`${d}|${mapKey}`);
-      if (p && p.total > 0) {
-        wins += p.wins;
-        seriesRaw.push({
-          date: d,
-          wins: p.wins,
-          losses: p.losses,
-          total: p.total,
-          winRatePct: Math.round((p.wins / p.total) * 100),
-        });
-      } else {
-        seriesRaw.push({
-          date: d,
-          wins: 0,
-          losses: 0,
-          total: 0,
-          winRatePct: null,
-        });
-      }
-    }
-    const series = withRolling(seriesRaw, rollWindow);
-    const overallWr = mapTotal > 0 ? wins / mapTotal : 0;
-    const overallWrPct = Math.round(overallWr * 100);
-    const recentDelta = computeRecentDelta(seriesRaw, overallWrPct);
-    return {
-      label: mapKey,
-      series,
-      totalGames: mapTotal,
-      totalWins: wins,
-      overallWrPct,
-      recentDelta,
-      // Per-map line colour follows the WR ramp on overall WR — a
-      // map you reliably win on reads green, a bleeder reads red.
-      color: wrColor(overallWr, mapTotal),
-      idx,
-    };
-  });
+  const panels = [...byMap.entries()]
+    .map(([label, periods]) => ({
+      label,
+      trend: buildWinRateTrend(periods, TARGET_GAMES),
+    }))
+    .filter((panel) => panel.trend.overall.games > 0)
+    .sort((a, b) => b.trend.overall.games - a.trend.overall.games || a.label.localeCompare(b.label))
+    .slice(0, topN);
   return {
     panels,
-    totalGames: grandTotal,
-    dateRange: { earliest, latest },
+    dateDomain: sortedDates.length ? [sortedDates[0], sortedDates[sortedDates.length - 1]] : undefined,
   };
-}
-
-function withRolling(
-  series: Array<Omit<PanelPoint, "rollingPct">>,
-  windowN: number,
-): PanelPoint[] {
-  const out: PanelPoint[] = [];
-  const queue: Array<Omit<PanelPoint, "rollingPct">> = [];
-  let wins = 0;
-  let total = 0;
-  for (const p of series) {
-    if (p.total > 0) {
-      queue.push(p);
-      wins += p.wins;
-      total += p.total;
-      if (queue.length > windowN) {
-        const dropped = queue.shift()!;
-        wins -= dropped.wins;
-        total -= dropped.total;
-      }
-    }
-    const ready = queue.length === windowN && total > 0;
-    out.push({
-      ...p,
-      rollingPct: ready ? Math.round((wins / total) * 100) : null,
-    });
-  }
-  return out;
-}
-
-function computeRecentDelta(
-  series: Array<Omit<PanelPoint, "rollingPct">>,
-  overallWrPct: number,
-): number | null {
-  const played = series.filter((p) => p.total > 0);
-  if (played.length < 4) return null;
-  const tail = played.slice(Math.max(0, played.length - Math.ceil(played.length / 4)));
-  let wins = 0;
-  let total = 0;
-  for (const p of tail) {
-    wins += p.wins;
-    total += p.total;
-  }
-  if (total === 0) return null;
-  return Math.round((wins / total) * 100) - overallWrPct;
-}
-
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
-
-function formatTick(value: string, showYear: boolean): string {
-  if (!value || value.length < 10) return value;
-  const [y, m, d] = value.split("-");
-  const monthIdx = Number.parseInt(m, 10) - 1;
-  const dayN = Number.parseInt(d, 10);
-  if (Number.isNaN(monthIdx) || monthIdx < 0 || monthIdx > 11) return value;
-  const month = MONTHS[monthIdx];
-  if (showYear) return `${month} '${y.slice(2)}`;
-  return `${month} ${dayN}`;
 }

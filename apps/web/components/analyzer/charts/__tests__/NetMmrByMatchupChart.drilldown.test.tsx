@@ -24,8 +24,8 @@ vi.mock("../NetMmrRaceOpponentsModal", () => ({
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Bar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  XAxis: () => null,
+  Bar: ({ children, dataKey, minPointSize }: { children: React.ReactNode; dataKey: string; minPointSize?: number }) => <div data-testid="mmr-bars" data-key={dataKey} data-min-size={minPointSize}>{children}</div>,
+  XAxis: ({ domain }: { domain: number[] }) => <div data-testid="mmr-axis" data-domain={JSON.stringify(domain)} />,
   YAxis: () => null,
   CartesianGrid: () => null,
   ReferenceLine: () => null,
@@ -39,6 +39,27 @@ afterEach(() => {
 });
 
 describe("NetMmrByMatchupChart opponent drill-down", () => {
+  it("compares total contribution or per-game impact without losing sample context", () => {
+    useApiMock.mockReturnValue({ data: {
+      matchups: [
+        { matchup: "PvP", myRace: "P", opponentRace: "P", netMmr: 120, avgDelta: 4, pairs: 30, games: 30, wins: 18, losses: 12, winRate: 0.6 },
+        { matchup: "PvT", myRace: "P", opponentRace: "T", netMmr: 0, avgDelta: 0, pairs: 2, games: 2, wins: 1, losses: 1, winRate: 0.5 },
+      ],
+    }, isLoading: false });
+    render(<NetMmrByMatchupChart />);
+    expect(screen.getByTestId("mmr-bars").getAttribute("data-key")).toBe("netMmr");
+    expect(screen.getByTestId("mmr-axis").getAttribute("data-domain")).toBe("[-140,140]");
+    fireEvent.click(screen.getByRole("button", { name: "Per game" }));
+    expect(screen.getByTestId("mmr-bars").getAttribute("data-key")).toBe("avgDelta");
+    expect(screen.getByTestId("mmr-axis").getAttribute("data-domain")).toBe("[-6,6]");
+    expect(screen.getByRole("button", { name: "Per game" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("mmr-bars").hasAttribute("data-min-size")).toBe(false);
+    expect(screen.getByText(/Small sample.*fewer than 20 measured games/)).toBeTruthy();
+    expect(screen.getByText(/30 measured games.*60.0% WR/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "View PvP MMR impact by opponent" }));
+    expect(screen.getByTestId("race-drilldown").textContent).toBe("Drill-down PvP");
+  });
+
   it("makes each matchup summary an accessible dialog launcher", () => {
     useApiMock.mockReturnValue({
       data: {

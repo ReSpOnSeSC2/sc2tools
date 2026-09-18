@@ -114,6 +114,20 @@ function metricValue(root: HTMLElement, label: string): string | null {
 }
 
 describe("MatchupGameLengthCard", () => {
+  it("leads with median duration and puts every matchup on the same zero-based minute scale", () => {
+    mockPopulatedCard();
+    render(<MatchupGameLengthCard />);
+    const pvt = matchupRow("PvT");
+    const tvz = matchupRow("TvZ");
+    expect(within(pvt).getByText("Typical (median)").nextElementSibling?.textContent).toBe("9:30");
+    expect(within(tvz).getByText("Typical (median)").nextElementSibling?.textContent).toBe("14:00");
+    expect(metricValue(pvt, "Average")).toBe("10:00");
+    expect(within(pvt).getByText("0:00")).toBeTruthy();
+    expect(within(pvt).getByText("15:00")).toBeTruthy();
+    expect(within(tvz).getByText("0:00")).toBeTruthy();
+    expect(within(pvt).getByText("Small sample · 4 measured games")).toBeTruthy();
+  });
+
   it("forwards global filters/dbRev and renders default total playtime for every real matchup", () => {
     mockPopulatedCard();
 
@@ -157,8 +171,8 @@ describe("MatchupGameLengthCard", () => {
     expect(matchupGrid.className).toContain("grid-cols-1");
     expect(matchupGrid.className).toContain("sm:grid-cols-2");
     expect(matchupGrid.className).toContain("xl:grid-cols-3");
-    expect(pvtView.getByText("Wins · 3")).toBeTruthy();
-    expect(pvtView.getByText("Losses · 1")).toBeTruthy();
+    expect(pvtView.getByText("Win average · 3")).toBeTruthy();
+    expect(pvtView.getByText("Loss average · 1")).toBeTruthy();
   });
 
   it("offers an accessible five-option time format and updates the overall and every matchup total", () => {

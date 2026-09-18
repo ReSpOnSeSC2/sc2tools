@@ -1,40 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-  Cell,
-} from "recharts";
 import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { pct1, wrColor } from "@/lib/format";
-import { ChartTooltip } from "./ChartTooltip";
+import { WinRateComparison } from "./WinRateComparison";
 
-type MomentumSplit = {
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-};
-
-type SessionPos = {
-  pos: number;
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-};
-
+type MomentumSplit = { wins: number; losses: number; total: number; winRate: number };
+type SessionPos = MomentumSplit & { pos: number };
 type MomentumResponse = {
   sessionGapMinutes: number;
   baseline: MomentumSplit;
@@ -43,367 +16,58 @@ type MomentumResponse = {
   sessionPositions: SessionPos[];
 };
 
-const COLOR_ACCENT = "#7c8cff";
-const COLOR_SUCCESS = "#3ec07a";
-const COLOR_DANGER = "#ff6b6b";
-const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_BG_SURFACE = "#11141b";
-const COLOR_GRID = "#1f2533";
-
-/**
- * Tilt & Momentum.
- *
- * Two views of the same psychology:
- *   1. Post-win vs post-loss win-rate (left): are you the player
- *      who tilts after a loss, or the one who shrugs it off?
- *   2. Within-session position curve (right): what's your WR on
- *      game 1, 2, 3, … of a session? Warm-up shapes look like an
- *      uphill ramp, fatigue shapes like a slow decline.
- *
- * The reference line on both panels is your overall win rate so a
- * 2-pt swing reads honestly as "barely different" rather than "huge
- * gap above zero".
- */
 export function MomentumChart() {
   const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
-  const { data, isLoading, error, mutate } = useApi<MomentumResponse>(
-    `/v1/momentum${filtersToQuery(filters)}#${dbRev}`,
-  );
+  const { data, isLoading, error, mutate } = useApi<MomentumResponse>(`/v1/momentum${filtersToQuery(filters)}#${dbRev}`);
 
-  if (error) return <TrendsRequestError title="Tilt & momentum" error={error} retry={mutate} />;
-
-  if (isLoading) {
-    return (
-      <Card title="Tilt & momentum">
-        <Skeleton rows={3} />
-      </Card>
-    );
-  }
-
-  if (!data || data.baseline.total === 0) {
-    return (
-      <Card title="Tilt & momentum">
-        <EmptyState
-          title="Not enough games yet"
-          sub={isGlobal ? "The selected players need back-to-back games to measure post-win and post-loss performance." : "Once you have a handful of back-to-back games on record, the post-win vs post-loss split fills in."}
-        />
-      </Card>
-    );
-  }
-
-  const baselinePct = Math.round(data.baseline.winRate * 100);
-  const minSampleForCurve = 3;
-  return (
-    <Card title="Tilt & momentum">
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {isGlobal ? "Sessions are measured separately for each player account and ladder race, then combined. " : ""}
-        Sessions split on a {data.sessionGapMinutes}-min gap · {isGlobal ? "the cohort's" : "your"} overall
-        win rate is {baselinePct}% (the dashed line on the curve panel).
-      </p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <TiltPanel
-          baseline={data.baseline}
-          postWin={data.postWin}
-          postLoss={data.postLoss}
-        />
-        <SessionCurvePanel
-          positions={data.sessionPositions}
-          baselinePct={baselinePct}
-          minSample={minSampleForCurve}
-        />
-      </div>
-      {!isGlobal && (
-        <TiltVerdict
-          baseline={data.baseline}
-          postWin={data.postWin}
-          postLoss={data.postLoss}
-        />
-      )}
+  if (error) return <TrendsRequestError title="Session patterns" error={error} retry={mutate} />;
+  if (isLoading) return <Card title="Session patterns"><Skeleton rows={3} /></Card>;
+  if (!data || data.baseline.total === 0) return (
+    <Card title="Session patterns">
+      <EmptyState title="Not enough games yet" sub={isGlobal ? "The selected players need recorded wins and losses to compare session patterns." : "Recorded wins and losses will show how results vary through a session."} />
     </Card>
   );
-}
 
-function TiltPanel({
-  baseline,
-  postWin,
-  postLoss,
-}: {
-  baseline: MomentumSplit;
-  postWin: MomentumSplit;
-  postLoss: MomentumSplit;
-}) {
-  const baselinePct = Math.round(baseline.winRate * 100);
-  const rows = useMemo(
-    () => [
-      {
-        label: "After a win",
-        pct: postWin.total > 0 ? Math.round(postWin.winRate * 100) : null,
-        sample: postWin.total,
-        color: wrColor(postWin.winRate, postWin.total),
-      },
-      {
-        label: "After a loss",
-        pct: postLoss.total > 0 ? Math.round(postLoss.winRate * 100) : null,
-        sample: postLoss.total,
-        color: wrColor(postLoss.winRate, postLoss.total),
-      },
-    ],
-    [postWin, postLoss],
-  );
-  return (
-    <div className="rounded-lg border border-border bg-bg-elevated/50 p-3">
-      <div className="mb-2 text-caption font-semibold text-text">
-        Win rate by previous game
-      </div>
-      <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={rows}
-            margin={{ top: 12, right: 16, bottom: 4, left: -8 }}
-            layout="vertical"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} horizontal={false} />
-            <XAxis
-              type="number"
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickFormatter={(v) => `${v}%`}
-              stroke={COLOR_TEXT_DIM}
-              fontSize={11}
-            />
-            <YAxis
-              type="category"
-              dataKey="label"
-              stroke={COLOR_TEXT_DIM}
-              fontSize={12}
-              width={100}
-              tickMargin={4}
-            />
-            {/* No Tooltip: the After-a-win / After-a-loss footer
-                cards below already show pct + sample, and on mobile
-                recharts' floating tooltip lands on top of the
-                two-row bar chart when a finger taps to read it. */}
-            <Bar dataKey="pct" radius={[0, 6, 6, 0]} minPointSize={2}>
-              {rows.map((r) => (
-                <Cell key={r.label} fill={r.color} fillOpacity={0.85} />
-              ))}
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-micro tabular-nums">
-        {rows.map((r) => (
-          <div
-            key={r.label}
-            className="rounded border border-border bg-bg-elevated/60 px-2 py-1.5"
-          >
-            <div className="text-text-dim">{r.label}</div>
-            <div>
-              <span className="font-semibold" style={{ color: r.color }}>
-                {r.pct == null ? "—" : `${r.pct}%`}
-              </span>{" "}
-              <span className="font-normal text-text-dim">
-                win rate · {r.sample.toLocaleString()} game
-                {r.sample === 1 ? "" : "s"}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  const recordLabel = isGlobal ? "player game records" : "games";
+  const afterRows = [
+    { ...data.postWin, key: "win", label: "After a win", games: data.postWin.total, rate: data.postWin.total ? data.postWin.winRate : null },
+    { ...data.postLoss, key: "loss", label: "After a loss", games: data.postLoss.total, rate: data.postLoss.total ? data.postLoss.winRate : null },
+  ];
+  const positions = [...data.sessionPositions].sort((a, b) => a.pos - b.pos).map((row) => ({
+    ...row, key: String(row.pos), label: `Game ${row.pos}`, games: row.total, rate: row.total ? row.winRate : null,
+  }));
+  const initialPositions = positions.filter((row) => row.pos <= 6);
+  const laterPositions = positions.filter((row) => row.pos > 6);
 
-function SessionCurvePanel({
-  positions,
-  baselinePct,
-  minSample,
-}: {
-  positions: SessionPos[];
-  baselinePct: number;
-  minSample: number;
-}) {
-  const rows = useMemo(
-    () =>
-      positions.map((p) => ({
-        pos: `#${p.pos}`,
-        total: p.total,
-        winRatePct: p.total >= minSample ? Math.round(p.winRate * 100) : null,
-        confidence: p.total,
-      })),
-    [positions, minSample],
-  );
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated/50 p-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="text-caption font-semibold text-text">
-          Win rate by game # in session
-        </span>
-        <span className="text-micro text-text-dim">
-          dots scale with sample size
-        </span>
+    <Card title="Session patterns">
+      <p className="-mt-1 mb-3 text-caption leading-relaxed text-text-muted">
+        {isGlobal ? "Sessions are measured separately for each player account and ladder race, then combined. " : ""}
+        Sessions split on a {data.sessionGapMinutes}-min gap · {isGlobal ? "the cohort's" : "your"} overall win rate is {Math.round(data.baseline.winRate * 100)}%.
+      </p>
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="min-w-0 rounded-lg border border-border bg-bg-elevated/30 p-3">
+          <h4 className="mb-3 text-caption font-semibold text-text">After the previous result</h4>
+          <WinRateComparison rows={afterRows} baseline={data.baseline.winRate} recordLabel={recordLabel} ariaLabel="Win rate after the previous result" />
+          <p className="mt-3 border-t border-border pt-3 text-caption leading-relaxed text-text-muted">
+            These are observed results in the same session. A difference does not establish tilt, confidence, or a benefit from continuing to play.
+          </p>
+        </section>
+        <section className="min-w-0 rounded-lg border border-border bg-bg-elevated/30 p-3">
+          <h4 className="mb-3 text-caption font-semibold text-text">Game number in the session</h4>
+          {positions.length === 0 ? <p className="py-5 text-caption text-text-dim">No session-position data in this view yet.</p> : <>
+            {initialPositions.length > 0 && <WinRateComparison rows={initialPositions} baseline={data.baseline.winRate} recordLabel={recordLabel} ariaLabel="Win rate by game number in session" />}
+            {laterPositions.length > 0 && <details className="mt-3 border-t border-border pt-2">
+              <summary className="min-h-11 cursor-pointer rounded py-3 text-caption font-medium text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{laterPositions.length === 1 ? `Later session game (${laterPositions[0].pos})` : `Later session games (${laterPositions[0].pos}–${laterPositions[laterPositions.length - 1].pos})`}</summary>
+              <WinRateComparison rows={laterPositions} baseline={data.baseline.winRate} recordLabel={recordLabel} ariaLabel="Win rate in later session games" />
+            </details>}
+          </>}
+          <p className="mt-3 border-t border-border pt-3 text-micro leading-relaxed text-text-dim">
+            Later positions include only sessions that continued that far. Their players, opponents, and sample sizes can differ. The first 12 positions are available.
+          </p>
+        </section>
       </div>
-      {rows.length === 0 ? (
-        <div className="flex h-48 items-center justify-center text-caption text-text-dim">
-          No multi-game sessions in this view yet.
-        </div>
-      ) : (
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows} margin={{ top: 8, right: 16, bottom: 4, left: -8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} />
-              <XAxis
-                dataKey="pos"
-                stroke={COLOR_TEXT_DIM}
-                fontSize={11}
-                tickMargin={4}
-              />
-              <YAxis
-                stroke={COLOR_TEXT_DIM}
-                fontSize={11}
-                domain={[0, 100]}
-                ticks={[0, 25, 50, 75, 100]}
-                tickFormatter={(v) => `${v}%`}
-                width={36}
-              />
-              <ReferenceLine
-                y={50}
-                stroke={COLOR_GRID}
-                strokeDasharray="2 4"
-              />
-              <ReferenceLine
-                y={baselinePct}
-                stroke={COLOR_ACCENT}
-                strokeOpacity={0.45}
-                strokeDasharray="4 4"
-              />
-              <Tooltip
-                cursor={{ stroke: COLOR_ACCENT, strokeDasharray: "3 3" }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload || payload.length === 0) return null;
-                  const p = payload[0].payload as {
-                    total: number;
-                    winRatePct: number | null;
-                  };
-                  const games = p.total ?? 0;
-                  const wr = p.winRatePct == null ? "—" : `${p.winRatePct}%`;
-                  return (
-                    <ChartTooltip
-                      header={`Game ${String(label).replace("#", "")} of session`}
-                      rows={[
-                        {
-                          key: "wr",
-                          label: "Win rate",
-                          value: `${wr} · ${games} game${games === 1 ? "" : "s"}`,
-                        },
-                      ]}
-                    />
-                  );
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="winRatePct"
-                stroke={COLOR_ACCENT}
-                strokeWidth={2.5}
-                dot={renderSampleDot}
-                activeDot={{
-                  r: 6,
-                  fill: COLOR_ACCENT,
-                  stroke: COLOR_BG_SURFACE,
-                  strokeWidth: 2,
-                }}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Plain-language verdict on the post-win vs post-loss split, so a
- * user who isn't fluent in chart-reading still gets the message.
- * Only shown when both splits have enough sample to mean anything.
- */
-function TiltVerdict({
-  baseline,
-  postWin,
-  postLoss,
-}: {
-  baseline: MomentumSplit;
-  postWin: MomentumSplit;
-  postLoss: MomentumSplit;
-}) {
-  if (postWin.total < 5 || postLoss.total < 5) return null;
-  const delta = postWin.winRate - postLoss.winRate;
-  const baselinePct = Math.round(baseline.winRate * 100);
-  if (Math.abs(delta) < 0.05) {
-    return (
-      <div className="mt-3 rounded-md border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted">
-        Even-keeled — wins and losses don't visibly shift your next-game
-        win rate (overall {baselinePct}%, {pct1(postWin.winRate)} after wins,{" "}
-        {pct1(postLoss.winRate)} after losses).
-      </div>
-    );
-  }
-  const tilting = delta > 0;
-  return (
-    <div
-      className="mt-3 rounded-md border px-3 py-2 text-caption"
-      style={{
-        borderColor: tilting ? "rgba(255,107,107,0.35)" : "rgba(62,192,122,0.35)",
-        background: tilting ? "rgba(255,107,107,0.06)" : "rgba(62,192,122,0.06)",
-      }}
-    >
-      {tilting ? (
-        <span>
-          <strong className="text-danger">Tilt signal:</strong> you win{" "}
-          {pct1(postWin.winRate)} after a win but only {pct1(postLoss.winRate)} after
-          a loss ({(delta * 100).toFixed(1)} pt gap).
-        </span>
-      ) : (
-        <span>
-          <strong className="text-success">Cool-headed:</strong> you actually
-          rebound better after losses ({pct1(postLoss.winRate)}) than off wins
-          ({pct1(postWin.winRate)}).
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
- * Recharts callback dot — render the data point as an SVG circle
- * whose radius reflects sample size, capped so a single 50-game
- * bucket doesn't dwarf its neighbours. Wrapped in a React fragment
- * because Recharts inspects the return for SVG-ness.
- */
-function renderSampleDot(props: {
-  cx?: number;
-  cy?: number;
-  payload?: { total: number; winRatePct: number | null };
-}) {
-  const { cx, cy, payload } = props;
-  if (cx == null || cy == null || !payload || payload.winRatePct == null) {
-    return <g />;
-  }
-  const r = Math.min(7, 3 + Math.sqrt(payload.total));
-  const color =
-    payload.winRatePct >= 50 ? COLOR_SUCCESS : payload.winRatePct >= 40 ? COLOR_ACCENT : COLOR_DANGER;
-  return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={r}
-      fill={color}
-      stroke={COLOR_BG_SURFACE}
-      strokeWidth={1.5}
-      opacity={0.9}
-    />
+    </Card>
   );
 }

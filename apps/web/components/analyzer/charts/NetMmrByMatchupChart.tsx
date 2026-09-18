@@ -75,10 +75,10 @@ const RACE_NAMES: Record<NetMmrPlayedRace, string> = {
   P: "Protoss", T: "Terran", Z: "Zerg",
 };
 
-const COLOR_SUCCESS = "#3ec07a";
-const COLOR_DANGER = "#ff6b6b";
-const COLOR_GRID = "#1f2533";
-const COLOR_TEXT_DIM = "#6b7280";
+const COLOR_SUCCESS = "rgb(var(--success))";
+const COLOR_DANGER = "rgb(var(--danger))";
+const COLOR_GRID = "rgb(var(--border))";
+const COLOR_TEXT_DIM = "rgb(var(--text-dim))";
 
 function untrustedMmrMessage(count: number): string {
   const noun = count === 1 ? "value is" : "values are";
@@ -138,6 +138,7 @@ export function NetMmrByMatchupChart() {
   const { isGlobal } = useTrendsDataScope();
   const { filters, dbRev } = useFilters();
   const descriptionId = useId();
+  const [metric, setMetric] = useState<"netMmr" | "avgDelta">("netMmr");
   const [selectedMatchup, setSelectedMatchup] = useState<{
     myRace: NetMmrPlayedRace; opponentRace: NetMmrPlayedRace;
   } | null>(null);
@@ -173,14 +174,16 @@ export function NetMmrByMatchupChart() {
     let mn = 0;
     let mx = 0;
     for (const r of rows) {
-      if (r.netMmr === null) continue;
-      if (r.netMmr < mn) mn = r.netMmr;
-      if (r.netMmr > mx) mx = r.netMmr;
+      const value = r[metric];
+      if (value === null) continue;
+      if (value < mn) mn = value;
+      if (value > mx) mx = value;
     }
-    const reach = Math.max(Math.abs(mn), Math.abs(mx), 25);
-    const padded = Math.ceil((reach * 1.15) / 10) * 10;
+    const reach = Math.max(Math.abs(mn), Math.abs(mx), metric === "avgDelta" ? 5 : 25);
+    const step = metric === "avgDelta" ? 2 : 10;
+    const padded = Math.ceil((reach * 1.15) / step) * step;
     return [-padded, padded];
-  }, [rows]);
+  }, [rows, metric]);
 
   if (error) return <TrendsRequestError title="Net MMR by matchup" error={error} retry={mutate} />;
 
@@ -224,17 +227,30 @@ export function NetMmrByMatchupChart() {
   return (
     <Card title="Net MMR by matchup">
       <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {isGlobal ? "Total" : "Your"} MMR gained (▶) or lost (◀) in each matchup, with the played race listed first.
-        Random-queue games use the race actually played.
-        Each game&apos;s change is measured from its starting MMR and the next
-        uploaded replay&apos;s starting MMR on the same Battle.net account/server
-        and selected ladder race. Missing or unverified readings break the
-        sequence; impossible result/delta signs and swings past ±150 are
-        excluded and reported below.
+        {isGlobal ? "Total" : "Your"} MMR gained or lost by matchup. Total shows the contribution to rating change;
+        per game compares matchups with different amounts of play. Small samples can move sharply.
       </p>
-      <div style={{ height: Math.max(180, rows.length * 38 + 36) }} aria-label="Net MMR by played matchup">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="MMR comparison measure" className="flex rounded-lg border border-border p-1">
+          {([
+            ["netMmr", "Total MMR"],
+            ["avgDelta", "Per game"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={metric === value}
+              onClick={() => setMetric(value)}
+              className={`min-h-11 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${metric === value ? "bg-accent/15 text-accent" : "text-text-dim hover:bg-bg-elevated"}`}
+            >{label}</button>
+          ))}
+        </div>
+        <span className="text-micro text-text-dim">{metric === "avgDelta" ? "MMR per measured game" : "Total measured MMR"} · ← lost / gained →</span>
+      </div>
+      <div style={{ height: Math.max(180, rows.length * 38 + 36) }} aria-label={metric === "avgDelta" ? "Average MMR change per measured game by played matchup" : "Net MMR by played matchup"}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
+            accessibilityLayer
             data={rows}
             layout="vertical"
             margin={{ top: 8, right: 24, bottom: 0, left: 0 }}
@@ -263,14 +279,15 @@ export function NetMmrByMatchupChart() {
               content={({ active, payload, label }) => {
                 const value = payload?.[0]?.value;
                 if (!active || typeof value !== "number" || !Number.isFinite(value)) return null;
-                return <ChartTooltip header={label} rows={[{
-                  label: "Net MMR",
+                const row = payload?.[0]?.payload as typeof rows[number];
+                return <ChartTooltip header={row.label || label} rows={[{
+                  label: metric === "avgDelta" ? "MMR per measured game" : "Net MMR",
                   value: `${value > 0 ? "+" : ""}${value.toLocaleString()}`,
                   dot: value >= 0 ? COLOR_SUCCESS : COLOR_DANGER,
-                }]} />;
+                }, { label: "Measured games", value: row.pairs.toLocaleString() }]} />;
               }}
             />
-            <Bar dataKey="netMmr" radius={[4, 4, 4, 4]} minPointSize={2}>
+            <Bar dataKey={metric} radius={[4, 4, 4, 4]} isAnimationActive={false}>
               {rows.map((r) => (
                 <Cell
                   key={r.matchup}
@@ -282,6 +299,16 @@ export function NetMmrByMatchupChart() {
           </BarChart>
         </ResponsiveContainer>
       </div>
+      <details className="mt-3 text-micro text-text-dim">
+        <summary className="cursor-pointer py-1 font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">How MMR changes are measured</summary>
+        <p className="mt-1 leading-relaxed">
+          The played race is listed first. Random-queue games use the race actually played.
+          Each change compares the game&apos;s starting MMR with the next uploaded replay&apos;s starting MMR
+          on the same Battle.net account/server and selected ladder race. Missing or unverified readings
+          break the sequence; impossible result/delta signs and swings past ±150 are excluded.
+          These are changes observed between uploaded replays; coverage is reported below.
+        </p>
+      </details>
       <div className="mt-3 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
         {rows.map((r) => {
           const totalForRace = r.coverage?.totalGames;
@@ -315,6 +342,7 @@ export function NetMmrByMatchupChart() {
                 >
                   {r.netMmr !== null && r.netMmr > 0 ? "+" : ""}
                   {r.netMmr ?? "—"}
+                  <span className="ml-1 text-micro font-normal text-text-dim">MMR</span>
                 </span>
               </div>
               <span id={`${descriptionId}-${r.matchup}-net`} className="sr-only">
@@ -324,6 +352,7 @@ export function NetMmrByMatchupChart() {
                 {measuredLabel}
                 {r.winRate !== null && r.avgDelta !== null ? <> · {pct1(r.winRate)} WR · avg {r.avgDelta > 0 ? "+" : ""}{r.avgDelta}/game</> : null}
               </div>
+              {r.pairs > 0 && r.pairs < 20 ? <div className="mt-1 text-micro text-text-dim">Small sample · fewer than 20 measured games</div> : null}
               {coverageReasons.length > 0 ? (
                 <div className="mt-1 text-micro leading-snug text-text-muted">
                   Not measured: {coverageReasons.join(" · ")}

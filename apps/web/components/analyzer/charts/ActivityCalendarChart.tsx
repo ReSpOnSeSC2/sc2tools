@@ -1,295 +1,144 @@
 "use client";
 
-import { useMemo } from "react";
-import { useTrendsApi as useApi } from "@/lib/trendsDataContext";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTrendsApi as useApi, useTrendsDataScope } from "@/lib/trendsDataContext";
 import { TrendsRequestError } from "./TrendsRequestError";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { wrRamp } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
+import { formatTrendDate } from "@/lib/winRateTrend";
 
-type ActivityDay = {
-  day: string;
-  wins: number;
-  losses: number;
-  total: number;
-  winRate: number;
-};
+type ActivityDay = { day: string; wins: number; losses: number; total: number; winRate: number };
+type ActivityResponse = { timezone: string; days: ActivityDay[] };
+type CalCell = { date: string; wins: number; losses: number; total: number };
+const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
+const MS_PER_DAY = 86_400_000;
+const VOLUME_LEVELS = [
+  { label: "0", className: "bg-bg-elevated" },
+  { label: "1–2", className: "bg-accent/20" },
+  { label: "3–5", className: "bg-accent/40" },
+  { label: "6–9", className: "bg-accent/60" },
+  { label: "10+", className: "bg-accent" },
+];
+const level = (total: number) => total === 0 ? 0 : total < 3 ? 1 : total < 6 ? 2 : total < 10 ? 3 : 4;
+// Date-only filters are already local calendar dates, not midnight UTC instants.
+const calendarKey = (value: string, zone: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : localDateKey(value, zone);
 
-type ActivityResponse = {
-  timezone: string;
-  days: ActivityDay[];
-};
-
-// Row 0 is Monday (mondayBasedDow); show labels on alternating rows
-// starting at Mon so the labels actually line up with the cells they
-// describe instead of slipping a row late. Sun is labelled too — it
-// anchors the bottom of the column for users orienting on weekends.
-const DAY_LABELS = ["Mon", "", "Wed", "", "Fri", "", "Sun"] as const;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-/**
- * GitHub-style contribution graph for SC2 games.
- *
- * Each square is a day; column = ISO week, row = day-of-week (Mon top
- * → Sun bottom). Cell colour blends two signals: hue carries win rate
- * (red → amber → green), saturation carries volume (more games =
- * more saturated). Empty days are flat dark.
- *
- * Hovering a cell shows the date + W-L-WR. Doubles as a "consistency"
- * indicator without dedicating a chart to it.
- */
-export function ActivityCalendarChart({
-  weeks = 26,
-}: {
-  weeks?: number;
-}) {
+/** A calendar answers "when did I play?"; outcomes belong in its selected-day readout. */
+export function ActivityCalendarChart({ weeks = 26 }: { weeks?: number }) {
   const { filters, dbRev } = useFilters();
+  const { isGlobal } = useTrendsDataScope();
+  const recordLabel = isGlobal ? "player game records" : "games";
   const tz = useMemo(() => clientTimezone(), []);
   const params = useMemo(() => ({ ...filters, tz }), [filters, tz]);
-  const { data, isLoading, error, mutate } = useApi<ActivityResponse>(
-    `/v1/activity-calendar${filtersToQuery(params)}#${dbRev}`,
-  );
-
+  const { data, isLoading, error, mutate } = useApi<ActivityResponse>(`/v1/activity-calendar${filtersToQuery(params)}#${dbRev}`);
   const calendar = useMemo(() => {
-    const dayMap = new Map<string, ActivityDay>();
-    for (const d of data?.days || []) {
-      const key = localDateKey(d.day, tz);
-      if (key) dayMap.set(key, d);
+    const zone = data?.timezone || tz;
+    const dayMap = new Map<string, CalCell>();
+    for (const day of data?.days ?? []) {
+      const date = calendarKey(day.day, zone);
+      if (date) dayMap.set(date, { date, wins: day.wins, losses: day.losses, total: day.total });
     }
-    return buildCalendar(dayMap, weeks, tz);
-  }, [data, tz, weeks]);
+    const today = localDateKey(new Date(), zone);
+    const until = filters.until ? calendarKey(filters.until, zone) : today;
+    const since = filters.since ? calendarKey(filters.since, zone) : "";
+    return buildCalendar(dayMap, weeks, until && until < today ? until : today, since);
+  }, [data, filters.since, filters.until, tz, weeks]);
+  const visible = useMemo(() => calendar.flat().filter((cell): cell is CalCell => cell != null), [calendar]);
+  const totalGames = visible.reduce((sum, cell) => sum + cell.total, 0);
+  const activeDays = visible.filter((cell) => cell.total > 0).length;
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const selected = visible.find((cell) => cell.date === selectedDate)
+    ?? [...visible].reverse().find((cell) => cell.total > 0) ?? visible[visible.length - 1];
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const cellRefs = useRef(new Map<string, HTMLButtonElement>());
+  const endDate = visible[visible.length - 1]?.date;
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth;
+  }, [endDate, isLoading]);
 
-  // Column-aligned month markers for the x-axis: each week shows its
-  // month label only when the month flipped from the previous column,
-  // so the row reads like a sparse calendar header (Jan ... Feb ...).
-  const monthMarkers = useMemo(() => {
-    let prevMonth = -1;
-    return calendar.weeks.map((week) => {
-      const firstCell = week.find((c) => c !== null);
-      if (!firstCell) return "";
-      const date = new Date(`${firstCell.date}T12:00:00`);
-      const month = date.getMonth();
-      if (month === prevMonth) return "";
-      prevMonth = month;
-      return date.toLocaleString(undefined, { month: "short" });
-    });
-  }, [calendar]);
-
-  const totalGames = (data?.days || []).reduce(
-    (acc, d) => acc + (d.total || 0),
-    0,
-  );
-  const totalWins = (data?.days || []).reduce(
-    (acc, d) => acc + (d.wins || 0),
-    0,
-  );
-
+  const onCellKeyDown = (event: KeyboardEvent<HTMLButtonElement>, cell: CalCell) => {
+    const index = visible.findIndex((entry) => entry.date === cell.date);
+    let next = index;
+    if (event.key === "ArrowRight") next += 7;
+    else if (event.key === "ArrowLeft") next -= 7;
+    else if (event.key === "ArrowDown") next += 1;
+    else if (event.key === "ArrowUp") next -= 1;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = visible.length - 1;
+    else return;
+    event.preventDefault();
+    cellRefs.current.get(visible[Math.max(0, Math.min(visible.length - 1, next))]?.date)?.focus();
+  };
   if (error) return <TrendsRequestError title="Activity calendar" error={error} retry={mutate} />;
+  if (isLoading) return <Card title="Activity calendar"><Skeleton rows={3} /></Card>;
+  if (!data?.days.some((day) => day.total > 0)) return <Card title="Activity calendar"><EmptyState title="No activity to plot" sub="The calendar fills in when the selected records include at least one game." /></Card>;
 
-  if (isLoading) {
-    return (
-      <Card title="Activity calendar">
-        <Skeleton rows={3} />
-      </Card>
-    );
-  }
-
-  if (totalGames === 0) {
-    return (
-      <Card title="Activity calendar">
-        <EmptyState
-          title="No activity to plot"
-          sub="The calendar fills in when the selected records include at least one game."
-        />
-      </Card>
-    );
-  }
-
-  const headline = `${totalGames} game${totalGames === 1 ? "" : "s"} · ${totalWins}W · ${
-    totalGames - totalWins
-  }L · ${calendar.weeks.length} weeks shown`;
-
+  const months = calendar.map((week, index) => {
+    const first = week.find((cell) => cell != null);
+    const previous = calendar[index - 1]?.find((cell) => cell != null);
+    if (!first || (index > 0 && index < 3) || first.date.slice(0, 7) === previous?.date.slice(0, 7)) return "";
+    return new Date(`${first.date}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", ...(index === 0 || first.date.slice(0, 4) !== previous?.date.slice(0, 4) ? { year: "2-digit" as const } : {}), timeZone: "UTC" });
+  });
   return (
-    <Card title="Activity calendar">
-      <p className="-mt-1 mb-3 text-caption text-text-dim">
-        {headline} · y = day of week, x = week (older → newer) · cell colour = win-rate, saturation = games played.
+    <Card title="Activity calendar" className="min-w-0">
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="text-caption font-semibold tabular-nums text-text">{totalGames.toLocaleString()} {recordLabel} shown</span>
+        <span className="text-caption tabular-nums text-text-muted">{activeDays} active {activeDays === 1 ? "day" : "days"} / {visible.length} shown</span>
+      </div>
+      <p className="mb-3 text-micro leading-relaxed text-text-muted">
+        {visible.length > 0 ? `${formatTrendDate(visible[0].date, true)} – ${formatTrendDate(visible[visible.length - 1].date, true)}. ` : ""}
+        Stronger color means more {recordLabel}. Showing up to {Math.max(1, Math.floor(weeks))} recent weeks within your date range.
       </p>
-      <div className="overflow-x-auto pb-1">
-        <div className="flex gap-2">
-          <div
-            className="flex flex-col text-micro uppercase tracking-wide text-text-dim"
-            aria-hidden
-          >
-            {/* Spacer so day labels line up with the cell rows below the
-                month-label row. */}
-            <div className="h-3" style={{ marginBottom: 2 }} />
-            {DAY_LABELS.map((label, i) => (
-              <div
-                key={i}
-                className="flex h-3.5 items-center"
-                style={{ marginBottom: 2 }}
-              >
-                {label}
-              </div>
-            ))}
+      <div ref={scroller} className="overflow-x-auto pb-2" aria-label="Activity calendar, older weeks on the left">
+        <div className="flex w-max gap-2">
+          <div aria-hidden="true" className="sticky left-0 z-10 bg-bg-surface pr-1 text-micro text-text-muted">
+            <div className="h-5" />
+            {DAY_LABELS.map((label, i) => <div key={i} className="flex h-6 items-center mb-0.5">{label}</div>)}
           </div>
-          <div className="flex flex-col">
-            <div
-              className="flex text-micro uppercase tracking-wide text-text-dim"
-              style={{ height: 12, marginBottom: 2 }}
-              aria-hidden
-            >
-              {monthMarkers.map((label, wi) => (
-                <div
-                  key={wi}
-                  className="whitespace-nowrap"
-                  style={{ width: 14, marginRight: 2 }}
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
-            <div className="flex">
-              {calendar.weeks.map((week, wi) => (
-                <div key={wi} className="flex flex-col">
-                  {week.map((cell, di) =>
-                    cell ? (
-                      <CalendarCell key={`${wi}-${di}`} cell={cell} />
-                    ) : (
-                      <div
-                        key={`${wi}-${di}`}
-                        className="h-3.5 w-3.5"
-                        style={{ marginRight: 2, marginBottom: 2 }}
-                        aria-hidden
-                      />
-                    ),
-                  )}
-                </div>
-              ))}
-            </div>
+          <div className="flex gap-0.5">
+            {calendar.map((week, wi) => <div key={wi}>
+              <div aria-hidden="true" className="h-5 w-6 whitespace-nowrap text-micro text-text-muted">{months[wi]}</div>
+              {week.map((cell, di) => cell ? <button key={cell.date} type="button"
+                ref={(node) => { if (node) cellRefs.current.set(cell.date, node); else cellRefs.current.delete(cell.date); }}
+                aria-label={`${cell.date}: ${cell.total} ${recordLabel}, ${cell.wins} wins, ${cell.losses} losses`}
+                aria-pressed={selected?.date === cell.date} tabIndex={selected?.date === cell.date ? 0 : -1}
+                onClick={() => setSelectedDate(cell.date)} onFocus={() => setSelectedDate(cell.date)} onKeyDown={(event) => onCellKeyDown(event, cell)}
+                className={`mb-0.5 block h-6 w-6 rounded border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${VOLUME_LEVELS[level(cell.total)].className} ${selected?.date === cell.date ? "border-text" : "border-border/40"}`} />
+                : <div key={di} aria-hidden="true" className="mb-0.5 h-6 w-6" />)}
+            </div>)}
           </div>
         </div>
       </div>
-      <Legend />
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-micro text-text-muted">
+        <span>{isGlobal ? "Records" : "Games"} per day</span>
+        {VOLUME_LEVELS.map((item) => <span key={item.label} className="inline-flex items-center gap-1"><span aria-hidden="true" className={`h-3 w-3 rounded border border-border/40 ${item.className}`} />{item.label}</span>)}
+      </div>
+      {selected && <div role="status" aria-live="polite" aria-atomic="true" className="mt-3 rounded-lg border border-border bg-bg-elevated/50 p-3 text-caption">
+        <div className="flex flex-wrap justify-between gap-2"><strong className="text-text">{formatTrendDate(selected.date, true)}</strong><span className="tabular-nums text-text-muted">{selected.total.toLocaleString()} {recordLabel}</span></div>
+        <p className="mt-1 tabular-nums text-text-muted">{selected.total ? `${selected.wins}W · ${selected.losses}L${selected.total > selected.wins + selected.losses ? ` · ${selected.total - selected.wins - selected.losses} other` : ""}` : "No selected games on this day."}</p>
+      </div>}
+      <p className="mt-2 text-micro text-text-muted">Select a day for results. Scroll for older weeks; arrow keys explore days.{isGlobal ? " Activity combines the selected players." : ""}</p>
     </Card>
   );
 }
 
-function CalendarCell({ cell }: { cell: CalCell }) {
-  const empty = cell.total === 0;
-  const wr = empty ? 0 : cell.wins / cell.total;
-  // Volume → opacity, but keep the floor high enough that a 1-game day
-  // still reads as clearly tinted instead of "almost empty grey". Caps
-  // at 6 games so a 50-game day doesn't dwarf its neighbours.
-  const intensity = empty ? 0 : 0.55 + Math.min(1, cell.total / 6) * 0.45;
-  const background = empty
-    ? "rgba(31, 37, 51, 0.55)"
-    : wrFill(wr, intensity);
-  const tooltip = empty
-    ? `${cell.date}: no games`
-    : `${cell.date}: ${cell.wins}W-${cell.losses}L (${Math.round(wr * 100)}% WR)`;
-  return (
-    <div
-      className="h-3.5 w-3.5 rounded-[3px]"
-      style={{ background, marginRight: 2, marginBottom: 2 }}
-      title={tooltip}
-      aria-label={tooltip}
-    />
-  );
-}
-
-function Legend() {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-micro text-text-dim">
-      <span>Less ←</span>
-      <span
-        className="h-3 w-3 rounded-[3px]"
-        style={{ background: "rgba(31, 37, 51, 0.55)" }}
-      />
-      <span
-        className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.25, 0.85) }}
-      />
-      <span
-        className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.5, 0.9) }}
-      />
-      <span
-        className="h-3 w-3 rounded-[3px]"
-        style={{ background: wrFill(0.7, 1) }}
-      />
-      <span>→ More wins</span>
-    </div>
-  );
-}
-
-type CalCell = {
-  date: string;
-  wins: number;
-  losses: number;
-  total: number;
-};
-
-function buildCalendar(
-  dayMap: Map<string, ActivityDay>,
-  weeks: number,
-  tz: string,
-): { weeks: Array<Array<CalCell | null>> } {
-  const today = new Date();
-  const todayKey = localDateKey(today, tz);
-  const todayDow = mondayBasedDow(today, tz);
-  // End the calendar on the user's local Sunday (or today, if it
-  // hasn't reached Sunday yet — clamp to today). Start = end - weeks.
-  const endOffset = 6 - todayDow;
-  const endDate = new Date(today.getTime() + endOffset * MS_PER_DAY);
-  const startDate = new Date(endDate.getTime() - (weeks * 7 - 1) * MS_PER_DAY);
-
+/** Calendar arithmetic uses date-only UTC keys, avoiding DST duplicates and gaps. */
+function buildCalendar(dayMap: Map<string, CalCell>, weeks: number, end: string, since: string): Array<Array<CalCell | null>> {
+  const endMs = Date.parse(`${end}T00:00:00Z`);
+  const endDow = (new Date(endMs).getUTCDay() + 6) % 7;
+  const count = Number.isFinite(weeks) ? Math.max(1, Math.min(104, Math.floor(weeks))) : 26;
+  const lastSunday = endMs + (6 - endDow) * MS_PER_DAY;
+  let startMs = lastSunday - (count * 7 - 1) * MS_PER_DAY;
+  const sinceMs = since ? Date.parse(`${since}T00:00:00Z`) : NaN;
+  if (Number.isFinite(sinceMs) && sinceMs > startMs) startMs = sinceMs - ((new Date(sinceMs).getUTCDay() + 6) % 7) * MS_PER_DAY;
   const out: Array<Array<CalCell | null>> = [];
-  for (let w = 0; w < weeks; w++) {
-    /** @type {Array<CalCell | null>} */
-    const col: Array<CalCell | null> = [];
-    for (let d = 0; d < 7; d++) {
-      const offset = w * 7 + d;
-      const cellDate = new Date(startDate.getTime() + offset * MS_PER_DAY);
-      const key = localDateKey(cellDate, tz);
-      // Don't paint future days.
-      if (key > todayKey) {
-        col.push(null);
-        continue;
-      }
-      const entry = dayMap.get(key);
-      col.push({
-        date: key,
-        wins: entry?.wins || 0,
-        losses: entry?.losses || 0,
-        total: entry?.total || 0,
-      });
-    }
-    out.push(col);
+  for (let week = startMs; week <= lastSunday; week += MS_PER_DAY * 7) {
+    out.push(Array.from({ length: 7 }, (_, offset) => {
+      const date = new Date(week + offset * MS_PER_DAY).toISOString().slice(0, 10);
+      if (date > end || (since && date < since)) return null;
+      return dayMap.get(date) ?? { date, wins: 0, losses: 0, total: 0 };
+    }));
   }
-  return { weeks: out };
-}
-
-function mondayBasedDow(date: Date, timeZone: string): number {
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    weekday: "short",
-  });
-  const parts = fmt.format(date);
-  const map: Record<string, number> = {
-    Mon: 0,
-    Tue: 1,
-    Wed: 2,
-    Thu: 3,
-    Fri: 4,
-    Sat: 5,
-    Sun: 6,
-  };
-  return map[parts] ?? 0;
-}
-
-function wrFill(rate: number, intensity: number): string {
-  const [r, g, b] = wrRamp(rate);
-  return `rgba(${r}, ${g}, ${b}, ${intensity.toFixed(3)})`;
+  return out;
 }

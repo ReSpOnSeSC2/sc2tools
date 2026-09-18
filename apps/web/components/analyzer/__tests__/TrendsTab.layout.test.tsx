@@ -106,20 +106,21 @@ describe("TrendsTab layout", () => {
     ["loading", "error", "empty"].map((state) => ({ mode, state })),
   ))("keeps every independent $mode trend section mounted when the overview is $state", ({ mode, state }) => {
     const retry = vi.fn();
-    useApiMock.mockReturnValueOnce({
+    const response: ReturnType<typeof useApiMock> = {
       data: state === "empty" ? { interval: "week", points: [] } : undefined,
       isLoading: state === "loading",
       error: state === "error" ? { status: 0, code: "request_timeout", message: "The API took too long to respond." } : undefined,
       mutate: retry,
-    });
+    };
+    useApiMock.mockReturnValueOnce(response).mockReturnValueOnce(response);
     render(<TrendsDataProvider mode={mode}><TrendsTab /></TrendsDataProvider>);
-    for (const title of ["Games per period (W stacked on L)", "Win rate", "MMR progression", "Net MMR by matchup", "Opponent MMR buckets", "Momentum", "Matchup over time", "Matchup game length", "Time of day", "Game length", "Activity calendar", "Map performance over time"]) {
+    for (const title of ["Games played", "Win rate", "MMR progression", "Net MMR by matchup", "Opponent MMR buckets", "Momentum", "Matchup over time", "Matchup game length", "Time of day", "Game length", "Activity calendar", "Map performance over time"]) {
       expect(screen.getByText(title), title).toBeTruthy();
     }
     expect(Boolean(screen.queryByTestId("skill-fingerprint"))).toBe(mode === "personal");
     expect(screen.getByText("Explore performance")).toBeTruthy();
-    expect(screen.getByRole("checkbox", { name: "Rolling WR (4)" })).toBeTruthy();
-    expect(screen.getByRole("combobox")).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "Rolling WR (4)" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Activity grouping" })).toBeTruthy();
     if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();
     if (state === "error") {
       expect(screen.getAllByRole("alert")[0].textContent).toContain("The API took too long to respond.");
@@ -136,8 +137,9 @@ describe("TrendsTab layout", () => {
   it("labels the server's wider interval and explains it for global data", () => {
     useApiMock.mockReturnValueOnce({ data: { interval: "month", points: [{ bucket: "2026-08-01T00:00:00.000Z", wins: 3, losses: 0, total: 3, winRate: 1 }] }, isLoading: false });
     render(<TrendsDataProvider mode="global"><TrendsTab /></TrendsDataProvider>);
-    expect(screen.getByText("Best month")).toBeTruthy();
-    expect(screen.getByText("Worst month")).toBeTruthy();
+    expect(screen.getByText("Active months")).toBeTruthy();
+    expect(screen.getByText("Recorded results")).toBeTruthy();
+    expect(screen.queryByText("Best month")).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Showing monthly periods");
   });
 

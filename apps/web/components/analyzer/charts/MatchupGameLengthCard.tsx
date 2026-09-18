@@ -136,7 +136,9 @@ export function MatchupGameLengthCard() {
     );
   }
 
-  const longestAverage = Math.max(...rows.map((row) => row.avgSec || 0), 1);
+  // One zero-based minute scale across matchups. A long outlier can lift
+  // the mean; the median remains the primary description of a typical game.
+  const scaleMaxSec = Math.ceil(Math.max(300, ...rows.flatMap((row) => [row.avgSec || 0, row.medianSec || 0])) / 300) * 300;
 
   return (
     <Card
@@ -151,8 +153,8 @@ export function MatchupGameLengthCard() {
     >
       <div className="-mt-1 mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <p className="text-caption text-text-dim sm:max-w-2xl">
-          Totals, averages, and medians use recorded replay time from the
-          filters above. 15m+ shows how often a matchup reaches the late game.
+          Typical length is the median, which is less affected by a few marathon games.
+          Compare it with the average on the same minute scale. 15m+ is the share lasting at least 15 minutes.
         </p>
         <label className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
           <span className="text-micro uppercase tracking-wider text-text-dim">
@@ -183,20 +185,24 @@ export function MatchupGameLengthCard() {
             label="Total played"
             value={fmtPlaytime(summary.totalSec, timeFormat)}
           />
+          <SummaryMetric label="Typical (median)" value={fmtMinutes(summary.medianSec)} />
           <SummaryMetric label="Average" value={fmtMinutes(summary.avgSec)} />
-          <SummaryMetric label="Median" value={fmtMinutes(summary.medianSec)} />
           <SummaryMetric label="Games 15m+" value={pct(summary.longGameRate)} />
         </dl>
       ) : null}
 
       {rows.length > 0 ? (
+        <>
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-micro text-text-muted">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-text" />Typical (median)</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-3 border-l-2 border-text" />Average</span>
+          <span>Shared scale · minutes:seconds</span>
+        </div>
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
             const color = raceColour(row.opponentRace);
-            const width = Math.max(
-              4,
-              Math.round(((row.avgSec || 0) / longestAverage) * 100),
-            );
+            const averagePosition = ((row.avgSec || 0) / scaleMaxSec) * 100;
+            const medianPosition = row.medianSec != null ? (row.medianSec / scaleMaxSec) * 100 : null;
             return (
               <li
                 key={`${row.myRace}-${row.opponentRace}`}
@@ -213,33 +219,33 @@ export function MatchupGameLengthCard() {
 
                 <div className="mt-2 flex items-end justify-between gap-3">
                   <span className="text-micro uppercase tracking-wider text-text-dim">
-                    Average
+                    Typical (median)
                   </span>
                   <span className="font-display text-xl font-bold tabular-nums text-text">
-                    {fmtMinutes(row.avgSec)}
+                    {fmtMinutes(row.medianSec)}
                   </span>
                 </div>
                 <div
-                  className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-bg-surface"
+                  className="relative mx-1.5 mb-1 mt-3 h-1.5 rounded-full bg-text-dim/15"
                   aria-hidden="true"
                 >
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${width}%`, backgroundColor: color }}
-                  />
+                  {medianPosition != null && <span className="absolute -top-0.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full" style={{ left: `${medianPosition}%`, backgroundColor: color }} />}
+                  <span className="absolute -bottom-1 -top-1 border-l-2 border-text" style={{ left: `${averagePosition}%` }} />
                 </div>
+                <div aria-hidden="true" className="flex justify-between text-micro tabular-nums text-text-dim"><span>0:00</span><span>{fmtMinutes(scaleMaxSec)}</span></div>
+                {row.games < 20 && <p className="mt-1.5 text-micro text-text-dim">Small sample · {row.games} measured game{row.games === 1 ? "" : "s"}</p>}
 
                 <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-2.5">
                   <PlaytimeMetric
                     value={fmtPlaytime(row.totalSec, timeFormat)}
                   />
                   <CompactMetric
-                    label="Median"
-                    value={fmtMinutes(row.medianSec)}
+                    label="Average"
+                    value={fmtMinutes(row.avgSec)}
                   />
                   <CompactMetric label="15m+" value={pct(row.longGameRate)} />
                   <CompactMetric
-                    label={`Wins · ${row.wins}`}
+                    label={`Win average · ${row.wins}`}
                     value={fmtMinutes(row.avgWinSec)}
                     valueClass={
                       row.avgWinSec == null
@@ -248,7 +254,7 @@ export function MatchupGameLengthCard() {
                     }
                   />
                   <CompactMetric
-                    label={`Losses · ${row.losses}`}
+                    label={`Loss average · ${row.losses}`}
                     value={fmtMinutes(row.avgLossSec)}
                     valueClass={
                       row.avgLossSec == null ? "text-text-dim" : "text-danger"
@@ -259,6 +265,7 @@ export function MatchupGameLengthCard() {
             );
           })}
         </ul>
+        </>
       ) : (
         <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center">
           <p className="text-sm font-medium text-text-muted">

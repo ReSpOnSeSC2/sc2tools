@@ -29,7 +29,7 @@ vi.mock("recharts", () => ({
     <div data-testid="matchup-series" data-series={JSON.stringify(data)}>{children}</div>
   ),
   Line: ({ dataKey }: { dataKey: string }) => <span data-testid="matchup-line" data-key={dataKey} />,
-  XAxis: () => null,
+  XAxis: ({ domain }: { domain: number[] }) => <span data-testid="date-axis" data-domain={JSON.stringify(domain)} />,
   YAxis: () => null,
   Tooltip: () => null,
   CartesianGrid: () => null,
@@ -78,7 +78,7 @@ describe("MatchupOverTimeChart played matchups", () => {
     const url = new URL(String(useApiMock.mock.calls[0][0]), "https://example.test");
     expect(url.pathname).toBe(mode === "global" ? "/v1/admin/global-trends/timeseries/matchups" : "/v1/timeseries/matchups");
     expect(url.searchParams.get("group_by")).toBe("matchup");
-    expect(url.searchParams.get("interval")).toBe("week");
+    expect(url.searchParams.get("interval")).toBe("day");
     expect(url.searchParams.get("tz")).toBe("UTC");
     expect(url.searchParams.get("race")).toBe("P");
     expect(url.searchParams.get("map")).toBe("Gold Base");
@@ -127,7 +127,7 @@ describe("MatchupOverTimeChart played matchups", () => {
     expect(screen.getByText(/3\b.*games.*(?:race|matchup)/i)).toBeTruthy();
   });
 
-  it("keeps same-opponent matchups isolated, preserves gaps, and weights rolling rates by games", () => {
+  it("keeps played matchups isolated and weights whole-period samples by games with a shared date axis", () => {
     useApiMock.mockReturnValue({
       data: {
         interval: "month",
@@ -137,8 +137,9 @@ describe("MatchupOverTimeChart played matchups", () => {
           point("2026-01-01T00:00:00Z", "PvT", 9, 1, 12),
           point("2026-01-01T00:00:00Z", "ZvT", 0, 3),
           point("2026-02-01T00:00:00Z", "ZvT", 1, 0),
-          point("2026-03-01T00:00:00Z", "PvT", 0, 2),
+          point("2026-03-01T00:00:00Z", "PvT", 0, 10),
           point("2026-04-01T00:00:00Z", "PvT", 1, 1),
+          point("2026-05-01T00:00:00Z", "ZvT", 10, 10),
         ],
       },
       isLoading: false,
@@ -148,22 +149,28 @@ describe("MatchupOverTimeChart played matchups", () => {
 
     const protoss = screen.getByRole("region", { name: "PvT win rate over time" });
     const zerg = screen.getByRole("region", { name: "ZvT win rate over time" });
-    expect(within(protoss).getByText("16 games")).toBeTruthy();
-    expect(within(protoss).getByText("63%")).toBeTruthy();
-    expect(within(zerg).getByText("4 games")).toBeTruthy();
-    expect(within(zerg).getByText("25%")).toBeTruthy();
+    expect(within(protoss).getByText("24 games")).toBeTruthy();
+    expect(within(protoss).getByText("Overall 41.7%")).toBeTruthy();
+    expect(within(zerg).getByText("24 games")).toBeTruthy();
+    expect(within(zerg).getByText("Overall 45.8%")).toBeTruthy();
+    expect(within(protoss).getByText(/2 other/)).toBeTruthy();
 
     const protossSeries = JSON.parse(within(protoss).getByTestId("matchup-series").getAttribute("data-series")!);
-    expect(protossSeries).toEqual([
-      { date: "2026-01-01", wins: 9, losses: 1, total: 12, winRatePct: 75, rollingPct: null },
-      { date: "2026-02-01", wins: 0, losses: 0, total: 0, winRatePct: null, rollingPct: null },
-      { date: "2026-03-01", wins: 0, losses: 2, total: 2, winRatePct: 0, rollingPct: null },
-      { date: "2026-04-01", wins: 1, losses: 1, total: 2, winRatePct: 50, rollingPct: 63 },
-    ]);
+    expect(protossSeries).toHaveLength(2);
+    expect(protossSeries[0]).toMatchObject({ date: "2026-03-01", sampleGames: 22, sampleWins: 9, sampleLosses: 11, rate: 9 / 22 * 100 });
+    expect(protossSeries[1]).toMatchObject({ date: "2026-04-01", sampleGames: 24, sampleWins: 10, sampleLosses: 12, rate: 10 / 24 * 100 });
     const zergSeries = JSON.parse(within(zerg).getByTestId("matchup-series").getAttribute("data-series")!);
-    expect(zergSeries[0]).toMatchObject({ wins: 0, losses: 3, total: 3, winRatePct: 0 });
-    expect(zergSeries[1]).toMatchObject({ wins: 1, losses: 0, total: 1, winRatePct: 100 });
-    expect(zergSeries[2]).toMatchObject({ total: 0, winRatePct: null });
-    expect(within(protoss).getAllByTestId("matchup-line").map((line) => line.getAttribute("data-key"))).toEqual(["winRatePct", "rollingPct"]);
+    expect(zergSeries).toHaveLength(1);
+    expect(zergSeries[0]).toMatchObject({ date: "2026-05-01", sampleGames: 20, sampleWins: 10, sampleLosses: 10, rate: 50 });
+    expect(within(protoss).getAllByTestId("matchup-line").map((line) => line.getAttribute("data-key"))).toEqual(["rate"]);
+    expect(within(protoss).getByTestId("date-axis").getAttribute("data-domain")).toBe(within(zerg).getByTestId("date-axis").getAttribute("data-domain"));
+  });
+
+  it("shows the raw record but withholds a misleading trend for a one-game matchup", () => {
+    useApiMock.mockReturnValue({ data: { interval: "day", points: [point("2026-07-05T00:00:00Z", "PvT", 1, 0)] }, isLoading: false });
+    render(<MatchupOverTimeChart bucket="day" />);
+    expect(screen.getByText("Building a sample")).toBeTruthy();
+    expect(screen.getByText(/Recorded so far:.*1W/)).toBeTruthy();
+    expect(screen.queryByTestId("matchup-series")).toBeNull();
   });
 });
