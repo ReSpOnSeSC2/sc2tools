@@ -79,6 +79,12 @@ const COLOR_SUCCESS = "rgb(var(--success))";
 const COLOR_DANGER = "rgb(var(--danger))";
 const COLOR_GRID = "rgb(var(--border))";
 const COLOR_TEXT_DIM = "rgb(var(--text-dim))";
+const SMALL_SAMPLE_GAMES = 20;
+
+function formatMmr(value: number | null, perGame: boolean): string {
+  if (value === null) return "—";
+  return `${value > 0 ? "+" : ""}${(value || 0).toLocaleString(undefined, { minimumFractionDigits: perGame ? 1 : 0, maximumFractionDigits: perGame ? 1 : 0 })}`;
+}
 
 function untrustedMmrMessage(count: number): string {
   const noun = count === 1 ? "value is" : "values are";
@@ -185,6 +191,13 @@ export function NetMmrByMatchupChart() {
     return [-padded, padded];
   }, [rows, metric]);
 
+  const perGame = metric === "avgDelta";
+  const unit = perGame ? "MMR/game" : "MMR";
+  const valueColumnWidth = Math.max(66, ...rows.map((row) => formatMmr(row[metric], perGame).length * 7 + 8));
+  const measuredRows = rows.filter((row) => row.avgDelta !== null).sort((a, b) => Math.abs(b.avgDelta!) - Math.abs(a.avgDelta!));
+  const scaleLeader = perGame && measuredRows.length > 1 && Math.abs(measuredRows[0].avgDelta!) > Math.max(5, Math.abs(measuredRows[1].avgDelta!) * 5)
+    ? measuredRows[0] : null;
+
   if (error) return <TrendsRequestError title="Net MMR by matchup" error={error} retry={mutate} />;
 
   if (isLoading) {
@@ -247,13 +260,13 @@ export function NetMmrByMatchupChart() {
         </div>
         <span className="text-micro text-text-dim">{metric === "avgDelta" ? "MMR per measured game" : "Total measured MMR"} · ← lost / gained →</span>
       </div>
-      <div style={{ height: Math.max(180, rows.length * 38 + 36) }} aria-label={metric === "avgDelta" ? "Average MMR change per measured game by played matchup" : "Net MMR by played matchup"}>
+      <div style={{ height: Math.max(180, rows.length * 48 + 36) }} aria-label={perGame ? "Average MMR change per measured game by played matchup" : "Net MMR by played matchup"}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             accessibilityLayer
             data={rows}
             layout="vertical"
-            margin={{ top: 8, right: 24, bottom: 0, left: 0 }}
+            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={COLOR_GRID} horizontal={false} />
             <XAxis
@@ -261,7 +274,7 @@ export function NetMmrByMatchupChart() {
               stroke={COLOR_TEXT_DIM}
               fontSize={11}
               domain={xDomain}
-              ticks={[xDomain[0], xDomain[0] / 2, 0, xDomain[1] / 2, xDomain[1]]}
+              ticks={[xDomain[0], 0, xDomain[1]]}
               tickFormatter={(v: number) => (v > 0 ? `+${v}` : `${v}`)}
             />
             <YAxis
@@ -269,8 +282,30 @@ export function NetMmrByMatchupChart() {
               dataKey="matchup"
               stroke={COLOR_TEXT_DIM}
               fontSize={12}
-              width={48}
+              width={76}
               tickMargin={4}
+              interval={0}
+              tick={({ x, y, payload }) => {
+                const row = rows.find((entry) => entry.matchup === payload.value);
+                return <text x={x} y={y} textAnchor="end" fill={COLOR_TEXT_DIM} fontSize={12}>
+                  <tspan x={x} dy={-3}>{payload.value}</tspan>
+                  <tspan x={x} dy={14} fontSize={10}>{row?.pairs.toLocaleString(undefined, { notation: "compact", maximumFractionDigits: 1 })} measured</tspan>
+                </text>;
+              }}
+            />
+            <YAxis
+              yAxisId="values"
+              type="category"
+              dataKey="matchup"
+              orientation="right"
+              width={valueColumnWidth}
+              axisLine={false}
+              tickLine={false}
+              interval={0}
+              tick={({ x, y, payload }) => {
+                const value = rows.find((entry) => entry.matchup === payload.value)?.[metric] ?? null;
+                return <text x={x} y={y} dy="0.35em" textAnchor="start" fill="rgb(var(--text))" fontSize={12} fontWeight={600}>{formatMmr(value, perGame)}</text>;
+              }}
             />
             <ReferenceLine x={0} stroke={COLOR_TEXT_DIM} strokeOpacity={0.65} />
             <Tooltip
@@ -282,7 +317,7 @@ export function NetMmrByMatchupChart() {
                 const row = payload?.[0]?.payload as typeof rows[number];
                 return <ChartTooltip header={row.label || label} rows={[{
                   label: metric === "avgDelta" ? "MMR per measured game" : "Net MMR",
-                  value: `${value > 0 ? "+" : ""}${value.toLocaleString()}`,
+                  value: formatMmr(value, perGame),
                   dot: value >= 0 ? COLOR_SUCCESS : COLOR_DANGER,
                 }, { label: "Measured games", value: row.pairs.toLocaleString() }]} />;
               }}
@@ -292,13 +327,17 @@ export function NetMmrByMatchupChart() {
                 <Cell
                   key={r.matchup}
                   fill={r.netMmr === null ? COLOR_TEXT_DIM : r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER}
-                  fillOpacity={0.85}
+                  fillOpacity={r.pairs < SMALL_SAMPLE_GAMES ? 0.45 : 0.85}
                 />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
+      {scaleLeader && <p role="status" className="mt-2 rounded-lg border border-border bg-bg-elevated/50 px-3 py-2 text-micro leading-relaxed text-text-muted">
+        {scaleLeader.matchup} sets the scale at {formatMmr(scaleLeader.avgDelta, true)} MMR/game from {scaleLeader.pairs.toLocaleString()} measured {scaleLeader.pairs === 1 ? "game" : "games"}.
+        {scaleLeader.pairs < SMALL_SAMPLE_GAMES ? " Small sample; this average can change sharply." : " Smaller averages sit close to zero."}
+      </p>}
       <details className="mt-3 text-micro text-text-dim">
         <summary className="cursor-pointer py-1 font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">How MMR changes are measured</summary>
         <p className="mt-1 leading-relaxed">
@@ -311,6 +350,7 @@ export function NetMmrByMatchupChart() {
       </details>
       <div className="mt-3 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2">
         {rows.map((r) => {
+          const primary = r[metric];
           const totalForRace = r.coverage?.totalGames;
           const measuredLabel =
             typeof totalForRace === "number" && totalForRace > r.pairs
@@ -338,21 +378,20 @@ export function NetMmrByMatchupChart() {
                 </span>
                 <span
                   className="whitespace-nowrap text-sm font-semibold tabular-nums"
-                  style={{ color: r.netMmr === null ? COLOR_TEXT_DIM : r.netMmr >= 0 ? COLOR_SUCCESS : COLOR_DANGER }}
+                  style={{ color: primary === null || primary === 0 ? COLOR_TEXT_DIM : primary > 0 ? COLOR_SUCCESS : COLOR_DANGER }}
                 >
-                  {r.netMmr !== null && r.netMmr > 0 ? "+" : ""}
-                  {r.netMmr ?? "—"}
-                  <span className="ml-1 text-micro font-normal text-text-dim">MMR</span>
+                  {formatMmr(primary, perGame)}
+                  <span className="ml-1 text-micro font-normal text-text-dim">{unit}</span>
                 </span>
               </div>
               <span id={`${descriptionId}-${r.matchup}-net`} className="sr-only">
-                {r.label}. {r.netMmr === null ? "No measured MMR change." : `Net MMR ${r.netMmr > 0 ? "+" : ""}${r.netMmr}.`}
+                {r.label}. {primary === null ? "No measured MMR change." : `${perGame ? "MMR per measured game" : "Net MMR"} ${formatMmr(primary, perGame)}.`}
               </span>
               <div id={`${descriptionId}-${r.matchup}-metrics`} className="mt-0.5 text-micro tabular-nums text-text-dim">
                 {measuredLabel}
-                {r.winRate !== null && r.avgDelta !== null ? <> · {pct1(r.winRate)} WR · avg {r.avgDelta > 0 ? "+" : ""}{r.avgDelta}/game</> : null}
+                {r.winRate !== null && r.avgDelta !== null ? <> · {pct1(r.winRate)} WR · {perGame ? `${formatMmr(r.netMmr, false)} MMR total` : `avg ${r.avgDelta > 0 ? "+" : ""}${r.avgDelta}/game`}</> : null}
               </div>
-              {r.pairs > 0 && r.pairs < 20 ? <div className="mt-1 text-micro text-text-dim">Small sample · fewer than 20 measured games</div> : null}
+              {r.pairs > 0 && r.pairs < SMALL_SAMPLE_GAMES ? <div className="mt-1 text-micro text-text-dim">Small sample · fewer than {SMALL_SAMPLE_GAMES} measured games</div> : null}
               {coverageReasons.length > 0 ? (
                 <div className="mt-1 text-micro leading-snug text-text-muted">
                   Not measured: {coverageReasons.join(" · ")}
