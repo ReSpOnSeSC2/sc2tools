@@ -38,7 +38,7 @@ function pctLabel(frac: number): string {
 
 /**
  * /admin/users/[userId]/opponents — the full opponent history for one
- * user. The per-user detail page only shows the top 5; this is the
+ * user. The per-user detail page only shows the five most recent; this is the
  * "see everything" browser with search, race + min-games filters, and
  * sortable columns. Pagination is offset-based (the sort column is
  * caller-selectable, so a single-key cursor wouldn't hold).

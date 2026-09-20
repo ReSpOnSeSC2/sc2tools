@@ -132,11 +132,11 @@ export default function AdminUserDetailPage({
       <Card padded={false}>
         <Card.Header>
           <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-            Top opponents
+            Recent opponents
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-caption text-text-dim">
-              top 5 by gameCount
+              5 most recently seen
             </span>
             <Link
               href={`/admin/users/${encodeURIComponent(data.userId)}/opponents`}

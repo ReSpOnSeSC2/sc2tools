@@ -83,6 +83,7 @@ export type AdminUserDetail = {
   };
   opponents: {
     total: number;
+    /** Five most recently seen opponents, newest first. */
     top: Array<{
       pulseId: string;
       displayNameSample: string;

@@ -355,7 +355,7 @@ class AdminService {
   /**
    * Detailed snapshot for one user — what the Users-tab "Open" drawer
    * shows. Includes counts, dates, MMR/race breakdown, and the
-   * top-5 most-played opponents.
+   * five most recently seen opponents.
    *
    * @param {string} userId
    */
@@ -365,7 +365,7 @@ class AdminService {
       user,
       gameStats,
       opponentCount,
-      topOpponents,
+      recentOpponents,
     ] = await Promise.all([
       this.db.users.findOne({ userId }, { projection: { _id: 0 } }),
       this.db.games
@@ -403,7 +403,7 @@ class AdminService {
             },
           },
         )
-        .sort({ gameCount: -1 })
+        .sort({ lastSeen: -1, pulseId: 1 })
         .limit(5)
         .toArray(),
     ]);
@@ -433,7 +433,7 @@ class AdminService {
       },
       opponents: {
         total: opponentCount,
-        top: topOpponents,
+        top: recentOpponents,
       },
     };
   }
@@ -441,7 +441,7 @@ class AdminService {
   /**
    * Full, filterable, paginated opponent history for one user — the
    * data behind the ``/admin/users/<id>/opponents`` browser. The
-   * per-user detail snapshot only carries the top-5; this is the
+   * per-user detail snapshot only carries the five most recent; this is the
    * "see everything" companion.
    *
    * Pagination is offset-based (``page`` * ``limit``) rather than the
