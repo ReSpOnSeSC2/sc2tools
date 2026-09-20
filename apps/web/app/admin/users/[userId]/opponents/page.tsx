@@ -59,7 +59,7 @@ export default function AdminUserOpponentsPage({
   const [search, setSearch] = useState("");
   const [race, setRace] = useState("all");
   const [minGames, setMinGames] = useState("");
-  const [sort, setSort] = useState<OpponentSort>("gameCount");
+  const [sort, setSort] = useState<OpponentSort>("lastSeen");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
   // Retain the last-known race set so the dropdown doesn't flicker
