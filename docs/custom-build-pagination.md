@@ -43,9 +43,15 @@ matchups by default.
 repeated whitespace for the analyzer's existing comparison lookup.
 
 `view=summary` returns only bounded catalog metadata such as slug, name, races,
-perspective and update time. It omits rules, signatures and notes. Pickers and
-the Builds overview page use this view. Arcade reads successive slim catalog
-pages because its games need the full set of names.
+perspective and update time. It omits rules, signatures and notes. Pickers use
+this view. Arcade reads successive slim catalog pages because its games need
+the full set of names.
+
+The analyzer's Builds tab uses `/v1/builds` replay analytics for both detected
+and custom builds. A saved definition appears there only after matching games
+are classified with its label and satisfy the selected replay filters, search,
+and minimum-game threshold. Definitions without matching games stay in the
+`/builds` library. Opponent-side definitions contribute to Strategies.
 
 `GET /v1/custom-builds/stats?slugs=slug-a,slug-b` returns statistics only for the
 requested visible builds, with at most 100 slugs per request. Without `slugs`,

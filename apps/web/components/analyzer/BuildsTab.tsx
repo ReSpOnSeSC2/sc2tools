@@ -12,7 +12,6 @@ import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
-import { SavedCustomBuilds } from "@/components/builds/SavedCustomBuilds";
 import { BuildEditorModal } from "./BuildEditorModal";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
@@ -30,38 +29,21 @@ type BuildRow = {
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
 const LS_BUILDS_SORT = "analyzer.builds.sort";
 
-/**
- * Saved definitions remain accessible independently of the filtered
- * replay statistics, including opponent builds and unmatched builds.
- */
+/** Custom and detected builds share the same filtered replay statistics. */
 export function BuildsTab() {
-  return (
-    <div className="space-y-4">
-      <SavedCustomBuilds />
-      <div>
-        <h2 className="text-base font-semibold text-text">Your replay performance</h2>
-        <p className="text-caption text-text-muted">
-          Your own builds in the selected games. Opponent build performance is in Strategies.
-        </p>
-      </div>
-      <BuildPerformance />
-    </div>
-  );
-}
-
-function BuildPerformance() {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
   const sort = usePersistentSort(LS_BUILDS_SORT, "total", "desc");
 
-  const { data, isLoading } = useApi<BuildRow[]>(
+  const { data, isLoading, error, mutate } = useApi<BuildRow[]>(
     `/v1/builds${filtersToQuery(filters)}#${dbRev}`,
+    { keepPreviousData: false },
   );
 
   const rows = useMemo(() => {
-    let r = data || [];
+    let r = (data || []).filter((b) => b.total > 0);
     const s = search.trim().toLowerCase();
     if (s) r = r.filter((b) => b.name.toLowerCase().includes(s));
     if (minGames > 1) r = r.filter((b) => (b.total || 0) >= minGames);
@@ -70,7 +52,7 @@ function BuildPerformance() {
 
   const hiddenByMinGames = useMemo(() => {
     if (minGames <= 1) return 0;
-    const all = data || [];
+    const all = (data || []).filter((b) => b.total > 0);
     const s = search.trim().toLowerCase();
     const matchedSearch = s
       ? all.filter((b) => b.name.toLowerCase().includes(s))
@@ -78,10 +60,18 @@ function BuildPerformance() {
     return matchedSearch.filter((b) => (b.total || 0) < minGames).length;
   }, [data, search, minGames]);
 
-  if (isLoading) return <Skeleton rows={6} />;
+  if (isLoading && !error) return <Skeleton rows={6} />;
 
   return (
     <div className="space-y-4">
+      {error ? (
+        <Card role="alert">
+          <p className="text-caption text-text-muted">
+            {data ? "Couldn't refresh builds. Showing the last loaded results for these filters." : "Couldn't load builds for these filters."}
+          </p>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void mutate()}>Retry</Button>
+        </Card>
+      ) : null}
       <ReclassifyBanner rows={data || []} />
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -101,7 +91,7 @@ function BuildPerformance() {
         </span>
       </div>
 
-      <Card>
+      {data || !error ? <Card>
         {rows.length === 0 ? (
           <EmptyState
             title="No builds match"
@@ -206,7 +196,7 @@ function BuildPerformance() {
             </div>
           </>
         )}
-      </Card>
+      </Card> : null}
 
       <BuildMmrPanel />
 

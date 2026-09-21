@@ -1,18 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FiltersContext } from "@/lib/filterContext";
-import type { CustomBuild } from "@/components/builds/types";
+import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 
 const harness = vi.hoisted(() => ({
-  items: [] as CustomBuild[],
-  libraryError: null as Error | null,
-  libraryLoaded: true,
-  performanceLoading: false,
-  performance: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number }>,
-  mutate: vi.fn(async () => undefined),
-  paths: [] as string[],
-  listMeta: {} as Record<string, unknown>,
-  pages: {} as Record<string, { items: CustomBuild[]; total: number; limit: number; nextCursor: string | null }>,
+  rows: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number }>,
+  loaded: true, loading: false, error: null as Error | null,
+  mutate: vi.fn(async () => undefined), paths: [] as string[],
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
@@ -20,129 +13,129 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: vi.fn(),
   useApi: (path: string) => {
     harness.paths.push(path);
-    const cursor = new URL(path, "https://example.test").searchParams.get("cursor");
-    return path.startsWith("/v1/custom-builds?view=summary")
-      ? {
-          data: harness.libraryLoaded ? (cursor ? harness.pages[cursor] : { items: harness.items, ...harness.listMeta }) : undefined,
-          error: harness.libraryError,
-          isValidating: false,
-          mutate: harness.mutate,
-        }
-      : { data: harness.performance, isLoading: harness.performanceLoading };
+    if (!path.startsWith("/v1/builds")) throw new Error("Builds must use filtered replay analytics.");
+    return { data: harness.loaded ? harness.rows : undefined, isLoading: harness.loading, error: harness.error, mutate: harness.mutate };
   },
 }));
-vi.mock("../BuildEditorModal", () => ({ BuildEditorModal: () => null }));
+vi.mock("../BuildEditorModal", () => ({
+  BuildEditorModal: ({ buildName, onClose }: { buildName: string; onClose: () => void }) =>
+    <div role="dialog" aria-label={buildName}><button onClick={onClose}>Close dossier</button></div>,
+}));
 vi.mock("../mmr/BuildMmrPanel", () => ({ BuildMmrPanel: () => null }));
 vi.mock("../mmr/BuildAgingCurve", () => ({ BuildAgingCurve: () => null }));
 vi.mock("../mmr/MmrProgressionByBuild", () => ({ MmrProgressionByBuild: () => null }));
 
 import { BuildsTab } from "../BuildsTab";
 
+function scopedTab(filters: AnalyzerFilters, dbRev = 3) {
+  return <FiltersContext.Provider value={{ filters, dbRev, bumpRev: vi.fn(), setFilters: vi.fn(), seasons: [] }}>
+    <BuildsTab />
+  </FiltersContext.Provider>;
+}
+
 beforeEach(() => {
   localStorage.clear();
-  harness.items = [
-    { slug: "new-opener", name: "New unmatched opener", race: "Protoss", vsRace: "Terran" },
-    { slug: "opponent/3 rax", name: "3 Rax", race: "Terran", vsRace: "Protoss", perspective: "opponent" },
+  harness.rows = [
+    { name: "Custom gateway opener", total: 5, wins: 3, losses: 2, winRate: 0.6 },
+    { name: "Standard opener", total: 8, wins: 6, losses: 2, winRate: 0.75 },
   ];
-  harness.libraryLoaded = true;
-  harness.libraryError = null;
-  harness.performanceLoading = false;
-  harness.performance = [];
+  harness.loaded = true; harness.loading = false; harness.error = null; harness.paths = [];
   harness.mutate.mockClear();
-  harness.paths = [];
-  harness.listMeta = {};
-  harness.pages = {};
 });
-
 afterEach(cleanup);
 
-describe("Builds tab saved library visibility", () => {
-  it("lets users navigate to saved builds beyond the first 100", () => {
-    const definitions = Array.from({ length: 104 }, (_, index) => ({
-      slug: `saved-${index + 1}`, name: `Saved build ${index + 1}`, race: "Protoss" as const,
-    }));
-    harness.items = definitions.slice(0, 50);
-    harness.listMeta = { total: 104, limit: 50, nextCursor: "second" };
-    harness.pages.second = { items: definitions.slice(50, 100), total: 104, limit: 50, nextCursor: "third" };
-    harness.pages.third = { items: definitions.slice(100), total: 104, limit: 50, nextCursor: null };
+describe("Builds tab filtered custom build integration", () => {
+  it("ranks custom and detected builds in one table with the same dossier action", () => {
     render(<BuildsTab />);
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("link", { name: /^Saved build 51 / })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /^Saved build 1 / })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("link", { name: /^Saved build 104 / }).getAttribute("href")).toBe("/builds/saved-104");
-    expect(screen.getByText("Showing 101–104 of 104 builds")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+    const table = within(screen.getByRole("table"));
+    const rows = table.getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.querySelector("td")?.textContent)).toEqual(["Standard opener", "Custom gateway opener"]);
+    const custom = table.getByRole("row", { name: /Custom gateway opener/ });
+    expect(within(custom).getAllByRole("cell").slice(1, 4).map((cell) => cell.textContent)).toEqual(["3", "2", "5"]);
+    expect(screen.queryByRole("region", { name: "Your custom builds" })).toBeNull();
+    fireEvent.click(custom);
+    expect(screen.getByRole("dialog", { name: "Custom gateway opener" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close dossier" }));
+    fireEvent.click(table.getByRole("row", { name: /Standard opener/ }));
+    expect(screen.getByRole("dialog", { name: "Standard opener" })).toBeTruthy();
   });
 
-  it("describes a deleted later page without claiming the whole library is empty", () => {
-    harness.listMeta = { total: 51, limit: 50, nextCursor: "second" };
-    harness.pages.second = { items: [], total: 50, limit: 50, nextCursor: null };
-    render(<BuildsTab />);
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText(/This page has no saved builds/)).toBeTruthy();
-    expect(screen.queryByText(/No custom builds saved yet/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-    expect(screen.getByRole("link", { name: /New unmatched opener/ })).toBeTruthy();
-  });
-
-  it("shows unmatched and opponent builds even when replay and minimum-game filters exclude every performance row", () => {
-    localStorage.setItem("analyzer.builds.minGames", "20");
-    harness.performance = [{ name: "A replay label", total: 1, wins: 1, losses: 0, winRate: 1 }];
-    render(
-      <FiltersContext.Provider value={{
-        filters: { since: "2026-09-01", regions: "NA", race: "P", map_pool: "ladder" },
-        dbRev: 3,
-        bumpRev: () => undefined,
-        setFilters: () => undefined,
-        seasons: [],
-      }}>
-        <BuildsTab />
-      </FiltersContext.Provider>,
+  it("applies search, minimum games and sorting equally to both build types", () => {
+    harness.rows.push(
+      { name: "Custom rare opener", total: 1, wins: 1, losses: 0, winRate: 1 },
+      { name: "Standard rare opener", total: 1, wins: 1, losses: 0, winRate: 1 },
     );
+    render(<BuildsTab />);
+    fireEvent.click(screen.getByRole("radio", { name: "3" }));
+    expect(screen.queryByText("Custom rare opener")).toBeNull();
+    expect(screen.queryByText("Standard rare opener")).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("search build…"), { target: { value: "custom" } });
+    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
+    expect(screen.queryByText("Standard opener")).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText("search build…"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /Games/ }));
+    expect(within(screen.getByRole("table")).getAllByRole("row").slice(1).map((row) => row.querySelector("td")?.textContent))
+      .toEqual(["Custom gateway opener", "Standard opener"]);
+  });
 
-    const saved = within(screen.getByRole("region", { name: "Your custom builds" }));
-    expect(saved.getByRole("link", { name: /New unmatched opener/ }).getAttribute("href")).toBe("/builds/new-opener");
-    expect(saved.getByRole("link", { name: /3 Rax/ }).getAttribute("href")).toBe("/builds/opponent%2F3%20rax");
-    expect(saved.getByText("From opponent")).toBeTruthy();
-    expect(saved.getByText("Your build")).toBeTruthy();
+  it("removes both types when the selected replay filters have no matching games", () => {
+    const filters: AnalyzerFilters = {
+      since: "2026-09-01", until: "2026-09-21", race: "P", opp_race: "T", regions: "NA",
+      map: "Site Delta", map_pool: "ladder", game_size: "1v1", mmr_min: 4000, mmr_max: 6000,
+      min_minutes: 6, max_minutes: 15,
+    };
+    const { rerender } = render(scopedTab(filters));
+    expect(screen.getByRole("table")).toBeTruthy();
+    const request = new URL(harness.paths.at(-1)!, "https://example.test");
+    for (const [key, value] of Object.entries(filters)) expect(request.searchParams.get(key)).toBe(String(value));
+    expect(request.hash).toBe("#3");
+    harness.rows = [];
+    rerender(scopedTab({ ...filters, regions: "EU" }, 4));
     expect(screen.getByText("No builds match")).toBeTruthy();
-    expect(harness.paths).toContain("/v1/custom-builds?view=summary");
-    expect(harness.paths.some((path) => path.startsWith("/v1/builds?") && path.includes("regions=NA") && path.endsWith("#3"))).toBe(true);
-    expect(saved.getByRole("link", { name: "Manage library" }).getAttribute("href")).toBe("/builds");
+    expect(screen.queryByText("Custom gateway opener")).toBeNull();
+    expect(screen.queryByText("Standard opener")).toBeNull();
+    expect(harness.paths.at(-1)).toContain("regions=EU");
+    expect(harness.paths.at(-1)).toMatch(/#4$/);
   });
 
-  it("keeps saved builds accessible while replay statistics are loading", () => {
-    harness.performanceLoading = true;
+  it("does not display zero-game definitions or fetch an unfiltered library", () => {
+    harness.rows = [{ name: "Unplayed saved build", total: 0, wins: 0, losses: 0, winRate: 0 }];
     render(<BuildsTab />);
-    expect(screen.getByRole("link", { name: /New unmatched opener/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /3 Rax/ })).toBeTruthy();
+    expect(screen.getByText("No builds match")).toBeTruthy();
+    expect(screen.queryByText("Unplayed saved build")).toBeNull();
+    expect(harness.paths.every((path) => path.startsWith("/v1/builds"))).toBe(true);
   });
 
-  it("opens each saved build by its own slug when display names collide", () => {
-    harness.items = [
-      { slug: "own-build", name: "Shared name", race: "Protoss" },
-      { slug: "opponent-build", name: "Shared name", race: "Terran", perspective: "opponent" },
-    ];
+  it("honors the persisted minimum-game threshold for every build", () => {
+    localStorage.setItem("analyzer.builds.minGames", "20");
     render(<BuildsTab />);
-    expect(screen.getAllByRole("link", { name: /Shared name/ }).map((link) => link.getAttribute("href")))
-      .toEqual(["/builds/own-build", "/builds/opponent-build"]);
+    expect(screen.getByText("No builds match")).toBeTruthy();
+    expect(screen.getByText(/2 builds hidden by Min games/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "1" }));
+    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(3);
   });
 
-  it("reports library failure and lets the user retry without claiming no builds are saved", () => {
-    harness.libraryLoaded = false;
-    harness.libraryError = new Error("Unavailable");
+  it("waits for matching replay results without displaying saved definitions", () => {
+    harness.loaded = false; harness.loading = true;
     render(<BuildsTab />);
-    expect(screen.getByRole("alert").textContent).toContain("Couldn't load your custom builds.");
-    expect(screen.queryByText(/No custom builds saved yet/)).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText("No builds match")).toBeNull();
+    expect(screen.queryByText("Custom gateway opener")).toBeNull();
+  });
+
+  it("reports a failed query and supports retry without claiming no matching games", () => {
+    harness.loaded = false; harness.error = new Error("Unavailable");
+    render(<BuildsTab />);
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load builds for these filters.");
+    expect(screen.queryByText("No builds match")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.mutate).toHaveBeenCalledOnce();
   });
 
-  it("retains the last loaded builds when a refresh fails", () => {
-    harness.libraryError = new Error("Unavailable");
+  it("identifies stale results when refreshing the same filters fails", () => {
+    harness.error = new Error("Unavailable");
     render(<BuildsTab />);
-    expect(screen.getByRole("alert").textContent).toContain("Showing the last loaded library.");
-    expect(screen.getByRole("link", { name: /3 Rax/ })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("last loaded results for these filters");
+    expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(3);
   });
 });
