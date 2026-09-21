@@ -1407,7 +1407,7 @@ class CustomBuildsService {
   /**
    * @param {string} userId
    * @param {string} slug
-   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent", strategyName?: string|null, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
+   * @param {{ includeTransitions?: boolean, perspective?: "you"|"opponent", strategyName?: string|null, compareGameId?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
    */
   async evaluateBuildPhases(userId, slug, opts = {}) {
     if (!this.perGame) throw new Error("perGame_unavailable");
@@ -1464,7 +1464,10 @@ class CustomBuildsService {
     // a perGame implementation that ignores ``match`` (test mocks).
     // In production the Mongo find has already done this work.
     const matched = ruleMatched;
-    const comps = computeCompositions(matched, { perspective: phasePerspective });
+    const comps = computeCompositions(matched, {
+      perspective: phasePerspective,
+      compareGameId: opts.compareGameId,
+    });
     if (phaseCohort.truncated && !comps.flags.includes("sample_truncated")) {
       comps.flags.push("sample_truncated");
     }
@@ -1485,6 +1488,8 @@ class CustomBuildsService {
      *   flags: string[],
      *   sampleLimit: number,
      *   sampleTruncated: boolean,
+     *   checkpoints: import('./types').BuildCheckpoint[],
+     *   comparisonGames: import('./types').BuildComparisonGame[],
      *   transitions?: import('./types').BuildTransitionsPayload["transitions"],
      * }} */
     const out = {
@@ -1499,6 +1504,8 @@ class CustomBuildsService {
       flags: comps.flags,
       sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
       sampleTruncated: phaseCohort.truncated,
+      checkpoints: comps.checkpoints,
+      comparisonGames: comps.comparisonGames,
     };
     if (includeTransitions) {
       out.transitions = computeTransitions(matched, {
@@ -2784,10 +2791,14 @@ function toPhaseAggregationGame(game, perspective) {
     : {};
   const raw = {
     gameId: game.gameId,
+    date: game.date || null,
+    map: typeof game.map === "string" ? game.map.slice(0, 200) : null,
     myBuild: game.myBuild,
     myRace: game.myRace,
     oppRace: game.oppRace || game?.opponent?.race || null,
     opponent: game.opponent ? {
+      displayName: typeof game.opponent.displayName === "string"
+        ? game.opponent.displayName.slice(0, 200) : null,
       race: game.opponent.race || null,
       strategy: game.opponent.strategy || null,
     } : null,
@@ -2810,6 +2821,8 @@ function toPhaseAggregationGame(game, perspective) {
   };
   return {
     gameId: raw.gameId,
+    date: raw.date,
+    map: raw.map,
     myBuild: raw.myBuild,
     myRace: raw.myRace,
     oppRace: raw.oppRace,

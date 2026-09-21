@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { rawPayload } from "./fixtures";
@@ -34,6 +34,40 @@ const { MapReplaySection } = await import("../../MapReplaySection");
 describe("MapReplaySection hosts", () => {
   beforeEach(() => {
     api.result = { data: rawPayload(), isLoading: false };
+  });
+
+  it("seeks when delayed playback arrives, stays paused, and preserves user scrubbing on refresh", () => {
+    api.result = { data: undefined, isLoading: true };
+    const view = render(<MapReplaySection gameId="g1" initialTimeSec={360} />);
+    api.result = { data: rawPayload(), isLoading: false };
+    view.rerender(<MapReplaySection gameId="g1" initialTimeSec={360} />);
+    const slider = () => screen.getByRole("slider", { name: /playback position/i }) as HTMLInputElement;
+    expect(slider().value).toBe("360");
+    expect(screen.getByRole("button", { name: /^play$/i })).toBeTruthy();
+    fireEvent.change(slider(), { target: { value: "420" } });
+    api.result = { data: rawPayload(), isLoading: false };
+    view.rerender(<MapReplaySection gameId="g1" initialTimeSec={360} />);
+    expect(slider().value).toBe("420");
+  });
+
+  it("clamps a linked timestamp to playback duration and resets on game or timestamp navigation", () => {
+    const view = render(<MapReplaySection gameId="g1" initialTimeSec={999999} />);
+    const slider = () => screen.getByRole("slider", { name: /playback position/i }) as HTMLInputElement;
+    expect(slider().value).toBe("600");
+    view.rerender(<MapReplaySection gameId="g1" initialTimeSec={120} />);
+    expect(slider().value).toBe("120");
+    fireEvent.change(slider(), { target: { value: "180" } });
+    view.rerender(<MapReplaySection gameId="g2" initialTimeSec={120} />);
+    expect(slider().value).toBe("120");
+    view.rerender(<MapReplaySection gameId="g3" />);
+    expect(slider().value).toBe("0");
+  });
+
+  it("initializes the compact replay at the linked timestamp too", () => {
+    render(<MapReplaySection gameId="g1" compact initialTimeSec={240} />);
+    const slider = screen.getByRole("slider", { name: /playback position/i }) as HTMLInputElement;
+    expect(slider.value).toBe("240");
+    expect(screen.getByRole("button", { name: "▶ Play" })).toBeTruthy();
   });
 
   it("renders the HUD stage with both rails on the full-page host", () => {

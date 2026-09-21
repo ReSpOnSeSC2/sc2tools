@@ -312,6 +312,7 @@ describe("buildCompositions — empty input", () => {
     for (const phase of ["early", "earlyMid", "mid", "midLate", "late"]) {
       expect(out.perPhase[phase]).toEqual({
         signatures: [], tech: [], upgrades: [],
+        window: { medianStartSec: null, medianEndSec: null },
         unitSummary: {
           metric: "peak_alive", source: "unit_timeline",
           observedGames: 0, missingGames: 0, emptyArmyGames: 0, units: [],
@@ -426,6 +427,12 @@ describe("buildCompositions — transparent unit summary", () => {
     expect(summary.units.find((row) => row.token === "Stalker")).toEqual({
       token: "Stalker", mean: 8 / 3, median: 0, p25: 0, p75: 4,
       min: 0, max: 8, gamesPresent: 1, sampleGameIds: ["stalker-game"],
+      whenPresent: { median: 8, p25: 8, p75: 8 },
+      examples: {
+        typical: { gameId: "stalker-game", count: 8, timeSec: 60 },
+        high: { gameId: "stalker-game", count: 8, timeSec: 60 },
+        absent: { gameId: "other-army", count: 0, timeSec: 60 },
+      },
     });
     expect(summary.observedGames + summary.missingGames).toBe(result.sampleSize.early);
   });

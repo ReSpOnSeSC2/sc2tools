@@ -1,5 +1,6 @@
 import { GameDetailPage } from "@/components/analyzer/game/GameDetailPage";
 import { opponentContextFromQuery } from "@/lib/opponentNavigation";
+import { replayTimeFromQuery } from "@/lib/replayLink";
 
 /**
  * /app/game/[gameId] — per-replay deep dive. Opponent-profile entry points
@@ -18,6 +19,7 @@ export default async function GameDetailRoute({
     <GameDetailPage
       gameId={safeDecode(route.gameId || "")}
       opponentContext={opponentContextFromQuery(query)}
+      initialTimeSec={replayTimeFromQuery(query)}
     />
   );
 }

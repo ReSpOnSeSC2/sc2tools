@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
@@ -142,14 +142,15 @@ function mockEndpoints({
   slimError?: { status: number; message: string };
   vodLinks?: GameVodLinksResponse;
 } = {}) {
+  const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
-    if (path === "/v1/games/g1") {
+    if (path === `/v1/games/${encodedId}`) {
       return slimError
         ? { data: undefined, error: slimError, isLoading: false }
         : { data: slim, error: undefined, isLoading: false };
     }
-    if (path === "/v1/games/g1/macro-breakdown") {
+    if (path === `/v1/games/${encodedId}/macro-breakdown`) {
       return macro
         ? { data: macro, error: undefined, isLoading: false }
         : {
@@ -158,10 +159,10 @@ function mockEndpoints({
             isLoading: false,
           };
     }
-    if (path === "/v1/games/g1/build-order") {
+    if (path === `/v1/games/${encodedId}/build-order`) {
       return { data: BUILD_ORDER, error: undefined, isLoading: false };
     }
-    if (path === "/v1/games/vod-links?gameId=g1") {
+    if (path === `/v1/games/vod-links?gameId=${encodedId}`) {
       return { data: vodLinks, error: undefined, isLoading: false };
     }
     return { data: undefined, error: undefined, isLoading: false };
@@ -169,6 +170,32 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("applies a deep-link time after async game data loads without resetting later scrubs", () => {
+    useApiMock.mockReturnValue({ isLoading: true });
+    const view = render(<GameDetailPage gameId="g1" initialTimeSec={360} />);
+    expect(screen.getByLabelText("Loading game")).toBeTruthy();
+    mockEndpoints();
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={360} />);
+    const slider = screen.getByRole("slider", { name: "Scrub game time" }) as HTMLInputElement;
+    expect(slider.value).toBe("360");
+    fireEvent.change(slider, { target: { value: "200" } });
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={360} />);
+    expect(slider.value).toBe("200");
+  });
+
+  it("clamps the initial timestamp and resets for another timestamp or game", () => {
+    mockEndpoints();
+    const view = render(<GameDetailPage gameId="g1" initialTimeSec={900} />);
+    const slider = () => screen.getByRole("slider", { name: "Scrub game time" }) as HTMLInputElement;
+    expect(slider().value).toBe("700");
+    fireEvent.change(slider(), { target: { value: "200" } });
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={240} />);
+    expect(slider().value).toBe("240");
+    mockEndpoints({ slim: { ...SLIM, gameId: "g2" } });
+    view.rerender(<GameDetailPage gameId="g2" />);
+    expect(slider().value).toBe("700");
+  });
+
   it("renders header, timeline, mechanics and the loss autopsy on a defeat", () => {
     mockEndpoints();
     const { container } = render(<GameDetailPage gameId="g1" />);

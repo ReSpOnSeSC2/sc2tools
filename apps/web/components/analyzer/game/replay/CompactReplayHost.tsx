@@ -39,6 +39,7 @@
 import { useCallback, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import { useReplayMusic } from "@/lib/replayMusic";
+import { clampReplayTime } from "@/lib/replayLink";
 import { MapReplayer } from "../MapReplayer";
 import { MusicControl } from "./MusicControl";
 import type { ReplaySpeed } from "./TransportDock";
@@ -48,14 +49,17 @@ export function CompactReplayHost({
   gameId,
   myRace,
   maxHeightPx,
+  initialTimeSec,
 }: {
   playback: MapPlayback;
   /** Seeds the score so one game always draws the same track. */
   gameId?: string | null;
   myRace?: string | null;
   maxHeightPx?: number;
+  /** Applied on mount; the host keys each game/timestamp navigation. */
+  initialTimeSec?: number | null;
 }) {
-  const [time, setTime] = useState(0);
+  const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);
 

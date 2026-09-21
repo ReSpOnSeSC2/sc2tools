@@ -4,6 +4,7 @@ const express = require("express");
 const { validateCustomBuild } = require("../validation/customBuild");
 const { evaluateRules } = require("../services/buildRulesEvaluator");
 const { parseFilters } = require("../util/parseQuery");
+const { parseComparisonGameId } = require("../util/parseComparisonGameId");
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
@@ -185,8 +186,9 @@ function buildCustomBuildsRouter(deps) {
    * @param {string} perspective
    * @param {string} [scope]
    * @param {string} [filtersKey]
+   * @param {string} [compareGameId]
    */
-  function phaseCacheKey(userId, slug, latestGameMs, classificationRevision, kind, perspective, scope, filtersKey) {
+  function phaseCacheKey(userId, slug, latestGameMs, classificationRevision, kind, perspective, scope, filtersKey, compareGameId) {
     // ``perspective`` is included so the comparison view's two
     // queries don't poison each other's cache slot — left ("you")
     // and right ("opponent") off the same slug must compute
@@ -196,7 +198,10 @@ function buildCustomBuildsRouter(deps) {
     // for the same slug must NOT alias. ``filtersKey`` serialises the
     // global filter bar so timeframe / race / map / mmr / region
     // changes don't alias either.
-    return `${userId}|${slug}|${latestGameMs}|${classificationRevision}|${kind}|${perspective}|${scope || ""}|${filtersKey || ""}`;
+    return `${userId}|${slug}|${JSON.stringify([
+      latestGameMs, classificationRevision, kind, perspective,
+      scope || "", filtersKey || "", compareGameId || "",
+    ])}`;
   }
   /**
    * Stable string key for a parsed filter object. Sorted entries so two
@@ -770,6 +775,11 @@ function buildCustomBuildsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      const compareGameId = parseComparisonGameId(req.query.compareGameId);
+      if (compareGameId === null) {
+        res.status(400).json({ error: { code: "invalid_compare_game_id" } });
+        return;
+      }
       if (!deps.perGame) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
         return;
@@ -798,6 +808,7 @@ function buildCustomBuildsRouter(deps) {
         perspective || "default",
         strategyName ? `s:${strategyName}` : "",
         filtersCacheKey(filters),
+        compareGameId,
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -814,6 +825,7 @@ function buildCustomBuildsRouter(deps) {
             slug,
             {
               includeTransitions: false,
+              compareGameId,
               perspective,
               strategyName,
               filters,

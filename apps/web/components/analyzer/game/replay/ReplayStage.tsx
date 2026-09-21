@@ -63,6 +63,7 @@ import {
   type ReplaySide,
 } from "@/lib/replayHud";
 import { useReplayMusic } from "@/lib/replayMusic";
+import { clampReplayTime } from "@/lib/replayLink";
 import { MapReplayer } from "../MapReplayer";
 import { ReplayTopBar } from "./ReplayTopBar";
 import { ProductionRail, type ProductionTab } from "./ProductionRail";
@@ -82,6 +83,7 @@ export function ReplayStage({
   buildMatchPct,
   banked,
   maxHeightPx,
+  initialTimeSec,
 }: {
   playback: MapPlayback;
   /** Only used to seed the background score, so the same replay always
@@ -110,10 +112,12 @@ export function ReplayStage({
    *  none. The map fills whatever is left after the top bar and the
    *  transport dock, so this is the ONE knob that sizes the replay. */
   maxHeightPx?: number;
+  /** Applied on mount; the host keys each game/timestamp navigation. */
+  initialTimeSec?: number | null;
 }) {
   const model = useMemo(() => deriveReplayHud(playback), [playback]);
 
-  const [time, setTime] = useState(0);
+  const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);
 

@@ -12,7 +12,7 @@ import { ChevronRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtMinutes, wrColor } from "@/lib/format";
-import { UnitCompositionTable, unitLabel, type UnitSummary } from "./UnitCompositionTable";
+import { UnitCompositionTable, unitLabel, compositionTime, type UnitSummary } from "./UnitCompositionTable";
 
 export type Phase = "early" | "earlyMid" | "mid" | "midLate" | "late";
 
@@ -53,6 +53,7 @@ export type PhaseCompositionRow = {
   tech: PhaseTechRow[];
   upgrades: PhaseTechRow[];
   unitSummary?: UnitSummary;
+  window?: { medianStartSec: number | null; medianEndSec: number | null };
 };
 
 /**
@@ -293,6 +294,7 @@ export function PhaseCompositionTabs({
           phase={active}
           samples={activeSamples}
         />
+        {activeRow?.window?.medianStartSec != null && activeRow.window.medianEndSec != null ? <p className="text-micro text-text-muted">Median phase window: {compositionTime(activeRow.window.medianStartSec)}–{compositionTime(activeRow.window.medianEndSec)}. Individual games enter and leave this phase at different times.</p> : null}
         {renderActiveBody({
           activeRow,
           activeSamples,

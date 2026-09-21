@@ -5,6 +5,25 @@ import type {
   Phase,
   PhaseCompositionRow,
 } from "@/components/analyzer/PhaseCompositionTabs";
+import type { UnitSummary } from "@/components/analyzer/UnitCompositionTable";
+
+export type CompositionGame = {
+  gameId: string;
+  date: string | null;
+  map: string | null;
+  result: string | null;
+  myRace: string | null;
+  oppRace: string | null;
+  opponentName: string | null;
+  durationSec: number;
+};
+
+export type CompositionCheckpoint = {
+  timeSec: number;
+  reachedGames: number;
+  endedGames: number;
+  unitSummary: UnitSummary;
+};
 
 export type { BuildTransitionsPayload } from "@/components/analyzer/BuildTransitionSankey";
 
@@ -32,6 +51,10 @@ export interface BuildPhasePayload {
   };
   durationP95Sec: number;
   flags: string[];
+  checkpoints?: CompositionCheckpoint[];
+  comparisonGames?: CompositionGame[];
+  sampleLimit?: number;
+  sampleTruncated?: boolean;
   /** Per-strategy phase envelopes for the opponent profile's
    *  storyline cards. Only present on opponent payloads (the build
    *  dossier collapses on a single user-side ``my_build``, so per-

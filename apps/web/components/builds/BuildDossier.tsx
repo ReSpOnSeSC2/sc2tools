@@ -27,6 +27,7 @@ import type { GameSummary } from "@/components/analyzer/game/types";
 import { useApi } from "@/lib/clientApi";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
+import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
 import type {
   BuildDetailRow,
   BuildPhasePayload,
@@ -177,6 +178,7 @@ export function BuildDossier({
             behavior: "smooth",
             block: "center",
           });
+          (el as HTMLElement).focus({ preventScroll: true });
         }
       });
     }
@@ -186,15 +188,10 @@ export function BuildDossier({
     <div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
       <PerformanceTiles totals={data.totals} />
-      <BreakdownGrid data={data} />
-      <TopMatchups rows={data.byMatchup} />
-      <TendenciesAndPredictions
-        strategies={data.topStrategies ?? []}
-        predictions={data.predictedStrategies ?? []}
-      />
       {phasePaths.compositions ? (
         <PhaseAndTransitions
           key={phasePaths.compositions}
+          apiPath={phasePaths.compositions}
           compositions={compositions.data}
           compositionsLoading={compositions.isLoading}
           compositionsError={compositions.error}
@@ -207,6 +204,12 @@ export function BuildDossier({
           onSignatureClick={openFilteredGames}
         />
       ) : null}
+      <BreakdownGrid data={data} />
+      <TopMatchups rows={data.byMatchup} />
+      <TendenciesAndPredictions
+        strategies={data.topStrategies ?? []}
+        predictions={data.predictedStrategies ?? []}
+      />
       {showMacro ? <MacroAggregate macro={data.macro} /> : null}
       <Last5AndRecent
         data={data}
@@ -477,7 +480,7 @@ function CompositionSampleGames({
   const recentById = new Map(recent.map((game) => [game.gameId, game]));
   return (
     <Card title="Composition sample games">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3" data-testid="build-games-filter-chip">
+      <div tabIndex={-1} role="region" aria-label="Selected composition sample games" className="mb-3 flex flex-wrap items-start justify-between gap-3 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" data-testid="build-games-filter-chip">
         <div>
           <p className="text-caption font-medium text-text">{label}</p>
           <p className="mt-1 text-micro text-text-muted">
@@ -550,6 +553,7 @@ function CompositionSampleGame({ gameId, cached }: { gameId: string; cached?: Bu
 }
 
 function PhaseAndTransitions({
+  apiPath,
   compositions,
   compositionsLoading,
   compositionsError,
@@ -561,6 +565,7 @@ function PhaseAndTransitions({
   onRetryTransitions,
   onSignatureClick,
 }: {
+  apiPath: string;
   compositions: BuildPhasePayload | undefined;
   compositionsLoading: boolean;
   compositionsError: unknown;
@@ -596,6 +601,7 @@ function PhaseAndTransitions({
           <Skeleton rows={3} />
         ) : compositions ? (
           <PhaseSection
+            apiPath={apiPath}
             payload={compositions}
             onSignatureClick={onSignatureClick}
           />
@@ -651,12 +657,17 @@ function PhaseLoadError({
 }
 
 function PhaseSection({
+  apiPath,
   payload,
   onSignatureClick,
 }: {
+  apiPath: string;
   payload: BuildPhasePayload;
   onSignatureClick: (sampleGameIds: string[], label: string) => void;
 }) {
+  if (payload.checkpoints?.length) {
+    return <BuildCompositionExplorer key={apiPath} payload={payload} apiPath={apiPath} onOpenGames={onSignatureClick} />;
+  }
   if (payload.flags?.includes("opp_signals_sparse")) {
     return (
       <EmptyState

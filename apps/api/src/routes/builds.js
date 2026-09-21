@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
+const { parseComparisonGameId } = require("../util/parseComparisonGameId");
 
 const PHASE_CACHE_TTL_MS = 60 * 1000;
 const PHASE_CACHE_MAX_ENTRIES = 32;
@@ -46,8 +47,9 @@ function buildBuildsRouter(deps) {
    * @param {string} perspective
    * @param {string} crossAxis
    * @param {string} filtersKey
+   * @param {string} [compareGameId]
    */
-  function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis, filtersKey) {
+  function phaseCacheKey(kind, userId, name, latestGameMs, perspective, crossAxis, filtersKey, compareGameId) {
     // ``crossAxis`` is the OTHER coordinate of the build × strategy
     // cell the BuildVsStrategyComparison drill-down passes through —
     // including it in the cache key keeps the cell-scoped payload
@@ -58,7 +60,10 @@ function buildBuildsRouter(deps) {
     // / map / mmr / region / excludeTooShort) so two requests that
     // differ only in the filter bar don't alias to the same cached
     // entry — the matched-set is filter-dependent.
-    return `${kind}|${userId}|${name}|${latestGameMs}|${perspective}|${crossAxis || ""}|${filtersKey || ""}`;
+    return JSON.stringify([
+      kind, userId, name, latestGameMs, perspective,
+      crossAxis || "", filtersKey || "", compareGameId || "",
+    ]);
   }
   /**
    * Stable string key for a parsed filter object. Sorted entries so two
@@ -307,6 +312,11 @@ function buildBuildsRouter(deps) {
   router.get("/strategies/:name/phases", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
+      const compareGameId = parseComparisonGameId(req.query.compareGameId);
+      if (compareGameId === null) {
+        res.status(400).json({ error: { code: "invalid_compare_game_id" } });
+        return;
+      }
       const strategyPhases = deps.strategyPhases;
       if (!strategyPhases) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
@@ -336,6 +346,7 @@ function buildBuildsRouter(deps) {
         perspective,
         buildName ? `b:${buildName}` : "",
         filtersCacheKey(filters),
+        compareGameId,
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -347,6 +358,7 @@ function buildBuildsRouter(deps) {
         (signal) => strategyPhases.evaluate(userId, name, {
           perspective,
           buildName,
+          compareGameId,
           filters,
           signal,
         }),
@@ -382,6 +394,11 @@ function buildBuildsRouter(deps) {
   router.get("/builds/:name/phases", async (req, res, next) => {
     try {
       const userId = requireAuth(req).userId;
+      const compareGameId = parseComparisonGameId(req.query.compareGameId);
+      if (compareGameId === null) {
+        res.status(400).json({ error: { code: "invalid_compare_game_id" } });
+        return;
+      }
       const strategyPhases = deps.strategyPhases;
       if (!strategyPhases) {
         res.status(503).json({ error: { code: "stats_unavailable" } });
@@ -412,6 +429,7 @@ function buildBuildsRouter(deps) {
         perspective,
         strategyName ? `s:${strategyName}` : "",
         filtersCacheKey(filters),
+        compareGameId,
       );
       const cached = phaseCacheGet(key);
       if (cached) {
@@ -423,7 +441,7 @@ function buildBuildsRouter(deps) {
         (signal) => strategyPhases.evaluateByBuildName(
           userId,
           name,
-          { perspective, strategyName, filters, signal },
+          { perspective, strategyName, compareGameId, filters, signal },
         ),
         requestScope.signal,
       );

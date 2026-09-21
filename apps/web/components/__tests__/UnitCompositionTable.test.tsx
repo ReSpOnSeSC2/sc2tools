@@ -129,16 +129,16 @@ describe("UnitCompositionTable", () => {
     expect(screen.getByText("Median peak")).toBeTruthy();
   });
 
-  it("sorts by average, frequency and name without mutating the server rows", () => {
+  it("defaults to frequency and supports average and name without mutating the server rows", () => {
     const units = [
       unit({ token: "Stalker", mean: 2.4, gamesPresent: 8 }),
       unit({ token: "Zealot", mean: 4.8, gamesPresent: 3 }),
       unit({ token: "Adept", mean: 1.2, gamesPresent: 4 }),
     ];
     render(<UnitCompositionTable summary={summary({ units })} />);
-    expect(visibleTokens()).toEqual(["Zealot", "Stalker", "Adept"]);
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), { target: { value: "frequency" } });
     expect(visibleTokens()).toEqual(["Stalker", "Adept", "Zealot"]);
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), { target: { value: "count" } });
+    expect(visibleTokens()).toEqual(["Zealot", "Stalker", "Adept"]);
     fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), { target: { value: "name" } });
     expect(visibleTokens()).toEqual(["Adept", "Stalker", "Zealot"]);
     expect(units.map((entry) => entry.token)).toEqual(["Stalker", "Zealot", "Adept"]);
@@ -150,10 +150,10 @@ describe("UnitCompositionTable", () => {
       units: tokens.map((token, index) => unit({ token, mean: index + 1 })),
     })} />);
     expect(screen.getAllByTestId("unit-summary-row")).toHaveLength(8);
-    expect(visibleTokens()).not.toContain("Adept");
+    expect(visibleTokens()).not.toContain("Stalker");
     fireEvent.click(screen.getByRole("button", { name: "Show all 10 unit types" }));
     expect(screen.getAllByTestId("unit-summary-row")).toHaveLength(10);
-    expect(visibleTokens()).toContain("Adept");
+    expect(visibleTokens()).toContain("Stalker");
     fireEvent.click(screen.getByRole("button", { name: "Show top 8 units" }));
     expect(screen.getAllByTestId("unit-summary-row")).toHaveLength(8);
   });

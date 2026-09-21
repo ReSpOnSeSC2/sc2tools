@@ -99,6 +99,15 @@ class StrategyPhasesService {
         games.push({
           gameId: game.gameId || null,
           result: game.result || null,
+          date: game.date || null,
+          map: typeof game.map === "string" ? game.map.slice(0, 200) : null,
+          myRace: game.myRace || null,
+          oppRace: game.oppRace || game.opponent?.race || null,
+          opponent: {
+            displayName: typeof game.opponent?.displayName === "string"
+              ? game.opponent.displayName.slice(0, 200) : null,
+          },
+          durationSec: game.durationSec,
           _phasePrepared: prepareCompositionGame(game, opts.perspective),
         });
       }
@@ -134,7 +143,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} strategyName
-   * @param {{ perspective?: "you"|"opponent", buildName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
+   * @param {{ perspective?: "you"|"opponent", buildName?: string, compareGameId?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -147,6 +156,8 @@ class StrategyPhasesService {
    *   flags: string[],
    *   sampleLimit: number,
    *   sampleTruncated: boolean,
+   *   checkpoints: import('./types').BuildCheckpoint[],
+   *   comparisonGames: import('./types').BuildComparisonGame[],
    * }>}
    */
   async evaluate(userId, strategyName, opts = {}) {
@@ -185,7 +196,7 @@ class StrategyPhasesService {
     // has already done this work, so the filter is a no-op.
     const matched = cohort.games;
     if (matched.length === 0) return null;
-    const comps = computeCompositions(matched, { perspective });
+    const comps = computeCompositions(matched, { perspective, compareGameId: opts.compareGameId });
     if (cohort.truncated && !comps.flags.includes("sample_truncated")) {
       comps.flags.push("sample_truncated");
     }
@@ -201,6 +212,8 @@ class StrategyPhasesService {
       flags: comps.flags,
       sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
       sampleTruncated: cohort.truncated,
+      checkpoints: comps.checkpoints,
+      comparisonGames: comps.comparisonGames,
     };
   }
 
@@ -225,7 +238,7 @@ class StrategyPhasesService {
    *
    * @param {string} userId
    * @param {string} buildName
-   * @param {{ perspective?: "you"|"opponent", strategyName?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
+   * @param {{ perspective?: "you"|"opponent", strategyName?: string, compareGameId?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
    * @returns {Promise<null | {
    *   name: string,
    *   total: number,
@@ -238,6 +251,8 @@ class StrategyPhasesService {
    *   flags: string[],
    *   sampleLimit: number,
    *   sampleTruncated: boolean,
+   *   checkpoints: import('./types').BuildCheckpoint[],
+   *   comparisonGames: import('./types').BuildComparisonGame[],
    * }>}
    */
   async evaluateByBuildName(userId, buildName, opts = {}) {
@@ -275,7 +290,7 @@ class StrategyPhasesService {
     // Defensive in-memory filter — see ``evaluate`` for the rationale.
     const matched = cohort.games;
     if (matched.length === 0) return null;
-    const comps = computeCompositions(matched, { perspective });
+    const comps = computeCompositions(matched, { perspective, compareGameId: opts.compareGameId });
     if (cohort.truncated && !comps.flags.includes("sample_truncated")) {
       comps.flags.push("sample_truncated");
     }
@@ -291,6 +306,8 @@ class StrategyPhasesService {
       flags: comps.flags,
       sampleLimit: PHASE_GAME_SAMPLE_LIMIT,
       sampleTruncated: cohort.truncated,
+      checkpoints: comps.checkpoints,
+      comparisonGames: comps.comparisonGames,
     };
   }
 

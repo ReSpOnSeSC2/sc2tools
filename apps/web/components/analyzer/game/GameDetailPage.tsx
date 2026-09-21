@@ -25,6 +25,7 @@ import {
   opponentProfileHref,
   type OpponentNavigationContext,
 } from "@/lib/opponentNavigation";
+import { clampReplayTime } from "@/lib/replayLink";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -42,13 +43,31 @@ import {
  * (pre-v0.5.11) keeps the mechanics/build panels and swaps the
  * timeline for an explanatory empty state. Never a blank page.
  */
-export function GameDetailPage({
-  gameId,
-  opponentContext,
-}: {
+type GameDetailPageProps = {
   gameId: string;
   opponentContext?: OpponentNavigationContext | null;
-}) {
+  /** Initial game-clock position from a replay example link. */
+  initialTimeSec?: number | null;
+};
+
+export function GameDetailPage(props: GameDetailPageProps) {
+  // A new replay or timestamp is a new navigation. Ordinary data refreshes
+  // retain the user's cursor, while client-side links reset it immediately.
+  const initialTimeSec = clampReplayTime(props.initialTimeSec);
+  return (
+    <GameDetailContent
+      key={JSON.stringify([props.gameId, initialTimeSec])}
+      {...props}
+      initialTimeSec={initialTimeSec}
+    />
+  );
+}
+
+function GameDetailContent({
+  gameId,
+  opponentContext,
+  initialTimeSec,
+}: GameDetailPageProps) {
   const enc = encodeURIComponent(gameId);
   const gameReq = useApi<GameSummary>(gameId ? `/v1/games/${enc}` : null, {
     revalidateOnFocus: false,
@@ -158,7 +177,7 @@ export function GameDetailPage({
         statsEvents={breakdown?.stats_events}
         oppStatsEvents={breakdown?.opp_stats_events}
         gameLengthSec={game.durationSec ?? breakdown?.game_length_sec ?? null}
-        scrubTime={scrubTime}
+        scrubTime={scrubTime ?? clampReplayTime(initialTimeSec, game.durationSec ?? breakdown?.game_length_sec)}
         onScrub={setScrubTime}
         myName={myName}
         oppName={oppName}
@@ -167,7 +186,14 @@ export function GameDetailPage({
       {/* Vespene-style map replay — directly under the timeline.
           Renders a one-line hint for games synced before the agent
           computed playback data. */}
-      <MapReplaySection gameId={game.gameId} />
+      <MapReplaySection
+        gameId={game.gameId}
+        initialTimeSec={initialTimeSec}
+        myName={myName}
+        oppName={oppName}
+        myRace={ghostMyRace}
+        oppRace={ghostOpponentRace}
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         <MechanicsPanel

@@ -12,6 +12,7 @@ const {
   MAX_UNIT_KEYS_PER_TICK_SIDE,
 } = require("./scouting/compositionAt");
 const { isKnownBuilding, isKnownUpgrade } = require("./knownBuildings");
+const { summarizeObservedUnits } = require("./buildCompositionSummary");
 
 /**
  * buildCompositions — per-phase signature aggregator for a list of
@@ -71,6 +72,8 @@ const MAX_SAMPLE_GAME_IDS = 25;
 const MAX_PHASE_UNITS = 64;
 const MAX_PHASE_TIMING_TOKENS = 128;
 const MAX_SUMMARY_TIMELINE_ROWS = 5000;
+const CHECKPOINT_TIMES = [240, 360, 480, 600, 720];
+const MAX_SNAPSHOT_AGE_SEC = 30;
 const HAS_OWN = Object.prototype.hasOwnProperty;
 // Filter raw names BEFORE canonicalization: AdeptPhaseShift and
 // DisruptorPhased would otherwise become ordinary army units.
@@ -83,7 +86,7 @@ const TRANSIENT_UNITS = new Set([
 
 /**
  * @param {Array<any>} games
- * @param {{ perspective?: "you"|"opponent" }} [opts]
+ * @param {{ perspective?: "you"|"opponent", compareGameId?: string }} [opts]
  *   ``perspective="opponent"`` rescores phases from the opponent's
  *   side and pulls signatures from ``unit_timeline[*].opp`` instead
  *   of ``.my``. When >50% of the matched games are missing
@@ -107,6 +110,8 @@ const TRANSIENT_UNITS = new Set([
  *   },
  *   durationP95Sec: number,
  *   flags: string[],
+ *   checkpoints: import('./types').BuildCheckpoint[],
+ *   comparisonGames: import('./types').BuildComparisonGame[],
  * }}
  */
 function computeCompositions(games, opts = {}) {
@@ -117,8 +122,12 @@ function computeCompositions(games, opts = {}) {
     prepared: preparedCompositionFor(game, perspective),
   }));
 
+  const compareGameId = typeof opts.compareGameId === "string" ? opts.compareGameId : undefined;
+  const checkpoints = computeCheckpoints(preparedGames, compareGameId);
+  const comparisonGames = comparisonGameMetadata(preparedGames);
   if (perspective === "opponent" && oppSignalTooSparse(preparedGames)) {
-    return emptyCompositionsResult(["opp_signals_sparse"]);
+    const selectedInCohort = preparedGames.some(({ game }) => String(game.gameId) === compareGameId);
+    return { ...emptyCompositionsResult(["opp_signals_sparse"], compareGameId, selectedInCohort), checkpoints, comparisonGames };
   }
 
   /** @type {Record<string, number>} */
@@ -174,7 +183,7 @@ function computeCompositions(games, opts = {}) {
   /** @type {Record<string, ReturnType<typeof computePerPhase>>} */
   const perPhase = {};
   for (const phase of PHASE_ORDER) {
-    perPhase[phase] = computePerPhase(classifiedGames, phase, perspective);
+    perPhase[phase] = computePerPhase(classifiedGames, phase, perspective, compareGameId);
   }
 
   const flags = computeFlags(finalPhaseDistribution, finalScores, list.length);
@@ -197,6 +206,8 @@ function computeCompositions(games, opts = {}) {
     medianCrossings,
     durationP95Sec,
     flags,
+    checkpoints,
+    comparisonGames,
   };
 }
 
@@ -290,8 +301,9 @@ function byCountDescTokenAsc(a, b) {
  * @param {Array<{game: any, classified: any, prepared: any}>} classifiedGames
  * @param {string} phase
  * @param {"you"|"opponent"} [perspective]
+ * @param {string} [compareGameId]
  */
-function computePerPhase(classifiedGames, phase, perspective) {
+function computePerPhase(classifiedGames, phase, perspective, compareGameId) {
   /**
    * @type {Map<string, {
    *   key: string,
@@ -308,15 +320,23 @@ function computePerPhase(classifiedGames, phase, perspective) {
   const techTimes = new Map();
   /** @type {Map<string, number[]>} */
   const upgradeTimes = new Map();
-  /** @type {Array<{gameId: unknown, units: Array<{token: string, count: number}>}>} */
+  /** @type {import('./buildCompositionSummary').GameObservation[]} */
   const summaryGames = [];
+  /** @type {number[]} */
+  const starts = [];
+  /** @type {number[]} */
+  const ends = [];
   let missingGames = 0;
 
   for (const { game, prepared } of classifiedGames) {
     const phaseData = prepared.phases[phase];
     if (!phaseData) continue;
+    if (phaseData.window) {
+      starts.push(phaseData.window.start);
+      ends.push(phaseData.window.end);
+    }
     if (phaseData.observedUnits) {
-      summaryGames.push({ gameId: game.gameId, units: phaseData.observedUnits });
+      summaryGames.push({ gameId: game.gameId, units: phaseData.observedUnits, sampleTimeSec: phaseData.sampleTimeSec });
     } else {
       missingGames += 1;
     }
@@ -384,7 +404,11 @@ function computePerPhase(classifiedGames, phase, perspective) {
     signatures: finalizeSignatures(sigBuckets),
     tech: finalizeRows(techTimes),
     upgrades: finalizeRows(upgradeTimes),
-    unitSummary: summarizeObservedUnits(summaryGames, missingGames),
+    unitSummary: summarizeObservedUnits(summaryGames, missingGames, {
+      compareGameId,
+      comparisonStatus: comparisonStatus(classifiedGames, compareGameId, (prepared) => prepared.phases[phase]),
+    }),
+    window: { medianStartSec: medianOrNull(starts), medianEndSec: medianOrNull(ends) },
   };
 }
 
@@ -397,105 +421,163 @@ function computePerPhase(classifiedGames, phase, perspective) {
  * @param {{start: number, end: number}} window
  * @param {"you"|"opponent"} perspective
  * @param {boolean} includeEnd
- * @returns {Array<{token: string, count: number}>|null}
+ * @returns {{units: Array<{token: string, count: number, timeSec: number}>, sampleTimeSec: number}|null}
  */
 function observedUnitsInWindow(macroBreakdown, window, perspective, includeEnd) {
   const timeline = Array.isArray(macroBreakdown?.unit_timeline)
     ? macroBreakdown.unit_timeline : [];
   const side = perspective === "opponent" ? "opp" : "my";
+  /** @type {Map<string, {count: number, timeSec: number}>} */
   const peak = new Map();
-  let observed = false;
+  let sampleTimeSec = Infinity;
   for (let i = 0; i < Math.min(timeline.length, MAX_SUMMARY_TIMELINE_ROWS); i++) {
     const row = timeline[i];
     const time = row?.time;
     if (typeof time !== "number" || !Number.isFinite(time)
       || time < window.start || time > window.end
       || (!includeEnd && time === window.end)) continue;
-    const values = row?.[side];
-    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
-    const counts = new Map();
-    let inspected = 0;
-    let validValue = false;
-    let hasKey = false;
-    for (const name in values) {
-      if (inspected >= MAX_UNIT_KEYS_PER_TICK_SIDE) break;
-      inspected += 1;
-      if (!HAS_OWN.call(values, name)) continue;
-      hasKey = true;
-      if (!name || name.length > MAX_UNIT_TOKEN_LENGTH) continue;
-      const count = values[name];
-      if (!Number.isSafeInteger(count) || count < 0) continue;
-      validValue = true;
-      if (!count || WORKER_SKIP.has(name) || TRANSIENT_UNITS.has(name)
-        || /^(Beacon|Changeling)/.test(name)
-        || /(Cocoon|Egg)$/.test(name)
-        || isKnownBuilding(name) || isKnownUpgrade(name)) continue;
-      const token = canonicalizeName(name);
-      if (!token || WORKER_SKIP.has(token) || TRANSIENT_UNITS.has(token)
-        || isKnownBuilding(token) || isKnownUpgrade(token)) continue;
-      counts.set(token, (counts.get(token) || 0) + count);
-    }
-    // Malformed-only maps must not turn into a false zero observation.
-    if (hasKey && !validValue) continue;
-    observed = true;
+    const counts = readUnitCounts(row?.[side]);
+    if (!counts) continue;
+    sampleTimeSec = Math.min(sampleTimeSec, time);
     for (const [token, count] of counts) {
-      peak.set(token, Math.max(peak.get(token) || 0, count));
-    }
-  }
-  if (!observed) return null;
-  return [...peak.entries()]
-    .map(([token, count]) => ({ token, count }))
-    .sort(byCountDescTokenAsc)
-    .slice(0, MAX_PHASE_UNITS);
-}
-
-/**
- * All statistics include absent-unit zeros from observed games.
- * @param {Array<{gameId: unknown, units: Array<{token: string, count: number}>}>} games
- * @param {number} missingGames
- * @returns {import('./types').BuildUnitSummary}
- */
-function summarizeObservedUnits(games, missingGames) {
-  /** @type {Map<string, {counts: number[], sampleGameIds: string[]}>} */
-  const byToken = new Map();
-  for (const game of games) {
-    for (const { token, count } of game.units) {
-      if (!byToken.has(token)) byToken.set(token, { counts: [], sampleGameIds: [] });
-      const row = byToken.get(token);
-      if (!row) continue;
-      row.counts.push(count);
-      if (game.gameId && row.sampleGameIds.length < MAX_SAMPLE_GAME_IDS) {
-        row.sampleGameIds.push(String(game.gameId));
+      const current = peak.get(token);
+      if (!current || count > current.count || (count === current.count && time < current.timeSec)) {
+        peak.set(token, { count, timeSec: time });
       }
     }
   }
-  const observedGames = games.length;
-  const units = [];
-  for (const [token, row] of byToken) {
-    const gamesPresent = row.counts.length;
-    const sorted = [...row.counts, ...Array(observedGames - gamesPresent).fill(0)]
-      .sort((a, b) => a - b);
-    units.push({
-      token,
-      mean: sorted.reduce((total, n) => total + n, 0) / observedGames,
-      median: percentile(sorted, 50),
-      p25: percentile(sorted, 25),
-      p75: percentile(sorted, 75),
-      min: sorted[0],
-      max: sorted[sorted.length - 1],
-      gamesPresent,
-      sampleGameIds: row.sampleGameIds,
-    });
-  }
-  units.sort((a, b) => b.mean - a.mean || a.token.localeCompare(b.token));
+  if (!Number.isFinite(sampleTimeSec)) return null;
   return {
-    metric: "peak_alive",
-    source: "unit_timeline",
-    observedGames,
-    missingGames,
-    emptyArmyGames: games.filter((game) => game.units.length === 0).length,
-    units: units.slice(0, MAX_PHASE_UNITS),
+    units: [...peak.entries()]
+      .map(([token, value]) => ({ token, ...value }))
+      .sort(byCountDescTokenAsc)
+      .slice(0, MAX_PHASE_UNITS),
+    sampleTimeSec,
   };
+}
+
+/** Canonicalize one valid side-map, preserving explicit empty armies.
+ * @param {any} values @returns {Map<string, number>|null} */
+function readUnitCounts(values) {
+  if (!values || typeof values !== "object" || Array.isArray(values)) return null;
+  const counts = new Map();
+  let inspected = 0;
+  let validValue = false;
+  let hasKey = false;
+  for (const name in values) {
+    // A truncated roster cannot establish absence of the omitted units.
+    if (inspected >= MAX_UNIT_KEYS_PER_TICK_SIDE) return null;
+    inspected += 1;
+    if (!HAS_OWN.call(values, name)) continue;
+    hasKey = true;
+    if (!name || name.length > MAX_UNIT_TOKEN_LENGTH) continue;
+    const count = values[name];
+    // An invalid army count is unknown, never a zero merely because another
+    // entry (often workers) is valid. Keep this sample out of the baseline.
+    if (!Number.isSafeInteger(count) || count < 0) return null;
+    validValue = true;
+    if (!count || WORKER_SKIP.has(name) || TRANSIENT_UNITS.has(name)
+      || /^(Beacon|Changeling)/.test(name) || /(Cocoon|Egg)$/.test(name)
+      || isKnownBuilding(name) || isKnownUpgrade(name)) continue;
+    const token = canonicalizeName(name);
+    if (!token || WORKER_SKIP.has(token) || TRANSIENT_UNITS.has(token)
+      || isKnownBuilding(token) || isKnownUpgrade(token)) continue;
+    counts.set(token, (counts.get(token) || 0) + count);
+  }
+  return hasKey && !validValue ? null : counts;
+}
+
+/** Only actual samples at/before a checkpoint and at most one sampling
+ * interval old qualify. Never interpolate or borrow a future army.
+ * @param {any} macroBreakdown @param {number} timeSec @param {'you'|'opponent'} perspective
+ */
+function observedUnitsAtCheckpoint(macroBreakdown, timeSec, perspective) {
+  const timeline = Array.isArray(macroBreakdown?.unit_timeline) ? macroBreakdown.unit_timeline : [];
+  const side = perspective === "opponent" ? "opp" : "my";
+  let sampleTimeSec = -Infinity;
+  /** @type {Map<string, number>|null} */
+  let selected = null;
+  for (let i = 0; i < Math.min(timeline.length, MAX_SUMMARY_TIMELINE_ROWS); i++) {
+    const row = timeline[i];
+    const time = row?.time;
+    if (typeof time !== "number" || !Number.isFinite(time)
+      || time > timeSec || time < timeSec - MAX_SNAPSHOT_AGE_SEC || time <= sampleTimeSec) continue;
+    const counts = readUnitCounts(row?.[side]);
+    if (!counts) continue;
+    selected = counts;
+    sampleTimeSec = time;
+  }
+  return {
+    observedUnits: selected === null ? null : [...selected.entries()]
+      .map(([token, count]) => ({ token, count, timeSec: sampleTimeSec }))
+      .sort(byCountDescTokenAsc).slice(0, MAX_PHASE_UNITS),
+    sampleTimeSec: selected === null ? undefined : sampleTimeSec,
+  };
+}
+
+/** @param {Array<{game: any, prepared: any}>} games @param {string|undefined} gameId
+ * @param {(prepared: any) => any} select
+ * @returns {import('./types').BuildUnitComparison['status']}
+ */
+function comparisonStatus(games, gameId, select) {
+  const match = gameId ? games.find(({ game }) => String(game.gameId) === gameId) : undefined;
+  if (!match) return "not_in_cohort";
+  const data = select(match.prepared);
+  if (!data) return "not_reached";
+  return data.observedUnits ? "observed" : "missing";
+}
+
+/** @param {Array<{game: any, prepared: any}>} games @param {string|undefined} compareGameId
+ * @returns {import('./types').BuildCheckpoint[]} */
+function computeCheckpoints(games, compareGameId) {
+  return CHECKPOINT_TIMES.map((timeSec) => {
+    /** @type {import('./buildCompositionSummary').GameObservation[]} */
+    const observed = [];
+    let reachedGames = 0;
+    let missingGames = 0;
+    for (const { game, prepared } of games) {
+      if (prepared.durationSec < timeSec) continue;
+      reachedGames += 1;
+      const sample = prepared.checkpoints?.[timeSec];
+      if (sample?.observedUnits) {
+        observed.push({ gameId: game.gameId, units: sample.observedUnits, sampleTimeSec: sample.sampleTimeSec });
+      } else missingGames += 1;
+    }
+    return {
+      timeSec,
+      reachedGames,
+      endedGames: games.length - reachedGames,
+      unitSummary: summarizeObservedUnits(observed, missingGames, {
+        metric: "snapshot_alive", compareGameId,
+        comparisonStatus: comparisonStatus(games, compareGameId, (prepared) => prepared.checkpoints?.[timeSec]),
+      }),
+    };
+  });
+}
+
+/** Minimal selector labels; never retain raw replay detail in this response.
+ * @param {Array<{game: any, prepared: any}>} games
+ * @returns {import('./types').BuildComparisonGame[]} */
+function comparisonGameMetadata(games) {
+  return games.filter(({ game }) => game.gameId).slice(0, 100).map(({ game, prepared }) => {
+    const parsedDate = game.date instanceof Date ? game.date
+      : typeof game.date === "string" ? new Date(game.date) : null;
+    return {
+      gameId: String(game.gameId),
+      date: parsedDate && Number.isFinite(parsedDate.getTime()) ? parsedDate.toISOString() : null,
+      map: boundedLabel(game.map),
+      result: boundedLabel(game.result),
+      myRace: boundedLabel(game.myRace),
+      oppRace: boundedLabel(game.oppRace),
+      opponentName: boundedLabel(game.opponent?.displayName || game.opponent?.name),
+      durationSec: prepared.durationSec,
+    };
+  });
+}
+
+/** @param {unknown} value */
+function boundedLabel(value) {
+  return typeof value === "string" && value.length ? value.slice(0, 160) : null;
 }
 
 /**
@@ -845,10 +927,13 @@ function prepareCompositionGame(game, perspective = "you") {
     const upgradeTimes = new Map();
     collectTechFirstSeen(game, midpoint, techTimes, side);
     collectUpgradeFirstSeen(game, midpoint, upgradeTimes, side);
-    const observedUnits = observedUnitsInWindow(
+    const observation = observedUnitsInWindow(
       macroBreakdown, window, side, phase === classified.finalPhase,
     );
+    const observedUnits = observation?.units || null;
     phases[phase] = {
+      window,
+      sampleTimeSec: observation?.sampleTimeSec,
       observedUnits,
       units: observedUnits ? observedUnits.slice(0, 3) : [],
       allUnits: observedUnits || [],
@@ -856,6 +941,10 @@ function prepareCompositionGame(game, perspective = "you") {
       upgrades: firstPreparedTimes(upgradeTimes),
     };
   }
+  const checkpoints = Object.fromEntries(CHECKPOINT_TIMES.map((timeSec) => [
+    timeSec,
+    durationSec >= timeSec ? observedUnitsAtCheckpoint(macroBreakdown, timeSec, side) : null,
+  ]));
   return {
     perspective: side,
     durationSec,
@@ -863,6 +952,7 @@ function prepareCompositionGame(game, perspective = "you") {
     hasOpponentStats: Array.isArray(macroBreakdown.opp_stats_events)
       && macroBreakdown.opp_stats_events.length > 0,
     phases,
+    checkpoints,
   };
 }
 
@@ -905,9 +995,9 @@ function oppSignalTooSparse(list) {
  * is too sparse to render. Mirrors the empty-input shape callers
  * already handle so the frontend code path stays the same.
  *
- * @param {string[]} flags
+ * @param {string[]} flags @param {string} [compareGameId] @param {boolean} [selectedInCohort]
  */
-function emptyCompositionsResult(flags) {
+function emptyCompositionsResult(flags, compareGameId, selectedInCohort = false) {
   /** @type {Record<string, number>} */
   const zeroes = { early: 0, earlyMid: 0, mid: 0, midLate: 0, late: 0 };
   /** @type {Record<string, {signatures: any[], tech: any[], upgrades: any[], unitSummary: import('./types').BuildUnitSummary}>} */
@@ -915,7 +1005,9 @@ function emptyCompositionsResult(flags) {
   for (const p of PHASE_ORDER) {
     perPhase[p] = {
       signatures: [], tech: [], upgrades: [],
-      unitSummary: summarizeObservedUnits([], 0),
+      unitSummary: summarizeObservedUnits([], 0, {
+        compareGameId, comparisonStatus: selectedInCohort ? "missing" : "not_in_cohort",
+      }),
     };
   }
   return {

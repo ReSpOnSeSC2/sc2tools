@@ -45,6 +45,7 @@ export function MapReplaySection({
   oppRace,
   buildName,
   buildMatchPct,
+  initialTimeSec,
 }: {
   gameId: string;
   /** Share the host’s recording action and progress without a second request. */
@@ -66,6 +67,8 @@ export function MapReplaySection({
   oppRace?: string | null;
   buildName?: string | null;
   buildMatchPct?: number | null;
+  /** Seek once when this game/timestamp navigation opens; never starts capture. */
+  initialTimeSec?: number | null;
 }) {
   const fallback = useMapReplay(controller ? null : gameId);
   const { playback, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
@@ -130,8 +133,10 @@ export function MapReplaySection({
         </div>
         {refreshControl}
         <CompactReplayHost
+          key={JSON.stringify([gameId, initialTimeSec ?? null])}
           playback={playback}
           gameId={gameId}
+          initialTimeSec={initialTimeSec}
           myRace={myRace}
           maxHeightPx={stageMaxH}
         />
@@ -143,8 +148,10 @@ export function MapReplaySection({
     <div className="space-y-2">
     {refreshControl}
     <ReplayStage
+      key={JSON.stringify([gameId, initialTimeSec ?? null])}
       playback={playback}
       gameId={gameId}
+      initialTimeSec={initialTimeSec}
       maxHeightPx={stageMaxH}
       myName={myName}
       oppName={oppName}

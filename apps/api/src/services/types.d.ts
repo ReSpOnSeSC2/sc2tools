@@ -345,12 +345,34 @@ export interface GamesService {
  * type the /v1/custom-builds/:slug/compositions response without
  * duplicating the field list.
  */
+export interface BuildUnitExample {
+  gameId: string;
+  count: number;
+  timeSec: number;
+}
+
+export interface BuildUnitComparison {
+  gameId: string;
+  status: "observed" | "missing" | "not_reached" | "not_in_cohort";
+  baselineGames: number;
+  sampleTimeSec?: number;
+  units: Array<{
+    token: string;
+    count: number;
+    median: number | null;
+    p25: number | null;
+    p75: number | null;
+    delta: number | null;
+  }>;
+}
+
 export interface BuildUnitSummary {
-  metric: "peak_alive";
+  metric: "peak_alive" | "snapshot_alive";
   source: "unit_timeline";
   observedGames: number;
   missingGames: number;
   emptyArmyGames: number;
+  comparison?: BuildUnitComparison;
   units: Array<{
     token: string;
     mean: number;
@@ -361,11 +383,32 @@ export interface BuildUnitSummary {
     max: number;
     gamesPresent: number;
     sampleGameIds: string[];
+    whenPresent: { median: number; p25: number; p75: number };
+    examples: { typical?: BuildUnitExample; high?: BuildUnitExample; absent?: BuildUnitExample };
   }>;
+}
+
+export interface BuildCheckpoint {
+  timeSec: number;
+  reachedGames: number;
+  endedGames: number;
+  unitSummary: BuildUnitSummary;
+}
+
+export interface BuildComparisonGame {
+  gameId: string;
+  date: string | null;
+  map: string | null;
+  result: string | null;
+  myRace: string | null;
+  oppRace: string | null;
+  opponentName: string | null;
+  durationSec: number;
 }
 
 export interface BuildPhaseRow {
   unitSummary?: BuildUnitSummary;
+  window?: { medianStartSec: number | null; medianEndSec: number | null };
   signatures: Array<{
     key: string;
     units: Array<{ token: string; count: number }>;
@@ -408,6 +451,8 @@ export interface BuildPhasePayload {
   perspective?: "you" | "opponent";
   sampleSize: Record<string, number>;
   perPhase: Record<string, BuildPhaseRow>;
+  checkpoints?: BuildCheckpoint[];
+  comparisonGames?: BuildComparisonGame[];
   finalPhaseDistribution: Record<string, number>;
   flags: string[];
 }
@@ -483,6 +528,7 @@ export interface CustomBuildsService {
     slug: string,
     opts?: {
       includeTransitions?: boolean;
+      compareGameId?: string;
       perspective?: "you" | "opponent";
       /**
        * Optional opponent-strategy axis. When set, the matched set is
@@ -887,6 +933,7 @@ export interface StrategyPhasesService {
     strategyName: string,
     opts?: {
       perspective?: "you" | "opponent";
+      compareGameId?: string;
       /**
        * Optional user-build axis. When set, the matched set is further
        * restricted to games where ``myBuild`` equals the requested
@@ -920,12 +967,15 @@ export interface StrategyPhasesService {
     flags: string[];
     sampleLimit: number;
     sampleTruncated: boolean;
+    checkpoints?: BuildCheckpoint[];
+    comparisonGames?: BuildComparisonGame[];
   }>;
   evaluateByBuildName(
     userId: string,
     buildName: string,
     opts?: {
       perspective?: "you" | "opponent";
+      compareGameId?: string;
       /**
        * Optional opponent-strategy axis. When set, the matched set is
        * further restricted to games where ``opponent.strategy`` equals
@@ -957,6 +1007,8 @@ export interface StrategyPhasesService {
     flags: string[];
     sampleLimit: number;
     sampleTruncated: boolean;
+    checkpoints?: BuildCheckpoint[];
+    comparisonGames?: BuildComparisonGame[];
   }>;
   latestGameDateMs(userId: string): Promise<number>;
 }

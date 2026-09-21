@@ -13,6 +13,15 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Build army checkpoints and game comparisons** — responsive build dossiers
+  now open with real 4/6/8/10/12-minute army snapshots, alongside phase analysis.
+  Compare a selected replay with other measured games in the same filtered
+  build, including zero counts and excluding the selected game from its baseline.
+  Frequency-first unit rows include when-present ranges and typical, highest,
+  and absent examples that open at the recorded replay moment. Coverage,
+  earlier endings, sample limits, perspective, and date range stay explicit.
+  Missing or malformed samples cannot become false zero armies. This web/API
+  update uses existing agent data and does not require another agent release.
 - **Readable build composition on mobile and desktop** — build dossiers now
   show unit names and icons, average sampled peak-alive counts, presence
   frequency, and expandable medians, quartiles, ranges, and replay examples.
