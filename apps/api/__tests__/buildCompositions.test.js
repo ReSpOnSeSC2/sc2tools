@@ -145,20 +145,13 @@ describe("buildCompositions — peak-alive sampling across phase window", () => 
         food_used: Math.min(12 + t / 4, 180), army_value: Math.min(t * 8, 5000),
       });
     }
-    // Timeline samples: dense roster at the busy ticks (peak), a
-    // sparse row at midpoint (post-engagement dip). The exact
-    // midpoint of the mid window depends on the classifier, but the
-    // stats curve pushes midAt to roughly 200s and lateAt past
-    // duration → mid window is roughly [200, 600] → midpoint ~400s.
-    const timeline = [
-      { time: 0, my: { Probe: 12 }, opp: {} },
-      { time: 250, my: { Probe: 50, ...peakUnits }, opp: {} },
-      { time: 350, my: { Probe: 50, ...peakUnits }, opp: {} },
-      // Midpoint sample carries only the dip roster — sparse, low count.
-      { time: 400, my: { Probe: 50, ...dipUnits }, opp: {} },
-      { time: 450, my: { Probe: 50, ...peakUnits }, opp: {} },
-      { time: 500, my: { Probe: 50, ...peakUnits }, opp: {} },
-    ];
+    // Dense samples keep this fixture inside its actual classifier
+    // windows. The previous sparse fixture accidentally relied on the
+    // nearest-sample fallback to borrow a Carrier from a later phase.
+    const timeline = Array.from({ length: duration + 1 }, (_, time) => ({
+      time, my: { Probe: 50, ...(time >= 250 ? peakUnits : {}) }, opp: {},
+    }));
+    timeline[425].my = { Probe: 50, ...dipUnits };
     return {
       bases: [{ name: "Nexus", born_time: 0, died_time: duration },
               { name: "Nexus", born_time: 100, died_time: duration }],
@@ -188,8 +181,11 @@ describe("buildCompositions — peak-alive sampling across phase window", () => 
       opponent: { strategy: "Zerg - Hydra Comp" },
       macroBreakdown, events: [], oppEvents: [],
     }]);
-    expect(result.perPhase.mid.signatures.length).toBeGreaterThan(0);
-    const sig = result.perPhase.mid.signatures[0];
+    // Tier-three air tech jumps directly to late; the zero-duration
+    // mid phase must no longer borrow samples from that later phase.
+    expect(result.perPhase.mid.signatures).toEqual([]);
+    expect(result.perPhase.late.signatures.length).toBeGreaterThan(0);
+    const sig = result.perPhase.late.signatures[0];
     const carrier = sig.units.find((u) => u.token === "Carrier");
     expect(carrier).toBeDefined();
     expect(carrier.count).toBeGreaterThanOrEqual(8); // peak, not dip-1
@@ -316,6 +312,10 @@ describe("buildCompositions — empty input", () => {
     for (const phase of ["early", "earlyMid", "mid", "midLate", "late"]) {
       expect(out.perPhase[phase]).toEqual({
         signatures: [], tech: [], upgrades: [],
+        unitSummary: {
+          metric: "peak_alive", source: "unit_timeline",
+          observedGames: 0, missingGames: 0, emptyArmyGames: 0, units: [],
+        },
       });
     }
   });
@@ -399,6 +399,130 @@ describe("buildCompositions — clustering across games", () => {
     const sig = out.perPhase.mid.signatures[0];
     expect(sig.key).toBe("Stalker");
     expect(sig.units.map((u) => u.token)).toEqual(["Stalker"]);
+  });
+});
+
+describe("buildCompositions — transparent unit summary", () => {
+  function earlyGame(gameId, timeline) {
+    return {
+      gameId, myRace: "Protoss", durationSec: 120, result: "Victory",
+      macroBreakdown: { unit_timeline: timeline },
+    };
+  }
+
+  test("averages all observed games, retaining zeros and excluding missing samples", () => {
+    const result = computeCompositions([
+      earlyGame("stalker-game", [{ time: 60, my: { Stalker: 8 } }]),
+      earlyGame("other-army", [{ time: 60, my: { Marine: 4 } }]),
+      earlyGame("zero-army", [{ time: 60, my: {} }]),
+      earlyGame("missing-side", [{ time: 60, opp: { Carrier: 2 } }]),
+      earlyGame("missing-timeline", []),
+    ]);
+    const summary = result.perPhase.early.unitSummary;
+    expect(summary).toMatchObject({
+      metric: "peak_alive", source: "unit_timeline",
+      observedGames: 3, missingGames: 2, emptyArmyGames: 1,
+    });
+    expect(summary.units.find((row) => row.token === "Stalker")).toEqual({
+      token: "Stalker", mean: 8 / 3, median: 0, p25: 0, p75: 4,
+      min: 0, max: 8, gamesPresent: 1, sampleGameIds: ["stalker-game"],
+    });
+    expect(summary.observedGames + summary.missingGames).toBe(result.sampleSize.early);
+  });
+
+  test("keeps independent unit peaks without presenting them as a simultaneous snapshot", () => {
+    const summary = computeCompositions([earlyGame("transition", [
+      { time: 30, my: { Roach: 12, RoachBurrowed: 8, Ravager: 0 } },
+      { time: 60, my: { Roach: 0, Ravager: 10 } },
+    ])]).perPhase.early.unitSummary;
+    expect(summary.metric).toBe("peak_alive");
+    expect(summary.units.map((row) => [row.token, row.mean])).toEqual([
+      ["Roach", 20], ["Ravager", 10],
+    ]);
+  });
+
+  test("never borrows future samples and assigns crossing samples to the later phase", () => {
+    const game = makeGame({ gameId: "crossing", result: "Victory", myUnitsAtMid: {} });
+    const crossing = prepareCompositionGame(game).classified.crossings.earlyMidAt;
+    expect(crossing).toBeGreaterThan(0);
+    game.macroBreakdown.unit_timeline = [{ time: crossing, my: { Marine: 8 } }];
+    const result = computeCompositions([game]);
+    expect(result.perPhase.early.unitSummary).toMatchObject({
+      observedGames: 0, missingGames: 1, units: [],
+    });
+    expect(result.perPhase.early.signatures).toEqual([]);
+    expect(result.perPhase.earlyMid.unitSummary.units[0]).toMatchObject({ token: "Marine", mean: 8 });
+  });
+
+  test("includes final-game boundary and excludes samples after the replay ended", () => {
+    const result = computeCompositions([earlyGame("end", [
+      { time: 120, my: { Stalker: 2 } },
+      { time: 121, my: { Carrier: 12 } },
+    ])]);
+    expect(result.perPhase.early.unitSummary.units.map((row) => row.token)).toEqual(["Stalker"]);
+  });
+
+  test("filters workers, structures, effects and cocoons before canonical aliases", () => {
+    const result = computeCompositions([earlyGame("roster", [{ time: 60, my: {
+      Probe: 44, DroneBurrowed: 5, OverlordTransport: 8,
+      Nexus: 4, BarracksFlying: 3, Assimilator: 4, AutoTurret: 2,
+      Adept: 3, AdeptPhaseShift: 3, Disruptor: 1, DisruptorPhased: 1,
+      RavagerCocoon: 8, LurkerMPEgg: 4, Interceptor: 16,
+      ForceField: 6, BeaconArmy: 1, ChangelingMarine: 4,
+      ProtossGroundWeaponsLevel1: 1,
+    } }])]);
+    expect(result.perPhase.early.unitSummary.units.map((row) => [row.token, row.mean]))
+      .toEqual([["Adept", 3], ["Disruptor", 1]]);
+    expect(result.perPhase.early.signatures[0].units.map((row) => [row.token, row.count]))
+      .toEqual([["Adept", 3], ["Disruptor", 1]]);
+  });
+
+  test("malformed-only maps are unavailable, while valid zero counts are observations", () => {
+    const result = computeCompositions([
+      earlyGame("invalid", [{ time: 60, my: { Stalker: NaN, Carrier: -2 } }]),
+      earlyGame("array", [{ time: 60, my: [] }]),
+      earlyGame("zero", [{ time: 60, my: { Stalker: 0 } }]),
+    ]);
+    expect(result.perPhase.early.unitSummary).toMatchObject({
+      observedGames: 1, emptyArmyGames: 1, missingGames: 2, units: [],
+    });
+  });
+
+  test("caps replay evidence IDs and keeps fractional means and medians", () => {
+    const games = Array.from({ length: 30 }, (_, index) => earlyGame(`g${index}`, [
+      { time: 60, my: { Stalker: index % 2 ? 1 : 2 } },
+    ]));
+    const row = computeCompositions(games).perPhase.early.unitSummary.units[0];
+    expect(row).toMatchObject({ mean: 1.5, median: 1.5, gamesPresent: 30, min: 1, max: 2 });
+    expect(row.sampleGameIds).toHaveLength(25);
+    expect(row.sampleGameIds[0]).toBe("g0");
+  });
+
+  test("count rank changes do not split the same legacy signature into separate groups", () => {
+    const result = computeCompositions([
+      earlyGame("g1", [{ time: 60, my: { Marine: 10, Marauder: 5 } }]),
+      earlyGame("g2", [{ time: 60, my: { Marine: 5, Marauder: 10 } }]),
+    ]);
+    expect(result.perPhase.early.signatures).toHaveLength(1);
+    expect(result.perPhase.early.signatures[0].sampleCount).toBe(2);
+  });
+
+  test("takes earliest finite tech starts and completed upgrades even when events are unsorted", () => {
+    const game = earlyGame("timings", [{ time: 30, my: { Marine: 5 } }]);
+    game.events = [
+      { name: "RoboticsFacility", time: 40 },
+      { name: "RoboticsFacility", time: 20 },
+      { name: "FleetBeacon", time: NaN },
+      { name: "TerranInfantryWeaponsLevel1", category: "upgrade", time: 1, complete_time: 80 },
+      { name: "TerranInfantryArmorLevel1", category: "upgrade", time: 1, complete_time: 50 },
+      { name: "TerranInfantryArmorLevel1", category: "upgrade", time: 0, complete_time: 40 },
+      { name: "TerranInfantryWeaponsLevel2", category: "upgrade", time: Infinity },
+    ];
+    const early = computeCompositions([game]).perPhase.early;
+    expect(early.tech.map((row) => [row.token, row.medianFirstSeen]))
+      .toEqual([["RoboticsFacility", 20]]);
+    expect(early.upgrades.map((row) => [row.token, row.medianFirstSeen]))
+      .toEqual([["TerranInfantryArmorLevel1", 40]]);
   });
 });
 

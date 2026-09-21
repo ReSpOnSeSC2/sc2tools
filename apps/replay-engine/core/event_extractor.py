@@ -1006,6 +1006,44 @@ def _skip_for_unit_timeline(clean: str) -> bool:
     return False
 
 
+def _unit_timeline_name(clean: str) -> Optional[str]:
+    """Map a tracker form to a completed, roster-visible unit, if any.
+
+    A cocoon is a construction state, not the completed unit it will
+    become. Recording that empty interval also removes the parent form
+    during a morph. Widow Mine burrow/unburrow is the same unit throughout.
+    """
+    if clean == "WidowMineBurrowed":
+        return "WidowMine"
+    if (clean in KNOWN_BUILDINGS or clean in SKIP_UNITS
+            or _skip_for_unit_timeline(clean)
+            or clean.endswith(("Cocoon", "Egg", "Uprooted", "Flying", "Lowered"))
+            or clean.startswith(("Changeling", "LocustMP", "Broodling"))):
+        return None
+    return clean
+
+
+def _unit_type_name_at_event(event) -> Optional[str]:
+    """Resolve completion events against their frame, not the final form.
+
+    UnitDoneEvent only holds a shared Unit object. Its ``name`` may already
+    be a later morph after sc2reader has loaded the entire replay.
+    """
+    explicit = getattr(event, "unit_type_name", None)
+    if explicit:
+        return explicit
+    unit = getattr(event, "unit", None)
+    history = getattr(unit, "type_history", None)
+    frame = getattr(event, "frame", None)
+    if isinstance(history, dict) and frame is not None:
+        prior_frames = [f for f in history if f <= frame]
+        if prior_frames:
+            name = getattr(history[max(prior_frames)], "name", None)
+            if name:
+                return name
+    return _get_unit_type_name(event)
+
+
 def _build_unit_timeline(
     unit_lifetimes: Dict[int, Dict],
     sample_times: List[int],
@@ -1017,8 +1055,9 @@ def _build_unit_timeline(
 
     A unit is considered alive at time ``t`` when ``born <= t`` and either
     it has no recorded death or ``t < died``. Counts are aggregated per
-    canonical unit name (UnitTypeChangeEvent rewrites are already applied
-    to ``unit_lifetimes`` upstream so morphs roll into the new name).
+    unit name at the sample time. ``forms`` holds subsequent type changes;
+    a null form marks an in-progress morph or another excluded state.
+    Later morphs must never rewrite the identity at earlier samples.
 
     Returns a list of dicts, one per sample time:
         { "time": int, "my": {Name: int, ...}, "opp": {Name: int, ...} }
@@ -1055,7 +1094,13 @@ def _build_unit_timeline(
             )
             if target is None:
                 continue
-            name = info.get("name") or "?"
+            name = info.get("name")
+            for form in info.get("forms", []):
+                if form["time"] > t:
+                    break
+                name = form["name"]
+            if not name:
+                continue
             target[name] = target.get(name, 0) + 1
         timeline.append({"time": int(t), "my": my_counts, "opp": opp_counts})
     return timeline
@@ -1184,6 +1229,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # 20260508__PReSpOnSe_VS_ZSquirtuoz.SC2Replay: 49 Adept
     # UnitInit/Done firings, 0 UnitBornEvent firings).
     completion_recorded_uids: Set[int] = set()
+    hallucinated_uids: Set[int] = set()
     gl = getattr(replay, "game_length", None)
     game_end = gl.seconds if gl is not None and hasattr(gl, "seconds") else 0
     out["game_length_sec"] = game_end
@@ -1295,12 +1341,19 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
 
                 if isinstance(event, (UnitBornEvent, UnitInitEvent, UnitDoneEvent)):
                     pid = _get_owner_pid(event)
-                    raw = _get_unit_type_name(event)
+                    raw = _unit_type_name_at_event(event)
                     if not raw:
                         continue
                     clean = _clean_building_name(raw)
                     t = event_seconds(event, replay)
                     uid = _resolve_unit_id(event)
+                    if _is_explicit_hallucination(event):
+                        if uid is not None:
+                            hallucinated_uids.add(uid)
+                        continue
+                    if uid in hallucinated_uids:
+                        continue
+                    timeline_name = _unit_timeline_name(clean)
 
                     # Track non-building, non-skip units for BOTH pids so
                     # the unit_timeline can render both armies. We accept
@@ -1320,16 +1373,15 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         isinstance(event, (UnitBornEvent, UnitDoneEvent))
                         and pid in (my_pid, opp_pid)
                         and pid is not None
-                        and clean not in KNOWN_BUILDINGS
-                        and clean not in SKIP_UNITS
-                        and not _skip_for_unit_timeline(clean)
+                        and timeline_name is not None
                         and uid is not None
                         and uid not in completion_recorded_uids
                     )
                     if is_unit_completion:
                         completion_recorded_uids.add(uid)
                         unit_lifetimes[uid] = {
-                            "pid": pid, "name": clean, "born": t, "died": None,
+                            "pid": pid, "name": timeline_name,
+                            "born": t, "died": None, "forms": [],
                         }
                         if pid in player_counters:
                             player_counters[pid]["units_produced"] += 1
@@ -1466,6 +1518,8 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                         continue
                     clean = _clean_building_name(raw)
                     uid = _resolve_unit_id(event)
+                    if uid in hallucinated_uids or _is_explicit_hallucination(event):
+                        continue
                     # Buildings: only follow morphs for my_pid (existing
                     # behavior — the macro engine only cares about my
                     # bases / production buildings).
@@ -1486,16 +1540,17 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if (pid == my_pid and clean in KNOWN_BUILDINGS
                             and uid is not None):
                         building_name_by_uid[uid] = clean
-                    # Units: morphs (Hellion->Hellbat, Roach->Ravager, etc.)
-                    # need to follow for either side so the timeline shows
-                    # the correct unit type post-morph. Beacons and
-                    # WidowMineBurrowed are filtered the same way as in the
-                    # birth branch — see _skip_for_unit_timeline().
-                    if (uid in unit_lifetimes
-                            and clean not in KNOWN_BUILDINGS
-                            and clean not in SKIP_UNITS
-                            and not _skip_for_unit_timeline(clean)):
-                        unit_lifetimes[uid]["name"] = clean
+                    # Preserve the original form and timestamp every
+                    # transition. Rewriting ``name`` relabels ALL earlier
+                    # samples with the replay-end form. Null forms record
+                    # cocoon intervals without counting either completed
+                    # parent or target, and one uid remains one unit.
+                    timeline_name = _unit_timeline_name(clean)
+                    if uid in unit_lifetimes:
+                        unit_lifetimes[uid]["forms"].append({
+                            "time": event_seconds(event, replay),
+                            "name": timeline_name,
+                        })
                     # Morph-only birth: when the parent uid was never
                     # added to unit_lifetimes (because the parent's name
                     # was in SKIP_UNITS) but the morph target IS army-
@@ -1522,16 +1577,12 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                             and uid not in completion_recorded_uids
                             and pid in (my_pid, opp_pid)
                             and pid is not None
-                            and clean not in KNOWN_BUILDINGS
-                            and clean not in SKIP_UNITS
-                            and not _skip_for_unit_timeline(clean)
-                            and not clean.endswith(
-                                ("Uprooted", "Flying", "Lowered"))):
+                            and timeline_name is not None):
                         completion_recorded_uids.add(uid)
                         morph_t = event_seconds(event, replay)
                         unit_lifetimes[uid] = {
-                            "pid": pid, "name": clean, "born": morph_t,
-                            "died": None,
+                            "pid": pid, "name": timeline_name, "born": morph_t,
+                            "died": None, "forms": [],
                         }
                     continue
 

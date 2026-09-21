@@ -345,7 +345,27 @@ export interface GamesService {
  * type the /v1/custom-builds/:slug/compositions response without
  * duplicating the field list.
  */
+export interface BuildUnitSummary {
+  metric: "peak_alive";
+  source: "unit_timeline";
+  observedGames: number;
+  missingGames: number;
+  emptyArmyGames: number;
+  units: Array<{
+    token: string;
+    mean: number;
+    median: number;
+    p25: number;
+    p75: number;
+    min: number;
+    max: number;
+    gamesPresent: number;
+    sampleGameIds: string[];
+  }>;
+}
+
 export interface BuildPhaseRow {
+  unitSummary?: BuildUnitSummary;
   signatures: Array<{
     key: string;
     units: Array<{ token: string; count: number }>;

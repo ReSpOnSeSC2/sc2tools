@@ -5,7 +5,13 @@ const {
   MAX_CLASSIFIER_DURATION_SEC,
 } = require("./phaseClassifier");
 const { TECH_SC2_NAMES } = require("./techTokens");
-const { peakAliveInWindow } = require("./scouting/compositionAt");
+const {
+  peakAliveInWindow,
+  canonicalizeName,
+  MAX_UNIT_TOKEN_LENGTH,
+  MAX_UNIT_KEYS_PER_TICK_SIDE,
+} = require("./scouting/compositionAt");
+const { isKnownBuilding, isKnownUpgrade } = require("./knownBuildings");
 
 /**
  * buildCompositions — per-phase signature aggregator for a list of
@@ -14,18 +20,15 @@ const { peakAliveInWindow } = require("./scouting/compositionAt");
  * coupling. Caller does the filtering, sorting (newest-first), and
  * detail-blob hydration.
  *
- * For every phase (early / earlyMid / mid / midLate / late) we pick a
- * unit composition "signature" — the top 3 non-worker tokens active at
- * the phase window's midpoint — then cluster identical signatures
- * across games to surface what the player typically fields at that
- * point of the build. Each phase also carries roll-ups of which tech
- * buildings / key units and upgrades had appeared by that midpoint.
+ * For every phase (early / earlyMid / mid / midLate / late), unitSummary
+ * covers the whole observed cohort and signatures group the top three
+ * unit types by their sampled peak alive counts. Each phase also carries
+ * tech-start and upgrade-completion timings observed by its midpoint.
  *
- * Time-base note: every timestamp on the inputs and outputs is on the
- * sc2reader event.second scale (~1.4x faster than wall-clock LotV),
- * matching ``phaseClassifier`` and ``buildDossier``. We do NOT
- * convert here — see the cross-cutting fix tracked in
- * ``phaseClassifier.js`` header.
+ * Inputs and outputs use real LotV seconds, matching phaseClassifier.
+ * unitSummary reports each unit's sampled peak alive within each game,
+ * averaged across all observed games (including observed zero counts).
+ * Independent unit peaks need not coexist and are not production totals.
  */
 
 const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
@@ -67,6 +70,16 @@ const MAX_SIGNATURES = 8;
 const MAX_SAMPLE_GAME_IDS = 25;
 const MAX_PHASE_UNITS = 64;
 const MAX_PHASE_TIMING_TOKENS = 128;
+const MAX_SUMMARY_TIMELINE_ROWS = 5000;
+const HAS_OWN = Object.prototype.hasOwnProperty;
+// Filter raw names BEFORE canonicalization: AdeptPhaseShift and
+// DisruptorPhased would otherwise become ordinary army units.
+const TRANSIENT_UNITS = new Set([
+  "Egg", "Broodling", "BroodlingEscort", "Interceptor", "Locust",
+  "LocustMP", "LocustMPFlying", "LocustMPPrecursor", "InfestedTerran",
+  "PointDefenseDrone", "AdeptPhaseShift", "DisruptorPhased", "KD8Charge",
+  "ForceField", "OracleStasisTrap",
+]);
 
 /**
  * @param {Array<any>} games
@@ -295,22 +308,30 @@ function computePerPhase(classifiedGames, phase, perspective) {
   const techTimes = new Map();
   /** @type {Map<string, number[]>} */
   const upgradeTimes = new Map();
+  /** @type {Array<{gameId: unknown, units: Array<{token: string, count: number}>}>} */
+  const summaryGames = [];
+  let missingGames = 0;
 
   for (const { game, prepared } of classifiedGames) {
     const phaseData = prepared.phases[phase];
     if (!phaseData) continue;
+    if (phaseData.observedUnits) {
+      summaryGames.push({ gameId: game.gameId, units: phaseData.observedUnits });
+    } else {
+      missingGames += 1;
+    }
 
-    // PEAK-alive across the whole phase window — see the docstrings
-    // on pickSignatureUnits / pickAllNonWorkerUnits for why we no
-    // longer use a single midpoint sample. The midpoint is still
-    // passed to collectTechFirstSeen / collectUpgradeFirstSeen since
-    // those want the chronological midpoint of the phase, not the
-    // peak.
+    // Strict per-unit peaks feed both the summary and legacy groups.
+    // Tech and upgrades retain the chronological phase midpoint cutoff.
+    /** @type {Array<{token: string, count: number}>} */
     const units = phaseData.units;
     const allUnits = phaseData.allUnits;
     if (units.length > 0) {
       const key = signatureKey(units);
-      let bucket = sigBuckets.get(key);
+      // A changing count rank is not a new composition. Preserve the
+      // legacy display order while grouping by the same set of tokens.
+      const groupKey = units.map((u) => u.token).sort().join("|");
+      let bucket = sigBuckets.get(groupKey);
       if (!bucket) {
         bucket = {
           key,
@@ -321,7 +342,7 @@ function computePerPhase(classifiedGames, phase, perspective) {
           losses: 0,
           sampleGameIds: [],
         };
-        sigBuckets.set(key, bucket);
+        sigBuckets.set(groupKey, bucket);
       }
       const b = bucket;
       b.sampleCount += 1;
@@ -363,6 +384,117 @@ function computePerPhase(classifiedGames, phase, perspective) {
     signatures: finalizeSignatures(sigBuckets),
     tech: finalizeRows(techTimes),
     upgrades: finalizeRows(upgradeTimes),
+    unitSummary: summarizeObservedUnits(summaryGames, missingGames),
+  };
+}
+
+/**
+ * Strict, bounded sample reader for the transparent cohort summary.
+ * Adjacent phases use [start, end); the final phase includes game end.
+ * Missing samples stay missing rather than borrowing a later army.
+ * An explicit empty side map is a valid observation of zero units.
+ * @param {any} macroBreakdown
+ * @param {{start: number, end: number}} window
+ * @param {"you"|"opponent"} perspective
+ * @param {boolean} includeEnd
+ * @returns {Array<{token: string, count: number}>|null}
+ */
+function observedUnitsInWindow(macroBreakdown, window, perspective, includeEnd) {
+  const timeline = Array.isArray(macroBreakdown?.unit_timeline)
+    ? macroBreakdown.unit_timeline : [];
+  const side = perspective === "opponent" ? "opp" : "my";
+  const peak = new Map();
+  let observed = false;
+  for (let i = 0; i < Math.min(timeline.length, MAX_SUMMARY_TIMELINE_ROWS); i++) {
+    const row = timeline[i];
+    const time = row?.time;
+    if (typeof time !== "number" || !Number.isFinite(time)
+      || time < window.start || time > window.end
+      || (!includeEnd && time === window.end)) continue;
+    const values = row?.[side];
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    const counts = new Map();
+    let inspected = 0;
+    let validValue = false;
+    let hasKey = false;
+    for (const name in values) {
+      if (inspected >= MAX_UNIT_KEYS_PER_TICK_SIDE) break;
+      inspected += 1;
+      if (!HAS_OWN.call(values, name)) continue;
+      hasKey = true;
+      if (!name || name.length > MAX_UNIT_TOKEN_LENGTH) continue;
+      const count = values[name];
+      if (!Number.isSafeInteger(count) || count < 0) continue;
+      validValue = true;
+      if (!count || WORKER_SKIP.has(name) || TRANSIENT_UNITS.has(name)
+        || /^(Beacon|Changeling)/.test(name)
+        || /(Cocoon|Egg)$/.test(name)
+        || isKnownBuilding(name) || isKnownUpgrade(name)) continue;
+      const token = canonicalizeName(name);
+      if (!token || WORKER_SKIP.has(token) || TRANSIENT_UNITS.has(token)
+        || isKnownBuilding(token) || isKnownUpgrade(token)) continue;
+      counts.set(token, (counts.get(token) || 0) + count);
+    }
+    // Malformed-only maps must not turn into a false zero observation.
+    if (hasKey && !validValue) continue;
+    observed = true;
+    for (const [token, count] of counts) {
+      peak.set(token, Math.max(peak.get(token) || 0, count));
+    }
+  }
+  if (!observed) return null;
+  return [...peak.entries()]
+    .map(([token, count]) => ({ token, count }))
+    .sort(byCountDescTokenAsc)
+    .slice(0, MAX_PHASE_UNITS);
+}
+
+/**
+ * All statistics include absent-unit zeros from observed games.
+ * @param {Array<{gameId: unknown, units: Array<{token: string, count: number}>}>} games
+ * @param {number} missingGames
+ * @returns {import('./types').BuildUnitSummary}
+ */
+function summarizeObservedUnits(games, missingGames) {
+  /** @type {Map<string, {counts: number[], sampleGameIds: string[]}>} */
+  const byToken = new Map();
+  for (const game of games) {
+    for (const { token, count } of game.units) {
+      if (!byToken.has(token)) byToken.set(token, { counts: [], sampleGameIds: [] });
+      const row = byToken.get(token);
+      if (!row) continue;
+      row.counts.push(count);
+      if (game.gameId && row.sampleGameIds.length < MAX_SAMPLE_GAME_IDS) {
+        row.sampleGameIds.push(String(game.gameId));
+      }
+    }
+  }
+  const observedGames = games.length;
+  const units = [];
+  for (const [token, row] of byToken) {
+    const gamesPresent = row.counts.length;
+    const sorted = [...row.counts, ...Array(observedGames - gamesPresent).fill(0)]
+      .sort((a, b) => a - b);
+    units.push({
+      token,
+      mean: sorted.reduce((total, n) => total + n, 0) / observedGames,
+      median: percentile(sorted, 50),
+      p25: percentile(sorted, 25),
+      p75: percentile(sorted, 75),
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+      gamesPresent,
+      sampleGameIds: row.sampleGameIds,
+    });
+  }
+  units.sort((a, b) => b.mean - a.mean || a.token.localeCompare(b.token));
+  return {
+    metric: "peak_alive",
+    source: "unit_timeline",
+    observedGames,
+    missingGames,
+    emptyArmyGames: games.filter((game) => game.units.length === 0).length,
+    units: units.slice(0, MAX_PHASE_UNITS),
   };
 }
 
@@ -371,40 +503,6 @@ function computePerPhase(classifiedGames, phase, perspective) {
  */
 function signatureKey(units) {
   return units.map((u) => u.token).join("|");
-}
-
-/**
- * Variant of pickSignatureUnits that returns EVERY non-worker unit
- * at the phase window's PEAK alive snapshot (not just the top 3).
- * Used to compute median counts across all units in a signature
- * bucket so the dossier can surface the complete composition (not
- * just the headline three). Uses the same peak-alive sampler as
- * pickSignatureUnits so the headline + full-composition reads stay
- * internally consistent.
- *
- * @param {any} macroBreakdown
- * @param {number} windowStart
- * @param {number} windowEnd
- * @param {"you"|"opponent"} [perspective]
- * @returns {Array<{token: string, count: number}>}
- */
-function pickAllNonWorkerUnits(macroBreakdown, windowStart, windowEnd, perspective) {
-  const timeline = Array.isArray(macroBreakdown && macroBreakdown.unit_timeline)
-    ? macroBreakdown.unit_timeline
-    : [];
-  if (timeline.length === 0) return [];
-  const side = perspective === "opponent" ? "opp" : "my";
-  const peak = peakAliveInWindow(
-    timeline, windowStart, windowEnd, side, WORKER_SKIP,
-  );
-  /** @type {Array<{token: string, count: number}>} */
-  const entries = [];
-  for (const [token, count] of Object.entries(peak.counts)) {
-    if (!(count > 0)) continue;
-    entries.push({ token, count });
-  }
-  entries.sort(byCountDescTokenAsc);
-  return entries.slice(0, MAX_PHASE_UNITS);
 }
 
 /**
@@ -438,7 +536,9 @@ function collectTechFirstSeen(game, midpoint, acc, perspective = "you") {
   for (const ev of events) {
     const name = ev && ev.name;
     if (!name || !TECH_SC2_NAMES.has(name)) continue;
-    if (!firstSeen.has(name)) firstSeen.set(name, Number(ev.time));
+    const time = ev.time;
+    if (typeof time !== "number" || !Number.isFinite(time) || time < 0) continue;
+    firstSeen.set(name, Math.min(firstSeen.get(name) ?? Infinity, time));
   }
   for (const [token, t] of firstSeen) {
     if (t <= midpoint) {
@@ -469,7 +569,11 @@ function collectUpgradeFirstSeen(game, midpoint, acc, perspective = "you") {
     if (!ev || ev.category !== "upgrade") continue;
     const name = ev.name;
     if (!name) continue;
-    if (!firstSeen.has(name)) firstSeen.set(name, Number(ev.time));
+    // Prepared events may carry inferred research starts; upgrades become
+    // available only at their recorded completion time.
+    const time = ev.complete_time ?? ev.time;
+    if (typeof time !== "number" || !Number.isFinite(time) || time < 0) continue;
+    firstSeen.set(name, Math.min(firstSeen.get(name) ?? Infinity, time));
   }
   for (const [token, t] of firstSeen) {
     if (t <= midpoint) {
@@ -741,19 +845,13 @@ function prepareCompositionGame(game, perspective = "you") {
     const upgradeTimes = new Map();
     collectTechFirstSeen(game, midpoint, techTimes, side);
     collectUpgradeFirstSeen(game, midpoint, upgradeTimes, side);
+    const observedUnits = observedUnitsInWindow(
+      macroBreakdown, window, side, phase === classified.finalPhase,
+    );
     phases[phase] = {
-      units: pickSignatureUnits(
-        macroBreakdown,
-        window.start,
-        window.end,
-        side,
-      ),
-      allUnits: pickAllNonWorkerUnits(
-        macroBreakdown,
-        window.start,
-        window.end,
-        side,
-      ),
+      observedUnits,
+      units: observedUnits ? observedUnits.slice(0, 3) : [],
+      allUnits: observedUnits || [],
       tech: firstPreparedTimes(techTimes),
       upgrades: firstPreparedTimes(upgradeTimes),
     };
@@ -812,10 +910,13 @@ function oppSignalTooSparse(list) {
 function emptyCompositionsResult(flags) {
   /** @type {Record<string, number>} */
   const zeroes = { early: 0, earlyMid: 0, mid: 0, midLate: 0, late: 0 };
-  /** @type {Record<string, {signatures: any[], tech: any[], upgrades: any[]}>} */
+  /** @type {Record<string, {signatures: any[], tech: any[], upgrades: any[], unitSummary: import('./types').BuildUnitSummary}>} */
   const perPhase = {};
   for (const p of PHASE_ORDER) {
-    perPhase[p] = { signatures: [], tech: [], upgrades: [] };
+    perPhase[p] = {
+      signatures: [], tech: [], upgrades: [],
+      unitSummary: summarizeObservedUnits([], 0),
+    };
   }
   return {
     sampleSize: { ...zeroes },

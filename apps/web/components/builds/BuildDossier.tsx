@@ -1,8 +1,9 @@
 "use client";
 
 import { type ReactNode, useMemo, useState } from "react";
+import Link from "next/link";
 import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
-import { fmtAgo, fmtMinutes, pct1, wrColor } from "@/lib/format";
+import { fmtAgo, fmtDate, fmtMinutes, pct1, wrColor } from "@/lib/format";
 import { Last5GamesTimeline } from "@/components/analyzer/Last5GamesTimeline";
 import type { ProfileGame } from "@/components/analyzer/Last5GamesTimeline";
 import {
@@ -19,9 +20,10 @@ import {
 } from "@/components/analyzer/PhaseTrajectoryStrip";
 import {
   PhaseCompositionTabs,
-  type PhaseSignature,
 } from "@/components/analyzer/PhaseCompositionTabs";
+import { unitLabel } from "@/components/analyzer/UnitCompositionTable";
 import { BuildTransitionSankey } from "@/components/analyzer/BuildTransitionSankey";
+import type { GameSummary } from "@/components/analyzer/game/types";
 import { useApi } from "@/lib/clientApi";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
@@ -115,24 +117,21 @@ export function BuildDossier({
 }: BuildDossierProps) {
   const { data, error, isLoading } = useApi<BuildDossierData>(apiPath);
 
-  // Compositions / transitions share the build's base URL — strip the
-  // ``/matches`` suffix to derive sibling routes. For apiPaths that
-  // don't follow the custom-builds convention (e.g. ``/v1/builds/:name``
-  // from the analyzer modal), no sibling routes exist; phaseBase is
-  // null and the section below isn't rendered.
-  const phaseBase = phaseBasePath(apiPath);
-  const phaseQuery = phasePerspective ? `?perspective=${phasePerspective}` : "";
+  const phasePaths = phaseApiPaths(apiPath, phasePerspective);
   const compositions = useApi<BuildPhasePayload>(
-    phaseBase ? `${phaseBase}/compositions${phaseQuery}` : null,
+    phasePaths.compositions,
   );
   const transitions = useApi<BuildTransitionsPayload>(
-    phaseBase ? `${phaseBase}/transitions${phaseQuery}` : null,
+    phasePaths.transitions,
   );
 
   const [gameFilter, setGameFilter] = useState<{
+    scope: string;
     gameIds: string[];
     label: string;
   } | null>(null);
+  const scope = `${apiPath}|${phasePerspective ?? "default"}`;
+  const activeGameFilter = gameFilter?.scope === scope ? gameFilter : null;
 
   if (isLoading && !data) {
     return (
@@ -165,7 +164,7 @@ export function BuildDossier({
 
   const openFilteredGames = (sampleGameIds: string[], label: string) => {
     if (!sampleGameIds || sampleGameIds.length === 0) return;
-    setGameFilter({ gameIds: sampleGameIds, label });
+    setGameFilter({ scope, gameIds: sampleGameIds, label });
     if (typeof window !== "undefined") {
       // Defer to next frame so the chip-rendered card is in the DOM
       // before we scroll to it; mirrors the pattern Last5 uses.
@@ -193,22 +192,26 @@ export function BuildDossier({
         strategies={data.topStrategies ?? []}
         predictions={data.predictedStrategies ?? []}
       />
-      {phaseBase ? (
+      {phasePaths.compositions ? (
         <PhaseAndTransitions
+          key={phasePaths.compositions}
           compositions={compositions.data}
           compositionsLoading={compositions.isLoading}
           compositionsError={compositions.error}
           transitions={transitions.data}
           transitionsLoading={transitions.isLoading}
           transitionsError={transitions.error}
+          showTransitions={Boolean(phasePaths.transitions)}
+          onRetryCompositions={() => { void compositions.mutate(); }}
+          onRetryTransitions={() => { void transitions.mutate(); }}
           onSignatureClick={openFilteredGames}
         />
       ) : null}
       {showMacro ? <MacroAggregate macro={data.macro} /> : null}
       <Last5AndRecent
         data={data}
-        filterGameIds={gameFilter?.gameIds}
-        filterLabel={gameFilter?.label}
+        filterGameIds={activeGameFilter?.gameIds}
+        filterLabel={activeGameFilter?.label}
         onClearFilter={() => setGameFilter(null)}
       />
       {footerSlot ? footerSlot(data) : null}
@@ -216,16 +219,30 @@ export function BuildDossier({
   );
 }
 
-function phaseBasePath(apiPath: string): string | null {
-  if (!apiPath) return null;
-  // Custom-builds dossier endpoints end in ``/matches`` and live next
-  // to ``/compositions`` and ``/transitions``. Anything else (e.g.
-  // ``/v1/builds/:name``) has no phase endpoints — return null so the
-  // hooks stay idle.
-  if (apiPath.endsWith("/matches")) {
-    return apiPath.slice(0, -"/matches".length);
+function phaseApiPaths(
+  apiPath: string,
+  perspective?: "you" | "opponent",
+): { compositions: string | null; transitions: string | null } {
+  const paths: {
+    compositions: string | null;
+    transitions: string | null;
+  } = { compositions: null, transitions: null };
+  if (!apiPath) return paths;
+  const url = new URL(apiPath, "https://sc2tools.invalid");
+  if (perspective) url.searchParams.set("perspective", perspective);
+  // Preserve the exact game scope and the hash used for SWR invalidation.
+  const suffix = `${url.search}${url.hash}`;
+  if (/^\/v1\/custom-builds\/[^/]+\/matches\/?$/.test(url.pathname)) {
+    const base = url.pathname.replace(/\/matches\/?$/, "");
+    paths.compositions = `${base}/compositions${suffix}`;
+    // The transitions endpoint currently accepts only perspective. Avoid
+    // presenting its unfiltered cohort next to a filtered composition.
+    const scoped = [...url.searchParams.keys()].some((key) => key !== "perspective");
+    if (!scoped) paths.transitions = `${base}/transitions${suffix}`;
+  } else if (/^\/v1\/builds\/[^/]+\/?$/.test(url.pathname)) {
+    paths.compositions = `${url.pathname.replace(/\/$/, "")}/phases${suffix}`;
   }
-  return null;
+  return paths;
 }
 
 function PerformanceTiles({
@@ -425,15 +442,110 @@ function Last5AndRecent({
           <WinRateTrend rows={data.byMatchup ?? []} />
         </Card>
       </div>
-      <BuildGamesTable
+      {filterGameIds?.length ? (
+        <CompositionSampleGames
+          key={`${filterLabel}:${filterGameIds.join(",")}`}
+          gameIds={filterGameIds}
+          label={filterLabel}
+          recent={data.recent ?? []}
+          onClear={onClearFilter}
+        />
+      ) : <BuildGamesTable
         games={data.recent ?? []}
         resumedGames={data.resumedRecent ?? []}
         resumedCount={data.resumedCount ?? 0}
-        filterGameIds={filterGameIds}
-        filterLabel={filterLabel}
-        onClearFilter={onClearFilter}
-      />
+      />}
     </div>
+  );
+}
+
+function CompositionSampleGames({
+  gameIds,
+  label,
+  recent,
+  onClear,
+}: {
+  gameIds: string[];
+  label?: string;
+  recent: BuildRecentGame[];
+  onClear?: () => void;
+}) {
+  const [page, setPage] = useState(0);
+  const ids = [...new Set(gameIds)].slice(0, 25);
+  const pageSize = 10;
+  const visibleIds = ids.slice(page * pageSize, (page + 1) * pageSize);
+  const recentById = new Map(recent.map((game) => [game.gameId, game]));
+  return (
+    <Card title="Composition sample games">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3" data-testid="build-games-filter-chip">
+        <div>
+          <p className="text-caption font-medium text-text">{label}</p>
+          <p className="mt-1 text-micro text-text-muted">
+            {ids.length} saved sample{ids.length === 1 ? "" : "s"} · up to 25 replay examples per selection. Analysis totals can include more games.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClear}
+          className="min-h-11 rounded-md border border-border px-3 py-2 text-caption text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Show all recent games
+        </button>
+      </div>
+      <ul className="divide-y divide-border rounded-lg border border-border">
+        {visibleIds.map((id) => (
+          <CompositionSampleGame key={id} gameId={id} cached={recentById.get(id)} />
+        ))}
+      </ul>
+      {ids.length > pageSize ? (
+        <div className="mt-3 flex flex-col gap-2 text-caption sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <span className="text-text-muted">{page * pageSize + 1}–{page * pageSize + visibleIds.length} of {ids.length} samples</span>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded border border-border px-3 py-2 text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Previous samples</button>
+            <button type="button" disabled={(page + 1) * pageSize >= ids.length} onClick={() => setPage((value) => value + 1)} className="min-h-11 rounded border border-border px-3 py-2 text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Next samples</button>
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function CompositionSampleGame({ gameId, cached }: { gameId: string; cached?: BuildRecentGame }) {
+  // The dossier only includes recent games; sample IDs can refer to older
+  // replays. Resolve those explicitly rather than silently dropping them.
+  // Pagination bounds this to ten slim metadata requests at a time.
+  const { data, error, isLoading, mutate } = useApi<GameSummary>(
+    cached ? null : `/v1/games/${encodeURIComponent(gameId)}`,
+    { revalidateOnFocus: false },
+    { timeoutMs: 15_000 },
+  );
+  const row = cached ?? (data ? {
+    gameId: data.gameId,
+    date: data.date ?? "",
+    map: data.map ?? undefined,
+    opponent: data.opponent?.displayName ?? undefined,
+    duration: data.durationSec ?? undefined,
+    result: data.result ?? "",
+  } : null);
+  const result = row?.result?.toLowerCase();
+  const resultLabel = result === "win" || result === "victory" ? "Win"
+    : result === "loss" || result === "defeat" ? "Loss"
+    : result === "tie" || result === "draw" ? "Draw" : "—";
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 px-3 py-3" data-game-id={gameId}>
+      <div className="min-w-0 flex-1">
+        {row ? <>
+          <p className="break-words text-caption font-medium text-text">{row.opponent || "Unknown opponent"} · {row.map || "Unknown map"}</p>
+          <p className="mt-1 text-micro text-text-muted">{row.date ? fmtDate(row.date) : "Date unavailable"} · {row.duration != null ? fmtMinutes(row.duration) : "Length unavailable"} · {resultLabel}</p>
+        </> : error ? <div role="status" className="text-caption text-text-muted">
+          Sample details couldn't load.{" "}
+          <button type="button" onClick={() => { void mutate(); }} className="inline-flex min-h-11 items-center text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Try again</button>
+        </div> : <p className="text-caption text-text-muted" role="status">{isLoading ? "Loading sample game…" : "Sample game details unavailable"}</p>}
+      </div>
+      <Link href={`/app/game/${encodeURIComponent(gameId)}`} className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-border px-3 py-2 text-caption text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        Open game
+      </Link>
+    </li>
   );
 }
 
@@ -444,6 +556,9 @@ function PhaseAndTransitions({
   transitions,
   transitionsLoading,
   transitionsError,
+  showTransitions,
+  onRetryCompositions,
+  onRetryTransitions,
   onSignatureClick,
 }: {
   compositions: BuildPhasePayload | undefined;
@@ -452,19 +567,31 @@ function PhaseAndTransitions({
   transitions: BuildTransitionsPayload | undefined;
   transitionsLoading: boolean;
   transitionsError: unknown;
+  showTransitions: boolean;
+  onRetryCompositions: () => void;
+  onRetryTransitions: () => void;
   onSignatureClick: (sampleGameIds: string[], label: string) => void;
 }) {
   const compositionsPending = compositionsLoading && !compositions;
   const transitionsPending = transitionsLoading && !transitions;
 
-  // Hide the entire section when both endpoints have errored — the
-  // analyzer-modal apiPath has no phase routes, and rendering an empty
-  // shell there would be visual noise.
-  if (compositionsError && transitionsError) return null;
-
   return (
     <div className="space-y-5" data-testid="phase-and-transitions">
-      <Card title="Phase trajectory & composition">
+      <Card
+        title="Army composition"
+        right={compositions ? (
+          <span className="text-micro text-text-muted">
+            {compositions.perspective === "opponent" ? "Opponent army" : "Your army"}
+          </span>
+        ) : undefined}
+      >
+        {compositionsError ? (
+          <PhaseLoadError
+            title="Army composition unavailable"
+            stale={Boolean(compositions)}
+            onRetry={onRetryCompositions}
+          />
+        ) : null}
         {compositionsPending ? (
           <Skeleton rows={3} />
         ) : compositions ? (
@@ -472,25 +599,53 @@ function PhaseAndTransitions({
             payload={compositions}
             onSignatureClick={onSignatureClick}
           />
-        ) : compositionsError ? (
-          <EmptyState
-            title="Phase data unavailable"
-            sub="Phase compositions couldn't load for this build."
-          />
         ) : null}
       </Card>
-      <Card title="Build transitions">
+      {showTransitions ? <Card title="Build transitions">
+        {transitionsError ? (
+          <PhaseLoadError
+            title="Transitions unavailable"
+            stale={Boolean(transitions)}
+            onRetry={onRetryTransitions}
+          />
+        ) : null}
         {transitionsPending ? (
           <Skeleton rows={3} />
         ) : transitions ? (
           <BuildTransitionSankey transitions={transitions} />
-        ) : transitionsError ? (
-          <EmptyState
-            title="Transitions unavailable"
-            sub="Build transitions couldn't load for this build."
-          />
         ) : null}
-      </Card>
+      </Card> : null}
+    </div>
+  );
+}
+
+function PhaseLoadError({
+  title,
+  stale,
+  onRetry,
+}: {
+  title: string;
+  stale: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated p-3">
+      <div>
+        <p className="text-caption font-medium text-text">{title}</p>
+        <p className="mt-1 text-micro text-text-muted">
+          {stale
+            ? "Couldn't refresh this analysis. Showing the previous results."
+            : "This analysis couldn't load. Try again in a moment."}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-md border border-border px-3 py-2 text-caption text-text hover:bg-bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label={`Retry ${title.toLowerCase().replace(" unavailable", "")}`}
+      >
+        Try again
+      </button>
     </div>
   );
 }
@@ -502,6 +657,14 @@ function PhaseSection({
   payload: BuildPhasePayload;
   onSignatureClick: (sampleGameIds: string[], label: string) => void;
 }) {
+  if (payload.flags?.includes("opp_signals_sparse")) {
+    return (
+      <EmptyState
+        title="Opponent composition unavailable"
+        sub="Most games in this selection are missing the opponent tracker data needed to identify phases. There isn't enough recorded data to calculate this army composition."
+      />
+    );
+  }
   return (
     <div className="space-y-4">
       <PhaseTrajectoryStrip
@@ -517,39 +680,20 @@ function PhaseSection({
         sampleSize={payload.sampleSize}
         perPhase={payload.perPhase}
         preferredPhase="mid"
-        onSignatureClick={(sampleGameIds) =>
-          handleSignatureClick(payload, sampleGameIds, onSignatureClick)
-        }
+        onSignatureClick={(sampleGameIds, context) => {
+          if (!context) return;
+          const { phase, signature } = context;
+          const units = signature.units.length > 0
+            ? signature.units.map((unit) => unitLabel(unit.token)).join(" · ")
+            : signature.key || "Other";
+          onSignatureClick(sampleGameIds, `${PHASE_LABELS[phase]} · ${units}`);
+        }}
+        onUnitClick={(sampleGameIds, { phase, token }) => {
+          onSignatureClick(sampleGameIds, `${PHASE_LABELS[phase]} · Games with ${unitLabel(token)}`);
+        }}
       />
     </div>
   );
-}
-
-function handleSignatureClick(
-  payload: BuildPhasePayload,
-  sampleGameIds: string[],
-  onSignatureClick: (sampleGameIds: string[], label: string) => void,
-) {
-  // Locate the signature so the chip can name it ("Mid · Phoenix
-  // Stalker Immortal"). Scanning every phase is fine — there are at
-  // most ~40 signatures across the whole payload.
-  const idSet = new Set(sampleGameIds);
-  for (const phase of Object.keys(payload.perPhase) as Phase[]) {
-    const row = payload.perPhase[phase];
-    if (!row) continue;
-    const hit = row.signatures.find((s: PhaseSignature) =>
-      s.sampleGameIds.some((gid) => idSet.has(gid)),
-    );
-    if (hit) {
-      const units =
-        hit.units.length > 0
-          ? hit.units.map((u) => u.token).join(" ")
-          : hit.key || "Other";
-      onSignatureClick(sampleGameIds, `${PHASE_LABELS[phase]} · ${units}`);
-      return;
-    }
-  }
-  onSignatureClick(sampleGameIds, "signature");
 }
 
 function WinRateTrend({ rows }: { rows: BuildDetailRow[] }) {

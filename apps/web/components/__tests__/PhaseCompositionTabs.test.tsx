@@ -160,7 +160,7 @@ describe("PhaseCompositionTabs", () => {
     expect(panel?.getAttribute("data-active-phase")).toBe("early");
   });
 
-  it("invokes onSignatureClick with the matching sampleGameIds on card click", () => {
+  it("opens games only from the explicit action with the correct phase and signature", () => {
     const onSignatureClick = vi.fn();
     const { container } = render(
       <PhaseCompositionTabs
@@ -172,10 +172,12 @@ describe("PhaseCompositionTabs", () => {
     );
     expect(cards.length).toBe(2);
     fireEvent.click(cards[0]);
+    expect(onSignatureClick).not.toHaveBeenCalled();
+    fireEvent.click(cards[0].querySelector('button')!);
     expect(onSignatureClick).toHaveBeenCalledTimes(1);
-    expect(onSignatureClick).toHaveBeenCalledWith(["g1", "g2", "g3"]);
-    fireEvent.click(cards[1]);
-    expect(onSignatureClick).toHaveBeenLastCalledWith(["g4", "g5"]);
+    expect(onSignatureClick).toHaveBeenCalledWith(["g1", "g2", "g3"], expect.objectContaining({ phase: "early", signature: expect.objectContaining({ key: "Zergling" }) }));
+    fireEvent.click(cards[1].querySelector('button')!);
+    expect(onSignatureClick).toHaveBeenLastCalledWith(["g4", "g5"], expect.objectContaining({ phase: "early", signature: expect.objectContaining({ key: "Drone" }) }));
   });
 
   it("positions tech timeline markers at the correct % offsets", () => {
@@ -484,7 +486,7 @@ describe("PhaseCompositionTabs", () => {
     expect(onStrategyOpen).toHaveBeenCalledWith("Zerg - 3 Base Macro");
   });
 
-  it("warns and shows the data-shape regression empty state when signatures are missing on a reached phase", () => {
+  it("explains missing samples without promising pending data or warning during render", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const { container } = render(
@@ -501,11 +503,37 @@ describe("PhaseCompositionTabs", () => {
           })}
         />,
       );
-      expect(container.textContent).toMatch(/Composition data still landing/i);
-      expect(warn).toHaveBeenCalled();
+      expect(container.textContent).toMatch(/No composition samples available/i);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("supports arrow, Home and End navigation while skipping unavailable phases", () => {
+    const { container } = render(<PhaseCompositionTabs {...baseProps()} />);
+    const tabs = container.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    tabs[0].focus();
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tabs[1]);
+    fireEvent.keyDown(tabs[1], { key: "End" });
+    expect(document.activeElement).toBe(tabs[2]);
+    fireEvent.keyDown(tabs[2], { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tabs[0]);
+    fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(tabs[2]);
+    fireEvent.keyDown(tabs[2], { key: "Home" });
+    expect(document.activeElement).toBe(tabs[0]);
+    const panel = container.querySelector('[role="tabpanel"]')!;
+    expect(panel.getAttribute("aria-labelledby")).toBe(tabs[0].id);
+    expect(tabs[0].getAttribute("aria-controls")).toBe(panel.id);
+  });
+
+  it("falls back when refreshed data removes the active phase", () => {
+    const props = baseProps();
+    const { container, rerender } = render(<PhaseCompositionTabs {...props} preferredPhase="earlyMid" />);
+    rerender(<PhaseCompositionTabs {...props} sampleSize={{ early: 4, earlyMid: 0, mid: 0, midLate: 0, late: 0 }} />);
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute("data-active-phase")).toBe("early");
   });
 
   describe("theme parity", () => {
@@ -557,6 +585,7 @@ describe("PhaseCompositionTabs", () => {
  */
 function stripStyles(html: string): string {
   return html
+    .replace(/:r[0-9a-z]+:/g, ":stable-id:")
     .replace(/\sstyle="[^"]*"/g, "")
     .replace(/\sdata-theme="[^"]*"/g, "");
 }

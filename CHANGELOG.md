@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Readable build composition on mobile and desktop** — build dossiers now
+  show unit names and icons, average sampled peak-alive counts, presence
+  frequency, and expandable medians, quartiles, ranges, and replay examples.
+  Observed absent units count as zero; missing phase samples are excluded.
+  Classified and custom builds preserve the selected game filters, and older
+  sample games load independently of the recent-game list. Lifetime production
+  totals remain distinct from sampled alive counts.
 - **Optional accurate replay capture** — agent **0.16.9**
   (`agent-v0.16.9`) keeps StarCraft recording **off by default**. Users can
   enable it in agent Settings after a CPU-use warning, receive a notice when
@@ -49,6 +56,17 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Unit forms remain accurate through replay morphs** — agent **0.16.10**
+  (`agent-v0.16.10`) preserves timestamped unit forms, excludes in-progress
+  cocoons and explicit hallucinations, and resolves completion events at their
+  historical form. Update the agent and use normal **Recompute** or full
+  **Re-sync** for existing replay history; the installer alone cannot repair
+  previously stored timelines. Accurate replay capture is not required.
+- **Build composition samples use the correct phase** — phase aggregates no
+  longer borrow future unit samples. Common unit groups share the same filtered
+  observations, remain stable when unit count rankings swap, and show explicit
+  conditional medians. Tech timing uses the earliest valid observation and
+  upgrade timing uses completion when available.
 - **Older replay details remain readable after the R2 switch** — replay
   inspectors now recover unmigrated analysis from Mongo when the R2 object
   is absent, and partial updates preserve those saved fields. Current detail

@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import { ChevronRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtMinutes, wrColor } from "@/lib/format";
+import { UnitCompositionTable, unitLabel, type UnitSummary } from "./UnitCompositionTable";
 
 export type Phase = "early" | "earlyMid" | "mid" | "midLate" | "late";
 
@@ -50,6 +52,7 @@ export type PhaseCompositionRow = {
   signatures: PhaseSignature[];
   tech: PhaseTechRow[];
   upgrades: PhaseTechRow[];
+  unitSummary?: UnitSummary;
 };
 
 /**
@@ -83,7 +86,8 @@ export type PhaseStrategyEnvelope = {
 export type PhaseCompositionTabsProps = {
   sampleSize: Record<Phase, number>;
   perPhase: Record<Phase, PhaseCompositionRow>;
-  onSignatureClick?: (sampleGameIds: string[]) => void;
+  onSignatureClick?: (sampleGameIds: string[], context?: { phase: Phase; signature: PhaseSignature }) => void;
+  onUnitClick?: (sampleGameIds: string[], context: { phase: Phase; token: string }) => void;
   showTechRow?: boolean;
   /**
    * Optional initial tab. When the requested phase has zero samples
@@ -137,11 +141,13 @@ export function PhaseCompositionTabs({
   sampleSize,
   perPhase,
   onSignatureClick,
+  onUnitClick,
   showTechRow = true,
   preferredPhase,
   byStrategy,
   onStrategyOpen,
 }: PhaseCompositionTabsProps) {
+  const id = useId();
   const initial = useMemo<Phase>(() => {
     if (preferredPhase && (sampleSize[preferredPhase] ?? 0) > 0) {
       return preferredPhase;
@@ -151,6 +157,21 @@ export function PhaseCompositionTabs({
   }, [sampleSize, preferredPhase]);
   const [active, setActive] = useState<Phase>(initial);
   const tabRefs = useRef<Partial<Record<Phase, HTMLButtonElement | null>>>({});
+
+  useEffect(() => {
+    if (!(sampleSize[active] > 0)) setActive(initial);
+  }, [active, sampleSize, initial]);
+
+  const handleTabKey = (event: KeyboardEvent<HTMLButtonElement>, phase: Phase) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const enabled = PHASE_ORDER.filter((p) => sampleSize[p] > 0);
+    if (!enabled.length) return;
+    const index = enabled.indexOf(phase);
+    const next = event.key === "Home" ? enabled[0] : event.key === "End" ? enabled[enabled.length - 1] : enabled[(index + (event.key === "ArrowRight" ? 1 : -1) + enabled.length) % enabled.length];
+    setActive(next);
+    tabRefs.current[next]?.focus();
+  };
 
   useEffect(() => {
     const node = tabRefs.current[active];
@@ -173,11 +194,6 @@ export function PhaseCompositionTabs({
         : [],
     [activeRow],
   );
-
-  const totalWins = signatures.reduce((s, sig) => s + sig.wins, 0);
-  const totalLosses = signatures.reduce((s, sig) => s + sig.losses, 0);
-  const totalGames = totalWins + totalLosses;
-  const overallWr = totalGames > 0 ? totalWins / totalGames : 0;
 
   return (
     <div className="space-y-4" data-testid="phase-composition-tabs">
@@ -207,6 +223,8 @@ export function PhaseCompositionTabs({
               }}
               type="button"
               role="tab"
+              id={`${id}-${phase}`}
+              aria-controls={`${id}-panel`}
               data-phase={phase}
               data-testid="phase-tab"
               aria-selected={selected}
@@ -217,13 +235,14 @@ export function PhaseCompositionTabs({
                 if (disabled) return;
                 setActive(phase);
               }}
+              onKeyDown={(event) => handleTabKey(event, phase)}
               style={
                 selected
                   ? { borderBottomColor: PHASE_ACCENT[phase] }
                   : undefined
               }
               className={[
-                "inline-flex min-h-[40px] shrink-0 snap-start items-center gap-2 -mb-px border-b-2 border-transparent px-3 py-2 text-caption transition-colors",
+                "inline-flex min-h-[44px] shrink-0 snap-start items-center gap-2 -mb-px border-b-2 border-transparent px-3 py-2 text-caption transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                 selected
                   ? "text-text font-semibold"
@@ -263,6 +282,8 @@ export function PhaseCompositionTabs({
 
       <div
         role="tabpanel"
+        id={`${id}-panel`}
+        aria-labelledby={`${id}-${active}`}
         aria-label={`${PHASE_LABELS[active]} compositions`}
         data-testid="phase-tab-panel"
         data-active-phase={active}
@@ -271,10 +292,6 @@ export function PhaseCompositionTabs({
         <ActivePhaseHeader
           phase={active}
           samples={activeSamples}
-          wins={totalWins}
-          losses={totalLosses}
-          wr={overallWr}
-          sparse={activeSamples === 0 || signatures.length === 0}
         />
         {renderActiveBody({
           activeRow,
@@ -283,6 +300,7 @@ export function PhaseCompositionTabs({
           onSignatureClick,
           showTechRow,
           phase: active,
+          onUnitClick,
         })}
         {byStrategy && byStrategy.length > 0 ? (
           <StrategyBreakdown
@@ -296,349 +314,86 @@ export function PhaseCompositionTabs({
   );
 }
 
-function ActivePhaseHeader({
-  phase,
-  samples,
-  wins,
-  losses,
-  wr,
-  sparse,
-}: {
-  phase: Phase;
-  samples: number;
-  wins: number;
-  losses: number;
-  wr: number;
-  sparse: boolean;
-}) {
-  const denom = wins + losses;
-  const showWr = denom > 0;
-  const wrText = showWr ? `${Math.round(wr * 100)}%` : "—";
+function ActivePhaseHeader({ phase, samples }: { phase: Phase; samples: number }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 text-micro uppercase tracking-wider text-text-dim">
-      <div className="flex items-baseline gap-2">
-        <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{ background: PHASE_ACCENT[phase] }}
-          aria-hidden="true"
-        />
-        <span className="font-semibold text-text-muted">
-          {PHASE_LABELS[phase]} game state
-        </span>
-        {!sparse ? (
-          <span className="normal-case tracking-normal text-text-dim">
-            {samples} game{samples === 1 ? "" : "s"} reached this phase
-          </span>
-        ) : null}
-      </div>
-      {showWr ? (
-        <span
-          className="rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-micro normal-case tracking-normal tabular-nums"
-          style={{ color: wrColor(wr, denom) }}
-          title={`${wins} wins · ${losses} losses across ${denom} completed games`}
-        >
-          {wins}–{losses} · {wrText}
-        </span>
-      ) : null}
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-caption text-text-muted">
+      <span className="inline-flex items-center gap-2 font-medium">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PHASE_ACCENT[phase] }} aria-hidden />
+        {PHASE_LABELS[phase]} game state
+      </span>
+      <span className="text-text-dim">{samples} game{samples === 1 ? "" : "s"} reached this phase</span>
     </div>
   );
 }
 
 function renderActiveBody({
-  activeRow,
-  activeSamples,
-  signatures,
-  onSignatureClick,
-  showTechRow,
-  phase,
+  activeRow, activeSamples, signatures, onSignatureClick, onUnitClick, showTechRow, phase,
 }: {
   activeRow: PhaseCompositionRow | undefined;
   activeSamples: number;
   signatures: PhaseSignature[];
   onSignatureClick: PhaseCompositionTabsProps["onSignatureClick"];
+  onUnitClick: PhaseCompositionTabsProps["onUnitClick"];
   showTechRow: boolean;
   phase: Phase;
 }) {
   if (!activeRow || activeSamples === 0) {
-    return (
-      <EmptyState
-        title="No games reached this phase yet"
-        sub="Play a few longer games on this build to see what you're typically fielding here."
-      />
-    );
+    return <EmptyState title="No games reached this phase yet" sub="Composition statistics appear as matching replays reach this stage of the game." />;
   }
-  if (signatures.length === 0) {
-    if (typeof console !== "undefined") {
-      console.warn(
-        `[PhaseCompositionTabs] ${activeSamples} game(s) reached ${phase} ` +
-          `but no signatures were computed — data-shape regression?`,
-      );
-    }
-    return (
-      <EmptyState
-        title="Composition data still landing"
-        sub={
-          `${activeSamples} game${activeSamples === 1 ? "" : "s"} on this build ` +
-          `reached this phase but signatures haven't been computed yet.`
-        }
-      />
-    );
+  const summary = activeRow.unitSummary;
+  if (!summary && signatures.length === 0) {
+    return <EmptyState title="No composition samples available" sub={`${activeSamples} game${activeSamples === 1 ? "" : "s"} reached this phase, but no army samples are available.`} />;
   }
-  return (
-    <div className="space-y-4">
-      <ul
-        className="grid gap-3"
-        style={{
-          // Auto-fit so composition cards keep enough room for the
-          // unit row + WR pill + sample-size footer regardless of the
-          // parent container's width. ~240px per card matches the
-          // designed minimum for the dense head row (3 UnitBadges
-          // ~44px each + WR pill + gap).
-          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        }}
-        data-testid="composition-cards"
-      >
-        {signatures.map((sig) => (
-          <CompositionCard
-            key={sig.key}
-            signature={sig}
-            onClick={onSignatureClick}
-          />
-        ))}
+  const patterns = (
+    <div className="space-y-3">
+      <p className="text-caption leading-relaxed text-text-muted">Grouped by their three most numerous unit types. Counts are median per-unit peaks among games containing that unit; the units may peak at different times.</p>
+      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2" data-testid="composition-cards">
+        {signatures.map((sig) => <CompositionCard key={sig.key} signature={sig} observedGames={summary?.observedGames ?? activeSamples} onClick={onSignatureClick ? (ids) => onSignatureClick(ids, { phase, signature: sig }) : undefined} />)}
       </ul>
-      {showTechRow ? (
-        <div className="hidden md:block">
-          <TechTimeline tech={activeRow.tech} upgrades={activeRow.upgrades} />
-        </div>
-      ) : null}
+    </div>
+  );
+  return (
+    <div className="min-w-0 space-y-5">
+      {summary ? <UnitCompositionTable key={phase} summary={summary} onOpenGames={onUnitClick ? (ids, token) => onUnitClick(ids, { phase, token }) : undefined} /> : <p className="rounded-md border border-border bg-bg-elevated p-3 text-caption text-text-muted">This replay analysis contains grouped medians only. Overall unit averages are unavailable.</p>}
+      {signatures.length > 0 ? summary ? (
+        <details className="group border-t border-border pt-1">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Common unit groups <span className="flex items-center gap-2 font-normal text-text-dim">{signatures.length} groups <ChevronRight className="h-4 w-4 group-open:rotate-90" aria-hidden /></span></summary>
+          {patterns}
+        </details>
+      ) : patterns : null}
+      {showTechRow ? <TechTimeline tech={activeRow.tech} upgrades={activeRow.upgrades} /> : null}
     </div>
   );
 }
 
-function CompositionCard({
-  signature,
-  onClick,
-}: {
+function CompositionCard({ signature, observedGames, onClick }: {
   signature: PhaseSignature;
-  onClick: PhaseCompositionTabsProps["onSignatureClick"];
+  observedGames: number;
+  onClick: ((ids: string[]) => void) | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const total = signature.wins + signature.losses;
-  const wrText = total > 0 ? `${signature.wins}–${signature.losses}` : "—";
-  const wr = signature.winRate;
-  const wrPct = total > 0 ? Math.round(wr * 100) : 0;
-  const interactive = !!onClick && signature.sampleGameIds.length > 0;
-
   const head = signature.units;
-  const all = signature.fullComposition ?? signature.units;
-  const headTokens = new Set(head.map((u) => u.token));
-  const extras = all.filter((u) => !headTokens.has(u.token));
-  const hasMore = extras.length > 0;
-
-  const activate = () => {
-    if (!interactive) return;
-    onClick?.(signature.sampleGameIds);
-  };
-
-  const handleKey = (e: KeyboardEvent<HTMLLIElement>) => {
-    if (!interactive) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      activate();
-    }
-  };
-
+  const all = signature.fullComposition ?? head;
+  const interactive = !!onClick && signature.sampleGameIds.length > 0;
+  const prevalence = observedGames > 0 ? Math.round(100 * signature.sampleCount / observedGames) : 0;
   return (
-    <li
-      role={interactive ? "button" : undefined}
-      tabIndex={interactive ? 0 : -1}
-      onClick={interactive ? activate : undefined}
-      onKeyDown={interactive ? handleKey : undefined}
-      aria-label={
-        interactive
-          ? `Open ${head.map((u) => `${u.count} ${u.token}`).join(", ") || "this composition"}`
-          : undefined
-      }
-      data-testid="composition-card"
-      data-signature-key={signature.key}
-      className={[
-        "flex min-h-[44px] flex-col gap-3 rounded-lg border border-border bg-bg-surface p-3",
-        interactive
-          ? "cursor-pointer transition-colors hover:bg-bg-elevated hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg motion-safe:hover:-translate-y-px"
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {head.length === 0 ? (
-            <span className="text-caption font-medium text-text-muted">
-              {signature.key === "Other"
-                ? "Mixed / rare compositions"
-                : signature.key || "Other"}
-            </span>
-          ) : (
-            head.map((u) => (
-              <UnitBadge key={u.token} token={u.token} count={u.count} />
-            ))
-          )}
-        </div>
-        <span
-          className="whitespace-nowrap rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-caption tabular-nums"
-          style={{ color: wrColor(wr, total) }}
-          data-testid="wr-pill"
-          title={
-            total > 0
-              ? `${signature.wins} wins, ${signature.losses} losses`
-              : "No completed games yet"
-          }
-        >
-          {wrText}
-        </span>
+    <li data-testid="composition-card" data-signature-key={signature.key} className="min-w-0 rounded-lg border border-border bg-bg-surface p-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-micro text-text-muted">
+        <span><strong className="font-semibold tabular-nums text-text">{prevalence}%</strong> of observed games · {signature.sampleCount} games</span>
+        <span data-testid="wr-pill" title={`${signature.wins} wins, ${signature.losses} losses; association does not establish that the composition caused the result.`} className="tabular-nums">{total > 0 ? `${Math.round(signature.wins / total * 100)}% win rate · ${signature.wins}–${signature.losses}` : "No decided games"}</span>
       </div>
-
-      {total > 0 ? (
-        <div className="space-y-1">
-          <div
-            className="relative h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated"
-            aria-hidden="true"
-          >
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${wrPct}%`,
-                background: wrColor(wr, total),
-                opacity: 0.85,
-              }}
-            />
-            <span
-              className="absolute top-0 h-full w-px bg-border"
-              style={{ left: "50%" }}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-2 text-micro text-text-dim">
-        <span>
-          {head.length > 0
-            ? `Median across ${signature.sampleCount} game${signature.sampleCount === 1 ? "" : "s"}`
-            : `${signature.sampleCount} game${signature.sampleCount === 1 ? "" : "s"} across rare comps`}
-        </span>
-        {hasMore ? (
-          <button
-            type="button"
-            data-testid="composition-toggle-extras"
-            aria-expanded={expanded}
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded((v) => !v);
-            }}
-            className="rounded-md border border-border bg-bg px-2 py-0.5 text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
-          >
-            {expanded
-              ? "Hide details"
-              : `+${extras.length} more unit${extras.length === 1 ? "" : "s"}`}
-          </button>
-        ) : null}
+      {head.length ? <ul className="space-y-2">{(expanded ? all : head).map((u) => (
+        <li key={u.token} className="flex items-center justify-between gap-2 text-caption">
+          <span className="flex min-w-0 items-center gap-2" data-testid="unit-badge" data-token={u.token}><Icon name={u.token} kind="unit" size={24} decorative /><span className="break-words text-text">{unitLabel(u.token)}</span></span>
+          <span className="shrink-0 tabular-nums text-text-muted">{u.count}<span className="ml-1 text-micro text-text-dim">median peak</span></span>
+        </li>
+      ))}</ul> : <p className="text-caption text-text-muted">Mixed / rare unit groups</p>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+        {all.length > head.length ? <button type="button" data-testid="composition-toggle-extras" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="min-h-11 rounded px-1 text-caption text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{expanded ? "Hide details" : `+${all.length - head.length} more units`}</button> : <span className="text-micro text-text-dim">{signature.sampleCount < 5 ? "Small sample" : "Median counts when present"}</span>}
+        {interactive ? <button type="button" onClick={() => onClick?.(signature.sampleGameIds)} className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-caption font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">View {signature.sampleGameIds.length < signature.sampleCount ? `${signature.sampleGameIds.length} sample game${signature.sampleGameIds.length === 1 ? "" : "s"}` : "games"}<ChevronRight className="h-3.5 w-3.5" aria-hidden /></button> : null}
       </div>
-
-      {interactive ? (
-        <div className="-mb-1 -mr-1 flex items-center justify-end text-micro text-text-muted">
-          <span className="inline-flex items-center gap-1">
-            Open games
-            <ChevronRight className="h-3 w-3" aria-hidden />
-          </span>
-        </div>
-      ) : null}
-
-      {expanded && hasMore ? (
-        <ExtrasGrid units={extras} totalGames={signature.sampleCount} />
-      ) : null}
     </li>
-  );
-}
-
-function ExtrasGrid({
-  units,
-  totalGames,
-}: {
-  units: Array<{ token: string; count: number; sampleCount?: number }>;
-  totalGames: number;
-}) {
-  return (
-    <ul
-      className="grid gap-2 border-t border-border pt-2"
-      style={{
-        // Auto-fit to the available width so unit cards never get
-        // crammed when the parent column is narrow (e.g. the half-
-        // width column inside ``BuildVsStrategyComparison`` at xl).
-        // Each card needs ~150px to fit the icon + token name +
-        // "~N · NN%" line without truncation overlap.
-        gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-      }}
-      data-testid="composition-extras"
-    >
-      {units.map((u) => {
-        const seen = u.sampleCount ?? 0;
-        const coverage =
-          totalGames > 0 ? Math.round((100 * seen) / totalGames) : 0;
-        return (
-          <li
-            key={u.token}
-            className="flex items-center gap-2 rounded-md border border-border bg-bg px-2 py-1.5"
-          >
-            <Icon name={u.token} kind="unit" size={24} alt={u.token} />
-            <div className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-micro text-text" title={u.token}>
-                {u.token}
-              </span>
-              <span className="text-micro tabular-nums text-text-dim">
-                ~{u.count}
-                {seen > 0
-                  ? totalGames > 0
-                    ? ` · ${coverage}%`
-                    : ` · ${seen}g`
-                  : ""}
-              </span>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function UnitBadge({ token, count }: { token: string; count: number }) {
-  return (
-    <span
-      className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-bg-elevated md:h-11 md:w-11"
-      data-testid="unit-badge"
-      data-token={token}
-      title={`${token} · ~${count} per game (median)`}
-    >
-      <Icon
-        name={token}
-        kind="unit"
-        size={32}
-        className="md:hidden"
-        alt={token}
-      />
-      <Icon
-        name={token}
-        kind="unit"
-        size={36}
-        className="hidden md:block"
-        alt={token}
-      />
-      <span
-        className="absolute -bottom-1 -right-1 inline-flex min-w-[18px] items-center justify-center rounded-full border border-border bg-bg px-1 text-micro font-semibold tabular-nums text-text"
-        aria-hidden="true"
-      >
-        {count}
-      </span>
-    </span>
   );
 }
 
@@ -1097,56 +852,28 @@ function TechTimeline({
     Math.max(0, Math.min(100, ((sec - minBound) / span) * 100));
 
   return (
-    <div className="space-y-1" data-testid="tech-timeline">
-      <div className="flex items-baseline justify-between text-micro uppercase tracking-wider text-text-dim">
-        <span className="font-semibold">Tech & upgrade timings</span>
-        <span className="font-mono tabular-nums normal-case tracking-normal text-text-muted">
-          {fmtMinutes(minBound)} – {fmtMinutes(minBound + span)}
-        </span>
-      </div>
-      <div className="relative h-9 w-full rounded-md border border-border bg-bg-elevated">
+    <details className="group border-t border-border pt-1" data-testid="tech-timeline">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        Tech & upgrade timings
+        <span className="flex items-center gap-2 text-micro font-normal text-text-dim">{rows.length} milestones <ChevronRight className="h-4 w-4 group-open:rotate-90" aria-hidden /></span>
+      </summary>
+      <p className="mb-3 text-caption leading-relaxed text-text-muted">First recorded timings for milestones seen by each game’s phase midpoint. Each row includes only games where that milestone was recorded.</p>
+      <ul className="divide-y divide-border rounded-lg border border-border bg-bg-surface">
         {rows.map((t) => {
           const left = toPct(t.medianFirstSeen);
           const bandLeft = toPct(t.p25);
-          const bandWidth = Math.max(0, toPct(t.p75) - bandLeft);
-          const tooltip =
-            `${t.token}: ${t.sampleCount} game${t.sampleCount === 1 ? "" : "s"}, ` +
-            `median ${fmtMinutes(t.medianFirstSeen)} ` +
-            `(p25-p75 ${fmtMinutes(t.p25)} – ${fmtMinutes(t.p75)})`;
+          const bandEnd = toPct(t.p75);
           return (
-            <div
-              key={`${t.kind}:${t.token}`}
-              className="absolute inset-y-0"
-              style={{ left: 0, right: 0 }}
-              data-testid="tech-marker"
-              data-token={t.token}
-              data-kind={t.kind}
-              data-median-pct={left}
-              data-p25-pct={bandLeft}
-              data-p75-pct={bandLeft + bandWidth}
-              title={tooltip}
-            >
-              <span
-                className="absolute top-1/2 h-3 -translate-y-1/2 rounded-full bg-text-dim/25"
-                style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
-                aria-hidden="true"
-                data-testid="tech-band"
-              />
-              <span
-                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${left}%` }}
-              >
-                <Icon
-                  name={t.token}
-                  kind={t.kind}
-                  size={22}
-                  alt={t.token}
-                />
+            <li key={`${t.kind}:${t.token}`} data-testid="tech-marker" data-token={t.token} data-kind={t.kind} data-median-pct={left} data-p25-pct={bandLeft} data-p75-pct={bandEnd} className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <Icon name={t.token} kind={t.kind} size={24} decorative />
+                <span className="min-w-0"><span className="block break-words text-caption font-medium text-text">{unitLabel(t.token)}</span><span className="block text-micro text-text-dim">{t.sampleCount} game{t.sampleCount === 1 ? "" : "s"} · {t.kind === "upgrade" ? "Upgrade" : "Tech"}</span></span>
               </span>
-            </div>
+              <span className="ml-auto text-right text-caption tabular-nums text-text"><span className="block">{fmtMinutes(t.medianFirstSeen)} <span className="text-micro text-text-muted">median</span></span><span className="block text-micro text-text-dim">{fmtMinutes(t.p25)}–{fmtMinutes(t.p75)} · middle 50%</span></span>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </details>
   );
 }

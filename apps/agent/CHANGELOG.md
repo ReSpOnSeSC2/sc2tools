@@ -2,6 +2,32 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.10
+
+### Fixed - unit composition through morphs
+
+- Replay analysis preserves each unit's form at the time of the sample.
+  Roaches that later become Ravagers, for example, remain Roaches in earlier
+  army samples instead of being labeled as Ravagers for the entire game.
+- In-progress morph cocoons and explicitly identified hallucinations are
+  excluded from completed-unit samples. Burrowing, other mode changes, and
+  completion events retain one unit identity without duplicate counts.
+- Warp-in completion events resolve the unit's historical form rather than
+  its form at the end of the replay.
+
+### Updating existing analysis
+
+- Install agent **0.16.10** and select the ordinary **Recompute** action for
+  affected games, or perform a full **Re-sync** to refresh older history.
+  The paired computer needs the original replay files. Existing saved unit
+  timelines are not corrected by the installer alone.
+- The companion website's **Army composition** view shows sampled peak-alive
+  averages, typical ranges, unit frequency, and sample games on mobile and
+  desktop. These counts describe units observed alive; they are not lifetime
+  production totals. The web/API changes deploy separately from the installer.
+- This parser correction does not require accurate replay capture or a new
+  StarCraft recording. The existing accurate-capture opt-in remains unchanged.
+
 ## 0.16.9
 
 ### Changed - accurate capture is optional
