@@ -337,7 +337,7 @@ function BuildsLibraryInner() {
     }
   }, [getToken, reclassifyStatus, toast]);
 
-  const isInitialLoad = !builds.data && builds.isLoading;
+  const isInitialLoad = !builds.data && !builds.error;
   const totalCount = decorated.length;
   const filteredCount = filtered.length;
   const targetForDelete =
@@ -402,13 +402,42 @@ function BuildsLibraryInner() {
         </section>
       ) : null}
 
+      {builds.error ? (
+        <section
+          role="alert"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/60 bg-warning/10 px-4 py-3 text-caption text-text"
+        >
+          <div>
+            <p className="font-semibold">
+              {decorated.length > 0
+                ? "Couldn't refresh your build library"
+                : "Couldn't load your build library"}
+            </p>
+            <p className="mt-0.5 text-text-muted">
+              {decorated.length > 0
+                ? "Showing your previously loaded builds. Retry to check for changes."
+                : "Your saved builds couldn't be retrieved. Retry to load them."}
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={builds.isValidating}
+            onClick={() => { void builds.mutate().catch(() => undefined); }}
+            iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
+          >
+            Retry
+          </Button>
+        </section>
+      ) : null}
+
       {isInitialLoad ? (
         <div className="space-y-4">
           <Skeleton rows={1} />
           <Skeleton rows={4} />
         </div>
       ) : decorated.length === 0 ? (
-        <FirstRunEmptyState onCreate={openCreate} />
+        builds.error ? null : <FirstRunEmptyState onCreate={openCreate} />
       ) : (
         <>
           <BuildFilterBar

@@ -12,6 +12,7 @@ import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
+import { SavedCustomBuilds } from "@/components/builds/SavedCustomBuilds";
 import { BuildEditorModal } from "./BuildEditorModal";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
@@ -30,11 +31,25 @@ const LS_MIN_BUILDS = "analyzer.builds.minGames";
 const LS_BUILDS_SORT = "analyzer.builds.sort";
 
 /**
- * The full Builds analytics tab (separate from the personal-builds
- * editor). Shows aggregated WR per build, drilldown to game list, and
- * lets the user open a build's detail page.
+ * Saved definitions remain accessible independently of the filtered
+ * replay statistics, including opponent builds and unmatched builds.
  */
 export function BuildsTab() {
+  return (
+    <div className="space-y-4">
+      <SavedCustomBuilds />
+      <div>
+        <h2 className="text-base font-semibold text-text">Your replay performance</h2>
+        <p className="text-caption text-text-muted">
+          Your own builds in the selected games. Opponent build performance is in Strategies.
+        </p>
+      </div>
+      <BuildPerformance />
+    </div>
+  );
+}
+
+function BuildPerformance() {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);

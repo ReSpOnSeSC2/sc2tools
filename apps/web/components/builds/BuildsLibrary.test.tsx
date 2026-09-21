@@ -8,6 +8,8 @@ const harness = vi.hoisted(() => ({
   mutateStats: vi.fn(async () => undefined),
   mutateStatus: vi.fn(async () => undefined),
   listData: undefined as undefined | Record<string, unknown>,
+  listError: undefined as Error | undefined,
+  listValidating: false,
   ruleStatsData: [] as Array<Record<string, unknown>> | undefined,
   ruleStatsError: undefined as Error | undefined,
   statusData: undefined as undefined | Record<string, unknown>,
@@ -26,16 +28,10 @@ vi.mock("@/lib/clientApi", () => ({
     harness.paths.push(path);
     return path === "/v1/custom-builds"
       ? {
-          data: harness.listData ?? {
-            items: [{
-              slug: "pvt-test",
-              name: "PvT Test Build",
-              race: "Protoss",
-              vsRace: "Terran",
-            }],
-          },
-          isLoading: false,
-          error: null,
+          data: harness.listData,
+          isLoading: harness.listData === undefined && !harness.listError,
+          isValidating: harness.listValidating,
+          error: harness.listError,
           mutate: harness.mutateBuilds,
         }
       : path === "/v1/custom-builds/stats"
@@ -138,12 +134,22 @@ import { BuildsLibrary } from "./BuildsLibrary";
 beforeEach(() => {
   harness.apiCall.mockReset();
   harness.getToken.mockClear();
-  harness.mutateBuilds.mockClear();
+  harness.mutateBuilds.mockReset();
+  harness.mutateBuilds.mockResolvedValue(undefined);
   harness.mutateStats.mockClear();
   harness.mutateStatus.mockReset();
   harness.mutateStatus.mockResolvedValue(undefined);
   harness.statusData = undefined;
-  harness.listData = undefined;
+  harness.listData = {
+    items: [{
+      slug: "pvt-test",
+      name: "PvT Test Build",
+      race: "Protoss",
+      vsRace: "Terran",
+    }],
+  };
+  harness.listError = undefined;
+  harness.listValidating = false;
   harness.ruleStatsData = [];
   harness.ruleStatsError = undefined;
   harness.success.mockReset();
@@ -152,6 +158,79 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("BuildsLibrary loading failures", () => {
+  it("shows a retryable load error instead of claiming the library is empty", async () => {
+    harness.listData = undefined;
+    harness.listError = new Error("HTTP 503");
+    harness.mutateBuilds.mockRejectedValueOnce(new Error("still unavailable"));
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Couldn't load your build library",
+    );
+    expect(screen.queryByText("No custom builds yet")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create your first build" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(harness.mutateBuilds).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("alert")).toBeTruthy();
+  });
+
+  it("keeps cached builds visible when a refresh fails and clears the warning after recovery", () => {
+    const view = render(<BuildsLibrary />);
+
+    harness.listError = new Error("HTTP 502");
+    view.rerender(<BuildsLibrary />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Showing your previously loaded builds. Retry to check for changes.",
+    );
+    expect(screen.getByRole("button", { name: "Edit PvT Test Build" })).toBeTruthy();
+    expect(screen.queryByText("No custom builds yet")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(harness.mutateBuilds).toHaveBeenCalledTimes(1);
+    harness.listValidating = true;
+    view.rerender(<BuildsLibrary />);
+    expect((screen.getByRole("button", { name: "Retry" }) as HTMLButtonElement).disabled).toBe(true);
+
+    harness.listError = undefined;
+    harness.listValidating = false;
+    view.rerender(<BuildsLibrary />);
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit PvT Test Build" })).toBeTruthy();
+  });
+
+  it("does not treat a stale empty response as a confirmed empty library", () => {
+    harness.listData = { items: [] };
+    harness.listError = new Error("HTTP 502");
+
+    render(<BuildsLibrary />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Couldn't load your build library",
+    );
+    expect(screen.queryByText("No custom builds yet")).toBeNull();
+  });
+
+  it("shows the first-build prompt only after an empty library loads successfully", () => {
+    harness.listData = undefined;
+    const view = render(<BuildsLibrary />);
+
+    expect(screen.queryByText("No custom builds yet")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    harness.listData = { items: [] };
+    view.rerender(<BuildsLibrary />);
+
+    expect(screen.getByText("No custom builds yet")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create your first build" })).toBeTruthy();
+  });
+});
 
 describe("BuildsLibrary queued reclassification feedback", () => {
   it("shows a truthful over-limit state and pauses new matching work", () => {
