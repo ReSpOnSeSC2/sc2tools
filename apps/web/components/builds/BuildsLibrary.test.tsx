@@ -4,12 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   apiCall: vi.fn(),
   getToken: vi.fn(async () => "test-token"),
+  userId: "test-user",
   mutateBuilds: vi.fn(async () => undefined),
   mutateStats: vi.fn(async () => undefined),
   mutateStatus: vi.fn(async () => undefined),
   listData: undefined as undefined | Record<string, unknown>,
   listError: undefined as Error | undefined,
   listValidating: false,
+  listPages: {} as Record<string, Record<string, unknown> | undefined>,
+  pageErrors: {} as Record<string, Error | undefined>,
   ruleStatsData: [] as Array<Record<string, unknown>> | undefined,
   ruleStatsError: undefined as Error | undefined,
   statusData: undefined as undefined | Record<string, unknown>,
@@ -19,22 +22,27 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken }),
+  useAuth: () => ({ getToken: harness.getToken, userId: harness.userId }),
 }));
 
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
-  useApi: (path: string) => {
+  useApi: (path: string | null) => {
+    if (!path) return { mutate: harness.mutateStats };
     harness.paths.push(path);
-    return path === "/v1/custom-builds"
+    const isList = path === "/v1/custom-builds" || path.startsWith("/v1/custom-builds?");
+    const pageKey = path.includes("?") ? path.split("?")[1] : "";
+    const listData = pageKey in harness.listPages ? harness.listPages[pageKey] : harness.listData;
+    const listError = harness.pageErrors[pageKey] ?? harness.listError;
+    return isList
       ? {
-          data: harness.listData,
-          isLoading: harness.listData === undefined && !harness.listError,
+          data: listData,
+          isLoading: listData === undefined && !listError,
           isValidating: harness.listValidating,
-          error: harness.listError,
+          error: listError,
           mutate: harness.mutateBuilds,
         }
-      : path === "/v1/custom-builds/stats"
+      : path.startsWith("/v1/custom-builds/stats?")
         ? {
             data: harness.ruleStatsData,
             isLoading: harness.ruleStatsData === undefined && !harness.ruleStatsError,
@@ -93,7 +101,19 @@ vi.mock("./BuildCard", () => ({
   ),
 }));
 
-vi.mock("./BuildFilterBar", () => ({ BuildFilterBar: () => null }));
+vi.mock("./BuildFilterBar", () => ({
+  BuildFilterBar: ({ value, onChange, total }: {
+    value: { search: string; sort: string; matchup: string; hideEmpty: boolean };
+    onChange: (next: unknown) => void;
+    total: number;
+  }) => <>
+    <input aria-label="Search" value={value.search} onChange={(event) => onChange({ ...value, search: event.target.value })} />
+    <select aria-label="Sort" value={value.sort} onChange={(event) => onChange({ ...value, sort: event.target.value })}>
+      <option value="updated">Recently edited</option><option value="games">Most games</option>
+    </select>
+    <span>{total} matching builds</span>
+  </>,
+}));
 vi.mock("./BuildDossierModal", () => ({ BuildDossierModal: () => null }));
 vi.mock("./BuildEditorSheet", () => ({ BuildEditorSheet: () => null }));
 vi.mock("./EditCustomBuildLauncher", () => ({
@@ -132,6 +152,7 @@ vi.mock("@/components/ui/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
 import { BuildsLibrary } from "./BuildsLibrary";
 
 beforeEach(() => {
+  harness.userId = "test-user";
   harness.apiCall.mockReset();
   harness.getToken.mockClear();
   harness.mutateBuilds.mockReset();
@@ -150,6 +171,8 @@ beforeEach(() => {
   };
   harness.listError = undefined;
   harness.listValidating = false;
+  harness.listPages = {};
+  harness.pageErrors = {};
   harness.ruleStatsData = [];
   harness.ruleStatsError = undefined;
   harness.success.mockReset();
@@ -158,6 +181,100 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe("BuildsLibrary pagination", () => {
+  function page(start: number, count: number, nextCursor: string | null) {
+    return {
+      items: Array.from({ length: count }, (_, index) => ({
+        slug: `build-${start + index}`,
+        name: `Build ${start + index}`,
+        race: "Protoss",
+        vsRace: "Terran",
+      })),
+      total: 104,
+      libraryTotal: 104,
+      limit: 50,
+      nextCursor,
+    };
+  }
+
+  it("reaches builds beyond 100, replaces page cards, and requests stats only for that page", () => {
+    harness.listData = page(1, 50, "second");
+    harness.listPages["cursor=second"] = page(51, 50, "third");
+    harness.listPages["cursor=third"] = page(101, 4, null);
+    render(<BuildsLibrary />);
+
+    expect(screen.getByText("Showing 1–50 of 104 builds")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByRole("button", { name: "Edit Build 1" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit Build 51" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("button", { name: "Edit Build 104" })).toBeTruthy();
+    expect(screen.getByText("Showing 101–104 of 104 builds")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+    const statsPath = harness.paths.filter((path) => path.startsWith("/v1/custom-builds/stats?")).at(-1)!;
+    expect(new URLSearchParams(statsPath.split("?")[1]).get("slugs")).toBe("build-101,build-102,build-103,build-104");
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("button", { name: "Edit Build 51" })).toBeTruthy();
+  });
+
+  it("runs search and sorting over the full library and resets the cursor", () => {
+    harness.listData = page(1, 50, "second");
+    harness.listPages["cursor=second"] = page(51, 50, "third");
+    harness.listPages["search=Build+104"] = { ...page(104, 1, null), total: 1 };
+    harness.listPages["search=Build+104&sort=games"] = { ...page(104, 1, null), total: 1 };
+    render(<BuildsLibrary />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search" }), { target: { value: "Build 104" } });
+
+    expect(screen.getByRole("button", { name: "Edit Build 104" })).toBeTruthy();
+    expect(screen.getByText("1 matching builds")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Custom build pages" })).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "games" } });
+    expect(harness.paths).toContain("/v1/custom-builds?search=Build+104&sort=games");
+    expect(harness.paths.some((path) => path.includes("search=") && path.includes("cursor="))).toBe(false);
+  });
+
+  it("keeps retry and Previous available when a later page fails", () => {
+    harness.listData = page(1, 50, "second");
+    harness.listPages["cursor=second"] = undefined;
+    harness.pageErrors["cursor=second"] = new Error("HTTP 503");
+    render(<BuildsLibrary />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load your build library");
+    expect(screen.queryByText("No custom builds yet")).toBeNull();
+    expect(screen.queryByText("No builds match these filters")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(harness.mutateBuilds).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("button", { name: "Edit Build 1" })).toBeTruthy();
+  });
+
+  it("does not carry a page cursor into a different signed-in account", () => {
+    harness.listData = page(1, 50, "second");
+    harness.listPages["cursor=second"] = page(51, 50, "third");
+    const view = render(<BuildsLibrary />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    harness.userId = "another-user";
+    harness.listData = { items: [{ slug: "another-build", name: "Another account build", race: "Terran" }], total: 1, limit: 50, nextCursor: null };
+    view.rerender(<BuildsLibrary />);
+    expect(screen.getByRole("button", { name: "Edit Another account build" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit Build 51" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Custom build pages" })).toBeNull();
+  });
+
+  it("returns to the first page and refreshes after a saved build changes its ordering", async () => {
+    harness.listData = page(1, 50, "second");
+    harness.listPages["cursor=second"] = page(51, 50, "third");
+    render(<BuildsLibrary />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Build 51" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish editor save" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit Build 1" })).toBeTruthy());
+    expect(harness.mutateBuilds).toHaveBeenCalledOnce();
+    expect((screen.getByRole("button", { name: "Previous" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
 
 describe("BuildsLibrary loading failures", () => {
   it("shows a retryable load error instead of claiming the library is empty", async () => {
@@ -233,7 +350,7 @@ describe("BuildsLibrary loading failures", () => {
 });
 
 describe("BuildsLibrary queued reclassification feedback", () => {
-  it("shows a truthful over-limit state and pauses new matching work", () => {
+  it("keeps creation and matching available for libraries larger than 100 builds", () => {
     harness.listData = {
       items: [{
         slug: "pvt-test",
@@ -242,24 +359,23 @@ describe("BuildsLibrary queued reclassification feedback", () => {
         vsRace: "Terran",
       }],
       total: 104,
-      limit: 100,
-      truncated: true,
+      limit: 50,
+      nextCursor: "second-page",
     };
 
     render(<BuildsLibrary />);
 
-    expect(screen.getByRole("alert").textContent).toContain(
-      "Showing the newest 100 of 104 builds",
-    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("104 matching builds")).toBeTruthy();
     expect((screen.getByRole("button", {
       name: "Reclassify replays",
-    }) as HTMLButtonElement).disabled).toBe(true);
+    }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", {
       name: "Reclassify PvT Test Build",
-    }) as HTMLButtonElement).disabled).toBe(true);
+    }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", {
       name: "New build",
-    }) as HTMLButtonElement).disabled).toBe(true);
+    }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("confirms that one build's replay matching was queued", async () => {

@@ -64,7 +64,7 @@ export function BuildEditorModal({
       try {
         const resp = await apiCall<{ items: CustomBuild[] }>(
           getToken,
-          "/v1/custom-builds",
+          `/v1/custom-builds?${new URLSearchParams({ name: buildName })}`,
         );
         if (cancelled) return;
         const items = Array.isArray(resp.items) ? resp.items : [];

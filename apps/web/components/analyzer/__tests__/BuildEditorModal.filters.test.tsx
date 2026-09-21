@@ -95,5 +95,10 @@ describe("BuildEditorModal global filter scope", () => {
       opp_strategy: "Terran - Proxy Rax",
     });
     expect(url.searchParams.has("preset")).toBe(false);
+    // Resolve this label across the complete library, including builds older
+    // than the first page, without fetching every saved definition.
+    expect(apiCallMock.mock.calls[0][1]).toBe(
+      "/v1/custom-builds?name=PvT+-+Macro+Transition+%28Unclassified%29",
+    );
   });
 });

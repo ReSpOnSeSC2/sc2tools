@@ -14,7 +14,8 @@ const {
 } = require("../src/services/communityBuildSnapshot");
 const {
   CustomBuildsService,
-  CUSTOM_BUILD_ACTIVE_LIMIT,
+  CUSTOM_BUILD_PAGE_SIZE,
+  CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,
 } = require("../src/services/customBuilds");
 const {
   PROXY_ELIGIBLE_BUILDING_NAMES,
@@ -280,7 +281,7 @@ describe("custom/community build payload bounds", () => {
     expect(expression).not.toBe("$build");
   });
 
-  test("private list and classifier bound arrays in Mongo plus a hard limit", async () => {
+  test("private list and classifier bound arrays and page size in Mongo", async () => {
     const pipelines = [];
     const cursor = {
       toArray: jest.fn(async () => []),
@@ -294,11 +295,11 @@ describe("custom/community build payload bounds", () => {
     );
 
     await service.list("bounded-user");
-    await service._listForClassification("bounded-user");
+    await service._classificationPage("bounded-user");
 
-    expect(pipelines[0]).toContainEqual({ $limit: CUSTOM_BUILD_ACTIVE_LIMIT });
+    expect(pipelines[0]).toContainEqual({ $limit: CUSTOM_BUILD_PAGE_SIZE });
     expect(pipelines[1]).toContainEqual({
-      $limit: CUSTOM_BUILD_ACTIVE_LIMIT + 1,
+      $limit: CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,
     });
     const listProjection = pipelines[0].find((stage) => stage.$project).$project;
     const classifierProjection = pipelines[1]
@@ -324,33 +325,29 @@ describe("custom/community build payload bounds", () => {
     expect(classifierProjection).not.toHaveProperty("steps");
   });
 
-  test("new builds stop at the active quota while existing builds remain editable", async () => {
+  test("new and existing builds remain saveable above the former quota", async () => {
     const customBuilds = {
       findOne: jest
         .fn()
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ _id: "existing" }),
-      countDocuments: jest.fn(async () => CUSTOM_BUILD_ACTIVE_LIMIT),
+      countDocuments: jest.fn(async () => 1000),
       updateOne: jest.fn(async () => ({ acknowledged: true })),
     };
     const service = new CustomBuildsService({ customBuilds, customBuildJobs: {} });
 
     await expect(service.upsert("quota-user", minimalBuild()))
-      .rejects.toMatchObject({
-        message: expect.stringContaining("100 active custom builds"),
-        status: 409,
-        code: "custom_build_limit_reached",
-      });
-    expect(customBuilds.updateOne).not.toHaveBeenCalled();
+      .resolves.toBeUndefined();
 
     await expect(service.upsert("quota-user", minimalBuild()))
       .resolves.toBeUndefined();
-    expect(customBuilds.updateOne).toHaveBeenCalledTimes(1);
+    expect(customBuilds.updateOne).toHaveBeenCalledTimes(2);
+    expect(customBuilds.countDocuments).not.toHaveBeenCalled();
   });
 
-  test("serializes concurrent creates so the active quota cannot be overrun", async () => {
+  test("concurrent creates can cross the former quota and release mutation bookkeeping", async () => {
     const slugs = new Set(Array.from(
-      { length: CUSTOM_BUILD_ACTIVE_LIMIT - 1 },
+      { length: 99 },
       (_, index) => `existing-${index}`,
     ));
     const customBuilds = {
@@ -369,10 +366,11 @@ describe("custom/community build payload bounds", () => {
       service.upsert("quota-user", minimalBuild({ slug: "create-b" })),
     ]);
 
-    expect(outcomes.filter((row) => row.status === "fulfilled")).toHaveLength(1);
-    expect(outcomes.filter((row) => row.status === "rejected")).toHaveLength(1);
-    expect(slugs.size).toBe(CUSTOM_BUILD_ACTIVE_LIMIT);
-    expect(customBuilds.updateOne).toHaveBeenCalledTimes(1);
+    expect(outcomes.filter((row) => row.status === "fulfilled")).toHaveLength(2);
+    expect(outcomes.filter((row) => row.status === "rejected")).toHaveLength(0);
+    expect(slugs.size).toBe(101);
+    expect(customBuilds.updateOne).toHaveBeenCalledTimes(2);
+    expect(service._buildMutationTails.size).toBe(0);
   });
 
   test("community list requests nested leaves and sanitizes legacy rows", async () => {

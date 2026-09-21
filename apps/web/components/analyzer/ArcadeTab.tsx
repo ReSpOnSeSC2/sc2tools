@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Tabs } from "@/components/ui/Tabs";
+import { CustomBuildCatalogProvider } from "@/components/builds/useCustomBuildCatalog";
 import { SeasonRecap } from "./arcade/SeasonRecap";
 import { TodaySurface } from "./arcade/surfaces/Today";
 import { QuickPlaySurface } from "./arcade/surfaces/QuickPlay";
@@ -23,6 +24,10 @@ const SUBS: Array<{ id: Sub; label: string }> = [
  * shared engine + state hooks.
  */
 export function ArcadeTab() {
+  return <CustomBuildCatalogProvider><ArcadeContent /></CustomBuildCatalogProvider>;
+}
+
+function ArcadeContent() {
   const [sub, setSub] = useState<Sub>("today");
   return (
     <div className="space-y-4">

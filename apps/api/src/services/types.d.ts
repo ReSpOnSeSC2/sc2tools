@@ -510,9 +510,17 @@ export interface ReclassifyQueueResult {
 
 export interface CustomBuildsService {
   list(userId: string): Promise<object[]>;
+  listPage(userId: string, opts?: Record<string, unknown>): Promise<{
+    items: object[];
+    total: number;
+    libraryTotal: number;
+    limit: number;
+    nextCursor: string | null;
+    truncated: boolean;
+  }>;
   libraryMeta(userId: string): Promise<{
     total: number;
-    limit: number;
+    limit: number | null;
     truncated: boolean;
   }>;
   get(userId: string, slug: string): Promise<object | null>;
@@ -549,7 +557,7 @@ export interface CustomBuildsService {
     | null
     | (BuildPhasePayload & { transitions?: BuildTransitionsPayload["transitions"] })
   >;
-  evaluateAllStats(userId: string, opts?: { signal?: AbortSignal }): Promise<object[]>;
+  evaluateAllStats(userId: string, opts?: { signal?: AbortSignal; slugs?: string[] }): Promise<object[]>;
   latestGameDateMs(userId: string): Promise<number>;
   enqueueReclassify(
     userId: string,
@@ -629,6 +637,7 @@ export interface CustomBuildsService {
     cleared: number;
     deferred: number;
     perBuild: Array<{ slug: string; name: string; matched: number; tagged: number }>;
+    perBuildTruncated: boolean;
   }>;
   tagSingleGame(
     userId: string,

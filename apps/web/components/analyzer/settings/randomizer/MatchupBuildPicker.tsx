@@ -27,6 +27,8 @@ import { defaultOpeningUnits } from "@/lib/randomizer/gatewayUnits";
 import type { MatchupConfig, MatchupKey } from "@/lib/randomizer/types";
 import { matchupRaces } from "@/lib/randomizer/types";
 import type { CustomBuild } from "@/components/builds/types";
+import { BuildPagination } from "@/components/builds/BuildPagination";
+import type { useCustomBuildPage } from "@/components/builds/useCustomBuildPage";
 import { raceTint } from "@/lib/race";
 import { BuildUnitRollEditor } from "./BuildUnitRollEditor";
 
@@ -34,6 +36,11 @@ export interface MatchupBuildPickerProps {
   matchup: MatchupKey;
   config: MatchupConfig;
   customBuilds: ReadonlyArray<CustomBuild>;
+  search?: string;
+  onSearchChange?: (search: string) => void;
+  customBuildPage?: Pick<ReturnType<typeof useCustomBuildPage>,
+    "pageNumber" | "pageStart" | "data" | "hasPrevious" | "hasNext" |
+    "isValidating" | "isLoading" | "error" | "previousPage" | "nextPage">;
   onChange: (next: MatchupConfig) => void;
 }
 
@@ -41,6 +48,9 @@ export function MatchupBuildPicker({
   matchup,
   config,
   customBuilds,
+  search = "",
+  onSearchChange,
+  customBuildPage,
   onChange,
 }: MatchupBuildPickerProps) {
   const pool = useMemo(
@@ -101,7 +111,7 @@ export function MatchupBuildPicker({
         </div>
       </Card>
 
-      {pool.length === 0 ? (
+      {pool.length === 0 && !customBuildPage ? (
         <Card>
           <EmptyStatePanel
             title="No builds eligible for this matchup"
@@ -128,6 +138,19 @@ export function MatchupBuildPicker({
             title="Your custom builds"
             description="Custom builds whose race / vsRace fit this matchup. Add more under Settings → Builds."
           >
+            {onSearchChange ? (
+              <input
+                type="search"
+                aria-label="Search custom builds for randomizer"
+                placeholder="Search your custom builds…"
+                value={search}
+                onChange={(event) => onSearchChange(event.target.value)}
+                className="mb-3 w-full rounded-lg border border-border bg-bg-surface px-3 py-2 text-caption"
+              />
+            ) : null}
+            {customBuildPage?.error ? (
+              <p role="alert" className="mb-3 text-caption text-danger">Couldn't load your custom builds. Try searching again.</p>
+            ) : null}
             <BuildChecklist
               candidates={custom}
               selectedIds={selectedIds}
@@ -135,8 +158,21 @@ export function MatchupBuildPicker({
               probabilities={probabilities}
               onToggle={toggle}
               onWeightChange={(id, w) => onChange(setBuildWeight(config, id, w))}
-              emptyHint="No custom builds yet for this matchup."
+              emptyHint={customBuildPage?.isLoading ? "Loading custom builds…" : search ? "No custom builds match your search." : "No custom builds yet for this matchup."}
             />
+            {customBuildPage ? (
+              <BuildPagination
+                pageNumber={customBuildPage.pageNumber}
+                pageStart={customBuildPage.pageStart}
+                count={customBuilds.length}
+                total={customBuildPage.data?.total}
+                hasPrevious={customBuildPage.hasPrevious}
+                hasNext={customBuildPage.hasNext}
+                loading={customBuildPage.isValidating}
+                onPrevious={customBuildPage.previousPage}
+                onNext={customBuildPage.nextPage}
+              />
+            ) : null}
           </Section>
         </>
       )}

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useApi } from "@/lib/clientApi";
+import { useCustomBuildCatalog } from "@/components/builds/useCustomBuildCatalog";
 import {
   useAnalysisGames,
   type AnalysisApiGame,
@@ -97,10 +98,6 @@ interface ApiSummary {
   };
 }
 
-interface ApiCustomBuilds {
-  items: Array<{ slug: string; name: string; race: string; vsRace?: string }>;
-}
-
 interface ApiCommunityBuilds {
   items: Array<{
     slug: string;
@@ -169,7 +166,7 @@ export function useArcadeData(): {
   const maps = useApi<ApiMap[]>("/v1/maps");
   // /v1/summary returns { totals: { wins, losses, total, winRate }, ... }.
   const summary = useApi<ApiSummary>("/v1/summary");
-  const custom = useApi<ApiCustomBuilds>("/v1/custom-builds");
+  const custom = useCustomBuildCatalog();
   // Arcade-universe endpoint: balanced top-N-per-matchup so the Stock
   // Market spans every matchup (PvP/PvT/PvZ/TvP/TvT/TvZ/ZvP/ZvT/ZvZ +
   // unclassified). The default `?sort=top` over /v1/community/builds

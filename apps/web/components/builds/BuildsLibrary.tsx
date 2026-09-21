@@ -19,15 +19,10 @@ import { BuildEditorSheet } from "./BuildEditorSheet";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPublishModal } from "./BuildPublishModal";
+import { BuildPagination } from "./BuildPagination";
+import { useCustomBuildPage } from "./useCustomBuildPage";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
-
-type ListResponse = {
-  items: CustomBuild[];
-  total?: number | null;
-  limit?: number | null;
-  truncated?: boolean;
-};
 
 type ReclassifyResult = {
   ok: true;
@@ -84,12 +79,16 @@ export function BuildsLibrary() {
 function BuildsLibraryInner() {
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const builds = useApi<ListResponse>("/v1/custom-builds");
+  const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
+  const builds = useCustomBuildPage(filters);
   // The custom-build endpoint reads the durable provenance slug written by
   // replay matching, so it is the only authoritative source. Display names
   // are not identities: two unrelated builds can share one, and renames must
   // never move replay counts between them.
-  const stats = useApi<BuildStats[]>("/v1/custom-builds/stats");
+  const statsSlugs = builds.data?.items.map((build) => build.slug).join(",");
+  const stats = useApi<BuildStats[]>(statsSlugs
+    ? `/v1/custom-builds/stats?${new URLSearchParams({ slugs: statsSlugs })}`
+    : null);
   const reclassifyStatus = useApi<ReclassifyStatus>(
     "/v1/custom-builds/reclassify-status",
     {
@@ -98,7 +97,6 @@ function BuildsLibraryInner() {
     },
   );
 
-  const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
   const [richEditBuild, setRichEditBuild] = useState<CustomBuild | null>(null);
@@ -115,7 +113,6 @@ function BuildsLibraryInner() {
   const initiatedReclassifyRef = useRef(false);
 
   const replayMatchingActive = isReclassifyActive(reclassifyStatus.data);
-  const libraryOverLimit = builds.data?.truncated === true;
 
   // A queued request outlives the POST that created it. Keep polling until
   // the durable worker reaches a terminal state, then refresh every library
@@ -152,6 +149,7 @@ function BuildsLibraryInner() {
         description: describeCompletedReclassify(progress),
         duration: progress.deferred ? null : undefined,
       });
+      builds.resetPage();
       void Promise.all([
         builds.mutate(),
         stats.mutate(),
@@ -173,10 +171,9 @@ function BuildsLibraryInner() {
     [items, stats.data, stats.error],
   );
 
-  const filtered = useMemo(
-    () => applyFilters(decorated, filters),
-    [decorated, filters],
-  );
+  // Search, matchup, sorting and empty-build filtering run before server
+  // pagination, so they cover every saved build instead of only this page.
+  const filtered = decorated;
 
   const openCreate = useCallback(() => {
     setEditorBuild(null);
@@ -227,6 +224,7 @@ function BuildsLibraryInner() {
         { method: "DELETE" },
       );
       toast.success("Build deleted.");
+      builds.resetPage();
       await builds.mutate();
     } catch (err: unknown) {
       const message =
@@ -264,6 +262,7 @@ function BuildsLibraryInner() {
       }
       // The save/queue response is authoritative. A secondary list refresh
       // must never hide confirmed background work or reject the save callback.
+      builds.resetPage();
       void builds.mutate().catch(() => undefined);
     },
     [editorBuild, builds, reclassifyStatus, toast],
@@ -272,6 +271,7 @@ function BuildsLibraryInner() {
   const handlePublished = useCallback(
     async (slug: string) => {
       toast.success(`Published to /community/builds/${slug}.`);
+      builds.resetPage();
       await builds.mutate();
     },
     [builds, toast],
@@ -338,7 +338,10 @@ function BuildsLibraryInner() {
   }, [getToken, reclassifyStatus, toast]);
 
   const isInitialLoad = !builds.data && !builds.error;
-  const totalCount = decorated.length;
+  const totalCount = builds.data?.total ?? decorated.length;
+  const libraryCount = builds.data?.libraryTotal ?? totalCount;
+  const showFilters = libraryCount > 0 || !!filters.search || filters.matchup !== "All"
+    || filters.hideEmpty || filters.sort !== "updated" || builds.hasPrevious;
   const filteredCount = filtered.length;
   const targetForDelete =
     deletingSlug != null ? items.find((b) => b.slug === deletingSlug) : null;
@@ -358,12 +361,12 @@ function BuildsLibraryInner() {
               <BookOpen className="h-4 w-4" aria-hidden />
               Definitions
             </Link>
-            {decorated.length > 0 ? (
+            {libraryCount > 0 ? (
               <Button
                 variant="secondary"
                 onClick={reclassifyAll}
                 loading={reclassifyAllPending || replayMatchingActive}
-                disabled={replayMatchingActive || libraryOverLimit}
+                disabled={replayMatchingActive}
                 iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
                 title="Re-evaluate every saved build's rules against your stored replays and update build tags. Runs in the cloud — no agent required."
               >
@@ -372,10 +375,6 @@ function BuildsLibraryInner() {
             ) : null}
             <Button
               onClick={openCreate}
-              disabled={libraryOverLimit}
-              title={libraryOverLimit
-                ? "Remove saved builds until the library is back within its safe limit."
-                : undefined}
               iconLeft={<Plus className="h-4 w-4" aria-hidden />}
             >
               New build
@@ -386,20 +385,6 @@ function BuildsLibraryInner() {
 
       {replayMatchingActive || showReclassifyFailure ? (
         <ReclassifyStatusPanel status={reclassifyStatus.data} />
-      ) : null}
-
-      {libraryOverLimit ? (
-        <section
-          role="alert"
-          className="mb-4 rounded-xl border border-warning/60 bg-warning/10 px-4 py-3 text-caption text-text"
-        >
-          <p className="font-semibold">Your build library is over its safe limit.</p>
-          <p className="mt-0.5 text-text-muted">
-            Showing the newest {(builds.data?.limit ?? items.length).toLocaleString()} of{" "}
-            {(builds.data?.total ?? items.length).toLocaleString()} builds. Replay matching and new builds
-            are paused until you remove enough visible builds; older builds then appear automatically.
-          </p>
-        </section>
       ) : null}
 
       {builds.error ? (
@@ -431,22 +416,24 @@ function BuildsLibraryInner() {
         </section>
       ) : null}
 
+      {showFilters ? (
+        <BuildFilterBar
+          value={filters}
+          onChange={setFilters}
+          total={totalCount}
+          shown={filteredCount}
+        />
+      ) : null}
       {isInitialLoad ? (
         <div className="space-y-4">
           <Skeleton rows={1} />
           <Skeleton rows={4} />
         </div>
-      ) : decorated.length === 0 ? (
+      ) : libraryCount === 0 && !filters.search && filters.matchup === "All" && !filters.hideEmpty ? (
         builds.error ? null : <FirstRunEmptyState onCreate={openCreate} />
       ) : (
         <>
-          <BuildFilterBar
-            value={filters}
-            onChange={setFilters}
-            total={totalCount}
-            shown={filteredCount}
-          />
-          {filteredCount === 0 ? (
+          {filteredCount === 0 && !builds.error ? (
             <EmptyStatePanel
               size="md"
               icon={<Library className="h-5 w-5" aria-hidden />}
@@ -466,8 +453,7 @@ function BuildsLibraryInner() {
                     onReclassify={reclassifyOne}
                     reclassifying={reclassifyingSlug === b.slug}
                     reclassifyDisabled={
-                      libraryOverLimit
-                      || replayMatchingActive
+                      replayMatchingActive
                       || reclassifyAllPending
                       || !!reclassifyingSlug
                     }
@@ -478,6 +464,14 @@ function BuildsLibraryInner() {
           )}
         </>
       )}
+      <BuildPagination
+        {...builds}
+        count={items.length}
+        total={builds.data?.total}
+        loading={builds.isValidating}
+        onPrevious={builds.previousPage}
+        onNext={builds.nextPage}
+      />
 
       {dossierBuild ? (
         <BuildDossierModal
@@ -690,73 +684,4 @@ function decorateBuilds(
       statsState: "loading",
     };
   });
-}
-
-function applyFilters(
-  builds: DecoratedBuild[],
-  filters: BuildFilterState,
-): DecoratedBuild[] {
-  const q = filters.search.trim().toLowerCase();
-  const filtered = builds.filter((b) => {
-    if (
-      filters.hideEmpty
-      && b.statsState === "ready"
-      && (b.stats?.total ?? 0) === 0
-    ) return false;
-    if (filters.matchup !== "All") {
-      const want = filters.matchup;
-      const have = matchupKeyForBuild(b);
-      if (have !== want) return false;
-    }
-    if (q) {
-      const hay = [
-        b.name,
-        b.description ?? "",
-        b.notes ?? "",
-        matchupKeyForBuild(b),
-        b.race,
-        b.vsRace ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
-  filtered.sort((a, b) => compareBy(a, b, filters.sort));
-  return filtered;
-}
-
-function matchupKeyForBuild(b: DecoratedBuild): string {
-  const my = b.race[0] ?? "?";
-  const vs = b.vsRace && b.vsRace !== "Any" ? b.vsRace[0] : "";
-  if (!vs) return my;
-  return `${my}v${vs}`;
-}
-
-function compareBy(
-  a: DecoratedBuild,
-  b: DecoratedBuild,
-  sort: BuildFilterState["sort"],
-): number {
-  switch (sort) {
-    case "winRate": {
-      const aw = a.stats?.winRate ?? -1;
-      const bw = b.stats?.winRate ?? -1;
-      return bw - aw;
-    }
-    case "games": {
-      const aw = a.stats?.total ?? 0;
-      const bw = b.stats?.total ?? 0;
-      return bw - aw;
-    }
-    case "name":
-      return a.name.localeCompare(b.name);
-    case "updated":
-    default: {
-      const aTs = new Date(a.updatedAt ?? 0).getTime();
-      const bTs = new Date(b.updatedAt ?? 0).getTime();
-      return bTs - aTs;
-    }
-  }
 }

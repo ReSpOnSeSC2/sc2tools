@@ -5,6 +5,7 @@ const { validateCustomBuild } = require("../validation/customBuild");
 const { evaluateRules } = require("../services/buildRulesEvaluator");
 const { parseFilters } = require("../util/parseQuery");
 const { parseComparisonGameId } = require("../util/parseComparisonGameId");
+const { parseBuildPageOptions, invalidPage } = require("../services/customBuildPages");
 
 const PREVIEW_TRUNCATION_LIMIT = 200;
 const PREVIEW_GAME_SCAN_CAP = 600;
@@ -666,13 +667,18 @@ function buildCustomBuildsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      const opts = parseBuildPageOptions(req.query);
+      if (typeof deps.customBuilds.listPage === "function") {
+        res.json(await deps.customBuilds.listPage(auth.userId, opts));
+        return;
+      }
       const [items, meta] = await Promise.all([
         deps.customBuilds.list(auth.userId),
         typeof deps.customBuilds.libraryMeta === "function"
           ? deps.customBuilds.libraryMeta(auth.userId)
           : Promise.resolve({ total: null, limit: null, truncated: false }),
       ]);
-      res.json({ items, ...meta });
+      res.json({ items, ...meta, libraryTotal: meta.total, nextCursor: null });
     } catch (err) {
       next(err);
     }
@@ -690,12 +696,16 @@ function buildCustomBuildsRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+      if (req.query.slugs !== undefined && (typeof req.query.slugs !== "string" || req.query.slugs.length > 8100)) {
+        throw invalidPage("Invalid build slugs.");
+      }
+      const slugs = typeof req.query.slugs === "string" ? req.query.slugs.split(",") : undefined;
       const requestAbort = phaseRequestAbort(req, res);
       let items;
       try {
         items = await deps.customBuilds.evaluateAllStats(
           auth.userId,
-          { signal: requestAbort.signal },
+          { signal: requestAbort.signal, ...(slugs ? { slugs } : {}) },
         );
       } finally {
         requestAbort.cleanup();

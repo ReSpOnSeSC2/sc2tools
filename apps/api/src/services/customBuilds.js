@@ -1,6 +1,6 @@
 "use strict";
 
-const { randomUUID } = require("crypto");
+const { createHash, randomUUID } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { evaluateRules } = require("./buildRulesEvaluator");
@@ -13,6 +13,13 @@ const { computeTransitions } = require("./buildTransitions");
 const { publicBuildMongoExpression } = require("./communityBuildSnapshot");
 const { ruleNameFromUnit } = require("./knownBuildings");
 const TimingCatalog = require("./timingCatalog");
+const {
+  CUSTOM_BUILD_PAGE_SIZE,
+  CUSTOM_BUILD_MAX_PAGE_SIZE,
+  CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,
+  listBuildPage,
+  invalidPage,
+} = require("./customBuildPages");
 const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
 const {
   assertNoActiveOpponentBuildOrderWrites,
@@ -32,7 +39,6 @@ const RECLASSIFY_WORKER_RETRY_MS = 1000;
 const RECLASSIFY_LEASE_MS = 60 * 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
-const CUSTOM_BUILD_ACTIVE_LIMIT = 100;
 
 /** @param {any} build @returns {"you"|"opponent"} */
 function buildPerspective(build) {
@@ -370,8 +376,8 @@ class CustomBuildsService {
       return /** @type {Promise<Array<import('./types').CustomBuildRecord & {slug: string}>>} */ (/** @type {unknown} */ (
         this.db.customBuilds.aggregate([
           { $match: { userId, deletedAt: { $exists: false } } },
-          { $sort: { updatedAt: -1 } },
-          { $limit: CUSTOM_BUILD_ACTIVE_LIMIT },
+          { $sort: { updatedAt: -1, slug: 1 } },
+          { $limit: CUSTOM_BUILD_PAGE_SIZE },
           { $project: CUSTOM_BUILD_READ_AGGREGATE_PROJECTION },
         ]).toArray()
       ));
@@ -382,10 +388,18 @@ class CustomBuildsService {
         { userId, deletedAt: { $exists: false } },
         { projection: CUSTOM_BUILD_READ_PROJECTION },
       )
-      .sort({ updatedAt: -1 })
-      .limit(CUSTOM_BUILD_ACTIVE_LIMIT)
+      .sort({ updatedAt: -1, slug: 1 })
+      .limit(CUSTOM_BUILD_PAGE_SIZE)
       .toArray()
     ));
+  }
+
+  /** @param {string} userId @param {Record<string, any>} [opts] */
+  async listPage(userId, opts = {}) {
+    return listBuildPage(
+      this.db.customBuilds, this._gamesCollection(), userId, opts,
+      CUSTOM_BUILD_READ_AGGREGATE_PROJECTION,
+    );
   }
 
   /** @param {string} userId */
@@ -396,8 +410,8 @@ class CustomBuildsService {
     });
     return {
       total,
-      limit: CUSTOM_BUILD_ACTIVE_LIMIT,
-      truncated: total > CUSTOM_BUILD_ACTIVE_LIMIT,
+      limit: null,
+      truncated: false,
     };
   }
 
@@ -420,38 +434,59 @@ class CustomBuildsService {
   }
 
   /**
-   * Project only fields the rule classifier consumes. Saved builds may carry
-   * notes/source payloads and future editor metadata; none of that should be
-   * retained while a full replay-history scan is running.
+   * The unique user/slug index provides a stable traversal even when a build
+   * is edited. Winner priority is compared explicitly by the classifier.
    * @param {string} userId
+   * @param {{after?: string, signal?: AbortSignal}} [opts]
    */
-  async _listForClassification(userId) {
-    let rows;
+  async _classificationPage(userId, opts = {}) {
+    opts.signal?.throwIfAborted();
+    const match = {
+      userId, deletedAt: { $exists: false },
+      ...(opts.after ? { slug: { $gt: opts.after } } : {}),
+    };
     if (typeof this.db.customBuilds.aggregate === "function") {
-      rows = await this.db.customBuilds.aggregate([
-        { $match: { userId, deletedAt: { $exists: false } } },
-        { $sort: { updatedAt: -1 } },
-        { $limit: CUSTOM_BUILD_ACTIVE_LIMIT + 1 },
+      return this.db.customBuilds.aggregate([
+        { $match: match },
+        { $sort: { slug: 1 } },
+        { $limit: CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE },
         { $project: CUSTOM_BUILD_CLASSIFIER_AGGREGATE_PROJECTION },
-      ]).toArray();
-    } else {
-      rows = await this.db.customBuilds.find(
-        { userId, deletedAt: { $exists: false } },
+      ], { ...(opts.signal ? { signal: opts.signal } : {}) }).toArray();
+    }
+    return this.db.customBuilds.find(
+        match,
         { projection: CUSTOM_BUILD_CLASSIFIER_PROJECTION },
       )
-        .sort({ updatedAt: -1 })
-        .limit(CUSTOM_BUILD_ACTIVE_LIMIT + 1)
+        .sort({ slug: 1 })
+        .limit(CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE)
         .toArray();
+  }
+
+  /** @param {string} userId @param {{signal?: AbortSignal}} [opts] */
+  async *_iterateForClassification(userId, opts = {}) {
+    let after = "";
+    for (;;) {
+      const rows = await this._classificationPage(userId, { after, signal: opts.signal });
+      opts.signal?.throwIfAborted();
+      if (rows.length === 0) return;
+      yield rows;
+      if (rows.length < CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE) return;
+      const next = rows[rows.length - 1].slug;
+      if (typeof next !== "string" || next <= after) throw new Error("custom_build_page_did_not_advance");
+      after = next;
     }
-    if (rows.length > CUSTOM_BUILD_ACTIVE_LIMIT) {
-      const err = new Error(
-        `Replay matching supports up to ${CUSTOM_BUILD_ACTIVE_LIMIT} active custom builds.`,
-      );
-      /** @type {any} */ (err).status = 409;
-      /** @type {any} */ (err).code = "custom_build_library_over_limit";
-      throw err;
+  }
+
+  /** @param {string} userId @param {string} slug */
+  async _getForClassification(userId, slug) {
+    const match = { userId, slug, deletedAt: { $exists: false } };
+    if (typeof this.db.customBuilds.aggregate === "function") {
+      return this.db.customBuilds.aggregate([
+        { $match: match }, { $limit: 1 },
+        { $project: CUSTOM_BUILD_CLASSIFIER_AGGREGATE_PROJECTION },
+      ]).next();
     }
-    return rows;
+    return this.db.customBuilds.findOne(match, { projection: CUSTOM_BUILD_CLASSIFIER_PROJECTION });
   }
 
   /**
@@ -474,29 +509,6 @@ class CustomBuildsService {
    */
   async _upsertUnlocked(userId, build) {
     if (!build || !build.slug) throw new Error("slug required");
-    const existing = await this.db.customBuilds.findOne(
-      {
-        userId,
-        slug: build.slug,
-        deletedAt: { $exists: false },
-      },
-      { projection: { _id: 1 } },
-    );
-    if (!existing) {
-      const active = await this.db.customBuilds.countDocuments(
-        { userId, deletedAt: { $exists: false } },
-        { limit: CUSTOM_BUILD_ACTIVE_LIMIT },
-      );
-      if (active >= CUSTOM_BUILD_ACTIVE_LIMIT) {
-        const err = new Error(
-          `You can keep up to ${CUSTOM_BUILD_ACTIVE_LIMIT} active custom builds. `
-          + "Remove one before saving another.",
-        );
-        /** @type {any} */ (err).status = 409;
-        /** @type {any} */ (err).code = "custom_build_limit_reached";
-        throw err;
-      }
-    }
     const now = new Date();
     /** @type {Record<string, any>} */
     const doc = { ...build, userId, updatedAt: now };
@@ -1522,11 +1534,20 @@ class CustomBuildsService {
    * `decorateBuilds` UI code works unchanged.
    *
    * @param {string} userId
-   * @param {{signal?: AbortSignal}} [opts]
+   * @param {{signal?: AbortSignal, slugs?: string[]}} [opts]
    * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
    */
   async evaluateAllStats(userId, opts = {}) {
-    const builds = await this._listForClassification(userId);
+    if (opts.slugs && (opts.slugs.length > CUSTOM_BUILD_MAX_PAGE_SIZE || opts.slugs.some((slug) => typeof slug !== "string" || !slug || slug.length > 80))) {
+      throw invalidPage(`Request stats for at most ${CUSTOM_BUILD_MAX_PAGE_SIZE} builds at a time.`);
+    }
+    const builds = opts.slugs
+      ? await this.db.customBuilds.aggregate([
+        { $match: { userId, slug: { $in: opts.slugs }, deletedAt: { $exists: false } } },
+        { $limit: CUSTOM_BUILD_MAX_PAGE_SIZE },
+        { $project: CUSTOM_BUILD_CLASSIFIER_AGGREGATE_PROJECTION },
+      ], { ...(opts.signal ? { signal: opts.signal } : {}) }).toArray()
+      : await this.list(userId);
     if (builds.length === 0) return [];
     const byPerspective = {
       you: builds.filter((build) => buildPerspective(build) === "you"),
@@ -1591,7 +1612,7 @@ class CustomBuildsService {
   }
 
   /**
-   * Serialize quota checks and creates inside the current production process.
+   * Serialize build mutations inside the current production process.
    * The deployment intentionally remains single-instance while socket/live
    * state is process-local. Entries disappear as soon as the final waiter
    * leaves, so unique user IDs cannot turn this into an unbounded cache.
@@ -1843,7 +1864,7 @@ class CustomBuildsService {
    * Memory-bounded full-history all-build classifier. Each page is scored
    * against every saved build before its detail blobs are released. A game
    * claimed by multiple builds is assigned to the most specific rule set;
-   * equal-sized rule sets keep the list's updatedAt-desc order.
+   * equal-sized rule sets prefer the newest edit, then the smaller slug.
    *
    * @param {string} userId
    * @param {{
@@ -1862,29 +1883,31 @@ class CustomBuildsService {
       userId,
     );
     const clearUnmatched = !!opts.clearUnmatched;
-    const builds = await this._listForClassification(userId);
-    const descriptors = builds.map((build, ord) => ({
-      build,
-      ord,
-      name: build.name || build.slug,
-      rules: extractRules(build),
-      perspective: buildPerspective(build),
-    }));
-    const ownedSlugs = new Set([
-      ...descriptors.map((d) => d.build.slug).filter(Boolean),
-      ...Object.keys(opts.previousNamesBySlug || {}),
-    ]);
-    const expectedPerspectiveBySlug = new Map(
-      descriptors
-        .filter((descriptor) => descriptor.build.slug)
-        .map((descriptor) => [descriptor.build.slug, descriptor.perspective]),
-    );
-    const perBuild = descriptors.map((d) => ({
-      slug: d.build.slug,
-      name: d.name,
-      matched: 0,
-      tagged: 0,
-    }));
+    // Keep compatibility summaries for the first 100 definitions, while the
+    // classifier and totals always cover the entire library.
+    const perBuild = [];
+    const summaryBySlug = new Map();
+    const libraryHash = createHash("sha256");
+    let buildCount = 0;
+    for await (const batch of this._iterateForClassification(userId, {
+      signal: opts.signal,
+    })) {
+      if (opts.assertLease) await opts.assertLease();
+      for (const build of batch) {
+        libraryHash.update(JSON.stringify(build)).update("\n");
+        buildCount += 1;
+        if (perBuild.length >= 100) continue;
+        const summary = {
+          slug: build.slug,
+          name: build.name || build.slug,
+          matched: 0,
+          tagged: 0,
+        };
+        perBuild.push(summary);
+        summaryBySlug.set(build.slug, summary);
+      }
+    }
+    const libraryFingerprint = libraryHash.digest("hex");
     const runId = randomUUID();
     const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const games = this._gamesCollection();
@@ -1906,98 +1929,118 @@ class CustomBuildsService {
         scanned += page.candidates;
         /** @type {Map<string, {name: string, slug: string, perspective: "you"|"opponent", rows: Array<{gameId: string, revision: string|null}>}>} */
         const desiredGroups = new Map();
-        /** @type {Array<{gameId: string, revision: string|null, perspective: "you"|"opponent"}>} */
+        /** @type {Array<{gameId: string, revision: string|null, slug: string, perspective: "you"|"opponent"}>} */
         const clearGames = [];
-        for (const game of page.games) {
-          // The user's build and the opponent's strategy are independent axes.
-          // Pick one closest winner per side so an opponent-side rule can never
-          // compete with (or overwrite) the user's own build classification.
-          for (const perspective of /** @type {Array<"you"|"opponent">} */ (
-            ["you", "opponent"]
-          )) {
-            const currentSlug = customBuildSlugForGame(game, perspective);
-            const expectedPerspective = typeof currentSlug === "string"
-              ? expectedPerspectiveBySlug.get(currentSlug)
-              : undefined;
-            const wrongAxisClaim = !!expectedPerspective
-              && expectedPerspective !== perspective;
-            let best = null;
-            const unknownContenders = [];
-            for (const descriptor of descriptors) {
-              if (descriptor.perspective !== perspective) continue;
-              if (!gameMatchesBuildMatchup(
-                game,
-                descriptor.build,
-                perspective,
-              )) continue;
-              const verdict = evaluateGameRules(
-                game,
-                descriptor.rules,
-                perspective,
-              );
+        // State scales with the replay page, not the number of saved builds.
+        // A single strongest unknown is sufficient to prove uncertainty.
+        const states = page.games.flatMap((game) => (
+          /** @type {Array<"you"|"opponent">} */ (["you", "opponent"])
+        ).map((perspective) => {
+          const currentSlug = customBuildSlugForGame(game, perspective);
+          return {
+            game,
+            perspective,
+            currentSlug,
+            owned: typeof currentSlug === "string" && Object.prototype.hasOwnProperty.call(
+              opts.previousNamesBySlug || {}, currentSlug,
+            ),
+            wrongAxisClaim: false,
+            /** @type {{name: string, slug: string, ruleCount: number, updatedAt: number}|null} */
+            best: null,
+            /** @type {{name: string, slug: string, ruleCount: number, updatedAt: number}|null} */
+            unknown: null,
+          };
+        }));
+        const pageLibraryHash = createHash("sha256");
+        for await (const batch of this._iterateForClassification(userId, {
+          signal: opts.signal,
+        })) {
+          if (opts.assertLease) await opts.assertLease();
+          for (const build of batch) {
+            pageLibraryHash.update(JSON.stringify(build)).update("\n");
+            const perspective = buildPerspective(build);
+            const rules = extractRules(build);
+            const descriptor = {
+              name: build.name || build.slug,
+              slug: build.slug,
+              ruleCount: rules.length,
+              updatedAt: new Date(build.updatedAt || 0).getTime() || 0,
+            };
+            for (const state of states) {
+              if (state.currentSlug === build.slug) {
+                state.owned = true;
+                state.wrongAxisClaim = perspective !== state.perspective;
+              }
+              if (state.perspective !== perspective) continue;
+              if (!gameMatchesBuildMatchup(state.game, build, perspective)) continue;
+              const verdict = evaluateGameRules(state.game, rules, perspective);
               if (verdict === "unknown") {
-                unknownContenders.push(descriptor);
-                continue;
-              }
-              if (verdict !== "pass") continue;
-              perBuild[descriptor.ord].matched += 1;
-              if (!best || descriptorOutranks(descriptor, best)) {
-                best = descriptor;
+                if (!state.unknown || descriptorOutranks(descriptor, state.unknown)) {
+                  state.unknown = descriptor;
+                }
+              } else if (verdict === "pass") {
+                const summary = summaryBySlug.get(build.slug);
+                if (summary) summary.matched += 1;
+                if (!state.best || descriptorOutranks(descriptor, state.best)) {
+                  state.best = descriptor;
+                }
               }
             }
-
-            // Missing detail on one side must defer only that side. A valid
-            // user-side result can still commit while opponent detail is absent,
-            // and vice versa.
-            const winnerIsUncertain = best && unknownContenders.some(
-              (candidate) => descriptorOutranks(candidate, best),
-            );
-            if (winnerIsUncertain || (!best && unknownContenders.length > 0)) {
-              // A provenance slug whose saved definition belongs to the other
-              // side is definitively corrupt even if this side's new winner is
-              // temporarily unknown. Clear that legacy claim unconditionally;
-              // this is a perspective migration, not clearUnmatched behavior.
-              if (wrongAxisClaim && game.gameId) {
-                clearGames.push({
-                  gameId: game.gameId,
-                  revision: game.customBuildRevision || null,
-                  perspective,
-                });
-              }
-              deferred += 1;
-              continue;
-            }
-
-            if (best && game.gameId) {
-              // A matching tag is already correct and needs no staged write.
-              if (
-                customBuildNameForGame(game, perspective) === best.name
-                && customBuildSlugForGame(game, perspective) === best.build.slug
-              ) continue;
-              const groupKey = `${perspective}|${best.build.slug}`;
-              const group = desiredGroups.get(groupKey) || /** @type {{name: string, slug: string, perspective: "you"|"opponent", rows: Array<{gameId: string, revision: string|null}>}} */ ({
-                name: best.name,
-                slug: best.build.slug,
-                perspective,
-                rows: [],
-              });
-              group.rows.push({
-                gameId: game.gameId,
-                revision: game.customBuildRevision || null,
-              });
-              desiredGroups.set(groupKey, group);
-            } else if (
-              (wrongAxisClaim || clearUnmatched)
-              && game.gameId
-              && typeof currentSlug === "string"
-              && ownedSlugs.has(currentSlug)
-            ) {
+          }
+        }
+        if (opts.signal && opts.signal.aborted) throw abortError();
+        // Saving without enqueueing another job must not mix old definitions
+        // on earlier replay pages with new definitions on later pages. Compare
+        // streamed fingerprints before staging; a retry starts a fresh scan.
+        if (pageLibraryHash.digest("hex") !== libraryFingerprint) {
+          throw new Error("custom_build_library_changed");
+        }
+        for (const state of states) {
+          const { game, perspective, currentSlug, best, unknown } = state;
+          const winnerIsUncertain = unknown && (!best || descriptorOutranks(unknown, best));
+          if (winnerIsUncertain) {
+            // A claim from the other perspective is definitively corrupt even
+            // when missing details temporarily hide this side's new winner.
+            if (state.wrongAxisClaim && game.gameId) {
               clearGames.push({
                 gameId: game.gameId,
                 revision: game.customBuildRevision || null,
+                slug: currentSlug,
                 perspective,
               });
             }
+            deferred += 1;
+            continue;
+          }
+          if (best && game.gameId) {
+            if (
+              customBuildNameForGame(game, perspective) === best.name
+              && currentSlug === best.slug
+            ) continue;
+            const groupKey = `${perspective}|${best.slug}`;
+            const group = desiredGroups.get(groupKey) || {
+              name: best.name,
+              slug: best.slug,
+              perspective,
+              rows: [],
+            };
+            group.rows.push({
+              gameId: game.gameId,
+              revision: game.customBuildRevision || null,
+            });
+            desiredGroups.set(groupKey, group);
+          } else if (
+            (state.wrongAxisClaim || clearUnmatched)
+            && game.gameId
+            && typeof currentSlug === "string"
+            && state.owned
+          ) {
+            clearGames.push({
+              gameId: game.gameId,
+              revision: game.customBuildRevision || null,
+              slug: currentSlug,
+              perspective,
+            });
           }
         }
 
@@ -2034,10 +2077,8 @@ class CustomBuildsService {
           );
           const stagedCount = staged.matchedCount || 0;
           tagged += stagedCount;
-          const descriptor = descriptors.find((d) => (
-            d.build.slug === group.slug && d.perspective === group.perspective
-          ));
-          if (descriptor) perBuild[descriptor.ord].tagged += stagedCount;
+          const summary = summaryBySlug.get(group.slug);
+          if (summary) summary.tagged += stagedCount;
         }
         if (clearGames.length > 0) {
           if (opts.assertLease) await opts.assertLease();
@@ -2047,9 +2088,7 @@ class CustomBuildsService {
                 filter: {
                   userId,
                   gameId: row.gameId,
-                  [customBuildProvenanceField(row.perspective)]: {
-                    $in: [...ownedSlugs],
-                  },
+                  [customBuildProvenanceField(row.perspective)]: row.slug,
                   ...customBuildRevisionMatch(row.revision),
                 },
                 update: {
@@ -2072,7 +2111,7 @@ class CustomBuildsService {
         }
         if (opts.onProgress) {
           await opts.onProgress({
-            builds: builds.length,
+            builds: buildCount,
             scanned,
             tagged,
             cleared,
@@ -2101,130 +2140,14 @@ class CustomBuildsService {
       );
       throw err;
     }
-    return { builds: builds.length, scanned, tagged, cleared, deferred, perBuild };
-  }
-
-  /**
-   * Reclassify the user's stored games against EVERY saved build.
-   *
-   * Single scan, each game tested against each build's rules. When a
-   * game matches multiple builds, the "closest" build wins: the build
-   * with the most rules (the most specific) takes the game. Ties on
-   * rule count are broken by `updatedAt desc` (most recently edited
-   * wins), consistent with the per-slug `reclassify` flow. Games that
-   * match no build keep whatever tag was already present unless
-   * `clearUnmatched` is true.
-   *
-   * @param {string} userId
-   * @param {{ clearUnmatched?: boolean }} [opts]
-   * @returns {Promise<{
-   *   builds: number,
-   *   scanned: number,
-   *   tagged: number,
-   *   cleared: number,
-   *   perBuild: Array<{slug: string, name: string, matched: number, tagged: number}>,
-   * }>}
-   */
-  async _reclassifyAllLegacy(userId, opts = {}) {
-    if (!this.perGame) throw new Error("perGame_unavailable");
-    const clearUnmatched = !!opts.clearUnmatched;
-    const builds = await this._listForClassification(userId);
-    const games = await this.perGame.listForRulePreview(userId, {
-      limit: STATS_GAME_SCAN_CAP,
-    });
-    /** @type {Map<string, {name: string, ruleCount: number, ord: number}>} */
-    const claims = new Map();
-    /** @type {Set<string>} */
-    const ownedNames = new Set();
-    /** @type {Array<{slug: string, name: string, matched: number, tagged: number}>} */
-    const perBuild = [];
-
-    for (let i = 0; i < builds.length; i++) {
-      const b = /** @type {any} */ (builds[i]);
-      const rules = extractRules(b);
-      const perspective = b.perspective === "opponent" ? "opponent" : "you";
-      const buildName = b.name || b.slug;
-      ownedNames.add(buildName);
-      let matchedCount = 0;
-      if (rules.length > 0) {
-        const inMatchup = games.filter((g) =>
-          gameMatchesBuildMatchup(g, b, perspective),
-        );
-        const matched = filterMatchingGames(inMatchup, rules, perspective);
-        for (const g of matched) {
-          if (!g.gameId) continue;
-          // Closest-match: keep whichever claim has more rules. Ties
-          // broken by index (lower = more recent, since `list()` orders
-          // by `updatedAt desc`).
-          const cur = claims.get(g.gameId);
-          if (
-            !cur ||
-            rules.length > cur.ruleCount ||
-            (rules.length === cur.ruleCount && i < cur.ord)
-          ) {
-            claims.set(g.gameId, {
-              name: buildName,
-              ruleCount: rules.length,
-              ord: i,
-            });
-          }
-        }
-        matchedCount = matched.length;
-      }
-      perBuild.push({
-        slug: b.slug,
-        name: buildName,
-        matched: matchedCount,
-        tagged: 0,
-      });
-    }
-    /** @type {Map<string, string>} */
-    const desiredTag = new Map();
-    for (const [gid, claim] of claims) desiredTag.set(gid, claim.name);
-
-    let totalTagged = 0;
-    /** @type {Map<string, string[]>} */
-    const grouped = new Map();
-    for (const [gid, name] of desiredTag) {
-      const arr = grouped.get(name) || [];
-      arr.push(gid);
-      grouped.set(name, arr);
-    }
-    const games_ = this._gamesCollection();
-    for (const [name, ids] of grouped) {
-      if (ids.length === 0) continue;
-      const res = await tagGames(games_, userId, ids, name);
-      totalTagged += res.modifiedCount || 0;
-      const row = perBuild.find((p) => p.name === name);
-      if (row) row.tagged = res.modifiedCount || 0;
-    }
-
-    let cleared = 0;
-    if (clearUnmatched && ownedNames.size > 0) {
-      // Clear tags for games whose `myBuild` references one of THIS
-      // user's saved builds but no longer matches that build's rules.
-      // We never touch tags that belong to community builds or the
-      // legacy agent classifier — those names are unknown to us.
-      const namesArr = Array.from(ownedNames);
-      const taggedIds = Array.from(desiredTag.keys());
-      const clearRes = await games_.updateMany(
-        {
-          userId,
-          isResumedFromReplay: { $ne: true },
-          myBuild: { $in: namesArr },
-          ...(taggedIds.length > 0 ? { gameId: { $nin: taggedIds } } : {}),
-        },
-        { $unset: { myBuild: "" } },
-      );
-      cleared = clearRes.modifiedCount || 0;
-    }
-
     return {
-      builds: builds.length,
-      scanned: games.length,
-      tagged: totalTagged,
+      builds: buildCount,
+      scanned,
+      tagged,
       cleared,
+      deferred,
       perBuild,
+      perBuildTruncated: buildCount > perBuild.length,
     };
   }
 
@@ -2272,36 +2195,6 @@ class CustomBuildsService {
    */
   async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
-    const builds = await this._listForClassification(userId);
-    if (builds.length === 0) {
-      const cleared = await this._gamesCollection().updateOne(
-        {
-          userId,
-          gameId: game.gameId,
-          ...(typeof opts.expectedRevision === "string"
-            ? { _customBuildRevision: opts.expectedRevision }
-            : {}),
-        },
-        {
-          $set: { _schemaVersion: expectedVersion(COLLECTIONS.GAMES) },
-          $unset: {
-            _customBuildSlug: "",
-            _customOpponentStrategySlug: "",
-            _customBuildReclassify: "",
-            _customBuildClassificationSequence: "",
-          },
-        },
-      );
-      if (
-        typeof opts.expectedRevision === "string"
-        && cleared.matchedCount === 0
-      ) {
-        const err = new Error("custom_build_tag_superseded");
-        /** @type {any} */ (err).code = "custom_build_tag_superseded";
-        throw err;
-      }
-      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
-    }
     // Parse the just-uploaded build logs into the same event shape the
     // rule evaluator expects. We pull this from the game payload (not
     // re-reading from Mongo) so this stays a pure post-write hook with
@@ -2346,51 +2239,73 @@ class CustomBuildsService {
       oppEvents,
     };
 
-    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, rules: readonly unknown[], ord: number} | null>} */
+    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, updatedAt: number} | null>} */
     const bestByPerspective = { you: null, opponent: null };
-    /** @type {Record<"you"|"opponent", Array<{name: string, slug: string, ruleCount: number, rules: readonly unknown[], ord: number}>>} */
-    const unknownByPerspective = { you: [], opponent: [] };
+    /** @type {Record<"you"|"opponent", {name: string, slug: string, ruleCount: number, updatedAt: number} | null>} */
+    const unknownByPerspective = { you: null, opponent: null };
     let matchCount = 0;
-    for (let i = 0; i < builds.length; i++) {
-      const b = /** @type {any} */ (builds[i]);
-      const rules = extractRules(b);
-      if (rules.length === 0) continue;
-      const perspective = buildPerspective(b);
-      if (!gameMatchesBuildMatchup(probe, b, perspective)) continue;
-      const evs = perspective === "opponent" ? probe.oppEvents : probe.events;
-      const buildName = b.name || b.slug;
-      const descriptor = {
-        name: buildName,
-        slug: b.slug,
-        ruleCount: rules.length,
-        rules,
-        ord: i,
-      };
-      if (evs.length === 0) {
-        unknownByPerspective[perspective].push(descriptor);
-        continue;
+    let buildCount = 0;
+    for await (const batch of this._iterateForClassification(userId)) {
+      for (const build of batch) {
+        buildCount += 1;
+        const rules = extractRules(build);
+        if (rules.length === 0) continue;
+        const perspective = buildPerspective(build);
+        if (!gameMatchesBuildMatchup(probe, build, perspective)) continue;
+        const evs = perspective === "opponent" ? probe.oppEvents : probe.events;
+        const descriptor = {
+          name: build.name || build.slug,
+          slug: build.slug,
+          ruleCount: rules.length,
+          updatedAt: new Date(build.updatedAt || 0).getTime() || 0,
+        };
+        let verdict = "unknown";
+        if (evs.length > 0) {
+          verdict = evaluateGameRules(probe, rules, perspective);
+        }
+        if (verdict === "unknown") {
+          const unknown = unknownByPerspective[perspective];
+          if (!unknown || descriptorOutranks(descriptor, unknown)) {
+            unknownByPerspective[perspective] = descriptor;
+          }
+        } else if (verdict === "pass") {
+          matchCount += 1;
+          const best = bestByPerspective[perspective];
+          if (!best || descriptorOutranks(descriptor, best)) {
+            bestByPerspective[perspective] = descriptor;
+          }
+        }
       }
-      let result;
-      try {
-        result = evaluateRules(/** @type {any} */ (rules), evs);
-      } catch (_e) {
-        unknownByPerspective[perspective].push(descriptor);
-        continue;
-      }
-      if (result.unavailable === true) {
-        unknownByPerspective[perspective].push(descriptor);
-        continue;
-      }
-      if (!result.pass) continue;
-      matchCount += 1;
-      const best = bestByPerspective[perspective];
+    }
+
+    if (buildCount === 0) {
+      const cleared = await this._gamesCollection().updateOne(
+        {
+          userId,
+          gameId: game.gameId,
+          ...(typeof opts.expectedRevision === "string"
+            ? { _customBuildRevision: opts.expectedRevision }
+            : {}),
+        },
+        {
+          $set: { _schemaVersion: expectedVersion(COLLECTIONS.GAMES) },
+          $unset: {
+            _customBuildSlug: "",
+            _customOpponentStrategySlug: "",
+            _customBuildReclassify: "",
+            _customBuildClassificationSequence: "",
+          },
+        },
+      );
       if (
-        !best ||
-        rules.length > best.ruleCount ||
-        (rules.length === best.ruleCount && i < best.ord)
+        typeof opts.expectedRevision === "string"
+        && cleared.matchedCount === 0
       ) {
-        bestByPerspective[perspective] = descriptor;
+        const err = new Error("custom_build_tag_superseded");
+        /** @type {any} */ (err).code = "custom_build_tag_superseded";
+        throw err;
       }
+      return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
     }
 
     // An unavailable higher-priority proxy contender makes the winner on that
@@ -2402,9 +2317,8 @@ class CustomBuildsService {
       ["you", "opponent"]
     )) {
       const best = bestByPerspective[perspective];
-      if (unknownByPerspective[perspective].some(
-        (candidate) => !best || descriptorOutranks(candidate, best),
-      )) {
+      const unknown = unknownByPerspective[perspective];
+      if (unknown && (!best || descriptorOutranks(unknown, best))) {
         bestByPerspective[perspective] = null;
         deferredByPerspective[perspective] = true;
       }
@@ -2449,13 +2363,10 @@ class CustomBuildsService {
     // its slug under the same revision fence; preserving only the slug would
     // leave an internally inconsistent row.
     if (deferredByPerspective.you && preservedDeferred?._customBuildSlug) {
-      const current = builds.find(
-        (build) => (
-          build.slug === preservedDeferred._customBuildSlug
-          && buildPerspective(build) === "you"
-        ),
+      const current = await this._getForClassification(
+        userId, preservedDeferred._customBuildSlug,
       );
-      if (current) {
+      if (current && buildPerspective(current) === "you") {
         classifiedSet.myBuild = current.name || current.slug;
         classifiedSet._customBuildSlug = current.slug;
       } else {
@@ -2466,13 +2377,10 @@ class CustomBuildsService {
       deferredByPerspective.opponent
       && preservedDeferred?._customOpponentStrategySlug
     ) {
-      const current = builds.find(
-        (build) => (
-          build.slug === preservedDeferred._customOpponentStrategySlug
-          && buildPerspective(build) === "opponent"
-        ),
+      const current = await this._getForClassification(
+        userId, preservedDeferred._customOpponentStrategySlug,
       );
-      if (current) {
+      if (current && buildPerspective(current) === "opponent") {
         classifiedSet["opponent.strategy"] = current.name || current.slug;
         classifiedSet._customOpponentStrategySlug = current.slug;
       } else {
@@ -2542,23 +2450,6 @@ class CustomBuildsService {
     // stays a thin layer over Mongo.
     return /** @type {any} */ (this.db).games;
   }
-}
-
-/**
- * @param {import('mongodb').Collection} games
- * @param {string} userId
- * @param {string[]} gameIds
- * @param {string} buildName
- */
-async function tagGames(games, userId, gameIds, buildName) {
-  if (!gameIds || gameIds.length === 0) return { modifiedCount: 0 };
-  return games.updateMany(
-    { userId, gameId: { $in: gameIds } },
-    {
-      $set: { myBuild: buildName },
-      $unset: { _customBuildReclassify: "" },
-    },
-  );
 }
 
 /**
@@ -2834,15 +2725,18 @@ function toPhaseAggregationGame(game, perspective) {
 }
 
 /**
- * Closest-match priority: more rules wins; list order resolves ties.
- * @param {{rules: readonly unknown[], ord: number}} candidate
- * @param {{rules: readonly unknown[], ord: number}} current
+ * Closest-match priority is independent of the library's paging order.
+ * @param {{ruleCount: number, updatedAt: number, slug: string}} candidate
+ * @param {{ruleCount: number, updatedAt: number, slug: string}} current
  */
 function descriptorOutranks(candidate, current) {
-  return candidate.rules.length > current.rules.length
+  return candidate.ruleCount > current.ruleCount
     || (
-      candidate.rules.length === current.rules.length
-      && candidate.ord < current.ord
+      candidate.ruleCount === current.ruleCount
+      && (
+        candidate.updatedAt > current.updatedAt
+        || (candidate.updatedAt === current.updatedAt && candidate.slug < current.slug)
+      )
     );
 }
 
@@ -3083,33 +2977,8 @@ function raceStrictMatch(actual, requested, buildName, bucketPos) {
 }
 
 /**
- * @param {Array<{events: any[], oppEvents: any[], myRace: string|null, oppRace: string|null, gameId: string, result: string|null, date: Date|null, map: string|null}>} games
- * @param {ReadonlyArray<import('./buildRulesEvaluator').BuildRule>} rules
- * @param {'you'|'opponent'} perspective
- */
-function filterMatchingGames(games, rules, perspective) {
-  if (rules.length === 0) return [];
-  /** @type {any[]} */
-  const out = [];
-  for (const g of games) {
-    const events =
-      perspective === "opponent" ? g.oppEvents || [] : g.events || [];
-    if (events.length === 0) continue;
-    let res;
-    try {
-      res = evaluateRules(rules, events);
-    } catch (_e) {
-      continue;
-    }
-    if (res.pass) out.push(g);
-  }
-  return out;
-}
-
-/**
- * Tri-state evaluator used by destructive reclassification. Unlike the
- * display-only helper above, missing detail or evaluator exceptions are not
- * collapsed into a nonmatch.
+ * Tri-state evaluator used by destructive reclassification. Missing detail
+ * and evaluator exceptions remain unknown rather than becoming nonmatches.
  * @param {any} game
  * @param {ReadonlyArray<import('./buildRulesEvaluator').BuildRule>} rules
  * @param {"you"|"opponent"} perspective
@@ -3334,5 +3203,7 @@ function toClassifiedRecent(game) {
 
 module.exports = {
   CustomBuildsService,
-  CUSTOM_BUILD_ACTIVE_LIMIT,
+  CUSTOM_BUILD_PAGE_SIZE,
+  CUSTOM_BUILD_MAX_PAGE_SIZE,
+  CUSTOM_BUILD_CLASSIFIER_BATCH_SIZE,
 };

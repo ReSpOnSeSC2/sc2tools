@@ -286,12 +286,12 @@ const COMPARISON_MIN_GAMES = 3;
  * participate in name comparisons against saved custom-build names,
  * which users typically author without that prefix. The character class
  * covers P/T/Z/R (case-insensitive); the separator may be a hyphen,
- * en-dash or em-dash with arbitrary surrounding whitespace, or just
+ * en-dash, em-dash or colon with arbitrary surrounding whitespace, or just
  * whitespace alone — users sometimes save builds as "PvZ Stargate"
  * without the dash.
  */
 function stripMatchupPrefix(s: string): string {
-  return s.replace(/^[PTZR]v[PTZR](\s*[-–—]\s*|\s+)/i, "");
+  return s.replace(/^[PTZR]v[PTZR]\s*(?:[-–—:]\s*)?/i, "");
 }
 
 /**
@@ -337,7 +337,7 @@ export function BuildVsStrategyComparison({
   // every drill from a build × strategy cell falls back to the empty
   // state even when the user has data on that build.
   const customBuilds = useApi<{ items: CustomBuild[] } | CustomBuild[]>(
-    "/v1/custom-builds",
+    `/v1/custom-builds?${new URLSearchParams({ normalizedName: normalizeBuildName(build), view: "summary" })}`,
   );
   const slug = useMemo(() => {
     const list = Array.isArray(customBuilds.data)

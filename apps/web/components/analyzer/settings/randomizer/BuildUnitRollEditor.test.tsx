@@ -220,4 +220,34 @@ describe("BuildUnitRollEditor", () => {
       "adept",
     ]);
   });
+
+  it("pages and searches the custom pool without losing selections on other pages", () => {
+    const onChange = vi.fn();
+    const nextPage = vi.fn();
+    const onSearchChange = vi.fn();
+    render(
+      <MatchupBuildPicker
+        matchup="TvZ"
+        config={buildConfig({ builds: [{ id: "custom:earlier", name: "Earlier selection", race: "Terran", source: "custom", weight: 2 }] })}
+        customBuilds={[{ slug: "older", name: "Older custom build", race: "Terran", vsRace: "Any" }]}
+        search=""
+        onSearchChange={onSearchChange}
+        customBuildPage={{
+          pageNumber: 3, pageStart: 100, data: { items: [], total: 160 },
+          hasPrevious: true, hasNext: true, isLoading: false, isValidating: false,
+          error: undefined, previousPage: vi.fn(), nextPage,
+        }}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByText("Showing 101–101 of 160 builds")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(nextPage).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search custom builds for randomizer" }), { target: { value: "Older" } });
+    expect(onSearchChange).toHaveBeenCalledWith("Older");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Toggle Older custom build" }));
+    const next = onChange.mock.calls[0][0] as MatchupConfig;
+    expect(next.builds.map((build) => build.id)).toEqual(["custom:earlier", "custom:older"]);
+    expect(next.builds[0].weight).toBe(2);
+  });
 });

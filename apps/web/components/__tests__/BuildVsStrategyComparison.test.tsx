@@ -107,7 +107,7 @@ function wireMocks({
   labelError?: { status: number } | null;
 }) {
   useApiMock.mockImplementation((path: string | null) => {
-    if (path === "/v1/custom-builds") {
+    if (path?.startsWith("/v1/custom-builds?")) {
       return { data: { items: customBuildsList }, isLoading: false, error: null };
     }
     if (path && path.includes("/compositions")) {
@@ -143,7 +143,7 @@ describe("BuildVsStrategyComparison", () => {
 
     const callPaths = useApiMock.mock.calls.map((c) => c[0]);
     // Slug bridge call:
-    expect(callPaths).toContain("/v1/custom-builds");
+    expect(callPaths).toContain("/v1/custom-builds?normalizedName=stargate+phoenix&view=summary");
     // Left column: perspective=you AND strategy filter — describes
     // the SAME cell as the right column.
     expect(callPaths).toEqual(
@@ -363,7 +363,7 @@ describe("BuildVsStrategyComparison", () => {
     // state — otherwise users with a matching build see the wrong
     // message until SWR resolves.
     useApiMock.mockImplementation((path: string | null) => {
-      if (path === "/v1/custom-builds") {
+      if (path?.startsWith("/v1/custom-builds?")) {
         return { data: undefined, isLoading: true, error: null };
       }
       if (path && path.includes("/phases")) {

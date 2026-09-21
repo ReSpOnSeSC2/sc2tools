@@ -51,27 +51,41 @@ async function reconcile({ local, api, token, log }) {
 async function countCloud(url, headers, log) {
   let total = 0;
   let cursor = null;
+  let cursorParam = "before";
   let pages = 0;
   const PAGE = 100;
   try {
     do {
       const u = new URL(url);
       u.searchParams.set("limit", String(PAGE));
-      if (cursor) u.searchParams.set("before", cursor);
+      if (cursor) u.searchParams.set(cursorParam, cursor);
       const res = await fetch(u, { headers });
       if (!res.ok) {
         log("warn", `${url} -> ${res.status}; aborting count`);
         return { total: null, error: res.status };
       }
       const json = await res.json();
+      // Modern libraries expose their complete filtered count; reading it
+      // avoids walking a potentially large library just to count its rows.
+      if (Number.isSafeInteger(json?.total) && json.total >= 0) {
+        return { total: json.total };
+      }
       const items = (json && json.items) || [];
       total += items.length;
-      cursor =
-        json && json.nextBefore
+      const nextCursor = typeof json?.nextCursor === "string"
+        ? json.nextCursor
+        : null;
+      const nextBefore = json && json.nextBefore
           ? typeof json.nextBefore === "string"
             ? json.nextBefore
             : new Date(json.nextBefore).toISOString()
           : null;
+      const next = nextCursor || nextBefore;
+      if (next && next === cursor) {
+        return { total: null, error: "repeated_cursor" };
+      }
+      cursor = next;
+      cursorParam = nextCursor ? "cursor" : "before";
       pages += 1;
       if (pages > 200) {
         log("warn", `>${pages} pages walking ${url} — bailing out`);
@@ -84,4 +98,4 @@ async function countCloud(url, headers, log) {
   }
 }
 
-module.exports = { reconcile };
+module.exports = { reconcile, countCloud };

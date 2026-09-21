@@ -11,6 +11,8 @@ const harness = vi.hoisted(() => ({
   performance: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number }>,
   mutate: vi.fn(async () => undefined),
   paths: [] as string[],
+  listMeta: {} as Record<string, unknown>,
+  pages: {} as Record<string, { items: CustomBuild[]; total: number; limit: number; nextCursor: string | null }>,
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
@@ -18,9 +20,10 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: vi.fn(),
   useApi: (path: string) => {
     harness.paths.push(path);
-    return path === "/v1/custom-builds"
+    const cursor = new URL(path, "https://example.test").searchParams.get("cursor");
+    return path.startsWith("/v1/custom-builds?view=summary")
       ? {
-          data: harness.libraryLoaded ? { items: harness.items } : undefined,
+          data: harness.libraryLoaded ? (cursor ? harness.pages[cursor] : { items: harness.items, ...harness.listMeta }) : undefined,
           error: harness.libraryError,
           isValidating: false,
           mutate: harness.mutate,
@@ -47,11 +50,42 @@ beforeEach(() => {
   harness.performance = [];
   harness.mutate.mockClear();
   harness.paths = [];
+  harness.listMeta = {};
+  harness.pages = {};
 });
 
 afterEach(cleanup);
 
 describe("Builds tab saved library visibility", () => {
+  it("lets users navigate to saved builds beyond the first 100", () => {
+    const definitions = Array.from({ length: 104 }, (_, index) => ({
+      slug: `saved-${index + 1}`, name: `Saved build ${index + 1}`, race: "Protoss" as const,
+    }));
+    harness.items = definitions.slice(0, 50);
+    harness.listMeta = { total: 104, limit: 50, nextCursor: "second" };
+    harness.pages.second = { items: definitions.slice(50, 100), total: 104, limit: 50, nextCursor: "third" };
+    harness.pages.third = { items: definitions.slice(100), total: 104, limit: 50, nextCursor: null };
+    render(<BuildsTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("link", { name: /^Saved build 51 / })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /^Saved build 1 / })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("link", { name: /^Saved build 104 / }).getAttribute("href")).toBe("/builds/saved-104");
+    expect(screen.getByText("Showing 101–104 of 104 builds")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("describes a deleted later page without claiming the whole library is empty", () => {
+    harness.listMeta = { total: 51, limit: 50, nextCursor: "second" };
+    harness.pages.second = { items: [], total: 50, limit: 50, nextCursor: null };
+    render(<BuildsTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText(/This page has no saved builds/)).toBeTruthy();
+    expect(screen.queryByText(/No custom builds saved yet/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByRole("link", { name: /New unmatched opener/ })).toBeTruthy();
+  });
+
   it("shows unmatched and opponent builds even when replay and minimum-game filters exclude every performance row", () => {
     localStorage.setItem("analyzer.builds.minGames", "20");
     harness.performance = [{ name: "A replay label", total: 1, wins: 1, losses: 0, winRate: 1 }];
@@ -73,7 +107,7 @@ describe("Builds tab saved library visibility", () => {
     expect(saved.getByText("From opponent")).toBeTruthy();
     expect(saved.getByText("Your build")).toBeTruthy();
     expect(screen.getByText("No builds match")).toBeTruthy();
-    expect(harness.paths).toContain("/v1/custom-builds");
+    expect(harness.paths).toContain("/v1/custom-builds?view=summary");
     expect(harness.paths.some((path) => path.startsWith("/v1/builds?") && path.includes("regions=NA") && path.endsWith("#3"))).toBe(true);
     expect(saved.getByRole("link", { name: "Manage library" }).getAttribute("href")).toBe("/builds");
   });

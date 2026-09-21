@@ -20,7 +20,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
-import type { CustomBuild } from "@/components/builds/types";
+import { useCustomBuildPage } from "@/components/builds/useCustomBuildPage";
 import {
   activeMatchupCount,
   defaultRandomizerConfig,
@@ -42,17 +42,22 @@ import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
 import { usePublishDirty } from "./SettingsContext";
 
-type CustomBuildsResp = { items: CustomBuild[] };
-
 export function SettingsRandomizer() {
   const { getToken } = useAuth();
   const { data, isLoading, mutate } = useApi<unknown>(
     "/v1/me/preferences/randomizer",
   );
-  const customBuildsApi = useApi<CustomBuildsResp>("/v1/custom-builds");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [active, setActive] = useState<MatchupKey>(MATCHUPS[0]);
+  const [buildSearch, setBuildSearch] = useState("");
+  const customBuildsApi = useCustomBuildPage({
+    matchup: active,
+    includeGeneric: true,
+    search: buildSearch,
+    sort: "name",
+    view: "summary",
+  });
 
   const serverConfig = useMemo<RandomizerConfig | undefined>(
     () => (data === undefined ? undefined : sanitizeRandomizerConfig(data)),
@@ -94,7 +99,7 @@ export function SettingsRandomizer() {
     }
   }
 
-  if (isLoading || customBuildsApi.isLoading) {
+  if (isLoading) {
     return <Skeleton rows={3} />;
   }
 
@@ -125,6 +130,9 @@ export function SettingsRandomizer() {
         matchup={active}
         config={matchupConfig}
         customBuilds={customBuilds}
+        search={buildSearch}
+        onSearchChange={setBuildSearch}
+        customBuildPage={customBuildsApi}
         onChange={(next) => setDraft((d) => withMatchup(d, active, next))}
       />
 

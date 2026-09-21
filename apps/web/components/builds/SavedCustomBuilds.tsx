@@ -5,20 +5,14 @@ import { ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
-import { useApi } from "@/lib/clientApi";
 import { coerceRace, coerceVsRace, matchupLabel } from "@/lib/race";
-import type { CustomBuild } from "./types";
-
-type ListResponse = {
-  items: CustomBuild[];
-  total?: number | null;
-  limit?: number | null;
-  truncated?: boolean;
-};
+import { BuildPagination } from "./BuildPagination";
+import { useCustomBuildPage } from "./useCustomBuildPage";
 
 /** Saved definitions include opponent builds and builds without replay tags. */
 export function SavedCustomBuilds() {
-  const { data, error, isValidating, mutate } = useApi<ListResponse>("/v1/custom-builds");
+  const page = useCustomBuildPage({ view: "summary" });
+  const { data, error, isValidating, mutate } = page;
   const items = data?.items ?? [];
 
   return (
@@ -64,15 +58,19 @@ export function SavedCustomBuilds() {
         </ul>
       ) : !error ? (
         <p className="text-caption text-text-muted">
-          No custom builds saved yet. Save a build from a replay or create one in your library.
+          {page.hasPrevious || (data?.total ?? 0) > 0
+            ? "This page has no saved builds. Go to Previous to see the rest of your library."
+            : "No custom builds saved yet. Save a build from a replay or create one in your library."}
         </p>
       ) : null}
-      {data?.truncated ? (
-        <p className="mt-3 text-caption text-text-muted">
-          Showing the newest {items.length.toLocaleString()} of {(data.total ?? items.length).toLocaleString()} saved builds.
-          Manage your library to review its limit.
-        </p>
-      ) : null}
+      <BuildPagination
+        {...page}
+        count={items.length}
+        total={data?.total}
+        loading={isValidating}
+        onPrevious={page.previousPage}
+        onNext={page.nextPage}
+      />
     </Card>
   );
 }
