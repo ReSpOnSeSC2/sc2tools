@@ -93,9 +93,11 @@ describe("custom build catalog pagination", () => {
       const catalog = useCustomBuildCatalog();
       return createElement("output", { "data-testid": `consumer-${id}` }, catalog.data?.items.length ?? "loading");
     }
-    const tree = (count: number) => createElement(CustomBuildCatalogProvider, {
-      children: Array.from({ length: count }, (_, id) => createElement(Consumer, { id, key: id })),
-    });
+    const tree = (count: number) => createElement(
+      CustomBuildCatalogProvider,
+      null,
+      Array.from({ length: count }, (_, id) => createElement(Consumer, { id, key: id })),
+    );
     const { rerender, unmount } = render(tree(3));
     await waitFor(() => expect(screen.getByTestId("consumer-2").textContent).toBe("101"));
     expect(harness.apiCall).toHaveBeenCalledTimes(2);
