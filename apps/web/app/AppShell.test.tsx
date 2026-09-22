@@ -32,6 +32,14 @@ vi.mock("@/components/chrome/Footer", () => ({
   Footer: () => <footer data-testid="site-footer" />,
 }));
 
+vi.mock("@/components/chrome/SiteStats", () => ({
+  SiteStats: () => <div data-testid="site-stats" />,
+}));
+
+vi.mock("@/components/chrome/SitePresence", () => ({
+  SitePresence: () => <div data-testid="site-presence" />,
+}));
+
 vi.mock("@/components/CookieBanner", () => ({
   CookieBanner: () => <div data-testid="cookie-banner" />,
 }));
@@ -86,6 +94,8 @@ describe("token-auth broadcast routes", () => {
     expect(screen.queryByTestId("cookie-banner")).toBeNull();
     expect(screen.queryByTestId("google-analytics")).toBeNull();
     expect(screen.queryByTestId("service-worker")).toBeNull();
+    expect(screen.queryByTestId("site-stats")).toBeNull();
+    expect(screen.queryByTestId("site-presence")).toBeNull();
     expect(screen.getByTestId("route-content").closest("main")).toBeTruthy();
   });
 });
@@ -121,6 +131,7 @@ describe("app chrome routes", () => {
       // AppChrome owns the rail, the context bar and <main>, so the
       // marketing header/footer never render alongside it.
       expect(screen.getByTestId("app-chrome")).toBeTruthy();
+      expect(screen.getByTestId("site-presence")).toBeTruthy();
       expect(screen.queryByTestId("site-header")).toBeNull();
       expect(screen.queryByTestId("site-footer")).toBeNull();
     },
@@ -147,6 +158,8 @@ describe("normal and protected routes", () => {
       expect(route.clerkRenders).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("site-header")).toBeTruthy();
       expect(screen.getByTestId("site-footer")).toBeTruthy();
+      expect(screen.getByTestId("site-stats")).toBeTruthy();
+      expect(screen.getByTestId("site-presence")).toBeTruthy();
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
       expect(screen.getByTestId("google-analytics")).toBeTruthy();
       expect(screen.getByTestId("service-worker")).toBeTruthy();

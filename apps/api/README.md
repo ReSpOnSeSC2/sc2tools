@@ -160,6 +160,41 @@ and fall back to `date` only when neither source is available.
 | GET    | /v1/agent/releases                  | none         | Release history                  |
 | POST   | /v1/agent/releases                  | admin token  | Publish a new release            |
 
+### Public site activity
+
+`GET /v1/site/stats` is public and returns only `agentDownloads`, `activeAgents`,
+`activeUsers`, `generatedAt`, and `activityWindowSeconds` (180). The three counts
+come from MongoDB; a failed source returns `null`, while an empty successful
+query returns zero. Aggregate reads share a ten-second process cache and an
+in-flight query; responses disable HTTP caching.
+
+- `agentDownloads` counts retained `admin_events` with type `agent_download`.
+  These are tracked website installer download requests since tracking began;
+  they do not prove completed transfers or unique installations, and direct
+  GitHub downloads or agent auto-updates are outside this counter.
+- `activeAgents` counts unrevoked `device_tokens` seen in the past three
+  minutes. Agent heartbeats and authenticated agent requests update that time.
+- `activeUsers` counts recently visible website visitors from first-party
+  presence. Signed-in accounts deduplicate across browsers/devices; signed-out
+  visitors deduplicate within a browser. This is an activity estimate, not a
+  census of unique people. Hidden or closed tabs stop heartbeats and age out.
+
+`POST /v1/site/presence` accepts `{ visitorToken?: string }`, optionally with a
+verified Clerk bearer JWT, and returns `{ visitorToken: string }`. The Next
+same-origin route keeps this signed token in an HttpOnly, SameSite cookie.
+Account IDs supplied in JSON are ignored; device credentials are rejected.
+The service stores only hashed browser/account identities and activity/expiry
+timestamps in `site_presence`. Rows expire after three minutes, and the count
+query enforces expiry even before MongoDB's TTL cleanup runs. Signing uses the
+existing `SERVER_PEPPER_HEX`; no extra external analytics setup is required.
+
+These routes have separate rate limits so heartbeat traffic through the web
+server does not consume ordinary API quotas: 12 writes per minute per valid
+signed visitor, 120 token issuances per minute per source IP, and 6,000 aggregate
+reads per minute per source IP, per API process. The presence parser allows
+only 1 KB. Invalid or long-expired tokens return `invalid_presence_token`; an
+active browser's expiring daily token renews without changing its identity.
+
 ### Infrastructure monitoring
 
 | Method | Path                              | Auth  | Purpose                              |

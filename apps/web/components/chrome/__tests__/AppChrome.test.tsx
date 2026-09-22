@@ -37,6 +37,9 @@ vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 vi.mock("../CoachingBookingAlert", () => ({
   CoachingBookingAlert: () => <div data-testid="coaching-alert-slot" />,
 }));
+vi.mock("../SiteStats", () => ({
+  SiteStats: () => <div data-testid="site-stats" />,
+}));
 
 afterEach(() => {
   cleanup();
@@ -57,6 +60,8 @@ describe("AppChrome navigation", () => {
   it("carries every product destination in one rail", () => {
     harness.pathname = "/app/macro";
     render(<AppChrome>content</AppChrome>);
+
+    expect(screen.getByTestId("site-stats")).toBeTruthy();
 
     for (const href of [
       "/app",

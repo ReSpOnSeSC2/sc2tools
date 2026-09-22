@@ -19,6 +19,7 @@ import {
   type NavIcon,
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { SiteStats } from "./SiteStats";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -228,6 +229,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
+
+        <SiteStats wide />
 
         <main
           id="main-content"

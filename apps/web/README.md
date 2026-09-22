@@ -29,6 +29,25 @@ npm run dev
 | /builds             | clerk  | User's custom-build library            |
 | /overlay/[token]    | token  | Public OBS Browser Source target       |
 
+## Public community activity
+
+The shared site and app headers display agent downloads, active agents, and
+users online. The counts refresh every 30 seconds from `/api/site/stats`, which
+proxies the API's public aggregate endpoint. Missing or unavailable counts show
+a dash, never an invented zero. The expandable explanation defines each metric.
+Broadcast overlay and stream dock routes do not display or report presence.
+
+`SitePresence` sends a check-in once a minute while a page is visible and has
+not been idle for three minutes. `/api/site/presence` keeps the API-signed
+browser token in a three-minute HttpOnly cookie. Clerk JWTs let the API count
+signed-in accounts once across devices; anonymous visits count once per browser.
+No page history or raw account identifiers are stored in presence records.
+
+Deploy both `apps/api` and `apps/web` for this feature. Existing API base URL,
+Clerk, MongoDB, and server pepper configuration are sufficient; the API creates
+the presence indexes at startup. See the API README's public site activity
+section for source definitions, retention, and rate limits.
+
 ## Voice readout
 
 The OBS overlay can read the scouting report aloud through the browser's

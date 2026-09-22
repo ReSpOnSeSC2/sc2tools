@@ -13,6 +13,8 @@ import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
+import { SiteStats } from "@/components/chrome/SiteStats";
+import { SitePresence } from "@/components/chrome/SitePresence";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
@@ -75,6 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             Skip to content
           </a>
+          <SitePresence />
           <AppChrome>{children}</AppChrome>
           <CookieBanner />
           {analyticsAllowed ? <GoogleAnalytics /> : null}
@@ -94,6 +97,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           Skip to content
         </a>
         <Header />
+        <SitePresence />
+        <SiteStats />
         <main id="main-content" tabIndex={-1} className={MAIN_CLASS}>
           {children}
         </main>

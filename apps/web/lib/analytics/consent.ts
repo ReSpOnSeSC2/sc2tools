@@ -4,8 +4,8 @@
  * Analytics consent — the single source of truth for whether Google
  * Analytics is allowed to run.
  *
- * We take the GDPR-correct opt-in posture: nothing analytics-related
- * loads until the visitor explicitly accepts. The choice is persisted
+ * Google Analytics never loads until the visitor explicitly accepts.
+ * The choice is persisted
  * in ``localStorage`` (not a cookie — a cookie would itself be a
  * non-essential tracker before consent) and broadcast on a window
  * event so the ``<GoogleAnalytics>`` component can react the instant

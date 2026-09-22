@@ -40,6 +40,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
+ *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
@@ -113,6 +114,9 @@ async function connect({ uri, dbName }, observability = {}) {
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
+      db.collection(COLLECTIONS.SITE_PRESENCE)
+    ),
     coaching: db.collection(COLLECTIONS.COACHING),
     pulseAccounts: db.collection(COLLECTIONS.PULSE_ACCOUNTS),
     pulseCharacterLinks: db.collection(COLLECTIONS.PULSE_CHARACTER_LINKS),
@@ -447,6 +451,12 @@ async function ensureIndexes(ctx) {
 
   await ctx.deviceTokens.createIndex({ tokenHash: 1 }, { unique: true });
   await ctx.deviceTokens.createIndex({ userId: 1, lastSeenAt: -1 });
+  await ctx.deviceTokens.createIndex({ revokedAt: 1, lastSeenAt: -1 });
+
+  // Current browser presence is short-lived. Queries also enforce expiry so
+  // MongoDB's asynchronous TTL sweep can never inflate the public counter.
+  await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
 
   await ctx.overlayTokens.createIndex({ token: 1 }, { unique: true });
   await ctx.overlayTokens.createIndex({ userId: 1, createdAt: -1 });

@@ -5,7 +5,7 @@ export const metadata = {
     "How SC2 Tools processes replay data and stores private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "August 14, 2026";
+const LAST_UPDATED = "September 21, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -53,13 +53,25 @@ export default function PrivacyPage() {
             scrubbed.
           </li>
           <li>
+            <strong>Live community counts.</strong> To show how many visitors
+            are currently active, the site sends a brief presence check while
+            you are using a visible page. A short-lived first-party cookie
+            groups visits from the same browser; signed-in accounts are counted
+            once across devices using a keyed hash of the account ID. Presence
+            records contain hashed identifiers and activity timestamps, with
+            no page history, email, or location. Records stop counting after
+            three minutes and are automatically removed shortly afterward.
+            Only aggregate counts are public. Agent activity comes from recent
+            check-ins, and download counts come from recorded installer requests.
+          </li>
+          <li>
             <strong>Usage analytics (opt-in).</strong> Only if you click
             &quot;Accept&quot; on the cookie banner, we load Google Analytics 4
             to understand which pages and features get used. It records
             pseudonymous data such as pages viewed, approximate location
             (country/region, from a truncated IP), device type, and referring
             site. We enable IP anonymization and disable advertising signals.
-            Nothing analytics-related loads until you opt in, and you can
+            Google Analytics does not load until you opt in, and you can
             withdraw consent at any time by clicking &quot;Reject&quot; on the
             banner (clear the banner choice in your browser storage to see it
             again).
@@ -153,8 +165,10 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">Cookies</h2>
         <p>
-          By default we use only strictly-necessary cookies: session login
-          (Clerk) and CSRF protection. Your banner choice is stored in your
+          The site uses cookies for session login (Clerk), CSRF protection,
+          and a short-lived first-party presence token for the public users
+          online count. The presence cookie expires after three minutes
+          without an activity check. Your banner choice is stored in your
           browser&apos;s local storage, not a cookie.
         </p>
         <p>

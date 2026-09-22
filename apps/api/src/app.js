@@ -104,6 +104,7 @@ const { AdminService } = require("./services/admin");
 const { AdminGlobalService } = require("./services/adminGlobal");
 const { AdminGlobalTrendsService } = require("./services/adminGlobalTrends");
 const { AdminEventsService } = require("./services/adminEvents");
+const { SiteStatsService } = require("./services/siteStats");
 const { AnalyticsService } = require("./services/analytics");
 const { buildPulseResolver } = require("./services/pulseResolver");
 const { PulseDirectoryService } = require("./services/pulseDirectory");
@@ -144,6 +145,7 @@ const { buildCatalogRouter } = require("./routes/catalog");
 const { buildMapImageRouter } = require("./routes/mapImage");
 const { buildMlRouter } = require("./routes/ml");
 const { buildAgentVersionRouter } = require("./routes/agentVersion");
+const { buildSiteStatsRouter } = require("./routes/siteStats");
 const { buildCommunityRouter } = require("./routes/community");
 const { buildPublicReplayRouter } = require("./routes/publicReplay");
 const { buildSeasonsRouter } = require("./routes/seasons");
@@ -258,7 +260,7 @@ function buildApp(deps) {
     getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
   });
-  applyBaseMiddleware(app, deps, auth);
+  applyBaseMiddleware(app, deps, auth, services.siteStats);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
@@ -595,6 +597,10 @@ function makeServices(deps) {
           logger: deps.logger,
         });
   const agentVersion = new AgentVersionService(deps.db, { githubFeed });
+  const siteStats = new SiteStatsService(deps.db, {
+    secret: deps.config.serverPepper,
+    logger: deps.logger,
+  });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
@@ -689,6 +695,7 @@ function makeServices(deps) {
     spatial,
     ml,
     agentVersion,
+    siteStats,
     gdpr,
     community,
     seasons,
@@ -719,8 +726,9 @@ function makeServices(deps) {
  * @param {import('express').Express} app
  * @param {AppDeps} deps
  * @param {import('express').RequestHandler} auth
+ * @param {import('./services/siteStats').SiteStatsService} siteStats
  */
-function applyBaseMiddleware(app, deps, auth) {
+function applyBaseMiddleware(app, deps, auth, siteStats) {
   app.use(helmet());
   app.use(
     cors({
@@ -741,6 +749,10 @@ function applyBaseMiddleware(app, deps, auth) {
     }),
   );
   app.use(requestId);
+  // Presence traffic comes through the web server's shared egress IP. Its
+  // own signed-visitor/issuance limits and 1KB parser avoid consuming the
+  // ordinary API's per-IP bucket for every visible browser tab.
+  app.use(SERVICE.ROUTE_PREFIX, buildSiteStatsRouter({ siteStats, auth }));
   const isSignedProviderWebhook = (/** @type {import('express').Request} */ req) =>
     req.method === "POST"
     && (

@@ -70,7 +70,8 @@ export function CookieBanner() {
               Cookies &amp; analytics
             </p>
             <p id="cookie-body" className="text-caption text-text-muted">
-              We use a strictly-necessary session cookie to keep you signed in.
+              Cookies keep you signed in and prevent duplicate browser counts
+              in the users online total.
               With your consent we also use Google Analytics to understand how
               SC2 Tools is used — no ads, no data selling. See our{" "}
               <Link
