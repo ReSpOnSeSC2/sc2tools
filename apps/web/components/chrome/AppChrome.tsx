@@ -225,6 +225,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           wide
           syncStatus={isAnalyzerPath(pathname) && me?.userId && me.games ? (
             <SyncStatus
+              compact
               total={me.games.total}
               latest={me.games.latest}
               userId={me.userId}

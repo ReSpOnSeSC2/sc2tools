@@ -9,6 +9,7 @@ type Props = {
   total: number;
   latest: string | null;
   userId: string;
+  compact?: boolean;
 };
 
 type ConnState =
@@ -30,7 +31,7 @@ type ConnState =
  * All colors flow through CSS variables so the bar reads cleanly in
  * both light and dark themes.
  */
-export function SyncStatus({ total: initialTotal, latest, userId }: Props) {
+export function SyncStatus({ total: initialTotal, latest, userId, compact = false }: Props) {
   const { getToken } = useAuth();
   const [total, setTotal] = useState(initialTotal);
   const [latestAt, setLatestAt] = useState(latest);
@@ -81,11 +82,11 @@ export function SyncStatus({ total: initialTotal, latest, userId }: Props) {
   const visual = visualForState(conn);
 
   return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted">
+    <p className={`flex items-center gap-x-2 text-caption text-text-muted ${compact ? "whitespace-nowrap" : "flex-wrap gap-y-1"}`}>
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-2 py-0.5 font-medium"
+        className={`inline-flex shrink-0 items-center gap-1.5 font-medium ${compact ? "xl:rounded-full xl:border xl:border-border xl:bg-bg-elevated xl:px-2 xl:py-0.5" : "rounded-full border border-border bg-bg-elevated px-2 py-0.5"}`}
       >
         <span
           aria-hidden
@@ -100,12 +101,19 @@ export function SyncStatus({ total: initialTotal, latest, userId }: Props) {
         <span className={visual.textClass}>{visual.label}</span>
       </span>
       <span>
-        <span className="font-mono tabular-nums text-text">{total}</span> games
+        <span className="font-mono tabular-nums text-text">
+          {compact && total >= 100_000 ? (
+            <span title={String(total)}>
+              <span aria-hidden className="sm:hidden">{new Intl.NumberFormat("en-US", { notation: "compact", maximumSignificantDigits: 3 }).format(total)}</span>
+              <span className="sr-only sm:not-sr-only">{total}</span>
+            </span>
+          ) : total}
+        </span> games
         synced
-        {latestAt ? ` · last ${formatRelative(latestAt)}` : ""}
+        {latestAt ? <span className={compact ? "sr-only sm:not-sr-only" : undefined}>{` · last ${formatRelative(latestAt)}`}</span> : null}
       </span>
       {conn.kind === "reconnecting" && conn.attempts >= 3 ? (
-        <span className="text-caption text-warning">
+        <span className={`text-caption text-warning ${compact ? "sr-only sm:not-sr-only" : ""}`}>
           retry {conn.attempts}…
         </span>
       ) : null}
