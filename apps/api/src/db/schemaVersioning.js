@@ -258,6 +258,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.SITE_PRESENCE]: {
+    collection: COLLECTIONS.SITE_PRESENCE,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.COACHING]: {
     collection: COLLECTIONS.COACHING,
     currentVersion: 1,

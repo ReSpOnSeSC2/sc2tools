@@ -1,6 +1,8 @@
 "use strict";
 
 const { createHmac, randomBytes, timingSafeEqual } = require("node:crypto");
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
 
 const ACTIVITY_WINDOW_SECONDS = 180;
 const SNAPSHOT_CACHE_MS = 10_000;
@@ -8,7 +10,7 @@ const VISITOR_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const QUERY_MAX_TIME_MS = 2_500;
 
 /**
- * @typedef {{_id: string, identityKey: string, lastSeenAt: Date, expiresAt: Date}} SitePresenceDoc
+ * @typedef {{_id: string, identityKey: string, lastSeenAt: Date, expiresAt: Date, _schemaVersion: number}} SitePresenceDoc
  * @typedef {{agentDownloads: number|null, activeAgents: number|null, activeUsers: number|null, generatedAt: string, activityWindowSeconds: number}} SiteStatsSnapshot
  */
 
@@ -108,11 +110,11 @@ class SiteStatsService {
     }
     const browserKey = this.hash(`browser:${visitorId}`);
     const identityKey = clerkUserId ? this.hash(`account:${clerkUserId}`) : browserKey;
-    const update = { $set: {
+    const update = { $set: stampVersion({
       identityKey,
       lastSeenAt: new Date(now),
       expiresAt: new Date(now + ACTIVITY_WINDOW_SECONDS * 1000),
-    } };
+    }, COLLECTIONS.SITE_PRESENCE) };
     try {
       await this.db.sitePresence.updateOne({ _id: browserKey }, update, { upsert: true });
     } catch (err) {

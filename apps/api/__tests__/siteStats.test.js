@@ -10,6 +10,8 @@ const { buildApp } = require("../src/app");
 const { buildAuth } = require("../src/middleware/auth");
 const { buildSiteStatsRouter } = require("../src/routes/siteStats");
 const { SiteStatsService } = require("../src/services/siteStats");
+const { COLLECTIONS } = require("../src/config/constants");
+const { expectedVersion } = require("../src/db/schemaVersioning");
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: jest.fn(async (token) => {
@@ -70,7 +72,8 @@ describe("public site statistics with persisted Mongo data", () => {
     await service.recordPresence(browserA.visitorToken);
     expect((await service.counts()).activeUsers).toBe(2);
     const row = await db.sitePresence.findOne({});
-    expect(Object.keys(row).sort()).toEqual(["_id", "expiresAt", "identityKey", "lastSeenAt"]);
+    expect(Object.keys(row).sort()).toEqual(["_id", "_schemaVersion", "expiresAt", "identityKey", "lastSeenAt"]);
+    expect(row._schemaVersion).toBe(expectedVersion(COLLECTIONS.SITE_PRESENCE));
     expect(JSON.stringify(row)).not.toMatch(/account-1|visitorToken/);
   });
 
