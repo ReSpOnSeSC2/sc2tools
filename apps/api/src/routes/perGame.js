@@ -165,7 +165,7 @@ function buildPerGameRouter(deps) {
           }
           if (ack?.code === "replay_not_found") failure = { code: ack.code, message: "The original replay file was not found on your connected desktop agent." };
           else if (ack?.code === "replay_capture_disabled") {
-            failure = { code: ack.code, message: "Accurate replay capture is turned off in the desktop agent. Enable it in agent Settings when you are ready; it starts StarCraft II and uses substantial CPU." };
+            failure = { code: ack.code, message: "This desktop agent requires capture to be enabled. Update to 0.16.11 or newer to record a single replay while automatic capture is off, or enable Map replay in agent Settings and retry." };
             break;
           }
           else if (ack?.code === "engine_busy") {

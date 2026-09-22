@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.16.11
+
+### Fixed - automatic map replay capture
+
+- **Settings → Map replay → Automatically capture map replays** now records
+  detailed movement, attacks, spells and creep as new and re-synced games are
+  processed, before upload. No website visit or generation button is needed.
+  The setting remains off by default and existing selections are preserved.
+- For games already synced, use **Re-sync** once with automatic capture on.
+  Compatible saved recordings are reused. Only one capture runs at a time;
+  turning automatic capture off stops its active recording. If recording
+  fails, ordinary analysis still syncs and the agent reports the failure.
+- The website's **Generate accurate playback** button requests one recording
+  even when automatic capture is off, without changing the automatic setting.
+  Keep the desktop agent open on the computer holding the original replay.
+- The agent and website explain automatic versus on-demand recording. New
+  recordings run StarCraft II in the background and can use substantial CPU
+  for several minutes per replay. Viewing saved playback does not start capture.
+
 ## 0.16.10
 
 ### Fixed - unit composition through morphs

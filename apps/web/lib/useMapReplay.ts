@@ -131,7 +131,7 @@ export function useMapReplay(gameId: string | null) {
         ? Math.min(now, Math.max(now - RECORDING_TIMEOUT_MS, updatedAt)) : now,
       refreshMessage: jobStatus === "uploading"
         ? "Recording finished. Uploading the map playback…"
-        : "Recording playback with StarCraft II. This can use significantly more CPU for several minutes. Turn off accurate capture in agent Settings → Map replay to stop it.",
+        : "Recording playback with StarCraft II. This can use significantly more CPU for several minutes. Keep the desktop agent open until the recording finishes.",
     });
   }, [canRefresh, jobId, jobStatus, updatedAt, state.refreshing, state.requestId, state.startedAt, playback, patch]);
 

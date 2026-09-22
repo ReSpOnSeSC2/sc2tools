@@ -65,7 +65,7 @@ describe("accurate replay refresh", () => {
     expect(state.config.refreshInterval).toBe(0);
     expect(screen.getByRole("status").textContent).toContain("still processing");
     view.rerender(<MapReplaySection gameId="game2" />);
-    expect(screen.getByRole("status").textContent).toContain("accurate capture is off by default");
+    expect(screen.getByRole("status").textContent).toContain("the desktop agent records new and re-synced games");
     expect(screen.getByRole("status").textContent).toContain("significantly more CPU");
   });
 });

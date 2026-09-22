@@ -185,9 +185,10 @@ class AgentState:
     a build the cloud no longer supports must update to keep working."""
 
     replay_capture_enabled: bool = False
-    """Explicit consent to run StarCraft II for accurate replay capture.
-    Fresh installs and upgrades default off. Existing recorded playback can
-    still be reused without starting the game or requiring this permission.
+    """Automatically capture new and re-synced replays with StarCraft II.
+    Defaults off; an existing explicit opt-in remains enabled on upgrade.
+    Manual website requests grant permission for only their requested replay.
+    Existing recordings can be reused without starting StarCraft II.
     """
 
     # ---- OBS scene switching (see live/obs_scene.py) ----

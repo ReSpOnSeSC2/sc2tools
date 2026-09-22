@@ -250,7 +250,7 @@ def test_setting_changed_after_dispatch_prevents_capture(tmp_path, monkeypatch):
     assert updates[-1]["status"] == "failed" and updates[-1]["code"] == "replay_capture_disabled"
 
 
-def test_dedicated_capture_event_forces_opt_in_handler_and_keeps_legacy_guard():
+def test_dedicated_capture_event_grants_one_shot_permission_and_keeps_legacy_guard():
     import asyncio
     from unittest.mock import Mock
     from sc2tools_agent.socket_client import SocketClient
@@ -269,10 +269,108 @@ def test_dedicated_capture_event_forces_opt_in_handler_and_keeps_legacy_guard():
         on_recompute_games=callback, on_recompute_opp_build=lambda _: None)
     client._sio = Sio()
     client._wire_handlers()
-    payload = {"gameIds": ["game"], "requestId": "request", "replayFidelity": "tracker"}
+    payload = {"gameIds": ["game"], "requestId": "request", "replayFidelity": "tracker", "requested": True}
     result = asyncio.run(client._sio.handlers["map-playback:recompute_request"](payload))
     assert result["code"] == "replay_capture_disabled"
     assert callback.call_args.kwargs["replay_fidelity"] == "engine"
+    assert callback.call_args.kwargs["requested"] is True
     result = asyncio.run(client._sio.handlers["macro:recompute_request"]({**payload, "replayFidelity": "engine"}))
     assert result["code"] == "replay_capture_disabled"
+    assert callback.call_args.kwargs["requested"] is False
     assert callback.call_count == 2
+
+
+def test_explicit_capture_with_automatic_off_passes_one_shot_permission_without_mutating_state(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+    from sc2tools_agent import replay_capture, socket_client
+    from sc2tools_agent.state import load_state
+    replay = tmp_path / "game.SC2Replay"
+    replay.write_bytes(b"replay")
+    _write_state(tmp_path, path_by_game_id={"game": str(replay)})
+    before = (tmp_path / "agent.json").read_bytes()
+    capture, updates, queued = Mock(), [], []
+    monkeypatch.setattr(replay_capture, "capture_exact_replay", capture)
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+        def start(self):
+            self.target()
+    monkeypatch.setattr(socket_client.threading, "Thread", ImmediateThread)
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path,
+        queue_resync_for_paths=queued.append, upload_monitor=lambda *_: None)
+    assert on_macro(["game"], replay_fidelity="engine", requested=True, report_status=updates.append)["ok"]
+    assert capture.call_args.args == (replay, tmp_path)
+    assert capture.call_args.kwargs["requested"] is True
+    assert queued == [[replay]]
+    assert updates[-1]["status"] == "complete"
+    assert load_state(tmp_path).replay_capture_enabled is False
+    assert (tmp_path / "agent.json").read_bytes() == before
+
+
+def test_explicit_capture_does_not_overlap_another_engine_capture(tmp_path):
+    from unittest.mock import Mock
+    from sc2tools_agent.socket_client import _ENGINE_REBUILD_LOCK
+    replay = tmp_path / "game.SC2Replay"
+    replay.write_bytes(b"replay")
+    _write_state(tmp_path, path_by_game_id={"game": str(replay)})
+    capture, queue = Mock(), Mock()
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path, engine_capture=capture,
+        queue_resync_for_paths=queue)
+    with _ENGINE_REBUILD_LOCK:
+        result = on_macro(["game"], replay_fidelity="engine", requested=True)
+    assert result == {"ok": False, "code": "engine_busy"}
+    capture.assert_not_called()
+    queue.assert_not_called()
+
+
+def test_manual_capture_releases_recorder_before_resync_and_upload_monitor(tmp_path, monkeypatch):
+    from sc2tools_agent import socket_client
+    replay = tmp_path / "game.SC2Replay"
+    replay.write_bytes(b"replay")
+    _write_state(tmp_path, path_by_game_id={"game": str(replay)})
+    order = []
+    lock = socket_client._ENGINE_REBUILD_LOCK
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+        def start(self):
+            self.target()
+    monkeypatch.setattr(socket_client.threading, "Thread", ImmediateThread)
+
+    def capture(_path):
+        assert lock.locked()
+        order.append("capture")
+
+    def while_uploading(phase):
+        # An automatic capture queued behind the requested recording must be
+        # able to run even when it owns the requested file's inflight slot.
+        assert lock.acquire(blocking=False)
+        try:
+            order.append(phase)
+        finally:
+            lock.release()
+
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path, engine_capture=capture,
+        queue_resync_for_paths=lambda _: while_uploading("resync"),
+        upload_monitor=lambda *_: while_uploading("upload"))
+    assert on_macro(["game"], replay_fidelity="engine", requested=True)["ok"]
+    assert order == ["capture", "resync", "upload"]
+    assert not lock.locked()
+
+
+def test_capture_thread_start_failure_releases_shared_engine_lock(tmp_path, monkeypatch):
+    from sc2tools_agent import socket_client
+    replay = tmp_path / "game.SC2Replay"
+    replay.write_bytes(b"replay")
+    _write_state(tmp_path, path_by_game_id={"game": str(replay)})
+    class FailedThread:
+        def __init__(self, **_kwargs):
+            pass
+        def start(self):
+            raise RuntimeError("thread start failed")
+    monkeypatch.setattr(socket_client.threading, "Thread", FailedThread)
+    on_macro, _, _ = make_recompute_handlers(state_dir=tmp_path, queue_resync_for_paths=lambda _: None)
+    with pytest.raises(RuntimeError, match="thread start failed"):
+        on_macro(["game"], replay_fidelity="engine", requested=True)
+    assert socket_client._ENGINE_REBUILD_LOCK.acquire(blocking=False)
+    socket_client._ENGINE_REBUILD_LOCK.release()

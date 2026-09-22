@@ -46,8 +46,11 @@ ThreadPoolExecutor mid-session if a worker dies unexpectedly.
 
 from __future__ import annotations
 
+import heapq
+import itertools
 import logging
 import logging.handlers
+import math
 import multiprocessing
 import os
 import threading
@@ -388,6 +391,7 @@ class ReplayWatcher:
         state: AgentState,
         upload: UploadQueue,
         on_replay_skipped: Optional[Callable[[Path, Optional[str]], None]] = None,
+        on_capture_notice: Optional[Callable[[str], None]] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
@@ -397,6 +401,7 @@ class ReplayWatcher:
         # the cloud's import-progress breakdown; everything else can leave
         # it unset.
         self._on_replay_skipped = on_replay_skipped
+        self._on_capture_notice = on_capture_notice
         self._stop = threading.Event()
         self._observer: Optional[Observer] = None
         self._sweeper: Optional[threading.Thread] = None
@@ -427,6 +432,20 @@ class ReplayWatcher:
             max_workers=1,
             thread_name_prefix="sc2tools-sweep-live-parse",
         )
+        # Engine capture runs in the parent, where it shares the website's
+        # recorder lock and can report notices. Keep parser result callbacks
+        # free: blocking the process-pool manager would stall every replay.
+        # Captures retain their existing inflight slots, bounding this queue
+        # by the same backpressure used for historical parsing.
+        self._capture_executor: Executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="sc2tools-auto-capture",
+        )
+        self._capture_queue: list[tuple[int, int, Path, object]] = []
+        self._capture_queue_lock = threading.Lock()
+        self._capture_sequence = itertools.count()
+        self._capture_draining = False
+        self._capture_active = False
         self._inflight: set[str] = set()
         self._inflight_lock = threading.Lock()
         self._history_backlog: deque[tuple[Path, float]] = deque()
@@ -669,6 +688,12 @@ class ReplayWatcher:
         executor.shutdown(wait=False, cancel_futures=True)
         self._live_executor.shutdown(wait=False, cancel_futures=True)
         self._sweep_live_executor.shutdown(wait=False, cancel_futures=True)
+        self._capture_executor.shutdown(wait=False, cancel_futures=True)
+        with self._capture_queue_lock:
+            abandoned = self._capture_queue
+            self._capture_queue = []
+        for _rank, _sequence, path, _game in abandoned:
+            self._finish_replay(path)
 
     # ---------------- internals ----------------
     def _discover_roots(self) -> list[Path]:
@@ -1121,6 +1146,7 @@ class ReplayWatcher:
         ``future.result()`` raises — without it a worker crash leaks
         a stale inflight entry and the replay never gets re-submitted.
         """
+        deferred = False
         try:
             try:
                 kind, path_str, payload = future.result()
@@ -1222,7 +1248,9 @@ class ReplayWatcher:
                 ):
                     self._state.uploaded[path_str] = "filtered"
                     return
-                self._upload.submit(UploadJob(file_path=path, game=payload))
+                deferred = self._queue_automatic_capture(path, payload)
+                if not deferred:
+                    self._upload.submit(UploadJob(file_path=path, game=payload))
                 # Parent-side throughput line. The matching
                 # ``replay_payload_ready`` log inside
                 # ``parse_replay_for_cloud`` runs in the WORKER
@@ -1283,18 +1311,155 @@ class ReplayWatcher:
             else:
                 log.warning("parse_worker_unknown_kind=%s path=%s", kind, path.name)
         finally:
-            with self._inflight_lock:
-                self._inflight.discard(submitted_path_str)
-            retry_path = Path(submitted_path_str)
-            if (
-                submitted_path_str not in self._state.uploaded
-                and not self._upload.is_pending(retry_path)
-            ):
-                with self._history_lock:
-                    self._history_refresh_generation += 1
-            self._drain_history_inventory()
+            if not deferred:
+                self._finish_replay(Path(submitted_path_str))
+
+    def _finish_replay(self, path: Path) -> None:
+        with self._inflight_lock:
+            self._inflight.discard(str(path))
+        self._release_sweep_live(path)
+        if str(path) not in self._state.uploaded and not self._upload.is_pending(path):
+            with self._history_lock:
+                self._history_refresh_generation += 1
+        self._drain_history_inventory()
+
+    def _capture_notice(self, message: str) -> None:
+        if self._on_capture_notice is not None:
+            try:
+                self._on_capture_notice(message)
+            except Exception:
+                log.exception("auto_capture_notice_failed")
+
+    def _queue_automatic_capture(self, path: Path, game, *, priority: bool = False) -> bool:
+        from .replay_capture import replay_capture_enabled
+
+        # A manually generated recording must be able to upload while its
+        # website request owns the recorder lock. Cloud compaction can mark
+        # that engine payload reduced-detail; it is still already recorded.
+        if (self._has_engine_playback(game) or self._stop.is_set()
+                or self._state.replay_capture_enabled is not True
+                or not replay_capture_enabled(self._cfg.state_dir)):
+            return False
+        retry_path = None
+        with self._capture_queue_lock:
+            if self._stop.is_set():
+                return False
+            # Watchdog events bypass the historical parser admission limit.
+            # Bound their retained payloads too; overflow stays on disk for
+            # the next sweep. Live work can replace queued history.
+            if len(self._capture_queue) + int(self._capture_active) >= self._parse_inflight_limit:
+                historical = [item for item in self._capture_queue if item[0] == 1]
+                if priority and historical:
+                    evicted = max(historical, key=lambda item: item[1])
+                    self._capture_queue.remove(evicted)
+                    heapq.heapify(self._capture_queue)
+                    retry_path = evicted[2]
+                else:
+                    retry_path = path
+            # Fresh games jump ahead of queued history, matching the parser's
+            # dedicated live lane. A running recording still finishes first.
+            if retry_path != path:
+                item = (0 if priority else 1, next(self._capture_sequence), path, game)
+                heapq.heappush(self._capture_queue, item)
+                if not self._capture_draining:
+                    self._capture_draining = True
+                    try:
+                        self._capture_executor.submit(self._drain_capture_queue)
+                    except RuntimeError:
+                        self._capture_draining = False
+                        self._capture_queue.remove(item)
+                        heapq.heapify(self._capture_queue)
+                        return False
+        if retry_path is not None:
+            self._finish_replay(retry_path)
+        return True
+
+    @staticmethod
+    def _has_engine_playback(game) -> bool:
+        playback = getattr(game, "map_playback", None) or {}
+        fidelity = playback.get("fidelity", {})
+        interval = fidelity.get("sampleSeconds")
+        return (isinstance(interval, (int, float)) and not isinstance(interval, bool)
+                and math.isfinite(interval) and 0 < interval <= 0.179
+                and fidelity.get("positions") == "engine" and all(
+            fidelity.get(channel) == "observed" for channel in ("attacks", "effects", "creep")
+        ))
+
+    def _drain_capture_queue(self) -> None:
+        while True:
+            with self._capture_queue_lock:
+                if not self._capture_queue or self._stop.is_set():
+                    self._capture_draining = False
+                    return
+                rank, _sequence, path, game = heapq.heappop(self._capture_queue)
+                self._capture_active = True
+            try:
+                self._capture_and_upload(path, game, priority=rank == 0)
+            except Exception:
+                log.exception("automatic_replay_upload_failed path=%s", path.name)
+            finally:
+                with self._capture_queue_lock:
+                    self._capture_active = False
+                self._finish_replay(path)
+
+    def _capture_and_upload(self, path: Path, game, *, priority: bool = False) -> None:
+        from .replay_capture import (
+            capture_exact_replay, replay_capture_enabled, ReplayCaptureCancelled, ReplayCaptureDisabled,
+        )
+        from .socket_client import _ENGINE_REBUILD_LOCK
+
+        def cancelled():
+            return self._stop.is_set() or bool(self._state.paused)
+
+        if cancelled():
+            return
+        if not self._sync_filter().replay_in_range(getattr(game, "date_iso", None)):
+            self._state.uploaded[str(path)] = "filtered"
+            return
+        acquired = False
+        try:
+            # An explicit website request may be recording this same replay.
+            # Even after automatic capture is switched off, wait until that
+            # recording is written before uploading our older tracker result.
+            while not cancelled():
+                if _ENGINE_REBUILD_LOCK.acquire(timeout=0.25):
+                    acquired = True
+                    break
+            if acquired and not cancelled():
+                automatic_enabled = replay_capture_enabled(self._cfg.state_dir)
+                if automatic_enabled:
+                    capture_exact_replay(
+                        path, self._cfg.state_dir,
+                        notify_start=self._capture_notice, cancel_requested=cancelled,
+                    )
+                # The parser discovers the atomic adjacent artifact, including
+                # a manual recording completed while this job awaited the lock.
+                recorded_game, reason = parse_replay_for_cloud_ex(
+                    path, state_dir=self._cfg.state_dir, resolve_pulse=priority,
+                )
+                if automatic_enabled and recorded_game is None:
+                    raise RuntimeError(f"Recorded replay analysis failed ({reason or 'unknown reason'}).")
+                if automatic_enabled and not self._has_engine_playback(recorded_game):
+                    raise RuntimeError("Recorded movement data could not be loaded into the replay analysis.")
+                if recorded_game is not None and self._has_engine_playback(recorded_game):
+                    game = recorded_game
+                    log.info("automatic_replay_capture_complete path=%s", path.name)
+        except (ReplayCaptureDisabled, ReplayCaptureCancelled):
+            log.info("automatic_replay_capture_stopped path=%s", path.name)
+        except Exception as exc:
+            log.exception("automatic_replay_capture_failed path=%s", path.name)
+            self._capture_notice(
+                f"Accurate playback could not be recorded for {path.name}: {str(exc)[:300]} "
+                "Normal replay analysis will still sync. Generate accurate playback on the website to retry."
+            )
+        finally:
+            if acquired:
+                _ENGINE_REBUILD_LOCK.release()
+        if not cancelled():
+            self._upload.submit(UploadJob(file_path=path, game=game, priority=priority))
 
     def _handle_replay(self, path: Path, *, priority: bool = False) -> None:
+        deferred = False
         try:
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
@@ -1356,24 +1521,18 @@ class ReplayWatcher:
             ):
                 self._state.uploaded[str(path)] = "filtered"
                 return
-            self._upload.submit(
-                UploadJob(
-                    file_path=path,
-                    game=game,
-                    priority=priority,
+            deferred = self._queue_automatic_capture(path, game, priority=priority)
+            if not deferred:
+                self._upload.submit(
+                    UploadJob(
+                        file_path=path,
+                        game=game,
+                        priority=priority,
+                    )
                 )
-            )
         finally:
-            with self._inflight_lock:
-                self._inflight.discard(str(path))
-            self._release_sweep_live(path)
-            if (
-                str(path) not in self._state.uploaded
-                and not self._upload.is_pending(path)
-            ):
-                with self._history_lock:
-                    self._history_refresh_generation += 1
-            self._drain_history_inventory()
+            if not deferred:
+                self._finish_replay(path)
 
     # Called by _Handler on a watchdog event.
     def on_replay_created(self, path: Path) -> None:

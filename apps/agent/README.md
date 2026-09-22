@@ -20,6 +20,15 @@ No command line. No `.env` editing. The Settings tab inside the
 window covers API base URL, log level, replay folder override,
 auto-start on Windows login, and "start minimised to tray".
 
+For detailed map playback, enable **Settings → Map replay → Automatically
+capture map replays**. The agent records new and re-synced games with
+StarCraft II before uploading them, including movement, attacks, spells and
+creep. This can use substantial CPU for several minutes per replay. For games
+already synced, use **Re-sync** once; compatible saved recordings are reused.
+Leave the setting off to sync standard analysis only. The website's
+**Generate accurate playback** button can record one game on demand with
+either setting, using agent 0.16.11 or newer.
+
 ## For developers - the source-install path
 
 ```bash

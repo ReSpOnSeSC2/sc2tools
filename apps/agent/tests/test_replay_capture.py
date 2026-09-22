@@ -64,7 +64,8 @@ def saved_recording():
 
 
 @pytest.mark.parametrize("location", ["adjacent", "cache"])
-def test_recompute_reuses_complete_matching_recording_without_launching_sc2(monkeypatch, tmp_path, location):
+@pytest.mark.parametrize("requested", [False, True])
+def test_recompute_reuses_complete_matching_recording_without_launching_sc2(monkeypatch, tmp_path, location, requested):
     import hashlib
     _parser, exporter = setup_capture(monkeypatch, me=SimpleNamespace(pid=2))
     monkeypatch.setattr(replay_capture, "replay_capture_enabled", lambda _state: False)
@@ -81,7 +82,7 @@ def test_recompute_reuses_complete_matching_recording_without_launching_sc2(monk
     progress = Mock()
     notice = Mock()
     assert replay_capture.capture_request_allowed(replay, tmp_path) is True
-    assert capture_exact_replay(replay, tmp_path, progress, notify_start=notice) == output
+    assert capture_exact_replay(replay, tmp_path, progress, notify_start=notice, requested=requested) == output
     notice.assert_not_called()
     exporter.export_engine_observations.assert_not_called()
     assert all(call.args[0] == artifact for call in exporter.write_observation_artifact.call_args_list)
@@ -146,6 +147,50 @@ def test_disabled_request_never_launches_or_writes_new_artifact(monkeypatch, tmp
     exporter.export_engine_observations.assert_not_called()
     exporter.write_observation_artifact.assert_not_called()
     notice.assert_not_called()
+
+
+def test_explicit_request_captures_with_automatic_off_without_changing_preference(monkeypatch, tmp_path):
+    from sc2tools_agent.state import AgentState, load_state, save_state
+    _parser, exporter = setup_capture(monkeypatch, me=SimpleNamespace(pid=2))
+    monkeypatch.setattr(replay_capture, "replay_capture_enabled", lambda _: False)
+    save_state(tmp_path, AgentState(replay_capture_enabled=False))
+    before = (tmp_path / "agent.json").read_bytes()
+    replay = tmp_path / "game.SC2Replay"
+    notice = Mock()
+    assert replay_capture.capture_request_allowed(replay, tmp_path, requested=True) is True
+    capture_exact_replay(replay, tmp_path, requested=True, notify_start=notice)
+    exporter.export_engine_observations.assert_called_once()
+    assert exporter.export_engine_observations.call_args.kwargs["cancel_requested"]() is False
+    notice.assert_called_once_with(replay_capture.REQUESTED_CAPTURE_START_NOTICE)
+    assert load_state(tmp_path).replay_capture_enabled is False
+    assert (tmp_path / "agent.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("requested", [False, True])
+def test_external_cancellation_stops_running_capture_and_preserves_recording(monkeypatch, tmp_path, requested):
+    _parser, exporter = setup_capture(monkeypatch, me=SimpleNamespace(pid=2))
+    stopped = [False]
+    def capture(_path, _pid, *, progress, cancel_requested):
+        assert cancel_requested() is False
+        stopped[0] = True
+        assert cancel_requested() is True
+        raise RuntimeError("owned engine stopped")
+    exporter.export_engine_observations.side_effect = capture
+    with pytest.raises(replay_capture.ReplayCaptureCancelled, match="previous playback was preserved"):
+        capture_exact_replay(tmp_path / "game.SC2Replay", tmp_path, requested=requested,
+                             cancel_requested=lambda: stopped[0])
+    exporter.write_observation_artifact.assert_not_called()
+
+
+@pytest.mark.parametrize("requested", [False, True])
+def test_external_cancellation_before_start_does_not_launch_engine(monkeypatch, tmp_path, requested):
+    parser, exporter = setup_capture(monkeypatch, me=SimpleNamespace(pid=2))
+    with pytest.raises(replay_capture.ReplayCaptureCancelled):
+        capture_exact_replay(tmp_path / "game.SC2Replay", tmp_path, requested=requested,
+                             cancel_requested=lambda: True)
+    parser.parse_deep.assert_not_called()
+    exporter.export_engine_observations.assert_not_called()
+    exporter.write_observation_artifact.assert_not_called()
 
 
 def test_new_capture_warns_before_start_and_rechecks_opt_in(monkeypatch, tmp_path):

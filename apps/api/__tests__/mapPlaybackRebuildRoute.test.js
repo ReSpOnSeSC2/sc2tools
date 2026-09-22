@@ -87,12 +87,12 @@ test("legacy agents without an acknowledgement return an actionable update error
   expect(device.emitWithAck.mock.calls[0][0]).toBe("map-playback:recompute_request");
 });
 
-test("disabled engine capture returns the opt-in hint and preserves existing playback", async () => {
+test("older agents with capture disabled get manual-recording upgrade guidance and preserve playback", async () => {
   const recording = { ok: true, v: 6, fidelity: { positions: "engine", complete: true } };
   const { app, device } = setup({ result: recording, ack: { ok: false, code: "replay_capture_disabled" } });
   const response = await request(app).post("/v1/games/disabled-capture/map-playback");
   expect(response.status).toBe(409);
-  expect(response.body.error).toMatchObject({ code: "replay_capture_disabled", message: expect.stringMatching(/Settings.*CPU/) });
+  expect(response.body.error).toMatchObject({ code: "replay_capture_disabled", message: expect.stringMatching(/0\.16\.11.*automatic capture is off/) });
   const existing = await request(app).get("/v1/games/disabled-capture/map-playback");
   expect(existing.body).toMatchObject({ ...recording, rebuild: { status: "failed", code: "replay_capture_disabled" } });
   expect(device.emitWithAck).toHaveBeenCalledTimes(1);

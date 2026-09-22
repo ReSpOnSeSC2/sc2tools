@@ -81,7 +81,7 @@ export function MapReplaySection({
         {refreshing ? "Recording replay…" : "Generate accurate playback"}
       </button>
       <span role="status" className="text-text-dim">
-        {refreshMessage || "Optional: accurate capture is off by default. Enable it in agent Settings → Map replay. Recording a new replay runs StarCraft II in the background and can use significantly more CPU for several minutes. Saved recordings are reused."}
+        {refreshMessage || "With automatic Map replay enabled, the desktop agent records new and re-synced games. Generate accurate playback records this game on demand, even when automatic capture is off. Keep the agent open; recording runs StarCraft II in the background and can use significantly more CPU for several minutes. Saved recordings are reused."}
       </span>
     </div>
   ) : null;
@@ -112,7 +112,7 @@ export function MapReplaySection({
         <p className="mt-1 text-caption text-text-dim">
           {error && error.status !== 404
             ? error.message || "Could not load map playback. Check your connection and try again."
-            : "No playback data for this game. Sync the replay for standard analysis, or opt in to accurate capture for detailed map playback."}
+            : "No playback data for this game. Sync the replay with automatic Map replay enabled in the agent, or select Generate accurate playback to record this game."}
         </p>
         {refreshControl}
       </div>

@@ -59,7 +59,7 @@ describe("map playback rebuild progress", () => {
     harness.api.request.mockResolvedValue({ requestId: "compact" });
     const view = render(<MapReplaySection gameId="g1" compact />);
     expect(button().compareDocumentPosition(screen.getByText("Compact replay")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("off by default");
+    expect(screen.getByRole("status").textContent).toContain("even when automatic capture is off");
     expect(screen.getByRole("status").textContent).toContain("significantly more CPU");
     await act(async () => fireEvent.click(button()));
     expect(new Set(harness.paths)).toEqual(new Set(["/v1/games/g1/map-playback", "/v1/games/g1/map-playback/status"]));

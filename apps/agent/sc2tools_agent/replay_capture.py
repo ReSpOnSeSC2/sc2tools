@@ -1,4 +1,4 @@
-"""Explicit engine replay capture used by the web map's rebuild action."""
+"""Engine replay capture for automatic syncing and explicit website requests."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,12 @@ from typing import Callable, Optional
 log = logging.getLogger(__name__)
 CAPTURE_START_NOTICE = (
     "Accurate replay capture is starting on this PC. StarCraft II may use substantial CPU "
-    "for several minutes. Turn off Accurate replay capture in Settings > Map replay to stop it."
+    "for several minutes. Turn off automatic capture in Settings > Map replay to stop automatic recordings."
+)
+REQUESTED_CAPTURE_START_NOTICE = (
+    "The accurate replay capture requested on the website is starting on this PC. "
+    "StarCraft II may use substantial CPU for several minutes. This records this replay once "
+    "and does not turn on automatic capture."
 )
 
 
@@ -22,8 +27,12 @@ class ReplayCaptureDisabled(RuntimeError):
     code = "replay_capture_disabled"
 
 
+class ReplayCaptureCancelled(RuntimeError):
+    code = "replay_capture_cancelled"
+
+
 def replay_capture_enabled(state_dir: Optional[Path]) -> bool:
-    """Only a durable explicit true grants permission to start StarCraft."""
+    """Only a durable explicit true permits automatic StarCraft capture."""
     if state_dir is None:
         return False
     try:
@@ -36,9 +45,9 @@ def replay_capture_enabled(state_dir: Optional[Path]) -> bool:
 def _require_capture_enabled(state_dir: Optional[Path]) -> None:
     if not replay_capture_enabled(state_dir):
         raise ReplayCaptureDisabled(
-            "Local replay capture is disabled. Enable Accurate replay capture in the agent's "
-            "Settings > Map replay to allow StarCraft II to use this PC's CPU for accurate replay capture. "
-            "Ordinary replay syncing and saved recordings still work."
+            "Automatic replay capture is disabled. Enable it in the agent's Settings > Map replay "
+            "to record replays during syncing, or select Generate accurate playback on the website "
+            "to record this replay once. Ordinary replay syncing and saved recordings still work."
         )
 
 
@@ -118,14 +127,15 @@ def _prepare_capture(path: Path, state_dir: Optional[Path]):
     return me, exporter, version
 
 
-def capture_request_allowed(path: Path, state_dir: Optional[Path]) -> bool:
+def capture_request_allowed(path: Path, state_dir: Optional[Path], *, requested: bool = False) -> bool:
     """Fast dispatch gate; a candidate is validated inside the rebuild thread.
 
     A cache hint grants no permission to launch SC2. Avoid parsing the whole
     replay before the socket acknowledgement; capture_exact_replay does that
-    once and still rejects invalid cache entries when local capture is off.
+    once and rejects invalid cache entries when automatic capture is off and
+    no explicit one-shot request was supplied.
     """
-    if replay_capture_enabled(state_dir):
+    if requested is True or replay_capture_enabled(state_dir):
         return True
     try:
         configure_observation_cache(state_dir)
@@ -149,28 +159,44 @@ def capture_request_allowed(path: Path, state_dir: Optional[Path]) -> bool:
 
 
 def capture_exact_replay(path: Path, state_dir: Optional[Path], progress: Optional[Callable] = None,
-                         *, notify_start: Optional[Callable[[str], None]] = None) -> Path:
-    """Reuse a valid recording, or capture only while explicit opt-in remains on.
+                         *, notify_start: Optional[Callable[[str], None]] = None,
+                         requested: bool = False,
+                         cancel_requested: Optional[Callable[[], bool]] = None) -> Path:
+    """Reuse a valid recording, or capture automatically / for one web request.
 
-    Ordinary replay parsing merely reads the cached artifact and never starts
-    StarCraft. A web request is not permission to enable this local setting.
+    Only the dedicated website request passes ``requested=True``. It permits
+    this recording without changing the durable automatic-capture preference.
+    All other callers must retain the default and obey that preference.
     """
+    requested = requested is True
+
+    def require_running():
+        if cancel_requested is not None and cancel_requested():
+            raise ReplayCaptureCancelled("Replay capture was cancelled. The previous playback was preserved.")
+
+    def require_capture_permission():
+        require_running()
+        if not requested:
+            _require_capture_enabled(state_dir)
+
+    require_running()
     try:
         me, exporter, version = _prepare_capture(path, state_dir)
     except Exception:
-        _require_capture_enabled(state_dir)
+        require_capture_permission()
         raise
     artifact = _reusable_recording(path, me.pid, exporter, version=version)
     if artifact is None:
-        _require_capture_enabled(state_dir)
+        require_capture_permission()
+        notice = REQUESTED_CAPTURE_START_NOTICE if requested else CAPTURE_START_NOTICE
         if progress:
-            progress(CAPTURE_START_NOTICE)
+            progress(notice)
         if notify_start:
             try:
-                notify_start(CAPTURE_START_NOTICE)
+                notify_start(notice)
             except Exception:
                 log.exception("replay_capture_notification_failed")
-        _require_capture_enabled(state_dir)
+        require_capture_permission()
         # Checking a large agent.json on every observation is wasteful. Poll
         # the durable preference at most once per second; the exporter
         # also monitors it while blocked waiting for an SC2 API response.
@@ -178,8 +204,12 @@ def capture_exact_replay(path: Path, state_dir: Optional[Path], progress: Option
         cancelled = False
         check_lock = threading.Lock()
 
-        def cancel_requested():
+        def should_cancel():
             nonlocal next_check, cancelled, signature
+            if cancel_requested is not None and cancel_requested():
+                return True
+            if requested:
+                return False
             with check_lock:
                 now = time.monotonic()
                 if not cancelled and now >= next_check:
@@ -197,16 +227,19 @@ def capture_exact_replay(path: Path, state_dir: Optional[Path], progress: Option
 
         try:
             artifact = exporter.export_engine_observations(path, me.pid, progress=progress,
-                                                           cancel_requested=cancel_requested)
+                                                           cancel_requested=should_cancel)
         except Exception as exc:
-            if cancel_requested():
+            require_running()
+            if should_cancel():
                 raise ReplayCaptureDisabled(
-                    "Local replay capture was stopped because it was turned off in Settings. "
+                    "Automatic replay capture was stopped because it was turned off in Settings. "
                     "The previous playback was preserved."
                 ) from exc
             raise
+        require_capture_permission()
     elif progress:
         progress("Using the complete saved recording; StarCraft does not need to start again.")
+    require_running()
     if artifact.get("playback", {}).get("fidelity", {}).get("complete") is not True:
         raise ValueError("The StarCraft replay could not be observed through the end of the game.")
     # Process-pool parsers may have started before this request changed the

@@ -65,6 +65,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Automatic map replay capture** — agent **0.16.11** (`agent-v0.16.11`)
+  records detailed movement, attacks, spells and creep for new and re-synced
+  games when Map replay is enabled. The website's **Generate accurate playback**
+  button records one game even when automatic capture is off. Saved recordings
+  are reused; capture work is serialized and fresh games take priority over
+  history. For games already uploaded, use **Re-sync** once with capture on.
 - **Unit forms remain accurate through replay morphs** — agent **0.16.10**
   (`agent-v0.16.10`) preserves timestamped unit forms, excludes in-progress
   cocoons and explicit hallucinations, and resolves completion events at their

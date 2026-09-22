@@ -6,44 +6,50 @@ unit positions. The web replay marks this fallback and uses recorded anchors
 without inventing mining trips or movement routes.
 
 For detailed playback, the desktop agent can run the replay through the
-installed StarCraft II engine. **Agent 0.16.9 leaves this off by default**, on
-both fresh installs and upgrades. This optional export captures actual unit
-positions, unit type changes, presence intervals, spell effect extents and
+installed StarCraft II engine. **Automatic capture is off by default**; agent
+0.16.11 preserves an existing enabled setting. This optional export captures
+actual unit positions, unit type changes, presence intervals, spell effect extents and
 global creep. On Windows, agent 0.16.8 starts its recorder off-screen without
 activation and keeps its capture windows out of view. It does not control an
 existing game process. Users do not manually open the replay. The first
-generation runs the saved game through StarCraft; later Recomputes reuse a
-compatible complete local recording. Ordinary syncing and viewing an uploaded
-recording do not launch StarCraft.
+generation runs the saved game through StarCraft; subsequent processing reuses a
+compatible complete local recording. Syncing with automatic capture enabled
+records missing playback before upload. Viewing an uploaded recording does not
+launch StarCraft.
 
 ## Desktop app
 
-To opt in, open **agent Settings → Map replay → Accurate replay capture
-(uses more CPU)** and acknowledge the warning. A new recording starts
-StarCraft II in the background and can use substantial CPU for several minutes.
+To opt in, open **agent Settings → Map replay → Automatically capture map replays
+(uses more CPU)** and acknowledge the warning. The agent records new and
+re-synced replays before uploading them, without a website visit. A new recording
+starts StarCraft II in the background and can use substantial CPU for several minutes.
 It performs three simulation passes and can affect gaming performance. The
 agent uses below-normal process priority, but does not promise a CPU percentage
 cap. Leave capture off or wait until after playing if that workload is unwanted.
 
-Enabling the setting does not start recording or backfill old games. Open a
-game's map replay and select **Generate accurate playback** to request one.
-The agent announces each new capture and shows an enabled-state notice.
-Turning the setting off stops its active recorder and prevents new launches;
-the existing game process is not controlled. The runtime checks the setting
-before launch and during export. Complete cached recordings can still be
-reused with the setting off, without launching StarCraft II.
+For games already synced, use **Re-sync** once with automatic capture enabled.
+Enabling the setting applies to new and pending work; it does not clear the
+existing upload history. The agent announces each new capture and shows an
+enabled-state notice. Turning the setting off stops automatic capture and
+prevents further automatic launches; the existing game process is not controlled.
+The runtime checks the setting before automatic launch and during export.
+Complete cached recordings can still be reused with the setting off, without
+launching StarCraft II. Capture failures preserve ordinary analysis and are
+reported in the agent; they do not block normal syncing.
 
-**Recompute** in Macro Breakdown requests ordinary analysis only. It does not
-start engine capture. Standard syncing, imports and viewing recorded playback
-also do not start it. Reopening the map panel resumes an active accurate
-recording's progress. Keep the updated desktop agent connected on the computer
+The website's **Generate accurate playback** requests one recording even when
+automatic capture is off, without changing that setting. Quit the agent to
+stop a manual recording. **Recompute** in Macro Breakdown requests reanalysis;
+replays processed by the watcher follow its automatic capture setting.
+Reopening the map panel resumes an active website-requested recording's
+progress. Keep the updated desktop agent connected on the computer
 containing the original replay and StarCraft II installation. The packaged
 agent includes the protocol dependencies; users do not need Python or a
 separate pip installation.
 
 The agent records the replay in the background, then uses its normal sync
-pipeline to upload the result. The page polls progress and reports recording,
-upload, missing-file, offline-agent and runtime failures. One recording runs per
+pipeline to upload the result. For website requests, the page polls progress and
+reports recording, upload, missing-file, offline-agent and runtime failures. One recording runs per
 agent at a time. Existing tracker playback remains available during recording.
 The action uses the signed-in user's paired device and verifies game ownership.
 Agent 0.16.7 also isolates the external StarCraft process from the packaged
@@ -94,7 +100,7 @@ artifacts leave the normal tracker playback available.
 
 ## Deployment
 
-Ship the API, web replay viewer and agent 0.16.9 together. The API sends the
+Ship the API, web replay viewer and agent 0.16.11 together. The API sends the
 dedicated `map-playback:recompute_request` event, which older agents do not
 handle, so pre-opt-in agents cannot start a recording from the updated website.
 Accurate generation on those agents receives an update-required message;
@@ -102,9 +108,10 @@ normal syncing and analysis remain supported. The agent's
 requirements pin the SC2 protocol, protobuf and WebSocket dependencies, and its
 PyInstaller spec collects their modules alongside the bundled replay engine.
 Stored tracker payloads remain usable and gain observed playback when the user
-opts in and requests generation. No server capture worker or additional paid
-hosting is deployed. The agent version bump introduces the default-off setting
-and does not force anyone to enable capture.
+re-syncs with automatic capture on or requests one recording on the website.
+Agents 0.16.9–0.16.10 still require their local setting for manual recording and
+do not capture automatically during sync. No server capture worker or additional
+paid hosting is deployed. The automatic setting remains off by default.
 
 Rebuild progress is a bounded, temporary API-process cache. HTTP requests and
 the paired device socket must reach the same API instance; a scaled deployment

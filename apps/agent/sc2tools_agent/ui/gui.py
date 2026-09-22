@@ -1123,9 +1123,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_notice.hide()
             grid.addWidget(self._update_notice, 2, 1, 1, 2)
             self._replay_capture_notice = QtWidgets.QLabel(
-                "Accurate replay capture is on. Requested recordings run "
-                "StarCraft II on this PC and can use substantial CPU. "
-                "Turn it off in Settings at any time."
+                "Automatic replay capture is on. New and re-synced replays "
+                "are recorded with StarCraft II before upload. This can use "
+                "substantial CPU. Turn it off in Settings to stop automatic capture."
             )
             self._replay_capture_notice.setObjectName("muted")
             self._replay_capture_notice.setWordWrap(True)
@@ -1875,15 +1875,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             capture_v.setContentsMargins(0, 0, 0, 0)
             capture_v.setSpacing(6)
             self._replay_capture_check = QtWidgets.QCheckBox(
-                "Accurate replay capture (uses more CPU)",
+                "Automatically capture map replays (uses more CPU)",
             )
             capture_v.addWidget(self._replay_capture_check)
             capture_help = QtWidgets.QLabel(
-                "Off by default. When you request a recording on the website, "
-                "an uncached replay runs StarCraft II in the background on "
-                "this PC. It can use substantial CPU for several minutes "
-                "and affect a game or stream. Saved recordings play without "
-                "running StarCraft II again. This switch applies immediately."
+                "Automatically records detailed movement, attacks, spells and creep "
+                "for new and re-synced replays. Uses StarCraft II in the background "
+                "and substantial CPU for several minutes per replay. Saved recordings "
+                "are reused. For games already synced, use Re-sync once. When off, "
+                "Generate accurate playback on the website records one replay. "
+                "This switch applies immediately."
             )
             capture_help.setObjectName("muted")
             capture_help.setWordWrap(True)
@@ -2670,14 +2671,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if desired:
                 answer = QtWidgets.QMessageBox.warning(
                     self,
-                    "Enable accurate replay capture?",
-                    "When you request an uncached recording on the website, "
-                    "the agent runs StarCraft II in the background on this PC. "
-                    "It can use substantial CPU for several minutes and slow "
+                    "Enable automatic replay capture?",
+                    "The agent will automatically record new and re-synced "
+                    "replays with StarCraft II in the background on this PC. "
+                    "It can use substantial CPU for several minutes per replay and slow "
                     "down your game or stream.\n\n"
                     "Saved recordings can be reused without running "
                     "StarCraft II again. You can turn this setting off at "
-                    "any time to stop capture.\n\nEnable this feature?",
+                    "any time to stop automatic capture.\n\nEnable this feature?",
                     QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                     QtWidgets.QMessageBox.No,
                 )
@@ -2704,9 +2705,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._replay_capture_last_saved = desired
             self._refresh_capture_notice()
             self._settings_status.setText(
-                "Accurate replay capture on — requested recordings use more CPU"
+                "Automatic replay capture on — new and re-synced replays record automatically"
                 if desired
-                else "Accurate replay capture off — stopping any active capture",
+                else "Automatic replay capture off — stopping automatic capture",
             )
 
         def _toggle_obs_scene_switch(self, enabled: bool) -> None:

@@ -439,6 +439,9 @@ def _run_headless(
         cfg=cfg,
         state=state,
         upload=upload,
+        on_capture_notice=lambda message: _notify_replay_capture(
+            tray, console, None, message, log,
+        ),
         on_replay_skipped=lambda p, reason: (
             import_ctl.on_replay_skipped(p, reason) if import_ctl else None
         ),
@@ -854,6 +857,9 @@ def _gui_boot_worker(
             cfg=cfg,
             state=state,
             upload=upload,
+            on_capture_notice=lambda message: _notify_replay_capture(
+                cell.tray, cell.console, cell.gui, message, log,
+            ),
             on_replay_skipped=lambda p, reason: (
                 import_ctl.on_replay_skipped(p, reason) if import_ctl else None
             ),

@@ -138,7 +138,7 @@ class SocketClient:
             log.info("socket_client_disconnected")
 
         @sio.on("macro:recompute_request")
-        async def _on_macro(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:  # noqa: ARG001
+        async def _on_macro(payload: Optional[Dict[str, Any]], *, requested: bool = False) -> Optional[Dict[str, Any]]:  # noqa: ARG001
             game_ids: List[str] = []
             if isinstance(payload, dict):
                 raw = payload.get("gameIds")
@@ -160,7 +160,7 @@ class SocketClient:
                             }), self._loop)
 
                     result = await asyncio.to_thread(self._on_recompute_games,  # type: ignore[call-arg,func-returns-value]
-                        game_ids, replay_fidelity="engine", report_status=report_status,
+                        game_ids, replay_fidelity="engine", report_status=report_status, requested=requested,
                     )
                     return {**result, "requestId": request_id, "gameId": game_ids[0]}
                 self._on_recompute_games(game_ids)
@@ -170,11 +170,12 @@ class SocketClient:
 
         @sio.on("map-playback:recompute_request")
         async def _on_map_playback(payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-            # Older agents do not know this event and cannot silently launch
-            # SC2. Keep the legacy macro route guarded during API rollouts.
+            # Only this explicit per-game website action permits a one-shot
+            # recording while automatic capture is off. Ignore any claimed
+            # permission in a legacy macro payload.
             if not isinstance(payload, dict):
                 return {"ok": False, "code": "invalid_request"}
-            return await _on_macro({**payload, "replayFidelity": "engine"})
+            return await _on_macro({**payload, "replayFidelity": "engine"}, requested=True)
 
         @sio.on("opp_build_order:recompute_request")
         async def _on_opp(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001
@@ -367,16 +368,16 @@ def make_recompute_handlers(
                 out.append(p)
         return out
 
-    def on_macro(game_ids: List[str], *, replay_fidelity=None, report_status=None):
+    def on_macro(game_ids: List[str], *, replay_fidelity=None, report_status=None, requested=False):
         paths = _resolve_paths(game_ids)
         if replay_fidelity == "engine":
             if len(game_ids) != 1 or len(paths) != 1 or not paths[0].is_file():
                 return {"ok": False, "code": "replay_not_found"}
             from .replay_capture import capture_request_allowed, ReplayCaptureDisabled
-            if not capture_request_allowed(paths[0], state_dir):
+            if not capture_request_allowed(paths[0], state_dir, requested=requested):
                 return {"ok": False, "code": "replay_capture_disabled", "message":
-                    "Enable Accurate replay capture in the agent's Settings > Map replay to allow its CPU use. "
-                    "Ordinary syncing and saved recordings still work."}
+                    "Enable automatic capture in the agent's Settings > Map replay, or select "
+                    "Generate accurate playback on the website to record this replay once."}
             if not _ENGINE_REBUILD_LOCK.acquire(blocking=False):
                 return {"ok": False, "code": "engine_busy"}
 
@@ -389,19 +390,26 @@ def make_recompute_handlers(
 
             def rebuild():
                 phase = "processing"
+                capture_lock_held = True
                 try:
                     report({"status": "processing"})
                     if engine_capture is not None:
-                        # Injected capture callbacks must obey the same guard.
+                        # Injected callbacks obey the same automatic/one-shot policy.
                         from .replay_capture import replay_capture_enabled
-                        if not replay_capture_enabled(state_dir):
+                        if requested is not True and not replay_capture_enabled(state_dir):
                             raise ReplayCaptureDisabled("Local replay capture was turned off before it started.")
                         engine_capture(paths[0])
                     else:
                         from .replay_capture import capture_exact_replay
                         capture_exact_replay(paths[0], state_dir,
                             progress=lambda message: report({"status": "processing", "message": message}),
-                            notify_start=notify_capture_start)
+                            notify_start=notify_capture_start, requested=requested)
+                    # Automatic work can already own this replay's inflight
+                    # reservation while waiting for our recorder. Let it
+                    # consume the saved artifact and upload; holding the lock
+                    # through that upload would make both sides wait forever.
+                    _ENGINE_REBUILD_LOCK.release()
+                    capture_lock_held = False
                     from .state import load_state
                     previous_marker = load_state(state_dir).uploaded.get(str(paths[0])) if state_dir else None
                     # The normal parser loads the matching cached observation
@@ -420,7 +428,8 @@ def make_recompute_handlers(
                     report({"status": "failed", "code": "replay_capture_disabled" if isinstance(exc, ReplayCaptureDisabled)
                             else "replay_upload_failed" if phase == "uploading" else "engine_capture_failed", "message": str(exc)[:500]})
                 finally:
-                    _ENGINE_REBUILD_LOCK.release()
+                    if capture_lock_held:
+                        _ENGINE_REBUILD_LOCK.release()
 
             try:
                 threading.Thread(target=rebuild, name="sc2tools-replay-rebuild", daemon=True).start()
