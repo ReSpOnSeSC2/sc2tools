@@ -32,7 +32,8 @@ import { SiteStats } from "./SiteStats";
  *   - Mobile: a bottom tab bar with the four highest-traffic
  *     destinations and a More sheet for the rest. No hamburger.
  *   - Both: a slim sticky context bar carrying the section name, a
- *     back control on detail pages, live sync state, theme and account.
+ *     back control on detail pages, theme and account. The activity bar
+ *     immediately below groups live sync state with the public site counts.
  *
  * /meta and /community are reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
@@ -191,16 +192,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
               title={title}
             />
 
-            {isAnalyzerPath(pathname) && me?.userId && me.games ? (
-              <div className="hidden min-w-0 lg:block">
-                <SyncStatus
-                  total={me.games.total}
-                  latest={me.games.latest}
-                  userId={me.userId}
-                />
-              </div>
-            ) : null}
-
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <SignedIn>
                 <CoachingBookingAlert compact />
@@ -230,7 +221,16 @@ export function AppChrome({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <SiteStats wide />
+        <SiteStats
+          wide
+          syncStatus={isAnalyzerPath(pathname) && me?.userId && me.games ? (
+            <SyncStatus
+              total={me.games.total}
+              latest={me.games.latest}
+              userId={me.userId}
+            />
+          ) : undefined}
+        />
 
         <main
           id="main-content"

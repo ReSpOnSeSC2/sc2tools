@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import useSWR from "swr";
 import { fetchSiteStats } from "@/lib/siteStats";
 
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
+const COMPACT_NUMBER_FORMAT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const REFRESH_MS = 30_000;
 const STALE_MS = 90_000;
 
@@ -14,7 +15,10 @@ async function fetchActivity(url: string) {
 }
 
 /** Public aggregates, shared by the marketing site and the app shell. */
-export function SiteStats({ wide = false }: { wide?: boolean }) {
+export function SiteStats({ wide = false, syncStatus }: {
+  wide?: boolean;
+  syncStatus?: ReactNode;
+}) {
   const detailsId = useId();
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -54,8 +58,10 @@ export function SiteStats({ wide = false }: { wide?: boolean }) {
   return (
     <section aria-label="SC2 Tools community activity" className="border-b border-border bg-bg-surface/40">
       <div className={`mx-auto w-full px-4 sm:px-6 lg:px-8 ${wide ? "max-w-[1680px]" : "max-w-7xl"}`}>
-        <div className="flex items-center gap-2 py-3 sm:gap-6">
-          <dl className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-border sm:max-w-2xl">
+        <div className={syncStatus ? "flex flex-wrap items-center gap-x-6 gap-y-1 py-2" : "flex items-center gap-2 py-3 sm:gap-6"}>
+          {syncStatus ? <div className="min-w-0 max-w-full py-1">{syncStatus}</div> : null}
+          <div className={`flex min-w-0 flex-1 items-center gap-2 sm:gap-4 ${syncStatus ? "basis-72 sm:basis-[28rem]" : ""}`}>
+          <dl className={`grid min-w-0 flex-1 grid-cols-3 divide-x divide-border ${syncStatus ? "sm:max-w-lg" : "sm:max-w-2xl"}`}>
             {values.map(({ label, value }, index) => (
               <div key={label} className={`flex min-w-0 flex-col gap-0.5 ${index ? "pl-3 sm:pl-6" : ""}`}>
                 <dt className="order-2 text-[11px] leading-4 text-text-muted sm:text-xs">{label}</dt>
@@ -64,6 +70,11 @@ export function SiteStats({ wide = false }: { wide?: boolean }) {
                     <span aria-label="Loading" className="inline-block h-5 w-10 rounded bg-bg-subtle motion-safe:animate-pulse" />
                   ) : value == null || unavailable ? (
                     <span aria-label="Unavailable" className="text-text-dim">—</span>
+                  ) : value >= 100_000 ? (
+                    <span title={NUMBER_FORMAT.format(value)} aria-label={NUMBER_FORMAT.format(value)}>
+                      <span aria-hidden className="sm:hidden">{COMPACT_NUMBER_FORMAT.format(value)}</span>
+                      <span aria-hidden className="hidden sm:inline">{NUMBER_FORMAT.format(value)}</span>
+                    </span>
                   ) : NUMBER_FORMAT.format(value)}
                 </dd>
               </div>
@@ -81,6 +92,7 @@ export function SiteStats({ wide = false }: { wide?: boolean }) {
             <span className="hidden sm:inline">Site activity</span>
             <ChevronDown aria-hidden className={`h-3.5 w-3.5 ${expanded ? "rotate-180" : ""}`} />
           </button>
+          </div>
         </div>
         <div id={detailsId} hidden={!expanded} className="border-t border-border py-4 text-xs leading-5 text-text-muted">
           <p className="mb-3 font-medium text-text">{status}</p>

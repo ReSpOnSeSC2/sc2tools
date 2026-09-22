@@ -38,7 +38,7 @@ vi.mock("../CoachingBookingAlert", () => ({
   CoachingBookingAlert: () => <div data-testid="coaching-alert-slot" />,
 }));
 vi.mock("../SiteStats", () => ({
-  SiteStats: () => <div data-testid="site-stats" />,
+  SiteStats: ({ syncStatus }: { syncStatus?: ReactNode }) => <div data-testid="site-stats">{syncStatus}</div>,
 }));
 
 afterEach(() => {
