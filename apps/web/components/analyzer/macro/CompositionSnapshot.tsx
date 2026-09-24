@@ -93,6 +93,15 @@ const CHIP_DETAIL_ICON_PX = 128;
 /** What a chip stands for. Drives the icon source and the count wording. */
 type ChipKind = "unit" | "building" | "upgrade";
 
+/** These catalog PNGs are placeholders, altered art, or the wrong entity.
+ *  Keep the saved models for them, including aliases such as uprooted
+ *  crawlers and parent-specific Terran add-ons. */
+const MODEL_ONLY_ICONS: ReadonlySet<string> = new Set([
+  "Reactor", "TechLab", "SpineCrawler", "SporeCrawler", "GreaterSpire",
+  // The flat registry aliases the worm exit onto the network building.
+  "NydusCanal",
+]);
+
 /**
  * The chip the user tapped, frozen at the moment of the tap. Frozen
  * rather than live because the roster re-snaps as the pointer moves
@@ -570,9 +579,8 @@ function SourceBadge({ source }: { source: CompositionSource }) {
 /**
  * The chip's icon. Prefer the saved game command-card icons, matching
  * the upgrades row. Units and buildings without a game icon keep their
- * Blender-rendered cutout, as do Reactors and Tech Labs whose catalog
- * icons are placeholders. Failed images end in a text label if no
- * usable asset can load.
+ * Blender-rendered cutout, as do entries whose catalog art is incorrect.
+ * Failed images end in a text label if no usable asset can load.
  *
  * Deliberately local to this file: the app-wide ``Icon`` is shared with
  * the optimizer, randomizer, fingerprint card and race chips, so
@@ -598,9 +606,8 @@ function ChipIcon({
     return <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />;
   }
   const sprite = canonicalSpriteName(name);
-  // Every parent-specific add-on name resolves to one of these models.
-  // Their flat catalog icons are placeholders, so never use them here.
-  const useModelOnly = sprite === "Reactor" || sprite === "TechLab";
+  // Resolve aliases before applying the audited artwork exceptions.
+  const useModelOnly = sprite !== null && MODEL_ONLY_ICONS.has(sprite);
   // Tracker state names (e.g. SiegeTankSieged) share their base icon.
   const gameIcon = useModelOnly
     ? null

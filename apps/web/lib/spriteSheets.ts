@@ -118,6 +118,8 @@ const SPRITE_ALIASES: Readonly<Record<string, string>> = {
   ExtractorRich: "Extractor",
   SpineCrawlerUprooted: "SpineCrawler",
   SporeCrawlerUprooted: "SporeCrawler",
+  // The worm exit has its own model, distinct from the Nydus Network.
+  NydusWorm: "NydusCanal",
   BanelingBurrowed: "Baneling",
   ObserverSiegeMode: "Observer",
   WarpPrismPhasing: "WarpPrism",
