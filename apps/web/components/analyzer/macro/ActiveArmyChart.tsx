@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { AlertCircle } from "lucide-react";
@@ -36,10 +37,9 @@ export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
 
 /**
  * Single hover dispatch — the chart emits these to the parent so the
- * parent can manage mouse-vs-touch selection state. Mouse moves emit
- * "hover" and the parent retains the last value on "leave"; touch/pen
- * taps are sticky ("tap"). A "leave" only fires for true mouse
- * pointers, so finger lifts never clear the locked time.
+ * parent can manage preview-vs-locked selection state. Mouse moves emit
+ * "hover" and the parent retains the last value on "leave"; clicks and
+ * taps lock the selection ("tap"). Scrolling never emits a selection.
  */
 export type HoverEvent =
   | { type: "hover"; time: number }
@@ -90,7 +90,7 @@ export interface ActiveArmyChartProps {
  * both players. The hovered time is lifted to the parent so the
  * unit-composition snapshot below the chart stays in sync.
  *
- * Touch/pen taps lock the crosshair via the parent's sticky state —
+ * Clicks and taps lock the crosshair via the parent's sticky state —
  * users don't have to keep a finger pressed to read the values.
  *
  * Army series is derived from the same hybrid source the snapshot
@@ -153,64 +153,47 @@ export function ActiveArmyChart({
    * (0…maxT). preserveAspectRatio is "none" so the CSS-to-time mapping
    * is uniform.
    */
-  const timeFromPointer = useCallback(
-    (e: ReactPointerEvent<SVGRectElement>): number | null => {
+  const timeFromClientX = useCallback(
+    (clientX: number): number | null => {
       if (!layout) return null;
       const overlay = overlayRef.current;
       if (!overlay) return null;
       const rect = overlay.getBoundingClientRect();
       if (rect.width <= 0) return null;
-      const f = (e.clientX - rect.left) / rect.width;
+      const f = (clientX - rect.left) / rect.width;
       return Math.max(0, Math.min(layout.maxT, f * layout.maxT));
     },
     [layout],
   );
 
-  const dispatchPointer = useCallback(
-    (e: ReactPointerEvent<SVGRectElement>, isDown: boolean) => {
-      if (!onHover) return;
-      const t = timeFromPointer(e);
-      if (t == null) return;
-      // Mouse pointers continuously update the retained desktop selection.
-      // Touch and pen are sticky: a tap or drag locks the crosshair so the
-      // user doesn't have to keep their finger pressed against the screen.
-      if (e.pointerType === "mouse") {
-        onHover({ type: "hover", time: t });
-        return;
-      }
-      // For touch/pen, only the initial pointer-down (and subsequent
-      // pointer-moves while the contact is active) emit taps. We
-      // don't get a separate "tap end" — the parent keeps the lock.
-      if (isDown || e.buttons || e.pressure > 0) {
-        onHover({ type: "tap", time: t });
-      } else {
-        // bare-hover from a stylus that supports it — keep transient
-        onHover({ type: "hover", time: t });
-      }
-    },
-    [onHover, timeFromPointer],
-  );
-
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent<SVGRectElement>) => {
-      dispatchPointer(e, false);
+      // Touch moves may be page scrolling. Only preview mouse/pen hover;
+      // the parent ignores these previews once a time has been locked.
+      if (!onHover || (e.pointerType !== "mouse" && e.pointerType !== "pen")) return;
+      if (e.buttons || e.pressure > 0) return;
+      const t = timeFromClientX(e.clientX);
+      if (t == null) return;
+      onHover({ type: "hover", time: t });
     },
-    [dispatchPointer],
+    [onHover, timeFromClientX],
   );
 
-  const handlePointerDown = useCallback(
-    (e: ReactPointerEvent<SVGRectElement>) => {
-      dispatchPointer(e, true);
+  const handleClick = useCallback(
+    (e: ReactMouseEvent<SVGRectElement>) => {
+      // Browsers emit click for a completed mouse click, finger tap or
+      // pen tap, but suppress it when a touch gesture scrolls the page.
+      const t = timeFromClientX(e.clientX);
+      if (t != null) onHover?.({ type: "tap", time: t });
     },
-    [dispatchPointer],
+    [onHover, timeFromClientX],
   );
 
   const handlePointerLeave = useCallback(
     (e: ReactPointerEvent<SVGRectElement>) => {
       if (!onHover) return;
       // Only mouse leaves are reported. The parent keeps that last position
-      // visible; touch lifts must not emit leave because taps use a stronger
-      // lock that is cleared by tapping outside the chart.
+      // visible; touch lifts never change a locked selection.
       if (e.pointerType === "mouse") {
         onHover({ type: "leave" });
       }
@@ -242,7 +225,7 @@ export function ActiveArmyChart({
       >
         <svg
           role="img"
-          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover to inspect a time; the last position remains selected."
+          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover to inspect a time; click or tap to lock it while scrolling."
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
           className="block h-[220px] w-full min-w-[320px] sm:h-[260px] sm:min-w-[480px]"
@@ -268,10 +251,10 @@ export function ActiveArmyChart({
             width={layout.innerW}
             height={layout.innerH}
             fill="transparent"
-            style={{ touchAction: "none", cursor: onHover ? "crosshair" : "default" }}
+            style={{ touchAction: "pan-y pinch-zoom", cursor: onHover ? "crosshair" : "default" }}
             onPointerMove={onHover ? handlePointerMove : undefined}
             onPointerLeave={onHover ? handlePointerLeave : undefined}
-            onPointerDown={onHover ? handlePointerDown : undefined}
+            onClick={onHover ? handleClick : undefined}
             aria-hidden
           />
         </svg>

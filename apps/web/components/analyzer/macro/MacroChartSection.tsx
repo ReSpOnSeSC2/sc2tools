@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { useApi } from "@/lib/clientApi";
@@ -54,8 +53,8 @@ export interface MacroChartSectionProps {
 }
 
 /** Hover state with sticky semantics. ``sticky=true`` means the value
- *  was set by a touch tap and persists until the user taps outside the
- *  chart. ``sticky=false`` is the latest mouse position: it remains
+ *  was selected by a click or tap and persists until another selection.
+ *  ``sticky=false`` is the latest mouse position: it remains
  *  visible after pointer-leave, then resumes following the cursor as
  *  soon as the mouse re-enters the plot. */
 interface HoverState {
@@ -82,10 +81,9 @@ const INITIAL_HOVER: HoverState = { time: null, sticky: false };
  * Hover behaviour:
  *   - Mouse: continuous hover; pointer-leave keeps the last inspected
  *     time, tooltip, composition, and vertical crosshair visible.
- *   - Touch / pen: tap (or drag-tap) locks the crosshair. The user
- *     does NOT have to keep their finger pressed — release leaves the
- *     value visible. Tapping outside the chart container (still inside
- *     the modal) or anywhere else in the document clears the lock.
+ *   - Click / tap: locks the crosshair until another chart click or tap.
+ *     Scrolling, outside interactions, and hovering preserve the lock.
+ *     Opening a different game resets the selection.
  */
 export function MacroChartSection({
   samples,
@@ -104,8 +102,11 @@ export function MacroChartSection({
   oppRace,
   gameId,
 }: MacroChartSectionProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
+
+  useEffect(() => {
+    setHover(INITIAL_HOVER);
+  }, [gameId]);
 
   const buildOrder = useApi<BuildOrderResponse>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/build-order` : null,
@@ -144,14 +145,12 @@ export function MacroChartSection({
   const handleHover = useCallback((event: HoverEvent) => {
     setHover((prev) => {
       if (event.type === "tap") {
-        // Touch / pen tap → lock at this time. Subsequent taps update
-        // the lock; releasing the finger does NOT clear it.
+        // A deliberate click or tap replaces the lock. Scrolling and
+        // moving the pointer must not change the selected time.
         return { time: event.time, sticky: true };
       }
       if (event.type === "hover") {
-        // Mouse move — only updates while we're not locked. (We never
-        // expect both mouse and touch on the same element in practice,
-        // but if a hybrid device fires both, the locked state wins.)
+        // Hover previews are available until a click or tap locks a time.
         if (prev.sticky) return prev;
         return { time: event.time, sticky: false };
       }
@@ -163,26 +162,8 @@ export function MacroChartSection({
     });
   }, []);
 
-  // Click-outside listener that clears a sticky lock. Only attaches
-  // while the lock is active so we don't pay for a global handler all
-  // the time. Uses pointerdown so it fires before the parent dialog's
-  // onClick handlers and works for both mouse and touch.
-  useEffect(() => {
-    if (!hover.sticky) return;
-    const handleOutside = (ev: PointerEvent) => {
-      const node = containerRef.current;
-      if (!node) return;
-      if (ev.target instanceof Node && node.contains(ev.target)) return;
-      setHover(INITIAL_HOVER);
-    };
-    document.addEventListener("pointerdown", handleOutside, true);
-    return () => {
-      document.removeEventListener("pointerdown", handleOutside, true);
-    };
-  }, [hover.sticky]);
-
   return (
-    <div ref={containerRef} className="space-y-3">
+    <div className="space-y-3">
       <ActiveArmyChart
         mySeries={mySeries}
         oppSeries={oppSeries}
@@ -198,8 +179,8 @@ export function MacroChartSection({
       />
       {hover.sticky ? (
         <p className="text-micro text-text-muted">
-          <span className="text-text">Locked</span> at this point. Tap
-          another spot to move it, or tap outside the chart to clear.
+          <span className="text-text">Locked</span> at this point while you scroll.
+          Click or tap another spot on the chart to move it.
         </p>
       ) : null}
       <CompositionSnapshot
