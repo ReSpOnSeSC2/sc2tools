@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
+import { getIconPath } from "@/lib/sc2-icons";
 import {
   canonicalSpriteName,
   spriteIconScale,
@@ -84,10 +85,8 @@ export interface CompositionSnapshotProps {
 const CHIP_ICON_PX = 22;
 
 /**
- * Icon size in the tap-to-enlarge detail dialog. The renders are 128 px
- * masters, so this is their native size — anything larger would just
- * upscale a thumbnail, and pulling the 2048² sprite SHEET for a sharper
- * one would mean a multi-hundred-KB download to enlarge a single chip.
+ * Icon size in the tap-to-enlarge detail dialog. Both the game icons
+ * and the fallback renders use saved thumbnail assets.
  */
 const CHIP_DETAIL_ICON_PX = 128;
 
@@ -569,11 +568,10 @@ function SourceBadge({ source }: { source: CompositionSource }) {
 }
 
 /**
- * The chip's icon. Units and buildings use the Blender-rendered sprite
- * cutout; upgrades have no 3D render and keep the flat command-card
- * icon, as does anything the sprite manifest doesn't know (Broodling,
- * the Adept phase-shift). A 404 falls back at runtime rather than
- * showing a broken image.
+ * The chip's icon. Prefer the saved game command-card icons, matching
+ * the upgrades row. Units and buildings without a game icon keep their
+ * Blender-rendered cutout. Failed images follow the same fallback
+ * chain, ending in a text label if neither asset can load.
  *
  * Deliberately local to this file: the app-wide ``Icon`` is shared with
  * the optimizer, randomizer, fingerprint card and race chips, so
@@ -591,31 +589,38 @@ function ChipIcon({
   kind: ChipKind;
   side: "me" | "opp";
   fallback: string;
-  /** Rendered box size. Defaults to the roster chip; the detail dialog
-   *  passes the render's native 128 px. */
+  /** Rendered box size for the roster chip or the enlarged detail. */
   px?: number;
 }) {
-  const sprite = kind === "upgrade" ? null : canonicalSpriteName(name);
-  const url = sprite ? spriteIconUrl(sprite, side === "me" ? "blue" : "red") : null;
-  const [failed, setFailed] = useState<string | null>(null);
-  if (url && failed !== url) {
+  const [failedUrls, setFailedUrls] = useState<string[]>([]);
+  if (kind === "upgrade") {
+    return <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />;
+  }
+  const sprite = canonicalSpriteName(name);
+  // Tracker state names (e.g. SiegeTankSieged) share their base icon.
+  const gameIcon = getIconPath(name, kind) ?? (sprite ? getIconPath(sprite, kind) : null);
+  const spriteIcon = sprite ? spriteIconUrl(sprite, side === "me" ? "blue" : "red") : null;
+  const url = [gameIcon, spriteIcon].find((src) => src && !failedUrls.includes(src));
+  if (url) {
     // The bake framed structures with a wide transparent margin and
     // units edge-to-edge, so a Nexus drew about two thirds the pixels
     // of the Marine beside it. ``spriteIconScale`` scales the margin
     // away. It is a transform, NOT a width bump: the element keeps its
     // ``px`` layout box, so a denser roster does not reflow and only
     // the (transparent) frame edge spills out.
-    const scale = spriteIconScale(sprite);
+    // Game icons are already cropped; only fallback renders need this.
+    const scale = url === spriteIcon ? spriteIconScale(sprite) : 1;
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={url}
         alt=""
+        aria-hidden
         width={px}
         height={px}
         loading="lazy"
         decoding="async"
-        onError={() => setFailed(url)}
+        onError={() => setFailedUrls((urls) => [...urls, url])}
         style={{
           width: px,
           height: px,
@@ -625,10 +630,14 @@ function ChipIcon({
       />
     );
   }
-  // Flat command-card fallback. No fit correction: those icons are a
-  // different asset family and were already cropped tight.
   return (
-    <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />
+    <span
+      aria-hidden
+      style={{ height: px, lineHeight: `${px}px` }}
+      className="inline-flex items-center justify-center rounded bg-bg-elevated px-1 text-micro font-medium uppercase tracking-wide text-text-dim"
+    >
+      {fallback}
+    </span>
   );
 }
 
@@ -703,8 +712,7 @@ interface ChipContext {
 
 /**
  * Tap-to-enlarge dialog. Answers the two things a 22 px chip cannot:
- * WHAT it is (the roster is 3D renders, and a Robotics Bay at 22 px is
- * not obviously a Robotics Bay) and what its number means.
+ * WHAT it is and what its number means.
  *
  * Rendered once for the whole panel, from state the chip froze on tap.
  */
@@ -870,4 +878,3 @@ function pointComposition(
   if (!point || !point.units) return {};
   return point.units;
 }
-
