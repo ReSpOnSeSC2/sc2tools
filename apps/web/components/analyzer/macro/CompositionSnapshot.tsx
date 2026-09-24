@@ -570,8 +570,9 @@ function SourceBadge({ source }: { source: CompositionSource }) {
 /**
  * The chip's icon. Prefer the saved game command-card icons, matching
  * the upgrades row. Units and buildings without a game icon keep their
- * Blender-rendered cutout. Failed images follow the same fallback
- * chain, ending in a text label if neither asset can load.
+ * Blender-rendered cutout, as do Reactors and Tech Labs whose catalog
+ * icons are placeholders. Failed images end in a text label if no
+ * usable asset can load.
  *
  * Deliberately local to this file: the app-wide ``Icon`` is shared with
  * the optimizer, randomizer, fingerprint card and race chips, so
@@ -597,8 +598,13 @@ function ChipIcon({
     return <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />;
   }
   const sprite = canonicalSpriteName(name);
+  // Every parent-specific add-on name resolves to one of these models.
+  // Their flat catalog icons are placeholders, so never use them here.
+  const useModelOnly = sprite === "Reactor" || sprite === "TechLab";
   // Tracker state names (e.g. SiegeTankSieged) share their base icon.
-  const gameIcon = getIconPath(name, kind) ?? (sprite ? getIconPath(sprite, kind) : null);
+  const gameIcon = useModelOnly
+    ? null
+    : getIconPath(name, kind) ?? (sprite ? getIconPath(sprite, kind) : null);
   const spriteIcon = sprite ? spriteIconUrl(sprite, side === "me" ? "blue" : "red") : null;
   const url = [gameIcon, spriteIcon].find((src) => src && !failedUrls.includes(src));
   if (url) {
