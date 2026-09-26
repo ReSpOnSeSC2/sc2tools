@@ -28,6 +28,8 @@ See [human play](PLAY_AGAINST_BOTS.md), [training](TRAINING.md),
 Historical diagnostic counts in the imported development documents describe
 the original local experiment; their private `runs/` artifacts are not shipped.
 
+For a visible immutable neural checkpoint preview, see [live neural play](LIVE_NEURAL.md).
+
 ## Hidden website integration
 
 See [the private integration guide](../../docs/bot-lab.md). The desktop agent

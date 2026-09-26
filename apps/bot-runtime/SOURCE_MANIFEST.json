@@ -234,6 +234,13 @@
     "scripts/migrate_alphastar_capacity.py": "45aa5c7adeb1a78ab736563cf28d5aa65902fc83d788251c2fe081ed63b01b15",
     "scripts/fit_alphastar_full_game.py": "719cc3d1a3302d475bde333351ec0f25b5be701267f5bfc5f13b63f18ce0e6f5",
     "tests/test_alphastar_capacity_migration.py": "a6011fe8a66c8994d650e4ec3de5cee4b8b2ceb2e820bf43e1ad46c3457a90af",
-    "tests/test_alphastar_full_game.py": "0a1b7f61baf881484564392265173694bcf10c98afc3530ff8f28c02be49d8a4"
+    "tests/test_alphastar_full_game.py": "0a1b7f61baf881484564392265173694bcf10c98afc3530ff8f28c02be49d8a4",
+    "src/pluto_sc2/alphastar_live.py": "74e63be6a5583192137558c983bb4232bc1dc7b95b98c072909b8d039912e0fd",
+    "src/pluto_sc2/alphastar_spool.py": "ac37cf93988acb7c45d6a5d8473e021b6549c9f071d7d00cc61911ad4c27446d",
+    "scripts/play_alphastar_checkpoint.py": "8fc4899dcda1031978233ef224624aa94c091e786ebf6cac99c5bfa9a0d72394",
+    "scripts/serve_alphastar_checkpoint.py": "b6873fbf693508b08f65af3226af00f4493aee800906c34c0c3883385f111a55",
+    "tests/test_alphastar_live.py": "f6cdf94bc5b5845518a87e078edcaa84b0b6cf395b2ce96749b6aa8146d5bf73",
+    "tests/test_alphastar_spool.py": "48791bf116091b20844c37f0ac9d4bd117c64727ae92bf3ce7181c2f1031f5f9",
+    "LIVE_NEURAL.md": "525348142c6e0bb0370929ce71736c34f577bed7286b76fba4b3d225b599debd"
   }
 }
