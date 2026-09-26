@@ -251,6 +251,14 @@
     "scripts/audit_alphastar_eligibility_v2.py": "6e4a1252a0102fc7d088d9d4de331d8fd42febca0576fe2f0c40ee7c4c2b9e42",
     "scripts/alphastar_source_objective.py": "ded1de3491307df5f7f598f1fd1ef0d6228e5f485bd9beec98f230bfe11d8c11",
     "tests/test_alphastar_source_objective.py": "637d04e15d824788148bc92d409f5447d7fd9c733c3594ca5bcd3f531c2eff76",
-    "scripts/audit_alphastar_source_objective.py": "9690f21a820c90dae3770780bd8d5b6517a49a983aed7c6cefb86226ef7b2777"
+    "scripts/audit_alphastar_source_objective.py": "9690f21a820c90dae3770780bd8d5b6517a49a983aed7c6cefb86226ef7b2777",
+    "src/pluto_sc2/building_placement_v1.py": "af1c30e289d7c9ee5c21caa719ec841bedd5b448fa04a321216526cacc5b8895",
+    "tests/test_building_placement_v1.py": "8e5be2066de4caa66cc32c1fa1b8c17a8e0900f0448e2b090f08f780cb661e87",
+    "scripts/alphastar_building_placement_bridge_v1.py": "39030e0a8be47011e6193f835010525030eeebb8f2c91999647aa2d7c119f5ef",
+    "tests/test_alphastar_building_placement_bridge_v1.py": "036183ac8c5d0bd1311878936aa54c95849a1dbd73d884ff9ae0c494258e739b",
+    "scripts/audit_alphastar_building_placement_v1.py": "539b9306a635283211293c94e479b4c9754d265501997b2f7a82061bbb1ecfe0",
+    "scripts/fit_alphastar_building_world.py": "15544d84051eec020d9d3f8a29d180124b21daafa4c6d30dbaebd953466aff47",
+    "tests/test_alphastar_building_world.py": "9ff7bae02fac7abdd86f55416bb5b88c0d36658f3f265394b4ac531d6f856f5a",
+    "scripts/reload_alphastar_building_world.py": "493fb4c053b91cc89f0f836c41b36246e63ff3cc54552cbdcb049b2a621e4d03"
   }
 }

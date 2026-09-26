@@ -59,6 +59,20 @@ absence are informational because valid production can be queued. These
 audits do not update weights or change the live host. Native queue execution
 requires its own verification.
 
+Opt-in experimental building-location repair is available through
+`scripts/audit_alphastar_building_placement_v1.py`,
+`scripts/fit_alphastar_building_world.py` and
+`scripts/reload_alphastar_building_world.py`. Current visible structures and
+public footprints can exclude proven overlaps; retained targets are not
+certified legal placements. The audit requires a user-provided, hash-pinned
+`--placement-preflight` CPU evidence report in addition to the existing local
+replay/checkpoint inputs. Those private reports and `runs/` data are not shipped.
+The bounded fitter updates only the existing world head and its Adam moments.
+Its separate candidate schema is experimental: the shared Adam age advances
+while frozen-head moments do not, so resuming ordinary full-model training
+requires a separately reviewed optimizer migration. These commands neither
+activate the live host nor promote a checkpoint or establish gameplay strength.
+
 Dataset collection preserves whole-replay train/validation separation. Actor
 observations must come from the selected player's permitted view, never from
 the omniscient website playback recording. Offline fitting can run while
