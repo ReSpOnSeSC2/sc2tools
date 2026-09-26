@@ -84,6 +84,9 @@ export function ReplayStage({
   banked,
   maxHeightPx,
   initialTimeSec,
+  onPlaybackTimeChange,
+  playbackWindow,
+  buffering = false,
 }: {
   playback: MapPlayback;
   /** Only used to seed the background score, so the same replay always
@@ -114,6 +117,9 @@ export function ReplayStage({
   maxHeightPx?: number;
   /** Applied on mount; the host keys each game/timestamp navigation. */
   initialTimeSec?: number | null;
+  onPlaybackTimeChange?: (time: number) => void;
+  playbackWindow?: { start: number; end: number };
+  buffering?: boolean;
 }) {
   const model = useMemo(() => deriveReplayHud(playback), [playback]);
 
@@ -137,8 +143,8 @@ export function ReplayStage({
 
   // Echoed back to MapReplayer VERBATIM — it compares by identity to
   // tell its own 4 Hz tick apart from an external seek.
-  const onTimeChange = useCallback((next: number) => setTime(next), []);
-  const seek = useCallback((next: number) => setTime(next), []);
+  const onTimeChange = useCallback((next: number) => { setTime(next); onPlaybackTimeChange?.(next); }, [onPlaybackTimeChange]);
+  const seek = onTimeChange;
   const onPlayingChange = useCallback(
     (next: boolean) => {
       // Synchronous, still inside the transport's click handler: that
@@ -223,6 +229,8 @@ export function ReplayStage({
         <div className="order-1 flex h-[52vh] max-h-[36rem] min-h-[16rem] min-w-0 flex-none xl:order-2 xl:h-auto xl:max-h-none xl:flex-1">
           <MapReplayer
             playback={playback}
+            playbackWindow={playbackWindow}
+            buffering={buffering}
             time={time}
             onTimeChange={onTimeChange}
             playing={playing}

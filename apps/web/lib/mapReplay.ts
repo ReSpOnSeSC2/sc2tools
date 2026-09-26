@@ -57,6 +57,8 @@ export interface PlaybackBattle {
 }
 
 export interface PlaybackBuilding {
+  /** v7 observation gaps, retained without inventing a death or landing. */
+  hidden?: number[];
   /** Observed weapon cycles; aim contains only confirmed target positions. */
   attacks?: number[];
   aim?: number[];
@@ -125,6 +127,8 @@ export interface ReplayCast {
 
 export interface MapPlayback {
   v: number;
+  /** v7 observed shots can coincide with the unit's final native loop. */
+  terminalAttackInclusive?: boolean;
   mapName: string;
   gameLength: number;
   bounds: PlaybackBounds;
@@ -159,6 +163,7 @@ export interface MapPlayback {
 export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Record<string, unknown>;
+  const terminalAttackInclusive = p.v === 7 && p.terminalAttackInclusive === true;
   const b = p.bounds as Record<string, unknown> | undefined;
   const num = (v: unknown): number =>
     v !== null && v !== undefined && v !== "" && typeof v !== "boolean" && Number.isFinite(Number(v))
@@ -218,7 +223,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     const coverage = p.fidelity as Record<string, unknown> | undefined;
     if (coverage?.positions !== "engine" || coverage.attacks !== "observed" || !Array.isArray(r.attacks)) return {};
     const shots = [...new Set(r.attacks.slice(0, Math.min(16384, remainingAttacks)).map(num)
-      .filter((t) => Number.isFinite(t) && t >= born && (!Number.isFinite(died) || t < died)))].sort((a, b) => a - b);
+      .filter((t) => Number.isFinite(t) && t >= born && (!Number.isFinite(died) || (terminalAttackInclusive ? t <= died : t < died))))].sort((a, b) => a - b);
     if (shots.length < r.attacks.length) truncated = true;
     remainingAttacks -= shots.length;
     const shotSet = new Set(shots);
@@ -266,6 +271,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
     if (Array.isArray(r.moves) && moves.length < r.moves.length) truncated = true;
     const bDied = r.died === null || r.died === undefined ? NaN : num(r.died);
     buildings.push({
+      ...(p.v === 7 && Array.isArray(r.hidden) ? { hidden: r.hidden.slice(0, 16384).map(num) } : {}),
       ...(tag(r.id) !== undefined ? { id: tag(r.id) } : {}),
       ...(formsIn(r.forms) ? { forms: formsIn(r.forms) } : {}),
       ...attacksIn(r, Number.isFinite(num(r.t)) ? num(r.t) : 0, bDied),
@@ -342,7 +348,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   // ~40% past the game. When the declared length overshoots all
   // recorded activity by >20%, trust the events: stats land every
   // ~10s until the end, so their last row is a tight bound.
-  if (lastActivity > 60 && gameLength > lastActivity * 1.2) {
+  if (p.v !== 7 && lastActivity > 60 && gameLength > lastActivity * 1.2) {
     gameLength = Math.round(lastActivity * 1.02);
   }
   // Casts (v5). Same defensive treatment as everything else: drop
@@ -427,6 +433,7 @@ export function sanitizeMapPlayback(raw: unknown): MapPlayback | null {
   if (fidelity && truncated) fidelity.complete = false;
   return {
     v: Number.isFinite(num(p.v)) ? num(p.v) : 1,
+    ...(terminalAttackInclusive ? { terminalAttackInclusive: true } : {}),
     mapName: typeof p.mapName === "string" ? p.mapName.slice(0, 120) : "",
     gameLength,
     bounds,
@@ -587,6 +594,14 @@ export function patchesNearHall(
 export function buildingAliveAt(b: PlaybackBuilding, t: number): boolean {
   if (b.t > t) return false;
   return b.died === null || b.died > t;
+}
+
+export function buildingVisibleAt(b: PlaybackBuilding, t: number): boolean {
+  if (!buildingAliveAt(b, t)) return false;
+  for (let i = 0; i + 1 < (b.hidden?.length ?? 0); i += 2) {
+    if (b.hidden![i] <= t && t < b.hidden![i + 1]) return false;
+  }
+  return true;
 }
 
 /* ──────────────── gas geysers ────────────────

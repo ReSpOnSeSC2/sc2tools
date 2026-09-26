@@ -28,6 +28,9 @@
 import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
 import { CompactReplayHost } from "./replay/CompactReplayHost";
 import { ReplayStage } from "./replay/ReplayStage";
+import dynamic from "next/dynamic";
+
+const SegmentedReplayHost = dynamic(() => import("./replay/SegmentedReplayHost").then(value => value.SegmentedReplayHost), { ssr: false });
 
 /** Stage height cap for the compact (drilldown) host, in CSS px. The
  * full-page host passes none and the replayer sizes itself to the
@@ -71,9 +74,10 @@ export function MapReplaySection({
   initialTimeSec?: number | null;
 }) {
   const fallback = useMapReplay(controller ? null : gameId);
-  const { playback, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
-  const refreshControl = canRefresh && (playback?.fidelity?.positions !== "engine" ||
-    playback?.fidelity?.complete === false || playback?.fidelity?.attacks !== "observed" ||
+  const { playback, manifest, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
+  const fidelity = manifest?.fidelity ?? playback?.fidelity;
+  const refreshControl = canRefresh && (fidelity?.positions !== "engine" ||
+    fidelity?.complete === false || fidelity?.attacks !== "observed" ||
     refreshing || refreshMessage) ? (
     <div className="flex flex-wrap items-center gap-2 text-caption">
       <button type="button" disabled={refreshing} onClick={refresh}
@@ -87,6 +91,14 @@ export function MapReplaySection({
   ) : null;
 
   const stageMaxH = maxHeightPx ?? (compact ? COMPACT_STAGE_MAX_H_PX : undefined);
+
+  if (manifest) return <section aria-label="Map replay" className="space-y-2">
+    {refreshControl}
+    <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, initialTimeSec ?? null])}
+      manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec}
+      maxHeightPx={stageMaxH} myName={myName} oppName={oppName} myRace={myRace} oppRace={oppRace}
+      buildName={buildName} buildMatchPct={buildMatchPct} />
+  </section>;
 
   if (isLoading) {
     if (compact) return null;

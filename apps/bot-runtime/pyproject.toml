@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pluto-inspired-sc2"
+version = "0.1.0"
+description = "Protoss replay imitation and constrained self-play reinforcement learning for StarCraft II"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "burnysc2==7.3.0",
+  "numpy>=2.0,<3",
+  "torch>=2.6,<3",
+  "s2protocol>=5.0.16.97563.0",
+  "sc2reader==1.8.0",
+  "filelock>=3,<5",
+  "loguru>=0.7,<1",
+  "mpyq>=0.2.5,<0.3",
+  "pys2clientprotocol==1.0.2",
+  "psutil>=7,<8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.11"]
+
+[project.scripts]
+pluto-sc2 = "pluto_sc2.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pluto_sc2 = ["replay_browser.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["integration: requires a local StarCraft II client and scenario"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

@@ -38,7 +38,7 @@ import {
   useState,
 } from "react";
 import {
-  buildingAliveAt,
+  buildingVisibleAt,
   buildingPositionAt,
   gasTappedAt,
   isGasStructure,
@@ -304,6 +304,8 @@ function iconToken(
 
 export function MapReplayer({
   playback,
+  playbackWindow,
+  buffering = false,
   /** Cap on the stage height in CSS px. Hosts that embed the replay in
    * a panel (the macro drilldown) pass a smaller one; the default
    * sizes to the viewport like a video player. */
@@ -342,6 +344,9 @@ export function MapReplayer({
   fill = false,
 }: {
   playback: MapPlayback;
+  /** The loaded segment. The clock waits at its end until the next arrives. */
+  playbackWindow?: { start: number; end: number };
+  buffering?: boolean;
   maxHeightPx?: number;
   time?: number;
   onTimeChange?: (t: number) => void;
@@ -393,6 +398,10 @@ export function MapReplayer({
   const timeRef = useRef(0);
   const playingRef = useRef(false);
   const speedRef = useRef<number>(8);
+  const windowRef = useRef(playbackWindow);
+  const bufferingRef = useRef(buffering);
+  windowRef.current = playbackWindow;
+  bufferingRef.current = buffering;
   playingRef.current = playing;
   speedRef.current = speed;
 
@@ -560,9 +569,10 @@ export function MapReplayer({
     let lastTs: number | null = null;
     const draw = (ts: number) => {
       raf = requestAnimationFrame(draw);
-      if (lastTs !== null && playingRef.current) {
+      if (lastTs !== null && playingRef.current && !bufferingRef.current) {
         const dt = ((ts - lastTs) / 1000) * speedRef.current;
-        const next = timeRef.current + dt;
+        const segmentEnd = windowRef.current?.end ?? gameLength;
+        const next = Math.min(segmentEnd, timeRef.current + dt);
         if (next >= gameLength) {
           timeRef.current = gameLength;
           emitTime(gameLength);
@@ -571,7 +581,7 @@ export function MapReplayer({
           timeRef.current = next;
           // Throttle React state to ~4 Hz — the canvas doesn't need it,
           // only the time label / scrubber do.
-          if (Math.abs(next - lastReactSync) > 0.25) {
+          if (Math.abs(next - lastReactSync) > 0.25 || (next === segmentEnd && next !== lastReactSync)) {
             lastReactSync = next;
             emitTime(next);
           }
@@ -1596,7 +1606,7 @@ function renderFrame(
   const buildings = playback.buildings;
   for (let bi = 0; bi < buildings.length; bi += 1) {
     const b = buildings[bi];
-    if (!buildingAliveAt(b, t)) continue;
+    if (!buildingVisibleAt(b, t)) continue;
     const bpos = buildingPositionAt(b, t, playback.fidelity?.positions === "engine");
     const sx = projectX(bounds, proj, bpos.x);
     const sy = projectY(bounds, proj, bpos.y);

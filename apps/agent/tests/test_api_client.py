@@ -468,7 +468,7 @@ def test_503_ingest_backpressure_yields_complete_batch_to_queue() -> None:
 
     assert raised.value.retry_after_seconds == 1.0
     assert request_mock.call_count == 1
-    assert request_mock.call_args_list[0].kwargs["json"] == {"games": games}
+    assert __import__("json").loads(request_mock.call_args_list[0].kwargs["data"]) == {"games": games}
 
 
 def test_429_without_retry_after_falls_back_to_exponential_backoff() -> None:

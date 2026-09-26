@@ -1336,7 +1336,7 @@ class ReplayWatcher:
         # A manually generated recording must be able to upload while its
         # website request owns the recorder lock. Cloud compaction can mark
         # that engine payload reduced-detail; it is still already recorded.
-        if (self._has_engine_playback(game) or self._stop.is_set()
+        if (self._has_engine_playback(game, allow_reduced_legacy=True) or self._stop.is_set()
                 or self._state.replay_capture_enabled is not True
                 or not replay_capture_enabled(self._cfg.state_dir)):
             return False
@@ -1375,15 +1375,9 @@ class ReplayWatcher:
         return True
 
     @staticmethod
-    def _has_engine_playback(game) -> bool:
-        playback = getattr(game, "map_playback", None) or {}
-        fidelity = playback.get("fidelity", {})
-        interval = fidelity.get("sampleSeconds")
-        return (isinstance(interval, (int, float)) and not isinstance(interval, bool)
-                and math.isfinite(interval) and 0 < interval <= 0.179
-                and fidelity.get("positions") == "engine" and all(
-            fidelity.get(channel) == "observed" for channel in ("attacks", "effects", "creep")
-        ))
+    def _has_engine_playback(game, *, allow_reduced_legacy=False) -> bool:
+        from .playback_artifacts import has_engine_playback
+        return has_engine_playback(game, allow_reduced_legacy=allow_reduced_legacy)
 
     def _drain_capture_queue(self) -> None:
         while True:

@@ -2510,3 +2510,63 @@ def test_drain_outside_filter_invokes_on_failure(tmp_path: Path) -> None:
     assert dropped == 2
     assert len(failures) == 2
     assert all(isinstance(e, _FilteredOutError) for _p, e in failures)
+
+
+def test_partial_byte_chunk_busy_commits_accepted_and_preserves_pending_backoff(tmp_path):
+    import pytest
+    class PartialBusyApi(_StubApi):
+        def upload_games_batch(self, games):
+            self.batch_calls.append(len(games))
+            self.calls.extend(games)
+            if len(self.batch_calls) == 1:
+                return {"accepted": [{"gameId": games[0]["gameId"]}],
+                        "rejected": [{"gameId": game["gameId"], "retryable": True,
+                                      "errors": ["batch_part_deferred"]} for game in games[1:]],
+                        "_ingest_retry_after_seconds": 7.5}
+            return {"accepted": [{"gameId": game["gameId"]} for game in games], "rejected": []}
+    state = AgentState(device_token="test")
+    api = PartialBusyApi()
+    failures = []
+    q = UploadQueue(cfg=_cfg(tmp_path, upload_batch_size=3), state=state, api=api,
+                    on_failure=lambda path, exc: failures.append((path, exc)))
+    jobs = [_game(tmp_path, f"partial-{index}.SC2Replay") for index in range(3)]
+    for job in jobs:
+        assert q.submit(job)
+    with pytest.raises(ReplayIngestBusy) as raised:
+        q._upload_batch(jobs)
+    assert raised.value.retry_after_seconds == 7.5
+    assert str(jobs[0].file_path) in state.uploaded
+    assert str(jobs[1].file_path) not in state.uploaded
+    assert not q.is_pending(jobs[0].file_path)
+    assert all(q.is_pending(job.file_path) for job in jobs[1:])
+    assert q._batch_size == 3 and failures == []
+    q._upload_batch(jobs[1:])
+    assert api.batch_calls == [3, 2]
+    assert len(state.uploaded) == 3
+    assert all(not q.is_pending(job.file_path) for job in jobs)
+    assert failures == []
+
+
+def test_playback_publication_failure_does_not_advance_durable_upload_cursor(tmp_path):
+    import pytest
+    state = AgentState(device_token="test")
+    class ArtifactApi(_StubApi):
+        fail = True
+        def upload_playback_artifact(self, game_id, path):
+            assert game_id == "id-segmented.SC2Replay"
+            assert path == tmp_path / "manifest.json"
+            if self.fail:
+                raise RuntimeError("segment upload interrupted")
+            return {"ok": True}
+    api = ArtifactApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _game(tmp_path, "segmented.SC2Replay")
+    job.game.playback_artifact_path = str(tmp_path / "manifest.json")
+    assert "playback_artifact_path" not in job.game.to_payload()
+    q.submit(job)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        q._upload_batch([job])
+    assert str(job.file_path) not in state.uploaded and q.is_pending(job.file_path)
+    api.fail = False
+    q._upload_batch([job])
+    assert str(job.file_path) in state.uploaded and not q.is_pending(job.file_path)

@@ -81,6 +81,7 @@ class GdprService {
    *   logger?: import('pino').Logger,
    *   gameDetails?: import('./gameDetails').GameDetailsService,
    *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
+   *   playbackArtifacts?: import('./playbackArtifacts').PlaybackArtifactsService|null,
    *   customBuilds?: import('./types').CustomBuildsService,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
@@ -99,6 +100,7 @@ class GdprService {
     // ``db.gameDetails.deleteMany`` only covers the Mongo backend.
     this.gameDetails = (opts && opts.gameDetails) || null;
     this.replayFiles = (opts && opts.replayFiles) || null;
+    this.playbackArtifacts = (opts && opts.playbackArtifacts) || null;
     this.customBuilds = (opts && opts.customBuilds) || null;
   }
 
@@ -240,6 +242,7 @@ class GdprService {
     if (this.replayFiles) {
       await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       await gdprFence.assert();
       counts.replayFiles = -1;
     }
@@ -312,6 +315,7 @@ class GdprService {
     if (this.replayFiles) {
       await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       await gdprFence.assert();
     }
     // Close the equivalent coaching race: a request may have resolved its
@@ -637,8 +641,10 @@ class GdprService {
           userId,
           replayGameIds,
         );
+        if (this.playbackArtifacts) await this.playbackArtifacts.deleteMany(userId, replayGameIds);
       } else {
         await this.replayFiles.deleteAllForUser(userId);
+        if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       }
       await gdprFence.assert();
     }
@@ -653,8 +659,10 @@ class GdprService {
       await gdprFence.assert();
       if (since || until) {
         await this.replayFiles.deleteMany(userId, replayGameIds);
+        if (this.playbackArtifacts) await this.playbackArtifacts.deleteMany(userId, replayGameIds);
       } else {
         await this.replayFiles.deleteAllForUser(userId);
+        if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       }
       await gdprFence.assert();
     }
@@ -1003,6 +1011,7 @@ class GdprService {
     if (this.replayFiles) {
       await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       await gdprFence.assert();
     }
     // Clear current data (NOT the user record — the user keeps their id).
@@ -1023,6 +1032,8 @@ class GdprService {
             const restored = { ...r, userId };
             if (key === "games") {
               delete restored.replayFile;
+              delete restored.playbackArtifact;
+              delete restored.playbackUpload;
               delete restored.replayUpload;
               delete restored._customBuildReclassify;
               delete restored._customBuildClassificationSequence;
@@ -1044,6 +1055,7 @@ class GdprService {
     if (this.replayFiles) {
       await gdprFence.assert();
       await this.replayFiles.deleteAllForUser(userId);
+      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
       await gdprFence.assert();
     }
     return { restoredAt: new Date(), counts: countsOf(data) };
@@ -1192,6 +1204,8 @@ class GdprService {
         $or: [
           { "replayFile.storedAt": { $exists: true } },
           { "replayUpload.uploadId": { $exists: true } },
+          { "playbackArtifact.artifactId": { $exists: true } },
+          { "playbackUpload.artifactId": { $exists: true } },
         ],
       },
       { projection: { _id: 1 } },

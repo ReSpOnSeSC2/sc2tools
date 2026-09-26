@@ -59,6 +59,7 @@ from .live.transport import (
 from .pairing import ensure_paired
 from .import_controller import ImportController
 from .socket_client import SocketClient, make_recompute_handlers
+from .bot_lab import BotLabController
 from .player_handle import (
     auto_detect_from_replays,
     read_cache as read_player_handle_cache,
@@ -495,6 +496,7 @@ def _run_headless(
             on_import_start=import_ctl.handle_start_request,
             on_import_cancel=import_ctl.handle_cancel_request,
             on_import_pick_folder=import_ctl.handle_pick_folder_request,
+            on_bot_lab=BotLabController(cfg.state_dir, state).handle,
         )
 
     live_transport: Optional[FanOutTransport] = None
@@ -922,6 +924,7 @@ def _gui_boot_worker(
                 on_import_start=import_ctl.handle_start_request,
                 on_import_cancel=import_ctl.handle_cancel_request,
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
+                on_bot_lab=BotLabController(cfg.state_dir, state).handle,
             )
         cell.socket_client = socket_client
 

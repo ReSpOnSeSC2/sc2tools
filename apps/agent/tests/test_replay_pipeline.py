@@ -2045,11 +2045,13 @@ def test_engine_track_compression_preserves_stops_and_time_aligned_position():
     kept = _compress_engine_track(points)
     assert len(kept) < len(points) // 2
     assert (10.0, 0.0, 20.0) in kept
-    assert max(b[0] - a[0] for a, b in zip(kept, kept[1:])) <= 2
+    # Observed stationary spans can be longer than the browser's two-second
+    # interpolation window: the browser holds their earlier point exactly.
+    assert any(b[0] - a[0] > 2 for a, b in zip(kept, kept[1:]))
     for t, x, y in points:
         for a, b in zip(kept, kept[1:]):
             if a[0] <= t <= b[0]:
-                f = (t - a[0]) / (b[0] - a[0])
+                f = 0 if b[0] - a[0] > 2 else (t - a[0]) / (b[0] - a[0])
                 assert abs(a[1] + f * (b[1] - a[1]) - x) <= 0.025
                 assert abs(a[2] + f * (b[2] - a[2]) - y) <= 0.025
                 break
@@ -2106,7 +2108,7 @@ def test_engine_adaptive_budget_keeps_cargo_exit_and_bounded_routes(monkeypatch,
     if budget == "points":
         monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 120)
     else:
-        monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_BYTES", int(len(json.dumps(original, separators=(",", ":")).encode()) * .87))
+        monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_BYTES", int(len(__import__("sc2tools_agent.upload_json", fromlist=["compact_json_bytes"]).compact_json_bytes(original)) * .87))
     out = pipeline._compact_map_playback(pb)
     assert .15 < out["fidelity"]["positionError"] <= .5
     assert out["fidelity"]["complete"] is True
@@ -2152,8 +2154,9 @@ def test_engine_budget_failure_reaches_parser_without_publishing_partial_game(mo
     monkeypatch.setattr(pipeline, "_PLAYBACK_OBSERVED_MAX_TOTAL_POINTS", 1)
     with pytest.raises(pipeline.PlaybackBudgetExceeded, match="0.5-cell accuracy"):
         pipeline._compact_map_playback(pb)
-    ctx = SimpleNamespace(is_ai_game=False, me=SimpleNamespace(name="Me", result="Win"),
-                          opponent=SimpleNamespace(name="Opp"), file_path=tmp_path / "game.SC2Replay")
+    ctx = SimpleNamespace(is_ai_game=False, me=SimpleNamespace(name="Me", result="Win", race="Protoss", mmr=None, handle=None, pid=1),
+                          opponent=SimpleNamespace(name="Opp", race="Terran", mmr=None, handle=None, pid=2), file_path=tmp_path / "game.SC2Replay",
+                          game_id="test-budget", date_iso="2026-09-25T00:00:00Z", map_name="Test", length_seconds=100)
     module = SimpleNamespace(detect_battle_markers=lambda *_a: [])
     monkeypatch.setattr(pipeline, "_load_sc2ra_package_module", lambda _n: module)
     monkeypatch.setattr(pipeline, "_raw_map_playback", lambda *_a: pb)
@@ -2210,7 +2213,7 @@ def test_v6_byte_budget_preserves_spell_events_and_track_endpoints(monkeypatch):
     pb["ability_casts"] = [{"owner": "me", "ability": "PsiStorm", "t": i * 10,
                             "x": 30, "y": 40} for i in range(50)]
     out = pipeline._compact_map_playback(pb)
-    assert len(json.dumps(out, separators=(",", ":")).encode()) <= 5000
+    assert len(__import__("sc2tools_agent.upload_json", fromlist=["compact_json_bytes"]).compact_json_bytes(out)) <= 5000
     assert out["fidelity"]["complete"] is False
     assert len(out["casts"]) == 50
     assert out["units"][0]["wp"][0] == 0

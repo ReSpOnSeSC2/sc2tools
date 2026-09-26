@@ -141,7 +141,7 @@ class DevicePairingsService {
    * sha256'd the bearer value).
    *
    * @param {string} tokenHash
-   * @returns {Promise<{userId: string}|null>}
+   * @returns {Promise<{userId: string, deviceId: string}|null>}
    */
   async findTokenByHash(tokenHash) {
     const row = await this.db.deviceTokens.findOne({
@@ -153,7 +153,7 @@ class DevicePairingsService {
     this.db.deviceTokens
       .updateOne({ tokenHash }, { $set: { lastSeenAt: new Date() } })
       .catch(() => {});
-    return { userId: row.userId };
+    return { userId: row.userId, deviceId: String(row._id) };
   }
 
   /**

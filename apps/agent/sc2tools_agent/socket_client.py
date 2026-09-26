@@ -62,6 +62,7 @@ class SocketClient:
         on_import_start: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_import_cancel: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._device_token = device_token
@@ -78,6 +79,7 @@ class SocketClient:
         self._on_import_start = on_import_start
         self._on_import_cancel = on_import_cancel
         self._on_import_pick_folder = on_import_pick_folder
+        self._on_bot_lab = on_bot_lab
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         # Lazily imported in start() so test environments that don't
@@ -136,6 +138,18 @@ class SocketClient:
         @sio.event
         async def disconnect() -> None:  # noqa: ARG001
             log.info("socket_client_disconnected")
+
+        @sio.on("bot-lab:request")
+        async def _on_bot_lab(payload):
+            if self._on_bot_lab is None:
+                return {"ok": False, "ready": False, "status": "failed", "code": "disabled",
+                        "message": "Bot Lab is unavailable on this agent.", "error": "Bot Lab is unavailable on this agent."}
+            try:
+                return await asyncio.to_thread(self._on_bot_lab, payload)
+            except Exception:
+                log.exception("bot_lab_callback_failed")
+                return {"ok": False, "ready": False, "status": "unknown", "code": "local_error",
+                        "error": "The local bot request could not be completed."}
 
         @sio.on("macro:recompute_request")
         async def _on_macro(payload: Optional[Dict[str, Any]], *, requested: bool = False) -> Optional[Dict[str, Any]]:  # noqa: ARG001

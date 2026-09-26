@@ -1,0 +1,5 @@
+# Preserve exact source hashes across Windows and Linux checkouts.
+** -text whitespace=cr-at-eol
+references/alphastar-upstream/** -whitespace
+# Preserve the imported test's existing terminal blank line and source hash.
+tests/test_league_client.py whitespace=cr-at-eol,-blank-at-eof

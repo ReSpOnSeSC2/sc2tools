@@ -18,6 +18,8 @@ from urllib.parse import quote
 
 import requests
 
+from .upload_json import GAME_BODY_MAX_BYTES, compact_json_bytes
+
 CONNECT_TIMEOUT_SEC = 5.0
 READ_TIMEOUT_SEC = 30.0
 DEFAULT_RETRIES = 3
@@ -143,6 +145,42 @@ class ApiClient:
     def upload_games_batch(self, games: list[Dict[str, Any]]) -> Dict[str, Any]:
         if not self.device_token:
             raise PermissionError("agent_not_paired")
+        # Game count does not bound a batch containing native playback.
+        # Partition using the exact bytes _request will send. Never truncate
+        # a game or repeatedly submit an oversized multi-game request.
+        chunks = []
+        current = []
+        rejected = []
+        for game in games:
+            if len(compact_json_bytes({"games": [game]})) > GAME_BODY_MAX_BYTES:
+                rejected.append({"gameId": game.get("gameId"),
+                                 "errors": ["game_payload_too_large"], "retryable": False})
+                continue
+            if current and len(compact_json_bytes({"games": [*current, game]})) > GAME_BODY_MAX_BYTES:
+                chunks.append(current)
+                current = []
+            current.append(game)
+        if current:
+            chunks.append(current)
+        if len(chunks) != 1 or rejected:
+            result = {"accepted": [], "rejected": rejected}
+            for index, chunk in enumerate(chunks):
+                try:
+                    response = self.upload_games_batch(chunk)
+                except (ReplayIngestBusy, _ApiError, requests.RequestException) as exc:
+                    # Prior chunks may already be durable. Acknowledge those
+                    # and retain only the remaining games in the retry lane.
+                    if not result["accepted"] and not result["rejected"]:
+                        raise
+                    result["rejected"].extend(
+                        {"gameId": game.get("gameId"), "errors": ["batch_part_deferred"], "retryable": True}
+                        for remaining in chunks[index:] for game in remaining)
+                    if isinstance(exc, ReplayIngestBusy):
+                        result["_ingest_retry_after_seconds"] = exc.retry_after_seconds
+                    break
+                result["accepted"].extend(response.get("accepted", []))
+                result["rejected"].extend(response.get("rejected", []))
+            return result
         # Read timeout scales with batch size (floor: the single-game
         # default). A size-50 batch gets 150 s instead of timing out
         # at 30 s while the server is still happily processing it —
@@ -158,6 +196,35 @@ class ApiClient:
             body={"games": games},
             read_timeout=read_timeout,
         )
+
+    def upload_playback_artifact(self, game_id: str, manifest_path: Path) -> Dict[str, Any]:
+        """Resume an immutable local bundle; completion is the publication point."""
+        from hashlib import sha256
+        from urllib.parse import quote
+        from .playback_artifacts import load_bundle, MAX_SEGMENT_BYTES
+        manifest_path = Path(manifest_path)
+        manifest = load_bundle(manifest_path)
+        base = f"/v1/games/{quote(game_id, safe='')}/map-playback/artifacts"
+        prepared = self._request("POST", base, auth=True, body={"manifest": manifest})
+        artifact_id = prepared.get("artifactId", "")
+        if not isinstance(artifact_id, str) or len(artifact_id) != 64 or any(c not in "0123456789abcdef" for c in artifact_id):
+            raise ValueError("Invalid playback artifact response")
+        for descriptor in manifest["segments"]:
+            digest = descriptor.get("sha256", "")
+            if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+                raise ValueError("Invalid playback segment digest")
+            path = manifest_path.parent / f"{digest}.json"
+            with path.open("rb") as handle:
+                body = handle.read(MAX_SEGMENT_BYTES + 1)
+            if len(body) > MAX_SEGMENT_BYTES or len(body) != descriptor["sizeBytes"] or sha256(body).hexdigest() != digest:
+                raise ValueError("Local playback segment integrity check failed")
+            result = self._request("PUT", f"{base}/{artifact_id}/segments/{descriptor['index']}", auth=True, raw_body=body)
+            if result.get("sha256") != digest:
+                raise ValueError("Playback segment upload was not verified")
+        result = self._request("POST", f"{base}/{artifact_id}/complete", auth=True, body={})
+        if result.get("artifactId") != artifact_id or result.get("segmentCount") != len(manifest["segments"]):
+            raise ValueError("Playback artifact publication was not verified")
+        return result
 
     def upload_replay_file(self, game_id: str, file_path: Path) -> bool:
         """Compatibility archive path for optional/rolling deployments."""
@@ -558,6 +625,7 @@ class ApiClient:
         body: Optional[Dict[str, Any]] = None,
         allow_202: bool = False,
         read_timeout: Optional[float] = None,
+        raw_body: Optional[bytes] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
         headers = {"user-agent": _USER_AGENT, "accept": "application/json"}
@@ -566,13 +634,26 @@ class ApiClient:
                 raise PermissionError("agent_not_paired")
             headers["authorization"] = f"Bearer {self.device_token}"
 
+        request_body = {"json": body if body is not None else None}
+        if raw_body is not None:
+            if body is not None or len(raw_body) > 2 * 1024 * 1024:
+                raise ValueError("Invalid bounded raw request")
+            headers["content-type"] = "application/json"
+            request_body = {"data": raw_body}
+        if path == "/v1/games" and body is not None:
+            encoded = compact_json_bytes(body)
+            if len(encoded) > GAME_BODY_MAX_BYTES:
+                raise ValueError("Game request exceeds API body capacity")
+            headers["content-type"] = "application/json"
+            request_body = {"data": encoded}
+
         last_exc: Optional[Exception] = None
         for attempt in range(DEFAULT_RETRIES):
             try:
                 response = requests.request(
                     method,
                     url,
-                    json=body if body is not None else None,
+                    **request_body,
                     headers=headers,
                     timeout=(
                         CONNECT_TIMEOUT_SEC,

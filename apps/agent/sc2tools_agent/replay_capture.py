@@ -226,8 +226,12 @@ def capture_exact_replay(path: Path, state_dir: Optional[Path], progress: Option
                 return cancelled
 
         try:
-            artifact = exporter.export_engine_observations(path, me.pid, progress=progress,
-                                                           cancel_requested=should_cancel)
+            from .bot_lab import engine_activity_guard, bot_match_blocks_capture
+            with engine_activity_guard(state_dir):
+                if bot_match_blocks_capture(state_dir):
+                    raise RuntimeError("A Bot Lab match is active or reserved. Replay capture will wait until it finishes.")
+                artifact = exporter.export_engine_observations(path, me.pid, progress=progress,
+                                                               cancel_requested=should_cancel)
         except Exception as exc:
             require_running()
             if should_cancel():

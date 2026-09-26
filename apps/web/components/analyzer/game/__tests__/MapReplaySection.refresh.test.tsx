@@ -62,7 +62,7 @@ describe("map playback rebuild progress", () => {
     expect(screen.getByRole("status").textContent).toContain("even when automatic capture is off");
     expect(screen.getByRole("status").textContent).toContain("significantly more CPU");
     await act(async () => fireEvent.click(button()));
-    expect(new Set(harness.paths)).toEqual(new Set(["/v1/games/g1/map-playback", "/v1/games/g1/map-playback/status"]));
+    expect(new Set(harness.paths)).toEqual(new Set(["/v1/games/g1/map-playback", "/v1/games/g1/map-playback/manifest", "/v1/games/g1/map-playback/status"]));
     expect(harness.api.mutate).not.toHaveBeenCalled();
     expect(harness.api.request).toHaveBeenCalledWith({ method: "POST", body: '{"fidelity":"engine"}' });
     expect(harness.interval).toBe(3000);

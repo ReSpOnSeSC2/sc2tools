@@ -2,6 +2,30 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.0
+
+### Fixed - long replay upload capacity
+
+- Upload complete engine playback as hash-verified, bounded segments rather
+  than one oversized game document. Long recordings keep their observed
+  movements, attacks, effects and creep; interrupted uploads can retry safely.
+- Keep normal analytics small and mark a recording uploaded only after the
+  server verifies every segment. Reuse compatible local recordings.
+- Preserve compact JSON transport, byte-accurate request limits and explicit
+  capacity failures instead of repeatedly retrying oversized payloads.
+
+### Added - private local bot integration
+
+- Bundle the optional bot runtime source and an authenticated local-agent
+  bridge for the hidden administrator Bot Lab. Local configuration is required;
+  ordinary installs do not import ML packages or start a game.
+- Launch only catalogued maps and immutable checkpoints. Persistent request
+  identities prevent duplicate starts after disconnects. Replay capture and
+  bot sessions coordinate access to the local game engine.
+- Preserve eight starting workers, Protoss's 200 APM and camera restrictions,
+  separate Terran/Zerg limits, and fog of war. These are development bots,
+  without a validated ladder rating or bundled champion weights.
+
 ## 0.16.11
 
 ### Fixed - automatic map replay capture

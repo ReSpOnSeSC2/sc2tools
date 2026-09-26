@@ -36,6 +36,7 @@ const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
+const { PlaybackArtifactsService } = require("./services/playbackArtifacts");
 const {
   InfrastructureUsageService,
 } = require("./services/infrastructureUsage");
@@ -123,6 +124,8 @@ const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
 const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
+const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
+const { buildBotLabRouter } = require("./routes/botLab");
 const {
   buildInfrastructureCostsRouter,
 } = require("./routes/infrastructureCosts");
@@ -174,11 +177,12 @@ const COACHING_JSON_LIMIT = "16mb";
  * @param {import('express').Request} req
  */
 function isLargeAuthenticatedJson(req) {
-  if (req.method !== "POST") return false;
   const path = String(req.originalUrl || req.url || "")
     .split("?", 1)[0]
     .replace(/\/+$/, "")
     .toLowerCase();
+  if (req.method === "PUT" && /^\/(?:v1\/)?games\/[^/]+\/map-playback\/artifacts\/[a-f0-9]{64}\/segments\/\d+$/.test(path)) return true;
+  if (req.method !== "POST") return false;
   if (path === "/v1/games" || path === "/games") return true;
   if (path === "/v1/me/multichat-sounds" || path === "/me/multichat-sounds") {
     return true;
@@ -299,6 +303,9 @@ function makeServices(deps) {
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
+  const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
+    client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
+  }) : null;
   const infrastructureUsage = new InfrastructureUsageService({
     games: deps.db.games,
     mongoDb: deps.db.db,
@@ -608,6 +615,7 @@ function makeServices(deps) {
     // wipe-history leave R2 objects behind when GAME_DETAILS_STORE=r2.
     gameDetails,
     replayFiles,
+    playbackArtifacts,
     customBuilds,
   });
   const community = new CommunityService(deps.db, {
@@ -670,6 +678,7 @@ function makeServices(deps) {
     gameVods,
     gameDetails,
     replayFiles,
+    playbackArtifacts,
     infrastructureUsage,
     customBuilds,
     pairings,
@@ -809,7 +818,11 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
   // body. Every ordinary endpoint gets a much smaller ceiling; otherwise an
   // unauthenticated client could open many parallel 5 MiB JSON requests to an
   // unrelated route and fill the V8 heap before route auth ever ran.
-  const replayJson = express.json({ limit: REPLAY_JSON_LIMIT });
+  const replayJson = express.json({ limit: REPLAY_JSON_LIMIT, verify: (req, _res, body) => {
+    if (req.method === "PUT" && /\/map-playback\/artifacts\//.test(req.url || "")) {
+      /** @type {import("http").IncomingMessage & {playbackRawBody?: Buffer}} */ (req).playbackRawBody = body;
+    }
+  } });
   const coachingJson = express.json({ limit: COACHING_JSON_LIMIT });
   const ordinaryJson = express.json({
     limit: DEFAULT_JSON_LIMIT,
@@ -977,6 +990,11 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   /** @param {import('express').Request} req */
   const isAdmin = (req) =>
     Boolean(req.auth && req.auth.clerkUserId && adminIds.has(req.auth.clerkUserId));
+  app.use("/v1/bot-lab", buildBotLabRouter({ auth, io: deps.io, isAdmin,
+    enabled: process.env.BOT_LAB_ENABLED === "true" }));
+  app.use(SERVICE.ROUTE_PREFIX, buildPlaybackArtifactsRouter({
+    playbackArtifacts: services.playbackArtifacts, auth,
+  }));
   // Email allowlist — the deterministic admin path. Lower-cased at load;
   // an empty set disables it. ``isAdminEmail`` is what the /v1/me route
   // consults to promote a matching user on sight; ``onAdminGranted``

@@ -39,6 +39,14 @@ def test_capture_uses_upload_perspective_and_process_visible_sidecar(monkeypatch
     assert output == tmp_path / "game.SC2Replay.observations.json"
 
 
+def test_capture_does_not_start_engine_during_reserved_bot_match(monkeypatch, tmp_path):
+    _parser, exporter = setup_capture(monkeypatch, me=SimpleNamespace(pid=2))
+    (tmp_path / "bot-lab-journal.json").write_text(json.dumps({"activeSessionId": "reserved"}))
+    with pytest.raises(RuntimeError, match="active or reserved"):
+        capture_exact_replay(tmp_path / "game.SC2Replay", tmp_path)
+    exporter.export_engine_observations.assert_not_called()
+
+
 def test_capture_never_caches_partial_or_unknown_perspective(monkeypatch, tmp_path):
     _parser, exporter = setup_capture(monkeypatch, complete=False, me=SimpleNamespace(pid=1))
     with pytest.raises(ValueError, match="end of the game"):

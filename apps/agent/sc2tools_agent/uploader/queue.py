@@ -1449,6 +1449,20 @@ class UploadQueue:
         accepted = result.get("accepted") or []
         rejected = result.get("rejected") or []
 
+        # Do not advance the durable parsed-game cursor until the independent
+        # playback artifact is fully verified/published. A retry safely upserts
+        # analytics and reuses the same content-addressed segments.
+        for acc in accepted:
+            gid = acc.get("gameId") if isinstance(acc, dict) else None
+            jobs = by_id.get(gid) if isinstance(gid, str) else None
+            if jobs:
+                artifact = getattr(jobs[0].game, "playback_artifact_path", None)
+                if artifact:
+                    with self._network_gate.hold(ingest_priority):
+                        if self.is_paused():
+                            raise _PausedBeforeNetwork()
+                        self._api.upload_playback_artifact(gid, Path(artifact))
+
         # Parsed stats and the exact replay file form one durable operation:
         # accepted originals enter the fsync'd archive journal before the
         # parsed-game cursor advances. Actual object storage is handled by a
@@ -1603,6 +1617,12 @@ class UploadQueue:
                 self._retry_q.put_nowait(self._queue_item(job))
 
         if retryable_jobs:
+            # The HTTP client may split by exact byte size. Earlier chunks
+            # are now committed, while a later admission-busy chunk retains
+            # the existing no-failure-callback/no-shrink retry semantics.
+            retry_after = result.get("_ingest_retry_after_seconds")
+            if isinstance(retry_after, (int, float)) and 0 <= retry_after <= 60:
+                raise ReplayIngestBusy(retry_after)
             summary = "; ".join(
                 f"{job.file_path.name}: {message}"
                 for job, message in retryable_jobs[:3]
@@ -1746,6 +1766,12 @@ class UploadQueue:
             self._release_pending((job,))
             raise _ServerRejectedError(f"server_rejected: {result!r}")
         game_id = getattr(job.game, "game_id", None)
+        artifact = getattr(job.game, "playback_artifact_path", None)
+        if artifact:
+            with self._network_gate.hold(0 if job.priority else 1):
+                if self.is_paused():
+                    raise _PausedBeforeNetwork()
+                self._api.upload_playback_artifact(game_id, Path(artifact))
         if isinstance(game_id, str) and game_id:
             task = ReplayArchiveTask(job.file_path, game_id)
             marker = (

@@ -50,6 +50,9 @@ export function CompactReplayHost({
   myRace,
   maxHeightPx,
   initialTimeSec,
+  onPlaybackTimeChange,
+  playbackWindow,
+  buffering = false,
 }: {
   playback: MapPlayback;
   /** Seeds the score so one game always draws the same track. */
@@ -58,6 +61,9 @@ export function CompactReplayHost({
   maxHeightPx?: number;
   /** Applied on mount; the host keys each game/timestamp navigation. */
   initialTimeSec?: number | null;
+  onPlaybackTimeChange?: (time: number) => void;
+  playbackWindow?: { start: number; end: number };
+  buffering?: boolean;
 }) {
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
@@ -68,7 +74,7 @@ export function CompactReplayHost({
 
   // Echoed back to MapReplayer VERBATIM — it compares by identity to
   // tell its own 4 Hz tick apart from an external seek.
-  const handleTimeChange = useCallback((next: number) => setTime(next), []);
+  const handleTimeChange = useCallback((next: number) => { setTime(next); onPlaybackTimeChange?.(next); }, [onPlaybackTimeChange]);
   const handlePlayingChange = useCallback(
     (next: boolean) => {
       // Synchronous, still inside the replayer's play/pause click.
@@ -89,6 +95,8 @@ export function CompactReplayHost({
       </div>
       <MapReplayer
         playback={playback}
+        playbackWindow={playbackWindow}
+        buffering={buffering}
         maxHeightPx={maxHeightPx}
         time={time}
         onTimeChange={handleTimeChange}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "./clientApi";
 import { sanitizeMapPlayback } from "./mapReplay";
+import { sanitizePlaybackManifest } from "./segmentedPlayback";
 
 const RECORDING_TIMEOUT_MS = 18 * 60 * 1000;
 const ACTIVE_STATUSES = new Set(["queued", "processing", "uploading"]);
@@ -44,19 +45,31 @@ export function useMapReplay(gameId: string | null) {
   }, [epoch]);
   useEffect(() => () => { scope.current.request += 1; }, [gameId]);
 
-  const req = useApi<Record<string, unknown>>(
-    gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback` : null,
+  const playbackPath = gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback` : null;
+  const manifestReq = useApi<Record<string, unknown>>(
+    playbackPath ? `${playbackPath}/manifest` : null,
     { revalidateOnFocus: false, refreshInterval: 0 },
   );
+  const manifest = useMemo(() => gameId ? sanitizePlaybackManifest(manifestReq.data) : null, [gameId, manifestReq.data]);
+  // Older servers return 404. A legacy-shaped response also remains usable
+  // during rolling deployments; malformed manifests never enable segments.
+  const legacyResponse = manifestReq.data?.v ? manifestReq.data : undefined;
+  const useLegacy = manifestReq.error?.status === 404 || !!legacyResponse;
+  const req = useApi<Record<string, unknown>>(useLegacy ? playbackPath : null,
+    { revalidateOnFocus: false, refreshInterval: 0 });
+  // Bind authenticated POST/explicit reads without an eager legacy download.
+  const actions = useApi<Record<string, unknown>>(playbackPath,
+    { isPaused: () => true, revalidateOnFocus: false, refreshInterval: 0 });
   const statusReq = useApi<Record<string, unknown>>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/map-playback/status` : null,
     { revalidateOnFocus: false, refreshInterval: gameId && state.refreshing ? 3000 : 0 },
   );
   const playback = useMemo(
-    () => gameId && req.data ? sanitizeMapPlayback(req.data) : null,
-    [gameId, req.data],
+    () => gameId && (req.data || legacyResponse) ? sanitizeMapPlayback(req.data || legacyResponse) : null,
+    [gameId, req.data, legacyResponse],
   );
-  const canRefresh = !!gameId && typeof req.request === "function";
+  const recordedFidelity = manifest?.fidelity ?? playback?.fidelity;
+  const canRefresh = !!gameId && typeof actions.request === "function";
   const rebuild = gameId ? (statusReq.data?.rebuild ?? (statusReq.data ? undefined : req.data?.rebuild)) as {
     status?: string; message?: string; requestId?: string; updatedAt?: number;
   } | undefined : undefined;
@@ -64,22 +77,44 @@ export function useMapReplay(gameId: string | null) {
   const jobStatus = rebuild?.status;
   const jobMessage = rebuild?.message;
   const updatedAt = rebuild?.updatedAt;
-  const error = gameId ? req.error : undefined;
+  const manifestError = manifestReq.error?.status === 404 ? undefined : manifestReq.error;
+  const invalidManifest = manifestReq.data && !manifest && !legacyResponse
+    ? { status: 0, code: "invalid_playback_manifest", message: "This replay's segment index is invalid. Please reload or record it again." } : undefined;
+  const error = gameId ? manifestError ?? invalidManifest ?? req.error : undefined;
   const progressError = gameId ? statusReq.error ?? req.error : undefined;
   const completionRead = useRef({ key: "", attempts: 0 });
   const reloadPlayback = req.mutate;
-  const playbackRequest = useRef(req.request);
-  playbackRequest.current = req.request;
+  const playbackRequest = useRef(actions.request);
+  playbackRequest.current = actions.request;
+  const manifestRequest = useRef(manifestReq.request);
+  manifestRequest.current = manifestReq.request;
+  const reloadManifest = manifestReq.mutate;
   const readPlayback = useCallback(async (stillCurrent: () => boolean) => {
     const readEpoch = scope.current.epoch;
     const readGeneration = scope.current.request;
     // SWR's no-argument mutate resolves cached data even when revalidation
     // fails. Only a rejecting authenticated GET can prove this download ran.
+    try {
+      const index = await manifestRequest.current<Record<string, unknown>>({ method: "GET" });
+      if (sanitizePlaybackManifest(index)) {
+        if (!stillCurrent() || scope.current.epoch !== readEpoch || scope.current.request !== readGeneration) return false;
+        await reloadManifest(index, { revalidate: false });
+        return stillCurrent() && scope.current.epoch === readEpoch && scope.current.request === readGeneration;
+      }
+      if (sanitizeMapPlayback(index)) {
+        if (!stillCurrent() || scope.current.epoch !== readEpoch || scope.current.request !== readGeneration) return false;
+        await reloadPlayback(index, { revalidate: false });
+        return stillCurrent() && scope.current.epoch === readEpoch && scope.current.request === readGeneration;
+      }
+      throw new Error("The replay segment index is invalid.");
+    } catch (failure) {
+      if ((failure as { status?: number })?.status !== 404) throw failure;
+    }
     const response = await playbackRequest.current<Record<string, unknown>>({ method: "GET" });
     if (!stillCurrent() || scope.current.epoch !== readEpoch || scope.current.request !== readGeneration) return false;
     await reloadPlayback(response, { revalidate: false });
     return stillCurrent() && scope.current.epoch === readEpoch && scope.current.request === readGeneration;
-  }, [reloadPlayback]);
+  }, [reloadPlayback, reloadManifest]);
 
   useEffect(() => {
     if (!gameId || !state.refreshing || !state.requestId || jobId !== state.requestId ||
@@ -126,14 +161,14 @@ export function useMapReplay(gameId: string | null) {
     // from GET without dispatching another capture or requiring a second click.
     const now = Date.now();
     patch({ refreshing: true, requestId: jobId, completedRequestId: null,
-      startedWithEnginePlayback: playback?.fidelity?.positions === "engine",
+      startedWithEnginePlayback: recordedFidelity?.positions === "engine",
       startedAt: typeof updatedAt === "number" && Number.isFinite(updatedAt)
         ? Math.min(now, Math.max(now - RECORDING_TIMEOUT_MS, updatedAt)) : now,
       refreshMessage: jobStatus === "uploading"
         ? "Recording finished. Uploading the map playback…"
         : "Recording playback with StarCraft II. This can use significantly more CPU for several minutes. Keep the desktop agent open until the recording finishes.",
     });
-  }, [canRefresh, jobId, jobStatus, updatedAt, state.refreshing, state.requestId, state.startedAt, playback, patch]);
+  }, [canRefresh, jobId, jobStatus, updatedAt, state.refreshing, state.requestId, state.startedAt, recordedFidelity, patch]);
 
   useEffect(() => {
     if (!gameId || !state.refreshing) return;
@@ -146,23 +181,23 @@ export function useMapReplay(gameId: string | null) {
     // was replaced, even if an API restart lost its in-memory job. Existing
     // engine recordings and reduced-detail output still need this job's status.
     if (state.requestId && !state.startedWithEnginePlayback &&
-        playback?.fidelity?.positions === "engine" && playback.fidelity.complete === true &&
-        playback.fidelity.attacks === "observed") {
+        recordedFidelity?.positions === "engine" && recordedFidelity.complete === true &&
+        recordedFidelity.attacks === "observed") {
       patch({ refreshing: false, completedRequestId: state.requestId,
         refreshMessage: "Recorded playback is ready." });
       return;
     }
     if (jobStatus === "complete" && sameJob && state.loadedRequestId === state.requestId) {
-      if (playback?.fidelity?.positions !== "engine") {
+      if (recordedFidelity?.positions !== "engine") {
         patch({ refreshing: false, refreshMessage: "Recording finished, but recorded playback is unavailable. Generate playback again." });
         return;
       }
-      const attacksObserved = playback.fidelity.attacks === "observed";
+      const attacksObserved = recordedFidelity.attacks === "observed";
       patch({ refreshing: false,
         completedRequestId: attacksObserved ? state.requestId : null,
         refreshMessage: !attacksObserved
           ? "Movement is ready, but this recording has no attack data. Update the desktop agent and generate playback again."
-          : playback.fidelity.complete === false
+          : recordedFidelity.complete === false
             ? "Recorded playback is ready with reduced detail for this large replay."
             : "Recorded playback is ready.",
       });
@@ -183,7 +218,7 @@ export function useMapReplay(gameId: string | null) {
       patch({ refreshing: false, refreshMessage: "Recording is still processing. Keep the desktop agent open and check back shortly." });
     }, Math.max(0, RECORDING_TIMEOUT_MS - (Date.now() - state.startedAt)));
     return () => window.clearTimeout(timer);
-  }, [gameId, state.refreshing, state.requestId, state.startedAt, state.startedWithEnginePlayback, playback,
+  }, [gameId, state.refreshing, state.requestId, state.startedAt, state.startedWithEnginePlayback, recordedFidelity,
     state.loadedRequestId, jobId, jobStatus, jobMessage, progressError, patch]);
 
   const refresh = async () => {
@@ -193,10 +228,10 @@ export function useMapReplay(gameId: string | null) {
     const isCurrent = () => scope.current.epoch === epoch && scope.current.request === generation;
     patch({ refreshing: true, requestId: null, completedRequestId: null,
       loadedRequestId: null, fallbackReads: 0,
-      startedWithEnginePlayback: playback?.fidelity?.positions === "engine",
+      startedWithEnginePlayback: recordedFidelity?.positions === "engine",
       refreshMessage: "Preparing recorded playback with your desktop agent…", startedAt: Date.now() });
     try {
-      const accepted = await req.request<{ requestId?: string; rebuild?: { requestId?: string } }>({
+      const accepted = await actions.request<{ requestId?: string; rebuild?: { requestId?: string } }>({
         method: "POST", body: JSON.stringify({ fidelity: "engine" }),
       });
       if (!isCurrent()) return;
@@ -218,7 +253,8 @@ export function useMapReplay(gameId: string | null) {
 
   return {
     playback,
-    isLoading: !!gameId && req.isLoading,
+    manifest,
+    isLoading: !!gameId && !manifest && !playback && (manifestReq.isLoading || (useLegacy && req.isLoading)),
     error,
     canRefresh,
     refreshing: !!gameId && state.refreshing,
@@ -228,4 +264,7 @@ export function useMapReplay(gameId: string | null) {
   };
 }
 
-export type MapReplayController = ReturnType<typeof useMapReplay>;
+export type MapReplayController = Omit<ReturnType<typeof useMapReplay>, "manifest"> & {
+  /** Optional for callers providing a legacy recording controller. */
+  manifest?: ReturnType<typeof useMapReplay>["manifest"];
+};

@@ -14,8 +14,8 @@
 #
 # Both are uploaded as a workflow artifact (downloadable from the
 # Actions tab for 30 days) regardless of trigger. On tag pushes the
-# files are ALSO uploaded to the GitHub Release page so end users can
-# grab them directly.
+# files are ALSO uploaded to a draft GitHub Release. Publish that draft
+# after verification and active local capture/session checks.
 #
 # To trigger manually: GitHub → Actions → "agent installer" → Run
 # workflow. To cut a release, tag the merged commit with the exact version in
@@ -198,7 +198,9 @@ jobs:
           fail_on_unmatched_files: true
           body_path: apps/agent/RELEASE_NOTES.generated.md
           generate_release_notes: true
-          draft: false
+          # Publish only after CI and local capture/session checks. A tag still
+          # builds a complete installer, without restarting active users.
+          draft: true
           prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
 
       - name: Wait before release retry
@@ -219,5 +221,5 @@ jobs:
           fail_on_unmatched_files: true
           body_path: apps/agent/RELEASE_NOTES.generated.md
           generate_release_notes: true
-          draft: false
+          draft: true
           prerelease: ${{ contains(steps.ver.outputs.version, '-') }}

@@ -465,6 +465,8 @@ class CloudGame:
     # replayer (unit tracks + buildings + battles over the map). Added
     # AFTER my_ladder_race to preserve positional-call compatibility.
     map_playback: Optional[Dict[str, Any]] = None
+    # Local spool reference only; never included in ordinary game analytics.
+    playback_artifact_path: Optional[str] = None
     # Exact replay start in RFC 3339 UTC. ``date_iso`` remains the replay
     # end time for backwards compatibility. Added last so positional
     # CloudGame constructors from older integrations keep their meaning.
@@ -935,14 +937,9 @@ def parse_replay_for_cloud_ex(
     # syncs. Best-effort — failures fall back to None and the heatmap
     # tiles surface their "no spatial data" empty state.
     spatial = _compute_spatial_extract(ctx)
-    # Compact map-playback payload for the cloud's vespene-style
-    # replayer (unit movement tracks + buildings + battle markers).
-    # Additive and best-effort like the spatial extract.
-    try:
-        map_playback = _compute_map_playback(ctx)
-    except PlaybackBudgetExceeded as exc:
-        log.warning("map_playback_budget_exceeded: %s", exc)
-        return None, "playback_budget_exceeded"
+    # Compute playback after the other fields so its budget is the exact
+    # remaining request capacity, not a fixed 0.75 MiB metadata reservation.
+    map_playback = None
 
     is_ladder = _is_ladder_game(ctx)
 
@@ -1114,7 +1111,7 @@ def parse_replay_for_cloud_ex(
     )
     started_at_raw = getattr(ctx, "started_at_iso", None)
 
-    return CloudGame(
+    game = CloudGame(
         game_id=str(ctx.game_id),
         date_iso=_to_iso(ctx.date_iso),
         result=result,
@@ -1149,7 +1146,34 @@ def parse_replay_for_cloud_ex(
             if started_at_raw not in (None, "", "unknown")
             else None
         ),
-    ), None
+    )
+    from .upload_json import GAME_BODY_MAX_BYTES, compact_json_bytes, playback_byte_budget
+    try:
+        budget = playback_byte_budget(game.to_payload())
+        if budget <= 0:
+            raise PlaybackBudgetExceeded("Game analysis alone exceeds the API request capacity")
+        # Complete recordings use separate immutable R2 segments. Ordinary
+        # analytics stay small and no long recording must be coarsened to fit
+        # the game-details object or its request budget.
+        raw = _raw_map_playback(ctx, _load_sc2ra_package_module("map_playback_data"))
+        if state_dir is not None and raw and raw.get("fidelity", {}).get("positions") == "engine" and raw.get("fidelity", {}).get("complete") is True:
+            from .playback_artifacts import build_bundle, source_artifact_digest
+            source_sha = source_artifact_digest(Path(getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)), raw)
+            # Full identities live in every content-addressed manifest/chunk;
+            # short directory shards avoid Windows MAX_PATH on deep state dirs.
+            destination = Path(state_dir) / "playback-artifacts" / source_sha[:2] / source_sha[2:10]
+            markers = _load_sc2ra_package_module("map_playback_data").detect_battle_markers(
+                raw.get("my_stats") or [], raw.get("opp_stats") or [],
+                raw.get("my_events") or [], raw.get("opp_events") or [], raw["game_length"])
+            game.playback_artifact_path = str(build_bundle(raw, destination, source_sha256=source_sha, battle_markers=markers))
+        else:
+            game.map_playback = _compute_map_playback(ctx, max_bytes=budget)
+        if len(compact_json_bytes({"games": [game.to_payload()]})) > GAME_BODY_MAX_BYTES:
+            raise PlaybackBudgetExceeded("Complete game analysis exceeds the API request capacity")
+    except PlaybackBudgetExceeded as exc:
+        log.warning("map_playback_budget_exceeded: %s", exc)
+        return None, "playback_budget_exceeded"
+    return game, None
 
 
 def _build_log_from_events(
@@ -1874,7 +1898,7 @@ def _simplify_track(
     return [points[i] for i in keep]
 
 
-def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
+def _compute_map_playback(ctx: Any, *, max_bytes: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Best-effort compact playback payload, or ``None``.
 
     Loads the ENGINE's ``core.map_playback_data`` via the package
@@ -1909,12 +1933,44 @@ def _compute_map_playback(ctx: Any) -> Optional[Dict[str, Any]]:
             )
         except Exception:  # noqa: BLE001
             markers = []
-        return _compact_map_playback(playback, markers)
+        return _compact_map_playback(playback, markers, max_bytes=max_bytes)
     except PlaybackBudgetExceeded:
         raise
     except Exception as exc:  # noqa: BLE001
         log.debug("map_playback_compact_failed: %s", exc)
         return None
+
+
+def _engine_wire_track(points):
+    """Keep millisecond timestamps; centicell coordinates cost <0.008 cells."""
+    flat = []
+    for point in points:
+        for index, value in enumerate(point):
+            rounded = round(value, 3 if index == 0 else 2)
+            flat.append(int(rounded) if rounded == int(rounded) else rounded)
+    # Rounding must not turn a walk into a browser-held teleport (or the
+    # reverse). Restore original coordinate precision on either endpoint of
+    # a changed guard and revisit adjacent pairs. Each point restores once.
+    pending = list(range(len(points) - 1))
+    restored = set()
+    while pending:
+        i = pending.pop()
+        dt = flat[(i + 1) * 3] - flat[i * 3]
+        if not 0 < dt <= 2:
+            continue
+        a, b = points[i], points[i + 1]
+        original_guard = math.hypot(b[1] - a[1], b[2] - a[2]) <= 14 * dt + 2
+        wire_guard = math.hypot(flat[(i + 1) * 3 + 1] - flat[i * 3 + 1],
+                                flat[(i + 1) * 3 + 2] - flat[i * 3 + 2]) <= 14 * dt + 2
+        if original_guard == wire_guard:
+            continue
+        for j in (i, i + 1):
+            if j in restored:
+                continue
+            restored.add(j)
+            flat[j * 3 + 1:j * 3 + 3] = points[j][1:3]
+            pending.extend(k for k in (j - 1, j) if 0 <= k < len(points) - 1)
+    return flat
 
 
 def _compress_engine_track(
@@ -1948,6 +2004,7 @@ def _compress_engine_track(
         if dt > 2 or math.hypot(b[1] - a[1], b[2] - a[2]) > 14 * dt + 2:
             keep.update((i - 1, i))
     anchors = sorted(keep)
+    protected = set(keep)
     stack = list(zip(anchors, anchors[1:]))
     while stack:
         lo, hi = stack.pop()
@@ -1956,25 +2013,58 @@ def _compress_engine_track(
         t0, x0, y0 = points[lo]
         t1, x1, y1 = points[hi]
         span = t1 - t0
-        # Leave room for the final 0.001-cell wire-coordinate rounding.
-        far, error = -1, max(0, tolerance - 0.001) ** 2
+        # Reserve more than sqrt(2) * .005 cells for centicell rounding.
+        far, error = -1, max(0, tolerance - 0.008) ** 2
         for i in range(lo + 1, hi):
             t, x, y = points[i]
             frac = (t - t0) / span if span > 0 else 0
             distance = (x - x0 - frac * (x1 - x0)) ** 2 + (y - y0 - frac * (y1 - y0)) ** 2
             if distance > error:
                 far, error = i, distance
-        if far < 0 and span > 2:
-            far = (lo + hi) // 2
+        if far < 0 and (span > 2 or math.hypot(x1 - x0, y1 - y0) > 14 * span + 2):
+            # The browser holds the earlier point across gaps over two
+            # seconds. A fully observed stationary interval therefore needs
+            # only its endpoints. Check that *held* position against every
+            # source observation; line interpolation alone cannot justify it.
+            held_error = max((x - x0) ** 2 + (y - y0) ** 2
+                             for _t, x, y in points[lo + 1:hi + 1])
+            if held_error > max(0, tolerance - 0.008) ** 2:
+                far = (lo + hi) // 2
         if far >= 0:
             keep.add(far)
             stack.extend(((lo, far), (far, hi)))
-    return [points[i] for i in sorted(keep)]
+    # RDP can leave redundant subdivision points after a nearby error peak
+    # introduces a shorter segment. Remove one only after checking all of
+    # its original observations against the browser's actual interpolation.
+    compact = []
+    for index in sorted(keep):
+        compact.append(index)
+        while len(compact) >= 3 and compact[-2] not in protected:
+            lo, hi = compact[-3], compact[-1]
+            t0, x0, y0 = points[lo]
+            t1, x1, y1 = points[hi]
+            span = t1 - t0
+            if span <= 0:
+                break
+            if span <= 2 and math.hypot(x1 - x0, y1 - y0) > 14 * span + 2:
+                break
+            allowed = max(0, tolerance - 0.008) ** 2
+            can_remove = True
+            for t, x, y in points[lo + 1:hi + 1]:
+                fraction = (t - t0) / span if span <= 2 else 0
+                if (x - x0 - fraction * (x1 - x0)) ** 2 + (y - y0 - fraction * (y1 - y0)) ** 2 > allowed:
+                    can_remove = False
+                    break
+            if not can_remove:
+                break
+            compact.pop(-2)
+    return [points[i] for i in compact]
 
 
 def _compact_map_playback(
     playback: Mapping[str, Any],
     battle_markers: Optional[list] = None,
+    *, max_bytes: Optional[int] = None, terminal_attack_inclusive: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Reduce a full playback dict to the bounded cloud upload shape.
 
@@ -2008,6 +2098,9 @@ def _compact_map_playback(
     selection — and the replayer pins those to the casting unit
     instead. Older payloads simply have no ``casts`` key.
     """
+    byte_budget = _PLAYBACK_OBSERVED_MAX_BYTES if max_bytes is None else max_bytes
+    if not isinstance(byte_budget, int) or isinstance(byte_budget, bool) or byte_budget <= 0:
+        raise PlaybackBudgetExceeded("Playback request capacity must be a positive byte count")
     bounds_in = playback.get("bounds")
     if not isinstance(bounds_in, Mapping):
         return None
@@ -2060,6 +2153,9 @@ def _compact_map_playback(
     precision = 3 if observed else 1
     if observed:
         out["v"] = 6
+        if terminal_attack_inclusive:
+            out["v"] = 7
+            out["terminalAttackInclusive"] = True
         out["fidelity"] = {
             "positions": fidelity["positions"], "paths": "observed",
             "creep": "observed" if fidelity.get("creep") == "observed" else "estimated",
@@ -2113,7 +2209,13 @@ def _compact_map_playback(
                 for t in raw_attacks:
                     if (isinstance(t, bool) or not isinstance(t, (int, float)) or not math.isfinite(t)
                             or t < 0 or (isinstance(born, (int, float)) and t < born)
-                            or (isinstance(died, (int, float)) and t >= died)):
+                            # Native overlay lifetimes can already be rounded
+                            # to milliseconds while shots retain four places.
+                            # v7 compares the declared wire precision so a
+                            # same-tick terminal shot is preserved exactly there.
+                            or (isinstance(died, (int, float)) and
+                                (round(t, precision) > round(died, precision)
+                                 if terminal_attack_inclusive else t >= died))):
                         mark_incomplete()
                         continue
                     attacks.append(round(float(t), precision))
@@ -2310,7 +2412,7 @@ def _compact_map_playback(
                                     track.append(point)
                         boundaries = track_boundaries(e)
                         engine_tracks.append((entry, "moves", track, boundaries))
-                        entry["moves"] = [round(v, precision) for point in _compress_engine_track(track, boundaries=boundaries) for v in point]
+                        entry["moves"] = _engine_wire_track(_compress_engine_track(track, boundaries=boundaries))
                     else:
                         move_limit = _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT if observed else _PLAYBACK_MAX_BUILDING_MOVES
                         if len(moves) > move_limit * 3:
@@ -2428,6 +2530,8 @@ def _compact_map_playback(
                                              _PLAYBACK_MAX_WAYPOINTS_PER_UNIT)
             for t, x, y in kept_track:
                 wp.extend((round(t, precision), round(x, precision), round(y, precision)))
+            if engine:
+                wp = _engine_wire_track(kept_track)
             if not wp:
                 continue
             born = u.get("born")
@@ -2548,10 +2652,11 @@ def _compact_map_playback(
 
     if engine:
         def within_engine_budget():
+            from .upload_json import compact_json_bytes
             sizes = [len(entry[field]) // 3 for entry, field, _track, _boundaries in engine_tracks]
             return (sum(sizes) <= _PLAYBACK_OBSERVED_MAX_TOTAL_POINTS
                     and all(size <= _PLAYBACK_OBSERVED_MAX_POINTS_PER_UNIT for size in sizes)
-                    and len(json.dumps(out, separators=(",", ":"), allow_nan=False).encode("utf-8")) <= _PLAYBACK_OBSERVED_MAX_BYTES)
+                    and len(compact_json_bytes(out)) <= byte_budget)
 
         # Recompress the original observations with a declared error bound.
         # Uniform thinning can delete a cargo exit or a corner while retaining
@@ -2566,8 +2671,7 @@ def _compact_map_playback(
                     "Its observation artifact and existing playback were preserved. "
                     "A higher-capacity playback format is required before this replay can be uploaded.")
             for entry, field, track, boundaries in engine_tracks:
-                entry[field] = [round(v, precision) for point in
-                                _compress_engine_track(track, tolerance, boundaries) for v in point]
+                entry[field] = _engine_wire_track(_compress_engine_track(track, tolerance, boundaries))
             out["fidelity"]["positionError"] = tolerance
 
     if observed and not engine:
@@ -2581,12 +2685,13 @@ def _compact_map_playback(
         # Reserve 0.75 MiB for those. If thinning is necessary, distribute it
         # over the whole game and explicitly expose the fidelity reduction.
         while True:
-            payload_size = len(json.dumps(out, separators=(",", ":"), allow_nan=False).encode("utf-8"))
-            if payload_size <= _PLAYBACK_OBSERVED_MAX_BYTES:
+            from .upload_json import compact_json_bytes
+            payload_size = len(compact_json_bytes(out))
+            if payload_size <= byte_budget:
                 break
             mark_incomplete()
             # A few kilobytes over budget should not halve an entire game.
-            ratio = min(0.98, 0.98 * _PLAYBACK_OBSERVED_MAX_BYTES / payload_size)
+            ratio = min(0.98, 0.98 * byte_budget / payload_size)
             changed = False
             for unit in units:
                 wp = unit["wp"]

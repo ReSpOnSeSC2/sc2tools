@@ -13,6 +13,16 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Private local Bot Lab and agent 0.17.0** — opt-in administrator-only bot
+  sessions use a selected authenticated local agent. The full bot/training
+  source lives in `apps/bot-runtime`; models, replays and SC2 execution remain
+  local. Both website and API gates default off, with no navigation entry or
+  ML dependency in normal site requests. Session IDs survive reconnects.
+- **Segmented accurate playback** — long engine recordings use immutable,
+  verified R2 segments with bounded transfer and a small viewer cache. Normal
+  analytics documents stay small; complete upload acknowledgements require
+  verified segments. Existing inline recordings remain supported.
+
 - **Build army checkpoints and game comparisons** — responsive build dossiers
   now open with real 4/6/8/10/12-minute army snapshots, alongside phase analysis.
   Compare a selected replay with other measured games in the same filtered

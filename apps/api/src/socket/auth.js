@@ -67,7 +67,7 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[]}|null>,
  *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
- *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string}|null>,
+ *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string, deviceId?: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
  *     wins: number, losses: number, games: number,
  *     mmrStart?: number, mmrCurrent?: number,
@@ -138,6 +138,8 @@ function attachSocketAuth(io, opts) {
         }
         socket.data.userId = hit.userId;
         socket.data.kind = "device";
+        // Stable pairing identity survives reconnects; never expose bearer hashes.
+        socket.data.deviceId = hit.deviceId;
         next();
         return;
       }
