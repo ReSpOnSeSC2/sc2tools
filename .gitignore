@@ -216,3 +216,6 @@ apps/web/public/sprites/
 # Replay background score (13MB, served from Cloudflare R2 in prod).
 # Upload with: node scripts/upload-sprites.mjs --source apps/web/public/audio/replay --bucket sc2tools-audio --prefix audio/v1
 apps/web/public/audio/replay/
+
+# Private bot project checkpoints, replay corpus and local training snapshots.
+/.local/bot-project/

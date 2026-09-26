@@ -83,3 +83,24 @@ rolling game minute, camera/selection rules and fog. Terran and Zerg have
 separate policies, 600 APM and global own/current-visible-enemy control with
 fog. Weighted training never changes unweighted evaluation or supplies a ladder
 MMR. See [third-party provenance](THIRD_PARTY.md).
+
+
+## Current project and continuous-learning guides
+
+The public implementation stays in this package. The intended private local project
+home is `C:/SC2TOOLS/.local/bot-project/workspace`, outside Git and the installer.
+See [local project organization](LOCAL_PROJECT_LAYOUT.md) for safe snapshots and why
+copying files does not relocate a running learner or its pinned provenance.
+
+[Continuous own-HUD imitation](CONTINUOUS_OWN_HUD.md) documents the frozen command
+prior, separately optimized Protoss HUD residual, causal data admission, exact
+continuation and evaluation limits. Preserved Terran/Zerg priors are separate;
+this continuation does not optimize them. [Reward feedback](REWARD_FEEDBACK.md)
+records the gap between live feedback collection and an implemented RL optimizer.
+The [structured experiment guide](ALPHASTAR_FOUNDATION.md) distinguishes that work
+from the smaller command prior. No game-strength or MMR claim follows from these
+source additions. The website and local agent remain separately default-disabled.
+
+Run `python scripts/verify_source_manifest.py` to check controlled source bytes
+without loading a model or starting SC2. Private inputs and immutable checkpoints
+must satisfy their own original experiment contracts before any training or play.

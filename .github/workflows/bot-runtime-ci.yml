@@ -1,0 +1,52 @@
+name: bot-runtime-source-tests
+
+on:
+  pull_request:
+    paths:
+      - 'apps/bot-runtime/**'
+      - '.github/workflows/bot-runtime-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/bot-runtime/**'
+      - '.github/workflows/bot-runtime-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-runtime-source-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu-source-tests:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/bot-runtime
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      NUMEXPR_NUM_THREADS: '2'
+      CUDA_VISIBLE_DEVICES: '-1'
+      BOT_LAB_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            apps/bot-runtime/pyproject.toml
+            apps/bot-runtime/constraints-windows-py312.txt
+      - name: Install separate test dependencies
+        run: python -m pip install -c constraints-windows-py312.txt -e ".[dev]"
+      - name: Verify controlled public source bytes
+        run: python scripts/verify_source_manifest.py
+      - name: CPU tests without native integration games
+        run: python -m pytest tests/test_action_eligibility_v1.py tests/test_alphastar_opening.py tests/test_alphastar_player_batch.py tests/test_alphastar_world_logits_v1.py tests/test_alphastar_world_rehearsal_reload_v1.py tests/test_alphastar_world_rehearsal_v1.py tests/test_background_capture_v1.py tests/test_build_order_depth_v1.py tests/test_build_order_depth_v2.py tests/test_build_order_hud_prior_v1.py tests/test_build_order_imitation_v1.py tests/test_build_order_prior_trainer_v1.py tests/test_build_order_prior_trainer_v2.py tests/test_mapped_player_plan_v1.py tests/test_neural_reward_feedback_v1.py tests/test_own_hud_features_v1.py tests/test_player_capture_default_path.py tests/test_reload_build_order_depth_v1.py tests/test_reload_build_order_depth_v2.py tests/test_reload_build_order_hud_v1.py tests/test_source_manifest.py tests/test_train_build_order_hud_v1.py tests/test_verify_own_hud_sidecar_v1.py -m "not integration" -q -p no:cacheprovider --basetemp "$env:RUNNER_TEMP/bot-runtime-tests"
