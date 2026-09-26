@@ -241,6 +241,16 @@
     "scripts/serve_alphastar_checkpoint.py": "b6873fbf693508b08f65af3226af00f4493aee800906c34c0c3883385f111a55",
     "tests/test_alphastar_live.py": "f6cdf94bc5b5845518a87e078edcaa84b0b6cf395b2ce96749b6aa8146d5bf73",
     "tests/test_alphastar_spool.py": "48791bf116091b20844c37f0ac9d4bd117c64727ae92bf3ce7181c2f1031f5f9",
-    "LIVE_NEURAL.md": "525348142c6e0bb0370929ce71736c34f577bed7286b76fba4b3d225b599debd"
+    "LIVE_NEURAL.md": "525348142c6e0bb0370929ce71736c34f577bed7286b76fba4b3d225b599debd",
+    "src/pluto_sc2/action_eligibility_v2.py": "6c1c67c877193a970cc64c0e218b29f906c5178d3e4bd8674087161569e7c611",
+    "tests/test_action_eligibility_v2.py": "7451b0d0b462c37260471229fada16bde86c18a02064b13921c2ea1f6964a0ca",
+    "scripts/alphastar_eligibility_bridge_v1.py": "122004bc2a03d11983fa3e08b1eb67fdef64b745a4bebe6ba48f4d3ee9e3dbfa",
+    "tests/test_alphastar_eligibility_bridge_v1.py": "3773a5e318fa8c551f6543fcf4dd10c58f86f09e4ff77d9c0376dfe772c9c317",
+    "scripts/alphastar_eligibility_bridge_v2.py": "993a56668a26f6afbd9e381a027bf0f941d2cdfac1a571cbc156e1414eedd289",
+    "scripts/preflight_action_eligibility_v2.py": "8fdafa14b06cb390b54c798eac85c635eb16c41cfd7a6f320df3be81b6db9cd4",
+    "scripts/audit_alphastar_eligibility_v2.py": "6e4a1252a0102fc7d088d9d4de331d8fd42febca0576fe2f0c40ee7c4c2b9e42",
+    "scripts/alphastar_source_objective.py": "ded1de3491307df5f7f598f1fd1ef0d6228e5f485bd9beec98f230bfe11d8c11",
+    "tests/test_alphastar_source_objective.py": "637d04e15d824788148bc92d409f5447d7fd9c733c3594ca5bcd3f531c2eff76",
+    "scripts/audit_alphastar_source_objective.py": "9690f21a820c90dae3770780bd8d5b6517a49a983aed7c6cefb86226ef7b2777"
   }
 }

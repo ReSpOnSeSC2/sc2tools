@@ -51,6 +51,14 @@ scripts; a fresh checkout needs explicit data and runtime setup. Existing
 checkpoint continuations must retain their pinned original source paths and
 hashes; moving an active run requires a separate reviewed provenance migration.
 
+Opt-in offline eligibility checks are provided by
+`scripts/preflight_action_eligibility_v2.py` and
+`scripts/audit_alphastar_eligibility_v2.py`. The v2 rules use public producer
+compatibility and known mineral/gas costs; supply and selected-panel ability
+absence are informational because valid production can be queued. These
+audits do not update weights or change the live host. Native queue execution
+requires its own verification.
+
 Dataset collection preserves whole-replay train/validation separation. Actor
 observations must come from the selected player's permitted view, never from
 the omniscient website playback recording. Offline fitting can run while
