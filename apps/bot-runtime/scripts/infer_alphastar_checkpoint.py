@@ -138,6 +138,30 @@ def verify_tree_schema(expected, actual, path="model"):
     return 1, value.size
 
 
+def checkpoint_bridge(result):
+    """Choose only the graph explicitly named by a verified run's contract.
+
+    Legacy artifacts retain their original graph. Expanded artifacts must pin
+    the reviewed helper source and shape; an unknown adapter never falls back.
+    """
+    adapter = result.get("capacity_adapter")
+    if adapter is None:
+        return build_official_bridge
+    from scripts.alphastar_capacity_bridge import CAPACITY_ADAPTER, CAPACITY_MATMUL_PRECISION, build_capacity_bridge
+    if adapter != CAPACITY_ADAPTER or result.get("tensor_config") != {
+            "max_entities": 512, "max_selected": 64, "world_size": 256,
+            "minimap_size": 64, "unit_features": 48}:
+        raise TensorError("Unknown or inconsistent checkpoint capacity adapter")
+    if result.get("matmul_precision") != CAPACITY_MATMUL_PRECISION:
+        raise TensorError("Expanded checkpoint lacks its highest matmul precision contract")
+    helper = ROOT / "scripts/alphastar_capacity_bridge.py"
+    recorded = [digest for path, digest in result.get("source_hashes", {}).items()
+                if path.replace("\\", "/").rsplit("/", 1)[-1] == helper.name]
+    if recorded != [sha256(helper)]:
+        raise TensorError("Checkpoint capacity adapter source hash differs")
+    return build_capacity_bridge
+
+
 def structured_prediction(outputs, registry, config):
     """Expose sampled actions and prove meaningful arguments were legal to sample.
 
@@ -215,7 +239,11 @@ class CheckpointPolicy:
             raise TensorError("Saved registry differs from pinned official functions/public catalog")
         self.artifacts, self.config = artifacts, artifacts["config"]
         self.jax, self.jnp, self.types = jax, jnp, types
-        self.component, _ = build_official_bridge(example, self.config, registry,
+        builder = checkpoint_bridge(artifacts["result"])
+        if artifacts["result"].get("capacity_adapter") is not None:
+            from scripts.alphastar_capacity_bridge import configure_capacity_runtime
+            configure_capacity_runtime(artifacts["result"])
+        self.component, _ = builder(example, self.config, registry,
                                                   is_training=False, sampling_mode=sampling_mode)
         source_proof = self.verify_inactive_source_component()
         if any(isinstance(key, tuple) and key[0] == "behaviour_features" for key in self.component.input_spec):
@@ -244,6 +272,8 @@ class CheckpointPolicy:
                              "sampling_mode": sampling_mode, "disabled_conditioning": {name: 0 for name in DISABLED_HEADS},
                              "inactive_source_component_proof": source_proof,
                              "optimizer_state_loaded_for_updates": False}
+        self.schema_proof["capacity_adapter"] = artifacts["result"].get("capacity_adapter")
+        self.schema_proof["matmul_precision"] = artifacts["result"].get("matmul_precision")
 
     def verify_inactive_source_component(self):
         """Numerically exercise the actual parameter-free component, not a mock.
@@ -340,6 +370,7 @@ def run(args):
         stop()
         catalog_path = Path(args.catalog) if args.catalog else Path(args.dataset) / "game-data.json"
         paths = [Path(__file__), ROOT / "scripts/train_alphastar_replay.py",
+                 ROOT / "scripts/alphastar_capacity_bridge.py",
                  ROOT / "src/pluto_sc2/alphastar_tensor.py", ROOT / "src/pluto_sc2/policy_intents.py",
                  ROOT / "src/pluto_sc2/rich_intents.py", ROOT / "src/pluto_sc2/rich_actions.py",
                  catalog_path, Path(args.run) / "result.json",

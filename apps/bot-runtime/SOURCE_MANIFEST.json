@@ -86,7 +86,7 @@
     "scripts/fit_alphastar_balanced_curriculum.py": "594d8628f059e0c679931cbb9b9c5f343f32bc094cad0da6ccd55a2d2bc3c71e",
     "scripts/fit_alphastar_curriculum.py": "452ef6149140bc6790aa8e902158f49e1741523b763db874ab3daa43cc441a02",
     "scripts/import_replay_batches.py": "9f9cf696608249da44d87c3f43b83cf91ea2933c7ecaa6e46eeaa3cacc1f4422",
-    "scripts/infer_alphastar_checkpoint.py": "483b8f0a4958365c3771ebe528f01607c126fb9e190c75a771a6e216a9481d85",
+    "scripts/infer_alphastar_checkpoint.py": "17b54e738b531ee83af812de5fd027e476a0a45b92dda1bd732bb1d1b542f820",
     "scripts/inspect_alphastar_world.py": "1776ba0aec524e85880a1553623b9aaffa5ad5a6da2049046007a662471135fd",
     "scripts/inspect_ground_target_replay.py": "0e7112c8082f46606cad53b0bcce571556ed268c87cf36296ed0b394a9388c49",
     "scripts/inspect_pvz_walls.py": "b79efeb66fcf2b0e367e1ed380474ed172e647d4f083dfa8f7411451b46ffe62",
@@ -229,6 +229,11 @@
     "REWARDS.md": "e9a7fa366f3c08bbbfeb07a003f4864711d71cae27d53313351bd0704d2517f7",
     "TRAINING.md": "b744affb42a2b15fa8705bd89859a43717276493f5e279a9684c2e4db65374bd",
     "Play Against Bots.cmd": "15df2f5cfc6ec1a2bc47606e18c00ab809bd95d792785c8a78191f36f7a73acf",
-    "Watch Training Games.cmd": "15df2f5cfc6ec1a2bc47606e18c00ab809bd95d792785c8a78191f36f7a73acf"
+    "Watch Training Games.cmd": "15df2f5cfc6ec1a2bc47606e18c00ab809bd95d792785c8a78191f36f7a73acf",
+    "scripts/alphastar_capacity_bridge.py": "e604a01464f86fcffdb3831e9bcaba5271f28f0e8cc7dca41174bf4083604716",
+    "scripts/migrate_alphastar_capacity.py": "45aa5c7adeb1a78ab736563cf28d5aa65902fc83d788251c2fe081ed63b01b15",
+    "scripts/fit_alphastar_full_game.py": "719cc3d1a3302d475bde333351ec0f25b5be701267f5bfc5f13b63f18ce0e6f5",
+    "tests/test_alphastar_capacity_migration.py": "a6011fe8a66c8994d650e4ec3de5cee4b8b2ceb2e820bf43e1ad46c3457a90af",
+    "tests/test_alphastar_full_game.py": "0a1b7f61baf881484564392265173694bcf10c98afc3530ff8f28c02be49d8a4"
   }
 }
