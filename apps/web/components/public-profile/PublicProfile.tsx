@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Swords, Trophy } from "lucide-react";
+import { MessageSquareText, Swords, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, WrBar } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -14,6 +14,7 @@ import type {
   PublicPlayerProfile,
   PublicProfileMatchupSplit,
   PublicProfileSignatureBuild,
+  PublicReviewerSection,
 } from "./types";
 
 export interface PublicProfileProps {
@@ -182,8 +183,47 @@ export function PublicProfile({ profile }: PublicProfileProps) {
         </Card>
       ) : null}
 
+      {profile.reviewer ? <ReviewerSection reviewer={profile.reviewer} /> : null}
+
       <GetYourOwnCTA />
     </article>
+  );
+}
+
+function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
+  return (
+    <Card>
+      <div className="space-y-3">
+        <h2 className="text-caption font-semibold uppercase tracking-wider text-text">
+          <span className="inline-flex items-center gap-1.5">
+            <MessageSquareText className="h-4 w-4 text-accent-cyan" aria-hidden />
+            Replay reviewer
+          </span>
+        </h2>
+        <p className="text-body text-text">
+          <strong>{reviewer.karma}</strong> karma · {reviewer.reviews} review{reviewer.reviews === 1 ? "" : "s"} ·{" "}
+          {reviewer.bestAnswers} best answer{reviewer.bestAnswers === 1 ? "" : "s"} · {reviewer.helpful} marked helpful
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {reviewer.verified ? (
+            <Badge variant="cyan" size="sm">
+              Verified {reviewer.verified.band.label}{reviewer.verified.race ? ` ${reviewer.verified.race}` : ""}
+            </Badge>
+          ) : null}
+          {reviewer.flair ? <Badge variant="signal" size="sm">{reviewer.flair}</Badge> : null}
+          {reviewer.badges.map((b) => <Badge key={b.key} variant="neutral" size="sm">{b.label}</Badge>)}
+        </div>
+        {reviewer.matchupsReviewed.length ? (
+          <p className="text-caption text-text-muted">
+            Matchups reviewed:{" "}
+            {reviewer.matchupsReviewed.map((m) => `${m.matchup} (${m.count})`).join(" · ")}
+          </p>
+        ) : null}
+        <Link href="/reviews" className="inline-flex text-caption font-semibold text-accent-cyan underline underline-offset-2">
+          Browse replay reviews
+        </Link>
+      </div>
+    </Card>
   );
 }
 

@@ -13,10 +13,9 @@
  *
  * A definition is NOT an opener when it is a mid/late-game composition, a
  * fallback / unclassified label or a game-length marker: none of those is a
- * build a player can choose to queue with, so none gets a guide page. The id
- * set below is shared with `lib/optimizer/__tests__/catalog-coverage.test.ts`
- * (reference-build coverage); the name patterns additionally catch
- * never-emitted legacy composition names and any future catch-all label.
+ * build a player can choose to queue with, so none gets a guide page. The
+ * name patterns additionally catch never-emitted legacy composition names
+ * and any future catch-all label.
  */
 import {
   BUILD_DEFINITIONS,

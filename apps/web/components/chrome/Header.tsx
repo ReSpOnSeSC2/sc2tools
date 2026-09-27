@@ -10,6 +10,8 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useApi } from "@/lib/clientApi";
 import { MobileNav, type MobileNavLink } from "./MobileNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { reviewsVisible } from "@/lib/reviews";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -35,6 +37,8 @@ const BASE_NAV_LINKS: readonly MobileNavLink[] = [
   { href: "/settings", label: "Settings", auth: "in" },
 ];
 
+const REVIEWS_LINK: MobileNavLink = { href: "/reviews", label: "Reviews", auth: "any" };
+
 const ADMIN_LINK: MobileNavLink = {
   href: "/admin",
   label: "Admin",
@@ -53,9 +57,12 @@ export function Header() {
   // useApi gates on isSignedIn internally, so this fetch is a no-op
   // for signed-out visitors — they never see the Admin link anyway.
   const { data: me } = useApi<MeAdminProbe>("/v1/me");
-  const navLinks: readonly MobileNavLink[] = me?.isAdmin
-    ? [...BASE_NAV_LINKS, ADMIN_LINK]
+  const withReviews: readonly MobileNavLink[] = reviewsVisible(me?.isAdmin)
+    ? [...BASE_NAV_LINKS.slice(0, 4), REVIEWS_LINK, ...BASE_NAV_LINKS.slice(4)]
     : BASE_NAV_LINKS;
+  const navLinks: readonly MobileNavLink[] = me?.isAdmin
+    ? [...withReviews, ADMIN_LINK]
+    : withReviews;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -107,6 +114,7 @@ export function Header() {
           <div className="ml-auto flex items-center gap-2">
             <SignedIn>
               <CoachingBookingAlert />
+              <NotificationBell />
             </SignedIn>
             <div className="hidden lg:block">
               <ThemeToggle />

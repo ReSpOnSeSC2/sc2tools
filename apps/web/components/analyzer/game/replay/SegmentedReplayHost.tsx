@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE } from "@/lib/clientApi";
 import { decodePlaybackSegment, PlaybackSegmentCache, readBoundedSegment, segmentAt,
@@ -14,11 +14,19 @@ type Props = {
   gameId: string; manifest: PlaybackManifest; compact?: boolean; maxHeightPx?: number;
   initialTimeSec?: number | null; myName?: string | null; oppName?: string | null;
   myRace?: string | null; oppRace?: string | null; buildName?: string | null; buildMatchPct?: number | null;
-};
+  /** Segment URL override (a public review's scoped grant). Owner game
+   *  pages use the default ``/v1/games/:id/…`` path. */
+  segmentPath?: (artifactId: string, index: number) => string;
+  /** Fetch without a Clerk token (public review pages). */
+  anonymous?: boolean;
+  /** Clock mirror for hosts that need the current time. */
+  onPlaybackTimeChange?: (time: number) => void;
+} & Pick<ComponentProps<typeof ReplayStage>,
+  "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "mobileCompact" | "defaultShowProduction">;
 
-export function SegmentedReplayHost({ manifest, compact, ...props }: Props) {
+export function SegmentedReplayHost({ manifest, compact, segmentPath, anonymous = false, onPlaybackTimeChange: onHostTime, ...props }: Props) {
   const { getToken, userId } = useAuth();
-  const scope = `${userId ?? ""}:${props.gameId}:${manifest.artifactId}`;
+  const scope = `${anonymous ? "public" : userId ?? ""}:${props.gameId}:${manifest.artifactId}`;
   const initialTime = clampReplayTime(props.initialTimeSec, manifest.gameLength) ?? 0;
   const [clock, setClock] = useState({ scope, time: initialTime });
   const time = clock.scope === scope ? clock.time : initialTime;
@@ -46,13 +54,19 @@ export function SegmentedReplayHost({ manifest, compact, ...props }: Props) {
     const timer = window.setTimeout(() => controller.abort(), 30_000);
     const load = async () => {
       try {
-        if (!userId) throw new Error("Sign in again to load this replay.");
-        const token = await tokenGetter.current();
-        controller.signal.throwIfAborted();
-        if (!token) throw new Error("Sign in again to load this replay.");
-        const path = `/v1/games/${encodeURIComponent(props.gameId)}/map-playback/artifacts/${manifest.artifactId}/segments/${desired.index}`;
+        let headers: Record<string, string> | undefined;
+        if (!anonymous) {
+          if (!userId) throw new Error("Sign in again to load this replay.");
+          const token = await tokenGetter.current();
+          controller.signal.throwIfAborted();
+          if (!token) throw new Error("Sign in again to load this replay.");
+          headers = { authorization: `Bearer ${token}` };
+        }
+        const path = segmentPath
+          ? segmentPath(manifest.artifactId, desired.index)
+          : `/v1/games/${encodeURIComponent(props.gameId)}/map-playback/artifacts/${manifest.artifactId}/segments/${desired.index}`;
         const response = await fetch(`${API_BASE}${path}`, {
-          headers: { authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal,
+          headers, cache: anonymous ? "default" : "no-store", signal: controller.signal,
         });
         const bytes = await readBoundedSegment(response, desired.sizeBytes);
         const playback = await decodePlaybackSegment(bytes, manifest, desired);
@@ -67,9 +81,12 @@ export function SegmentedReplayHost({ manifest, compact, ...props }: Props) {
     };
     void load();
     return () => { cancelled = true; controller.abort(); window.clearTimeout(timer); };
-  }, [scope, userId, props.gameId, manifest, desired, attempt]);
+  }, [scope, userId, props.gameId, manifest, desired, attempt, anonymous, segmentPath]);
 
-  const onPlaybackTimeChange = useCallback((next: number) => setClock({ scope, time: next }), [scope]);
+  const onPlaybackTimeChange = useCallback((next: number) => {
+    setClock({ scope, time: next });
+    onHostTime?.(next);
+  }, [scope, onHostTime]);
   const loading = <div role={error ? "alert" : "status"} className="flex min-h-44 flex-col items-center justify-center gap-3 p-6 text-center">
     <p>{error || "Loading replay at this time…"}</p>
     {error && <button type="button" className="rounded-md border border-border px-3 py-2" onClick={() => setAttempt(value => value + 1)}>Retry playback</button>}

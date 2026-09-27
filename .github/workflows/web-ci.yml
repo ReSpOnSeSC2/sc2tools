@@ -67,6 +67,9 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuZXhhbXBsZS5jb20k
       CLERK_SECRET_KEY: sk_live_dummy
       NEXT_PUBLIC_API_BASE: http://localhost:8080
+      # Replay Review Exchange pages are exercised against the fixture API
+      # (tests/e2e/mock-review-api.mjs); the flag is inlined at build time.
+      NEXT_PUBLIC_REVIEWS_ENABLED: "on"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

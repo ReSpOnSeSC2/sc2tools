@@ -2,9 +2,9 @@
  * mapReplayLosses — units-lost accounting for the map replayer.
  *
  * Prices every unit death in the playback payload with REAL balance
- * data: costs come from the optimizer's patch dataset (the same
- * layered profiles the build optimizer resolves), so there is one
- * source of truth for unit prices. Morphed units (Baneling, Ravager,
+ * data: costs come from the balance-patch dataset in lib/sc2-patch
+ * (layered per patch), so there is one source of truth for unit
+ * prices. Morphed units (Baneling, Ravager,
  * Brood Lord, …) price at their FULL invested cost — the morph price
  * plus the consumed unit's full cost, walked through the dataset's
  * ``builtFrom`` chain — because losing a Brood Lord loses the
@@ -17,7 +17,7 @@
 import {
   DEFAULT_PROFILE_ID,
   resolveProfile,
-} from "./optimizer/patch/profiles";
+} from "./sc2-patch/profiles";
 import {
   unitAliveAt,
   unitNameAt,

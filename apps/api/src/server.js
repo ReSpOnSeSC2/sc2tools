@@ -33,6 +33,7 @@ const {
 const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
+const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 
@@ -300,6 +301,14 @@ async function main() {
   });
   ladderMetaJob.start();
 
+  // Weekly Replay Review Exchange digest (hourly check, weekly send).
+  const reviewDigestJob = buildReviewDigestJob({
+    reviews: /** @type {any} */ (services).reviews,
+    logger,
+    enabled: config.reviewsEnabled === "on",
+  });
+  reviewDigestJob.start();
+
   // Derive compact chart facts from existing replay details in small batches.
   // Normal uploads maintain these facts atomically; no reupload is needed.
   const trendsExplorerBackfill = new TrendsExplorerBackfill({
@@ -348,6 +357,7 @@ async function main() {
     await leaguePercentilesJob.stop();
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
+    await reviewDigestJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();
     logger.info("shutdown_complete");

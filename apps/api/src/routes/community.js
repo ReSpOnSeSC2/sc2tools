@@ -22,11 +22,17 @@ const rateLimit =
  *   POST   /community/builds                 — publish a private build
  *   DELETE /community/builds/:slug           — unpublish (owner)
  *   POST   /community/builds/:slug/vote      — { delta: 1 | -1 }
- *   POST   /community/reports                — flag content
+ *   POST   /community/reports                — flag content (build |
+ *                                        opponent, or a registered target
+ *                                        such as review_comment)
  *
  * Admin (Clerk role: admin):
- *   GET    /community/admin/reports          — list open reports
- *   POST   /community/admin/reports/:id      — resolve
+ *   GET    /community/admin/reports          — list open reports (registered
+ *                                        targets carry a ``target`` summary)
+ *   POST   /community/admin/reports/:id      — resolve; for registered targets
+ *                                        dismiss restores auto-hidden content
+ *                                        and either action settles every open
+ *                                        report on that target
  *
  * @param {{
  *   community: import('../services/community').CommunityService,

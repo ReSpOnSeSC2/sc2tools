@@ -54,7 +54,7 @@
  * the light theme.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import {
   deriveReplayHud,
@@ -64,12 +64,12 @@ import {
 } from "@/lib/replayHud";
 import { useReplayMusic } from "@/lib/replayMusic";
 import { clampReplayTime } from "@/lib/replayLink";
-import { MapReplayer } from "../MapReplayer";
+import { MapReplayer, type ReplayMapMarker } from "../MapReplayer";
 import { ReplayTopBar } from "./ReplayTopBar";
 import { ProductionRail, type ProductionTab } from "./ProductionRail";
 import { BuildOrderRail, type BuildFilter } from "./BuildOrderRail";
 import { ReplaySettings } from "./ReplaySettings";
-import { TransportDock, type ReplaySpeed } from "./TransportDock";
+import { TransportDock, type CommentTimelineMarker, type ReplaySpeed } from "./TransportDock";
 import { REPLAY_SCOPE_CLASS, STAGE_BG } from "./replayTheme";
 
 export function ReplayStage({
@@ -87,6 +87,14 @@ export function ReplayStage({
   onPlaybackTimeChange,
   playbackWindow,
   buffering = false,
+  seekRequest,
+  mapMarkers,
+  onWorldClick,
+  onMarkerClick,
+  commentMarkers,
+  onCommentMarker,
+  mobileCompact = false,
+  defaultShowProduction = true,
 }: {
   playback: MapPlayback;
   /** Only used to seed the background score, so the same replay always
@@ -120,6 +128,21 @@ export function ReplayStage({
   onPlaybackTimeChange?: (time: number) => void;
   playbackWindow?: { start: number; end: number };
   buffering?: boolean;
+  /* ── Review-page hooks (all optional; the game page passes none) ──
+   * ``seekRequest`` is an external jump after mount: each new ``seq``
+   * seeks to ``t`` and PAUSES (a comment's time chip). ``mapMarkers`` /
+   * ``onWorldClick`` / ``onMarkerClick`` pass straight to MapReplayer;
+   * ``commentMarkers`` adds the comment strip to the transport dock. */
+  seekRequest?: { t: number; seq: number } | null;
+  mapMarkers?: readonly ReplayMapMarker[];
+  onWorldClick?: (x: number, y: number, t: number) => void;
+  onMarkerClick?: (id: string) => void;
+  commentMarkers?: readonly CommentTimelineMarker[];
+  onCommentMarker?: (marker: CommentTimelineMarker) => void;
+  /** Below ``xl``: hide both rails and shorten the map band, so the
+   *  whole stage is short enough to pin above a scrolling thread. */
+  mobileCompact?: boolean;
+  defaultShowProduction?: boolean;
 }) {
   const model = useMemo(() => deriveReplayHud(playback), [playback]);
 
@@ -127,7 +150,7 @@ export function ReplayStage({
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);
 
-  const [showProduction, setShowProduction] = useState(true);
+  const [showProduction, setShowProduction] = useState(defaultShowProduction);
   const [showBuildOrder, setShowBuildOrder] = useState(true);
   const [productionSide, setProductionSide] = useState<ReplaySide>("me");
   const [productionTab, setProductionTab] = useState<ProductionTab>("queue");
@@ -157,6 +180,20 @@ export function ReplayStage({
     [setMusicPlaying],
   );
   const onSpeedChange = useCallback((next: ReplaySpeed) => setSpeed(next), []);
+
+  // External seek-and-pause. Keyed on ``seq`` so asking for the same
+  // moment twice (clicking one time chip again after scrubbing away)
+  // still jumps; routed through ``seek`` so a segmented host loads the
+  // right segment and MapReplayer sees a non-echo time.
+  const lastSeekSeq = useRef<number | null>(seekRequest?.seq ?? null);
+  useEffect(() => {
+    if (!seekRequest || seekRequest.seq === lastSeekSeq.current) return;
+    lastSeekSeq.current = seekRequest.seq;
+    const target = Math.min(model.gameLength, Math.max(0, seekRequest.t));
+    seek(target);
+    setMusicPlaying(false);
+    setPlaying(false);
+  }, [seekRequest, seek, model.gameLength, setMusicPlaying]);
 
   const hud = useMemo(
     () => hudAt(model, playback, time, banked),
@@ -214,7 +251,7 @@ export function ReplayStage({
             onSideChange={setProductionSide}
             myName={myName}
             oppName={oppName}
-            className="order-2 flex max-h-72 xl:order-1 xl:h-full xl:max-h-none xl:w-56 xl:shrink-0"
+            className={`order-2 max-h-72 xl:order-1 xl:flex xl:h-full xl:max-h-none xl:w-56 xl:shrink-0 ${mobileCompact ? "hidden" : "flex"}`}
           />
         ) : null}
 
@@ -226,7 +263,7 @@ export function ReplayStage({
             ``h-[52vh]`` — collapsing the map to its ``min-h``. At
             ``xl`` the band is a ROW item, so ``flex-1`` is exactly
             right and takes over. */}
-        <div className="order-1 flex h-[52vh] max-h-[36rem] min-h-[16rem] min-w-0 flex-none xl:order-2 xl:h-auto xl:max-h-none xl:flex-1">
+        <div className={`order-1 flex min-w-0 flex-none xl:order-2 xl:h-auto xl:max-h-none xl:flex-1 ${mobileCompact ? "h-[36vh] max-h-[22rem] min-h-[12rem]" : "h-[52vh] max-h-[36rem] min-h-[16rem]"}`}>
           <MapReplayer
             playback={playback}
             playbackWindow={playbackWindow}
@@ -239,6 +276,9 @@ export function ReplayStage({
             onSpeedChange={onSpeedChange}
             hideControls
             fill
+            markers={mapMarkers}
+            onWorldClick={onWorldClick}
+            onMarkerClick={onMarkerClick}
           />
         </div>
 
@@ -257,7 +297,7 @@ export function ReplayStage({
             buildMatchPct={buildMatchPct}
             myName={myName}
             oppName={oppName}
-            className="order-3 flex max-h-72 xl:h-full xl:max-h-none xl:w-64 xl:shrink-0"
+            className={`order-3 max-h-72 xl:flex xl:h-full xl:max-h-none xl:w-64 xl:shrink-0 ${mobileCompact ? "hidden" : "flex"}`}
           />
         ) : null}
       </div>
@@ -269,6 +309,8 @@ export function ReplayStage({
         speed={speed}
         markers={model.markers}
         phases={model.phases}
+        commentMarkers={commentMarkers}
+        onCommentMarker={onCommentMarker}
         onSeek={seek}
         onPlayingChange={onPlayingChange}
         onSpeedChange={onSpeedChange}

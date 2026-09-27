@@ -13,6 +13,19 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Replay Review Exchange** — post one of your 1v1 games with a question
+  and get reviews pinned to exact replay moments and map points. The
+  opponent is always redacted ("Opponent (Zerg, ~4,100 MMR)"), the asker can
+  stay anonymous, and a request grants read-only access to that one game's
+  analysis until it closes. Reviewers' leagues are verified from their own
+  synced ladder games; helpful, best and upvoted reviews earn karma, badges
+  and an opt-in weekly leaderboard. Includes the public `/reviews` board
+  (Hot/New/Top), report-driven auto-hide wired into the existing moderation
+  queue, blocks, database-backed rate limits, in-app notifications with a
+  header bell, a weekly digest, Reddit/Discord sharing, dynamic OG images,
+  QAPage JSON-LD and a quality-gated sitemap. Off by default behind `REVIEWS_ENABLED` /
+  `NEXT_PUBLIC_REVIEWS_ENABLED` (`off` → `admins` → `on`); see
+  [`docs/reviews.md`](docs/reviews.md).
 - **Private local Bot Lab and agent 0.17.0** — opt-in administrator-only bot
   sessions use a selected authenticated local agent. The full bot/training
   source lives in `apps/bot-runtime`; models, replays and SC2 execution remain
@@ -74,6 +87,45 @@ corresponding GitHub Release.
   identity and uncalibrated probability estimates.
 
 ### Fixed
+
+- **APM and spending quotient reach the website** — agent **0.17.2**
+  (`agent-v0.17.2`) sends each game's average APM and spending quotient.
+  Both were empty on every game because the agent read them from a player
+  record that never had them, so the battle card's spending quotient and
+  the league benchmark tables had nothing to show. Use **Re-sync** or
+  **Recompute** to fill in games already uploaded.
+- **APM/SPM chart shows each player's own actions** — the chart matched
+  sc2reader's 0-based user id against the 1-based player slot, so player 1
+  was credited with player 2's actions and player 2 always read zero. Fixed
+  in agent **0.17.2**; re-sync to redraw older games.
+- **Map Intel death zones have data** — the "where your army died" heatmap
+  was always empty: it expected loss totals the battle detector never
+  produced. Agent **0.17.2** measures each fight's army value lost on both
+  sides and records the fights you lost where your units died, weighted by
+  the net loss.
+- **All six Arcade badges can be earned** — only Buildle Brain had award
+  logic. Streak Hunter, Closer and Detective now unlock after five straight
+  days with every answer correct, Veto Sleuth after three correct Streak
+  Veto answers in a row, and Tycoon after five straight green Stock Market
+  weeks.
+- **Arcade progress no longer overwrites itself** — each Arcade surface
+  kept its own copy of your saved progress and saved it whole, so the last
+  save erased the others' changes. Locking a Stock Market portfolio, for
+  example, dropped the XP and play record saved alongside it (Buildle, Bingo
+  and Higher or Lower had the same problem). All surfaces now share one
+  saved state and send one combined save.
+- **Stock Market weeks settle** — the weekly leaderboard only ever received
+  the 0% placeholder posted at lock-in. The first time you open the market
+  in a new week, last week's portfolio settles at the prices you see, its
+  result is shown, and public locks post their real P&L to the leaderboard.
+- **Public profiles are reachable** — nothing linked to `/p/<handle>`. Author
+  pages now link to the player's profile, and Settings → Profile shows your
+  profile link (or how to turn it on).
+- **Current overlay and Arcade counts** — the sign-up page and README said
+  15 overlay widgets (there are 30) and the Arcade README listed 16 modes
+  (there are 18). The sign-up page now reads the tested product facts, and
+  the unused copy of the old landing page, which carried more stale counts,
+  was removed.
 
 - **Macro breakdown match timeline and roster** — the chart is now a match
   timeline with a switch between army value, workers, supply and income
@@ -204,6 +256,14 @@ corresponding GitHub Release.
   agent atomically disables the running controller, cancels inbox and
   debounced scene work, and guards the startup handoff so no later phase can
   switch scenes after the setting is cleared.
+
+### Removed
+
+- **Unused build-order simulator** — the Build adapter page was removed in
+  July, but its simulation library, reference builds and threat data stayed
+  behind with nothing using them. They are deleted. The balance-patch data
+  the map replayer uses to price lost units moves to `lib/sc2-patch`, and
+  replay loss totals are unchanged.
 
 ### Changed
 

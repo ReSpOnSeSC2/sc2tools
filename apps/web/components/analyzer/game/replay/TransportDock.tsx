@@ -37,6 +37,17 @@ import { SIDE_COLOR } from "./replayTheme";
 export const REPLAY_SPEEDS = [1, 4, 8, 16] as const;
 export type ReplaySpeed = (typeof REPLAY_SPEEDS)[number];
 
+/**
+ * A cluster of review comments on the timeline (Replay Review Exchange).
+ * ``count`` sizes the marker so busy moments read at a glance.
+ */
+export type CommentTimelineMarker = {
+  id: string;
+  t: number;
+  count: number;
+  label: string;
+};
+
 export function nextSpeed(speed: ReplaySpeed): ReplaySpeed {
   const i = REPLAY_SPEEDS.indexOf(speed);
   return REPLAY_SPEEDS[(i + 1) % REPLAY_SPEEDS.length];
@@ -90,6 +101,41 @@ function MarkerDots({
   );
 }
 
+function CommentStrip({
+  markers,
+  gameLength,
+  onSelect,
+}: {
+  markers: readonly CommentTimelineMarker[];
+  gameLength: number;
+  onSelect: (marker: CommentTimelineMarker) => void;
+}) {
+  if (markers.length === 0) return null;
+  return (
+    <div
+      className="relative h-4"
+      role="group"
+      aria-label="Review comments on the timeline"
+      data-testid="replay-comment-strip"
+    >
+      {markers.map((m) => {
+        const size = Math.min(14, 7 + (m.count - 1) * 2);
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onSelect(m)}
+            title={m.label}
+            aria-label={`${m.label}. Jump here.`}
+            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-[#f0c43c] ring-1 ring-black/60 transition-transform hover:scale-125 focus-visible:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+            style={{ left: `${pct(m.t, gameLength)}%`, width: size, height: size }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function PhaseStrip({
   phases,
   gameLength,
@@ -136,6 +182,8 @@ function TransportDockImpl({
   onSpeedChange,
   music,
   children,
+  commentMarkers,
+  onCommentMarker,
 }: {
   t: number;
   gameLength: number;
@@ -151,6 +199,9 @@ function TransportDockImpl({
   music?: ReplayMusicApi;
   /** Settings popover and any other trailing controls. */
   children?: ReactNode;
+  /** Review-comment clusters; selecting one seeks unless a handler is given. */
+  commentMarkers?: readonly CommentTimelineMarker[];
+  onCommentMarker?: (marker: CommentTimelineMarker) => void;
 }) {
   const progress = pct(t, gameLength);
   return (
@@ -203,6 +254,13 @@ function TransportDockImpl({
       <div className="order-first flex w-full min-w-0 items-center gap-2 md:order-none md:w-auto md:flex-[1_1_16rem]">
         <div className="min-w-0 flex-1 pt-0.5">
           <PhaseStrip phases={phases} gameLength={gameLength} />
+          {commentMarkers ? (
+            <CommentStrip
+              markers={commentMarkers}
+              gameLength={gameLength}
+              onSelect={(m) => (onCommentMarker ? onCommentMarker(m) : onSeek(m.t))}
+            />
+          ) : null}
           <MarkerDots markers={markers} gameLength={gameLength} onSeek={onSeek} />
           <input
             type="range"

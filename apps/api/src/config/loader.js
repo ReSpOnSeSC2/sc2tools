@@ -79,6 +79,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *     keyFile: string|null,
  *   },
  *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
+ *   reviewsEnabled: "off" | "admins" | "on",
  * }}
  *
  * Example:
@@ -155,7 +156,24 @@ function loadConfig(env = process.env) {
     renderAdmin: parseRenderAdminConfig(env),
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
+    reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
   };
+}
+
+/**
+ * Replay Review Exchange rollout stage. Default off; ``admins`` exposes
+ * every surface only to platform admins (signed-out and ordinary
+ * visitors get the same 404 as ``off``); ``true``/``on``/``all`` opens
+ * it to everyone.
+ *
+ * @param {string | undefined} raw
+ * @returns {"off" | "admins" | "on"}
+ */
+function parseReviewsRollout(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "admins" || value === "admin") return "admins";
+  if (value === "true" || value === "on" || value === "all" || value === "1") return "on";
+  return "off";
 }
 
 /**
@@ -604,4 +622,5 @@ module.exports = {
   parseRenderAdminConfig,
   parseAnalyticsConfig,
   parsePlatformIntegrationsConfig,
+  parseReviewsRollout,
 };

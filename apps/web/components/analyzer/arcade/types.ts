@@ -309,6 +309,17 @@ export interface ArcadeState {
    * blobs persisted before the field existed; readers coalesce to {}.
    */
   questClaimsByDay?: Record<string, Record<string, QuestClaim>>;
+  /**
+   * Per-mode progress toward the run-based badges (see badges.ts), keyed
+   * by mode id. Optional for back-compat; readers coalesce to {}.
+   */
+  badgeRuns?: Record<string, BadgeRun>;
+  /**
+   * Settled Stock Market weeks: "YYYY-Www" → final portfolio P&L. A week
+   * settles the first time the player opens Stock Market in a later
+   * week. Drives the Tycoon badge; capped to the most recent weeks.
+   */
+  stockMarketHistory?: Record<string, StockMarketResult>;
   /** Cosmetic preferences (mascot skin, card-back theme). */
   cosmetics: { mascotSkin: string; cardBackTheme: string };
   /** Opt-in flag for the Stock Market leaderboard. */
@@ -321,6 +332,26 @@ export interface ArcadeState {
 export interface QuestClaim {
   claimedAt: string;
   xp: number;
+}
+
+/**
+ * Run tracking for one mode's badge. ``perfectDaysBefore`` counts the
+ * consecutive perfect days that ended the day before ``day``;
+ * ``dayPerfect`` is whether every attempt on ``day`` so far was correct.
+ * ``correctRun`` counts consecutive correct attempts across days.
+ */
+export interface BadgeRun {
+  day: string | null;
+  dayPerfect: boolean;
+  perfectDaysBefore: number;
+  correctRun: number;
+}
+
+/** A settled Stock Market week (see stockMarketHistory). */
+export interface StockMarketResult {
+  /** Portfolio P&L in percent (e.g. 4.2 = +4.2%). */
+  pnlPct: number;
+  settledAt: string;
 }
 
 export interface ModeRecord {

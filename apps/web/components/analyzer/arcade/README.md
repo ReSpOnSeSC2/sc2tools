@@ -22,9 +22,9 @@ The CI script `scripts/depthLint.mjs` walks every mode file, asserts a known `de
 
 ## Locked catalog
 
-Sixteen modes, exactly. The catalog is locked: a mode is added only by replacing one of these slots after a design review.
+Eighteen modes, exactly (the count `lib/productFacts.ts` asserts against the registry). The catalog is locked: a mode is added only by replacing one of these slots after a design review.
 
-### Quizzes (10)
+### Quizzes (12)
 
 | ID | Tag | What it asks |
 |---|---|---|
@@ -38,12 +38,14 @@ Sixteen modes, exactly. The catalog is locked: a mode is added only by replacing
 | `loss-pattern-sleuth` | conditional | Modal next-build after losing to a given race |
 | `closers-eye` | hidden-derivation | Build with the shortest mean win duration (cannon rush excluded) |
 | `macro-memory` | hidden-derivation | Pick the cleanest macro game from 3 unscored options |
+| `unit-profile` | hidden-derivation | Four questions about the units you actually build (most built, total lost, lost per game, unit diversity) |
+| `group-census` | conditional | How many of your opponents, maps or builds land in a win-rate range; group, window and range rotate daily |
 
 ### Games (6)
 
 | ID | Tag | What it does |
 |---|---|---|
-| `stock-market` | generative | Allocate 100 across ≤5 builds for the week; weekly P&L = Σ(weight × Δprice). Opt-in leaderboard renders in **Community → Leaderboard** |
+| `stock-market` | generative | Allocate 100 across ≤5 builds for the week; weekly P&L = Σ(weight × % return × volatility). A week settles the first time the market opens in a later week; that result feeds the weekly leaderboard and the Tycoon badge. Opt-in leaderboard renders in **Community → Leaderboard** |
 | `bingo-ladder` | forward | 5×5 forward objectives auto-resolved against the next 7 days of ingested games. Map-bound objectives draw from `/v1/seasons` `mapPool` |
 | `buildle` | generative | Daily case file from a real game in your history. One fact is redacted (duration, result, when, time-of-day, opp opener, your build, times played opponent, career WR vs opponent, or streak going in — 9-day rotation). One pick from 2–4 buckets, correct or wrong, sealed for the day |
 | `two-truths-lie` | cross-axis | Three multi-axis claims about you — pick the lie |
