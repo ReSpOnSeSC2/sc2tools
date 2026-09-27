@@ -20,7 +20,6 @@ import {
   encodeGhostBuildConfig,
   encodeGhostTarget,
   fromBuildLog,
-  fromOptimizerResult,
   ghostMatchupKey,
   migrateLegacyGhostTarget,
   migrateLegacyGhostTargetInStorage,
@@ -40,7 +39,6 @@ import {
   type SavedGhostBuild,
   type GhostTarget,
 } from "@/lib/ghostBuild";
-import type { BuildOrderStep } from "@/lib/optimizer/types";
 
 /** Craft a raw base64url ?ghost= value from an arbitrary object —
  * bypasses encodeGhostTarget's own normalization so tests can feed
@@ -412,74 +410,6 @@ describe("hostile decode inputs", () => {
     expect(normalizeGhostTarget([])).toBeNull();
     expect(normalizeGhostTarget("x")).toBeNull();
     expect(normalizeGhostTarget({ v: 1, name: "x", steps: "nope" })).toBeNull();
-  });
-});
-
-describe("fromOptimizerResult", () => {
-  const step = (
-    name: string,
-    startSec: number,
-    kind: BuildOrderStep["kind"] = "build",
-    supply = 14,
-  ): BuildOrderStep => ({ supply, name, kind, startSec, doneSec: startSec + 10 });
-
-  it("keeps timed build/train/research steps and maps fields", () => {
-    const target = fromOptimizerResult({
-      referenceName: "2 SG Void Ray",
-      profileId: "lotv-5016",
-      sim: {
-        steps: [
-          step("Pylon", 17.4, "build", 14),
-          step("Adept", 95, "train", 21),
-          step("WarpGateResearch", 130, "research", 23),
-        ],
-      },
-    });
-    expect(target).not.toBeNull();
-    expect(target!.name).toBe("2 SG Void Ray (lotv-5016)");
-    expect(target!.steps).toEqual([
-      { supply: 14, t: 17, name: "Pylon" },
-      { supply: 21, t: 95, name: "Adept" },
-      { supply: 23, t: 130, name: "WarpGateResearch" },
-    ]);
-  });
-
-  it("drops workers, chrono, and warpgate transforms", () => {
-    const target = fromOptimizerResult({
-      referenceName: "Macro opener",
-      profileId: "lotv-base",
-      sim: {
-        steps: [
-          step("Probe", 12, "train"),
-          step("SCV", 12, "train"),
-          step("Drone", 12, "train"),
-          step("Nexus", 60, "chrono"),
-          step("WarpGate", 200, "transform-warpgate"),
-          step("Pylon", 17, "build"),
-        ],
-      },
-    });
-    expect(target!.steps).toEqual([{ supply: 14, t: 17, name: "Pylon" }]);
-  });
-
-  it("caps at MAX_GHOST_STEPS", () => {
-    const target = fromOptimizerResult({
-      referenceName: "Long",
-      profileId: "p",
-      sim: {
-        steps: Array.from({ length: 300 }, (_, i) => step("Zealot", i + 1, "train")),
-      },
-    });
-    expect(target!.steps).toHaveLength(MAX_GHOST_STEPS);
-  });
-
-  it("returns null when nothing armable remains", () => {
-    const target = fromOptimizerResult({
-      referenceName: "Workers only",
-      profileId: "p",
-      sim: { steps: [step("Probe", 12, "train")] },
-    });
-    expect(target).toBeNull();
   });
 });
 

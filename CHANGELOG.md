@@ -238,6 +238,14 @@ corresponding GitHub Release.
   debounced scene work, and guards the startup handoff so no later phase can
   switch scenes after the setting is cleared.
 
+### Removed
+
+- **Unused build-order simulator** — the Build adapter page was removed in
+  July, but its simulation library, reference builds and threat data stayed
+  behind with nothing using them. They are deleted. The balance-patch data
+  the map replayer uses to price lost units moves to `lib/sc2-patch`, and
+  replay loss totals are unchanged.
+
 ### Changed
 
 - **Daily Pulse now appears before Ladder Pulse on Today** — the page and its

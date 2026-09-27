@@ -4,7 +4,7 @@ import {
   listProfiles,
   mergeLayer,
   resolveProfile,
-} from "../patch/profiles";
+} from "../profiles";
 
 describe("patch profile layering", () => {
   it("preserves the initial 5.0.16 live release", () => {
