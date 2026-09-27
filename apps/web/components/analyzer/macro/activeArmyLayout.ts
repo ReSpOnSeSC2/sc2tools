@@ -126,6 +126,11 @@ export interface SeriesPoint {
   supplyCap?: number;
   /** Minerals + gas collected per minute (the collection rate). */
   income?: number;
+  /**
+   * Actions per minute around ``t`` from the game's APM curve (see
+   * lib/apm.ts); absent when the game has no trusted curve.
+   */
+  apm?: number;
 }
 
 /** One clock label under the plot, already placed and de-collided. */

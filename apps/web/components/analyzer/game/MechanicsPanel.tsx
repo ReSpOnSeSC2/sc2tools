@@ -12,6 +12,7 @@ import {
   tierFromSq,
 } from "@/lib/macro";
 import type { GameSummary } from "./types";
+import { formatApm } from "@/lib/apm";
 
 export interface MechanicsPanelProps {
   breakdown?: MacroBreakdownData | null;
@@ -124,9 +125,12 @@ export function MechanicsPanel({
     );
   }
 
+  const apm = trustedApm(breakdown, game);
+
   const hasAnything =
     sq !== null ||
     macroScore !== null ||
+    apm.mine !== null ||
     supplyBlockedSec !== null ||
     mechanicActual !== null ||
     floatSpikes !== null;
@@ -163,6 +167,8 @@ export function MechanicsPanel({
             hint={sqTier ? `${sqTier}-tier spending` : undefined}
           />
         </div>
+
+        <ApmStat mine={apm.mine} opponent={apm.opponent} />
 
         <div>
           <dt className="text-micro uppercase tracking-wider text-text-dim">
@@ -342,6 +348,52 @@ function MechanicBar({
             style={{ width: `${pct}%` }}
           />
         </div>
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * APM to show, if it can be trusted. Only games uploaded by agent 0.17.2+
+ * carry the slim ``apm`` (every earlier upload sent null); those uploads
+ * also credit each player's own actions, so the opponent's value from the
+ * same breakdown is trusted too. Older breakdowns can still carry a
+ * misattributed ``player_stats`` APM, which must never be shown.
+ */
+function trustedApm(
+  breakdown: MacroBreakdownData | null | undefined,
+  game: GameSummary | null | undefined,
+): { mine: number | null; opponent: number | null } {
+  const mine = typeof game?.apm === "number" && game.apm > 0 ? game.apm : null;
+  const opp = breakdown?.player_stats?.opponent?.apm;
+  return {
+    mine,
+    opponent: mine !== null && typeof opp === "number" && opp > 0 ? opp : null,
+  };
+}
+
+function ApmStat({ mine, opponent }: { mine: number | null; opponent: number | null }) {
+  return (
+    <div data-testid="apm-stat">
+      <dt
+        className="text-micro uppercase tracking-wider text-text-dim"
+        title="Actions per minute, counted like StarCraft II's in-game APM: every command, selection and control-group action, averaged over the game."
+      >
+        APM
+      </dt>
+      <dd className="mt-1">
+        <span className="text-lg font-semibold tabular-nums text-text">{formatApm(mine)}</span>
+        {/* Neutral copy: the public replay page shows this row too. */}
+        <span
+          className="ml-2 text-caption text-text-muted"
+          title={mine === null ? "APM is measured for games synced with agent 0.17.2 or newer." : undefined}
+        >
+          {mine === null
+            ? "Not measured for this game"
+            : opponent !== null
+              ? `Opponent ${formatApm(opponent)}`
+              : null}
+        </span>
       </dd>
     </div>
   );

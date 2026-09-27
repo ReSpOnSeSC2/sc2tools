@@ -385,10 +385,14 @@ class PerGameComputeService {
   /**
    * Return the stored APM curve. Schema:
    *   apmCurve: {
+   *     v?: number,
    *     window_sec: number,
    *     has_data: boolean,
-   *     players: Array<{ name, race, samples: Array<{t, apm, spm}> }>
+   *     players: Array<{ name, race, avg_apm?, samples: Array<{t, apm, spm}> }>
    *   }
+   * ``v`` is echoed (1 when absent) because only v2+ curves (agent
+   * 0.17.2) credit each player's own actions and count APM the way
+   * StarCraft II does; clients must not display older curves.
    *
    * @param {string} userId
    * @param {string} gameId
@@ -416,6 +420,7 @@ class PerGameComputeService {
       ok: true,
       game_id: slim.gameId,
       game_length_sec: slim.durationSec || 0,
+      v: Number.isInteger(curve.v) ? curve.v : 1,
       window_sec: curve.window_sec || 30,
       has_data: !!curve.has_data,
       players: Array.isArray(curve.players) ? curve.players : [],

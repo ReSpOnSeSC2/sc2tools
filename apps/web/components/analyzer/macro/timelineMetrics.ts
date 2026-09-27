@@ -1,18 +1,21 @@
 /**
  * The metrics behind the Match timeline switch: army value, workers,
- * supply and income. Pure data and number formatting;
- * ``activeArmyLayout`` plots whichever metric is selected and the chart
- * parts render it.
+ * supply, income and, for games with a trusted APM curve, APM. Pure
+ * data and number formatting; ``activeArmyLayout`` plots whichever
+ * metric is selected and the chart parts render it.
  *
- * Only tracker ``PlayerStatsEvent`` fields the agent already uploads
- * are used, so every metric works on existing games. Who leads, and by
- * how much, is shown on every metric (shading between the lines and a
- * margin beside the leader) rather than as a metric of its own.
+ * The first four read tracker ``PlayerStatsEvent`` fields the agent
+ * already uploads, so they work on existing games. APM comes from the
+ * game's APM curve (lib/apm.ts) and is only offered when that curve is
+ * trusted. Who leads, and by how much, is shown on every metric (shading
+ * between the lines and a margin beside the leader) rather than as a
+ * metric of its own.
  */
 
+import { Keyboard, type LucideIcon } from "lucide-react";
 import type { SeriesPoint } from "./activeArmyLayout";
 
-export type TimelineMetric = "army" | "workers" | "supply" | "income";
+export type TimelineMetric = "army" | "workers" | "supply" | "income" | "apm";
 
 type RaceLetter = "P" | "T" | "Z";
 
@@ -31,7 +34,9 @@ export interface TimelineMetricDef {
   /** Per-player text for the tooltip and summary; defaults to ``read``. */
   describe?: (p: SeriesPoint) => string;
   /** The in-game icon that stands for this metric, per race. */
-  icon: Record<RaceLetter, string>;
+  icon?: Record<RaceLetter, string>;
+  /** Generic glyph for a metric with no race-specific in-game icon. */
+  glyph?: LucideIcon;
 }
 
 export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
@@ -77,7 +82,24 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
     floor: 200,
     icon: { P: "Nexus", T: "CommandCenter", Z: "Hatchery" },
   },
+  {
+    key: "apm",
+    label: "APM",
+    title: "Actions per minute (every command, selection and control-group action)",
+    caption: "APM",
+    read: (p) => (typeof p.apm === "number" ? p.apm : null),
+    floor: 100,
+    glyph: Keyboard,
+  },
 ];
+
+/**
+ * The metrics this game can show. APM needs a trusted APM curve, so it
+ * is left out of the switch entirely rather than drawn empty.
+ */
+export function timelineMetricsFor({ apm }: { apm: boolean }): readonly TimelineMetricDef[] {
+  return apm ? TIMELINE_METRICS : TIMELINE_METRICS.filter((m) => m.key !== "apm");
+}
 
 export const DEFAULT_TIMELINE_METRIC: TimelineMetric = "army";
 
@@ -91,7 +113,7 @@ export function metricIcon(
   race: string | null | undefined,
 ): string | null {
   const letter = (race || "").charAt(0).toUpperCase();
-  return letter === "P" || letter === "T" || letter === "Z"
+  return metric.icon && (letter === "P" || letter === "T" || letter === "Z")
     ? metric.icon[letter]
     : null;
 }

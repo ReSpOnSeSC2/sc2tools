@@ -72,6 +72,20 @@ describe("services/perGameCompute", () => {
       });
     });
 
+    test("apmCurve echoes the curve version so clients can skip pre-v2 curves", async () => {
+      const serve = (apmCurve) => new PerGameComputeService(
+        { games: { findOne: async () => ({ gameId: "g", durationSec: 470 }) } },
+        { gameDetails: { findOne: async () => ({ apmCurve }) } },
+      ).apmCurve("u", "g");
+      const players = [{ pid: 1, is_me: true, avg_apm: 189.7, samples: [{ t: 0, apm: 150, spm: 20 }] }];
+      expect(await serve({ v: 2, window_sec: 30, has_data: true, players }))
+        .toMatchObject({ ok: true, v: 2, players });
+      expect(await serve({ window_sec: 30, has_data: true, players: [] }))
+        .toMatchObject({ ok: true, v: 1 });
+      expect(await serve({ v: "2", window_sec: 30, has_data: true, players: [] }))
+        .toMatchObject({ v: 1 });
+    });
+
     test("a genuine absence keeps the not-computed response", async () => {
       const service = new PerGameComputeService({ games: { findOne: async () => ({ gameId: "g", macroScore: 74 }) } }, {
         gameDetails: { findOne: async () => null },

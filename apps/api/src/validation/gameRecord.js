@@ -294,6 +294,9 @@ const GAME_SCHEMA = {
       type: "object",
       additionalProperties: true,
       properties: {
+        // v2 (agent 0.17.2): per-player attribution fixed and ``apm``
+        // counts every action like SC2's own APM counter.
+        v: { type: "integer", minimum: 1, maximum: 10 },
         window_sec: { type: "integer", minimum: 1, maximum: 600 },
         has_data: { type: "boolean" },
         players: { type: "array", maxItems: 8 },

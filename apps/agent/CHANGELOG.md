@@ -8,11 +8,14 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 - Your average APM and spending quotient now reach the website. Both were sent
   empty for every game, so the replay list, battle card and league benchmarks
-  had no APM or SQ to show. APM is the same active-window average the stats
-  table shows; SQ is the macro breakdown's spending quotient.
-- The APM/SPM chart credits each player with their own actions. It compared
+  had no APM or SQ to show. SQ is the macro breakdown's spending quotient.
+- APM is counted like StarCraft II's in-game APM: every command, selection
+  and control-group action, averaged over the whole game in real time.
+  It used to count commands only, which read far below the in-game number.
+- The APM curve credits each player with their own actions. It compared
   sc2reader's 0-based user id with the 1-based player slot, so player 1 was
-  shown player 2's actions and player 2 always read zero.
+  shown player 2's actions and player 2 always read zero. Curves now carry
+  a version (`v: 2`) so the website can skip the old ones.
 - Map Intel's death-zone heatmap has data. Fights you lost (more army value
   lost than your opponent within the fight) are recorded where your units
   died, weighted by the net loss. The list was always empty before.

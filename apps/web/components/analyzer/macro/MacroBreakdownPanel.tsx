@@ -30,7 +30,8 @@ import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
 import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
-import { SpendingQuotientStat } from "./SpendingQuotientStat";
+import { MacroKpiRow } from "./MacroKpiRow";
+import { readGameApm, type ApmCurveResponse } from "@/lib/apm";
 import type {
   LeakItem,
   MacroBreakdownData,
@@ -408,6 +409,13 @@ function BreakdownBody({
   );
   const headlineColour = scoreToneTextClass(score);
   const samplesMissing = isMissingChartSamples(data);
+  // One read of the APM curve feeds both the timeline's APM view and the
+  // APM tile; pre-v2 curves (misattributed, commands only) read as null.
+  const apmReq = useApi<ApmCurveResponse>(
+    `/v1/games/${encodeURIComponent(gameId)}/apm-curve`,
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+  const gameApm = useMemo(() => readGameApm(apmReq.data), [apmReq.data]);
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -438,6 +446,7 @@ function BreakdownBody({
             myRace={headerMeta?.myRace ?? data.race ?? null}
             oppRace={headerMeta?.opponentRace ?? null}
             gameId={gameId}
+            apm={gameApm}
           />
         )}
       </section>
@@ -451,31 +460,7 @@ function BreakdownBody({
 
       <Headline score={score} colourClass={headlineColour} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SpendingQuotientStat
-          label="Spending Quotient"
-          value={typeof raw.sq === "number" ? raw.sq : null}
-          tone="cyan"
-          glow
-          decimals={1}
-          explanation="SQ blends income and unspent resources into a single ladder-tier metric. 80+ is Master/Pro pacing; 70+ is solid Diamond."
-        />
-        <SpendingQuotientStat
-          label="Supply blocked"
-          value={raw.supply_blocked_seconds}
-          tone={(raw.supply_blocked_seconds || 0) > 10 ? "warning" : "neutral"}
-          unit="s"
-          hint="Lower is better"
-          explanation="Total seconds your supply was capped — production stalls during these windows, costing units and tempo."
-        />
-        <SpendingQuotientStat
-          label="Float spikes"
-          value={raw.mineral_float_spikes}
-          tone={(raw.mineral_float_spikes || 0) > 0 ? "warning" : "neutral"}
-          hint="Samples > 800 minerals after 4:00"
-          explanation="How many mid-game samples showed a sustained mineral surplus. Banked minerals that aren't building units delay your next push."
-        />
-      </div>
+      <MacroKpiRow raw={raw} apm={gameApm} apmLoading={apmReq.isLoading} />
 
       <section
         aria-labelledby="penalty-heading"
