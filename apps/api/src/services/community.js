@@ -228,6 +228,16 @@ function pickTop(counts) {
  * Plus a moderation queue: communityReports holds user-flag records
  * resolved by an admin via the Clerk role check.
  */
+/**
+ * @typedef {{
+ *   exists: (targetId: string) => Promise<boolean>,
+ *   onReported: (targetId: string, distinctOpenReporters: number) => Promise<void>,
+ *   remove: (targetId: string, adminUserId: string, note: string) => Promise<void>,
+ *   restore: (targetId: string) => Promise<void>,
+ *   describe: (targetIds: string[]) => Promise<Map<string, {title: string, snippet: string, href: string, hidden: boolean, status: string}>>,
+ * }} ReportTargetHandlers
+ */
+
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
@@ -236,6 +246,23 @@ class CommunityService {
   constructor(db, opts = {}) {
     this.db = db;
     this.slugSecret = opts.slugSecret || null;
+    /**
+     * Report targets owned by OTHER services (the Replay Review
+     * Exchange registers ``review_request`` / ``review_comment``), so
+     * every surface shares this one moderation queue.
+     *
+     * @type {Map<string, ReportTargetHandlers>}
+     */
+    this.reportTargets = new Map();
+  }
+
+  /**
+   * @param {string} kind
+   * @param {ReportTargetHandlers} handlers
+   */
+  registerReportTarget(kind, handlers) {
+    if (kind === "build" || kind === "opponent") throw new Error(`report target ${kind} is built in`);
+    this.reportTargets.set(kind, handlers);
   }
 
   // ── Builds ──────────────────────────────────────────────────────
@@ -1465,14 +1492,21 @@ class CommunityService {
   /**
    * @param {string} userId — reporter
    * @param {{targetType: string, targetId: string, reason: string, note?: string}} input
-   *   ``targetType`` must be 'build'|'opponent'; anything else is
-   *   rejected with a 400 below. Typed wide because the route passes
+   *   ``targetType`` must be 'build'|'opponent' or a kind registered via
+   *   ``registerReportTarget``; anything else is rejected with a 400. Typed wide because the route passes
    *   the raw request-body string through for exactly that check.
    */
   async report(userId, input) {
-    if (!["build", "opponent"].includes(input.targetType)) {
-      const err = new Error("targetType must be build|opponent");
+    const external = this.reportTargets.get(input.targetType) || null;
+    if (!["build", "opponent"].includes(input.targetType) && !external) {
+      const allowed = ["build", "opponent", ...this.reportTargets.keys()].join("|");
+      const err = new Error(`targetType must be ${allowed}`);
       /** @type {any} */ (err).status = 400;
+      throw err;
+    }
+    if (external && !(await external.exists(String(input.targetId)))) {
+      const err = new Error("report_target_not_found");
+      /** @type {any} */ (err).status = 404;
       throw err;
     }
     const reason = String(input.reason || "").slice(0, 80);
@@ -1514,6 +1548,16 @@ class CommunityService {
         COLLECTIONS.COMMUNITY_REPORTS,
       ),
     );
+    if (external) {
+      // Auto-hide is driven by DISTINCT open reporters, so one account
+      // can never hide content on its own.
+      const reporters = await this.db.communityReports.distinct("reporterUserId", {
+        targetType: input.targetType,
+        targetId,
+        resolvedAt: null,
+      });
+      await external.onReported(targetId, reporters.length);
+    }
     return { alreadyReported: false };
   }
 
@@ -1524,6 +1568,16 @@ class CommunityService {
       .sort({ createdAt: 1 })
       .limit(100)
       .toArray();
+    // Registered targets describe themselves (title, snippet, link,
+    // auto-hidden state) so the admin queue can review in context.
+    for (const [kind, handlers] of this.reportTargets) {
+      const ids = [...new Set(items.filter((r) => r.targetType === kind).map((r) => r.targetId))];
+      if (ids.length === 0) continue;
+      const described = await handlers.describe(ids);
+      for (const item of items) {
+        if (item.targetType === kind) item.target = described.get(item.targetId) || null;
+      }
+    }
     return { items };
   }
 
@@ -1544,6 +1598,26 @@ class CommunityService {
         adminUserId,
         reason: input.note || "moderator_action",
       });
+    }
+    const external = this.reportTargets.get(report.targetType) || null;
+    if (external) {
+      if (input.action === "remove") await external.remove(report.targetId, adminUserId, input.note || "");
+      else await external.restore(report.targetId);
+      // A decision about registered content settles every open report on
+      // it — otherwise a dismissed-and-restored comment would sit in the
+      // queue under its other reports, still counting toward auto-hide.
+      await this.db.communityReports.updateMany(
+        { targetType: report.targetType, targetId: report.targetId, resolvedAt: null },
+        {
+          $set: {
+            resolvedAt: new Date(),
+            resolvedBy: adminUserId,
+            resolution: input.action,
+            resolutionNote: input.note || null,
+          },
+        },
+      );
+      return;
     }
     await this.db.communityReports.updateOne(
       { id: reportId },

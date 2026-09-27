@@ -13,6 +13,7 @@ import {
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
+import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
 import {
   opponentProfileHref,
@@ -134,6 +135,11 @@ export function GameDetailShell({
                 filename={game.replayFilename}
                 sizeBytes={replaySizeBytes}
                 showLabel
+              />
+              <AskForReviewButton
+                gameId={game.gameId}
+                durationSec={game.durationSec}
+                matchup={matchup}
               />
             </div>
 

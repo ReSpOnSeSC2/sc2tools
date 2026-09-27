@@ -263,6 +263,31 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.REVIEW_REQUESTS]: {
+    collection: COLLECTIONS.REVIEW_REQUESTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.REVIEW_COMMENTS]: {
+    collection: COLLECTIONS.REVIEW_COMMENTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.REVIEW_KARMA_EVENTS]: {
+    collection: COLLECTIONS.REVIEW_KARMA_EVENTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.REVIEW_BLOCKS]: {
+    collection: COLLECTIONS.REVIEW_BLOCKS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.NOTIFICATIONS]: {
+    collection: COLLECTIONS.NOTIFICATIONS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.COACHING]: {
     collection: COLLECTIONS.COACHING,
     currentVersion: 1,

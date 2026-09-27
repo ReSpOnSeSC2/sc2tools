@@ -52,6 +52,19 @@ export interface PublicPlayerProfile {
   signatureBuilds: PublicProfileSignatureBuild[];
   featuredBuild: PublicProfileFeaturedBuild | null;
   publishedBuildCount: number;
+  /** Replay Review Exchange section; absent until they have reviewed. */
+  reviewer?: PublicReviewerSection | null;
+}
+
+export interface PublicReviewerSection {
+  karma: number;
+  reviews: number;
+  helpful: number;
+  bestAnswers: number;
+  badges: Array<{ key: string; label: string }>;
+  flair: string | null;
+  verified: { band: { id: number; label: string }; race: string | null; mmr: number | null } | null;
+  matchupsReviewed: Array<{ matchup: string; count: number }>;
 }
 
 /** Envelope returned by GET /v1/public/profile/:handle. */

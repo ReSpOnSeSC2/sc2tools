@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -10,12 +11,31 @@ import { ForbiddenCard } from "../components/AdminFragments";
 type Report = {
   id: string;
   reporterUserId: string;
-  targetType: "build" | "opponent";
+  targetType: "build" | "opponent" | "review_request" | "review_comment";
   targetId: string;
   reason: string;
   note?: string;
   createdAt: string;
+  /** Registered targets (Replay Review Exchange) describe themselves. */
+  target?: {
+    title: string;
+    snippet: string;
+    href: string;
+    hidden: boolean;
+    status: string;
+  } | null;
 };
+
+const TARGET_LABEL: Record<Report["targetType"], string> = {
+  build: "Community build",
+  opponent: "Opponent profile",
+  review_request: "Review request",
+  review_comment: "Review comment",
+};
+
+function isReviewTarget(r: Report) {
+  return r.targetType === "review_request" || r.targetType === "review_comment";
+}
 
 type ReportsResp = { items: Report[] };
 
@@ -79,7 +99,10 @@ export default function AdminModerationPage() {
         <p className="text-text-muted">
           Open community reports awaiting review. Resolve by either
           dismissing (no action) or removing (unpublishes the
-          target).
+          target). Replay-review content is hidden automatically once
+          three different people report it; dismissing restores it and
+          settles every report on it, removing takes it down for good
+          (the author loses 20 review karma).
         </p>
       </header>
 
@@ -94,12 +117,26 @@ export default function AdminModerationPage() {
               <Card padded>
                 <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                   <strong className="break-all">
-                    {r.targetType} · {r.targetId}
+                    {TARGET_LABEL[r.targetType] ?? r.targetType} · {r.target?.title ?? r.targetId}
                   </strong>
                   <span className="text-caption text-text-dim">
                     {new Date(r.createdAt).toLocaleString()}
                   </span>
                 </div>
+                {r.target ? (
+                  <div className="mt-2 space-y-1 rounded-lg border border-border bg-bg-elevated/40 p-2 text-sm">
+                    <p className="break-words text-text">{r.target.snippet || "(no text)"}</p>
+                    <p className="text-caption text-text-dim">
+                      {r.target.hidden ? "Auto-hidden pending review · " : ""}
+                      Status: {r.target.status} ·{" "}
+                      <Link href={r.target.href} className="text-accent-cyan underline" target="_blank" rel="noreferrer">
+                        Open in context
+                      </Link>
+                    </p>
+                  </div>
+                ) : isReviewTarget(r) ? (
+                  <p className="mt-2 text-caption text-text-dim">The reported content no longer exists.</p>
+                ) : null}
                 <div className="mt-2 text-sm">
                   <span className="font-semibold text-warning">Reason:</span>{" "}
                   {r.reason}
@@ -122,7 +159,7 @@ export default function AdminModerationPage() {
                     onClick={() => resolve(r.id, "dismiss")}
                     disabled={busy}
                   >
-                    Dismiss
+                    {isReviewTarget(r) && r.target?.hidden ? "Dismiss & restore" : "Dismiss"}
                   </button>
                   <button
                     type="button"

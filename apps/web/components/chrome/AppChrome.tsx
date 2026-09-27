@@ -19,6 +19,8 @@ import {
   type NavIcon,
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { reviewsVisible } from "@/lib/reviews";
 import { SiteStats } from "./SiteStats";
 
 /* ------------------------------------------------------------------
@@ -83,7 +85,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const entries = NAV_ENTRIES.filter(
     (e) =>
       (!e.adminOnly || me?.isAdmin === true) &&
-      (!e.coachingOnly || hasCoachingAccess),
+      (!e.coachingOnly || hasCoachingAccess) &&
+      (!e.reviewsRollout || reviewsVisible(me?.isAdmin)),
   );
   const sections = entries.filter((e) => e.group === "section");
   const utilities = entries.filter((e) => e.group === "utility");
@@ -195,6 +198,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <SignedIn>
                 <CoachingBookingAlert compact />
+                <NotificationBell compact />
               </SignedIn>
               <ThemeToggle />
               <SignedIn>

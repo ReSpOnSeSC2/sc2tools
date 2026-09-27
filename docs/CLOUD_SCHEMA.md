@@ -302,6 +302,92 @@ Hot queries:
 
 ---
 
+## Replay Review Exchange collections
+
+See [`docs/reviews.md`](reviews.md) for the rules and privacy model.
+Public payloads are rebuilt from allow-lists in
+[`services/reviewRedaction.js`](../apps/api/src/services/reviewRedaction.js);
+`userId`, `gameId` and every opponent identifier below are server-only.
+
+### `review_requests`
+
+```jsonc
+{
+  "_id": "a1B2c3D4e5F6g7H8",      // random 16-char public id (/reviews/<id>)
+  "userId": "...", "gameId": "...", // PRIVATE: the scoped grant's target
+  "activeKey": "userId\u0000gameId", // present only while open/answered
+  "question": "...", "tags": ["build_order"], "timeRange": {"startSec": 300, "endSec": 420} | null,
+  "desiredLevel": "anyone|my_league_or_higher|masters_plus",
+  "visibility": "public|link", "askerDisplay": "anonymous|named", "askerName": "..." | null,
+  // redacted snapshot frozen at posting time
+  "matchup": "PvZ", "myRace": "Protoss", "oppRace": "Zerg", "map": "...", "result": "Win|Loss|Draw",
+  "durationSec": 640, "askerBand": {"id": 4, "label": "Diamond"}, "askerMmr": 4100,
+  "opponentBand": {...}, "opponentMmr": 4100, "opponentLabel": "Opponent (Zerg, ~4,100 MMR)",
+  "myBuild": "...", "oppStrategy": "...", "macroScore": 61,
+  "hasPlayback": true, "playbackMode": "segmented|inline|none",
+  "status": "open|answered|closed|removed", "closedReason": "asker|game_unavailable|moderator",
+  "hidden": false, "reportCount": 0,
+  "reviewCount": 0, "commentCount": 0, "helpfulCount": 0, "upvoteTotal": 0, "bestCommentId": null,
+  "listed": true, "indexable": false, "hotScore": 12.3, "topScore": 2,  // derived on every write
+  "lastActivityAt": ISODate, "createdAt": ISODate, "updatedAt": ISODate, "_schemaVersion": 1
+}
+```
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{activeKey: 1}` unique sparse | One live request per game |
+| `{userId: 1, createdAt: -1}` | Open/daily caps, `/me/reviews` |
+| `{userId: 1, gameId: 1}` | Close requests when games are deleted |
+| `{listed: 1, createdAt: -1, _id: -1}` | Board: New |
+| `{listed: 1, hotScore: -1, _id: -1}` | Board: Hot (age decay baked into the score) |
+| `{listed: 1, topScore: -1, _id: -1}` | Board: Top |
+| `{listed: 1, matchup: 1, createdAt: -1}` | Matchup filter, help-with list, digest |
+| `{listed: 1, reviewCount: 1, createdAt: -1}` | Unanswered filter |
+| `{indexable: 1, lastActivityAt: -1}` | Sitemap |
+
+### `review_comments`
+
+```jsonc
+{
+  "_id": "...", "requestId": "...", "authorId": "..." | null, "authorDeleted": true?,
+  "parentId": null | "...", "isAskerComment": false,
+  "gameTimeSec": 312, "endTimeSec": 340 | null, "mapPoint": {"x": 40.5, "y": 61.3} | null,
+  "body": "...", "upvotes": 0, "upvoteKarma": 0, "helpful": false, "best": false,
+  "reportCount": 0, "status": "visible|hidden|removed|deleted",
+  "createdAt": ISODate, "editedAt": ISODate | null, "_schemaVersion": 1
+}
+```
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{requestId: 1, createdAt: 1, _id: 1}` | Thread listing |
+| `{authorId: 1, createdAt: -1}` | Rate limits, reviewer history, GDPR |
+| `{parentId: 1}` sparse | Replies / soft-delete check |
+
+### `review_karma_events`
+
+`{commentId, requestId, kind: "helpful|best|upvote|removed", actorId, userId, points, createdAt}`.
+Unique partial `{commentId, kind, actorId}` (`actorId` string only — GDPR nulls
+it) makes every reward idempotent; `{userId, createdAt}` and `{createdAt, userId}`
+serve recompute and the weekly leaderboard. Totals are materialised on
+`users.reviewer` (`karma, helpful, best, upvotes, reviews, removed,
+verified, leaderboardOptIn, digestOptOut, digestWeek`; index
+`{"reviewer.karma": -1}` sparse).
+
+### `review_blocks`
+
+`{_id, blockerId, blockedId, createdAt}` — unique `{blockerId, blockedId}`,
+plus `{blockedId}`.
+
+### `notifications`
+
+`{_id, userId, kind, title, body, href, count, readAt, createdAt, groupKey?, senderId?}`.
+`{userId, createdAt}` lists the bell; `{userId, readAt}` counts unread; the
+unique partial `{userId, groupKey}` (unread rows only) folds grouped events
+into one row; a 90-day TTL on `createdAt` keeps it a bell, not an archive.
+
+---
+
 ## Schema versioning
 
 Every document carries `_schemaVersion` (integer, currently `1`).

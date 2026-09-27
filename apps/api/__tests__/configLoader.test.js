@@ -195,3 +195,13 @@ describe("config loader - Render capacity diagnostics", () => {
     })).toThrow(/non-negative USD/);
   });
 });
+
+describe("config loader - replay review rollout", () => {
+  test("defaults to off and accepts admins/on spellings", () => {
+    expect(loadConfig({ ...BASE_ENV }).reviewsEnabled).toBe("off");
+    expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: "admins" }).reviewsEnabled).toBe("admins");
+    expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: " ON " }).reviewsEnabled).toBe("on");
+    expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: "true" }).reviewsEnabled).toBe("on");
+    expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: "maybe" }).reviewsEnabled).toBe("off");
+  });
+});

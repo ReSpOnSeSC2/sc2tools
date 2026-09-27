@@ -113,6 +113,11 @@ const { PlayerChannelsService } = require("./services/playerChannels");
 const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
+const { NotificationsService } = require("./services/notifications");
+const { buildNotificationsRouter } = require("./routes/notifications");
+const { ReviewerReputationService } = require("./services/reviewerReputation");
+const { ReviewsService } = require("./services/reviews");
+const { buildReviewsRouter } = require("./routes/reviews");
 const { loadAllMigrations } = require("./db/migrations");
 
 const { buildHealthRouter } = require("./routes/health");
@@ -225,6 +230,7 @@ function isCoachingStateJson(req) {
  *   pulseLinks?: import('./services/pulseCharacterLinks').PulseCharacterLinkService,
  *   fingerprintPopulationCalibration?: import('./services/fingerprintPopulationCalibration').FingerprintPopulationCalibrationService,
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
+ *   reviewSeasonWindowStart?: () => Promise<Date>,
  * }} AppDeps
  */
 
@@ -632,6 +638,33 @@ function makeServices(deps) {
   });
   const seasons = new SeasonsService();
   const arcade = new ArcadeService(deps.db, { games, gameDetails });
+  // Replay Review Exchange (docs/reviews.md). Built unconditionally —
+  // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
+  // wipes always cover review data. ``reviewSeasonWindowStart`` is a
+  // test-injected stand-in so suites never reach live SC2Pulse.
+  const notifications = new NotificationsService(deps.db, {
+    io: deps.io,
+    logger: deps.logger,
+  });
+  const reviewerReputation = new ReviewerReputationService(deps.db, {
+    seasons,
+    seasonWindowStart: deps.reviewSeasonWindowStart,
+    logger: deps.logger,
+  });
+  const reviews = new ReviewsService(deps.db, {
+    replayLibrary,
+    perGame,
+    playbackArtifacts,
+    reputation: reviewerReputation,
+    notifications,
+    community,
+    logger: deps.logger,
+  });
+  gdpr.reviews = reviews;
+  publicProfile.reviewerReputation = reviewerReputation;
+  for (const [kind, handlers] of Object.entries(reviews.moderationTargets())) {
+    community.registerReportTarget(kind, handlers);
+  }
   // Stats-ticker fun-facts pool — career stats, records, and trivia
   // for the overlay's scrolling bottom line. Composes the fingerprint,
   // arcade unit trivia, and season catalog as best-effort extras; the
@@ -728,6 +761,9 @@ function makeServices(deps) {
     pulseDirectory,
     playerChannels,
     playerIdentities,
+    notifications,
+    reviewerReputation,
+    reviews,
   };
 }
 
@@ -1092,6 +1128,23 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       replayFiles: services.replayFiles,
       auth,
     }),
+  );
+  // Replay Review Exchange — public review pages, the board and the
+  // scoped per-game analysis grant are unauthenticated by design (the
+  // asker opted in); writes apply auth per route. Public bundle.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildReviewsRouter({
+      reviews: services.reviews,
+      reputation: services.reviewerReputation,
+      auth,
+      isAdmin,
+      rollout: deps.config.reviewsEnabled || "off",
+    }),
+  );
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildNotificationsRouter({ notifications: services.notifications, auth }),
   );
   // Multichat overlay relays — overlay-token auth (path segment), no
   // Clerk session, so it mounts with the public bundle.

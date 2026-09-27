@@ -3077,6 +3077,64 @@ function coachingMatchupOrder(matchup) {
   return COACHING_MATCHUP_ORDER.get(matchup) ?? Number.MAX_SAFE_INTEGER;
 }
 
+/**
+ * Read-only public view of the coach roster for the Replay Review
+ * Exchange's "Coach" badge. Only coaches linked to a site account
+ * (``userId``) are listed — legacy PIN-only coach rows never match a
+ * reviewer. ``bookable`` mirrors the calendar's published state
+ * (availability saved and not paused). Emails, Clerk ids, PINs and
+ * student rows never leave this function; ``userId`` is for server-side
+ * matching only and must not be serialized.
+ *
+ * Never calls ``roleFor`` (which can bootstrap-write the roster).
+ *
+ * @param {{coaching: import('mongodb').Collection}} db
+ * @returns {Promise<Array<{coachId: string, name: string, userId: string, bookable: boolean, studentUserIds: string[]}>>}
+ */
+async function listPublicCoaches(db) {
+  const doc = await db.coaching.findOne(
+    /** @type {any} */ ({ _id: DOC_ID }),
+    {
+      projection: {
+        _id: 0,
+        "state.coaches.id": 1,
+        "state.coaches.name": 1,
+        "state.coaches.userId": 1,
+        "state.students.userId": 1,
+        "state.students.coachId": 1,
+      },
+    },
+  );
+  const state = doc && doc.state ? doc.state : {};
+  /** @type {Array<Record<string, any>>} */
+  const coaches = (Array.isArray(state.coaches) ? state.coaches : [])
+    .filter((/** @type {any} */ c) => c && typeof c.id === "string" && typeof c.userId === "string" && c.userId);
+  if (coaches.length === 0) return [];
+  const calendars = await db.coaching
+    .find(
+      /** @type {any} */ ({ _id: { $in: coaches.map((c) => calendarId(c.id)) } }),
+      { projection: { _id: 0, coachId: 1, availabilityEnabled: 1, "availability.windows": 1 } },
+    )
+    .toArray();
+  const open = new Set(
+    calendars
+      .filter((cal) => cal && cal.availability && cal.availabilityEnabled !== false
+        && Array.isArray(cal.availability.windows) && cal.availability.windows.length > 0)
+      .map((cal) => cal.coachId),
+  );
+  /** @type {Array<Record<string, any>>} */
+  const students = Array.isArray(state.students) ? state.students : [];
+  return coaches.map((c) => ({
+    coachId: c.id,
+    name: safeAssignmentName(c.name, "Coach"),
+    userId: c.userId,
+    bookable: open.has(c.id),
+    studentUserIds: students
+      .filter((st) => st && st.coachId === c.id && typeof st.userId === "string" && st.userId)
+      .map((st) => st.userId),
+  }));
+}
+
 /** @param {ConstructorParameters<typeof CoachingService>[0]} deps */
 function buildCoachingService(deps) {
   return new CoachingService(deps);
@@ -3085,6 +3143,7 @@ function buildCoachingService(deps) {
 module.exports = {
   buildCoachingService,
   CoachingService,
+  listPublicCoaches,
   buildAvailableSlots,
   normalizeAvailability,
   zonedLocalToUtc,

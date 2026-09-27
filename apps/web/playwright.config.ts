@@ -24,7 +24,7 @@ const BROWSER = process.env.PW_BROWSER === "firefox" ? "firefox" : "chromium";
  * this suite asserts.
  *
  * Run locally:
- *   npm run build   (with the dummy env below)
+ *   npm run build   (with the dummy env below, incl. NEXT_PUBLIC_REVIEWS_ENABLED=on)
  *   npx playwright test
  */
 export default defineConfig({
@@ -46,7 +46,14 @@ export default defineConfig({
     // Chromium-only flags — Firefox rejects them at spawn.
     launchOptions:
       BROWSER === "chromium" && !process.env.CI
-        ? { args: ["--proxy-server=direct://", "--proxy-bypass-list=*"] }
+        ? {
+          args: ["--proxy-server=direct://", "--proxy-bypass-list=*"],
+          // Sandboxes with a preinstalled Chromium that doesn't match
+          // this Playwright's pinned revision can point at it directly.
+          ...(process.env.PW_CHROMIUM_EXECUTABLE
+            ? { executablePath: process.env.PW_CHROMIUM_EXECUTABLE }
+            : {}),
+        }
         : {},
   },
   projects: [
@@ -63,7 +70,17 @@ export default defineConfig({
       use: { browserName: BROWSER, viewport: { width: 1280, height: 800 } },
     },
   ],
-  webServer: {
+  webServer: [
+  {
+    // Fixture API: answers ONLY the public Replay Review Exchange routes
+    // and drops every other connection, so all other pages still see
+    // "no API" exactly as before (tests/e2e/mock-review-api.mjs).
+    command: "node tests/e2e/mock-review-api.mjs",
+    url: "http://127.0.0.1:8080/__mock/health",
+    reuseExistingServer: !process.env.CI,
+    timeout: 20_000,
+  },
+  {
     // Default (dual-stack) bind on purpose: Next self-proxies internal
     // requests to localhost:<port>, which resolves to ::1 on Windows —
     // a 127.0.0.1-only bind 500s every page. The BROWSER still targets
@@ -89,6 +106,9 @@ export default defineConfig({
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_Y2xlcmsuZXhhbXBsZS5jb20k",
       CLERK_SECRET_KEY: "sk_live_dummy",
       NEXT_PUBLIC_API_BASE: "http://localhost:8080",
+      // Build-time inlined: the build step must use the same value.
+      NEXT_PUBLIC_REVIEWS_ENABLED: "on",
     },
   },
+  ],
 });

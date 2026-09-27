@@ -4,6 +4,7 @@ import {
   Cpu,
   Globe2,
   Library,
+  MessageSquareText,
   ShieldCheck,
   SlidersHorizontal,
   Users2,
@@ -38,6 +39,9 @@ export type NavEntry = {
   coachingOnly?: boolean;
   /** Signed-out visitors can reach these (shared community/meta links). */
   publicRoute?: boolean;
+  /** Shown only while the Replay Review Exchange rollout exposes it
+   *  to this viewer (NEXT_PUBLIC_REVIEWS_ENABLED). */
+  reviewsRollout?: boolean;
 };
 
 export const TODAY_ENTRY: NavEntry = {
@@ -60,6 +64,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Custom builds", icon: Library, group: "utility" },
   { key: "meta", href: "/meta", label: "Meta", icon: Globe2, group: "utility", publicRoute: true },
   { key: "community", href: "/community", label: "Community", icon: Users2, group: "utility", publicRoute: true },
+  { key: "reviews", href: "/reviews", label: "Reviews", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
   {
     key: "coaching",
     href: "/coaching",
