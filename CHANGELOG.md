@@ -19,12 +19,11 @@ corresponding GitHub Release.
   stay anonymous, and a request grants read-only access to that one game's
   analysis until it closes. Reviewers' leagues are verified from their own
   synced ladder games; helpful, best and upvoted reviews earn karma, badges
-  and an opt-in weekly leaderboard, and Coaching Locker coaches get a
-  "Book a lesson" badge. Includes the public `/reviews` board (Hot/New/Top),
-  report-driven auto-hide wired into the existing moderation queue, blocks,
-  database-backed rate limits, in-app notifications with a header bell, a
-  weekly digest, Reddit/Discord sharing, dynamic OG images, QAPage JSON-LD
-  and a quality-gated sitemap. Off by default behind `REVIEWS_ENABLED` /
+  and an opt-in weekly leaderboard. Includes the public `/reviews` board
+  (Hot/New/Top), report-driven auto-hide wired into the existing moderation
+  queue, blocks, database-backed rate limits, in-app notifications with a
+  header bell, a weekly digest, Reddit/Discord sharing, dynamic OG images,
+  QAPage JSON-LD and a quality-gated sitemap. Off by default behind `REVIEWS_ENABLED` /
   `NEXT_PUBLIC_REVIEWS_ENABLED` (`off` → `admins` → `on`); see
   [`docs/reviews.md`](docs/reviews.md).
 - **Private local Bot Lab and agent 0.17.0** — opt-in administrator-only bot

@@ -283,7 +283,7 @@ class ReviewsService {
         : Promise.resolve([]),
     ]);
     const authorIds = comments.filter((c) => !c.isAskerComment).map((c) => c.authorId).filter(Boolean);
-    const profiles = await this.reputation.publicProfiles(authorIds, { viewerId: viewer.userId });
+    const profiles = await this.reputation.publicProfiles(authorIds);
     const thread = serializeThread(comments, {
       doc,
       viewer,
@@ -1153,7 +1153,7 @@ class ReviewsService {
     );
   }
 
-  // ── Reports, blocks, lessons ────────────────────────────────────
+  // ── Reports and blocks ──────────────────────────────────────────
 
   /**
    * Report a request or a comment into the shared community moderation
@@ -1241,46 +1241,6 @@ class ReviewsService {
       .find({ blockerId: userId }, { projection: { _id: 0, blockedId: 1 } })
       .toArray();
     return new Set(rows.map((r) => r.blockedId));
-  }
-
-  /**
-   * "Book a lesson" for a viewer who is not yet the coach's student:
-   * booking itself is attachment-gated in the Coaching Locker, so this
-   * sends the coach an in-app lesson request they can act on there.
-   *
-   * @param {string} coachId
-   * @param {Viewer & {userId: string}} viewer
-   * @param {{note?: unknown, requestId?: unknown}} input
-   */
-  async requestLesson(coachId, viewer, input) {
-    const coach = await this.reputation.coachById(String(coachId || ""));
-    if (!coach || !coach.bookable) throw notFound();
-    if (coach.userId === viewer.userId) throw reviewError(400, "own_coach", "That's you.");
-    if (coach.studentUserIds.includes(viewer.userId)) {
-      return { status: "student", href: "/coaching?view=schedule" };
-    }
-    const since = new Date(this.now() - DAY_MS);
-    const sent = await this.db.notifications.countDocuments({
-      kind: "review.lesson_request",
-      senderId: viewer.userId,
-      createdAt: { $gte: since },
-    });
-    if (sent >= REVIEWS.LESSON_REQUESTS_PER_DAY) {
-      throw reviewError(429, "rate_limited", "You've sent the maximum number of lesson requests for today.");
-    }
-    const note = cleanText(typeof input.note === "string" ? input.note : "").slice(0, 300);
-    if (note && containsBlockedTerm(note)) throw reviewError(400, "content_rejected", "Your note contains language that isn't allowed.");
-    const profiles = await this.reputation.publicProfiles([viewer.userId]);
-    const name = profiles.get(viewer.userId)?.name || "A player";
-    const requestId = typeof input.requestId === "string" && ID_RE.test(input.requestId) ? input.requestId : null;
-    const row = await this.notifications.notify(coach.userId, {
-      kind: "review.lesson_request",
-      title: `${name} would like a lesson`,
-      body: note || "Sent from a replay review. Attach them in the Coaching Locker to let them book your published hours.",
-      href: requestId ? `/reviews/${requestId}` : "/coaching",
-    });
-    if (row) await this.db.notifications.updateOne({ _id: row._id }, { $set: { senderId: viewer.userId } });
-    return { status: "requested" };
   }
 
   // ── Moderation hooks (community_reports) ────────────────────────
@@ -1484,7 +1444,7 @@ class ReviewsService {
       this.db.reviewComments.find({ authorId: userId }).toArray(),
       this.db.reviewKarmaEvents.find({ userId }, { projection: { _id: 0, actorId: 0 } }).toArray(),
       this.db.reviewBlocks.find({ blockerId: userId }, { projection: { _id: 0, blockedId: 0 } }).toArray(),
-      this.db.notifications.find({ userId }, { projection: { senderId: 0 } }).toArray(),
+      this.db.notifications.find({ userId }).toArray(),
     ]);
     return { reviewRequests: requests, reviewComments: comments, reviewKarmaEvents: karma, reviewBlocks: blocks, notifications };
   }
@@ -1517,7 +1477,6 @@ class ReviewsService {
     );
     const blocks = await this.db.reviewBlocks.deleteMany({ $or: [{ blockerId: userId }, { blockedId: userId }] });
     const notifications = await this.db.notifications.deleteMany({ userId });
-    await this.db.notifications.updateMany({ senderId: userId }, { $unset: { senderId: "" } });
     return {
       reviewRequests: requests.deletedCount || 0,
       reviewThreadComments: threadComments.deletedCount || 0,
@@ -1685,7 +1644,6 @@ function serializeThread(comments, ctx) {
           verified: profile?.verified || null,
           badges: profile?.badges || [],
           flair: profile?.flair || null,
-          coach: profile?.coach || null,
         }
         : null,
       body: showBody ? c.body : "",

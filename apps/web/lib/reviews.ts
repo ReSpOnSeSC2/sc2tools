@@ -135,7 +135,6 @@ export type ReviewCommentAuthor = {
   verified: ReviewerVerified | null;
   badges: Array<{ key: string; label: string }>;
   flair: string | null;
-  coach: { coachId: string; bookable: boolean; isViewersCoach: boolean } | null;
 };
 
 export type ReviewComment = {

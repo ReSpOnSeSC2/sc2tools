@@ -43,7 +43,7 @@ const REQUEST = {
 const author = (label, extra = {}) => ({
   label, isAsker: false, profileHref: null,
   verified: { band: { id: 5, label: "Master" }, race: "Protoss", mmr: 4800 },
-  badges: [{ key: "first_review", label: "First Review" }], flair: null, coach: null, ...extra,
+  badges: [{ key: "first_review", label: "First Review" }], flair: null, ...extra,
 });
 const comment = (id, t, body, extra = {}) => ({
   id, parentId: null, state: "visible", author: author("FixtureReviewer"), body, gameTimeSec: t, endTimeSec: null,
@@ -54,7 +54,7 @@ const comment = (id, t, body, extra = {}) => ({
 const COMMENTS = [
   comment("e2eComment000001", 312,
     "Your **blink timing** at 5:12 was too late — the roaches were already out. Scout the natural at 4:30 and hold the blink until 5:40.",
-    { endTimeSec: 340, mapPoint: { x: 100, y: 100 }, best: true, upvotes: 4, author: author("MasterFox", { flair: "Masters Mentor", coach: { coachId: "c1", bookable: true, isViewersCoach: false } }) }),
+    { endTimeSec: 340, mapPoint: { x: 100, y: 100 }, best: true, upvotes: 4, author: author("MasterFox", { flair: "Masters Mentor" }) }),
   comment("e2eComment000002", 250,
     "- Probe count stalled at 38\n- No observer before the push\n\nThat's why the roach count surprised you.",
     { helpful: true, upvotes: 2, mapPoint: { x: 60, y: 60 }, author: author("MacroMachine", { verified: { band: { id: 4, label: "Diamond" }, race: "Protoss", mmr: 4100 } }) }),

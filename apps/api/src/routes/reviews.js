@@ -36,7 +36,6 @@ const SHA256_RE = /^[a-f0-9]{64}$/;
  *   PATCH  /reviews/:id/comments/:cid              — 15-minute edit window
  *   DELETE /reviews/:id/comments/:cid              — "[deleted]" when it has replies
  *   POST   /reviews/:id/comments/:cid/{helpful,best,upvote,report,block}
- *   POST   /reviews/coaches/:coachId/lesson-request
  *   GET    /me/reviews | /me/reviewer ; PATCH /me/reviewer
  *   GET    /me/review-blocks ; DELETE /me/review-blocks/:blockId
  *
@@ -184,12 +183,6 @@ function buildReviewsRouter(deps) {
   router.get("/reviews/for-me", ...signedIn, handle(async (req, res) => {
     privateNoStore(res);
     res.json(await deps.reviews.forReviewer(signedViewer(req).userId));
-  }));
-
-  router.post("/reviews/coaches/:coachId/lesson-request", ...signedIn, handle(async (req, res) => {
-    const coachId = String(req.params.coachId || "");
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(coachId)) throw notFoundError();
-    res.status(202).json(await deps.reviews.requestLesson(coachId, signedViewer(req), req.body || {}));
   }));
 
   router.get("/reviews/:id", ...pub, validId, handle(async (req, res) => {

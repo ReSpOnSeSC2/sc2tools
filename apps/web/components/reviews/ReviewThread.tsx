@@ -160,7 +160,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
         ) : (
           <span className="font-semibold text-text">{author?.label ?? "SC2 Player"}</span>
         )}
-        {author ? <ReviewerBadges author={author} requestId={requestId} /> : null}
+        {author ? <ReviewerBadges author={author} /> : null}
         {c.best ? (
           <span className="inline-flex items-center gap-1 text-caption font-bold text-success"><Star className="h-3.5 w-3.5" aria-hidden /> Best review</span>
         ) : c.helpful ? (

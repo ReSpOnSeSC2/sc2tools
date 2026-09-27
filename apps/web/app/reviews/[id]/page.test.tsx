@@ -31,8 +31,8 @@ function pageData(overrides: Partial<ReviewPageData["seo"]> = {}): ReviewPageDat
       bestCommentId: "BBBBBBBBBBBBBBBB", createdAt: "2026-09-27T10:00:00.000Z", lastActivityAt: null,
     },
     comments: [
-      { id: "BBBBBBBBBBBBBBBB", parentId: null, state: "visible", author: { label: "CoachFox", isAsker: false, profileHref: null, verified: null, badges: [], flair: null, coach: null }, body: "Scout at 4:30.", gameTimeSec: 270, endTimeSec: null, mapPoint: null, upvotes: 3, upvoted: false, helpful: false, best: true, mine: false, canEdit: false, createdAt: "2026-09-27T11:00:00.000Z", editedAt: null },
-      { id: "CCCCCCCCCCCCCCCC", parentId: null, state: "visible", author: { label: "Other", isAsker: false, profileHref: null, verified: null, badges: [], flair: null, coach: null }, body: "Probe count stalled.", gameTimeSec: 300, endTimeSec: null, mapPoint: null, upvotes: 0, upvoted: false, helpful: true, best: false, mine: false, canEdit: false, createdAt: "2026-09-27T12:00:00.000Z", editedAt: null },
+      { id: "BBBBBBBBBBBBBBBB", parentId: null, state: "visible", author: { label: "ReviewFox", isAsker: false, profileHref: null, verified: null, badges: [], flair: null }, body: "Scout at 4:30.", gameTimeSec: 270, endTimeSec: null, mapPoint: null, upvotes: 3, upvoted: false, helpful: false, best: true, mine: false, canEdit: false, createdAt: "2026-09-27T11:00:00.000Z", editedAt: null },
+      { id: "CCCCCCCCCCCCCCCC", parentId: null, state: "visible", author: { label: "Other", isAsker: false, profileHref: null, verified: null, badges: [], flair: null }, body: "Probe count stalled.", gameTimeSec: 300, endTimeSec: null, mapPoint: null, upvotes: 0, upvoted: false, helpful: true, best: false, mine: false, canEdit: false, createdAt: "2026-09-27T12:00:00.000Z", editedAt: null },
     ],
     viewer: { signedIn: false, isAsker: false, isAdmin: false, canComment: false, reason: "sign_in" },
     seo: { indexable: true, answerCount: 2, acceptedAnswerId: "BBBBBBBBBBBBBBBB", suggestedAnswerIds: ["CCCCCCCCCCCCCCCC"], ...overrides },

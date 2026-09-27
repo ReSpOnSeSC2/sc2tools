@@ -189,7 +189,6 @@ const REVIEWS = Object.freeze({
   BOARD_PAGE_DEFAULT: 20,
   BOARD_PAGE_MAX: 40,
   LEADERBOARD_SIZE: 10,
-  LESSON_REQUESTS_PER_DAY: 5,
 });
 
 const TIMEOUTS = Object.freeze({

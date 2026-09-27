@@ -16,7 +16,7 @@ describe("reviews: indexability gate, sitemap and OG", () => {
   beforeAll(async () => {
     h = await createHarness();
     await h.seedUser("asker", { displayName: "BlinkMaster" });
-    await h.seedUser("reviewer", { displayName: "CoachFox" });
+    await h.seedUser("reviewer", { displayName: "ReviewFox" });
     await h.seedLadderHistory("reviewer", { mmr: 4800 });
   });
   afterAll(async () => {
@@ -107,7 +107,7 @@ describe("reviews: GDPR", () => {
 
   test("deleting a reviewer anonymises their comments; deleting an asker removes their requests", async () => {
     await h.seedUser("asker", { displayName: "BlinkMaster" });
-    await h.seedUser("reviewer", { displayName: "CoachFox" });
+    await h.seedUser("reviewer", { displayName: "ReviewFox" });
     await h.seedLadderHistory("reviewer", { mmr: 4800 });
     await h.seedUser("voter");
     const gameId = await h.seedGame("asker");

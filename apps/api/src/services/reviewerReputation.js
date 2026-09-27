@@ -8,10 +8,8 @@ const {
   approximateMmr,
   isPlausibleMmr,
 } = require("../util/leagueBands");
-const { listPublicCoaches } = require("./coaching");
 const { normalizeRace } = require("./reviewRedaction");
 
-const COACH_CACHE_MS = 5 * 60 * 1000;
 const SEASON_WINDOW_TIMEOUT_MS = 3000;
 const VERIFY_SCAN_LIMIT = 3000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -39,14 +37,15 @@ const BADGES = Object.freeze([
  *   verifiedAt: Date,
  *   reason?: string,
  * }} ReviewerVerification
- * @typedef {{coachId: string, name: string, userId: string, bookable: boolean, studentUserIds: string[]}} PublicCoach
  */
 
 /**
  * ReviewerReputationService — who a reviewer is, as far as the public
  * page is concerned: verified league band and race (from their OWN
- * synced ladder games, never self-reported), karma and badges, and the
- * Coaching Locker "Coach" badge.
+ * synced ladder games, never self-reported), karma and badges.
+ *
+ * Deliberately never reads the Coaching Locker: coaching stays private,
+ * so nothing here reveals who coaches or who is coached.
  */
 class ReviewerReputationService {
   /**
@@ -64,8 +63,6 @@ class ReviewerReputationService {
     this.now = opts.now || (() => Date.now());
     this.logger = opts.logger || null;
     this._seasonWindowStart = opts.seasonWindowStart || null;
-    /** @type {{at: number, coaches: PublicCoach[]} | null} */
-    this._coachCache = null;
   }
 
   /**
@@ -216,41 +213,18 @@ class ReviewerReputationService {
   }
 
   /**
-   * @returns {Promise<PublicCoach[]>}
-   */
-  async coaches() {
-    const now = this.now();
-    if (this._coachCache && now - this._coachCache.at < COACH_CACHE_MS) return this._coachCache.coaches;
-    let coaches = /** @type {PublicCoach[]} */ ([]);
-    try {
-      coaches = await listPublicCoaches(this.db);
-    } catch (err) {
-      if (this.logger) this.logger.warn({ err }, "review_coach_roster_failed");
-    }
-    this._coachCache = { at: now, coaches };
-    return coaches;
-  }
-
-  /** @param {string} coachId */
-  async coachById(coachId) {
-    return (await this.coaches()).find((c) => c.coachId === coachId) || null;
-  }
-
-  /**
    * Public identity + badges for a set of reviewers, batched for one page
-   * of comments. ``viewerId`` only changes the "Book a lesson" target
-   * (a coach's own students get the direct schedule link).
+   * of comments.
    *
    * @param {string[]} userIds
-   * @param {{viewerId?: string | null}} [opts]
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
-  async publicProfiles(userIds, opts = {}) {
+  async publicProfiles(userIds) {
     const ids = [...new Set(userIds.filter((id) => typeof id === "string" && id))];
     /** @type {Map<string, Record<string, any>>} */
     const out = new Map();
     if (ids.length === 0) return out;
-    const [users, coaches, publicAuthors] = await Promise.all([
+    const [users, publicAuthors] = await Promise.all([
       this.db.users
         .find(
           { userId: { $in: ids } },
@@ -258,7 +232,6 @@ class ReviewerReputationService {
         )
         .toArray()
         .then((rows) => /** @type {Array<Record<string, any>>} */ (rows)),
-      this.coaches(),
       this.db.communityBuilds.distinct("ownerUserId", {
         ownerUserId: { $in: ids },
         removed: false,
@@ -269,7 +242,6 @@ class ReviewerReputationService {
     for (const user of users) {
       const stats = reviewerStats(user.reviewer);
       const verified = publicVerification(user.reviewer?.verified);
-      const coach = coaches.find((c) => c.userId === user.userId) || null;
       out.set(user.userId, {
         name: publicName(user),
         profileHref: hasPublicProfile.has(user.userId)
@@ -279,13 +251,6 @@ class ReviewerReputationService {
         karma: stats.karma,
         badges: badgesFor(stats),
         flair: flairFor(stats, verified),
-        coach: coach
-          ? {
-            coachId: coach.coachId,
-            bookable: coach.bookable,
-            isViewersCoach: Boolean(opts.viewerId && coach.studentUserIds.includes(opts.viewerId)),
-          }
-          : null,
       });
     }
     return out;

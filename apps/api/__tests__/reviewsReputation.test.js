@@ -11,7 +11,7 @@ const { bandFromMmr, approximateMmr } = require("../src/util/leagueBands");
 
 const QUESTION = "Why did my blink all-in fail against the roach defence?";
 
-describe("reviews: verified reviewer band and coach badge", () => {
+describe("reviews: verified reviewer band, and coaching stays private", () => {
   let h;
 
   beforeAll(async () => {
@@ -46,56 +46,58 @@ describe("reviews: verified reviewer band and coach badge", () => {
     expect(v.race).toBe("Terran");
   });
 
-  test("coach badge links a coach's own students to the schedule and lets others request a lesson", async () => {
+  test("coaching stays private: a Locker coach who reviews gets no coach badge and the Locker is never read or changed", async () => {
     await h.seedUser("asker", { displayName: "BlinkMaster" });
-    await h.seedUser("coach", { displayName: "CoachSensei" });
+    await h.seedUser("coach", { displayName: "ReviewerFox" });
     await h.seedUser("student", { displayName: "Pupil" });
-    await h.seedUser("stranger", { displayName: "Stranger" });
     await h.seedLadderHistory("coach", { mmr: 5600 });
     await h.db.coaching.insertOne({
       _id: "locker",
       rev: 1,
       state: {
-        coaches: [{ id: "c1", name: "CoachSensei", userId: h.userId("coach"), email: "coach@example.com", clerkUserId: "clerk_coach" }],
-        students: [{ id: "s1", name: "Pupil", userId: h.userId("student"), coachId: "c1" }],
+        coaches: [{ id: "lockerCoach1", name: "LockerOnlyCoachName", userId: h.userId("coach"), email: "coach@example.com", clerkUserId: "clerk_coach" }],
+        students: [{ id: "s1", name: "LockerOnlyStudentName", userId: h.userId("student"), coachId: "lockerCoach1" }],
       },
     });
     await h.db.coaching.insertOne({
-      _id: "calendar:c1",
-      coachId: "c1",
+      _id: "calendar:lockerCoach1",
+      coachId: "lockerCoach1",
       coachUserId: h.userId("coach"),
       availabilityEnabled: true,
       availability: { timeZone: "UTC", durations: [60], windows: [{ day: 1, startMinute: 600, endMinute: 720 }] },
       bookings: [],
     });
-    h.services.reviewerReputation._coachCache = null;
+    const lockerBefore = await h.db.coaching.find({}).sort({ _id: 1 }).toArray();
+
     const gameId = await h.seedGame("asker");
     const id = (await request(h.app).post("/v1/reviews").set("authorization", h.bearer("asker")).send({ gameId, question: QUESTION })).body.id;
-    const c = (await request(h.app).post(`/v1/reviews/${id}/comments`).set("authorization", h.bearer("coach")).send({ body: "Coach here: scout at 4:30.", gameTimeSec: 270 })).body.id;
+    const c = (await request(h.app).post(`/v1/reviews/${id}/comments`).set("authorization", h.bearer("coach")).send({ body: "Scout the natural at 4:30.", gameTimeSec: 270 })).body.id;
+    await request(h.app).post(`/v1/reviews/${id}/comments/${c}/helpful`).set("authorization", h.bearer("asker")).send({});
 
-    const anon = await request(h.app).get(`/v1/reviews/${id}`);
-    const author = anon.body.comments.find((x) => x.id === c).author;
-    expect(author.coach).toEqual({ coachId: "c1", bookable: true, isViewersCoach: false });
-    expect(JSON.stringify(anon.body)).not.toContain("coach@example.com");
-    const asStudent = await request(h.app).get(`/v1/reviews/${id}`).set("authorization", h.bearer("student"));
-    expect(asStudent.body.comments.find((x) => x.id === c).author.coach.isViewersCoach).toBe(true);
-
-    const direct = await request(h.app).post("/v1/reviews/coaches/c1/lesson-request").set("authorization", h.bearer("student")).send({});
-    expect(direct.body).toEqual({ status: "student", href: "/coaching?view=schedule" });
-    const req = await request(h.app).post("/v1/reviews/coaches/c1/lesson-request").set("authorization", h.bearer("stranger")).send({ note: "Can we work on PvZ?", requestId: id });
-    expect(req.status).toBe(202);
-    expect(req.body.status).toBe("requested");
+    for (const viewer of [null, "student", "asker", "coach"]) {
+      const req = request(h.app).get(`/v1/reviews/${id}`);
+      const res = viewer ? await req.set("authorization", h.bearer(viewer)) : await req;
+      const author = res.body.comments.find((x) => x.id === c).author;
+      expect(author).not.toHaveProperty("coach");
+      const json = JSON.stringify(res.body);
+      for (const secret of ["lockerCoach1", "LockerOnlyCoachName", "LockerOnlyStudentName", "coach@example.com", "/coaching", "lesson"]) {
+        expect(json).not.toContain(secret);
+      }
+    }
     const inbox = await request(h.app).get("/v1/me/notifications").set("authorization", h.bearer("coach"));
-    const lesson = inbox.body.items.find((n) => n.kind === "review.lesson_request");
-    expect(lesson).toMatchObject({ title: "Stranger would like a lesson", body: "Can we work on PvZ?", href: `/reviews/${id}` });
-    expect((await request(h.app).post("/v1/reviews/coaches/nope/lesson-request").set("authorization", h.bearer("stranger")).send({})).status).toBe(404);
+    expect(JSON.stringify(inbox.body)).not.toMatch(/lesson|coaching/i);
+    // No lesson-request (or any coach) route exists on the review API.
+    const lesson = await request(h.app).post("/v1/reviews/coaches/lockerCoach1/lesson-request").set("authorization", h.bearer("student")).send({});
+    expect(lesson.status).toBe(404);
+    expect(await h.db.coaching.find({}).sort({ _id: 1 }).toArray()).toEqual(lockerBefore);
   });
 
   test("public profile carries a reviewer section once they have reviewed", async () => {
-    await h.db.communityBuilds.insertOne({ slug: "b1", ownerUserId: h.userId("coach"), removed: false, authorName: "CoachSensei", title: "t", matchup: "PvZ", votes: 0, publishedAt: new Date(), build: { race: "Protoss" } });
+    await h.db.communityBuilds.insertOne({ slug: "b1", ownerUserId: h.userId("coach"), removed: false, authorName: "ReviewerFox", title: "t", matchup: "PvZ", votes: 0, publishedAt: new Date(), build: { race: "Protoss" } });
     const profile = await h.services.publicProfile.getPublicProfile(h.userId("coach"));
     expect(profile.reviewer).toMatchObject({ reviews: 1, matchupsReviewed: [{ matchup: "PvZ", count: 1 }] });
     expect(profile.reviewer.badges.map((b) => b.key)).toContain("first_review");
+    expect(JSON.stringify(profile.reviewer)).not.toMatch(/coach|lesson/i);
   });
 
   test("league bands and rounded MMR", () => {

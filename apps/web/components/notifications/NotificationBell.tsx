@@ -21,7 +21,7 @@ type NotificationRow = {
 
 /**
  * The in-app notification bell (review activity, helpful/best marks,
- * the weekly digest, lesson requests). There is no email channel.
+ * the weekly digest). There is no email channel.
  *
  * The unread count polls slowly and refreshes on the server's
  * ``notifications:changed`` socket ping — a text-free hint, because

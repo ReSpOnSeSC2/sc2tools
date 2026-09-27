@@ -19,7 +19,7 @@ describe("reviews: opponent redaction and the scoped grant", () => {
   beforeAll(async () => {
     h = await createHarness();
     await h.seedUser("asker", { displayName: "BlinkMaster" });
-    await h.seedUser("reviewer", { displayName: "CoachFox" });
+    await h.seedUser("reviewer", { displayName: "ReviewFox" });
     await h.seedLadderHistory("reviewer", { mmr: 4700 });
     gameId = await h.seedGame("asker");
     // A second game of the owner with a DIFFERENT build — the grant must

@@ -381,7 +381,7 @@ plus `{blockedId}`.
 
 ### `notifications`
 
-`{_id, userId, kind, title, body, href, count, readAt, createdAt, groupKey?, senderId?}`.
+`{_id, userId, kind, title, body, href, count, readAt, createdAt, groupKey?}`.
 `{userId, createdAt}` lists the bell; `{userId, readAt}` counts unread; the
 unique partial `{userId, groupKey}` (unread rows only) folds grouped events
 into one row; a 90-day TTL on `createdAt` keeps it a bell, not an archive.
