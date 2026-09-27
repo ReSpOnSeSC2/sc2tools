@@ -122,10 +122,28 @@ def test_rate_samples_divide_the_last_window_by_its_real_length():
     from sc2tools_agent.replay_pipeline import _rate_samples
 
     side = {"actions": {0: 60, 1: 10}, "selections": {0: 15}, "total": 70}
-    samples = _rate_samples(side, game_length=40, window_sec=30)
+    samples = _rate_samples(side, game_length=50, window_sec=30)
     assert samples == [
         {"t": 0, "apm": 120.0, "spm": 30.0},
-        {"t": 30, "apm": 60.0, "spm": 0.0},  # 10 actions in the final 10 s
+        {"t": 30, "apm": 30.0, "spm": 0.0},  # 10 actions in the final 20 s
+    ]
+
+
+def test_rate_samples_fold_a_short_final_window_into_the_one_before():
+    from sc2tools_agent.replay_pipeline import _rate_samples
+
+    # A 1-second final window would read 0 (or a spike) at game end.
+    side = {"actions": {0: 60, 1: 2}, "selections": {0: 15, 1: 1}, "total": 62}
+    samples = _rate_samples(side, game_length=31, window_sec=30)
+    assert samples == [{"t": 0, "apm": 120.0, "spm": 31.0}]  # 62 actions in 31 s
+
+
+def test_rate_samples_keep_a_game_shorter_than_one_window():
+    from sc2tools_agent.replay_pipeline import _rate_samples
+
+    side = {"actions": {0: 10}, "selections": {}, "total": 10}
+    assert _rate_samples(side, game_length=12, window_sec=30) == [
+        {"t": 0, "apm": 50.0, "spm": 0.0},
     ]
 
 
@@ -186,13 +204,28 @@ def _actions_by_slot(replay):
 
 def _curve_actions(curve, game_length):
     """Undo each window's per-minute rate back into an action count."""
-    window = curve["window_sec"]
-    return {
-        p["pid"]: round(sum(
-            s["apm"] * min(window, game_length - s["t"]) / 60 for s in p["samples"]
+    counts = {}
+    for p in curve["players"]:
+        ends = [s["t"] for s in p["samples"][1:]] + [game_length]
+        counts[p["pid"]] = round(sum(
+            s["apm"] * (end - s["t"]) / 60 for s, end in zip(p["samples"], ends)
         ))
-        for p in curve["players"]
-    }
+    return counts
+
+
+def _seconds_in_game(replay, game_length):
+    """Real seconds each player slot stayed in the game (sc2reader's own
+    leave attribution, independent of the pipeline's slot resolver)."""
+    from sc2reader.events.game import PlayerLeaveEvent
+    from core.timebase import infer_fps  # type: ignore
+
+    fps = infer_fps(replay)
+    played = {}
+    for ev in replay.events:
+        slot = getattr(getattr(ev, "player", None), "pid", None)
+        if isinstance(ev, PlayerLeaveEvent) and slot not in played:
+            played[slot] = min(ev.frame / fps, game_length)
+    return played
 
 
 @pytest.mark.parametrize("perspective", ["ReSpOnSe", "Squirtuoz"])
@@ -212,10 +245,57 @@ def test_apm_curve_credits_each_player_with_their_own_actions(perspective):
         # Per-window rates are rounded to 0.1 APM.
         assert abs(got[pid] - expected[pid]) <= len(curve["players"][0]["samples"])
     by_pid = {p["pid"]: p for p in curve["players"]}
+    played = _seconds_in_game(ctx.raw, ctx.length_seconds)
     for pid in (ctx.me.pid, ctx.opponent.pid):
-        want = round(expected[pid] * 60 / ctx.length_seconds, 1)
+        want = round(expected[pid] * 60 / played.get(pid, ctx.length_seconds), 1)
         assert by_pid[pid]["avg_apm"] == want
     assert by_pid[ctx.me.pid]["is_me"] is True
+
+
+LADDER_TVZ_REPLAY = FIXTURE_REPLAY.with_name("ladder_tvz_ever_dream_18min.SC2Replay")
+
+
+def test_apm_matches_sc2reader_except_its_double_counted_control_groups():
+    """On a real 18-minute ladder game where JiaanN leaves before the
+    replay ends and uses control-group steal/clear, every action counts
+    once and each player is averaged over their own time in the game."""
+    _require_real_parser()
+    if not LADDER_TVZ_REPLAY.is_file():
+        pytest.skip("ladder fixture replay not available")
+    import sc2reader
+    from sc2reader.engine import GameEngine
+    from sc2reader.engine.plugins import APMTracker, ContextLoader, GameHeartNormalizer
+    from sc2reader.events.game import ControlGroupEvent
+    from core.sc2_replay_parser import parse_deep  # type: ignore
+    from sc2tools_agent.replay_pipeline import _compute_apm_curve
+
+    ctx = parse_deep(str(LADDER_TVZ_REPLAY), "JiaanN")
+    curve = _compute_apm_curve(ctx)
+    avg = {p["pid"]: p["avg_apm"] for p in curve["players"]}
+    actions = _actions_by_slot(ctx.raw)
+    played = _seconds_in_game(ctx.raw, ctx.length_seconds)
+    assert played[ctx.me.pid] < ctx.length_seconds  # JiaanN left first
+
+    # A private engine (the default one's plugins plus APMTracker), so the
+    # global sc2reader engine the pipeline uses is left untouched.
+    engine = GameEngine()
+    engine.register_plugins(
+        GameHeartNormalizer(), ContextLoader(), APMTracker(),
+    )
+    ref = sc2reader.load_replay(str(LADDER_TVZ_REPLAY), load_level=4, engine=engine)
+    for player in ref.players:
+        # sc2reader handles each plain ControlGroupEvent (clear / steal) twice.
+        twice = sum(
+            1 for ev in ref.events
+            if type(ev) is ControlGroupEvent and getattr(ev.player, "pid", None) == player.pid
+        )
+        assert avg[player.pid] == round(actions[player.pid] * 60 / played[player.pid], 1)
+        corrected = player.avg_apm * actions[player.pid] / (actions[player.pid] + twice)
+        assert avg[player.pid] == pytest.approx(corrected, abs=0.2)
+    # The final window runs to the end instead of reading one empty second.
+    for p in curve["players"]:
+        assert ctx.length_seconds - p["samples"][-1]["t"] >= curve["window_sec"] / 2
+        assert p["samples"][-1]["apm"] > 0
 
 
 def test_uploaded_game_carries_consistent_apm_and_spq():
