@@ -3140,22 +3140,24 @@ def _my_average_apm(
 ) -> Optional[float]:
     """Return the uploading player's average APM for the slim game row.
 
-    Uses the same active-window average as ``player_stats.me.apm`` so the
-    game list, benchmarks and stats table all show one number. ``None``
-    when the curve is missing or the player had no recorded commands.
+    This is the curve's ``avg_apm`` (every action over the game's length,
+    as SC2 counts APM), the same number ``player_stats.me.apm`` carries.
+    ``None`` when the curve is missing, the player had no actions, or the
+    value falls outside what the API schema accepts.
 
     Example:
-        >>> _my_average_apm({"players": [{"pid": 1, "samples": [{"apm": 90, "spm": 0}]}]}, 1)
-        90.0
+        >>> _my_average_apm({"players": [{"pid": 1, "avg_apm": 212.4}]}, 1)
+        212.4
     """
     if not apm_curve or me_pid is None:
         return None
     for player in apm_curve.get("players") or []:
         if player.get("pid") != me_pid:
             continue
-        averages = _active_rate_averages(player.get("samples") or [])
-        apm = averages["apm"] if averages else None
-        return apm if apm is not None and 0 < apm <= _APM_SCHEMA_MAX else None
+        apm = player.get("avg_apm")
+        if isinstance(apm, bool) or not isinstance(apm, (int, float)):
+            return None
+        return float(apm) if 0 < apm <= _APM_SCHEMA_MAX else None
     return None
 
 
@@ -3186,14 +3188,13 @@ def _my_spending_quotient(
 def _merge_apm_into_player_stats(
     macro_breakdown: Dict[str, Any], apm_curve: Dict[str, Any],
 ) -> None:
-    """Compute average APM/SPM per side from the apm_curve and write
-    them onto ``macro_breakdown["player_stats"]``.
+    """Copy each side's APM (the curve's whole-game ``avg_apm``) and SPM
+    (active-window average) onto ``macro_breakdown["player_stats"]``.
 
-    Average is taken over windows that have any activity (apm or spm
-    > 0) so a long idle stretch at game end doesn't suppress the
-    headline number — same approach the SPA's APM/SPM chart uses for
-    its summary tooltip. Mutates ``macro_breakdown`` in place. Safe to
-    call when player_stats is missing — short-circuits cleanly.
+    SPM averages only windows with any activity so a long idle stretch
+    at game end doesn't suppress it. Mutates ``macro_breakdown`` in
+    place. Safe to call when player_stats is missing — short-circuits
+    cleanly.
     """
     stats = macro_breakdown.get("player_stats")
     if not isinstance(stats, dict):
@@ -3201,8 +3202,13 @@ def _merge_apm_into_player_stats(
     by_pid: Dict[int, Dict[str, float]] = {}
     for player in apm_curve.get("players") or []:
         averages = _active_rate_averages(player.get("samples") or [])
-        if averages is not None:
-            by_pid[int(player.get("pid"))] = averages
+        if averages is None:
+            continue
+        # APM is the whole-game average SC2 reports; SPM stays the
+        # active-window average of selections.
+        if isinstance(player.get("avg_apm"), (int, float)):
+            averages["apm"] = float(player["avg_apm"])
+        by_pid[int(player.get("pid"))] = averages
     for key in ("me", "opponent"):
         rec = stats.get(key)
         if not isinstance(rec, dict):
@@ -3322,121 +3328,129 @@ def _game_event_player_slot(ev: Any) -> Optional[int]:
     return None
 
 
-def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
-    """Build the apmCurve payload (windowed APM/SPM samples per player).
+# apmCurve payload version. v2 (agent 0.17.2): actions are credited to the
+# issuing player slot, and ``apm`` counts every command, selection and
+# control-group action, the way StarCraft II's own APM counter does.
+# Earlier curves counted commands only and mis-attributed them, so the
+# website only displays curves at this version or later.
+APM_CURVE_VERSION = 2
+_APM_WINDOW_SEC = 30
 
-    Walks ``replay.events`` once, bucketing each side's command/selection
-    actions into 30-second windows, then converts those into per-second
-    rates. Mirrors the shape PerGameComputeService.apmCurve returns so
-    the SPA's ApmSpmChart renders without further translation.
+
+def _game_event_real_second(ev: Any, fps: float) -> Optional[int]:
+    """Real-time second of a game event.
+
+    sc2reader 1.8's ``event.second`` is ``frame // 16`` (the HotS 16 fps
+    scale), 1.4x too high on a LotV replay, so frames are converted with
+    the replay's real frame rate; frame-less events are rescaled.
+    """
+    frame = getattr(ev, "frame", None)
+    try:
+        if frame is not None:
+            return int(round(int(frame) / fps))
+        sec_attr = getattr(ev, "second", None)
+        if sec_attr is None:
+            return None
+        return int(round(float(sec_attr) * 16.0 / fps))
+    except (TypeError, ValueError):
+        return None
+
+
+def _count_player_actions(
+    events: Any, pids: tuple, fps: float, window_sec: int,
+) -> Dict[int, Dict[str, Any]]:
+    """Per player slot: actions and selections per window, plus the total.
+
+    An action is any command, selection or control-group event (what SC2
+    counts as APM); camera moves are not actions.
+    """
+    try:
+        from sc2reader.events.game import (  # type: ignore
+            CommandEvent,
+            ControlGroupEvent,
+            SelectionEvent,
+        )
+    except Exception:  # noqa: BLE001
+        return {}
+    action_types = (CommandEvent, SelectionEvent, ControlGroupEvent)
+    counts: Dict[int, Dict[str, Any]] = {
+        pid: {"actions": {}, "selections": {}, "total": 0} for pid in pids
+    }
+    for ev in events:
+        if not isinstance(ev, action_types):
+            continue
+        pid = _game_event_player_slot(ev)
+        sec = _game_event_real_second(ev, fps)
+        if pid not in counts or sec is None or sec < 0:
+            continue
+        bucket = sec // window_sec
+        side = counts[pid]
+        side["actions"][bucket] = side["actions"].get(bucket, 0) + 1
+        side["total"] += 1
+        if isinstance(ev, SelectionEvent):
+            side["selections"][bucket] = side["selections"].get(bucket, 0) + 1
+    return counts
+
+
+def _rate_samples(
+    side: Dict[str, Any], game_length: int, window_sec: int,
+) -> list:
+    """Per-window ``{t, apm, spm}`` rates; the final, shorter window is
+    divided by its real length so the game's last seconds aren't halved."""
+    samples = []
+    for t_sec in range(0, game_length, window_sec):
+        span = min(window_sec, game_length - t_sec)
+        bucket = t_sec // window_sec
+        samples.append({
+            "t": t_sec,
+            "apm": round(side["actions"].get(bucket, 0) * 60.0 / span, 1),
+            "spm": round(side["selections"].get(bucket, 0) * 60.0 / span, 1),
+        })
+    return samples
+
+
+def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Build the apmCurve payload: windowed APM/SPM samples per player.
+
+    ``apm`` is actions per minute as StarCraft II counts them (commands,
+    selections and control-group actions); ``spm`` is selections per
+    minute. Each player also carries ``avg_apm``: all their actions over
+    the game's length in minutes, the same average SC2 and sc2reader
+    report. Returns None when the replay has no players or length.
     """
     me = getattr(ctx, "me", None)
     opp = getattr(ctx, "opponent", None)
     replay = getattr(ctx, "raw", None)
-    if me is None or replay is None:
+    game_length = int(getattr(ctx, "length_seconds", 0) or 0)
+    if me is None or replay is None or game_length <= 0:
         return None
-    window_sec = 30
-    me_pid = getattr(me, "pid", None)
-    opp_pid = getattr(opp, "pid", None) if opp is not None else None
-    counts_apm: Dict[int, Dict[int, int]] = {}
-    counts_spm: Dict[int, Dict[int, int]] = {}
-    try:
-        events = getattr(replay, "events", None) or []
-    except Exception:  # noqa: BLE001
-        events = []
-    try:
-        from sc2reader.events.game import (  # type: ignore
-            CommandEvent,
-            SelectionEvent,
-        )
-    except Exception:  # noqa: BLE001
-        CommandEvent = None  # type: ignore
-        SelectionEvent = None  # type: ignore
-    # ``event.second`` from sc2reader 1.8.0 is ``frame // 16`` — the
-    # HotS-era 16fps scale — so reading it directly would put every
-    # bucket 1.4× too high on a LotV replay. Resolve the real
-    # frame-rate once via ``infer_fps`` and convert frames ourselves.
     try:
         from core.timebase import infer_fps  # type: ignore
         fps = infer_fps(replay)
     except Exception:  # noqa: BLE001
         fps = 22.4
-    for ev in events:
-        pid = _game_event_player_slot(ev)
-        if pid is None or pid not in (me_pid, opp_pid):
-            continue
-        frame = getattr(ev, "frame", None)
-        if frame is None:
-            # Some game events don't expose frame; their ``second``
-            # is still on sc2reader's broken 16fps scale, so rescale
-            # it to real time the same way ``timebase.event_seconds``
-            # does in its frame-less fallback path.
-            sec_attr = getattr(ev, "second", None)
-            if sec_attr is None:
-                continue
-            try:
-                sec = int(round(float(sec_attr) * 16.0 / fps))
-            except (TypeError, ValueError):
-                continue
-        else:
-            try:
-                sec = int(round(int(frame) / fps))
-            except (TypeError, ValueError):
-                continue
-        bucket = int(sec) // window_sec
-        if CommandEvent is not None and isinstance(ev, CommandEvent):
-            counts_apm.setdefault(pid, {}).setdefault(bucket, 0)
-            counts_apm[pid][bucket] += 1
-            continue
-        if SelectionEvent is not None and isinstance(ev, SelectionEvent):
-            counts_spm.setdefault(pid, {}).setdefault(bucket, 0)
-            counts_spm[pid][bucket] += 1
-    game_length = int(getattr(ctx, "length_seconds", 0) or 0)
-    if game_length <= 0:
-        return None
-    bucket_count = max(1, (game_length + window_sec - 1) // window_sec)
-    has_data = False
-
-    def _samples_for(pid: Optional[int]) -> list:
-        nonlocal has_data
-        if pid is None:
-            return []
-        out: list = []
-        apm_buckets = counts_apm.get(pid, {})
-        spm_buckets = counts_spm.get(pid, {})
-        for b in range(bucket_count):
-            t_sec = b * window_sec
-            apm_val = apm_buckets.get(b, 0) * (60 / window_sec)
-            spm_val = spm_buckets.get(b, 0) * (60 / window_sec)
-            if apm_val or spm_val:
-                has_data = True
-            out.append({
-                "t": t_sec,
-                "apm": round(float(apm_val), 1),
-                "spm": round(float(spm_val), 1),
-            })
-        return out
-
-    players: list = []
-    if me_pid is not None:
+    try:
+        events = getattr(replay, "events", None) or []
+    except Exception:  # noqa: BLE001
+        events = []
+    sides = [(p, p is me) for p in (me, opp) if getattr(p, "pid", None) is not None]
+    pids = tuple(getattr(p, "pid") for p, _ in sides)
+    counts = _count_player_actions(events, pids, fps, _APM_WINDOW_SEC)
+    players = []
+    for player, is_me in sides:
+        side = counts.get(player.pid) or {"actions": {}, "selections": {}, "total": 0}
         players.append({
-            "pid": me_pid,
-            "name": getattr(me, "name", "") or "",
-            "race": getattr(me, "race", "") or "",
-            "is_me": True,
-            "samples": _samples_for(me_pid),
-        })
-    if opp_pid is not None:
-        players.append({
-            "pid": opp_pid,
-            "name": getattr(opp, "name", "") or "",
-            "race": getattr(opp, "race", "") or "",
-            "is_me": False,
-            "samples": _samples_for(opp_pid),
+            "pid": player.pid,
+            "name": getattr(player, "name", "") or "",
+            "race": getattr(player, "race", "") or "",
+            "is_me": is_me,
+            "avg_apm": round(side["total"] * 60.0 / game_length, 1) if side["total"] else None,
+            "samples": _rate_samples(side, game_length, _APM_WINDOW_SEC),
         })
     return {
-        "window_sec": window_sec,
-        "has_data": has_data,
+        "v": APM_CURVE_VERSION,
+        "window_sec": _APM_WINDOW_SEC,
+        "has_data": any(p["avg_apm"] for p in players),
         "players": players,
     }
 

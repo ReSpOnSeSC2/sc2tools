@@ -1,10 +1,12 @@
 """Regression tests for per-player APM attribution and the slim apm/spq fields.
 
-Two bugs shipped together until agent 0.17.2:
+Fixed in agent 0.17.2:
 
   - ``_compute_apm_curve`` compared sc2reader's game-event ``ev.pid`` (a
     0-indexed *user* id) with ``player.pid`` (a 1-indexed slot). Slot 1
     was credited with slot 2's actions and slot 2 always showed zero.
+  - It counted commands only; APM now counts every command, selection and
+    control-group action, as StarCraft II's own counter does (curve v2).
   - The slim ``apm`` / ``spq`` fields were read off ``PlayerInfo``, which
     has neither attribute, so every uploaded game carried ``null``.
 
@@ -89,29 +91,42 @@ def test_player_slot_ignores_observers():
 # ---------------------------------------------------------------------------
 
 
-def _curve(pid, apms):
-    return {"players": [{"pid": pid, "samples": [{"apm": a, "spm": 0} for a in apms]}]}
+def _curve(pid, avg_apm):
+    return {"players": [{"pid": pid, "avg_apm": avg_apm, "samples": []}]}
 
 
-def test_my_average_apm_skips_idle_windows():
+def test_my_average_apm_is_the_curves_whole_game_average():
     from sc2tools_agent.replay_pipeline import _my_average_apm
 
-    assert _my_average_apm(_curve(1, [60, 120, 0]), 1) == 90.0
+    assert _my_average_apm(_curve(1, 212.4), 1) == 212.4
 
 
 def test_my_average_apm_is_none_without_data_or_for_other_pid():
     from sc2tools_agent.replay_pipeline import _my_average_apm
 
     assert _my_average_apm(None, 1) is None
-    assert _my_average_apm(_curve(1, [60]), None) is None
-    assert _my_average_apm(_curve(2, [60]), 1) is None
-    assert _my_average_apm(_curve(1, [0, 0]), 1) is None
+    assert _my_average_apm(_curve(1, 150.0), None) is None
+    assert _my_average_apm(_curve(2, 150.0), 1) is None
+    assert _my_average_apm(_curve(1, None), 1) is None
+    assert _my_average_apm(_curve(1, True), 1) is None
 
 
 def test_my_average_apm_omits_values_the_api_schema_would_reject():
     from sc2tools_agent.replay_pipeline import _my_average_apm
 
-    assert _my_average_apm(_curve(1, [5001.0]), 1) is None
+    assert _my_average_apm(_curve(1, 5001.0), 1) is None
+    assert _my_average_apm(_curve(1, 0.0), 1) is None
+
+
+def test_rate_samples_divide_the_last_window_by_its_real_length():
+    from sc2tools_agent.replay_pipeline import _rate_samples
+
+    side = {"actions": {0: 60, 1: 10}, "selections": {0: 15}, "total": 70}
+    samples = _rate_samples(side, game_length=40, window_sec=30)
+    assert samples == [
+        {"t": 0, "apm": 120.0, "spm": 30.0},
+        {"t": 30, "apm": 60.0, "spm": 0.0},  # 10 actions in the final 10 s
+    ]
 
 
 @pytest.mark.parametrize("sq", [81.4, 0.0, 142])
@@ -157,41 +172,50 @@ def _require_real_parser():
         pytest.skip(f"replay engine unavailable: {diag}")
 
 
-def _commands_by_slot(replay):
-    from sc2reader.events.game import CommandEvent
+def _actions_by_slot(replay):
+    """Every command, selection and control-group event, per player slot."""
+    from sc2reader.events.game import CommandEvent, ControlGroupEvent, SelectionEvent
 
     counts = {}
     for ev in replay.events:
-        if isinstance(ev, CommandEvent):
+        if isinstance(ev, (CommandEvent, SelectionEvent, ControlGroupEvent)):
             slot = getattr(getattr(ev, "player", None), "pid", None)
             counts[slot] = counts.get(slot, 0) + 1
     return counts
 
 
-def _curve_commands(curve):
+def _curve_actions(curve, game_length):
+    """Undo each window's per-minute rate back into an action count."""
     window = curve["window_sec"]
     return {
-        p["pid"]: round(sum(s["apm"] for s in p["samples"]) * window / 60)
+        p["pid"]: round(sum(
+            s["apm"] * min(window, game_length - s["t"]) / 60 for s in p["samples"]
+        ))
         for p in curve["players"]
     }
 
 
 @pytest.mark.parametrize("perspective", ["ReSpOnSe", "Squirtuoz"])
-def test_apm_curve_credits_each_player_with_their_own_commands(perspective):
+def test_apm_curve_credits_each_player_with_their_own_actions(perspective):
     _require_real_parser()
     from core.sc2_replay_parser import parse_deep  # type: ignore
-    from sc2tools_agent.replay_pipeline import _compute_apm_curve
+    from sc2tools_agent.replay_pipeline import APM_CURVE_VERSION, _compute_apm_curve
 
     ctx = parse_deep(str(FIXTURE_REPLAY), perspective)
-    expected = _commands_by_slot(ctx.raw)
+    expected = _actions_by_slot(ctx.raw)
     curve = _compute_apm_curve(ctx)
 
     assert curve is not None and curve["has_data"] is True
-    got = _curve_commands(curve)
-    assert got[ctx.me.pid] == expected[ctx.me.pid]
-    assert got[ctx.opponent.pid] == expected[ctx.opponent.pid]
-    # Both players commanded units; neither side may read zero.
-    assert all(total > 0 for total in got.values())
+    assert curve["v"] == APM_CURVE_VERSION == 2
+    got = _curve_actions(curve, ctx.length_seconds)
+    for pid in (ctx.me.pid, ctx.opponent.pid):
+        # Per-window rates are rounded to 0.1 APM.
+        assert abs(got[pid] - expected[pid]) <= len(curve["players"][0]["samples"])
+    by_pid = {p["pid"]: p for p in curve["players"]}
+    for pid in (ctx.me.pid, ctx.opponent.pid):
+        want = round(expected[pid] * 60 / ctx.length_seconds, 1)
+        assert by_pid[pid]["avg_apm"] == want
+    assert by_pid[ctx.me.pid]["is_me"] is True
 
 
 def test_uploaded_game_carries_consistent_apm_and_spq():
@@ -205,7 +229,10 @@ def test_uploaded_game_carries_consistent_apm_and_spq():
     payload = game.to_payload()
     breakdown = payload["macroBreakdown"]
 
+    me_curve = next(p for p in payload["apmCurve"]["players"] if p["is_me"])
     assert isinstance(payload.get("apm"), float) and payload["apm"] > 0
-    assert payload["apm"] == breakdown["player_stats"]["me"]["apm"]
+    assert payload["apm"] == breakdown["player_stats"]["me"]["apm"] == me_curve["avg_apm"]
+    opp_curve = next(p for p in payload["apmCurve"]["players"] if not p["is_me"])
+    assert breakdown["player_stats"]["opponent"]["apm"] == opp_curve["avg_apm"]
     assert isinstance(payload.get("spq"), float) and payload["spq"] >= 0
     assert payload["spq"] == pytest.approx(breakdown["raw"]["sq"], abs=0.01)
