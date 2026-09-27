@@ -13,6 +13,17 @@ corresponding GitHub Release.
 
 ### Added
 
+- **APM on the macro breakdown and replay analysis** — games synced with
+  agent **0.17.2** show your average APM, with your opponent's beside it,
+  in the macro breakdown's headline tiles and the replay page's Mechanics
+  panel. The macro breakdown's Match timeline gains an **APM** view with
+  the same crosshair, lead shading and readout as Army, Workers, Supply
+  and Income. APM is counted like StarCraft II's in-game APM: every
+  command, selection and control-group action, not commands alone (the
+  undercount that got the old APM/SPM chart removed). Older games read
+  "Not measured for this game" until they are recomputed or re-synced,
+  because their stored values credited one player with the other's
+  actions.
 - **Replay Review Exchange** — post one of your 1v1 games with a question
   and get reviews pinned to exact replay moments and map points. The
   opponent is always redacted ("Opponent (Zerg, ~4,100 MMR)"), the asker can
@@ -92,12 +103,16 @@ corresponding GitHub Release.
   (`agent-v0.17.2`) sends each game's average APM and spending quotient.
   Both were empty on every game because the agent read them from a player
   record that never had them, so the battle card's spending quotient and
-  the league benchmark tables had nothing to show. Use **Re-sync** or
-  **Recompute** to fill in games already uploaded.
-- **APM/SPM chart shows each player's own actions** — the chart matched
-  sc2reader's 0-based user id against the 1-based player slot, so player 1
-  was credited with player 2's actions and player 2 always read zero. Fixed
-  in agent **0.17.2**; re-sync to redraw older games.
+  the league benchmark tables had nothing to show. APM is the whole-game
+  average of every command, selection and control-group action, matching
+  the in-game counter. Use **Re-sync** or **Recompute** to fill in games
+  already uploaded.
+- **APM curve credits each player with their own actions** — the agent
+  matched sc2reader's 0-based user id against the 1-based player slot, so
+  player 1 was credited with player 2's actions and player 2 always read
+  zero. Agent **0.17.2** fixes the attribution and marks its curves as
+  version 2; the website ignores older curves. Re-sync to redraw older
+  games.
 - **Map Intel death zones have data** — the "where your army died" heatmap
   was always empty: it expected loss totals the battle detector never
   produced. Agent **0.17.2** measures each fight's army value lost on both

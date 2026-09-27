@@ -36,7 +36,9 @@ import {
 import { MetricSwitch, TimelineSummary } from "./TimelineControls";
 import {
   DEFAULT_TIMELINE_METRIC,
+  timelineMetricsFor,
   type TimelineMetric,
+  type TimelineMetricDef,
 } from "./timelineMetrics";
 
 export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
@@ -52,6 +54,9 @@ export type HoverEvent =
   | { type: "hover"; time: number }
   | { type: "tap"; time: number }
   | { type: "leave" };
+
+/** The metrics every game has; APM joins them when its curve is trusted. */
+const BASE_METRICS = timelineMetricsFor({ apm: false });
 
 export interface ActiveArmyChartProps {
   /**
@@ -89,6 +94,8 @@ export interface ActiveArmyChartProps {
   oppName?: string | null;
   /** Your race, for the metric switch's icons. */
   myRace?: string | null;
+  /** Metrics this game offers; APM is included only with a trusted curve. */
+  metrics?: readonly TimelineMetricDef[];
   /** Draw the supply-block bands (the host owns the on/off switch). */
   showSupplyBlocks?: boolean;
   /** Render the "Match timeline" caption (off when the host titles it). */
@@ -142,6 +149,7 @@ export function ActiveArmyChart({
   myName,
   oppName,
   myRace,
+  metrics = BASE_METRICS,
   showSupplyBlocks = true,
   showTitle = true,
   className = "",
@@ -151,7 +159,12 @@ export function ActiveArmyChart({
   const overlayRef = useRef<SVGRectElement | null>(null);
   const gesture = useRef<TouchGesture | null>(null);
   const [containerRef, size] = useElementSize();
-  const [metric, setMetric] = useState<TimelineMetric>(DEFAULT_TIMELINE_METRIC);
+  const [chosenMetric, setMetric] = useState<TimelineMetric>(DEFAULT_TIMELINE_METRIC);
+  // A metric this game can't show (e.g. APM on an older upload) falls
+  // back to the default instead of drawing an empty chart.
+  const metric = metrics.some((m) => m.key === chosenMetric)
+    ? chosenMetric
+    : DEFAULT_TIMELINE_METRIC;
 
   const layout = useMemo(
     () =>
@@ -275,7 +288,7 @@ export function ActiveArmyChart({
         </figcaption>
       ) : null}
 
-      <MetricSwitch metric={metric} onMetric={setMetric} race={myRace} />
+      <MetricSwitch metric={metric} onMetric={setMetric} race={myRace} metrics={metrics} />
 
       <div
         ref={containerRef}

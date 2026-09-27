@@ -1291,8 +1291,8 @@ Add indexes for the board sorts, per-request comment listing, and per-user histo
 
 All but one were verified and fixed on this branch (agent **0.17.2** plus web changes; see `CHANGELOG.md`):
 
-- **Fixed — slim `apm` / `spq` were always null.** `replay_pipeline.py` read them from `PlayerInfo`, which has neither field. They now come from the APM curve and the macro breakdown's `raw.sq`.
-- **Fixed — APM/SPM curve credited the wrong player.** `_compute_apm_curve` compared sc2reader's 0-based user id with the 1-based player slot. It now resolves the slot the way the replay engine does.
+- **Fixed — slim `apm` / `spq` were always null.** `replay_pipeline.py` read them from `PlayerInfo`, which has neither field. They now come from the APM curve and the macro breakdown's `raw.sq`. APM counts every command, selection and control-group action over the whole game, like the in-game counter.
+- **Fixed — APM/SPM curve credited the wrong player.** `_compute_apm_curve` compared sc2reader's 0-based user id with the 1-based player slot. It now resolves the slot the way the replay engine does, and curves carry `v: 2` so the website only shows fixed ones.
 - **Fixed — Map Intel death zones were always empty.** Lost fights are now measured from each side's army-value-lost counter and placed where the user's units died.
 - **Fixed — 5 of 6 Arcade badges were unearnable.** Run tracking added for Streak Hunter, Veto Sleuth, Closer and Detective. Stock Market weeks now settle, which enables Tycoon and puts real P&L on the weekly leaderboard; it had only ever received 0%.
 - **Fixed — Arcade saves overwrote each other** (found while fixing the badges). Every Arcade surface kept its own copy of the saved blob, and the last save won. They now share one store with one combined save.

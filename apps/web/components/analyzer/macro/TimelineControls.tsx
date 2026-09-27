@@ -3,9 +3,10 @@
 /**
  * The Match timeline's controls and read-out: a segmented metric switch
  * (army, workers, supply, income — each shown with your race's in-game
- * icon) above the chart, and a "Game time | you | opponent" strip below
- * it that always shows the inspected moment (or the game end), with the
- * leader's margin beside their number.
+ * icon — plus APM when the game has it) above the chart, and a
+ * "Game time | you | opponent" strip below it that always shows the
+ * inspected moment (or the game end), with the leader's margin beside
+ * their number.
  */
 
 import { Lock } from "lucide-react";
@@ -13,51 +14,62 @@ import { Icon } from "@/components/ui/Icon";
 import { formatGameClock } from "@/lib/macro";
 import type { SeriesPoint } from "./activeArmyLayout";
 import {
-  TIMELINE_METRICS,
   describeMetric,
   formatSigned,
   metricIcon,
   metricLead,
+  timelineMetricsFor,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
 
+/** Beyond this many segments, phones show labels only. */
+const PHONE_ICON_SEGMENTS = 4;
+
 /**
  * One rounded track with a sliding highlight behind the chosen metric.
- * Full width on phones (four equal segments), sized to its labels from
+ * Full width on phones (equal segments), sized to its labels from
  * ``sm`` up.
  */
 export function MetricSwitch({
   metric,
   onMetric,
   race,
+  metrics = timelineMetricsFor({ apm: false }),
 }: {
   metric: TimelineMetric;
   onMetric: (next: TimelineMetric) => void;
   /** Your race, for the icons; they are left out when it is unknown. */
   race?: string | null;
+  /** The metrics this game can show (APM only with a trusted curve). */
+  metrics?: readonly TimelineMetricDef[];
 }) {
   const index = Math.max(
     0,
-    TIMELINE_METRICS.findIndex((m) => m.key === metric),
+    metrics.findIndex((m) => m.key === metric),
   );
+  // The labels need the room on phones once a fifth segment appears,
+  // and on the narrowest phones always.
+  const iconHide = metrics.length > PHONE_ICON_SEGMENTS ? "max-sm:hidden" : "max-[359px]:hidden";
   return (
     <div
       role="group"
       aria-label="Chart metric"
-      className="relative grid grid-cols-4 rounded-full border border-border bg-bg-subtle p-1 sm:inline-grid"
+      className="relative grid rounded-full border border-border bg-bg-subtle p-1 sm:inline-grid"
+      style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))` }}
     >
       <span
         aria-hidden
         className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-accent shadow-sm transition-transform duration-200"
         style={{
-          width: `calc((100% - 0.5rem) / ${TIMELINE_METRICS.length})`,
+          width: `calc((100% - 0.5rem) / ${metrics.length})`,
           transform: `translateX(${index * 100}%)`,
         }}
       />
-      {TIMELINE_METRICS.map((m) => {
+      {metrics.map((m) => {
         const on = m.key === metric;
         const icon = metricIcon(m, race);
+        const Glyph = icon ? null : m.glyph;
         return (
           <button
             key={m.key}
@@ -74,9 +86,10 @@ export function MetricSwitch({
                 name={icon}
                 size={18}
                 decorative
-                // The labels need the room on the narrowest phones.
-                className={`rounded-[3px] max-[359px]:hidden ${on ? "" : "opacity-80"}`}
+                className={`rounded-[3px] ${iconHide} ${on ? "" : "opacity-80"}`}
               />
+            ) : Glyph ? (
+              <Glyph aria-hidden className={`h-4 w-4 flex-shrink-0 ${iconHide}`} />
             ) : null}
             <span className="truncate">{m.label}</span>
           </button>

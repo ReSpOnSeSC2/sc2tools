@@ -24,6 +24,8 @@ import type {
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
 import { buildSeries } from "./activeArmyLayout";
+import { timelineMetricsFor } from "./timelineMetrics";
+import { withApm, type GameApm } from "@/lib/apm";
 
 export interface MacroChartSectionProps {
   samples: StatsEvent[];
@@ -51,6 +53,11 @@ export interface MacroChartSectionProps {
    * snapshot below.
    */
   gameId?: string | null;
+  /**
+   * The game's trusted APM curve (lib/apm.ts readGameApm). When present,
+   * the timeline switch gains an APM metric; null leaves it out.
+   */
+  apm?: GameApm | null;
 }
 
 /** Hover state with sticky semantics. ``sticky=true`` means the value
@@ -104,6 +111,7 @@ export function MacroChartSection({
   myRace,
   oppRace,
   gameId,
+  apm = null,
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
@@ -127,26 +135,27 @@ export function MacroChartSection({
   // chip, AND the unit chips next to it ALL come from the same
   // SeriesPoint at the same ``t``. Single source of truth: the chart
   // and the roster mathematically cannot disagree at a hovered tick.
+  // APM rides on the same SeriesPoints, so the APM metric shares the
+  // chart's crosshair, lead shading and read-out with every other metric.
   const mySeries = useMemo(
     () =>
-      buildSeries(
-        samples,
-        unitTimeline,
-        "my",
-        buildOrder.data?.events,
+      withApm(
+        buildSeries(samples, unitTimeline, "my", buildOrder.data?.events),
+        apm?.me,
+        apm?.windowSec ?? 0,
       ),
-    [samples, unitTimeline, buildOrder.data?.events],
+    [samples, unitTimeline, buildOrder.data?.events, apm],
   );
   const oppSeries = useMemo(
     () =>
-      buildSeries(
-        oppSamples,
-        unitTimeline,
-        "opp",
-        buildOrder.data?.opp_events,
+      withApm(
+        buildSeries(oppSamples, unitTimeline, "opp", buildOrder.data?.opp_events),
+        apm?.opp,
+        apm?.windowSec ?? 0,
       ),
-    [oppSamples, unitTimeline, buildOrder.data?.opp_events],
+    [oppSamples, unitTimeline, buildOrder.data?.opp_events, apm],
   );
+  const metrics = useMemo(() => timelineMetricsFor({ apm: apm !== null }), [apm]);
 
   const handleHover = useCallback((event: HoverEvent) => {
     setHover((prev) => {
@@ -207,6 +216,7 @@ export function MacroChartSection({
         myName={myName}
         oppName={oppName}
         myRace={myRace}
+        metrics={metrics}
         showSupplyBlocks={showBlocks}
         showTitle={false}
         className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
