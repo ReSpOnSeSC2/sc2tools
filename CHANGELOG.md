@@ -95,6 +95,12 @@ corresponding GitHub Release.
   days with every answer correct, Veto Sleuth after three correct Streak
   Veto answers in a row, and Tycoon after five straight green Stock Market
   weeks.
+- **Arcade progress no longer overwrites itself** — each Arcade surface
+  kept its own copy of your saved progress and saved it whole, so the last
+  save erased the others' changes. Locking a Stock Market portfolio, for
+  example, dropped the XP and play record saved alongside it (Buildle, Bingo
+  and Higher or Lower had the same problem). All surfaces now share one
+  saved state and send one combined save.
 - **Stock Market weeks settle** — the weekly leaderboard only ever received
   the 0% placeholder posted at lock-in. The first time you open the market
   in a new week, last week's portfolio settles at the prices you see, its

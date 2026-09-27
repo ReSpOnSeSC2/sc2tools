@@ -1295,6 +1295,7 @@ All but one were verified and fixed on this branch (agent **0.17.2** plus web ch
 - **Fixed — APM/SPM curve credited the wrong player.** `_compute_apm_curve` compared sc2reader's 0-based user id with the 1-based player slot. It now resolves the slot the way the replay engine does.
 - **Fixed — Map Intel death zones were always empty.** Lost fights are now measured from each side's army-value-lost counter and placed where the user's units died.
 - **Fixed — 5 of 6 Arcade badges were unearnable.** Run tracking added for Streak Hunter, Veto Sleuth, Closer and Detective. Stock Market weeks now settle, which enables Tycoon and puts real P&L on the weekly leaderboard; it had only ever received 0%.
+- **Fixed — Arcade saves overwrote each other** (found while fixing the badges). Every Arcade surface kept its own copy of the saved blob, and the last save won. They now share one store with one combined save.
 - **Fixed — nothing linked to `/p/[handle]`.** Author pages and Settings → Profile now link to it.
 - **Fixed — stale counts.** Sign-up page, README and the Arcade README now match the registries (30 widgets, 18 modes). The unused old landing page code was removed.
 - **Removed — the unused optimizer simulator.** Its Build adapter UI was deliberately removed on 2026-07-11 (commit `110ddf4c`), and the library was flagged for removal then. The simulator is deleted. The balance-patch data the map replayer uses to price lost units moved to `apps/web/lib/sc2-patch/`.
