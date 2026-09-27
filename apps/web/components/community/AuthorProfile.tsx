@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Trophy } from "lucide-react";
+import { ArrowLeft, Trophy, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { GlowHalo } from "@/components/ui/GlowHalo";
@@ -92,6 +92,17 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
               profile.totalBuilds === 1
                 ? "One published community build"
                 : `${profile.totalBuilds} published community builds`
+            }
+            actions={
+              // Same opt-in gate as this page (a public author name), so
+              // every author here has a /p/ player profile.
+              <Link
+                href={`/p/${encodeURIComponent(profile.userId)}`}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border px-3 text-caption font-semibold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <UserRound className="h-4 w-4" aria-hidden />
+                Player profile
+              </Link>
             }
           />
         </div>

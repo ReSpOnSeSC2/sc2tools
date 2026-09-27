@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
 import { SettingsPlayerChannels } from "./SettingsPlayerChannels";
+import { SettingsPublicProfile } from "./SettingsPublicProfile";
 
 type ProfileRead = {
   battleTag?: string;
@@ -337,6 +338,8 @@ export function SettingsProfile() {
         profileDirty={dirty}
         onDirtyChange={setChannelsDirty}
       />
+
+      <SettingsPublicProfile />
 
       <SaveBar
         visible={dirty}

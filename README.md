@@ -35,7 +35,7 @@ agent that does the local replay parsing.
 | **Build Recognizer** | Per-opener W-L with map and MMR breakdowns, and trend sparklines. |
 | **Strategy Detection** | Rule-based opener identification across 100+ builds, per matchup. |
 | **Map Intel & Veto Planning** | Per-map win-rates and timing libraries to plan your veto. |
-| **Live OBS Overlay** | 15 broadcast-ready widgets behind per-widget URLs — drop one into a Browser Source and you're streaming. |
+| **Live OBS Overlay** | 30 broadcast-ready widgets behind per-widget URLs — drop one into a Browser Source and you're streaming. |
 | **Custom Build Library** | Sync your own openers and browse the community pool. |
 
 There's also an **Arcade**: lightweight daily games (Buildle and friends) generated from *your own*
@@ -45,7 +45,7 @@ replay data — a fun way to revisit your games.
 
 > Real captures from the live app.
 
-**Live OBS overlay — copy & paste.** 15 widgets behind one URL; drop it into a Browser Source and you're on the air.
+**Live OBS overlay — copy & paste.** 30 widgets behind one URL; drop it into a Browser Source and you're on the air.
 
 <img src="apps/web/public/landing/overlay-live.png" alt="StarCraft II gameplay with the SC2 Tools live OBS overlay — opponent identity card, session record, and rematch flag" width="900"/>
 

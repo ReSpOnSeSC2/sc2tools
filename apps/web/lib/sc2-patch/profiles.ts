@@ -1,7 +1,7 @@
 /**
  * Patch-profile registry and layering.
  *
- * Profiles ship as JSON under data/patches/. A profile either stands
+ * Profiles ship as JSON under data/. A profile either stands
  * alone (the lotv-base dataset) or names a parent via `extends` and
  * carries only the fields that changed — so adapting to a new balance
  * patch means adding one small delta file and registering it here.
@@ -11,16 +11,16 @@
  *   - `null` deletes the key (removes a unit/upgrade from the game)
  *   - arrays replace wholesale (a delta can't append to `requires`)
  */
-import lotvBase from "../data/patches/lotv-base.json";
-import patch5016 from "../data/patches/patch-5-0-16.json";
-import patch5016a from "../data/patches/patch-5-0-16a.json";
-import patch5016b from "../data/patches/patch-5-0-16b.json";
+import lotvBase from "./data/lotv-base.json";
+import patch5016 from "./data/patch-5-0-16.json";
+import patch5016a from "./data/patch-5-0-16a.json";
+import patch5016b from "./data/patch-5-0-16b.json";
 import type {
   PatchProfile,
   PatchProfileFile,
   UnitDef,
   UpgradeDef,
-} from "../types";
+} from "./types";
 
 const REGISTRY: Record<string, PatchProfileFile> = {
   [lotvBase.id]: lotvBase as PatchProfileFile,

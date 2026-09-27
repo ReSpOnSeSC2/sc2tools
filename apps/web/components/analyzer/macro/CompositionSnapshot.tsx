@@ -586,7 +586,7 @@ function SourceBadge({ source }: { source: CompositionSource }) {
  * Failed images end in a text label if no usable asset can load.
  *
  * Deliberately local to this file: the app-wide ``Icon`` is shared with
- * the optimizer, randomizer, fingerprint card and race chips, so
+ * the randomizer, fingerprint card and race chips, so
  * swapping it there would be a far wider blast radius than the army
  * roster the change is actually for.
  */

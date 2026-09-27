@@ -24,15 +24,11 @@
  *     The overlay must never paint an error because a viewer tampered
  *     with a URL.
  *
- * Timed steps come from the two surfaces that HAVE times:
- *   - the optimizer's adapted sim ({@link fromOptimizerResult} —
- *     BuildOrderStep {supply, name, kind, startSec}), and
- *   - a game's raw ``[m:ss] Name`` build-log lines
- *     ({@link fromBuildLog} — the same shape lib/build-events.ts and
- *     lib/lossAutopsy.ts already parse).
+ * Timed steps come from a game's raw ``[m:ss] Name`` build-log lines
+ * ({@link fromBuildLog} — the same shape lib/build-events.ts and
+ * lib/lossAutopsy.ts already parse).
  */
 
-import type { BuildOrderStep } from "@/lib/optimizer/types";
 import {
   MATCHUPS,
   isMatchupKey,
@@ -577,48 +573,8 @@ export function appendGhostToUrl(
 }
 
 /* ------------------------------------------------------------------ */
-/* Constructors — the two surfaces that have timed steps               */
+/* Constructors — timed steps from a game's build log                  */
 /* ------------------------------------------------------------------ */
-
-/**
- * Structural subset of the optimizer's AdaptResult that
- * {@link fromOptimizerResult} consumes — every AdaptResult satisfies
- * it, and tests/fixtures don't have to fake a whole sim.
- */
-export interface GhostOptimizerSource {
-  referenceName: string;
-  profileId: string;
-  sim: { steps: ReadonlyArray<BuildOrderStep> };
-}
-
-/**
- * Build a target from an adapted optimizer result. Keeps
- * build/train/research/morph steps; drops chrono (a macro ability, not
- * a buildable — mirroring toSalt.ts), warpgate transforms (replay
- * build logs never carry them, so they'd grade as permanent misses)
- * and workers. Caps at {@link MAX_GHOST_STEPS}. Returns null when
- * nothing armable remains.
- */
-export function fromOptimizerResult(
-  result: GhostOptimizerSource,
-): GhostTarget | null {
-  const steps: GhostStep[] = [];
-  for (const step of result.sim.steps) {
-    if (step.kind === "chrono" || step.kind === "transform-warpgate") continue;
-    if (isWorkerName(step.name)) continue;
-    steps.push({
-      supply: Number.isFinite(step.supply) ? Math.floor(step.supply) : null,
-      t: Math.round(step.startSec),
-      name: step.name,
-    });
-    if (steps.length >= MAX_GHOST_STEPS) break;
-  }
-  return normalizeGhostTarget({
-    v: GHOST_BUILD_VERSION,
-    name: `${result.referenceName} (${result.profileId})`,
-    steps,
-  });
-}
 
 /** ``[m:ss] Name`` — the exact shape lib/build-events.ts's
  * buildLogToEvents and lib/lossAutopsy.ts already parse. */
