@@ -146,7 +146,8 @@ own synced games, and helpful reviewers earn karma.
   - Deleted comments still count, so deleting can't reset the limit.
   - Every limit is re-checked after the insert (and the insert withdrawn
     if it went over), so parallel posts can't slip past it. The same
-    applies to the 3-open / 3-per-day request caps.
+    applies to the 500-comment thread cap and the 3-open / 3-per-day
+    request caps.
 - **Editing and deleting.**
   - You can edit your own comment for **15 minutes**.
   - Deleting is always a soft delete: the text, pin and range are wiped
@@ -167,8 +168,10 @@ own synced games, and helpful reviewers earn karma.
   asker is. So the blocked person can still comment, but the asker never
   sees those comments and is never notified about them.
 - **The asker is never blockable from their own request**, and a viewer's
-  blocks never hide the asker's replies. Either would let someone test
-  whether a named user is the anonymous asker.
+  blocks never hide the asker's replies, silence their reply
+  notifications, or drop an anonymous request from "Requests you can help
+  with". Any of these would let someone test whether a named user is the
+  anonymous asker.
 
 ## Reputation
 

@@ -187,6 +187,13 @@ describe("reviews: report → moderation queue → auto-hide, and blocks", () =>
     const sleuthView = (await pageAs("sleuth")).body.comments;
     expect(sleuthView.find((x) => x.id === askerReply)).toMatchObject({ state: "visible" });
     expect(sleuthView.find((x) => x.id === askerTop)).toMatchObject({ state: "visible" });
+    // …nor silence the asker's reply notifications (a missing ping would
+    // reveal the same thing).
+    const replyPings = () => h.db.notifications.find({ userId: h.userId("sleuth"), kind: "review.reply" }).toArray()
+      .then((rows) => rows.reduce((n, r) => n + (r.count || 1), 0));
+    const pingsBefore = await replyPings();
+    expect((await post("/comments", "asker", { body: "Another reply from the anonymous asker.", gameTimeSec: 24, parentId: review })).status).toBe(201);
+    expect(await replyPings()).toBe(pingsBefore + 1);
 
     // Upvotes on the asker's replies are refused (karma is public).
     const karmaBefore = (await h.db.users.findOne({ userId: h.userId("asker") }))?.reviewer?.karma || 0;
@@ -201,7 +208,11 @@ describe("reviews: report → moderation queue → auto-hide, and blocks", () =>
     // The asker blocks sleuth: on an ANONYMOUS request the block can't be
     // revealed, so sleuth may still comment, but the asker never sees it
     // and never hears about it.
+    const forMe = async () => (await request(h.app).get("/v1/reviews/for-me").set("authorization", h.bearer("sleuth"))).body.items.map((x) => x.id);
+    expect(await forMe()).toContain(reviewId);
     expect((await post(`/comments/${review}/block`, "asker")).status).toBe(200);
+    // Still listed under "Requests you can help with" (dropping it would reveal the block).
+    expect(await forMe()).toContain(reviewId);
     const before = await h.db.notifications.countDocuments({ userId: h.userId("asker") });
     const unread = (await request(h.app).get("/v1/me/notifications/unread-count").set("authorization", h.bearer("asker"))).body.count;
     const hidden = await post("/comments", "sleuth", { body: "Posting after the asker blocked me.", gameTimeSec: 23 });

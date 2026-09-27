@@ -34,6 +34,7 @@ type StatsEvents = NonNullable<Parameters<typeof InteractiveTimeline>[0]["statsE
  */
 export function ReviewReplayPanel({
   requestId,
+  hidden = false,
   analysis,
   analysisError,
   seekRequest,
@@ -46,6 +47,8 @@ export function ReviewReplayPanel({
   onCommentMarker,
 }: {
   requestId: string;
+  /** Hidden pending moderation: the grant is suspended, nothing to load. */
+  hidden?: boolean;
   analysis: ReviewAnalysis | undefined;
   analysisError: { status: number; message: string } | undefined;
   seekRequest: { t: number; seq: number } | null;
@@ -81,6 +84,13 @@ export function ReviewReplayPanel({
     [enc],
   );
 
+  if (hidden) {
+    return (
+      <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+        The replay isn&apos;t shared while this request is hidden pending moderator review.
+      </div>
+    );
+  }
   if (analysisError) {
     return (
       <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">

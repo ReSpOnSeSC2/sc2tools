@@ -141,6 +141,36 @@ describe("reviews: comment rules", () => {
     expect(await h.db.reviewComments.countDocuments({ authorId: h.userId("racer") })).toBeLessThanOrEqual(30);
   });
 
+  test("the 500-comment thread cap holds under parallel posts", async () => {
+    const { REVIEWS } = require("../src/config/constants");
+    // Its own request, so the full thread doesn't affect other tests.
+    await h.seedUser("capasker", { displayName: "CapAsker" });
+    const capGame = await h.seedGame("capasker", { gameId: "cap-thread-game" });
+    const capId = (await request(h.app).post("/v1/reviews").set("authorization", h.bearer("capasker")).send({ gameId: capGame, question: QUESTION })).body.id;
+    const onCap = (name, body) =>
+      request(h.app).post(`/v1/reviews/${capId}/comments`).set("authorization", h.bearer(name)).send(body);
+    const filler = REVIEWS.MAX_COMMENTS_PER_REQUEST - 1;
+    await h.db.reviewComments.insertMany(Array.from({ length: filler }, (_, i) => ({
+      _id: `fill${String(i).padStart(12, "0")}`,
+      requestId: capId,
+      authorId: "someone-else",
+      parentId: null,
+      status: "visible",
+      body: "filler",
+      gameTimeSec: 1,
+      createdAt: new Date(Date.now() - 86_400_000 * 2),
+    })));
+    await h.seedUser("capper1", { displayName: "CapperOne" });
+    await h.seedUser("capper2", { displayName: "CapperTwo" });
+    await h.seedLadderHistory("capper1", { mmr: 4900 });
+    await h.seedLadderHistory("capper2", { mmr: 4900 });
+    const results = await Promise.all(["capper1", "capper2", "capper1", "capper2"].map((name, i) =>
+      onCap(name, { body: `${BODY} [${i}]`, gameTimeSec: 40 + i })));
+    expect(results.filter((r) => r.status === 201).length).toBeLessThanOrEqual(1);
+    expect(results.every((r) => r.status === 201 || r.status === 409)).toBe(true);
+    expect(await h.db.reviewComments.countDocuments({ requestId: capId })).toBeLessThanOrEqual(REVIEWS.MAX_COMMENTS_PER_REQUEST);
+  });
+
   test("edit window: 15 minutes, own comments only", async () => {
     const created = await comment("master", { body: BODY, gameTimeSec: 100 });
     const id = created.body.id;

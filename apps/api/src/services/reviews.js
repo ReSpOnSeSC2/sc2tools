@@ -428,7 +428,9 @@ class ReviewsService {
         .map((b) => b.blockerId),
     );
     const items = rows
-      .filter((doc) => !blockedBy.has(doc.userId) && meetsDesiredLevel(doc, verification))
+      // Only a NAMED asker's block hides their request here: dropping an
+      // anonymous one would tell the viewer that its asker blocked them.
+      .filter((doc) => !(doc.askerDisplay === "named" && blockedBy.has(doc.userId)) && meetsDesiredLevel(doc, verification))
       .slice(0, 12)
       .map((doc) => cardView(doc));
     return { verified, items, reason: null };
@@ -679,10 +681,7 @@ class ReviewsService {
       }
     }
     await this._enforceCommentRate(userId, 0);
-    const total = await this.db.reviewComments.countDocuments({ requestId: doc._id });
-    if (total >= REVIEWS.MAX_COMMENTS_PER_REQUEST) {
-      throw reviewError(409, "review_thread_full", "This thread has reached its comment limit.");
-    }
+    await this._enforceThreadCap(doc._id, 0);
     const fields = this._commentFields(input, doc);
     const now = new Date(this.now());
     const comment = stampVersion(
@@ -706,9 +705,11 @@ class ReviewsService {
     );
     await this.db.reviewComments.insertOne(comment);
     // Re-count with this comment included so parallel posts can't slip
-    // past the hourly/daily limits (see _enforceCommentRate).
+    // past the hourly/daily limits or the thread cap. Nothing (stats,
+    // counters, notifications) has happened yet, so withdrawing is clean.
     try {
       await this._enforceCommentRate(userId, 1);
+      await this._enforceThreadCap(doc._id, 1);
     } catch (err) {
       await this.db.reviewComments.deleteOne({ _id: comment._id });
       throw err;
@@ -753,6 +754,23 @@ class ReviewsService {
   }
 
   /** @param {string} userId */
+  /**
+   * At most MAX_COMMENTS_PER_REQUEST comments per request (deleted ones
+   * included). ``justInserted`` is 1 when re-checking after the insert.
+   *
+   * @param {string} requestId
+   * @param {0 | 1} justInserted
+   */
+  async _enforceThreadCap(requestId, justInserted) {
+    const total = await this.db.reviewComments.countDocuments(
+      { requestId },
+      { limit: REVIEWS.MAX_COMMENTS_PER_REQUEST + 1 },
+    );
+    if (total - justInserted >= REVIEWS.MAX_COMMENTS_PER_REQUEST) {
+      throw reviewError(409, "review_thread_full", "This thread has reached its comment limit.");
+    }
+  }
+
   /**
    * 30 comments per hour and 200 per day. Counts every comment the user
    * created, including ones they deleted (deletion is always a soft
@@ -805,8 +823,12 @@ class ReviewsService {
           }),
         });
       }
+      // A block silences the blocked person's replies — but never the
+      // asker's: the asker's replies stay visible to someone who blocked
+      // their account elsewhere, so a missing notification would reveal
+      // who the anonymous asker is.
       if (parent && parent.authorId && parent.authorId !== comment.authorId
-        && !(await this._isBlocked(parent.authorId, comment.authorId))) {
+        && (isAsker || !(await this._isBlocked(parent.authorId, comment.authorId)))) {
         await this.notifications.notify(parent.authorId, {
           kind: "review.reply",
           groupKey: `review-reply:${parent._id}`,

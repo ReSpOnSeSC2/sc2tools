@@ -142,6 +142,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
         >
           <ReviewReplayPanel
             requestId={id}
+            hidden={data.request.hidden}
             analysis={analysisReq.data}
             analysisError={analysisReq.error}
             seekRequest={seekRequest}
