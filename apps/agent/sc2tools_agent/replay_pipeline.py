@@ -3140,8 +3140,9 @@ def _my_average_apm(
 ) -> Optional[float]:
     """Return the uploading player's average APM for the slim game row.
 
-    This is the curve's ``avg_apm`` (every action over the game's length,
-    as SC2 counts APM), the same number ``player_stats.me.apm`` carries.
+    This is the curve's ``avg_apm`` (every action over the time the player
+    was in the game, as SC2 counts APM), the same number
+    ``player_stats.me.apm`` carries.
     ``None`` when the curve is missing, the player had no actions, or the
     value falls outside what the API schema accepts.
 
@@ -3362,7 +3363,10 @@ def _count_player_actions(
     """Per player slot: actions and selections per window, plus the total.
 
     An action is any command, selection or control-group event (what SC2
-    counts as APM); camera moves are not actions.
+    counts as APM); camera moves are not actions. Each event counts once:
+    sc2reader's APMTracker counts control-group clear and steal events
+    (the base ``ControlGroupEvent``) twice, because its engine dispatches
+    ``handleControlGroupEvent`` both by type and by name for that class.
     """
     try:
         from sc2reader.events.game import (  # type: ignore
@@ -3392,19 +3396,62 @@ def _count_player_actions(
     return counts
 
 
+def _player_leave_seconds(
+    events: Any, pids: tuple, fps: float,
+) -> Dict[int, float]:
+    """Real-time second each player left the game, from their first
+    ``PlayerLeaveEvent``. Players who never leave are absent."""
+    try:
+        from sc2reader.events.game import PlayerLeaveEvent  # type: ignore
+    except Exception:  # noqa: BLE001
+        return {}
+    left: Dict[int, float] = {}
+    for ev in events:
+        if not isinstance(ev, PlayerLeaveEvent):
+            continue
+        pid = _game_event_player_slot(ev)
+        frame = getattr(ev, "frame", None)
+        if pid in pids and pid not in left and frame is not None:
+            left[pid] = int(frame) / fps
+    return left
+
+
+def _window_starts(game_length: int, window_sec: int) -> list:
+    """Start second of each sample window.
+
+    A final window shorter than half a window is folded into the one
+    before it: a game that runs a second past a boundary would otherwise
+    end on a one-second window reading as a spike or a drop to zero,
+    which is where the website's read-out sits by default.
+    """
+    starts = list(range(0, game_length, window_sec))
+    if len(starts) > 1 and game_length - starts[-1] < window_sec / 2:
+        starts.pop()
+    return starts
+
+
 def _rate_samples(
     side: Dict[str, Any], game_length: int, window_sec: int,
 ) -> list:
-    """Per-window ``{t, apm, spm}`` rates; the final, shorter window is
-    divided by its real length so the game's last seconds aren't halved."""
+    """Per-window ``{t, apm, spm}`` rates, each divided by the window's
+    real length (the last window runs to the end of the game)."""
+    starts = _window_starts(game_length, window_sec)
     samples = []
-    for t_sec in range(0, game_length, window_sec):
-        span = min(window_sec, game_length - t_sec)
-        bucket = t_sec // window_sec
+    for i, t_sec in enumerate(starts):
+        last = i == len(starts) - 1
+        end = game_length if last else starts[i + 1]
+        lo, hi = t_sec // window_sec, end // window_sec
+        actions = sum(
+            n for b, n in side["actions"].items() if b >= lo and (last or b < hi)
+        )
+        selections = sum(
+            n for b, n in side["selections"].items() if b >= lo and (last or b < hi)
+        )
+        span = max(end - t_sec, 1)
         samples.append({
             "t": t_sec,
-            "apm": round(side["actions"].get(bucket, 0) * 60.0 / span, 1),
-            "spm": round(side["selections"].get(bucket, 0) * 60.0 / span, 1),
+            "apm": round(actions * 60.0 / span, 1),
+            "spm": round(selections * 60.0 / span, 1),
         })
     return samples
 
@@ -3415,8 +3462,8 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     ``apm`` is actions per minute as StarCraft II counts them (commands,
     selections and control-group actions); ``spm`` is selections per
     minute. Each player also carries ``avg_apm``: all their actions over
-    the game's length in minutes. (sc2reader's APMTracker stops a player's
-    clock when they leave, so it reads a leaver a fraction higher.)
+    the time they were in the game (until they left, else the game's
+    length), the way SC2 and sc2reader's APMTracker average APM.
     Returns None when the replay has no players or length.
     """
     me = getattr(ctx, "me", None)
@@ -3437,15 +3484,19 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     sides = [(p, p is me) for p in (me, opp) if getattr(p, "pid", None) is not None]
     pids = tuple(getattr(p, "pid") for p, _ in sides)
     counts = _count_player_actions(events, pids, fps, _APM_WINDOW_SEC)
+    left = _player_leave_seconds(events, pids, fps)
     players = []
     for player, is_me in sides:
         side = counts.get(player.pid) or {"actions": {}, "selections": {}, "total": 0}
+        played = left.get(player.pid, 0.0)
+        if not 0 < played < game_length:
+            played = float(game_length)
         players.append({
             "pid": player.pid,
             "name": getattr(player, "name", "") or "",
             "race": getattr(player, "race", "") or "",
             "is_me": is_me,
-            "avg_apm": round(side["total"] * 60.0 / game_length, 1) if side["total"] else None,
+            "avg_apm": round(side["total"] * 60.0 / played, 1) if side["total"] else None,
             "samples": _rate_samples(side, game_length, _APM_WINDOW_SEC),
         })
     return {

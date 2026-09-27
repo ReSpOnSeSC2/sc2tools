@@ -103,16 +103,18 @@ corresponding GitHub Release.
   (`agent-v0.17.2`) sends each game's average APM and spending quotient.
   Both were empty on every game because the agent read them from a player
   record that never had them, so the battle card's spending quotient and
-  the league benchmark tables had nothing to show. APM is the whole-game
-  average of every command, selection and control-group action, matching
-  the in-game counter. Use **Re-sync** or **Recompute** to fill in games
-  already uploaded.
+  the league benchmark tables had nothing to show. APM counts every
+  command, selection and control-group action over the time the player
+  was in the game, matching the in-game counter. Use **Re-sync** or
+  **Recompute** to fill in games already uploaded.
 - **APM curve credits each player with their own actions** — the agent
   matched sc2reader's 0-based user id against the 1-based player slot, so
   player 1 was credited with player 2's actions and player 2 always read
   zero. Agent **0.17.2** fixes the attribution and marks its curves as
-  version 2; the website ignores older curves. Re-sync to redraw older
-  games.
+  version 2; the website ignores older curves. The curve's last window
+  also runs to the end of the game, so a game that ends a second past a
+  window boundary no longer finishes on a reading of zero. Re-sync to
+  redraw older games.
 - **Map Intel death zones have data** — the "where your army died" heatmap
   was always empty: it expected loss totals the battle detector never
   produced. Agent **0.17.2** measures each fight's army value lost on both
