@@ -50,6 +50,11 @@ test("review page shows the replay and readable comments signed out", async ({ p
   await expect(page.getByText("Best review").first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
+  // The consent banner (fixed to the bottom on phones) would sit over
+  // the thread; a real visitor answers it first.
+  const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
+  if (await reject.isVisible()) await reject.click();
+
   // A time chip seeks the replay (and it stays on screen: pinned on
   // phones, beside the thread on desktop).
   await page.getByRole("button", { name: "Jump to 5:12–5:40 in the replay" }).click();
@@ -70,6 +75,10 @@ test("review page shows the replay and readable comments signed out", async ({ p
 });
 
 test("a missing review is a real 404", async ({ page }) => {
-  const response = await page.goto("/reviews/doesNotExist00000");
-  expect([404]).toContain(response?.status());
+  // A well-formed id the API 404s, and a malformed one rejected before
+  // any fetch: both must be a real 404 status, not a streamed soft-404.
+  for (const path of ["/reviews/doesNotExist0000", "/reviews/not-a-review"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+  }
 });

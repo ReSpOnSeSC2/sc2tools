@@ -3,21 +3,19 @@
 Players post one of their games with a question. Other players answer with
 comments pinned to exact moments on the replay timeline and, when the game has
 map playback, to points on the 2D map. Reviewer leagues are verified from their
-own synced games, helpful reviewers earn karma, and Coaching Locker coaches get
-a "Book a lesson" entry point.
+own synced games, and helpful reviewers earn karma.
 
 - **API:**
   - `apps/api/src/services/reviews.js` (requests, board, scoped grant,
     comments, karma ledger, blocks, moderation hooks, GDPR, weekly digest)
-  - `services/reviewerReputation.js` (verification, badges, coach badge,
-    leaderboard)
+  - `services/reviewerReputation.js` (verification, badges, leaderboard)
   - `services/reviewRedaction.js` (the only place that decides what a public
     payload may contain)
   - `services/notifications.js` (the in-app bell)
   - `routes/reviews.js`, `routes/notifications.js`
   - `jobs/reviewDigestJob.js`
 - **Web:**
-  - `app/reviews/page.tsx` (board)
+  - `app/reviews/(board)/page.tsx` (board)
   - `app/reviews/[id]/page.tsx` (review page, SEO)
   - `app/reviews/[id]/opengraph-image.tsx`
   - `components/reviews/*`
@@ -205,18 +203,17 @@ a "Book a lesson" entry point.
 - **Bands** use the ladder `leagueId` numbering (0 Bronze … 6
   Grandmaster), from MMR floors in `util/leagueBands.js`.
 
-### Coach badge
+### Coaching stays private
 
-- **Who gets it.** Coaching Locker coaches linked to a site account. The
-  Locker is invite-only.
-- **"Book a lesson".** The link appears when the coach has published,
-  unpaused availability:
-  - For the coach's own attached students, it goes straight to
-    `/coaching?view=schedule`.
-  - Booking is attachment-gated, so for everyone else it sends the coach
-    an in-app lesson request (at most 5 per day per user). The coach can
-    then attach the player in the Locker, which opens their published
-    calendar.
+- The review exchange **never reads or writes the Coaching Locker** (the
+  `coaching_locker` collection, its roster, calendars or bookings).
+- There is no coach badge, "Book a lesson" link or lesson request, so a
+  review page never reveals who coaches or who is coached.
+- Coaching remains invite-only and role-gated exactly as before. The
+  regression test "coaching stays private" in
+  `apps/api/__tests__/reviewsReputation.test.js` seeds a Locker coach who
+  reviews, then asserts that no Locker data appears on any review
+  surface and that the Locker is unchanged afterwards.
 
 ## Moderation playbook
 
@@ -253,8 +250,8 @@ a "Book a lesson" entry point.
 - **What notifies whom:**
   - The asker gets new reviews, grouped: one unread row per request, e.g.
     "3 new reviews on your replay".
-  - A reviewer gets their review marked helpful or best, replies (grouped
-    per review), and lesson requests (coaches).
+  - A reviewer gets their review marked helpful or best, and replies
+    (grouped per review).
   - Verified reviewers get a weekly digest, "N open review requests in
     your matchups" (their race, at or below their band). It is sent once
     per ISO week after Monday 15:00 UTC. Opt out from the leaderboard card
@@ -318,7 +315,6 @@ a "Book a lesson" entry point.
     `DELETE /v1/reviews/:id/comments/:cid`
   - `POST /v1/reviews/:id/comments/:cid/{helpful,best,upvote,report,block}`
     (`{value:false}` undoes helpful, best and upvote)
-  - `POST /v1/reviews/coaches/:coachId/lesson-request`
   - `GET /v1/me/reviews`, `GET|PATCH /v1/me/reviewer`
   - `GET /v1/me/review-blocks`, `DELETE /v1/me/review-blocks/:id`
   - `GET /v1/me/notifications`, `GET /v1/me/notifications/unread-count`,

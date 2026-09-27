@@ -18,8 +18,10 @@ import { reviewHeadline, reviewPageTitle, reviewsRollout, type ReviewPageData } 
  * SEO: canonical /reviews/<id>; indexable only once the thread has a
  * helpful or best review (quality gate, decided by the API), with
  * QAPage + BreadcrumbList JSON-LD. Link-only requests are never indexed.
- * A real 404 is raised in ``generateMetadata`` (before the loading
- * boundary streams); an unreachable API renders "unavailable" + noindex.
+ * No loading boundary sits above this page (the board's lives in the
+ * ``(board)`` route group) so a missing review is a real 404 status for
+ * every user agent, not a streamed soft-404; an unreachable API renders
+ * "unavailable" + noindex.
  */
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
