@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Toggle } from "@/components/ui/Toggle";
 import { useApi } from "@/lib/clientApi";
 import {
   ActiveArmyChart,
@@ -105,6 +106,9 @@ export function MacroChartSection({
   gameId,
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
+  const [showBlocks, setShowBlocks] = useState(true);
+  const hasBlocks =
+    (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
 
   useEffect(() => {
     setHover(INITIAL_HOVER);
@@ -169,13 +173,25 @@ export function MacroChartSection({
     // chart stays pinned under the panel header while the roster scrolls
     // beneath it, then leaves with the roster (sc2replaystats layout).
     <div className="space-y-3">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 sm:px-0">
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          Match timeline
-        </h3>
-        <p className="text-micro text-text-muted">
-          Hover, tap or drag across the chart to inspect a moment
-        </p>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-0">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+            Match timeline
+          </h3>
+          <p className="text-micro text-text-muted">
+            Hover, tap or drag across the chart to inspect a moment
+          </p>
+        </div>
+        {hasBlocks ? (
+          <label className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted">
+            <span className="whitespace-nowrap">Supply blocks</span>
+            <Toggle
+              checked={showBlocks}
+              onChange={setShowBlocks}
+              label="Show supply blocks"
+            />
+          </label>
+        ) : null}
       </div>
       <ActiveArmyChart
         mySeries={mySeries}
@@ -190,6 +206,8 @@ export function MacroChartSection({
         onHover={handleHover}
         myName={myName}
         oppName={oppName}
+        myRace={myRace}
+        showSupplyBlocks={showBlocks}
         showTitle={false}
         className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
       />

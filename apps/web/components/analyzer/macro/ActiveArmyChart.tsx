@@ -20,10 +20,10 @@ import {
 } from "./activeArmyLayout";
 import {
   AccessibleLeakTable,
-  AdvantageArea,
   ChartTooltip,
   Grid,
   HoverCrosshair,
+  LeadShading,
   LeakMarkers,
   SeriesLines,
   SupplyBlockBands,
@@ -33,10 +33,9 @@ import {
   type ActiveArmySupplyBlockWindow,
   type HoverState,
 } from "./ActiveArmyChartParts";
-import { MetricTabs, TimelineSummary } from "./TimelineControls";
+import { MetricSwitch, TimelineSummary } from "./TimelineControls";
 import {
   DEFAULT_TIMELINE_METRIC,
-  type AdvantagePoint,
   type TimelineMetric,
 } from "./timelineMetrics";
 
@@ -88,6 +87,10 @@ export interface ActiveArmyChartProps {
   myName?: string | null;
   /** Display name of the opponent (for the tooltip header). */
   oppName?: string | null;
+  /** Your race, for the metric switch's icons. */
+  myRace?: string | null;
+  /** Draw the supply-block bands (the host owns the on/off switch). */
+  showSupplyBlocks?: boolean;
   /** Render the "Match timeline" caption (off when the host titles it). */
   showTitle?: boolean;
   /** Classes for the outer figure (e.g. sticky positioning). */
@@ -105,13 +108,14 @@ interface TouchGesture {
 }
 
 /**
- * Match timeline — sc2replaystats-style interactive SVG chart.
+ * Match timeline — interactive SVG chart.
  *
- * One metric at a time (Army Value, Workers, Supply, Collection Rate,
- * Income Advantage), both players overlaid in their colours, with
- * labelled supply-block bands, a dashed crosshair, a dark tooltip and
- * a "Game time | you | opponent" read-out underneath. The hovered time
- * is lifted to the parent so the unit roster below stays in sync.
+ * One metric at a time (army value, workers, supply, income), both
+ * players overlaid in their colours with the gap between them shaded
+ * for whoever leads, labelled supply-block bands, a dashed crosshair, a
+ * dark tooltip and a "Game time | you | opponent" read-out underneath.
+ * The hovered time is lifted to the parent so the unit roster below
+ * stays in sync.
  *
  * The SVG is laid out at its measured pixel size, so it fills the
  * width of any screen without stretching text. Height comes from CSS.
@@ -137,6 +141,8 @@ export function ActiveArmyChart({
   onHover,
   myName,
   oppName,
+  myRace,
+  showSupplyBlocks = true,
   showTitle = true,
   className = "",
 }: ActiveArmyChartProps) {
@@ -146,7 +152,6 @@ export function ActiveArmyChart({
   const gesture = useRef<TouchGesture | null>(null);
   const [containerRef, size] = useElementSize();
   const [metric, setMetric] = useState<TimelineMetric>(DEFAULT_TIMELINE_METRIC);
-  const [showBlocks, setShowBlocks] = useState(true);
 
   const layout = useMemo(
     () =>
@@ -250,12 +255,10 @@ export function ActiveArmyChart({
 
   const hover = computeHoverPoints(layout, hoveredTime);
   const readout = hover ?? endOfGame(layout);
-  const blocksAvailable =
-    (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
   const you = myName?.trim() || "You";
   const them = oppName?.trim() || "Opponent";
   const scaleX = size ? size.width / layout.width : 1;
-  const label = layout.metric.label;
+  const title = layout.metric.title;
 
   return (
     <figure
@@ -272,13 +275,7 @@ export function ActiveArmyChart({
         </figcaption>
       ) : null}
 
-      <MetricTabs
-        metric={metric}
-        onMetric={setMetric}
-        showBlocks={showBlocks}
-        onToggleBlocks={() => setShowBlocks((v) => !v)}
-        blocksAvailable={blocksAvailable}
-      />
+      <MetricSwitch metric={metric} onMetric={setMetric} race={myRace} />
 
       <div
         ref={containerRef}
@@ -290,13 +287,13 @@ export function ActiveArmyChart({
       >
         <svg
           role="img"
-          aria-label={`${label.charAt(0)}${label.slice(1).toLowerCase()} for both players over game time. Hover to inspect a moment; click or tap to lock it, or drag sideways to scrub.`}
+          aria-label={`${title} for both players over game time. Hover to inspect a moment; click or tap to lock it, or drag sideways to scrub.`}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
           className="absolute inset-0 block h-full w-full"
         >
           <Grid layout={layout} />
-          {showBlocks ? (
+          {showSupplyBlocks ? (
             <SupplyBlockBands
               layout={layout}
               my={supplyBlockWindows}
@@ -309,11 +306,8 @@ export function ActiveArmyChart({
             leaks={leaks}
             highlightedKey={highlightedKey}
           />
-          {layout.metric.advantage ? (
-            <AdvantageArea layout={layout} clipId={clipId} />
-          ) : (
-            <SeriesLines layout={layout} />
-          )}
+          <LeadShading layout={layout} clipId={clipId} />
+          <SeriesLines layout={layout} />
           {hover ? <HoverCrosshair layout={layout} hover={hover} /> : null}
           <YAxisLabels layout={layout} />
           <rect
@@ -340,8 +334,8 @@ export function ActiveArmyChart({
             scaleX={scaleX}
             myName={you}
             oppName={them}
-            myBlocked={showBlocks && blockedAt(supplyBlockWindows, hover.cursorT)}
-            oppBlocked={showBlocks && blockedAt(oppSupplyBlockWindows, hover.cursorT)}
+            myBlocked={showSupplyBlocks && blockedAt(supplyBlockWindows, hover.cursorT)}
+            oppBlocked={showSupplyBlocks && blockedAt(oppSupplyBlockWindows, hover.cursorT)}
           />
         ) : null}
       </div>
@@ -352,7 +346,6 @@ export function ActiveArmyChart({
         locked={locked && hover != null}
         my={readout.my}
         opp={readout.opp}
-        advantage={readout.advantage}
         myName={you}
         oppName={them}
       />
@@ -437,7 +430,6 @@ function computeHoverPoints(
     xMouseView: layout.xOf(clamped),
     my,
     opp,
-    advantage: priorAdvantage(layout.advantage, clamped),
   };
 }
 
@@ -446,23 +438,12 @@ function endOfGame(layout: ChartLayout): {
   t: number;
   my: SeriesPoint | null;
   opp: SeriesPoint | null;
-  advantage: AdvantagePoint | null;
 } {
   return {
     t: layout.maxT,
     my: layout.mySeries[layout.mySeries.length - 1] ?? null,
     opp: layout.oppSeries[layout.oppSeries.length - 1] ?? null,
-    advantage: layout.advantage[layout.advantage.length - 1] ?? null,
   };
-}
-
-function priorAdvantage(points: AdvantagePoint[], t: number): AdvantagePoint | null {
-  let best: AdvantagePoint | null = null;
-  for (const p of points) {
-    if (p.t > t) break;
-    best = p;
-  }
-  return best ?? points[0] ?? null;
 }
 
 function ChartEmptyState() {

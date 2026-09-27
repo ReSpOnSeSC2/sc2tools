@@ -7,11 +7,11 @@
  * ``activeArmyLayout.buildLayout``) plus their own narrow inputs and
  * draw a single layer of the chart. No state, no effects — pure SVG.
  *
- * The look follows sc2replaystats' match timeline: light horizontal
- * grid, compact "5.0k" value labels, one solid line per player (you
- * blue, opponent red), labelled "Supply Blocked" bands, a dashed
- * crosshair with point markers, and a dark tooltip. The layout is
- * drawn 1:1 in CSS pixels, so font sizes here are real pixel sizes.
+ * The look: light horizontal grid, compact "5.0k" value labels, one
+ * solid line per player (you blue, opponent red) with the gap between
+ * them shaded in the leader's colour, labelled "Supply Blocked" bands,
+ * a dashed crosshair with point markers, and a dark tooltip. The layout
+ * is drawn 1:1 in CSS pixels, so font sizes here are real pixel sizes.
  */
 
 import { formatGameClock, leakKey } from "@/lib/macro";
@@ -20,8 +20,7 @@ import type { ChartLayout, SeriesPoint } from "./activeArmyLayout";
 import {
   describeMetric,
   formatAxisValue,
-  formatSigned,
-  type AdvantagePoint,
+  metricLead,
 } from "./timelineMetrics";
 
 export const COLOR_AXIS = "rgb(var(--text-dim))";
@@ -61,8 +60,6 @@ export interface HoverState {
   xMouseView: number;
   my: SeriesPoint | null;
   opp: SeriesPoint | null;
-  /** You minus the opponent at ``t`` (advantage metrics only). */
-  advantage: AdvantagePoint | null;
 }
 
 export function Grid({ layout }: { layout: ChartLayout }) {
@@ -174,56 +171,40 @@ export function SeriesLines({ layout }: { layout: ChartLayout }) {
 }
 
 /**
- * The advantage line (you minus the opponent): blue with a blue wash
- * while you lead, red below the zero line while the opponent does.
+ * The gap between the two lines, washed in the colour of whoever leads
+ * at each moment: blue where your line is above the opponent's, red
+ * where it is below. Crossings split cleanly because each half is
+ * clipped at the opponent's line.
  */
-export function AdvantageArea({
+export function LeadShading({
   layout,
   clipId,
 }: {
   layout: ChartLayout;
   clipId: string;
 }) {
-  if (!layout.advantagePath) return null;
-  const above = `${clipId}-lead`;
-  const below = `${clipId}-trail`;
-  const leadH = Math.max(0, layout.zeroY - layout.plotTop);
-  const trailH = Math.max(0, layout.plotBottom - layout.zeroY);
+  if (!layout.leadArea) return null;
   const halves = [
-    { id: above, color: COLOR_YOU },
-    { id: below, color: COLOR_OPP },
+    { id: `${clipId}-lead`, region: layout.oppAbove, color: COLOR_YOU },
+    { id: `${clipId}-trail`, region: layout.oppBelow, color: COLOR_OPP },
   ];
   return (
-    <g>
+    <g aria-hidden>
       <defs>
-        <clipPath id={above}>
-          <rect x={layout.plotLeft} y={layout.plotTop} width={layout.innerW} height={leadH} />
-        </clipPath>
-        <clipPath id={below}>
-          <rect x={layout.plotLeft} y={layout.zeroY} width={layout.innerW} height={trailH} />
-        </clipPath>
+        {halves.map(({ id, region }) => (
+          <clipPath key={id} id={id}>
+            <path d={region} />
+          </clipPath>
+        ))}
       </defs>
-      <line
-        x1={layout.plotLeft}
-        y1={layout.zeroY}
-        x2={layout.plotRight}
-        y2={layout.zeroY}
-        stroke={COLOR_AXIS}
-        strokeOpacity={0.7}
-        shapeRendering="crispEdges"
-      />
       {halves.map(({ id, color }) => (
-        <g key={id} clipPath={`url(#${id})`}>
-          <path d={layout.advantageArea} fill={color} fillOpacity={0.16} />
-          <path
-            d={layout.advantagePath}
-            fill="none"
-            stroke={color}
-            strokeWidth={LINE_WIDTH}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        </g>
+        <path
+          key={id}
+          d={layout.leadArea}
+          clipPath={`url(#${id})`}
+          fill={color}
+          fillOpacity={0.12}
+        />
       ))}
     </g>
   );
@@ -267,11 +248,6 @@ function hoverMarkers(
   layout: ChartLayout,
   hover: HoverState,
 ): Array<{ key: string; y: number; color: string }> {
-  if (layout.metric.advantage) {
-    if (!hover.advantage) return [];
-    const v = hover.advantage.value;
-    return [{ key: "adv", y: layout.yOf(v), color: v < 0 ? COLOR_OPP : COLOR_YOU }];
-  }
   const out: Array<{ key: string; y: number; color: string }> = [];
   const oppV = hover.opp ? layout.metric.read(hover.opp) : null;
   const myV = hover.my ? layout.metric.read(hover.my) : null;
@@ -309,6 +285,7 @@ export function ChartTooltip({
   const flip = cursorX + width + 16 > containerW;
   const left = flip ? Math.max(4, cursorX - width - 12) : cursorX + 12;
   const metric = layout.metric;
+  const lead = metricLead(metric, hover.my, hover.opp);
   return (
     <div
       role="status"
@@ -332,19 +309,18 @@ export function ChartTooltip({
         value={describeMetric(metric, hover.opp)}
         blocked={oppBlocked}
       />
-      {metric.advantage && hover.advantage ? (
+      {lead != null ? (
         <div className="mt-1 border-t border-bg/25 pt-1 tabular-nums">
-          {advantageSentence(hover.advantage.value, myName, oppName)}
+          {leadSentence(lead, myName, oppName)}
         </div>
       ) : null}
     </div>
   );
 }
 
-function advantageSentence(value: number, myName: string, oppName: string): string {
-  if (Math.round(value) === 0) return "Even income";
-  const leader = value > 0 ? myName : oppName;
-  return `${leader} ${formatSigned(Math.abs(value))}`;
+function leadSentence(lead: number, myName: string, oppName: string): string {
+  if (lead === 0) return "Even";
+  return `${lead > 0 ? myName : oppName} ahead by ${Math.abs(lead).toLocaleString()}`;
 }
 
 function TooltipRow({

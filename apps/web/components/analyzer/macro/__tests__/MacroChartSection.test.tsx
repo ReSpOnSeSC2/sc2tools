@@ -192,7 +192,7 @@ describe("Match timeline tabs and read-out", () => {
     return overlay;
   }
 
-  it("switches the plotted metric and the read-out with the tabs", () => {
+  it("switches the plotted metric and shows who leads on each", () => {
     render(
       <MacroChartSection
         gameId="tabs"
@@ -202,12 +202,19 @@ describe("Match timeline tabs and read-out", () => {
         gameLengthSec={300}
         myName="ReSpOnSe"
         oppName="Koht"
+        myRace="Protoss"
       />,
     );
-    // Before any inspection the read-out shows the end of the game.
+    // Before any inspection the read-out shows the end of the game, with
+    // your 625 army-value lead beside your number.
     expect(readout().textContent).toContain("5:00");
     expect(readout().textContent).toContain("3,025");
     expect(readout().textContent).toContain("2,400");
+    expect(readout().textContent).toContain("+625");
+    expect(screen.getByRole("group", { name: "Chart metric" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Army" }).getAttribute("aria-pressed"),
+    ).toBe("true");
 
     const workers = screen.getByRole("button", { name: "Workers" });
     fireEvent.click(workers);
@@ -220,17 +227,14 @@ describe("Match timeline tabs and read-out", () => {
     expect(readout().textContent).toContain("95/110");
     expect(readout().textContent).toContain("80/94");
 
-    fireEvent.click(screen.getByRole("button", { name: "Collection Rate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Income" }));
     expect(readout().textContent).toContain("1,500");
     expect(readout().textContent).toContain("1,350");
-
-    fireEvent.click(screen.getByRole("button", { name: "Income Advantage" }));
-    // You lead by 150 at the end; the lead is shown beside your number.
     expect(readout().textContent).toContain("+150");
-    tap(overlayOf(/^Income advantage/), 150);
+    tap(overlayOf(/^Income/), 150);
     const tooltip = screen.getByRole("status");
     expect(tooltip.textContent).toContain("2:30");
-    expect(tooltip.textContent).toContain("ReSpOnSe +200");
+    expect(tooltip.textContent).toContain("ReSpOnSe ahead by 200");
     expect(readout().textContent).toContain("locked");
   });
 
@@ -260,16 +264,15 @@ describe("Match timeline tabs and read-out", () => {
     );
     const chart = screen.getByRole("img", { name: /Army value/ });
     expect(chart.textContent).toContain("Supply Blocked");
-    const toggle = screen.getByRole("button", { name: "Supply Blocks" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    const toggle = screen.getByRole("switch", { name: "Show supply blocks" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(chart.textContent).not.toContain("Supply Blocked");
   });
 
-  it("disables the Supply Blocks toggle when nobody was blocked", () => {
+  it("offers no supply-block switch when nobody was blocked", () => {
     render(<TestPage />);
-    const toggle = screen.getByRole("button", { name: "Supply Blocks" }) as HTMLButtonElement;
-    expect(toggle.disabled).toBe(true);
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 });

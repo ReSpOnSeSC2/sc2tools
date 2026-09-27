@@ -75,22 +75,23 @@ corresponding GitHub Release.
 
 ### Fixed
 
-- **Macro breakdown timeline and roster, sc2replaystats style** — the chart is
-  now a match timeline with Army Value, Workers, Supply, Collection Rate and
-  Income Advantage tabs, you in blue and the opponent in red, labelled
-  "Supply Blocked" bands (with an on/off toggle), a dashed crosshair, a dark
-  tooltip and a Game time / you / opponent read-out underneath. It draws at the
-  real screen size, so it fills the width on phones and desktops without
-  stretched labels, and the desktop panel is wider. On phones the chart stays
-  pinned under the header while the unit roster scrolls beneath it, and a
-  sideways drag scrubs the chart while vertical drags still scroll the page.
-  Phones also get all six chart options in two rows and a roster of square
-  unit, building and upgrade icons with the count on the corner.
-  Upgrades no longer appear in the Units row as separate "1" chips for each
-  level: each upgrade line shows once in the Upgrades row at its level (1, 2 or
-  3), and one-off research has no number. After a lost final fight the roster
-  no longer lists units that already died when the army value is 0. Web-only;
-  existing games work without another agent release.
+- **Macro breakdown match timeline and roster** — the chart is now a match
+  timeline with a switch between army value, workers, supply and income
+  (shown with your race's in-game icons), you in blue and the opponent in red
+  with the gap between the lines shaded for whoever leads, labelled "Supply
+  Blocked" bands (with an on/off switch), a dashed crosshair, a dark tooltip,
+  and a Game time / you / opponent read-out with the leader's margin. It draws
+  at the real screen size, so it fills the width on phones and desktops
+  without stretched labels, and the desktop panel is wider. On phones the
+  chart stays pinned under the header while the unit roster scrolls beneath
+  it, the roster shows square unit, building and upgrade icons with the count
+  on the corner, and a sideways drag scrubs the chart while vertical drags
+  still scroll the page. Upgrades no longer appear in the Units row as
+  separate "1" chips for each level: each upgrade line shows once in the
+  Upgrades row at its level (1, 2 or 3), and one-off research has no number.
+  After a lost final fight the roster no longer lists units that already died
+  when the army value is 0. Web-only; existing games work without another
+  agent release.
 - **Replays no longer stay stuck in background sync** — agent **0.17.1**
   (`agent-v0.17.1`) syncs a recorded replay's game analysis even when its
   playback cannot be split into segments. Any playback already stored for the

@@ -263,6 +263,7 @@ function MacroPanel({
           gameLengthSec={gameLengthSec}
           leaks={leaks}
           highlightedKey={null}
+          myRace={myRace}
         />
       </Card>
       <Card padded>

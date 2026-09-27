@@ -19,9 +19,7 @@ import type {
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
 import {
-  advantageSeries,
   timelineMetric,
-  type AdvantagePoint,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
@@ -150,7 +148,7 @@ export interface ChartLayout {
   maxT: number;
   /** The metric being plotted. */
   metric: TimelineMetricDef;
-  /** Value range of the y axis (negative only for advantage metrics). */
+  /** Value range of the y axis. */
   yMin: number;
   yMax: number;
   /** Values that get a grid line and a label. */
@@ -162,12 +160,15 @@ export interface ChartLayout {
   /** One line per player (value metrics). */
   myPath: string;
   oppPath: string;
-  /** You minus the opponent (advantage metrics), with its zero line. */
-  advantage: AdvantagePoint[];
-  advantagePath: string;
-  /** ``advantagePath`` closed down to the zero line, for the fill. */
-  advantageArea: string;
-  zeroY: number;
+  /**
+   * Lead shading: the band between the two lines, and the regions above
+   * and below the opponent's line. Clipped to the region above, the band
+   * is where you lead; below, where the opponent does. Empty unless both
+   * players have a line.
+   */
+  leadArea: string;
+  oppAbove: string;
+  oppBelow: string;
   xTicks: number[];
   xTickLabels: XTickLabel[];
   /** Per-side, per-time data points keyed by time-second. */
@@ -342,18 +343,15 @@ export function buildLayout(
   const height = sizeOr(opts.height, DEFAULT_VIEW_H, 120);
   const innerW = width - PAD_LEFT - PAD_RIGHT;
   const innerH = height - PAD_TOP - PAD_BOTTOM;
-  const advantage = metric.advantage
-    ? advantageSeries(myArr, oppArr, metric.read)
-    : [];
-  const { yMin, yMax } = valueRange(metric, myArr.concat(oppArr), advantage);
+  const { yMin, yMax } = valueRange(metric, myArr.concat(oppArr));
   const xOf = (t: number) => PAD_LEFT + (t / maxT) * innerW;
   const yOf = (v: number) => PAD_TOP + (1 - (v - yMin) / (yMax - yMin)) * innerH;
   const tOfX = (px: number) => {
     const clamped = Math.max(PAD_LEFT, Math.min(PAD_LEFT + innerW, px));
     return ((clamped - PAD_LEFT) / innerW) * maxT;
   };
-  const zeroY = yOf(Math.max(yMin, Math.min(yMax, 0)));
-  const advantagePath = pathOf(advantage, (p) => p.value, xOf, yOf);
+  const myPts = plotPoints(myArr, metric.read, xOf, yOf);
+  const oppPts = plotPoints(oppArr, metric.read, xOf, yOf);
   const xTicks = computeXTicks(maxT);
   return {
     width,
@@ -372,12 +370,9 @@ export function buildLayout(
     xOf,
     yOf,
     tOfX,
-    myPath: metric.advantage ? "" : pathOf(myArr, metric.read, xOf, yOf),
-    oppPath: metric.advantage ? "" : pathOf(oppArr, metric.read, xOf, yOf),
-    advantage,
-    advantagePath,
-    advantageArea: closeDownTo(advantage, advantagePath, xOf, zeroY),
-    zeroY,
+    myPath: pathOf(myArr, metric.read, xOf, yOf),
+    oppPath: pathOf(oppArr, metric.read, xOf, yOf),
+    ...leadShading(myPts, oppPts, PAD_TOP, PAD_TOP + innerH),
     xTicks,
     xTickLabels: labelXTicks(xTicks, xOf),
     mySeries: myArr,
@@ -433,19 +428,12 @@ function sizeOr(v: number | undefined, fallback: number, min: number): number {
 
 /**
  * Y range for ``metric``: 0 up to a "nice" ceiling (200/400/600/800,
- * not 173/345/518/691 — sc2replaystats' calibration), or a symmetric
- * range around zero for an advantage metric.
+ * not 173/345/518/691), so the grid lines read as round values.
  */
 function valueRange(
   metric: TimelineMetricDef,
   points: SeriesPoint[],
-  advantage: AdvantagePoint[],
 ): { yMin: number; yMax: number } {
-  if (metric.advantage) {
-    const peak = advantage.reduce((m, p) => Math.max(m, Math.abs(p.value)), 0);
-    const bound = niceCeil(Math.max(peak, metric.floor));
-    return { yMin: -bound, yMax: bound };
-  }
   let peak = 0;
   for (const p of points) {
     const v = metric.read(p);
@@ -554,18 +542,47 @@ function pathOf<T extends { t: number }>(
   return out.trim();
 }
 
-/** ``path`` closed down to the ``zeroY`` baseline, for an area fill. */
-function closeDownTo(
-  points: AdvantagePoint[],
-  path: string,
+/** The samples of one line that have a value, in pixels. */
+function plotPoints(
+  series: SeriesPoint[],
+  read: (p: SeriesPoint) => number | null,
   xOf: (t: number) => number,
-  zeroY: number,
-): string {
-  if (points.length === 0 || !path) return "";
-  const first = xOf(points[0].t).toFixed(1);
-  const last = xOf(points[points.length - 1].t).toFixed(1);
-  const y = zeroY.toFixed(1);
-  return `${path} L${last},${y} L${first},${y} Z`;
+  yOf: (v: number) => number,
+): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const p of series) {
+    const v = read(p);
+    if (v != null && Number.isFinite(v)) out.push([xOf(p.t), yOf(v)]);
+  }
+  return out;
+}
+
+/**
+ * Geometry for shading who leads: the band between the two lines, plus
+ * the areas above and below the opponent's line that split it into
+ * "you lead" and "they lead" (the classic difference-chart clip).
+ */
+function leadShading(
+  my: Array<[number, number]>,
+  opp: Array<[number, number]>,
+  top: number,
+  bottom: number,
+): { leadArea: string; oppAbove: string; oppBelow: string } {
+  if (my.length < 2 || opp.length < 2) {
+    return { leadArea: "", oppAbove: "", oppBelow: "" };
+  }
+  const pt = ([x, y]: [number, number]) => `${x.toFixed(1)},${y.toFixed(1)}`;
+  const line = (pts: Array<[number, number]>) => pts.map(pt).join(" L");
+  const oppLine = line(opp);
+  const firstX = opp[0][0].toFixed(1);
+  const lastX = opp[opp.length - 1][0].toFixed(1);
+  const edge = (y: number) =>
+    `M${oppLine} L${lastX},${y.toFixed(1)} L${firstX},${y.toFixed(1)} Z`;
+  return {
+    leadArea: `M${line(my)} L${line([...opp].reverse())} Z`,
+    oppAbove: edge(top),
+    oppBelow: edge(bottom),
+  };
 }
 
 /**

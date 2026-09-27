@@ -1,65 +1,62 @@
 /**
- * The metrics behind the Match timeline tabs — the sc2replaystats
- * vocabulary (Army Value, Workers, Supply, Collection Rate, Income
- * Advantage). Pure data and number formatting; ``activeArmyLayout``
- * plots whichever metric is selected and the chart parts render it.
+ * The metrics behind the Match timeline switch: army value, workers,
+ * supply and income. Pure data and number formatting;
+ * ``activeArmyLayout`` plots whichever metric is selected and the chart
+ * parts render it.
  *
  * Only tracker ``PlayerStatsEvent`` fields the agent already uploads
- * are used, so every tab works on existing games. sc2replaystats'
- * "Resources Lost" is absent because the samples carry no loss totals.
+ * are used, so every metric works on existing games. Who leads, and by
+ * how much, is shown on every metric (shading between the lines and a
+ * margin beside the leader) rather than as a metric of its own.
  */
 
 import type { SeriesPoint } from "./activeArmyLayout";
 
-export type TimelineMetric =
-  | "army"
-  | "workers"
-  | "supply"
-  | "income"
-  | "incomeAdvantage";
+export type TimelineMetric = "army" | "workers" | "supply" | "income";
+
+type RaceLetter = "P" | "T" | "Z";
 
 export interface TimelineMetricDef {
   key: TimelineMetric;
-  /** Tab label. */
+  /** Switch label. */
   label: string;
+  /** Full name for assistive tech and the chart description. */
+  title: string;
   /** What the per-player number is, after the player's name. */
   caption: string;
   /** Per-player value at a sample; null when the payload lacks it. */
   read: (p: SeriesPoint) => number | null;
   /** Smallest axis maximum, so a quiet game still gets a sane scale. */
   floor: number;
-  /**
-   * Plot one signed line (you minus the opponent) instead of one line
-   * per player. ``read`` still gives each player's own number for the
-   * tooltip and the summary row.
-   */
-  advantage?: boolean;
   /** Per-player text for the tooltip and summary; defaults to ``read``. */
   describe?: (p: SeriesPoint) => string;
-}
-
-function income(p: SeriesPoint): number | null {
-  return typeof p.income === "number" ? p.income : null;
+  /** The in-game icon that stands for this metric, per race. */
+  icon: Record<RaceLetter, string>;
 }
 
 export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
   {
     key: "army",
-    label: "Army Value",
+    label: "Army",
+    title: "Army value",
     caption: "army value",
     read: (p) => p.army,
     floor: 200,
+    icon: { P: "Zealot", T: "Marine", Z: "Zergling" },
   },
   {
     key: "workers",
     label: "Workers",
+    title: "Workers",
     caption: "workers",
     read: (p) => p.workers,
     floor: 12,
+    icon: { P: "Probe", T: "SCV", Z: "Drone" },
   },
   {
     key: "supply",
     label: "Supply",
+    title: "Supply used",
     caption: "supply",
     read: (p) => (typeof p.supply === "number" ? p.supply : null),
     floor: 20,
@@ -69,21 +66,16 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
         : typeof p.supplyCap === "number" && p.supplyCap > 0
           ? `${Math.round(p.supply)}/${Math.round(p.supplyCap)}`
           : String(Math.round(p.supply)),
+    icon: { P: "Pylon", T: "SupplyDepot", Z: "Overlord" },
   },
   {
     key: "income",
-    label: "Collection Rate",
-    caption: "collection rate",
-    read: income,
+    label: "Income",
+    title: "Income (minerals and gas collected per minute)",
+    caption: "income",
+    read: (p) => (typeof p.income === "number" ? p.income : null),
     floor: 200,
-  },
-  {
-    key: "incomeAdvantage",
-    label: "Income Advantage",
-    caption: "collection rate",
-    read: income,
-    floor: 100,
-    advantage: true,
+    icon: { P: "Nexus", T: "CommandCenter", Z: "Hatchery" },
   },
 ];
 
@@ -91,6 +83,17 @@ export const DEFAULT_TIMELINE_METRIC: TimelineMetric = "army";
 
 export function timelineMetric(key: TimelineMetric): TimelineMetricDef {
   return TIMELINE_METRICS.find((m) => m.key === key) ?? TIMELINE_METRICS[0];
+}
+
+/** The metric's icon for a race ("Protoss", "P", …); null when unknown. */
+export function metricIcon(
+  metric: TimelineMetricDef,
+  race: string | null | undefined,
+): string | null {
+  const letter = (race || "").charAt(0).toUpperCase();
+  return letter === "P" || letter === "T" || letter === "Z"
+    ? metric.icon[letter]
+    : null;
 }
 
 /** Full-precision number for the tooltip and summary: "8,025". */
@@ -110,8 +113,23 @@ export function describeMetric(
 }
 
 /**
- * Compact axis label, sc2replaystats style: 750, 2.5k, 5.0k, 10k.
- * One decimal below ten thousand keeps quarter ticks distinct.
+ * Your value minus the opponent's (positive while you lead), rounded;
+ * null when either side has no value.
+ */
+export function metricLead(
+  metric: TimelineMetricDef,
+  my: SeriesPoint | null | undefined,
+  opp: SeriesPoint | null | undefined,
+): number | null {
+  const mine = my ? metric.read(my) : null;
+  const theirs = opp ? metric.read(opp) : null;
+  if (mine == null || theirs == null) return null;
+  return Math.round(mine - theirs);
+}
+
+/**
+ * Compact axis label: 750, 2.5k, 5.0k, 10k. One decimal below ten
+ * thousand keeps quarter ticks distinct.
  */
 export function formatAxisValue(v: number): string {
   if (!Number.isFinite(v)) return "";
@@ -122,39 +140,9 @@ export function formatAxisValue(v: number): string {
   return `${sign}${Math.round(abs)}`;
 }
 
-/** Signed difference for the advantage metric: "+350", "-120", "0". */
+/** Signed margin: "+350", "-120", "0". */
 export function formatSigned(v: number): string {
   const r = Math.round(v);
   if (r === 0) return "0";
   return `${r > 0 ? "+" : "-"}${Math.abs(r).toLocaleString()}`;
-}
-
-export interface AdvantagePoint {
-  t: number;
-  /** Your value minus the opponent's at ``t``. */
-  value: number;
-}
-
-/**
- * ``read(you) - read(opponent)`` at each of your samples. The opponent
- * is read at its latest sample at or before ``t`` (its first sample
- * before it has one), the same never-read-the-future rule the tooltip
- * and roster use. Both series are ascending by ``t``.
- */
-export function advantageSeries(
-  mySeries: SeriesPoint[],
-  oppSeries: SeriesPoint[],
-  read: (p: SeriesPoint) => number | null,
-): AdvantagePoint[] {
-  if (mySeries.length === 0 || oppSeries.length === 0) return [];
-  const out: AdvantagePoint[] = [];
-  let j = 0;
-  for (const p of mySeries) {
-    while (j + 1 < oppSeries.length && oppSeries[j + 1].t <= p.t) j++;
-    const mine = read(p);
-    const theirs = read(oppSeries[j]);
-    if (mine == null || theirs == null) continue;
-    out.push({ t: p.t, value: mine - theirs });
-  }
-  return out;
 }

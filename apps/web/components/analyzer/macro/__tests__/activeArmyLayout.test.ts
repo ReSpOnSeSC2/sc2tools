@@ -416,17 +416,22 @@ describe("buildLayout — metric tabs and measured size", () => {
     expect(layout.myPath.match(/M/g)).toHaveLength(2);
   });
 
-  it("centres the income advantage on zero and signs it you-minus-opponent", () => {
+  it("shades the gap between the lines, split at the opponent's line", () => {
     const my = [point(0, { income: 500 }), point(60, { income: 900 })];
     const opp = [point(0, { income: 700 }), point(60, { income: 600 })];
-    const layout = buildLayout(my, opp, 60, { metric: "incomeAdvantage" })!;
-    expect(layout.advantage.map((p) => p.value)).toEqual([-200, 300]);
-    expect(layout.yMin).toBe(-400);
-    expect(layout.yMax).toBe(400);
-    expect(layout.yTicks).toContain(0);
-    expect(layout.zeroY).toBeCloseTo((layout.plotTop + layout.plotBottom) / 2);
-    expect(layout.advantageArea.endsWith("Z")).toBe(true);
-    expect(layout.myPath).toBe("");
+    const layout = buildLayout(my, opp, 60, { metric: "income" })!;
+    // The band runs out along your line and back along the opponent's.
+    expect(layout.leadArea).toMatch(/^M.*Z$/);
+    expect(layout.leadArea.match(/L/g)).toHaveLength(3);
+    // Clipped above the opponent's line it is your lead; below, theirs.
+    expect(layout.oppAbove.endsWith(`,${layout.plotTop.toFixed(1)} Z`)).toBe(true);
+    expect(layout.oppBelow.endsWith(`,${layout.plotBottom.toFixed(1)} Z`)).toBe(true);
+  });
+
+  it("draws no lead shading until both players have a line", () => {
+    const layout = buildLayout([point(0), point(60, { army: 400 })], [], 60)!;
+    expect(layout.leadArea).toBe("");
+    expect(layout.oppAbove).toBe("");
   });
 
   it("keeps the game-end clock label and drops ticks that would collide", () => {

@@ -1,78 +1,87 @@
 "use client";
 
 /**
- * The Match timeline's controls and read-out, in sc2replaystats'
- * arrangement: a row of metric buttons plus the "Supply Blocks"
- * toggle above the chart, and a "Game time | you | opponent" strip
- * below it that always shows the inspected moment (or the game end).
+ * The Match timeline's controls and read-out: a segmented metric switch
+ * (army, workers, supply, income — each shown with your race's in-game
+ * icon) above the chart, and a "Game time | you | opponent" strip below
+ * it that always shows the inspected moment (or the game end), with the
+ * leader's margin beside their number.
  */
 
 import { Lock } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { formatGameClock } from "@/lib/macro";
 import type { SeriesPoint } from "./activeArmyLayout";
 import {
   TIMELINE_METRICS,
   describeMetric,
   formatSigned,
-  type AdvantagePoint,
+  metricIcon,
+  metricLead,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
 
-// Phones: equal cells in a 3 x 2 grid, labels allowed to wrap on the
-// narrowest screens. From sm up: a single wrapping row of buttons.
-const SEGMENT_BASE =
-  "inline-flex min-h-8 items-center justify-center rounded-md border px-1.5 py-1 text-center text-micro font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:flex-shrink-0 sm:whitespace-nowrap sm:px-2.5 sm:py-0 sm:text-caption";
-const SEGMENT_ON = "border-text bg-text text-bg";
-const SEGMENT_OFF =
-  "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text";
-
-export function MetricTabs({
+/**
+ * One rounded track with a sliding highlight behind the chosen metric.
+ * Full width on phones (four equal segments), sized to its labels from
+ * ``sm`` up.
+ */
+export function MetricSwitch({
   metric,
   onMetric,
-  showBlocks,
-  onToggleBlocks,
-  blocksAvailable,
+  race,
 }: {
   metric: TimelineMetric;
   onMetric: (next: TimelineMetric) => void;
-  showBlocks: boolean;
-  onToggleBlocks: () => void;
-  /** False when neither player has a recorded supply block. */
-  blocksAvailable: boolean;
+  /** Your race, for the icons; they are left out when it is unknown. */
+  race?: string | null;
 }) {
+  const index = Math.max(
+    0,
+    TIMELINE_METRICS.findIndex((m) => m.key === metric),
+  );
   return (
-    // Every option visible on a phone (no swiping to find Supply Blocks),
-    // in two compact rows like sc2replaystats.
     <div
       role="group"
-      aria-label="Chart view"
-      className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center"
+      aria-label="Chart metric"
+      className="relative grid grid-cols-4 rounded-full border border-border bg-bg-subtle p-1 sm:inline-grid"
     >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-full bg-accent shadow-sm transition-transform duration-200"
+        style={{
+          width: `calc((100% - 0.5rem) / ${TIMELINE_METRICS.length})`,
+          transform: `translateX(${index * 100}%)`,
+        }}
+      />
       {TIMELINE_METRICS.map((m) => {
         const on = m.key === metric;
+        const icon = metricIcon(m, race);
         return (
           <button
             key={m.key}
             type="button"
             aria-pressed={on}
+            title={m.title}
             onClick={() => onMetric(m.key)}
-            className={`${SEGMENT_BASE} ${on ? SEGMENT_ON : SEGMENT_OFF}`}
+            className={`relative flex h-8 min-w-0 items-center justify-center gap-1 rounded-full px-1 text-micro font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:gap-1.5 sm:px-4 sm:text-caption ${
+              on ? "text-white" : "text-text-muted hover:text-text"
+            }`}
           >
-            {m.label}
+            {icon ? (
+              <Icon
+                name={icon}
+                size={18}
+                decorative
+                // The labels need the room on the narrowest phones.
+                className={`rounded-[3px] max-[359px]:hidden ${on ? "" : "opacity-80"}`}
+              />
+            ) : null}
+            <span className="truncate">{m.label}</span>
           </button>
         );
       })}
-      <button
-        type="button"
-        aria-pressed={blocksAvailable && showBlocks}
-        disabled={!blocksAvailable}
-        onClick={onToggleBlocks}
-        title={blocksAvailable ? undefined : "No supply blocks in this game"}
-        className={`${SEGMENT_BASE} ${blocksAvailable && showBlocks ? SEGMENT_ON : SEGMENT_OFF}`}
-      >
-        Supply Blocks
-      </button>
     </div>
   );
 }
@@ -83,7 +92,6 @@ export function TimelineSummary({
   locked,
   my,
   opp,
-  advantage,
   myName,
   oppName,
 }: {
@@ -94,11 +102,10 @@ export function TimelineSummary({
   locked: boolean;
   my: SeriesPoint | null;
   opp: SeriesPoint | null;
-  advantage: AdvantagePoint | null;
   myName: string;
   oppName: string;
 }) {
-  const lead = metric.advantage && advantage ? Math.round(advantage.value) : 0;
+  const lead = metricLead(metric, my, opp) ?? 0;
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-border border-y border-border">
       <div className="px-3 py-1.5">
@@ -146,7 +153,7 @@ function PlayerCell({
   name: string;
   caption: string;
   value: string;
-  /** How far ahead this player is (advantage metrics), else 0. */
+  /** How far ahead this player is on the metric, else 0. */
   lead: number;
   tone: string;
 }) {
@@ -154,15 +161,21 @@ function PlayerCell({
     <div className="min-w-0 px-3 py-1.5">
       <dt className="truncate text-micro text-text-muted">
         <span className="font-semibold text-text">{name}</span>
-        {/* The pressed tab already names the metric on a phone. */}
+        {/* The chosen metric is already on the switch on a phone. */}
         <span className="sr-only sm:not-sr-only sm:whitespace-nowrap"> {caption}</span>
       </dt>
       <dd className={`flex items-baseline gap-1.5 text-h4 font-bold tabular-nums ${tone}`}>
         <span className="truncate">{value}</span>
         {lead > 0 ? (
-          <span className="text-micro font-semibold">{formatSigned(lead)}</span>
+          <span
+            className="text-micro font-semibold"
+            title={`${name} leads by ${lead.toLocaleString()}`}
+          >
+            {formatSigned(lead)}
+          </span>
         ) : null}
       </dd>
     </div>
   );
 }
+
