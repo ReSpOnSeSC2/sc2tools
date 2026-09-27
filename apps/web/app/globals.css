@@ -63,6 +63,12 @@
   --warning: 232 156 56;      /* #e89c38 — nudged orange so it stays distinct from amber signal */
   --danger: 255 107 107;      /* #ff6b6b */
 
+  /* Player-vs-player series (macro timeline + roster): you blue,
+     opponent red, the same pairing as the in-game team colours and the
+     roster's unit renders. */
+  --player-you: 96 146 255;   /* #6092ff */
+  --player-opp: 255 99 99;    /* #ff6363 */
+
   --border: 28 36 49;         /* #1c2431 */
   --border-strong: 44 56 72;  /* #2c3848 */
 
@@ -118,6 +124,9 @@
   --success: 28 156 86;       /* #1c9c56 */
   --warning: 176 118 24;      /* #b07618 */
   --danger: 210 68 73;        /* #d24449 */
+
+  --player-you: 37 99 235;    /* #2563eb */
+  --player-opp: 214 40 57;    /* #d62839 */
 
   --border: 221 226 236;      /* #dde2ec */
   --border-strong: 197 205 221;/* #c5cddd */

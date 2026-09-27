@@ -457,6 +457,50 @@ describe("deriveBuildingComposition — death-aware Buildings roster", () => {
   });
 });
 
+describe("upgrades stay out of the Units row", () => {
+  // Regression: the build-order path counted research as units, so a
+  // Protoss roster read "Warp Gate 1, Charge 1, Weapons 1, Weapons 1,
+  // Weapons 1, Shields 1, Shields 1, Shields 1" among the Stalkers.
+  const events: BuildEvent[] = [
+    { time: 60, name: "Stalker", is_building: false, category: "army" },
+    { time: 100, complete_time: 200, name: "WarpGateResearch", is_building: false, category: "upgrade" },
+    { time: 300, name: "ProtossGroundWeaponsLevel1", is_building: false, category: "upgrade" },
+    { time: 500, name: "ProtossGroundWeaponsLevel2", is_building: false, category: "upgrade" },
+    { time: 700, name: "ProtossGroundWeaponsLevel3", is_building: false, category: "upgrade" },
+    // Catalog miss: the parser tagged these "unknown", but the names are
+    // unmistakably research.
+    { time: 400, name: "Charge", is_building: false, category: "unknown" },
+    { time: 800, name: "ProtossShieldsLevel2", is_building: false },
+  ];
+
+  it("buildOrderUnitsAt counts only the units", () => {
+    expect(buildOrderUnitsAt(events, 9999)).toEqual({ Stalker: 1 });
+  });
+
+  it("keeps research out of the hybrid build-order + deaths composition", () => {
+    const timeline: UnitTimelineEntry[] = [
+      { time: 0, my: {}, opp: { Zealot: 1 } },
+      { time: 900, my: {}, opp: { Zealot: 1 } },
+    ];
+    const derived = deriveUnitComposition({
+      timeline,
+      buildEvents: events,
+      side: "my",
+      t: 900,
+    });
+    expect(derived.units).toEqual({ Stalker: 1 });
+  });
+
+  it("shows every upgrade line once, at its level, in the Upgrades row", () => {
+    expect(countUpgradesAt(events, 9999)).toEqual({
+      WarpGateResearch: 1,
+      ProtossGroundWeaponsLevel3: 3,
+      Charge: 1,
+      ProtossShieldsLevel2: 2,
+    });
+  });
+});
+
 describe("countUpgradesAt — Upgrades row", () => {
   it("counts only entries tagged ``category: upgrade``", () => {
     const events: BuildEvent[] = [

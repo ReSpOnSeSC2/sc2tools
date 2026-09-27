@@ -38,6 +38,7 @@
  * and are not handled here.
  */
 
+import { iconKindOf } from "@/lib/sc2-icons";
 import { isBuildingUnit, isWorkerUnit } from "@/lib/sc2-units";
 import type {
   ProductionBuildingRecord,
@@ -283,6 +284,10 @@ export function buildOrderUnitsAt(
     if (!ev || ev.is_building) continue;
     const time = Number(ev.time) || 0;
     if (time > t) break;
+    // Research is not a unit. Counting it here put every upgrade level
+    // in the Units row as its own "1" chip (Weapons 1, 2 and 3 as three
+    // chips); the Upgrades row shows it once, at its level.
+    if (isUpgradeEvent(ev)) continue;
     const rawName = ev.name || ev.display || "";
     if (!rawName) continue;
     const canonical = canonicalizeName(rawName);
@@ -505,12 +510,24 @@ const BUILDING_MORPH_PARENT: Record<string, string> = {
 
 /**
  * Upgrade categories the build-order parser tags. The agent's catalog
- * marks every research event with ``category: "upgrade"`` so we can
- * filter the upgrade row from the build-event stream without a
- * separate name list. Empty string is permitted — older payloads
- * occasionally lack the field; in that case we conservatively skip.
+ * marks every research event with ``category: "upgrade"``. Older
+ * payloads occasionally lack the field; ``isUpgradeEvent`` then falls
+ * back to the icon registry's upgrade names.
  */
 const UPGRADE_CATEGORY = "upgrade";
+
+/**
+ * True for a research event. A catalog ``category`` is authoritative;
+ * only entries without one (or tagged ``unknown`` after a failed
+ * catalog lookup) fall back to the name, so every event lands in
+ * exactly one of the Units and Upgrades rows.
+ */
+export function isUpgradeEvent(ev: BuildEvent): boolean {
+  const category = (ev.category || "").toLowerCase();
+  if (category === UPGRADE_CATEGORY) return true;
+  if (category && category !== "unknown") return false;
+  return iconKindOf(ev.name || ev.display || "") === "upgrade";
+}
 
 /**
  * Reduce a build-order timeline into ``{name: count}`` for buildings
@@ -776,7 +793,7 @@ export function countUpgradesAt(
   for (const ev of events) {
     if (!ev) continue;
     if (ev.is_building) continue;
-    if ((ev.category || "").toLowerCase() !== UPGRADE_CATEGORY) continue;
+    if (!isUpgradeEvent(ev)) continue;
     const time = Number(ev.complete_time ?? ev.time) || 0;
     if (time > t) continue;
     const raw = ev.name || ev.display || "";

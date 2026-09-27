@@ -52,6 +52,11 @@ const config: Config = {
         success: channel("--success"),
         warning: channel("--warning"),
         danger: channel("--danger"),
+        // Head-to-head series colours: you (blue) vs opponent (red).
+        player: {
+          you: channel("--player-you"),
+          opp: channel("--player-opp"),
+        },
         race: {
           protoss: channel("--race-protoss"),
           terran: channel("--race-terran"),

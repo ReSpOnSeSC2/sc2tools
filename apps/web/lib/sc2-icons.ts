@@ -408,6 +408,17 @@ export function getIconPath(name: string, kind?: IconKind): string | null {
   return `${ICON_BASE}/${rel}`;
 }
 
+/**
+ * What kind of entity a name resolves to in the icon registry
+ * ("unit", "building", "upgrade", …), or null when it is unknown.
+ * Lets callers tell a research event from a unit by name alone, for
+ * payloads whose build-order entries lack a category.
+ */
+export function iconKindOf(name: string): IconKind | null {
+  if (!name) return null;
+  return lookupKind(normalizeIconName(name))?.kind ?? null;
+}
+
 export function resolveRaceIcon(input: string): string | null {
   if (!input) return null;
   const trimmed = String(input).trim();

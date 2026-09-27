@@ -1,5 +1,5 @@
 /**
- * Pure layout + projection helpers for the Active Army & Workers chart.
+ * Pure layout + projection helpers for the Match timeline chart.
  *
  * Keeping these out of ActiveArmyChart.tsx lets the chart component
  * stay under the 800-line cap and keeps the math unit-testable
@@ -7,6 +7,7 @@
  * the DOM — every function is a deterministic data transform.
  */
 
+import { formatGameClock } from "@/lib/macro";
 import { computeArmyValue } from "@/lib/sc2-units";
 import {
   deriveUnitComposition,
@@ -17,13 +18,31 @@ import type {
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
+import {
+  advantageSeries,
+  timelineMetric,
+  type AdvantagePoint,
+  type TimelineMetric,
+  type TimelineMetricDef,
+} from "./timelineMetrics";
 
-export const VIEW_W = 720;
-export const VIEW_H = 240;
-export const PAD_LEFT = 44;
-export const PAD_RIGHT = 44;
-export const PAD_TOP = 16;
-export const PAD_BOTTOM = 28;
+/**
+ * Drawing size before the chart has measured its box (server render,
+ * first paint). After that the SVG is laid out at its real pixel size,
+ * so labels are never stretched.
+ */
+export const DEFAULT_VIEW_W = 720;
+export const DEFAULT_VIEW_H = 260;
+/** Room for the compact y labels ("7.5k", "-1.5k"). */
+export const PAD_LEFT = 40;
+export const PAD_RIGHT = 14;
+export const PAD_TOP = 10;
+/** Room for the clock labels under the plot. */
+export const PAD_BOTTOM = 24;
+/** Approximate width of one 11px axis-label character, for collisions. */
+const AXIS_CHAR_PX = 6.4;
+/** Clear space kept between neighbouring clock labels. */
+const AXIS_LABEL_GAP_PX = 8;
 /**
  * Last-resort fallback for slim payloads that ship neither
  * ``army_value`` (agent v0.5.11+) nor ``unit_timeline`` / ``buildLog``
@@ -46,14 +65,13 @@ export const FOOD_FALLBACK_MULT = 50;
  * of parallel Larva morphs).
  */
 export const ARMY_FALLBACK_CAP = 9000;
-export const ARMY_FLOOR = 200;
-export const WORKER_FLOOR = 12;
 /**
  * Lower bound for the X-axis when a game length is unavailable AND no
  * samples were extracted (very-short replays or slim payloads). Keeps
  * the empty-state chart legible.
  */
 export const MIN_AXIS_SECONDS = 60;
+/** Horizontal grid lines, as fractions of the value range. */
 export const Y_TICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
 /**
@@ -104,6 +122,19 @@ export interface SeriesPoint {
   units: Record<string, number>;
   /** Provenance of ``units`` (timeline / hybrid / build_order / empty). */
   unitsSource: CompositionSource;
+  /** Supply used (``food_used``); absent when the sample lacks it. */
+  supply?: number;
+  /** Supply cap (``food_made``). */
+  supplyCap?: number;
+  /** Minerals + gas collected per minute (the collection rate). */
+  income?: number;
+}
+
+/** One clock label under the plot, already placed and de-collided. */
+export interface XTickLabel {
+  t: number;
+  x: number;
+  anchor: "middle" | "end";
 }
 
 export interface ChartLayout {
@@ -117,21 +148,38 @@ export interface ChartLayout {
   plotRight: number;
   plotBottom: number;
   maxT: number;
-  armyMax: number;
-  workerMax: number;
+  /** The metric being plotted. */
+  metric: TimelineMetricDef;
+  /** Value range of the y axis (negative only for advantage metrics). */
+  yMin: number;
+  yMax: number;
+  /** Values that get a grid line and a label. */
+  yTicks: number[];
   xOf: (t: number) => number;
-  yArmy: (a: number) => number;
-  yWorker: (w: number) => number;
+  yOf: (v: number) => number;
   /** Inverse of xOf — maps pixel x back to game-time seconds. */
   tOfX: (px: number) => number;
-  myArmy: string;
-  myWorker: string;
-  oppArmy: string;
-  oppWorker: string;
+  /** One line per player (value metrics). */
+  myPath: string;
+  oppPath: string;
+  /** You minus the opponent (advantage metrics), with its zero line. */
+  advantage: AdvantagePoint[];
+  advantagePath: string;
+  /** ``advantagePath`` closed down to the zero line, for the fill. */
+  advantageArea: string;
+  zeroY: number;
   xTicks: number[];
+  xTickLabels: XTickLabel[];
   /** Per-side, per-time data points keyed by time-second. */
   mySeries: SeriesPoint[];
   oppSeries: SeriesPoint[];
+}
+
+export interface LayoutOptions {
+  metric?: TimelineMetric;
+  /** Measured drawing size in CSS pixels. */
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -172,17 +220,25 @@ export function buildSeries(
   buildEvents?: BuildEvent[] | undefined,
 ): SeriesPoint[] {
   if (!Array.isArray(samples) || samples.length === 0) return [];
+  const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
   const out: SeriesPoint[] = [];
   for (const sample of samples) {
     const t = Math.round(Number(sample.time) || 0);
     const workers = Number(sample.food_workers) || 0;
-    const derived = deriveUnitComposition({
+    const stats = sampleArmyValue(sample);
+    let derived = deriveUnitComposition({
       timeline: unitTimeline,
       buildEvents,
       side,
       t,
     });
-    const stats = sampleArmyValue(sample);
+    if (stats === 0 && hasTimeline && derived.source !== "timeline") {
+      // sc2reader's army value and the tracker timeline both say no army
+      // is alive. The build-order fallback cannot see units that died
+      // between samples, so after a lost fight it listed an army (17
+      // Stalkers under "Army 0"). Two independent sources win.
+      derived = { units: {}, source: "timeline" };
+    }
     let army: number;
     let armySource: ArmySource;
     if (stats != null) {
@@ -221,7 +277,27 @@ export function buildSeries(
       armySource,
       units: derived.units,
       unitsSource: derived.source,
+      ...economyFields(sample),
     });
+  }
+  return out;
+}
+
+/** Supply and collection rate off a stats sample, when it carries them. */
+function economyFields(
+  sample: StatsEvent,
+): Pick<SeriesPoint, "supply" | "supplyCap" | "income"> {
+  const out: Pick<SeriesPoint, "supply" | "supplyCap" | "income"> = {};
+  const num = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const used = num(sample.food_used);
+  const cap = num(sample.food_made);
+  const minerals = num(sample.minerals_collection_rate);
+  const gas = num(sample.vespene_collection_rate);
+  if (used !== undefined) out.supply = used;
+  if (cap !== undefined) out.supplyCap = cap;
+  if (minerals !== undefined || gas !== undefined) {
+    out.income = (minerals ?? 0) + (gas ?? 0);
   }
   return out;
 }
@@ -239,7 +315,7 @@ function sampleArmyValue(sample: StatsEvent): number | null {
 }
 
 /**
- * Build the unified chart layout from a PRE-BUILT pair of series.
+ * Build the chart layout for one metric from a PRE-BUILT pair of series.
  *
  * Why the series come in pre-built rather than being constructed here:
  * the roster panel beneath the chart needs the SAME SeriesPoint at
@@ -247,16 +323,80 @@ function sampleArmyValue(sample: StatsEvent): number | null {
  * cannot diverge. The parent (``MacroChartSection``) builds the
  * series once via ``buildSeries`` and threads the result to both
  * children.
+ *
+ * ``opts.width`` / ``opts.height`` are the chart's measured CSS size:
+ * the SVG is drawn 1:1 in pixels so text and strokes are never
+ * stretched, whatever the screen.
  */
 export function buildLayout(
   mySeries: SeriesPoint[],
   oppSeries: SeriesPoint[],
   gameLengthSec: number | undefined,
+  opts: LayoutOptions = {},
 ): ChartLayout | null {
+  const clipped = clipToGame(mySeries, oppSeries, gameLengthSec);
+  if (!clipped) return null;
+  const { maxT, myArr, oppArr } = clipped;
+  const metric = timelineMetric(opts.metric ?? "army");
+  const width = sizeOr(opts.width, DEFAULT_VIEW_W, 160);
+  const height = sizeOr(opts.height, DEFAULT_VIEW_H, 120);
+  const innerW = width - PAD_LEFT - PAD_RIGHT;
+  const innerH = height - PAD_TOP - PAD_BOTTOM;
+  const advantage = metric.advantage
+    ? advantageSeries(myArr, oppArr, metric.read)
+    : [];
+  const { yMin, yMax } = valueRange(metric, myArr.concat(oppArr), advantage);
+  const xOf = (t: number) => PAD_LEFT + (t / maxT) * innerW;
+  const yOf = (v: number) => PAD_TOP + (1 - (v - yMin) / (yMax - yMin)) * innerH;
+  const tOfX = (px: number) => {
+    const clamped = Math.max(PAD_LEFT, Math.min(PAD_LEFT + innerW, px));
+    return ((clamped - PAD_LEFT) / innerW) * maxT;
+  };
+  const zeroY = yOf(Math.max(yMin, Math.min(yMax, 0)));
+  const advantagePath = pathOf(advantage, (p) => p.value, xOf, yOf);
+  const xTicks = computeXTicks(maxT);
+  return {
+    width,
+    height,
+    innerW,
+    innerH,
+    plotLeft: PAD_LEFT,
+    plotTop: PAD_TOP,
+    plotRight: PAD_LEFT + innerW,
+    plotBottom: PAD_TOP + innerH,
+    maxT,
+    metric,
+    yMin,
+    yMax,
+    yTicks: Y_TICK_FRACTIONS.map((f) => yMin + f * (yMax - yMin)),
+    xOf,
+    yOf,
+    tOfX,
+    myPath: metric.advantage ? "" : pathOf(myArr, metric.read, xOf, yOf),
+    oppPath: metric.advantage ? "" : pathOf(oppArr, metric.read, xOf, yOf),
+    advantage,
+    advantagePath,
+    advantageArea: closeDownTo(advantage, advantagePath, xOf, zeroY),
+    zeroY,
+    xTicks,
+    xTickLabels: labelXTicks(xTicks, xOf),
+    mySeries: myArr,
+    oppSeries: oppArr,
+  };
+}
+
+/**
+ * The time axis and the samples that fall on it. Returns null when
+ * neither side has a sample.
+ */
+function clipToGame(
+  mySeries: SeriesPoint[],
+  oppSeries: SeriesPoint[],
+  gameLengthSec: number | undefined,
+): { maxT: number; myArr: SeriesPoint[]; oppArr: SeriesPoint[] } | null {
   const myArrRaw = Array.isArray(mySeries) ? mySeries : [];
   const oppArrRaw = Array.isArray(oppSeries) ? oppSeries : [];
   if (myArrRaw.length === 0 && oppArrRaw.length === 0) return null;
-
   const observedT = Math.max(
     myArrRaw.reduce((m, p) => Math.max(m, p.t), 0),
     oppArrRaw.reduce((m, p) => Math.max(m, p.t), 0),
@@ -269,77 +409,73 @@ export function buildLayout(
   // metadata) we fall back to the latest observed sample, floored to
   // MIN_AXIS_SECONDS so a 12-second test-replay still draws an axis.
   const lengthFromMeta = Number(gameLengthSec) || 0;
-  const maxT =
-    lengthFromMeta > 0
-      ? lengthFromMeta
-      : Math.max(observedT, MIN_AXIS_SECONDS);
-
+  if (lengthFromMeta <= 0) {
+    return {
+      maxT: Math.max(observedT, MIN_AXIS_SECONDS),
+      myArr: myArrRaw,
+      oppArr: oppArrRaw,
+    };
+  }
   // Drop any samples that landed past the authoritative game end (can
   // happen when sc2reader's stat tick fires inside the post-game grace
-  // period). Without this, the line would continue past plotRight and
-  // the SVG would draw it outside the plot area on browsers that don't
-  // honour the implicit viewBox clip.
-  const myArr =
-    lengthFromMeta > 0
-      ? myArrRaw.filter((p) => p.t <= maxT)
-      : myArrRaw;
-  const oppArr =
-    lengthFromMeta > 0
-      ? oppArrRaw.filter((p) => p.t <= maxT)
-      : oppArrRaw;
-  const allSeries = myArr.concat(oppArr);
-  const armyVals = allSeries.map((p) => p.army);
-  const workerVals = allSeries.map((p) => p.workers);
-  const armyPeak = Math.max(
-    armyVals.length ? Math.max(...armyVals) : 0,
-    ARMY_FLOOR,
-  );
-  const workerPeak = Math.max(
-    workerVals.length ? Math.max(...workerVals) : 0,
-    WORKER_FLOOR,
-  );
-  // Round axis maxima up to a "nice" number so the four Y-tick labels
-  // read as round values (200/400/600/800 instead of 173/345/518/691).
-  // Matches sc2replaystats's chart calibration.
-  const armyMax = niceCeil(armyPeak);
-  const workerMax = niceCeil(workerPeak);
-
-  const innerW = VIEW_W - PAD_LEFT - PAD_RIGHT;
-  const innerH = VIEW_H - PAD_TOP - PAD_BOTTOM;
-  const xOf = (t: number) => PAD_LEFT + (t / maxT) * innerW;
-  const yArmy = (a: number) => PAD_TOP + (1 - a / armyMax) * innerH;
-  const yWorker = (w: number) => PAD_TOP + (1 - w / workerMax) * innerH;
-  const tOfX = (px: number) => {
-    const clamped = Math.max(PAD_LEFT, Math.min(PAD_LEFT + innerW, px));
-    return ((clamped - PAD_LEFT) / innerW) * maxT;
-  };
-
-  const xTicks = computeXTicks(maxT);
-
+  // period), so no line runs past the right edge of the plot.
   return {
-    width: VIEW_W,
-    height: VIEW_H,
-    innerW,
-    innerH,
-    plotLeft: PAD_LEFT,
-    plotTop: PAD_TOP,
-    plotRight: VIEW_W - PAD_RIGHT,
-    plotBottom: PAD_TOP + innerH,
-    maxT,
-    armyMax,
-    workerMax,
-    xOf,
-    yArmy,
-    yWorker,
-    tOfX,
-    myArmy: pathFor(myArr, xOf, yArmy, "army"),
-    myWorker: pathFor(myArr, xOf, yWorker, "workers"),
-    oppArmy: pathFor(oppArr, xOf, yArmy, "army"),
-    oppWorker: pathFor(oppArr, xOf, yWorker, "workers"),
-    xTicks,
-    mySeries: myArr,
-    oppSeries: oppArr,
+    maxT: lengthFromMeta,
+    myArr: myArrRaw.filter((p) => p.t <= lengthFromMeta),
+    oppArr: oppArrRaw.filter((p) => p.t <= lengthFromMeta),
   };
+}
+
+function sizeOr(v: number | undefined, fallback: number, min: number): number {
+  const n = typeof v === "number" && Number.isFinite(v) && v > 0 ? v : fallback;
+  return Math.max(min, n);
+}
+
+/**
+ * Y range for ``metric``: 0 up to a "nice" ceiling (200/400/600/800,
+ * not 173/345/518/691 — sc2replaystats' calibration), or a symmetric
+ * range around zero for an advantage metric.
+ */
+function valueRange(
+  metric: TimelineMetricDef,
+  points: SeriesPoint[],
+  advantage: AdvantagePoint[],
+): { yMin: number; yMax: number } {
+  if (metric.advantage) {
+    const peak = advantage.reduce((m, p) => Math.max(m, Math.abs(p.value)), 0);
+    const bound = niceCeil(Math.max(peak, metric.floor));
+    return { yMin: -bound, yMax: bound };
+  }
+  let peak = 0;
+  for (const p of points) {
+    const v = metric.read(p);
+    if (v != null && Number.isFinite(v) && v > peak) peak = v;
+  }
+  return { yMin: 0, yMax: niceCeil(Math.max(peak, metric.floor)) };
+}
+
+/**
+ * The clock labels that fit: the game-end label is kept (right-aligned
+ * to the plot edge) and earlier ticks are dropped where they would
+ * touch their neighbour on a narrow screen.
+ */
+function labelXTicks(
+  ticks: number[],
+  xOf: (t: number) => number,
+): XTickLabel[] {
+  if (ticks.length === 0) return [];
+  const width = (t: number) => formatGameClock(t).length * AXIS_CHAR_PX;
+  const end = ticks[ticks.length - 1];
+  const kept: XTickLabel[] = [{ t: end, x: xOf(end), anchor: "end" }];
+  let leftEdge = xOf(end) - width(end);
+  for (let i = ticks.length - 2; i >= 0; i--) {
+    const x = xOf(ticks[i]);
+    const half = width(ticks[i]) / 2;
+    if (x + half + AXIS_LABEL_GAP_PX > leftEdge) continue;
+    kept.unshift({ t: ticks[i], x, anchor: "middle" });
+    leftEdge = x - half;
+  }
+  return kept;
 }
 
 /**
@@ -394,20 +530,42 @@ function pickXTickStep(maxT: number): number {
   return 600;                       //  >30 min → 10 m
 }
 
-function pathFor(
-  series: SeriesPoint[],
+/**
+ * Polyline through ``points``. A sample without a value lifts the pen
+ * rather than dropping the line to zero.
+ */
+function pathOf<T extends { t: number }>(
+  points: T[],
+  read: (p: T) => number | null,
   xOf: (t: number) => number,
   yOf: (v: number) => number,
-  field: "army" | "workers",
 ): string {
-  if (series.length === 0) return "";
   let out = "";
-  for (let i = 0; i < series.length; i++) {
-    const p = series[i];
-    const cmd = i === 0 ? "M" : "L";
-    out += `${cmd}${xOf(p.t).toFixed(1)},${yOf(p[field]).toFixed(1)} `;
+  let penDown = false;
+  for (const p of points) {
+    const v = read(p);
+    if (v == null || !Number.isFinite(v)) {
+      penDown = false;
+      continue;
+    }
+    out += `${penDown ? "L" : "M"}${xOf(p.t).toFixed(1)},${yOf(v).toFixed(1)} `;
+    penDown = true;
   }
   return out.trim();
+}
+
+/** ``path`` closed down to the ``zeroY`` baseline, for an area fill. */
+function closeDownTo(
+  points: AdvantagePoint[],
+  path: string,
+  xOf: (t: number) => number,
+  zeroY: number,
+): string {
+  if (points.length === 0 || !path) return "";
+  const first = xOf(points[0].t).toFixed(1);
+  const last = xOf(points[points.length - 1].t).toFixed(1);
+  const y = zeroY.toFixed(1);
+  return `${path} L${last},${y} L${first},${y} Z`;
 }
 
 /**
@@ -419,8 +577,8 @@ function pathFor(
  *   niceCeil(518) → 600; niceCeil(2487) → 2500.
  *
  * The returned value is always >= the input. Zero or negative inputs
- * snap to the input unchanged (callers floor to ARMY_FLOOR before
- * calling so this branch is unreachable in practice).
+ * snap to the input unchanged (callers floor to the metric's axis
+ * floor before calling so this branch is unreachable in practice).
  *
  * Exported for unit tests.
  */

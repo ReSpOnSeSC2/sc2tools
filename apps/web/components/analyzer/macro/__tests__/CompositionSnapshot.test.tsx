@@ -44,6 +44,7 @@ const BUILD_ORDER = {
       name: "ProtossGroundWeaponsLevel3",
       category: "upgrade",
     },
+    { time: 320, complete_time: 420, name: "Charge", category: "upgrade" },
   ],
   opp_events: [],
 };
@@ -89,6 +90,12 @@ describe("CompositionSnapshot chips", () => {
       name: "Protoss Ground Weapons — Level 3",
     });
     expect(chip.textContent).toContain("3");
+  });
+
+  it("shows no number on a one-off research, which has no level", () => {
+    renderSnapshot();
+    const chip = screen.getByRole("button", { name: "Charge — Researched" });
+    expect(chip.textContent).not.toMatch(/\d/);
   });
 
   it("opens a dialog naming the unit, with its cost", () => {

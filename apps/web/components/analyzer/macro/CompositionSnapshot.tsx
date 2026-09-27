@@ -394,9 +394,9 @@ function PlayerStrip({
   );
   const accentClass =
     side === "me"
-      ? "border-success/50 bg-success/[0.04]"
-      : "border-danger/50 bg-danger/[0.04]";
-  const labelTone = side === "me" ? "text-success" : "text-danger";
+      ? "border-player-you/50 bg-player-you/[0.04]"
+      : "border-player-opp/50 bg-player-opp/[0.04]";
+  const labelTone = side === "me" ? "text-player-you" : "text-player-opp";
 
   return (
     <section
@@ -685,6 +685,9 @@ function UnitChip({
         ? "bg-bg-elevated/80 ring-1 ring-accent/30"
         : "bg-bg-elevated";
   const label = chipLabel(name, kind, count);
+  // Upgrades show their level (1, 2 or 3) as the number, one chip per
+  // upgrade line; a one-off research (Charge, Blink) has no level to show.
+  const countText = kind === "upgrade" ? upgradeDisplayTier(name) : count;
   return (
     <button
       type="button"
@@ -709,7 +712,9 @@ function UnitChip({
       }
     >
       <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} />
-      <span className="font-semibold">{count}</span>
+      {countText != null ? (
+        <span className="font-semibold">{countText}</span>
+      ) : null}
     </button>
   );
 }
@@ -763,7 +768,7 @@ function ChipDetailDialog({
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-5">
         <div
           className={`flex h-40 w-40 shrink-0 items-center justify-center rounded-lg border ${
-            side === "me" ? "border-success/40" : "border-danger/40"
+            side === "me" ? "border-player-you/40" : "border-player-opp/40"
           } bg-bg-elevated`}
         >
           <ChipIcon

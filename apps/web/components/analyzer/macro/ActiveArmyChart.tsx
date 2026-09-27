@@ -20,26 +20,34 @@ import {
 } from "./activeArmyLayout";
 import {
   AccessibleLeakTable,
+  AdvantageArea,
   ChartTooltip,
   Grid,
   HoverCrosshair,
   LeakMarkers,
-  Legend,
-  Lines,
+  SeriesLines,
   SupplyBlockBands,
   XAxis,
   YAxisLabels,
+  blockedAt,
   type ActiveArmySupplyBlockWindow,
   type HoverState,
 } from "./ActiveArmyChartParts";
+import { MetricTabs, TimelineSummary } from "./TimelineControls";
+import {
+  DEFAULT_TIMELINE_METRIC,
+  type AdvantagePoint,
+  type TimelineMetric,
+} from "./timelineMetrics";
 
 export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
 
 /**
  * Single hover dispatch — the chart emits these to the parent so the
  * parent can manage preview-vs-locked selection state. Mouse moves emit
- * "hover" and the parent retains the last value on "leave"; clicks and
- * taps lock the selection ("tap"). Scrolling never emits a selection.
+ * "hover" and the parent retains the last value on "leave"; clicks,
+ * taps and sideways touch drags lock the selection ("tap"). Scrolling
+ * never emits a selection.
  */
 export type HoverEvent =
   | { type: "hover"; time: number }
@@ -49,62 +57,72 @@ export type HoverEvent =
 export interface ActiveArmyChartProps {
   /**
    * Pre-built per-tick series for the local player. Each SeriesPoint
-   * carries army value, worker count, AND the alive unit composition
-   * at that tick. The parent (``MacroChartSection``) builds the
-   * series once and threads it to both this chart and the
-   * ``CompositionSnapshot`` roster, so the tooltip's army number and
-   * the roster header's "Army NNN" are guaranteed to come from the
-   * same SeriesPoint at the same hover time.
+   * carries army value, worker count, supply, collection rate AND the
+   * alive unit composition at that tick. The parent
+   * (``MacroChartSection``) builds the series once and threads it to
+   * both this chart and the ``CompositionSnapshot`` roster, so the
+   * tooltip's army number and the roster header's "Army NNN" are
+   * guaranteed to come from the same SeriesPoint at the same time.
    */
   mySeries: SeriesPoint[];
   /** Opponent series — may be empty when no opp samples were extracted. */
   oppSeries: SeriesPoint[];
   gameLengthSec?: number;
-  /** Leak collection — drives vertical markers along the time axis. */
+  /** Leak collection — drives markers along the time axis. */
   leaks: LeakItem[];
   /** Per-window supply-block annotations for the local player, drawn
-   *  as translucent vertical bands behind the chart lines. Empty when
-   *  the macro engine didn't surface windows for this game. */
+   *  as labelled bands behind the chart lines. Empty when the macro
+   *  engine didn't surface windows for this game. */
   supplyBlockWindows?: ActiveArmySupplyBlockWindow[];
-  /** Opponent's supply-block windows — rendered with a distinct tone. */
+  /** Opponent's supply-block windows — rendered in the opponent colour. */
   oppSupplyBlockWindows?: ActiveArmySupplyBlockWindow[];
   /** Stable id of the highlighted leak — receives an emphasised marker. */
   highlightedKey?: string | null;
   /** Hovered game-time second — when set, the crosshair locks here. */
   hoveredTime?: number | null;
+  /** True when a tap or click has pinned ``hoveredTime``. */
+  locked?: boolean;
   /** Callback fired for every hover/tap/leave event. */
   onHover?: (event: HoverEvent) => void;
   /** Display name of the local player (for the tooltip header). */
   myName?: string | null;
   /** Display name of the opponent (for the tooltip header). */
   oppName?: string | null;
+  /** Render the "Match timeline" caption (off when the host titles it). */
+  showTitle?: boolean;
+  /** Classes for the outer figure (e.g. sticky positioning). */
+  className?: string;
+}
+
+/** Sideways travel, in pixels, before a touch drag scrubs the chart. */
+const SCRUB_SLOP_PX = 8;
+
+interface TouchGesture {
+  id: number;
+  x: number;
+  y: number;
+  scrubbing: boolean;
 }
 
 /**
- * Active Army & Workers chart — interactive SVG renderer.
+ * Match timeline — sc2replaystats-style interactive SVG chart.
  *
- * Hover behaviour mirrors sc2replaystats: a vertical crosshair tracks
- * the cursor exactly (no snap-jump), dots highlight each side's value
- * at the nearest sample, and a floating tooltip lists army value
- * (Σ minerals + gas of all non-worker units) and worker count for
- * both players. The hovered time is lifted to the parent so the
- * unit-composition snapshot below the chart stays in sync.
+ * One metric at a time (Army Value, Workers, Supply, Collection Rate,
+ * Income Advantage), both players overlaid in their colours, with
+ * labelled supply-block bands, a dashed crosshair, a dark tooltip and
+ * a "Game time | you | opponent" read-out underneath. The hovered time
+ * is lifted to the parent so the unit roster below stays in sync.
  *
- * Clicks and taps lock the crosshair via the parent's sticky state —
- * users don't have to keep a finger pressed to read the values.
+ * The SVG is laid out at its measured pixel size, so it fills the
+ * width of any screen without stretching text. Height comes from CSS.
  *
- * Army series is derived from the same hybrid source the snapshot
- * uses (unit_timeline preferred, build-order fallback with
- * timeline-derived deaths), so the chart and the roster's "Army N"
- * header always agree at every tick. Older slim payloads (no
- * timeline, no build_order) fall back to a fighting-supply heuristic
- * so the line still renders.
+ * Mouse: moving previews a time; click locks it. Touch: tap locks a
+ * time and a sideways drag scrubs it, while vertical drags scroll the
+ * page (``touch-action: pan-y``) and never move the lock.
  *
- * Sub-components for the Grid, X/Y axes, line paths, hover crosshair,
- * tooltip, and leak markers/bands live in
- * ``ActiveArmyChartParts.tsx`` to keep this file under the 800-line
- * cap. The chart owns layout/hover orchestration; the parts file owns
- * the per-layer SVG rendering.
+ * Army values come from ``buildSeries`` (sc2reader's army value when
+ * present, derived composition otherwise), so the chart and the
+ * roster's "Army N" agree at every tick.
  */
 export function ActiveArmyChart({
   mySeries,
@@ -115,43 +133,35 @@ export function ActiveArmyChart({
   oppSupplyBlockWindows,
   highlightedKey,
   hoveredTime = null,
+  locked = false,
   onHover,
   myName,
   oppName,
+  showTitle = true,
+  className = "",
 }: ActiveArmyChartProps) {
   const chartId = useId();
+  const clipId = `timeline-${chartId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const overlayRef = useRef<SVGRectElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerSize, setContainerSize] = useState<
-    { width: number; height: number } | null
-  >(null);
+  const gesture = useRef<TouchGesture | null>(null);
+  const [containerRef, size] = useElementSize();
+  const [metric, setMetric] = useState<TimelineMetric>(DEFAULT_TIMELINE_METRIC);
+  const [showBlocks, setShowBlocks] = useState(true);
 
   const layout = useMemo(
-    () => buildLayout(mySeries, oppSeries, gameLengthSec),
-    [mySeries, oppSeries, gameLengthSec],
+    () =>
+      buildLayout(mySeries, oppSeries, gameLengthSec, {
+        metric,
+        width: size?.width,
+        height: size?.height,
+      }),
+    [mySeries, oppSeries, gameLengthSec, metric, size],
   );
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      setContainerSize({ width, height });
-    });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
 
   /**
    * Map a pointer event into a game-time second within the plot area.
-   *
-   * The overlay <rect> spans viewBox coords [plotLeft, plotLeft+innerW]
-   * — its CSS bounding rect maps to that exact range, so the cursor
-   * fraction within the rect equals the fraction along the time axis
-   * (0…maxT). preserveAspectRatio is "none" so the CSS-to-time mapping
-   * is uniform.
+   * The overlay <rect> spans exactly the plot, so the cursor fraction
+   * within its box is the fraction along the time axis (0…maxT).
    */
   const timeFromClientX = useCallback(
     (clientX: number): number | null => {
@@ -166,11 +176,40 @@ export function ActiveArmyChart({
     [layout],
   );
 
+  const handlePointerDown = useCallback(
+    (e: ReactPointerEvent<SVGRectElement>) => {
+      if (e.pointerType === "mouse") return;
+      gesture.current = {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        scrubbing: false,
+      };
+    },
+    [],
+  );
+
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent<SVGRectElement>) => {
-      // Touch moves may be page scrolling. Only preview mouse/pen hover;
-      // the parent ignores these previews once a time has been locked.
-      if (!onHover || (e.pointerType !== "mouse" && e.pointerType !== "pen")) return;
+      if (!onHover) return;
+      const g = gesture.current;
+      if (g && g.id === e.pointerId) {
+        // Touch / pen contact: vertical drags belong to page scrolling
+        // (the browser cancels them); a clearly sideways drag scrubs.
+        if (!g.scrubbing) {
+          const dx = Math.abs(e.clientX - g.x);
+          const dy = Math.abs(e.clientY - g.y);
+          if (dx < SCRUB_SLOP_PX || dx <= dy) return;
+          g.scrubbing = true;
+          capturePointer(e);
+        }
+        const t = timeFromClientX(e.clientX);
+        if (t != null) onHover({ type: "tap", time: t });
+        return;
+      }
+      // Mouse / hovering pen: preview only. The parent ignores previews
+      // once a time has been locked.
+      if (e.pointerType !== "mouse" && e.pointerType !== "pen") return;
       if (e.buttons || e.pressure > 0) return;
       const t = timeFromClientX(e.clientX);
       if (t == null) return;
@@ -178,6 +217,10 @@ export function ActiveArmyChart({
     },
     [onHover, timeFromClientX],
   );
+
+  const endGesture = useCallback((e: ReactPointerEvent<SVGRectElement>) => {
+    if (gesture.current?.id === e.pointerId) gesture.current = null;
+  }, []);
 
   const handleClick = useCallback(
     (e: ReactMouseEvent<SVGRectElement>) => {
@@ -205,44 +248,73 @@ export function ActiveArmyChart({
     return <ChartEmptyState />;
   }
 
-  const hoverPoints = computeHoverPoints(layout, hoveredTime);
+  const hover = computeHoverPoints(layout, hoveredTime);
+  const readout = hover ?? endOfGame(layout);
+  const blocksAvailable =
+    (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
+  const you = myName?.trim() || "You";
+  const them = oppName?.trim() || "Opponent";
+  const scaleX = size ? size.width / layout.width : 1;
+  const label = layout.metric.label;
 
   return (
-    <figure className="space-y-2" aria-labelledby={`${chartId}-title`}>
-      <figcaption
-        id={`${chartId}-title`}
-        className="flex flex-wrap items-center justify-between gap-2 text-caption text-text-muted"
-      >
-        <span className="font-semibold uppercase tracking-wider text-text">
-          Active Army &amp; Workers
-        </span>
-        <Legend />
-      </figcaption>
+    <figure
+      aria-label={showTitle ? undefined : "Match timeline chart"}
+      aria-labelledby={showTitle ? `${clipId}-title` : undefined}
+      className={`space-y-2 ${className}`}
+    >
+      {showTitle ? (
+        <figcaption
+          id={`${clipId}-title`}
+          className="text-caption font-semibold uppercase tracking-wider text-text"
+        >
+          Match timeline
+        </figcaption>
+      ) : null}
+
+      <MetricTabs
+        metric={metric}
+        onMetric={setMetric}
+        showBlocks={showBlocks}
+        onToggleBlocks={() => setShowBlocks((v) => !v)}
+        blocksAvailable={blocksAvailable}
+      />
 
       <div
         ref={containerRef}
-        className="relative overflow-x-auto rounded-lg border border-border bg-bg-elevated"
+        // Vertical drags scroll the page; sideways drags stay with the
+        // chart so they can scrub. Set on this HTML box because Chrome
+        // ignores ``touch-action`` on SVG shapes like the overlay rect.
+        style={{ touchAction: "pan-y pinch-zoom" }}
+        className="relative h-[clamp(190px,30vh,280px)] w-full sm:h-[clamp(260px,44vh,460px)]"
       >
         <svg
           role="img"
-          aria-label="Army value (mineral + gas) and worker count over game time, both players overlaid. Hover to inspect a time; click or tap to lock it while scrolling."
+          aria-label={`${label.charAt(0)}${label.slice(1).toLowerCase()} for both players over game time. Hover to inspect a moment; click or tap to lock it, or drag sideways to scrub.`}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
-          className="block h-[220px] w-full min-w-[320px] sm:h-[260px] sm:min-w-[480px]"
+          className="absolute inset-0 block h-full w-full"
         >
           <Grid layout={layout} />
+          {showBlocks ? (
+            <SupplyBlockBands
+              layout={layout}
+              my={supplyBlockWindows}
+              opp={oppSupplyBlockWindows}
+            />
+          ) : null}
           <XAxis layout={layout} />
-          <SupplyBlockBands layout={layout} windows={supplyBlockWindows} tone="me" />
-          <SupplyBlockBands layout={layout} windows={oppSupplyBlockWindows} tone="opp" />
           <LeakMarkers
             layout={layout}
             leaks={leaks}
             highlightedKey={highlightedKey}
           />
-          <Lines layout={layout} />
-          {hoverPoints ? (
-            <HoverCrosshair layout={layout} hover={hoverPoints} />
-          ) : null}
+          {layout.metric.advantage ? (
+            <AdvantageArea layout={layout} clipId={clipId} />
+          ) : (
+            <SeriesLines layout={layout} />
+          )}
+          {hover ? <HoverCrosshair layout={layout} hover={hover} /> : null}
           <YAxisLabels layout={layout} />
           <rect
             ref={overlayRef}
@@ -252,26 +324,85 @@ export function ActiveArmyChart({
             height={layout.innerH}
             fill="transparent"
             style={{ touchAction: "pan-y pinch-zoom", cursor: onHover ? "crosshair" : "default" }}
+            onPointerDown={onHover ? handlePointerDown : undefined}
             onPointerMove={onHover ? handlePointerMove : undefined}
+            onPointerUp={onHover ? endGesture : undefined}
+            onPointerCancel={onHover ? endGesture : undefined}
             onPointerLeave={onHover ? handlePointerLeave : undefined}
             onClick={onHover ? handleClick : undefined}
             aria-hidden
           />
         </svg>
-        {hoverPoints && containerSize ? (
+        {hover ? (
           <ChartTooltip
             layout={layout}
-            hover={hoverPoints}
-            container={containerSize}
-            myName={myName}
-            oppName={oppName}
+            hover={hover}
+            scaleX={scaleX}
+            myName={you}
+            oppName={them}
+            myBlocked={showBlocks && blockedAt(supplyBlockWindows, hover.cursorT)}
+            oppBlocked={showBlocks && blockedAt(oppSupplyBlockWindows, hover.cursorT)}
           />
         ) : null}
       </div>
 
+      <TimelineSummary
+        metric={layout.metric}
+        time={readout.t}
+        locked={locked && hover != null}
+        my={readout.my}
+        opp={readout.opp}
+        advantage={readout.advantage}
+        myName={you}
+        oppName={them}
+      />
+
       <AccessibleLeakTable leaks={leaks} highlightedKey={highlightedKey} />
     </figure>
   );
+}
+
+/**
+ * Track an element's content-box size in whole CSS pixels through a
+ * callback ref, so it attaches whenever the chart box mounts (it is
+ * absent while the empty state shows). Rounding keeps sub-pixel layout
+ * jitter from re-rendering the chart.
+ */
+function useElementSize(): [
+  (node: HTMLDivElement | null) => void,
+  { width: number; height: number } | null,
+] {
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (!box || box.width <= 0 || box.height <= 0) return;
+      const width = Math.round(box.width);
+      const height = Math.round(box.height);
+      setSize((prev) =>
+        prev && prev.width === width && prev.height === height
+          ? prev
+          : { width, height },
+      );
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+  useEffect(() => () => observerRef.current?.disconnect(), []);
+  return [ref, size];
+}
+
+/** Keep receiving a scrub's moves after the finger leaves the plot. */
+function capturePointer(e: ReactPointerEvent<SVGRectElement>) {
+  try {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  } catch {
+    // Capture is an optimisation; scrubbing works without it.
+  }
 }
 
 function computeHoverPoints(
@@ -301,11 +432,37 @@ function computeHoverPoints(
     : clamped;
   return {
     t,
+    cursorT: clamped,
     xView: layout.xOf(t),
     xMouseView: layout.xOf(clamped),
     my,
     opp,
+    advantage: priorAdvantage(layout.advantage, clamped),
   };
+}
+
+/** What the read-out shows before anything is inspected: the final samples. */
+function endOfGame(layout: ChartLayout): {
+  t: number;
+  my: SeriesPoint | null;
+  opp: SeriesPoint | null;
+  advantage: AdvantagePoint | null;
+} {
+  return {
+    t: layout.maxT,
+    my: layout.mySeries[layout.mySeries.length - 1] ?? null,
+    opp: layout.oppSeries[layout.oppSeries.length - 1] ?? null,
+    advantage: layout.advantage[layout.advantage.length - 1] ?? null,
+  };
+}
+
+function priorAdvantage(points: AdvantagePoint[], t: number): AdvantagePoint | null {
+  let best: AdvantagePoint | null = null;
+  for (const p of points) {
+    if (p.t > t) break;
+    best = p;
+  }
+  return best ?? points[0] ?? null;
 }
 
 function ChartEmptyState() {
@@ -316,9 +473,9 @@ function ChartEmptyState() {
         Chart samples unavailable
       </div>
       <p className="text-caption text-text-muted">
-        The Active Army &amp; Workers chart needs the per-second sample stream
-        from your SC2 agent. Re-run the agent or click Recompute to ask it
-        to re-parse the replay file.
+        The match timeline needs the per-second sample stream from your
+        SC2 agent. Re-run the agent or click Recompute to ask it to
+        re-parse the replay file.
       </p>
     </div>
   );

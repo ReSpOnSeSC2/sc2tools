@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, RefreshCcw, X } from "lucide-react";
@@ -49,8 +50,9 @@ const FOCUSABLE_SELECTOR = [
 /**
  * MacroBreakdownPanel — drilldown surface for a single game's macro
  * score. On mobile it renders as a full-bleed page that takes over the
- * viewport (matching the look of the Strategies dossier); on ≥640px
- * it becomes a centered modal with margin + rounded corners.
+ * viewport (matching the look of the Strategies dossier), with the
+ * match timeline pinned under the header while the roster scrolls; on
+ * ≥640px it becomes a wide centered modal with margin + rounded corners.
  *
  * Esc closes; focus traps inside; body scrolls locked while open;
  * previous focus is restored on close.
@@ -64,6 +66,7 @@ export function MacroBreakdownPanel({
 }: MacroBreakdownPanelProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
 
   const { data, error, isLoading, mutate, request } = useApi<MacroBreakdownData>(
@@ -125,6 +128,19 @@ export function MacroBreakdownPanel({
   }, [open, replayController.completedRequestId, mutate]);
 
   useEffect(() => {
+    // The chart pins directly under the sticky header on phones; publish
+    // the header's live height (it wraps with long names) for its offset.
+    const header = headerRef.current;
+    const dialog = dialogRef.current;
+    if (!open || !header || !dialog || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      dialog.style.setProperty("--macro-header-h", `${header.offsetHeight}px`);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     previouslyFocusedRef.current = document.activeElement;
     const prevOverflow = document.body.style.overflow;
@@ -174,15 +190,16 @@ export function MacroBreakdownPanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-6xl flex-col bg-bg-surface text-text sm:min-h-0 sm:rounded-xl sm:border sm:border-border sm:shadow-[var(--shadow-card)]"
+        className="relative mx-auto flex min-h-[100dvh] w-full min-w-0 max-w-[1440px] flex-col bg-bg-surface text-text sm:min-h-0 sm:rounded-xl sm:border sm:border-border sm:shadow-[var(--shadow-card)]"
       >
         <PanelHeader
+          headerRef={headerRef}
           titleId={titleId}
           gameId={gameId}
           meta={headerMeta}
           onClose={onClose}
         />
-        <div className={`min-w-0 flex-1 px-4 py-5 ${recomputeMsg ? "pb-44" : "pb-24"} sm:px-6 sm:pb-5 lg:px-8`}>
+        <div className="min-w-0 flex-1 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
           {isLoading ? (
             <LoadingState />
           ) : error ? (
@@ -221,11 +238,13 @@ export function MacroBreakdownPanel({
  * ============================================================ */
 
 function PanelHeader({
+  headerRef,
   titleId,
   gameId,
   meta,
   onClose,
 }: {
+  headerRef: RefObject<HTMLElement | null>;
   titleId: string;
   gameId: string;
   meta?: PanelHeaderMeta;
@@ -237,15 +256,18 @@ function PanelHeader({
   const oppRaceLetter = (meta?.opponentRace || "").charAt(0).toUpperCase();
   const dateLine = formatHeaderDate(meta?.dateIso);
   return (
-    <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:rounded-t-xl sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-6xl items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="text-caption font-semibold uppercase tracking-wider text-accent-cyan">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85 sm:rounded-t-xl sm:px-6 sm:py-3 lg:px-8"
+    >
+      <div className="mx-auto flex w-full max-w-[1440px] items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5 sm:space-y-1">
+          <div className="text-micro font-semibold uppercase tracking-wider text-accent-cyan sm:text-caption">
             Macro breakdown
           </div>
           <h2
             id={titleId}
-            className="flex flex-wrap items-center gap-2 text-h3 font-semibold text-text sm:text-h2"
+            className="flex flex-wrap items-center gap-2 text-h4 font-semibold text-text sm:text-h2"
           >
             {myRaceLetter ? (
               <Icon
@@ -319,14 +341,14 @@ function PanelFooter({
   return (
     <footer
       className={[
-        // Mobile: fixed to viewport bottom so the action row is always
-        // reachable while the body scrolls. Desktop: in-flow at panel
-        // bottom inside the centered modal.
-        "fixed inset-x-0 bottom-0 z-20 border-t border-border bg-bg-elevated/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-bg-elevated/85",
-        "sm:relative sm:inset-auto sm:rounded-b-xl sm:pb-3 sm:px-6 lg:px-8",
+        // In flow at the end of the panel on every screen. On phones the
+        // top of the screen holds the pinned chart, so a fixed action
+        // bar would squeeze the scrolling half; Close stays in the header.
+        "border-t border-border bg-bg-elevated px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        "sm:rounded-b-xl sm:pb-3 sm:px-6 lg:px-8",
       ].join(" ")}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-end gap-2">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-end gap-2">
         {recomputeMsg ? (
           <span
             className="mr-auto max-w-full text-caption text-text-muted sm:max-w-[60%]"
@@ -390,11 +412,15 @@ function BreakdownBody({
   return (
     <div className="space-y-5 sm:space-y-6">
       <section
-        aria-label="Active Army & Workers"
-        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
+        aria-label="Match timeline"
+        // Edge to edge on phones (the chart uses the full screen width);
+        // a card on larger screens.
+        className="-mx-4 sm:mx-0 sm:rounded-lg sm:border sm:border-border sm:bg-bg-elevated/40 sm:p-4"
       >
         {samplesMissing ? (
-          <ChartSamplesMissingHint />
+          <div className="px-4 sm:px-0">
+            <ChartSamplesMissingHint />
+          </div>
         ) : (
           <MacroChartSection
             samples={data.stats_events || []}

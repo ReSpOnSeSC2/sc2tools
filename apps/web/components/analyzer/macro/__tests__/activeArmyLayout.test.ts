@@ -7,6 +7,7 @@ import {
   nearestPriorPoint,
   niceCeil,
   seriesAt,
+  type SeriesPoint,
 } from "../activeArmyLayout";
 import type {
   StatsEvent,
@@ -154,6 +155,49 @@ describe("buildSeries — opponent late-game cannot vertical-spike", () => {
     // authoritative and present, so the chart binds to it directly.
     expect(out[0].army).toBe(1200);
     expect(out[0].armySource).toBe("stats");
+  });
+});
+
+describe("buildSeries — a wiped army stays wiped in the roster", () => {
+  it("drops build-order units when army value and timeline both read empty", () => {
+    // Lost the final fight: sc2reader reports army 0 and the timeline has
+    // no units for this side, but units that died between samples never
+    // showed up as timeline deaths, so the build order still "had" them.
+    const timeline: UnitTimelineEntry[] = [
+      { time: 1740, my: { Stalker: 3 }, opp: { Roach: 20 } },
+      { time: 1760, my: {}, opp: { Roach: 18 } },
+    ];
+    const events: BuildEvent[] = Array.from({ length: 17 }, (_, i) => ({
+      time: 300 + i * 60,
+      name: "Stalker",
+      is_building: false,
+    }));
+    const samples: StatsEvent[] = [
+      sample(1740, { food_workers: 53, army_value: 525 }),
+      sample(1760, { food_workers: 53, army_value: 0 }),
+    ];
+    const out = buildSeries(samples, timeline, "my", events);
+    expect(out[0].units).toEqual({ Stalker: 3 });
+    expect(out[1].army).toBe(0);
+    expect(out[1].units).toEqual({});
+    expect(out[1].unitsSource).toBe("timeline");
+  });
+
+  it("keeps the build-order fallback while the army value says units are alive", () => {
+    const timeline: UnitTimelineEntry[] = [
+      { time: 600, my: {}, opp: { Roach: 4 } },
+    ];
+    const events: BuildEvent[] = [
+      { time: 300, name: "Stalker", is_building: false },
+    ];
+    const out = buildSeries(
+      [sample(600, { army_value: 175 })],
+      timeline,
+      "my",
+      events,
+    );
+    expect(out[0].units).toEqual({ Stalker: 1 });
+    expect(out[0].unitsSource).toBe("build_order");
   });
 });
 
@@ -323,5 +367,103 @@ describe("buildLayout — game length drives the axis", () => {
     ];
     const layout = buildLayout(samples, [], 0);
     expect(layout?.maxT).toBeGreaterThanOrEqual(60);
+  });
+});
+
+describe("buildLayout — metric tabs and measured size", () => {
+  function point(t: number, fields: Partial<SeriesPoint> = {}): SeriesPoint {
+    return {
+      t,
+      army: 0,
+      workers: 12,
+      armySource: "stats",
+      units: {},
+      unitsSource: "empty",
+      ...fields,
+    };
+  }
+
+  it("draws 1:1 at the measured size so labels are never stretched", () => {
+    const layout = buildLayout([point(0), point(600)], [], 600, {
+      width: 390,
+      height: 250,
+    })!;
+    expect(layout.width).toBe(390);
+    expect(layout.height).toBe(250);
+    expect(layout.plotRight).toBeLessThan(390);
+    expect(layout.xOf(600)).toBe(layout.plotRight);
+  });
+
+  it("plots the selected metric on its own nice scale", () => {
+    const my = [point(0, { workers: 12 }), point(300, { workers: 61 })];
+    const opp = [point(0, { workers: 12 }), point(300, { workers: 44 })];
+    const layout = buildLayout(my, opp, 300, { metric: "workers" })!;
+    expect(layout.metric.key).toBe("workers");
+    expect(layout.yMin).toBe(0);
+    expect(layout.yMax).toBe(80);
+    expect(layout.yTicks).toEqual([0, 20, 40, 60, 80]);
+    expect(layout.myPath.startsWith("M")).toBe(true);
+    expect(layout.oppPath.startsWith("M")).toBe(true);
+  });
+
+  it("lifts the pen over samples that lack the metric instead of drawing zero", () => {
+    const my = [
+      point(0, { supply: 12 }),
+      point(10),
+      point(20, { supply: 20 }),
+    ];
+    const layout = buildLayout(my, [], 20, { metric: "supply" })!;
+    expect(layout.myPath.match(/M/g)).toHaveLength(2);
+  });
+
+  it("centres the income advantage on zero and signs it you-minus-opponent", () => {
+    const my = [point(0, { income: 500 }), point(60, { income: 900 })];
+    const opp = [point(0, { income: 700 }), point(60, { income: 600 })];
+    const layout = buildLayout(my, opp, 60, { metric: "incomeAdvantage" })!;
+    expect(layout.advantage.map((p) => p.value)).toEqual([-200, 300]);
+    expect(layout.yMin).toBe(-400);
+    expect(layout.yMax).toBe(400);
+    expect(layout.yTicks).toContain(0);
+    expect(layout.zeroY).toBeCloseTo((layout.plotTop + layout.plotBottom) / 2);
+    expect(layout.advantageArea.endsWith("Z")).toBe(true);
+    expect(layout.myPath).toBe("");
+  });
+
+  it("keeps the game-end clock label and drops ticks that would collide", () => {
+    const series = [point(0), point(1760)];
+    const wide = buildLayout(series, [], 1760, { width: 1200 })!;
+    const narrow = buildLayout(series, [], 1760, { width: 300 })!;
+    for (const layout of [wide, narrow]) {
+      const labels = layout.xTickLabels;
+      const last = labels[labels.length - 1];
+      expect(last.t).toBe(1760);
+      expect(last.anchor).toBe("end");
+      for (let i = 1; i < labels.length; i++) {
+        expect(labels[i].x - labels[i - 1].x).toBeGreaterThan(30);
+      }
+    }
+    expect(wide.xTickLabels.map((l) => l.t)).toEqual([0, 300, 600, 900, 1200, 1500, 1760]);
+    expect(narrow.xTickLabels.length).toBeLessThan(wide.xTickLabels.length);
+  });
+});
+
+describe("buildSeries — supply and collection rate", () => {
+  it("carries supply used, cap and minerals + gas income per sample", () => {
+    const out = buildSeries(
+      [
+        sample(60, {
+          food_used: 31,
+          food_made: 38,
+          minerals_collection_rate: 720,
+          vespene_collection_rate: 160,
+        }),
+      ],
+      undefined,
+      "my",
+      undefined,
+    );
+    expect(out[0].supply).toBe(31);
+    expect(out[0].supplyCap).toBe(38);
+    expect(out[0].income).toBe(880);
   });
 });

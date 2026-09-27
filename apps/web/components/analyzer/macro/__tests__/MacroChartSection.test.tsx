@@ -58,7 +58,8 @@ function expectSelection(clock: string, army: string) {
   const tooltip = screen.getByRole("status");
   expect(within(tooltip).getByText(clock)).toBeTruthy();
   expect(tooltip.textContent).toContain(army);
-  expect(screen.getByRole("img", { name: /Army value/ }).querySelectorAll("circle")).toHaveLength(4);
+  // One marker per player on the selected metric's line.
+  expect(screen.getByRole("img", { name: /Army value/ }).querySelectorAll("circle")).toHaveLength(2);
 }
 
 beforeEach(() => {
@@ -163,5 +164,112 @@ describe("MacroChartSection selection", () => {
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("region", { name: "You composition at 5:00" })).toBeTruthy();
     expect(screen.getByText(/^Game end/)).toBeTruthy();
+  });
+});
+
+describe("Match timeline tabs and read-out", () => {
+  const mine: StatsEvent[] = [
+    { time: 0, army_value: 0, food_workers: 12, food_used: 12, food_made: 15, minerals_collection_rate: 400, vespene_collection_rate: 0 },
+    { time: 150, army_value: 1500, food_workers: 30, food_used: 50, food_made: 62, minerals_collection_rate: 900, vespene_collection_rate: 200 },
+    { time: 300, army_value: 3025, food_workers: 48, food_used: 95, food_made: 110, minerals_collection_rate: 1100, vespene_collection_rate: 400 },
+  ];
+  const theirs: StatsEvent[] = [
+    { time: 0, army_value: 0, food_workers: 12, food_used: 12, food_made: 14, minerals_collection_rate: 400, vespene_collection_rate: 0 },
+    { time: 150, army_value: 1800, food_workers: 26, food_used: 48, food_made: 54, minerals_collection_rate: 800, vespene_collection_rate: 100 },
+    { time: 300, army_value: 2400, food_workers: 40, food_used: 80, food_made: 94, minerals_collection_rate: 1000, vespene_collection_rate: 350 },
+  ];
+
+  function readout() {
+    return screen.getByText("Game time").closest("dl")!;
+  }
+
+  function overlayOf(name: RegExp) {
+    const chart = screen.getByRole("img", { name });
+    const overlay = chart.querySelector<SVGRectElement>('rect[fill="transparent"]')!;
+    vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 300, 220),
+    );
+    return overlay;
+  }
+
+  it("switches the plotted metric and the read-out with the tabs", () => {
+    render(
+      <MacroChartSection
+        gameId="tabs"
+        samples={mine}
+        oppSamples={theirs}
+        leaks={[]}
+        gameLengthSec={300}
+        myName="ReSpOnSe"
+        oppName="Koht"
+      />,
+    );
+    // Before any inspection the read-out shows the end of the game.
+    expect(readout().textContent).toContain("5:00");
+    expect(readout().textContent).toContain("3,025");
+    expect(readout().textContent).toContain("2,400");
+
+    const workers = screen.getByRole("button", { name: "Workers" });
+    fireEvent.click(workers);
+    expect(workers.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("img", { name: /^Workers for both players/ })).toBeTruthy();
+    expect(readout().textContent).toContain("48");
+    expect(readout().textContent).toContain("40");
+
+    fireEvent.click(screen.getByRole("button", { name: "Supply" }));
+    expect(readout().textContent).toContain("95/110");
+    expect(readout().textContent).toContain("80/94");
+
+    fireEvent.click(screen.getByRole("button", { name: "Collection Rate" }));
+    expect(readout().textContent).toContain("1,500");
+    expect(readout().textContent).toContain("1,350");
+
+    fireEvent.click(screen.getByRole("button", { name: "Income Advantage" }));
+    // You lead by 150 at the end; the lead is shown beside your number.
+    expect(readout().textContent).toContain("+150");
+    tap(overlayOf(/^Income advantage/), 150);
+    const tooltip = screen.getByRole("status");
+    expect(tooltip.textContent).toContain("2:30");
+    expect(tooltip.textContent).toContain("ReSpOnSe +200");
+    expect(readout().textContent).toContain("locked");
+  });
+
+  it("scrubs the locked time with a sideways touch drag", () => {
+    render(<TestPage />);
+    const overlay = chartOverlay();
+    fireEvent.pointerDown(overlay, { ...point("touch", 75), buttons: 1, pressure: 0.5 });
+    fireEvent.pointerMove(overlay, { ...point("touch", 140, 34), buttons: 1, pressure: 0.5 });
+    expectSelection("2:20", "1,425");
+    fireEvent.pointerUp(overlay, point("touch", 140, 34));
+    expect(readout().textContent).toContain("locked");
+    // A mouse passing over afterwards does not move the scrubbed lock.
+    fireEvent.pointerMove(overlay, point("mouse", 75));
+    expectSelection("2:20", "1,425");
+  });
+
+  it("labels supply blocks and lets them be hidden", () => {
+    render(
+      <MacroChartSection
+        gameId="blocks"
+        samples={samples}
+        oppSamples={samples}
+        leaks={[]}
+        gameLengthSec={300}
+        supplyBlockWindows={[{ start: 60, end: 90 }]}
+      />,
+    );
+    const chart = screen.getByRole("img", { name: /Army value/ });
+    expect(chart.textContent).toContain("Supply Blocked");
+    const toggle = screen.getByRole("button", { name: "Supply Blocks" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(chart.textContent).not.toContain("Supply Blocked");
+  });
+
+  it("disables the Supply Blocks toggle when nobody was blocked", () => {
+    render(<TestPage />);
+    const toggle = screen.getByRole("button", { name: "Supply Blocks" }) as HTMLButtonElement;
+    expect(toggle.disabled).toBe(true);
   });
 });

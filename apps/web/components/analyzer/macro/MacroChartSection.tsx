@@ -65,10 +65,11 @@ interface HoverState {
 const INITIAL_HOVER: HoverState = { time: null, sticky: false };
 
 /**
- * Active Army & Workers chart + the live unit/building composition
- * panel beneath it. The two share a hovered-time state so scrubbing
- * the chart instantly updates the composition counts (sc2replaystats
- * parity).
+ * Match timeline chart + the live unit/building composition panel
+ * beneath it. The two share a hovered-time state so scrubbing the
+ * chart instantly updates the composition counts (sc2replaystats
+ * parity). On phones the chart pins under the panel header while the
+ * roster scrolls beneath it.
  *
  * The build-order endpoint is fetched ONCE here and passed down to
  * both children. The chart uses it to derive its army series the
@@ -83,6 +84,7 @@ const INITIAL_HOVER: HoverState = { time: null, sticky: false };
  *     time, tooltip, composition, and vertical crosshair visible.
  *   - Click / tap: locks the crosshair until another chart click or tap.
  *     Scrolling, outside interactions, and hovering preserve the lock.
+ *     A sideways touch drag scrubs the lock along the chart.
  *     Opening a different game resets the selection.
  */
 export function MacroChartSection({
@@ -163,7 +165,18 @@ export function MacroChartSection({
   }, []);
 
   return (
+    // This wrapper is the sticky chart's containing block: on phones the
+    // chart stays pinned under the panel header while the roster scrolls
+    // beneath it, then leaves with the roster (sc2replaystats layout).
     <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 sm:px-0">
+        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
+          Match timeline
+        </h3>
+        <p className="text-micro text-text-muted">
+          Hover, tap or drag across the chart to inspect a moment
+        </p>
+      </div>
       <ActiveArmyChart
         mySeries={mySeries}
         oppSeries={oppSeries}
@@ -173,32 +186,31 @@ export function MacroChartSection({
         oppSupplyBlockWindows={oppSupplyBlockWindows}
         highlightedKey={highlightedKey}
         hoveredTime={hover.time}
+        locked={hover.sticky}
         onHover={handleHover}
         myName={myName}
         oppName={oppName}
+        showTitle={false}
+        className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
       />
-      {hover.sticky ? (
-        <p className="text-micro text-text-muted">
-          <span className="text-text">Locked</span> at this point while you scroll.
-          Click or tap another spot on the chart to move it.
-        </p>
-      ) : null}
-      <CompositionSnapshot
-        mySeries={mySeries}
-        oppSeries={oppSeries}
-        unitTimeline={unitTimeline}
-        hoveredTime={hover.time}
-        gameLengthSec={gameLengthSec}
-        myName={myName}
-        oppName={oppName}
-        myRace={myRace}
-        oppRace={oppRace}
-        buildOrderData={buildOrder.data}
-        buildOrderLoading={buildOrder.isLoading}
-        buildOrderError={Boolean(buildOrder.error)}
-        myProductionBuildings={myProductionBuildings}
-        oppProductionBuildings={oppProductionBuildings}
-      />
+      <div className="px-4 sm:px-0">
+        <CompositionSnapshot
+          mySeries={mySeries}
+          oppSeries={oppSeries}
+          unitTimeline={unitTimeline}
+          hoveredTime={hover.time}
+          gameLengthSec={gameLengthSec}
+          myName={myName}
+          oppName={oppName}
+          myRace={myRace}
+          oppRace={oppRace}
+          buildOrderData={buildOrder.data}
+          buildOrderLoading={buildOrder.isLoading}
+          buildOrderError={Boolean(buildOrder.error)}
+          myProductionBuildings={myProductionBuildings}
+          oppProductionBuildings={oppProductionBuildings}
+        />
+      </div>
     </div>
   );
 }
