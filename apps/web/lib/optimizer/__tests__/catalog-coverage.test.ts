@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
+import { GUIDE_NON_OPENER_IDS } from "@/lib/guides/catalog";
 import { actionsFromSteps, adaptBuild, referenceBuilds } from "../adapt/adapt";
 import { resolveProfile } from "../patch/profiles";
 import { defaultPolicies, simulate } from "../sim/engine";
@@ -14,33 +15,9 @@ import type { ReferenceBuild, SimRace } from "../types";
  * entries). Pure compositions, fallback labels, and the too-short
  * markers are not openers and are excluded below.
  */
-const NON_OPENER_DEFINITIONS = new Set([
-  // mid/late-game compositions and transitions — no opening to adapt
-  "protoss-chargelot-archon-comp",
-  "protoss-robo-comp",
-  "protoss-skytoss-transition",
-  "terran-bio-comp",
-  "terran-mech-comp",
-  "terran-skyterran",
-  "zerg-muta-ling-bane-comp",
-  // fallback / unclassified labels
-  "protoss-standard-play-unclassified",
-  "terran-standard-play-unclassified",
-  "zerg-standard-play-unclassified",
-  "pvp-macro-transition-unclassified",
-  "pvt-macro-transition-unclassified",
-  "pvz-macro-transition-unclassified",
-  // game-length markers
-  "pvp-game-too-short",
-  "pvt-game-too-short",
-  "pvz-game-too-short",
-  "tvp-game-too-short",
-  "tvt-game-too-short",
-  "tvz-game-too-short",
-  "zvp-game-too-short",
-  "zvt-game-too-short",
-  "zvz-game-too-short",
-]);
+// Shared with the build guides (lib/guides/catalog.ts): the same
+// definitions never get a guide page.
+const NON_OPENER_DEFINITIONS = GUIDE_NON_OPENER_IDS;
 
 const target = resolveProfile("5.0.16");
 const baseline = resolveProfile("lotv-base");
