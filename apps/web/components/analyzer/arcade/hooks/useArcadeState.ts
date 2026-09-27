@@ -9,6 +9,11 @@ import {
   type ModeRecord,
 } from "../types";
 import { levelForXp, todayKey } from "../ArcadeEngine";
+import {
+  applyPlayBadgeProgress,
+  applyStockMarketSettlement,
+  awardBadge,
+} from "../badges";
 
 const PREF_PATH = "/v1/me/preferences/arcade";
 const FLUSH_DEBOUNCE_MS = 600;
@@ -191,13 +196,20 @@ export function useArcadeState() {
           const diffDays = Math.round((dayT - lastT) / 86_400_000);
           nextStreak = diffDays === 1 ? prev.streak.count + 1 : 1;
         }
-        return {
+        const played: ArcadeState = {
           ...prev,
           xp: { ...prev.xp, total: prev.xp.total + Math.max(0, input.xp) },
           minerals: prev.minerals + (input.correct ? 5 : 1),
           streak: { count: nextStreak, lastPlayedDay: day },
           records: { ...prev.records, [input.modeId]: nextRecord },
         };
+        // Run-based badges (Streak Hunter, Veto Sleuth, Closer,
+        // Detective) progress in the same write as the play itself.
+        return applyPlayBadgeProgress(
+          played,
+          { modeId: input.modeId, day, correct: input.correct },
+          new Date(),
+        );
       });
     },
     [update],
@@ -221,14 +233,18 @@ export function useArcadeState() {
 
   const earnBadge = useCallback(
     (id: string) => {
-      update((prev) => {
-        if (prev.badges[id]) return prev;
-        return {
-          ...prev,
-          badges: { ...prev.badges, [id]: { earnedAt: new Date().toISOString() } },
-          minerals: prev.minerals + 25,
-        };
-      });
+      update((prev) => awardBadge(prev, id, new Date()));
+    },
+    [update],
+  );
+
+  /**
+   * Record a finished Stock Market week's portfolio P&L (idempotent per
+   * week) and award Tycoon when the green-week run is long enough.
+   */
+  const settleStockMarket = useCallback(
+    (weekKey: string, pnlPct: number) => {
+      update((prev) => applyStockMarketSettlement(prev, { weekKey, pnlPct }, new Date()));
     },
     [update],
   );
@@ -253,6 +269,7 @@ export function useArcadeState() {
     recordPlay,
     unlockCard,
     earnBadge,
+    settleStockMarket,
     spendMinerals,
   };
 }

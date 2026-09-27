@@ -10,12 +10,14 @@ import { IconFor } from "../../icons";
 import { registerMode, weekKey } from "../../ArcadeEngine";
 import { buildUniverse, rolling14DayWr } from "../../sessions";
 import { useArcadeState } from "../../hooks/useArcadeState";
+import { pickReturn, portfolioPnlPct, volatility } from "../../stockMarketPnl";
 import type {
   GenerateInput,
   GenerateResult,
   Mode,
   ScoreResult,
   ShareSummary,
+  StockMarketResult,
   StockMarketState,
 } from "../../types";
 
@@ -45,62 +47,6 @@ type Q = {
 };
 
 type A = { picks: Array<{ id: string; alloc: number }>; submitToLeaderboard: boolean };
-
-/**
- * Per-pick % return on entry price — the standard portfolio math.
- * Returns a number in basis-points-of-WR terms, e.g. +0.333 means the
- * pick gained 33.3% on its entry price (a price-30 build at 40).
- * Used both for locked-view display and for the end-of-week P&L
- * computation. Distinct from raw Δprice: a 5-point gain on a price-90
- * build (+5.6% return) ranks differently from a 5-point gain on a
- * price-30 build (+16.7% return) — that's what makes the price column
- * matter strategically rather than cosmetically.
- */
-function pctReturn(entryPrice: number, currentPrice: number): number {
-  if (entryPrice <= 0) return 0;
-  return (currentPrice - entryPrice) / entryPrice;
-}
-
-/**
- * Anchor point for the play-volume volatility curve. A build played
- * this many times sits at the neutral 1.0× multiplier; fewer plays
- * amplify P&L, more plays damp it. Picked so that "you've played
- * about a month's worth of ladder" feels like the baseline.
- */
-const VOL_BASELINE_PLAYS = 30;
-/** Floor and ceiling on the multiplier so a single-play build can't dominate the portfolio. */
-const VOL_MIN = 0.75;
-const VOL_MAX = 2.0;
-
-/**
- * Play-volume volatility multiplier on per-pick P&L. Layers on top of
- * the % return calculation so the price column AND the play-count
- * column both shape risk/reward:
- *
- *   pnl_per_pick = alloc × pctReturn(entry, now) × volatility(plays)
- *
- * Modelled on the standard error of a proportion (~ 1/√n): few plays
- * = high sample noise = wider realised swings, both up and down.
- * Anchored at VOL_BASELINE_PLAYS = 30 → 1.0×, with a √(BASELINE/n)
- * curve bounded by VOL_MIN..VOL_MAX so a single-play build (raw 5.5×)
- * doesn't trivially dominate optimal strategy and a 1000-play veteran
- * still has a non-zero floor.
- *
- * Sample table (rounded):
- *   plays   1   2   5   8  10  20  30  50 100 1000
- *   vol  2.00 2.00 2.00 1.94 1.73 1.22 1.00 0.77 0.75 0.75
- *
- * Strategic effect: a brand-new build is 2× more volatile than your
- * baseline; a 100-play veteran is 0.75×. Cheap unplayed underdogs
- * stack TWO multipliers (low price → high % return per Δprice, low
- * plays → wide variance); expensive veterans get TWO dampeners. Real
- * risk/reward axis with two independent levers.
- */
-function volatility(plays: number): number {
-  const n = Math.max(1, plays);
-  const raw = Math.sqrt(VOL_BASELINE_PLAYS / n);
-  return Math.max(VOL_MIN, Math.min(VOL_MAX, raw));
-}
 
 async function generate(input: GenerateInput): Promise<GenerateResult<Q>> {
   const universe = buildUniverse(input.data);
@@ -206,7 +152,7 @@ function Render({
 }: {
   ctx: Parameters<Mode<Q, A>["render"]>[0];
 }) {
-  const { state, update, hydrated } = useArcadeState();
+  const { state, update, hydrated, settleStockMarket } = useArcadeState();
   const { getToken } = useAuth();
   const { user, isLoaded: userLoaded } = useUser();
   // The name we show by default so a player appears under their own
@@ -264,6 +210,48 @@ function Render({
   const [name, setName] = useState("");
 
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Settle last week's portfolio the first time the market opens in a
+  // later week: record its final P&L (Tycoon badge) and, when that lock
+  // was public, replace the 0% placeholder posted at lock-in on the
+  // weekly leaderboard. Prices come from the current quotes — the same
+  // numbers the locked view showed — because past prices aren't stored.
+  const settledWeekRef = useRef<string | null>(null);
+  const prior = state.stockMarket;
+  const priorSettled = prior ? Boolean(state.stockMarketHistory?.[prior.weekKey]) : true;
+  useEffect(() => {
+    if (!hydrated || !prior || priorSettled) return;
+    if (prior.weekKey >= ctx.question.weekKey || settledWeekRef.current === prior.weekKey) return;
+    settledWeekRef.current = prior.weekKey;
+    const pnlPct = portfolioPnlPct(prior.picks, ctx.question.quotes);
+    settleStockMarket(prior.weekKey, pnlPct);
+    if (!state.leaderboardOptIn) return;
+    apiCall(getToken, "/v1/arcade/leaderboard", {
+      method: "POST",
+      body: JSON.stringify({
+        weekKey: prior.weekKey,
+        pnlPct,
+        displayName: state.leaderboardDisplayName,
+      }),
+    }).catch((err: unknown) => {
+      setSubmitError(
+        `Couldn't post ${prior.weekKey}'s final P&L to the leaderboard${
+          err instanceof Error ? `: ${err.message}` : ""
+        }. It still counts toward your badges.`,
+      );
+    });
+  }, [
+    hydrated,
+    prior,
+    priorSettled,
+    ctx.question.weekKey,
+    ctx.question.quotes,
+    settleStockMarket,
+    state.leaderboardOptIn,
+    state.leaderboardDisplayName,
+    getToken,
+  ]);
+  const lastSettled = latestSettledWeek(state.stockMarketHistory, ctx.question.weekKey);
 
   // Display name hydrates once: prefer a name the player saved on a
   // previous lock, otherwise seed it with their account identity so the
@@ -380,13 +368,9 @@ function Render({
           // entryPlays is optional for back-compat with portfolios
           // locked before the volatility model existed — those use
           // the neutral 1.0× multiplier.
-          const ret =
-            cur && cur.price !== null && p.entryPrice > 0
-              ? pctReturn(p.entryPrice, cur.price)
-              : null;
           const vol =
             typeof p.entryPlays === "number" ? volatility(p.entryPlays) : 1.0;
-          const adjusted = ret !== null ? ret * vol : null;
+          const adjusted = pickReturn(p, cur?.price);
           return (
             <li
               key={p.slug}
@@ -655,7 +639,29 @@ function Render({
           : `Pick up to 5 builds — total must equal 100`,
       }}
       isDaily={ctx.isDaily}
-      body={locked ? lockedView : editor}
+      body={
+        <div className="space-y-3">
+          {lastSettled ? (
+            <p className="text-caption text-text-muted">
+              Week <span className="font-mono text-text">{lastSettled.weekKey}</span> settled at{" "}
+              <span
+                className={
+                  lastSettled.pnlPct > 0
+                    ? "font-mono text-success"
+                    : lastSettled.pnlPct < 0
+                      ? "font-mono text-danger"
+                      : "font-mono text-text-dim"
+                }
+              >
+                {lastSettled.pnlPct > 0 ? "+" : ""}
+                {lastSettled.pnlPct.toFixed(1)}%
+              </span>
+              .
+            </p>
+          ) : null}
+          {locked ? lockedView : editor}
+        </div>
+      }
       primary={
         !locked ? (
           <button
@@ -670,4 +676,14 @@ function Render({
       }
     />
   );
+}
+
+/** The most recent settled week before ``currentWeek``, if any. */
+function latestSettledWeek(
+  history: Record<string, StockMarketResult> | undefined,
+  currentWeek: string,
+): { weekKey: string; pnlPct: number } | null {
+  const weeks = Object.keys(history ?? {}).filter((wk) => wk < currentWeek).sort();
+  const weekKey = weeks[weeks.length - 1];
+  return weekKey && history ? { weekKey, pnlPct: history[weekKey].pnlPct } : null;
 }
