@@ -33,15 +33,23 @@ function screenPoint(bounds: PlaybackBounds, proj: Projection, view: View, m: Re
   };
 }
 
-/** The pin under a canvas-local point (CSS px), if any. */
+/** Whether a pin is drawn at replay time ``t`` (see drawMarkers). */
+function markerVisible(m: ReplayMapMarker, t: number) {
+  const end = typeof m.endT === "number" ? m.endT : m.t;
+  return Boolean(m.active || m.draft) || (t >= m.t - MARKER_LEAD_SEC && t <= end + MARKER_TRAIL_SEC);
+}
+
+/** The DRAWN pin under a canvas-local point (CSS px) at time ``t``, if any. */
 export function markerAt(
   markers: readonly ReplayMapMarker[],
   bounds: PlaybackBounds,
   proj: Projection,
   view: View,
   pt: { x: number; y: number },
+  t: number,
 ): ReplayMapMarker | undefined {
   return markers.find((m) => {
+    if (!markerVisible(m, t)) return false;
     const { sx, sy } = screenPoint(bounds, proj, view, m);
     return Math.hypot(pt.x - sx, pt.y - sy) <= MARKER_RADIUS_PX + 2;
   });
@@ -66,9 +74,9 @@ export function drawMarkers(
   ctx.textBaseline = "middle";
   ctx.font = "700 11px ui-sans-serif, system-ui, sans-serif";
   for (const m of markers) {
+    if (!markerVisible(m, t)) continue;
     const end = typeof m.endT === "number" ? m.endT : m.t;
     const near = t >= m.t - MARKER_LEAD_SEC && t <= end + MARKER_TRAIL_SEC;
-    if (!near && !m.active && !m.draft) continue;
     const { sx, sy } = screenPoint(bounds, proj, view, m);
     if (sx < -MARKER_RADIUS_PX || sy < -MARKER_RADIUS_PX || sx > w + MARKER_RADIUS_PX || sy > h + MARKER_RADIUS_PX) continue;
     ctx.globalAlpha = near || m.draft ? 1 : 0.55;

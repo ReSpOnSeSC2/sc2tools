@@ -21,6 +21,11 @@ export type MarkdownOptions = {
   onSeek?: (seconds: number) => void;
   /** Game length, so "99:99"-style non-times never become chips. */
   maxSeconds?: number | null;
+  /**
+   * Rendering a link label: no nested links or seek buttons (an <a> or
+   * <button> inside an <a> is invalid HTML and breaks hydration).
+   */
+  inLink?: boolean;
 };
 
 const LINK_REL = "nofollow ugc noopener noreferrer";
@@ -104,8 +109,8 @@ export function renderInline(text: string, opts: MarkdownOptions = {}, keyPrefix
     if (m[1] !== undefined) {
       out.push(<code key={key} className="rounded bg-bg-elevated px-1 py-0.5 font-mono text-[0.85em]">{m[1]}</code>);
     } else if (m[2] !== undefined) {
-      const href = safeHttpUrl(m[3]);
-      out.push(href ? externalLink(href, renderInline(m[2], opts, key), key) : m[0]);
+      const href = opts.inLink ? null : safeHttpUrl(m[3]);
+      out.push(href ? externalLink(href, renderInline(m[2], { ...opts, inLink: true }, key), key) : m[0]);
     } else if (m[4] !== undefined) {
       out.push(<strong key={key}>{renderInline(m[4], opts, key)}</strong>);
     } else if (m[5] !== undefined || m[6] !== undefined) {
@@ -113,11 +118,11 @@ export function renderInline(text: string, opts: MarkdownOptions = {}, keyPrefix
     } else if (m[7] !== undefined) {
       // Trailing sentence punctuation belongs to the sentence, not the URL.
       const trimmed = m[7].replace(/[.,;:!?]+$/, "");
-      const href = safeHttpUrl(trimmed);
+      const href = opts.inLink ? null : safeHttpUrl(trimmed);
       out.push(href ? externalLink(href, trimmed, key) : trimmed);
       if (trimmed.length < m[7].length) out.push(m[7].slice(trimmed.length));
     } else if (m[8] !== undefined) {
-      out.push(timestamp(m[8], opts, key));
+      out.push(opts.inLink ? m[8] : timestamp(m[8], opts, key));
     }
     last = m.index + m[0].length;
   }

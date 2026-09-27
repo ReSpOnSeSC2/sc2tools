@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { getMapImageUrl } from "@/lib/map-images";
+import { getMapImageUrl, getMapLayoutUrl } from "@/lib/map-images";
 
 /**
  * Dynamic OG card for a replay review: matchup, question snippet,
@@ -117,21 +117,40 @@ async function load(id: string): Promise<OgSummary | null> {
   }
 }
 
-/** Pre-fetch into a data URL so a slow/missing thumbnail can't fail the card. */
+/**
+ * Pre-fetch into a data URL so a slow/missing thumbnail can't fail the
+ * card. Satori only decodes PNG, JPEG and GIF — the 16:9 thumbnails are
+ * WebP — so fall back to the JPEG layout render, and drop anything else
+ * rather than crash the image.
+ */
 async function mapThumbnail(map: string): Promise<string | null> {
-  const url = getMapImageUrl(map);
-  if (!url) return null;
+  for (const url of [getMapImageUrl(map), getMapLayoutUrl(map)]) {
+    if (!url) continue;
+    const embedded = await embeddable(url);
+    if (embedded) return embedded;
+  }
+  return null;
+}
+
+async function embeddable(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, { next: { revalidate: 86_400 } });
     if (!res.ok) return null;
-    const type = res.headers.get("content-type") || "image/jpeg";
-    if (!type.startsWith("image/")) return null;
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length > 1_500_000) return null;
-    return `data:${type};base64,${bytes.toString("base64")}`;
+    const type = sniffImageType(bytes);
+    return type ? `data:${type};base64,${bytes.toString("base64")}` : null;
   } catch {
     return null;
   }
+}
+
+/** Trust the bytes, not the header: only formats Satori can draw. */
+function sniffImageType(bytes: Buffer): string | null {
+  if (bytes.length > 8 && bytes[0] === 0x89 && bytes.toString("ascii", 1, 4) === "PNG") return "image/png";
+  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (bytes.length > 6 && bytes.toString("ascii", 0, 4) === "GIF8") return "image/gif";
+  return null;
 }
 
 function truncate(value: string, max: number) {

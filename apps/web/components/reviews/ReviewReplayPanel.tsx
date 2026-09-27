@@ -12,7 +12,7 @@ import type { CommentTimelineMarker } from "@/components/analyzer/game/replay/Tr
 import { sanitizeMapPlayback } from "@/lib/mapReplay";
 import { sanitizePlaybackManifest } from "@/lib/segmentedPlayback";
 import { usePublicApi } from "@/lib/usePublicApi";
-import type { ReviewAnalysis } from "@/lib/reviews";
+import { reviewsRollout, type ReviewAnalysis } from "@/lib/reviews";
 
 const SegmentedReplayHost = dynamic(
   () => import("@/components/analyzer/game/replay/SegmentedReplayHost").then((m) => m.SegmentedReplayHost),
@@ -59,13 +59,17 @@ export function ReviewReplayPanel({
 }) {
   const enc = encodeURIComponent(requestId);
   const mode = analysis?.playback.mode ?? "none";
+  // The admins-only stage 404s anonymous reads, so send the token then.
+  const adminStage = reviewsRollout() === "admins";
   const inlineReq = usePublicApi<Record<string, unknown>>(
     mode === "inline" ? `/v1/reviews/${enc}/analysis/map-playback` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false },
+    { personalized: adminStage },
   );
   const manifestReq = usePublicApi<Record<string, unknown>>(
     mode === "segmented" ? `/v1/reviews/${enc}/analysis/map-playback/manifest` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false },
+    { personalized: adminStage },
   );
   const playback = useMemo(() => (inlineReq.data ? sanitizeMapPlayback(inlineReq.data) : null), [inlineReq.data]);
   const manifest = useMemo(() => (manifestReq.data ? sanitizePlaybackManifest(manifestReq.data) : null), [manifestReq.data]);
@@ -111,7 +115,7 @@ export function ReviewReplayPanel({
       <SegmentedReplayHost
         gameId={`review-${requestId}`}
         manifest={manifest}
-        anonymous
+        anonymous={!adminStage}
         segmentPath={segmentPath}
         onPlaybackTimeChange={onTimeChange}
         {...stageProps}

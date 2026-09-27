@@ -840,7 +840,7 @@ export function MapReplayer({
       if (!(proj.k > 0)) return;
       // Pins first, in screen px (they are drawn at a constant size).
       const hitMarker = onMarkerClickRef.current
-        ? markerAt(markersRef.current ?? [], b, proj, v, pt)
+        ? markerAt(markersRef.current ?? [], b, proj, v, pt, timeRef.current)
         : undefined;
       if (hitMarker && onMarkerClickRef.current) {
         onMarkerClickRef.current(hitMarker.id);

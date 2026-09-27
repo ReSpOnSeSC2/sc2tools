@@ -184,8 +184,9 @@ export function ReplayStage({
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
   // moment twice (clicking one time chip again after scrubbing away)
   // still jumps; routed through ``seek`` so a segmented host loads the
-  // right segment and MapReplayer sees a non-echo time.
-  const lastSeekSeq = useRef<number | null>(seekRequest?.seq ?? null);
+  // right segment and MapReplayer sees a non-echo time. Starts at null so
+  // a request made while the stage was still loading applies on mount.
+  const lastSeekSeq = useRef<number | null>(null);
   useEffect(() => {
     if (!seekRequest || seekRequest.seq === lastSeekSeq.current) return;
     lastSeekSeq.current = seekRequest.seq;
