@@ -2,6 +2,7 @@
 
 const { MongoClient } = require("mongodb");
 const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
+const { GUIDE_SAMPLE_TTL_SEC } = require("../config/guides");
 
 /**
  * @typedef {{
@@ -53,6 +54,9 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   reviewBlocks: import('mongodb').Collection<any>,
  *   notifications: import('mongodb').Collection<any>,
  *   browserIngestDaily: import('mongodb').Collection<any>,
+ *   guideSamples: import('mongodb').Collection,
+ *   guideStats: import('mongodb').Collection,
+ *   guideNotes: import('mongodb').Collection,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -136,6 +140,9 @@ async function connect({ uri, dbName }, observability = {}) {
     reviewBlocks: db.collection(COLLECTIONS.REVIEW_BLOCKS),
     notifications: db.collection(COLLECTIONS.NOTIFICATIONS),
     browserIngestDaily: db.collection(COLLECTIONS.BROWSER_INGEST_DAILY),
+    guideSamples: db.collection(COLLECTIONS.GUIDE_SAMPLES),
+    guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
+    guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -629,6 +636,7 @@ async function ensureIndexes(ctx) {
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
   await ensureReviewIndexes(ctx);
+  await ensureGuideSampleIndexes(ctx);
 }
 
 /**
@@ -694,6 +702,32 @@ async function ensureReviewIndexes(ctx) {
     { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
   );
   await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
+}
+
+/**
+ * ``guide_samples`` (services/guideSamples.js): pseudonymous per-game
+ * guide inputs.
+ *   - unique {userHash, gameHash}: the idempotent ingest/backfill upsert
+ *     key; its ``userHash`` prefix also serves GDPR deletes and the /me
+ *     comparison, so no separate {userHash:1} index;
+ *   - {matchup, buildKey, era}: the nightly per-matchup aggregation;
+ *   - TTL on createdAt: rows age out GUIDE_SAMPLE_TTL_SEC after capture.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureGuideSampleIndexes(ctx) {
+  await ctx.guideSamples.createIndex(
+    { userHash: 1, gameHash: 1 },
+    { unique: true, name: "guide_samples_user_game" },
+  );
+  await ctx.guideSamples.createIndex(
+    { matchup: 1, buildKey: 1, era: 1 },
+    { name: "guide_samples_matchup_build_era" },
+  );
+  await ctx.guideSamples.createIndex(
+    { createdAt: 1 },
+    { expireAfterSeconds: GUIDE_SAMPLE_TTL_SEC, name: "guide_samples_ttl" },
+  );
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

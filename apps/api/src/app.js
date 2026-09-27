@@ -74,6 +74,8 @@ const { MLService } = require("./services/ml");
 const { AgentVersionService } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
+const { GuideSamplesService } = require("./services/guideSamples");
+const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
@@ -621,6 +623,20 @@ function makeServices(deps) {
     secret: deps.config.serverPepper,
     logger: deps.logger,
   });
+  // SC2 Tools Guides: compact pseudonymous per-game guide inputs, captured
+  // fire-and-forget by POST /v1/games (routes/games.js). The backfill job
+  // distils older games from game_details; it is admin-triggered only and
+  // never started here or in server.js (server.js only stops it).
+  const guideSamples = new GuideSamplesService(deps.db, {
+    pepper: deps.config.serverPepper,
+    logger: deps.logger,
+  });
+  const guideSamplesBackfill = buildGuideSamplesBackfillJob({
+    db: deps.db,
+    guideSamples,
+    gameDetails,
+    logger: deps.logger,
+  });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
@@ -630,6 +646,7 @@ function makeServices(deps) {
     replayFiles,
     playbackArtifacts,
     customBuilds,
+    guideSamples,
   });
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
@@ -764,6 +781,8 @@ function makeServices(deps) {
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
+    guideSamples,
+    guideSamplesBackfill,
     publicProfile,
     chatbot,
     pulseDirectory,
@@ -961,6 +980,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       buildMetricsRouter({
         token: deps.config.metricsToken,
         liveGameBroker: services.liveGameBroker,
+        guideSamples: services.guideSamples,
       }),
     );
   }
@@ -1299,6 +1319,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
+      guideSamples: services.guideSamples,
       auth,
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,

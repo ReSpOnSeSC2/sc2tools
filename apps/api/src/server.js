@@ -358,6 +358,10 @@ async function main() {
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
+    // Admin-triggered guide backfill (never started at boot) and any
+    // in-flight fire-and-forget guide sample writes, before Mongo closes.
+    await /** @type {any} */ (services).guideSamplesBackfill.stop();
+    await /** @type {any} */ (services).guideSamples.drain();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();
     logger.info("shutdown_complete");

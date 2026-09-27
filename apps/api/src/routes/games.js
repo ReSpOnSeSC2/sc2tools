@@ -73,6 +73,9 @@ const REPLAY_INGEST_MAX_GAMES = 50;
  *     ) => Promise<boolean>,
  *   },
  *   io?: import('socket.io').Server,
+ *   guideSamples?: {
+ *     capture: (userId: string, game: Record<string, any>, opts?: { created?: boolean }) => void,
+ *   },
  *   auth: import('express').RequestHandler,
  *   browserIngestQuota?: import('./gamesIngestPolicy').BrowserIngestQuota,
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
@@ -607,6 +610,19 @@ function buildGamesRouter(deps) {
             ],
           });
           continue;
+        }
+        // Guide samples: the game is durable and its heavy fields are still
+        // on ``game`` (upsertWithRevision works on a shallow copy). capture()
+        // extracts synchronously and writes in the background — it never
+        // throws, never awaits and never retains ``game``. Runs for new and
+        // re-uploaded games alike (the sample upsert is idempotent; a
+        // re-upload relabelled to a non-guide build drops its stale sample).
+        if (deps.guideSamples && typeof deps.guideSamples.capture === "function") {
+          try {
+            deps.guideSamples.capture(userId, game, { created });
+          } catch {
+            // Belt and braces: capture is documented never to throw.
+          }
         }
         if (game.opponent && game.opponent.pulseId) {
           // Only bump counters on a brand-new ``games`` row

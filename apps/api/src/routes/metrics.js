@@ -15,9 +15,14 @@ const express = require("express");
  * metrics expose internal traffic shape. Prometheus/Grafana Cloud
  * scrape configs pass it via `authorization: Bearer <token>`.
  *
+ * Guide sample capture (services/guideSamples.js) exposes its
+ * captured/skipped/failed/dropped tallies the same way, as
+ * ``sc2tools_guide_samples_<counter>`` gauges.
+ *
  * @param {{
  *   token: string,
  *   liveGameBroker?: { counters: Record<string, number> },
+ *   guideSamples?: { counters: Record<string, number> },
  * }} deps
  * @returns {import('express').Router}
  */
@@ -30,22 +35,19 @@ function buildMetricsRouter(deps) {
   promClient.collectDefaultMetrics({ register: registry });
 
   if (deps.liveGameBroker) {
-    const broker = deps.liveGameBroker;
-    const counterNames = Object.keys(broker.counters || {});
-    for (const name of counterNames) {
-      // Broker counters are monotonic per-process tallies — expose as
-      // gauges read at scrape time so we never have to keep the two
-      // counting systems in sync.
-      const gauge = new promClient.Gauge({
-        name: `sc2tools_live_broker_${name}`,
-        help: `LiveGameBroker counter: ${name}`,
-        registers: [registry],
-        collect() {
-          this.set(broker.counters[name] || 0);
-        },
-      });
-      void gauge;
-    }
+    // Broker counters are monotonic per-process tallies — expose as
+    // gauges read at scrape time so we never have to keep the two
+    // counting systems in sync.
+    registerCounterGauges(promClient, registry, deps.liveGameBroker, {
+      prefix: "sc2tools_live_broker_",
+      help: "LiveGameBroker counter",
+    });
+  }
+  if (deps.guideSamples) {
+    registerCounterGauges(promClient, registry, deps.guideSamples, {
+      prefix: "sc2tools_guide_samples_",
+      help: "Guide sample capture counter",
+    });
   }
 
   router.get("/metrics", async (req, res) => {
@@ -60,6 +62,28 @@ function buildMetricsRouter(deps) {
   });
 
   return router;
+}
+
+/**
+ * One gauge per key of ``source.counters``, read live at scrape time.
+ *
+ * @param {typeof import('prom-client')} promClient
+ * @param {import('prom-client').Registry} registry
+ * @param {{ counters: Record<string, number> }} source
+ * @param {{ prefix: string, help: string }} naming
+ */
+function registerCounterGauges(promClient, registry, source, naming) {
+  for (const name of Object.keys(source.counters || {})) {
+    const gauge = new promClient.Gauge({
+      name: `${naming.prefix}${name}`,
+      help: `${naming.help}: ${name}`,
+      registers: [registry],
+      collect() {
+        this.set(source.counters[name] || 0);
+      },
+    });
+    void gauge;
+  }
 }
 
 module.exports = { buildMetricsRouter };

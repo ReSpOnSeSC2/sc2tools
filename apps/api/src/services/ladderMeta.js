@@ -10,6 +10,14 @@ const {
   isLadderMetaMmrBand,
   ladderMetaBracketLabel,
 } = require("../util/mmrBracketing");
+const {
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_ERAS,
+  PATCH_5_0_16_BUILD,
+  PATCH_5_0_16_RELEASE,
+  buildEraMatch,
+} = require("../util/patchEra");
 
 /**
  * Ladder Meta Radar — the effectiveness-weighted opener meta report.
@@ -100,16 +108,9 @@ const SCHEMA_VERSION = 2;
 
 const BAND_TYPE_LEAGUE = "league";
 const BAND_TYPE_MMR = "mmr";
-const PATCH_ERA_AFTER = "after";
-const PATCH_ERA_BEFORE = "before";
-/** @type {ReadonlyArray<"after" | "before">} */
-const PATCH_ERAS = Object.freeze([PATCH_ERA_AFTER, PATCH_ERA_BEFORE]);
-// First live 5.0.16 build. New agent uploads carry the replay's exact build
-// and release string, so the meta split follows the game version even when a
-// replay's timestamp is skewed. The release instant remains the compatibility
-// fallback for rows uploaded before version metadata existed.
-const PATCH_5_0_16_BUILD = 97364;
-const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
+// Patch-era constants and the era $match live in util/patchEra.js (shared
+// with the guides pipeline); re-exported below so this module's public
+// surface is unchanged.
 const BAND_INDEX_KEY = Object.freeze({ era: 1, bandType: 1, band: 1, matchup: 1 });
 
 /** Race initials accepted on either side of the matchup. */
@@ -496,68 +497,6 @@ function buildGamesMatch(bandType, era) {
     $and: [
       buildEraMatch(era),
       { $or: [{ playerCount: { $exists: false } }, { playerCount: 2 }] },
-    ],
-  };
-}
-
-/**
- * Prefer replay-authored version metadata over wall-clock time. ``gameBuild``
- * is monotonic and therefore authoritative. ``gameVersion`` covers partially
- * upgraded producers, while ``date`` keeps the historical corpus queryable.
- * The branches are mutually exclusive so a row cannot land in both eras.
- *
- * @param {"after" | "before"} era
- * @returns {Record<string, any>}
- */
-function buildEraMatch(era) {
-  const missingBuild = { gameBuild: { $not: { $type: "number" } } };
-  const missingVersion = { gameVersion: { $not: { $type: "string" } } };
-  const versionBuild = {
-    $convert: {
-      input: { $arrayElemAt: [{ $split: ["$gameVersion", "."] }, -1] },
-      to: "int",
-      onError: -1,
-      onNull: -1,
-    },
-  };
-  if (era === PATCH_ERA_BEFORE) {
-    return {
-      $or: [
-        { gameBuild: { $type: "number", $lt: PATCH_5_0_16_BUILD } },
-        {
-          $and: [
-            missingBuild,
-            { gameVersion: { $type: "string" } },
-            { $expr: { $lt: [versionBuild, PATCH_5_0_16_BUILD] } },
-          ],
-        },
-        {
-          $and: [
-            missingBuild,
-            missingVersion,
-            { date: { $lt: PATCH_5_0_16_RELEASE } },
-          ],
-        },
-      ],
-    };
-  }
-  return {
-    $or: [
-      { gameBuild: { $type: "number", $gte: PATCH_5_0_16_BUILD } },
-      {
-        $and: [
-          missingBuild,
-          { gameVersion: { $type: "string" } },
-          { $expr: { $gte: [versionBuild, PATCH_5_0_16_BUILD] } },
-        ],
-      },
-      {
-        $and: [
-          missingBuild,
-          missingVersion,
-          { date: { $gte: PATCH_5_0_16_RELEASE } },
-        ],
-      },
     ],
   };
 }
