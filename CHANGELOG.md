@@ -84,6 +84,8 @@ corresponding GitHub Release.
   stretched labels, and the desktop panel is wider. On phones the chart stays
   pinned under the header while the unit roster scrolls beneath it, and a
   sideways drag scrubs the chart while vertical drags still scroll the page.
+  Phones also get all six chart options in two rows and a roster of square
+  unit, building and upgrade icons with the count on the corner.
   Upgrades no longer appear in the Units row as separate "1" chips for each
   level: each upgrade line shows once in the Upgrades row at its level (1, 2 or
   3), and one-off research has no number. After a lost final fight the roster

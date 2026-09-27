@@ -19,8 +19,10 @@ import {
   type TimelineMetricDef,
 } from "./timelineMetrics";
 
+// Phones: equal cells in a 3 x 2 grid, labels allowed to wrap on the
+// narrowest screens. From sm up: a single wrapping row of buttons.
 const SEGMENT_BASE =
-  "inline-flex h-8 flex-shrink-0 items-center whitespace-nowrap rounded-md border px-2.5 text-caption font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex min-h-8 items-center justify-center rounded-md border px-1.5 py-1 text-center text-micro font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40 sm:h-8 sm:flex-shrink-0 sm:whitespace-nowrap sm:px-2.5 sm:py-0 sm:text-caption";
 const SEGMENT_ON = "border-text bg-text text-bg";
 const SEGMENT_OFF =
   "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text";
@@ -40,12 +42,12 @@ export function MetricTabs({
   blocksAvailable: boolean;
 }) {
   return (
-    // One swipeable row on phones, where the chart is pinned and every
-    // pixel of height matters; wrapped rows from ``sm`` up.
+    // Every option visible on a phone (no swiping to find Supply Blocks),
+    // in two compact rows like sc2replaystats.
     <div
       role="group"
       aria-label="Chart view"
-      className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden"
+      className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:items-center"
     >
       {TIMELINE_METRICS.map((m) => {
         const on = m.key === metric;

@@ -84,6 +84,9 @@ export interface CompositionSnapshotProps {
  * distances on dense rosters. The chip text scales with the icon. */
 const CHIP_ICON_PX = 22;
 
+/** Roster icon size: 34 px inside a phone tile, CHIP_ICON_PX from ``sm``. */
+const TILE_ICON_CLASS = "h-[34px] w-[34px] sm:h-[22px] sm:w-[22px]";
+
 /**
  * Icon size in the tap-to-enlarge detail dialog. Both the game icons
  * and the fallback renders use saved thumbnail assets.
@@ -593,6 +596,7 @@ function ChipIcon({
   side,
   fallback,
   px = CHIP_ICON_PX,
+  tile = false,
 }: {
   name: string;
   kind: ChipKind;
@@ -600,10 +604,26 @@ function ChipIcon({
   fallback: string;
   /** Rendered box size for the roster chip or the enlarged detail. */
   px?: number;
+  /**
+   * Roster tile sizing: a large icon on phones (sc2replaystats' icon
+   * grid) and ``px`` from ``sm`` up. CSS classes size it, because an
+   * inline size cannot change with the screen.
+   */
+  tile?: boolean;
 }) {
   const [failedUrls, setFailedUrls] = useState<string[]>([]);
+  const tileSize = tile ? TILE_ICON_CLASS : undefined;
   if (kind === "upgrade") {
-    return <Icon name={name} kind={kind} size={px} fallback={fallback} decorative />;
+    return (
+      <Icon
+        name={name}
+        kind={kind}
+        size={px}
+        fallback={fallback}
+        className={tileSize}
+        decorative
+      />
+    );
   }
   const sprite = canonicalSpriteName(name);
   // Resolve aliases before applying the audited artwork exceptions.
@@ -635,19 +655,19 @@ function ChipIcon({
         decoding="async"
         onError={() => setFailedUrls((urls) => [...urls, url])}
         style={{
-          width: px,
-          height: px,
+          width: tile ? undefined : px,
+          height: tile ? undefined : px,
           transform: scale === 1 ? undefined : `scale(${scale})`,
         }}
-        className="shrink-0 object-contain"
+        className={`shrink-0 object-contain ${tileSize ?? ""}`}
       />
     );
   }
   return (
     <span
       aria-hidden
-      style={{ height: px, lineHeight: `${px}px` }}
-      className="inline-flex items-center justify-center rounded bg-bg-elevated px-1 text-micro font-medium uppercase tracking-wide text-text-dim"
+      style={tile ? undefined : { height: px, lineHeight: `${px}px` }}
+      className={`inline-flex items-center justify-center rounded bg-bg-elevated px-1 text-micro font-medium uppercase tracking-wide text-text-dim ${tileSize ?? ""}`}
     >
       {fallback}
     </span>
@@ -691,10 +711,10 @@ function UnitChip({
   return (
     <button
       type="button"
-      // ``py-1.5`` on touch and the original ``py-1`` from sm up: the
-      // desktop roster keeps its density while the tap target clears
-      // the ~32 px the chip needs to be reliably hittable.
-      className={`inline-flex touch-manipulation items-center gap-1.5 rounded ${toneClass} px-2 py-1.5 text-[13px] tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:py-1`}
+      // Phones: a 44 px square tile with the number printed over the
+      // icon's corner, sc2replaystats' dense icon grid (seven across a
+      // typical phone). From sm up: the compact icon + number pill.
+      className={`relative inline-flex h-11 w-11 touch-manipulation items-center justify-center rounded-md ${toneClass} tabular-nums text-text transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:h-auto sm:w-auto sm:justify-start sm:gap-1.5 sm:rounded sm:px-2 sm:py-1 sm:text-[13px]`}
       title={label}
       aria-label={label}
       aria-haspopup="dialog"
@@ -711,9 +731,11 @@ function UnitChip({
         })
       }
     >
-      <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} />
+      <ChipIcon name={name} kind={kind} side={ctx.side} fallback={fallback} tile />
       {countText != null ? (
-        <span className="font-semibold">{countText}</span>
+        <span className="pointer-events-none absolute bottom-0.5 right-1 text-[15px] font-extrabold leading-none text-white [text-shadow:0_0_2px_rgb(0_0_0),0_0_2px_rgb(0_0_0),1px_1px_1px_rgb(0_0_0)] sm:static sm:text-[13px] sm:font-semibold sm:leading-normal sm:text-text sm:[text-shadow:none]">
+          {countText}
+        </span>
       ) : null}
     </button>
   );

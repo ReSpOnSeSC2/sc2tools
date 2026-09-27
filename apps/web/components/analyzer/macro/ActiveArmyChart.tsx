@@ -286,7 +286,7 @@ export function ActiveArmyChart({
         // chart so they can scrub. Set on this HTML box because Chrome
         // ignores ``touch-action`` on SVG shapes like the overlay rect.
         style={{ touchAction: "pan-y pinch-zoom" }}
-        className="relative h-[clamp(190px,30vh,280px)] w-full sm:h-[clamp(260px,44vh,460px)]"
+        className="relative h-[clamp(180px,28vh,260px)] w-full sm:h-[clamp(260px,44vh,460px)]"
       >
         <svg
           role="img"
