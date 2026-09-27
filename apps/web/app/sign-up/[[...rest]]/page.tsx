@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
+import { PRODUCT_FACTS } from "@/lib/productFacts";
 
 export default function SignUpPage() {
   return (
@@ -43,7 +44,7 @@ const BULLETS: ReadonlyArray<MarketingBullet> = [
   },
   {
     icon: Tv,
-    text: "Broadcast-ready overlay with 15 widgets and per-widget URLs for OBS.",
+    text: `Broadcast-ready overlay with ${PRODUCT_FACTS.overlayWidgets} widgets and per-widget URLs for OBS.`,
   },
   {
     icon: ShieldCheck,

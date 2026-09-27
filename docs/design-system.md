@@ -2,7 +2,7 @@
 
 The SC2 Tools design system is the single source of truth for color,
 typography, spacing, motion, and elevation across every surface we ship:
-the React SPA analyzer, the Tkinter desktop GUI, the sixteen OBS browser-
+the React SPA analyzer, the Tkinter desktop GUI, the OBS browser-
 source overlay widgets, and the future web dashboard / React Native mobile
 app.
 
