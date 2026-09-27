@@ -3415,8 +3415,9 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     ``apm`` is actions per minute as StarCraft II counts them (commands,
     selections and control-group actions); ``spm`` is selections per
     minute. Each player also carries ``avg_apm``: all their actions over
-    the game's length in minutes, the same average SC2 and sc2reader
-    report. Returns None when the replay has no players or length.
+    the game's length in minutes. (sc2reader's APMTracker stops a player's
+    clock when they leave, so it reads a leaver a fraction higher.)
+    Returns None when the replay has no players or length.
     """
     me = getattr(ctx, "me", None)
     opp = getattr(ctx, "opponent", None)
