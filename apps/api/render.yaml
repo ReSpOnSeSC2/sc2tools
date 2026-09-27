@@ -63,6 +63,10 @@ services:
         # Explicit rollout gate: set to r2 in Render only after agent 0.15.16
         # is published and the private bucket/lifecycle rule are ready.
         sync: false
+      # Replay Review Exchange rollout: off (default) | admins | on. Set the
+      # matching NEXT_PUBLIC_REVIEWS_ENABLED on Vercel. See docs/reviews.md.
+      - key: REVIEWS_ENABLED
+        sync: false
       - key: R2_REPLAY_PREFIX
         value: raw-replays/v1
       # Optional public cost snapshot. This is a separate least-privilege

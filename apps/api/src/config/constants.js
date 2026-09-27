@@ -95,6 +95,18 @@ const COLLECTIONS = Object.freeze({
   PLAYER_IDENTITIES: "player_identities",
   PLAYER_IDENTITY_SUBMISSIONS: "player_identity_submissions",
   PLAYER_IDENTITY_DIRECTORY: "player_identity_directory",
+  // Replay Review Exchange. Requests freeze a redacted snapshot of one of
+  // the asker's games; comments pin a moment (and optionally a map point)
+  // on that game's timeline. Karma is an append-only ledger whose unique
+  // (commentId, kind, actorId) key makes every reward idempotent; blocks
+  // are per-user mutes. See docs/reviews.md.
+  REVIEW_REQUESTS: "review_requests",
+  REVIEW_COMMENTS: "review_comments",
+  REVIEW_KARMA_EVENTS: "review_karma_events",
+  REVIEW_BLOCKS: "review_blocks",
+  // Per-user in-app notifications (the header bell). Distinct from the
+  // admin-only ``admin_events`` feed above.
+  NOTIFICATIONS: "notifications",
 });
 
 const LIMITS = Object.freeze({
@@ -145,6 +157,40 @@ const LIMITS = Object.freeze({
   MACRO_JOB_HISTORY: 50,
 });
 
+// Replay Review Exchange (docs/reviews.md). Every threshold the feature
+// enforces lives here so the playbook and the code cannot drift apart.
+const REVIEWS = Object.freeze({
+  QUESTION_MIN: 20,
+  QUESTION_MAX: 500,
+  COMMENT_MIN: 10,
+  COMMENT_MAX: 2000,
+  COMMENT_MAX_LINKS: 5,
+  MAX_OPEN_REQUESTS: 3,
+  MAX_NEW_REQUESTS_PER_DAY: 3,
+  MAX_COMMENTS_PER_REQUEST: 500,
+  COMMENTS_PER_HOUR: 30,
+  COMMENTS_PER_DAY: 200,
+  MIN_SYNCED_GAMES_TO_COMMENT: 20,
+  EDIT_WINDOW_MS: 15 * 60 * 1000,
+  MAX_RANGE_SEC: 300,
+  AUTO_HIDE_DISTINCT_REPORTS: 3,
+  KARMA_HELPFUL: 5,
+  KARMA_BEST: 15,
+  KARMA_UPVOTE: 1,
+  KARMA_UPVOTE_CAP_PER_COMMENT: 10,
+  KARMA_REMOVED: -20,
+  // Verified reviewer band: ladder 1v1 games in the current or previous
+  // season, per race. A band needs BAND_SUPPORT games at or above it and
+  // the race needs MIN_GAMES in total, so one outlier never verifies.
+  VERIFY_MIN_GAMES: 10,
+  VERIFY_BAND_SUPPORT: 3,
+  VERIFY_FALLBACK_WINDOW_DAYS: 180,
+  VERIFY_TTL_MS: 12 * 60 * 60 * 1000,
+  BOARD_PAGE_DEFAULT: 20,
+  BOARD_PAGE_MAX: 40,
+  LEADERBOARD_SIZE: 10,
+});
+
 const TIMEOUTS = Object.freeze({
   MONGO_CONNECT_MS: 5000,
   MONGO_SOCKET_MS: 30000,
@@ -164,6 +210,7 @@ module.exports = {
   SERVICE,
   COLLECTIONS,
   LIMITS,
+  REVIEWS,
   TIMEOUTS,
   PYTHON,
 };

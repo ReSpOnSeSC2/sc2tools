@@ -580,6 +580,11 @@ const STATS_NUMBER_FIELDS = [
 module.exports = {
   buildPublicReplaysRouter,
   PUBLIC_REPLAYS_RATE_LIMIT_PER_MIN,
+  // Allow-list sanitizers shared with the Replay Review Exchange's scoped
+  // analysis grant (services/reviewRedaction.js). They never spread input.
+  publicMacroBreakdown,
+  boundedString,
+  boundedNumber,
   _internals: {
     parseReplayListQuery,
     publicReplayItem,

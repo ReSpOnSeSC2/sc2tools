@@ -82,6 +82,10 @@ class PublicProfileService {
     this.aggregations =
       (opts && opts.aggregations) || new AggregationsService(db);
     this.builds = (opts && opts.builds) || new BuildsService(db);
+    // Replay Review Exchange reviewer section. Assigned in makeServices
+    // (the reputation service is built later); null → no section.
+    /** @type {import('./reviewerReputation').ReviewerReputationService | null} */
+    this.reviewerReputation = null;
   }
 
   /**
@@ -98,6 +102,7 @@ class PublicProfileService {
    *   signatureBuilds: Array<{ name: string, games: number, wins: number, losses: number, winRate: number }>,
    *   featuredBuild: { slug: string, title: string, matchup: string | null, votes: number } | null,
    *   publishedBuildCount: number,
+   *   reviewer: Record<string, any> | null,
    * } | null>}
    *   ``null`` when the handle is malformed, unknown, or the user has not
    *   opted in — the route turns every ``null`` into a neutral 404 so a
@@ -120,10 +125,13 @@ class PublicProfileService {
     // reusing the analytics summary. We intentionally read ONLY
     // ``totals`` and ``byMatchup`` — ``summary.recent`` carries opponent
     // display names, which must never surface on a public page.
-    const [summary, buildRows, mainRace] = await Promise.all([
+    const [summary, buildRows, mainRace, reviewer] = await Promise.all([
       this.aggregations.summary(userId, {}),
       this.builds.list(userId, {}),
       this._mainRace(userId),
+      this.reviewerReputation
+        ? this.reviewerReputation.publicSection(userId).catch(() => null)
+        : Promise.resolve(null),
     ]);
 
     const totals = shapeTotals(summary && summary.totals);
@@ -146,6 +154,9 @@ class PublicProfileService {
       publishedBuildCount: Number.isFinite(author.totalBuilds)
         ? author.totalBuilds
         : 0,
+      // Karma, best answers and matchups reviewed — only once they have
+      // reviewed something (docs/reviews.md).
+      reviewer,
     };
   }
 

@@ -83,6 +83,7 @@ class GdprService {
    *   replayFiles?: import('./replayFiles').ReplayFilesService|null,
    *   playbackArtifacts?: import('./playbackArtifacts').PlaybackArtifactsService|null,
    *   customBuilds?: import('./types').CustomBuildsService,
+   *   reviews?: import('./reviews').ReviewsService | null,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -102,6 +103,11 @@ class GdprService {
     this.replayFiles = (opts && opts.replayFiles) || null;
     this.playbackArtifacts = (opts && opts.playbackArtifacts) || null;
     this.customBuilds = (opts && opts.customBuilds) || null;
+    // Replay Review Exchange. Wired after construction in makeServices
+    // (the reviews service depends on services built later); every path
+    // below is a no-op until it is set.
+    /** @type {import('./reviews').ReviewsService | null} */
+    this.reviews = (opts && opts.reviews) || null;
   }
 
   /**
@@ -198,6 +204,12 @@ class GdprService {
         { ownerUserId: userId },
         { projection: { _id: 0, updatedBy: 0 } },
       ).toArray();
+    }
+    // Review requests/comments/karma/blocks/notifications are public or
+    // shared content: exported here, deliberately NOT restorable (they
+    // are not in USER_SCOPED_COLLECTIONS).
+    if (this.reviews) {
+      Object.assign(data, await this.reviews.exportForUser(userId));
     }
     return {
       userId,
@@ -304,6 +316,15 @@ class GdprService {
         },
       );
       counts.adminEventsScrubbed = scrubRes.modifiedCount || 0;
+    }
+
+    // Replay Review Exchange: the user's requests (and the threads under
+    // them) are deleted; comments they wrote on other people's requests
+    // are anonymised to "[deleted user]"; blocks, notifications and the
+    // karma they received go; karma they gave loses its actor id.
+    if (this.reviews) {
+      await gdprFence.assert();
+      addDeletionCounts(counts, await this.reviews.deleteForUser(userId));
     }
 
     // Close the upload-completion race: a request that passed ownership
@@ -699,6 +720,10 @@ class GdprService {
     }
     await gdprFence.assert();
     const macroJobsRes = await this.db.macroJobs.deleteMany({ userId });
+
+    // A review request's scoped grant points at one game; once that game
+    // is gone the request closes (its thread text stays).
+    if (this.reviews) await this.reviews.closeForMissingGames(userId);
 
     const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
     await gdprFence.assert();

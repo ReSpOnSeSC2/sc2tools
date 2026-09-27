@@ -90,8 +90,14 @@ import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
 import { getIconPath, type IconKind } from "@/lib/sc2-icons";
 import { REPLAY_SCOPE_CLASS } from "./replay/replayTheme";
+import { drawMarkers, markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
+
+export type { ReplayMapMarker };
 
 const SPEEDS = [1, 4, 8, 16] as const;
+
+/** A pointer that travelled further than this is a drag, not a tap. */
+const TAP_SLOP_PX = 6;
 /** The floating map-view controls. Glass over the canvas, so they read
  *  at any terrain colour without a hard panel cutting into the map. */
 const VIEW_BUTTON_CLASS =
@@ -342,6 +348,15 @@ export function MapReplayer({
    * which is also the only way to break the feedback loop that used to
    * pin the map at its 240 px floor (see the sizing effect below). */
   fill = false,
+  /* ── Optional host interaction (review pins) ────────────────────
+   * ``onWorldClick`` receives the WORLD point under a tap/click (never
+   * a drag or pinch) plus the exact clock time, ``markers`` draws
+   * numbered pins, ``onMarkerClick`` fires when a pin is tapped. All
+   * three live in refs, so neither the rAF loop nor the pointer
+   * listeners re-bind when a host passes fresh arrays. */
+  onWorldClick,
+  markers,
+  onMarkerClick,
 }: {
   playback: MapPlayback;
   /** The loaded segment. The clock waits at its end until the next arrives. */
@@ -356,6 +371,9 @@ export function MapReplayer({
   onSpeedChange?: (speed: (typeof SPEEDS)[number]) => void;
   hideControls?: boolean;
   fill?: boolean;
+  onWorldClick?: (x: number, y: number, t: number) => void;
+  markers?: readonly ReplayMapMarker[];
+  onMarkerClick?: (id: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -377,6 +395,14 @@ export function MapReplayer({
   onPlayingChangeRef.current = onPlayingChange;
   const onSpeedChangeRef = useRef(onSpeedChange);
   onSpeedChangeRef.current = onSpeedChange;
+  const onWorldClickRef = useRef(onWorldClick);
+  onWorldClickRef.current = onWorldClick;
+  const onMarkerClickRef = useRef(onMarkerClick);
+  onMarkerClickRef.current = onMarkerClick;
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
   // Last value we published, so the sync effect can tell the host
   // echoing our own tick apart from a real external seek.
   const lastEmitRef = useRef<number | null>(null);
@@ -604,9 +630,10 @@ export function MapReplayer({
         canvas.height !== drawn.ch ||
         view.z !== drawn.z ||
         view.ox !== drawn.ox ||
-        view.oy !== drawn.oy;
+        view.oy !== drawn.oy ||
+        markersRef.current !== drawn.mk;
       if (dirty) {
-        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view);
+        renderFrame(ctx, canvas, playback, timeRef.current, layoutImageRef.current, view, markersRef.current);
         drawn = {
           t: timeRef.current,
           v: assetsVersion,
@@ -620,11 +647,15 @@ export function MapReplayer({
           z: view.z,
           ox: view.ox,
           oy: view.oy,
+          mk: markersRef.current,
         };
       }
     };
     let lastReactSync = -1;
-    let drawn = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0 };
+    let drawn: {
+      t: number; v: number; sv: number; cw: number; ch: number; z: number; ox: number; oy: number;
+      mk: readonly ReplayMapMarker[] | undefined;
+    } = { t: -1, v: -1, sv: -1, cw: 0, ch: 0, z: 1, ox: 0, oy: 0, mk: undefined };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [playback, gameLength, emitTime, emitPlaying]);
@@ -736,6 +767,10 @@ export function MapReplayer({
     if (!canvas) return;
     const pointers = new Map<number, { x: number; y: number }>();
     let pinchDist = 0;
+    // Tap detection for host clicks: a gesture that pans, pinches or
+    // wanders past TAP_SLOP_PX is not a click on the map.
+    let tapStart: { x: number; y: number } | null = null;
+    let tapMoved = false;
 
     const local = (e: { clientX: number; clientY: number }) => {
       const rect = canvas.getBoundingClientRect();
@@ -748,6 +783,12 @@ export function MapReplayer({
     };
     const onPointerDown = (e: PointerEvent) => {
       pointers.set(e.pointerId, local(e));
+      if (pointers.size === 1) {
+        tapStart = local(e);
+        tapMoved = false;
+      } else {
+        tapMoved = true;
+      }
       canvas.setPointerCapture(e.pointerId);
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
@@ -759,6 +800,7 @@ export function MapReplayer({
       if (!prev) return;
       const now = local(e);
       pointers.set(e.pointerId, now);
+      if (tapStart && Math.hypot(now.x - tapStart.x, now.y - tapStart.y) > TAP_SLOP_PX) tapMoved = true;
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -783,6 +825,38 @@ export function MapReplayer({
       pinchDist = 0;
     };
     const onDblClick = () => resetView();
+    const onClick = (e: MouseEvent) => {
+      const moved = tapMoved;
+      tapStart = null;
+      tapMoved = false;
+      if (moved || e.detail > 1) return; // drag, pinch, or the 2nd click of a dblclick
+      const pt = local(e);
+      const v = viewRef.current;
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const cw = canvas.width / dpr;
+      const ch = canvas.height / dpr;
+      const b = playbackRef.current.bounds;
+      const proj = worldProjection(b, cw, ch, STAGE_PAD_PX);
+      if (!(proj.k > 0)) return;
+      // Pins first, in screen px (they are drawn at a constant size).
+      const hitMarker = onMarkerClickRef.current
+        ? markerAt(markersRef.current ?? [], b, proj, v, pt)
+        : undefined;
+      if (hitMarker && onMarkerClickRef.current) {
+        onMarkerClickRef.current(hitMarker.id);
+        return;
+      }
+      const handler = onWorldClickRef.current;
+      if (!handler) return;
+      // Exact inverse of renderFrame: undo zoom/pan, then the projection
+      // (world Y points up; the canvas flips it).
+      const sx = (pt.x - v.ox) / v.z;
+      const sy = (pt.y - v.oy) / v.z;
+      const worldX = b.minX + (sx - proj.ox) / proj.k;
+      const worldY = b.maxY - (sy - proj.oy) / proj.k;
+      if (worldX < b.minX || worldX > b.maxX || worldY < b.minY || worldY > b.maxY) return;
+      handler(worldX, worldY, timeRef.current);
+    };
 
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -790,7 +864,9 @@ export function MapReplayer({
     canvas.addEventListener("pointerup", onPointerEnd);
     canvas.addEventListener("pointercancel", onPointerEnd);
     canvas.addEventListener("dblclick", onDblClick);
+    canvas.addEventListener("click", onClick);
     return () => {
+      canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -1428,6 +1504,7 @@ function renderFrame(
   t: number,
   layout: HTMLImageElement | null,
   view: ViewTransform,
+  markers?: readonly ReplayMapMarker[],
 ) {
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const w = canvas.width / dpr;
@@ -1790,6 +1867,10 @@ function renderFrame(
   if (vignette) {
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
+  }
+
+  if (markers && markers.length) {
+    drawMarkers(ctx, bounds, worldProjection(bounds, w, h, STAGE_PAD_PX), t, view, w, h, markers);
   }
 }
 

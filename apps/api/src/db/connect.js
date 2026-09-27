@@ -47,6 +47,11 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   playerIdentities: import('mongodb').Collection,
  *   playerIdentitySubmissions: import('mongodb').Collection,
  *   playerIdentityDirectory: import('mongodb').Collection,
+ *   reviewRequests: import('mongodb').Collection<any>,
+ *   reviewComments: import('mongodb').Collection<any>,
+ *   reviewKarmaEvents: import('mongodb').Collection<any>,
+ *   reviewBlocks: import('mongodb').Collection<any>,
+ *   notifications: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -124,6 +129,11 @@ async function connect({ uri, dbName }, observability = {}) {
     playerIdentities: db.collection(COLLECTIONS.PLAYER_IDENTITIES),
     playerIdentitySubmissions: db.collection(COLLECTIONS.PLAYER_IDENTITY_SUBMISSIONS),
     playerIdentityDirectory: db.collection(COLLECTIONS.PLAYER_IDENTITY_DIRECTORY),
+    reviewRequests: db.collection(COLLECTIONS.REVIEW_REQUESTS),
+    reviewComments: db.collection(COLLECTIONS.REVIEW_COMMENTS),
+    reviewKarmaEvents: db.collection(COLLECTIONS.REVIEW_KARMA_EVENTS),
+    reviewBlocks: db.collection(COLLECTIONS.REVIEW_BLOCKS),
+    notifications: db.collection(COLLECTIONS.NOTIFICATIONS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -597,6 +607,73 @@ async function ensureIndexes(ctx) {
   await ctx.pulseCharacterLinks.createIndex({ updatedAt: -1 });
   await ctx.pulseCharacterLinks.createIndex({ accountId: 1 }, { sparse: true });
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
+
+  await ensureReviewIndexes(ctx);
+}
+
+/**
+ * Replay Review Exchange + user notifications (docs/reviews.md).
+ *
+ * Board reads filter on the denormalised ``listed`` flag (public
+ * visibility, open/answered, not moderation-hidden) so every sort is a
+ * single index range: New = createdAt, Hot = the monotone ``hotScore``
+ * (activity with an age term baked in at write time, so it never needs
+ * a decay sweep), Top = ``topScore``. ``activeKey`` is present only while
+ * a request is open/answered, making "one live request per game" a
+ * unique-sparse constraint instead of a racy read-then-insert.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureReviewIndexes(ctx) {
+  await ctx.reviewRequests.createIndex({ activeKey: 1 }, { unique: true, sparse: true });
+  await ctx.reviewRequests.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.reviewRequests.createIndex({ userId: 1, gameId: 1 });
+  await ctx.reviewRequests.createIndex({ listed: 1, createdAt: -1, _id: -1 });
+  await ctx.reviewRequests.createIndex({ listed: 1, hotScore: -1, _id: -1 });
+  await ctx.reviewRequests.createIndex({ listed: 1, topScore: -1, _id: -1 });
+  await ctx.reviewRequests.createIndex({ listed: 1, matchup: 1, createdAt: -1 });
+  await ctx.reviewRequests.createIndex({ listed: 1, reviewCount: 1, createdAt: -1 });
+  await ctx.reviewRequests.createIndex({ indexable: 1, lastActivityAt: -1 });
+
+  await ctx.reviewComments.createIndex({ requestId: 1, createdAt: 1, _id: 1 });
+  await ctx.reviewComments.createIndex({ authorId: 1, createdAt: -1 });
+  await ctx.reviewComments.createIndex({ parentId: 1 }, { sparse: true });
+
+  // One reward per (comment, kind, actor). GDPR anonymisation clears a
+  // deleted actor's id, so only string actors participate in uniqueness.
+  await ctx.reviewKarmaEvents.createIndex(
+    { commentId: 1, kind: 1, actorId: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { actorId: { $type: "string" } },
+      name: "review_karma_idempotency",
+    },
+  );
+  await ctx.reviewKarmaEvents.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.reviewKarmaEvents.createIndex({ createdAt: -1, userId: 1 });
+
+  await ctx.reviewBlocks.createIndex({ blockerId: 1, blockedId: 1 }, { unique: true });
+  await ctx.reviewBlocks.createIndex({ blockedId: 1 });
+
+  await ctx.notifications.createIndex({ userId: 1, createdAt: -1 });
+  await ctx.notifications.createIndex({ userId: 1, readAt: 1 });
+  // Grouped notifications ("3 new reviews on your request") collapse onto
+  // the caller's single UNREAD row per group; once read, the next event
+  // starts a fresh row.
+  await ctx.notifications.createIndex(
+    { userId: 1, groupKey: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { readAt: null, groupKey: { $type: "string" } },
+      name: "notification_unread_group",
+    },
+  );
+  // In-app notifications are a bell, not an archive.
+  await ctx.notifications.createIndex(
+    { createdAt: 1 },
+    { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
+  );
+  await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };
