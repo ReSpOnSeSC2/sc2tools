@@ -43,6 +43,9 @@ log = logging.getLogger(__name__)
 # well within 5000 events even for a 30-minute Zerg macro game).
 _BUILD_LOG_CAP = 5000
 _EARLY_BUILD_LOG_CAP = 1000
+# Mirrors ``apm: {maximum: 5000}`` in the same schema. An out-of-range
+# value would reject the whole game, so the slim ``apm`` is omitted instead.
+_APM_SCHEMA_MAX = 5000.0
 
 # Behavioral identity signatures deliberately stay compact enough to live on
 # the cloud's slim game row.  Ten minutes captures the hotkey layout and the
@@ -1127,8 +1130,10 @@ def parse_replay_for_cloud_ex(
         map_name=str(ctx.map_name),
         duration_sec=int(ctx.length_seconds or 0),
         macro_score=macro_score_value,
-        apm=getattr(me, "apm", None),
-        spq=getattr(me, "spq", None),
+        # PlayerInfo has no apm/spq fields; reading them off ``me`` sent
+        # null on every game. Derive both from the payloads built above.
+        apm=_my_average_apm(apm_curve, getattr(me, "pid", None)),
+        spq=_my_spending_quotient(macro_breakdown),
         my_mmr=my_mmr,
         my_toon_handle=my_toon_handle,
         player_count=_player_count(ctx),
@@ -1428,6 +1433,148 @@ def _raw_map_playback(ctx: Any, playback_mod: Any) -> Optional[Dict[str, Any]]:
     return playback
 
 
+# Half-width of the window around a battle marker used to measure who lost
+# more army value. PlayerStatsEvents arrive every ~10 s, so a narrower
+# window can miss the sample that records the fight's losses.
+_DEATH_ZONE_WINDOW_SEC = 10.0
+# A unit's death position is trusted only when its final observed waypoint
+# is stamped at the death itself (morph "deaths" carry no position).
+_DEATH_POSITION_TOLERANCE_SEC = 0.05
+
+
+def _army_value_lost(
+    stats: List[Dict[str, Any]], t0: float, t1: float, interp: Any,
+) -> Optional[float]:
+    """Army value (minerals + gas) one side lost between ``t0`` and ``t1``.
+
+    Reads the cumulative ``lost`` counter the playback stats carry.
+    Returns ``None`` when the stats predate that counter.
+
+    Example:
+        >>> stats = [{"time": 0.0, "lost": 0}, {"time": 20.0, "lost": 400}]
+        >>> _army_value_lost(stats, 0.0, 20.0, interp)
+        400.0
+    """
+    if not stats or any("lost" not in s for s in stats):
+        return None
+    return max(0.0, float(interp(stats, t1, "lost")) - float(interp(stats, t0, "lost")))
+
+
+def _unit_death_position(unit: Dict[str, Any]) -> Optional[Tuple[float, float]]:
+    """Return the (x, y) where a unit died, if it was observed there.
+
+    Waypoints are ``[t, x, y, t, x, y, …]`` (compact playback) or a list of
+    ``(t, x, y)`` rows (raw tracks); both are accepted.
+
+    Example:
+        >>> _unit_death_position({"died": 5.0, "waypoints": [1.0, 2.0, 3.0, 5.0, 8.0, 9.0]})
+        (8.0, 9.0)
+    """
+    died = unit.get("died")
+    waypoints = unit.get("waypoints") or []
+    if not isinstance(died, (int, float)) or not waypoints:
+        return None
+    last = waypoints[-1] if isinstance(waypoints[0], (list, tuple)) else waypoints[-3:]
+    if len(last) < 3 or not all(isinstance(v, (int, float)) for v in last[:3]):
+        return None
+    if abs(float(last[0]) - float(died)) > _DEATH_POSITION_TOLERANCE_SEC:
+        return None
+    return float(last[1]), float(last[2])
+
+
+def _army_death_centroid(
+    units: List[Dict[str, Any]], t0: float, t1: float,
+) -> Optional[Tuple[float, float]]:
+    """Centroid of the non-worker unit deaths observed in ``[t0, t1]``.
+
+    Example:
+        >>> _army_death_centroid([{"died": 5.0, "waypoints": [5.0, 10.0, 20.0]}], 0.0, 9.0)
+        (10.0, 20.0)
+    """
+    points = []
+    for unit in units or []:
+        died = unit.get("died")
+        if unit.get("is_worker") or not isinstance(died, (int, float)):
+            continue
+        if t0 <= float(died) <= t1:
+            position = _unit_death_position(unit)
+            if position is not None:
+                points.append(position)
+    if not points:
+        return None
+    return (
+        sum(p[0] for p in points) / len(points),
+        sum(p[1] for p in points) / len(points),
+    )
+
+
+def _battle_loss_windows(
+    battles: List[Dict[str, Any]],
+) -> List[Optional[Tuple[float, float]]]:
+    """Per-battle ``(t0, t1)`` windows for measuring army losses.
+
+    Each window spans ±``_DEATH_ZONE_WINDOW_SEC`` around the battle but is
+    clipped at the midpoint to a neighbouring battle, so two nearby
+    fights never count the same losses. Battles without a time get
+    ``None``.
+
+    Example:
+        >>> _battle_loss_windows([{"time": 100.0}, {"time": 112.0}])
+        [(90.0, 106.0), (106.0, 122.0)]
+    """
+    times = [b.get("time") if isinstance(b.get("time"), (int, float)) else None
+             for b in battles]
+    known = sorted(float(t) for t in times if t is not None)
+    windows: List[Optional[Tuple[float, float]]] = []
+    for t in times:
+        if t is None:
+            windows.append(None)
+            continue
+        t0, t1 = float(t) - _DEATH_ZONE_WINDOW_SEC, float(t) + _DEATH_ZONE_WINDOW_SEC
+        earlier = [o for o in known if o < t]
+        later = [o for o in known if o > t]
+        if earlier:
+            t0 = max(t0, (earlier[-1] + t) / 2.0)
+        if later:
+            t1 = min(t1, (t + later[0]) / 2.0)
+        windows.append((t0, t1))
+    return windows
+
+
+def _death_zone_sample(
+    battle: Dict[str, Any],
+    window: Optional[Tuple[float, float]],
+    playback: Dict[str, Any],
+    playback_mod: Any,
+) -> Optional[Dict[str, Any]]:
+    """Turn one battle into a death-zone point when the user lost it.
+
+    ``detect_battle_markers`` only reports ``{time, x, y, side}``, so the
+    losses are measured here: army value each side lost within the
+    battle's ``window``. A point is emitted only when the user lost more
+    than the opponent, weighted by the net loss and placed at the
+    centroid of the user's army deaths in that window (falling back to
+    the battle marker). This is the Map Intel "where my army died" layer;
+    before this, the list was always empty.
+    """
+    interp = getattr(playback_mod, "interp", None)
+    if window is None or interp is None:
+        return None
+    t0, t1 = window
+    my_lost = _army_value_lost(playback.get("my_stats") or [], t0, t1, interp)
+    opp_lost = _army_value_lost(playback.get("opp_stats") or [], t0, t1, interp)
+    if my_lost is None or opp_lost is None or my_lost <= opp_lost:
+        return None
+    position = _army_death_centroid(playback.get("my_units") or [], t0, t1)
+    x, y = position if position is not None else (battle["x"], battle["y"])
+    return {
+        "x": round(float(x), 2),
+        "y": round(float(y), 2),
+        "weight": round(float(my_lost - opp_lost), 1),
+        "time": float(battle["time"]),
+    }
+
+
 def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     """Extract per-replay spatial events for the cloud Map Intel heatmaps.
 
@@ -1597,21 +1744,10 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
         if isinstance(t, (int, float)):
             sample["time"] = float(t)
         battles.append(sample)
-        # When the marker is annotated with "my_lost" > "opp_lost" we
-        # treat it as a death-zone for the user; otherwise skip.
-        my_lost = m.get("my_army_lost") or m.get("my_lost")
-        opp_lost = m.get("opp_army_lost") or m.get("opp_lost")
-        try:
-            if (
-                isinstance(my_lost, (int, float))
-                and isinstance(opp_lost, (int, float))
-                and my_lost > opp_lost
-            ):
-                death_sample = dict(sample)
-                death_sample["weight"] = float(my_lost - opp_lost)
-                deaths.append(death_sample)
-        except Exception:  # noqa: BLE001
-            pass
+    for battle, window in zip(battles, _battle_loss_windows(battles)):
+        death_sample = _death_zone_sample(battle, window, playback, playback_mod)
+        if death_sample is not None:
+            deaths.append(death_sample)
     if battles:
         out["battles"] = battles
     if deaths:
@@ -2975,6 +3111,78 @@ def _downsample_unit_timeline(
     return out
 
 
+def _active_rate_averages(
+    samples: List[Dict[str, Any]],
+) -> Optional[Dict[str, float]]:
+    """Average APM/SPM over the apm_curve windows that have any activity.
+
+    Idle windows (both rates zero, e.g. a long wait at game end) are
+    excluded so they don't drag the headline number down. Returns
+    ``None`` when no window had activity.
+
+    Example:
+        >>> _active_rate_averages([{"apm": 60, "spm": 10}, {"apm": 0, "spm": 0}])
+        {'apm': 60.0, 'spm': 10.0}
+    """
+    active = [
+        s for s in samples
+        if (s.get("apm") or 0) > 0 or (s.get("spm") or 0) > 0
+    ]
+    if not active:
+        return None
+    avg_apm = sum(float(s.get("apm") or 0) for s in active) / len(active)
+    avg_spm = sum(float(s.get("spm") or 0) for s in active) / len(active)
+    return {"apm": round(avg_apm, 1), "spm": round(avg_spm, 2)}
+
+
+def _my_average_apm(
+    apm_curve: Optional[Dict[str, Any]], me_pid: Optional[int],
+) -> Optional[float]:
+    """Return the uploading player's average APM for the slim game row.
+
+    Uses the same active-window average as ``player_stats.me.apm`` so the
+    game list, benchmarks and stats table all show one number. ``None``
+    when the curve is missing or the player had no recorded commands.
+
+    Example:
+        >>> _my_average_apm({"players": [{"pid": 1, "samples": [{"apm": 90, "spm": 0}]}]}, 1)
+        90.0
+    """
+    if not apm_curve or me_pid is None:
+        return None
+    for player in apm_curve.get("players") or []:
+        if player.get("pid") != me_pid:
+            continue
+        averages = _active_rate_averages(player.get("samples") or [])
+        apm = averages["apm"] if averages else None
+        return apm if apm is not None and 0 < apm <= _APM_SCHEMA_MAX else None
+    return None
+
+
+def _my_spending_quotient(
+    macro_breakdown: Optional[Dict[str, Any]],
+) -> Optional[float]:
+    """Return the engine's spending quotient (``raw.sq``) for the slim row.
+
+    The macro card already reads ``raw.sq``; mirroring it onto the slim
+    ``spq`` field feeds the game list, battle card and league benchmarks.
+    Negative or non-finite values are omitted rather than clamped: the
+    API schema requires ``spq >= 0`` and a rejected field would drop the
+    whole game from the upload batch.
+
+    Example:
+        >>> _my_spending_quotient({"raw": {"sq": 81.4}})
+        81.4
+    """
+    raw = (macro_breakdown or {}).get("raw")
+    sq = raw.get("sq") if isinstance(raw, dict) else None
+    if isinstance(sq, bool) or not isinstance(sq, (int, float)):
+        return None
+    if not math.isfinite(float(sq)) or sq < 0:
+        return None
+    return float(sq)
+
+
 def _merge_apm_into_player_stats(
     macro_breakdown: Dict[str, Any], apm_curve: Dict[str, Any],
 ) -> None:
@@ -2992,20 +3200,9 @@ def _merge_apm_into_player_stats(
         return
     by_pid: Dict[int, Dict[str, float]] = {}
     for player in apm_curve.get("players") or []:
-        pid = player.get("pid")
-        samples = player.get("samples") or []
-        active = [
-            s for s in samples
-            if (s.get("apm") or 0) > 0 or (s.get("spm") or 0) > 0
-        ]
-        if not active:
-            continue
-        avg_apm = sum(float(s.get("apm") or 0) for s in active) / len(active)
-        avg_spm = sum(float(s.get("spm") or 0) for s in active) / len(active)
-        by_pid[int(pid)] = {
-            "apm": round(avg_apm, 1),
-            "spm": round(avg_spm, 2),
-        }
+        averages = _active_rate_averages(player.get("samples") or [])
+        if averages is not None:
+            by_pid[int(player.get("pid"))] = averages
     for key in ("me", "opponent"):
         rec = stats.get(key)
         if not isinstance(rec, dict):
@@ -3016,8 +3213,8 @@ def _merge_apm_into_player_stats(
         merged = by_pid.get(int(pid))
         if not merged:
             continue
-        # Only overwrite when the slim-row value is missing — me.apm
-        # already holds the engine's authoritative number for me.
+        # Only fill values the parser did not supply. PlayerInfo carries
+        # no APM/SPM today, so the corrected curve is the source for both.
         if rec.get("apm") is None:
             rec["apm"] = merged["apm"]
         if rec.get("spm") is None:
@@ -3099,6 +3296,32 @@ def _build_player_stats_summary(
     }
 
 
+def _game_event_player_slot(ev: Any) -> Optional[int]:
+    """Return the 1-indexed player slot that issued a game event.
+
+    sc2reader's game-event ``ev.pid`` is the 0-indexed *user* id since
+    HotS, not the ``player.pid`` slot that ``ctx.me`` / ``ctx.opponent``
+    carry. Comparing them directly credited slot 1 with the actions of
+    user 1 (normally slot 2) and left slot 2 at zero. Mirrors the
+    replay engine's ``event_extractor._resolve_command_pid``: prefer the
+    sc2reader-resolved ``ev.player.pid``, then the commanded unit's
+    owner. Observers resolve to ``None`` because they carry no slot.
+
+    Example:
+        >>> _game_event_player_slot(SimpleNamespace(pid=0, player=SimpleNamespace(pid=1)))
+        1
+    """
+    player = getattr(ev, "player", None)
+    slot = getattr(player, "pid", None) if player is not None else None
+    if slot:
+        return int(slot)
+    for attr in ("control_player_id", "upkeep_player_id"):
+        value = getattr(ev, attr, None)
+        if value:
+            return int(value)
+    return None
+
+
 def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     """Build the apmCurve payload (windowed APM/SPM samples per player).
 
@@ -3139,11 +3362,8 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     except Exception:  # noqa: BLE001
         fps = 22.4
     for ev in events:
-        pid = getattr(ev, "pid", None)
-        if pid is None:
-            player = getattr(ev, "player", None)
-            pid = getattr(player, "pid", None) if player else None
-        if pid not in (me_pid, opp_pid):
+        pid = _game_event_player_slot(ev)
+        if pid is None or pid not in (me_pid, opp_pid):
             continue
         frame = getattr(ev, "frame", None)
         if frame is None:

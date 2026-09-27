@@ -2,6 +2,23 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.2
+
+### Fixed - replay stats sent to the website
+
+- Your average APM and spending quotient now reach the website. Both were sent
+  empty for every game, so the replay list, battle card and league benchmarks
+  had no APM or SQ to show. APM is the same active-window average the stats
+  table shows; SQ is the macro breakdown's spending quotient.
+- The APM/SPM chart credits each player with their own actions. It compared
+  sc2reader's 0-based user id with the 1-based player slot, so player 1 was
+  shown player 2's actions and player 2 always read zero.
+- Map Intel's death-zone heatmap has data. Fights you lost (more army value
+  lost than your opponent within the fight) are recorded where your units
+  died, weighted by the net loss. The list was always empty before.
+
+Use **Re-sync** (or **Recompute** on a game) to refresh games already uploaded.
+
 ## 0.17.1
 
 ### Fixed - replays stuck in background sync
