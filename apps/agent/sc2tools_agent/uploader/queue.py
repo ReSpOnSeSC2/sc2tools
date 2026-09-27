@@ -73,6 +73,14 @@ _ARCHIVE_RETRY_BASE_SEC = 2.0
 _ARCHIVE_RETRY_MAX_SEC = 60.0
 _ARCHIVE_IDLE_GRACE_SEC = 1.0
 
+# A recording's publication is retried with its (already accepted) game,
+# because the game's cursor must not advance first. A recording that can
+# never publish therefore re-uploaded the game every few seconds forever and
+# held the import card at "N remaining". After a permanent refusal, or this
+# many consecutive failed attempts, the analysis completes without it; the
+# server keeps any playback it already stored for the game.
+_PLAYBACK_PUBLISH_MAX_ATTEMPTS = 5
+
 
 class _NetworkRequestGate:
     """Bound all queue-owned cloud work and favor parsed-game ingest.
@@ -299,6 +307,13 @@ class UploadQueue:
         # otherwise finish after a fresh replay and roll the sticky MMR
         # backward even though both passed the initial date check.
         self._mmr_push_lock = threading.Lock()
+        # Segment PUTs share the API's single replay-ingest admission slot,
+        # so two workers publishing at once only reject each other's
+        # segments. Taken before a network slot so a waiting worker never
+        # holds one idle. ``_playback_failures`` counts consecutive failed
+        # attempts per replay path (guarded by ``_lock``).
+        self._playback_publish_lock = threading.Lock()
+        self._playback_failures: Dict[str, int] = {}
         # A replay path stays reserved from the moment it enters the
         # queue until it reaches a terminal outcome. ``state.uploaded``
         # cannot provide this protection because it is intentionally
@@ -1458,10 +1473,9 @@ class UploadQueue:
             if jobs:
                 artifact = getattr(jobs[0].game, "playback_artifact_path", None)
                 if artifact:
-                    with self._network_gate.hold(ingest_priority):
-                        if self.is_paused():
-                            raise _PausedBeforeNetwork()
-                        self._api.upload_playback_artifact(gid, Path(artifact))
+                    self._publish_playback(
+                        jobs[0], gid, Path(artifact), ingest_priority,
+                    )
 
         # Parsed stats and the exact replay file form one durable operation:
         # accepted originals enter the fsync'd archive journal before the
@@ -1629,6 +1643,51 @@ class UploadQueue:
             )
             raise _RetryablePerGameError(summary)
 
+    def _publish_playback(
+        self,
+        job: UploadJob,
+        game_id: Any,
+        artifact: Path,
+        priority: int,
+    ) -> None:
+        """Publish an accepted game's recording before its cursor advances.
+
+        A retryable failure raises so the batch stays reserved and retries;
+        segments are content-addressed, so a retry is safe. Pause and API
+        backpressure always propagate without counting as failures.
+        """
+        key = str(job.file_path)
+        try:
+            with self._playback_publish_lock:
+                with self._network_gate.hold(priority):
+                    if self.is_paused():
+                        raise _PausedBeforeNetwork()
+                    self._api.upload_playback_artifact(game_id, artifact)
+        except (_PausedBeforeNetwork, ReplayIngestBusy):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            permanent = _playback_failure_is_permanent(exc)
+            with self._lock:
+                attempts = self._playback_failures.get(key, 0) + 1
+                give_up = (
+                    permanent or attempts >= _PLAYBACK_PUBLISH_MAX_ATTEMPTS
+                )
+                if give_up:
+                    self._playback_failures.pop(key, None)
+                else:
+                    self._playback_failures[key] = attempts
+            if not give_up:
+                raise
+            log.warning(
+                "playback_artifact_publish_abandoned file=%s gameId=%s "
+                "attempts=%d permanent=%s: %s (game analysis still syncs; "
+                "previously stored playback is unchanged)",
+                job.file_path.name, game_id, attempts, permanent, exc,
+            )
+            return
+        with self._lock:
+            self._playback_failures.pop(key, None)
+
     def _payload_for_job(self, job: UploadJob) -> Dict[str, Any]:
         """Build one payload and attach legacy IDs for resumed artifacts.
 
@@ -1768,10 +1827,9 @@ class UploadQueue:
         game_id = getattr(job.game, "game_id", None)
         artifact = getattr(job.game, "playback_artifact_path", None)
         if artifact:
-            with self._network_gate.hold(0 if job.priority else 1):
-                if self.is_paused():
-                    raise _PausedBeforeNetwork()
-                self._api.upload_playback_artifact(game_id, Path(artifact))
+            self._publish_playback(
+                job, game_id, Path(artifact), 0 if job.priority else 1,
+            )
         if isinstance(game_id, str) and game_id:
             task = ReplayArchiveTask(job.file_path, game_id)
             marker = (
@@ -1890,6 +1948,25 @@ class UploadQueue:
             "last_mmr_pushed mmr=%d region=%s game_date=%s",
             my_mmr, region or "?", game_date,
         )
+
+
+def _playback_failure_is_permanent(exc: Exception) -> bool:
+    """Whether retrying a recording's publication can never succeed."""
+    if isinstance(exc, (FileNotFoundError, NotADirectoryError, IsADirectoryError)):
+        # The local segment spool is gone; a retry cannot recreate it.
+        return True
+    if isinstance(exc, (ValueError, KeyError, TypeError)):
+        # Local bundle integrity or an unverifiable acknowledgement repeats
+        # identically on every attempt.
+        return True
+    # The API validated and refused this artifact (invalid segment, replay
+    # mismatch, …). Auth, timeouts and rate limits are not about the file.
+    status = getattr(exc, "status", None)
+    return (
+        isinstance(status, int)
+        and 400 <= status < 500
+        and status not in (401, 403, 408, 429)
+    )
 
 
 # Map the leading region byte of an SC2 toon handle to a short

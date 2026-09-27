@@ -1034,6 +1034,158 @@ def test_inflight_cleared_when_future_itself_raises(
     assert "BrokenProcessPool" in crash_logs[0].message
 
 
+# --- per-file terminal outcomes ---------------------------------------
+#
+# The import card finishes only when every replay reaches a terminal
+# outcome. A file that fails the same way on every sweep without one is
+# re-parsed forever and pins the card at "N replay files remain".
+
+
+def _record_skips(watcher) -> List[Tuple[str, Optional[str]]]:
+    skipped: List[Tuple[str, Optional[str]]] = []
+    watcher._on_replay_skipped = lambda p, reason: skipped.append((p.name, reason))
+    return skipped
+
+
+def test_unexpected_parse_error_is_terminal_in_thread_mode(
+    monkeypatch, watcher_factory,
+) -> None:
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    skipped = _record_skips(watcher)
+    monkeypatch.setattr(
+        watcher_module, "_wait_for_file_ready", lambda _path, _timeout: True,
+    )
+
+    def _parse(_path, **_kwargs):
+        raise ValueError("Matching native observation artifact is unavailable")
+
+    monkeypatch.setattr(watcher_module, "parse_replay_for_cloud_ex", _parse)
+    replay = watcher._cfg.state_dir / "Broken.SC2Replay"
+
+    watcher._handle_replay(replay)
+
+    assert watcher._test_state.uploaded[str(replay)] == "skipped:analysis_failed"
+    assert skipped == [("Broken.SC2Replay", "analysis_failed")]
+    assert watcher._test_upload.submitted == []
+
+
+def test_unexpected_parse_error_is_terminal_in_process_mode(
+    monkeypatch, watcher_factory, caplog,
+) -> None:
+    from sc2tools_agent import replay_pipeline
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.delenv("SC2TOOLS_PARSE_USE_PROCESSES", raising=False)
+    with patch(
+        "sc2tools_agent.watcher._probe_process_pool",
+        return_value=(True, None),
+    ):
+        watcher = watcher_factory()
+    skipped = _record_skips(watcher)
+    caplog.set_level("WARNING", logger="sc2tools_agent.watcher")
+    replay = watcher._cfg.state_dir / "Broken.SC2Replay"
+    replay.write_bytes(b"replay")
+    monkeypatch.setattr(
+        watcher_module, "_wait_for_file_ready", lambda _path, _timeout: True,
+    )
+
+    def _parse(_path, **_kwargs):
+        raise ValueError("Matching native observation artifact is unavailable")
+
+    monkeypatch.setattr(replay_pipeline, "parse_replay_for_cloud_ex", _parse)
+
+    result = watcher_module._parse_in_worker(str(replay), "")
+    with watcher._inflight_lock:
+        watcher._inflight.add(str(replay))
+    fut: Future = Future()
+    fut.set_result(result)
+    watcher._on_worker_done(fut, str(replay))
+
+    assert watcher._test_state.uploaded[str(replay)] == "skipped:analysis_failed"
+    assert skipped == [("Broken.SC2Replay", "analysis_failed")]
+    assert str(replay) not in watcher._inflight
+    # The parent log names the file and the cause; worker logs are separate.
+    assert any(
+        "Broken.SC2Replay" in rec.message
+        and "Matching native observation artifact" in rec.message
+        for rec in caplog.records
+    )
+
+
+def test_replay_that_never_settles_becomes_terminal(
+    monkeypatch, watcher_factory,
+) -> None:
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    skipped = _record_skips(watcher)
+    monkeypatch.setattr(
+        watcher_module, "_wait_for_file_ready", lambda _path, _timeout: False,
+    )
+    replay = watcher._cfg.state_dir / "Empty.SC2Replay"
+    replay.write_bytes(b"")
+
+    for _ in range(watcher_module._SETTLE_FAILURE_LIMIT - 1):
+        watcher._handle_replay(replay)
+        assert str(replay) not in watcher._test_state.uploaded
+    watcher._handle_replay(replay)
+
+    assert watcher._test_state.uploaded[str(replay)] == "skipped:file_unstable"
+    assert skipped == [("Empty.SC2Replay", "file_unstable")]
+
+
+def test_replay_still_being_written_is_never_marked_unstable(
+    monkeypatch, watcher_factory,
+) -> None:
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    skipped = _record_skips(watcher)
+    monkeypatch.setattr(
+        watcher_module, "_wait_for_file_ready", lambda _path, _timeout: False,
+    )
+    replay = watcher._cfg.state_dir / "Growing.SC2Replay"
+
+    for size in range(watcher_module._SETTLE_FAILURE_LIMIT * 2):
+        replay.write_bytes(b"x" * size)
+        watcher._handle_replay(replay)
+
+    assert str(replay) not in watcher._test_state.uploaded
+    assert skipped == []
+
+
+def test_never_settling_replay_becomes_terminal_in_process_mode(
+    monkeypatch, watcher_factory,
+) -> None:
+    from sc2tools_agent import watcher as watcher_module
+
+    monkeypatch.delenv("SC2TOOLS_PARSE_USE_PROCESSES", raising=False)
+    with patch(
+        "sc2tools_agent.watcher._probe_process_pool",
+        return_value=(True, None),
+    ):
+        watcher = watcher_factory()
+    skipped = _record_skips(watcher)
+    replay = watcher._cfg.state_dir / "Empty.SC2Replay"
+    replay.write_bytes(b"")
+
+    for _ in range(watcher_module._SETTLE_FAILURE_LIMIT):
+        with watcher._inflight_lock:
+            watcher._inflight.add(str(replay))
+        fut: Future = Future()
+        fut.set_result(("settle_failed", str(replay), None))
+        watcher._on_worker_done(fut, str(replay))
+
+    assert watcher._test_state.uploaded[str(replay)] == "skipped:file_unstable"
+    assert skipped == [("Empty.SC2Replay", "file_unstable")]
+    assert str(replay) not in watcher._inflight
+
+
 # --- env-var resolution unit -----------------------------------------
 
 

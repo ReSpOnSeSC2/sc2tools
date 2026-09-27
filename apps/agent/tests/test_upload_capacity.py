@@ -71,3 +71,96 @@ def test_oversized_game_is_rejected_without_post_or_truncation(monkeypatch):
     assert result=={'accepted':[],'rejected':[{'gameId':'large','errors':['game_payload_too_large'],'retryable':False}]}
     assert game['padding']=='x'*200
     mocked.assert_not_called()
+
+
+def _stub_bundle(monkeypatch, tmp_path, count=2):
+    import hashlib
+    artifacts = importlib.import_module('sc2tools_agent.playback_artifacts')
+    segments = []
+    for index in range(count):
+        body = json.dumps({'index': index}).encode()
+        digest = hashlib.sha256(body).hexdigest()
+        (tmp_path / f'{digest}.json').write_bytes(body)
+        segments.append({'index': index, 'sizeBytes': len(body), 'sha256': digest})
+    monkeypatch.setattr(artifacts, 'load_bundle', lambda _path: {'segments': segments})
+    return tmp_path / 'manifest.json', segments
+
+
+def _playback_server(segments, script):
+    """Route playback requests; ``script`` maps a request key to queued
+    responses (the last one repeats)."""
+    calls = []
+    artifact = 'c' * 64
+
+    def request(method, url, **kwargs):
+        if url.endswith('/artifacts'):
+            key = 'prepare'
+            default = response(200, {'ok': True, 'artifactId': artifact})
+        elif url.endswith('/complete'):
+            key = 'complete'
+            default = response(200, {'ok': True, 'artifactId': artifact, 'segmentCount': len(segments)})
+        else:
+            index = int(url.rsplit('/', 1)[1])
+            key = f'segment{index}'
+            default = response(200, {'ok': True, 'sha256': segments[index]['sha256']})
+        calls.append(key)
+        queued = script.get(key)
+        if queued:
+            return queued.pop(0) if len(queued) > 1 else queued[0]
+        return default
+    return request, calls
+
+
+def busy(code):
+    value = response(503, {'error': {'code': code}})
+    value.headers = {'Retry-After': '5'}
+    return value
+
+
+def test_busy_segment_is_retried_in_place_without_restarting_publication(monkeypatch, tmp_path):
+    manifest, segments = _stub_bundle(monkeypatch, tmp_path)
+    ok = response(200, {'ok': True, 'sha256': segments[0]['sha256']})
+    request, calls = _playback_server(segments, {'segment0': [busy('replay_ingest_busy'), busy('replay_ingest_busy'), ok]})
+    monkeypatch.setattr(client.requests, 'request', request)
+    waits = []
+    monkeypatch.setattr(client.time, 'sleep', waits.append)
+    result = client.ApiClient('https://example.invalid', 'secret').upload_playback_artifact('g', manifest)
+    assert result['segmentCount'] == 2
+    assert calls == ['prepare', 'segment0', 'segment0', 'segment0', 'segment1', 'complete']
+    assert waits == [5.0, 5.0]
+
+
+def test_busy_artifact_writer_is_waited_out(monkeypatch, tmp_path):
+    manifest, segments = _stub_bundle(monkeypatch, tmp_path)
+    ok = response(200, {'ok': True, 'artifactId': 'c' * 64})
+    request, calls = _playback_server(segments, {'prepare': [busy('playback_artifact_busy')] * 4 + [ok]})
+    monkeypatch.setattr(client.requests, 'request', request)
+    monkeypatch.setattr(client.time, 'sleep', lambda _s: None)
+    client.ApiClient('https://example.invalid', 'secret').upload_playback_artifact('g', manifest)
+    assert calls.count('prepare') == 5
+    assert calls[-1] == 'complete'
+
+
+def test_rejected_segment_is_not_retried(monkeypatch, tmp_path):
+    manifest, segments = _stub_bundle(monkeypatch, tmp_path)
+    rejected = response(400, {'error': {'code': 'invalid_playback_artifact'}})
+    request, calls = _playback_server(segments, {'segment1': [rejected]})
+    monkeypatch.setattr(client.requests, 'request', request)
+    monkeypatch.setattr(client.time, 'sleep', lambda _s: None)
+    with pytest.raises(client._ApiError) as raised:
+        client.ApiClient('https://example.invalid', 'secret').upload_playback_artifact('g', manifest)
+    assert raised.value.status == 400
+    assert calls == ['prepare', 'segment0', 'segment1']
+
+
+def test_persistent_backpressure_eventually_surfaces(monkeypatch, tmp_path):
+    manifest, segments = _stub_bundle(monkeypatch, tmp_path)
+    request, calls = _playback_server(segments, {'segment0': [busy('replay_ingest_busy')]})
+    monkeypatch.setattr(client.requests, 'request', request)
+    clock = {'now': 0.0}
+    monkeypatch.setattr(client.time, 'monotonic', lambda: clock['now'])
+    monkeypatch.setattr(client.time, 'sleep', lambda s: clock.__setitem__('now', clock['now'] + s))
+    with pytest.raises(client.ReplayIngestBusy):
+        client.ApiClient('https://example.invalid', 'secret').upload_playback_artifact('g', manifest)
+    assert clock['now'] >= client.PLAYBACK_BUSY_MAX_WAIT_SEC
+    assert 'segment1' not in calls

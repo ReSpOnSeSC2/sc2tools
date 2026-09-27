@@ -690,6 +690,10 @@ SKIP_RESUMED_REPLAY = "resumed_replay"
 SKIP_PLAYER_UNRESOLVED = "player_unresolved"
 SKIP_NO_RESULT = "no_result"
 SKIP_PARSE_FAILED = "parse_failed"
+# Terminal outcomes recorded by the watcher rather than returned here: an
+# unexpected analysis error, and a file that never becomes readable.
+SKIP_ANALYSIS_FAILED = "analysis_failed"
+SKIP_FILE_UNSTABLE = "file_unstable"
 
 
 def _build_resumed_cloud_game(ctx: Any, me: Any, opp: Any) -> CloudGame:
@@ -1155,17 +1159,12 @@ def parse_replay_for_cloud_ex(
         # Complete recordings use separate immutable R2 segments. Ordinary
         # analytics stay small and no long recording must be coarsened to fit
         # the game-details object or its request budget.
-        raw = _raw_map_playback(ctx, _load_sc2ra_package_module("map_playback_data"))
+        try:
+            raw = _raw_map_playback(ctx, _load_sc2ra_package_module("map_playback_data"))
+        except Exception:  # noqa: BLE001 - the inline path below logs and degrades
+            raw = None
         if state_dir is not None and raw and raw.get("fidelity", {}).get("positions") == "engine" and raw.get("fidelity", {}).get("complete") is True:
-            from .playback_artifacts import build_bundle, source_artifact_digest
-            source_sha = source_artifact_digest(Path(getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)), raw)
-            # Full identities live in every content-addressed manifest/chunk;
-            # short directory shards avoid Windows MAX_PATH on deep state dirs.
-            destination = Path(state_dir) / "playback-artifacts" / source_sha[:2] / source_sha[2:10]
-            markers = _load_sc2ra_package_module("map_playback_data").detect_battle_markers(
-                raw.get("my_stats") or [], raw.get("opp_stats") or [],
-                raw.get("my_events") or [], raw.get("opp_events") or [], raw["game_length"])
-            game.playback_artifact_path = str(build_bundle(raw, destination, source_sha256=source_sha, battle_markers=markers))
+            game.playback_artifact_path = _build_segmented_playback(ctx, raw, Path(state_dir), file_path)
         else:
             game.map_playback = _compute_map_playback(ctx, max_bytes=budget)
         if len(compact_json_bytes({"games": [game.to_payload()]})) > GAME_BODY_MAX_BYTES:
@@ -1174,6 +1173,49 @@ def parse_replay_for_cloud_ex(
         log.warning("map_playback_budget_exceeded: %s", exc)
         return None, "playback_budget_exceeded"
     return game, None
+
+
+def _build_segmented_playback(
+    ctx: Any,
+    raw: Dict[str, Any],
+    state_dir: Path,
+    file_path: Path,
+) -> Optional[str]:
+    """Spool a complete engine recording as bounded segments, or ``None``.
+
+    Playback is additive and must never block the game analysis it
+    accompanies. A recording that cannot be segmented (no matching native
+    observation file, lifecycle data the viewer cannot hold, a local write
+    failure) used to escape the parser: the replay was neither uploaded nor
+    skipped, so every sweep re-parsed it and the import card stalled with
+    files "remaining". The analysis now syncs without the recording, which
+    leaves any playback already stored in the cloud untouched.
+    ``PlaybackBudgetExceeded`` still propagates: that explicit capacity
+    outcome is what an on-demand recording reports to the website.
+    """
+    from .playback_artifacts import build_bundle, source_artifact_digest
+
+    try:
+        source_sha = source_artifact_digest(Path(getattr(ctx, "file_path", None) or getattr(ctx, "replay_path", None)), raw)
+        # Full identities live in every content-addressed manifest/chunk;
+        # short directory shards avoid Windows MAX_PATH on deep state dirs.
+        destination = state_dir / "playback-artifacts" / source_sha[:2] / source_sha[2:10]
+        try:
+            markers = _load_sc2ra_package_module("map_playback_data").detect_battle_markers(
+                raw.get("my_stats") or [], raw.get("opp_stats") or [],
+                raw.get("my_events") or [], raw.get("opp_events") or [], raw["game_length"])
+        except Exception:  # noqa: BLE001 - markers are optional, as in the inline path
+            markers = []
+        return str(build_bundle(raw, destination, source_sha256=source_sha, battle_markers=markers))
+    except PlaybackBudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.warning(
+            "map_playback_segments_unavailable file=%s error=%s: %s "
+            "(game analysis still syncs without this recording)",
+            file_path.name, type(exc).__name__, exc,
+        )
+        return None
 
 
 def _build_log_from_events(

@@ -97,6 +97,38 @@ describe("ImportProgressCard benign replay-resume skips", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
+  it("names replay files the agent could not analyse, with a next step", () => {
+    render(
+      <ImportProgressCard
+        job={job({
+          total: 53,
+          completed: 51,
+          errors: 2,
+          remaining: 0,
+          errorBreakdown: { analysis_failed: 1, file_unstable: 1 },
+          errorSamples: [
+            { file: "Recorded.SC2Replay", errorCode: "analysis_failed" },
+            { file: "Empty.SC2Replay", errorCode: "file_unstable" },
+          ],
+        })}
+        active={false}
+        pct={100}
+        etaSeconds={null}
+      />,
+    );
+
+    expect(screen.getByText("accepted: 51")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: /2 files couldn't be imported/i }),
+    );
+    expect(screen.getByText(/1× analysis failed/i)).toBeTruthy();
+    expect(screen.getByText(/unexpected error analysing this replay/i)).toBeTruthy();
+    expect(screen.getByText(/1× file unstable/i)).toBeTruthy();
+    expect(screen.getByText(/stayed empty or unreadable/i)).toBeTruthy();
+    expect(screen.getByText(/Recorded\.SC2Replay/)).toBeTruthy();
+    expect(screen.getByText(/Empty\.SC2Replay/)).toBeTruthy();
+  });
+
   it("does not count date-filtered files as accepted", () => {
     render(
       <ImportProgressCard

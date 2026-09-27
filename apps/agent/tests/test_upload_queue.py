@@ -2570,3 +2570,137 @@ def test_playback_publication_failure_does_not_advance_durable_upload_cursor(tmp
     api.fail = False
     q._upload_batch([job])
     assert str(job.file_path) in state.uploaded and not q.is_pending(job.file_path)
+
+
+def _segmented_game(tmp_path, name):
+    job = _game(tmp_path, name)
+    job.game.playback_artifact_path = str(tmp_path / f"{name}.manifest.json")
+    return job
+
+
+def test_rejected_playback_publication_still_commits_synced_game(tmp_path):
+    """A recording the API refuses can never publish; retrying it forever
+    re-uploads the game every few seconds and pins the import card at
+    "N remaining". The accepted analysis must still reach its terminal
+    outcome (the server keeps any previously stored playback)."""
+    from sc2tools_agent.api_client import _ApiError
+
+    state = AgentState(device_token="test")
+
+    class RejectingApi(_StubApi):
+        artifact_calls = 0
+
+        def upload_playback_artifact(self, game_id, path):
+            self.artifact_calls += 1
+            raise _ApiError(400, '{"error":{"code":"invalid_playback_artifact"}}')
+
+    api = RejectingApi()
+    successes = []
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api,
+                    on_success=lambda path: successes.append(path))
+    job = _segmented_game(tmp_path, "rejected-playback.SC2Replay")
+    assert q.submit(job)
+    q._upload_batch([job])
+    assert api.artifact_calls == 1
+    assert state.uploaded[str(job.file_path)] not in ("rejected", "filtered")
+    assert not q.is_pending(job.file_path)
+    assert successes == [job.file_path]
+    # The original replay still enters its durable private-backup journal.
+    assert ReplayArchiveJournal(tmp_path).contains(
+        ReplayArchiveTask(job.file_path, "id-rejected-playback.SC2Replay"),
+    )
+
+
+def test_missing_local_playback_bundle_still_commits_synced_game(tmp_path):
+    state = AgentState(device_token="test")
+
+    class MissingBundleApi(_StubApi):
+        def upload_playback_artifact(self, game_id, path):
+            raise FileNotFoundError(str(path))
+
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=MissingBundleApi())
+    job = _segmented_game(tmp_path, "missing-bundle.SC2Replay")
+    assert q.submit(job)
+    q._upload_batch([job])
+    assert str(job.file_path) in state.uploaded
+    assert not q.is_pending(job.file_path)
+
+
+def test_repeated_playback_publication_failures_stop_blocking_the_game(tmp_path):
+    import pytest
+    from sc2tools_agent.uploader import queue as queue_module
+
+    state = AgentState(device_token="test")
+
+    class FlakyApi(_StubApi):
+        artifact_calls = 0
+
+        def upload_playback_artifact(self, game_id, path):
+            self.artifact_calls += 1
+            raise RuntimeError("segment upload interrupted")
+
+    api = FlakyApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    job = _segmented_game(tmp_path, "flaky-playback.SC2Replay")
+    assert q.submit(job)
+    for _ in range(queue_module._PLAYBACK_PUBLISH_MAX_ATTEMPTS - 1):
+        with pytest.raises(RuntimeError, match="interrupted"):
+            q._upload_batch([job])
+        assert str(job.file_path) not in state.uploaded
+        assert q.is_pending(job.file_path)
+    q._upload_batch([job])
+    assert api.artifact_calls == queue_module._PLAYBACK_PUBLISH_MAX_ATTEMPTS
+    assert str(job.file_path) in state.uploaded
+    assert not q.is_pending(job.file_path)
+
+
+def test_ingest_backpressure_never_counts_as_a_playback_failure(tmp_path):
+    import pytest
+    from sc2tools_agent.uploader import queue as queue_module
+
+    state = AgentState(device_token="test")
+
+    class BusyApi(_StubApi):
+        def upload_playback_artifact(self, game_id, path):
+            raise ReplayIngestBusy(5)
+
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=BusyApi())
+    job = _segmented_game(tmp_path, "busy-playback.SC2Replay")
+    assert q.submit(job)
+    for _ in range(queue_module._PLAYBACK_PUBLISH_MAX_ATTEMPTS + 2):
+        with pytest.raises(ReplayIngestBusy):
+            q._upload_batch([job])
+    assert str(job.file_path) not in state.uploaded
+    assert q.is_pending(job.file_path)
+
+
+def test_playback_publications_run_one_at_a_time(tmp_path):
+    """Segment PUTs share the API's single ingest-admission slot. Two
+    workers publishing at once rejected each other's segments and each
+    restarted from segment 0 — two long recordings never finished."""
+    state = AgentState(device_token="test")
+    lock = threading.Lock()
+    active = {"now": 0, "peak": 0}
+
+    class SlowArtifactApi(_StubApi):
+        def upload_playback_artifact(self, game_id, path):
+            with lock:
+                active["now"] += 1
+                active["peak"] = max(active["peak"], active["now"])
+            time.sleep(0.2)
+            with lock:
+                active["now"] -= 1
+            return {"ok": True}
+
+    q = UploadQueue(cfg=_cfg(tmp_path, upload_concurrency=2), state=state,
+                    api=SlowArtifactApi())
+    jobs = [_segmented_game(tmp_path, f"long-{index}.SC2Replay") for index in range(2)]
+    for job in jobs:
+        assert q.submit(job)
+    workers = [threading.Thread(target=q._upload_batch, args=([job],)) for job in jobs]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=5)
+    assert active["peak"] == 1
+    assert all(str(job.file_path) in state.uploaded for job in jobs)

@@ -77,7 +77,12 @@ from .replay_finder import (
     find_all_replays_roots,
     find_replays_root,
 )
-from .replay_pipeline import AnalyzerImportError, parse_replay_for_cloud_ex
+from .replay_pipeline import (
+    SKIP_ANALYSIS_FAILED,
+    SKIP_FILE_UNSTABLE,
+    AnalyzerImportError,
+    parse_replay_for_cloud_ex,
+)
 from .state import AgentState, save_state
 from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
@@ -92,6 +97,12 @@ WORKER_LOG_MAX_BYTES = 2 * 1024 * 1024
 REPLAY_SUFFIX = ".SC2Replay"
 SETTLE_TIMEOUT_SEC = 15
 SETTLE_POLL_SEC = 1.0
+# Consecutive settle failures, with the file observed unchanged, before a
+# replay is recorded as unreadable. A replay SC2 is still writing settles
+# within an attempt or two and changes size in between; one left empty by
+# an interrupted save fails identically forever, so without a terminal
+# outcome it was re-queued every sweep and the import card never finished.
+_SETTLE_FAILURE_LIMIT = 3
 
 # Boot-time probe budget. A healthy spawn on Windows takes ~1–3 s
 # (cold) or ~0.5 s (warm); 30 s is the upper bound we'll wait before
@@ -316,6 +327,9 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
       * ``("settle_failed", path_str, None)`` → file size never
                                               stabilised within the
                                               timeout
+      * ``("analysis_failed", path_str, str)`` → unexpected per-file
+                                              error; recorded as a
+                                              terminal skip
 
     The function is intentionally process-mode-safe: it imports
     everything fresh, runs the file-settle loop in the worker (so
@@ -373,6 +387,16 @@ def _parse_in_worker(path_str: str, state_dir_str: str) -> tuple:
         )
     except _AnalyzerImportError as exc:
         return ("analyzer_error", path_str, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        # Returned rather than raised: a raised exception reached the parent
+        # as an anonymous worker crash with no terminal outcome, so this one
+        # replay was re-parsed on every sweep and never uploaded or skipped.
+        log.warning("replay_analysis_failed file=%s", path.name, exc_info=True)
+        return (
+            "analysis_failed",
+            path_str,
+            f"{type(exc).__name__}: {exc}"[:500],
+        )
     if not game:
         # Carry the skip-reason code over the IPC boundary so the
         # parent can persist it (``skipped:<reason>``) and report it
@@ -463,6 +487,12 @@ class ReplayWatcher:
         self._sweep_live_lock = threading.Lock()
         self._sweep_live_paths: dict[str, str] = {}
         self._sweep_live_roots: set[str] = set()
+        # path -> (file signature at the last settle failure, consecutive
+        # failures with that same signature). See ``_record_settle_failure``.
+        self._settle_failures: dict[
+            str, tuple[tuple[int, int] | None, int]
+        ] = {}
+        self._settle_failures_lock = threading.Lock()
         self._parse_inflight_limit = max(
             _PARSE_INFLIGHT_MIN,
             min(
@@ -1237,6 +1267,8 @@ class ReplayWatcher:
                     path_str,
                 )
             path = Path(path_str)
+            if kind != "settle_failed":
+                self._clear_settle_failure(path)
             if kind == "game":
                 # Post-parse date-range check. The mtime pre-filter is
                 # cheap but lossy (file copy / OneDrive sync stamps the
@@ -1293,6 +1325,16 @@ class ReplayWatcher:
                     self._analyzer_unavailable = False
             elif kind == "settle_failed":
                 log.warning("file_never_settled %s", path.name)
+                self._record_settle_failure(path)
+            elif kind == "analysis_failed":
+                log.warning(
+                    "replay_analysis_failed file=%s error=%s "
+                    "(recorded as skipped; Re-sync retries it)",
+                    path.name,
+                    payload,
+                )
+                self._state.uploaded[path_str] = f"skipped:{SKIP_ANALYSIS_FAILED}"
+                self._notify_skipped(path, SKIP_ANALYSIS_FAILED)
             elif kind == "analyzer_error":
                 # Throttled — same logic as the in-thread handler.
                 now = time.monotonic()
@@ -1313,6 +1355,36 @@ class ReplayWatcher:
         finally:
             if not deferred:
                 self._finish_replay(Path(submitted_path_str))
+
+    def _record_settle_failure(self, path: Path) -> None:
+        """Give up on a replay that stays unreadable, visibly.
+
+        Only a file observed unchanged across ``_SETTLE_FAILURE_LIMIT``
+        consecutive failures is recorded as ``skipped:file_unstable``; a file
+        still growing between attempts keeps being retried.
+        """
+        key = str(path)
+        signature = _file_signature(path)
+        with self._settle_failures_lock:
+            previous, count = self._settle_failures.get(key, (None, 0))
+            count = count + 1 if count and previous == signature else 1
+            if count < _SETTLE_FAILURE_LIMIT:
+                self._settle_failures[key] = (signature, count)
+                return
+            self._settle_failures.pop(key, None)
+        log.warning(
+            "file_never_settled_giving_up file=%s attempts=%d size=%s "
+            "(recorded as skipped; Re-sync retries it)",
+            path.name,
+            count,
+            signature[0] if signature else "unreadable",
+        )
+        self._state.uploaded[key] = f"skipped:{SKIP_FILE_UNSTABLE}"
+        self._notify_skipped(path, SKIP_FILE_UNSTABLE)
+
+    def _clear_settle_failure(self, path: Path) -> None:
+        with self._settle_failures_lock:
+            self._settle_failures.pop(str(path), None)
 
     def _finish_replay(self, path: Path) -> None:
         with self._inflight_lock:
@@ -1457,7 +1529,9 @@ class ReplayWatcher:
         try:
             if not _wait_for_file_ready(path, SETTLE_TIMEOUT_SEC):
                 log.warning("file_never_settled %s", path.name)
+                self._record_settle_failure(path)
                 return
+            self._clear_settle_failure(path)
             try:
                 game, skip_reason = parse_replay_for_cloud_ex(
                     path,
@@ -1489,6 +1563,17 @@ class ReplayWatcher:
                     self._analyzer_error_logged_at = now
                 self._analyzer_unavailable = True
                 return
+            except Exception:  # noqa: BLE001
+                # Executors discard a raised exception silently, and the
+                # replay was then re-parsed on every sweep without ever
+                # being uploaded or skipped. Record a terminal outcome.
+                log.warning(
+                    "replay_analysis_failed file=%s "
+                    "(recorded as skipped; Re-sync retries it)",
+                    path.name,
+                    exc_info=True,
+                )
+                game, skip_reason = None, SKIP_ANALYSIS_FAILED
             else:
                 # We got past the import; reset the throttle so a
                 # subsequent failure (e.g., after a reload) is logged
@@ -1571,6 +1656,15 @@ class _Handler(FileSystemEventHandler):
             return
         log.info("watchdog_seen %s", path.name)
         self._parent.on_replay_created(path)
+
+
+def _file_signature(path: Path) -> tuple[int, int] | None:
+    """``(size, mtime_ns)`` to tell a stuck file from one still changing."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_size, stat.st_mtime_ns
 
 
 def _directory_mtime_ns(path: Path) -> int | None:

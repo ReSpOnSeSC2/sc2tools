@@ -2,6 +2,27 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.1
+
+### Fixed - replays stuck in background sync
+
+- A recorded replay whose playback could not be split into segments no longer
+  stops its game from syncing. The game analysis uploads, and any playback
+  already stored for it is kept. Previously the replay was neither uploaded
+  nor skipped, and the import card stayed at "N replay files remain".
+- Two long recordings uploading at the same time no longer block each other.
+  Recordings publish one at a time, and a busy server is waited out on the
+  same segment instead of restarting from the first one.
+- A recording the server refuses, or that fails five times in a row, no
+  longer re-uploads its game forever. The game completes without it.
+- Every replay now ends with a visible outcome. An unexpected analysis error
+  is reported as "analysis failed", and a replay file that stays empty is
+  reported as "file unstable", each with its file name. Use **Re-sync** to
+  retry them after updating.
+- After a restart, the agent re-attaches to an unfinished import even when
+  only a few files remain, so the website card finishes instead of showing
+  those files as remaining indefinitely.
+
 ## 0.17.0
 
 ### Fixed - long replay upload capacity

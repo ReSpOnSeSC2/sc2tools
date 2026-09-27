@@ -50,8 +50,13 @@ _BENIGN_REASONS = {"ai_game", "resumed_replay"}
 
 # Minimum un-uploaded replay count for the startup sweep to register
 # itself as a visible job. Below this the sweep finishes in seconds
-# and a progress card would just flash.
+# and a progress card would just flash. Re-attaching to a job that is
+# already visible is exempt (see ``maybe_start_auto_backfill``).
 AUTO_BACKFILL_MIN = 25
+
+# Job statuses the cloud still shows as in progress; mirrors the API's
+# agent-start adoption filter.
+_UNFINISHED_JOB_STATUSES = frozenset({"scanning", "running", "stalled"})
 
 _REPORT_INTERVAL_SEC = 2.0
 _MAX_SAMPLES = 25
@@ -283,12 +288,21 @@ class ImportController:
         Called once by the runner right after ``watcher.start()``. The
         sweep itself runs regardless — this only decides whether the
         user gets a live progress card for it.
+
+        It is also the only way back to a job that outlived an agent
+        restart. Re-attaching shows no new card, so the threshold does
+        not apply to it: a job whose last few files were still pending at
+        restart was otherwise never reported on again, and the website
+        kept showing those files as remaining after they synced.
         """
         with self._lock:
             if self._job_id is not None:
                 return
-        total = self._safe_count_pending()
-        if total < AUTO_BACKFILL_MIN:
+        total = self._try_count_pending()
+        if total is None:
+            log.info("auto_backfill_not_registered reason=inventory_unavailable")
+            return
+        if total < AUTO_BACKFILL_MIN and not self._unfinished_job_exists():
             log.info(
                 "auto_backfill_not_registered candidates=%d threshold=%d",
                 total,
@@ -324,6 +338,17 @@ class ImportController:
             "seeded_errors=%d existing=%s",
             job_id, total, completed, errors, bool(out.get("existing")),
         )
+        if total == 0:
+            # Nothing was ever counted and a strict recount found nothing
+            # pending: close the job now rather than after a stall window.
+            self._post_progress({
+                "jobId": str(job_id),
+                "total": 0,
+                "phase": "import",
+                "message": "nothing_to_import",
+                "done": True,
+            })
+            return
         self._activate(
             str(job_id),
             total,
@@ -333,6 +358,22 @@ class ImportController:
         )
 
     # ---------------- internals ----------------
+
+    def _unfinished_job_exists(self) -> bool:
+        """Whether the cloud still shows a job in progress for this account."""
+        lookup = getattr(self._api, "import_status", None)
+        if not callable(lookup):
+            return False
+        try:
+            out = lookup()
+        except Exception as exc:  # noqa: BLE001
+            log.info("import_status_unavailable: %s", exc)
+            return False
+        return (
+            isinstance(out, dict)
+            and bool(out.get("jobId"))
+            and out.get("status") in _UNFINISHED_JOB_STATUSES
+        )
 
     def _bump(self, code: str, path: Path, message: Optional[str]) -> None:
         """Record a non-benign failure (caller holds the lock)."""
@@ -601,16 +642,12 @@ class ImportController:
             # disturb the parse/upload pipeline it's narrating.
             log.debug("import_progress_post_failed: %s", exc)
 
-    def _safe_count_pending(self) -> int:
-        remaining = self._try_count_pending()
-        return remaining if remaining is not None else 0
-
     def _try_count_pending(self) -> Optional[int]:
         """Return the pending inventory, or ``None`` when it is unknown.
 
         Inventory failures must never be interpreted as an empty disk and a
-        successful job. Start, scan, and completion all use this strict form;
-        the auto-backfill prompt alone may safely decline to mount on unknown.
+        successful job. Every caller uses this strict form; on unknown the
+        auto-backfill prompt simply declines to mount or re-attach.
         """
         try:
             return max(0, int(self._watcher.count_pending()))

@@ -75,6 +75,15 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Replays no longer stay stuck in background sync** — agent **0.17.1**
+  (`agent-v0.17.1`) syncs a recorded replay's game analysis even when its
+  playback cannot be split into segments. Any playback already stored for the
+  game is kept. Two long recordings no longer block each other's upload, and
+  a recording the server refuses no longer re-uploads its game forever. Every
+  replay now ends with a visible outcome: a file that cannot be analysed or
+  stays empty is named on the import card instead of leaving it at "N replay
+  files remain". A restarted agent also finishes an unfinished import when only
+  a few files are left.
 - **Automatic map replay capture** — agent **0.16.11** (`agent-v0.16.11`)
   records detailed movement, attacks, spells and creep for new and re-synced
   games when Map replay is enabled. The website's **Generate accurate playback**

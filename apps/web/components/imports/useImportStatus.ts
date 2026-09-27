@@ -47,7 +47,10 @@ export const ERROR_CODE_COPY: Record<string, string> = {
     "Skipped — a replay-resume session is not a new ladder result.",
   filtered: "Skipped — outside your import date range.",
   rejected_by_server: "The server rejected the upload.",
-  file_unstable: "The file never finished writing (cloud-sync lag?).",
+  file_unstable:
+    "The file stayed empty or unreadable (interrupted save or cloud-sync lag?). Run Re-sync in the desktop agent to retry it.",
+  analysis_failed:
+    "The desktop agent hit an unexpected error analysing this replay. Update the agent, then run Re-sync to retry it.",
   analyzer_unavailable: "The agent's parser couldn't load — restart the agent.",
 };
 

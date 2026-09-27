@@ -559,3 +559,106 @@ def test_apparent_completion_recounts_and_expands_for_new_files(monkeypatch):
     assert wait_for(lambda: ctl._job_id is None)
     assert api.progress_calls[-1]["done"] is True
     assert api.progress_calls[-1]["remaining"] == 0
+
+
+# ---------------- restart re-attachment ------------------------------
+#
+# A job outlives an agent restart (auto-update, reboot, installing a
+# fix). ``maybe_start_auto_backfill`` is the only restart path back to
+# it, and the card threshold used to gate that too: with fewer than
+# AUTO_BACKFILL_MIN files left, nothing ever reported on the job again
+# and the website kept saying "2 replay files remain" indefinitely.
+
+
+class StatusApi(FakeApi):
+    def __init__(self, status_resp, **kwargs):
+        super().__init__(**kwargs)
+        self._status_resp = status_resp
+        self.status_calls = 0
+
+    def import_status(self):
+        self.status_calls += 1
+        if isinstance(self._status_resp, Exception):
+            raise self._status_resp
+        return self._status_resp
+
+
+def _stalled_job_api(*, completed=51, errors=0):
+    return StatusApi(
+        {"ok": True, "jobId": "job-stalled", "status": "stalled"},
+        agent_start_resp={
+            "ok": True, "jobId": "job-stalled", "existing": True,
+            "status": "stalled", "total": 53,
+            "completed": completed, "errors": errors,
+        },
+    )
+
+
+def test_restart_reattaches_small_unfinished_job_and_finishes_it(monkeypatch):
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.01,
+    )
+    ctl, api, w = make_controller(pending=2, api=_stalled_job_api())
+    ctl.maybe_start_auto_backfill()
+    assert api.agent_start_calls == [{"total": 2}]
+
+    w.pending = 0
+    ctl.on_upload_success(Path("a.SC2Replay"))
+    ctl.on_upload_success(Path("b.SC2Replay"))
+    assert wait_for(lambda: any(c.get("done") for c in api.progress_calls)), (
+        f"re-attached job never finished: {api.progress_calls!r}"
+    )
+    final = api.progress_calls[-1]
+    assert final["jobId"] == "job-stalled"
+    assert final["completed"] == 53
+    assert final["remaining"] == 0
+    ctl.stop()
+
+
+def test_restart_closes_unfinished_job_whose_files_already_synced(monkeypatch):
+    monkeypatch.setattr(
+        "sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", 0.01,
+    )
+    ctl, api, _w = make_controller(pending=0, api=_stalled_job_api())
+    ctl.maybe_start_auto_backfill()
+    assert wait_for(lambda: any(c.get("done") for c in api.progress_calls)), (
+        f"re-attached job never closed: {api.progress_calls!r}"
+    )
+    final = api.progress_calls[-1]
+    assert final["jobId"] == "job-stalled"
+    assert final["completed"] == 51
+    assert final["remaining"] == 0
+    ctl.stop()
+
+
+def test_restart_closes_empty_unfinished_job_without_waiting():
+    api = _stalled_job_api(completed=0)
+    ctl, api, _w = make_controller(pending=0, api=api)
+    ctl.maybe_start_auto_backfill()
+    assert api.progress_calls[-1]["done"] is True
+    assert api.progress_calls[-1]["jobId"] == "job-stalled"
+    ctl.stop()
+
+
+def test_small_backlog_without_unfinished_job_still_does_not_register():
+    api = StatusApi({"ok": True, "jobId": "old", "status": "done"})
+    ctl, api, _w = make_controller(pending=2, api=api)
+    ctl.maybe_start_auto_backfill()
+    assert api.status_calls == 1
+    assert api.agent_start_calls == []
+
+
+def test_status_lookup_failure_does_not_register_small_backlog():
+    api = StatusApi(RuntimeError("offline"))
+    ctl, api, _w = make_controller(pending=2, api=api)
+    ctl.maybe_start_auto_backfill()
+    assert api.agent_start_calls == []
+
+
+def test_unknown_inventory_never_reattaches_or_registers():
+    api = _stalled_job_api()
+    ctl, api, w = make_controller(pending=2, api=api)
+    w.fail_count = True
+    ctl.maybe_start_auto_backfill()
+    assert api.agent_start_calls == []
+    assert api.progress_calls == []

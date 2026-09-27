@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import re
 import time
 from dataclasses import dataclass
@@ -44,6 +45,15 @@ REPLAY_PUT_READ_TIMEOUT_SEC = 120.0
 # unavailable. Rejecting locally avoids an unrecoverable 413 retry loop.
 REPLAY_FILE_MAX_BYTES = 5 * 1024 * 1024
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# Playback segment PUTs share the API's one-at-a-time replay-ingest slot with
+# game uploads, and artifact writes are bounded per API process. Both answer
+# 503 as deliberate backpressure. Abandoning the publication on the first one
+# restarted it from segment 0, so two long recordings uploading at once kept
+# rejecting each other and never finished. Wait them out per request instead.
+PLAYBACK_BUSY_MAX_WAIT_SEC = 300.0
+_PLAYBACK_BUSY_RETRY_SEC = 5.0
+_PLAYBACK_BUSY_CODES = frozenset({"replay_ingest_busy", "playback_artifact_busy"})
 
 _USER_AGENT = "sc2tools-agent/0.1"
 
@@ -205,7 +215,7 @@ class ApiClient:
         manifest_path = Path(manifest_path)
         manifest = load_bundle(manifest_path)
         base = f"/v1/games/{quote(game_id, safe='')}/map-playback/artifacts"
-        prepared = self._request("POST", base, auth=True, body={"manifest": manifest})
+        prepared = self._playback_request("POST", base, body={"manifest": manifest})
         artifact_id = prepared.get("artifactId", "")
         if not isinstance(artifact_id, str) or len(artifact_id) != 64 or any(c not in "0123456789abcdef" for c in artifact_id):
             raise ValueError("Invalid playback artifact response")
@@ -218,13 +228,40 @@ class ApiClient:
                 body = handle.read(MAX_SEGMENT_BYTES + 1)
             if len(body) > MAX_SEGMENT_BYTES or len(body) != descriptor["sizeBytes"] or sha256(body).hexdigest() != digest:
                 raise ValueError("Local playback segment integrity check failed")
-            result = self._request("PUT", f"{base}/{artifact_id}/segments/{descriptor['index']}", auth=True, raw_body=body)
+            result = self._playback_request("PUT", f"{base}/{artifact_id}/segments/{descriptor['index']}", raw_body=body)
             if result.get("sha256") != digest:
                 raise ValueError("Playback segment upload was not verified")
-        result = self._request("POST", f"{base}/{artifact_id}/complete", auth=True, body={})
+        result = self._playback_request("POST", f"{base}/{artifact_id}/complete", body={})
         if result.get("artifactId") != artifact_id or result.get("segmentCount") != len(manifest["segments"]):
             raise ValueError("Playback artifact publication was not verified")
         return result
+
+    def _playback_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        body: Optional[Dict[str, Any]] = None,
+        raw_body: Optional[bytes] = None,
+    ) -> Dict[str, Any]:
+        """One playback request, retried in place while the API is busy."""
+        deadline = time.monotonic() + PLAYBACK_BUSY_MAX_WAIT_SEC
+        while True:
+            try:
+                return self._request(
+                    method, path, auth=True, body=body, raw_body=raw_body,
+                )
+            except (ReplayIngestBusy, _ApiError) as exc:
+                if isinstance(exc, ReplayIngestBusy):
+                    delay = exc.retry_after_seconds
+                elif exc.status == 503 and _api_error_code(exc) in _PLAYBACK_BUSY_CODES:
+                    delay = _PLAYBACK_BUSY_RETRY_SEC
+                else:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
+            time.sleep(min(max(delay, RETRY_BACKOFF_BASE_SEC), remaining))
 
     def upload_replay_file(self, game_id: str, file_path: Path) -> bool:
         """Compatibility archive path for optional/rolling deployments."""
@@ -594,6 +631,13 @@ class ApiClient:
         """Report host facts (cores, watched replay folders)."""
         return self._post("/v1/import/host-info", auth=True, body=body)
 
+    def import_status(self) -> Dict[str, Any]:
+        """The account's latest import job, in any status.
+
+        Lets a restarted agent find an unfinished job to re-attach to.
+        """
+        return self._get("/v1/import/status", auth=True)
+
     # ---------------- internals ----------------
     def _get(
         self,
@@ -733,6 +777,17 @@ def _error_code(response: requests.Response) -> Optional[str]:
         code = error.get("code")
         return code if isinstance(code, str) else None
     return None
+
+
+def _api_error_code(exc: _ApiError) -> Optional[str]:
+    """``_error_code`` for an already-raised error's response body."""
+    try:
+        payload = json.loads(exc.body or "")
+    except ValueError:
+        return None
+    error = payload.get("error") if isinstance(payload, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, str) else None
 
 
 def _backoff(attempt: int) -> None:

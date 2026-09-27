@@ -2169,6 +2169,67 @@ def test_engine_budget_failure_reaches_parser_without_publishing_partial_game(mo
     assert pipeline.parse_replay_for_cloud_ex(ctx.file_path, player_handle="Me") == (None, "playback_budget_exceeded")
 
 
+def _recorded_replay_parse(monkeypatch, tmp_path):
+    """Stub one parse whose replay has a complete engine recording."""
+    import sc2tools_agent.replay_pipeline as pipeline
+    pb = _sample_playback()
+    pb["fidelity"] = {"positions": "engine", "complete": True}
+    pb["replaySha256"] = "a" * 64
+    ctx = SimpleNamespace(is_ai_game=False, me=SimpleNamespace(name="Me", result="Win", race="Protoss", mmr=None, handle=None, pid=1),
+                          opponent=SimpleNamespace(name="Opp", race="Terran", mmr=None, handle=None, pid=2), file_path=tmp_path / "recorded.SC2Replay",
+                          game_id="recorded-game", date_iso="2026-09-25T00:00:00Z", map_name="Test", length_seconds=700)
+    monkeypatch.setitem(sys.modules, "core.sc2_replay_parser", SimpleNamespace(parse_deep=lambda *_a: ctx))
+    monkeypatch.setattr(pipeline, "_compute_macro_breakdown", lambda *_a: (None, None))
+    monkeypatch.setattr(pipeline, "_compute_apm_curve", lambda *_a: None)
+    monkeypatch.setattr(pipeline, "_compute_spatial_extract", lambda *_a: None)
+    monkeypatch.setattr(pipeline, "_load_sc2ra_package_module", lambda _n: SimpleNamespace(detect_battle_markers=lambda *_a: []))
+    monkeypatch.setattr(pipeline, "_raw_map_playback", lambda *_a: pb)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    return pipeline, ctx, state_dir
+
+
+def test_unavailable_recording_source_still_syncs_game_analysis(monkeypatch, tmp_path):
+    # No matching observation sidecar: source_artifact_digest raises
+    # ValueError. That must not escape the parser (the watcher would
+    # re-parse the replay forever without ever uploading or skipping it).
+    pipeline, ctx, state_dir = _recorded_replay_parse(monkeypatch, tmp_path)
+    game, reason = pipeline.parse_replay_for_cloud_ex(ctx.file_path, player_handle="Me", state_dir=state_dir)
+    assert reason is None
+    assert game.game_id == "recorded-game"
+    assert game.playback_artifact_path is None
+    # Omitting mapPlayback preserves any playback already stored in the cloud.
+    assert "mapPlayback" not in game.to_payload()
+
+
+def test_segment_build_failure_still_syncs_game_analysis(monkeypatch, tmp_path):
+    import sc2tools_agent.playback_artifacts as artifacts
+    pipeline, ctx, state_dir = _recorded_replay_parse(monkeypatch, tmp_path)
+    monkeypatch.setattr(artifacts, "source_artifact_digest", lambda *_a: "b" * 64)
+
+    def fail(*_a, **_k):
+        raise ValueError("Incomplete source cannot be published as a complete segment")
+
+    monkeypatch.setattr(artifacts, "build_bundle", fail)
+    game, reason = pipeline.parse_replay_for_cloud_ex(ctx.file_path, player_handle="Me", state_dir=state_dir)
+    assert reason is None
+    assert game.playback_artifact_path is None
+    assert "mapPlayback" not in game.to_payload()
+
+
+def test_segment_budget_failure_keeps_explicit_capacity_skip(monkeypatch, tmp_path):
+    import sc2tools_agent.playback_artifacts as artifacts
+    pipeline, ctx, state_dir = _recorded_replay_parse(monkeypatch, tmp_path)
+    monkeypatch.setattr(artifacts, "source_artifact_digest", lambda *_a: "b" * 64)
+
+    def over_budget(*_a, **_k):
+        raise pipeline.PlaybackBudgetExceeded("Playback needs more than 512 bounded segments")
+
+    monkeypatch.setattr(artifacts, "build_bundle", over_budget)
+    assert pipeline.parse_replay_for_cloud_ex(ctx.file_path, player_handle="Me", state_dir=state_dir) == (
+        None, "playback_budget_exceeded")
+
+
 def test_v6_engine_preserves_observed_creep_and_effect_lifetimes():
     from sc2tools_agent.replay_pipeline import _compact_map_playback
     pb = _sample_playback()
