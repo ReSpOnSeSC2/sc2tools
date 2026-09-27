@@ -1,0 +1,1297 @@
+[
+  {
+    "name": "Protoss - 4 Gate Rush",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if 4 Gateways exist before 6:00 and before the 2nd Nexus.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Blink All-In",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "3 or 4 Gateways have been made along with Blink before 6:30 without a second Nexus.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Cannon Rush",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Photon Cannon is built near your base (Proxy) before 4:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Chargelot All-in",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if Charge is researched, 7+ Gates, and low gas count.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Chargelot/Archon Comp",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on Archons and Chargelots.",
+    "opener": false
+  },
+  {
+    "name": "Protoss - DT Rush",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Dark Shrine is built before 7:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Glaive Adept Timing",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if Twilight Council + Glaives researched + High Adept count by 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Proxy 4 Gate",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if 3+ Gateways are built far from the main base before 4:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Proxy Robo Opener",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Robo is built away from the opponents base before 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Proxy Stargate Opener",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Stargate is built away from the opponents base before 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Robo Comp",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on Colossi or Disruptors.",
+    "opener": false
+  },
+  {
+    "name": "Protoss - Robo Opener",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Robotics Facility is built before 6:30 AND no Twilight Council was started before it (a 2-Gate Expand Blink build with a later Robo is a Twilight-first opener, not a Robo Opener).",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Skytoss Transition",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on multiple Stargates or Carriers.",
+    "opener": false
+  },
+  {
+    "name": "Protoss - Standard Expand",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if the 2nd Nexus starts before 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Standard Macro (CIA)",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if Protoss has 3 Bases and Charge/Immortal/Archon tech path.",
+    "opener": true
+  },
+  {
+    "name": "Protoss - Standard Play (Unclassified)",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Catch-all for unclassified Protoss games.",
+    "opener": false
+  },
+  {
+    "name": "Protoss - Stargate Opener",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Stargate is built before 6:30.",
+    "opener": true
+  },
+  {
+    "name": "PvP - 1 Gate Expand",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "PvP standard 1-gate expand: exactly 1 Gateway finished before the natural Nexus (which goes down before 5:00) and the first warp-in is a Stalker / Adept / Zealot.",
+    "opener": true
+  },
+  {
+    "name": "PvP - 1 Gate Nexus into 4 Gate",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if exactly 1 Gateway is started before the natural Nexus (which goes down before 5:00), 4+ Gateways exist by 6:00, the first warp-in is a Stalker / Adept / Zealot (NOT Sentry), no tech building (Stargate / Robotics Facility / Twilight Council / Templar Archive / Dark Shrine) is started before the 4th Gateway, and Warp Gate research begins by 5:30 -- the 1 Gate Nexus into 4 Gate Stalker timing.",
+    "opener": true
+  },
+  {
+    "name": "PvP - 2 Gate Expand",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "PvP safer 2-gate expand: 2 (or more) Gateways are started before the natural Nexus (which goes down before 5:00) AND no tech building (Stargate, Robotics Facility, or Twilight Council) is started before the natural. A Stargate / Robo / Twilight before the natural means it is a tech-first opener, not a pure 2-gate expand. Trades a few seconds of economy for protection vs proxy 2-gate / early aggression.",
+    "opener": true
+  },
+  {
+    "name": "PvP - 4 Stalker Oracle into DT",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if 3+ Stalkers by 6:30, 1+ Oracle by 7:30, and a Dark Shrine is built by 9:00 -- Stalker / Oracle harass transitioning into Dark Templar.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Adept Glaives",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if the Twilight Council is the FIRST tech building (built before any Robotics Facility AND any Stargate -- pure ordering, no time threshold) and the FIRST upgrade researched out of it is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- a pure Gateway Adept Glaive timing. The Glaives-first signal separates it from Blink Stalker Style, where Blink would be researched first.",
+    "opener": true
+  },
+  {
+    "name": "PvP - AlphaStar (4 Adept/Oracle)",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Stargate is built, 4+ Adepts have been produced by 6:00 AND 1+ Oracle is on the field by 6:30 -- the AlphaStar 4-Adept / Oracle pressure opener. Hallucinated Oracles from a Sentry do not count.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Blink Stalker Style",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if Blink is researched by 9:00, the player has expanded (2+ Nexuses), and they have between 2 and 4 Gateways by 9:00 -- a macro Blink Stalker game.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Game Too Short",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Catch-all bucket for PvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "PvP - Macro Transition (Unclassified)",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "PvP catch-all: the game reached the macro phase but did not match a more specific PvP pattern.",
+    "opener": false
+  },
+  {
+    "name": "PvP - Phoenix Style",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Stargate is built and 3+ Phoenix have been produced by 8:30 -- an air-control / Phoenix-heavy PvP style. Hallucinated Phoenix from Sentries do not count.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Proxy 2 Gate",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Gateway is built before 4:30 within 50 units of the OPPONENT's main base -- a proxied 2-Gate aggression.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Proxy Robo Opener",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Robotics Facility is built before 6:30 within 50 units of the OPPONENT's main base -- a proxied Robo (Immortal / Warp Prism) opener.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Rail's Blink Stalker (Robo 1st)",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if Robotics Facility goes down BEFORE Twilight Council and BOTH go down before the natural Nexus -- a Robo-first Blink Stalker style. A Robo-first build whose FIRST Twilight upgrade is Glaives tags as PvP - Robo into Glaives instead.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Robo into Glaives",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Robotics Facility is built BEFORE the Twilight Council and the FIRST upgrade researched out of that Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge) -- the common PvP Robo (Immortal / Observer) opening into a Glaive Adept timing. Classification is purely order-based: the Glaives-first signal is what separates this from Rail's Blink Stalker (Robo 1st), where Blink would be the upgrade instead.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Standard Stargate Opener",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Stargate is built before 6:30 in the player's own base (not proxied) -- the standard Stargate (Oracle / Phoenix) PvP opener.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Strange's 1 Gate Expand",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "PvP 1-gate expand variant where exactly 1 Gateway is built before the natural Nexus and the first warp-in is a Sentry.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives finishes BEFORE the third Nexus is taken, AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 2 Gate Blink (Fast 3rd Nexus)",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style with Robo follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 3 Gate Blink (Macro)",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND exactly 3 Gateways were STARTED before the 3rd Nexus -- a macro 3-Gate Blink style. Counting gates before the 3rd Nexus (not a fixed 7:30 cutoff) means a player who takes the 3rd Nexus fast and then adds more Gateways still classifies as 3 Gate Blink, while a player who delays the 3rd Nexus to push out 4+ Gateways gets labelled 4 Gate Blink.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 3 Gate Charge Opener",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Charge is researched by 9:00 AND Twilight Council was built BEFORE Robotics Facility AND BEFORE Stargate -- a Twilight-first 3-Gate Charge opener.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 4 Gate Blink",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND 4+ Gateways were STARTED before the 3rd Nexus -- a 4-Gate Blink Stalker timing. The gate count is measured against the 3rd Nexus's start time, so a player who delays the 3rd Nexus while adding Gateways gets this label, while a player who takes the 3rd Nexus fast and then adds Gateways gets the lower-count Blink label that matches what was committed pre-expansion.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 7 Gate Blink All-in",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 9:00, 6+ Gateways exist by 9:00, the 5th Gateway was STARTED before the 3rd Nexus was STARTED, AND no 3rd Nexus was STARTED before 6:00 -- a heavy Twilight-first multi-Gate Blink all-in. The Twilight-first guard keeps Robo-first openers with 6+ Gateways + late Blink off this label (those fall through to Robo First). \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop a LATE 3rd Nexus (6:00 or later) and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway, OR if any 3rd Nexus was taken before 6:00 (a fast 3rd Nexus is a macro commitment, so those builds fall through to the 3/4 Gate Blink (Macro) labels). A DT Drop opener that later macros into a multi-Gate Blink composition is also excluded -- the DT Drop signature is checked first.",
+    "opener": true
+  },
+  {
+    "name": "PvT - 8 Gate Charge All-in",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Charge is researched by 9:00, 7+ Gateways exist by 7:30, AND fewer than 3 Nexuses have been taken -- a 2-base Twilight-first mass-Gate Chargelot all-in. The Twilight-first guard keeps Robo-first openers with 7+ Gateways + late Charge off this label (those fall through to Robo First).",
+    "opener": true
+  },
+  {
+    "name": "PvT - DT Drop",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Dark Shrine is started by 4:15 AND a Robotics Facility is up by 4:30 AND at least one real (non-hallucinated) Dark Templar exists on the field by 5:00 AND a Warp Prism is on the field by 5:15 -- a fast tactical PvT DT drop. The cutoffs are calibrated against a real PvT DT Drop replay (Peruano, Taito Citadel LE 2026-05-11: Shrine 3:13, Robo 3:32, DT 3:51, Prism 4:11) with ~60 seconds of buffer per signal so slower variants still classify. Slower openers that miss these windows are Robo First or late-tech DT support builds, not drop openers.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Game Too Short",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Catch-all bucket for PvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "PvT - Macro Transition (Unclassified)",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "PvT catch-all: the game reached the macro phase but did not match a more specific PvT pattern.",
+    "opener": false
+  },
+  {
+    "name": "PvT - Phoenix Opener",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Stargate-first Phoenix opener. The Stargate-first ordering keeps Robo-first openers with a midgame Stargate + Phoenix harass off this label (those fall through to Robo First). Hallucinated Phoenix from Sentries do NOT count.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Phoenix into Robo",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Stargate-first Phoenix opener that transitions into Robo tech. The Stargate-first ordering keeps Robo-first openers that ADD a midgame Stargate + real Phoenix off this label (those fall through to Robo First, since the OPENER was Robo). A Sentry's hallucinated Phoenix does NOT trigger this build.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Proxy Void Ray/Stargate",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Stargate is built before the natural Nexus within 50 units of the OPPONENT's main -- a proxied Stargate (Void Ray) timing.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Robo First",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building — Robo lands before any Twilight Council AND before any Stargate. The label describes the OPENER, not the entire composition: a Robo opener that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests) still classifies as Robo First because the opening was Robo. Stargate-led openers are caught earlier by Phoenix into Robo / Phoenix Opener / Stargate Opener so they don't fall into this bucket.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Standard Charge Macro",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Stargate Opener",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Stargate into Blink",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Blink (i.e. Blink starts before Resonating Glaives and before Charge). Stargate harass into Blink Stalker macro/midgame. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo, not Twilight-led.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Stargate into Charge",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Stargate is built before any Twilight Council (the Stargate unit produced — Phoenix / Oracle / Void Ray — does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Charge (i.e. Charge starts before Resonating Glaives and before Blink). The build can resolve as a 2-base Chargelot timing OR transition into a 3-base Charge macro game — the rule keys on the Stargate-then-Charge opening only and does NOT require an all-in commitment. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo / Robo First, not Twilight-led.",
+    "opener": true
+  },
+  {
+    "name": "PvT - Stargate into Glaives",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Stargate is built before any Twilight Council (typically with Phoenix harass, but the Stargate unit does NOT matter), a Twilight Council is built AFTER the Stargate, AND the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts before Blink and before Charge). The old-school Stargate-Phoenix into Glaive Adept midgame timing. Disqualified if a Robotics Facility (or an Immortal / Robotics Bay) lands BEFORE the Twilight Council — those replays are Phoenix into Robo, not Twilight-led.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - 2 Stargate Phoenix",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Stargate-into-Glaives hybrid (Phoenix as Glaive Adept support) tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid (Phoenix + Robo for Immortal / Observer / Disruptor) tags as PvZ - Stargate into Robo. The Glaives-first signal and the Robo presence are both strong intent markers -- the Phoenix count alone isn't enough to claim the pure 2 SG Phoenix label.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - 2 Stargate Void Ray",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built before 6:00. A 4+ Void Ray commitment that adds a LATER Robo (after 6:00) for Observer / Immortal support still counts as Void Ray; only an EARLY Robo (before 6:00) reroutes to PvZ - Stargate into Robo. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - 3 Stargate Phoenix",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid tags as PvZ - Stargate into Robo.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - 7 Gate Glaive/Immortal All-in",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Robotics Facility is built, Glaives is researched by 8:30, 2+ Sentries and 1+ Immortal produced by 8:30, and 6+ Gateways exist by 9:00 -- a heavy Glaive Adept / Immortal all-in.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Adept Glaives (No Robo)",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold, so a slow Twilight with nothing else committed first still qualifies), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Adept Glaives (Robo)",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND a Robotics Facility is built (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - AlphaStar Style (Oracle/Robo)",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building, followed by the third Nexus and then a Robotics Facility that begins by 5:30 and before any Twilight Council, with 2+ Oracles plus a Forge present by 8:30 -- the AlphaStar Oracle / fast-third / fast-Robo composition. A missing or later Robo is not AlphaStar and falls to the matching Blink-, Charge-, or Resonating-Glaives-first transition.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Archon Drop",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph).",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Blink Stalker All-in (2 Base)",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if Blink is researched by 8:00, 5+ Gateways exist by 8:00, and the player has NOT built a Stargate or Dark Shrine by 8:00 -- a 2-base Blink all-in.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Carrier Rush",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Carrier has been produced by 10:00 -- a true Stargate-opener Carrier rush. A DT or Glaives opener that adds a Stargate / Fleet Beacon / Carrier late tags as PvZ - DT Opener or PvZ - Adept Glaives instead. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - DT Opener",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Dark Shrine is the player's primary alternative-tech path -- built BEFORE any Stargate / Robotics Facility -- with at least 1 real Dark Templar on the field by 9:00. Pure ordering, no time threshold: a slow Shrine with no earlier Stargate / Robo still counts. (Twilight Council is required as Dark Shrine's prereq, so a Twilight-first ordering is implicit and isn't checked separately.) Catches DT openers that transition to mid- or late-game tech (Skytoss / Mothership / Templar) -- without this rule a DT build that later picked up a Stargate + Carrier used to mis-fire as PvZ - Carrier Rush.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - DT drop into Archon Drop",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if Twilight Council goes down before Dark Shrine, a Dark Shrine AND a Robotics Facility are up by 9:00, 3+ Dark Templar are produced by 9:00, and a Warp Prism is on the field by 9:00.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Game Too Short",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Catch-all bucket for PvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "PvZ - Macro Transition (Unclassified)",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "PvZ catch-all: the game reached the macro phase but did not match a more specific PvZ pattern.",
+    "opener": false
+  },
+  {
+    "name": "PvZ - Rail's Disruptor Drop",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Robotics Facility AND a Robotics Bay are built and at least 1 Disruptor and 1 Warp Prism are produced by 8:00 -- an early Disruptor drop harass build.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Robo Opener",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Robotics Facility is the FIRST tech building -- built BEFORE any Stargate / Twilight Council / Dark Shrine. Pure ordering, no time threshold: a slow Robo opener with no other tech first still counts.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Standard Blink Macro",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Blink is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Blink macro rather than AlphaStar.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Standard charge Macro",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 9:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Stargate Opener",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Catch-all for any Stargate-first opener (Stargate built BEFORE any Twilight Council / Dark Shrine / Robotics Facility) that didn't match a more specific Stargate-prefixed PvZ rule -- Carrier Rush, Tempest Rush, 2/3 Stargate Phoenix, 2 Stargate Void Ray, AlphaStar Style, Stargate into Robo, Stargate into Glaives, Standard Blink Macro, Standard charge Macro, Archon Drop. Examples that land here: a Stargate that got harassed off before producing a real unit, a Stargate-into-Templar build without 2 Archons by 9:00, or any Stargate opener with an unusual midgame composition the analyzer doesn't have a named bucket for. Mirror of PvT - Stargate Opener.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Stargate into Glaives",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Stargate is the FIRST tech building, Twilight Council is added before any Robotics Facility, and the FIRST Twilight upgrade is Resonating Glaives (completed BEFORE Blink and Charge) -- a Stargate opener into Glaive Adepts. Classification is order-based with no Gateway-count window: a Robo added after Twilight is support and cannot steal the Glaives label, while Robo-before-Twilight remains AlphaStar or Stargate into Robo.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Stargate into Robo",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building, at least 1 real Phoenix / Oracle / Void Ray is on the field by 10:00, and a Robotics Facility is built by 10:00. This is the generic Stargate-into-Robo transition only when a clearer three-base Twilight path is absent: Twilight-then-Glaives before the Robo uses PvZ - Stargate into Glaives, while a three-base Twilight build whose first upgrade is Blink or Charge keeps its Standard Blink / Charge Macro label even if a support Robo is added later. Twilight may precede the third only when that Nexus follows within four minutes.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Tempest Rush",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege opened off a Stargate.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 1-1-1 One Base",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Factory (before 6:30) and Starport (before 8:10) are both built BEFORE the second Command Center -- a 1-base 1-Rax / 1-Fact / 1-Port pressure build, not the standard expanding 1-1-1.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 1-1-1 Standard",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Factory (before 6:30) and Starport (before 8:10) are built and they are after the second CC.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 2 Gas 3 Reaper 2 Hellion",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 2 Gas, 3 Reapers, and 2 Hellions before 5:30.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 2-3 Rax Reaper rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 3+ Barracks exist before 6:30 off a single Command Center, no Refineries, and 2+ Reapers have been produced before 6:30 -- early Reaper-heavy aggression.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 3 Rax",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 3 Barracks are built after second CC but before any other tech buildings.",
+    "opener": true
+  },
+  {
+    "name": "Terran - 3-4 Rax Marine rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 3+ Barracks exist before 6:30 off a single Command Center with NO Refineries -- a gas-less, Marine-only mass-Rax all-in.",
+    "opener": true
+  },
+  {
+    "name": "Terran - BC Rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Fusion Core is built before 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Banshee Rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Banshee and Cloak or Hyper Flight Rotors exists before 7:30.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Bio Comp",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on heavy Barracks production.",
+    "opener": false
+  },
+  {
+    "name": "Terran - Cyclone Rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Factory with Tech Lab and Cyclones are built early (< 5:30).",
+    "opener": true
+  },
+  {
+    "name": "Terran - Fast 3 CC",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 3 Command Centers exist before 7:00 (Counting only construction, ignoring Orbitals).",
+    "opener": true
+  },
+  {
+    "name": "Terran - Ghost Rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Ghost Academy is built within first 6:30 of the game.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Hellbat All-in",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Armory is built early (< 5:00) with high Hellion/Hellbat count.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Mech Comp",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on heavy Factory production.",
+    "opener": false
+  },
+  {
+    "name": "Terran - Proxy 1-1-1",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Factory (before 6:30) and Starport (before 8:10) and are built away from their base.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Proxy Rax",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Barracks are built far from the main base before 4:30.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Proxy Starport Hellion Drop",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Factory and Starport are built away from the main base, the player has expanded (2nd Command Center started), 2+ Hellions are produced by 6:00, and the FIRST unit produced from the Starport is a Medivac -- an expanding proxy Starport build that uses a Medivac to ferry Hellions into the opponent's mineral line (Yoon-style Hellion drop). Differs from Proxy 1-1-1 by the 2nd CC and the Medivac-first opener.",
+    "opener": true
+  },
+  {
+    "name": "Terran - SkyTerran",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on heavy Starport production.",
+    "opener": false
+  },
+  {
+    "name": "Terran - Standard Bio Tank",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if 3 CCs, Engineering Bays, and Tanks/Medivacs are present.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Standard Play (Unclassified)",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Catch-all for unclassified Terran games.",
+    "opener": false
+  },
+  {
+    "name": "Terran - Widow Mine Drop",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if Medivac and multiple widow mines are built after second CC within the first 6:30.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Widow Mine Drop into Thor Rush",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure.",
+    "opener": true
+  },
+  {
+    "name": "Terran - Widow Upgraded Mine Cheese",
+    "race": "Terran",
+    "matchup": null,
+    "description": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
+    "opener": true
+  },
+  {
+    "name": "TvP - 1-1-1 Cloak Banshee",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the 1-base cloak-Banshee harass vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - 2 Base Tank Push",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a Starport build fields Siege Tanks behind a Marine ball off two bases -- the classic tank-push timing vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - 2-1-1 Reaper Expand",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a Reaper-first scout takes a single expansion (no fast 3rd CC) and adds a Factory + Starport for the Medivac-drop / Stim bio timing off two bases vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - 3 Rax Marine",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when 3+ Barracks off one base flood Marines with no Factory -- a gas-light Marine all-in vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Battlecruiser Rush",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a fast Fusion Core lands Battlecruisers -- the Battlecruiser rush vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Cyclone Push",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when an early Factory produces Cyclones off two or fewer bases -- the lock-on Cyclone pressure vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Fast 3 CC Bio",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when three Command Centers are taken by 6:00 behind 3+ Barracks of Marine/Marauder with no mech tech -- the greedy macro bio opening vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Game Too Short",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Catch-all bucket for TvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "TvP - Proxy 4 Rax Reaper",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Proxy Marauder",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a proxied Barracks pumps Marauders into the Protoss wall -- the proxy Marauder rush vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Tank/Thor Mech",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when an Armory backs Thors and Siege Tanks -- the positional mech composition vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "TvP - Widow Mine Drop",
+    "race": "Terran",
+    "matchup": "TvP",
+    "description": "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops into the Protoss mineral lines.",
+    "opener": true
+  },
+  {
+    "name": "TvT - 1-1-1 Cloak Banshee",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the classic 1-1-1 cloak-Banshee harass.",
+    "opener": true
+  },
+  {
+    "name": "TvT - 2-1-1 Marine Tank",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a Starport build fields Siege Tanks and Marines off two bases (no Viking) -- the TvT bio-tank timing.",
+    "opener": true
+  },
+  {
+    "name": "TvT - 3 Rax Marine",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when 3+ Barracks off one base flood Marines with no Factory -- a gas-light TvT Marine all-in.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Banshee into Raven",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when cloak Banshees are backed by a Raven for detection and anti-air -- the TvT Banshee/Raven harass.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Battlecruiser Rush",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a fast Fusion Core lands Battlecruisers -- the TvT Battlecruiser rush.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Cyclone Push",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when an early Factory produces Cyclones off two or fewer bases -- the TvT Cyclone push.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Game Too Short",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Catch-all bucket for TvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "TvT - Mass Viking Air",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a Viking-heavy air composition dominates the skies -- the TvT mass-Viking late game.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Proxy 4 Rax Reaper",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush in TvT.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Proxy Marauder",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a proxied Barracks pumps Marauders into the enemy base -- the TvT proxy Marauder rush.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Reaper Expand into Tank/Viking",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when a Reaper-first scout is followed by a single expansion and then Siege Tanks behind Vikings -- the standard TvT positional macro opener that masses tanks for the air-controlled contain.",
+    "opener": true
+  },
+  {
+    "name": "TvT - Tank/Thor Mech",
+    "race": "Terran",
+    "matchup": "TvT",
+    "description": "Detected when an Armory backs Thors and Siege Tanks -- the positional TvT mech composition.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 1-1-1 Banshee",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when a Factory and Starport are built before any expansion and a Banshee reaches the field on one base -- the 1-base cloak-Banshee harass vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 2 Base Hellbat Thor",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when an Armory and two Factories produce Thors behind a wall of Hellions/Hellbats off two bases -- the 2-base mech timing vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 2-1-1 Marine Drop",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when a Starport Medivac drop carries Marines off two bases -- the committed 2-base drop timing (not 3-CC macro).",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 2-1-1 Marine Hellbat Timing",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when Armory-backed Hellbats and Marines push off two bases without a Thor -- the 2-1-1 marine/hellbat timing attack.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 3 CC Bio",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when three Command Centers are taken by 6:00 behind 3+ Barracks of Marine/Marauder with no mech tech (Armory / Fusion Core) -- the standard macro bio opening vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - 3 Rax Marine",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when 3+ Barracks off a single base produce a Marine flood with no Factory -- a gas-light Marine all-in vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - Battlecruiser Mech",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when a Fusion Core produces Battlecruisers as the late-game mech finisher vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - Game Too Short",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Catch-all bucket for TvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "TvZ - Hellion Liberator",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when early Hellions plus a Liberator zone the Zerg's bases off two CCs -- the Hellion/Liberator harass opener.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - Proxy 4 Rax Reaper",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when four Barracks (at least one proxied near the enemy) flood Reapers -- the all-in proxy reaper rush vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - Reaper Hellion Expand",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when a Reaper-first scout and early Hellions back a fast expansion before any air or mech-upgrade tech -- the standard economic Reaper/Hellion opener vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "TvZ - Widow Mine Marine",
+    "race": "Terran",
+    "matchup": "TvZ",
+    "description": "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops vs Zerg.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 1 Base Roach Rush",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if a Roach Warren is built off 1 base very early (< 3:40).",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 13/12 Baneling Bust",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Early pool and early gas (<70s) leading into Baneling Nest before 3:20.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 13/12 Speedling Aggression",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Early pool and early gas (<70s) for aggressive speedlings.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 17 Hatch 18 Gas 17 Pool",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Standard modern Zerg macro opener (Hatch < 85s, Gas < 95s, Pool < 105s).",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 2 Base Muta Rush",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if a Spire is started before 7:00 with low drone count.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 2 Base Nydus",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if a Nydus Network is built before 7:00.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 2 Base Roach/Ravager All-in",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if Roach Warren exists, Lair exists, high Roaches/Ravagers count, low drone count (< 40) off 2 bases.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 3 Base Macro (Hatch First)",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Standard safe Zerg macro reaching 3 bases by 6:30 off a Hatch First.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 3 Base Macro (Pool First)",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Standard safe Zerg macro reaching 3 bases by 6:30 off a Pool First.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 3 Hatch Before Pool",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if a 3rd Hatchery is started before the Spawning Pool.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 3 Hatch Ling Flood",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected 3 bases but >20 lings and <30 drones by 5:00.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - 8 Pool",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 8 Supply).",
+    "opener": true
+  },
+  {
+    "name": "Zerg - Early Pool (14/14 or 15 Pool)",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if Spawning Pool starts < 1:10 but drones were built.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - Hydra Comp",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback featuring Hydralisks.",
+    "opener": false
+  },
+  {
+    "name": "Zerg - Muta/Ling/Bane Comp",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback based on Mutalisks and Banelings.",
+    "opener": false
+  },
+  {
+    "name": "Zerg - Pool First Opener",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Generic Pool first opener that transitions into standard macro.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - Proxy Hatch",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if a hatchery being built on the opponents side of the map within the first 4:30.",
+    "opener": true
+  },
+  {
+    "name": "Zerg - Roach/Ravager Comp",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Mid/Late game composition fallback heavily focused on Roaches and Ravagers.",
+    "opener": false
+  },
+  {
+    "name": "Zerg - Standard Play (Unclassified)",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Catch-all for unclassified Zerg games.",
+    "opener": false
+  },
+  {
+    "name": "ZvP - 2 Base Nydus",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Nydus Network goes down off two bases for a worm into the Protoss main -- the ZvP Nydus all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - 2 Base Roach Ravager All-in",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvP roach/ravager all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - 8 Pool Rush",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Game Too Short",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Catch-all bucket for ZvP replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "ZvP - Hatch First Macro",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Hydra Timing (3 Base)",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Hydralisk Den fields a hydra wave off three bases -- the standard ZvP answer to Stargate openers.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Ling Bane Bust",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the bust through the Protoss wall.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Ling Bane Muta",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Baneling Nest and Spire support Banelings and a wall of Zerglings -- the muta/ling/bane harass style vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Lurker Contain",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Lurker Den enables a positional Lurker contain vs Protoss.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Mutalisk Harass",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when a Spire into 6+ Mutalisks (no Baneling Nest) runs pure muta harass into the Protoss mineral lines.",
+    "opener": true
+  },
+  {
+    "name": "ZvP - Speedling Flood",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvP ling-flood timing against a greedy third.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - 2 Base Nydus",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a Nydus Network goes down off two bases for a drop into the Terran main -- the ZvT Nydus all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - 2 Base Roach Ravager Timing",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvT roach/ravager pressure timing.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - 3 Base Ling Flood",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when three bases pump 20+ Zerglings on a low drone count -- the ZvT ling-flood timing.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - 3 Hatch Ling Bane Muta",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when three bases go down with a Baneling Nest and Spire, defending bio with Banelings and Zerglings while teching to Mutalisks -- the textbook ZvT macro style.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Game Too Short",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Catch-all bucket for ZvT replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "ZvT - Hatch First Macro",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a greedy three-base economy (40+ Drones) opens hatch-first vs Terran.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Ling Bane Bust",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when an early Pool and Baneling Nest flood Banelings and Zerglings off two or fewer bases -- the ZvT ling/bane bust.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Lurker Contain",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a Lurker Den enables a positional Lurker contain vs Terran.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Mass Muta Harass",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a Spire into 6+ Mutalisks (no Baneling Nest) runs pure muta harass vs Terran.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Mass Queen Defensive",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a queen-heavy defence (6+ Queens) holds with no Roach/Baneling/Spire aggression -- the ZvT queen-walk / defensive style.",
+    "opener": true
+  },
+  {
+    "name": "ZvT - Roach Hydra",
+    "race": "Zerg",
+    "matchup": "ZvT",
+    "description": "Detected when a Roach Warren and Hydralisk Den field a roach/hydra ground army vs Terran.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - 2 Base Nydus",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Nydus Network goes down off two bases -- the ZvZ Nydus all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - 8 Pool Speedling",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - 8 Pool into Baneling",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Drone Macro (Hatch First)",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a greedy hatch-first economy (30+ Drones, slow Pool) drones up in ZvZ.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Game Too Short",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Catch-all bucket for ZvZ replays that ended in under 45 seconds (no build order developed). Both the player and the opponent get this label so the data view stays consistent. Filterable via the analyzer's 'Exclude too-short games' toggle.",
+    "opener": false
+  },
+  {
+    "name": "ZvZ - Hatch First Muta",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a hatch-first economy (slow Pool) teches to a Spire -- the ZvZ hatch-first muta.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Ling Bane All-in",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Baneling Nest floods Banelings and Zerglings off two or fewer bases -- the ZvZ ling/bane all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Mutalisk vs Mutalisk",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Spire into 6+ Mutalisks creates the classic ZvZ muta war.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Roach Aggression",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Roach Warren produces a wall of Roaches off two bases -- the standard ZvZ roach pressure / all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Roach Ravager",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Roach Warren fields Roaches and Ravagers -- the ZvZ roach/ravager style.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - Zergling Flood",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when 20+ Zerglings flood on a low drone count -- the ZvZ ling flood.",
+    "opener": true
+  }
+]
