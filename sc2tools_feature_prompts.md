@@ -77,7 +77,7 @@ You are implementing a new public feature for sc2tools.com in the ReSpOnSeSC2/sc
 - `games` holds a SLIM ~3 kB row per game. Allowlists: GAME_SLIM_FIELDS / OPPONENT_SLIM_FIELDS in services/games.js. Fields:
   - result, date, myRace, myBuild (classified opener), map, durationSec, macroScore, top3Leaks, myMmr, isLadderGame, playerCount/matchFormat, gameVersion/gameBuild
   - opponent{race, strategy, opening, leagueId, mmr, pulseId…}
-- Do not use the slim apm/spq fields. The agent currently always uploads them as null (known bug, fixed separately).
+- The slim apm/spq fields are only filled for games uploaded by agent 0.17.2 or later; older rows stay null until re-synced. Treat null as missing, never as zero.
 - HEAVY fields (buildLog, oppBuildLog, macroBreakdown, apmCurve, mapPlayback) live in game_details, or as gzip objects in Cloudflare R2 when GAME_DETAILS_STORE=r2.
 - A nightly job must NEVER read game_details/R2. It is slow, costly and memory-heavy.
 
@@ -578,7 +578,7 @@ All read-only, and always scoped on the server to req.auth.userId:
 - LadderMetaService (public meta).
 - SkillFingerprintService.
 
-Global filters are parsed by util/parseQuery.js (parseFilters/gamesMatchStage). Reuse them rather than writing new filter code. Don't use the slim apm/spq fields — the agent currently always uploads them as null (known bug, fixed separately).
+Global filters are parsed by util/parseQuery.js (parseFilters/gamesMatchStage). Reuse them rather than writing new filter code. The slim apm/spq fields are only filled for games uploaded by agent 0.17.2 or later; older rows stay null until re-synced, so treat null as missing, never as zero.
 
 ### Web
 - Next.js 15 / React 19 / Tailwind tokens / components/ui kit; useApi + apiCall (lib/clientApi.ts).
@@ -1289,14 +1289,12 @@ Add indexes for the board sorts, per-request comment listing, and per-user histo
 
 ## Bonus: issues spotted while researching
 
-- **Confirmed: top-level `apm` and `spq` are never uploaded.**
-  - `apps/agent/sc2tools_agent/replay_pipeline.py:1130-1131` reads `getattr(me, "apm", None)` / `getattr(me, "spq", None)`.
-  - `PlayerInfo` in `apps/replay-engine/core/sc2_replay_parser.py:52` has neither field, so both are always `null` on every game row.
-  - Per-game SQ does exist inside `macroBreakdown.raw.sq`. The prompts above tell agents not to build on the slim fields.
-- **Unverified leads** from the exploration agents (worth a quick look):
-  - `_compute_apm_curve` may attribute APM using `ev.pid` (user id) instead of `ev.player.pid`.
-  - The spatial extract's `deaths` list is always empty, because `detect_battle_markers` returns only `{time,x,y,side}`.
-  - `apps/web/lib/optimizer/*` is a complete build-order simulator with tests but no UI. It is a strong candidate to plug into Guides ("optimal timings") or Ghost Build.
-  - 5 of the 6 Arcade badges can't be earned (only `buildle-brain` is awarded).
-  - Nothing links to `/p/[handle]`.
-  - README and landing copy have stale counts (widgets, arcade modes).
+All but one were verified and fixed on this branch (agent **0.17.2** plus web changes; see `CHANGELOG.md`):
+
+- **Fixed — slim `apm` / `spq` were always null.** `replay_pipeline.py` read them from `PlayerInfo`, which has neither field. They now come from the APM curve and the macro breakdown's `raw.sq`.
+- **Fixed — APM/SPM curve credited the wrong player.** `_compute_apm_curve` compared sc2reader's 0-based user id with the 1-based player slot. It now resolves the slot the way the replay engine does.
+- **Fixed — Map Intel death zones were always empty.** Lost fights are now measured from each side's army-value-lost counter and placed where the user's units died.
+- **Fixed — 5 of 6 Arcade badges were unearnable.** Run tracking added for Streak Hunter, Veto Sleuth, Closer and Detective. Stock Market weeks now settle, which enables Tycoon and puts real P&L on the weekly leaderboard; it had only ever received 0%.
+- **Fixed — nothing linked to `/p/[handle]`.** Author pages and Settings → Profile now link to it.
+- **Fixed — stale counts.** Sign-up page, README and the Arcade README now match the registries (30 widgets, 18 modes). The unused old landing page code was removed.
+- **Open — `apps/web/lib/optimizer`.** My earlier note here was wrong about its history. The Build adapter UI was deliberately removed on 2026-07-11 (commit `110ddf4c`), and the library was flagged for removal then. Only `lib/ghostBuild.ts` still imports one type from it. Whether to delete it or bring the page back is the owner's call.

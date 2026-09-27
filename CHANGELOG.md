@@ -75,6 +75,39 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **APM and spending quotient reach the website** — agent **0.17.2**
+  (`agent-v0.17.2`) sends each game's average APM and spending quotient.
+  Both were empty on every game because the agent read them from a player
+  record that never had them, so the battle card's spending quotient and
+  the league benchmark tables had nothing to show. Use **Re-sync** or
+  **Recompute** to fill in games already uploaded.
+- **APM/SPM chart shows each player's own actions** — the chart matched
+  sc2reader's 0-based user id against the 1-based player slot, so player 1
+  was credited with player 2's actions and player 2 always read zero. Fixed
+  in agent **0.17.2**; re-sync to redraw older games.
+- **Map Intel death zones have data** — the "where your army died" heatmap
+  was always empty: it expected loss totals the battle detector never
+  produced. Agent **0.17.2** measures each fight's army value lost on both
+  sides and records the fights you lost where your units died, weighted by
+  the net loss.
+- **All six Arcade badges can be earned** — only Buildle Brain had award
+  logic. Streak Hunter, Closer and Detective now unlock after five straight
+  days with every answer correct, Veto Sleuth after three correct Streak
+  Veto answers in a row, and Tycoon after five straight green Stock Market
+  weeks.
+- **Stock Market weeks settle** — the weekly leaderboard only ever received
+  the 0% placeholder posted at lock-in. The first time you open the market
+  in a new week, last week's portfolio settles at the prices you see, its
+  result is shown, and public locks post their real P&L to the leaderboard.
+- **Public profiles are reachable** — nothing linked to `/p/<handle>`. Author
+  pages now link to the player's profile, and Settings → Profile shows your
+  profile link (or how to turn it on).
+- **Current overlay and Arcade counts** — the sign-up page and README said
+  15 overlay widgets (there are 30) and the Arcade README listed 16 modes
+  (there are 18). The sign-up page now reads the tested product facts, and
+  the unused copy of the old landing page, which carried more stale counts,
+  was removed.
+
 - **Macro breakdown match timeline and roster** — the chart is now a match
   timeline with a switch between army value, workers, supply and income
   (shown with your race's in-game icons), you in blue and the opponent in red
