@@ -67,7 +67,7 @@ class ReviewsService {
    *   playbackArtifacts?: {getManifest(userId: string, gameId: string): Promise<any>, getSegment(userId: string, gameId: string, artifactId: string, index: number): Promise<Buffer>} | null,
    *   reputation: import('./reviewerReputation').ReviewerReputationService,
    *   notifications: import('./notifications').NotificationsService,
-   *   community?: {report(userId: string, input: {targetType: string, targetId: string, reason: string, note?: string}): Promise<{alreadyReported: boolean}>},
+   *   community?: {report(userId: string, input: {targetType: string, targetId: string, reason: string, note?: string}, opts?: {registeredTarget?: boolean}): Promise<{alreadyReported: boolean}>},
    *   now?: () => number,
    *   logger?: import('pino').Logger,
    * }} deps
@@ -142,16 +142,7 @@ class ReviewsService {
     }
 
     const now = new Date(this.now());
-    const [openCount, recentCount] = await Promise.all([
-      this.db.reviewRequests.countDocuments({ userId, status: { $in: [...ACTIVE_STATUSES] } }),
-      this.db.reviewRequests.countDocuments({ userId, createdAt: { $gte: new Date(now.getTime() - DAY_MS) } }),
-    ]);
-    if (openCount >= REVIEWS.MAX_OPEN_REQUESTS) {
-      throw reviewError(429, "review_open_limit", `You can have at most ${REVIEWS.MAX_OPEN_REQUESTS} open review requests. Close one to post another.`);
-    }
-    if (recentCount >= REVIEWS.MAX_NEW_REQUESTS_PER_DAY) {
-      throw reviewError(429, "review_daily_limit", `You can post at most ${REVIEWS.MAX_NEW_REQUESTS_PER_DAY} review requests per day.`);
-    }
+    await this._enforceRequestCaps(userId, now, 0);
 
     const id = newId();
     /** @type {Doc} */
@@ -197,7 +188,38 @@ class ReviewsService {
       }
       throw err;
     }
+    // The pre-check above races with parallel posts; re-count including
+    // this insert and withdraw it if the caps are now exceeded, so
+    // concurrent requests can never push a user past them.
+    try {
+      await this._enforceRequestCaps(userId, now, 1);
+    } catch (err) {
+      await this.db.reviewRequests.deleteOne({ _id: id });
+      throw err;
+    }
     return { id, url: `/reviews/${id}` };
+  }
+
+  /**
+   * At most MAX_OPEN_REQUESTS open and MAX_NEW_REQUESTS_PER_DAY new
+   * requests per user. ``justInserted`` is 1 when re-checking after the
+   * insert (the new request is already counted).
+   *
+   * @param {string} userId
+   * @param {Date} now
+   * @param {0 | 1} justInserted
+   */
+  async _enforceRequestCaps(userId, now, justInserted) {
+    const [openCount, recentCount] = await Promise.all([
+      this.db.reviewRequests.countDocuments({ userId, status: { $in: [...ACTIVE_STATUSES] } }),
+      this.db.reviewRequests.countDocuments({ userId, createdAt: { $gte: new Date(now.getTime() - DAY_MS) } }),
+    ]);
+    if (openCount - justInserted >= REVIEWS.MAX_OPEN_REQUESTS) {
+      throw reviewError(429, "review_open_limit", `You can have at most ${REVIEWS.MAX_OPEN_REQUESTS} open review requests. Close one to post another.`);
+    }
+    if (recentCount - justInserted >= REVIEWS.MAX_NEW_REQUESTS_PER_DAY) {
+      throw reviewError(429, "review_daily_limit", `You can post at most ${REVIEWS.MAX_NEW_REQUESTS_PER_DAY} review requests per day.`);
+    }
   }
 
   /**
@@ -313,11 +335,9 @@ class ReviewsService {
     if (!ACTIVE_STATUSES.includes(doc.status)) return { ...base, canComment: false, reason: "closed" };
     if (viewer.source && viewer.source !== "clerk") return { ...base, canComment: false, reason: "browser_session_required" };
     if (isAsker) return { ...base, canComment: true, canReview: false, reason: null };
-    const blocked = await this.db.reviewBlocks.findOne(
-      { blockerId: doc.userId, blockedId: viewer.userId },
-      { projection: { _id: 1 } },
-    );
-    if (blocked) return { ...base, canComment: false, reason: "blocked" };
+    if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, viewer.userId)) {
+      return { ...base, canComment: false, reason: "blocked" };
+    }
     const games = await this.reputation.syncedGameCount(viewer.userId);
     if (games < REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT) {
       return { ...base, canComment: false, reason: "min_games", syncedGames: games, requiredGames: REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT };
@@ -634,11 +654,16 @@ class ReviewsService {
       if (parent.status !== "visible") throw reviewError(409, "parent_unavailable", "That review is no longer available.");
     }
     if (!isAsker) {
-      const blocked = await this.db.reviewBlocks.findOne(
-        { blockerId: doc.userId, blockedId: userId },
-        { projection: { _id: 1 } },
-      );
-      if (blocked) throw reviewError(403, "review_blocked", "The asker has blocked you from commenting on their requests.");
+      // A named asker's block refuses outright. An ANONYMOUS asker's block
+      // must not reveal who they are, so the comment is accepted but the
+      // asker never sees it or hears about it (serializeThread and
+      // _notifyNewComment filter it).
+      if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, userId)) {
+        throw reviewError(403, "review_blocked", "The asker has blocked you from commenting on their requests.");
+      }
+      if (parent && !parent.isAskerComment && parent.authorId && await this._isBlocked(parent.authorId, userId)) {
+        throw reviewError(403, "review_blocked", "That reviewer has blocked you, so you can't reply to them.");
+      }
       const games = await this.reputation.syncedGameCount(userId);
       if (games < REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT) {
         throw reviewError(403, "review_min_games", `Sync at least ${REVIEWS.MIN_SYNCED_GAMES_TO_COMMENT} games with the desktop agent to review replays.`, {
@@ -653,7 +678,7 @@ class ReviewsService {
         }
       }
     }
-    await this._enforceCommentRate(userId);
+    await this._enforceCommentRate(userId, 0);
     const total = await this.db.reviewComments.countDocuments({ requestId: doc._id });
     if (total >= REVIEWS.MAX_COMMENTS_PER_REQUEST) {
       throw reviewError(409, "review_thread_full", "This thread has reached its comment limit.");
@@ -680,6 +705,14 @@ class ReviewsService {
       COLLECTIONS.REVIEW_COMMENTS,
     );
     await this.db.reviewComments.insertOne(comment);
+    // Re-count with this comment included so parallel posts can't slip
+    // past the hourly/daily limits (see _enforceCommentRate).
+    try {
+      await this._enforceCommentRate(userId, 1);
+    } catch (err) {
+      await this.db.reviewComments.deleteOne({ _id: comment._id });
+      throw err;
+    }
     if (!parent && !isAsker) await this.reputation.applyStats(userId, { reviews: 1 });
     await this._refresh(doc._id, { activity: true });
     await this._notifyNewComment(doc, comment, parent, isAsker);
@@ -720,18 +753,27 @@ class ReviewsService {
   }
 
   /** @param {string} userId */
-  async _enforceCommentRate(userId) {
+  /**
+   * 30 comments per hour and 200 per day. Counts every comment the user
+   * created, including ones they deleted (deletion is always a soft
+   * delete), so deleting can't reset the limit. ``justInserted`` is 1
+   * when re-checking after the insert.
+   *
+   * @param {string} userId
+   * @param {0 | 1} justInserted
+   */
+  async _enforceCommentRate(userId, justInserted) {
     const now = this.now();
     const [hour, day] = await Promise.all([
       this.db.reviewComments.countDocuments(
         { authorId: userId, createdAt: { $gte: new Date(now - HOUR_MS) } },
-        { limit: REVIEWS.COMMENTS_PER_HOUR },
+        { limit: REVIEWS.COMMENTS_PER_HOUR + 1 },
       ),
       this.db.reviewComments.countDocuments(
         { authorId: userId, createdAt: { $gte: new Date(now - DAY_MS) } },
-        { limit: REVIEWS.COMMENTS_PER_DAY },
+        { limit: REVIEWS.COMMENTS_PER_DAY + 1 },
       ),
-    ]);
+    ]).then((counts) => counts.map((n) => n - justInserted));
     if (hour >= REVIEWS.COMMENTS_PER_HOUR) {
       throw reviewError(429, "rate_limited", `You can post ${REVIEWS.COMMENTS_PER_HOUR} comments per hour. Try again later.`);
     }
@@ -750,7 +792,7 @@ class ReviewsService {
     const href = `/reviews/${doc._id}#comment-${comment._id}`;
     const question = snippet(doc.question, 90);
     try {
-      if (!parent && !isAsker) {
+      if (!parent && !isAsker && !(await this._isBlocked(doc.userId, comment.authorId))) {
         await this.notifications.notify(doc.userId, {
           kind: "review.new",
           groupKey: `review-new:${doc._id}`,
@@ -763,7 +805,8 @@ class ReviewsService {
           }),
         });
       }
-      if (parent && parent.authorId && parent.authorId !== comment.authorId) {
+      if (parent && parent.authorId && parent.authorId !== comment.authorId
+        && !(await this._isBlocked(parent.authorId, comment.authorId))) {
         await this.notifications.notify(parent.authorId, {
           kind: "review.reply",
           groupKey: `review-reply:${parent._id}`,
@@ -834,30 +877,29 @@ class ReviewsService {
     await this._revokeCommentKarma(comment, doc);
     const replies = comment.parentId
       ? 0
-      : await this.db.reviewComments.countDocuments({ parentId: comment._id }, { limit: 1 });
-    if (replies > 0) {
-      await this.db.reviewComments.updateOne(
-        { _id: comment._id },
-        {
-          $set: {
-            status: "deleted",
-            body: "",
-            mapPoint: null,
-            endTimeSec: null,
-            helpful: false,
-            best: false,
-            deletedAt: new Date(this.now()),
-          },
+      : await this.db.reviewComments.countDocuments({ parentId: comment._id, status: { $ne: "deleted" } }, { limit: 1 });
+    // Always a soft delete: the text is wiped, the row stays (so it still
+    // counts toward the comment rate limits). The thread shows a
+    // "[deleted]" placeholder only when replies hang off it.
+    await this.db.reviewComments.updateOne(
+      { _id: comment._id },
+      {
+        $set: {
+          status: "deleted",
+          body: "",
+          mapPoint: null,
+          endTimeSec: null,
+          helpful: false,
+          best: false,
+          deletedAt: new Date(this.now()),
         },
-      );
-    } else {
-      await this.db.reviewComments.deleteOne({ _id: comment._id });
-    }
-    if (!comment.parentId && !comment.isAskerComment && comment.authorId && comment.status === "visible") {
+      },
+    );
+    if (!comment.parentId && !comment.isAskerComment && comment.authorId && countsAsReview(comment)) {
       await this.reputation.applyStats(comment.authorId, { reviews: -1 });
     }
     await this._refresh(doc._id, {});
-    return { deleted: replies > 0 ? "soft" : "hard" };
+    return { deleted: replies > 0 ? "placeholder" : "removed" };
   }
 
   // ── Helpful / best / upvote (karma ledger) ──────────────────────
@@ -964,6 +1006,9 @@ class ReviewsService {
   async setUpvote(requestId, commentId, viewer, value) {
     const { doc, comment } = await this._actionTarget(requestId, commentId, viewer);
     if (comment.authorId === viewer.userId) throw reviewError(400, "own_comment", "You can't upvote your own comment.");
+    // Karma is public (profiles, leaderboard); crediting an anonymous
+    // asker's account would let anyone test who they are.
+    if (comment.isAskerComment) throw reviewError(400, "asker_comment", "Upvotes are for reviews, not the asker's replies.");
     if (value) {
       // Reserve a karma slot atomically before recording the vote, so two
       // simultaneous upvotes can never push a comment past the cap.
@@ -1180,7 +1225,7 @@ class ReviewsService {
       targetId: commentId || doc._id,
       reason: cleanText(input.reason).slice(0, 80),
       note: cleanText(input.note || "", { multiline: true }).slice(0, 1000),
-    });
+    }, { registeredTarget: true });
   }
 
   /**
@@ -1193,10 +1238,12 @@ class ReviewsService {
    * @param {Viewer & {userId: string}} viewer
    */
   async blockAuthor(requestId, commentId, viewer) {
-    const doc = await this.getDoc(requestId);
-    if (!doc) throw notFound();
+    const { doc } = await this._readable(requestId, viewer);
     const comment = await this.db.reviewComments.findOne({ _id: commentId, requestId: doc._id });
-    if (!comment || !comment.authorId) throw notFound();
+    if (!comment || !comment.authorId || comment.authorDeleted || comment.status !== "visible") throw notFound();
+    // Blocking through the asker's own replies would tie their account
+    // (named in /me/review-blocks) to an anonymous request.
+    if (comment.isAskerComment) throw reviewError(400, "asker_comment", "You can't block the asker from their own request.");
     if (comment.authorId === viewer.userId) throw reviewError(400, "own_comment", "You can't block yourself.");
     const id = newId();
     try {
@@ -1236,6 +1283,16 @@ class ReviewsService {
   }
 
   /** @param {string} userId @returns {Promise<Set<string>>} */
+  /**
+   * @param {string} blockerId
+   * @param {string} blockedId
+   */
+  async _isBlocked(blockerId, blockedId) {
+    if (!blockerId || !blockedId || blockerId === blockedId) return false;
+    return Boolean(await this.db.reviewBlocks.findOne({ blockerId, blockedId }, { projection: { _id: 1 } }));
+  }
+
+  /** @param {string} userId */
   async _blockedBy(userId) {
     const rows = await this.db.reviewBlocks
       .find({ blockerId: userId }, { projection: { _id: 0, blockedId: 1 } })
@@ -1308,10 +1365,12 @@ class ReviewsService {
             { _id: id },
             { $set: { status: "removed", removedAt: new Date(this.now()), removedBy: adminUserId } },
           );
-          if (doc && comment.authorId) {
+          // Asker replies carry no karma either way: a public karma change
+          // would tie the anonymous asker to their account.
+          if (doc && comment.authorId && !comment.isAskerComment) {
             // One penalty per comment however many admins act on it.
             await this._award(comment, doc, "removed", "moderation", REVIEWS.KARMA_REMOVED);
-            if (!comment.parentId && !comment.isAskerComment && comment.status === "visible") {
+            if (!comment.parentId && countsAsReview(comment)) {
               await this.reputation.applyStats(comment.authorId, { reviews: -1 });
             }
           }
@@ -1441,7 +1500,7 @@ class ReviewsService {
   async exportForUser(userId) {
     const [requests, comments, karma, blocks, notifications] = await Promise.all([
       this.db.reviewRequests.find({ userId }, { projection: { activeKey: 0 } }).toArray(),
-      this.db.reviewComments.find({ authorId: userId }).toArray(),
+      this.db.reviewComments.find({ authorId: userId }, { projection: { removedBy: 0 } }).toArray(),
       this.db.reviewKarmaEvents.find({ userId }, { projection: { _id: 0, actorId: 0 } }).toArray(),
       this.db.reviewBlocks.find({ blockerId: userId }, { projection: { _id: 0, blockedId: 0 } }).toArray(),
       this.db.notifications.find({ userId }).toArray(),
@@ -1600,12 +1659,14 @@ function seoView(doc, comments) {
  * @param {{doc: Doc, viewer: Viewer, blockedIds: Set<string>, upvoted: Set<string>, profiles: Map<string, Record<string, any>>, now: number}} ctx
  */
 function serializeThread(comments, ctx) {
-  const hasReplies = new Set(comments.filter((c) => c.parentId).map((c) => c.parentId));
+  const hasReplies = new Set(comments.filter((c) => c.parentId && c.status !== "deleted").map((c) => c.parentId));
   /** @type {Record<string, any>[]} */
   const out = [];
   for (const c of comments) {
     const mine = Boolean(ctx.viewer.userId && c.authorId === ctx.viewer.userId);
-    const blocked = Boolean(c.authorId && ctx.blockedIds.has(c.authorId));
+    // Never applied to the asker's replies: otherwise blocking someone
+    // elsewhere and watching an anonymous thread would reveal the asker.
+    const blocked = Boolean(c.authorId && !c.isAskerComment && ctx.blockedIds.has(c.authorId));
     /** @type {"visible"|"hidden"|"removed"|"deleted"|"blocked"} */
     let state = c.status;
     if (c.status === "hidden" && !mine && !ctx.viewer.isAdmin) {
@@ -1664,6 +1725,16 @@ function serializeThread(comments, ctx) {
 }
 
 // ── Ranking ─────────────────────────────────────────────────────────
+
+/**
+ * Whether a comment is counted in its author's ``reviewer.reviews`` total
+ * (matches recomputeStats: visible or moderation-hidden).
+ *
+ * @param {Record<string, any>} comment
+ */
+function countsAsReview(comment) {
+  return comment.status === "visible" || comment.status === "hidden";
+}
 
 /**
  * Board flags and scores, derived from the stored counters.

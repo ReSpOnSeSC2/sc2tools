@@ -1144,7 +1144,11 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildNotificationsRouter({ notifications: services.notifications, auth }),
+    buildNotificationsRouter({
+      notifications: services.notifications,
+      auth,
+      rollout: deps.config.reviewsEnabled || "off",
+    }),
   );
   // Multichat overlay relays — overlay-token auth (path segment), no
   // Clerk session, so it mounts with the public bundle.

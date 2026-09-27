@@ -111,6 +111,36 @@ describe("reviews: comment rules", () => {
     expect(daily.body.error.message).toMatch(/per day/);
   });
 
+  test("rate limits survive deleting comments and parallel posts", async () => {
+    await h.seedUser("deleter", { displayName: "Deleter" });
+    await h.seedLadderHistory("deleter", { mmr: 4900 });
+    // 30 comments posted and then deleted this hour still count.
+    await h.db.reviewComments.insertMany(Array.from({ length: 30 }, (_, i) => ({
+      _id: `dele${String(i).padStart(12, "0")}`,
+      requestId: "elsewhere00000000",
+      authorId: h.userId("deleter"),
+      parentId: null,
+      status: "deleted",
+      body: "",
+      createdAt: new Date(Date.now() - 60_000),
+    })));
+    expect((await comment("deleter", { body: BODY, gameTimeSec: 1 })).status).toBe(429);
+
+    await h.seedUser("racer", { displayName: "Racer" });
+    await h.seedLadderHistory("racer", { mmr: 4900 });
+    await h.db.reviewComments.insertMany(Array.from({ length: 27 }, (_, i) => ({
+      _id: `race${String(i).padStart(12, "0")}`,
+      requestId: "elsewhere00000000",
+      authorId: h.userId("racer"),
+      parentId: null,
+      status: "visible",
+      createdAt: new Date(Date.now() - 60_000),
+    })));
+    const burst = await Promise.all(Array.from({ length: 8 }, (_, i) => comment("racer", { body: `${BODY} (${i})`, gameTimeSec: 10 + i })));
+    expect(burst.filter((r) => r.status === 201).length).toBeLessThanOrEqual(3);
+    expect(await h.db.reviewComments.countDocuments({ authorId: h.userId("racer") })).toBeLessThanOrEqual(30);
+  });
+
   test("edit window: 15 minutes, own comments only", async () => {
     const created = await comment("master", { body: BODY, gameTimeSec: 100 });
     const id = created.body.id;
@@ -134,16 +164,18 @@ describe("reviews: comment rules", () => {
     }
   });
 
-  test("delete: [deleted] placeholder with replies, hard delete without", async () => {
+  test("delete: [deleted] placeholder with replies, gone from the thread without", async () => {
     const parent = await comment("master", { body: "Top-level thought about the macro.", gameTimeSec: 50 });
     await comment("diamond", { body: "A reply that keeps the parent alive.", gameTimeSec: 60, parentId: parent.body.id });
     const lone = await comment("master", { body: "A lonely comment with no replies.", gameTimeSec: 70 });
     const del = (id) => request(h.app).delete(`/v1/reviews/${reviewId}/comments/${id}`).set("authorization", h.bearer("master"));
     expect((await request(h.app).delete(`/v1/reviews/${reviewId}/comments/${parent.body.id}`).set("authorization", h.bearer("diamond"))).status).toBe(403);
-    expect((await del(parent.body.id)).body).toEqual({ deleted: "soft" });
-    expect((await del(lone.body.id)).body).toEqual({ deleted: "hard" });
-    expect(await h.db.reviewComments.findOne({ _id: lone.body.id })).toBeNull();
+    expect((await del(parent.body.id)).body).toEqual({ deleted: "placeholder" });
+    expect((await del(lone.body.id)).body).toEqual({ deleted: "removed" });
+    // The row stays (text wiped) so it still counts toward rate limits.
+    expect(await h.db.reviewComments.findOne({ _id: lone.body.id })).toMatchObject({ status: "deleted", body: "", mapPoint: null });
     const page = await request(h.app).get(`/v1/reviews/${reviewId}`);
+    expect(page.body.comments.some((c) => c.id === lone.body.id)).toBe(false);
     const placeholder = page.body.comments.find((c) => c.id === parent.body.id);
     expect(placeholder).toMatchObject({ state: "deleted", body: "", author: null, gameTimeSec: null });
     expect(page.body.comments.some((c) => c.parentId === parent.body.id)).toBe(true);
