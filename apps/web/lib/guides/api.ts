@@ -9,9 +9,11 @@
  *   - moved       → permanentRedirect(path) (an alias slug; 301 on the API)
  *   - not_found   → notFound() (the API positively said 404, or the URL
  *                   segment can never be valid)
- *   - unavailable → noindex "temporarily unavailable" state (network
- *                   error, timeout, 429, 5xx, malformed JSON) — never a
- *                   404 for real content during an outage.
+ *   - unavailable → network error, timeout, 429, 5xx, malformed JSON:
+ *                   never a 404 for real content during an outage. Pages
+ *                   rendered per request show the noindex "temporarily
+ *                   unavailable" state; ISR pages throw instead, so the
+ *                   outage is never cached (lib/guides/guideErrors.ts).
  *
  * Responses are kept in Next's data cache (`GUIDE_REVALIDATE_SEC`, 200s
  * only) under the "guides" tag, which `app/api/revalidate-guides` purges
@@ -234,4 +236,25 @@ export async function fetchGuideMap(
  */
 export function fetchGuideSitemap(): Promise<GuideFetchResult<GuideSitemapPayload>> {
   return fetchGuide<GuideSitemapPayload>(`${API_GUIDES_PREFIX}/sitemap`);
+}
+
+/**
+ * Paths of every guide page the API serves as published (the sitemap
+ * list: same rule as the pages, so a listed path never renders "Not
+ * enough games yet"). Pages use it to link only published pages when
+ * their own payload carries no published flag for the target (a build's
+ * best / toughest maps, a map's best openers). Null when the list can't
+ * be read, so an API blip keeps a page's links instead of dropping all
+ * of them.
+ *
+ * Example: `(await fetchPublishedGuidePaths())?.has("/guides/maps/old-sun-temple")` → true.
+ */
+export async function fetchPublishedGuidePaths(): Promise<ReadonlySet<string> | null> {
+  const result = await fetchGuideSitemap();
+  if (result.kind !== "ok" || !Array.isArray(result.data.entries)) return null;
+  const paths = new Set<string>();
+  for (const entry of result.data.entries) {
+    if (typeof entry?.path === "string") paths.add(entry.path);
+  }
+  return paths;
 }

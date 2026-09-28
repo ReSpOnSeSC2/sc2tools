@@ -5,12 +5,13 @@
  * services/guideStats.js — the guide_samples side: exact milestone
  * quantiles (linear interpolation, computed in Mongo), the presence
  * threshold, the both-sides floor on winner/loser medians, army presence
- * and median counts, and the per-user cap on samples.
+ * and median counts, and the per-user cap on samples (most recently
+ * played first).
  */
 
 const { GuideStatsService } = require("../src/services/guideStats");
 const {
-  NOW_MS, GLAIVES, startDb, resetDb, sampleRow, statsByKey,
+  NOW_MS, DAY_MS, GLAIVES, startDb, resetDb, sampleRow, statsByKey,
 } = require("./helpers/guideStatsSeed");
 
 const KEY_GLAIVES = "build:after:PvZ:stargate-into-glaives";
@@ -115,6 +116,47 @@ describe("GuideStatsService.recompute — guide_samples timings and army", () =>
     expect(glaives.users).toBe(6);
     expect(glaives.milestones[0]).toMatchObject({ key: "Pylon", games: 90, median: 10, p75: 30 });
     expect(docs.get("build:after:PvZ:2-stargate-phoenix").timings).toBeNull();
+  });
+
+  test("the per-user cap keeps the most recently PLAYED samples, not the last written", async () => {
+    // A newest-first backfill writes a user's oldest games last, so capture
+    // order (createdAt) is the reverse of play order (playedOn).
+    const whale = Array.from({ length: 60 }, (_, i) => sampleRow({
+      userHash: "whale",
+      playedOn: new Date(NOW_MS - (i + 1) * DAY_MS),
+      createdAt: new Date(NOW_MS - (60 - i) * 1000),
+      milestones: { Pylon: 100 + i },
+    }));
+    await db.guideSamples.insertMany([...whale, ...samples(20, () => ({ milestones: { Pylon: 100 } }), 4)]);
+    const { timings } = (await recompute()).get(KEY_GLAIVES);
+    // Kept: whale i = 0..49 (+ 20 others at 100) → 21 × 100, then 101..149.
+    expect(timings).toMatchObject({ samples: 70, users: 5 });
+    expect(timings.milestones[0]).toMatchObject({ key: "Pylon", games: 70, median: 114.5 });
+  });
+
+  test("equal play days break ties by gameHash, identically on every run", async () => {
+    const day = new Date(NOW_MS - DAY_MS);
+    const createdAt = new Date(NOW_MS);
+    const whale = Array.from({ length: 60 }, (_, i) => sampleRow({
+      userHash: "whale",
+      gameHash: `gh-tie-${String(i).padStart(2, "0")}`,
+      playedOn: day,
+      createdAt,
+      milestones: { Pylon: 100 + i },
+    }));
+    await db.guideSamples.insertMany([...whale, ...samples(20, () => ({ milestones: { Pylon: 100 } }), 4)]);
+    const first = (await recompute()).get(KEY_GLAIVES).timings;
+    // Kept: the 50 greatest hashes, gh-tie-10..59 → 20 × 100, then 110..159.
+    expect(first.milestones[0]).toMatchObject({ games: 70, median: 124.5 });
+    expect((await recompute()).get(KEY_GLAIVES).timings).toEqual(first);
+  });
+
+  test("rows written before playedOn existed fall back to their capture time", async () => {
+    const legacy = Array.from({ length: 60 }, (_, i) => sampleRow({
+      userHash: "whale", createdAt: new Date(NOW_MS - i * 1000), milestones: { Pylon: 100 + i },
+    }));
+    await db.guideSamples.insertMany([...legacy, ...samples(20, () => ({ milestones: { Pylon: 100 } }), 4)]);
+    expect((await recompute()).get(KEY_GLAIVES).timings.milestones[0]).toMatchObject({ games: 70, median: 114.5 });
   });
 
   test("samples are split by era", async () => {

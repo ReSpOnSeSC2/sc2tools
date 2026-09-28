@@ -25,6 +25,10 @@ const SECONDS_PER_MINUTE = 60;
 const SECONDS_PAD_WIDTH = 2;
 /** Percentage-point suffix for win-rate / prevalence deltas. */
 const PP_SUFFIX = "pp";
+/** A whole-percent share of every game. */
+const WHOLE_SHARE = "100%";
+/** Printed for a share just under 1 that whole-percent rounding would show as 100%. */
+const ALMOST_ALL = ">99%";
 
 /**
  * A week-over-week move smaller than this (a fraction, 0.005 = 0.5
@@ -84,6 +88,30 @@ export function fmtCi(ci: GuideCi | null | undefined): string {
 export function fmtCount(value: number | null | undefined): string {
   if (!isFiniteNumber(value)) return GUIDE_MISSING;
   return COUNT_FORMAT.format(value);
+}
+
+/**
+ * Whole count plus a noun that agrees with it ("1 opener", "2 openers").
+ * The plural defaults to the singular + "s".
+ *
+ * Example: `fmtCountNoun(1, "opener")` → "1 opener";
+ * `fmtCountNoun(1234, "ladder game")` → "1,234 ladder games".
+ */
+export function fmtCountNoun(count: number, singular: string, plural = `${singular}s`): string {
+  return `${fmtCount(count)} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * Share of games rounded to a whole percent that never rounds a partial
+ * share up to "100%": 0.995 (199 of 200) prints ">99%", so the page
+ * never claims every game had something one game lacked. Exactly 1
+ * still prints "100%".
+ *
+ * Example: `fmtPresence(0.995)` → ">99%"; `fmtPresence(0.62)` → "62%".
+ */
+export function fmtPresence(value: number | null | undefined): string {
+  const text = pct(value);
+  return isFiniteNumber(value) && value < 1 && text === WHOLE_SHARE ? ALMOST_ALL : text;
 }
 
 /**

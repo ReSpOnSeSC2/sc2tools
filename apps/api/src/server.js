@@ -294,7 +294,8 @@ async function main() {
     });
   fingerprintPopulationCalibrationJob.start();
 
-  // Nightly effectiveness-weighted ladder meta rebuild (public /meta).
+  // Nightly effectiveness-weighted ladder meta rebuild (the signed-in
+  // Ladder Pulse; the old public /meta page now redirects to /guides).
   const ladderMetaJob = buildLadderMetaRecomputeJob({
     ladderMeta: /** @type {any} */ (services).ladderMeta,
     logger,

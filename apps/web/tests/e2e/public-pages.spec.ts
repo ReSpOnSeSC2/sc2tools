@@ -119,6 +119,47 @@ test("/meta permanently redirects to /guides", async ({ request }) => {
   expect(response.headers()["location"]).toMatch(/^\/guides(\?|$)/);
 });
 
+test("old /meta?matchup= links go straight to the lowercase matchup guide", async ({ request }) => {
+  const response = await request.get("/meta?axis=league&band=4&matchup=PvZ", { maxRedirects: 0 });
+  expect(response.status()).toBe(308);
+  expect(response.headers()["location"]).toMatch(/^\/guides\/pvz(\?|$)/);
+});
+
+/** Path + decoded query of a redirect's (absolute, from middleware) Location header. */
+function locationPath(location: string | undefined): string {
+  const url = new URL(location ?? "", "http://location.invalid");
+  return `${url.pathname}${decodeURIComponent(url.search)}`;
+}
+
+test("a mixed-case guide URL permanently redirects to its lowercase path", async ({ request, page }) => {
+  const mixed = "/guides/PvZ/Stargate-into-Glaives";
+  const build = await request.get(mixed, { maxRedirects: 0 });
+  expect(build.status()).toBe(308);
+  // One hop from middleware, ahead of the ISR cache: a single Location value.
+  expect(build.headersArray().filter((h) => h.name.toLowerCase() === "location")).toHaveLength(1);
+  expect(locationPath(build.headers()["location"])).toBe("/guides/pvz/stargate-into-glaives");
+  const matchup = await request.get("/guides/PvZ?band=league:4", { maxRedirects: 0 });
+  expect(matchup.status()).toBe(308);
+  expect(locationPath(matchup.headers()["location"])).toBe("/guides/pvz?band=league:4");
+  // A real browser follows it to the canonical page.
+  const landed = await page.goto(`${mixed.replace("Glaives", "GLAIVES")}`);
+  expect(landed?.status()).toBe(200);
+  expect(new URL(page.url()).pathname).toBe("/guides/pvz/stargate-into-glaives");
+});
+
+test("a build guide is edge-cached (ISR) while an outage is never cached", async ({ request }) => {
+  const cached = await request.get("/guides/pvz/stargate-into-glaives");
+  expect(cached.status()).toBe(200);
+  expect(cached.headers()["cache-control"]).toContain("s-maxage=21600");
+  // The fixture API answers no other build, so this render hits an "outage":
+  // it must fail uncached (5xx, no-store), never freeze a 6 h error page.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const outage = await request.get("/guides/pvz/robo-opener");
+    expect(outage.status()).toBeGreaterThanOrEqual(500);
+    expect(outage.headers()["cache-control"]).toContain("no-store");
+  }
+});
+
 test("an impossible guide URL is a real 404 (the pages render per request)", async ({ request }) => {
   const response = await request.get("/guides/not-a-matchup");
   expect(response.status()).toBe(404);

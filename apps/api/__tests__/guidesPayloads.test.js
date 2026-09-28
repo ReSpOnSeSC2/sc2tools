@@ -156,6 +156,53 @@ describe("shapeCounterPayload / shapeMapPayload", () => {
   });
 });
 
+describe("same-named guides of one namespace get distinct page names", () => {
+  const MINE = "TvP - Widow Mine Drop";
+  const GENERIC = "Terran - Widow Mine Drop";
+
+  test("counter pages, the matchup's counter links and a build's vs-strategy rows", () => {
+    const counter = (strategyKey, strategySlug) => shapeCounterPayload({
+      matchup: "PvT", strategyKey, strategySlug, era: "after", doc: null, matchupDoc: null, videos: [],
+    });
+    expect(counter(MINE, "widow-mine-drop").name).toBe("Widow Mine Drop");
+    expect(counter(GENERIC, "terran-widow-mine-drop").name).toBe("Widow Mine Drop (any matchup)");
+    const matchupInput = { matchup: "PvT", era: "after", band: null, doc: null, buildDocs: [], videos: [] };
+    const links = shapeMatchupPayload(matchupInput).counters
+      .filter((c) => c.strategyKey === MINE || c.strategyKey === GENERIC)
+      .map((c) => c.name);
+    expect(links.sort()).toEqual(["Widow Mine Drop", "Widow Mine Drop (any matchup)"]);
+    const build = shapeBuildPayload({
+      ...buildInput({
+        published: true, matchup: "PvT", computedAt: AT, overall: cell(150, 6, 0.4),
+        vsStrategy: [
+          cell(40, 5, 0.4, { strategyKey: MINE, strategySlug: "widow-mine-drop" }),
+          cell(40, 5, 0.3, { strategyKey: GENERIC, strategySlug: "terran-widow-mine-drop" }),
+        ],
+      }),
+      matchup: "PvT", buildKey: "PvT - DT Drop", buildSlug: "dt-drop",
+    });
+    expect(build.vsStrategy.map((r) => r.name)).toEqual(["Widow Mine Drop", "Widow Mine Drop (any matchup)"]);
+  });
+
+  test("build pages and matchup openers", () => {
+    const build = shapeBuildPayload({
+      ...buildInput(null), matchup: "ZvP", buildKey: "Zerg - 2 Base Nydus", buildSlug: "zerg-2-base-nydus",
+    });
+    expect(build.name).toBe("2 Base Nydus (any matchup)");
+    const out = shapeMatchupPayload({
+      matchup: "ZvP", era: "after", band: null, videos: [], buildDocs: [],
+      doc: {
+        kind: "matchup", matchup: "ZvP", published: true, games: 400, users: 12, computedAt: AT, counters: [],
+        builds: [
+          { ...cell(60, 6, 0.4), buildKey: "ZvP - 2 Base Nydus", buildSlug: "2-base-nydus", published: true },
+          { ...cell(60, 6, 0.3), buildKey: "Zerg - 2 Base Nydus", buildSlug: "zerg-2-base-nydus", published: true },
+        ],
+      },
+    });
+    expect(out.openers.map((o) => o.name)).toEqual(["2 Base Nydus", "2 Base Nydus (any matchup)"]);
+  });
+});
+
 describe("shapeMatchupPayload / shapeIndexPayload", () => {
   // Stored out of order on purpose; the Carrier row is below the CELL floor.
   const matchupDoc = {

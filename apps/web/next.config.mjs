@@ -50,7 +50,40 @@ const engineAssetHeaders = [
  */
 function metaRedirects(guidesOn) {
   const destination = guidesOn ? "/guides" : "/";
-  return ["/meta", "/meta/:path*"].map((source) => ({ source, destination, permanent: guidesOn }));
+  const fallbacks = ["/meta", "/meta/:path*"].map((source) => ({ source, destination, permanent: guidesOn }));
+  return guidesOn ? [...metaMatchupRedirects(), ...fallbacks] : fallbacks;
+}
+
+/** The nine matchups (lib/guides/slugs.ts GUIDE_MATCHUPS; a test keeps them equal). */
+const META_REDIRECT_MATCHUPS = ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"];
+
+/**
+ * Case-insensitive pattern for a `has` value (Next anchors it):
+ * "PvZ" → "[Pp][Vv][Zz]".
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function anyCase(text) {
+  return [...text].map((ch) => `[${ch.toUpperCase()}${ch.toLowerCase()}]`).join("");
+}
+
+/**
+ * Old radar links carried the matchup in the query
+ * ("/meta?axis=league&band=4&matchup=PvZ"): send each straight to its
+ * matchup guide ("/guides/pvz", lowercase, in one hop) ahead of the
+ * generic /meta → /guides rule. Next passes the old query through; the
+ * guide page ignores parameters it doesn't know.
+ *
+ * @returns {Array<{ source: string, has: Array<{ type: "query", key: string, value: string }>, destination: string, permanent: boolean }>}
+ */
+function metaMatchupRedirects() {
+  return META_REDIRECT_MATCHUPS.map((matchup) => ({
+    source: "/meta",
+    has: [{ type: "query", key: "matchup", value: anyCase(matchup) }],
+    destination: `/guides/${matchup.toLowerCase()}`,
+    permanent: true,
+  }));
 }
 
 /** @type {import('next').NextConfig} */

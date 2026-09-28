@@ -3,8 +3,8 @@
 
 /**
  * routes/guides.js in isolation (stub service, injected alias table):
- * retired slugs 301 to the canonical guide, the per-IP limiter is bounded
- * and scoped to /guides, query parsing clamps, and service failures reach
+ * retired slugs 301 to the canonical guide, the per-IP-and-path limiter is
+ * bounded and scoped to /guides, query parsing clamps, and service failures reach
  * the app error handler as 500s.
  */
 
@@ -77,17 +77,6 @@ describe("guides router (isolated)", () => {
     });
   });
 
-  test("the limiter is bounded per IP and scoped to /guides", async () => {
-    const app = appWith({ guides: stubGuides(), limitPerMinute: 2 });
-    expect((await request(app).get("/v1/guides")).status).toBe(200);
-    expect((await request(app).get("/v1/guides/pvz")).status).toBe(200);
-    const limited = await request(app).get("/v1/guides/sitemap");
-    expect(limited.status).toBe(429);
-    expect(limited.body).toEqual({ error: { code: "rate_limited", message: "rate_limited" } });
-    expect(limited.headers["cache-control"]).toBe("no-store");
-    expect((await request(app).get("/v1/other")).status).toBe(200);
-  });
-
   test("a service failure is a 500 through the app error handler, never cacheable", async () => {
     const guides = stubGuides();
     guides.index.mockRejectedValue(new Error("mongo down"));
@@ -111,5 +100,33 @@ describe("guides router (isolated)", () => {
     expect(parseEra(" before ")).toBe("before");
     expect(parseEra("BEFORE")).toBe("after");
     expect(parseEra(undefined)).toBe("after");
+  });
+});
+
+describe("guides rate limit (isolated)", () => {
+  test("the limiter is bounded per IP and path, and scoped to /guides", async () => {
+    const app = appWith({ guides: stubGuides(), limitPerMinute: 2 });
+    expect((await request(app).get("/v1/guides/pvz")).status).toBe(200);
+    // A query string shares its path's bucket rather than opening a fresh one.
+    expect((await request(app).get("/v1/guides/pvz?band=league:4")).status).toBe(200);
+    const limited = await request(app).get("/v1/guides/pvz?era=before");
+    expect(limited.status).toBe(429);
+    expect(limited.body).toEqual({ error: { code: "rate_limited", message: "rate_limited" } });
+    expect(limited.headers["cache-control"]).toBe("no-store");
+    expect((await request(app).get("/v1/other")).status).toBe(200);
+  });
+
+  test("junk slugs from the shared web IP cannot drain a real guide's bucket", async () => {
+    const guides = stubGuides();
+    const app = appWith({ guides, limitPerMinute: 2 });
+    for (const junk of ["junk-a", "junk-b", "junk-c"]) {
+      expect((await request(app).get(`/v1/guides/maps/${junk}`)).status).toBe(404);
+      expect((await request(app).get(`/v1/guides/maps/${junk}`)).status).toBe(404);
+      expect((await request(app).get(`/v1/guides/maps/${junk}`)).status).toBe(429);
+    }
+    expect((await request(app).get("/v1/guides")).status).toBe(200);
+    expect((await request(app).get("/v1/guides/sitemap")).status).toBe(200);
+    expect((await request(app).get("/v1/guides/pvz/stargate-into-glaives")).status).toBe(200);
+    expect(guides.build).toHaveBeenCalledTimes(1);
   });
 });

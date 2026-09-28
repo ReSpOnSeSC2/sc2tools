@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -143,5 +144,10 @@ describe("POST /api/revalidate-guides", () => {
   it("refuses an oversized body (413)", async () => {
     const res = await POST(signed(JSON.stringify({ ts: NOW, scope: "guides", pad: "x".repeat(5000) }), NOW));
     expect(res.status).toBe(413);
+  });
+
+  it("names every HTTP status it answers (house rule: no bare numeric literals)", () => {
+    const source = readFileSync(path.resolve(process.cwd(), "app/api/revalidate-guides/route.ts"), "utf8");
+    expect(source).not.toMatch(/reply\(\s*\d/);
   });
 });

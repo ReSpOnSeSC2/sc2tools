@@ -76,7 +76,7 @@ export interface GuideVideo {
   url: string;
   thumbnailUrl: string;
   embedUrl: string;
-  /** First paragraph of the description, verbatim (≤ 300 chars). */
+  /** First paragraph of the description, verbatim (≤ 300 chars); "" when there is none. */
   excerpt: string | null;
   /** Verbatim checklist lines from the description, or null. */
   checklist: string[] | null;

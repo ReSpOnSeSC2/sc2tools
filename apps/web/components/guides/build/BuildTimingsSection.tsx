@@ -111,24 +111,35 @@ export function BuildTimingsSection({
   blurb: ReadonlyArray<GuideCopyLine>;
 }) {
   const { timings } = payload;
-  if (!timings || timings.milestones.length === 0) return null;
-  const community = timings.milestones.map(({ key, label, event, median }) => ({
+  const community = (timings?.milestones ?? []).map(({ key, label, event, median }) => ({
     key,
     label,
     event,
     median,
   }));
+  const comparison = (
+    <GuidePersonalComparison
+      matchupSlug={payload.matchupSlug}
+      buildSlug={payload.buildSlug}
+      buildName={payload.name}
+      community={community}
+    />
+  );
+  // A page can publish (games floor met) before any community timings exist
+  // (sample capture starts at deploy); the viewer's own win rate needs none.
+  if (!timings || community.length === 0) {
+    return (
+      <Section id="your-record" title="Your record with this build">
+        {comparison}
+      </Section>
+    );
+  }
   return (
     <Section id="key-timings" title="Key timings">
       <div className="space-y-4">
         <GuideCopyText lines={blurb} />
         <TimingsTable timings={timings} />
-        <GuidePersonalComparison
-          matchupSlug={payload.matchupSlug}
-          buildSlug={payload.buildSlug}
-          buildName={payload.name}
-          community={community}
-        />
+        {comparison}
       </div>
     </Section>
   );

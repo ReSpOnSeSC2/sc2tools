@@ -49,7 +49,13 @@ function buildJsonLd(payload: GuideBuildPayload): Array<Record<string, unknown>>
   return items;
 }
 
-function PublishedBuild({ payload }: { payload: GuideBuildPublished }) {
+function PublishedBuild({
+  payload,
+  publishedPaths,
+}: {
+  payload: GuideBuildPublished;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
   return (
     <>
       <BuildHero
@@ -63,7 +69,7 @@ function PublishedBuild({ payload }: { payload: GuideBuildPublished }) {
       <BuildArmySection army={payload.army} />
       <BuildVsStrategySection rows={payload.vsStrategy} matchupSlug={payload.matchupSlug} />
       <BuildLengthsSection lengths={payload.lengths} />
-      <BuildMapsSection maps={payload.maps} />
+      <BuildMapsSection maps={payload.maps} publishedPaths={publishedPaths} />
       <BuildLeaksSection leaks={payload.leaks} macro={payload.macro} />
       <BuildRelatedSection
         related={payload.related}
@@ -90,12 +96,26 @@ function UnpublishedBuild({ payload }: { payload: GuideBuildUnpublished }) {
   );
 }
 
-export function BuildGuide({ payload }: { payload: GuideBuildPayload }) {
+/**
+ * `publishedPaths`: published guide page paths (null = unknown), which
+ * gate the links whose target's publication the payload doesn't carry.
+ */
+export function BuildGuide({
+  payload,
+  publishedPaths = null,
+}: {
+  payload: GuideBuildPayload;
+  publishedPaths?: ReadonlySet<string> | null;
+}) {
   return (
     <article className="space-y-10">
       <GuideJsonLd items={buildJsonLd(payload)} />
       <GuideBreadcrumbs crumbs={buildCrumbs(payload)} />
-      {payload.published ? <PublishedBuild payload={payload} /> : <UnpublishedBuild payload={payload} />}
+      {payload.published ? (
+        <PublishedBuild payload={payload} publishedPaths={publishedPaths} />
+      ) : (
+        <UnpublishedBuild payload={payload} />
+      )}
     </article>
   );
 }

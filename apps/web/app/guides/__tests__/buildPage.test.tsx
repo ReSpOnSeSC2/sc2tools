@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   fetchGuideBuild: vi.fn(),
+  fetchPublishedGuidePaths: vi.fn(async (): Promise<ReadonlySet<string> | null> => null),
   permanentRedirect: vi.fn((path: string) => {
     throw Object.assign(new Error("NEXT_REDIRECT"), { digest: `NEXT_REDIRECT;replace;${path};308;` });
   }),
 }));
 
-vi.mock("@/lib/guides/api", () => ({ fetchGuideBuild: mocks.fetchGuideBuild }));
+vi.mock("@/lib/guides/api", () => ({
+  fetchGuideBuild: mocks.fetchGuideBuild,
+  fetchPublishedGuidePaths: mocks.fetchPublishedGuidePaths,
+}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
@@ -22,11 +26,23 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: 
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, error: undefined, isLoading: false }) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
-import BuildGuidePage, { dynamic, generateMetadata } from "@/app/guides/[matchup]/[build]/page";
+import BuildGuidePage, {
+  generateMetadata,
+  generateStaticParams,
+  revalidate,
+} from "@/app/guides/[matchup]/[build]/page";
+import GuidesError from "@/app/guides/error";
+import { GuideUnavailableError } from "@/lib/guides/guideErrors";
 import { buildIntro, buildTimingsBlurb } from "@/lib/guides/guideCopy";
-import { FIXTURE_BUILD_PUBLISHED, FIXTURE_BUILD_UNPUBLISHED, fixtureCell } from "@/lib/guides/__fixtures__";
+import {
+  FIXTURE_BUILD_PUBLISHED,
+  FIXTURE_BUILD_UNPUBLISHED,
+  FIXTURE_SITEMAP,
+  fixtureCell,
+} from "@/lib/guides/__fixtures__";
 
 const PARAMS = { params: Promise.resolve({ matchup: "pvz", build: "stargate-into-glaives" }) };
+const SIX_HOURS_SEC = 6 * 60 * 60;
 /** The payload's Diamond headline (82 of 145 decided games), formatted like the page. */
 const HEADLINE_PCT = `${((FIXTURE_BUILD_PUBLISHED.headline?.winRate ?? Number.NaN) * 100).toFixed(1)}%`;
 
@@ -52,13 +68,15 @@ afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
   mocks.fetchGuideBuild.mockReset();
+  mocks.fetchPublishedGuidePaths.mockReset();
+  mocks.fetchPublishedGuidePaths.mockResolvedValue(null);
   mocks.permanentRedirect.mockClear();
 });
 
 describe("/guides/[matchup]/[build] metadata", () => {
-  it("renders per request so an API blip never freezes the unavailable state", () => {
-    // The API read itself stays cached (fetch next.revalidate + "guides" tag).
-    expect(dynamic).toBe("force-dynamic");
+  it("is ISR over the API data window, rendered on first request (nothing at build)", () => {
+    expect(revalidate).toBe(SIX_HOURS_SEC); // == GUIDE_REVALIDATE_SEC (segmentConfig.test.ts)
+    expect(generateStaticParams()).toEqual([]);
   });
 
   it("titles a published guide with its real headline win rate and league", async () => {
@@ -66,7 +84,7 @@ describe("/guides/[matchup]/[build] metadata", () => {
     const md = await generateMetadata(PARAMS);
     expect(HEADLINE_PCT).toBe("56.5%");
     expect(md.title).toBe(
-      `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate at Diamond (Patch 5.0.16) | SC2 Tools`,
+      `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate vs Diamond (Patch 5.0.16) | SC2 Tools`,
     );
     expect(md.alternates?.canonical).toBe("/guides/pvz/stargate-into-glaives");
     expect(md.robots).toBeUndefined();
@@ -110,12 +128,23 @@ describe("/guides/[matchup]/[build] metadata", () => {
     expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/pvz/new-slug");
   });
 
-  it("serves a noindex unavailable state when the API is down", async () => {
+  it("throws (never caches) the outage; the guides error boundary renders it noindex", async () => {
     mocks.fetchGuideBuild.mockResolvedValue({ kind: "unavailable" });
     const md = await generateMetadata(PARAMS);
     expect(md.robots).toEqual({ index: false, follow: false });
-    await renderPage();
+    await expect(BuildGuidePage(PARAMS)).rejects.toBeInstanceOf(GuideUnavailableError);
+    const { container } = render(<GuidesError error={new GuideUnavailableError("/guides/pvz/stargate-into-glaives")} />);
     expect(screen.getByText("This guide is temporarily unavailable")).toBeTruthy();
+    const robots = container.ownerDocument.querySelector('meta[name="robots"]');
+    expect(robots?.getAttribute("content")).toBe("noindex, nofollow");
+  });
+
+  it("permanently redirects a mixed-case URL to its lowercase path before fetching", async () => {
+    const mixed = { params: Promise.resolve({ matchup: "PvZ", build: "Stargate-into-Glaives" }) };
+    await expect(generateMetadata(mixed)).rejects.toThrow("NEXT_REDIRECT");
+    await expect(BuildGuidePage(mixed)).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/pvz/stargate-into-glaives");
+    expect(mocks.fetchGuideBuild).not.toHaveBeenCalled();
   });
 });
 
@@ -166,6 +195,16 @@ describe("/guides/[matchup]/[build] page", () => {
     expect(screen.getByRole("link", { name: "Sign in to compare your timings" })).toBeTruthy();
   });
 
+  it("still offers the personal win-rate comparison on a published build with no community timings yet", async () => {
+    mocks.fetchGuideBuild.mockResolvedValue(ok({ ...FIXTURE_BUILD_PUBLISHED, timings: null }));
+    await renderPage();
+    expect(screen.queryByRole("heading", { level: 2, name: "Key timings" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Your record with this build" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in to compare your win rate" }).getAttribute("href")).toBe(
+      "/sign-in",
+    );
+  });
+
 });
 
 describe("/guides/[matchup]/[build] page sections", () => {
@@ -181,6 +220,7 @@ describe("/guides/[matchup]/[build] page sections", () => {
     expect(screen.getByRole("link", { name: "Old Sun Temple" }).getAttribute("href")).toBe(
       "/guides/maps/old-sun-temple",
     );
+    expect(mocks.fetchPublishedGuidePaths).toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "Standard Blink Macro" }).getAttribute("href")).toBe(
       "/guides/pvz/standard-blink-macro",
     );
@@ -193,6 +233,19 @@ describe("/guides/[matchup]/[build] page sections", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Game plan" })).toBeTruthy();
     expect(screen.getByText("From the video by ReSpOnSe")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  it("links only the maps whose map guide is published (the rest are plain names)", async () => {
+    mocks.fetchGuideBuild.mockResolvedValue(ok(FIXTURE_BUILD_PUBLISHED));
+    mocks.fetchPublishedGuidePaths.mockResolvedValue(new Set(FIXTURE_SITEMAP.entries.map((entry) => entry.path)));
+    await renderPage();
+    const maps = screen.getByRole("heading", { level: 2, name: "Best and worst maps" }).closest("section") as HTMLElement;
+    expect(within(maps).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      "/guides/maps/old-sun-temple",
+    ]);
+    // Washout clears the build's cell floor (44 games) but its map page is unpublished.
+    expect(within(maps).getByText("Washout")).toBeTruthy();
+    expect(within(maps).queryByRole("link", { name: "Washout" })).toBeNull();
   });
 
   it("emits BreadcrumbList, Article and VideoObject JSON-LD", async () => {

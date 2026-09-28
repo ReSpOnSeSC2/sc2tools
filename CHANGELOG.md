@@ -28,7 +28,10 @@ corresponding GitHub Release.
   checklists, let signed-in players compare their win rate and timings with
   the community's, and can arm a Ghost Build target from the community
   medians. Dynamic OG images, JSON-LD, a data-driven sitemap and on-demand
-  revalidation make the pages indexable. Admins can add Coach's notes and
+  revalidation make the pages indexable; guide, counter and map pages are
+  served from the edge cache and refreshed after each nightly run, and old
+  `/meta?matchup=…` links and mixed-case guide URLs redirect to the
+  matching guide. Admins can add Coach's notes and
   curate videos per guide. Off by default behind `GUIDES_ENABLED` /
   `NEXT_PUBLIC_GUIDES_ENABLED`; timing samples are captured from new
   uploads right away so data accumulates first. See

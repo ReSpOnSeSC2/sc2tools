@@ -3,9 +3,11 @@ import {
   fmtCi,
   fmtClock,
   fmtCount,
+  fmtCountNoun,
   fmtDeltaPp,
   fmtGuideDate,
   fmtPct,
+  fmtPresence,
   GUIDE_MISSING,
   GUIDE_TREND_FLAT_THRESHOLD,
   guideBandLabel,
@@ -34,6 +36,24 @@ describe("guide number formatting", () => {
     expect(fmtCount(1234567)).toBe("1,234,567");
     expect(fmtCount(0)).toBe("0");
     expect(fmtCount(undefined)).toBe(GUIDE_MISSING);
+  });
+
+  test("fmtCountNoun agrees the noun with 0, 1 and 2", () => {
+    expect(fmtCountNoun(0, "opener")).toBe("0 openers");
+    expect(fmtCountNoun(1, "opener")).toBe("1 opener");
+    expect(fmtCountNoun(2, "opener")).toBe("2 openers");
+    expect(fmtCountNoun(1, "match", "matches")).toBe("1 match");
+    expect(fmtCountNoun(1234, "ladder game")).toBe("1,234 ladder games");
+  });
+
+  test("fmtPresence never rounds a partial share up to 100%", () => {
+    expect(fmtPresence(199 / 200)).toBe(">99%");
+    expect(fmtPresence(0.9966)).toBe(">99%");
+    expect(fmtPresence(0.9999)).toBe(">99%");
+    expect(fmtPresence(1)).toBe("100%");
+    expect(fmtPresence(0.994)).toBe("99%");
+    expect(fmtPresence(0.29)).toBe("29%");
+    expect(fmtPresence(null)).toBe(GUIDE_MISSING);
   });
 
   test("fmtClock rounds before splitting minutes", () => {

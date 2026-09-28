@@ -5,7 +5,7 @@
  * (below the floor, so no numbers at all) yields null, which the image
  * renders as the neutral branded card.
  */
-import { fmtCount, fmtPct } from "@/lib/guides/format";
+import { fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
 import type {
   GuideBuildPayload,
   GuideBuildPublished,
@@ -14,6 +14,7 @@ import type {
   GuideMatchupPayload,
 } from "@/lib/guides/types";
 import { myRaceWord } from "@/components/guides/guideUi";
+import { rankedOpenerCount } from "@/components/guides/guideMetadata";
 
 /** The win rate the card's bar draws. */
 export interface GuideOgRate {
@@ -61,7 +62,7 @@ function headlineCell(data: GuideBuildPublished): { label: string; cell: CellLik
   if (headline && headline.scope === "league" && headline.label) {
     const band = data.bands.league.find((row) => row.value === headline.value);
     const cell = band ?? { winRate: headline.winRate, games: headline.games, users: null, ci: null };
-    return { label: `Win rate at ${headline.label}`, cell };
+    return { label: `Win rate vs ${headline.label}`, cell };
   }
   return { label: "Ladder win rate", cell: overall };
 }
@@ -70,7 +71,7 @@ function headlineCell(data: GuideBuildPublished): { label: string; cell: CellLik
  * Card for a build guide; null below the publishing floor.
  *
  * Example: published "Stargate into Glaives" → title "Stargate into
- * Glaives", rate { label: "Win rate at Diamond", winRate: 0.5655, games: 145 }.
+ * Glaives", rate { label: "Win rate vs Diamond", winRate: 0.5655, games: 145 }.
  */
 export function buildOgCard(data: GuideBuildPayload): GuideOgCardData | null {
   if (!data.published) return null;
@@ -113,19 +114,19 @@ export function counterOgCard(data: GuideCounterPayload): GuideOgCardData | null
 
 /**
  * Card for a matchup page (its top-ranked published opener on the bar);
- * null when the matchup is unpublished.
+ * null when the matchup is unpublished. The opener count is the page
+ * title's ({@link rankedOpenerCount}), so card and title never disagree.
  *
  * Example: → title "PvZ build orders", rate label "Top opener: Stargate into Glaives".
  */
 export function matchupOgCard(data: GuideMatchupPayload): GuideOgCardData | null {
   if (!data.published || data.games === null || data.users === null) return null;
   const top = data.openers.find((row) => row.published) ?? null;
-  const published = data.openers.filter((row) => row.published).length;
   return {
     kind: "Matchup guide",
     matchup: data.matchup,
     title: `${data.matchup} build orders`,
-    subtitle: `${fmtCount(published)} openers ranked by win rate · ${patchText(data.patch)}`,
+    subtitle: `${fmtCountNoun(rankedOpenerCount(data), "opener")} ranked by win rate · ${patchText(data.patch)}`,
     rate: top
       ? { label: `Top opener: ${top.name}`, winRate: top.winRate, ci: top.ci, games: top.games }
       : null,

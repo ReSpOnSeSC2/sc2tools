@@ -245,6 +245,43 @@ class GdprService {
   }
 
   /**
+   * Pull a sharer's example replays out of the published guide_stats build
+   * docs. Each example carries a game's result, map, length and date under
+   * the sharer's handle, so it goes with the games; the nightly run
+   * rebuilds examples from the games that survive. Null-guarded like
+   * ``_scrubGuideNoteEditor``.
+   *
+   * @param {unknown} slug the user's replay-sharing slug (an example's ``handle``)
+   * @returns {Promise<number|null>} build docs scrubbed, or null without the collection
+   */
+  async _scrubGuideExamples(slug) {
+    if (!this.db.guideStats) return null;
+    if (typeof slug !== "string" || !slug) return 0;
+    const res = await this.db.guideStats.updateMany(
+      { "examples.handle": slug },
+      // PullOperator's mapped type rejects fields of an untyped Document.
+      { $pull: /** @type {any} */ ({ examples: { handle: slug } }) },
+    );
+    return res.modifiedCount || 0;
+  }
+
+  /**
+   * ``_scrubGuideExamples`` for a user whose row still exists (history
+   * wipe, snapshot restore): the handle is read from the account.
+   *
+   * @param {string} userId
+   * @returns {Promise<number|null>}
+   */
+  async _scrubUserGuideExamples(userId) {
+    if (!this.db.guideStats) return null;
+    const user = await this.db.users.findOne(
+      { userId },
+      { projection: { _id: 0, "replaySharing.slug": 1 } },
+    );
+    return this._scrubGuideExamples(user && user.replaySharing && user.replaySharing.slug);
+  }
+
+  /**
    * Permanently delete every per-user document including the user
    * record itself. Returns counts so the caller can audit-log them.
    *
@@ -259,7 +296,7 @@ class GdprService {
     // scrub below needs the clerkUserId to find signup/message rows.
     const user = await this.db.users.findOne(
       { userId },
-      { projection: { _id: 0, clerkUserId: 1 } },
+      { projection: { _id: 0, clerkUserId: 1, "replaySharing.slug": 1 } },
     );
 
     const gdprFence = await this._acquireMutationFence(userId, "delete_all");
@@ -322,6 +359,9 @@ class GdprService {
 
     const guideNotesScrubbed = await this._scrubGuideNoteEditor(userId);
     if (guideNotesScrubbed !== null) counts.guideNotesScrubbed = guideNotesScrubbed;
+    const sharingSlug = user && user.replaySharing && user.replaySharing.slug;
+    const guideExamplesScrubbed = await this._scrubGuideExamples(sharingSlug);
+    if (guideExamplesScrubbed !== null) counts.guideExamplesScrubbed = guideExamplesScrubbed;
 
     // Manual snapshots hold a FULL export of the user's data — the
     // single most sensitive thing to leave behind.
@@ -712,6 +752,9 @@ class GdprService {
     await gdprFence.assert();
     const gamesRes = await this.db.games.deleteMany(gamesDeleteFilter);
     const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
+    // Every example of the handle goes (not just the wiped range): the
+    // nightly run re-picks examples from the surviving games.
+    await this._scrubUserGuideExamples(userId);
     // A completion already in flight may have promoted an object after the
     // first purge. Repeat the same key-scoped cleanup immediately after the
     // matching ownership rows are gone; completion's conditional marker
@@ -1123,8 +1166,10 @@ class GdprService {
       if (c) await c.deleteMany({ userId });
     }
     // Guide samples are distilled from the detail blobs purged above and
-    // are never in snapshots: purge them with the games they came from.
+    // are never in snapshots: purge them (and any published example
+    // replay) with the games they came from.
     if (this.guideSamples) await this.guideSamples.deleteForUser(userId);
+    await this._scrubUserGuideExamples(userId);
     const data = snap.payload?.data || {};
     for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
       await gdprFence.assert();

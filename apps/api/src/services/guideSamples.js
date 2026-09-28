@@ -9,7 +9,7 @@ const {
 const { GUIDE_MILESTONES } = require("../config/guideMilestones");
 const { stampVersion } = require("../db/schemaVersioning");
 const { guideUserHash, guideGameHash } = require("../util/guideHash");
-const { eraForGame } = require("../util/patchEra");
+const { dateMs, eraForGame } = require("../util/patchEra");
 const { parseBuildLogLines } = require("./perGameCompute");
 const {
   MAX_UNIT_KEYS_PER_TICK_SIDE,
@@ -47,10 +47,12 @@ const {
  * job can recover them. ``this.counters`` feeds /v1/metrics.
  *
  * Relabels: a re-upload whose agent label is no longer a guide build (a
- * reclassified game on Full Resync) removes the sample kept under the old
- * label — the slim row now carries the new one, so the old sample would
- * feed a guide the game no longer belongs to. The backfill does the same
- * for games a server-side custom build relabelled.
+ * reclassified game on Full Resync), or that ingest's custom-build tagging
+ * relabelled (routes/games.js passes the tag's ``_customBuildSlug`` in),
+ * removes the sample kept under the old label — the slim row now carries
+ * the new one, so the old sample would feed a guide the game no longer
+ * belongs to. The backfill does the same for games a bulk reclassification
+ * relabelled.
  *
  * Kill switch: SC2TOOLS_GUIDE_SAMPLES_DISABLED=1 turns capture and sample
  * writes off (reads and GDPR deletes still work).
@@ -67,6 +69,9 @@ const MAP_MAX_CHARS = 200;
 /** GDPR ranged wipes delete in chunks so one ``$in`` stays small. */
 const DELETE_CHUNK = 1000;
 const RESULTS = Object.freeze(["Victory", "Defeat", "Tie"]);
+const DAY_MS = 86_400_000;
+/** @type {ReadonlySet<string>} Skip reasons of a re-upload that make any stored sample stale. */
+const RELABEL_REASONS = new Set([INELIGIBLE.NOT_GUIDE_BUILD, INELIGIBLE.CUSTOM_BUILD]);
 /** Unit names become Mongo field keys: plain identifiers only. */
 const SAFE_UNIT_NAME_RE = /^[A-Za-z][A-Za-z0-9]{0,63}$/;
 /** Timeline tokens that are not army before canonicalisation (it would fold AdeptPhaseShift → Adept, DisruptorPhased → Disruptor). */
@@ -98,6 +103,8 @@ const SKIP = Object.freeze({
  * @property {"Victory"|"Defeat"|"Tie"} result
  * @property {string} map
  * @property {number|null} durationSec
+ * @property {Date|null} playedOn         UTC day the game was played (midnight; day
+ *   precision only, so no row carries the game's timestamp) — the per-user cap's order
  * @property {Record<string, number>} milestones  milestone key → recorded seconds
  * @property {Record<string, Record<string, number>>} army checkpoint sec → {Unit: count}
  */
@@ -298,6 +305,21 @@ function extractArmy(macroBreakdown, durationSec) {
   return army;
 }
 
+/**
+ * The UTC day a game was played. Day precision on purpose: ordering the
+ * per-user cap needs no more, and a sample must not carry the game's
+ * timestamp (game ids embed it).
+ *
+ * Example: `playedOnOf("2026-07-01T12:00:00Z")` → `2026-07-01T00:00:00.000Z`.
+ *
+ * @param {unknown} date ISO string (ingest) or Date (backfill)
+ * @returns {Date|null}
+ */
+function playedOnOf(date) {
+  const ms = dateMs(date);
+  return ms === null ? null : new Date(Math.floor(ms / DAY_MS) * DAY_MS);
+}
+
 /** @param {unknown} v @returns {number|null} */
 function durationOf(v) {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_GAME_SEC ? v : null;
@@ -335,6 +357,7 @@ function extractSample(raw) {
     result: game.result,
     map: game.map.slice(0, MAP_MAX_CHARS),
     durationSec,
+    playedOn: playedOnOf(game.date),
     milestones,
     army: extractArmy(game.macroBreakdown, durationSec),
   };
@@ -353,9 +376,10 @@ function captureGameId(userId, game) {
 
 /**
  * True for a re-upload whose explicit ``myBuild`` is no longer a guide
- * build: any sample stored for the game carries a stale label. Other skip
- * reasons never remove a sample — a sparser re-upload payload must not
- * erase what an earlier, complete upload captured.
+ * build, or that the ingest's custom-build tagging relabelled to a saved
+ * "you" definition: any sample stored for the game carries a stale label.
+ * Other skip reasons never remove a sample — a sparser re-upload payload
+ * must not erase what an earlier, complete upload captured.
  *
  * @param {unknown} game
  * @param {string} reason extractSample's skip code
@@ -363,7 +387,7 @@ function captureGameId(userId, game) {
  * @returns {boolean}
  */
 function isRelabelledReupload(game, reason, opts) {
-  if (!opts || opts.created !== false || reason !== INELIGIBLE.NOT_GUIDE_BUILD) return false;
+  if (!opts || opts.created !== false || !RELABEL_REASONS.has(reason)) return false;
   return typeof (/** @type {Record<string, unknown>} */ (game)).myBuild === "string";
 }
 
@@ -458,9 +482,22 @@ class GuideSamplesService {
     return res.deletedCount || 0;
   }
 
-  /** Resolve once every in-flight capture write has settled (tests, shutdown, GDPR). */
+  /**
+   * Resolve once no capture write is in flight, including writes started
+   * while waiting (tests, shutdown — where ingest has stopped).
+   */
   async drain() {
     while (this.pending.size > 0) await Promise.all([...this.pending]);
+  }
+
+  /**
+   * Settle the capture writes already in flight — one snapshot, so the
+   * wait is bounded by ``maxPending`` writes however busy ingest is. The
+   * GDPR deletes use this rather than ``drain``: other users' later
+   * captures must not hold an erasure (and its mutation fence) open.
+   */
+  async _settleInFlight() {
+    await Promise.all([...this.pending]);
   }
 
   /**
@@ -470,7 +507,7 @@ class GuideSamplesService {
    * @returns {Promise<number>} deleted count
    */
   async deleteForUser(userId) {
-    await this.drain();
+    await this._settleInFlight();
     const res = await this.coll.deleteMany({ userHash: this.userHash(userId) });
     return res.deletedCount || 0;
   }
@@ -483,7 +520,7 @@ class GuideSamplesService {
    * @returns {Promise<number>} deleted count
    */
   async deleteForGames(userId, gameIds) {
-    await this.drain();
+    await this._settleInFlight();
     const userHash = this.userHash(userId);
     const hashes = gameIds
       .filter((id) => typeof id === "string" && id)

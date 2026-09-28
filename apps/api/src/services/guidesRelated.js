@@ -11,7 +11,11 @@
  *   - ``verifyExamples``: the nightly example replays re-checked against
  *     the users' CURRENT replay-sharing state, because the nightly docs
  *     can be up to a day stale. A user who stopped sharing (or deleted
- *     the account) disappears immediately; the display name is re-read.
+ *     the account) disappears from the next API response; the display
+ *     name is re-read. Rendered web pages may keep a cached copy for up to
+ *     GUIDE_REVALIDATE_SEC (6 h, apps/web/lib/guides/api.ts). GDPR deletes
+ *     and history wipes also pull the user's examples from guide_stats
+ *     (services/gdpr.js ``_scrubGuideExamples``).
  *
  * Both return public-safe fields only (slug/title; handle/displayName/
  * result/map/length/date) — never a userId, gameId or opponent field.

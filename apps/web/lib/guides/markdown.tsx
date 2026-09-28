@@ -1,12 +1,17 @@
 /**
- * Guide markdown — a deliberately tiny, SAFE markdown subset for the
- * coach's notes on build guides (public pages + the admin live preview).
+ * Guide markdown — the coach's notes on build guides (public pages + the
+ * admin live preview), rendered with the site's one safe inline renderer.
  *
- * Supported: paragraphs (blank-line separated; soft line breaks join
- * with a space), headings ("### Title" — "#"/"##" are accepted too and
- * all render as <h3>, because notes sit under the page's own <h2>
- * sections), "- " bullet lists, **bold**, *italic*, `code` and
- * [text](https://…) links (http/https only, rel="nofollow noopener").
+ * This module only adds the BLOCK structure notes need: paragraphs
+ * (blank-line separated; soft line breaks join with a space), headings
+ * ("### Title" — "#"/"##" are accepted too and all render as <h3>,
+ * because notes sit under the page's own <h2> sections), "- " bullet
+ * lists and the 4,000-character cap. Everything INLINE — `code`,
+ * **bold**, *italic* / _italic_, [text](https://…) and bare https://
+ * links — is `renderInline` from lib/reviewMarkdown.tsx, so link safety
+ * (`safeHttpUrl`: absolute http(s) only) and the link rel ("nofollow ugc
+ * noopener noreferrer") live in one place for reviews and notes alike.
+ * No `onSeek` is passed, so game clocks ("4:30") stay plain text.
  *
  * Safety: output is React elements built from plain strings, so React
  * escapes everything; there is no dangerouslySetInnerHTML. Raw HTML,
@@ -18,25 +23,15 @@
  * Pure and hook-free, so it works in server components and client
  * islands alike. Class names are spelled with utilities that also occur
  * under app/ and components/ (Tailwind does not scan lib/); callers may
- * override them via `classes`.
+ * override the block classes via `classes`.
  */
 import type { ReactNode } from "react";
+import { renderInline, safeHttpUrl } from "@/lib/reviewMarkdown";
 
 /** Mirror of the API's GUIDE_NOTE_MAX_CHARS; longer input is truncated. */
 export const GUIDE_MARKDOWN_MAX_CHARS = 4000;
-/** Nesting cap for inline emphasis inside emphasis/links. */
-const MAX_INLINE_DEPTH = 4;
-const SAFE_PROTOCOLS: ReadonlySet<string> = new Set(["http:", "https:"]);
-const LINK_REL = "nofollow noopener";
 const HEADING_RE = /^#{1,3}\s+(.+)$/;
 const LIST_ITEM_RE = /^\s*-\s+(.+)$/;
-/**
- * Leftmost inline token; alternatives are tried in order at each
- * position: `code` (1), **bold** (2), [text](url) (3, 4), *italic* (5).
- * Emphasis must hug its text ("2 * 3 * 4" stays literal).
- */
-const INLINE_RE =
-  /`([^`]+)`|\*\*([^\s*](?:.*?[^\s])?)\*\*|\[([^\]]+)\]\(([^()\s]+)\)|\*([^\s*](?:[^*]*[^\s*])?)\*/;
 
 export interface GuideMarkdownClasses {
   root?: string;
@@ -44,8 +39,6 @@ export interface GuideMarkdownClasses {
   heading?: string;
   list?: string;
   listItem?: string;
-  code?: string;
-  link?: string;
 }
 
 const DEFAULT_CLASSES: Required<GuideMarkdownClasses> = {
@@ -54,8 +47,6 @@ const DEFAULT_CLASSES: Required<GuideMarkdownClasses> = {
   heading: "font-display text-h4 font-bold text-text",
   list: "list-disc space-y-1 pl-5 text-body text-text",
   listItem: "",
-  code: "rounded bg-bg-elevated px-1 font-mono text-caption",
-  link: "font-semibold text-accent-cyan underline-offset-2 hover:underline",
 };
 
 /** One parsed block of the subset. */
@@ -65,18 +56,14 @@ export type GuideMarkdownBlock =
   | { kind: "list"; items: string[] };
 
 /**
- * Absolute http(s) URL, normalised, or null for anything else.
+ * Absolute http(s) URL, normalised, or null for anything else — the
+ * review renderer's `safeHttpUrl`, so notes and reviews share one rule.
  *
  * Example: `safeGuideHref("https://liquipedia.net/starcraft2")` →
  * "https://liquipedia.net/starcraft2"; `safeGuideHref("javascript:alert(1)")` → null.
  */
 export function safeGuideHref(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    return SAFE_PROTOCOLS.has(url.protocol) ? url.href : null;
-  } catch {
-    return null;
-  }
+  return safeHttpUrl(raw);
 }
 
 interface BlockBuilder {
@@ -134,72 +121,26 @@ export function parseGuideMarkdown(source: string): GuideMarkdownBlock[] {
   return state.blocks;
 }
 
-function renderToken(
-  match: RegExpExecArray,
-  depth: number,
-  key: string,
-  classes: Required<GuideMarkdownClasses>,
-): ReactNode {
-  const [source, code, bold, linkText, linkHref, italic] = match;
-  const nested = (text: string): ReactNode =>
-    depth < MAX_INLINE_DEPTH ? renderInline(text, depth + 1, key, classes) : text;
-  if (code !== undefined) {
-    return <code key={key} className={classes.code}>{code}</code>;
-  }
-  if (bold !== undefined) return <strong key={key}>{nested(bold)}</strong>;
-  if (italic !== undefined) return <em key={key}>{nested(italic)}</em>;
-  const href = safeGuideHref(linkHref ?? "");
-  if (!href) return source;
-  return (
-    <a key={key} href={href} rel={LINK_REL} target="_blank" className={classes.link}>
-      {nested(linkText ?? "")}
-    </a>
-  );
-}
-
-function renderInline(
-  text: string,
-  depth: number,
-  keyPrefix: string,
-  classes: Required<GuideMarkdownClasses>,
-): ReactNode[] {
-  const out: ReactNode[] = [];
-  let rest = text;
-  let index = 0;
-  while (rest) {
-    const match = INLINE_RE.exec(rest);
-    if (!match) {
-      out.push(rest);
-      break;
-    }
-    if (match.index > 0) out.push(rest.slice(0, match.index));
-    out.push(renderToken(match, depth, `${keyPrefix}.${index}`, classes));
-    rest = rest.slice(match.index + match[0].length);
-    index += 1;
-  }
-  return out;
-}
-
 function renderBlock(
   block: GuideMarkdownBlock,
   key: string,
   classes: Required<GuideMarkdownClasses>,
 ): ReactNode {
   if (block.kind === "heading") {
-    return <h3 key={key} className={classes.heading}>{renderInline(block.text, 0, key, classes)}</h3>;
+    return <h3 key={key} className={classes.heading}>{renderInline(block.text, {}, key)}</h3>;
   }
   if (block.kind === "list") {
     return (
       <ul key={key} className={classes.list}>
         {block.items.map((item, i) => (
           <li key={`${key}.${i}`} className={classes.listItem || undefined}>
-            {renderInline(item, 0, `${key}.${i}`, classes)}
+            {renderInline(item, {}, `${key}.${i}`)}
           </li>
         ))}
       </ul>
     );
   }
-  return <p key={key} className={classes.paragraph}>{renderInline(block.text, 0, key, classes)}</p>;
+  return <p key={key} className={classes.paragraph}>{renderInline(block.text, {}, key)}</p>;
 }
 
 /**

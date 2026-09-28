@@ -65,8 +65,10 @@ Three constraints shape the design:
 - **The new games index has a cost:** one extra key per game, about 40–70
   bytes. It is built in the background at boot, so a large collection can't
   delay startup.
-- **Samples keep the classifier label.** A game that a user later re-tags
-  with a server-side custom build keeps its classifier-labelled sample
+- **Samples keep the classifier label.** Ingest captures the sample after
+  the user's saved custom builds have tagged the game, so a game tagged at
+  upload (or re-uploaded after tagging) never keeps a sample. A game that a
+  bulk reclassification re-tags later keeps its classifier-labelled sample
   until the next backfill removes it. The win-rate aggregate excludes such
   games immediately.
 - **Opponent-strategy labels are published.** They are classifier output,

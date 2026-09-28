@@ -1,26 +1,29 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { MapGuide } from "@/components/guides/map/MapGuide";
-import { GuideUnavailable } from "@/components/guides/GuideStates";
 import { guidePaths, mapMetadata } from "@/components/guides/guideMetadata";
 import { guideUnavailableMetadata } from "@/components/guides/guideSeo";
-import { fetchGuideMap } from "@/lib/guides/api";
+import { fetchGuideMap, fetchPublishedGuidePaths } from "@/lib/guides/api";
+import { lowercaseGuidePath } from "@/lib/guides/canonicalPath";
+import { GuideUnavailableError } from "@/lib/guides/guideErrors";
 import { guidesEnabled } from "@/lib/guides/flags";
 
 /**
  * /guides/maps/[map] — matchup win rates and the best openers on one
- * ladder map. 404 / 308 raised in generateMetadata; API down → noindex
- * "unavailable"; unpublished → "Not enough games yet" + noindex.
+ * ladder map. 404 / 308 raised in generateMetadata (mixed-case URLs 308
+ * to lowercase); unpublished → "Not enough games yet" + noindex.
  *
- * Rendered per request, like /guides: as an ISR page, an API blip would
- * freeze the "temporarily unavailable" state for the whole 6 h window,
- * and switching an ISR page to dynamic at runtime (noStore) is a 500 in
- * Next 15. The API reads stay cached: lib/guides/api.ts fetches with
- * `next.revalidate = GUIDE_REVALIDATE_SEC` + the "guides" tag (Next
- * caches only 200s) and shares one call between generateMetadata and the
- * page (React cache).
+ * Incremental static regeneration, like the build page: cached for 6 h
+ * (purged on demand after the nightly run); an API outage throws
+ * GuideUnavailableError so it is never cached (the last good render keeps
+ * serving; with none, an uncached 5xx until the API is back).
  */
-export const dynamic = "force-dynamic";
+export const revalidate = 21600;
+
+/** Nothing is prerendered at `next build` (the API may be unreachable there). */
+export function generateStaticParams(): Array<{ map: string }> {
+  return [];
+}
 
 interface MapPageProps {
   params: Promise<{ map: string }>;
@@ -29,10 +32,13 @@ interface MapPageProps {
 async function loadMap(params: MapPageProps["params"]) {
   if (!guidesEnabled()) notFound();
   const { map } = await params;
+  const canonical = guidePaths.map(map);
+  const lowercase = lowercaseGuidePath(canonical);
+  if (lowercase) permanentRedirect(lowercase);
   const result = await fetchGuideMap(map);
   if (result.kind === "not_found") notFound();
   if (result.kind === "moved") permanentRedirect(result.path);
-  return { result, canonical: guidePaths.map(map) };
+  return { result, canonical };
 }
 
 export async function generateMetadata({ params }: MapPageProps): Promise<Metadata> {
@@ -42,7 +48,9 @@ export async function generateMetadata({ params }: MapPageProps): Promise<Metada
 }
 
 export default async function MapGuidePage({ params }: MapPageProps) {
-  const { result } = await loadMap(params);
-  if (result.kind === "unavailable") return <GuideUnavailable />;
-  return <MapGuide payload={result.data} />;
+  const { result, canonical } = await loadMap(params);
+  if (result.kind === "unavailable") throw new GuideUnavailableError(canonical);
+  // Map openers carry no published flag of their own; gate their build links on the published list.
+  const publishedPaths = result.data.published ? await fetchPublishedGuidePaths() : null;
+  return <MapGuide payload={result.data} publishedPaths={publishedPaths} />;
 }

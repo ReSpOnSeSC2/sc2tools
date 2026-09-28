@@ -202,7 +202,7 @@ function buildHeadlineLine(p: GuideBuildPublished): GuideCopyLine | null {
   if (!headline || headline.scope !== "league" || !headline.label) return null;
   return line(
     "intro-headline",
-    `It is played most at ${headline.label}, where it wins ${fmtPct(headline.winRate)} over ${fmtCount(headline.games)} games.`,
+    `It is played most against ${headline.label} opponents, where it wins ${fmtPct(headline.winRate)} over ${fmtCount(headline.games)} games.`,
     [headline.winRate, headline.games],
   );
 }

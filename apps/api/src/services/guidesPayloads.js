@@ -23,7 +23,7 @@ const {
 } = require("../config/guides");
 const {
   MATCHUPS,
-  displayName,
+  guideName,
   matchupSlug,
   strategyNamesForMatchup,
   strategySlug,
@@ -174,17 +174,18 @@ function eraFields(era, doc) {
 
 /**
  * @param {Doc} row matchup-doc build row
+ * @param {string} matchup the matchup doc's matchup
  * @returns {GuideCell & { buildKey: string, buildSlug: string, name: string, published: boolean,
  *   prevalence: number|null, trend: ReturnType<typeof pickTrend>, isNew: boolean }|null}
  */
-function openerRow(row) {
+function openerRow(row, matchup) {
   const cell = pickCell(row);
   if (!cell || typeof row.buildKey !== "string" || typeof row.buildSlug !== "string") return null;
   return {
     ...cell,
     buildKey: row.buildKey,
     buildSlug: row.buildSlug,
-    name: displayName(row.buildKey),
+    name: guideName("builds", matchup, row.buildKey),
     published: row.published === true,
     prevalence: numOrNull(row.prevalence),
     trend: pickTrend(row.trend),
@@ -199,7 +200,7 @@ function openerRow(row) {
  * @param {Doc|null|undefined} doc
  */
 function openerRows(doc) {
-  const rows = doc ? pickList(doc.builds, openerRow) : [];
+  const rows = doc ? pickList(doc.builds, (/** @type {Doc} */ row) => openerRow(row, doc.matchup)) : [];
   return rows.sort((a, b) => compareByCiLow(a, b, a.buildKey, b.buildKey));
 }
 
@@ -262,7 +263,7 @@ function counterLinks(matchup, doc) {
     return strategyNamesForMatchup(matchup).map((key) => ({
       strategyKey: key,
       strategySlug: /** @type {string} */ (strategySlug(matchup, key)),
-      name: displayName(key),
+      name: guideName("counters", matchup, key),
       published: false,
       games: null,
     }));
@@ -272,7 +273,7 @@ function counterLinks(matchup, doc) {
       ? {
         strategyKey: row.strategyKey,
         strategySlug: row.strategySlug,
-        name: displayName(row.strategyKey),
+        name: guideName("counters", matchup, row.strategyKey),
         published: row.published === true,
         games: flooredGames(row.games),
       }
@@ -321,7 +322,7 @@ function bandOpeners(buildDocs, band) {
       ...cell,
       buildKey: doc.buildKey,
       buildSlug: doc.buildSlug,
-      name: displayName(doc.buildKey),
+      name: guideName("builds", doc.matchup, doc.buildKey),
       published: doc.published === true,
       prevalence: null,
       trend: null,

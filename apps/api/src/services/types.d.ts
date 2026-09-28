@@ -669,6 +669,8 @@ export interface CustomBuildsService {
           opponent: string | null;
         };
         ruleCount: number;
+        /** The "you" definition slug the stored row now carries, null when none. */
+        userSlug?: string | null;
       }
   >;
 }

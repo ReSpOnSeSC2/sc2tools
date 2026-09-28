@@ -1,16 +1,28 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import nextConfig from "../../../next.config.mjs";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { GUIDE_MATCHUPS } from "@/lib/guides/slugs";
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function metaRedirects() {
+async function allMetaRedirects() {
   const redirects = nextConfig.redirects;
   if (!redirects) throw new Error("next.config.mjs has no redirects()");
   const all = await redirects();
   return all.filter((rule) => rule.source === "/meta" || rule.source.startsWith("/meta/"));
+}
+
+/** The unconditional /meta rules (no `has` query matcher). */
+async function metaRedirects() {
+  return (await allMetaRedirects()).filter((rule) => !("has" in rule) || !rule.has);
+}
+
+/** Next anchors a `has` value regex (`^value$`) — mirror that to test the patterns. */
+function matchesQuery(rule: { has?: Array<{ type: string; key?: string; value?: string }> }, key: string, value: string) {
+  const item = rule.has?.find((entry) => entry.type === "query" && entry.key === key);
+  return item?.value !== undefined && new RegExp(`^${item.value}$`).test(value);
 }
 
 describe("/meta redirect (next.config.mjs)", () => {
@@ -22,9 +34,23 @@ describe("/meta redirect (next.config.mjs)", () => {
     ]);
   });
 
+  test("sends old /meta?matchup=XvY links (any case) to the lowercase matchup guide first", async () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    const all = await allMetaRedirects();
+    const byQuery = all.filter((rule) => "has" in rule && rule.has);
+    expect(byQuery.map((rule) => rule.destination)).toEqual(GUIDE_MATCHUPS.map((mu) => `/guides/${mu.toLowerCase()}`));
+    expect(all.indexOf(byQuery[byQuery.length - 1])).toBeLessThan(
+      all.findIndex((rule) => rule.source === "/meta" && !("has" in rule && rule.has)),
+    );
+    const pvz = byQuery.find((rule) => rule.destination === "/guides/pvz");
+    expect(pvz?.permanent).toBe(true);
+    for (const value of ["PvZ", "pvz", "PVZ"]) expect(pvz && matchesQuery(pvz, "matchup", value)).toBe(true);
+    for (const value of ["PvZx", "PvT", ""]) expect(pvz && matchesQuery(pvz, "matchup", value)).toBe(false);
+  });
+
   test("temporarily points home when guides are off", async () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", undefined);
-    expect(await metaRedirects()).toEqual([
+    expect(await allMetaRedirects()).toEqual([
       { source: "/meta", destination: "/", permanent: false },
       { source: "/meta/:path*", destination: "/", permanent: false },
     ]);

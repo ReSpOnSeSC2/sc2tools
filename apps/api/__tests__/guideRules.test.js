@@ -25,6 +25,7 @@ const {
   leagueLabel,
   mmrBandLabel,
 } = require("../src/services/guideRules");
+const { LEAGUES } = require("../src/util/leagueBands");
 
 const BUILD = "PvZ - Stargate into Glaives";
 
@@ -111,6 +112,17 @@ describe("guideRules (pure)", () => {
     expect(mmrBandLabel(123)).toBeNull();
     expect(GUIDE_LEAGUE_BANDS).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(GUIDE_MMR_BANDS).toContain(6500);
+  });
+
+  test("league bands and labels are util/leagueBands.js's table, not a copy", () => {
+    expect(GUIDE_LEAGUE_BANDS).toEqual(LEAGUES.map((league) => league.id));
+    for (const league of LEAGUES) {
+      expect(leagueLabel(league.id)).toBe(league.label);
+      expect(leagueBandOf({ leagueId: league.id })).toBe(league.id);
+    }
+    expect(leagueBandOf({ leagueId: LEAGUES.length })).toBeNull();
+    expect(leagueLabel(-1)).toBe("League -1");
+    expect(leagueLabel(4.5)).toBe("League 4.5");
   });
 
   test("guideGamesMatch rejects an invalid matchup", () => {

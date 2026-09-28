@@ -103,6 +103,33 @@ describe("/guides/[matchup] filters", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Latest PvZ videos" })).toBeTruthy();
   });
 
+  it("never links a before-patch ranking to the current-patch guide pages", async () => {
+    const before: GuideMatchupPayload = { ...FIXTURE_MATCHUP, era: "before" };
+    mocks.fetchGuideMatchup.mockResolvedValue(ok(before));
+    render(await MatchupGuidePage(props({ era: "before" })));
+    expect(mocks.fetchGuideMatchup).toHaveBeenCalledWith("pvz", { band: null, era: "before" });
+    const table = screen.getByRole("table", { name: /PvZ openers/ });
+    const published = FIXTURE_MATCHUP.openers.find((row) => row.published);
+    expect(published).toBeTruthy();
+    expect(within(table).getByText(published?.name ?? "")).toBeTruthy();
+    expect(within(table).queryAllByRole("link")).toEqual([]);
+    expect(within(table).queryByText("Full guide once more games are in")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 2, name: /How to beat/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /How to beat/ })).toBeNull();
+  });
+
+  it("keeps guide links and the unpublished hint in the current-patch view", async () => {
+    mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
+    render(await MatchupGuidePage(props()));
+    const table = screen.getByRole("table", { name: /PvZ openers/ });
+    expect(within(table).getAllByRole("link")).toHaveLength(
+      FIXTURE_MATCHUP.openers.filter((row) => row.published).length,
+    );
+    expect(within(table).getAllByText("Full guide once more games are in")).toHaveLength(
+      FIXTURE_MATCHUP.openers.filter((row) => !row.published).length,
+    );
+    expect(screen.getByRole("heading", { level: 2, name: "How to beat Zerg openers" })).toBeTruthy();
+  });
 });
 
 describe("/guides/[matchup] states", () => {
@@ -119,6 +146,28 @@ describe("/guides/[matchup] states", () => {
     mocks.fetchGuideMatchup.mockResolvedValue({ kind: "moved", path: "/guides/pvz" });
     await expect(generateMetadata(props())).rejects.toMatchObject({ path: "/guides/pvz" });
     await expect(MatchupGuidePage(props())).rejects.toMatchObject({ path: "/guides/pvz" });
+  });
+
+  it("308s a mixed-case matchup URL to lowercase, keeping a valid filter and dropping the rest", async () => {
+    const mixed = {
+      params: Promise.resolve({ matchup: "PvZ" }),
+      searchParams: Promise.resolve({ band: "league:4", era: "before", matchup: "PvZ", axis: "league" }),
+    };
+    await expect(generateMetadata(mixed)).rejects.toMatchObject({ path: "/guides/pvz?band=league:4&era=before" });
+    await expect(MatchupGuidePage({ ...mixed, searchParams: Promise.resolve({}) })).rejects.toMatchObject({
+      path: "/guides/pvz",
+    });
+    await expect(
+      CounterListPage({ params: Promise.resolve({ matchup: "PVZ" }) }),
+    ).rejects.toMatchObject({ path: "/guides/pvz/counter" });
+    expect(mocks.fetchGuideMatchup).not.toHaveBeenCalled();
+  });
+
+  it("still 404s a mixed-case segment that is no matchup", async () => {
+    mocks.fetchGuideMatchup.mockResolvedValue({ kind: "not_found" });
+    await expect(
+      generateMetadata({ params: Promise.resolve({ matchup: "PvX" }), searchParams: Promise.resolve({}) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("404s an unknown matchup from generateMetadata", async () => {

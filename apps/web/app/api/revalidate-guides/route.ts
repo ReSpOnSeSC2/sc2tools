@@ -23,6 +23,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "private, no-store, max-age=0" };
+const HTTP_OK = 200;
+const HTTP_BAD_REQUEST = 400;
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_PAYLOAD_TOO_LARGE = 413;
+const HTTP_SERVICE_UNAVAILABLE = 503;
 
 function reply(status: number, body: Record<string, unknown>): NextResponse {
   return NextResponse.json(body, { status, headers: NO_STORE });
@@ -36,10 +41,10 @@ function tooLarge(request: Request, rawBody: string | null): boolean {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const secret = process.env.GUIDES_REVALIDATE_SECRET;
-  if (!secret) return reply(503, { error: "not_configured" });
-  if (tooLarge(request, null)) return reply(413, { error: "too_large" });
+  if (!secret) return reply(HTTP_SERVICE_UNAVAILABLE, { error: "not_configured" });
+  if (tooLarge(request, null)) return reply(HTTP_PAYLOAD_TOO_LARGE, { error: "too_large" });
   const rawBody = await request.text();
-  if (tooLarge(request, rawBody)) return reply(413, { error: "too_large" });
+  if (tooLarge(request, rawBody)) return reply(HTTP_PAYLOAD_TOO_LARGE, { error: "too_large" });
 
   const verdict = verifyGuideRevalidation(
     secret,
@@ -47,11 +52,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     rawBody,
     Date.now(),
   );
-  if (!verdict.ok) return reply(401, { error: verdict.reason });
-  if (verdict.scope !== GUIDE_REVALIDATE_SCOPE) return reply(400, { error: "bad_scope" });
+  if (!verdict.ok) return reply(HTTP_UNAUTHORIZED, { error: verdict.reason });
+  if (verdict.scope !== GUIDE_REVALIDATE_SCOPE) return reply(HTTP_BAD_REQUEST, { error: "bad_scope" });
 
   revalidateTag(GUIDE_CACHE_TAG);
   revalidatePath("/guides", "layout");
   revalidatePath("/sitemap.xml");
-  return reply(200, { revalidated: true, tag: GUIDE_CACHE_TAG });
+  return reply(HTTP_OK, { revalidated: true, tag: GUIDE_CACHE_TAG });
 }

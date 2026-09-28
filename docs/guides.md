@@ -18,10 +18,27 @@ POST /v1/games ──► guide_samples  (one pseudonymous row per eligible game:
                          │
    nightly guideStats job│ one aggregation per matchup, pushed into Mongo
                          ▼
-                   guide_stats ──► GET /v1/guides/* ──► /guides pages (ISR)
+                   guide_stats ──► GET /v1/guides/* ──► /guides pages (ISR, 6 h)
                          │                                  ▲
                          └── signed POST /api/revalidate-guides ┘
 ```
+
+The build, counter-list, counter and map pages are incrementally static
+(ISR): rendered on the first request, then served from the cache for 6
+hours. The hub, the maps list and the matchup pages (which read their
+`?band` / `?era` filters) render per request. Every API read is cached in
+Next's data cache for 6 hours under the `guides` tag, and the signed
+revalidation ping purges that tag, and the ISR pages built from it, after
+each stats run.
+
+When the API is down, an ISR page throws instead of rendering, so an
+outage is never cached: a page whose window has passed keeps serving its
+last good render, and a page with no usable render (never visited, or
+just purged) answers an uncached 500 until the API is back. The
+per-request pages show a noindex "temporarily unavailable" state.
+Mixed-case guide URLs (`/guides/PvZ`) get a 308 to the lowercase URL from
+the middleware, and old `/meta?matchup=PvZ` links go straight to
+`/guides/pvz`.
 
 - **guide_samples** are written at ingest time, while the game's heavy
   fields (`buildLog`, `macroBreakdown`) are already in memory. This is the
@@ -52,7 +69,12 @@ A game feeds guides only if all of these hold:
   "Game Too Short", unclassified labels, composition fallbacks and users'
   private custom-build names.
 - Rows re-tagged by a server-side custom build (`_customBuildSlug`) are
-  excluded.
+  excluded. Ingest captures the guide sample only after the user's saved
+  custom builds have tagged the game, so a game a "you" definition
+  relabels feeds neither the win rates nor the timings, and its re-upload
+  removes any sample stored before the definition existed. Old games that
+  a bulk reclassification relabels keep their samples until the next
+  backfill.
 
 These are the same exclusions as the Ladder Meta Radar, with a catalog
 allowlist added so private custom-build names can never appear.
@@ -85,7 +107,7 @@ are ignored, and the canonical URL never carries a band.
 |---|---|---|
 | `GUIDE_CELL_MIN_USERS` / `GUIDE_CELL_MIN_GAMES` | 5 / 30 | Any displayed number (a "cell") needs at least 5 distinct users AND 30 games. |
 | `GUIDE_PAGE_MIN_USERS` / `GUIDE_PAGE_MIN_GAMES` | 5 / 100 | A whole page publishes only with at least 5 users AND 100 games in the current patch. |
-| `GUIDE_USER_CELL_CAP` | 50 | At most 50 games per user per build per era count (most recent first), so one account can't move a cell. |
+| `GUIDE_USER_CELL_CAP` | 50 | At most 50 games per user per build per era count (most recently played first), so one account can't move a cell. Samples are ordered by `playedOn`, the UTC day the game was played (older rows without it fall back to their capture time), with `gameHash` breaking ties. |
 | `GUIDE_MILESTONE_MIN_PRESENCE` | 0.6 | A timing row appears only if the milestone occurs in at least 60% of samples. |
 
 - Below the page floor, the API returns the page with `published: false`
@@ -126,22 +148,35 @@ The trend therefore always compares against a snapshot that is 7–14 days
 old. It stays empty until a build has one, and a baseline older than 21 days
 is dropped. Rerunning the job on the same day changes nothing.
 
+`isNew` ("newly published, so no weekly trend yet") holds while a build is
+published, was **first** published less than 7 days ago (`firstPublishedAt`
+is carried forward), and has no trend. A build that already has a trend
+from snapshots taken before it crossed the page floor shows that trend
+instead, and a build that drops under the floor and re-crosses it later is
+not announced as new again.
+
 ## Privacy
 
 - **guide_samples** store `userHash` and `gameHash`, which are HMACs made
   with the server pepper (`util/guideHash.js`). They never store user ids,
-  game ids, player names, toon handles or pulse ids. Rows expire after 400
-  days.
+  game ids, player names, toon handles or pulse ids, and the game's date
+  only to the day (`playedOn`, never a timestamp). Rows expire 400 days
+  after they were first captured.
 - **Deleting an account** (`DELETE /v1/me`) deletes that user's samples, by
-  computing their hash at deletion time. Wiping game history and restoring
-  a snapshot do the same.
+  computing their hash at deletion time, and pulls their example replays
+  out of every `guide_stats` build document. Wiping game history (ranged or
+  full) and restoring a snapshot do the same; the next stats run picks
+  examples again from the games that remain.
 - **guide_stats** and every public payload are aggregates only.
   `apps/api/__tests__/guidesNoPii.test.js` seeds known names and ids and
   asserts none of them appear in any public response.
 - **Example replays** come only from users who enabled public replay
-  sharing. Sharing is re-checked when the page is served. They link to that
-  user's public replay list, never to a game id (game ids embed the
-  opponent's name).
+  sharing. The API re-checks sharing (and the current display name) on
+  every read, so a user who stops sharing or deletes their account drops
+  out of API responses at once. Rendered guide pages reuse cached API data,
+  so they can keep showing that user for up to 6 hours, or until the next
+  nightly revalidation ping. Examples link to that user's public replay
+  list, never to a game id (game ids embed the opponent's name).
 
 ## Slugs
 
@@ -153,7 +188,9 @@ is dropped. Rerunning the job on the same day changes nothing.
   lowercase it, and turn every run of non-alphanumerics into `-`.
 - **Collisions within a matchup:** the matchup-specific name keeps the plain
   slug, and the race-generic one gets its race as a prefix
-  (`zerg-2-base-nydus`).
+  (`zerg-2-base-nydus`). Its page name gets " (any matchup)" appended
+  ("2 Base Nydus (any matchup)"), so the two pages never share a title,
+  H1 or link text (`guideName` in `guideSlugs.js`).
 - **`apps/api/src/config/guideSlugs.lock.json` pins the whole mapping.**
   Tests in both apps fail if it drifts, so a catalog rename can't silently
   break URLs. To retire a slug, add an entry to `SLUG_ALIASES` in
@@ -192,7 +229,9 @@ is dropped. Rerunning the job on the same day changes nothing.
 
 Admins write markdown notes per build (up to 4000 characters) under
 `/admin/guides`. They render with a safe subset (no raw HTML; http(s) links
-only, with `rel="nofollow"`). Public payloads include only `{ body,
+only, with `rel="nofollow ugc noopener noreferrer"`; bare `https://` URLs
+become links too), using the same inline renderer as replay reviews.
+Public payloads include only `{ body,
 updatedAt }`; who edited a note is never exposed.
 
 ## Configuration
@@ -204,7 +243,7 @@ API (`apps/api`, see `render.yaml` and `.env.example`):
 | `GUIDES_ENABLED` | off | Master switch for the `/v1/guides` routes and the nightly stats and video jobs. `on`, `true`, `1`, `yes` or `all` turn it on (the same spellings as the web flag). |
 | `GUIDES_REVALIDATE_URL` | unset | `https://<web>/api/revalidate-guides`, pinged after each successful stats run. |
 | `GUIDES_REVALIDATE_SECRET` | unset | Shared HMAC secret. Must match the web's value. |
-| `GUIDES_YOUTUBE_CHANNEL_ID` / `GUIDES_YOUTUBE_CHANNEL_URL` | ReSpOnSe's channel | Video sync source and the "Subscribe" link. |
+| `GUIDES_YOUTUBE_CHANNEL_ID` / `GUIDES_YOUTUBE_CHANNEL_URL` | unset (`render.yaml` sets ReSpOnSe's channel) | Video sync source and the "Subscribe" link. Unset = no video sync, no Subscribe link, and admin Add video / Sync now answer 503. |
 | `SC2TOOLS_GUIDE_SAMPLES_DISABLED=1` | — | Stops ingest-time sample capture. Capture is ON by default, so data accumulates before launch. |
 | `SC2TOOLS_GUIDE_BACKFILL_DISABLED=1` | — | Blocks the admin-triggered backfill. |
 | `SC2TOOLS_GUIDE_STATS_DISABLED=1`, `…_INTERVAL_SEC`, `…_START_DELAY_SEC` | —, 86400, 900 | Nightly stats job. |
@@ -244,8 +283,9 @@ games synced before capture existed.
 
 To run it:
 
-- From **`/admin/guides` → Stats & backfill**: choose how many days back
-  (1–400, default 90) and press **Start**. **Stop** pauses it.
+- From **`/admin/guides` → Stats runs → Samples backfill**: choose how many
+  days back (1–400, default 90) and press **Start backfill**. **Stop**
+  pauses it.
 - Or through the API with an admin session token:
 
   ```bash
@@ -256,7 +296,7 @@ To run it:
   ```
 
 At 2 games/s, 100k games take about 14 hours. The ingest path is unaffected.
-`SC2TOOLS_GUIDE_BACKFILL_DISABLED=1` makes Start answer 409.
+`SC2TOOLS_GUIDE_BACKFILL_DISABLED=1` makes Start backfill answer 409.
 
 **Recompute now** (`POST /v1/admin/guides/recompute`) runs the stats job
 immediately and then pings the web to revalidate.
@@ -272,6 +312,14 @@ immediately and then pings the web to revalidate.
   Each aggregation has a 120 s `maxTimeMS` limit.
 - **Metrics:** `sc2tools_guide_samples_{captured,skipped,failed,dropped}`
   on `/v1/metrics`.
+- **Rate limit:** `/v1/guides` allows 300 requests per minute per client IP
+  **and path** (the query string is ignored). Guide pages are rendered on
+  the web server, so every visitor reaches the API from its egress IP;
+  keying on the path means junk slugs only use up their own buckets and
+  can't make real guide pages answer 429 (an ISR page would then fail to
+  render, a per-request page would show "temporarily unavailable").
+  Direct callers are still capped per IP
+  by the app-wide limiter.
 - **Caching:** public responses send
   `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`.
   Web pages cache API data for 6 hours, and the revalidation ping clears it

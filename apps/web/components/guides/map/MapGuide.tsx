@@ -7,7 +7,7 @@ import { GuideCopyText } from "@/components/guides/GuideCopyText";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { WinRateCell } from "@/components/guides/WinRateCell";
-import { guidePaths } from "@/components/guides/guideMetadata";
+import { canLinkGuidePath, guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import {
   GUIDE_LINK_CLASS,
@@ -24,12 +24,14 @@ import {
 } from "@/components/guides/guideUi";
 import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
 import { buildMapIntro } from "@/lib/guides/guideCopy";
-import type { GuideMapMatchupRow, GuideMapPayload, GuideMapPublished } from "@/lib/guides/types";
+import type { GuideMapMatchupRow, GuideMapOpener, GuideMapPayload, GuideMapPublished } from "@/lib/guides/types";
 
 /**
  * Body of /guides/maps/[map]: the map artwork, the win rate of each
  * matchup on it (from the first-named race's side) and the best openers
- * per matchup, each linking its build guide.
+ * per matchup, each linking its build guide when that guide is published
+ * (a map opener only needs the cell floor on this map; a build page needs
+ * the page floor over every map).
  */
 
 export function mapCrumbs(payload: Pick<GuideMapPayload, "map" | "mapSlug">): GuideCrumb[] {
@@ -76,7 +78,33 @@ function MatchupTable({ rows }: { rows: ReadonlyArray<GuideMapMatchupRow> }) {
   );
 }
 
-function BestOpeners({ rows }: { rows: ReadonlyArray<GuideMapMatchupRow> }) {
+function OpenerName({
+  matchupSlug,
+  opener,
+  publishedPaths,
+}: {
+  matchupSlug: string;
+  opener: GuideMapOpener;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
+  const path = guidePaths.build(matchupSlug, opener.buildSlug);
+  if (!canLinkGuidePath(publishedPaths, path)) {
+    return <span className="break-words text-text">{opener.name}</span>;
+  }
+  return (
+    <Link href={path} className={`${GUIDE_LINK_CLASS} break-words`}>
+      {opener.name}
+    </Link>
+  );
+}
+
+function BestOpeners({
+  rows,
+  publishedPaths,
+}: {
+  rows: ReadonlyArray<GuideMapMatchupRow>;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
   const withOpeners = rows.filter((row) => row.openers.length > 0);
   if (withOpeners.length === 0) return null;
   return (
@@ -89,9 +117,7 @@ function BestOpeners({ rows }: { rows: ReadonlyArray<GuideMapMatchupRow> }) {
               {row.openers.map((opener) => (
                 <li key={opener.buildKey} className="flex items-center justify-between gap-3 py-2 text-caption">
                   <span className="min-w-0">
-                    <Link href={guidePaths.build(row.slug, opener.buildSlug)} className={`${GUIDE_LINK_CLASS} break-words`}>
-                      {opener.name}
-                    </Link>
+                    <OpenerName matchupSlug={row.slug} opener={opener} publishedPaths={publishedPaths} />
                     <span className="block text-micro text-text-dim">{fmtCount(opener.games)} games</span>
                   </span>
                   <WinRateCell winRate={opener.winRate} ci={opener.ci} showWhisker={false} />
@@ -105,7 +131,13 @@ function BestOpeners({ rows }: { rows: ReadonlyArray<GuideMapMatchupRow> }) {
   );
 }
 
-function PublishedMap({ payload }: { payload: GuideMapPublished }) {
+function PublishedMap({
+  payload,
+  publishedPaths,
+}: {
+  payload: GuideMapPublished;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
   return (
     <>
       <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] md:items-start">
@@ -126,19 +158,26 @@ function PublishedMap({ payload }: { payload: GuideMapPublished }) {
       <Section id="matchups" title="Win rate by matchup" description="Share of decided games won by the first-named race in each matchup.">
         <MatchupTable rows={payload.matchups} />
       </Section>
-      <BestOpeners rows={payload.matchups} />
+      <BestOpeners rows={payload.matchups} publishedPaths={publishedPaths} />
     </>
   );
 }
 
-export function MapGuide({ payload }: { payload: GuideMapPayload }) {
+/** `publishedPaths`: published guide page paths (null = unknown) gating the opener links. */
+export function MapGuide({
+  payload,
+  publishedPaths = null,
+}: {
+  payload: GuideMapPayload;
+  publishedPaths?: ReadonlySet<string> | null;
+}) {
   const crumbs = mapCrumbs(payload);
   return (
     <article className="space-y-10">
       <GuideJsonLd items={[breadcrumbJsonLd(crumbs)]} />
       <GuideBreadcrumbs crumbs={crumbs} />
       {payload.published ? (
-        <PublishedMap payload={payload} />
+        <PublishedMap payload={payload} publishedPaths={publishedPaths} />
       ) : (
         <GuideNotEnoughGames
           eyebrow="Map guide"

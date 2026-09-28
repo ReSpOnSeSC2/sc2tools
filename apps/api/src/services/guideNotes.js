@@ -24,12 +24,12 @@
 const { COLLECTIONS } = require("../config/constants");
 const { buildSlug } = require("../config/guideSlugs");
 const { stampVersion } = require("../db/schemaVersioning");
+const { isDuplicateKey } = require("../util/jobLock");
 const { validateGuideAdminInput } = require("../validation/guideAdmin");
 
 /** Upper bound on the admin list (one note per catalog build at most). */
 const NOTES_LIST_MAX = 1000;
 const HTTP_BAD_REQUEST = 400;
-const DUPLICATE_KEY = 11000;
 /** C0 controls except TAB (\u0009) and LF (\u000a), plus DEL. */
 const CONTROL_CHARS_RE = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
 const CRLF_RE = /\r\n?/g;
@@ -211,7 +211,7 @@ class GuideNotesService {
     } catch (err) {
       // Two first saves raced on the unique {matchup, buildKey}: the
       // loser retries as a plain update of the winner's document.
-      if (/** @type {any} */ (err)?.code !== DUPLICATE_KEY) throw err;
+      if (!isDuplicateKey(err)) throw err;
       return this._upsert(matchup, buildKey, parsed, editorUserId);
     }
   }

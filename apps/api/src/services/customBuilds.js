@@ -2191,7 +2191,9 @@ class CustomBuildsService {
    *   chosen: string|null,
    *   chosenByPerspective?: {you: string|null, opponent: string|null},
    *   ruleCount: number,
-   * }>}
+   *   userSlug?: string|null,
+   * }>} ``userSlug`` is the "you" definition the stored row now carries
+   *   (a fresh winner or a restored deferred label), null when none
    */
   async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
@@ -2437,6 +2439,9 @@ class CustomBuildsService {
         userWinner?.ruleCount || 0,
         opponentWinner?.ruleCount || 0,
       ),
+      userSlug: typeof classifiedSet._customBuildSlug === "string"
+        ? classifiedSet._customBuildSlug
+        : null,
     };
   }
 
