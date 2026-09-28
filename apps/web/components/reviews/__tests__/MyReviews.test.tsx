@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
@@ -6,14 +6,15 @@ const harness = vi.hoisted(() => ({
   apiCall: vi.fn(),
   mutateBlocks: vi.fn(async () => undefined),
   data: {} as Record<string, unknown>,
+  errors: {} as Record<string, { status: number; message: string } | undefined>,
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => harness.auth }));
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
   useApi: (path: string) => ({
-    data: harness.data[path],
-    error: undefined,
+    data: harness.errors[path] ? undefined : harness.data[path],
+    error: harness.errors[path],
     mutate: path === "/v1/me/review-blocks" ? harness.mutateBlocks : vi.fn(),
   }),
 }));
@@ -34,6 +35,7 @@ beforeEach(() => {
   harness.apiCall.mockReset();
   harness.apiCall.mockResolvedValue({ ok: true });
   harness.mutateBlocks.mockClear();
+  harness.errors = {};
   harness.data = {
     "/v1/me/reviews": {
       asked: [card("AAAAAAAAAAAAAAAA", { visibility: "link" }), card("BBBBBBBBBBBBBBBB", { hidden: true })],
@@ -49,6 +51,26 @@ describe("My reviews", () => {
     render(<MyReviews />);
     expect(screen.getByText("Sign in to see your reviews")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toContain("redirect_url=%2Freviews%2Fmine");
+  });
+
+  it("falls back to the sign-in prompt when Clerk never finishes loading", async () => {
+    vi.useFakeTimers();
+    try {
+      harness.auth = { isLoaded: false, isSignedIn: false, getToken: async () => null };
+      render(<MyReviews />);
+      expect(screen.getByLabelText("Loading your reviews")).toBeTruthy();
+      await act(async () => { vi.advanceTimersByTime(2000); });
+      expect(screen.getByText("Sign in to see your reviews")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the blocked-reviewers card when the requests fail to load", () => {
+    harness.errors["/v1/me/reviews"] = { status: 503, message: "down" };
+    render(<MyReviews />);
+    expect(screen.getByText(/Your requests couldn.t be loaded/)).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Blocked reviewers" })).toBeTruthy();
   });
 
   it("lists your requests (with link-only and hidden flags) and the reviews you wrote", () => {

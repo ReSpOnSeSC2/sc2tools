@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2, MessageSquareText, ShieldOff, Star, ThumbsUp } from "lucide-react";
@@ -16,37 +16,45 @@ import { ReviewCard } from "./ReviewCard";
  * the reviews they wrote on other people's requests, and the reviewers
  * they blocked (the only place to undo a block).
  */
+// How long to show a skeleton while Clerk loads before assuming "signed
+// out". Clerk never finishes loading when its script is blocked (ad
+// blockers), so waiting on ``isLoaded`` alone could spin forever.
+const AUTH_GRACE_MS = 1500;
+
 export function MyReviews() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) {
+  const [graceOver, setGraceOver] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setGraceOver(true), AUTH_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  if (isLoaded && isSignedIn) return <MyReviewsSignedIn />;
+  if (!isLoaded && !graceOver) {
     return <div aria-busy="true" aria-label="Loading your reviews" className="h-64 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />;
   }
-  if (!isSignedIn) {
-    return (
-      <EmptyStatePanel
-        size="lg"
-        icon={<MessageSquareText className="h-6 w-6" aria-hidden />}
-        title="Sign in to see your reviews"
-        description="Your review requests, the reviews you've written and the reviewers you've blocked live here."
-        action={
-          <Link href={`/sign-in?redirect_url=${encodeURIComponent("/reviews/mine")}`} className="font-semibold text-accent-cyan underline underline-offset-2">
-            Sign in
-          </Link>
-        }
-      />
-    );
-  }
-  return <MyReviewsSignedIn />;
+  return (
+    <EmptyStatePanel
+      size="lg"
+      icon={<MessageSquareText className="h-6 w-6" aria-hidden />}
+      title="Sign in to see your reviews"
+      description="Your review requests, the reviews you've written and the reviewers you've blocked live here."
+      action={
+        <Link href={`/sign-in?redirect_url=${encodeURIComponent("/reviews/mine")}`} className="font-semibold text-accent-cyan underline underline-offset-2">
+          Sign in
+        </Link>
+      }
+    />
+  );
 }
 
 function MyReviewsSignedIn() {
   const mine = useApi<MyReviewsResponse>("/v1/me/reviews", { revalidateOnFocus: true });
   const now = Date.now();
-  if (mine.error) {
+  if (mine.error?.status === 404) {
     return (
       <EmptyStatePanel
         title="Your reviews couldn't be loaded"
-        description={mine.error.status === 404 ? "The Replay Review Exchange isn't available on your account yet." : "Try again in a moment."}
+        description="The Replay Review Exchange isn't available on your account yet."
       />
     );
   }
@@ -57,7 +65,9 @@ function MyReviewsSignedIn() {
       <div className="min-w-0 space-y-6">
         <section aria-labelledby="my-requests" className="space-y-3">
           <h2 id="my-requests" className="font-display text-h3 font-bold text-text">Your review requests</h2>
-          {!mine.data ? (
+          {mine.error ? (
+            <p role="status" className="text-body text-text-muted">Your requests couldn&apos;t be loaded. Try again in a moment.</p>
+          ) : !mine.data ? (
             <div aria-busy="true" className="h-28 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />
           ) : asked.length === 0 ? (
             <EmptyStatePanel
@@ -120,11 +130,12 @@ function BlockedReviewers() {
     setNotice(null);
     try {
       await apiCall(getToken, `/v1/me/review-blocks/${encodeURIComponent(id)}`, { method: "DELETE" });
-      await blocks.mutate();
       setNotice(`Unblocked ${name}.`);
     } catch (err) {
       setNotice((err as { message?: string })?.message || "Couldn't unblock right now.");
     } finally {
+      // Always resync, so a block already removed elsewhere drops off.
+      await blocks.mutate();
       setBusyId(null);
     }
   }
