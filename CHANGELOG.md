@@ -18,7 +18,9 @@ corresponding GitHub Release.
   in the macro breakdown's headline tiles and the replay page's Mechanics
   panel. The macro breakdown's Match timeline gains an **APM** view with
   the same crosshair, lead shading and readout as Army, Workers, Supply
-  and Income. APM is counted like StarCraft II's in-game APM: every
+  and Income, plus a **Game average** row with each player's APM and SPM
+  (selections per minute) over their time in the game. APM is counted
+  like StarCraft II's in-game APM: every
   command, selection and control-group action, not commands alone (the
   undercount that got the old APM/SPM chart removed). Older games read
   "Not measured for this game" until they are recomputed or re-synced,

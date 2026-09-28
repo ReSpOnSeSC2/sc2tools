@@ -11,6 +11,7 @@
 
 import { Lock } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
+import { formatApm, type GamePace } from "@/lib/apm";
 import { formatGameClock } from "@/lib/macro";
 import type { SeriesPoint } from "./activeArmyLayout";
 import {
@@ -107,6 +108,7 @@ export function TimelineSummary({
   opp,
   myName,
   oppName,
+  averages = null,
 }: {
   metric: TimelineMetricDef;
   /** The clock the values belong to. */
@@ -117,10 +119,12 @@ export function TimelineSummary({
   opp: SeriesPoint | null;
   myName: string;
   oppName: string;
+  /** Whole-game pace per player, shown as a second row (the APM view). */
+  averages?: { my: GamePace | null; opp: GamePace | null } | null;
 }) {
   const lead = metricLead(metric, my, opp) ?? 0;
   return (
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-border border-y border-border">
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] border-y border-border">
       <div className="px-3 py-1.5">
         <dt className="flex items-center gap-1 whitespace-nowrap text-micro text-text-muted">
           Game time
@@ -152,7 +156,39 @@ export function TimelineSummary({
         lead={lead < 0 ? -lead : 0}
         tone="text-player-opp"
       />
+      {averages ? (
+        <>
+          <div className="border-t border-border px-3 py-1">
+            <dt
+              className="whitespace-nowrap text-micro text-text-muted"
+              title="Actions and selections per minute over the time each player was in the game"
+            >
+              Game average
+            </dt>
+            <dd className="sr-only">APM and SPM over the whole game</dd>
+          </div>
+          <PaceCell name={myName} pace={averages.my} />
+          <PaceCell name={oppName} pace={averages.opp} />
+        </>
+      ) : null}
     </dl>
+  );
+}
+
+/** One player's game-average APM and SPM; wraps onto two lines on a phone. */
+function PaceCell({ name, pace }: { name: string; pace: GamePace | null }) {
+  return (
+    <div className="min-w-0 border-l border-t border-border px-3 py-1">
+      <dt className="sr-only">{name}</dt>
+      <dd className="flex flex-wrap items-baseline gap-x-2 text-caption tabular-nums text-text-muted">
+        <span className="whitespace-nowrap">
+          <span className="font-semibold text-text">{formatApm(pace?.apm)}</span> APM
+        </span>
+        <span className="whitespace-nowrap">
+          <span className="font-semibold text-text">{formatApm(pace?.spm)}</span> SPM
+        </span>
+      </dd>
+    </div>
   );
 }
 
@@ -171,7 +207,7 @@ function PlayerCell({
   tone: string;
 }) {
   return (
-    <div className="min-w-0 px-3 py-1.5">
+    <div className="min-w-0 border-l border-border px-3 py-1.5">
       <dt className="truncate text-micro text-text-muted">
         <span className="font-semibold text-text">{name}</span>
         {/* The chosen metric is already on the switch on a phone. */}
