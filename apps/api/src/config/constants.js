@@ -115,6 +115,17 @@ const COLLECTIONS = Object.freeze({
   // Per-user, per-UTC-day counter of games accepted from browser ingest.
   // Short-lived (TTL) rows; see ``services/browserIngestQuota.js``.
   BROWSER_INGEST_DAILY: "browser_ingest_daily",
+  // SC2 Tools Guides. ``guide_samples``: one compact, pseudonymous row per
+  // eligible ladder game (build-log milestone times + army snapshots),
+  // keyed by HMACs of userId/gameId — see services/guideSamples.js.
+  // ``guide_stats``: the nightly cross-user aggregate (services/guideStats.js).
+  // ``guide_notes``: admin-authored coach's notes per build page.
+  GUIDE_SAMPLES: "guide_samples",
+  GUIDE_STATS: "guide_stats",
+  GUIDE_NOTES: "guide_notes",
+  // ``guide_videos``: the site owner's YouTube build-order videos (channel
+  // RSS + committed snapshot) shown on guide pages — services/guideVideos.js.
+  GUIDE_VIDEOS: "guide_videos",
 });
 
 const LIMITS = Object.freeze({

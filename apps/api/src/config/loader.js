@@ -1,6 +1,7 @@
 "use strict";
 
 const { DEFAULTS } = require("./constants");
+const { parseBool } = require("../util/parseQuery");
 
 const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
 
@@ -81,6 +82,11 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   },
  *   platformIntegrations: ReturnType<typeof parsePlatformIntegrationsConfig>,
  *   reviewsEnabled: "off" | "admins" | "on",
+ *   guidesEnabled: boolean,
+ *   guidesRevalidateUrl: string|null,
+ *   guidesRevalidateSecret: string|null,
+ *   guidesYoutubeChannelId: string|null,
+ *   guidesYoutubeChannelUrl: string|null,
  * }}
  *
  * Example:
@@ -154,6 +160,12 @@ function loadConfig(env = process.env) {
     analytics: parseAnalyticsConfig(env),
     platformIntegrations: parsePlatformIntegrationsConfig(env),
     reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
+    ...parseGuidesConfig(env),
+    // SC2 Tools Guides build-order videos: the site owner's YouTube
+    // channel (id feeds the RSS sync, URL is the public "Subscribe" link).
+    // Validated by services/guideVideos.js; unset = no video sync.
+    guidesYoutubeChannelId: env.GUIDES_YOUTUBE_CHANNEL_ID || null,
+    guidesYoutubeChannelUrl: env.GUIDES_YOUTUBE_CHANNEL_URL || null,
   };
 }
 
@@ -200,6 +212,25 @@ function parseIngestConfig(env) {
       DEFAULTS.BROWSER_INGEST_DAILY_CAP,
       "BROWSER_INGEST_DAILY_CAP",
     ),
+  };
+}
+
+/**
+ * SC2 Tools Guides switches:
+ *   - ``guidesEnabled`` (GUIDES_ENABLED, default off): the public
+ *     /v1/guides routes and the nightly guide_stats job;
+ *   - ``guidesRevalidateUrl`` / ``guidesRevalidateSecret``: the web ISR
+ *     purge pinged after each guide_stats run (services/guideRevalidate.js);
+ *     both unset = pages refresh on their own 6 h window.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{ guidesEnabled: boolean, guidesRevalidateUrl: string|null, guidesRevalidateSecret: string|null }}
+ */
+function parseGuidesConfig(env) {
+  return {
+    guidesEnabled: parseBool(env.GUIDES_ENABLED),
+    guidesRevalidateUrl: env.GUIDES_REVALIDATE_URL || null,
+    guidesRevalidateSecret: env.GUIDES_REVALIDATE_SECRET || null,
   };
 }
 

@@ -87,6 +87,7 @@ class GdprService {
    *   playbackArtifacts?: import('./playbackArtifacts').PlaybackArtifactsService|null,
    *   customBuilds?: import('./types').CustomBuildsService,
    *   reviews?: import('./reviews').ReviewsService | null,
+   *   guideSamples?: import('./guideSamples').GuideSamplesService|null,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -111,6 +112,10 @@ class GdprService {
     // below is a no-op until it is set.
     /** @type {import('./reviews').ReviewsService | null} */
     this.reviews = (opts && opts.reviews) || null;
+    // Guide samples are keyed by HMACs of userId/gameId (no userId field),
+    // so they cannot ride the PURGE_ONLY list: the service hashes for us.
+    // Optional — focused tests build GdprService with fake dbs.
+    this.guideSamples = (opts && opts.guideSamples) || null;
   }
 
   /**
@@ -291,6 +296,11 @@ class GdprService {
       if (!coll) continue;
       const res = await coll.deleteMany({ [field]: userId });
       counts[key] = res.deletedCount || 0;
+    }
+
+    if (this.guideSamples) {
+      await gdprFence.assert();
+      counts.guideSamples = await this.guideSamples.deleteForUser(userId);
     }
 
     // Manual snapshots hold a FULL export of the user's data — the
@@ -605,7 +615,8 @@ class GdprService {
    *
    * @param {string} userId
    * @param {{ since?: Date | null, until?: Date | null }} [opts]
-   * @returns {Promise<{ games: number, opponents: number, macroJobs: number, range: { since: string|null, until: string|null } }>}
+   * @returns {Promise<{ games: number, opponents: number, macroJobs: number, guideSamples?: number, range: { since: string|null, until: string|null } }>}
+   *   ``guideSamples`` is reported only when the guide samples service is wired.
    */
   async wipeGames(userId, opts = {}) {
     const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
@@ -673,8 +684,14 @@ class GdprService {
       await gdprFence.assert();
     }
 
+    // Guide samples of a ranged wipe are addressed by game id, so the wipe
+    // is linearized on an id snapshot (like the replay path above).
+    const guideGameIds = await this._guideSampleWipeIds(filter, replayGameIds);
+    if (guideGameIds && !this.replayFiles) gamesDeleteFilter = { userId, gameId: { $in: guideGameIds } };
+
     await gdprFence.assert();
     const gamesRes = await this.db.games.deleteMany(gamesDeleteFilter);
+    const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
     // A completion already in flight may have promoted an object after the
     // first purge. Repeat the same key-scoped cleanup immediately after the
     // matching ownership rows are gone; completion's conditional marker
@@ -704,8 +721,9 @@ class GdprService {
       // When replay storage is active, use the same linearized game-ID
       // snapshot as the slim-row/raw-file cleanup so an in-range game that
       // arrives concurrently survives with both its row and detail object.
-      const detailFilter = this.replayFiles
-        ? { userId, gameId: { $in: replayGameIds } }
+      const snapshotIds = this.replayFiles ? replayGameIds : guideGameIds;
+      const detailFilter = snapshotIds
+        ? { userId, gameId: { $in: snapshotIds } }
         : filter;
       const rows = await this.db.gameDetails
         .find(detailFilter, { projection: { _id: 0, gameId: 1 } })
@@ -735,6 +753,7 @@ class GdprService {
       games: gamesRes.deletedCount || 0,
       opponents: opponentsDeleted,
       macroJobs: macroJobsRes.deletedCount || 0,
+      ...(guideSamplesDeleted === null ? {} : { guideSamples: guideSamplesDeleted }),
       range: {
         since: since ? since.toISOString() : null,
         until: until ? until.toISOString() : null,
@@ -743,6 +762,40 @@ class GdprService {
     } finally {
       await this._releaseMutationFence(userId, gdprFence);
     }
+  }
+
+  /**
+   * Game ids whose guide samples a ranged wipe must delete: the replay
+   * snapshot when one was taken, else a fresh read of the range. Null for
+   * an unbounded wipe (every sample of the user goes) or without the
+   * guide samples service.
+   *
+   * @param {Record<string, any>} filter the wipe's games filter
+   * @param {string[]} snapshotIds the replay path's id snapshot (taken for
+   *   ranged wipes when replay storage is active)
+   * @returns {Promise<string[]|null>}
+   */
+  async _guideSampleWipeIds(filter, snapshotIds) {
+    if (!this.guideSamples || !filter.date) return null;
+    if (this.replayFiles) return snapshotIds;
+    const rows = await this.db.games
+      .find(filter, { projection: { _id: 0, gameId: 1 } })
+      .toArray();
+    return rows
+      .map((row) => row && row.gameId)
+      .filter((gameId) => typeof gameId === "string" && gameId);
+  }
+
+  /**
+   * @param {string} userId
+   * @param {string[]|null} gameIds null → all of the user's samples
+   * @returns {Promise<number|null>} deleted count, null without the service
+   */
+  async _deleteWipedGuideSamples(userId, gameIds) {
+    if (!this.guideSamples) return null;
+    return gameIds
+      ? this.guideSamples.deleteForGames(userId, gameIds)
+      : this.guideSamples.deleteForUser(userId);
   }
 
   /**
@@ -1049,6 +1102,9 @@ class GdprService {
       const c = /** @type {any} */ (this.db)[key];
       if (c) await c.deleteMany({ userId });
     }
+    // Guide samples are distilled from the detail blobs purged above and
+    // are never in snapshots: purge them with the games they came from.
+    if (this.guideSamples) await this.guideSamples.deleteForUser(userId);
     const data = snap.payload?.data || {};
     for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
       await gdprFence.assert();

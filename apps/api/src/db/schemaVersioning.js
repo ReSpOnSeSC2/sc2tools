@@ -309,6 +309,26 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.GUIDE_SAMPLES]: {
+    collection: COLLECTIONS.GUIDE_SAMPLES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.GUIDE_STATS]: {
+    collection: COLLECTIONS.GUIDE_STATS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.GUIDE_NOTES]: {
+    collection: COLLECTIONS.GUIDE_NOTES,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  [COLLECTIONS.GUIDE_VIDEOS]: {
+    collection: COLLECTIONS.GUIDE_VIDEOS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

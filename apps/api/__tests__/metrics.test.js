@@ -12,9 +12,9 @@ const express = require("express");
 const request = require("supertest");
 const { buildMetricsRouter } = require("../src/routes/metrics");
 
-function buildApp({ broker } = {}) {
+function buildApp({ broker, guideSamples } = {}) {
   const app = express();
-  app.use(buildMetricsRouter({ token: "scrape-token", liveGameBroker: broker }));
+  app.use(buildMetricsRouter({ token: "scrape-token", liveGameBroker: broker, guideSamples }));
   return app;
 }
 
@@ -50,5 +50,23 @@ describe("GET /metrics", () => {
       .get("/metrics")
       .set("authorization", "Bearer scrape-token");
     expect(res2.text).toContain("sc2tools_live_broker_published 9");
+  });
+
+  test("guide sample capture counters are exposed as live gauges", async () => {
+    const guideSamples = { counters: { captured: 4, skipped: 2, failed: 1, dropped: 0 } };
+    const app = buildApp({ guideSamples });
+    const res = await request(app)
+      .get("/metrics")
+      .set("authorization", "Bearer scrape-token");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("sc2tools_guide_samples_captured 4");
+    expect(res.text).toContain("sc2tools_guide_samples_skipped 2");
+    expect(res.text).toContain("sc2tools_guide_samples_failed 1");
+    expect(res.text).toContain("sc2tools_guide_samples_dropped 0");
+    guideSamples.counters.captured = 5;
+    const res2 = await request(app)
+      .get("/metrics")
+      .set("authorization", "Bearer scrape-token");
+    expect(res2.text).toContain("sc2tools_guide_samples_captured 5");
   });
 });

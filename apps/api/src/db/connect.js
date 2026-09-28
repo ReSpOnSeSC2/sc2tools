@@ -2,6 +2,7 @@
 
 const { MongoClient } = require("mongodb");
 const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
+const { GUIDE_SAMPLE_TTL_SEC } = require("../config/guides");
 
 /**
  * @typedef {{
@@ -53,6 +54,10 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   reviewBlocks: import('mongodb').Collection<any>,
  *   notifications: import('mongodb').Collection<any>,
  *   browserIngestDaily: import('mongodb').Collection<any>,
+ *   guideSamples: import('mongodb').Collection,
+ *   guideStats: import('mongodb').Collection,
+ *   guideNotes: import('mongodb').Collection,
+ *   guideVideos: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -136,6 +141,10 @@ async function connect({ uri, dbName }, observability = {}) {
     reviewBlocks: db.collection(COLLECTIONS.REVIEW_BLOCKS),
     notifications: db.collection(COLLECTIONS.NOTIFICATIONS),
     browserIngestDaily: db.collection(COLLECTIONS.BROWSER_INGEST_DAILY),
+    guideSamples: db.collection(COLLECTIONS.GUIDE_SAMPLES),
+    guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
+    guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
+    guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -506,6 +515,14 @@ async function ensureIndexes(ctx) {
   });
   await ctx.games.createIndex({ userId: 1, "opponent.strategy": 1 });
   await ctx.games.createIndex({ userId: 1, map: 1, date: -1 });
+  // Guides nightly aggregate (services/guideStatsPipelines.js): the only
+  // cross-user index a guide pipeline can use (every other one is
+  // userId-prefixed). guideGamesMatch pins myBuild to exact catalog names
+  // and opponent.race to case-prefix regexes → tight bounds on both keys.
+  await ctx.games.createIndex({ myBuild: 1, "opponent.race": 1 }, {
+    name: "guide_stats_build_opp_race",
+    partialFilterExpression: { myBuild: { $type: "string" } },
+  });
 
   // Coaching practice requirements live beside the Locker/calendar documents
   // but are independently revisioned. These indexes keep role-scoped lists
@@ -629,6 +646,40 @@ async function ensureIndexes(ctx) {
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
   await ensureReviewIndexes(ctx);
+  await ensureGuideSampleIndexes(ctx);
+  await ensureGuideStatsIndexes(ctx);
+  await ensureGuideVideoIndexes(ctx);
+}
+
+/**
+ * ``guide_stats`` (services/guideStats.js). Built here, not lazily in the
+ * service (the ladder_meta way): the public read layer queries it from
+ * boot, and the recompute's replace-by-key upserts need the unique key.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureGuideStatsIndexes(ctx) {
+  await ctx.guideStats.createIndex({ key: 1 }, { unique: true, name: "guide_stats_key" });
+  await ctx.guideStats.createIndex({ kind: 1, era: 1, matchup: 1 }, { name: "guide_stats_kind_era_matchup" });
+}
+
+/**
+ * ``guide_videos`` (services/guideVideos.js): the site owner's YouTube
+ * build-order videos.
+ *   - unique {youtubeId}: the RSS/snapshot/admin upsert key;
+ *   - {publishedAt: -1}: the newest-first read behind every guide page.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureGuideVideoIndexes(ctx) {
+  await ctx.guideVideos.createIndex(
+    { youtubeId: 1 },
+    { unique: true, name: "guide_videos_youtube_id" },
+  );
+  await ctx.guideVideos.createIndex(
+    { publishedAt: -1 },
+    { name: "guide_videos_published_at" },
+  );
 }
 
 /**
@@ -694,6 +745,32 @@ async function ensureReviewIndexes(ctx) {
     { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
   );
   await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
+}
+
+/**
+ * ``guide_samples`` (services/guideSamples.js): pseudonymous per-game
+ * guide inputs.
+ *   - unique {userHash, gameHash}: the idempotent ingest/backfill upsert
+ *     key; its ``userHash`` prefix also serves GDPR deletes and the /me
+ *     comparison, so no separate {userHash:1} index;
+ *   - {matchup, buildKey, era}: the nightly per-matchup aggregation;
+ *   - TTL on createdAt: rows age out GUIDE_SAMPLE_TTL_SEC after capture.
+ *
+ * @param {DbContext} ctx
+ */
+async function ensureGuideSampleIndexes(ctx) {
+  await ctx.guideSamples.createIndex(
+    { userHash: 1, gameHash: 1 },
+    { unique: true, name: "guide_samples_user_game" },
+  );
+  await ctx.guideSamples.createIndex(
+    { matchup: 1, buildKey: 1, era: 1 },
+    { name: "guide_samples_matchup_build_era" },
+  );
+  await ctx.guideSamples.createIndex(
+    { createdAt: 1 },
+    { expireAfterSeconds: GUIDE_SAMPLE_TTL_SEC, name: "guide_samples_ttl" },
+  );
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

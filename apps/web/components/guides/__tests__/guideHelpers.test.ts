@@ -1,0 +1,192 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  breadcrumbJsonLd,
+  embeddedVideoJsonLd,
+  guideMetadata,
+  videoJsonLd,
+} from "@/components/guides/guideSeo";
+import {
+  buildHeadline,
+  counterHeadline,
+  counterMetadata,
+  hubMetadata,
+  hubTotals,
+  matchupMetadata,
+} from "@/components/guides/guideMetadata";
+import { fmtUnitCount } from "@/components/guides/build/BuildArmySection";
+import { lengthLabel } from "@/components/guides/build/BuildChartSections";
+import { rankVsStrategyRows, splitBestWorstMaps } from "@/components/guides/build/BuildMatchupSections";
+import { milestoneText, splitDelta } from "@/components/guides/build/BuildTimingsSection";
+import { safeChannelUrl, safeVideoUrls } from "@/components/guides/youtubeUrls";
+import { cellVerdict, unitDisplayName } from "@/components/guides/guideUi";
+import { fmtClock } from "@/lib/guides/format";
+import {
+  FIXTURE_BUILD_PUBLISHED,
+  FIXTURE_BUILD_UNPUBLISHED,
+  FIXTURE_COUNTER_PUBLISHED,
+  FIXTURE_COUNTER_UNPUBLISHED,
+  FIXTURE_INDEX,
+  FIXTURE_MATCHUP,
+  VIDEO_PVZ_CRACKING_8_POOLS,
+  fixtureCell,
+} from "@/lib/guides/__fixtures__";
+import type { GuideVsStrategyRow } from "@/lib/guides/types";
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("guideSeo", () => {
+  it("builds absolute breadcrumb URLs from NEXT_PUBLIC_SITE_URL", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://staging.sc2tools.com/");
+    const ld = breadcrumbJsonLd([
+      { name: "Guides", path: "/guides" },
+      { name: "PvZ", path: "/guides/pvz" },
+    ]) as { itemListElement: Array<{ item: string; position: number }> };
+    expect(ld.itemListElement.map((entry) => entry.item)).toEqual([
+      "https://staging.sc2tools.com/guides",
+      "https://staging.sc2tools.com/guides/pvz",
+    ]);
+    expect(ld.itemListElement.map((entry) => entry.position)).toEqual([1, 2]);
+  });
+
+  it("never puts a query string in the canonical and clamps long descriptions", () => {
+    const md = guideMetadata({
+      title: "t",
+      description: "word ".repeat(200),
+      canonical: "/guides/pvz?band=league:4",
+      noindex: true,
+    });
+    expect(md.alternates?.canonical).toBe("/guides/pvz");
+    expect(String(md.description).length).toBeLessThanOrEqual(300);
+    expect(md.robots).toEqual({ index: false, follow: true });
+  });
+
+  it("describes a video with the author's excerpt", () => {
+    expect(videoJsonLd(VIDEO_PVZ_CRACKING_8_POOLS)).toMatchObject({
+      "@type": "VideoObject",
+      name: "PvZ Cracking 8 Pools",
+      description: VIDEO_PVZ_CRACKING_8_POOLS.excerpt,
+      contentUrl: "https://www.youtube.com/watch?v=A4x6gR7J-AY",
+      thumbnailUrl: ["https://i.ytimg.com/vi/A4x6gR7J-AY/hqdefault.jpg"],
+    });
+  });
+});
+
+describe("guideMetadata", () => {
+  it("keeps numbers out of unpublished headlines", () => {
+    expect(buildHeadline(FIXTURE_BUILD_UNPUBLISHED)).toBe("Carrier Rush PvZ build order guide (Patch 5.0.16)");
+    expect(buildHeadline(FIXTURE_BUILD_PUBLISHED)).toMatch(/— \d+\.\d% win rate at Diamond/);
+  });
+
+  it("titles the unfiltered matchup page with the opener count", () => {
+    expect(matchupMetadata(FIXTURE_MATCHUP).title).toBe(
+      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (Patch 5.0.16) | SC2 Tools`,
+    );
+  });
+});
+
+describe("section helpers", () => {
+  it("labels game-length buckets in minutes", () => {
+    expect(lengthLabel({ minSec: 360, maxSec: 600 })).toBe("6–10 min");
+    expect(lengthLabel({ minSec: 1200, maxSec: null })).toBe("20+ min");
+  });
+
+  it("words milestones from their build-log event", () => {
+    expect(milestoneText({ label: "Stargate", event: "start" })).toBe("Stargate started");
+    expect(milestoneText({ label: "Blink", event: "finish" })).toBe("Blink done");
+  });
+
+  it("never lists a map as both best and worst", () => {
+    const { best, worst } = splitBestWorstMaps(FIXTURE_BUILD_PUBLISHED.maps);
+    const slugs = [...best, ...worst].map((map) => map.mapSlug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(best[0].ci.low).toBeGreaterThanOrEqual(best[best.length - 1].ci.low);
+  });
+
+  it("colours only a decisive interval", () => {
+    expect(cellVerdict({ ci: { low: 0.51, high: 0.6 } })).toBe("win");
+    expect(cellVerdict({ ci: { low: 0.4, high: 0.49 } })).toBe("loss");
+    expect(cellVerdict({ ci: { low: 0.45, high: 0.55 } })).toBe("even");
+    expect(unitDisplayName("VoidRay")).toBe("Void Ray");
+  });
+
+  it("accepts only first-party YouTube URLs", () => {
+    expect(safeVideoUrls(VIDEO_PVZ_CRACKING_8_POOLS)).toEqual({
+      embed: "https://www.youtube-nocookie.com/embed/A4x6gR7J-AY",
+      watch: "https://www.youtube.com/watch?v=A4x6gR7J-AY",
+      thumb: "https://i.ytimg.com/vi/A4x6gR7J-AY/hqdefault.jpg",
+    });
+    expect(safeVideoUrls({ ...VIDEO_PVZ_CRACKING_8_POOLS, url: "javascript:alert(1)" }).watch).toBeNull();
+    expect(safeChannelUrl("https://www.youtube.com/@ReSpOnSeSC2")).toBe("https://www.youtube.com/@ReSpOnSeSC2");
+    expect(safeChannelUrl("https://evil.example/@ReSpOnSeSC2")).toBeNull();
+  });
+});
+
+function vsRow(strategySlug: string, cell: ReturnType<typeof fixtureCell>): GuideVsStrategyRow {
+  return { ...cell, strategyKey: `Zerg - ${strategySlug}`, strategySlug, name: strategySlug, published: true };
+}
+
+describe("verifier regressions", () => {
+  it("ranks vs-opener rows by the Wilson lower bound, not the raw win rate", () => {
+    // Thin and lucky: 66.7% over 30 games (ci.low ≈ 0.49); solid: 60% over 400 (ci.low ≈ 0.55).
+    const thin = vsRow("thin", fixtureCell(30, 5, 20));
+    const solid = vsRow("solid", fixtureCell(400, 60, 240));
+    expect(thin.winRate).toBeGreaterThan(solid.winRate);
+    expect(solid.ci.low).toBeGreaterThan(thin.ci.low);
+    expect(rankVsStrategyRows([thin, solid]).map((row) => row.strategySlug)).toEqual(["solid", "thin"]);
+    const tieA = vsRow("a", fixtureCell(60, 9, 33));
+    const tieB = vsRow("b", fixtureCell(60, 9, 33));
+    expect(rankVsStrategyRows([tieA, tieB]).map((row) => row.strategySlug)).toEqual(["a", "b"]);
+  });
+
+  it("states the wins-vs-losses gap from the same rounded clocks the row prints", () => {
+    const close = { winners: { games: 40, users: 9, median: 270.4 }, losers: { games: 40, users: 9, median: 270.6 } };
+    expect([fmtClock(close.winners.median), fmtClock(close.losers.median)]).toEqual(["4:30", "4:31"]);
+    expect(splitDelta(close)).toBe("1s earlier in wins");
+    const same = { winners: { games: 40, users: 9, median: 270.2 }, losers: { games: 40, users: 9, median: 269.8 } };
+    expect(splitDelta(same)).toBe("same in wins and losses");
+    expect(splitDelta({ winners: close.winners })).toBeNull();
+  });
+
+  it("prints an interpolated army median with one decimal instead of rounding it up", () => {
+    expect(fmtUnitCount(4)).toBe("4");
+    expect(fmtUnitCount(2.5)).toBe("2.5");
+    expect(fmtUnitCount(1.25)).toBe("1.3");
+  });
+
+  it("sums only published matchups into the hub totals", () => {
+    const withThinMatchup = {
+      ...FIXTURE_INDEX,
+      matchups: [
+        ...FIXTURE_INDEX.matchups,
+        { ...FIXTURE_INDEX.matchups[0], matchup: "ZvZ" as const, slug: "zvz", published: false, games: 57, users: 3, top: [], publishedBuilds: 0 },
+      ],
+    };
+    const before = hubTotals(FIXTURE_INDEX);
+    expect(hubTotals(withThinMatchup)).toEqual(before);
+    expect(String(hubMetadata(withThinMatchup).description)).not.toContain(
+      (before.games + 57).toLocaleString("en-US"),
+    );
+  });
+
+  it("words counter pages from the matchup, whatever the payload's race labels", () => {
+    const terse = { ...FIXTURE_COUNTER_PUBLISHED, myRace: "P", oppRace: "Z" };
+    expect(counterHeadline(terse)).toBe("How to beat 8 Pool as Protoss — best openers by win rate (Patch 5.0.16)");
+    expect(String(counterMetadata(terse).description)).toMatch(/^Protoss players win /);
+    const unpublished = { ...FIXTURE_COUNTER_UNPUBLISHED, myRace: "P", oppRace: "Z" };
+    expect(String(counterMetadata(unpublished).description)).toMatch(/^How to beat Lurker Contain \(Zerg\) as Protoss:/);
+    expect(String(counterMetadata(unpublished).description)).not.toMatch(/\d+(\.\d+)?%/);
+  });
+
+  it("restates the card image on the page-level twitter metadata", () => {
+    const md = guideMetadata({ title: "t", description: "d", canonical: "/guides" });
+    expect(md.twitter).toMatchObject({ card: "summary_large_image", images: ["/og.jpg"] });
+  });
+
+  it("emits VideoObject JSON-LD only for first-party YouTube URLs", () => {
+    expect(embeddedVideoJsonLd([VIDEO_PVZ_CRACKING_8_POOLS])).toHaveLength(1);
+    expect(embeddedVideoJsonLd([])).toEqual([]);
+    const hostile = { ...VIDEO_PVZ_CRACKING_8_POOLS, embedUrl: "https://evil.example/embed/A4x6gR7J-AY" };
+    expect(videoJsonLd(hostile)).toBeNull();
+    expect(embeddedVideoJsonLd([hostile, VIDEO_PVZ_CRACKING_8_POOLS])).toEqual([]);
+  });
+});

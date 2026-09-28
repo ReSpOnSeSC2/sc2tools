@@ -74,6 +74,13 @@ const { MLService } = require("./services/ml");
 const { AgentVersionService } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
+const { GuideSamplesService } = require("./services/guideSamples");
+const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
+const { GuideStatsService } = require("./services/guideStats");
+const { buildGuideRevalidator } = require("./services/guideRevalidate");
+const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
+const { GuideVideosService } = require("./services/guideVideos");
+const { buildGuideVideosSyncJob } = require("./jobs/guideVideosSyncJob");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
@@ -232,6 +239,7 @@ function isCoachingStateJson(req) {
  *   fingerprintPopulationCalibration?: import('./services/fingerprintPopulationCalibration').FingerprintPopulationCalibrationService,
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  *   reviewSeasonWindowStart?: () => Promise<Date>,
+ *   guideVideos?: import('./services/guideVideos').GuideVideosService,
  * }} AppDeps
  */
 
@@ -621,6 +629,43 @@ function makeServices(deps) {
     secret: deps.config.serverPepper,
     logger: deps.logger,
   });
+  // SC2 Tools Guides: compact pseudonymous per-game guide inputs, captured
+  // fire-and-forget by POST /v1/games (routes/games.js). The backfill job
+  // distils older games from game_details; it is admin-triggered only and
+  // never started here or in server.js (server.js only stops it).
+  const guideSamples = new GuideSamplesService(deps.db, {
+    pepper: deps.config.serverPepper,
+    logger: deps.logger,
+  });
+  const guideSamplesBackfill = buildGuideSamplesBackfillJob({
+    db: deps.db,
+    guideSamples,
+    gameDetails,
+    logger: deps.logger,
+  });
+  // SC2 Tools Guides nightly aggregate (guide_stats) and its job. The job
+  // is built here but only started by server.js when GUIDES_ENABLED; the
+  // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
+  const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
+  const guideStatsJob = buildGuideStatsRecomputeJob({
+    db: deps.db,
+    guideStats,
+    logger: deps.logger,
+    revalidate: buildGuideRevalidator({
+      url: deps.config.guidesRevalidateUrl || null,
+      secret: deps.config.guidesRevalidateSecret || null,
+      logger: deps.logger,
+    }),
+  });
+  // SC2 Tools Guides build-order videos from the site owner's YouTube
+  // channel (committed snapshot + RSS sync). The sync job is built here
+  // but only started by server.js (GUIDES_ENABLED + a channel id).
+  const guideVideos = deps.guideVideos || new GuideVideosService(deps.db, {
+    channelId: deps.config.guidesYoutubeChannelId || null,
+    channelUrl: deps.config.guidesYoutubeChannelUrl || null,
+    logger: deps.logger,
+  });
+  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
@@ -630,6 +675,7 @@ function makeServices(deps) {
     replayFiles,
     playbackArtifacts,
     customBuilds,
+    guideSamples,
   });
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
@@ -764,6 +810,12 @@ function makeServices(deps) {
     fingerprintPopulationCalibration,
     skillFingerprint,
     ladderMeta,
+    guideSamples,
+    guideSamplesBackfill,
+    guideStats,
+    guideStatsJob,
+    guideVideos,
+    guideVideosJob,
     publicProfile,
     chatbot,
     pulseDirectory,
@@ -961,6 +1013,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       buildMetricsRouter({
         token: deps.config.metricsToken,
         liveGameBroker: services.liveGameBroker,
+        guideSamples: services.guideSamples,
       }),
     );
   }
@@ -1299,6 +1352,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
+      guideSamples: services.guideSamples,
       auth,
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
