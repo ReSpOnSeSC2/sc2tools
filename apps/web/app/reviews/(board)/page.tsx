@@ -56,9 +56,14 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
       description="Players post a game with a question; reviewers answer with comments pinned to exact moments on the replay and the map. Reviewer leagues are verified from their own synced games."
       actions={
         <SignedIn>
-          <Link href="/app" className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover">
-            Ask about one of your games
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+              My reviews
+            </Link>
+            <Link href="/app" className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover">
+              Ask about one of your games
+            </Link>
+          </div>
         </SignedIn>
       }
     />

@@ -467,7 +467,8 @@ class ReviewsService {
       : [];
     const byId = new Map(requests.map((r) => [r._id, r]));
     return {
-      asked: asked.map((doc) => ({ ...cardView(doc), visibility: doc.visibility, isOwn: true })),
+      // Only the asker's own list says a request is hidden pending review.
+      asked: asked.map((doc) => ({ ...cardView(doc), visibility: doc.visibility, hidden: doc.hidden === true, isOwn: true })),
       answered: authored.flatMap((comment) => {
         const doc = byId.get(comment.requestId);
         if (!doc || (doc.hidden && doc.userId !== userId)) return [];

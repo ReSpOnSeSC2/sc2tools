@@ -16,6 +16,8 @@ own synced games, and helpful reviewers earn karma.
   - `jobs/reviewDigestJob.js`
 - **Web:**
   - `app/reviews/(board)/page.tsx` (board)
+  - `app/reviews/mine/page.tsx` ("My reviews": your requests, your
+    reviews, and blocked reviewers with Unblock)
   - `app/reviews/[id]/page.tsx` (review page, SEO)
   - `app/reviews/[id]/opengraph-image.tsx`
   - `components/reviews/*`
@@ -164,7 +166,8 @@ own synced games, and helpful reviewers earn karma.
 
 - Anyone can block the author of a visible reviewer comment. Blocks are
   created from a comment, because internal user ids never reach the
-  client, and are managed at `GET/DELETE /v1/me/review-blocks`.
+  client. They're listed and undone on **My reviews** (`/reviews/mine`),
+  backed by `GET/DELETE /v1/me/review-blocks`.
 - The blocker no longer sees the blocked person's comments (a comment
   with replies shows a placeholder) and gets no notifications from them.
   The blocked person can't reply to the blocker's comments.

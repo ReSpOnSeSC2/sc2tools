@@ -28,6 +28,7 @@ export function ReviewCard({ card, now }: { card: ReviewCardData; now: number })
             {card.hasPlayback ? <Film className="h-3.5 w-3.5 text-text-dim" aria-label="Map playback available" /> : null}
             {card.visibility === "link" ? <Badge variant="neutral" size="sm">Link only</Badge> : null}
             {card.status === "closed" ? <Badge variant="neutral" size="sm">Closed</Badge> : null}
+            {card.hidden ? <Badge variant="warning" size="sm">Hidden pending review</Badge> : null}
           </div>
           <p className="line-clamp-2 break-words font-semibold text-text group-hover:text-accent-cyan">{card.question}</p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-text-muted">

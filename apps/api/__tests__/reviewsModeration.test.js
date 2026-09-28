@@ -96,6 +96,9 @@ describe("reviews: report → moderation queue → auto-hide, and blocks", () =>
     }
     expect((await pageAs(null)).status).toBe(404);
     expect((await pageAs("asker")).body.request.hidden).toBe(true);
+    // The asker's own list flags it (the only list that ever says so).
+    const mine = await request(h.app).get("/v1/me/reviews").set("authorization", h.bearer("asker"));
+    expect(mine.body.asked.find((x) => x.id === reviewId)).toMatchObject({ hidden: true });
     expect((await pageAs("mod")).status).toBe(200);
     expect((await request(h.app).get(`/v1/reviews/${reviewId}/analysis`)).status).toBe(404);
     const board = await request(h.app).get("/v1/reviews");

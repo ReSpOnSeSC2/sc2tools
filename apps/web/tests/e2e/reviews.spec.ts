@@ -74,6 +74,14 @@ test("review page shows the replay and readable comments signed out", async ({ p
   await expectNoHorizontalScroll(page, REVIEW);
 });
 
+test("my reviews asks signed-out visitors to sign in", async ({ page }) => {
+  const response = await page.goto("/reviews/mine");
+  expect(response?.status()).toBeLessThan(400);
+  await expect(page.getByText("Sign in to see your reviews")).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  await expectNoHorizontalScroll(page, "/reviews/mine");
+});
+
 test("a missing review is a real 404", async ({ page }) => {
   // A well-formed id the API 404s, and a malformed one rejected before
   // any fetch: both must be a real 404 status, not a streamed soft-404.
