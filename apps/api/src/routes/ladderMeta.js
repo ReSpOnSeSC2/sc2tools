@@ -4,7 +4,9 @@ const express = require("express");
 const { isLadderMetaMmrBand } = require("../util/mmrBracketing");
 
 /**
- * /v1/meta/ladder — the public Ladder Meta Radar report.
+ * /v1/meta/ladder — the Ladder Meta Radar report behind the signed-in
+ * Ladder Pulse. (The old public /meta page was replaced by /guides and
+ * now redirects there; guides have their own API, routes/guides.js.)
  *
  * Serves the effectiveness-weighted opener meta for one opponent League
  * or MMR band plus matchup: the top openers by games with
@@ -15,11 +17,11 @@ const { isLadderMetaMmrBand } = require("../util/mmrBracketing");
  *
  * PUBLIC — no auth middleware. Unlike routes/benchmarks.js (which frames
  * a signed-in user's own numbers and is therefore authed), this is a
- * corpus-wide, SEO-facing report with nothing user-specific in it. It is
- * meant to be mounted with app.js's PUBLIC router bundle (alongside
- * routes/seasons.js and the public community GETs, BEFORE any router
- * that calls ``router.use(auth)``) so the marketing page at /meta can
- * render it server-side without a token. See lib/serverApi.getJson.
+ * corpus-wide report with nothing user-specific in it, so it needs no
+ * token even though only the signed-in Ladder Pulse renders it. It is
+ * mounted with app.js's PUBLIC router bundle (alongside routes/seasons.js
+ * and the public community GETs, BEFORE any router that calls
+ * ``router.use(auth)``).
  *
  * @param {{
  *   ladderMeta: import('../services/ladderMeta').LadderMetaService,

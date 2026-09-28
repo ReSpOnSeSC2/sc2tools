@@ -72,6 +72,7 @@ describe("extractSample", () => {
       result: "Victory",
       map: "Site Delta LE",
       durationSec: 700,
+      playedOn: new Date("2026-07-01T00:00:00.000Z"),
       milestones: {
         Pylon: 18, Gateway: 40, Assimilator: 48, "Nexus#2": 90, CyberneticsCore: 103,
         Stargate: 185, TwilightCouncil: 271, "Nexus#3": 340, AdeptPiercingAttack: 380, WarpGateResearch: 381,
@@ -82,6 +83,14 @@ describe("extractSample", () => {
       },
     });
     expect(Object.keys(sample.army)).toEqual(["360", "480"]);
+  });
+
+  test("playedOn is the UTC day of an ISO (ingest) or Date (backfill) date, null when unusable", () => {
+    const day = new Date("2026-07-01T00:00:00.000Z");
+    expect(extractSample(ingestGame({ date: "2026-07-01T23:59:59.999Z" })).playedOn).toEqual(day);
+    expect(extractSample(ingestGame({ date: new Date("2026-07-01T00:00:00.001Z") })).playedOn).toEqual(day);
+    expect(extractSample(ingestGame({ date: "not a date" })).playedOn).toBeNull();
+    expect(extractSample(ingestGame({ date: undefined })).playedOn).toBeNull();
   });
 
   test("carries no user, game, opponent or identity data", () => {
@@ -291,6 +300,28 @@ describe("GuideSamplesService.capture", () => {
       gameHash: { $in: [guideGameHash(PEPPER, "u_1", "g1"), guideGameHash(PEPPER, "u_1", "g2")] },
     });
     expect(svc.userHash("u_1")).toBe(guideUserHash(PEPPER, "u_1"));
+  });
+
+  test.each([
+    ["deleteForUser", (svc) => svc.deleteForUser("u_victim")],
+    ["deleteForGames", (svc) => svc.deleteForGames("u_victim", ["g1"])],
+  ])("GDPR %s settles the writes in flight, never other users' later captures", async (_name, erase) => {
+    const gates = [];
+    const db = fakeDb({ updateOne: () => new Promise((resolve) => { gates.push(resolve); }) });
+    const svc = new GuideSamplesService(db, { pepper: PEPPER, logger: null, disabled: false });
+    svc.capture("u_other", ingestGame({ gameId: "g-before" }));
+    const deleting = erase(svc);
+    svc.capture("u_other", ingestGame({ gameId: "g-during" }));
+    const nextTick = () => new Promise((resolve) => { setImmediate(() => resolve("waiting")); });
+    expect(await Promise.race([deleting, nextTick()])).toBe("waiting");
+    expect(db.guideSamples.deleteMany).not.toHaveBeenCalled();
+    gates[0]({});
+    // The capture that started during the erasure is still in flight.
+    expect(await Promise.race([deleting, nextTick()])).toBe(2);
+    expect(svc.pending.size).toBe(1);
+    gates[1]({});
+    await svc.drain();
+    expect(svc.counters.captured).toBe(2);
   });
 
   test("requires the pepper", () => {

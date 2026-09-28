@@ -11,11 +11,12 @@
 import { isGuidesFlagOn } from "@/lib/guides/guidesFlag.mjs";
 
 /**
- * True when `NEXT_PUBLIC_GUIDES_ENABLED` is "1", "true" or "on"
- * (trimmed, case-insensitive — the NEXT_PUBLIC_REVIEWS_ENABLED convention).
+ * True when `NEXT_PUBLIC_GUIDES_ENABLED` is "1", "true", "yes", "on" or
+ * "all" (trimmed, case-insensitive; the same set as the API's
+ * GUIDES_ENABLED).
  *
  * Example: with `NEXT_PUBLIC_GUIDES_ENABLED=On`, `guidesEnabled()` → true;
- * unset, "0" or "yes" → false.
+ * unset, "0" or "admins" → false.
  */
 export function guidesEnabled(): boolean {
   return isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED);

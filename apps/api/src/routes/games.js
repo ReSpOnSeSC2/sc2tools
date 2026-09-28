@@ -25,6 +25,33 @@ const ANALYSIS_CORPUS_RESPONSE_TIMEOUT_MS = 30_000;
 const REPLAY_INGEST_MAX_GAMES = 50;
 
 /**
+ * Guide samples for one stored game. Runs AFTER custom-build tagging so a
+ * game a saved "you" definition relabelled is seen exactly as the win-rate
+ * aggregate sees the stored row: custom-tagged, so no sample (and a
+ * re-upload drops its stale one). The heavy fields are still on ``game``
+ * (upsertWithRevision works on a shallow copy); capture() extracts
+ * synchronously and writes in the background — it never throws, never
+ * awaits and never retains ``game``. Runs for new and re-uploaded games
+ * alike (the sample upsert is idempotent).
+ *
+ * @param {{ capture: (userId: string, game: Record<string, any>, opts?: { created?: boolean }) => void }
+ *   | undefined} guideSamples
+ * @param {string} userId
+ * @param {Record<string, any>} game the validated ingest payload
+ * @param {{ userSlug?: string|null } | null} customTag tagSingleGame's result
+ * @param {boolean} created false for a re-upload of an existing game
+ */
+function captureGuideSample(guideSamples, userId, game, customTag, created) {
+  if (!guideSamples || typeof guideSamples.capture !== "function") return;
+  const userSlug = customTag && typeof customTag.userSlug === "string" ? customTag.userSlug : null;
+  try {
+    guideSamples.capture(userId, userSlug ? { ...game, _customBuildSlug: userSlug } : game, { created });
+  } catch {
+    // Belt and braces: capture is documented never to throw.
+  }
+}
+
+/**
  * /v1/games — list, get, exists, ingest from the agent or a browser.
  *
  * Ingest accepts either a single game object or `{games: [...]}` for
@@ -611,19 +638,6 @@ function buildGamesRouter(deps) {
           });
           continue;
         }
-        // Guide samples: the game is durable and its heavy fields are still
-        // on ``game`` (upsertWithRevision works on a shallow copy). capture()
-        // extracts synchronously and writes in the background — it never
-        // throws, never awaits and never retains ``game``. Runs for new and
-        // re-uploaded games alike (the sample upsert is idempotent; a
-        // re-upload relabelled to a non-guide build drops its stale sample).
-        if (deps.guideSamples && typeof deps.guideSamples.capture === "function") {
-          try {
-            deps.guideSamples.capture(userId, game, { created });
-          } catch {
-            // Belt and braces: capture is documented never to throw.
-          }
-        }
         if (game.opponent && game.opponent.pulseId) {
           // Only bump counters on a brand-new ``games`` row
           // (``created === true``). Re-uploads of an existing
@@ -749,9 +763,11 @@ function buildGamesRouter(deps) {
         // set a definitive winner, clear a definitive nonmatch, or restore an
         // active prior label+slug when evidence is unavailable. Acknowledging
         // a failed hook could leave those fields incoherent permanently.
+        /** @type {{ userSlug?: string|null } | null} */
+        let customTag = null;
         if (deps.customBuilds && typeof deps.customBuilds.tagSingleGame === "function") {
           try {
-            await deps.customBuilds.tagSingleGame(userId, {
+            customTag = await deps.customBuilds.tagSingleGame(userId, {
               ...game,
               // Evaluate exactly the bounded evidence GamesService persisted.
               // In particular, a malformed/truncated v1 candidate list has
@@ -776,6 +792,7 @@ function buildGamesRouter(deps) {
             continue;
           }
         }
+        captureGuideSample(deps.guideSamples, userId, game, customTag, created);
         const outcome = { gameId: game.gameId, created };
         accepted.push(outcome);
         competitiveAccepted.push(outcome);

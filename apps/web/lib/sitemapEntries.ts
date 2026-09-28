@@ -7,7 +7,12 @@
  * contribution, so the sitemap degrades to its static routes.
  */
 import type { MetadataRoute } from "next";
-import type { CommunitySitemapPayload, GuideSitemapPayload } from "@/lib/guides/types";
+import type {
+  CommunitySitemapBuild,
+  CommunitySitemapPayload,
+  CommunitySitemapProfile,
+  GuideSitemapPayload,
+} from "@/lib/guides/types";
 
 export type SitemapRows = MetadataRoute.Sitemap;
 type ChangeFrequency = NonNullable<SitemapRows[number]["changeFrequency"]>;
@@ -69,20 +74,13 @@ export function guideSitemapRows(
   return rows;
 }
 
-/**
- * Published community builds and their authors' public profiles from
- * `GET /v1/community/sitemap`.
- *
- * Example: `{ builds: [{ slug: "build-1a2b", … }], profiles: [{ handle: "fox", … }] }`
- * → "/community/builds/build-1a2b" and "/p/fox" rows.
- */
-export function communitySitemapRows(
+function communityBuildRows(
   siteUrl: string,
-  payload: CommunitySitemapPayload | null,
+  builds: ReadonlyArray<CommunitySitemapBuild>,
   now: Date,
 ): SitemapRows {
   const rows: SitemapRows = [];
-  for (const build of payload?.builds ?? []) {
+  for (const build of builds) {
     if (typeof build?.slug !== "string" || !COMMUNITY_SLUG_RE.test(build.slug)) continue;
     rows.push({
       url: `${siteUrl}/community/builds/${encodeURIComponent(build.slug)}`,
@@ -91,7 +89,16 @@ export function communitySitemapRows(
       priority: COMMUNITY_BUILD_PRIORITY,
     });
   }
-  for (const profile of payload?.profiles ?? []) {
+  return rows;
+}
+
+function profileRows(
+  siteUrl: string,
+  profiles: ReadonlyArray<CommunitySitemapProfile>,
+  now: Date,
+): SitemapRows {
+  const rows: SitemapRows = [];
+  for (const profile of profiles) {
     if (typeof profile?.handle !== "string" || !PROFILE_HANDLE_RE.test(profile.handle)) continue;
     rows.push({
       url: `${siteUrl}/p/${encodeURIComponent(profile.handle)}`,
@@ -101,6 +108,24 @@ export function communitySitemapRows(
     });
   }
   return rows;
+}
+
+/**
+ * Published community builds and their authors' public profiles from
+ * `GET /v1/community/sitemap` (build rows first, so a cap trims profiles).
+ *
+ * Example: `{ builds: [{ slug: "build-1a2b", … }], profiles: [{ handle: "fox", … }] }`
+ * → "/community/builds/build-1a2b" and "/p/fox" rows.
+ */
+export function communitySitemapRows(
+  siteUrl: string,
+  payload: CommunitySitemapPayload | null,
+  now: Date,
+): SitemapRows {
+  return [
+    ...communityBuildRows(siteUrl, payload?.builds ?? [], now),
+    ...profileRows(siteUrl, payload?.profiles ?? [], now),
+  ];
 }
 
 /**

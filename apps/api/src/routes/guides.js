@@ -62,7 +62,7 @@ const BAND_LEAGUE = "league";
  * ``deps.auth`` itself, so the router mounts in app.js's public bundle.
  * When ``enabled`` is false every ``/guides`` path answers 404 (the gate
  * is path-scoped, so unrelated /v1 traffic passing through is untouched).
- * A bounded per-IP limiter guards the whole prefix. Public 200s and 301s
+ * A bounded per-IP-and-path limiter guards the whole prefix. Public 200s and 301s
  * carry GUIDE_CACHE_CONTROL, 404s a five-minute edge cache, ``/me`` is
  * ``private, no-store`` and everything else (429, 5xx) ``no-store``.
  *
@@ -93,7 +93,12 @@ function buildGuidesRouter(deps) {
     standardHeaders: true,
     legacyHeaders: false,
     store: new BoundedRateLimitStore({ maxEntries: LIMIT_MAX_ENTRIES }),
-    keyGenerator: (/** @type {import('express').Request} */ req) => `guides:${req.ip}`,
+    // Guide pages are server-rendered, so every visitor reaches this API
+    // from the web's shared egress IP. Keying on the path too (never the
+    // query string) means a flood of junk slugs only fills its own buckets
+    // and cannot 429 the real guide pages. Direct callers stay capped per
+    // IP by the app-wide limiter.
+    keyGenerator: (/** @type {import('express').Request} */ req) => `guides:${req.ip}:${req.path}`,
     message: { error: { code: "rate_limited", message: "rate_limited" } },
   }));
   mountPublicRoutes(router, deps);

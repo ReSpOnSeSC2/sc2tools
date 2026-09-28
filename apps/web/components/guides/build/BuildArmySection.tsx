@@ -2,7 +2,7 @@
 
 import { Section } from "@/components/ui/Section";
 import { GUIDE_PANEL_CLASS, unitDisplayName } from "@/components/guides/guideUi";
-import { fmtClock, fmtCount, fmtPctWhole } from "@/lib/guides/format";
+import { fmtClock, fmtCount, fmtPresence } from "@/lib/guides/format";
 import { getIconPath } from "@/lib/sc2-icons";
 import type { GuideArmy, GuideArmyCheckpoint, GuideArmyCheckpointKey } from "@/lib/guides/types";
 
@@ -48,7 +48,7 @@ function UnitRow({ unit }: { unit: GuideArmyCheckpoint["units"][number] }) {
       <span className="min-w-0 flex-1 truncate text-caption text-text">{name}</span>
       <span className="text-right text-caption tabular-nums">
         <span className="font-semibold text-text">×{fmtUnitCount(unit.median)}</span>
-        <span className="block text-micro text-text-dim">in {fmtPctWhole(unit.presence)} of games</span>
+        <span className="block text-micro text-text-dim">in {fmtPresence(unit.presence)} of games</span>
       </span>
     </li>
   );

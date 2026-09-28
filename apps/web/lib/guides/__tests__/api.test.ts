@@ -6,6 +6,7 @@ import {
   fetchGuideMap,
   fetchGuideMatchup,
   fetchGuideSitemap,
+  fetchPublishedGuidePaths,
   GUIDE_CACHE_TAG,
   GUIDE_REVALIDATE_SEC,
   toSiteGuidePath,
@@ -181,5 +182,23 @@ describe("toSiteGuidePath", () => {
     ]) {
       expect(toSiteGuidePath(target)).toBeNull();
     }
+  });
+});
+
+describe("fetchPublishedGuidePaths", () => {
+  test("is the set of published paths the sitemap lists", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, FIXTURE_SITEMAP));
+    const paths = await fetchPublishedGuidePaths();
+    expect(lastUrl()).toMatch(/\/v1\/guides\/sitemap$/);
+    expect(paths && [...paths]).toEqual(FIXTURE_SITEMAP.entries.map((entry) => entry.path));
+    expect(paths?.has("/guides/maps/old-sun-temple")).toBe(true);
+    expect(paths?.has("/guides/maps/washout")).toBe(false);
+  });
+
+  test("is null (keep links) when the list can't be read", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    expect(await fetchPublishedGuidePaths()).toBeNull();
+    fetchMock.mockResolvedValue(jsonResponse(200, { computedAt: null }));
+    expect(await fetchPublishedGuidePaths()).toBeNull();
   });
 });

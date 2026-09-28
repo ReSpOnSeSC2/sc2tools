@@ -92,7 +92,9 @@ async function myTimings(samples, userHash, matchup, buildKey) {
       { userHash, matchup, buildKey, era: GUIDE_CURRENT_ERA },
       { projection: { _id: 0, milestones: 1 }, maxTimeMS: QUERY_MAX_MS },
     )
-    .sort({ createdAt: -1 })
+    // Most recently PLAYED first (older rows without ``playedOn`` last, by
+    // capture time); gameHash keeps equal days in a stable order.
+    .sort({ playedOn: -1, createdAt: -1, gameHash: -1 })
     .limit(ME_SAMPLES_MAX)
     .toArray();
   const milestones = [];

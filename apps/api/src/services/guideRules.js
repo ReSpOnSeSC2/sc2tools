@@ -15,6 +15,7 @@ const {
   isGuideBuildName,
   isGuideStrategyName,
 } = require("../config/guideSlugs");
+const { LEAGUES, bandFromId } = require("../util/leagueBands");
 
 /**
  * Guide eligibility — the ONE definition of "a game that may feed a public
@@ -54,22 +55,14 @@ const OPP_RACE_INDEX = 2;
 const ONE_V_ONE_PLAYERS = 2;
 const ONE_V_ONE_FORMAT = "1v1";
 
-/** SC2 league enum → label (same enum as services/ladderMeta.js). */
-const LEAGUE_NAMES = Object.freeze(
-  /** @type {Readonly<Record<number, string>>} */ ({
-    0: "Bronze",
-    1: "Silver",
-    2: "Gold",
-    3: "Platinum",
-    4: "Diamond",
-    5: "Master",
-    6: "Grandmaster",
-  }),
-);
-const LEAGUE_MIN = 0;
-const LEAGUE_MAX = 6;
-/** League band values a guide may publish (the ladder enum, Bronze..GM). */
-const GUIDE_LEAGUE_BANDS = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
+/**
+ * League band values a guide may publish: the ladder league ids of
+ * util/leagueBands.js (Bronze..GM), whose labels the guides reuse.
+ */
+/** @type {ReadonlyArray<number>} */
+const GUIDE_LEAGUE_BANDS = Object.freeze(LEAGUES.map((league) => league.id));
+const LEAGUE_MIN = Math.min(...GUIDE_LEAGUE_BANDS);
+const LEAGUE_MAX = Math.max(...GUIDE_LEAGUE_BANDS);
 /** MMR band values (opponent MMR, 500-point bands with capped tails). */
 const GUIDE_MMR_BANDS = LADDER_META_MMR_BANDS;
 
@@ -302,7 +295,8 @@ function mmrBandExpression() {
  * @returns {string}
  */
 function leagueLabel(id) {
-  return LEAGUE_NAMES[id] || `League ${id}`;
+  const band = Number.isInteger(id) ? bandFromId(id) : null;
+  return band ? band.label : `League ${id}`;
 }
 
 /**
@@ -317,7 +311,6 @@ function mmrBandLabel(band) {
 
 module.exports = {
   RACE_LETTERS,
-  LEAGUE_NAMES,
   GUIDE_LEAGUE_BANDS,
   GUIDE_MMR_BANDS,
   INELIGIBLE,

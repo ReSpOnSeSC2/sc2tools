@@ -26,8 +26,9 @@ const {
  * winrates, this shows — from the whole SC2 Tools user corpus — which
  * OPENERS actually WIN, sliced by (opponent band, matchup), with
  * week-over-week movement. The opponent band can be either league or a
- * capped 500-point MMR range. It is the public, SEO-facing counterpart to
- * services/leaguePercentiles.js and is built the same way: one nightly
+ * capped 500-point MMR range. It feeds the signed-in Ladder Pulse (the
+ * public /meta page it once backed now redirects to /guides) and is the
+ * corpus-wide counterpart to services/leaguePercentiles.js, built the same way: one nightly
  * aggregation over the SLIM ``games`` rows into a small collection, a
  * k-anonymity floor before anything is served, and no per-user field in
  * the output.

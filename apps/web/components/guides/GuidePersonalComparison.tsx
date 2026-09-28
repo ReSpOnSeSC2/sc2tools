@@ -90,19 +90,22 @@ function SignedInComparison({
   );
 }
 
+/** Sign-in prompt; without community timings there is only the win rate to compare. */
+function SignInPrompt({ hasTimings }: { hasTimings: boolean }) {
+  return (
+    <p className={BOX_CLASS}>
+      <Link href="/sign-in" className={GUIDE_LINK_CLASS}>
+        {hasTimings ? "Sign in to compare your timings" : "Sign in to compare your win rate"}
+      </Link>{" "}
+      {hasTimings ? "with the community medians." : "with this build to the community's."}
+    </p>
+  );
+}
+
 function ComparisonBody(props: GuidePersonalComparisonProps) {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <div className="min-h-[2.5rem]" aria-hidden />;
-  if (!isSignedIn) {
-    return (
-      <p className={BOX_CLASS}>
-        <Link href="/sign-in" className={GUIDE_LINK_CLASS}>
-          Sign in to compare your timings
-        </Link>{" "}
-        with the community medians.
-      </p>
-    );
-  }
+  if (!isSignedIn) return <SignInPrompt hasTimings={props.community.length > 0} />;
   return <SignedInComparison {...props} />;
 }
 

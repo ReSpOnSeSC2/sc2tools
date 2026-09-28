@@ -39,9 +39,9 @@
  * is read and only its unit timeline is used.
  */
 
-const { randomUUID } = require("crypto");
 const { extractSample } = require("../services/guideSamples");
 const { isGuideEligibleGame } = require("../services/guideRules");
+const { buildJobLock } = require("../util/jobLock");
 
 const LOCK_COLLECTION = "jobLocks";
 const LOCK_KEY = "guideSamplesBackfill";
@@ -116,58 +116,6 @@ function defaultSleep(ms, signal) {
   });
 }
 
-/** @param {unknown} err */
-function isDuplicateKey(err) {
-  const e = /** @type {{code?: unknown, codeName?: unknown}} */ (err);
-  return Boolean(e && (e.code === 11000 || e.codeName === "DuplicateKey"));
-}
-
-/**
- * Owner-safe advisory lock (opponentMmrEnrichmentJob's pattern) plus a
- * lease extension for long passes.
- *
- * @param {{ collection: import('mongodb').Collection, now: () => number }} deps
- */
-function buildJobLock(deps) {
-  async function ensureIndexes() {
-    await deps.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-    await deps.collection.createIndex({ key: 1 }, { unique: true });
-  }
-
-  /** @returns {Promise<string|null>} owner token, or null when held elsewhere */
-  async function acquire() {
-    const owner = randomUUID();
-    const now = deps.now();
-    try {
-      const doc = await deps.collection.findOneAndUpdate(
-        { key: LOCK_KEY, $or: [{ expiresAt: { $lte: new Date(now) } }, { expiresAt: { $exists: false } }] },
-        { $set: { key: LOCK_KEY, owner, acquiredAt: new Date(now), expiresAt: new Date(now + LEASE_MS) } },
-        { upsert: true, returnDocument: "after" },
-      );
-      return doc && doc.owner === owner ? owner : null;
-    } catch (err) {
-      if (isDuplicateKey(err)) return null;
-      throw err;
-    }
-  }
-
-  /** @param {string} owner @returns {Promise<boolean>} false when the lease was lost */
-  async function extend(owner) {
-    const res = await deps.collection.updateOne(
-      { key: LOCK_KEY, owner },
-      { $set: { expiresAt: new Date(deps.now() + LEASE_MS) } },
-    );
-    return res.matchedCount === 1;
-  }
-
-  /** @param {string} owner */
-  async function release(owner) {
-    await deps.collection.deleteOne({ key: LOCK_KEY, owner });
-  }
-
-  return { ensureIndexes, acquire, extend, release };
-}
-
 /**
  * @typedef {{
  *   db: import('../db/connect').DbContext,
@@ -188,7 +136,7 @@ class GuideSamplesBackfillJob {
     this.sleep = deps.sleep || defaultSleep;
     this.logger = deps.logger.child({ component: "guideSamplesBackfill" });
     this.locks = deps.db.db.collection(LOCK_COLLECTION);
-    this.lock = buildJobLock({ collection: this.locks, now: this.now });
+    this.lock = buildJobLock({ collection: this.locks, key: LOCK_KEY, leaseMs: LEASE_MS, now: this.now });
     this.state = freshState();
     /** @type {Promise<void>|null} */
     this.inflight = null;

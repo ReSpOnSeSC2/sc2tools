@@ -52,6 +52,21 @@ describe("GuidePersonalComparison", () => {
     expect(harness.useApi).not.toHaveBeenCalled();
   });
 
+  it("offers the win-rate comparison when the build has no community timings yet", () => {
+    render(
+      <GuidePersonalComparison matchupSlug="pvz" buildSlug="stargate-into-glaives" buildName="Stargate into Glaives" community={[]} />,
+    );
+    expect(screen.getByRole("link", { name: "Sign in to compare your win rate" })).toBeTruthy();
+    cleanup();
+    harness.auth = { isLoaded: true, isSignedIn: true };
+    harness.api = { data: FIXTURE_ME, error: undefined, isLoading: false };
+    render(
+      <GuidePersonalComparison matchupSlug="pvz" buildSlug="stargate-into-glaives" buildName="Stargate into Glaives" community={[]} />,
+    );
+    const box = screen.getByTestId("guide-me");
+    expect(box.textContent).toBe(`You: ${((FIXTURE_ME.winRate ?? Number.NaN) * 100).toFixed(1)}% over 37 games`);
+  });
+
   it("shows the signed-in viewer's own record next to the community medians", () => {
     harness.auth = { isLoaded: true, isSignedIn: true };
     harness.api = { data: FIXTURE_ME, error: undefined, isLoading: false };

@@ -2,8 +2,9 @@
 
 /**
  * Owner-safe advisory lock with a renewable lease, stored in the shared
- * ``jobLocks`` collection (the pattern of jobs/opponentMmrEnrichmentJob.js
- * and jobs/guideSamplesBackfillJob.js, generalised over the key/lease).
+ * ``jobLocks`` collection (the pattern of jobs/opponentMmrEnrichmentJob.js,
+ * generalised over the key/lease). Used by jobs/guideStatsRecomputeJob.js
+ * and jobs/guideSamplesBackfillJob.js; ``isDuplicateKey`` is shared too.
  *
  *   - ``acquire()`` CASes the lock doc from "expired or absent" to a fresh
  *     random owner token; a live holder makes the upsert hit the unique

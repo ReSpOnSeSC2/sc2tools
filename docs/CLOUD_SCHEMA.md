@@ -399,7 +399,8 @@ windows live in [`config/guides.js`](../apps/api/src/config/guides.js):
 a number is published only for ≥ 30 games from ≥ 5 users, a page only
 for ≥ 100 games from ≥ 5 users. No guide collection is part of the
 GDPR export; `guide_samples` rows are deleted with the account or a
-history wipe, and `guide_notes.updatedBy` is scrubbed to `null`.
+history wipe, the user's example replays are pulled from `guide_stats`,
+and `guide_notes.updatedBy` is scrubbed to `null`.
 
 ### `guide_samples`
 
@@ -414,6 +415,7 @@ are HMACs with the server pepper.
   "buildKey": "PvZ - Stargate into Glaives", "matchup": "PvZ", "era": "after|before",
   "leagueBand": 4 | null, "mmrBand": 4000 | null, "result": "Victory|Defeat|Tie",
   "map": "…", "durationSec": 640 | null,
+  "playedOn": ISODate | null,                           // UTC day played (midnight; day precision only)
   "milestones": { "Pylon": 18, "Nexus#2": 95 },          // recorded build-log seconds
   "army": { "360": { "Adept": 4, "Oracle": 1 } },         // checkpoints 360/480/600 when present
   "createdAt": ISODate, "updatedAt": ISODate, "_schemaVersion": 1

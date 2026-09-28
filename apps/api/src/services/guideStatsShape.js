@@ -344,8 +344,15 @@ function trendOf(overall, prevalence, baseline) {
 
 /**
  * History fields of a build doc: baseline/candidate/trend (week over
- * week), isNew (published now, and no prior doc was published) and the
- * carried-forward firstPublishedAt.
+ * week), isNew and the carried-forward firstPublishedAt.
+ *
+ * isNew means "newly published, so no weekly trend yet" (the page says
+ * exactly that): published now, FIRST published less than
+ * GUIDE_BASELINE_MIN_AGE_MS ago, and no trend. Derived from the carried
+ * firstPublishedAt rather than the previous run, so a rerun does not clear
+ * it, a build that drops under the page floor and re-crosses it is not
+ * re-announced, and a build whose pre-publish snapshots already give a
+ * trend shows that trend instead.
  *
  * @param {{ published: boolean, overall: GuideCell|null, prevalence: number|null }} current
  * @param {Row|undefined} prior
@@ -358,12 +365,16 @@ function trendOf(overall, prevalence, baseline) {
 function historyFields(current, prior, computedAt) {
   const { baseline, candidate } = nextBaselines(prior, current, computedAt);
   const priorFirst = prior && prior.firstPublishedAt instanceof Date ? prior.firstPublishedAt : null;
+  const firstPublishedAt = priorFirst || (current.published ? computedAt : null);
+  const trend = trendOf(current.overall, current.prevalence, baseline);
+  const isRecent = firstPublishedAt !== null
+    && computedAt.getTime() - firstPublishedAt.getTime() < GUIDE_BASELINE_MIN_AGE_MS;
   return {
     baseline,
     baselineCandidate: candidate,
-    trend: trendOf(current.overall, current.prevalence, baseline),
-    isNew: current.published && !(prior && prior.published === true),
-    firstPublishedAt: priorFirst || (current.published ? computedAt : null),
+    trend,
+    isNew: current.published && isRecent && trend === null,
+    firstPublishedAt,
   };
 }
 

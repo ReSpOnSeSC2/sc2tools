@@ -17,7 +17,7 @@ const { GUIDE_MILESTONE_MIN_PRESENCE } = require("../config/guides");
 const {
   MATCHUPS,
   RACE_WORDS,
-  displayName,
+  guideName,
   matchupSlug,
   catalogEntry,
 } = require("../config/guideSlugs");
@@ -223,7 +223,8 @@ function buildSections(doc, publishedCounters) {
       return cell && typeof row.strategyKey === "string" && typeof row.strategySlug === "string"
         ? {
           ...cell, strategyKey: row.strategyKey, strategySlug: row.strategySlug,
-          name: displayName(row.strategyKey), published: publishedCounters.has(row.strategyKey),
+          name: guideName("counters", doc.matchup, row.strategyKey),
+          published: publishedCounters.has(row.strategyKey),
         }
         : null;
     }),
@@ -275,7 +276,7 @@ function shapeBuildPayload(input) {
     matchupSlug: /** @type {string} */ (matchupSlug(matchup)),
     buildKey,
     buildSlug: input.buildSlug,
-    name: displayName(buildKey),
+    name: guideName("builds", matchup, buildKey),
     description: entry ? entry.description : "",
     ...eraFields(input.era, doc),
     videos: input.videos,
@@ -307,7 +308,7 @@ function shapeCounterPayload(input) {
     matchupSlug: /** @type {string} */ (matchupSlug(matchup)),
     strategyKey,
     strategySlug: input.strategySlug,
-    name: displayName(strategyKey),
+    name: guideName("counters", matchup, strategyKey),
     description: entry ? entry.description : "",
     myRace: RACE_WORDS[matchup[MY_RACE_INDEX]],
     oppRace: RACE_WORDS[matchup[OPP_RACE_INDEX]],
@@ -326,7 +327,7 @@ function shapeCounterPayload(input) {
       return cell && typeof row.buildKey === "string" && typeof row.buildSlug === "string"
         ? {
           ...cell, buildKey: row.buildKey, buildSlug: row.buildSlug,
-          name: displayName(row.buildKey), published: publishedBuilds.has(row.buildKey),
+          name: guideName("builds", matchup, row.buildKey), published: publishedBuilds.has(row.buildKey),
         }
         : null;
     }),
@@ -344,7 +345,9 @@ function mapMatchupRow(row) {
   const openers = pickList(row.openers, (o) => {
     const c = pickCell(o);
     return c && typeof o.buildKey === "string" && typeof o.buildSlug === "string"
-      ? { ...c, buildKey: o.buildKey, buildSlug: o.buildSlug, name: displayName(o.buildKey) }
+      ? {
+        ...c, buildKey: o.buildKey, buildSlug: o.buildSlug, name: guideName("builds", row.matchup, o.buildKey),
+      }
       : null;
   });
   return { ...cell, matchup: row.matchup, slug, openers };

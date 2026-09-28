@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   fetchGuideCounter: vi.fn(),
   fetchGuideMap: vi.fn(),
+  fetchPublishedGuidePaths: vi.fn(async (): Promise<ReadonlySet<string> | null> => null),
   permanentRedirect: vi.fn((path: string) => {
     throw Object.assign(new Error("NEXT_REDIRECT"), { path });
   }),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/guides/api", () => ({
   fetchGuideCounter: mocks.fetchGuideCounter,
   fetchGuideMap: mocks.fetchGuideMap,
+  fetchPublishedGuidePaths: mocks.fetchPublishedGuidePaths,
 }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -23,11 +25,13 @@ vi.mock("next/navigation", () => ({
 import CounterGuidePage, { generateMetadata as counterMetadata } from "@/app/guides/[matchup]/counter/[strategy]/page";
 import MapGuidePage, { generateMetadata as mapMetadata } from "@/app/guides/maps/[map]/page";
 import { buildCounterIntro, buildMapIntro } from "@/lib/guides/guideCopy";
+import { GuideUnavailableError } from "@/lib/guides/guideErrors";
 import {
   FIXTURE_COUNTER_PUBLISHED,
   FIXTURE_COUNTER_UNPUBLISHED,
   FIXTURE_MAP,
   FIXTURE_MAP_UNPUBLISHED,
+  FIXTURE_SITEMAP,
 } from "@/lib/guides/__fixtures__";
 
 const COUNTER_PARAMS = { params: Promise.resolve({ matchup: "pvz", strategy: "8-pool" }) };
@@ -43,6 +47,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
   mocks.fetchGuideCounter.mockReset();
   mocks.fetchGuideMap.mockReset();
+  mocks.fetchPublishedGuidePaths.mockReset();
+  mocks.fetchPublishedGuidePaths.mockResolvedValue(null);
   mocks.permanentRedirect.mockClear();
 });
 
@@ -50,7 +56,10 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
   it("titles the page from the payload and describes it with n and the stats date", async () => {
     mocks.fetchGuideCounter.mockResolvedValue(ok(FIXTURE_COUNTER_PUBLISHED));
     const md = await counterMetadata(COUNTER_PARAMS);
-    expect(md.title).toBe("How to beat 8 Pool as Protoss — best openers by win rate (Patch 5.0.16) | SC2 Tools");
+    const pct = `${(FIXTURE_COUNTER_PUBLISHED.overall.winRate * 100).toFixed(1)}%`;
+    expect(md.title).toBe(
+      `How to beat 8 Pool as Protoss — ${pct} win rate over 236 ladder games (Patch 5.0.16) | SC2 Tools`,
+    );
     expect(md.alternates?.canonical).toBe("/guides/pvz/counter/8-pool");
     expect(String(md.description)).toContain("236 PvZ ladder games");
     expect(String(md.description)).toContain("Sep 27, 2026");
@@ -101,6 +110,17 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     );
   });
 
+  it("throws (never caches) an outage and redirects a mixed-case URL before fetching", async () => {
+    mocks.fetchGuideCounter.mockResolvedValue({ kind: "unavailable" });
+    expect((await counterMetadata(COUNTER_PARAMS)).robots).toEqual({ index: false, follow: false });
+    await expect(CounterGuidePage(COUNTER_PARAMS)).rejects.toBeInstanceOf(GuideUnavailableError);
+    mocks.fetchGuideCounter.mockReset();
+    const mixed = { params: Promise.resolve({ matchup: "PvZ", strategy: "8-Pool" }) };
+    await expect(CounterGuidePage(mixed)).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/pvz/counter/8-pool");
+    expect(mocks.fetchGuideCounter).not.toHaveBeenCalled();
+  });
+
   it("redirects aliases and 404s unknown strategies from generateMetadata", async () => {
     mocks.fetchGuideCounter.mockResolvedValue({ kind: "moved", path: "/guides/pvz/counter/new-pool" });
     await expect(counterMetadata(COUNTER_PARAMS)).rejects.toThrow("NEXT_REDIRECT");
@@ -146,7 +166,27 @@ describe("/guides/maps/[map]", () => {
     cleanup();
     mocks.fetchGuideMap.mockResolvedValue({ kind: "unavailable" });
     expect((await mapMetadata(MAP_PARAMS)).robots).toEqual({ index: false, follow: false });
+    await expect(MapGuidePage(MAP_PARAMS)).rejects.toBeInstanceOf(GuideUnavailableError);
+  });
+
+  it("links only the openers whose build guide is published", async () => {
+    mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
+    mocks.fetchPublishedGuidePaths.mockResolvedValue(new Set(FIXTURE_SITEMAP.entries.map((entry) => entry.path)));
     render(await MapGuidePage(MAP_PARAMS));
-    expect(screen.getByText("This guide is temporarily unavailable")).toBeTruthy();
+    const openers = screen.getByRole("heading", { level: 2, name: "Best openers per matchup" })
+      .closest("section") as HTMLElement;
+    expect(within(openers).getAllByRole("link").map((link) => link.getAttribute("href")).sort()).toEqual([
+      "/guides/pvz/standard-blink-macro",
+      "/guides/pvz/stargate-into-glaives",
+    ]);
+    // Cleared the cell floor on this map, but its build page is not published.
+    expect(within(openers).getByText("3 CC Bio")).toBeTruthy();
+    expect(within(openers).queryByRole("link", { name: "3 CC Bio" })).toBeNull();
+  });
+
+  it("redirects a mixed-case map URL to lowercase before fetching", async () => {
+    await expect(mapMetadata({ params: Promise.resolve({ map: "Old-Sun-Temple" }) })).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/maps/old-sun-temple");
+    expect(mocks.fetchGuideMap).not.toHaveBeenCalled();
   });
 });

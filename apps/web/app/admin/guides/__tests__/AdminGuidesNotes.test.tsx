@@ -223,7 +223,7 @@ describe("admin Guides notes preview", () => {
     const links = within(preview).getAllByRole("link");
     expect(links).toHaveLength(1);
     expect(links[0].getAttribute("href")).toBe("https://liquipedia.net/starcraft2");
-    expect(links[0].getAttribute("rel")).toBe("nofollow noopener");
+    expect(links[0].getAttribute("rel")).toBe("nofollow ugc noopener noreferrer");
     expect(preview.textContent).toContain("[bad](javascript:alert(1))");
   });
 

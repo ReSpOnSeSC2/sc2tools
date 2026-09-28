@@ -3,14 +3,15 @@
 
 /**
  * GET /v1/guides/me/:matchup/:build — the caller's own current-era record
- * with a guide build and the medians of their own guide_samples. Requires
+ * with a guide build and the medians of their own most recently played
+ * guide_samples. Requires
  * auth (per route; the router stays public), is never cached, and never
  * reads another user's rows.
  */
 
 const request = require("supertest");
 const { createGuidesHarness, GLAIVES } = require("./helpers/guidesHarness");
-const { slimGame, sampleRow, BEFORE_BUILD } = require("./helpers/guideStatsSeed");
+const { slimGame, sampleRow, BEFORE_BUILD, NOW_MS, DAY_MS } = require("./helpers/guideStatsSeed");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
@@ -76,6 +77,23 @@ describe("GET /v1/guides/me/:matchup/:build", () => {
         expect.objectContaining({ key: "Pylon", median: 300, games: 1 }),
         expect.objectContaining({ key: "Gateway", median: 300, games: 1 }),
       ],
+    });
+  });
+
+  test("timings use the caller's most recently PLAYED samples, not the last written", async () => {
+    const dave = await h.seedUser("dave");
+    const userHash = h.services.guideSamples.userHash(dave);
+    // Backfilled newest-first: the 100 oldest games were written last.
+    await h.db.guideSamples.insertMany(Array.from({ length: 300 }, (_, i) => sampleRow({
+      userHash,
+      playedOn: new Date(NOW_MS - (i + 1) * DAY_MS),
+      createdAt: new Date(NOW_MS - (300 - i) * 1000),
+      milestones: { Pylon: i < 200 ? 20 : 90 },
+    })));
+    const res = await me("dave");
+    expect(res.body.timings).toEqual({
+      samples: 200,
+      milestones: [expect.objectContaining({ key: "Pylon", median: 20, games: 200 })],
     });
   });
 

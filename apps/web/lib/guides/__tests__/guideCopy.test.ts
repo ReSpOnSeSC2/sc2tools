@@ -106,7 +106,7 @@ describe("buildIntro", () => {
     expect(lines[0].text).toContain("412");
     expect(lines[0].text).toContain("53.9%");
     expect(lines[1].text).toContain("too close to call");
-    expect(lines[2].text).toBe("It is played most at Diamond, where it wins 56.5% over 146 games.");
+    expect(lines[2].text).toBe("It is played most against Diamond opponents, where it wins 56.5% over 146 games.");
     expect(lines[4].text).toBe(
       "Its win rate is up 1.3 percentage points on the previous weekly snapshot.",
     );

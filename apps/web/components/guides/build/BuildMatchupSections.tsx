@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Section } from "@/components/ui/Section";
 import { WinRateCell } from "@/components/guides/WinRateCell";
-import { guidePaths } from "@/components/guides/guideMetadata";
+import { canLinkGuidePath, guidePaths } from "@/components/guides/guideMetadata";
 import {
   GUIDE_LINK_CLASS,
   GUIDE_PANEL_CLASS,
@@ -19,7 +19,9 @@ import type { GuideMapCell, GuideVsStrategyRow } from "@/lib/guides/types";
 /**
  * Build guide sections 5 (what it beats / loses to, by opponent opener,
  * linking the counter pages) and 7 (best and worst maps, linking the
- * map pages). Rows are the API's published cells only.
+ * map pages). Rows are the API's published cells only. A build's map
+ * cell only needs the cell floor while a map page needs the page floor,
+ * so a map links only when its page is published (`publishedPaths`).
  */
 
 const MAP_LIST_SIZE = 3;
@@ -88,7 +90,15 @@ export function BuildVsStrategySection({
   );
 }
 
-function MapList({ title, maps }: { title: string; maps: ReadonlyArray<GuideMapCell> }) {
+function MapList({
+  title,
+  maps,
+  publishedPaths,
+}: {
+  title: string;
+  maps: ReadonlyArray<GuideMapCell>;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
   return (
     <div className={`${GUIDE_PANEL_CLASS} min-w-0 p-4`}>
       <h3 className="mb-2 text-caption font-semibold uppercase tracking-wider text-text-dim">{title}</h3>
@@ -96,9 +106,13 @@ function MapList({ title, maps }: { title: string; maps: ReadonlyArray<GuideMapC
         {maps.map((map) => (
           <li key={map.mapSlug} className="flex items-center justify-between gap-3 py-2">
             <span className="min-w-0">
-              <Link href={guidePaths.map(map.mapSlug)} className={`${GUIDE_LINK_CLASS} break-words`}>
-                {map.map}
-              </Link>
+              {canLinkGuidePath(publishedPaths, guidePaths.map(map.mapSlug)) ? (
+                <Link href={guidePaths.map(map.mapSlug)} className={`${GUIDE_LINK_CLASS} break-words`}>
+                  {map.map}
+                </Link>
+              ) : (
+                <span className="break-words text-text">{map.map}</span>
+              )}
               <span className="block text-micro text-text-dim">{fmtCount(map.games)} games</span>
             </span>
             <WinRateCell winRate={map.winRate} ci={map.ci} showWhisker={false} />
@@ -126,14 +140,20 @@ export function splitBestWorstMaps(maps: ReadonlyArray<GuideMapCell>): {
   return { best, worst };
 }
 
-export function BuildMapsSection({ maps }: { maps: ReadonlyArray<GuideMapCell> }) {
+export function BuildMapsSection({
+  maps,
+  publishedPaths,
+}: {
+  maps: ReadonlyArray<GuideMapCell>;
+  publishedPaths: ReadonlySet<string> | null;
+}) {
   if (maps.length === 0) return null;
   const { best, worst } = splitBestWorstMaps(maps);
   return (
     <Section id="maps" title="Best and worst maps">
       <div className="grid gap-4 md:grid-cols-2">
-        <MapList title="Best maps" maps={best} />
-        {worst.length > 0 ? <MapList title="Toughest maps" maps={worst} /> : null}
+        <MapList title="Best maps" maps={best} publishedPaths={publishedPaths} />
+        {worst.length > 0 ? <MapList title="Toughest maps" maps={worst} publishedPaths={publishedPaths} /> : null}
       </div>
     </Section>
   );

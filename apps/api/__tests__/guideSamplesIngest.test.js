@@ -155,6 +155,32 @@ describe("POST /v1/games captures guide_samples", () => {
     expect((await db.games.findOne({ gameId: "g-relabel" })).myBuild).toBe("PvZ - Macro Transition (Unclassified)");
   });
 
+  test("a game a saved 'you' custom build relabels feeds no sample; its re-upload drops the stale one", async () => {
+    await post(ladderGame("g-custom-old"));
+    await services.guideSamples.drain();
+    expect(await samples()).toHaveLength(1);
+    const saved = await request(app).put("/v1/custom-builds/my-glaives").set("authorization", "Bearer user-a").send({
+      slug: "my-glaives", name: "My Glaives", race: "Protoss", vsRace: "Zerg", perspective: "you",
+      rules: [{ type: "before", name: "BuildStargate", time_lt: 240 }], reclassify: false,
+    });
+    expect(saved.status).toBe(200);
+    try {
+      await post(ladderGame("g-custom-new"));
+      const reupload = await post(ladderGame("g-custom-old"));
+      expect(reupload.body.accepted).toEqual([expect.objectContaining({ gameId: "g-custom-old", created: false })]);
+      await services.guideSamples.drain();
+      const projection = { _id: 0, myBuild: 1, _customBuildSlug: 1 };
+      const rows = await db.games.find({ userId }, { projection }).toArray();
+      expect(rows).toEqual([
+        { myBuild: "My Glaives", _customBuildSlug: "my-glaives" },
+        { myBuild: "My Glaives", _customBuildSlug: "my-glaives" },
+      ]);
+      expect(await samples()).toHaveLength(0);
+    } finally {
+      await db.customBuilds.deleteMany({ userId });
+    }
+  });
+
   test.each([
     ["team game", { playerCount: 4, matchFormat: "team" }],
     ["non-ladder", { isLadderGame: false }],

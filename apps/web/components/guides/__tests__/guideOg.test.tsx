@@ -83,7 +83,7 @@ describe("guide OG card data", () => {
       kind: "Build guide",
       matchup: "PvZ",
       title: "Stargate into Glaives",
-      rate: { label: "Win rate at Diamond", winRate: diamond?.winRate, games: diamond?.games, ci: diamond?.ci },
+      rate: { label: "Win rate vs Diamond", winRate: diamond?.winRate, games: diamond?.games, ci: diamond?.ci },
     });
     expect(card?.stats).toEqual([
       { label: "Players", value: String(diamond?.users) },

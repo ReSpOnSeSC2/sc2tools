@@ -284,4 +284,20 @@ describe("guide samples backfill job", () => {
   test("requires its dependencies", () => {
     expect(() => buildGuideSamplesBackfillJob({ db })).toThrow(/required/);
   });
+
+  test("its lock is the shared util/jobLock under the backfill key, not a private copy", () => {
+    // Spy (a wrapper around the real helper): one lock implementation, so a
+    // fix to its compare-and-swap reaches every job.
+    const real = jest.requireActual("../src/util/jobLock");
+    const spy = jest.fn(real.buildJobLock);
+    jest.isolateModules(() => {
+      jest.doMock("../src/util/jobLock", () => ({ ...real, buildJobLock: spy }));
+      const isolated = require("../src/jobs/guideSamplesBackfillJob");
+      isolated.buildGuideSamplesBackfillJob({ db, guideSamples, gameDetails: details, logger, nowFn: () => NOW_MS });
+    });
+    jest.dontMock("../src/util/jobLock");
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({
+      collection: expect.anything(), key: __internal.LOCK_KEY, leaseMs: expect.any(Number),
+    }));
+  });
 });

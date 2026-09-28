@@ -13,7 +13,7 @@ import { OpenersTable } from "@/components/guides/matchup/OpenersTable";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, eraLabel, oppRaceWord } from "@/components/guides/guideUi";
-import { fmtGuideDate } from "@/lib/guides/format";
+import { GUIDE_DEFAULT_ERA, fmtGuideDate } from "@/lib/guides/format";
 import { buildMatchupIntro } from "@/lib/guides/guideCopy";
 import type { GuideMatchupPayload } from "@/lib/guides/types";
 
@@ -22,6 +22,18 @@ import type { GuideMatchupPayload } from "@/lib/guides/types";
  * "How to beat …" counter links and the latest channel videos for the
  * matchup. Unpublished matchups get the "not enough games yet" page.
  */
+
+/**
+ * Build and counter guide pages always serve the current patch, so only
+ * the current-era view links to them: a before-patch view's `published`
+ * flags and game counts describe that era, and would point at pages that
+ * show other numbers (or none).
+ *
+ * Example: `linksGuides({ era: "before" })` → false.
+ */
+function linksGuides(payload: Pick<GuideMatchupPayload, "era">): boolean {
+  return payload.era === GUIDE_DEFAULT_ERA;
+}
 
 export function matchupCrumbs(payload: Pick<GuideMatchupPayload, "matchup" | "slug">): GuideCrumb[] {
   return [
@@ -51,6 +63,7 @@ function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
             openers={payload.openers}
             matchupSlug={payload.slug}
             caption={`${payload.matchup} openers${bandText}, ${eraLabel(payload.era, payload.patch)}`}
+            canLinkGuides={linksGuides(payload)}
           />
         ) : (
           <div className={GUIDE_PANEL_CLASS}>
@@ -67,6 +80,7 @@ function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
 }
 
 function CountersSection({ payload }: { payload: GuideMatchupPayload }) {
+  if (!linksGuides(payload)) return null;
   if (!payload.counters.some((counter) => counter.published)) return null;
   return (
     <Section

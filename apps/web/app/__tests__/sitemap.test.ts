@@ -6,7 +6,7 @@ vi.mock("@/lib/serverApi", () => ({ getJson: mocks.getJson }));
 vi.mock("@/lib/guides/api", () => ({ fetchGuideSitemap: mocks.fetchGuideSitemap }));
 
 import sitemap, { revalidate } from "@/app/sitemap";
-import { finalizeSitemap, guideSitemapRows, SITEMAP_MAX_URLS } from "@/lib/sitemapEntries";
+import { communitySitemapRows, finalizeSitemap, guideSitemapRows, SITEMAP_MAX_URLS } from "@/lib/sitemapEntries";
 import { FIXTURE_SITEMAP } from "@/lib/guides/__fixtures__";
 
 const SITE = "https://sc2tools.com";
@@ -124,6 +124,15 @@ describe("sitemap helpers", () => {
     expect(rows).toEqual([
       { url: `${SITE}/guides/pvz/counter/8-pool`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     ]);
+  });
+
+  it("lists community builds before profiles (so a cap trims profiles) and tolerates no payload", () => {
+    const now = new Date("2026-09-28T00:00:00.000Z");
+    expect(communitySitemapRows(SITE, COMMUNITY, now).map((row) => [row.url, row.priority])).toEqual([
+      [`${SITE}/community/builds/build-0123456789abcdef0123456789abcdef`, 0.5],
+      [`${SITE}/p/fixture-author`, 0.4],
+    ]);
+    expect(communitySitemapRows(SITE, null, now)).toEqual([]);
   });
 
   it("caps the list at 45,000 URLs with a warning (counts only)", () => {

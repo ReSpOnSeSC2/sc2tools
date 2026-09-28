@@ -15,6 +15,7 @@ vi.mock("@/lib/ghostBuild", async (importOriginal) => {
 import { GuideCtas } from "@/components/guides/GuideCtas";
 import { buildGhostTargetFromGuide } from "@/lib/guides/ghost";
 import { FIXTURE_BUILD_PUBLISHED } from "@/lib/guides/__fixtures__";
+import { isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
 
 /** jsdom cannot navigate; stop anchor default actions (onClick handlers still run). */
 function preventNavigation(event: Event) {
@@ -72,7 +73,10 @@ describe("GuideCtas", () => {
       build: "stargate-into-glaives",
     });
     const settings = await screen.findByRole("link", { name: /Open Settings → Overlay/ });
-    expect(settings.getAttribute("href")).toBe("/settings#overlay");
+    expect(settings.getAttribute("href")).toBe("/settings?tab=overlay");
+    // /settings opens a tab only from ?tab= (never the hash), so it must name a real tab.
+    const tab = new URL(settings.getAttribute("href") ?? "", "https://sc2tools.com").searchParams.get("tab");
+    expect(isSettingsTabId(tab)).toBe(true);
   });
 
   it("reports a storage failure instead of claiming success", async () => {

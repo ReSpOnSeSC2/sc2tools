@@ -13,6 +13,7 @@ const {
   buildSlug,
   catalogEntry,
   displayName,
+  guideName,
   guideSlugTable,
   isGuideBuildName,
   isGuideStrategyName,
@@ -284,6 +285,23 @@ describe("config/guideSlugs catalog rows, display names and map slugs", () => {
     expect(displayName("A - B - C")).toBe("B - C");
     expect(displayName("No separator")).toBe("No separator");
     expect(displayName(null)).toBe("");
+  });
+
+  test("guideName is unique in every namespace; only the race-generic member of a collision is suffixed", () => {
+    const table = guideSlugTable();
+    for (const kind of /** @type {const} */ (["builds", "counters"])) {
+      for (const matchup of MATCHUPS) {
+        const names = Object.values(table[kind][matchup.toLowerCase()]).map((name) => guideName(kind, matchup, name));
+        expect(new Set(names).size).toBe(names.length);
+      }
+    }
+    expect(guideName("counters", "PvT", "TvP - Widow Mine Drop")).toBe("Widow Mine Drop");
+    expect(guideName("counters", "PvT", "Terran - Widow Mine Drop")).toBe("Widow Mine Drop (any matchup)");
+    expect(guideName("builds", "ZvP", "ZvP - 2 Base Nydus")).toBe("2 Base Nydus");
+    expect(guideName("builds", "ZvP", "Zerg - 2 Base Nydus")).toBe("2 Base Nydus (any matchup)");
+    expect(guideName("builds", "ZvP", "Zerg - 8 Pool")).toBe("8 Pool");
+    expect(guideName("builds", "PvZ", "PvZ - Stargate into Glaives")).toBe("Stargate into Glaives");
+    expect(guideName("builds", "PvX", "Zerg - 2 Base Nydus")).toBe("2 Base Nydus");
   });
 
   test("mapSlug slugs the full map name", () => {

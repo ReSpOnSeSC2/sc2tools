@@ -28,7 +28,8 @@ import {
 /** Same event GhostGradeCard dispatches so open overlay settings re-read the target. */
 const GHOST_ARMED_EVENT = "sc2tools:ghost-build-armed";
 const CTA_EVENT = "guide_cta_click";
-const OVERLAY_SETTINGS_HREF = "/settings#overlay";
+/** The settings page opens a tab from `?tab=` (it never reads the URL hash). */
+const OVERLAY_SETTINGS_HREF = "/settings?tab=overlay";
 
 type CtaName = "track" | "practice" | "matchup";
 type ArmStatus = "idle" | "armed" | "failed";

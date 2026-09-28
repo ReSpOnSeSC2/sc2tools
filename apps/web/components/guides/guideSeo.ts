@@ -175,7 +175,8 @@ export function videoJsonLd(video: GuideVideo): Record<string, unknown> | null {
     "@context": SCHEMA_CONTEXT,
     "@type": "VideoObject",
     name: video.title,
-    description: video.excerpt ?? video.title,
+    // The API sends "" (not null) for a video without a description: fall back on that too.
+    description: video.excerpt || video.title,
     thumbnailUrl: [urls.thumb],
     uploadDate: video.publishedAt,
     embedUrl: urls.embed,

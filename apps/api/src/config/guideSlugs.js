@@ -79,6 +79,12 @@ const GUIDE_CATALOG_JSON = require("./guideCatalog.json");
 
 /** Separator between a catalog name's prefix and its display text. */
 const NAME_SEPARATOR = " - ";
+/**
+ * Appended to the display name of a race-generic entry whose slug got the
+ * race prefix, so the two same-named guides of a namespace ("TvP - Widow
+ * Mine Drop" / "Terran - Widow Mine Drop") never share a title or H1.
+ */
+const GENERIC_NAME_SUFFIX = " (any matchup)";
 /** Upper bound on a slug's length (mirrors the web catalog's id cap). */
 const SLUG_MAX_CHARS = 80;
 /** Character offsets inside a "PvZ"-form matchup. */
@@ -358,6 +364,28 @@ function strategySlug(matchup, name) {
 }
 
 /**
+ * Page name of a guide, unique within its namespace: the display name,
+ * suffixed with GENERIC_NAME_SUFFIX for the race-generic member of a
+ * collision (the one whose slug carries the race prefix). Names outside
+ * the namespace fall back to the plain display name.
+ *
+ * Example: `guideName("counters", "PvT", "Terran - Widow Mine Drop")` →
+ * "Widow Mine Drop (any matchup)"; `guideName("counters", "PvT",
+ * "TvP - Widow Mine Drop")` → "Widow Mine Drop".
+ *
+ * @param {SlugKind} kind
+ * @param {string} matchup "PvZ" form (the user's matchup)
+ * @param {string} name exact catalog name
+ * @returns {string}
+ */
+function guideName(kind, matchup, name) {
+  const base = displayName(name);
+  const ns = namespaceFor(kind, matchup);
+  const slug = ns ? ns.byName.get(name) : undefined;
+  return slug && slug !== slugifyGuideText(base) ? `${base}${GENERIC_NAME_SUFFIX}` : base;
+}
+
+/**
  * True when `name` is a guide build (catalog opener) for `matchup`.
  *
  * @param {string} matchup "PvZ" form
@@ -544,6 +572,7 @@ module.exports = {
   SLUG_MAX_CHARS,
   slugifyGuideText,
   displayName,
+  guideName,
   matchupSlug,
   matchupFromSlug,
   buildNamesForMatchup,

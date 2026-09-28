@@ -33,6 +33,26 @@ const QUANTILE_MEDIAN = 0.5;
 const QUANTILE_P75 = 0.75;
 
 /**
+ * The per-user cap's order key, most recent = greatest: the day the game
+ * was played, not when its sample was written (the backfill writes newest
+ * games first), with rows from before ``playedOn`` existed falling back to
+ * their capture time. ``gameHash`` is appended so equal days keep the same
+ * rows at the cap boundary on every run (``$documentNumber`` takes a
+ * single sort key, hence one sortable string: ISO date + "|" + hash).
+ *
+ * @returns {Record<string, any>}
+ */
+function recencyKey() {
+  return {
+    $concat: [
+      { $dateToString: { date: { $ifNull: ["$playedOn", "$createdAt"] } } },
+      "|",
+      { $ifNull: ["$gameHash", ""] },
+    ],
+  };
+}
+
+/**
  * Indexed ``$match`` + per-user cap over one matchup's guide_samples.
  *
  * @param {string} matchup
@@ -49,8 +69,17 @@ function sampleBaseStages(matchup, projection) {
         userHash: { $type: "string" },
       },
     },
-    { $project: { _id: 0, userHash: 1, createdAt: 1, era: 1, build: "$buildKey", ...projection } },
-    ...perUserCapStages("userHash", "build", "createdAt"),
+    {
+      $project: {
+        _id: 0,
+        userHash: 1,
+        era: 1,
+        build: "$buildKey",
+        recency: recencyKey(),
+        ...projection,
+      },
+    },
+    ...perUserCapStages("userHash", "build", "recency"),
   ];
 }
 

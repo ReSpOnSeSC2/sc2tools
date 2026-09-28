@@ -199,6 +199,7 @@ module.exports = {
   PATCH_5_0_16_BUILD,
   PATCH_5_0_16_RELEASE,
   buildEraMatch,
+  dateMs,
   eraExpression,
   eraForGame,
 };

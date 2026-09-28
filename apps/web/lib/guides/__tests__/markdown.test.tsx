@@ -8,6 +8,7 @@ import {
   renderGuideMarkdown,
   safeGuideHref,
 } from "@/lib/guides/markdown";
+import { renderInline, safeHttpUrl } from "@/lib/reviewMarkdown";
 import { FIXTURE_BUILD_PUBLISHED } from "@/lib/guides/__fixtures__";
 
 afterEach(() => {
@@ -60,14 +61,26 @@ describe("GuideMarkdown rendering", () => {
     expect(container.querySelector("code")?.textContent).toBe("Glaives");
     const link = container.querySelector("a");
     expect(link?.getAttribute("href")).toBe("https://liquipedia.net/starcraft2/Adept");
-    expect(link?.getAttribute("rel")).toBe("nofollow noopener");
+    expect(link?.getAttribute("rel")).toBe("nofollow ugc noopener noreferrer");
     expect(link?.textContent).toBe("Liquipedia");
   });
 
-  test("nested emphasis inside bold and link text", () => {
-    const container = renderNotes("**hold *then* punish** [**docs**](https://example.com/a)");
-    expect(container.querySelector("strong em")?.textContent).toBe("then");
+  test("emphasis inside link text; game clocks stay plain text", () => {
+    const container = renderNotes("[**docs**](https://example.com/a) and _hold_ until 4:30");
     expect(container.querySelector("a strong")?.textContent).toBe("docs");
+    expect(container.querySelector("em")?.textContent).toBe("hold");
+    expect(container.querySelector("button")).toBeNull();
+    expect(container.textContent).toContain("until 4:30");
+  });
+
+  test("inline rendering is the review renderer's, so the two can never drift", () => {
+    const source = "Lead with **Void Ray**, see https://liquipedia.net/starcraft2/Adept. `Glaives` [x](https:evil.example)";
+    const notes = renderToStaticMarkup(<GuideMarkdown source={source} />);
+    const review = renderToStaticMarkup(<>{renderInline(source, {}, "b0")}</>);
+    expect(notes).toContain(review);
+    // Bare URLs link (sentence punctuation trimmed); a scheme without "//" never does.
+    const links = renderNotes(source).querySelectorAll("a");
+    expect([...links].map((a) => a.getAttribute("href"))).toEqual(["https://liquipedia.net/starcraft2/Adept"]);
   });
 
   test("renders the fixture coach's notes as h3 + list", () => {
@@ -76,10 +89,10 @@ describe("GuideMarkdown rendering", () => {
     expect(container.querySelectorAll("li")).toHaveLength(2);
   });
 
-  test("loose asterisks stay literal", () => {
-    const container = renderNotes("2 * 3 * 4 and **");
-    expect(container.querySelector("em")).toBeNull();
-    expect(container.textContent).toBe("2 * 3 * 4 and **");
+  test("an unmatched ** stays literal", () => {
+    const container = renderNotes("Hold the ramp and **");
+    expect(container.querySelector("strong")).toBeNull();
+    expect(container.textContent).toBe("Hold the ramp and **");
   });
 
   test("empty source renders nothing", () => {
@@ -149,8 +162,14 @@ describe("safeGuideHref", () => {
   });
 
   test("rejects everything else", () => {
-    for (const raw of ["javascript:alert(1)", " javascript:alert(1)", "ftp://x.y", "nope", ""]) {
+    for (const raw of ["javascript:alert(1)", " javascript:alert(1)", "ftp://x.y", "nope", "", "https:evil.example"]) {
       expect(safeGuideHref(raw)).toBeNull();
+    }
+  });
+
+  test("is the review renderer's URL rule", () => {
+    for (const raw of ["https://liquipedia.net/a", "HTTP://Example.com", "https:evil.example", "data:x"]) {
+      expect(safeGuideHref(raw)).toBe(safeHttpUrl(raw));
     }
   });
 });

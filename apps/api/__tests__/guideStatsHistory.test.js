@@ -51,15 +51,15 @@ describe("GuideStatsService — history, examples and privacy", () => {
       baseline: null, baselineCandidate: firstSnapshot, trend: null, isNew: true, firstPublishedAt: new Date(NOW_MS),
     });
 
-    // Reruns inside the week ("Recompute now", deploys): numbers and both slots unchanged.
+    // Reruns inside the week ("Recompute now", deploys): numbers, both slots and isNew unchanged.
     const rerun = await runAt(NOW_MS + HOUR_MS);
     expect(pick(rerun)).toEqual(pick(first));
-    expect(rerun).toMatchObject({ baseline: null, baselineCandidate: firstSnapshot, trend: null, isNew: false });
+    expect(rerun).toMatchObject({ baseline: null, baselineCandidate: firstSnapshot, trend: null, isNew: true });
 
     await db.games.insertMany(cellGames({ users: 6, perUser: 10, winsPerUser: 10, userPrefix: "b" }));
     const midWeek = await runAt(NOW_MS + 3 * DAY_MS);
     expect(midWeek.overall).toMatchObject({ games: 180, wins: 120, winRate: 0.6667 });
-    expect(midWeek).toMatchObject({ baseline: null, baselineCandidate: firstSnapshot, trend: null });
+    expect(midWeek).toMatchObject({ baseline: null, baselineCandidate: firstSnapshot, trend: null, isNew: true });
 
     // Day 7: the week-old candidate becomes the baseline; today's numbers the next candidate.
     const weekOne = await runAt(NOW_MS + 7 * DAY_MS);
@@ -67,6 +67,7 @@ describe("GuideStatsService — history, examples and privacy", () => {
     expect(weekOne.baseline).toEqual(firstSnapshot);
     expect(weekOne.baselineCandidate).toEqual(weekOneSnapshot);
     expect(weekOne.trend).toEqual({ winRateDelta: 0.1667, prevalenceDelta: 0, since: new Date(NOW_MS) });
+    expect(weekOne.isNew).toBe(false);
 
     const weekOneRerun = await runAt(NOW_MS + 7 * DAY_MS + HOUR_MS);
     expect(pick(weekOneRerun)).toEqual(pick(weekOne));
@@ -89,21 +90,38 @@ describe("GuideStatsService — history, examples and privacy", () => {
     expect(afterGap.baselineCandidate).toEqual({ ...weekOneSnapshot, at: new Date(NOW_MS + 60 * DAY_MS) });
   });
 
-  test("isNew marks the first published run; firstPublishedAt is carried even when unpublished again", async () => {
+  test("isNew: first published < 7 days ago, no trend; firstPublishedAt carried when unpublished", async () => {
     await db.games.insertMany(cellGames({ users: 6, perUser: 10, winsPerUser: 5, userPrefix: "a" }));
     const cellOnly = await runAt(NOW_MS);
     expect(cellOnly).toMatchObject({ published: false, isNew: false, firstPublishedAt: null });
 
     await db.games.insertMany(cellGames({ users: 6, perUser: 10, winsPerUser: 5, userPrefix: "b" }));
     const published = await runAt(NOW_MS + DAY_MS);
-    expect(published).toMatchObject({ published: true, isNew: true, firstPublishedAt: new Date(NOW_MS + DAY_MS) });
+    expect(published).toMatchObject({
+      published: true, isNew: true, trend: null, firstPublishedAt: new Date(NOW_MS + DAY_MS),
+    });
 
     const again = await runAt(NOW_MS + 2 * DAY_MS);
-    expect(again).toMatchObject({ published: true, isNew: false, firstPublishedAt: new Date(NOW_MS + DAY_MS) });
+    expect(again).toMatchObject({ published: true, isNew: true, firstPublishedAt: new Date(NOW_MS + DAY_MS) });
 
     await db.games.deleteMany({ userId: /^b-/ });
     const dropped = await runAt(NOW_MS + 3 * DAY_MS);
     expect(dropped).toMatchObject({ published: false, isNew: false, firstPublishedAt: new Date(NOW_MS + DAY_MS) });
+
+    // Re-crossing the page floor weeks later is not a new guide.
+    await db.games.insertMany(cellGames({ users: 6, perUser: 10, winsPerUser: 5, userPrefix: "c" }));
+    const recrossed = await runAt(NOW_MS + 30 * DAY_MS);
+    expect(recrossed).toMatchObject({ published: true, isNew: false, firstPublishedAt: new Date(NOW_MS + DAY_MS) });
+  });
+
+  test("a build whose pre-publish snapshots give a trend is published with the trend, not as new", async () => {
+    await db.games.insertMany(cellGames({ users: 6, perUser: 14, winsPerUser: 7, userPrefix: "a" }));
+    expect(await runAt(NOW_MS)).toMatchObject({ published: false, isNew: false });
+    await runAt(NOW_MS + 7 * DAY_MS);
+    await db.games.insertMany(cellGames({ users: 6, perUser: 4, winsPerUser: 4, userPrefix: "a" }));
+    const crossed = await runAt(NOW_MS + 8 * DAY_MS);
+    expect(crossed).toMatchObject({ published: true, isNew: false, firstPublishedAt: new Date(NOW_MS + 8 * DAY_MS) });
+    expect(crossed.trend).toEqual({ winRateDelta: 0.1111, prevalenceDelta: 0, since: new Date(NOW_MS) });
   });
 
   test("examples: newest stored replay per sharing user, public fields only", async () => {
