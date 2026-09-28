@@ -72,6 +72,7 @@ class ReviewsService {
    *   reputation: import('./reviewerReputation').ReviewerReputationService,
    *   notifications: import('./notifications').NotificationsService,
    *   community?: {report(userId: string, input: {targetType: string, targetId: string, reason: string, note?: string}, opts?: {registeredTarget?: boolean}): Promise<{alreadyReported: boolean}>},
+   *   replayFiles?: {prepareDownload(userId: string, gameId: string, opts?: {filename?: string}): Promise<{url: string, filename: string, expiresIn: number}>} | null,
    *   now?: () => number,
    *   logger?: import('pino').Logger,
    * }} deps
@@ -84,6 +85,7 @@ class ReviewsService {
     this.reputation = deps.reputation;
     this.notifications = deps.notifications;
     this.community = deps.community || null;
+    this.replayFiles = deps.replayFiles || null;
     this.now = deps.now || (() => Date.now());
     this.logger = deps.logger || null;
   }
@@ -163,6 +165,8 @@ class ReviewsService {
       visibility: input.visibility === "link" ? "link" : "public",
       askerDisplay,
       askerName,
+      // The asker's explicit choice; off unless they tick the box.
+      shareReplay: input.shareReplay === true,
       ...snapshot,
       hasPlayback: playbackMode !== "none",
       playbackMode,
@@ -320,11 +324,101 @@ class ReviewsService {
       now: this.now(),
     });
     return {
-      request: requestView(doc, { viewer, isAsker }),
+      request: requestView(doc, { viewer, isAsker, replay: await this._replayState(doc, isAsker) }),
       comments: thread,
       viewer: await this._viewerCapabilities(doc, viewer, isAsker),
       seo: seoView(doc, comments),
     };
+  }
+
+  /**
+   * Whether reviewers can download the asker's replay file: shared by the
+   * asker, request open, and the file actually backed up.
+   *
+   * The asker also gets ``optedIn`` — their saved choice — so the switch
+   * shows what they chose even while the request is hidden (when downloads
+   * are paused) and they can still turn it off.
+   *
+   * @param {Doc} doc
+   * @param {boolean} [isAsker]
+   * @returns {Promise<{shared: boolean, available: boolean, optedIn?: boolean}>}
+   */
+  async _replayState(doc, isAsker = false) {
+    const mine = isAsker ? { optedIn: doc.shareReplay === true } : {};
+    if (!replayShared(doc)) return { shared: false, available: false, ...mine };
+    const ready = await this._replayReady([doc]);
+    return { shared: true, available: ready.has(doc._id), ...mine };
+  }
+
+  /**
+   * Ids of the given requests whose replay file is shared AND actually
+   * stored (one query), so cards only offer a download that will work.
+   *
+   * @param {Doc[]} docs
+   * @returns {Promise<Set<string>>}
+   */
+  async _replayReady(docs) {
+    const shared = docs.filter(replayShared);
+    if (!this.replayFiles || shared.length === 0) return new Set();
+    const rows = await this.db.games
+      .find(
+        { $or: shared.map((d) => ({ userId: d.userId, gameId: d.gameId })), "replayFile.storedAt": { $ne: null } },
+        { projection: { _id: 0, userId: 1, gameId: 1 } },
+      )
+      .toArray();
+    const stored = new Set(rows.map((r) => `${r.userId}\u0000${r.gameId}`));
+    return new Set(shared.filter((d) => stored.has(`${d.userId}\u0000${d.gameId}`)).map((d) => d._id));
+  }
+
+  /**
+   * The asker turns replay-file sharing on or off (admins may turn it off).
+   *
+   * @param {string} requestId
+   * @param {Viewer & {userId: string}} viewer
+   * @param {boolean} value
+   */
+  async setReplaySharing(requestId, viewer, value) {
+    const doc = await this.getDoc(requestId);
+    if (!doc || doc.status === "removed") throw notFound();
+    const isAsker = doc.userId === viewer.userId;
+    if (!isAsker && !(viewer.isAdmin && !value)) {
+      throw reviewError(403, "forbidden", "Only the asker can change replay sharing.");
+    }
+    if (value && !ACTIVE_STATUSES.includes(doc.status)) {
+      throw reviewError(409, "review_closed", "This request is closed, so its replay can't be shared.");
+    }
+    await this.db.reviewRequests.updateOne(
+      { _id: doc._id },
+      { $set: { shareReplay: value, updatedAt: new Date(this.now()) } },
+    );
+    // The effective state (e.g. still paused while hidden) and the choice.
+    return { shared: replayShared({ ...doc, shareReplay: value }), optedIn: value };
+  }
+
+  /**
+   * A short-lived download link for the asker's replay file. Only while
+   * the asker shares it and the request is open (the same scoped grant as
+   * the analysis). The file is served under a neutral name: the default
+   * download name includes the opponent's.
+   *
+   * @param {string} requestId
+   */
+  async replayDownload(requestId) {
+    const { doc, ownerId, gameId } = await this.grant(requestId);
+    if (doc.shareReplay !== true) {
+      throw reviewError(404, "replay_not_shared", "The asker hasn't shared this replay file.");
+    }
+    if (!this.replayFiles) throw reviewError(503, "replay_storage_unavailable", "Replay storage is unavailable.");
+    try {
+      return await this.replayFiles.prepareDownload(ownerId, gameId, {
+        filename: `sc2tools-review-${doc._id}.SC2Replay`,
+      });
+    } catch (err) {
+      if (/** @type {any} */ (err)?.status === 404) {
+        throw reviewError(404, "replay_unavailable", "The replay file hasn't been uploaded by the asker's desktop agent yet.");
+      }
+      throw err;
+    }
   }
 
   /**
@@ -394,8 +488,9 @@ class ReviewsService {
       .toArray();
     const page = rows.slice(0, limit);
     const last = page[page.length - 1];
+    const ready = await this._replayReady(page);
     return {
-      items: page.map((doc) => cardView(doc)),
+      items: page.map((doc) => cardView(doc, ready.has(doc._id))),
       nextCursor: rows.length > limit && last
         ? encodeCursor({ s: sort, v: sort === "new" ? new Date(last.createdAt).toISOString() : last[field], id: last._id })
         : null,
@@ -434,12 +529,13 @@ class ReviewsService {
         .toArray())
         .map((b) => b.blockerId),
     );
-    const items = rows
+    const picked = rows
       // Only a NAMED asker's block hides their request here: dropping an
       // anonymous one would tell the viewer that its asker blocked them.
       .filter((doc) => !(doc.askerDisplay === "named" && blockedBy.has(doc.userId)) && meetsDesiredLevel(doc, verification))
-      .slice(0, 12)
-      .map((doc) => cardView(doc));
+      .slice(0, 12);
+    const ready = await this._replayReady(picked);
+    const items = picked.map((doc) => cardView(doc, ready.has(doc._id)));
     return { verified, items, reason: null };
   }
 
@@ -466,14 +562,15 @@ class ReviewsService {
       ? await this.db.reviewRequests.find({ _id: { $in: requestIds }, status: { $ne: "removed" } }).toArray()
       : [];
     const byId = new Map(requests.map((r) => [r._id, r]));
+    const ready = await this._replayReady([...asked, ...requests]);
     return {
       // Only the asker's own list says a request is hidden pending review.
-      asked: asked.map((doc) => ({ ...cardView(doc), visibility: doc.visibility, hidden: doc.hidden === true, isOwn: true })),
+      asked: asked.map((doc) => ({ ...cardView(doc, ready.has(doc._id)), visibility: doc.visibility, hidden: doc.hidden === true, isOwn: true })),
       answered: authored.flatMap((comment) => {
         const doc = byId.get(comment.requestId);
         if (!doc || (doc.hidden && doc.userId !== userId)) return [];
         return [{
-          request: cardView(doc),
+          request: cardView(doc, ready.has(doc._id)),
           commentId: comment._id,
           snippet: snippet(comment.body),
           helpful: comment.helpful === true,
@@ -1610,7 +1707,7 @@ class ReviewsService {
 
 /**
  * @param {Doc} doc
- * @param {{viewer: Viewer, isAsker: boolean}} ctx
+ * @param {{viewer: Viewer, isAsker: boolean, replay?: {shared: boolean, available: boolean, optedIn?: boolean}}} ctx
  */
 function requestView(doc, ctx) {
   return {
@@ -1656,9 +1753,20 @@ function requestView(doc, ctx) {
       upvoteTotal: doc.upvoteTotal || 0,
     },
     bestCommentId: doc.bestCommentId || null,
+    replay: ctx.replay || { shared: false, available: false },
     createdAt: iso(doc.createdAt),
     lastActivityAt: iso(doc.lastActivityAt),
   };
+}
+
+/**
+ * Whether the replay file is currently offered: the asker opted in and
+ * the request is open and not hidden.
+ *
+ * @param {Doc} doc
+ */
+function replayShared(doc) {
+  return doc.shareReplay === true && ACTIVE_STATUSES.includes(doc.status) && doc.hidden !== true;
 }
 
 /** @param {unknown} reason */
@@ -1667,8 +1775,11 @@ function publicClosedReason(reason) {
   return "closed";
 }
 
-/** @param {Doc} doc */
-function cardView(doc) {
+/**
+ * @param {Doc} doc
+ * @param {boolean} [replayReady] the shared replay file is stored (see _replayReady)
+ */
+function cardView(doc, replayReady = false) {
   return {
     id: doc._id,
     url: `/reviews/${doc._id}`,
@@ -1686,6 +1797,8 @@ function cardView(doc) {
     helpfulCount: doc.helpfulCount || 0,
     hasBest: Boolean(doc.bestCommentId),
     hasPlayback: doc.hasPlayback === true,
+    // Only when a download would actually work (shared AND stored).
+    replayShared: replayShared(doc) && replayReady,
     createdAt: iso(doc.createdAt),
     lastActivityAt: iso(doc.lastActivityAt),
   };

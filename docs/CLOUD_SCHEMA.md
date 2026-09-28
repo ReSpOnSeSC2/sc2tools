@@ -319,6 +319,7 @@ Public payloads are rebuilt from allow-lists in
   "question": "...", "tags": ["build_order"], "timeRange": {"startSec": 300, "endSec": 420} | null,
   "desiredLevel": "anyone|my_league_or_higher|masters_plus",
   "visibility": "public|link", "askerDisplay": "anonymous|named", "askerName": "..." | null,
+  "shareReplay": false,             // asker's opt-in: signed-in reviewers may download the .SC2Replay
   // redacted snapshot frozen at posting time
   "matchup": "PvZ", "myRace": "Protoss", "oppRace": "Zerg", "map": "...", "result": "Win|Loss|Draw",
   "durationSec": 640, "askerBand": {"id": 4, "label": "Diamond"}, "askerMmr": 4100,

@@ -34,6 +34,10 @@ vi.mock("@/components/analyzer/macro/MacroBreakdownPanel", () => ({
   MacroBreakdownPanel: () => null,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 beforeEach(() => {
   useApiMock.mockReturnValue({
     data: undefined,
@@ -51,6 +55,47 @@ afterEach(() => {
   useApiMock.mockReset();
   apiCallMock.mockReset();
   getTokenMock.mockClear();
+});
+
+describe("AllGamesTable: Ask for a review", () => {
+  const GAME = {
+    id: "game/77",
+    date: "2026-07-10T12:00:00.000Z",
+    result: "Loss",
+    map: "Ancient Cistern",
+    my_race: "Protoss",
+    opp_race: "Zerg",
+    opp_strategy: "Roach timing",
+    my_build: "Oracle opener",
+    game_length: 720,
+    macro_score: 61,
+  };
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("appears on an opponent dossier's rows and opens the form without expanding the row", () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    render(<AllGamesTable games={[GAME]} opponentContext={{ pulseId: "1-S2-1-7" }} />);
+    const asks = screen.getAllByRole("button", { name: "Ask for a review of this game" });
+    // One compact desktop action, one full-width mobile action.
+    expect(asks).toHaveLength(2);
+    expect(asks[0].textContent).toContain("Review");
+    fireEvent.click(asks[0]);
+    expect(screen.getByRole("dialog", { name: "Ask for a replay review" })).toBeTruthy();
+    expect(screen.queryByText("Build order timeline")).toBeNull();
+  });
+
+  it("stays out of other tables and hides while the rollout is off", () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    const { unmount } = render(<AllGamesTable games={[GAME]} />);
+    expect(screen.queryByRole("button", { name: "Ask for a review of this game" })).toBeNull();
+    unmount();
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "off");
+    render(<AllGamesTable games={[GAME]} opponentContext={{ pulseId: "1-S2-1-7" }} />);
+    expect(screen.queryByRole("button", { name: "Ask for a review of this game" })).toBeNull();
+  });
 });
 
 describe("AllGamesTable game analysis entry point", () => {

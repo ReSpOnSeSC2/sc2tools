@@ -3,10 +3,18 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReplayLibraryItem } from "../replays/types";
 import { ReplayList } from "../replays/ReplayList";
 
-const { downloadMock, macroPanelMock, publicDownloadMock } = vi.hoisted(() => ({
+const { downloadMock, macroPanelMock, publicDownloadMock, askMock } = vi.hoisted(() => ({
   downloadMock: vi.fn(),
   macroPanelMock: vi.fn(),
   publicDownloadMock: vi.fn(),
+  askMock: vi.fn(),
+}));
+
+vi.mock("@/components/reviews/AskForReviewButton", () => ({
+  AskForReviewButton: (props: { gameId: string; matchup: string | null; label?: string; ariaLabel?: string }) => {
+    askMock(props);
+    return <button type="button" aria-label={props.ariaLabel}>{props.label ?? "Ask for a review"}</button>;
+  },
 }));
 
 vi.mock("@/components/analyzer/ReplayDownloadButton", () => ({
@@ -111,6 +119,7 @@ afterEach(() => {
   downloadMock.mockClear();
   macroPanelMock.mockClear();
   publicDownloadMock.mockClear();
+  askMock.mockClear();
 });
 
 describe("ReplayList", () => {
@@ -296,6 +305,27 @@ describe("ReplayList", () => {
       screen.getAllByLabelText("Primary opponent: Rival, Terran"),
     ).toHaveLength(2);
     expect(screen.getAllByText("Team game · 4 players")).toHaveLength(2);
+  });
+
+  it("offers Ask for a review on the owner's 1v1 rows only", () => {
+    const { unmount } = render(<ReplayList items={[{ ...REPLAY, matchFormat: "1v1", matchup: "PvT" }]} owner playerName="Reaver" />);
+    // Desktop row + mobile card, each styled for its own layout.
+    const asks = screen.getAllByRole("button", { name: "Ask for a review of your game vs Rival on Crimson Court LE" });
+    expect(asks).toHaveLength(2);
+    expect(asks.map((b) => b.textContent)).toEqual(["Review", "Ask for review"]);
+    expect(askMock).toHaveBeenCalledWith(expect.objectContaining({ gameId: "game/42", matchup: "PvT", durationSec: 845 }));
+    // The macro breakdown opened from a 1v1 row offers it too.
+    fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown for/i })[0]);
+    expect(macroPanelMock).toHaveBeenLastCalledWith(expect.objectContaining({ reviewable: true }));
+    unmount();
+
+    askMock.mockClear();
+    const team = render(<ReplayList items={[{ ...REPLAY, matchFormat: "team", playerCount: 4 }]} owner playerName="Reaver" />);
+    expect(askMock).not.toHaveBeenCalled();
+    team.unmount();
+
+    render(<ReplayList items={[REPLAY]} owner={false} playerName="Reaver" publicHandle="shared" />);
+    expect(askMock).not.toHaveBeenCalled();
   });
 
   it("renders an accessible empty state for an exhausted query", () => {

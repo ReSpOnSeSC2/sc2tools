@@ -60,7 +60,13 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
             <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
               My reviews
             </Link>
-            <Link href="/app" className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover">
+            {/* Requests start from a game page; Replays is the list of your
+                games (the "Ask for a review" button sits in its actions). */}
+            <Link
+              href="/app/replays"
+              title="Opens your replays: pick a 1v1 game, then click “Ask for a review”"
+              className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover"
+            >
               Ask about one of your games
             </Link>
           </div>

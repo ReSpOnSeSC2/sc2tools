@@ -19,6 +19,30 @@ export function reviewsRollout(): ReviewsRollout {
   return "off";
 }
 
+/**
+ * Whether a game's format can be posted for review (1v1 only; legacy rows
+ * with no format are accepted, as the API does). Lists use this to hide
+ * the button on team games; the API still re-checks.
+ */
+export function isReviewableGame(game: {
+  matchFormat?: string | null;
+  playerCount?: number | null;
+}): boolean {
+  if (game.matchFormat) return game.matchFormat === "1v1";
+  return game.playerCount == null || game.playerCount === 2;
+}
+
+/** "PvZ" from two race names or letters, or null when either is unknown. */
+export function matchupFromRaces(myRace?: string | null, oppRace?: string | null): string | null {
+  const letter = (race?: string | null) => {
+    const c = String(race || "").trim().charAt(0).toUpperCase();
+    return c === "P" || c === "T" || c === "Z" ? c : null;
+  };
+  const mine = letter(myRace);
+  const theirs = letter(oppRace);
+  return mine && theirs ? `${mine}v${theirs}` : null;
+}
+
 /** Whether review surfaces should be offered to this viewer. */
 export function reviewsVisible(isAdmin: boolean | undefined): boolean {
   const rollout = reviewsRollout();
@@ -93,6 +117,8 @@ export type ReviewCard = {
   visibility?: "public" | "link";
   /** Only on the asker's own list: hidden pending moderator review. */
   hidden?: boolean;
+  /** The asker lets signed-in players download the replay file. */
+  replayShared?: boolean;
 };
 
 export type ReviewBoardResponse = { items: ReviewCard[]; nextCursor: string | null };
@@ -143,6 +169,9 @@ export type ReviewRequestView = {
   opponent: { label: string; race: Race | null; band: Band | null; mmr: number | null };
   stats: { reviewCount: number; commentCount: number; helpfulCount: number; upvoteTotal: number };
   bestCommentId: string | null;
+  /** Replay file download: opted in by the asker, and backed up yet. */
+  /** ``optedIn`` is the asker's saved choice (only sent to the asker). */
+  replay?: { shared: boolean; available: boolean; optedIn?: boolean };
   createdAt: string | null;
   lastActivityAt: string | null;
 };

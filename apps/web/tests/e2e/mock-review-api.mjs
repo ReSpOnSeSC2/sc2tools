@@ -36,6 +36,7 @@ const REQUEST = {
   opponent: { label: "Opponent (Zerg, ~4,100 MMR)", race: "Zerg", band: { id: 4, label: "Diamond" }, mmr: 4100 },
   stats: { reviewCount: 3, commentCount: 4, helpfulCount: 1, upvoteTotal: 6 },
   bestCommentId: "e2eComment000001",
+  replay: { shared: true, available: true },
   createdAt: NOW,
   lastActivityAt: NOW,
 };
@@ -72,7 +73,7 @@ const PAGE = {
 const CARD = {
   id: ID, url: REQUEST.url, question: REQUEST.question, tags: REQUEST.tags, matchup: "PvZ", map: REQUEST.game.map,
   result: "Loss", durationSec: 600, askerLabel: "Anonymous Protoss", askerBand: REQUEST.asker.band, desiredLevel: "anyone",
-  status: "answered", reviewCount: 3, helpfulCount: 1, hasBest: true, hasPlayback: true, createdAt: NOW, lastActivityAt: NOW,
+  status: "answered", reviewCount: 3, helpfulCount: 1, hasBest: true, hasPlayback: true, replayShared: true, createdAt: NOW, lastActivityAt: NOW,
 };
 
 const wp = (t0, x, y) => [t0, x, y, 600, x, y];

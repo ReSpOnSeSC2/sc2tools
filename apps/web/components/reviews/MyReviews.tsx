@@ -72,8 +72,8 @@ function MyReviewsSignedIn() {
           ) : asked.length === 0 ? (
             <EmptyStatePanel
               title="You haven't asked for a review yet"
-              description="Open one of your 1v1 games and use “Ask for a review”."
-              action={<Link href="/app" className="font-semibold text-accent-cyan underline underline-offset-2">Go to your games</Link>}
+              description="Open one of your 1v1 games from Replays and use “Ask for a review”."
+              action={<Link href="/app/replays" className="font-semibold text-accent-cyan underline underline-offset-2">Go to your replays</Link>}
             />
           ) : (
             <ul className="space-y-3" aria-label="Your review requests">

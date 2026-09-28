@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -26,23 +26,48 @@ type Props = {
   matchup: string | null;
 };
 
+type ButtonProps = Props & {
+  /**
+   * The button's look, so it matches wherever it sits (the game header
+   * pill by default; replay rows, dossier tables and the macro panel pass
+   * their own action classes).
+   */
+  className?: string;
+  /** Visible label; defaults to "Ask for a review". */
+  label?: ReactNode;
+  /** Accessible name when the visible label is shortened. */
+  ariaLabel?: string;
+  iconClassName?: string;
+};
+
+const DEFAULT_CLASS =
+  "hard-press inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
 /**
- * "Ask for a review" on /app/game/[gameId]. Only offered while the
- * rollout shows reviews to this viewer. The API re-checks everything
- * (own game, 1v1, macro breakdown, caps).
+ * "Ask for a review" for one of your games: the game page, your replay
+ * list, an opponent dossier's replays and the macro breakdown. Only
+ * offered while the rollout shows reviews to this viewer. The API
+ * re-checks everything (own game, 1v1, macro breakdown, caps).
  */
-export function AskForReviewButton(props: Props) {
+export function AskForReviewButton({
+  className = DEFAULT_CLASS,
+  label = "Ask for a review",
+  ariaLabel,
+  iconClassName = "h-4 w-4",
+  ...props
+}: ButtonProps) {
   const { data: me } = useApi<{ isAdmin?: boolean }>("/v1/me");
   const [open, setOpen] = useState(false);
   if (!reviewsVisible(me?.isAdmin)) return null;
+  const onClick = (e: MouseEvent) => {
+    // Rows in some tables expand on click; asking shouldn't toggle them.
+    e.stopPropagation();
+    setOpen(true);
+  };
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="hard-press inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <MessageSquarePlus className="h-4 w-4" aria-hidden /> Ask for a review
+      <button type="button" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} className={className}>
+        <MessageSquarePlus className={iconClassName} aria-hidden /> {label}
       </button>
       {open ? <AskForReviewDialog {...props} onClose={() => setOpen(false)} /> : null}
     </>
@@ -60,6 +85,7 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
   const [level, setLevel] = useState<DesiredLevel>("anyone");
   const [visibility, setVisibility] = useState<"public" | "link">("public");
   const [named, setNamed] = useState(false);
+  const [shareReplay, setShareReplay] = useState(false);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +110,7 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           desiredLevel: level,
           visibility,
           askerDisplay: named ? "named" : "anonymous",
+          shareReplay,
         }),
       });
       gaEvent("review_requested", { matchup: matchup ?? "unknown", visibility, level });
@@ -186,10 +213,24 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           </span>
         </label>
 
+        <label className="flex items-start gap-2 text-caption text-text">
+          <input type="checkbox" checked={shareReplay} onChange={(e) => setShareReplay(e.target.checked)} className="mt-0.5 h-4 w-4" />
+          <span>
+            Let reviewers download the replay file.{" "}
+            <span className="text-text-dim">Signed-in players can then open it in StarCraft II. You can stop sharing at any time, which stops new downloads.</span>
+          </span>
+        </label>
+        {shareReplay ? (
+          <p role="note" className="rounded-lg border border-warning/50 bg-warning/10 p-2 text-caption text-text">
+            The .SC2Replay file contains both players&apos; in-game names and any in-game chat, including yours and your opponent&apos;s, even if you post anonymously.
+            If the desktop agent hasn&apos;t backed up this replay yet, the download appears once it has.
+          </p>
+        ) : null}
+
         {error ? (
           <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 p-2 text-caption text-danger">
             {error}{" "}
-            {existing ? <Link href="/reviews" className="underline">See your requests</Link> : null}
+            {existing ? <Link href="/reviews/mine" className="underline">See your requests</Link> : null}
           </p>
         ) : null}
       </form>
