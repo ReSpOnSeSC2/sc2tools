@@ -63,7 +63,13 @@ export interface PublicReviewerSection {
   bestAnswers: number;
   badges: Array<{ key: string; label: string }>;
   flair: string | null;
-  verified: { band: { id: number; label: string }; race: string | null; mmr: number | null } | null;
+  verified: {
+    band: { id: number; label: string };
+    race: string | null;
+    mmr: number | null;
+    /** The league in each region they play ranked 1v1 in, strongest first. */
+    regions?: Array<{ region: string; band: { id: number; label: string }; race: string | null }>;
+  } | null;
   matchupsReviewed: Array<{ matchup: string; count: number }>;
 }
 

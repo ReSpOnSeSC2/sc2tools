@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
 import { fmtAgo, pct, wrColor } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
+import { verifiedRegionsLabel } from "@/lib/reviews";
 import { GetYourOwnCTA } from "./GetYourOwnCTA";
 import type {
   PublicPlayerProfile,
@@ -207,7 +208,7 @@ function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
         <div className="flex flex-wrap gap-1.5">
           {reviewer.verified ? (
             <Badge variant="cyan" size="sm">
-              Verified {reviewer.verified.band.label}{reviewer.verified.race ? ` ${reviewer.verified.race}` : ""}
+              Verified {verifiedRegionsLabel(reviewer.verified)}
             </Badge>
           ) : null}
           {reviewer.flair ? <Badge variant="signal" size="sm">{reviewer.flair}</Badge> : null}

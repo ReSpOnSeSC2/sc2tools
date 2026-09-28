@@ -715,9 +715,13 @@ function makeServices(deps) {
     io: deps.io,
     logger: deps.logger,
   });
+  // ``pulse`` reads each reviewer account's current-season league
+  // (Grandmaster is a region's top 200, not an MMR line). Tests inject a
+  // PulseMmrService with fetch disabled, or a stand-in.
   const reviewerReputation = new ReviewerReputationService(deps.db, {
     seasons,
     seasonWindowStart: deps.reviewSeasonWindowStart,
+    pulse: pulseMmr,
     logger: deps.logger,
   });
   const reviews = new ReviewsService(deps.db, {

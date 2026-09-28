@@ -9,6 +9,8 @@ own synced games, and helpful reviewers earn karma.
   - `apps/api/src/services/reviews.js` (requests, board, scoped grant,
     comments, karma ledger, blocks, moderation hooks, GDPR, weekly digest)
   - `services/reviewerReputation.js` (verification, badges, leaderboard)
+  - `services/reviewerLeagues.js` (league per region from SC2Pulse and
+    the reviewer's own games)
   - `services/reviewRedaction.js` (the only place that decides what a public
     payload may contain)
   - `services/notifications.js` (the in-app bell)
@@ -237,15 +239,33 @@ own synced games, and helpful reviewers earn karma.
   games** in the current or previous season. The window starts at the
   previous season's start from the SC2Pulse catalog, with a 180-day
   fallback.
-- **Per race:**
+- **Per region** (`services/reviewerLeagues.js`):
+  - The accounts (toon handles) behind **3 or more** of those games are
+    looked up on SC2Pulse. A region's league is the one Blizzard gave the
+    account this season. This is the only way to know **Grandmaster**,
+    which is a region's top 200, not an MMR line.
+  - A region shows the higher of that league and the band its own games
+    reach (below). When SC2Pulse is down or has no team yet, the games
+    alone decide.
+  - The UI lists every region: "Grandmaster Protoss (NA, EU)", or
+    "Grandmaster Protoss (NA) · Master Zerg (EU)".
+  - Only accounts from the reviewer's own games count, so nobody can
+    borrow another player's league. Public payloads carry each region's
+    band and race, never its MMR.
+- **From games, per race:**
   - The race needs **10 or more games**.
   - The band is the one reached by the race's **3rd-best** game, so a
     single outlier or a corrupt row can't verify anyone upward.
-- The reviewer's best race wins. Without enough games, the reviewer is
-  "Unverified".
-- The result is cached on `users.reviewer.verified` for 12 hours.
+- The overall league is the strongest region's, or the band all the games
+  reach together when that is higher. It drives "My league or higher",
+  "Masters+", "Requests you can help with" and flair. Without enough
+  games, the reviewer is "Unverified".
+- The result is cached on `users.reviewer.verified` (version `v: 2`) for
+  12 hours. A result cached before regions existed is recomputed on the
+  next read. SC2Pulse gets 6 seconds per verification.
 - **Bands** use the ladder `leagueId` numbering (0 Bronze … 6
-  Grandmaster), from MMR floors in `util/leagueBands.js`.
+  Grandmaster). Game MMR maps to a band through the floors in
+  `util/leagueBands.js`.
 
 ### Coaching stays private
 

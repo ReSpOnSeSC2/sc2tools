@@ -2,15 +2,29 @@
 
 const { REVIEWS } = require("../config/constants");
 const { cleanDisplayName } = require("../util/contentFilter");
-const {
-  bandFromMmr,
-  bandFromId,
-  approximateMmr,
-  isPlausibleMmr,
-} = require("../util/leagueBands");
+const { bandFromId, approximateMmr } = require("../util/leagueBands");
 const { normalizeRace } = require("./reviewRedaction");
+const {
+  groupLadderRows,
+  bestBandFromGames,
+  ladderAccounts,
+  ladderLeaguesByRegion,
+  gameLeaguesByRegion,
+  mergeRegionLeagues,
+  storedRegions,
+  publicRegions,
+  isStronger,
+} = require("./reviewerLeagues");
 
 const SEASON_WINDOW_TIMEOUT_MS = 3000;
+/** SC2Pulse lookup budget for one verification; the games verify alone after it. */
+const LADDER_LOOKUP_TIMEOUT_MS = 6000;
+/**
+ * Shape version of ``users.reviewer.verified``. A cached verification of
+ * an older version is recomputed on the next read instead of waiting out
+ * VERIFY_TTL_MS (v2 added SC2Pulse leagues and ``regions``).
+ */
+const VERIFICATION_VERSION = 2;
 const VERIFY_SCAN_LIMIT = 3000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,20 +43,24 @@ const BADGES = Object.freeze([
 /**
  * @typedef {{karma: number, helpful: number, best: number, upvotes: number, reviews: number, removed: number}} ReviewerStats
  * @typedef {{
+ *   v: number,
  *   band: {id: number, label: string} | null,
  *   race: string | null,
  *   mmr: number | null,
  *   games: number,
+ *   regions: Array<{region: string, band: {id: number, label: string}, race: string, mmr: number | null, games: number, source: string}>,
  *   windowStart: Date,
  *   verifiedAt: Date,
  *   reason?: string,
  * }} ReviewerVerification
+ * @typedef {{getLadderTeams(ids: string[]): Promise<import('./reviewerLeagues').LadderTeam[]>}} LadderSource
  */
 
 /**
  * ReviewerReputationService — who a reviewer is, as far as the public
- * page is concerned: verified league band and race (from their OWN
- * synced ladder games, never self-reported), karma and badges.
+ * page is concerned: verified league band and race, overall and per
+ * region (from the accounts in their OWN synced ladder games, never
+ * self-reported), karma and badges.
  *
  * Deliberately never reads the Coaching Locker: coaching stays private,
  * so nothing here reveals who coaches or who is coached.
@@ -53,6 +71,7 @@ class ReviewerReputationService {
    * @param {{
    *   seasons?: {list(): Promise<{items: Array<{battlenetId: number, start: string | null}>, current: number | null, source: string}>},
    *   seasonWindowStart?: () => Promise<Date>,
+   *   pulse?: LadderSource | null,
    *   now?: () => number,
    *   logger?: import('pino').Logger,
    * }} [opts]
@@ -60,6 +79,7 @@ class ReviewerReputationService {
   constructor(db, opts = {}) {
     this.db = db;
     this.seasons = opts.seasons || null;
+    this.pulse = opts.pulse || null;
     this.now = opts.now || (() => Date.now());
     this.logger = opts.logger || null;
     this._seasonWindowStart = opts.seasonWindowStart || null;
@@ -122,7 +142,12 @@ class ReviewerReputationService {
         { projection: { _id: 0, "reviewer.verified": 1 } },
       );
       const cached = user?.reviewer?.verified;
-      if (cached && cached.verifiedAt && this.now() - new Date(cached.verifiedAt).getTime() < REVIEWS.VERIFY_TTL_MS) {
+      if (
+        cached
+        && cached.v === VERIFICATION_VERSION
+        && cached.verifiedAt
+        && this.now() - new Date(cached.verifiedAt).getTime() < REVIEWS.VERIFY_TTL_MS
+      ) {
         return cached;
       }
     }
@@ -135,11 +160,19 @@ class ReviewerReputationService {
   }
 
   /**
-   * Highest band the reviewer has actually played at in the current or
-   * previous season, per race: the race needs VERIFY_MIN_GAMES ladder 1v1
-   * games in the window, and the band is the one reached by its
-   * VERIFY_BAND_SUPPORT-th best game (so a single outlier or a corrupt
-   * row never verifies anyone upward).
+   * The reviewer's verified league, overall and per region.
+   *
+   * The window's ranked 1v1 games (current or previous season) decide
+   * which accounts and regions count. A region's league is the higher of
+   * SC2Pulse's current-season league for those accounts and the band the
+   * region's games reach (``services/reviewerLeagues.js``). The overall
+   * band is the strongest region's, or the band all the games reach
+   * together when that is higher (for example games synced before the
+   * agent recorded toon handles).
+   *
+   * Example: Protoss games at ~5,300 MMR on NA and EU, and SC2Pulse
+   * placing both accounts in Grandmaster → band Grandmaster, regions
+   * [NA Grandmaster Protoss, EU Grandmaster Protoss].
    *
    * @param {string} userId
    * @returns {Promise<ReviewerVerification>}
@@ -164,52 +197,60 @@ class ReviewerReputationService {
             { matchFormat: { $exists: false }, playerCount: { $in: [2, null] } },
           ],
         },
-        { projection: { _id: 0, myRace: 1, myMmr: 1 } },
+        { projection: { _id: 0, myRace: 1, myMmr: 1, myToonHandle: 1 } },
       )
       .sort({ date: -1 })
       .limit(VERIFY_SCAN_LIMIT)
       .toArray();
-    /** @type {Map<string, number[]>} */
-    const byRace = new Map();
-    for (const row of rows) {
-      const race = normalizeRace(row.myRace);
-      if (!race || race === "Random" || !isPlausibleMmr(row.myMmr)) continue;
-      const list = byRace.get(race) || [];
-      list.push(Number(row.myMmr));
-      byRace.set(race, list);
-    }
-    /** @type {{race: string, mmr: number, band: {id: number, label: string}, games: number} | null} */
-    let best = null;
-    for (const [race, mmrs] of byRace) {
-      if (mmrs.length < REVIEWS.VERIFY_MIN_GAMES) continue;
-      mmrs.sort((a, b) => b - a);
-      const supported = mmrs[REVIEWS.VERIFY_BAND_SUPPORT - 1];
-      const band = bandFromMmr(supported);
-      if (!band) continue;
-      if (!best || band.id > best.band.id || (band.id === best.band.id && supported > best.mmr)) {
-        best = { race, mmr: supported, band: { id: band.id, label: band.label }, games: mmrs.length };
-      }
-    }
+    const { byRace, byRegion } = groupLadderRows(rows);
+    const teams = await this.ladderTeams(ladderAccounts(byRegion));
+    const regions = mergeRegionLeagues(ladderLeaguesByRegion(teams, byRegion), gameLeaguesByRegion(byRegion));
+    const pooled = bestBandFromGames(byRace);
+    const best = pooled && (!regions[0] || isStronger(pooled, regions[0])) ? pooled : regions[0] || null;
     const verifiedAt = new Date(this.now());
     if (!best) {
       return {
+        v: VERIFICATION_VERSION,
         band: null,
         race: null,
         mmr: null,
         games: rows.length,
+        regions: [],
         windowStart,
         verifiedAt,
         reason: "not_enough_ladder_games",
       };
     }
     return {
+      v: VERIFICATION_VERSION,
       band: best.band,
       race: best.race,
       mmr: approximateMmr(best.mmr),
       games: best.games,
+      regions: storedRegions(regions),
       windowStart,
       verifiedAt,
     };
+  }
+
+  /**
+   * Current-season SC2Pulse teams for the reviewer's own accounts. Empty
+   * when SC2Pulse isn't wired (tests), slow or down; the games still
+   * verify a band then.
+   *
+   * @param {string[]} toons toon handles from the reviewer's synced games
+   * @returns {Promise<import('./reviewerLeagues').LadderTeam[]>}
+   */
+  async ladderTeams(toons) {
+    if (!this.pulse || toons.length === 0) return [];
+    try {
+      const teams = await withTimeout(this.pulse.getLadderTeams(toons), LADDER_LOOKUP_TIMEOUT_MS);
+      return Array.isArray(teams) ? teams : [];
+    } catch (err) {
+      const reason = err instanceof Error && err.message === "timeout" ? "timeout" : "error";
+      this.logger?.warn({ reason }, "reviewer_ladder_lookup_failed");
+      return [];
+    }
   }
 
   /**
@@ -486,7 +527,8 @@ function flairFor(stats, verified) {
 }
 
 /**
- * Only the public facts: band, race, rounded MMR.
+ * Only the public facts: band, race and rounded MMR, plus each region's
+ * band and race (no per-region MMR).
  *
  * @param {Record<string, any> | undefined | null} raw
  */
@@ -498,6 +540,7 @@ function publicVerification(raw) {
     band: { id: band.id, label: band.label },
     race: normalizeRace(raw.race),
     mmr: typeof raw.mmr === "number" ? raw.mmr : null,
+    regions: publicRegions(raw.regions),
   };
 }
 
@@ -541,6 +584,7 @@ function withTimeout(promise, ms) {
 
 module.exports = {
   ReviewerReputationService,
+  VERIFICATION_VERSION,
   BADGES,
   badgesFor,
   flairFor,

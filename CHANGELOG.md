@@ -156,6 +156,16 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Replay reviews show your real league in each region** — a reviewer's
+  league was guessed from the MMR in their synced games, and only 6,500 MMR
+  and up counted as Grandmaster. A 5,350 NA Grandmaster therefore showed as
+  "Master", and every region was merged into one label. Each region now
+  uses the league SC2Pulse has for that account this season, for example
+  "Grandmaster Protoss (NA, EU)". Only accounts found in the reviewer's own
+  synced ladder games are looked up. When SC2Pulse has no team for a
+  region, or is down, that region falls back to its games' MMR. The
+  change applies to the "You" card, review badges, the leaderboard and
+  public profiles. Cached results are refreshed on the next read.
 - **APM matches StarCraft II** — agent **0.17.3** (`agent-v0.17.3`) uses
   the APM StarCraft II records in each replay for both players, so the
   macro breakdown, the replay page and the league benchmarks show the

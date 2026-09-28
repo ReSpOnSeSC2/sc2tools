@@ -10,6 +10,7 @@ import { usePublicApi } from "@/lib/usePublicApi";
 import {
   reviewsRollout,
   verifiedLabel,
+  verifiedRegionsLabel,
   type LeaderboardResponse,
   type ReviewBoardResponse,
   type ReviewerMe,
@@ -66,7 +67,7 @@ export function ReviewLeaderboard({ initial }: { initial: LeaderboardResponse | 
               <span className="w-5 text-right font-mono font-bold text-text-dim">{row.rank}</span>
               <span className="min-w-0 flex-1 truncate">
                 {row.profileHref ? <Link href={row.profileHref} className="font-semibold text-text hover:underline">{row.name}</Link> : <span className="font-semibold text-text">{row.name}</span>}
-                <span className="ml-1 text-text-dim">{row.flair ?? verifiedLabel(row.verified)}</span>
+                <span className="ml-1 text-text-dim">{row.flair ?? verifiedRegionsLabel(row.verified)}</span>
               </span>
               <span className="font-mono font-bold tabular-nums text-accent-cyan">+{row.points}</span>
             </li>
@@ -98,7 +99,7 @@ function LeaderboardOptIn({ onChanged }: { onChanged: () => void }) {
   return (
     <div className="mt-3 space-y-2 border-t border-border pt-3 text-caption">
       <p className="text-text-muted">
-        You: <strong className="text-text">{me.data.stats.karma} karma</strong> · {verifiedLabel(me.data.verified)}
+        You: <strong className="text-text">{me.data.stats.karma} karma</strong> · {verifiedRegionsLabel(me.data.verified)}
         {me.data.badges.length ? ` · ${me.data.badges.map((b) => b.label).join(", ")}` : ""}
       </p>
       <label className="flex items-center gap-2">
