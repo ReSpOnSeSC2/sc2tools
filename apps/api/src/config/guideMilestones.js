@@ -75,6 +75,13 @@ const PROTOSS_MILESTONES = Object.freeze([
   milestone("Charge", "Charge", ["Charge"], FINISH),
   milestone("AdeptPiercingAttack", "Resonating Glaives", ["AdeptPiercingAttack"], FINISH),
   milestone("Nexus#3", "3rd Nexus", ["Nexus"], START, THIRD),
+  // Tech the channel's build-order guides hinge on (Colossus pushes, DT
+  // drops, Carrier/Tempest rushes). Shown only where most games of a build
+  // actually reach them (GUIDE_MILESTONE_MIN_PRESENCE).
+  milestone("RoboticsBay", "Robotics Bay", ["RoboticsBay"], START),
+  milestone("DarkShrine", "Dark Shrine", ["DarkShrine"], START),
+  milestone("TemplarArchive", "Templar Archives", ["TemplarArchive"], START),
+  milestone("FleetBeacon", "Fleet Beacon", ["FleetBeacon"], START),
 ]);
 
 const TERRAN_MILESTONES = Object.freeze([
@@ -90,6 +97,8 @@ const TERRAN_MILESTONES = Object.freeze([
   milestone("ShieldWall", "Combat Shield", ["ShieldWall"], FINISH),
   milestone("PunisherGrenades", "Concussive Shells", ["PunisherGrenades"], FINISH),
   milestone("TerranInfantryWeaponsLevel1", "Infantry Weapons 1", ["TerranInfantryWeaponsLevel1"], FINISH),
+  milestone("Armory", "Armory", ["Armory"], START),
+  milestone("FusionCore", "Fusion Core", ["FusionCore"], START),
 ]);
 
 const ZERG_MILESTONES = Object.freeze([
@@ -110,6 +119,8 @@ const ZERG_MILESTONES = Object.freeze([
   milestone("HydraliskDen", "Hydralisk Den", ["HydraliskDen"], START),
   milestone("Spire", "Spire", ["Spire"], START),
   milestone("GlialReconstitution", "Glial Reconstitution", ["GlialReconstitution"], FINISH),
+  milestone("NydusNetwork", "Nydus Network", ["NydusNetwork"], START),
+  milestone("LurkerDenMP", "Lurker Den", ["LurkerDenMP", "LurkerDen"], START),
 ]);
 
 /** Race letter → ordered milestone list (display order). */
