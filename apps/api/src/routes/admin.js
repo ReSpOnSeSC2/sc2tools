@@ -33,6 +33,10 @@
 const express = require("express");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 const { buildAdminGuidesRouter } = require("./adminGuides");
+const {
+  ADMIN_STATUS_MAX_AGE_MS,
+  browserUploadStatusOf,
+} = require("../services/replayFilesCors");
 
 /**
  * @param {{
@@ -51,6 +55,7 @@ const { buildAdminGuidesRouter } = require("./adminGuides");
  *   onAdminGranted?: (clerkUserId: string) => void,
  *   gameDetailsStoreKind?: string,
  *   replayFilesStoreKind?: string,
+ *   browserUploadCors?: import('../services/replayFilesCors').BrowserUploadCorsStatus|null,
  *   guideNotes?: import('../services/guideNotes').GuideNotesService,
  *   guides?: import('../services/guides').GuidesService,
  *   guideStats?: import('../services/guideStats').GuideStatsService,
@@ -458,6 +463,10 @@ function buildAdminRouter(deps) {
         await deps.admin.health({
           gameDetailsStoreKind: deps.gameDetailsStoreKind,
           replayFilesStoreKind: deps.replayFilesStoreKind,
+          replayFilesBrowserUpload: browserUploadStatusOf(
+            deps.browserUploadCors,
+            { maxAgeMs: ADMIN_STATUS_MAX_AGE_MS },
+          ),
         }),
       );
     } catch (err) {

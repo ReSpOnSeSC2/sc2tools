@@ -68,9 +68,15 @@ screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
 4. Each remaining replay is parsed in the worker. `/try` also skips
    "resume from replay" sessions (`resumed_replay`).
 5. The report shows only cards the payloads support: record, record by
-   matchup, openers, most-faced opponent, macro score and top leaks, and "why
-   you lost" for the latest loss (`lib/instant/report.ts`). A card with no
-   data is hidden.
+   matchup, your openers and your opponents' openers (with your W-L against
+   each), most-faced opponent, macro score and top leaks, an MMR card, and
+   "why you lost" for the latest loss (`lib/instant/report.ts`). "Game by
+   game" lets the visitor pick a game and see both build orders side by side
+   and the macro timeline, rendered offline from the payload (no API call).
+   MMR is the pre-game MMR the replay records; the per-game change is the
+   difference to the next ladder game on the same account and queue in the
+   set, and is labelled that way because it includes any games the visitor
+   didn't add. A card with no data is hidden.
 6. **Nothing is uploaded unless the visitor saves.** The parsed games (at
    most 100) are kept in IndexedDB for 7 days, so the visitor can come back
    to the report.
@@ -588,9 +594,10 @@ Backup is optional and offered only by the signed-in import panel
 (`BrowserImportPanel`), never by `/try` or Folder Sync. Its "Also back up
 original replay files" checkbox appears only when
 `GET /v1/me/replay-archive-status` returns `enabled: true`
-(`REPLAY_FILES_STORE=r2`) and is then **checked by default**, like the
-agent; the panel's intro says a private copy of each file is uploaded while
-it is ticked. Digests are computed only while it is checked. Backup covers only the
+(`REPLAY_FILES_STORE=r2`) and `browserUploadReady: true` (see
+[Browser replay backup](#browser-replay-backup)), and is then **checked by
+default**, like the agent; the panel's intro says a private copy of each
+file is uploaded while it is ticked. Digests are computed only while it is checked. Backup covers only the
 games the server accepted, skips files over 5 MiB (the server's
 `REPLAY_FILE_MAX_BYTES`) and files the server already stores, and uses the
 agent's three-step protocol (`replayBackup.ts`) strictly one file at a time:
@@ -606,28 +613,100 @@ agent's three-step protocol (`replayBackup.ts`) strictly one file at a time:
 
 Busy, 5xx and network errors back off (2 s doubling to 60 s, full jitter,
 bounded attempts). Invalid requests and unknown games are skipped. Auth
-failure, `replay_storage_unavailable` or an abort stops the run.
+failure, `replay_storage_unavailable`, a PUT blocked by the browser, or an
+abort stops the run.
 
-**R2 CORS rule (required).** The browser PUTs straight to the **private**
-replay bucket, so that bucket needs this CORS policy (Cloudflare dashboard →
-R2 → bucket → Settings → CORS policy):
+### Browser replay backup
+
+The browser PUTs straight to the **private** replay bucket, so that bucket
+needs a CORS rule that allows `PUT` from the site's origins with the signed
+headers. Without it the browser blocks the PUT, which page script sees only
+as a `TypeError`. Two safeguards keep a missing rule from being hidden or
+retried:
+
+- **Gating.** The backup checkbox appears only when
+  `GET /v1/me/replay-archive-status` returns `enabled: true` **and**
+  `browserUploadReady: true` (missing counts as `false`). The API sets
+  `browserUploadReady` only after its own browser-style check passes (see
+  below).
+- **Fail fast.** If a PUT still throws a `TypeError`, `replayBackup.ts` stops
+  after that single attempt with `stoppedReason: "unavailable"` instead of
+  retrying every file. The games stay imported, and the summary says, in
+  neutral words: "Your games were imported. Original-file backup isn't
+  available right now, so no replay files were uploaded."
+
+**Automatic setup (default).** With `REPLAY_FILES_STORE=r2`, the API
+(`apps/api/src/services/replayFilesCors.js`) checks the rule in the
+background after it starts listening:
+
+1. It reads the bucket's CORS configuration. If no rule already allows PUT
+   with the four signed headers from every exact `http(s)` origin in
+   `CORS_ALLOWED_ORIGINS` (wildcards dropped, localhost only outside
+   production), it writes the rule `sc2tools-browser-replay-upload` next to
+   **every existing rule** (only an older copy of that one rule is
+   replaced), then reads the configuration again to confirm it.
+   `R2_BROWSER_CORS_AUTO=0` skips this write.
+2. It verifies the rule the way a browser would: an `OPTIONS` preflight from
+   each site origin (up to four), with `Access-Control-Request-Method: PUT`
+   and the four signed headers, sent to the same host and path style as the
+   signed PUT URLs (a probe key under `<R2_REPLAY_PREFIX>-pending/_cors-probe/`).
+   Nothing is uploaded. Only a passing preflight counts as ready. After a
+   fresh write it checks again 30 s later, the longest delay R2 documents
+   for a CORS change.
+3. It caches the result, logs one `replay_files_browser_cors` line
+   (`{status, configured}`), and checks again in the background every 10
+   minutes (every 2 minutes while Admin Health is open).
+
+Writing the rule needs an R2 key that is allowed to change bucket settings.
+A bucket-scoped **Object Read & Write** token is not, and the status then
+reads `no_permission`. Use the manual steps below instead.
+
+**Status card.** Admin → Infrastructure → Operational health →
+**Browser replay backup** (`runtime.replayFilesBrowserUpload` in
+`GET /v1/admin/health`) shows:
+
+| Status | Card | Meaning |
+|---|---|---|
+| `ready` | green **Ready** | The preflight passed, so browsers can back up originals. |
+| `missing_cors` | amber **Needs setup** | The preflight was refused. The detail line says why (for example, automatic setup is off). |
+| `no_permission` | amber **Needs setup** | The R2 key can't change bucket settings. Add the rule by hand. |
+| `error` | amber **Check failed** | The check could not finish (timeout, network). The detail line names the error code. |
+| `disabled` | grey **Off** | `REPLAY_FILES_STORE` is not `r2`. |
+| `unknown` / `checking` | grey **Checking…** | The first check has not finished yet. |
+
+Every checked state also shows "checked … ago".
+
+**Manual fallback (Cloudflare dashboard).**
+
+1. Open the Cloudflare dashboard and choose **R2 Object Storage**.
+2. Select the private replay bucket (the API's `R2_BUCKET`).
+3. Open the **Settings** tab.
+4. Under **CORS Policy**, choose **Add CORS policy**, or **Edit** if a policy
+   already exists.
+5. Open the **JSON** tab and paste the array below. If the bucket already has
+   rules, add this object to the existing array instead of replacing them.
+6. Choose **Save**. Keep Admin Health open: it re-checks every 2 minutes and
+   the card turns **Ready** within a few minutes (or right after the next API
+   deploy). Signed-in imports offer the backup again once the card is ready.
 
 ```json
 [
   {
-    "AllowedOrigins": ["https://sc2tools.com"],
+    "AllowedOrigins": ["https://sc2tools.com", "https://www.sc2tools.com"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type", "cache-control", "content-md5", "x-amz-meta-sha256"],
-    "MaxAgeSeconds": 600
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
   }
 ]
 ```
 
-Add every other origin that serves the web app (a `www` alias, staging) to
-`AllowedOrigins`, and `http://localhost:3000` only on a development bucket.
-The rule grants no read access and does not make the bucket public; each
-signed URL still scopes one PUT to one pending object for five minutes (the
-API default).
+`AllowedOrigins` must list the origins in the API's `CORS_ALLOWED_ORIGINS`.
+The two above are the production site. Add a staging origin if you have
+one, and `http://localhost:3000` only on a development bucket. The rule
+grants no read access and does not make the bucket public. Each signed URL
+still scopes one PUT to one pending object for five minutes (the API
+default).
 
 ## Browser vs agent
 
@@ -769,7 +848,7 @@ the engine version or protocol changed, never a mismatched engine.
 | Pyodide parity | `python apps/agent/tests/instant_golden.py --out /tmp/instant-golden`, then in `apps/web`: `npm run engine:build && INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine` | The built bundle's assets match the manifest. The worker's real Python glue in Pyodide gives envelopes identical to CPython's, including the upload `json`, and unzips entries with their stored times. `tests/engine/required.test.mjs` checks the prebuild reads the flag like the app. |
 | Web units | `cd apps/web && npx vitest run lib/instant components/instant` | Boot and integrity (mocked worker), client queue, timeouts and recycling, intake, identity, IndexedDB (`fake-indexeddb`), batching, uploader, backup, report, flag, analytics and components. |
 | API | `cd apps/api && npx jest __tests__/gamesBrowserIngest.test.js __tests__/gamesExists.test.js __tests__/browserIngestQuota.test.js __tests__/gamesIngestPolicy.test.js __tests__/replayFiles.test.js` | Provenance stamping, the exists route, the daily cap, ingest policy and Clerk-session backup. |
-| End to end | Build with `NEXT_PUBLIC_INSTANT_IMPORT=all`, then `NEXT_PUBLIC_INSTANT_IMPORT=all npx playwright test try-instant --project=desktop-1280` (`tests/e2e/try-instant.spec.ts`, tagged `@slow`; it skips itself without the flag) | The real engine in Chromium: drop a fixture on `/try`, get a report, and no request reaches the API origin. |
+| End to end | Build with `NEXT_PUBLIC_INSTANT_IMPORT=all`, then `NEXT_PUBLIC_INSTANT_IMPORT=all npx playwright test try-instant` (`tests/e2e/try-instant.spec.ts`, tagged `@slow`; runs on desktop-1280 and mobile-360 and skips itself without the flag) | The real engine in Chromium: drop fixtures on `/try`, get a report with opponent openers, the MMR card and a game's build orders and macro timeline, and no request reaches the API origin. |
 
 CI: `python-tests.yml` → `instant-parity` runs the Python parity suite in a
 venv holding **only** sc2reader and pytest, then builds the bundle and runs

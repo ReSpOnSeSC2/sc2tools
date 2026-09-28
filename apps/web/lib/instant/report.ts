@@ -8,15 +8,17 @@
  *   totals          — games / wins / losses
  *   recordByMatchup — W-L per opponent race (shared seasonRecap logic)
  *   openers         — W-L per detected build of yours
+ *   opponentOpeners — your W-L against each strategy opponents opened with
  *   mostFaced       — the opponent you met most (≥ 2 games)
  *   macro           — average macro score + most frequent top-3 leaks
+ *   mmr             — pre-game MMR per account + queue (ladder only)
  *   lastLoss        — "why you lost" causes for your most recent loss
+ *   games           — every game, newest first, for the game-by-game view
  *
  * Example:
  *   const payloads = parsed.flatMap((g) => parseInstantPayload(g.json) ?? []);
  *   const report = buildInstantReport(payloads, new Date());
  */
-import type { ArcadeGame } from "@/components/analyzer/arcade/types";
 import { isGameTooShort, outcome } from "@/components/analyzer/arcade/ArcadeEngine";
 import type {
   LeakItem,
@@ -24,10 +26,16 @@ import type {
 } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import { lossAutopsy, type AutopsyCause, type AutopsyGame } from "@/lib/lossAutopsy";
 import { computeSeasonRecap, type RecapMatchupSplit } from "@/lib/seasonRecap";
+import { toArcadeGame } from "./reportArcade";
+import { buildReportGames, type ReportGame } from "./reportGames";
+import { computeMmrByQueue, type MmrQueueRow } from "./reportMmr";
 import type { InstantOpponent, InstantPayload } from "./reportPayload";
 
+export { toArcadeGame } from "./reportArcade";
 export { parseInstantPayload } from "./reportPayload";
 export type { InstantMacroBreakdown, InstantOpponent, InstantPayload } from "./reportPayload";
+export type { ReportGame } from "./reportGames";
+export type { MmrQueueRow } from "./reportMmr";
 
 /** "Most faced" only means something once you met someone twice. */
 export const MOST_FACED_MIN_GAMES = 2;
@@ -90,62 +98,14 @@ export interface InstantReport {
   totals: InstantTotals;
   recordByMatchup: MatchupRow[] | null;
   openers: OpenerRow[] | null;
+  /** Rows are opponent strategies; W-L is yours against them. */
+  opponentOpeners: OpenerRow[] | null;
   mostFaced: MostFacedOpponent | null;
   macro: MacroSummary | null;
+  mmr: MmrQueueRow[] | null;
   lastLoss: LastLoss | null;
-}
-
-/**
- * Map a payload to the analyzer's `ArcadeGame` row. This replicates
- * `normaliseGame` (components/analyzer/arcade/hooks/useArcadeData.ts)
- * instead of importing it: that module is a Clerk/SWR React hook file,
- * and this one must stay pure (it runs on the public /try page before
- * any auth exists). Mapping: durationSec → duration, macroScore →
- * macro_score, opponent.race → oppRace, opponent.strategy →
- * opp_strategy, opponent.pulseId → oppPulseId.
- *
- * Example:
- *   toArcadeGame(payload).oppRace; // -> "Zerg"
- */
-export function toArcadeGame(payload: InstantPayload): ArcadeGame {
-  const opp = payload.opponent;
-  return {
-    gameId: payload.gameId,
-    date: payload.date,
-    result: payload.result,
-    myToonHandle: payload.myToonHandle,
-    myBuild: payload.myBuild,
-    macro_score: payload.macroScore,
-    opp_strategy: opp?.strategy ?? null,
-    ...optionalGameFields(payload),
-    ...(opp ? opponentGameFields(opp) : {}),
-  };
-}
-
-/** Optional `ArcadeGame` fields, present only when the payload has them. */
-function optionalGameFields(payload: InstantPayload): Partial<ArcadeGame> {
-  const fields: Partial<ArcadeGame> = {};
-  if (payload.myRace) fields.myRace = payload.myRace;
-  if (payload.map) fields.map = payload.map;
-  if (payload.durationSec !== null) fields.duration = payload.durationSec;
-  if (payload.myMmr !== null) fields.myMmr = payload.myMmr;
-  return fields;
-}
-
-function opponentGameFields(opp: InstantOpponent): Partial<ArcadeGame> {
-  const fields: Partial<ArcadeGame> = { opponent: arcadeOpponent(opp) };
-  if (opp.race) fields.oppRace = opp.race;
-  if (opp.pulseId) fields.oppPulseId = opp.pulseId;
-  return fields;
-}
-
-function arcadeOpponent(opp: NonNullable<InstantPayload["opponent"]>): ArcadeGame["opponent"] {
-  const out: NonNullable<ArcadeGame["opponent"]> = { strategy: opp.strategy };
-  if (opp.displayName) out.displayName = opp.displayName;
-  if (opp.race) out.race = opp.race;
-  if (opp.mmr !== null) out.mmr = opp.mmr;
-  if (opp.pulseId) out.pulseId = opp.pulseId;
-  return out;
+  /** Newest first; empty for an empty report. */
+  games: ReportGame[];
 }
 
 function uniqueDated(payloads: ReadonlyArray<InstantPayload>): InstantPayload[] {
@@ -182,9 +142,12 @@ export function buildInstantReport(
     },
     recordByMatchup: recap.matchupSplits.length > 0 ? recap.matchupSplits : null,
     openers: computeOpeners(games),
+    opponentOpeners: computeOpponentOpeners(games),
     mostFaced: computeMostFaced(games),
     macro: computeMacro(games),
+    mmr: computeMmrByQueue(games),
     lastLoss: computeLastLoss(games),
+    games: buildReportGames(games),
   };
 }
 
@@ -200,16 +163,20 @@ function tallyResult(target: { wins: number; losses: number }, result: string): 
 }
 
 /**
- * W-L per build of yours, most played first. "Game Too Short" labels
- * are classifier artifacts, not openers (same rule as the recap).
+ * W-L per name `pick` returns (games without one are skipped), most
+ * played first. "Game Too Short" labels are classifier artifacts, not
+ * openers (same rule as the recap). Names match case-insensitively.
  *
  * Example:
- *   computeOpeners(games)?.[0]; // -> { name: "PvZ - Adept Glaives (Robo)", games: 3, ... }
+ *   tallyOpeners(games, (game) => game.myBuild)?.[0].name; // -> "PvZ - Adept Glaives (Robo)"
  */
-export function computeOpeners(games: ReadonlyArray<InstantPayload>): OpenerRow[] | null {
+function tallyOpeners(
+  games: ReadonlyArray<InstantPayload>,
+  pick: (game: InstantPayload) => string | null,
+): OpenerRow[] | null {
   const byName = new Map<string, OpenerRow>();
   for (const game of games) {
-    const name = game.myBuild?.trim() ?? "";
+    const name = pick(game)?.trim() ?? "";
     if (!name || isGameTooShort(name)) continue;
     const key = name.toLowerCase();
     const row = byName.get(key) ?? { name, games: 0, wins: 0, losses: 0, winrate: null };
@@ -223,6 +190,28 @@ export function computeOpeners(games: ReadonlyArray<InstantPayload>): OpenerRow[
   }));
   rows.sort(compareOpeners);
   return rows.length > 0 ? rows : null;
+}
+
+/**
+ * W-L per build of yours, most played first.
+ *
+ * Example:
+ *   computeOpeners(games)?.[0]; // -> { name: "PvZ - Adept Glaives (Robo)", games: 3, ... }
+ */
+export function computeOpeners(games: ReadonlyArray<InstantPayload>): OpenerRow[] | null {
+  return tallyOpeners(games, (game) => game.myBuild);
+}
+
+/**
+ * Your W-L against each strategy the classifier detected for your
+ * opponents (`opponent.strategy`), most faced first; null when no game
+ * has one.
+ *
+ * Example:
+ *   computeOpponentOpeners(games)?.[0]; // -> { name: "ZvP - Speedling Flood", games: 2, wins: 1, ... }
+ */
+export function computeOpponentOpeners(games: ReadonlyArray<InstantPayload>): OpenerRow[] | null {
+  return tallyOpeners(games, (game) => game.opponent?.strategy ?? null);
 }
 
 function compareOpeners(a: OpenerRow, b: OpenerRow): number {

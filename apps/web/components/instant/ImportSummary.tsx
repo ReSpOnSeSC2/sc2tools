@@ -23,7 +23,7 @@ import { AlertTriangle, CheckCircle2, MinusCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { uploadsResumeText } from "@/lib/instant/displayUnits";
 import { summarizeFailures, type ErrorCopy, type FailureGroup } from "@/lib/instant/errorCopy";
-import type { BackupSummary } from "@/lib/instant/replayBackup";
+import type { BackupStopReason, BackupSummary } from "@/lib/instant/replayBackup";
 import type { UploadCounts } from "@/lib/instant/importRunner";
 import type { FailedParse } from "@/lib/instant/types";
 import type { UploadStopReason } from "@/lib/instant/uploader";
@@ -121,16 +121,36 @@ function StopNotice({ reason, resetAt }: { reason: UploadStopReason; resetAt?: n
   );
 }
 
-function backupLine(backup: BackupSummary): string | null {
-  const parts = [
-    backup.backedUp.length > 0 ? `${backup.backedUp.length} backed up` : null,
-    backup.alreadyStored.length > 0 ? `${backup.alreadyStored.length} already stored` : null,
-    backup.skipped.length > 0 ? `${backup.skipped.length} skipped` : null,
-    backup.failed.length > 0 ? `${backup.failed.length} failed` : null,
-  ].filter((part): part is string => part !== null);
-  if (backup.stoppedReason === "unavailable") parts.push("replay backup is unavailable right now");
-  if (backup.stoppedReason === "auth") parts.push("stopped because your session expired");
-  if (backup.stoppedReason === "aborted") parts.push("stopped when you cancelled");
+/** Neutral note when the backup could not run at all (no store, or R2 blocked the browser). */
+export const BACKUP_UNAVAILABLE_TEXT =
+  "Your games were imported. Original-file backup isn't available right now, so no replay files were uploaded.";
+
+/** Why the backup stopped early, appended to the counts. */
+const BACKUP_STOP_NOTES: Record<BackupStopReason, string> = {
+  unavailable: "replay backup is unavailable right now",
+  auth: "stopped because your session expired",
+  aborted: "stopped when you cancelled",
+};
+
+/**
+ * The one line about original-file backup, or null when there is nothing
+ * to say. When backup was unavailable before any file went up, the line is
+ * the neutral {@link BACKUP_UNAVAILABLE_TEXT} (the import itself succeeded).
+ *
+ * Example:
+ *   backupLine({ backedUp: [], alreadyStored: [], skipped: [], failed: [], stoppedReason: "unavailable" });
+ *   // -> BACKUP_UNAVAILABLE_TEXT
+ */
+export function backupLine(backup: BackupSummary): string | null {
+  if (backup.stoppedReason === "unavailable" && backup.backedUp.length === 0) return BACKUP_UNAVAILABLE_TEXT;
+  const counts: ReadonlyArray<[number, string]> = [
+    [backup.backedUp.length, "backed up"],
+    [backup.alreadyStored.length, "already stored"],
+    [backup.skipped.length, "skipped"],
+    [backup.failed.length, "failed"],
+  ];
+  const parts = counts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`);
+  if (backup.stoppedReason) parts.push(BACKUP_STOP_NOTES[backup.stoppedReason]);
   return parts.length > 0 ? `Original replay files: ${parts.join(", ")}.` : null;
 }
 

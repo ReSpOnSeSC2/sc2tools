@@ -167,7 +167,8 @@ describe("TryPage report", () => {
     expect(screen.getByTestId("report-matchups")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Save these games to your free account" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Clear local data" })).toBeTruthy();
-    expect(events("instant_report_view")).toBe(1);
+    // The view event fires from an effect after the report commits.
+    await waitFor(() => expect(events("instant_report_view")).toBe(1));
   });
 
   it("moves focus to the report once a run finishes (the progress panel goes away)", async () => {

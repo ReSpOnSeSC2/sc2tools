@@ -1,7 +1,8 @@
 /**
  * Small presentational pieces shared by the /try instant-report cards:
  * the card frame (title + optional subtitle), a W-L pair, a win-rate
- * label and a thin win-rate bar. Pure and prop-driven; no data fetching.
+ * label, a thin win-rate bar, a one-game W/L mark and the report's date
+ * format. Pure and prop-driven; no data fetching.
  *
  * Example:
  *   <ReportCard title="Record by matchup" testId="report-matchups">
@@ -22,6 +23,19 @@ import { PERCENT } from "@/lib/instant/displayUnits";
 export function winratePercent(wins: number, losses: number): number | null {
   const decided = wins + losses;
   return decided > 0 ? Math.round((wins / decided) * PERCENT) : null;
+}
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
+
+/**
+ * A game date as "May 8, 2026" (local time); null when unparseable.
+ *
+ * Example:
+ *   formatReportDate("2026-05-08T19:08:12Z"); // -> "May 8, 2026"
+ */
+export function formatReportDate(iso: string): string | null {
+  const parsed = Date.parse(iso);
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleDateString("en-US", DATE_FORMAT) : null;
 }
 
 /**
@@ -112,5 +126,35 @@ export function WinrateBar({ wins, losses }: { wins: number; losses: number }) {
     <div aria-hidden className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
       {rate === null ? null : <div className="h-full rounded-full bg-success" style={{ width: `${rate}%` }} />}
     </div>
+  );
+}
+
+const OUTCOME_MARKS = {
+  W: { text: "W", label: "Win", tone: "border-success/40 bg-success/15 text-success" },
+  L: { text: "L", label: "Loss", tone: "border-danger/40 bg-danger/15 text-danger" },
+} as const;
+
+/**
+ * A one-letter W / L chip for one game (screen readers hear "Win" /
+ * "Loss"); a dash when the game was not decided.
+ *
+ * Example:
+ *   <OutcomeMark outcome="W" />
+ */
+export function OutcomeMark({ outcome }: { outcome: "W" | "L" | null }) {
+  if (!outcome) {
+    return (
+      <span className="text-text-dim">
+        <span aria-hidden>–</span>
+        <span className="sr-only">No result</span>
+      </span>
+    );
+  }
+  const mark = OUTCOME_MARKS[outcome];
+  return (
+    <span className={["inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border text-micro font-bold", mark.tone].join(" ")}>
+      <span aria-hidden>{mark.text}</span>
+      <span className="sr-only">{mark.label}</span>
+    </span>
   );
 }

@@ -2,9 +2,11 @@
 
 /**
  * InstantReport — the /try report over games analysed on this device:
- * a header with totals (games, W-L, win rate) and one card per report
- * section — record by matchup, your openers, most-faced opponent, macro
- * and the loss autopsy of your most recent loss.
+ * a header with totals (games, W-L, win rate), one card per report
+ * section — record by matchup, macro, your openers next to your
+ * opponents' openers, MMR, most-faced opponent and the loss autopsy of
+ * your most recent loss — then "Game by game": a game picker with both
+ * build orders and the macro timeline of the selected game.
  *
  * ALL DATA IS REAL: every card renders nothing when its section of the
  * report (`buildInstantReport`) is null, so a visitor only ever sees
@@ -18,9 +20,11 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import type { InstantReport as InstantReportData } from "@/lib/instant/report";
 import { LastLossCard } from "./report/LastLossCard";
+import { LazyGamesSection } from "./report/LazyGamesSection";
 import { MacroCard } from "./report/MacroCard";
+import { MmrCard } from "./report/MmrCard";
 import { MostFacedCard } from "./report/MostFacedCard";
-import { OpenersCard } from "./report/OpenersCard";
+import { OpenersCard, OpponentOpenersCard } from "./report/OpenersCard";
 import { RecordByMatchupCard } from "./report/RecordByMatchupCard";
 import { WinLoss, gamesLabel, winratePercent } from "./report/ReportBits";
 
@@ -50,6 +54,14 @@ function TotalsLine({ report }: { report: InstantReportData }) {
 }
 
 /**
+ * Two cards side by side on wider screens; nothing (not even an empty
+ * grid) when neither has data.
+ */
+function CardPair({ show, children }: { show: boolean; children: ReactNode }) {
+  return show ? <div className="grid gap-4 md:grid-cols-2">{children}</div> : null;
+}
+
+/**
  * The instant report (see module comment). Renders nothing for an
  * empty report (no usable games).
  *
@@ -74,13 +86,20 @@ export function InstantReport({ report, actions, focusKey = 0, className = "" }:
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </header>
-      <div className="grid gap-4 md:grid-cols-2">
+      <CardPair show={report.recordByMatchup !== null || report.macro !== null}>
         <RecordByMatchupCard rows={report.recordByMatchup} />
-        <OpenersCard rows={report.openers} />
         <MacroCard macro={report.macro} />
+      </CardPair>
+      <CardPair show={report.openers !== null || report.opponentOpeners !== null}>
+        <OpenersCard rows={report.openers} />
+        <OpponentOpenersCard rows={report.opponentOpeners} />
+      </CardPair>
+      <CardPair show={report.mmr !== null || report.mostFaced !== null}>
+        <MmrCard rows={report.mmr} />
         <MostFacedCard opponent={report.mostFaced} />
-      </div>
+      </CardPair>
       <LastLossCard lastLoss={report.lastLoss} />
+      <LazyGamesSection games={report.games} />
     </section>
   );
 }

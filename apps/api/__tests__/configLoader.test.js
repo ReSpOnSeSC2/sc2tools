@@ -95,6 +95,18 @@ describe("config loader - original replay storage", () => {
   });
 });
 
+describe("config loader - R2_BROWSER_CORS_AUTO", () => {
+  test("defaults on, so the API adds the browser-upload CORS rule itself", () => {
+    expect(loadConfig({ ...BASE_ENV }).r2BrowserCorsAuto).toBe(true);
+    expect(loadConfig({ ...BASE_ENV, R2_BROWSER_CORS_AUTO: "" }).r2BrowserCorsAuto).toBe(true);
+    expect(loadConfig({ ...BASE_ENV, R2_BROWSER_CORS_AUTO: "1" }).r2BrowserCorsAuto).toBe(true);
+  });
+
+  test.each(["0", "false", " FALSE ", "off", "no"])("%p turns the automatic write off", (raw) => {
+    expect(loadConfig({ ...BASE_ENV, R2_BROWSER_CORS_AUTO: raw }).r2BrowserCorsAuto).toBe(false);
+  });
+});
+
 describe("config loader - Cloudflare infrastructure analytics", () => {
   test("is optional when both credentials are absent", () => {
     expect(loadConfig({ ...BASE_ENV }).cloudflareAnalytics).toBeNull();

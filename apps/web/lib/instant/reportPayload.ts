@@ -7,7 +7,8 @@
  * or malformed becomes null and the matching report card hides itself.
  * `macroBreakdown` is narrowed to a `MacroBreakdownData`-compatible
  * shape (without the envelope fields the API adds: ok, macro_score,
- * race, game_length_sec).
+ * race, game_length_sec), and `apmCurve` to the `ApmCurveResponse`
+ * fields `lib/apm.ts` reads.
  *
  * Example:
  *   const payload = parseInstantPayload(parsedGame.json);
@@ -25,6 +26,7 @@ import type {
   SupplyBlockWindow,
   UnitTimelineEntry,
 } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
+import type { ApmCurveResponse } from "@/lib/apm";
 
 export interface InstantOpponent {
   displayName: string | null;
@@ -32,6 +34,8 @@ export interface InstantOpponent {
   toonHandle: string | null;
   pulseId: string | null;
   mmr: number | null;
+  /** Where `mmr` came from ("replay" = the replay's pre-game value). */
+  mmrSource: string | null;
   strategy: string | null;
 }
 
@@ -51,10 +55,19 @@ export interface InstantPayload {
   myBuild: string | null;
   macroScore: number | null;
   myMmr: number | null;
+  /** Where `myMmr` came from ("replay" = the replay's pre-game value). */
+  myMmrSource: string | null;
   myToonHandle: string | null;
+  /** The race you queued as (the ladder queue), e.g. "Random". */
+  myLadderRace: string | null;
+  /** True for ranked 1v1 ladder games; null when the payload does not say. */
+  isLadderGame: boolean | null;
   opponent: InstantOpponent | null;
   macroBreakdown: InstantMacroBreakdown | null;
   buildLog: string[];
+  oppBuildLog: string[];
+  /** The APM curve, in the shape GET /v1/games/:id/apm-curve serves. */
+  apmCurve: ApmCurveResponse | null;
 }
 
 type Json = Record<string, unknown>;
@@ -252,6 +265,42 @@ function toMacroBreakdown(value: unknown): InstantMacroBreakdown | null {
   return out;
 }
 
+type ApmPlayer = NonNullable<ApmCurveResponse["players"]>[number];
+type ApmPoint = NonNullable<ApmPlayer["samples"]>[number];
+
+function toApmSample(value: Json): ApmPoint {
+  const sample: ApmPoint = {};
+  copyNumbers(value, ["t", "apm", "spm"], sample);
+  return sample;
+}
+
+function toApmPlayer(value: Json): ApmPlayer {
+  const player: ApmPlayer = { samples: records(value.samples).map(toApmSample) };
+  copyNumbers(value, ["pid", "avg_apm"], player);
+  if (typeof value.is_me === "boolean") player.is_me = value.is_me;
+  return player;
+}
+
+/**
+ * The curve as GET /v1/games/:id/apm-curve would serve it (the API adds
+ * `game_length_sec` from `durationSec`); `readGameApm` does the rest of
+ * the trust checks (version, is_me, finite samples).
+ */
+function toApmCurve(value: unknown, durationSec: number | null): ApmCurveResponse | null {
+  if (!isRecord(value)) return null;
+  const curve: ApmCurveResponse = {
+    has_data: value.has_data === true,
+    players: records(value.players).map(toApmPlayer),
+  };
+  copyNumbers(value, ["v", "window_sec"], curve);
+  if (durationSec !== null) curve.game_length_sec = durationSec;
+  return curve;
+}
+
+function bool(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function toOpponent(value: unknown): InstantOpponent | null {
   if (!isRecord(value)) return null;
   return {
@@ -260,6 +309,7 @@ function toOpponent(value: unknown): InstantOpponent | null {
     toonHandle: str(value.toonHandle),
     pulseId: str(value.pulseId),
     mmr: num(value.mmr),
+    mmrSource: str(value.mmrSource),
     strategy: str(value.strategy),
   };
 }
@@ -285,19 +335,25 @@ export function parseInstantPayload(json: string): InstantPayload | null {
   const date = str(value.date);
   const result = str(value.result);
   if (!gameId || !date || !result) return null;
+  const durationSec = num(value.durationSec);
   return {
     gameId,
     date,
     result,
     myRace: str(value.myRace),
     map: str(value.map),
-    durationSec: num(value.durationSec),
+    durationSec,
     myBuild: str(value.myBuild),
     macroScore: num(value.macroScore),
     myMmr: num(value.myMmr),
+    myMmrSource: str(value.myMmrSource),
     myToonHandle: str(value.myToonHandle),
+    myLadderRace: str(value.myLadderRace),
+    isLadderGame: bool(value.isLadderGame),
     opponent: toOpponent(value.opponent),
     macroBreakdown: toMacroBreakdown(value.macroBreakdown),
     buildLog: strings(value.buildLog),
+    oppBuildLog: strings(value.oppBuildLog),
+    apmCurve: toApmCurve(value.apmCurve, durationSec),
   };
 }

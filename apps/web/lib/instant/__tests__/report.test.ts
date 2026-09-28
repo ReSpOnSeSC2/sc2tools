@@ -8,11 +8,13 @@ import {
   computeMacro,
   computeMostFaced,
   computeOpeners,
+  computeOpponentOpeners,
   parseInstantPayload,
   toArcadeGame,
   toAutopsyGame,
   type InstantPayload,
 } from "../report";
+import { bare } from "./fixtures/reportGames";
 
 // Real payload: the desktop agent's parse_replay_for_cloud_ex + to_payload +
 // compact_json_bytes on apps/replay-engine/tests/fixtures/replays/warpgate_adept_tracking.SC2Replay.
@@ -62,6 +64,30 @@ describe("parseInstantPayload", () => {
     expect(p.macroBreakdown?.raw?.supply_block_windows?.length).toBe(4);
     expect(p.macroBreakdown?.stats_events?.[0]).toMatchObject({ time: 0, food_used: 12 });
   });
+});
+
+describe("parseInstantPayload game-by-game fields", () => {
+  it("keeps the fields the game-by-game view and MMR card read", () => {
+    const p = realWin();
+    expect(p).toMatchObject({
+      myMmrSource: "replay",
+      myLadderRace: "Protoss",
+      isLadderGame: true,
+      opponent: { mmrSource: "replay" },
+    });
+    expect(p.oppBuildLog[0]).toBe("[0:00] RewardDanceOverlord");
+    expect(p.oppBuildLog.some((line) => line.endsWith(" SpawningPool"))).toBe(true);
+    expect(p.apmCurve).toMatchObject({ v: 2, window_sec: 30, has_data: true, game_length_sec: 470 });
+    expect(p.apmCurve?.players?.map((player) => player.is_me)).toEqual([true, false]);
+    expect(p.apmCurve?.players?.[0].samples?.[0]).toEqual({ t: 0, apm: 168, spm: 36 });
+  });
+
+  it("drops a malformed apm curve and non-boolean ladder flags", () => {
+    const p = parseInstantPayload(
+      '{"gameId":"g","date":"2026-01-01T00:00:00Z","result":"Victory","apmCurve":[1],"isLadderGame":"yes","oppBuildLog":[3,"[0:10] Pylon"]}',
+    );
+    expect(p).toMatchObject({ apmCurve: null, isLadderGame: null, oppBuildLog: ["[0:10] Pylon"] });
+  });
 
   it("returns null for malformed JSON or missing required fields", () => {
     expect(parseInstantPayload("{not json")).toBeNull();
@@ -101,6 +127,10 @@ describe("buildInstantReport on real data", () => {
     expect(report.openers).toEqual([
       { name: "PvZ - Adept Glaives (Robo)", games: 2, wins: 1, losses: 1, winrate: 0.5 },
     ]);
+    expect(report.opponentOpeners).toEqual([
+      { name: "ZvP - Speedling Flood", games: 2, wins: 1, losses: 1, winrate: 0.5 },
+    ]);
+    expect(report.games.map((game) => game.gameId)).toEqual(["defeat-variant", realWin().gameId]);
     expect(report.mostFaced).toEqual({ name: "Squirtuoz", race: "Zerg", games: 2, wins: 1, losses: 1 });
     expect(report.macro).toEqual({
       averageScore: 72,
@@ -145,26 +175,6 @@ describe("buildInstantReport on real data", () => {
   });
 });
 
-/** A minimal game with every optional field missing. */
-function bare(patch: Partial<InstantPayload> = {}): InstantPayload {
-  return {
-    gameId: "g",
-    date: "2026-05-01T00:00:00Z",
-    result: "Victory",
-    myRace: null,
-    map: null,
-    durationSec: null,
-    myBuild: null,
-    macroScore: null,
-    myMmr: null,
-    myToonHandle: null,
-    opponent: null,
-    macroBreakdown: null,
-    buildLog: [],
-    ...patch,
-  };
-}
-
 describe("buildInstantReport null-safety", () => {
   it("hides every section for an empty list", () => {
     expect(buildInstantReport([], NOW)).toEqual({
@@ -172,9 +182,12 @@ describe("buildInstantReport null-safety", () => {
       totals: { games: 0, wins: 0, losses: 0 },
       recordByMatchup: null,
       openers: null,
+      opponentOpeners: null,
       mostFaced: null,
       macro: null,
+      mmr: null,
       lastLoss: null,
+      games: [],
     });
   });
 
@@ -183,9 +196,12 @@ describe("buildInstantReport null-safety", () => {
     expect(report.totals).toEqual({ games: 2, wins: 2, losses: 0 });
     expect(report.recordByMatchup).toBeNull();
     expect(report.openers).toBeNull();
+    expect(report.opponentOpeners).toBeNull();
     expect(report.mostFaced).toBeNull();
     expect(report.macro).toBeNull();
+    expect(report.mmr).toBeNull();
     expect(report.lastLoss).toBeNull();
+    expect(report.games.map((game) => game.gameId)).toEqual(["g", "h"]);
   });
 
   it("ignores games without a usable date", () => {
@@ -216,7 +232,7 @@ describe("report sections", () => {
   });
 
   it("needs two games before naming a most-faced opponent", () => {
-    const opp = { displayName: "Solo", race: "Terran", toonHandle: null, pulseId: null, mmr: null, strategy: null };
+    const opp = { displayName: "Solo", race: "Terran", toonHandle: null, pulseId: null, mmr: null, mmrSource: null, strategy: null };
     expect(computeMostFaced([bare({ opponent: opp })])).toBeNull();
     const rematch = bare({ gameId: "h", opponent: { ...opp, displayName: "solo" }, result: "Defeat" });
     const twice = computeMostFaced([bare({ opponent: opp }), rematch]);
@@ -224,7 +240,7 @@ describe("report sections", () => {
   });
 
   it("keys opponents by toon and shows their newest name", () => {
-    const opp = { displayName: "OldName", race: "Zerg", toonHandle: "2-S2-1-9", pulseId: null, mmr: null, strategy: null };
+    const opp = { displayName: "OldName", race: "Zerg", toonHandle: "2-S2-1-9", pulseId: null, mmr: null, mmrSource: null, strategy: null };
     const later = bare({ gameId: "h", date: "2026-05-03T00:00:00Z", opponent: { ...opp, displayName: "NewName" } });
     const nameless = bare({ gameId: "i", date: "2026-05-02T00:00:00Z", opponent: { ...opp, displayName: null } });
     expect(computeMostFaced([later, bare({ opponent: opp }), nameless])).toEqual({
@@ -244,5 +260,25 @@ describe("report sections", () => {
       bare({ gameId: "c", myBuild: "A" }),
     ]);
     expect(rows?.map((r) => [r.name, r.games])).toEqual([["A", 2], ["B", 1]]);
+  });
+});
+
+describe("opponent openers", () => {
+  it("tallies your record against each opponent strategy, most faced first", () => {
+    const vs = (gameId: string, strategy: string | null, result = "Victory") =>
+      bare({ gameId, result, opponent: { displayName: "X", race: "Zerg", toonHandle: null, pulseId: null, mmr: null, mmrSource: null, strategy } });
+    const rows = computeOpponentOpeners([
+      vs("a", "ZvP - 12 Pool"),
+      vs("b", "ZvP - Roach Rush", "Defeat"),
+      vs("c", "zvp - roach rush"),
+      vs("d", "ZvP - Game Too Short"),
+      vs("e", null),
+      bare({ gameId: "f" }),
+    ]);
+    expect(rows).toEqual([
+      { name: "ZvP - Roach Rush", games: 2, wins: 1, losses: 1, winrate: 0.5 },
+      { name: "ZvP - 12 Pool", games: 1, wins: 1, losses: 0, winrate: 1 },
+    ]);
+    expect(computeOpponentOpeners([vs("x", null), bare()])).toBeNull();
   });
 });

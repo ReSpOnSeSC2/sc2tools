@@ -69,6 +69,11 @@ services:
         sync: false
       - key: R2_REPLAY_PREFIX
         value: raw-replays/v1
+      # Browser replay backups: the API adds + verifies the bucket's PUT-only
+      # CORS rule for CORS_ALLOWED_ORIGINS (Admin Health shows the result).
+      # 0 skips the automatic write but still verifies.
+      - key: R2_BROWSER_CORS_AUTO
+        value: "1"
       # Optional public cost snapshot. This is a separate least-privilege
       # Cloudflare API token with Account Analytics: Read; the S3 object token
       # above cannot query GraphQL Analytics. Account id + token are all-or-none.

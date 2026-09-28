@@ -1,13 +1,15 @@
 /**
  * ImportSummary — count rows, the daily-cap notice with the local reset
- * time, the per-run cap note, focus on mount, and the headline that is
- * not a live region (panels announce it through their own region).
+ * time, the per-run cap note, focus on mount, the headline that is not a
+ * live region (panels announce it through their own region), and the
+ * original-file backup line (including the neutral "unavailable" copy).
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { UploadCounts } from "@/lib/instant/importRunner";
-import { ImportSummary, importHeadline, stopCopy } from "../ImportSummary";
+import type { BackupSummary } from "@/lib/instant/replayBackup";
+import { BACKUP_UNAVAILABLE_TEXT, ImportSummary, backupLine, importHeadline, stopCopy } from "../ImportSummary";
 
 const COUNTS: UploadCounts = { uploaded: 3, created: 2, skippedExisting: 1, rejected: 0, pending: 0 };
 const RESET_AT = Date.parse("2026-09-29T00:00:00Z");
@@ -55,5 +57,27 @@ describe("ImportSummary", () => {
     unmount();
     render(<ImportSummary counts={COUNTS} failed={[]} autoFocus />);
     expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Import complete" }));
+  });
+});
+
+describe("ImportSummary backup line", () => {
+  const EMPTY: BackupSummary = { backedUp: [], alreadyStored: [], skipped: [], failed: [] };
+
+  it("says calmly that the games were imported when backup was unavailable", () => {
+    const backup: BackupSummary = { ...EMPTY, alreadyStored: ["g0"], stoppedReason: "unavailable" };
+    render(<ImportSummary counts={COUNTS} failed={[]} backup={backup} />);
+    const line = screen.getByText(
+      "Your games were imported. Original-file backup isn't available right now, so no replay files were uploaded.",
+    );
+    expect(line.closest("[role=alert]")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Import complete" })).toBeTruthy();
+  });
+
+  it("keeps the counts when some files went up before backup became unavailable", () => {
+    expect(backupLine({ ...EMPTY, backedUp: ["g1", "g2"], stoppedReason: "unavailable" })).toBe(
+      "Original replay files: 2 backed up, replay backup is unavailable right now.",
+    );
+    expect(backupLine({ ...EMPTY, stoppedReason: "unavailable" })).toBe(BACKUP_UNAVAILABLE_TEXT);
+    expect(backupLine(EMPTY)).toBeNull();
   });
 });

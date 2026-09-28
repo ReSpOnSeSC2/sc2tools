@@ -10,10 +10,11 @@
  *     optionally back up the original .SC2Replay files
  *   → a summary with counts, grouped skips/failures and a link to /app.
  *
- * The backup toggle only appears when the server has a replay store
- * (`/v1/me/replay-archive-status` → `enabled`) and is on by default then,
- * so the intro mentions the replay-file copy exactly when it applies;
- * file hashes are only computed when it is on. The analyzer (Pyodide)
+ * The backup toggle only appears when the server has a replay store AND
+ * has verified that browsers may PUT to it (`/v1/me/replay-archive-status`
+ * → `enabled` and `browserUploadReady`; the R2 bucket's CORS rule) and is
+ * on by default then, so the intro mentions the replay-file copy exactly
+ * when it applies; file hashes are only computed when it is on. The analyzer (Pyodide)
  * warms up on the visitor's first intent to add replays and is otherwise
  * started by "Analyze" (or a dropped .zip).
  *
@@ -219,12 +220,31 @@ function StartButton({ session }: { session: InstantSession }) {
   );
 }
 
+/** The fields of `GET /v1/me/replay-archive-status` the panel reads. */
+interface ReplayArchiveCapability {
+  enabled?: boolean;
+  /** The server verified R2 accepts browser PUTs (its CORS rule); absent on older APIs. */
+  browserUploadReady?: boolean;
+}
+
+/**
+ * Whether this browser can back up original replays: the server stores
+ * them AND has verified R2 accepts PUTs from the site (missing → no).
+ *
+ * Example:
+ *   backupCapability({ enabled: true }); // -> false
+ *   backupCapability({ enabled: true, browserUploadReady: true }); // -> true
+ */
+export function backupCapability(status: ReplayArchiveCapability | null | undefined): boolean {
+  return status?.enabled === true && status.browserUploadReady === true;
+}
+
 /** Profile toons + backup capability for the signed-in user. */
 function useImportContext() {
   const profile = useApi<unknown>("/v1/me/profile");
-  const archive = useApi<{ enabled?: boolean }>("/v1/me/replay-archive-status");
+  const archive = useApi<ReplayArchiveCapability>("/v1/me/replay-archive-status");
   const toons = useMemo(() => profileToons(profile.data), [profile.data]);
-  return { profileToons: toons, capability: archive.data?.enabled === true };
+  return { profileToons: toons, capability: backupCapability(archive.data) };
 }
 
 interface IntakeBlockProps {

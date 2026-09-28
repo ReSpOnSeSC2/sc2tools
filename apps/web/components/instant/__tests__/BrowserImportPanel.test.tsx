@@ -1,6 +1,7 @@
 /**
- * BrowserImportPanel — the backup toggle (visibility, default, effect on
- * hashing, and the intro copy that follows it), the notes about what a
+ * BrowserImportPanel — the backup toggle (visibility gated on a replay
+ * store AND a verified browser-upload rule, default, effect on hashing,
+ * and the intro copy that follows it), the notes about what a
  * selection left out, the status region and focus flow, and the hand-off
  * from a finished parse to the upload runner.
  * `useInstantSession` is a MOCK (no engine), `runBrowserUpload` is a MOCK
@@ -12,10 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserUploadInput, BrowserUploadSummary } from "@/lib/instant/importRunner";
 import type { InstantSession, UseInstantSessionOptions } from "@/lib/instant/useInstantSession";
 import type { ParsedWithFile } from "@/lib/instant/sessionState";
-import { BrowserImportPanel } from "../BrowserImportPanel";
+import { BrowserImportPanel, backupCapability } from "../BrowserImportPanel";
 
 const mocks = vi.hoisted(() => ({
-  archiveEnabled: true as boolean,
+  archive: { enabled: true, browserUploadReady: true } as { enabled?: boolean; browserUploadReady?: boolean },
   profile: { pulseIds: ["1-S2-1-111"] } as unknown,
   sessionOptions: [] as UseInstantSessionOptions[],
   session: null as Partial<InstantSession> | null,
@@ -27,7 +28,7 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token
 vi.mock("@/lib/clientApi", () => ({
   API_BASE: "https://api.test",
   useApi: (path: string | null) => ({
-    data: path === "/v1/me/replay-archive-status" ? { enabled: mocks.archiveEnabled } : mocks.profile,
+    data: path === "/v1/me/replay-archive-status" ? mocks.archive : mocks.profile,
     isLoading: false,
     error: null,
   }),
@@ -92,7 +93,7 @@ const SUMMARY: BrowserUploadSummary = {
 };
 
 beforeEach(() => {
-  mocks.archiveEnabled = true;
+  mocks.archive = { enabled: true, browserUploadReady: true };
   mocks.session = null;
   mocks.sessionOptions = [];
   mocks.runBrowserUpload.mockReset();
@@ -115,10 +116,32 @@ describe("BrowserImportPanel backup toggle", () => {
   });
 
   it("is hidden when the server has no replay store", () => {
-    mocks.archiveEnabled = false;
+    mocks.archive = { enabled: false, browserUploadReady: false };
     render(<BrowserImportPanel />);
     expect(screen.queryByRole("checkbox", { name: /also back up/i })).toBeNull();
     expect(lastOptions().wantDigests).toBe(false);
+  });
+
+  it.each([
+    ["not verified", { enabled: true, browserUploadReady: false }],
+    ["not reported (older API)", { enabled: true }],
+  ])("is hidden while browser uploads to the store are %s", async (_label, archive) => {
+    mocks.archive = archive;
+    mocks.runBrowserUpload.mockResolvedValue({ ...SUMMARY, stoppedReason: undefined, pending: 0 });
+    mocks.session = { phase: "done", parsedWithFiles: PARSED, chosenToon: null };
+    render(<BrowserImportPanel />);
+    expect(screen.queryByRole("checkbox", { name: /also back up/i })).toBeNull();
+    expect(lastOptions().wantDigests).toBe(false);
+    await waitFor(() => expect(mocks.runBrowserUpload).toHaveBeenCalledTimes(1));
+    const input = mocks.runBrowserUpload.mock.calls[0]?.[0] as BrowserUploadInput;
+    expect(input.backup.capabilityEnabled).toBe(false);
+  });
+
+  it("needs both the store and the verified rule", () => {
+    expect(backupCapability({ enabled: true, browserUploadReady: true })).toBe(true);
+    expect(backupCapability({ enabled: false, browserUploadReady: true })).toBe(false);
+    expect(backupCapability({ enabled: true })).toBe(false);
+    expect(backupCapability(undefined)).toBe(false);
   });
 });
 
