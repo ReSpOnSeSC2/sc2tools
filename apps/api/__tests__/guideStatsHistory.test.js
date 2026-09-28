@@ -181,7 +181,8 @@ describe("GuideStatsService — history, examples and privacy", () => {
     expect(glaives.examples).toEqual([expect.objectContaining({ displayName: "Public Sharer" })]);
     expect(glaives.timings.samples).toBe(60);
     for (const doc of docs) {
-      const json = JSON.stringify(doc);
+      // Leave out the random ObjectId: its hex can contain "7f3a" by chance.
+      const json = JSON.stringify({ ...doc, _id: undefined });
       for (const needle of ["PII", "7f3a", "1-S2-1-", "2-S2-1-", "3-S2-1-"]) {
         expect(json).not.toContain(needle);
       }
