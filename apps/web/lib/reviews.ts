@@ -19,6 +19,30 @@ export function reviewsRollout(): ReviewsRollout {
   return "off";
 }
 
+/**
+ * Whether a game's format can be posted for review (1v1 only; legacy rows
+ * with no format are accepted, as the API does). Lists use this to hide
+ * the button on team games; the API still re-checks.
+ */
+export function isReviewableGame(game: {
+  matchFormat?: string | null;
+  playerCount?: number | null;
+}): boolean {
+  if (game.matchFormat) return game.matchFormat === "1v1";
+  return game.playerCount == null || game.playerCount === 2;
+}
+
+/** "PvZ" from two race names or letters, or null when either is unknown. */
+export function matchupFromRaces(myRace?: string | null, oppRace?: string | null): string | null {
+  const letter = (race?: string | null) => {
+    const c = String(race || "").trim().charAt(0).toUpperCase();
+    return c === "P" || c === "T" || c === "Z" ? c : null;
+  };
+  const mine = letter(myRace);
+  const theirs = letter(oppRace);
+  return mine && theirs ? `${mine}v${theirs}` : null;
+}
+
 /** Whether review surfaces should be offered to this viewer. */
 export function reviewsVisible(isAdmin: boolean | undefined): boolean {
   const rollout = reviewsRollout();

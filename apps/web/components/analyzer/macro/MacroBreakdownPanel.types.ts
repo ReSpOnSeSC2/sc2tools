@@ -229,4 +229,10 @@ export interface MacroBreakdownPanelProps {
   /** Headline score from the calling row, used as a placeholder while loading. */
   initialScore?: number | null;
   headerMeta?: PanelHeaderMeta;
+  /**
+   * Offer "Ask for a review" in the header. Only for the signed-in
+   * owner's own 1v1 games (the review rollout still gates visibility,
+   * and the API re-checks eligibility).
+   */
+  reviewable?: boolean;
 }

@@ -26,6 +26,8 @@ import {
 } from "@/lib/macro";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { matchupFromRaces } from "@/lib/reviews";
 import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
 import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
@@ -63,6 +65,7 @@ export function MacroBreakdownPanel({
   gameId,
   initialScore,
   headerMeta,
+  reviewable = false,
 }: MacroBreakdownPanelProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -147,6 +150,12 @@ export function MacroBreakdownPanel({
     document.body.style.overflow = "hidden";
 
     const onKey = (e: KeyboardEvent) => {
+      // A dialog layered on top of the panel (e.g. "Ask for a review")
+      // owns the keyboard while focus is inside it: don't close the panel
+      // on its Esc or pull its Tab focus back here.
+      const target = e.target instanceof Element ? e.target : null;
+      const layered = target?.closest('[role="dialog"]');
+      if (layered && dialogRef.current && !dialogRef.current.contains(layered)) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
@@ -197,6 +206,16 @@ export function MacroBreakdownPanel({
           titleId={titleId}
           gameId={gameId}
           meta={headerMeta}
+          action={reviewable ? (
+            <AskForReviewButton
+              gameId={gameId}
+              durationSec={data?.game_length_sec ?? null}
+              matchup={matchupFromRaces(headerMeta?.myRace, headerMeta?.opponentRace)}
+              className="inline-flex h-10 flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-bg-surface px-3 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              label={<span className="hidden sm:inline">Ask for a review</span>}
+              ariaLabel="Ask for a review of this game"
+            />
+          ) : null}
           onClose={onClose}
         />
         <div className="min-w-0 flex-1 px-4 pb-6 pt-3 sm:px-6 sm:py-5 lg:px-8">
@@ -242,12 +261,15 @@ function PanelHeader({
   titleId,
   gameId,
   meta,
+  action,
   onClose,
 }: {
   headerRef: RefObject<HTMLElement | null>;
   titleId: string;
   gameId: string;
   meta?: PanelHeaderMeta;
+  /** Optional header action beside Close (e.g. "Ask for a review"). */
+  action?: ReactNode;
   onClose: () => void;
 }) {
   const playerName = meta?.playerName?.trim() || "You";
@@ -314,14 +336,17 @@ function PanelHeader({
             </span>
           </p>
         </div>
-        <button
-          type="button"
-          aria-label="Close macro breakdown"
-          onClick={onClose}
-          className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <X className="h-5 w-5" aria-hidden />
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {action}
+          <button
+            type="button"
+            aria-label="Close macro breakdown"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
       </div>
     </header>
   );

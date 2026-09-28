@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -26,23 +26,48 @@ type Props = {
   matchup: string | null;
 };
 
+type ButtonProps = Props & {
+  /**
+   * The button's look, so it matches wherever it sits (the game header
+   * pill by default; replay rows, dossier tables and the macro panel pass
+   * their own action classes).
+   */
+  className?: string;
+  /** Visible label; defaults to "Ask for a review". */
+  label?: ReactNode;
+  /** Accessible name when the visible label is shortened. */
+  ariaLabel?: string;
+  iconClassName?: string;
+};
+
+const DEFAULT_CLASS =
+  "hard-press inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
 /**
- * "Ask for a review" on /app/game/[gameId]. Only offered while the
- * rollout shows reviews to this viewer. The API re-checks everything
- * (own game, 1v1, macro breakdown, caps).
+ * "Ask for a review" for one of your games: the game page, your replay
+ * list, an opponent dossier's replays and the macro breakdown. Only
+ * offered while the rollout shows reviews to this viewer. The API
+ * re-checks everything (own game, 1v1, macro breakdown, caps).
  */
-export function AskForReviewButton(props: Props) {
+export function AskForReviewButton({
+  className = DEFAULT_CLASS,
+  label = "Ask for a review",
+  ariaLabel,
+  iconClassName = "h-4 w-4",
+  ...props
+}: ButtonProps) {
   const { data: me } = useApi<{ isAdmin?: boolean }>("/v1/me");
   const [open, setOpen] = useState(false);
   if (!reviewsVisible(me?.isAdmin)) return null;
+  const onClick = (e: MouseEvent) => {
+    // Rows in some tables expand on click; asking shouldn't toggle them.
+    e.stopPropagation();
+    setOpen(true);
+  };
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="hard-press inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <MessageSquarePlus className="h-4 w-4" aria-hidden /> Ask for a review
+      <button type="button" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} className={className}>
+        <MessageSquarePlus className={iconClassName} aria-hidden /> {label}
       </button>
       {open ? <AskForReviewDialog {...props} onClose={() => setOpen(false)} /> : null}
     </>

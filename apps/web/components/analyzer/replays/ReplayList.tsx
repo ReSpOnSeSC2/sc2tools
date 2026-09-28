@@ -18,9 +18,11 @@ import { PublicReplayDownloadButton } from "@/components/public-profile/PublicRe
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtMinutes, fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
+import { isReviewableGame } from "@/lib/reviews";
 import type { ReplayLibraryItem } from "./types";
 
 export interface ReplayListProps {
@@ -120,6 +122,7 @@ export function ReplayList({
           gameId={macroGame.gameId}
           initialScore={macroGame.macroScore}
           headerMeta={headerMeta(macroGame, playerName)}
+          reviewable={isReviewableGame(macroGame)}
         />
       ) : null}
     </>
@@ -183,6 +186,16 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
             <BarChart3 className="h-4 w-4" aria-hidden /> Analysis
             {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
           </Link>
+          {owner && isReviewableGame(game) ? (
+            <AskForReviewButton
+              gameId={game.gameId}
+              durationSec={game.durationSec}
+              matchup={game.matchup ?? null}
+              className={actionClass}
+              label="Review"
+              ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
+            />
+          ) : null}
           {owner ? (
             <ReplayDownloadButton
               gameId={game.gameId}
@@ -257,6 +270,16 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
           <Eye className="h-4 w-4" aria-hidden /> Analysis
           {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
         </Link>
+        {owner && isReviewableGame(game) ? (
+          <AskForReviewButton
+            gameId={game.gameId}
+            durationSec={game.durationSec}
+            matchup={game.matchup ?? null}
+            className={mobileActionClass}
+            label="Ask for review"
+            ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
+          />
+        ) : null}
         {owner ? (
           <div className="w-full sm:w-auto">
             <ReplayDownloadButton
