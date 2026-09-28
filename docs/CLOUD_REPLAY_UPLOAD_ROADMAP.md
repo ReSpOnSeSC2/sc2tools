@@ -1,6 +1,17 @@
 # Cloud-Side Replay Upload & Parser — Roadmap
 
-Status: **proposal** · Owner: TBD · Target: post-Phase 17 web-app overhaul
+Status: **superseded** by [Instant Analysis](instant-analysis.md) (in-browser parsing) · Owner: TBD · Target: post-Phase 17 web-app overhaul
+
+> **Superseded (2026-09-28).** Replays are now parsed on the user's own
+> device: a Web Worker runs the desktop agent's unchanged Python pipeline
+> under self-hosted Pyodide and uploads the agent's exact payload to the
+> existing `POST /v1/games`. No upload bucket, queue or server parser worker
+> is needed. That covers flows 1 and 3 below (web-only sign-up,
+> multi-device use), and flow 2 (mobile sharing) except that iOS Safari has
+> not been verified yet. Flow 4, community builds with a source replay, is
+> still open. See [`instant-analysis.md`](instant-analysis.md) and
+> [ADR 0022](adr/0022-instant-analysis-browser-parsing.md). The rest of this
+> document is kept for history.
 
 ## Why this exists
 

@@ -1,4 +1,4 @@
-# ADR 0022: Guides capture timing samples at ingest and publish only above data floors
+# ADR 0023: Guides capture timing samples at ingest and publish only above data floors
 
 **Status**: Accepted
 **Date**: 2026-09-28

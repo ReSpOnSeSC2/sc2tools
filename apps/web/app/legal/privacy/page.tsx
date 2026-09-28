@@ -1,3 +1,15 @@
+/**
+ * /legal/privacy — the SC2 Tools privacy policy (static server component).
+ *
+ * Each policy section is its own small component, so the page reads top to
+ * bottom like the policy and no function outgrows the engineering limits.
+ * Update `LAST_UPDATED` whenever the policy text changes materially.
+ *
+ * Example:
+ *   GET /legal/privacy  →  <PrivacyPage />
+ */
+import type { ReactNode } from "react";
+
 export const metadata = {
   alternates: { canonical: "/legal/privacy" },
   title: "Privacy Policy — SC2 Tools",
@@ -5,8 +17,18 @@ export const metadata = {
     "How SC2 Tools processes replay data and stores private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "September 21, 2026";
+const LAST_UPDATED = "September 28, 2026";
+const ISSUES_URL = "https://github.com/ReSpOnSeSC2/sc2tools/issues";
+/** Settings tab with export, history deletion and account deletion. */
+const DATA_SETTINGS_HREF = "/settings?tab=backups";
+const LIST_CLASS = "list-disc space-y-2 pl-6";
 
+/**
+ * The privacy policy page.
+ *
+ * Example:
+ *   <PrivacyPage />
+ */
 export default function PrivacyPage() {
   return (
     <article className="prose prose-invert mx-auto max-w-3xl space-y-6">
@@ -21,202 +43,349 @@ export default function PrivacyPage() {
         can exercise your rights over it.
       </p>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">What we collect</h2>
-        <ul className="list-disc space-y-2 pl-6">
-          <li>
-            <strong>Account identity.</strong> Your Clerk user id, email, and
-            (if you signed in with Google) your Google account name and avatar.
-            We do not see your Google password.
-          </li>
-          <li>
-            <strong>Replay data and original files.</strong> Each .SC2Replay
-            file in a replay folder you add is read by the SC2 Tools agent on
-            your PC. The agent uploads structured data such as map, matchup,
-            build orders, APM, MMR, opponent identity, and the original replay
-            file. Originals are kept in a private cloud archive so you can
-            download your own replays from the dashboard.
-          </li>
-          <li>
-            <strong>Personal builds and notes.</strong> Anything you type into
-            the build editor.
-          </li>
-          <li>
-            <strong>Device fingerprints.</strong> When you pair an agent we
-            store a hashed device token, the agent version, and the OS string.
-          </li>
-          <li>
-            <strong>Operational telemetry.</strong> Standard request logs (IP,
-            user-agent, timestamp), retained for 30 days for security and
-            debugging. If Sentry crash reporting is enabled (opt-in via
-            settings), unhandled exceptions are forwarded to Sentry with PII
-            scrubbed.
-          </li>
-          <li>
-            <strong>Live community counts.</strong> To show how many visitors
-            are currently active, the site sends a brief presence check while
-            you are using a visible page. A short-lived first-party cookie
-            groups visits from the same browser; signed-in accounts are counted
-            once across devices using a keyed hash of the account ID. Presence
-            records contain hashed identifiers and activity timestamps, with
-            no page history, email, or location. Records stop counting after
-            three minutes and are automatically removed shortly afterward.
-            Only aggregate counts are public. Agent activity comes from recent
-            check-ins, and download counts come from recorded installer requests.
-          </li>
-          <li>
-            <strong>Usage analytics (opt-in).</strong> Only if you click
-            &quot;Accept&quot; on the cookie banner, we load Google Analytics 4
-            to understand which pages and features get used. It records
-            pseudonymous data such as pages viewed, approximate location
-            (country/region, from a truncated IP), device type, and referring
-            site. We enable IP anonymization and disable advertising signals.
-            Google Analytics does not load until you opt in, and you can
-            withdraw consent at any time by clicking &quot;Reject&quot; on the
-            banner (clear the banner choice in your browser storage to see it
-            again).
-          </li>
-        </ul>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">What we do NOT collect</h2>
-        <ul className="list-disc space-y-2 pl-6">
-          <li>Anything from outside your Replays folder.</li>
-          <li>Voice or video.</li>
-          <li>Payment information (we don&apos;t take payments).</li>
-        </ul>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Where the data lives</h2>
-        <p>
-          Structured replay data lives in MongoDB Atlas. Original replay files
-          and larger replay-detail payloads live in a private Cloudflare R2
-          bucket. Render hosts the API, and Vercel hosts the website. Data is
-          sent over TLS; access to replay downloads requires your signed-in
-          account and a short-lived private download link.
-        </p>
-        <p>
-          Replay files remain stored until you delete the matching history or
-          your account. Temporary download links expire after a short period
-          and do not make the bucket public. Incomplete temporary uploads are
-          not exposed in your library and are covered by a one-day automatic
-          expiration rule.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Sharing</h2>
-        <p>
-          We do not sell or rent your data. We share it only with the
-          subprocessors above (Clerk for auth, MongoDB Atlas for database
-          hosting, Cloudflare R2 for private replay-file storage, Render for
-          API hosting, Vercel for the website, Sentry for opt-in crash
-          reporting, and Google Analytics for opt-in usage analytics).
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Community publishing</h2>
-        <p>
-          Publishing a build is optional and user-controlled. Community builds
-          show your profile or chosen community name by default; you can
-          explicitly choose <strong>Post anonymously</strong> for an individual
-          build. We publish its title, description, build metadata, and
-          signature, but not source replays, opponent identities, or personal
-          notes. You can remove the listing from Community at any time.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Aggregated opponent data</h2>
-        <p>
-          Public aggregated opponent statistics are a separate feature. We
-          strip contributor names and apply k-anonymity: we never publish an
-          aggregate row that fewer than 5 unique users have contributed to.
-          Pulse IDs are public information from Blizzard&apos;s ladder.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Your rights</h2>
-        <p>
-          You can export your structured account data as a JSON archive,
-          download stored replay originals from replay history, or delete your
-          replay history or account permanently from{" "}
-          <a href="/settings" className="underline">
-            Settings → Backups → Export / delete (GDPR)
-          </a>
-          . Deletion is hard — there is no recovery. If you live in the EU, UK,
-          or California, you have additional rights under GDPR and CCPA; open a
-          ticket at{" "}
-          <a
-            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
-            rel="noopener"
-            className="underline"
-          >
-            github.com/ReSpOnSeSC2/sc2tools/issues
-          </a>{" "}
-          to exercise them.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Cookies</h2>
-        <p>
-          The site uses cookies for session login (Clerk), CSRF protection,
-          and a short-lived first-party presence token for the public users
-          online count. The presence cookie expires after three minutes
-          without an activity check. Your banner choice is stored in your
-          browser&apos;s local storage, not a cookie.
-        </p>
-        <p>
-          If — and only if — you opt in via the banner, Google Analytics sets
-          its own first-party analytics cookies (e.g.{" "}
-          <code className="font-mono">_ga</code>) to measure usage. These are
-          never set before you accept, and we do NOT use advertising or
-          cross-site tracking cookies.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Children</h2>
-        <p>
-          SC2 Tools is not directed at children under 13. If you believe a
-          child has signed up, open a ticket at{" "}
-          <a
-            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
-            rel="noopener"
-            className="underline"
-          >
-            github.com/ReSpOnSeSC2/sc2tools/issues
-          </a>{" "}
-          and we will delete the account.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Changes to this policy</h2>
-        <p>
-          When we make material changes, we update the &quot;last updated&quot;
-          date and provide additional notice when required by applicable law
-          or when a change materially affects how we use personal data.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Contact</h2>
-        <p>
-          <a
-            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
-            rel="noopener"
-            className="underline"
-          >
-            github.com/ReSpOnSeSC2/sc2tools/issues
-          </a>
-        </p>
-      </section>
+      <WhatWeCollect />
+      <WhatWeDoNotCollect />
+      <WhereDataLives />
+      <BrowserStoredData />
+      <Sharing />
+      <CommunityPublishing />
+      <AggregatedOpponentData />
+      <YourRights />
+      <Cookies />
+      <Children />
+      <PolicyChanges />
+      <Contact />
     </article>
+  );
+}
+
+function PolicySection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function IssuesLink() {
+  return (
+    <a href={ISSUES_URL} rel="noopener" className="underline">
+      github.com/ReSpOnSeSC2/sc2tools/issues
+    </a>
+  );
+}
+
+function DataSettingsLink() {
+  return (
+    <a href={DATA_SETTINGS_HREF} className="underline">
+      Settings → Backups &amp; data
+    </a>
+  );
+}
+
+function TryPath() {
+  return <code className="font-mono">/try</code>;
+}
+
+function WhatWeCollect() {
+  return (
+    <PolicySection title="What we collect">
+      <ul className={LIST_CLASS}>
+        <AccountAndReplayItems />
+        <InstantAnalysisItem />
+        <BuildsDeviceAndTelemetryItems />
+        <PresenceAndAnalyticsItems />
+      </ul>
+    </PolicySection>
+  );
+}
+
+function AccountAndReplayItems() {
+  return (
+    <>
+      <li>
+        <strong>Account identity.</strong> Your Clerk user id, email, and
+        (if you signed in with Google) your Google account name and avatar.
+        We do not see your Google password.
+      </li>
+      <li>
+        <strong>Replay data and original files.</strong> Each .SC2Replay
+        file in a replay folder you add is read by the SC2 Tools agent on
+        your PC. The agent uploads structured data such as map, matchup,
+        build orders, APM, MMR, opponent identity, and the original replay
+        file. Originals are kept in a private cloud archive so you can
+        download your own replays from the dashboard.
+      </li>
+    </>
+  );
+}
+
+function InstantAnalysisItem() {
+  return (
+    <li>
+      <strong>Instant Analysis (in your browser).</strong> Instant
+      Analysis reads the replays or replay folder you choose and parses
+      them on your device, inside your browser. The analyzer is served
+      from our own site, not a third-party service. On the <TryPath />{" "}
+      page your report is built and kept in your browser, and nothing is
+      uploaded unless you choose to save the games to an account. When you
+      save or import games while signed in, or Folder Sync uploads new
+      games, we receive the same parsed game data the agent sends. When our
+      replay archive is enabled, a signed-in import also uploads the
+      original replay files to it, like the agent does; the import shows
+      this as a checkbox, checked by default, that you can clear before you
+      start. Folder Sync never uploads original files. If you opted in to
+      usage analytics, Instant Analysis reports only counts, timings, error
+      types, and how files were added (for example, drag and drop), never
+      file names, player names, or replay contents.
+    </li>
+  );
+}
+
+function BuildsDeviceAndTelemetryItems() {
+  return (
+    <>
+      <li>
+        <strong>Personal builds and notes.</strong> Anything you type into
+        the build editor.
+      </li>
+      <li>
+        <strong>Device fingerprints.</strong> When you pair an agent we
+        store a hashed device token, the agent version, and the OS string.
+      </li>
+      <li>
+        <strong>Operational telemetry.</strong> Standard request logs (IP,
+        user-agent, timestamp), retained for 30 days for security and
+        debugging. If Sentry crash reporting is enabled (opt-in via
+        settings), unhandled exceptions are forwarded to Sentry with PII
+        scrubbed.
+      </li>
+    </>
+  );
+}
+
+function PresenceAndAnalyticsItems() {
+  return (
+    <>
+      <li>
+        <strong>Live community counts.</strong> To show how many visitors
+        are currently active, the site sends a brief presence check while
+        you are using a visible page. A short-lived first-party cookie
+        groups visits from the same browser; signed-in accounts are counted
+        once across devices using a keyed hash of the account ID. Presence
+        records contain hashed identifiers and activity timestamps, with
+        no page history, email, or location. Records stop counting after
+        three minutes and are automatically removed shortly afterward.
+        Only aggregate counts are public. Agent activity comes from recent
+        check-ins, and download counts come from recorded installer requests.
+      </li>
+      <li>
+        <strong>Usage analytics (opt-in).</strong> Only if you click
+        &quot;Accept&quot; on the cookie banner, we load Google Analytics 4
+        to understand which pages and features get used. It records
+        pseudonymous data such as pages viewed, approximate location
+        (country/region, from a truncated IP), device type, and referring
+        site. We enable IP anonymization and disable advertising signals.
+        Google Analytics does not load until you opt in, and you can
+        withdraw consent at any time by clicking &quot;Reject&quot; on the
+        banner (clear the banner choice in your browser storage to see it
+        again).
+      </li>
+    </>
+  );
+}
+
+function WhatWeDoNotCollect() {
+  return (
+    <PolicySection title="What we do NOT collect">
+      <ul className={LIST_CLASS}>
+        <li>Anything from outside your Replays folder.</li>
+        <li>Voice or video.</li>
+        <li>Payment information (we don&apos;t take payments).</li>
+      </ul>
+    </PolicySection>
+  );
+}
+
+function WhereDataLives() {
+  return (
+    <PolicySection title="Where the data lives">
+      <p>
+        Structured replay data lives in MongoDB Atlas. Original replay files
+        and larger replay-detail payloads live in a private Cloudflare R2
+        bucket. Render hosts the API, and Vercel hosts the website. Data is
+        sent over TLS; access to replay downloads requires your signed-in
+        account and a short-lived private download link.
+      </p>
+      <p>
+        Replay files remain stored until you delete the matching history or
+        your account. Temporary download links expire after a short period
+        and do not make the bucket public. Incomplete temporary uploads are
+        not exposed in your library and are covered by a one-day automatic
+        expiration rule.
+      </p>
+    </PolicySection>
+  );
+}
+
+function BrowserStoredData() {
+  return (
+    <PolicySection title="Data stored in your browser">
+      <p>
+        Instant Analysis keeps some data in your browser&apos;s IndexedDB
+        storage on your device. We cannot read it, and it is sent to us only
+        when you save your <TryPath /> games to an account:
+      </p>
+      <BrowserStoredItems />
+      <p>
+        To remove this data, use <strong>Clear local data</strong> on the{" "}
+        <TryPath /> page (for the analysed games) or{" "}
+        <strong>Stop syncing</strong> on the Folder Sync card (for the folder
+        permission and the ledger), or clear this site&apos;s data in your
+        browser settings to remove all of it. This does not delete games you
+        already saved to your account. To delete those, use{" "}
+        <DataSettingsLink />.
+      </p>
+    </PolicySection>
+  );
+}
+
+function BrowserStoredItems() {
+  return (
+    <ul className={LIST_CLASS}>
+      <li>
+        <strong>Games analysed on /try.</strong> The parsed game data, so
+        you can come back to your report or save the games after signing
+        up. Each game expires 7 days after it was analysed and is deleted
+        the next time you open <TryPath /> in that browser. Saving the
+        games to your account also deletes them from the browser.
+      </li>
+      <li>
+        <strong>Folder Sync ledger.</strong> If you use Folder Sync, a list
+        of the replay files it has handled: each file&apos;s path within
+        the folder you picked, its size and modified date, whether it was
+        uploaded, skipped, or failed, and the game it matched. Later scans
+        use it to skip files that are already done.
+      </li>
+      <li>
+        <strong>Folder permission.</strong> The browser&apos;s read-only
+        handle to the folder you picked for Folder Sync, and the time of
+        the last scan. Your browser may ask you to allow access again on a
+        later visit.
+      </li>
+    </ul>
+  );
+}
+
+function Sharing() {
+  return (
+    <PolicySection title="Sharing">
+      <p>
+        We do not sell or rent your data. We share it only with the
+        subprocessors above (Clerk for auth, MongoDB Atlas for database
+        hosting, Cloudflare R2 for private replay-file storage, Render for
+        API hosting, Vercel for the website, Sentry for opt-in crash
+        reporting, and Google Analytics for opt-in usage analytics).
+      </p>
+    </PolicySection>
+  );
+}
+
+function CommunityPublishing() {
+  return (
+    <PolicySection title="Community publishing">
+      <p>
+        Publishing a build is optional and user-controlled. Community builds
+        show your profile or chosen community name by default; you can
+        explicitly choose <strong>Post anonymously</strong> for an individual
+        build. We publish its title, description, build metadata, and
+        signature, but not source replays, opponent identities, or personal
+        notes. You can remove the listing from Community at any time.
+      </p>
+    </PolicySection>
+  );
+}
+
+function AggregatedOpponentData() {
+  return (
+    <PolicySection title="Aggregated opponent data">
+      <p>
+        Public aggregated opponent statistics are a separate feature. We
+        strip contributor names and apply k-anonymity: we never publish an
+        aggregate row that fewer than 5 unique users have contributed to.
+        Pulse IDs are public information from Blizzard&apos;s ladder.
+      </p>
+    </PolicySection>
+  );
+}
+
+function YourRights() {
+  return (
+    <PolicySection title="Your rights">
+      <p>
+        You can export your structured account data as a JSON archive,
+        download stored replay originals from replay history, or delete your
+        replay history or account permanently from <DataSettingsLink />.
+        Deletion is hard — there is no recovery. If you live in the EU, UK,
+        or California, you have additional rights under GDPR and CCPA; open a
+        ticket at <IssuesLink /> to exercise them.
+      </p>
+    </PolicySection>
+  );
+}
+
+function Cookies() {
+  return (
+    <PolicySection title="Cookies">
+      <p>
+        The site uses cookies for session login (Clerk), CSRF protection,
+        and a short-lived first-party presence token for the public users
+        online count. The presence cookie expires after three minutes
+        without an activity check. Your banner choice is stored in your
+        browser&apos;s local storage, not a cookie.
+      </p>
+      <p>
+        If — and only if — you opt in via the banner, Google Analytics sets
+        its own first-party analytics cookies (e.g.{" "}
+        <code className="font-mono">_ga</code>) to measure usage. These are
+        never set before you accept, and we do NOT use advertising or
+        cross-site tracking cookies.
+      </p>
+    </PolicySection>
+  );
+}
+
+function Children() {
+  return (
+    <PolicySection title="Children">
+      <p>
+        SC2 Tools is not directed at children under 13. If you believe a
+        child has signed up, open a ticket at <IssuesLink /> and we will
+        delete the account.
+      </p>
+    </PolicySection>
+  );
+}
+
+function PolicyChanges() {
+  return (
+    <PolicySection title="Changes to this policy">
+      <p>
+        When we make material changes, we update the &quot;last updated&quot;
+        date and provide additional notice when required by applicable law
+        or when a change materially affects how we use personal data.
+      </p>
+    </PolicySection>
+  );
+}
+
+function Contact() {
+  return (
+    <PolicySection title="Contact">
+      <p>
+        <IssuesLink />
+      </p>
+    </PolicySection>
   );
 }

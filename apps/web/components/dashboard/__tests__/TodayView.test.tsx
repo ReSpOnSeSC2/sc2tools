@@ -10,6 +10,10 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
+vi.mock("@/lib/instant/useInstantImport", () => ({
+  useInstantImport: () => ({ enabled: false, mode: "off", loading: false }),
+}));
+
 vi.mock("@/components/dashboard/AnalyzerFrame", () => ({
   useDashboardMe: () => ({
     agentPaired: true,

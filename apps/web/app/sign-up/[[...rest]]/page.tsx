@@ -1,5 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { SignUp } from "@clerk/nextjs";
 import {
   CreditCard,
@@ -11,24 +14,53 @@ import {
 } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
+import { safeAuthRedirect } from "@/lib/instant/authRedirect";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
+import type { Theme } from "@/lib/theme";
+
+/** Where new accounts go unless /try asked to come back (see authRedirect). */
+const WELCOME_PATH = "/welcome";
 
 export default function SignUpPage() {
   return (
     <AuthShell marketing={<SignUpMarketing />}>
       {(theme) => (
-        <SignUp
-          key={theme}
-          appearance={appearanceFor(theme)}
-          signInUrl="/sign-in"
-          // New accounts land in the /welcome wizard (download → pair →
-          // first sync) instead of an empty dashboard. Returning users
-          // signing IN keep going straight to /app.
-          forceRedirectUrl="/welcome"
-          fallbackRedirectUrl="/welcome"
-        />
+        // useSearchParams needs a Suspense boundary for the static build.
+        <Suspense fallback={<WidgetPlaceholder />}>
+          <SignUpWidget theme={theme} />
+        </Suspense>
       )}
     </AuthShell>
+  );
+}
+
+function SignUpWidget({ theme }: { theme: Theme }) {
+  const searchParams = useSearchParams();
+  // Only the allowlisted /try hand-off may override the default; any
+  // other ?redirect_url= is ignored (no open redirects).
+  const redirect = safeAuthRedirect(searchParams.get("redirect_url"));
+  return (
+    <SignUp
+      key={theme}
+      appearance={appearanceFor(theme)}
+      signInUrl="/sign-in"
+      // New accounts land in the /welcome wizard (download → pair →
+      // first sync) instead of an empty dashboard — unless they came
+      // from /try to save the games they just analysed. Returning users
+      // signing IN keep going straight to /app.
+      forceRedirectUrl={redirect ?? WELCOME_PATH}
+      fallbackRedirectUrl={WELCOME_PATH}
+    />
+  );
+}
+
+function WidgetPlaceholder() {
+  return (
+    <div
+      className="min-h-[480px] rounded-xl border border-border bg-bg-surface/40"
+      aria-hidden
+    />
   );
 }
 
@@ -65,6 +97,16 @@ function SignUpMarketing() {
         Install a 450&nbsp;MB agent, finish a replay, and watch your
         opponent dossier fill out automatically.
       </p>
+      {getInstantImportMode() === "all" ? (
+        <p className="max-w-prose text-body text-text-muted">
+          <Link
+            href="/try"
+            className="font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Or analyze replays in your browser first — no download
+          </Link>
+        </p>
+      ) : null}
       <ul className="space-y-3">
         {BULLETS.map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-start gap-3">

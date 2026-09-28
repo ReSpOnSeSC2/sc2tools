@@ -15,6 +15,7 @@ import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useApi } from "@/lib/clientApi";
+import { useInstantImport } from "@/lib/instant/useInstantImport";
 
 /**
  * Applied at most once per browser session so the preference lands you
@@ -36,6 +37,7 @@ const DEFAULT_TAB_APPLIED_KEY = "sc2tools.defaultTabApplied";
 export function TodayView() {
   const router = useRouter();
   const me = useDashboardMe();
+  const { enabled: browserImportEnabled } = useInstantImport();
 
   const { data: misc } = useApi<{ defaultTab?: string }>(
     "/v1/me/preferences/misc",
@@ -63,6 +65,7 @@ export function TodayView() {
           version: me.agentVersion,
           lastSeenAt: me.agentLastSeenAt,
         }}
+        browserImportEnabled={browserImportEnabled}
       />
 
       {/* Live game card. Hidden by default; mounts a per-user SSE

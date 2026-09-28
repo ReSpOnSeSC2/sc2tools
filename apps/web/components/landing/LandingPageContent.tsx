@@ -8,6 +8,7 @@ import {
   Cloud,
   Download,
   Gamepad2,
+  MonitorSmartphone,
   Shield,
   Swords,
   Tv,
@@ -29,6 +30,7 @@ import {
   StreamStudioPreview,
   VirtualSetStrip,
 } from "@/components/landing/ProductShowcases";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 
 export function LandingPageContent() {
@@ -84,18 +86,7 @@ function LandingHero() {
             match, learns the opponents you face, coaches the builds you
             practise, and powers a complete stream production suite.
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            <CtaLink
-              href="/download"
-              iconLeft={<Download className="h-5 w-5" aria-hidden />}
-              iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
-            >
-              Download the free agent
-            </CtaLink>
-            <CtaLink href="#replay-demo" variant="secondary">
-              Try a replay
-            </CtaLink>
-          </div>
+          <HeroCtas />
           <LandingTrustStrip />
         </div>
         <div className="lg:col-span-7">
@@ -103,6 +94,50 @@ function LandingHero() {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Hero CTA row. With Instant Analysis rolled out to everyone
+ * (`NEXT_PUBLIC_INSTANT_IMPORT=all`, inlined at build time) the in-browser
+ * /try flow is the secondary CTA and the server-side replay demo drops
+ * to a text link; otherwise the row is unchanged.
+ */
+function HeroCtas() {
+  const instant = getInstantImportMode() === "all";
+  return (
+    <div className="mt-7 flex flex-wrap items-center gap-3">
+      <CtaLink
+        href="/download"
+        iconLeft={<Download className="h-5 w-5" aria-hidden />}
+        iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}
+      >
+        Download the free agent
+      </CtaLink>
+      {instant ? (
+        <>
+          <CtaLink
+            href="/try"
+            variant="secondary"
+            size="touch"
+            iconLeft={<MonitorSmartphone className="h-5 w-5" aria-hidden />}
+            className="text-balance"
+          >
+            No download — analyze your replays in your browser
+          </CtaLink>
+          <Link
+            href="#replay-demo"
+            className="inline-flex min-h-[44px] items-center font-semibold text-text-muted underline-offset-4 hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            Try a replay
+          </Link>
+        </>
+      ) : (
+        <CtaLink href="#replay-demo" variant="secondary">
+          Try a replay
+        </CtaLink>
+      )}
+    </div>
   );
 }
 
@@ -562,10 +597,19 @@ function EditorialHead({ folio, kicker, title, standfirst }: EditorialHeadProps)
   );
 }
 
+// min-h (not h) so a long label wraps onto two lines on a phone
+// instead of overflowing the button.
+const CTA_SIZE_CLASS: Record<NonNullable<CtaLinkProps["size"]>, string> = {
+  lg: "min-h-12 py-2 px-5 text-body-lg gap-2.5",
+  md: "min-h-10 py-1.5 px-4 text-body gap-2",
+  touch: "min-h-11 py-2 px-4 text-body gap-2",
+};
+
 interface CtaLinkProps {
   href: string;
   variant?: "primary" | "secondary";
-  size?: "md" | "lg";
+  /** "touch": `md` type on a 44px minimum (long labels that may wrap). */
+  size?: "md" | "lg" | "touch";
   iconLeft?: ReactNode;
   iconRight?: ReactNode;
   children: ReactNode;
@@ -585,15 +629,12 @@ function CtaLink({
     variant === "primary"
       ? "bg-accent text-white hover:brightness-90"
       : "bg-bg-elevated text-text border-2 border-line hover:bg-bg-subtle";
-  const sizeClass =
-    size === "lg"
-      ? "h-12 px-5 text-body-lg gap-2.5"
-      : "h-10 px-4 text-body gap-2";
+  const sizeClass = CTA_SIZE_CLASS[size];
   return (
     <Link
       href={href}
       className={[
-        "inline-flex min-w-[44px] items-center justify-center rounded-md font-semibold",
+        "inline-flex min-w-[44px] items-center justify-center rounded-md text-center font-semibold",
         "transition-colors duration-100",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         variantClass,

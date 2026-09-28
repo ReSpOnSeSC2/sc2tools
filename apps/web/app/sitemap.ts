@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getJson } from "@/lib/serverApi";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { reviewsRollout } from "@/lib/reviews";
 import { fetchGuideSitemap } from "@/lib/guides/api";
 import { guidesEnabled } from "@/lib/guides/flags";
@@ -34,6 +35,14 @@ const ROUTES: Route[] = [
   { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly" },
 ];
 
+// /try (in-browser replay analysis) is public only once Instant Analysis
+// is rolled out to everyone; in "admins"/"off" mode it is not listed.
+const TRY_ROUTE: Route = { path: "/try", priority: 0.8, changeFrequency: "monthly" };
+
+function staticRoutes(): Route[] {
+  return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE] : ROUTES;
+}
+
 const REVIEW_ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const LIST_REVALIDATE_SEC = 3600;
 
@@ -43,7 +52,7 @@ const LIST_REVALIDATE_SEC = 3600;
 export const revalidate = 3600;
 
 function staticRows(lastModified: Date): SitemapRows {
-  return ROUTES.map((route) => ({
+  return staticRoutes().map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,

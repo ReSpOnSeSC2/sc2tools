@@ -8,14 +8,65 @@ import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
+import { BrowserImportPanel } from "@/components/instant/BrowserImportPanel";
+
+/** How the replays reach the account: the paired agent, or this browser. */
+export type OnboardingImportMode = "agent" | "browser";
 
 /**
- * Step 4 — Import. The magic moment: one click pulls the user's whole
- * existing replay history through the freshly-paired agent so the
- * dashboard opens fully populated instead of empty. Skipping is fine
- * — the agent imports new games as they're played either way.
+ * Step 4 — Import. The magic moment: the user's existing replay history
+ * lands before the dashboard opens, so it opens populated instead of
+ * empty. In "agent" mode one click asks the freshly-paired agent to
+ * import; in "browser" mode (chosen on the Download step, behind the
+ * Instant Analysis flag) replays are analysed in this tab and uploaded.
+ * Skipping is fine either way.
  */
-export function OnboardingImport() {
+export function OnboardingImport({ mode = "agent" }: { mode?: OnboardingImportMode }) {
+  return mode === "browser" ? <BrowserModeImport /> : <AgentModeImport />;
+}
+
+/** Browser mode: the compact import panel, then the dashboard. */
+function BrowserModeImport() {
+  const router = useRouter();
+  const [imported, setImported] = useState(false);
+  return (
+    <section aria-labelledby="onboarding-step-heading" className="space-y-8">
+      <header className="space-y-2">
+        <h1
+          id="onboarding-step-heading"
+          tabIndex={-1}
+          className="text-display-lg font-semibold tracking-tight text-text outline-none"
+        >
+          Import your replays
+        </h1>
+        <p className="text-body-lg text-text-muted">
+          Choose replays from your StarCraft II folder — they&apos;re analysed
+          right here in your browser, then only the results are uploaded to
+          your account.
+        </p>
+      </header>
+
+      <BrowserImportPanel
+        compact
+        onDone={(summary) =>
+          setImported(summary.uploaded + summary.skippedExisting > 0)
+        }
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Button
+          variant={imported ? "primary" : "secondary"}
+          size="lg"
+          onClick={() => router.push("/app")}
+        >
+          Open your dashboard →
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function AgentModeImport() {
   const router = useRouter();
   const { getToken } = useAuth();
   const importStatus = useImportStatus();

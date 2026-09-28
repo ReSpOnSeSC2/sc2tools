@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { API_BASE } from "@/lib/clientApi";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { BuildEditorModal } from "@/components/builds/editor";
 import { buildLogToEvents } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
@@ -102,6 +103,28 @@ const FRIENDLY_ERRORS: Record<string, string> = {
   rate_limited: "Easy! Wait a minute then try another replay.",
   too_large: "That file is bigger than the demo accepts. Pick a smaller one or sign up.",
 };
+
+/**
+ * "Analyze privately in your browser instead" → /try, shown only once
+ * Instant Analysis is rolled out to everyone (build-time flag).
+ *
+ * Example:
+ *   <PrivateTryLink />
+ */
+function PrivateTryLink() {
+  if (getInstantImportMode() !== "all") return null;
+  return (
+    <p className="text-caption">
+      <Link
+        href="/try"
+        className="inline-flex min-h-[44px] items-center gap-1.5 font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >
+        Analyze privately in your browser instead
+        <ArrowRight className="h-4 w-4" aria-hidden />
+      </Link>
+    </p>
+  );
+}
 
 export function ReplayDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -201,7 +224,7 @@ export function ReplayDemo() {
             </h2>
             <p className="text-body-lg text-text-muted">
               Pick any replay from your StarCraft II folder. We&rsquo;ll read it
-              right here in your browser and open the build editor with that
+              on our server, discard it, and open the build editor with that
               game loaded — so you can see exactly how saving a custom build
               works before you sign up.
             </p>
@@ -230,9 +253,10 @@ export function ReplayDemo() {
               </Link>
             </div>
             <p className="text-caption text-text-dim">
-              Files are parsed once and discarded — nothing about your replay
-              is stored.
+              The file is sent to our server, parsed once and discarded —
+              nothing about your replay is stored.
             </p>
+            <PrivateTryLink />
           </div>
 
           <ReplayDropPreview onActivate={() => inputRef.current?.click()} />
