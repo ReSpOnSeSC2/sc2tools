@@ -21,14 +21,16 @@ import {
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
+import { guidesEnabled } from "@/lib/guides/flags";
 import { SiteStats } from "./SiteStats";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
  * Today and the analyzer sections, the custom-build library,
  * community, reviews, agent, settings and admin. (The public build
- * guides at /guides keep the marketing Header/Footer instead: they are
- * search landing pages, not an app surface.)
+ * guides at /guides are linked from the rail while the guides flag is on,
+ * but keep the marketing Header/Footer: they are search landing pages,
+ * not an app surface.)
  *
  *   - Desktop (md+): a 64px icon rail that expands to a labelled
  *     overlay on hover / keyboard focus. One navigation system for the
@@ -88,7 +90,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
     (e) =>
       (!e.adminOnly || me?.isAdmin === true) &&
       (!e.coachingOnly || hasCoachingAccess) &&
-      (!e.reviewsRollout || reviewsVisible(me?.isAdmin)),
+      (!e.reviewsRollout || reviewsVisible(me?.isAdmin)) &&
+      (!e.guidesFlag || guidesEnabled()),
   );
   const sections = entries.filter((e) => e.group === "section");
   const utilities = entries.filter((e) => e.group === "utility");

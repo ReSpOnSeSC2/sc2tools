@@ -43,6 +43,7 @@ vi.mock("../SiteStats", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   harness.pathname = "/app";
   harness.me = { userId: "u1", isAdmin: false, games: { total: 50, latest: null } };
   harness.coachingMe = { role: "none" };
@@ -58,6 +59,7 @@ const railHrefs = () =>
 
 describe("AppChrome navigation", () => {
   it("carries every product destination in one rail", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
     harness.pathname = "/app/macro";
     render(<AppChrome>content</AppChrome>);
 
@@ -80,12 +82,32 @@ describe("AppChrome navigation", () => {
     ]) {
       expect(railHrefs()).toContain(href);
     }
-    // The public guides live in the marketing shell, not the rail, and
-    // the retired /meta radar has no entry at all.
+    // The build guides only appear while their flag is on, and the
+    // retired /meta radar has no entry at all.
     expect(railHrefs()).not.toContain("/guides");
     expect(railHrefs()).not.toContain("/meta");
     expect(railHrefs()).not.toContain("/admin");
     expect(railHrefs()).not.toContain("/coaching");
+  });
+
+  it("links the build guides after Custom builds while their flag is on", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    harness.pathname = "/app/opponents/1-S2-1-99";
+    render(<AppChrome>content</AppChrome>);
+
+    const hrefs = railHrefs();
+    expect(hrefs.indexOf("/guides")).toBe(hrefs.indexOf("/builds") + 1);
+    const guides = within(screen.getByRole("navigation", { name: "App navigation" }))
+      .getByRole("link", { name: "Guides" });
+    expect(guides.getAttribute("href")).toBe("/guides");
+    expect(guides.getAttribute("aria-current")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(
+      within(screen.getByRole("dialog", { name: "More sections" }))
+        .getByRole("link", { name: "Guides" })
+        .getAttribute("href"),
+    ).toBe("/guides");
   });
 
   it("adds Admin and Coaching immediately when /v1/me grants admin access", () => {
@@ -249,6 +271,7 @@ describe("AppChrome mobile navigation", () => {
 
 describe("AppChrome for signed-out visitors", () => {
   it("keeps the shell but shows only public destinations and sign-in CTAs", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
     harness.signedIn = false;
     harness.me = undefined;
     harness.pathname = "/community/builds/shared-slug";
@@ -271,5 +294,15 @@ describe("AppChrome for signed-out visitors", () => {
     expect(
       Array.from(bar.querySelectorAll("a")).map((a) => a.getAttribute("href")),
     ).toEqual(["/community", "/sign-in"]);
+  });
+
+  it("offers the build guides to signed-out visitors while their flag is on", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    harness.signedIn = false;
+    harness.me = undefined;
+    harness.pathname = "/community";
+    render(<AppChrome>content</AppChrome>);
+
+    expect(railHrefs()).toEqual(["/", "/guides", "/community"]);
   });
 });
