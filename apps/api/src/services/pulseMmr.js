@@ -554,7 +554,7 @@ class PulseMmrService {
    * @returns {Promise<Array<{
    *   rating: number, lastPlayedMs: number, region: string|null,
    *   race: string|null, games: number, league: string|null,
-   *   tier: number|null, revealedName: string|null,
+   *   leagueId: number|null, tier: number|null, revealedName: string|null,
    * }>>}
    */
   async _collectTeamCandidates(ids, opts = {}) {
@@ -571,7 +571,7 @@ class PulseMmrService {
       throwOnError: opts.throwOnError === true,
     });
     if (seasons.size === 0) return [];
-    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, tier: number|null, revealedName: string|null}>} */
+    /** @type {Array<{rating: number, lastPlayedMs: number, region: string|null, race: string|null, games: number, league: string|null, leagueId: number|null, tier: number|null, revealedName: string|null}>} */
     const candidates = [];
     // SC2Pulse's /group/team accepts repeated ``characterId`` query
     // params and returns the union — one HTTP call carries every id in
@@ -672,6 +672,7 @@ class PulseMmrService {
           race,
           games,
           league: teamLeagueLabel(team),
+          leagueId: teamLeagueId(team),
           tier: teamTierNumber(team),
           revealedName: teamProNickname(team),
         });
@@ -755,6 +756,36 @@ class PulseMmrService {
       this.raceCacheTtlMs,
     );
     return races;
+  }
+
+  /**
+   * Every current-season 1v1 team SC2Pulse has for ``ids`` (numeric
+   * character ids and/or toon handles), one row per team: its region,
+   * race, league id (0 Bronze … 6 Grandmaster), rating and games.
+   * Uncached (callers cache what they derive from it) and fail-soft:
+   * ``[]`` when nothing resolves or SC2Pulse is unavailable.
+   *
+   * Example:
+   *   await pulse.getLadderTeams(["1-S2-1-267727"]);
+   *   // -> [{ region: "NA", race: "Protoss", leagueId: 6, rating: 5350, games: 375 }]
+   *
+   * @param {Array<string|null|undefined>} ids
+   * @returns {Promise<Array<{
+   *   region: string|null, race: string|null, leagueId: number|null,
+   *   rating: number, games: number,
+   * }>>}
+   */
+  async getLadderTeams(ids) {
+    const numericIds = await this._normaliseToNumericIds(ids);
+    if (numericIds.length === 0) return [];
+    const candidates = await this._collectTeamCandidates(numericIds);
+    return candidates.map((c) => ({
+      region: c.region,
+      race: c.race,
+      leagueId: c.leagueId,
+      rating: Math.round(c.rating),
+      games: c.games,
+    }));
   }
 
   /**
@@ -1457,14 +1488,17 @@ const LEAGUE_LABELS = [
 ];
 
 /**
- * Human league label for a SC2Pulse team, or null when absent /
- * out-of-range. Accepts the bare-int, ``{type}``-object, and numeric-
- * string shapes Pulse has emitted across versions.
+ * League id for a SC2Pulse team (0 Bronze … 6 Grandmaster, Blizzard's
+ * numbering), or null when absent / out-of-range. Accepts the bare-int,
+ * ``{type}``-object, and numeric-string shapes Pulse has emitted across
+ * versions.
+ *
+ * Example: `teamLeagueId({ league: { type: 6 } })` → 6.
  *
  * @param {any} team
- * @returns {string|null}
+ * @returns {number|null}
  */
-function teamLeagueLabel(team) {
+function teamLeagueId(team) {
   const raw = team && team.league;
   let n = null;
   if (typeof raw === "number") n = raw;
@@ -1474,8 +1508,20 @@ function teamLeagueLabel(team) {
     const parsed = Number(raw);
     if (Number.isFinite(parsed)) n = parsed;
   }
-  if (n === null || n < 0 || n >= LEAGUE_LABELS.length) return null;
-  return LEAGUE_LABELS[n];
+  if (n === null || !Number.isInteger(n) || n < 0 || n >= LEAGUE_LABELS.length) return null;
+  return n;
+}
+
+/**
+ * Human league label for a SC2Pulse team, or null when absent /
+ * out-of-range (see ``teamLeagueId``).
+ *
+ * @param {any} team
+ * @returns {string|null}
+ */
+function teamLeagueLabel(team) {
+  const id = teamLeagueId(team);
+  return id === null ? null : LEAGUE_LABELS[id];
 }
 
 /**

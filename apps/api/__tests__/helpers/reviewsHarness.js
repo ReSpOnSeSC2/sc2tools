@@ -15,6 +15,11 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const pino = require("pino");
 const { connect } = require("../../src/db/connect");
 const { buildApp } = require("../../src/app");
+const { PulseMmrService } = require("../../src/services/pulseMmr");
+
+const networkDisabled = async () => {
+  throw new Error("network_disabled_in_tests");
+};
 
 /** Opponent identity seeded into every "secret" game. None may leak. */
 const SECRET = Object.freeze({
@@ -35,7 +40,11 @@ const SECRET_NEEDLES = Object.freeze([
 ]);
 
 /**
- * @param {{rollout?: "off"|"admins"|"on", admins?: string[]}} [opts]
+ * ``pulseMmr`` stands in for SC2Pulse (reviewer leagues); by default it
+ * is a PulseMmrService whose fetch always fails, so no suite reaches the
+ * live API.
+ *
+ * @param {{rollout?: "off"|"admins"|"on", admins?: string[], pulseMmr?: object}} [opts]
  */
 async function createHarness(opts = {}) {
   const mongo = await MongoMemoryServer.create();
@@ -64,6 +73,7 @@ async function createHarness(opts = {}) {
     logger: pino({ level: "silent" }),
     config,
     reviewSeasonWindowStart: async () => new Date(0),
+    pulseMmr: opts.pulseMmr || new PulseMmrService({ fetchImpl: networkDisabled }),
   });
   const harness = {
     mongo,

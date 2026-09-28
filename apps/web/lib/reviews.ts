@@ -176,7 +176,16 @@ export type ReviewRequestView = {
   lastActivityAt: string | null;
 };
 
-export type ReviewerVerified = { band: Band; race: Race | null; mmr: number | null };
+/** A reviewer's league in one region they play ranked 1v1 in. */
+export type ReviewerRegion = { region: string; band: Band; race: Race | null };
+
+export type ReviewerVerified = {
+  band: Band;
+  race: Race | null;
+  mmr: number | null;
+  /** Strongest first; absent or empty when no region could be read. */
+  regions?: ReviewerRegion[];
+};
 
 export type ReviewCommentAuthor = {
   label: string;
@@ -441,8 +450,37 @@ export function levelLabel(key: string): string {
   return DESIRED_LEVELS.find((l) => l.key === key)?.label ?? key;
 }
 
-/** "Unverified" unless the API verified a band from the reviewer's own games. */
-export function verifiedLabel(v: ReviewerVerified | null | undefined): string {
-  if (!v) return "Unverified";
+/** The league shape both the review payloads and public profiles carry. */
+type VerifiedLeague = {
+  band: Band;
+  race: string | null;
+  regions?: Array<{ region: string; band: Band; race: string | null }>;
+};
+
+function leagueText(v: { band: Band; race: string | null }): string {
   return v.race ? `${v.band.label} ${v.race}` : v.band.label;
+}
+
+/** "Unverified" unless the API verified a band from the reviewer's own games. */
+export function verifiedLabel(v: VerifiedLeague | null | undefined): string {
+  return v ? leagueText(v) : "Unverified";
+}
+
+/**
+ * The verified league in each region the reviewer plays in, with regions
+ * on the same league grouped: "Grandmaster Protoss (NA, EU)", or
+ * "Grandmaster Protoss (NA) · Master Zerg (EU)". Same as
+ * ``verifiedLabel`` when the API sent no regions.
+ */
+export function verifiedRegionsLabel(v: VerifiedLeague | null | undefined): string {
+  const regions = v?.regions ?? [];
+  if (!v || regions.length === 0) return verifiedLabel(v);
+  const groups: Array<{ text: string; regions: string[] }> = [];
+  for (const r of regions) {
+    const text = leagueText(r);
+    const group = groups.find((g) => g.text === text);
+    if (group) group.regions.push(r.region);
+    else groups.push({ text, regions: [r.region] });
+  }
+  return groups.map((g) => `${g.text} (${g.regions.join(", ")})`).join(" · ");
 }

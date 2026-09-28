@@ -62,7 +62,7 @@ describe("reviews: comment rules", () => {
     const top = page.body.comments.find((c) => c.id === master.body.id);
     expect(top).toMatchObject({ gameTimeSec: 312, endTimeSec: 340, mapPoint: { x: 40, y: 61.3 } });
     expect(top.author.label).toBe("MasterFox");
-    expect(top.author.verified).toEqual({ band: { id: 5, label: "Master" }, race: "Protoss", mmr: 4800 });
+    expect(top.author.verified).toEqual({ band: { id: 5, label: "Master" }, race: "Protoss", mmr: 4800, regions: [] });
     expect(page.body.request.stats.reviewCount).toBe(1);
     expect(page.body.request.stats.commentCount).toBe(2);
   });
