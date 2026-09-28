@@ -22,6 +22,11 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     path: "/players/test-player-0123456789/replays",
     expectText: /replay archive|replays/i,
   },
+  // /try exists only when Instant Analysis is rolled out to everyone
+  // (build-time flag; the build step must use the same value).
+  ...(process.env.NEXT_PUBLIC_INSTANT_IMPORT === "all"
+    ? [{ path: "/try", expectText: /analyze/i }]
+    : []),
 ];
 
 for (const { path, expectText } of PAGES) {

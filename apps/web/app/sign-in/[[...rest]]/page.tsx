@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { SignIn } from "@clerk/nextjs";
 import {
   Cloud,
@@ -10,18 +12,43 @@ import {
 } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
+import { safeAuthRedirect } from "@/lib/instant/authRedirect";
+import type { Theme } from "@/lib/theme";
 
 export default function SignInPage() {
   return (
     <AuthShell marketing={<SignInMarketing />}>
       {(theme) => (
-        <SignIn
-          key={theme}
-          appearance={appearanceFor(theme)}
-          signUpUrl="/sign-up"
-        />
+        // useSearchParams needs a Suspense boundary for the static build.
+        <Suspense fallback={<WidgetPlaceholder />}>
+          <SignInWidget theme={theme} />
+        </Suspense>
       )}
     </AuthShell>
+  );
+}
+
+function SignInWidget({ theme }: { theme: Theme }) {
+  const searchParams = useSearchParams();
+  // Only the allowlisted /try hand-off forces a destination; otherwise
+  // Clerk keeps its default behaviour (no open redirects added here).
+  const redirect = safeAuthRedirect(searchParams.get("redirect_url"));
+  return (
+    <SignIn
+      key={theme}
+      appearance={appearanceFor(theme)}
+      signUpUrl="/sign-up"
+      {...(redirect ? { forceRedirectUrl: redirect } : {})}
+    />
+  );
+}
+
+function WidgetPlaceholder() {
+  return (
+    <div
+      className="min-h-[480px] rounded-xl border border-border bg-bg-surface/40"
+      aria-hidden
+    />
   );
 }
 
