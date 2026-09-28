@@ -6,8 +6,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const ON = ["1", "true", "on", "TRUE", "On", " 1", "true\n", "  ON  "];
-const OFF = ["", " ", "0", "false", "off", "yes", "enabled", "all", "admins", "1 1", "tru e"];
+const ON = ["1", "true", "yes", "on", "all", "TRUE", "On", "ALL", " 1", "true\n", "  ON  ", " all "];
+const OFF = ["", " ", "0", "false", "off", "no", "enabled", "admins", "admin", "1 1", "tru e"];
 
 describe("guidesEnabled", () => {
   test.each(ON)("on for %j", (value) => {

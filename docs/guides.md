@@ -201,7 +201,7 @@ API (`apps/api`, see `render.yaml` and `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GUIDES_ENABLED` | off | Master switch for the `/v1/guides` routes and the nightly stats and video jobs. |
+| `GUIDES_ENABLED` | off | Master switch for the `/v1/guides` routes and the nightly stats and video jobs. `on`, `true`, `1`, `yes` or `all` turn it on (the same spellings as the web flag). |
 | `GUIDES_REVALIDATE_URL` | unset | `https://<web>/api/revalidate-guides`, pinged after each successful stats run. |
 | `GUIDES_REVALIDATE_SECRET` | unset | Shared HMAC secret. Must match the web's value. |
 | `GUIDES_YOUTUBE_CHANNEL_ID` / `GUIDES_YOUTUBE_CHANNEL_URL` | ReSpOnSe's channel | Video sync source and the "Subscribe" link. |
@@ -214,7 +214,7 @@ Web (`apps/web`, see `.env.example`):
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_GUIDES_ENABLED` | `on`, `1` or `true` shows `/guides`, the nav, footer and landing links, and adds guide URLs to the sitemap. Inlined at build time. |
+| `NEXT_PUBLIC_GUIDES_ENABLED` | `on`, `true`, `1`, `yes` or `all` shows `/guides`, the nav, footer and landing links, and adds guide URLs to the sitemap. Inlined at build time. |
 | `GUIDES_REVALIDATE_SECRET` | Verifies the API's revalidation ping. |
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Google Search Console token, added to the root metadata. |
 

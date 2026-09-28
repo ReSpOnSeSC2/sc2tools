@@ -1,7 +1,6 @@
 "use strict";
 
 const { DEFAULTS } = require("./constants");
-const { parseBool } = require("../util/parseQuery");
 
 const HEX_64_REGEX = /^[0-9a-fA-F]{64}$/;
 
@@ -229,12 +228,32 @@ function parseIngestConfig(env) {
  */
 function parseGuidesConfig(env) {
   return {
-    guidesEnabled: parseBool(env.GUIDES_ENABLED),
+    guidesEnabled: parseGuidesFlag(env.GUIDES_ENABLED),
     guidesRevalidateUrl: env.GUIDES_REVALIDATE_URL || null,
     guidesRevalidateSecret: env.GUIDES_REVALIDATE_SECRET || null,
     guidesYoutubeChannelId: env.GUIDES_YOUTUBE_CHANNEL_ID || null,
     guidesYoutubeChannelUrl: env.GUIDES_YOUTUBE_CHANNEL_URL || null,
   };
+}
+
+/**
+ * Spellings of GUIDES_ENABLED that switch guides on (after trim and
+ * lowercase). The same set as the web's NEXT_PUBLIC_GUIDES_ENABLED parser
+ * (apps/web/lib/guides/guidesFlag.mjs), so one value set on both apps
+ * always agrees. "all" is accepted because the other rollout flags
+ * (REVIEWS_ENABLED, NEXT_PUBLIC_INSTANT_IMPORT) use it for "everyone";
+ * guides have no admins-only stage, so anything else is off.
+ */
+const GUIDES_FLAG_ON_VALUES = new Set(["1", "true", "yes", "on", "all"]);
+
+/**
+ * Example: `parseGuidesFlag(" All ")` → true; `parseGuidesFlag("admins")` → false.
+ *
+ * @param {string | undefined} raw
+ * @returns {boolean}
+ */
+function parseGuidesFlag(raw) {
+  return GUIDES_FLAG_ON_VALUES.has(String(raw || "").trim().toLowerCase());
 }
 
 /**
