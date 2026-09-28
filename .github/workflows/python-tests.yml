@@ -1,4 +1,4 @@
-# Pytest gate for the two Python packages:
+# Pytest gate for the Python packages and the in-browser replay engine:
 #   * apps/replay-engine — parsing/classifier/analytics suite, runs on
 #     Linux inside a clean venv (mpyq, a sc2reader dep, fails to build
 #     against Debian/Ubuntu's patched *system* setuptools — the venv
@@ -6,8 +6,14 @@
 #   * apps/agent — desktop agent suite, runs on Windows because that is
 #     the platform the agent actually ships on (watcher paths, autostart,
 #     installer assumptions are Windows-shaped).
+#   * instant-parity — Instant Analysis (in-browser engine). Proves the
+#     sandbox entry point (sc2tools_agent.instant_analysis) produces the
+#     desktop agent's exact upload payload for every replay fixture and
+#     perspective, in a venv holding ONLY sc2reader (so the browser path
+#     provably needs no numpy/scipy), then checks the Pyodide bundle
+#     against the CPython goldens.
 #
-# Failure of either job blocks the merge.
+# Failure of any job blocks the merge.
 
 name: python-tests
 
@@ -16,6 +22,12 @@ on:
     paths:
       - 'apps/replay-engine/**'
       - 'apps/agent/**'
+      - 'apps/web/scripts/build-browser-engine.mjs'
+      - 'apps/web/scripts/browser-engine/**'
+      - 'apps/web/lib/instant/**'
+      - 'apps/web/tests/engine/**'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
       - '.github/workflows/python-tests.yml'
   push:
     branches: [main]
@@ -73,3 +85,38 @@ jobs:
           pip install -r requirements.txt pytest
       - name: Test
         run: python -m pytest -ra
+
+  instant-parity:
+    name: Instant Analysis parity (CPython + Pyodide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # Also puts python3 on PATH for the bundle builder, which creates
+      # its own clean venv from hash-pinned wheels.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create sc2reader-only venv (browser path needs no numpy/scipy)
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip setuptools wheel
+          .venv/bin/pip install sc2reader==1.8.0 pytest==9.1.1
+      - name: Desktop-agent parity tests
+        run: cd apps/agent && ../../.venv/bin/python -m pytest tests/test_instant_analysis.py -ra
+      - name: Generate CPython goldens (installed data view)
+        run: .venv/bin/python apps/agent/tests/instant_golden.py --out "$RUNNER_TEMP/instant-golden"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Build browser engine bundle
+        working-directory: apps/web
+        run: npm run engine:build
+      - name: Pyodide engine matches CPython goldens
+        working-directory: apps/web
+        run: INSTANT_GOLDEN_DIR="$RUNNER_TEMP/instant-golden" npm run test:engine
