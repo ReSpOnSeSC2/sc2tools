@@ -465,6 +465,31 @@ def test_expand_replay_zip_nested_dirs_and_junk_returns_only_replays() -> None:
     assert entries[0]["data"] == data
 
 
+def test_expand_replay_zip_entry_times_returns_epoch_ms_read_as_utc() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(zipfile.ZipInfo("old.SC2Replay", (2020, 1, 2, 3, 4, 6)), b"MPQ\x1b-old")
+        archive.writestr(zipfile.ZipInfo("new.SC2Replay", (2026, 9, 1, 12, 0, 0)), b"MPQ\x1b-new")
+    entries = ia.expand_replay_zip(buffer.getvalue())
+    assert [(entry["name"], entry["lastModified"]) for entry in entries] == [
+        ("old.SC2Replay", 1577934246000),
+        ("new.SC2Replay", 1788264000000),
+    ]
+
+
+def test_zip_entry_epoch_ms_invalid_stored_date_returns_none() -> None:
+    info = zipfile.ZipInfo("a.SC2Replay")
+    info.date_time = (1980, 0, 0, 0, 0, 0)
+    assert instant_intake.zip_entry_epoch_ms(info) is None
+
+
+def test_expand_replay_zip_too_many_central_entries_raises_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(instant_intake, "MAX_ZIP_CENTRAL_ENTRIES", 2)
+    blob = _zip_bytes([("a.SC2Replay", b"MPQ\x1b"), ("b.txt", b"x"), ("c.png", b"y")])
+    with pytest.raises(ValueError, match="zip_too_many_entries"):
+        ia.expand_replay_zip(blob)
+
+
 def test_expand_replay_zip_too_many_entries_raises_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(instant_intake, "MAX_ZIP_REPLAY_ENTRIES", 2)
     blob = _zip_bytes([(f"{index}.SC2Replay", b"MPQ\x1b") for index in range(3)])

@@ -14,7 +14,8 @@
  * parse a fixture replay from the zip in a fresh interpreter -> publish.
  *
  * Required vs optional: the build is REQUIRED with `--require`,
- * INSTANT_ENGINE_REQUIRED=1, or NEXT_PUBLIC_INSTANT_IMPORT=admins|all, and
+ * INSTANT_ENGINE_REQUIRED=1, or NEXT_PUBLIC_INSTANT_IMPORT=admins|all (any
+ * case, like the app reads it; see browser-engine/required.mjs), and
  * then any failure exits non-zero. Otherwise (the feature is off) a missing
  * Python or a failed build prints a warning and exits 0 without writing.
  *
@@ -28,6 +29,7 @@ import {
 } from "./browser-engine/pyodideBundle.mjs";
 import { readBundleFiles } from "./browser-engine/files.mjs";
 import { publishBundle } from "./browser-engine/publish.mjs";
+import { isEngineRequired } from "./browser-engine/required.mjs";
 import { readVersions } from "./browser-engine/versions.mjs";
 import { ensureWheels, findPython } from "./browser-engine/wheels.mjs";
 import {
@@ -38,25 +40,10 @@ import {
   logWarn,
 } from "./browser-engine/util.mjs";
 
-const REQUIRE_FLAG = "--require";
-const REQUIRED_ENV_VALUE = "1";
-const FLAG_MODES_REQUIRING_ENGINE = new Set(["admins", "all"]);
 /** Summary table column widths and the wheel digest prefix shown. */
 const ROLE_COLUMN = 15;
 const SIZE_COLUMN = 11;
 const DIGEST_PREFIX_CHARS = 16;
-
-/**
- * Whether a failure must fail the build.
- *
- * Example:
- *   isEngineRequired(["--require"], {}); // -> true
- */
-function isEngineRequired(argv, env) {
-  if (argv.includes(REQUIRE_FLAG)) return true;
-  if (env.INSTANT_ENGINE_REQUIRED === REQUIRED_ENV_VALUE) return true;
-  return FLAG_MODES_REQUIRING_ENGINE.has((env.NEXT_PUBLIC_INSTANT_IMPORT ?? "").trim());
-}
 
 function timer() {
   const started = performance.now();

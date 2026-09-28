@@ -179,7 +179,7 @@ describe("runBrowserUpload: early stops and best effort", () => {
   it("reports progress for every stage", async () => {
     const { services } = mockServices(uploadSummary({ accepted: [{ gameId: "g1", created: true }] }));
     services.uploadGames.mockImplementationOnce(async (_games, deps) => {
-      deps.onProgress?.({ phase: "uploading", accepted: 1, total: 3 });
+      deps.onProgress?.({ phase: "uploading", accepted: 1, settled: 1, total: 3 });
       return uploadSummary({ accepted: [{ gameId: "g1", created: true }] });
     });
     const stages: string[] = [];
@@ -193,6 +193,15 @@ describe("uploadCounts / backupItemsFor", () => {
     const counts = uploadCounts(uploadSummary({ rejected: [{ gameId: "a", errors: ["x"] }], oversized: ["b"] }));
     expect(counts.rejected).toBe(2);
     expect(counts.stoppedReason).toBeUndefined();
+    expect(counts.dailyCapResetAt).toBeUndefined();
+  });
+
+  it("carries the daily cap's reset time", () => {
+    const resetAt = Date.parse("2026-09-29T00:00:00Z");
+    const counts = uploadCounts(uploadSummary({
+      stoppedReason: "daily_cap", dailyCap: { limit: 5000, remaining: 0, resetAt },
+    }));
+    expect(counts).toMatchObject({ stoppedReason: "daily_cap", dailyCapResetAt: resetAt });
   });
 
   it("ignores accepted ids that were not part of this run", () => {

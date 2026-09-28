@@ -72,8 +72,10 @@ const ERROR_COPY: Record<ErrorKind, ErrorCopy> = {
     hint: "The analyzer hit an unexpected error on this replay. The desktop agent may still import it.",
   },
   playback_budget_exceeded: {
-    title: "Replay too long to analyse here",
-    hint: "This game is too long to analyse inside the browser's memory budget. The desktop agent can import it.",
+    title: "Game too large to upload",
+    hint:
+      "This game's analysis is larger than the upload size limit, so it can't be saved. The desktop agent has " +
+      "the same limit unless it recorded the game with StarCraft II's engine capture.",
   },
   engine_unavailable: {
     title: "Analyzer was updated",
@@ -89,7 +91,7 @@ const ERROR_COPY: Record<ErrorKind, ErrorCopy> = {
   },
   not_1v1: {
     title: "Not a 1v1 game",
-    hint: "Skipped — only 1v1 games are analysed.",
+    hint: "Skipped — only 1v1 games are analyzed.",
   },
   resumed_replay: {
     title: "Resumed from a replay",
@@ -101,11 +103,13 @@ const ERROR_COPY: Record<ErrorKind, ErrorCopy> = {
   },
   too_large: {
     title: "File too large",
-    hint: "This file is much larger than any ladder replay, so it was not opened.",
+    hint:
+      "This file is larger than any ladder replay, or than a .zip we can unpack here, so it was not opened. " +
+      "For a big collection, choose your replay folder instead of a .zip.",
   },
   cancelled: {
     title: "Cancelled",
-    hint: "Stopped before this replay was analysed.",
+    hint: "Stopped before this replay was analyzed.",
   },
   integrity_failed: {
     title: "Download check failed",

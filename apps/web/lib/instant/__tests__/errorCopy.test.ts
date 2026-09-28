@@ -33,6 +33,23 @@ describe("errorCopy", () => {
   it("suggests a newer patch for unsupported_version", () => {
     expect(errorCopy("unsupported_version").hint).toMatch(/newer StarCraft II patch/);
   });
+
+  it("blames the upload size limit, not browser memory, for playback_budget_exceeded", () => {
+    const copy = errorCopy("playback_budget_exceeded");
+    expect(copy.title).toBe("Game too large to upload");
+    expect(copy.hint).toMatch(/larger than the upload size limit/);
+    expect(copy.hint).toMatch(/same limit/);
+    expect(copy.hint).not.toMatch(/memory/);
+    expect(copy.hint).not.toMatch(/can import it/);
+  });
+
+  it("points large archives to folder import", () => {
+    expect(errorCopy("too_large").hint).toMatch(/replay folder instead of a \.zip/);
+  });
+
+  it("uses American spelling in every hint", () => {
+    for (const kind of ALL_KINDS) expect(errorCopy(kind).hint).not.toMatch(/analys(e|ed|ing)\b/i);
+  });
 });
 
 describe("summarizeFailures", () => {

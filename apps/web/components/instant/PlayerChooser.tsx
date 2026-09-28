@@ -59,7 +59,7 @@ export function PlayerChooser({ candidates, onChoose, onCancel, className = "" }
           Which player are you?
         </h2>
         <p className="text-caption text-text-muted">
-          These replays don&apos;t say which side is yours. Pick yourself so every game is analysed from your point of view.
+          These replays don&apos;t say which side is yours. Pick yourself so every game is analyzed from your point of view.
         </p>
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">

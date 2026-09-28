@@ -9,8 +9,7 @@
  *   </ReportCard>
  */
 import type { ReactNode } from "react";
-
-const PERCENT = 100;
+import { PERCENT } from "@/lib/instant/displayUnits";
 
 /**
  * Win rate over decided games as a whole percentage, or null when no

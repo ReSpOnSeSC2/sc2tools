@@ -3,23 +3,30 @@
  *
  *   - /try games: parsed payloads kept for 7 days so a visitor can
  *     come back to their report or claim the games after signing up.
- *     Expired rows are purged before every read.
+ *     Expired rows are purged before every read, and at most
+ *     `MAX_STORED_TRY_GAMES` are kept (oldest-stored dropped on save).
  *   - Folder Sync ledger: per-file status so re-scans skip settled files.
  *   - Folder Sync directory handle (structured-cloned by the browser).
- *   - Small metadata such as the last folder scan time.
+ *   - Small metadata: the last folder scan time, the account the Folder
+ *     Sync state belongs to, and an auto-sync pause after the daily
+ *     browser-upload cap.
  *
- * Everything read back is validated (storage can hold older shapes).
- * Nothing here ever leaves the device.
+ * Folder Sync state is bound to ONE account: binding a different account
+ * (`saveFolderHandle` / `claimFolderSync`) forgets the previous account's
+ * ledger and scan time in the same transaction, so a shared browser never
+ * syncs one person's replays into another person's account.
+ *
+ * Everything read back is validated (localStoreRows.ts). Nothing here
+ * ever leaves the device.
  *
  * Example:
- *   await saveTryGames([{ gameId, json, date }], Date.now());
+ *   await saveTryGames([{ gameId, json, date, engineVersion }], Date.now());
  *   const games = await loadTryGames(Date.now());
  */
 import {
   TRY_GAMES_EXPIRES_INDEX,
   idbClear,
   idbCount,
-  idbDelete,
   idbGet,
   idbGetAll,
   idbPut,
@@ -27,27 +34,27 @@ import {
   idbTransaction,
   openInstantDb,
 } from "./idb";
-import { isErrorKind, type LedgerEntry, type LedgerStatus } from "./ledger";
+import type { LedgerEntry } from "./ledger";
 import { isDirectoryHandle, type DirectoryHandleLike } from "./folderSync";
+import {
+  MAX_STORED_TRY_GAMES,
+  TRY_TTL_MS,
+  isFiniteNumber,
+  newestStoredFirst,
+  toIngestPause,
+  toLedgerEntry,
+  toStoredTryGame,
+  type StoredTryGame,
+  type TryGameInput,
+} from "./localStoreRows";
 
-/** /try games are kept on this device for 7 days. */
-export const TRY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { MAX_STORED_TRY_GAMES, TRY_TTL_DAYS, TRY_TTL_MS } from "./localStoreRows";
+export type { StoredTryGame, TryGameInput } from "./localStoreRows";
 
 const FOLDER_HANDLE_KEY = "folder";
 const LAST_FOLDER_SCAN_KEY = "lastFolderScanAt";
-
-export interface TryGameInput {
-  gameId: string;
-  /** Compact payload JSON exactly as the engine produced it. */
-  json: string;
-  /** Replay date (RFC 3339). */
-  date: string;
-}
-
-export interface StoredTryGame extends TryGameInput {
-  storedAt: number;
-  expiresAt: number;
-}
+const FOLDER_OWNER_KEY = "folderOwner";
+const INGEST_PAUSE_KEY = "browserIngestPausedUntil";
 
 export interface InstantLocalStore {
   saveTryGames(games: ReadonlyArray<TryGameInput>, now: number): Promise<void>;
@@ -58,50 +65,21 @@ export interface InstantLocalStore {
   loadLedger(): Promise<LedgerEntry[]>;
   saveLedgerEntries(entries: ReadonlyArray<LedgerEntry>): Promise<void>;
   clearLedger(): Promise<void>;
-  saveFolderHandle(handle: DirectoryHandleLike): Promise<void>;
+  /** Remember the folder for `ownerUserId` (a different owner's ledger is forgotten). */
+  saveFolderHandle(handle: DirectoryHandleLike, ownerUserId: string): Promise<void>;
   loadFolderHandle(): Promise<DirectoryHandleLike | null>;
+  /** Forget the folder, its owner and its last scan time. */
   clearFolderHandle(): Promise<void>;
+  /** The account the Folder Sync state belongs to, or null. */
+  getFolderOwner(): Promise<string | null>;
+  /** Bind the Folder Sync state to `ownerUserId` (a different owner's ledger is forgotten). */
+  claimFolderSync(ownerUserId: string): Promise<void>;
   getLastFolderScanAt(): Promise<number | null>;
   setLastFolderScanAt(at: number): Promise<void>;
+  /** Epoch ms until which `userId`'s auto-sync waits (daily cap), or null. */
+  getIngestPausedUntil(userId: string): Promise<number | null>;
+  setIngestPausedUntil(userId: string, until: number): Promise<void>;
   clearAll(): Promise<void>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function toStoredTryGame(value: unknown): StoredTryGame | null {
-  if (!isRecord(value)) return null;
-  const { gameId, json, date, storedAt, expiresAt } = value;
-  if (typeof gameId !== "string" || typeof json !== "string" || typeof date !== "string") {
-    return null;
-  }
-  if (!isFiniteNumber(storedAt) || !isFiniteNumber(expiresAt)) return null;
-  return { gameId, json, date, storedAt, expiresAt };
-}
-
-const LEDGER_STATUSES: ReadonlyArray<LedgerStatus> = ["uploaded", "skipped", "failed"];
-
-function isLedgerStatus(value: unknown): value is LedgerStatus {
-  return LEDGER_STATUSES.some((status) => status === value);
-}
-
-function toLedgerEntry(value: unknown): LedgerEntry | null {
-  if (!isRecord(value)) return null;
-  const { path, size, lastModified, status, gameId, errorKind, updatedAt } = value;
-  if (typeof path !== "string" || !isLedgerStatus(status)) return null;
-  if (!isFiniteNumber(size) || !isFiniteNumber(lastModified) || !isFiniteNumber(updatedAt)) {
-    return null;
-  }
-  const entry: LedgerEntry = { path, size, lastModified, status, updatedAt };
-  if (typeof gameId === "string") entry.gameId = gameId;
-  // An unknown kind from a newer app version is dropped rather than trusted.
-  if (typeof errorKind === "string" && isErrorKind(errorKind)) entry.errorKind = errorKind;
-  return entry;
 }
 
 async function purgeExpiredIn(db: IDBDatabase, now: number): Promise<number> {
@@ -120,6 +98,32 @@ async function purgeExpiredIn(db: IDBDatabase, now: number): Promise<number> {
   }).then((box) => box.removed);
 }
 
+/** Queue a delete of every valid row beyond the newest `keep` (same transaction). */
+function trimTryGames(store: IDBObjectStore, keep: number): void {
+  const request: IDBRequest<unknown[]> = store.getAll();
+  request.onsuccess = () => {
+    const rows = request.result.flatMap((value) => toStoredTryGame(value) ?? []);
+    rows.sort(newestStoredFirst).slice(keep).forEach((row) => store.delete(row.gameId));
+  };
+}
+
+/**
+ * Bind the Folder Sync state to `owner` inside `tx` (stores `meta` and
+ * `ledger`): when the stored owner differs (or is missing), the ledger
+ * and the last scan time belong to someone else and are forgotten.
+ */
+function bindOwner(tx: IDBTransaction, owner: string): void {
+  const meta = tx.objectStore("meta");
+  const request = meta.get(FOLDER_OWNER_KEY);
+  request.onsuccess = () => {
+    if (request.result !== owner) {
+      tx.objectStore("ledger").clear();
+      meta.delete(LAST_FOLDER_SCAN_KEY);
+    }
+    meta.put(owner, FOLDER_OWNER_KEY);
+  };
+}
+
 type DbGetter = () => Promise<IDBDatabase>;
 
 type TryGameMethods = Pick<
@@ -134,10 +138,16 @@ function tryGameMethods(db: DbGetter): TryGameMethods {
         gameId: game.gameId,
         json: game.json,
         date: game.date,
+        engineVersion: game.engineVersion,
         storedAt: now,
         expiresAt: now + TRY_TTL_MS,
       }));
-      await idbPutMany(await db(), "tryGames", rows);
+      if (rows.length === 0) return;
+      await idbTransaction(await db(), "tryGames", "readwrite", (tx) => {
+        const store = tx.objectStore("tryGames");
+        for (const row of rows) store.put(row);
+        trimTryGames(store, MAX_STORED_TRY_GAMES);
+      });
     },
     async loadTryGames(now) {
       const conn = await db();
@@ -161,9 +171,9 @@ function tryGameMethods(db: DbGetter): TryGameMethods {
   };
 }
 
-type FolderSyncMethods = Omit<InstantLocalStore, keyof TryGameMethods | "clearAll">;
+type LedgerMethods = Pick<InstantLocalStore, "loadLedger" | "saveLedgerEntries" | "clearLedger">;
 
-function folderSyncMethods(db: DbGetter): FolderSyncMethods {
+function ledgerMethods(db: DbGetter): LedgerMethods {
   return {
     async loadLedger() {
       const rows = (await idbGetAll(await db(), "ledger")).map(toLedgerEntry);
@@ -175,15 +185,37 @@ function folderSyncMethods(db: DbGetter): FolderSyncMethods {
     async clearLedger() {
       await idbClear(await db(), "ledger");
     },
-    async saveFolderHandle(handle) {
-      await idbPut(await db(), "handles", handle, FOLDER_HANDLE_KEY);
+  };
+}
+
+type FolderMethods = Omit<InstantLocalStore, keyof TryGameMethods | keyof LedgerMethods | "clearAll">;
+
+function folderMethods(db: DbGetter): FolderMethods {
+  return {
+    async saveFolderHandle(handle, ownerUserId) {
+      await idbTransaction(await db(), ["handles", "meta", "ledger"], "readwrite", (tx) => {
+        tx.objectStore("handles").put(handle, FOLDER_HANDLE_KEY);
+        bindOwner(tx, ownerUserId);
+      });
     },
     async loadFolderHandle() {
       const value = await idbGet(await db(), "handles", FOLDER_HANDLE_KEY);
       return isDirectoryHandle(value) ? value : null;
     },
     async clearFolderHandle() {
-      await idbDelete(await db(), "handles", FOLDER_HANDLE_KEY);
+      await idbTransaction(await db(), ["handles", "meta"], "readwrite", (tx) => {
+        tx.objectStore("handles").delete(FOLDER_HANDLE_KEY);
+        const meta = tx.objectStore("meta");
+        meta.delete(FOLDER_OWNER_KEY);
+        meta.delete(LAST_FOLDER_SCAN_KEY);
+      });
+    },
+    async getFolderOwner() {
+      const value = await idbGet(await db(), "meta", FOLDER_OWNER_KEY);
+      return typeof value === "string" && value ? value : null;
+    },
+    async claimFolderSync(ownerUserId) {
+      await idbTransaction(await db(), ["meta", "ledger"], "readwrite", (tx) => bindOwner(tx, ownerUserId));
     },
     async getLastFolderScanAt() {
       const value = await idbGet(await db(), "meta", LAST_FOLDER_SCAN_KEY);
@@ -191,6 +223,13 @@ function folderSyncMethods(db: DbGetter): FolderSyncMethods {
     },
     async setLastFolderScanAt(at) {
       await idbPut(await db(), "meta", at, LAST_FOLDER_SCAN_KEY);
+    },
+    async getIngestPausedUntil(userId) {
+      const pause = toIngestPause(await idbGet(await db(), "meta", INGEST_PAUSE_KEY));
+      return pause && pause.userId === userId ? pause.until : null;
+    },
+    async setIngestPausedUntil(userId, until) {
+      await idbPut(await db(), "meta", { userId, until }, INGEST_PAUSE_KEY);
     },
   };
 }
@@ -231,7 +270,8 @@ export function createInstantLocalStore(
   };
   return {
     ...tryGameMethods(db),
-    ...folderSyncMethods(db),
+    ...ledgerMethods(db),
+    ...folderMethods(db),
     async clearAll() {
       await idbClear(await db(), ["tryGames", "ledger", "handles", "meta"]);
     },
@@ -252,10 +292,11 @@ export function instantLocalStore(): InstantLocalStore {
 }
 
 /**
- * Save parsed /try games (upsert; refreshes the 7-day expiry).
+ * Save parsed /try games (upsert; refreshes the 7-day expiry; keeps at
+ * most `MAX_STORED_TRY_GAMES`, dropping the oldest-stored ones).
  *
  * Example:
- *   await saveTryGames([{ gameId, json, date }], Date.now());
+ *   await saveTryGames([{ gameId, json, date, engineVersion }], Date.now());
  */
 export function saveTryGames(games: ReadonlyArray<TryGameInput>, now: number): Promise<void> {
   return instantLocalStore().saveTryGames(games, now);
@@ -302,26 +343,6 @@ export function clearTryData(): Promise<void> {
 }
 
 /**
- * Every valid Folder Sync ledger entry.
- *
- * Example:
- *   const ledger = await loadLedger();
- */
-export function loadLedger(): Promise<LedgerEntry[]> {
-  return instantLocalStore().loadLedger();
-}
-
-/**
- * Upsert ledger entries (one atomic transaction).
- *
- * Example:
- *   await saveLedgerEntries([ledgerEntryFor(file, "uploaded", Date.now(), { gameId })]);
- */
-export function saveLedgerEntries(entries: ReadonlyArray<LedgerEntry>): Promise<void> {
-  return instantLocalStore().saveLedgerEntries(entries);
-}
-
-/**
  * Forget the Folder Sync ledger (next scan re-checks every file).
  *
  * Example:
@@ -332,13 +353,13 @@ export function clearLedger(): Promise<void> {
 }
 
 /**
- * Persist the picked replays folder handle.
+ * Persist the picked replays folder handle for the signed-in account.
  *
  * Example:
- *   await saveFolderHandle(root);
+ *   await saveFolderHandle(root, userId);
  */
-export function saveFolderHandle(handle: DirectoryHandleLike): Promise<void> {
-  return instantLocalStore().saveFolderHandle(handle);
+export function saveFolderHandle(handle: DirectoryHandleLike, ownerUserId: string): Promise<void> {
+  return instantLocalStore().saveFolderHandle(handle, ownerUserId);
 }
 
 /**
@@ -352,13 +373,35 @@ export function loadFolderHandle(): Promise<DirectoryHandleLike | null> {
 }
 
 /**
- * Forget the persisted folder handle ("Stop syncing this folder").
+ * Forget the persisted folder handle, its owner and last scan time
+ * ("Stop syncing this folder").
  *
  * Example:
  *   await clearFolderHandle();
  */
 export function clearFolderHandle(): Promise<void> {
   return instantLocalStore().clearFolderHandle();
+}
+
+/**
+ * The account (Clerk user id) the Folder Sync state belongs to, or null.
+ *
+ * Example:
+ *   if ((await getFolderOwner()) !== userId) showRebindPrompt();
+ */
+export function getFolderOwner(): Promise<string | null> {
+  return instantLocalStore().getFolderOwner();
+}
+
+/**
+ * Bind Folder Sync on this device to `ownerUserId` (only ever from the
+ * user's own click). Another account's ledger and scan time are forgotten.
+ *
+ * Example:
+ *   await claimFolderSync(userId);
+ */
+export function claimFolderSync(ownerUserId: string): Promise<void> {
+  return instantLocalStore().claimFolderSync(ownerUserId);
 }
 
 /**
@@ -372,11 +415,32 @@ export function getLastFolderScanAt(): Promise<number | null> {
 }
 
 /**
- * Record a completed folder scan.
+ * When `userId`'s Folder Sync auto-sync may run again after the daily
+ * browser-upload cap; null when not paused or storage is unavailable.
  *
  * Example:
- *   await setLastFolderScanAt(Date.now());
+ *   const until = await getBrowserIngestPausedUntil(userId);
+ *   if (until !== null && Date.now() < until) return;
  */
-export function setLastFolderScanAt(at: number): Promise<void> {
-  return instantLocalStore().setLastFolderScanAt(at);
+export async function getBrowserIngestPausedUntil(userId: string): Promise<number | null> {
+  try {
+    return await instantLocalStore().getIngestPausedUntil(userId);
+  } catch {
+    return null; // storage blocked: nothing remembered, nothing paused
+  }
+}
+
+/**
+ * Pause `userId`'s Folder Sync auto-sync until `until` (epoch ms). Best
+ * effort: a blocked store only loses the pause.
+ *
+ * Example:
+ *   await setBrowserIngestPausedUntil(userId, resetAt);
+ */
+export async function setBrowserIngestPausedUntil(userId: string, until: number): Promise<void> {
+  try {
+    await instantLocalStore().setIngestPausedUntil(userId, until);
+  } catch {
+    // Storage blocked: the in-memory pause of this visit still applies.
+  }
 }

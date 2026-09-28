@@ -233,6 +233,12 @@ export interface EngineClient {
 export interface UploadableGame {
   gameId: string;
   json: string;
+  /**
+   * Engine release that parsed this game, when it may differ from the
+   * running page's (e.g. /try games stored before a deploy). The upload
+   * tags the game with it instead of the uploader's default.
+   */
+  engineVersion?: string;
   /** Optional original file for the replay backup. */
   file?: IntakeFile;
   digests?: ReplayDigests;

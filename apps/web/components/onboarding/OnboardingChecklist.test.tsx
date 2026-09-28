@@ -54,6 +54,16 @@ describe("OnboardingChecklist download row", () => {
     expect(offParent?.className ?? "").not.toContain("items-end");
   });
 
+  it("keeps the browser link after the download started, until games arrive", () => {
+    const started: ChecklistMe = { ...BASE, onboarding: { downloadStartedAt: "2026-09-01T00:00:00Z" } };
+    render(<OnboardingChecklist me={started} browserImportEnabled />);
+    expect(screen.queryByRole("link", { name: /^download$/i })).toBeNull();
+    expect(screen.getByRole("link", { name: "or import in your browser" })).toBeTruthy();
+    cleanup();
+    render(<OnboardingChecklist me={{ ...started, agentPaired: true }} browserImportEnabled />);
+    expect(screen.getByRole("link", { name: "or import in your browser" })).toBeTruthy();
+  });
+
   it("renders nothing for a browser-only player with games", () => {
     render(<OnboardingChecklist me={{ ...BASE, games: { total: 3 } }} browserImportEnabled />);
     expect(screen.queryByTestId("onboarding-checklist")).toBeNull();

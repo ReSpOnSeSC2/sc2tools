@@ -150,14 +150,12 @@ export function OnboardingChecklist({
           done={downloadDone}
           title="Download the agent"
           subtitle="It watches your replay folder and parses games locally."
-          action={
-            downloadDone ? null : (
-              <DownloadAction
-                onDownload={() => void markDownloadStarted()}
-                browserImportEnabled={browserImportEnabled === true}
-              />
-            )
-          }
+          action={downloadRowAction({
+            downloadDone,
+            playDone,
+            browserImportEnabled,
+            onDownload: () => void markDownloadStarted(),
+          })}
         />
 
         <ChecklistRow
@@ -322,17 +320,40 @@ function PairHint({ onPaired }: { onPaired?: () => void }) {
 }
 
 /**
- * The download CTA, plus "or import in your browser" when browser
- * import (Instant Analysis) is enabled.
+ * Row 1's action: the download CTA until the download started, and the
+ * browser-import link while browser import is on and no games arrived
+ * yet (so the browser path stays one click away); null when neither.
+ *
+ * Example:
+ *   downloadRowAction({ downloadDone: true, playDone: false, browserImportEnabled: true, onDownload });
+ */
+function downloadRowAction(options: {
+  downloadDone: boolean;
+  playDone: boolean;
+  browserImportEnabled?: boolean;
+  onDownload: () => void;
+}): ReactNode {
+  const offerBrowser = options.browserImportEnabled === true && !options.playDone;
+  if (options.downloadDone && !offerBrowser) return null;
+  return <DownloadAction onDownload={options.onDownload} downloadDone={options.downloadDone} browserImportEnabled={offerBrowser} />;
+}
+
+/**
+ * The download CTA (until the download started), plus "or import in your
+ * browser" while browser import (Instant Analysis) is on and no games
+ * have arrived — even after the download started, so the browser path is
+ * never hidden behind an unfinished agent setup.
  */
 function DownloadAction({
   onDownload,
+  downloadDone,
   browserImportEnabled,
 }: {
   onDownload: () => void;
+  downloadDone: boolean;
   browserImportEnabled: boolean;
 }) {
-  const download = (
+  const download = downloadDone ? null : (
     <CtaLink href="/download" onClick={onDownload}>
       <Download className="h-4 w-4" aria-hidden />
       Download

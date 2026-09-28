@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EngineError } from "../engineErrors";
+import { MAX_ZIP_ARCHIVE_BYTES } from "../fileIntake";
 import { expandArchives, sortSelection } from "../sessionIntake";
 import { finalizeOutcomes, type RunRules } from "../sessionPipeline";
 import { createThrottle, toSessionProgress } from "../sessionProgress";
@@ -111,6 +112,15 @@ describe("sessionIntake", () => {
     expect(selection.replays.map((file) => file.source)).toEqual(["folder"]);
     expect(selection.zips.map((file) => file.name)).toEqual(["b.ZIP"]);
     expect(selection.ignoredCount).toBe(1);
+  });
+
+  it("rejects an oversized archive as too_large without passing it on to be read", () => {
+    const huge = new File(["z"], "library.zip");
+    Object.defineProperty(huge, "size", { value: MAX_ZIP_ARCHIVE_BYTES + 1 });
+    const fits = new File(["z"], "few.zip");
+    const selection = sortSelection([huge, fits], "drop");
+    expect(selection.zips.map((file) => file.name)).toEqual(["few.zip"]);
+    expect(selection.rejected.map((failure) => [failure.fileName, failure.errorKind])).toEqual([["library.zip", "too_large"]]);
   });
 
   it("rejects a broken archive on its own but stops when the engine cannot start", async () => {

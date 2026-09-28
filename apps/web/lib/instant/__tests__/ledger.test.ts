@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RETRYABLE_KINDS,
+  MAX_RETRYABLE_ATTEMPTS,
   diffAgainstLedger,
   isErrorKind,
+  isRetryableKind,
   ledgerEntryFor,
+  needsProfileToons,
   type LedgerEntry,
 } from "../ledger";
 
@@ -56,12 +59,39 @@ describe("diffAgainstLedger", () => {
   });
 });
 
+describe("diffAgainstLedger: retry cap and unresolved players", () => {
+  it("stops retrying a transient failure after MAX_RETRYABLE_ATTEMPTS", () => {
+    const below = [entry("t", { status: "failed", errorKind: "timeout", attempts: MAX_RETRYABLE_ATTEMPTS - 1 })];
+    const at = [entry("t", { status: "failed", errorKind: "timeout", attempts: MAX_RETRYABLE_ATTEMPTS })];
+    expect(diffAgainstLedger([file("t")], below).toProcess).toHaveLength(1);
+    expect(diffAgainstLedger([file("t")], at).unchanged).toHaveLength(1);
+    expect(diffAgainstLedger([file("t")], at, { retryFailed: true }).toProcess).toHaveLength(1);
+  });
+
+  it("re-checks an unresolved player only when the profile knows one of its toons", () => {
+    const ledger = [entry("u", { status: "failed", errorKind: "player_unresolved", toons: ["1-S2-1-1", "2-S2-1-2"] })];
+    expect(diffAgainstLedger([file("u")], ledger).unchanged).toHaveLength(1);
+    expect(diffAgainstLedger([file("u")], ledger, { profileToons: ["9-S2-1-9"] }).unchanged).toHaveLength(1);
+    expect(diffAgainstLedger([file("u")], ledger, { profileToons: ["2-S2-1-2"] }).toProcess).toHaveLength(1);
+  });
+
+  it("asks for profile toons only when an unresolved entry could use them", () => {
+    expect(needsProfileToons([entry("a")])).toBe(false);
+    expect(needsProfileToons([entry("u", { status: "failed", errorKind: "player_unresolved" })])).toBe(false);
+    expect(needsProfileToons([entry("u", { status: "failed", errorKind: "player_unresolved", toons: ["1-S2-1-1"] })])).toBe(true);
+  });
+});
+
 describe("ledger helpers", () => {
   it("builds entries from files", () => {
     expect(ledgerEntryFor(file("a"), "uploaded", 42, { gameId: "g" })).toEqual({
       path: "a", size: 100, lastModified: 1, status: "uploaded", gameId: "g", updatedAt: 42,
     });
     expect(ledgerEntryFor(file("b"), "failed", 7, { errorKind: "timeout" }).errorKind).toBe("timeout");
+    expect(ledgerEntryFor(file("c"), "failed", 7, { errorKind: "timeout", attempts: 2 }).attempts).toBe(2);
+    expect(ledgerEntryFor(file("d"), "failed", 7, { errorKind: "player_unresolved", toons: [] }).toons).toBeUndefined();
+    expect(isRetryableKind("timeout")).toBe(true);
+    expect(isRetryableKind("corrupt_file")).toBe(false);
   });
 
   it("recognises error kinds", () => {

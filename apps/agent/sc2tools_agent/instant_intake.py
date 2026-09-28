@@ -4,8 +4,8 @@ Everything the browser engine does to user-supplied bytes BEFORE the replay
 pipeline sees them lives here, so ``instant_analysis`` stays a thin mapping
 layer over the unchanged desktop pipeline:
 
-* :func:`expand_replay_zip` pulls ``.SC2Replay`` entries out of a zip with
-  zip-bomb guards.
+* :func:`expand_replay_zip` pulls ``.SC2Replay`` entries (and their
+  modification times) out of a zip with zip-bomb guards.
 * :func:`replay_digests` hashes the original bytes for the optional backup.
 * :func:`staged_replay` writes one replay under a fresh temp dir, recreating
   the sanitised relative path so a ``<region>-S2-<realm>-<id>`` toon folder
@@ -23,6 +23,7 @@ Example:
 from __future__ import annotations
 
 import base64
+import calendar
 import contextlib
 import hashlib
 import io
@@ -31,7 +32,7 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 BytesLike = Union[bytes, bytearray, memoryview]
 
@@ -46,6 +47,9 @@ ZIP_TOO_LARGE = "zip_too_large"
 #: Zip-bomb guards for :func:`expand_replay_zip`. A ranked replay is well
 #: under 1 MiB; 20 MiB per entry leaves room for multi-hour team games.
 MAX_ZIP_REPLAY_ENTRIES = 1000
+#: Every entry of the central directory, replays or not (a zipped Accounts
+#: folder holds banks and screenshots too); bounds the work of filtering.
+MAX_ZIP_CENTRAL_ENTRIES = 20_000
 MAX_ZIP_ENTRY_BYTES = 20 * 1024 * 1024
 # Extracted entries live in the Pyodide heap and are then copied to JS, so
 # keep an archive well inside the worker's ~700 MB budget. Larger libraries
@@ -67,6 +71,9 @@ _UNSAFE_PART_REPLACEMENT = "_"
 _TRAILING_UNSAFE = " ."
 _MACOS_METADATA_DIR = "__MACOSX"
 _ZIP_FLAG_ENCRYPTED = 0x1
+_MS_PER_SECOND = 1000
+# ``ZipInfo.date_time`` holds 6 fields; ``calendar.timegm`` needs a 9-tuple.
+_STRUCT_TIME_PADDING = (0, 0, 0)
 
 
 def as_bytes(data: BytesLike) -> bytes:
@@ -172,13 +179,17 @@ def expand_replay_zip(data: BytesLike) -> List[Dict[str, Any]]:
     Directories, ``__MACOSX/`` metadata and dotfiles are skipped. Entry
     names are returned with ``/`` separators and without empty, ``.``,
     ``..`` or drive-letter parts; they are data only and never used as real
-    paths here.
+    paths here. ``lastModified`` is the entry's stored modification time in
+    epoch milliseconds, read as UTC (zip times carry no timezone; only
+    their relative order matters to the caller's newest-first cap and
+    date pre-filter), or ``None`` when the stored time is invalid.
 
     Args:
         data: The raw zip bytes.
 
     Returns:
-        ``[{"name": str, "data": bytes}]`` in archive order.
+        ``[{"name": str, "data": bytes, "lastModified": int | None}]`` in
+        archive order.
 
     Raises:
         ValueError: With one of ``zip_invalid``, ``zip_unsupported``,
@@ -200,7 +211,10 @@ def expand_replay_zip(data: BytesLike) -> List[Dict[str, Any]]:
     except (zipfile.BadZipFile, OSError, EOFError, ValueError) as exc:
         raise ValueError(ZIP_INVALID) from exc
     with archive:
-        entries = [info for info in archive.infolist() if _is_replay_entry(info)]
+        infos = archive.infolist()
+        if len(infos) > MAX_ZIP_CENTRAL_ENTRIES:
+            raise ValueError(ZIP_TOO_MANY_ENTRIES)
+        entries = [info for info in infos if _is_replay_entry(info)]
         _check_zip_entries(entries)
         return _read_zip_entries(archive, entries)
 
@@ -271,8 +285,33 @@ def _read_zip_entries(
         total += len(blob)
         if total > MAX_ZIP_TOTAL_BYTES:
             raise ValueError(ZIP_TOO_LARGE)
-        out.append({"name": "/".join(clean_path_parts(info.filename)), "data": blob})
+        out.append({
+            "name": "/".join(clean_path_parts(info.filename)),
+            "data": blob,
+            "lastModified": zip_entry_epoch_ms(info),
+        })
     return out
+
+
+def zip_entry_epoch_ms(info: zipfile.ZipInfo) -> Optional[int]:
+    """An entry's stored modification time as epoch ms, read as UTC.
+
+    Args:
+        info: The zip entry.
+
+    Returns:
+        Milliseconds since the epoch, or ``None`` for an invalid stored
+        date (e.g. month 0 from a broken archiver).
+
+    Example:
+        >>> zip_entry_epoch_ms(zipfile.ZipInfo("a.SC2Replay", (2026, 9, 1, 12, 0, 0)))
+        1788264000000
+    """
+    try:
+        return calendar.timegm(tuple(info.date_time) + _STRUCT_TIME_PADDING) * _MS_PER_SECOND
+    # timegm rejects out-of-range fields with ValueError or OverflowError.
+    except (ValueError, OverflowError):
+        return None
 
 
 def _read_zip_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes:

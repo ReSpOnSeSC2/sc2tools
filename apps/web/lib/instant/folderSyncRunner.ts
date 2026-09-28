@@ -1,7 +1,8 @@
 /**
  * One Folder Sync pass over the visitor's StarCraft II replay folder:
  *
- *   walk Multiplayer replays (or take a `<input webkitdirectory>` list)
+ *   stored Folder Sync state bound to another account? stop (`notOwner`)
+ *   → walk Multiplayer replays (or take a `<input webkitdirectory>` list)
  *   → diff against the ledger (settled files are skipped)
  *   → nothing new? record the scan time and stop WITHOUT booting the engine
  *   → otherwise, per chunk of files: header scan → identify "me" exactly
@@ -15,28 +16,34 @@
  * chunk of parsed payloads, and the engine client reads files one at a
  * time. Ledger rules: uploaded / already stored → `uploaded`; skips and
  * server refusals → `skipped`; parse failures → `failed` with their kind
- * (transient kinds are retried on the next scan); games left pending by
- * an early stop get no entry, so the next scan picks them up.
+ * (transient kinds are retried on later scans, at most
+ * `MAX_RETRYABLE_ATTEMPTS` times; an unidentified player is re-checked
+ * once the profile knows one of the replay's toons); games left pending
+ * by an early stop get no entry, so the next scan picks them up.
+ *
+ * When the browser refuses storage (private window), the pass still runs
+ * with an empty ledger and remembers nothing.
  *
  * Example:
  *   const summary = await runFolderSync({
  *     source: { handle }, engineFactory: () => createEngineClient(), getToken,
  *     apiBase: API_BASE, engineVersion: INSTANT_ENGINE_VERSION,
  *     profileToons: () => fetchProfileToons(getToken, apiCall),
- *     now: Date.now, signal, onProgress: setProgress,
+ *     ownerUserId: userId, now: Date.now, signal, onProgress: setProgress,
  *   });
  */
 import { isSkipKind } from "./errorCopy";
 import { MAX_REPLAY_BYTES, makeIntakeFile, type DateWindow } from "./fileIntake";
 import { walkMultiplayerReplays, type DirectoryHandleLike, type FolderReplay, type WalkOptions } from "./folderSync";
 import type { TokenGetter } from "./httpRetry";
+import { InstantDbUnavailableError } from "./idb";
 import { uploadCounts, type UploadCounts } from "./importRunner";
-import { diffAgainstLedger, ledgerEntryFor, type LedgerEntry } from "./ledger";
+import { diffAgainstLedger, isRetryableKind, ledgerEntryFor, needsProfileToons, type LedgerEntry } from "./ledger";
 import { instantLocalStore } from "./localStore";
 import { detectMe, type MeScan } from "./meDetection";
 import { profileToons as toonsFromProfile, type ApiCallFn } from "./profileHandles";
 import { intakeFailure } from "./sessionIntake";
-import { finalizeOutcomes, triageScans, type RunRules } from "./sessionPipeline";
+import { finalizeOutcomes, triageScans, type EligibleFile, type RunRules } from "./sessionPipeline";
 import type { EngineClient, EngineProgress, FailedParse, IntakeFile, ParseRequest, PlayerSelector, UploadableGame } from "./types";
 import { uploadGames, type UploadDeps, type UploadSummary } from "./uploader";
 
@@ -53,6 +60,8 @@ export interface FolderSyncStore {
   loadLedger(): Promise<LedgerEntry[]>;
   saveLedgerEntries(entries: ReadonlyArray<LedgerEntry>): Promise<void>;
   setLastFolderScanAt(at: number): Promise<void>;
+  /** The account the stored Folder Sync state belongs to (see `ownerUserId`). */
+  getFolderOwner?(): Promise<string | null>;
 }
 
 export interface FolderSyncProgress {
@@ -76,6 +85,8 @@ export interface FolderSyncSummary extends UploadCounts {
   aborted: boolean;
   /** Whether the analyzer (Pyodide) had to start. */
   engineStarted: boolean;
+  /** Nothing ran: the stored Folder Sync state belongs to another account. */
+  notOwner?: boolean;
 }
 
 export interface FolderSyncServices {
@@ -92,10 +103,16 @@ export interface FolderSyncInput {
   engineVersion: string;
   /**
    * The signed-in user's saved toon handles, or a loader for them. A
-   * loader runs only when the pass has new files, so a scan with nothing
-   * new makes no profile request.
+   * loader runs only when the pass has new files or the ledger holds
+   * unidentified players the profile might know by now, so a quiet scan
+   * makes no profile request.
    */
   profileToons: ReadonlyArray<string> | (() => Promise<ReadonlyArray<string>>);
+  /**
+   * The signed-in account (Clerk user id). When set, a pass whose stored
+   * Folder Sync state is bound to another account stops before walking.
+   */
+  ownerUserId?: string;
   now: () => number;
   signal?: AbortSignal;
   onProgress?: (progress: FolderSyncProgress) => void;
@@ -109,8 +126,10 @@ interface Ctx {
   store: FolderSyncStore;
   services: FolderSyncServices;
   rules: RunRules;
-  /** Resolved `input.profileToons` (set before the first chunk). */
-  toons: ReadonlyArray<string>;
+  /** Resolved `input.profileToons` (null until first needed). */
+  toons: ReadonlyArray<string> | null;
+  /** The ledger as loaded at the start of the pass, by path. */
+  previous: Map<string, LedgerEntry>;
   engine: EngineClient | null;
   summary: FolderSyncSummary;
   total: number;
@@ -129,6 +148,14 @@ function getEngine(ctx: Ctx): EngineClient {
     ctx.summary.engineStarted = true;
   }
   return ctx.engine;
+}
+
+async function resolveToons(ctx: Ctx): Promise<ReadonlyArray<string>> {
+  if (ctx.toons === null) {
+    const { profileToons } = ctx.input;
+    ctx.toons = typeof profileToons === "function" ? await profileToons() : profileToons;
+  }
+  return ctx.toons;
 }
 
 function report(ctx: Ctx, stage: FolderSyncProgress["stage"], done: number): void {
@@ -150,6 +177,38 @@ async function listReplays(ctx: Ctx): Promise<ReadonlyArray<FolderReplay>> {
  */
 function exactSelector(scan: MeScan, profileToons: ReadonlyArray<string>): PlayerSelector | null {
   return detectMe([scan], { profileToons }).selectorFor(scan.key);
+}
+
+/**
+ * Toons that could identify an unresolved replay later: the ones that
+ * played but are not on the profile yet. A toon folder decides alone
+ * (like the agent), so a replay inside one never becomes resolvable.
+ */
+function unknownToons(scan: MeScan, profileToons: ReadonlyArray<string>): string[] {
+  if (scan.toonFromPath) return [];
+  const toons = scan.players.flatMap((player) => (player.toon ? [player.toon] : []));
+  return [...new Set(toons)].filter((toon) => !profileToons.includes(toon));
+}
+
+interface Selection {
+  requests: ParseRequest[];
+  failed: FailedParse[];
+  /** `player_unresolved` files → toons that could resolve them later. */
+  unresolved: Map<string, string[]>;
+}
+
+function selectPlayers(eligible: ReadonlyArray<EligibleFile>, profileToons: ReadonlyArray<string>): Selection {
+  const selection: Selection = { requests: [], failed: [], unresolved: new Map() };
+  for (const { file, scan } of eligible) {
+    const player = exactSelector(scan, profileToons);
+    if (player) {
+      selection.requests.push({ file, player });
+      continue;
+    }
+    selection.failed.push(intakeFailure(file, "player_unresolved"));
+    selection.unresolved.set(file.relativePath, unknownToons(scan, profileToons));
+  }
+  return selection;
 }
 
 interface ReadChunk {
@@ -178,6 +237,8 @@ async function readChunk(chunk: ReadonlyArray<FolderReplay>): Promise<ReadChunk>
   return read;
 }
 
+const NOTHING_PARSED: ParsedChunk = { games: [], failed: [], unresolved: new Map() };
+
 const NOTHING_UPLOADED: UploadSummary = {
   accepted: [],
   rejected: [],
@@ -192,52 +253,64 @@ function progressFor(ctx: Ctx, offset: number): (event: EngineProgress) => void 
   };
 }
 
+interface ParsedChunk {
+  games: UploadableGame[];
+  failed: FailedParse[];
+  unresolved: Map<string, string[]>;
+}
+
 /** Header scan + parse of one chunk; returns games to upload and every failure. */
-async function parseChunk(
-  ctx: Ctx,
-  files: IntakeFile[],
-  offset: number,
-): Promise<{ games: UploadableGame[]; failed: FailedParse[] }> {
+async function parseChunk(ctx: Ctx, files: IntakeFile[], offset: number): Promise<ParsedChunk> {
   const engine = getEngine(ctx);
   const options = { signal: ctx.input.signal };
   const scans = await engine.listPlayers(files, options);
   const triaged = triageScans(files, scans, ctx.rules);
-  const failed = [...triaged.failed];
-  const requests: ParseRequest[] = [];
-  for (const { file, scan } of triaged.eligible) {
-    const player = exactSelector(scan, ctx.toons);
-    if (player) requests.push({ file, player });
-    else failed.push(intakeFailure(file, "player_unresolved"));
-  }
-  if (requests.length === 0) return { games: [], failed };
+  const { requests, failed, unresolved } = selectPlayers(triaged.eligible, await resolveToons(ctx));
+  const skipped = [...triaged.failed, ...failed];
+  if (requests.length === 0) return { games: [], failed: skipped, unresolved };
   const outcomes = await engine.parseFiles(requests, { ...options, onProgress: progressFor(ctx, offset) });
   const finalized = finalizeOutcomes(requests, outcomes, ctx.rules);
   const games = finalized.parsed.map(({ game, file }) => ({ gameId: game.gameId, json: game.json, file }));
-  return { games, failed: [...failed, ...finalized.failed] };
+  return { games, failed: [...skipped, ...finalized.failed], unresolved };
+}
+
+interface ChunkResult extends ParsedChunk {
+  /** Every file of the chunk that could be opened. */
+  files: ReadonlyArray<IntakeFile>;
+  upload: UploadSummary;
+}
+
+/** Retryable failures of this exact file version so far, plus this one. */
+function nextAttempts(ctx: Ctx, file: IntakeFile): number {
+  const previous = ctx.previous.get(file.relativePath);
+  const same = previous && previous.size === file.size && previous.lastModified === file.lastModified;
+  return (same ? previous.attempts ?? 0 : 0) + 1;
+}
+
+function failureEntry(ctx: Ctx, file: IntakeFile, failure: FailedParse, chunk: ChunkResult): LedgerEntry {
+  const now = ctx.input.now();
+  const kind = failure.errorKind;
+  if (isSkipKind(kind)) return ledgerEntryFor(file, "skipped", now, { errorKind: kind });
+  if (isRetryableKind(kind)) return ledgerEntryFor(file, "failed", now, { errorKind: kind, attempts: nextAttempts(ctx, file) });
+  return ledgerEntryFor(file, "failed", now, { errorKind: kind, toons: chunk.unresolved.get(file.relativePath) });
 }
 
 /** Ledger rows for one chunk (see module comment for the rules). */
-function ledgerEntries(
-  files: ReadonlyArray<IntakeFile>,
-  games: ReadonlyArray<UploadableGame>,
-  failed: ReadonlyArray<FailedParse>,
-  upload: UploadSummary,
-  now: number,
-): LedgerEntry[] {
-  const byPath = new Map(files.map((file) => [file.relativePath, file]));
+function ledgerEntries(ctx: Ctx, chunk: ChunkResult): LedgerEntry[] {
+  const now = ctx.input.now();
+  const byPath = new Map(chunk.files.map((file) => [file.relativePath, file]));
+  const { upload } = chunk;
   const stored = new Set([...upload.accepted.map((item) => item.gameId), ...upload.skippedExisting]);
   const refused = new Set([...upload.rejected.map((item) => item.gameId), ...upload.oversized]);
   const entries: LedgerEntry[] = [];
-  for (const game of games) {
+  for (const game of chunk.games) {
     if (!game.file) continue;
     if (stored.has(game.gameId)) entries.push(ledgerEntryFor(game.file, "uploaded", now, { gameId: game.gameId }));
     else if (refused.has(game.gameId)) entries.push(ledgerEntryFor(game.file, "skipped", now, { gameId: game.gameId }));
   }
-  for (const failure of failed) {
+  for (const failure of chunk.failed) {
     const file = byPath.get(failure.relativePath);
-    if (!file || failure.errorKind === "cancelled") continue;
-    const status = isSkipKind(failure.errorKind) ? "skipped" : "failed";
-    entries.push(ledgerEntryFor(file, status, now, { errorKind: failure.errorKind }));
+    if (file && failure.errorKind !== "cancelled") entries.push(failureEntry(ctx, file, failure, chunk));
   }
   return entries;
 }
@@ -250,6 +323,7 @@ function addUpload(summary: FolderSyncSummary, upload: UploadSummary): void {
   summary.rejected += counts.rejected;
   summary.pending += counts.pending;
   if (counts.stoppedReason) summary.stoppedReason = counts.stoppedReason;
+  if (counts.dailyCapResetAt !== undefined) summary.dailyCapResetAt = counts.dailyCapResetAt;
 }
 
 function uploadChunk(ctx: Ctx, games: ReadonlyArray<UploadableGame>): Promise<UploadSummary> {
@@ -268,12 +342,12 @@ async function processChunk(ctx: Ctx, chunk: ReadonlyArray<FolderReplay>, offset
   const { input } = ctx;
   report(ctx, "reading", offset);
   const read = await readChunk(chunk);
-  const parsed = read.files.length > 0 ? await parseChunk(ctx, read.files, offset) : { games: [], failed: [] };
+  const parsed = read.files.length > 0 ? await parseChunk(ctx, read.files, offset) : NOTHING_PARSED;
   if (input.signal?.aborted) return false;
   report(ctx, "uploading", offset + chunk.length);
   const upload = await uploadChunk(ctx, parsed.games);
   const failed = [...read.failed, ...parsed.failed];
-  const entries = ledgerEntries(read.all, parsed.games, failed, upload, input.now());
+  const entries = ledgerEntries(ctx, { ...parsed, failed, files: read.all, upload });
   // After a cancel ("Stop syncing" clears the ledger) nothing more is written.
   if (entries.length > 0 && !input.signal?.aborted) await ctx.store.saveLedgerEntries(entries);
   addUpload(ctx.summary, upload);
@@ -283,8 +357,7 @@ async function processChunk(ctx: Ctx, chunk: ReadonlyArray<FolderReplay>, offset
 }
 
 async function processAll(ctx: Ctx, toProcess: ReadonlyArray<FolderReplay>): Promise<void> {
-  const { profileToons } = ctx.input;
-  ctx.toons = typeof profileToons === "function" ? await profileToons() : profileToons;
+  await resolveToons(ctx);
   const size = Math.max(1, ctx.input.chunkSize ?? FOLDER_SYNC_CHUNK_SIZE);
   for (let offset = 0; offset < toProcess.length; offset += size) {
     const proceed = await processChunk(ctx, toProcess.slice(offset, offset + size), offset);
@@ -292,33 +365,80 @@ async function processAll(ctx: Ctx, toProcess: ReadonlyArray<FolderReplay>): Pro
   }
 }
 
+/** Resolve with `fallback` when the browser refuses storage; rethrow anything else. */
+function orWithoutStorage<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return promise.catch((error: unknown) => {
+    if (error instanceof InstantDbUnavailableError) return fallback;
+    throw error;
+  });
+}
+
+/**
+ * The store with a refused IndexedDB softened: the pass still runs with
+ * an empty ledger and remembers nothing ("each sync starts fresh").
+ */
+function resilientStore(store: FolderSyncStore): FolderSyncStore {
+  const resilient: FolderSyncStore = {
+    loadLedger: () => orWithoutStorage(store.loadLedger(), []),
+    saveLedgerEntries: (entries) => orWithoutStorage(store.saveLedgerEntries(entries), undefined),
+    setLastFolderScanAt: (at) => orWithoutStorage(store.setLastFolderScanAt(at), undefined),
+  };
+  // Passed through as is: `belongsToAnotherAccount` decides what a refusal means.
+  const getOwner = store.getFolderOwner?.bind(store);
+  if (getOwner) resilient.getFolderOwner = getOwner;
+  return resilient;
+}
+
+/**
+ * True when the stored Folder Sync state is bound to another account.
+ * Without storage nothing persisted can belong to anyone, so no mismatch.
+ */
+async function belongsToAnotherAccount(ctx: Ctx): Promise<boolean> {
+  const { ownerUserId } = ctx.input;
+  if (!ownerUserId || !ctx.store.getFolderOwner) return false;
+  const owner = await orWithoutStorage(ctx.store.getFolderOwner(), ownerUserId);
+  return owner !== ownerUserId;
+}
+
 function createContext(input: FolderSyncInput): Ctx {
   return {
     input,
-    store: input.store ?? instantLocalStore(),
+    store: resilientStore(input.store ?? instantLocalStore()),
     services: { uploadGames, walk: walkMultiplayerReplays, ...input.services },
     rules: { dateWindow: ALL_TIME, now: input.now(), onlyOneVsOne: false },
-    toons: [],
+    toons: null,
+    previous: new Map(),
     engine: null,
     summary: emptySummary(),
     total: 0,
   };
 }
 
+/** Load the ledger and split the replays; profile toons only when they could matter. */
+async function diffReplays(ctx: Ctx, replays: ReadonlyArray<FolderReplay>): Promise<FolderReplay[]> {
+  const ledger = await ctx.store.loadLedger();
+  ctx.previous = new Map(ledger.map((entry) => [entry.path, entry]));
+  const profileToons = needsProfileToons(ledger) ? await resolveToons(ctx) : undefined;
+  return diffAgainstLedger(replays, ledger, { profileToons }).toProcess;
+}
+
 /**
  * Run one Folder Sync pass (see module comment). Rejects with the
  * engine's `EngineError` when the analyzer cannot start (the scan time is
  * still recorded, so auto-sync waits before trying again); an abort
- * resolves with `aborted: true` and leaves the scan time untouched.
+ * resolves with `aborted: true` and leaves the scan time untouched; a
+ * pass for another account's stored state resolves with `notOwner: true`
+ * without reading the folder.
  *
  * Example:
  *   const { uploaded, engineStarted } = await runFolderSync(input);
  */
 export async function runFolderSync(input: FolderSyncInput): Promise<FolderSyncSummary> {
   const ctx = createContext(input);
+  if (await belongsToAnotherAccount(ctx)) return { ...ctx.summary, notOwner: true };
   try {
     const replays = await listReplays(ctx);
-    const { toProcess } = diffAgainstLedger(replays, await ctx.store.loadLedger());
+    const toProcess = await diffReplays(ctx, replays);
     ctx.summary.found = replays.length;
     ctx.summary.newFiles = toProcess.length;
     ctx.total = toProcess.length;
@@ -395,15 +515,24 @@ export async function fetchProfileToons(
   }
 }
 
+/** What this device's Folder Sync ledger holds. */
+export interface FolderLedgerCounts {
+  /** Replays uploaded (or already in the account) from the folder. */
+  synced: number;
+  /** Every remembered file, including skips and failures. */
+  total: number;
+}
+
 /**
- * Replays this device has synced from the folder (ledger `uploaded` rows).
+ * Count the ledger rows (drives "N replays synced" and whether there is
+ * import history to forget).
  *
  * Example:
- *   setSyncedCount(await syncedReplayCount());
+ *   const { synced, total } = await folderLedgerCounts();
  */
-export async function syncedReplayCount(
+export async function folderLedgerCounts(
   store: Pick<FolderSyncStore, "loadLedger"> = instantLocalStore(),
-): Promise<number> {
+): Promise<FolderLedgerCounts> {
   const entries = await store.loadLedger();
-  return entries.filter((entry) => entry.status === "uploaded").length;
+  return { synced: entries.filter((entry) => entry.status === "uploaded").length, total: entries.length };
 }

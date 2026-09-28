@@ -12,7 +12,9 @@
  *
  * On success the stored games are forgotten and the visitor lands on
  * /app. A stopped upload says why: today's cap (games stay on the device
- * for 7 days), an expired sign-in, or a busy server (retry).
+ * until they expire; the card says when uploads resume), an expired
+ * sign-in, or a busy server (retry). Each stored game is uploaded with
+ * the engine version that parsed it, not the one deployed now.
  *
  * Example:
  *   const upload = useTryUpload();
@@ -43,7 +45,14 @@ export type TryUploadState =
   | { status: "empty"; reason: "none" | "storage" }
   | { status: "uploading"; progress: UploadProgress | null }
   | { status: "done"; accepted: number }
-  | { status: "stopped"; reason: TryUploadStop; accepted: number; pending: number };
+  | {
+      status: "stopped";
+      reason: TryUploadStop;
+      accepted: number;
+      pending: number;
+      /** Daily cap only: epoch ms when uploads resume (null when unknown). */
+      resetAt?: number | null;
+    };
 
 export interface TryUpload {
   state: TryUploadState;
@@ -70,6 +79,10 @@ const DASHBOARD_PATH = "/app";
 export function classifyUpload(summary: UploadSummary): TryUploadState | null {
   const accepted = summary.accepted.length;
   if (summary.stoppedReason === "aborted") return null;
+  if (summary.stoppedReason === "daily_cap") {
+    const resetAt = summary.dailyCap?.resetAt ?? null;
+    return { status: "stopped", reason: "daily_cap", accepted, pending: summary.pending.length, resetAt };
+  }
   if (summary.stoppedReason) {
     return { status: "stopped", reason: summary.stoppedReason, accepted, pending: summary.pending.length };
   }
@@ -80,9 +93,12 @@ export function classifyUpload(summary: UploadSummary): TryUploadState | null {
   return { status: "done", accepted };
 }
 
-/** Only the id + payload leave the device (never the replay file). */
+/**
+ * Only the id + payload leave the device (never the replay file), tagged
+ * with the engine version that parsed each game when it is known.
+ */
 function uploadable(games: ReadonlyArray<UploadableGame>): UploadableGame[] {
-  return games.map(({ gameId, json }) => ({ gameId, json }));
+  return games.map(({ gameId, json, engineVersion }) => (engineVersion ? { gameId, json, engineVersion } : { gameId, json }));
 }
 
 /** Mutable bookkeeping shared by the upload actions of one `useTryUpload`. */
@@ -143,7 +159,7 @@ function useUploadAction(runtime: UploadRuntime, setState: SetUploadState): (gam
       if (next?.status === "stopped" && next.reason !== "rejected") trackInstantError({ kind: `upload_${next.reason}` });
       if (next?.status !== "done") return;
       trackInstantUploadDone({ games: next.accepted });
-      await clearTryData().catch(() => undefined); // best effort: they expire in 7 days anyway
+      await clearTryData().catch(() => undefined); // best effort: they expire anyway
       router.push(DASHBOARD_PATH);
     },
     [getToken, router, runtime, setState],

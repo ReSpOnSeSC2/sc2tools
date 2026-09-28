@@ -51,6 +51,8 @@ export interface UploadCounts {
   /** Games not settled because the run stopped early. */
   pending: number;
   stoppedReason?: UploadStopReason;
+  /** Daily cap only: epoch ms when browser uploads resume (from the 429). */
+  dailyCapResetAt?: number;
 }
 
 /** Why the replay backup did not run (null when it ran). */
@@ -121,6 +123,8 @@ export function uploadCounts(summary: UploadSummary): UploadCounts {
     pending: summary.pending.length,
   };
   if (summary.stoppedReason) counts.stoppedReason = summary.stoppedReason;
+  const resetAt = summary.dailyCap?.resetAt;
+  if (summary.stoppedReason === "daily_cap" && typeof resetAt === "number") counts.dailyCapResetAt = resetAt;
   return counts;
 }
 

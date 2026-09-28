@@ -4,9 +4,11 @@
  * POST /v1/games/exists — which of these game ids does the caller already
  * have stored?
  *
- * The in-browser importer calls this before parsing a folder so replays the
- * server already holds are skipped locally (parsing costs seconds of CPU per
- * replay; this lookup is one index-backed query). Registered inside
+ * The in-browser importer calls this after parsing (the game ids come from
+ * the parse) and before uploading, so games the server already holds are
+ * not sent again: the lookup is one index-backed query, while each upload
+ * batch spends the single ingest slot and the daily browser cap. Registered
+ * inside
  * ``buildGamesRouter`` — whose ``router.use(auth)`` already authenticated the
  * caller — and declared before any ``/games/:gameId`` route.
  *

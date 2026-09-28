@@ -263,20 +263,21 @@ describe("describeBootError", () => {
   });
 });
 
-/**
+/*
  * Boot orchestration with REAL digest checks and real (Node) Blobs; only the
  * Pyodide runtime itself is faked. Proves the order "verify, then execute":
  * modules are imported from blob: URLs holding exactly the verified bytes,
  * the wasm comes from the shim, and a tampered asset stops the boot before
  * anything is imported.
  */
-describe("bootEngine", () => {
-  const WASM_URL = `${ORIGIN}${ASSET_PATHS["pyodide-wasm"]}`;
-  const BOOT_STARTED_MS = 1_000;
-  const BOOT_FINISHED_MS = 3_400;
-  const objectUrls = new Map<string, NodeBlob>();
-  const revoked: string[] = [];
+const WASM_URL = `${ORIGIN}${ASSET_PATHS["pyodide-wasm"]}`;
+const BOOT_STARTED_MS = 1_000;
+const BOOT_FINISHED_MS = 3_400;
+const objectUrls = new Map<string, NodeBlob>();
+const revoked: string[] = [];
 
+/** Registers the Blob / importScripts / object-URL stubs for the enclosing describe. */
+function useBootGlobals(): void {
   beforeEach(() => {
     objectUrls.clear();
     revoked.length = 0;
@@ -299,54 +300,58 @@ describe("bootEngine", () => {
     Reflect.deleteProperty(URL, "createObjectURL");
     Reflect.deleteProperty(URL, "revokeObjectURL");
   });
+}
 
-  async function objectUrlText(url: string | undefined): Promise<string> {
-    const blob = url === undefined ? undefined : objectUrls.get(url);
-    if (!blob) throw new Error(`no object URL ${String(url)}`);
-    return blob.text();
-  }
+async function objectUrlText(url: string | undefined): Promise<string> {
+  const blob = url === undefined ? undefined : objectUrls.get(url);
+  if (!blob) throw new Error(`no object URL ${String(url)}`);
+  return blob.text();
+}
 
-  const importScriptsHidden = (): boolean => typeof Reflect.get(globalThis, "importScripts") !== "function";
+const importScriptsHidden = (): boolean => typeof Reflect.get(globalThis, "importScripts") !== "function";
 
-  /** Fake Pyodide runtime that records what the boot hands it. */
-  function fakeRuntime(scope: FetchScope) {
-    const seen = { imports: [] as Array<{ url: string; text: string; hidden: boolean }>, wasm: "", stdlib: "", lockBlocked: false, hiddenInLoad: false, config: null as PyodideBootConfig | null, unpacked: "", extractDir: "", code: [] as string[] };
-    const createPyodideModule = vi.fn();
-    const pyodide: PyodideLike = {
-      version: PYODIDE_VERSION,
-      runPython: (code) => seen.code.push(code),
-      unpackArchive: (buffer, format, options) => {
-        seen.unpacked = `${format}:${new TextDecoder().decode(buffer)}`;
-        seen.extractDir = options?.extractDir ?? "";
-      },
-      globals: { get: () => undefined },
-      _module: { HEAP8: { length: 0 } },
-    };
-    const loadPyodide = vi.fn(async (config: PyodideBootConfig) => {
-      seen.config = config;
-      seen.hiddenInLoad = importScriptsHidden();
-      seen.wasm = await (await scope.fetch(new URL(WASM_URL))).text();
-      seen.stdlib = await objectUrlText(config.stdLibURL);
-      seen.lockBlocked = await scope.fetch(`${ORIGIN}/pyodide/${PYODIDE_VERSION}/pyodide-lock.json`).then(() => false, () => true);
-      return pyodide;
-    });
-    const importModule = vi.fn(async (url: string) => {
-      const text = await objectUrlText(url);
-      seen.imports.push({ url, text, hidden: importScriptsHidden() });
-      return text === "bytes of pyodide-loader" ? { loadPyodide } : { default: createPyodideModule };
-    });
-    return { seen, importModule, loadPyodide, createPyodideModule };
-  }
+/** Fake Pyodide runtime that records what the boot hands it. */
+function fakeRuntime(scope: FetchScope) {
+  const seen = { imports: [] as Array<{ url: string; text: string; hidden: boolean }>, wasm: "", stdlib: "", lockBlocked: false, hiddenInLoad: false, config: null as PyodideBootConfig | null, unpacked: "", extractDir: "", code: [] as string[] };
+  const createPyodideModule = vi.fn();
+  const pyodide: PyodideLike = {
+    version: PYODIDE_VERSION,
+    runPython: (code) => seen.code.push(code),
+    unpackArchive: (buffer, format, options) => {
+      seen.unpacked = `${format}:${new TextDecoder().decode(buffer)}`;
+      seen.extractDir = options?.extractDir ?? "";
+    },
+    globals: { get: () => undefined },
+    _module: { HEAP8: { length: 0 } },
+  };
+  const loadPyodide = vi.fn(async (config: PyodideBootConfig) => {
+    seen.config = config;
+    seen.hiddenInLoad = importScriptsHidden();
+    seen.wasm = await (await scope.fetch(new URL(WASM_URL))).text();
+    seen.stdlib = await objectUrlText(config.stdLibURL);
+    seen.lockBlocked = await scope.fetch(`${ORIGIN}/pyodide/${PYODIDE_VERSION}/pyodide-lock.json`).then(() => false, () => true);
+    return pyodide;
+  });
+  const importModule = vi.fn(async (url: string) => {
+    const text = await objectUrlText(url);
+    seen.imports.push({ url, text, hidden: importScriptsHidden() });
+    return text === "bytes of pyodide-loader" ? { loadPyodide } : { default: createPyodideModule };
+  });
+  return { seen, importModule, loadPyodide, createPyodideModule };
+}
 
-  async function routes(tampered?: EngineAssetRole) {
-    const valid = await manifest();
-    const all: Record<string, unknown> = { [POINTER_URL]: pointer(), [`${ORIGIN}${MANIFEST_PATH}`]: valid, ...assetRoutes() };
-    if (tampered) all[`${ORIGIN}${ASSET_PATHS[tampered]}`] = new TextEncoder().encode("tampered");
-    return { valid, fetchImpl: fakeFetch(all) };
-  }
+async function bootRoutes(tampered?: EngineAssetRole) {
+  const valid = await manifest();
+  const all: Record<string, unknown> = { [POINTER_URL]: pointer(), [`${ORIGIN}${MANIFEST_PATH}`]: valid, ...assetRoutes() };
+  if (tampered) all[`${ORIGIN}${ASSET_PATHS[tampered]}`] = new TextEncoder().encode("tampered");
+  return { valid, fetchImpl: fakeFetch(all) };
+}
+
+describe("bootEngine", () => {
+  useBootGlobals();
 
   it("imports only verified bytes and serves the verified wasm, stdlib and lock info", async () => {
-    const { valid, fetchImpl } = await routes();
+    const { valid, fetchImpl } = await bootRoutes();
     const network = vi.fn(async () => new Response("network"));
     const scope: FetchScope = { fetch: network };
     const runtime = fakeRuntime(scope);
@@ -378,11 +383,15 @@ describe("bootEngine", () => {
     expect(importScriptsHidden()).toBe(false);
     expect([...revoked].sort()).toEqual([...objectUrls.keys()].sort());
   });
+});
+
+describe("bootEngine failures", () => {
+  useBootGlobals();
 
   it.each<EngineAssetRole>(["pyodide-loader", "pyodide-asm", "pyodide-wasm", "python-stdlib", "engine-bundle"])(
     "stops before executing anything when %s is tampered with",
     async (role) => {
-      const { fetchImpl } = await routes(role);
+      const { fetchImpl } = await bootRoutes(role);
       const scope: FetchScope = { fetch: vi.fn() };
       const runtime = fakeRuntime(scope);
       const error = await bootEngine(POINTER_URL, { fetchImpl, scope, importModule: runtime.importModule }).catch((e: unknown) => e);
@@ -394,7 +403,7 @@ describe("bootEngine", () => {
   );
 
   it("restores fetch and importScripts and revokes object URLs when Pyodide fails to start", async () => {
-    const { fetchImpl } = await routes();
+    const { fetchImpl } = await bootRoutes();
     const network = vi.fn(async () => new Response("network"));
     const scope: FetchScope = { fetch: network };
     const runtime = fakeRuntime(scope);

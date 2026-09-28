@@ -4,10 +4,16 @@
  * The ledger is keyed by relative path (like the agent's
  * `state.uploaded`, which is keyed by absolute path) and remembers the
  * file's size and `lastModified`, so a re-scan only parses files that
- * are new, changed, or failed for a reason that might go away.
+ * are new, changed, or failed for a reason that might go away:
+ *
+ *   - a transient failure (timeout, out of memory, crashed worker, …) is
+ *     retried, but at most `MAX_RETRYABLE_ATTEMPTS` times in all, so one
+ *     pathological replay cannot boot the analyzer on every scan forever;
+ *   - a replay whose player could not be identified is re-checked only
+ *     once the profile learns one of the toons that played in it.
  *
  * Example:
- *   const { toProcess, unchanged } = diffAgainstLedger(files, await loadLedger());
+ *   const { toProcess, unchanged } = diffAgainstLedger(files, await loadLedger(), { profileToons });
  */
 import type { ErrorKind } from "./types";
 
@@ -21,6 +27,13 @@ export interface LedgerEntry {
   status: LedgerStatus;
   gameId?: string;
   errorKind?: ErrorKind;
+  /** Retryable failures so far (see `MAX_RETRYABLE_ATTEMPTS`). */
+  attempts?: number;
+  /**
+   * `player_unresolved` only: toons that played in the replay but were not
+   * on the profile yet. Learning one of them makes the file worth a re-check.
+   */
+  toons?: string[];
   /** Epoch ms of the last status change. */
   updatedAt: number;
 }
@@ -42,6 +55,11 @@ export interface LedgerDiffOptions {
    * (e.g. `outside_date_range` after widening the window to "All time").
    */
   reprocessSkippedKinds?: ReadonlyArray<ErrorKind>;
+  /**
+   * The signed-in user's toon handles now. A `player_unresolved` entry
+   * whose `toons` include one of them is processed again.
+   */
+  profileToons?: ReadonlyArray<string>;
 }
 
 export interface LedgerDiff<T extends LedgerCandidate> {
@@ -104,10 +122,18 @@ export const DEFAULT_RETRYABLE_KINDS: ReadonlyArray<ErrorKind> = [
 ];
 
 /**
+ * A file that failed for a retryable reason this many times is settled:
+ * the replay itself is the likely cause (e.g. it times out every time).
+ * `retryFailed` still re-processes it.
+ */
+export const MAX_RETRYABLE_ATTEMPTS = 3;
+
+/**
  * Split files into those that need work and those the ledger already
  * settled. A file is unchanged when its path, size and lastModified
  * match an entry whose status is `uploaded`/`skipped`, or `failed` with
- * a kind that is not retryable.
+ * a kind that is not retryable (or retried `MAX_RETRYABLE_ATTEMPTS`
+ * times), unless it is an unresolved player the profile now knows.
  *
  * Example:
  *   diffAgainstLedger(files, entries, { retryFailed: true }).toProcess;
@@ -140,9 +166,32 @@ function isSettled(
     const reprocess = options.reprocessSkippedKinds ?? [];
     return !(entry.errorKind && reprocess.includes(entry.errorKind));
   }
+  return isFailureSettled(entry, options);
+}
+
+function isFailureSettled(entry: LedgerEntry, options: LedgerDiffOptions): boolean {
   if (options.retryFailed || !entry.errorKind) return false;
-  const retryable = options.retryableKinds ?? DEFAULT_RETRYABLE_KINDS;
-  return !retryable.includes(entry.errorKind);
+  if (entry.errorKind === "player_unresolved") return !knowsNewToon(entry, options.profileToons);
+  if (!isRetryableKind(entry.errorKind, options.retryableKinds)) return true;
+  return (entry.attempts ?? 0) >= MAX_RETRYABLE_ATTEMPTS;
+}
+
+function knowsNewToon(entry: LedgerEntry, profileToons: ReadonlyArray<string> = []): boolean {
+  return (entry.toons ?? []).some((toon) => profileToons.includes(toon));
+}
+
+/**
+ * True when some unresolved-player entry could be settled by the profile's
+ * toons, i.e. the caller should load them before diffing.
+ *
+ * Example:
+ *   if (needsProfileToons(ledger)) toons = await fetchProfileToons(getToken, apiCall);
+ */
+export function needsProfileToons(ledger: Iterable<LedgerEntry>): boolean {
+  for (const entry of ledger) {
+    if (entry.errorKind === "player_unresolved" && (entry.toons?.length ?? 0) > 0) return true;
+  }
+  return false;
 }
 
 /**
@@ -150,12 +199,13 @@ function isSettled(
  *
  * Example:
  *   ledgerEntryFor(file, "uploaded", Date.now(), { gameId });
+ *   ledgerEntryFor(file, "failed", Date.now(), { errorKind: "timeout", attempts: 2 });
  */
 export function ledgerEntryFor(
   file: LedgerCandidate,
   status: LedgerStatus,
   now: number,
-  extra: { gameId?: string; errorKind?: ErrorKind } = {},
+  extra: Pick<LedgerEntry, "gameId" | "errorKind" | "attempts" | "toons"> = {},
 ): LedgerEntry {
   return {
     path: file.relativePath,
@@ -164,6 +214,18 @@ export function ledgerEntryFor(
     status,
     ...(extra.gameId ? { gameId: extra.gameId } : {}),
     ...(extra.errorKind ? { errorKind: extra.errorKind } : {}),
+    ...(extra.attempts ? { attempts: extra.attempts } : {}),
+    ...(extra.toons && extra.toons.length > 0 ? { toons: [...extra.toons] } : {}),
     updatedAt: now,
   };
+}
+
+/**
+ * Whether a failure kind is retried on a later scan (the attempt cap aside).
+ *
+ * Example:
+ *   isRetryableKind("timeout"); // -> true
+ */
+export function isRetryableKind(kind: ErrorKind, retryable: ReadonlyArray<ErrorKind> = DEFAULT_RETRYABLE_KINDS): boolean {
+  return retryable.includes(kind);
 }

@@ -1,6 +1,8 @@
 /**
  * BrowserImportPanel — the backup toggle (visibility, default, effect on
- * hashing) and the hand-off from a finished parse to the upload runner.
+ * hashing, and the intro copy that follows it), the notes about what a
+ * selection left out, the status region and focus flow, and the hand-off
+ * from a finished parse to the upload runner.
  * `useInstantSession` is a MOCK (no engine), `runBrowserUpload` is a MOCK
  * (no network), and Clerk / useApi / GA4 are mocked.
  */
@@ -64,6 +66,7 @@ function baseSession(): InstantSession {
     cancel: vi.fn(),
     reset: vi.fn(),
     lastHeapBytes: () => null,
+    prewarm: vi.fn(),
   };
 }
 
@@ -154,7 +157,56 @@ describe("BrowserImportPanel upload", () => {
     const start = vi.fn(async () => undefined);
     mocks.session = { phase: "ready", files: PARSED.map((entry) => entry.file), start };
     render(<BrowserImportPanel compact />);
-    fireEvent.click(screen.getByRole("button", { name: "Analyse and upload 1 replay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze and upload 1 replay" }));
     expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces the result through one always-mounted region and focuses the summary", async () => {
+    let finish: (value: BrowserUploadSummary) => void = () => undefined;
+    mocks.runBrowserUpload.mockReturnValue(new Promise<BrowserUploadSummary>((resolve) => (finish = resolve)));
+    mocks.session = { phase: "done", parsedWithFiles: PARSED, chosenToon: null };
+    render(<BrowserImportPanel />);
+    const region = screen.getAllByRole("status").find((node) => node.getAttribute("aria-live") === "polite" && node.className.includes("sr-only"));
+    if (!region) throw new Error("status region missing");
+    await waitFor(() => expect(region.textContent).toBe("Uploading your games…"));
+    expect(document.activeElement?.textContent).toBe("Preparing the upload…");
+    finish({ ...SUMMARY, stoppedReason: undefined, pending: 0 });
+    const heading = await screen.findByRole("heading", { name: "Import complete" });
+    expect(region.textContent).toBe("Import complete");
+    expect(heading.closest("[role=status]")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+});
+
+describe("BrowserImportPanel intake notes and intro", () => {
+  it("says when a selection held no replays", () => {
+    mocks.session = { lastIntake: { found: 0, added: 0, ignored: 3, rejected: 0 } };
+    render(<BrowserImportPanel />);
+    const note = screen.getByText("No .SC2Replay files in that selection.");
+    expect(note.closest("[role=status]")).not.toBeNull();
+  });
+
+  it("says how many replays the 500-file cap left out", () => {
+    mocks.session = { phase: "ready", files: PARSED.map((entry) => entry.file), truncatedCount: 2500 };
+    render(<BrowserImportPanel />);
+    expect(screen.getByText(/Only the newest 500 replays are imported in one run; 2500 older ones were left out/)).toBeTruthy();
+  });
+
+  it("mentions the replay-file copy while the backup is on, and never says only the analysis is uploaded", () => {
+    render(<BrowserImportPanel />);
+    const intro = screen.getByText(/then the results are uploaded to your account/);
+    expect(intro.textContent).toMatch(/private copy of each replay file/);
+    expect(intro.textContent).not.toMatch(/\bonly\b/);
+    fireEvent.click(screen.getByRole("checkbox", { name: /also back up original replay files/i }));
+    expect(screen.getByText(/then the results are uploaded to your account/).textContent).toMatch(/Replay files stay on this device/);
+  });
+
+  it("warms the analyzer up on the first intent, not on mount", () => {
+    const prewarm = vi.fn();
+    mocks.session = { prewarm };
+    render(<BrowserImportPanel />);
+    expect(prewarm).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
+    expect(prewarm).toHaveBeenCalled();
   });
 });

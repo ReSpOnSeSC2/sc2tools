@@ -62,6 +62,21 @@ for (const { path, expectText } of PAGES) {
   });
 }
 
+// The browser-vs-agent comparison must fit the page (it scrolls inside its
+// own box only as a last resort), even at 360px.
+if (process.env.NEXT_PUBLIC_INSTANT_IMPORT === "all") {
+  test("/try comparison table fits without scrolling sideways", async ({ page }) => {
+    await page.goto("/try");
+    const region = page.getByRole("region", { name: "Browser vs desktop agent comparison" });
+    await expect(region).toBeVisible();
+    const box = await region.evaluate((node) => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth }));
+    expect(
+      box.scrollWidth,
+      `comparison table overflows its box: ${box.scrollWidth}px > ${box.clientWidth}px`,
+    ).toBeLessThanOrEqual(box.clientWidth + 1);
+  });
+}
+
 test("/p/<missing> is a real 404, not a soft-404", async ({ page }) => {
   const response = await page.goto("/p/definitely-not-a-real-handle");
   expect(response).not.toBeNull();

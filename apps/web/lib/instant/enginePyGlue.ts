@@ -58,7 +58,11 @@ def _sc2t_unzip(data):
     except ValueError as exc:
         return _sc2t_json.dumps({"ok": False, "code": str(exc)})
     _sc2t_pending.extend(entry["data"] for entry in entries)
-    return _sc2t_json.dumps({"ok": True, "names": [entry["name"] for entry in entries]})
+    return _sc2t_json.dumps({
+        "ok": True,
+        "names": [entry["name"] for entry in entries],
+        "lastModified": [entry.get("lastModified") for entry in entries],
+    })
 
 
 def _sc2t_unzip_take(index):
@@ -77,10 +81,22 @@ def _sc2t_unzip_done():
 const GLUE_FUNCTIONS = ["_sc2t_players", "_sc2t_parse", "_sc2t_unzip", "_sc2t_unzip_take", "_sc2t_unzip_done"] as const;
 type GlueName = (typeof GLUE_FUNCTIONS)[number];
 
-/** Result of `unzip`: entry names + bytes, or the Python guard code. */
-export type UnzipResult =
-  | { ok: true; entries: Array<{ name: string; bytes: ArrayBuffer }> }
-  | { ok: false; code: string };
+/** One unpacked entry; `lastModified` is its stored zip time (epoch ms) when valid. */
+export interface UnzipEntry {
+  name: string;
+  bytes: ArrayBuffer;
+  lastModified?: number;
+}
+
+/** Result of `unzip`: entries, or the Python guard code. */
+export type UnzipResult = { ok: true; entries: UnzipEntry[] } | { ok: false; code: string };
+
+interface UnzipHeader {
+  ok: true;
+  names: string[];
+  /** Aligned with `names`; null where the stored time was invalid. */
+  lastModified: Array<number | null>;
+}
 
 /** Typed calls into the glue. Raw JSON strings are narrowed by the caller. */
 export interface EngineRuntime {
@@ -103,15 +119,34 @@ function ownBuffer(value: unknown): ArrayBuffer {
   return whole && value.buffer instanceof ArrayBuffer ? value.buffer : value.slice().buffer;
 }
 
-function parseUnzipHeader(raw: string): { ok: true; names: string[] } | { ok: false; code: string } {
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Entry times, aligned with the names (older glue sent none: all null). */
+function entryTimes(value: unknown, count: number): Array<number | null> {
+  const times = Array.isArray(value) ? value : [];
+  return Array.from({ length: count }, (_, index) => finiteOrNull(times[index]));
+}
+
+function parseUnzipHeader(raw: string): UnzipHeader | { ok: false; code: string } {
   const parsed: unknown = JSON.parse(raw);
   if (typeof parsed === "object" && parsed !== null && "ok" in parsed) {
     if (parsed.ok === true && "names" in parsed && Array.isArray(parsed.names)) {
-      return { ok: true, names: parsed.names.map((name: unknown) => String(name)) };
+      const names = parsed.names.map((name: unknown) => String(name));
+      const times = "lastModified" in parsed ? parsed.lastModified : null;
+      return { ok: true, names, lastModified: entryTimes(times, names.length) };
     }
     if ("code" in parsed && typeof parsed.code === "string") return { ok: false, code: parsed.code };
   }
   throw new TypeError("unzip returned a malformed header");
+}
+
+function unzipEntry(header: UnzipHeader, index: number, bytes: ArrayBuffer): UnzipEntry {
+  const lastModified = header.lastModified[index];
+  const entry: UnzipEntry = { name: header.names[index], bytes };
+  if (lastModified !== null && lastModified !== undefined) entry.lastModified = lastModified;
+  return entry;
 }
 
 /**
@@ -138,7 +173,7 @@ export function createEngineRuntime(pyodide: PyodideLike): EngineRuntime {
     const header = parseUnzipHeader(asString(call("_sc2t_unzip", bytes), "unzip"));
     if (!header.ok) return header;
     try {
-      const entries = header.names.map((name, index) => ({ name, bytes: ownBuffer(call("_sc2t_unzip_take", index)) }));
+      const entries = header.names.map((_name, index) => unzipEntry(header, index, ownBuffer(call("_sc2t_unzip_take", index))));
       return { ok: true, entries };
     } finally {
       call("_sc2t_unzip_done");

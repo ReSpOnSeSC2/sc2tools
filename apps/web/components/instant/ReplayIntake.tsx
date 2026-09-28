@@ -15,12 +15,29 @@
  * there. On iOS/iPadOS the picker gets no `accept` filter, because Files
  * greys out `.SC2Replay` (no UTI for the extension).
  *
+ * `onIntent` fires on the visitor's first signs of adding replays — a
+ * pointer or key press on a "Choose…" button, files dragged over the drop
+ * zone, focus moving into the panel — so the caller can warm the analyzer
+ * up (`session.prewarm`) while the file dialog is still open. It never
+ * fires on mount.
+ *
  * Example:
  *   <ReplayIntake onFiles={session.addFiles} dateWindow={session.dateWindow}
  *     onDateWindowChange={session.setDateWindow} fileCount={session.files.length}
  *     estimate={session.estimate} maxFiles={MAX_TRY_FILES} disabled={session.busy} allowFolderInput />
  */
-import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FocusEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { FileUp, FolderOpen, FolderSync, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui";
 import { REPLAY_INPUT_ACCEPT, replayInputAccept, type DateWindow, type ParseEstimate } from "@/lib/instant/fileIntake";
@@ -43,6 +60,14 @@ export interface ReplayIntakeProps {
   estimate?: ParseEstimate | null;
   /** Show the `<input webkitdirectory>` folder picker (Firefox/Safari). */
   allowFolderInput?: boolean;
+  /** The visitor is about to add replays (see module comment); may fire often. */
+  onIntent?: () => void;
+  /**
+   * Bump to move keyboard focus onto the panel's heading (e.g. after the
+   * control that had focus disappeared); 0 leaves focus alone. Focusing
+   * the heading is not treated as intent.
+   */
+  focusKey?: number;
   className?: string;
 }
 
@@ -156,7 +181,7 @@ function useFolderDrop(onDropFiles: (files: File[]) => void) {
 }
 
 /** Drop handlers; a depth counter keeps child elements from flickering the highlight. */
-function useDropTarget(disabled: boolean, onDropFiles: (files: File[]) => void) {
+function useDropTarget(disabled: boolean, onDropFiles: (files: File[]) => void, onIntent?: () => void) {
   const [dragging, setDragging] = useState(false);
   const depth = useRef(0);
   const { reading, readTree } = useFolderDrop(onDropFiles);
@@ -164,6 +189,7 @@ function useDropTarget(disabled: boolean, onDropFiles: (files: File[]) => void) 
     onDragEnter: (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
       if (disabled) return;
+      onIntent?.();
       depth.current += 1;
       setDragging(true);
     },
@@ -194,7 +220,7 @@ function useDropTarget(disabled: boolean, onDropFiles: (files: File[]) => void) 
 
 function IntakeStatus({ fileCount, estimate, maxFiles }: Pick<ReplayIntakeProps, "fileCount" | "estimate" | "maxFiles">) {
   const noun = fileCount === 1 ? "replay" : "replays";
-  const timing = estimate ? ` · ${estimate.label} to analyse` : "";
+  const timing = estimate ? ` · ${estimate.label} to analyze` : "";
   return (
     <div className="space-y-0.5 text-caption text-text-muted">
       <p role="status" aria-live="polite" className="font-semibold text-text">
@@ -211,16 +237,19 @@ interface IntakeButtonsProps {
   onChooseFiles: () => void;
   onChooseFolder?: () => void;
   onPickFolder?: () => void;
+  onIntent?: () => void;
 }
 
-function IntakeButtons({ disabled, hintsId, onChooseFiles, onChooseFolder, onPickFolder }: IntakeButtonsProps) {
+function IntakeButtons({ disabled, hintsId, onChooseFiles, onChooseFolder, onPickFolder, onIntent }: IntakeButtonsProps) {
+  // Pressing a "Choose…" button is the earliest sign of a run: warm up before the dialog opens.
+  const intent = { onPointerDown: onIntent, onKeyDown: onIntent };
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
-      <Button onClick={onChooseFiles} disabled={disabled} aria-describedby={hintsId} iconLeft={<FileUp className="h-4 w-4" aria-hidden />}>
+      <Button onClick={onChooseFiles} {...intent} disabled={disabled} aria-describedby={hintsId} iconLeft={<FileUp className="h-4 w-4" aria-hidden />}>
         Choose replays
       </Button>
       {onChooseFolder ? (
-        <Button variant="secondary" onClick={onChooseFolder} disabled={disabled} aria-describedby={hintsId} iconLeft={<FolderOpen className="h-4 w-4" aria-hidden />}>
+        <Button variant="secondary" onClick={onChooseFolder} {...intent} disabled={disabled} aria-describedby={hintsId} iconLeft={<FolderOpen className="h-4 w-4" aria-hidden />}>
           Choose a folder
         </Button>
       ) : null}
@@ -236,13 +265,15 @@ function IntakeButtons({ disabled, hintsId, onChooseFiles, onChooseFolder, onPic
 interface DropZoneProps {
   disabled: boolean;
   headingId: string;
+  headingRef: RefObject<HTMLParagraphElement | null>;
   hintsId: string;
   onDropFiles: (files: File[]) => void;
+  onIntent?: () => void;
   children: ReactNode;
 }
 
-function DropZone({ disabled, headingId, hintsId, onDropFiles, children }: DropZoneProps) {
-  const { dragging, reading, handlers } = useDropTarget(disabled, onDropFiles);
+function DropZone({ disabled, headingId, headingRef, hintsId, onDropFiles, onIntent, children }: DropZoneProps) {
+  const { dragging, reading, handlers } = useDropTarget(disabled, onDropFiles, onIntent);
   return (
     <div
       {...handlers}
@@ -255,9 +286,11 @@ function DropZone({ disabled, headingId, hintsId, onDropFiles, children }: DropZ
       ].filter(Boolean).join(" ")}
     >
       <UploadCloud className={["h-8 w-8", dragging ? "text-accent" : "text-text-muted"].join(" ")} aria-hidden />
-      <p id={headingId} className="font-display text-h4 text-text">Add your replays</p>
+      <p id={headingId} ref={headingRef} tabIndex={-1} className="font-display text-h4 text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        Add your replays
+      </p>
       <p id={hintsId} className="max-w-prose text-caption text-text-muted">
-        Drag .SC2Replay files, a replay folder or a .zip of them here, or choose them. Replays are analysed right here in
+        Drag .SC2Replay files, a replay folder or a .zip of them here, or choose them. Replays are analyzed right here in
         your browser.
       </p>
       {children}
@@ -287,6 +320,15 @@ function usePickerInputs(onFiles: ReplayIntakeProps["onFiles"]) {
   return { fileInput, folderInput, attachFolderInput, onPicked };
 }
 
+/** Focus the heading whenever `focusKey` is bumped (never for 0). */
+function useHeadingFocus(focusKey: number): RefObject<HTMLParagraphElement | null> {
+  const heading = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    if (focusKey > 0) heading.current?.focus();
+  }, [focusKey]);
+  return heading;
+}
+
 /**
  * The replay intake panel (see module comment).
  *
@@ -303,21 +345,36 @@ export function ReplayIntake({
   fileCount,
   estimate = null,
   allowFolderInput = false,
+  onIntent,
+  focusKey = 0,
   className = "",
 }: ReplayIntakeProps) {
   const headingId = useId();
   const hintsId = useId();
   const accept = useReplayAccept();
   const inputs = usePickerInputs(onFiles);
+  const heading = useHeadingFocus(focusKey);
+  const intent = disabled ? undefined : onIntent;
+  const onFocus = (event: FocusEvent<HTMLElement>): void => {
+    if (event.target !== heading.current) intent?.();
+  };
   return (
-    <section aria-labelledby={headingId} className={["space-y-4", className].filter(Boolean).join(" ")}>
-      <DropZone disabled={disabled} headingId={headingId} hintsId={hintsId} onDropFiles={(files) => onFiles(files, "drop")}>
+    <section aria-labelledby={headingId} onFocus={onFocus} className={["space-y-4", className].filter(Boolean).join(" ")}>
+      <DropZone
+        disabled={disabled}
+        headingId={headingId}
+        headingRef={heading}
+        hintsId={hintsId}
+        onDropFiles={(files) => onFiles(files, "drop")}
+        onIntent={intent}
+      >
         <IntakeButtons
           disabled={disabled}
           hintsId={hintsId}
           onChooseFiles={() => inputs.fileInput.current?.click()}
           onChooseFolder={allowFolderInput ? () => inputs.folderInput.current?.click() : undefined}
           onPickFolder={onPickFolder}
+          onIntent={intent}
         />
       </DropZone>
       <input ref={inputs.fileInput} type="file" multiple accept={accept} onChange={inputs.onPicked("picker")} disabled={disabled} tabIndex={-1} aria-label="Replay files" className="sr-only" />

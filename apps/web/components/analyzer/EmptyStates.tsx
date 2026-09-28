@@ -104,7 +104,7 @@ function NoGamesYetChoices() {
           <ChoiceCard
             icon={<Globe className="h-5 w-5" aria-hidden />}
             title="In your browser"
-            body="Analyse replays right here — on Windows, Mac, Chromebook or iPad."
+            body="Analyze replays right here — on Windows, Mac, Chromebook or iPad."
             href="/settings?tab=import"
             cta="Import in your browser — no download"
             variant="secondary"

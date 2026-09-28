@@ -4,16 +4,22 @@
  * BrowserImportPanel — the signed-in "import in your browser" flow:
  *
  *   pick replays (files, a folder or a .zip; or start Folder Sync)
- *   → analyse them in this tab (the same engine as the desktop agent)
+ *   → analyze them in this tab (the same engine as the desktop agent)
  *   → "which player are you?" when the replays don't say
  *   → upload to the account, remember the confirmed player, and
  *     optionally back up the original .SC2Replay files
  *   → a summary with counts, grouped skips/failures and a link to /app.
  *
  * The backup toggle only appears when the server has a replay store
- * (`/v1/me/replay-archive-status` → `enabled`) and is on by default then;
+ * (`/v1/me/replay-archive-status` → `enabled`) and is on by default then,
+ * so the intro mentions the replay-file copy exactly when it applies;
  * file hashes are only computed when it is on. The analyzer (Pyodide)
- * starts only when the visitor presses "Analyse" (or drops a .zip).
+ * warms up on the visitor's first intent to add replays and is otherwise
+ * started by "Analyze" (or a dropped .zip).
+ *
+ * Accessibility: one always-mounted polite status region announces the
+ * upload and its result; focus moves to the progress panel, the upload
+ * card and the summary as each replaces the control that had focus.
  *
  * Example:
  *   <BrowserImportPanel onDone={(summary) => setImported(summary.uploaded)} />
@@ -24,6 +30,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui";
 import { API_BASE, useApi } from "@/lib/clientApi";
 import { trackInstantOpen } from "@/lib/instant/analytics";
+import { secondsUntilRetry } from "@/lib/instant/displayUnits";
 import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
 import { errorCopy } from "@/lib/instant/errorCopy";
 import { supportsDirectoryPicker } from "@/lib/instant/folderSync";
@@ -33,7 +40,7 @@ import { isRunningPhase } from "@/lib/instant/sessionState";
 import type { EngineClient } from "@/lib/instant/types";
 import { useInstantSession, type InstantSession } from "@/lib/instant/useInstantSession";
 import type { FolderSyncController } from "./FolderSyncCard";
-import { ImportSummary } from "./ImportSummary";
+import { ImportSummary, importHeadline } from "./ImportSummary";
 import { ParseProgress } from "./ParseProgress";
 import { PlayerChooser } from "./PlayerChooser";
 import { ReplayIntake } from "./ReplayIntake";
@@ -73,7 +80,8 @@ const NOTHING_TO_UPLOAD: BrowserUploadSummary = {
 };
 
 /**
- * Human label for an upload step.
+ * Human label for an upload step (games already in the account count as
+ * done, so the count reaches the total).
  *
  * Example:
  *   uploadStageLabel({ stage: "backup", done: 2, total: 5 }); // -> "Backing up original replay files… 2 of 5"
@@ -85,9 +93,9 @@ export function uploadStageLabel(progress: BrowserUploadProgress | null): string
   const { upload } = progress;
   if (upload.phase === "checking") return "Checking which games your account already has…";
   if (upload.phase === "waiting") {
-    return `Our servers are busy — retrying in ${Math.ceil((upload.retryInMs ?? 0) / 1000)} s…`;
+    return `Our servers are busy — retrying in ${secondsUntilRetry(upload.retryInMs)} s…`;
   }
-  return `Uploading games… ${upload.accepted} of ${upload.total}`;
+  return `Uploading games… ${upload.settled} of ${upload.total}`;
 }
 
 /** Upload the finished session's games once; cancellable. */
@@ -164,10 +172,15 @@ function BackupToggle({ checked, onChange, disabled }: { checked: boolean; onCha
   );
 }
 
+/** Visual progress; announced once through the panel's status region, and focused on mount. */
 function UploadProgressCard({ progress, onCancel }: { progress: BrowserUploadProgress | null; onCancel: () => void }) {
+  const label = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    label.current?.focus();
+  }, []);
   return (
     <section aria-label="Upload progress" className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard">
-      <p role="status" aria-live="polite" className="text-body font-semibold text-text">
+      <p ref={label} tabIndex={-1} className="text-body font-semibold text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         {uploadStageLabel(progress)}
       </p>
       <Button variant="secondary" onClick={onCancel}>
@@ -201,7 +214,7 @@ function StartButton({ session }: { session: InstantSession }) {
   if (session.phase !== "ready" || count === 0) return null;
   return (
     <Button size="lg" onClick={() => void session.start()} disabled={session.expanding} iconLeft={<Play className="h-4 w-4" aria-hidden />}>
-      Analyse and upload {count} {count === 1 ? "replay" : "replays"}
+      Analyze and upload {count} {count === 1 ? "replay" : "replays"}
     </Button>
   );
 }
@@ -221,13 +234,40 @@ interface IntakeBlockProps {
   capability: boolean;
   backupChoice: boolean;
   onBackupChoice: (next: boolean) => void;
+  /** Bumped to move focus back onto the intake ("Import more replays"). */
+  focusKey: number;
 }
 
-function IntakeBlock({ session, folderSync, pickerSupported, capability, backupChoice, onBackupChoice }: IntakeBlockProps) {
+/**
+ * What the last selection left out: nothing usable, or replays beyond the
+ * per-run cap. Always mounted so assistive tech announces each change.
+ *
+ * Example:
+ *   <IntakeNotes session={session} />
+ */
+export function IntakeNotes({ session }: { session: Pick<InstantSession, "lastIntake" | "truncatedCount"> }) {
+  const nothingFound = session.lastIntake !== null && session.lastIntake.found === 0;
+  const left = session.truncatedCount;
+  return (
+    <div role="status" className="space-y-1 text-caption empty:hidden">
+      {nothingFound ? <p className="font-semibold text-text">No .SC2Replay files in that selection.</p> : null}
+      {left > 0 ? (
+        <p className="text-text-muted">
+          Only the newest {MAX_BROWSER_IMPORT_FILES} replays are imported in one run; {left} older{" "}
+          {left === 1 ? "one was" : "ones were"} left out — use Folder Sync (or run again) for the rest.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function IntakeBlock({ session, folderSync, pickerSupported, capability, backupChoice, onBackupChoice, focusKey }: IntakeBlockProps) {
   return (
     <>
       <ReplayIntake
         onFiles={(files, source) => void session.addFiles(files, source)}
+        onIntent={session.prewarm}
+        focusKey={focusKey}
         onPickFolder={folderSync && pickerSupported ? folderSync.pickFolder : undefined}
         allowFolderInput={!folderSync}
         disabled={session.busy}
@@ -237,6 +277,7 @@ function IntakeBlock({ session, folderSync, pickerSupported, capability, backupC
         fileCount={session.files.length}
         estimate={session.estimate}
       />
+      <IntakeNotes session={session} />
       {capability ? <BackupToggle checked={backupChoice} onChange={onBackupChoice} disabled={session.busy} /> : null}
       <StartButton session={session} />
     </>
@@ -272,19 +313,42 @@ function UploadResult({
       failed={session.failed}
       onImportMore={onImportMore}
       showDashboardLink={!compact}
+      truncatedCount={session.truncatedCount}
+      autoFocus
     />
   );
 }
 
-function PanelIntro() {
+/**
+ * What leaves the device, stated for the current backup setting: the
+ * analysis always, a private copy of each replay file only while the
+ * backup is available and ticked.
+ *
+ * Example:
+ *   uploadScopeLine(true, true); // -> "…then the results are uploaded to your account, plus a private copy of each replay file…"
+ */
+export function uploadScopeLine(capability: boolean, backupChoice: boolean): string {
+  const base = "Replays are analyzed right here in your browser, then the results are uploaded to your account";
+  if (!capability) return `${base} — no download needed.`;
+  return backupChoice
+    ? `${base}, plus a private copy of each replay file while the backup box below is ticked.`
+    : `${base}. Replay files stay on this device (the backup box below is off).`;
+}
+
+function PanelIntro({ capability, backupChoice }: { capability: boolean; backupChoice: boolean }) {
   return (
     <div className="space-y-1">
       <h2 className="font-display text-h3 text-text">Import replays in your browser</h2>
-      <p className="text-caption text-text-muted">
-        Replays are analysed right here, then only the analysis is uploaded to your account — no download needed.
-      </p>
+      <p className="text-caption text-text-muted">{uploadScopeLine(capability, backupChoice)}</p>
     </div>
   );
+}
+
+/** One polite region for the upload's start and result (inserted-with-text regions are often skipped). */
+function panelAnnouncement(upload: ReturnType<typeof useBrowserUpload>): string {
+  if (upload.status === "uploading") return "Uploading your games…";
+  if (upload.status === "done" && upload.summary) return importHeadline(upload.summary);
+  return "";
 }
 
 function isIntakePhase(phase: InstantSession["phase"]): boolean {
@@ -299,7 +363,7 @@ interface RunStatusProps {
   onImportMore: () => void;
 }
 
-/** Everything after "Analyse": player choice, progress, errors, upload, summary. */
+/** Everything after "Analyze": player choice, progress, errors, upload, summary. */
 function RunStatus({ session, folderSync, upload, compact, onImportMore }: RunStatusProps) {
   const parsing = isRunningPhase(session.phase) && session.phase !== "choosing";
   return (
@@ -311,7 +375,14 @@ function RunStatus({ session, folderSync, upload, compact, onImportMore }: RunSt
         <PlayerChooser candidates={session.candidates} onChoose={(toon) => void session.choose(toon)} onCancel={session.cancel} />
       ) : null}
       {parsing ? (
-        <ParseProgress progress={session.progress} phase={session.phase} total={session.files.length} failed={session.failed} onCancel={session.cancel} />
+        <ParseProgress
+          progress={session.progress}
+          phase={session.phase}
+          total={session.files.length}
+          failed={session.failed}
+          onCancel={session.cancel}
+          autoFocus
+        />
       ) : null}
       {session.phase === "error" ? <EngineErrorCard session={session} onStartOver={onImportMore} /> : null}
       <UploadResult upload={upload} session={session} compact={compact} onImportMore={onImportMore} />
@@ -338,6 +409,7 @@ export function BrowserImportPanel(props: BrowserImportPanelProps) {
     clientFactory,
   });
   const upload = useBrowserUpload(session, { enabled: backupChoice, capabilityEnabled: capability }, onDone);
+  const [intakeFocusKey, setIntakeFocusKey] = useState(0);
   useEffect(() => {
     trackInstantOpen();
     setPickerSupported(supportsDirectoryPicker());
@@ -345,10 +417,14 @@ export function BrowserImportPanel(props: BrowserImportPanelProps) {
   const importMore = (): void => {
     upload.reset();
     session.reset();
+    setIntakeFocusKey((key) => key + 1);
   };
   return (
     <section aria-label="Import replays in your browser" className={[compact ? "space-y-4" : "space-y-5", className].filter(Boolean).join(" ")}>
-      {intro ? <PanelIntro /> : null}
+      <p role="status" aria-live="polite" className="sr-only">
+        {panelAnnouncement(upload)}
+      </p>
+      {intro ? <PanelIntro capability={capability} backupChoice={backupChoice} /> : null}
       {isIntakePhase(session.phase) ? (
         <IntakeBlock
           session={session}
@@ -357,6 +433,7 @@ export function BrowserImportPanel(props: BrowserImportPanelProps) {
           capability={capability}
           backupChoice={backupChoice}
           onBackupChoice={setBackupChoice}
+          focusKey={intakeFocusKey}
         />
       ) : null}
       <RunStatus session={session} folderSync={folderSync} upload={upload} compact={compact} onImportMore={importMore} />

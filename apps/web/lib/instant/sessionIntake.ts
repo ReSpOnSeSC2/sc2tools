@@ -5,7 +5,8 @@
  *
  * Files that are neither `*.SC2Replay` nor `*.zip` are ignored silently
  * (a picked folder is full of banks and screenshots); replays over
- * `MAX_REPLAY_BYTES` are rejected as `too_large` without being read.
+ * `MAX_REPLAY_BYTES` and archives over `MAX_ZIP_ARCHIVE_BYTES` are
+ * rejected as `too_large` without being read.
  *
  * Example:
  *   const selection = sortSelection(Array.from(input.files), "picker");
@@ -13,7 +14,7 @@
  */
 import { EngineError, safeDetail } from "./engineErrors";
 import { failedParse } from "./engineOutcome";
-import { MAX_REPLAY_BYTES, isReplayFileName, isZipFileName, makeIntakeFile } from "./fileIntake";
+import { MAX_REPLAY_BYTES, MAX_ZIP_ARCHIVE_BYTES, isReplayFileName, isZipFileName, makeIntakeFile } from "./fileIntake";
 import type { EngineClient, ErrorKind, FailedParse, IntakeFile, IntakeSource, ParseOptions } from "./types";
 
 /** A browser selection split by what we will do with each file. */
@@ -83,7 +84,8 @@ export function acceptReplays(files: ReadonlyArray<IntakeFile>): { replays: Inta
 }
 
 /**
- * Split a browser selection into replays, archives and rejects.
+ * Split a browser selection into replays, archives and rejects. Oversized
+ * archives are rejected here, before anything reads them.
  *
  * Example:
  *   sortSelection([replay, zip, png], "drop"); // -> { replays: [replay], zips: [zip], rejected: [], ignoredCount: 1 }
@@ -91,14 +93,16 @@ export function acceptReplays(files: ReadonlyArray<IntakeFile>): { replays: Inta
 export function sortSelection(files: ReadonlyArray<File>, source: IntakeSource): IntakeSelection {
   const candidates: IntakeFile[] = [];
   const zips: IntakeFile[] = [];
+  const oversizedZips: FailedParse[] = [];
   let ignoredCount = 0;
   for (const file of files) {
     if (isReplayFileName(file.name)) candidates.push(makeIntakeFile(file, source));
-    else if (isZipFileName(file.name)) zips.push(makeIntakeFile(file, source));
-    else ignoredCount += 1;
+    else if (!isZipFileName(file.name)) ignoredCount += 1;
+    else if (file.size > MAX_ZIP_ARCHIVE_BYTES) oversizedZips.push(intakeFailure(makeIntakeFile(file, source), "too_large"));
+    else zips.push(makeIntakeFile(file, source));
   }
   const { replays, rejected } = acceptReplays(candidates);
-  return { replays, zips, rejected, ignoredCount };
+  return { replays, zips, rejected: [...rejected, ...oversizedZips], ignoredCount };
 }
 
 /**

@@ -23,8 +23,11 @@
 import { isReplayFileName } from "./fileIntake";
 import { TOON_HANDLE_RE, isMultiplayerReplayPath } from "./toonPath";
 
+const MS_PER_MINUTE = 60 * 1000;
+/** Minutes between automatic re-scans (quoted in the Folder Sync copy). */
+export const AUTO_SCAN_INTERVAL_MINUTES = 10;
 /** Do not re-scan automatically more often than this. */
-export const MIN_AUTO_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+export const MIN_AUTO_SCAN_INTERVAL_MS = AUTO_SCAN_INTERVAL_MINUTES * MS_PER_MINUTE;
 /** Yield to the event loop after this many directory entries... */
 export const YIELD_EVERY_ENTRIES = 32;
 /** ...or after this much continuous work, whichever comes first. */
@@ -135,6 +138,17 @@ export async function pickReplaysFolder(
     if (error instanceof DOMException && error.name === "AbortError") return null;
     throw error;
   }
+}
+
+/**
+ * True when a picker or permission error means the visitor (or a browser
+ * policy) refused access, as opposed to the picker failing to open.
+ *
+ * Example:
+ *   isPermissionDenied(new DOMException("blocked", "NotAllowedError")); // -> true
+ */
+export function isPermissionDenied(error: unknown): boolean {
+  return error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError");
 }
 
 function toReadPermission(state: PermissionState): ReadPermission {
