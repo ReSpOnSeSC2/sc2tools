@@ -20,6 +20,7 @@ npm run dev
 | /                   | public | Landing                                |
 | /sign-in, /sign-up  | public | Clerk's hosted UI                      |
 | /download           | public | Agent install instructions             |
+| /try                | public | Instant Analysis: in-browser replay report (flag-gated) |
 | /app                | clerk  | Today dashboard + replay analysis      |
 | /app/replays        | clerk  | Replay library and share controls      |
 | /players/[slug]/replays | public | Shareable player replay list + downloads |
@@ -47,6 +48,83 @@ Deploy both `apps/api` and `apps/web` for this feature. Existing API base URL,
 Clerk, MongoDB, and server pepper configuration are sufficient; the API creates
 the presence indexes at startup. See the API README's public site activity
 section for source definitions, retention, and rate limits.
+
+## Instant Analysis (in-browser replay parsing)
+
+`/try`, the signed-in browser importer and Folder Sync parse replays on the
+visitor's device. A Web Worker runs the desktop agent's own Python pipeline
+under self-hosted Pyodide. Design, parity rules, upload and storage
+behaviour, the R2 CORS rule for replay backup and the rollout plan are in
+[`docs/instant-analysis.md`](../../docs/instant-analysis.md) and
+[ADR 0022](../../docs/adr/0022-instant-analysis-browser-parsing.md). Code
+lives in `lib/instant/`, `components/instant/` and `app/try/`.
+
+### Engine build
+
+The engine is generated, not committed. `scripts/build-browser-engine.mjs`
+writes `public/pyodide/<pyodideVersion>/` (the Pyodide runtime, copied from
+the pinned npm package) and
+`public/engine/<engineVersion>/<bundleId>/{engine.zip,manifest.json}`, plus
+the pointer `public/engine/current.json`. Both directories are gitignored.
+
+```bash
+npm run engine:build   # build it now; any failure is an error
+npm run build          # the prebuild hook runs the same script first
+```
+
+The build needs Python ≥ 3.10 with `venv` and `ensurepip` (Debian/Ubuntu:
+`python3-venv`).
+It tries `$PYTHON`, then `python3`, then `python`. It builds hash-pinned
+sc2reader and mpyq wheels in a private venv under
+`node_modules/.cache/sc2tools-browser-engine/` (cached), assembles a
+deterministic `engine.zip` inside Pyodide, smoke-parses a fixture replay and
+publishes a manifest with the SHA-256 of every asset.
+
+As `prebuild`, the engine is **required**, and any failure fails the
+build, when `NEXT_PUBLIC_INSTANT_IMPORT` is `admins` or `all` or
+`INSTANT_ENGINE_REQUIRED=1`. Otherwise a missing Python or a failed build
+prints a warning and the web build continues without Instant Analysis.
+Version drift is always fatal. `INSTANT_ENGINE_VERSION` in
+`lib/instant/engineVersion.ts` must equal `apps/replay-engine/VERSION`, and
+`PYODIDE_VERSION` must equal the exact `pyodide` pin in `package.json`.
+
+`next.config.mjs` serves `/pyodide/**` and `/engine/<version>/<bundle>/**`
+with `Cache-Control: public, max-age=31536000, immutable`, and
+`/engine/current.json` with `no-cache`.
+
+### Flags
+
+| Variable | Values | Effect |
+| --- | --- | --- |
+| `NEXT_PUBLIC_INSTANT_IMPORT` | `off` (default) / `admins` / `all`, lowercase | Who sees `/try` and the browser importer. Build-time inlined: redeploy after changing it. `admins` = signed-in accounts with `isAdmin`. The prebuild only treats lowercase `admins`/`all` as making the engine required. |
+| `INSTANT_ENGINE_REQUIRED` | `1` | Makes the prebuild engine build mandatory even with the flag `off` (CI sets it). |
+| `PYTHON` | path or command | Python used for the wheel venv when `python3` is not the right one. |
+
+The prebuild script reads these from the process environment (the Vercel
+project env or your shell), not from `.env.local`. Next.js still inlines
+`NEXT_PUBLIC_INSTANT_IMPORT` from `.env.local` into the pages, so locally run
+`npm run engine:build` once when you turn the flag on.
+
+The API side needs no flag. `BROWSER_INGEST_DAILY_CAP` (API env) caps
+browser uploads per user per UTC day.
+
+### Tests
+
+```bash
+npx vitest run lib/instant components/instant   # unit tests (mocked worker, fake-indexeddb)
+
+# Pyodide vs CPython parity (slow): build the engine, generate goldens, compare
+npm run engine:build
+python ../agent/tests/instant_golden.py --out /tmp/instant-golden
+INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine
+```
+
+`npm run test:engine` (`node --test tests/engine/*.test.mjs`) verifies every
+built asset against its manifest, boots the bundle in Node with the worker's
+real Python glue and, with `INSTANT_GOLDEN_DIR` set, requires envelopes
+identical to the CPython goldens. `instant_golden.py` needs a Python with
+`sc2reader==1.8.0` installed. Without `INSTANT_GOLDEN_DIR`, only the asset
+and smoke checks run.
 
 ## Voice readout
 
