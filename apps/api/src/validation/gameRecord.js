@@ -311,7 +311,8 @@ const GAME_SCHEMA = {
       additionalProperties: true,
       properties: {
         // v2 (agent 0.17.2): per-player attribution fixed and ``apm``
-        // counts every action like SC2's own APM counter.
+        // counts every action. v3 (agent 0.17.3): ``avg_apm`` is the APM
+        // StarCraft II recorded in the replay, windows scaled to it.
         v: { type: "integer", minimum: 1, maximum: 10 },
         window_sec: { type: "integer", minimum: 1, maximum: 600 },
         has_data: { type: "boolean" },

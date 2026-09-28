@@ -391,8 +391,9 @@ class PerGameComputeService {
    *     players: Array<{ name, race, avg_apm?, samples: Array<{t, apm, spm}> }>
    *   }
    * ``v`` is echoed (1 when absent) because only v2+ curves (agent
-   * 0.17.2) credit each player's own actions and count APM the way
-   * StarCraft II does; clients must not display older curves.
+   * 0.17.2) credit each player's own actions; clients must not display
+   * older curves. From v3 (agent 0.17.3) ``avg_apm`` is the APM
+   * StarCraft II recorded in the replay.
    *
    * @param {string} userId
    * @param {string} gameId

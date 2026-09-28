@@ -152,6 +152,17 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **APM matches StarCraft II** — agent **0.17.3** (`agent-v0.17.3`) uses
+  the APM StarCraft II records in each replay for both players, so the
+  macro breakdown, the replay page and the league benchmarks show the
+  game's own number. Counting replay events read about 14% low (a game SC2
+  recorded at 221 APM showed 196): a hotkey plus a target click is one
+  replay event, while SC2 most likely counts both inputs. The APM timeline
+  is scaled to SC2's number; replays too old to record it are still
+  counted from events, now including repeated hotkey presses such as
+  queueing several workers. APM curves are marked version 3. Use
+  **Recompute** on a game, or **Re-sync**, to update games already
+  uploaded.
 - **APM and spending quotient reach the website** — agent **0.17.2**
   (`agent-v0.17.2`) sends each game's average APM and spending quotient.
   Both were empty on every game because the agent read them from a player
