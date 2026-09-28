@@ -7,6 +7,7 @@ import {
   Download,
   Filter,
   Gamepad2,
+  Globe,
   Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -18,12 +19,20 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
  * what's missing and gives the next obvious step.
  *
  * - {@link NoGamesYet} is the dashboard hero shown when 0 games exist
- *   (full-bleed, with a cyan halo to draw the eye).
+ *   (full-bleed, with a cyan halo to draw the eye). With browser import
+ *   enabled it offers two paths side by side (stacked on mobile): the
+ *   desktop agent or importing in the browser.
  * - The rest are inline empties used to indicate filters returned
  *   nothing.
  */
 
-export function NoGamesYet() {
+export function NoGamesYet({
+  browserImportEnabled = false,
+}: {
+  /** Instant Analysis flag: offer "Import in your browser" next to the agent. */
+  browserImportEnabled?: boolean;
+} = {}) {
+  if (browserImportEnabled) return <NoGamesYetChoices />;
   return (
     <section
       className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface shadow-hard px-4 py-12 sm:px-6 sm:py-20"
@@ -62,6 +71,76 @@ export function NoGamesYet() {
         />
       </div>
     </section>
+  );
+}
+
+/** The two ways in: install the agent, or import in the browser. */
+function NoGamesYetChoices() {
+  return (
+    <section
+      className="relative overflow-hidden rounded-2xl border-2 border-line bg-bg-surface shadow-hard px-4 py-10 sm:px-6 sm:py-16"
+      data-testid="dashboard-no-games"
+    >
+      <GlowHalo color="cyan" position="top" opacity={0.85} size={70} />
+      <div className="relative z-10 mx-auto max-w-3xl space-y-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg-elevated text-text-muted">
+            <Gamepad2 className="h-6 w-6" aria-hidden />
+          </div>
+          <h2 className="text-body font-medium text-text">No games synced yet</h2>
+          <p className="text-caption text-text-muted">
+            Choose how your replays reach SC2 Tools — you can use both.
+          </p>
+        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ChoiceCard
+            icon={<Download className="h-5 w-5" aria-hidden />}
+            title="Desktop agent"
+            body="Syncs every game while you play, with live scouting and OBS overlays. Runs on your Windows gaming PC."
+            href="/download"
+            cta="Install the desktop agent"
+            variant="primary"
+          />
+          <ChoiceCard
+            icon={<Globe className="h-5 w-5" aria-hidden />}
+            title="In your browser"
+            body="Analyse replays right here — on Windows, Mac, Chromebook or iPad."
+            href="/settings?tab=import"
+            cta="Import in your browser — no download"
+            variant="secondary"
+          />
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function ChoiceCard({
+  icon,
+  title,
+  body,
+  href,
+  cta,
+  variant,
+}: {
+  icon: ReactNode;
+  title: string;
+  body: string;
+  href: string;
+  cta: string;
+  variant: "primary" | "secondary";
+}) {
+  return (
+    <li className="flex flex-col gap-3 rounded-xl border-2 border-line bg-bg-elevated/40 p-4">
+      <div className="flex items-center gap-2 text-text">
+        <span className="text-accent-cyan">{icon}</span>
+        <h3 className="text-body font-semibold">{title}</h3>
+      </div>
+      <p className="flex-1 text-caption text-text-muted">{body}</p>
+      <CtaLink href={href} variant={variant}>
+        {cta}
+      </CtaLink>
+    </li>
   );
 }
 

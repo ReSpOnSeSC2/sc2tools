@@ -19,9 +19,22 @@ export type ChecklistMe = {
   onboarding?: { downloadStartedAt?: string; dismissedAt?: string } | null;
 };
 
-/** Server-derived completion state for the three steps. */
-export function checklistVisible(me: ChecklistMe): boolean {
+export type ChecklistOptions = {
+  /** Instant Analysis flag: games can arrive without any agent. */
+  browserImportEnabled?: boolean;
+};
+
+/**
+ * Server-derived completion state for the three steps. With browser
+ * import enabled, games alone finish it: a browser-only player never
+ * pairs an agent and must not see the agent checklist forever.
+ */
+export function checklistVisible(
+  me: ChecklistMe,
+  options: ChecklistOptions = {},
+): boolean {
   if (me.onboarding?.dismissedAt) return false;
+  if (options.browserImportEnabled && me.games.total > 0) return false;
   return !(me.agentPaired && me.games.total > 0);
 }
 
@@ -36,9 +49,12 @@ export function checklistVisible(me: ChecklistMe): boolean {
 export function OnboardingChecklist({
   me,
   onRefresh,
+  browserImportEnabled,
 }: {
   me: ChecklistMe;
   onRefresh?: () => void;
+  /** Offer "or import in your browser" next to the agent download. */
+  browserImportEnabled?: boolean;
 }) {
   const { getToken } = useAuth();
   const [dismissed, setDismissed] = useState(false);
@@ -46,7 +62,7 @@ export function OnboardingChecklist({
   const [startingImport, setStartingImport] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  if (dismissed || !checklistVisible(me)) return null;
+  if (dismissed || !checklistVisible(me, { browserImportEnabled })) return null;
 
   const downloadDone =
     me.agentPaired || !!me.onboarding?.downloadStartedAt;
@@ -136,10 +152,10 @@ export function OnboardingChecklist({
           subtitle="It watches your replay folder and parses games locally."
           action={
             downloadDone ? null : (
-              <CtaLink href="/download" onClick={() => void markDownloadStarted()}>
-                <Download className="h-4 w-4" aria-hidden />
-                Download
-              </CtaLink>
+              <DownloadAction
+                onDownload={() => void markDownloadStarted()}
+                browserImportEnabled={browserImportEnabled === true}
+              />
             )
           }
         />
@@ -302,6 +318,38 @@ function PairHint({ onPaired }: { onPaired?: () => void }) {
         This row ticks green automatically once paired.
       </li>
     </ol>
+  );
+}
+
+/**
+ * The download CTA, plus "or import in your browser" when browser
+ * import (Instant Analysis) is enabled.
+ */
+function DownloadAction({
+  onDownload,
+  browserImportEnabled,
+}: {
+  onDownload: () => void;
+  browserImportEnabled: boolean;
+}) {
+  const download = (
+    <CtaLink href="/download" onClick={onDownload}>
+      <Download className="h-4 w-4" aria-hidden />
+      Download
+    </CtaLink>
+  );
+  // Flag off: exactly the original markup, no wrapper.
+  if (!browserImportEnabled) return download;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {download}
+      <Link
+        href="/settings?tab=import"
+        className="inline-flex min-h-[44px] items-center text-caption font-medium text-accent underline-offset-2 hover:text-accent-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >
+        or import in your browser
+      </Link>
+    </div>
   );
 }
 
