@@ -12,7 +12,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
-import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { AskForReviewButton, STOP_POINTER_EVENTS } from "@/components/reviews/AskForReviewButton";
 import { matchupFromRaces } from "@/lib/reviews";
 import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
 import { BuildOrderDualTimeline } from "./charts/BuildOrderDualTimeline";
@@ -517,14 +517,18 @@ function MacroCell({
         {hasScore ? macro : "—"}
       </button>
       {open && game.id ? (
-        <MacroBreakdownPanel
-          open={open}
-          gameId={game.id}
-          initialScore={typeof macro === "number" ? macro : null}
-          headerMeta={panelHeaderMetaFromGame(game)}
-          onClose={onClose}
-          reviewable
-        />
+        // The panel is portalled but sits inside a clickable row in the React
+        // tree: keep its clicks from toggling the row's build order.
+        <span className="contents" {...STOP_POINTER_EVENTS}>
+          <MacroBreakdownPanel
+            open={open}
+            gameId={game.id}
+            initialScore={typeof macro === "number" ? macro : null}
+            headerMeta={panelHeaderMetaFromGame(game)}
+            onClose={onClose}
+            reviewable
+          />
+        </span>
       ) : null}
     </>
   );

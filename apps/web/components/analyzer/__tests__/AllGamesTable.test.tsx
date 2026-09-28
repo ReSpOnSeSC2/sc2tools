@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { AllGamesTable } from "../AllGamesTable";
 
@@ -31,7 +32,12 @@ vi.mock("@/components/analyzer/charts/BuildOrderDualTimeline", () => ({
 }));
 
 vi.mock("@/components/analyzer/macro/MacroBreakdownPanel", () => ({
-  MacroBreakdownPanel: () => null,
+  // A stand-in with something to click (the real panel is portalled).
+  MacroBreakdownPanel: () => (
+    <div role="dialog" aria-label="Macro breakdown">
+      <button type="button">Inside the macro panel</button>
+    </div>
+  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -84,6 +90,41 @@ describe("AllGamesTable: Ask for a review", () => {
     fireEvent.click(asks[0]);
     expect(screen.getByRole("dialog", { name: "Ask for a replay review" })).toBeTruthy();
     expect(screen.queryByText("Build order timeline")).toBeNull();
+  });
+
+  it("typing in the form never toggles the row or loses focus", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    const props = { games: [GAME], opponentContext: { pulseId: "1-S2-1-7" } };
+    const { rerender } = render(<AllGamesTable {...props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ask for a review of this game" })[0]);
+    // Let the form's own initial focus run first.
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+    const question = screen.getByRole("textbox", { name: /question/i });
+    question.focus();
+    // Clicks inside the (portalled) form must not reach the clickable row.
+    // ▾ marks an expanded row (desktop and mobile); it must stay collapsed
+    // after every single click (two toggles would cancel out).
+    fireEvent.mouseDown(question);
+    fireEvent.click(question);
+    expect(screen.queryByText("▾")).toBeNull();
+    fireEvent.change(question, { target: { value: "Why did my blink all-in fail?" } });
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Ask for a replay review" })).getByRole("button", { name: "Macro" }));
+    expect(screen.queryByText("▾")).toBeNull();
+    question.focus();
+    // A re-render of the row must not reset the form's focus.
+    rerender(<AllGamesTable {...props} games={[{ ...GAME }]} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+    expect(document.activeElement).toBe(question);
+    expect((question as HTMLTextAreaElement).value).toBe("Why did my blink all-in fail?");
+  });
+
+  it("clicks inside the macro breakdown never toggle the row either", () => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    render(<AllGamesTable games={[GAME]} opponentContext={{ pulseId: "1-S2-1-7" }} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown/ })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Inside the macro panel" }));
+    expect(screen.queryByText("▾")).toBeNull();
   });
 
   it("stays out of other tables and hides while the rollout is off", () => {
