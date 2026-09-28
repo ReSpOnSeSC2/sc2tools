@@ -3524,21 +3524,44 @@ def _sc2_reported_apm(replay: Any) -> Dict[int, float]:
     return reported
 
 
+def _average_apm(
+    counted: Optional[float], sc2_apm: Optional[float]
+) -> Tuple[Optional[float], Optional[str], float]:
+    """One player's ``(avg_apm, avg_apm_source, window scale)``.
+
+    StarCraft II's recorded APM wins when the replay has it, and the
+    counted 30-second windows are scaled by ``sc2_apm / counted`` so the
+    timeline agrees with it. Otherwise the event count is the average
+    and the windows keep their counted values. A player with neither has
+    no average.
+
+    Example:
+        >>> _average_apm(200.0, 221.0)
+        (221.0, 'sc2', 1.105)
+        >>> _average_apm(196.0, None)
+        (196.0, 'events', 1.0)
+    """
+    if sc2_apm is not None:
+        return round(sc2_apm, 1), APM_SOURCE_SC2, (sc2_apm / counted if counted else 1.0)
+    if counted:
+        return round(counted, 1), APM_SOURCE_EVENTS, 1.0
+    return None, None, 1.0
+
+
 def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     """Build the apmCurve payload: windowed APM/SPM samples per player.
 
-    Each player carries ``avg_apm``, the whole-game APM. When the replay
-    has it, that is StarCraft II's own figure (``_sc2_reported_apm``), and
-    ``avg_apm_source`` is ``"sc2"``. Otherwise it is counted from replay
-    events (``_count_player_actions``) over the time the player was in
-    the game (until they left, else the game's length), and the source
-    is ``"events"``. ``samples`` hold 30-second windows of APM and SPM
-    (selections per minute) counted from events; with SC2's figure the
-    APM windows are scaled so they agree with it. Returns None when the
-    replay has no players or length.
+    Each player carries ``avg_apm``, the whole-game APM, and its
+    ``avg_apm_source`` (``_average_apm``): SC2's own figure when the
+    replay has it, else replay events (``_count_player_actions``) counted
+    over the time the player was in the game (until they left, else the
+    game's length). ``samples`` hold 30-second windows of APM and SPM
+    (selections per minute) counted from events, with the APM windows
+    scaled to agree with the average. Returns None when the replay has
+    no players or length.
     """
-    me = getattr(ctx, "me", None)
-    opp = getattr(ctx, "opponent", None)
+    me: Any = getattr(ctx, "me", None)
+    opp: Any = getattr(ctx, "opponent", None)
     replay = getattr(ctx, "raw", None)
     game_length = int(getattr(ctx, "length_seconds", 0) or 0)
     if me is None or replay is None or game_length <= 0:
@@ -3564,23 +3587,16 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
         if not 0 < played < game_length:
             played = float(game_length)
         counted = side["total"] * 60.0 / played if side["total"] else None
-        sc2_apm = reported.get(player.pid)
+        avg_apm, source, scale = _average_apm(counted, reported.get(player.pid))
         entry: Dict[str, Any] = {
             "pid": player.pid,
             "name": getattr(player, "name", "") or "",
             "race": getattr(player, "race", "") or "",
             "is_me": is_me,
-            "avg_apm": None,
+            "avg_apm": avg_apm,
         }
-        scale = 1.0
-        if sc2_apm is not None:
-            entry["avg_apm"] = round(sc2_apm, 1)
-            entry["avg_apm_source"] = APM_SOURCE_SC2
-            if counted:
-                scale = sc2_apm / counted
-        elif counted:
-            entry["avg_apm"] = round(counted, 1)
-            entry["avg_apm_source"] = APM_SOURCE_EVENTS
+        if source is not None:
+            entry["avg_apm_source"] = source
         entry["samples"] = _rate_samples(side, game_length, _APM_WINDOW_SEC, apm_scale=scale)
         players.append(entry)
     return {
