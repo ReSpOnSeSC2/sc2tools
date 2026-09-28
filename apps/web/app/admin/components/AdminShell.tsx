@@ -82,6 +82,12 @@ const NAV: ReadonlyArray<NavItem> = [
     icon: "M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2m3 6a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2",
   },
   {
+    href: "/admin/guides",
+    label: "Guides",
+    description: "Coach's notes, videos, stats runs",
+    icon: "M4 19V5a2 2 0 0 1 2-2h14v14H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h14v-4M8 7h8M8 11h5",
+  },
+  {
     href: "/admin/analytics",
     label: "Analytics",
     description: "Google Analytics traffic",
