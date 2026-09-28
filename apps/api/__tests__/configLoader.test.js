@@ -1,5 +1,7 @@
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
 const { loadConfig, parseGuidesConfig } = require("../src/config/loader");
 
 const BASE_ENV = {
@@ -259,5 +261,42 @@ describe("config loader - SC2 Tools Guides", () => {
     expect(loadConfig({ ...BASE_ENV }).guidesEnabled).toBe(false);
     expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "1" }).guidesEnabled).toBe(true);
     expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "false" }).guidesEnabled).toBe(false);
+  });
+});
+
+describe("config loader - GUIDES_ENABLED spellings", () => {
+  /** @param {string} source @returns {string[]} the GUIDES_FLAG_ON_VALUES literal */
+  function onValuesIn(source) {
+    const match = source.match(/GUIDES_FLAG_ON_VALUES = new Set\(\[([^\]]*)\]\)/);
+    expect(match).not.toBeNull();
+    return JSON.parse(`[${/** @type {RegExpMatchArray} */ (match)[1]}]`);
+  }
+
+  test.each(["1", "true", "yes", "on", "all", "ALL", " On ", "true\n"])(
+    "GUIDES_ENABLED=%j is on (\"all\" matches the other rollout flags)",
+    (value) => {
+      expect(parseGuidesConfig({ GUIDES_ENABLED: value }).guidesEnabled).toBe(true);
+    },
+  );
+
+  test.each(["", "0", "false", "off", "no", "admins", "admin", "enabled", "1 1"])(
+    "GUIDES_ENABLED=%j is off (guides have no admins-only stage)",
+    (value) => {
+      expect(parseGuidesConfig({ GUIDES_ENABLED: value }).guidesEnabled).toBe(false);
+    },
+  );
+
+  test("accepts exactly the spellings the web's NEXT_PUBLIC_GUIDES_ENABLED accepts", () => {
+    const webOn = onValuesIn(
+      fs.readFileSync(path.join(__dirname, "../../web/lib/guides/guidesFlag.mjs"), "utf8"),
+    );
+    expect(webOn.length).toBeGreaterThan(0);
+    for (const value of webOn) {
+      expect(parseGuidesConfig({ GUIDES_ENABLED: value }).guidesEnabled).toBe(true);
+    }
+    const apiOn = onValuesIn(
+      fs.readFileSync(path.join(__dirname, "../src/config/loader.js"), "utf8"),
+    );
+    expect([...apiOn].sort()).toEqual([...webOn].sort());
   });
 });
