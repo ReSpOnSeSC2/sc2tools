@@ -71,6 +71,9 @@ const PURGE_ONLY_COLLECTIONS = [
   ["playerChannels", "ownerUserId"],
   // Moderation state must not be restored from a client backup.
   ["playerIdentitySubmissions", "userId"],
+  // Short-lived browser-ingest quota counters: operational state, never
+  // exported or restored, but still keyed to the account.
+  ["browserIngestDaily", "userId"],
 ];
 
 class GdprService {

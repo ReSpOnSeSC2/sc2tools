@@ -11,6 +11,12 @@ const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
+const { registerGamesExistsRoute } = require("./gamesExists");
+const {
+  stampIngestProvenance,
+  admitBrowserBatch,
+  recordBrowserBatch,
+} = require("./gamesIngestPolicy");
 
 const ANALYSIS_CORPUS_MAX_CONCURRENT = 1;
 const ANALYSIS_CORPUS_MAX_WAITERS = 6;
@@ -19,10 +25,13 @@ const ANALYSIS_CORPUS_RESPONSE_TIMEOUT_MS = 30_000;
 const REPLAY_INGEST_MAX_GAMES = 50;
 
 /**
- * /v1/games — list, get, ingest from agent.
+ * /v1/games — list, get, exists, ingest from the agent or a browser.
  *
  * Ingest accepts either a single game object or `{games: [...]}` for
- * batches. Each game is upserted by `gameId` so retries are safe.
+ * batches. Each game is upserted by `gameId` so retries are safe. The
+ * uploader's provenance (``ingestSource``/``engineVersion``) and the daily
+ * browser-ingest cap are applied by ``./gamesIngestPolicy``; the browser's
+ * pre-parse dedupe lookup lives in ``./gamesExists``.
  *
  * After a successful ingest this route also pushes:
  *   - ``games:changed`` to the user's room so an open SPA tab refreshes;
@@ -65,6 +74,7 @@ const REPLAY_INGEST_MAX_GAMES = 50;
  *   },
  *   io?: import('socket.io').Server,
  *   auth: import('express').RequestHandler,
+ *   browserIngestQuota?: import('./gamesIngestPolicy').BrowserIngestQuota,
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
  *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} deps
@@ -114,6 +124,9 @@ function buildGamesRouter(deps) {
     if (!req._mergedToonHandles) req._mergedToonHandles = new Set();
     return req._mergedToonHandles;
   };
+
+  // Declared before every ``/games/:gameId`` route so the literal path wins.
+  registerGamesExistsRoute(router, { games: deps.games });
 
   router.get("/games", async (req, res, next) => {
     try {
@@ -392,6 +405,15 @@ function buildGamesRouter(deps) {
         });
         return;
       }
+      // Browser (Clerk-session) uploads are capped per user per UTC day. A
+      // refused batch gets its 429 here; ``finally`` releases the ingest slot.
+      const browserAdmission = await admitBrowserBatch(
+        req,
+        res,
+        deps.browserIngestQuota,
+        Array.isArray(req.body?.games) ? req.body.games.length : 1,
+      );
+      if (browserAdmission.blocked) return;
       const incoming = Array.isArray(req.body?.games)
         ? req.body.games
         : [req.body];
@@ -474,6 +496,8 @@ function buildGamesRouter(deps) {
           continue;
         }
         const game = /** @type {any} */ (validation.value);
+        // Provenance comes from the verified credential, never the payload.
+        stampIngestProvenance(game, auth);
         // v0.4.3 storage trim: drop the redundant earlyBuildLog /
         // oppEarlyBuildLog fields if the agent (or a back-compat
         // caller) still sends them. They are derivable from
@@ -965,6 +989,12 @@ function buildGamesRouter(deps) {
           }
         }
       }
+      await recordBrowserBatch(
+        req,
+        deps.browserIngestQuota,
+        browserAdmission,
+        accepted.length,
+      );
       res.status(202).json({ accepted, rejected });
     } catch (err) {
       next(err);

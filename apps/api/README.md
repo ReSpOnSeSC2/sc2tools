@@ -25,7 +25,8 @@ All routes are mounted under `/v1`.
 | GET    | /v1/opponents/:pulseId            | clerk/device | One opponent + aggregates     |
 | GET    | /v1/games                         | clerk/device | Page through games            |
 | GET    | /v1/games/:gameId                 | clerk/device | One game's full record        |
-| POST   | /v1/games                         | clerk/device | Ingest from agent (1 or batch) |
+| POST   | /v1/games                         | clerk/device | Ingest from agent or browser (1 or batch) |
+| POST   | /v1/games/exists                  | clerk        | Which of these gameIds are stored |
 | GET    | /v1/custom-builds                 | clerk        | List user builds              |
 | GET    | /v1/custom-builds/:slug           | clerk        | One build                     |
 | PUT    | /v1/custom-builds/:slug           | clerk        | Upsert                        |
@@ -71,8 +72,8 @@ All routes are mounted under `/v1`.
 | GET    | /v1/games/:gameId/macro-breakdown            | clerk/device | Read stored breakdown         |
 | POST   | /v1/games/:gameId/macro-breakdown            | clerk/device | Persist or request recompute  |
 | POST   | /v1/games/:gameId/opp-build-order            | device       | Agent uploads opp build log   |
-| POST   | /v1/games/:gameId/replay-upload              | device       | Prepare signed pending PUT    |
-| POST   | /v1/games/:gameId/replay-upload/complete     | device       | Verify and promote replay     |
+| POST   | /v1/games/:gameId/replay-upload              | clerk/device | Prepare signed pending PUT    |
+| POST   | /v1/games/:gameId/replay-upload/complete     | clerk/device | Verify and promote replay     |
 | GET    | /v1/games/:gameId/replay-download            | clerk/device | Prepare signed private GET    |
 | POST   | /v1/macro/backfill/start                     | clerk        | Kick a per-user macro pass    |
 | GET    | /v1/macro/backfill/status                    | clerk/device | Job state                     |
@@ -291,8 +292,8 @@ safety net for abandoned URLs, crashed agents, and superseded upload nonces.
 
 The authenticated endpoints are:
 
-- `POST /v1/games/:gameId/replay-upload` (paired device only)
-- `POST /v1/games/:gameId/replay-upload/complete` (paired device only)
+- `POST /v1/games/:gameId/replay-upload` (paired device or signed-in browser)
+- `POST /v1/games/:gameId/replay-upload/complete` (paired device or signed-in browser)
 - `GET /v1/games/:gameId/replay-download` (owning user)
 
 Upload preparation accepts `{ filename, sizeBytes, sha256, md5 }`, where
@@ -302,6 +303,36 @@ when an All-time Re-sync finds the same verified object. Completion accepts
 `{ uploadId }`. Files are limited to 5 MB and must use the `.SC2Replay`
 extension. Account deletion and full or date-ranged history wipes remove
 both permanent and pending R2 objects before their Mongo ownership rows.
+
+A browser backup PUTs directly to the private bucket, so that bucket needs a
+CORS rule allowing `PUT` from the web origin with the signed headers
+`content-type`, `cache-control`, `content-md5` and `x-amz-meta-sha256`.
+
+## Browser ingest
+
+Signed-in browsers can parse replays locally and upload them through the
+same `POST /v1/games` route (Clerk session instead of a device token):
+
+- **Provenance is server-derived.** Every accepted game is stamped
+  `ingestSource: "agent"` (device token) or `"browser"` (Clerk session),
+  whatever the payload claims. `engineVersion` (semver of the in-browser
+  engine, e.g. `1.6.3`) is kept only for browser uploads. Both are slim-row
+  fields so browser-ingest cohorts stay queryable.
+- **Daily cap.** Clerk-session uploads are limited to
+  `BROWSER_INGEST_DAILY_CAP` games per user per UTC day (default 5000),
+  counted in the TTL-bounded `browser_ingest_daily` collection. A batch that
+  would exceed it is refused whole with `429 {error: {code:
+  "browser_ingest_daily_cap", retryable: false, limit, remaining, resetAt}}`
+  and `Retry-After` set to the seconds until UTC midnight; `remaining` is how
+  many games still fit today, so a smaller batch may succeed. Only accepted
+  games are counted, and device uploads are never counted.
+- **Dedupe before parsing.** `POST /v1/games/exists` takes
+  `{gameIds: string[]}` (1-500 ids, each at most 200 characters) and returns
+  `{existing: string[]}`: the caller's stored ids (quarantined rows included)
+  in first-seen input order. Clerk sessions only (device tokens get 403
+  `clerk_auth_required`); 60 requests per minute per user.
+- **CORS** exposes `Retry-After`, so cross-origin callers can honour the
+  backoff on `503 replay_ingest_busy`, `408` and `429`.
 
 ## Realtime
 

@@ -7,6 +7,12 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 const MD5_BASE64 = /^[A-Za-z0-9+/]{22}==$/;
 const UPLOAD_ID = /^[A-Za-z0-9_-]{20,64}$/;
 
+// Credentials allowed to back up an original replay: the paired desktop
+// agent (device token) and the signed-in browser importer (Clerk session).
+// Both are bound to ``req.auth.userId``, and the service only signs uploads
+// for that user's existing game rows.
+const REPLAY_UPLOADER_SOURCES = new Set(["device", "clerk"]);
+
 /**
  * Signed direct-to-R2 original replay upload/download endpoints.
  *
@@ -24,7 +30,7 @@ function buildReplayFilesRouter(deps) {
     async (req, res, next) => {
       try {
         const auth = requireAuth(req);
-        requireDevice(auth);
+        requireReplayUploader(auth);
         const replayFiles = requireStore(deps.replayFiles);
         const gameId = parseGameId(req.params.gameId);
         const file = parseUploadRequest(req.body);
@@ -42,7 +48,7 @@ function buildReplayFilesRouter(deps) {
     async (req, res, next) => {
       try {
         const auth = requireAuth(req);
-        requireDevice(auth);
+        requireReplayUploader(auth);
         const replayFiles = requireStore(deps.replayFiles);
         const gameId = parseGameId(req.params.gameId);
         const uploadId = parseUploadId(req.body);
@@ -140,9 +146,15 @@ function requireAuth(req) {
   return req.auth;
 }
 
-/** @param {{source?: string}} auth */
-function requireDevice(auth) {
-  if (auth.source !== "device") throw httpError(403, "device_auth_required");
+/**
+ * Allow prepare/complete only for a device token or a Clerk session.
+ * Example: requireReplayUploader({ source: "clerk" }) // passes
+ * @param {{source?: string}} auth
+ */
+function requireReplayUploader(auth) {
+  if (!auth.source || !REPLAY_UPLOADER_SOURCES.has(auth.source)) {
+    throw httpError(403, "replay_upload_auth_required");
+  }
 }
 
 /** @param {any} replayFiles */

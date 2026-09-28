@@ -285,6 +285,8 @@ export interface GamesService {
   ): Promise<{ items: object[]; nextCursor: string | null }>;
   get(userId: string, gameId: string): Promise<object | null>;
   findMany(userId: string, gameIds: string[]): Promise<object[]>;
+  /** Ids from ``gameIds`` with a stored row (quarantined rows included). */
+  existingGameIds(userId: string, gameIds: string[]): Promise<string[]>;
   upsert(userId: string, game: object & { gameId: string }): Promise<boolean>;
   upsertWithRevision?(
     userId: string,

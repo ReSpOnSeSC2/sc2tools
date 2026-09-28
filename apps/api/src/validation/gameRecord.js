@@ -32,6 +32,7 @@ const BUILD_LOG_LINE_MAX_LENGTH = 256;
 // bounded even though the surrounding agent payload remains forward
 // compatible.
 const { PLAY_SIGNATURE_SCHEMA, validPlaySignatureSemantics } = require("./playSignature");
+const { INGEST_PROVENANCE, LIMITS } = require("../config/constants");
 
 const UNIT_TIMELINE_SIDE_SCHEMA = {
   type: "object",
@@ -79,13 +80,14 @@ const GAME_SCHEMA = {
     },
   ],
   properties: {
-    gameId: { type: "string", minLength: 1, maxLength: 200 },
+    // Shared with POST /v1/games/exists so every stored id can be looked up.
+    gameId: { type: "string", minLength: 1, maxLength: LIMITS.GAME_ID_MAX_LENGTH },
     isResumedFromReplay: { type: "boolean" },
     resumedReplayGameIds: {
       type: "array",
       maxItems: 50,
       uniqueItems: true,
-      items: { type: "string", minLength: 1, maxLength: 200 },
+      items: { type: "string", minLength: 1, maxLength: LIMITS.GAME_ID_MAX_LENGTH },
     },
     date: { type: "string", format: "date-time" },
     // Exact replay start time from sc2reader. ``date`` remains the replay
@@ -129,6 +131,20 @@ const GAME_SCHEMA = {
       maxLength: 40,
     },
     gameBuild: { type: "integer", minimum: 1, maximum: 2147483647 },
+    // Upload provenance. Both are slim-allowlisted, so they are typed and
+    // bounded here like every other slim field. The ingest route overwrites
+    // ``ingestSource`` from the authenticated caller (device token ->
+    // "agent", Clerk session -> "browser") and drops ``engineVersion`` for
+    // device uploads, so a client value is never trusted on its own.
+    ingestSource: { type: "string", enum: [...INGEST_PROVENANCE.SOURCES] },
+    // Semver of the in-browser analysis engine (e.g. 1.6.3, 1.6.3-rc.1,
+    // 1.6.3+build.5). Lets support and cohort queries tie a browser-parsed
+    // row to the exact engine bundle that produced it.
+    engineVersion: {
+      type: "string",
+      maxLength: INGEST_PROVENANCE.ENGINE_VERSION_MAX_LENGTH,
+      pattern: INGEST_PROVENANCE.ENGINE_VERSION_PATTERN,
+    },
     durationSec: { type: "integer", minimum: 0, maximum: 24 * 60 * 60 },
     macroScore: { type: "number", minimum: 0, maximum: 100 },
     apm: { type: "number", minimum: 0, maximum: 5000 },

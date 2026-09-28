@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { sanitizePlaySignature } = require("../validation/playSignature");
 const { ObjectId } = require("mongodb");
-const { LIMITS, COLLECTIONS } = require("../config/constants");
+const { LIMITS, COLLECTIONS, INGEST_PROVENANCE } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
@@ -94,6 +94,15 @@ const GAME_SLIM_FIELDS = new Set([
   // detail-store round trip.
   "spatial",
   "_schemaVersion",
+  // Upload provenance: "agent" | "browser" plus the browser engine's semver.
+  // Together they cost ~40 bytes of the ~3 kB slim budget. They live on the
+  // slim row (not game_details) because they must be Mongo-queryable: support
+  // and rollout monitoring select browser-ingest cohorts by engine version
+  // (e.g. "re-parse every row produced by engine 1.6.3") without an R2
+  // round-trip per game. Both are enum/pattern-bounded by the ingest schema
+  // and re-bounded in normalizeSlimField below.
+  "ingestSource",
+  "engineVersion",
   // Pre-nested-agent aliases retained for upload/backfill compatibility.
   "duration",
   "macro_score",
@@ -353,6 +362,7 @@ class GamesService {
     // re-uploads and must survive them; $setting the whole parent
     // object would erase the marker and retry Pulse misses forever.
     const slimSet = buildSlimSet(doc);
+    unsetStaleEngineVersion(slimSet, unset);
     const protectOpponentMmr = normalizeOpponentMmrProvenance(slimSet);
     if (
       Object.prototype.hasOwnProperty.call(doc, "spatial")
@@ -479,6 +489,8 @@ class GamesService {
       "isLadderGame",
       "gameVersion",
       "gameBuild",
+      "ingestSource",
+      "engineVersion",
       "opponent",
     ]) {
       if (game[key] !== undefined) insert[key] = game[key];
@@ -680,6 +692,38 @@ class GamesService {
       if (row) ordered.push(row);
     }
     return ordered;
+  }
+
+  /**
+   * Which of ``gameIds`` already have a row for this user.
+   *
+   * Upload clients (the in-browser importer) ask this before parsing so a
+   * re-selected replay folder skips work the server already holds. Unlike
+   * ``findMany`` it deliberately INCLUDES quarantined resume-from-replay rows:
+   * those are stored too, and re-uploading them would only repeat the
+   * quarantine. The query is covered by the unique ``{userId, gameId}``
+   * index and projects nothing but the id. Callers bound and dedupe the
+   * input (the route caps it at ``LIMITS.GAMES_EXISTS_MAX_IDS``).
+   *
+   * Example:
+   *   await games.existingGameIds("u1", ["a", "b"]) // -> ["b"] when only b exists
+   *
+   * @param {string} userId
+   * @param {string[]} gameIds
+   * @returns {Promise<string[]>} matching ids, in no particular order
+   */
+  async existingGameIds(userId, gameIds) {
+    const ids = Array.isArray(gameIds)
+      ? gameIds.filter((id) => typeof id === "string" && id.length > 0)
+      : [];
+    if (ids.length === 0) return [];
+    const rows = await this.db.games
+      .find(
+        { userId, gameId: { $in: ids } },
+        { projection: { _id: 0, gameId: 1 } },
+      )
+      .toArray();
+    return rows.map((row) => String(row.gameId));
   }
 
   /**
@@ -1865,15 +1909,66 @@ function protectStoredOpponentMmr(update, incoming) {
  * @param {unknown} value
  */
 function normalizeSlimField(key, value) {
-  if (key === "spatial") return sanitizeSpatial(value);
-  if (key === "top3Leaks") return sanitizeTopLeakArray(value);
-  if (key === "duration") return boundedNumber(value, 0, 24 * 60 * 60);
-  if (key === "macro_score") return boundedNumber(value, 0, 100);
-  if (key === "oppMmr") return boundedInteger(value, 0, 9999);
-  if (key === "oppPulseId") return boundedString(value, 200);
-  if (key === "oppRace") return boundedString(value, 24);
-  if (key === "opp_strategy") return boundedString(value, 200);
-  return value;
+  const normalize = SLIM_FIELD_NORMALIZERS.get(key);
+  return normalize ? normalize(value) : value;
+}
+
+/** @type {Array<[string, (value: unknown) => unknown]>} */
+const SLIM_FIELD_NORMALIZER_ENTRIES = [
+  ["spatial", sanitizeSpatial],
+  ["top3Leaks", sanitizeTopLeakArray],
+  ["duration", (value) => boundedNumber(value, 0, 24 * 60 * 60)],
+  ["macro_score", (value) => boundedNumber(value, 0, 100)],
+  ["oppMmr", (value) => boundedInteger(value, 0, 9999)],
+  ["oppPulseId", (value) => boundedString(value, 200)],
+  ["oppRace", (value) => boundedString(value, 24)],
+  ["opp_strategy", (value) => boundedString(value, 200)],
+  ["ingestSource", normalizeIngestSource],
+  ["engineVersion", normalizeEngineVersion],
+];
+const SLIM_FIELD_NORMALIZERS = new Map(SLIM_FIELD_NORMALIZER_ENTRIES);
+
+const ENGINE_VERSION_REGEX = new RegExp(INGEST_PROVENANCE.ENGINE_VERSION_PATTERN);
+
+/**
+ * Keep only a known provenance label.
+ * Example: normalizeIngestSource("browser") === "browser";
+ *          normalizeIngestSource("desktop") === undefined
+ * @param {unknown} value
+ * @returns {string|undefined}
+ */
+function normalizeIngestSource(value) {
+  return typeof value === "string" && INGEST_PROVENANCE.SOURCES.includes(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * Keep only a bounded semver engine version.
+ * Example: normalizeEngineVersion("1.6.3-rc.1") === "1.6.3-rc.1";
+ *          normalizeEngineVersion("latest") === undefined
+ * @param {unknown} value
+ * @returns {string|undefined}
+ */
+function normalizeEngineVersion(value) {
+  if (typeof value !== "string") return undefined;
+  if (value.length > INGEST_PROVENANCE.ENGINE_VERSION_MAX_LENGTH) return undefined;
+  return ENGINE_VERSION_REGEX.test(value) ? value : undefined;
+}
+
+/**
+ * ``ingestSource`` / ``engineVersion`` describe the upload that last wrote
+ * the slim row. When a stamped upload carries no engine version (a desktop
+ * agent re-upload of a browser-parsed game), clear any older browser engine
+ * version so the pair never contradicts itself under patch semantics.
+ * Example: {$set: {ingestSource: "agent"}} also unsets engineVersion.
+ * @param {Record<string, any>} slimSet
+ * @param {Record<string, string>} unset
+ */
+function unsetStaleEngineVersion(slimSet, unset) {
+  if (slimSet.ingestSource !== undefined && slimSet.engineVersion === undefined) {
+    unset.engineVersion = "";
+  }
 }
 
 /**

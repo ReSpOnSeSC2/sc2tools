@@ -9,6 +9,10 @@
 # hard-fail PRs the moment the two values diverge.
 # Also keeps the website's loading-state agent label aligned with the agent
 # package version so a release cannot leave an old version in that fallback.
+# And pins the in-browser engine (Instant Analysis): INSTANT_ENGINE_VERSION in
+# apps/web/lib/instant/engineVersion.ts must equal apps/replay-engine/VERSION,
+# and PYODIDE_VERSION must equal the exact pyodide pin in apps/web/package.json
+# (scripts/build-browser-engine.mjs enforces the same at build time).
 
 name: version-check
 
@@ -19,6 +23,8 @@ on:
       - 'apps/replay-engine/__init__.py'
       - 'apps/agent/sc2tools_agent/__init__.py'
       - 'apps/web/lib/agentNotice.ts'
+      - 'apps/web/lib/instant/engineVersion.ts'
+      - 'apps/web/package.json'
       - '.github/workflows/version-check.yml'
   push:
     branches: [main]
@@ -52,6 +58,7 @@ jobs:
           set -euo pipefail
 
           python3 - <<'PY'
+          import json
           import sys
           import re
           from pathlib import Path
@@ -86,4 +93,22 @@ jobs:
           if agent_match[1] != web_match[1]:
               sys.exit(f'ERROR: agent version drift -- package {agent_match[1]}, web fallback {web_match[1]}')
           print('OK -- agent package and web fallback agree on', agent_match[1])
+
+          engine_ts = Path('apps/web/lib/instant/engineVersion.ts').read_text(encoding='utf-8')
+          engine_match = re.search(r'^export const INSTANT_ENGINE_VERSION\s*=\s*"([^"]+)";', engine_ts, re.MULTILINE)
+          pyodide_match = re.search(r'^export const PYODIDE_VERSION\s*=\s*"([^"]+)";', engine_ts, re.MULTILINE)
+          if not engine_match or not pyodide_match:
+              sys.exit('ERROR: engineVersion.ts lacks INSTANT_ENGINE_VERSION or PYODIDE_VERSION')
+          if engine_match[1] != file_version:
+              sys.exit(f'ERROR: browser engine drift -- INSTANT_ENGINE_VERSION {engine_match[1]}, '
+                       f'apps/replay-engine/VERSION {file_version}')
+          print('OK -- INSTANT_ENGINE_VERSION matches the engine VERSION', file_version)
+
+          web_package = json.loads(Path('apps/web/package.json').read_text(encoding='utf-8'))
+          pyodide_pin = (web_package.get('devDependencies') or {}).get('pyodide', '')
+          if not re.fullmatch(r'\d+\.\d+\.\d+', pyodide_pin):
+              sys.exit(f'ERROR: apps/web/package.json must pin pyodide exactly (got {pyodide_pin!r})')
+          if pyodide_pin != pyodide_match[1]:
+              sys.exit(f'ERROR: Pyodide drift -- package.json {pyodide_pin}, PYODIDE_VERSION {pyodide_match[1]}')
+          print('OK -- PYODIDE_VERSION matches the package.json pin', pyodide_pin)
           PY

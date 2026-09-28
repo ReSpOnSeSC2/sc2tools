@@ -28,6 +28,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   corsAllowedOrigins: string[],
  *   rateLimitPerMinute: number,
  *   replayIngestMaxActive: number,
+ *   browserIngestDailyCap: number,
  *   agentReleaseAdminToken: string|null,
  *   pythonExe: string|null,
  *   pythonAnalyzerDir: string|null,
@@ -120,11 +121,7 @@ function loadConfig(env = process.env) {
       env.RATE_LIMIT_PER_MINUTE,
       DEFAULTS.RATE_LIMIT_PER_MINUTE,
     ),
-    replayIngestMaxActive: parsePositiveInteger(
-      env.REPLAY_INGEST_MAX_ACTIVE,
-      DEFAULTS.REPLAY_INGEST_MAX_ACTIVE,
-      "REPLAY_INGEST_MAX_ACTIVE",
-    ),
+    ...parseIngestConfig(env),
     agentReleaseAdminToken: env.AGENT_RELEASE_ADMIN_TOKEN || null,
     pythonExe: env.SC2_PY_PYTHON || null,
     pythonAnalyzerDir: env.SC2_PY_ANALYZER_DIR || null,
@@ -174,6 +171,36 @@ function parseReviewsRollout(raw) {
   if (value === "admins" || value === "admin") return "admins";
   if (value === "true" || value === "on" || value === "all" || value === "1") return "on";
   return "off";
+}
+
+/**
+ * Replay-ingest capacity knobs. Both must be positive integers.
+ *
+ *   - REPLAY_INGEST_MAX_ACTIVE: concurrent memory-heavy ingest batches per
+ *     process (see middleware/replayIngestAdmission.js).
+ *   - BROWSER_INGEST_DAILY_CAP: games per user per UTC day accepted from
+ *     in-browser (Clerk-session) ingest. Desktop-agent uploads are never
+ *     counted against it (see services/browserIngestQuota.js).
+ *
+ * Example:
+ *   parseIngestConfig({}) // -> { replayIngestMaxActive: 1, browserIngestDailyCap: 5000 }
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{ replayIngestMaxActive: number, browserIngestDailyCap: number }}
+ */
+function parseIngestConfig(env) {
+  return {
+    replayIngestMaxActive: parsePositiveInteger(
+      env.REPLAY_INGEST_MAX_ACTIVE,
+      DEFAULTS.REPLAY_INGEST_MAX_ACTIVE,
+      "REPLAY_INGEST_MAX_ACTIVE",
+    ),
+    browserIngestDailyCap: parsePositiveInteger(
+      env.BROWSER_INGEST_DAILY_CAP,
+      DEFAULTS.BROWSER_INGEST_DAILY_CAP,
+      "BROWSER_INGEST_DAILY_CAP",
+    ),
+  };
 }
 
 /**

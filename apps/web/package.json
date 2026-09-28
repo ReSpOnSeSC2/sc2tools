@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "prebuild": "node scripts/build-browser-engine.mjs",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
@@ -15,7 +16,9 @@
     "maps:sync": "node scripts/sync-map-images.mjs",
     "backgrounds:export": "node scripts/export-stream-backgrounds.mjs",
     "scenes:render": "node scripts/render-scene.mjs",
-    "guides:catalog": "node scripts/export-guide-catalog.mjs"
+    "guides:catalog": "node scripts/export-guide-catalog.mjs",
+    "engine:build": "node scripts/build-browser-engine.mjs --require",
+    "test:engine": "node --test tests/engine/*.test.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "6.9.5",
@@ -42,8 +45,10 @@
     "autoprefixer": "10.4.20",
     "eslint": "9.18.0",
     "eslint-config-next": "^15.5.15",
+    "fake-indexeddb": "6.2.5",
     "jsdom": "^25.0.1",
     "postcss": "8.5.1",
+    "pyodide": "314.0.7",
     "sharp": "^0.34.5",
     "tailwindcss": "3.4.17",
     "typescript": "5.7.3",

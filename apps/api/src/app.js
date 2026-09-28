@@ -11,7 +11,7 @@ const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 const pinoHttp = /** @type {any} */ (pinoHttpModule).default || pinoHttpModule;
 
-const { LIMITS, SERVICE } = require("./config/constants");
+const { DEFAULTS, LIMITS, SERVICE } = require("./config/constants");
 const { requestId } = require("./middleware/requestId");
 const { buildErrorHandler } = require("./middleware/errorHandler");
 const { buildAuth } = require("./middleware/auth");
@@ -28,6 +28,7 @@ const {
   OpponentIdentityMatcherService,
 } = require("./services/opponentIdentityMatcher");
 const { GamesService } = require("./services/games");
+const { BrowserIngestQuotaService } = require("./services/browserIngestQuota");
 const { ReplayLibraryService } = require("./services/replayLibrary");
 const { GameVodsService } = require("./services/gameVods");
 const { PublicYoutubeVodsService } = require("./services/publicYoutubeVods");
@@ -309,6 +310,12 @@ function makeServices(deps) {
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
+  // Per-user daily cap on browser (Clerk-session) ingest. Tests hand-build
+  // config objects, so an absent cap falls back to the documented default.
+  const browserIngestQuota = new BrowserIngestQuotaService(
+    deps.db.browserIngestDaily,
+    { cap: deps.config.browserIngestDailyCap ?? DEFAULTS.BROWSER_INGEST_DAILY_CAP },
+  );
   const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
     client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
   }) : null;
@@ -707,6 +714,7 @@ function makeServices(deps) {
     opponents,
     opponentIdentityMatcher,
     games,
+    browserIngestQuota,
     replayLibrary,
     gameVods,
     gameDetails,
@@ -780,6 +788,10 @@ function applyBaseMiddleware(app, deps, auth, siteStats) {
       origin: pickCorsOrigin(deps.config.corsAllowedOrigins),
       maxAge: 600,
       credentials: false,
+      // Cross-origin JS can only read CORS-safelisted response headers
+      // unless they are exposed. The browser importer honours Retry-After
+      // on 503 replay_ingest_busy / 408 / 429 instead of guessing a backoff.
+      exposedHeaders: ["Retry-After"],
     }),
   );
   app.use(
@@ -1288,6 +1300,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       auth,
+      browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
     }),
   );
