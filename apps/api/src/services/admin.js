@@ -23,6 +23,7 @@
  */
 
 const { COLLECTIONS } = require("../config/constants");
+const { disabledBrowserUploadStatus } = require("./replayFilesCors");
 
 /**
  * Subset of collection names that have meaningful per-collection
@@ -729,6 +730,7 @@ class AdminService {
    * @param {{
    *   gameDetailsStoreKind?: string,
    *   replayFilesStoreKind?: string,
+   *   replayFilesBrowserUpload?: import('./replayFilesCors').BrowserUploadStatusSnapshot,
    *   nodeVersion?: string,
    * }} [ctx]
    */
@@ -769,6 +771,10 @@ class AdminService {
         nodeVersion: ctx.nodeVersion || process.version,
         gameDetailsStore: ctx.gameDetailsStoreKind || "mongo",
         replayFilesStore: ctx.replayFilesStoreKind || "disabled",
+        // Verified R2 CORS status for browser replay backups (Admin Health
+        // card); "disabled" while the replay store is off.
+        replayFilesBrowserUpload:
+          ctx.replayFilesBrowserUpload || disabledBrowserUploadStatus(),
         infrastructureCostsConfigured:
           infrastructure.cloudflareAnalytics.configured
           && infrastructure.mongo.atlas.configured,

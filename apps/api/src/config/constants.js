@@ -25,6 +25,10 @@ const DEFAULTS = Object.freeze({
   // gives a healthy safety margin and stays just below typical CDN cache
   // windows so the upstream actually sees the request.
   KEEPALIVE_INTERVAL_MS: 13 * 60 * 1000,
+  // Browser replay backup: let the API add the PUT-only CORS rule browsers
+  // need to the private R2 replay bucket (services/replayFilesCors.js).
+  // R2_BROWSER_CORS_AUTO=0 keeps the verification probe but skips the write.
+  R2_BROWSER_CORS_AUTO: true,
 });
 
 const SERVICE = Object.freeze({

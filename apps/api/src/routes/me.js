@@ -6,6 +6,7 @@ const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
+const { browserUploadStatusOf } = require("../services/replayFilesCors");
 
 // Hard cap on the per-request MMR fan-out. Profiles with many toons
 // are rare but legitimate (smurf accounts, region-hoppers); we cap to
@@ -42,6 +43,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   imports?: import('../services/import').ImportService,
  *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   replayArchiveEnabled?: boolean,
+ *   browserUploadCors?: import('../services/replayFilesCors').BrowserUploadCorsStatus|null,
  *   clerk?: import('../services/clerkClient').ClerkClient,
  *   pulseMmr?: {
  *     getCurrentMmr(pulseId: string): Promise<{
@@ -592,11 +594,13 @@ function buildMeRouter(deps) {
             : Promise.resolve(emptyReplayArchiveCounts()),
           deps.users.getPreferences(auth.userId, "replayArchive"),
         ]);
-        res.json(withReplayResyncState(
-          counts,
-          prefs,
-          Boolean(deps.replayArchiveEnabled),
-        ));
+        res.json({
+          ...withReplayResyncState(counts, prefs, Boolean(deps.replayArchiveEnabled)),
+          // Browsers may back up originals only once R2 verifiably accepts
+          // their cross-origin PUTs (services/replayFilesCors.js).
+          browserUploadReady:
+            browserUploadStatusOf(deps.browserUploadCors).status === "ready",
+        });
       } catch (err) {
         next(err);
       }

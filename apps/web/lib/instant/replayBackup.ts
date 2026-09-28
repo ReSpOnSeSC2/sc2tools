@@ -12,7 +12,11 @@
  * game rows exist. Busy/5xx/network errors back off (2 s doubling to
  * 60 s, full jitter, bounded attempts); invalid requests and unknown
  * games are skipped; auth failure, a server without replay storage
- * (`replay_storage_unavailable`) or an abort stops the run.
+ * (`replay_storage_unavailable`) or an abort stops the run. A PUT to R2
+ * that throws a `TypeError` (what a missing bucket CORS rule looks like
+ * to page script) also stops the run as `unavailable` after that single
+ * attempt: every other file would be blocked the same way. The games stay
+ * imported either way.
  *
  * Example:
  *   const summary = await backupReplays(items, { getToken, apiBase: API_BASE });
@@ -78,7 +82,10 @@ export interface BackupDeps {
   maxAttempts?: number;
 }
 
-/** `unavailable`: the server has no replay store, so no item can succeed. */
+/**
+ * `unavailable`: no item can succeed right now: the server has no replay
+ * store, or the browser was blocked from reaching it (CORS).
+ */
 export type BackupStopReason = "auth" | "aborted" | "unavailable";
 
 const STOP_REASONS: ReadonlyArray<BackupStopReason> = ["auth", "aborted", "unavailable"];
@@ -262,19 +269,34 @@ async function waitToRetry(attempt: number, retryAfterMs: number | null, ctx: Ct
   }
 }
 
-/** fetch that maps an abort to "aborted" and any other throw to a retry. */
+/** What a thrown fetch (other than an abort) means for a step. */
+type NetworkErrorPolicy = (error: unknown) => Step<never>;
+
+/** API calls: a network blip is worth a retry. */
+const RETRY_ON_NETWORK_ERROR: NetworkErrorPolicy = () => ({ kind: "retry", retryAfterMs: null });
+
+/**
+ * R2 PUT: a `TypeError` is how a CORS block (or no route to R2) surfaces to
+ * page script. Retrying cannot help and every later file would fail the same
+ * way, so the run stops; anything else is retried like an API call.
+ */
+const STOP_ON_BLOCKED_PUT: NetworkErrorPolicy = (error) =>
+  error instanceof TypeError ? { kind: "end", outcome: "unavailable" } : { kind: "retry", retryAfterMs: null };
+
+/** fetch that maps an abort to "aborted" and any other throw through `onNetworkError`. */
 async function send<T>(
   ctx: Ctx,
   url: string,
   init: RequestInit,
   classify: (res: Response) => Promise<Step<T>>,
+  onNetworkError: NetworkErrorPolicy = RETRY_ON_NETWORK_ERROR,
 ): Promise<Step<T>> {
   let res: Response;
   try {
     res = await ctx.fetchImpl(url, { ...init, signal: ctx.deps.signal });
   } catch (error) {
     if (isAbortError(error) || ctx.deps.signal?.aborted) return { kind: "end", outcome: "aborted" };
-    return { kind: "retry", retryAfterMs: null };
+    return onNetworkError(error);
   }
   return classify(res);
 }
@@ -331,13 +353,14 @@ async function putAttempt(
   ctx: Ctx,
 ): Promise<Step<true>> {
   const init: RequestInit = { method: "PUT", headers: putHeaders(headers), body: item.file.blob };
-  return send(ctx, url, init, async (res) => {
+  const classify = async (res: Response): Promise<Step<true>> => {
     if (res.ok) return { kind: "ok", value: true };
     if (isRetryableStatus(res.status)) {
       return { kind: "retry", retryAfterMs: parseRetryAfterMs(res.headers.get("retry-after"), ctx.now()) };
     }
     return { kind: "end", outcome: "failed" };
-  });
+  };
+  return send(ctx, url, init, classify, STOP_ON_BLOCKED_PUT);
 }
 
 async function completeAttempt(

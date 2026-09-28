@@ -2,7 +2,7 @@
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
-import { formatDuration } from "../components/format";
+import { formatDuration, timeSince } from "../components/format";
 import { ForbiddenCard } from "../components/AdminFragments";
 import { InfrastructureOverview } from "../components/InfrastructureOverview";
 import type {
@@ -21,6 +21,8 @@ import type {
  *   - Mongo ping latency and application-database allocation.
  *   - Process uptime + Node version.
  *   - Both object-store backends and Cloudflare analytics readiness.
+ *   - Whether browsers can back up original replays to R2 (the bucket's
+ *     CORS rule, set up and verified by the API).
  *   - Atlas disk, pending-invoice costs, and diagnostic credential expiry.
  *
  * Operational health refreshes every 30 s. The page checks provider status
@@ -91,7 +93,7 @@ export default function AdminHealthPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <StatusTile
           label="MongoDB"
           tone={data.mongo.ok ? "ok" : "error"}
@@ -112,6 +114,7 @@ export default function AdminHealthPage() {
               : "Original replay files are not being archived"
           }
         />
+        <BrowserBackupTile runtime={data.runtime} />
         <StatusTile
           label="Game-details store"
           tone="ok"
@@ -175,16 +178,21 @@ export default function AdminHealthPage() {
   );
 }
 
+type Tone = "ok" | "warning" | "error" | "neutral";
+
 function StatusTile({
   label,
   tone,
   primary,
   secondary,
+  notes = [],
 }: {
   label: string;
-  tone: "ok" | "warning" | "error" | "neutral";
+  tone: Tone;
   primary: string;
   secondary?: string;
+  /** Extra caption lines under `secondary` (hidden when empty). */
+  notes?: ReadonlyArray<string>;
 }) {
   const dot = {
     ok: "bg-success shadow-[0_0_0_4px_rgba(34,197,94,0.15)]",
@@ -209,7 +217,123 @@ function StatusTile({
       {secondary ? (
         <p className="mt-1 text-caption text-text-dim">{secondary}</p>
       ) : null}
+      {notes.map((note) => (
+        <p key={note} className="mt-1 text-caption text-text-dim">
+          {note}
+        </p>
+      ))}
     </Card>
+  );
+}
+
+/** `runtime.replayFilesBrowserUpload.status` from GET /v1/admin/health. */
+type BrowserUploadState =
+  | "ready"
+  | "missing_cors"
+  | "no_permission"
+  | "error"
+  | "disabled"
+  | "unknown"
+  | "checking";
+
+interface BrowserUploadStatus {
+  status: BrowserUploadState;
+  checkedAt: string | null;
+  detail: string | null;
+}
+
+const BROWSER_UPLOAD_STATES: ReadonlyArray<BrowserUploadState> = [
+  "ready",
+  "missing_cors",
+  "no_permission",
+  "error",
+  "disabled",
+  "unknown",
+  "checking",
+];
+
+const SETUP_DOC_HINT =
+  'see docs/instant-analysis.md, "Browser replay backup"';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isBrowserUploadState(value: unknown): value is BrowserUploadState {
+  return BROWSER_UPLOAD_STATES.some((state) => state === value);
+}
+
+/**
+ * Narrow `runtime.replayFilesBrowserUpload`; null when an older API does
+ * not report it (the tile then hides instead of guessing).
+ */
+function readBrowserUpload(runtime: unknown): BrowserUploadStatus | null {
+  if (!isRecord(runtime)) return null;
+  const raw = runtime.replayFilesBrowserUpload;
+  if (!isRecord(raw) || !isBrowserUploadState(raw.status)) return null;
+  return {
+    status: raw.status,
+    checkedAt: typeof raw.checkedAt === "string" ? raw.checkedAt : null,
+    detail: typeof raw.detail === "string" && raw.detail ? raw.detail : null,
+  };
+}
+
+/** Tone + plain-words copy for each browser-backup state. */
+function browserUploadCopy(value: BrowserUploadStatus): {
+  tone: Tone;
+  primary: string;
+  secondary: string;
+  detail: string | null;
+} {
+  switch (value.status) {
+    case "ready":
+      return { tone: "ok", primary: "Ready", secondary: "Browsers can back up original replays to R2", detail: null };
+    case "no_permission":
+      return {
+        tone: "warning",
+        primary: "Needs setup",
+        secondary: `The R2 key can't change bucket settings. Add the upload rule in Cloudflare — ${SETUP_DOC_HINT}`,
+        detail: null,
+      };
+    case "missing_cors":
+      return {
+        tone: "warning",
+        primary: "Needs setup",
+        secondary:
+          "Browsers can't upload replay files to R2 yet: R2 refused the browser check from this site. " +
+          `Check the bucket's CORS policy in Cloudflare — ${SETUP_DOC_HINT}`,
+        detail: value.detail,
+      };
+    case "error":
+      return {
+        tone: "warning",
+        primary: "Check failed",
+        secondary: value.detail ?? "The last check did not finish",
+        detail: null,
+      };
+    case "disabled":
+      return { tone: "neutral", primary: "Off", secondary: "Original replay storage is off", detail: null };
+    default:
+      return { tone: "neutral", primary: "Checking…", secondary: "The API is checking the R2 upload rule", detail: null };
+  }
+}
+
+/** Can browsers PUT original replays to the private R2 bucket (its CORS rule)? */
+function BrowserBackupTile({ runtime }: { runtime: unknown }) {
+  const value = readBrowserUpload(runtime);
+  if (!value) return null;
+  const copy = browserUploadCopy(value);
+  const notes = [copy.detail, value.checkedAt ? `checked ${timeSince(value.checkedAt)}` : null].filter(
+    (note): note is string => note !== null,
+  );
+  return (
+    <StatusTile
+      label="Browser replay backup"
+      tone={copy.tone}
+      primary={copy.primary}
+      secondary={copy.secondary}
+      notes={notes}
+    />
   );
 }
 

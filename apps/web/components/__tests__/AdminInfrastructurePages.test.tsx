@@ -379,6 +379,93 @@ describe("admin infrastructure health", () => {
   });
 });
 
+const FIVE_MINUTES_MS = 5 * 60_000;
+
+/** Render Admin Health with `runtime.replayFilesBrowserUpload` set; the backup card or null. */
+function renderWithBrowserUpload(browserUpload: unknown): HTMLElement | null {
+  const health = { ...HEALTH, runtime: { ...HEALTH.runtime, replayFilesBrowserUpload: browserUpload } };
+  useApiMock.mockImplementation((path: string) => ({
+    data: path === "/v1/admin/infrastructure" ? INFRASTRUCTURE : health,
+    error: null,
+    isLoading: false,
+  }));
+  render(<AdminHealthPage />);
+  return screen.queryByText("Browser replay backup")?.closest("section") ?? null;
+}
+
+function dotClass(card: HTMLElement): string {
+  return card.querySelector("span[aria-hidden]")?.className ?? "";
+}
+
+describe("admin browser replay backup card: ready and needs setup", () => {
+  it("shows a verified rule as ready (green) with when it was checked", () => {
+    const checkedAt = new Date(Date.now() - FIVE_MINUTES_MS).toISOString();
+    const card = renderWithBrowserUpload({ status: "ready", checkedAt, configuredAt: checkedAt });
+    expect(card).not.toBeNull();
+    expect(within(card!).getByText("Ready")).toBeTruthy();
+    expect(within(card!).getByText("Browsers can back up original replays to R2")).toBeTruthy();
+    expect(within(card!).getByText("checked 5m ago")).toBeTruthy();
+    expect(dotClass(card!)).toContain("bg-success");
+    const replayStore = screen.getByText("Original replay store").closest("section");
+    expect(replayStore?.nextElementSibling).toBe(card);
+  });
+
+  it("explains a key without bucket permissions in plain words (amber)", () => {
+    const card = renderWithBrowserUpload({
+      status: "no_permission",
+      checkedAt: new Date().toISOString(),
+      detail: "The R2 key can't change bucket settings",
+    });
+    expect(within(card!).getByText("Needs setup")).toBeTruthy();
+    expect(within(card!).getByText(
+      'The R2 key can\'t change bucket settings. Add the upload rule in Cloudflare — see docs/instant-analysis.md, "Browser replay backup"',
+    )).toBeTruthy();
+    expect(dotClass(card!)).toContain("bg-warning");
+  });
+
+  it("shows a missing rule as needing setup, with the server's reason", () => {
+    const card = renderWithBrowserUpload({
+      status: "missing_cors",
+      checkedAt: new Date().toISOString(),
+      detail: "Automatic setup is off (R2_BROWSER_CORS_AUTO)",
+    });
+    expect(within(card!).getByText("Needs setup")).toBeTruthy();
+    expect(within(card!).getByText(/R2 refused the browser check from this site/)).toBeTruthy();
+    expect(within(card!).getByText("Automatic setup is off (R2_BROWSER_CORS_AUTO)")).toBeTruthy();
+    expect(dotClass(card!)).toContain("bg-warning");
+  });
+});
+
+describe("admin browser replay backup card: failed, neutral and unreported", () => {
+  it("shows a failed check with its detail (amber)", () => {
+    const card = renderWithBrowserUpload({
+      status: "error",
+      checkedAt: new Date().toISOString(),
+      detail: "The browser check timed out after 5 s",
+    });
+    expect(within(card!).getByText("Check failed")).toBeTruthy();
+    expect(within(card!).getByText("The browser check timed out after 5 s")).toBeTruthy();
+    expect(dotClass(card!)).toContain("bg-warning");
+  });
+
+  it.each([
+    ["disabled", "Off"],
+    ["unknown", "Checking…"],
+    ["checking", "Checking…"],
+  ])("shows %s as a neutral %s without a check time", (status, primary) => {
+    const card = renderWithBrowserUpload({ status, checkedAt: null });
+    expect(within(card!).getByText(primary)).toBeTruthy();
+    expect(within(card!).queryByText(/^checked /)).toBeNull();
+    expect(dotClass(card!)).toContain("bg-text-dim");
+  });
+
+  it("hides itself when the API does not report the status", () => {
+    expect(renderWithBrowserUpload(undefined)).toBeNull();
+    cleanup();
+    expect(renderWithBrowserUpload({ status: "sideways" })).toBeNull();
+  });
+});
+
 describe("admin dashboard storage", () => {
   it("separates whole app dbStats and the planning estimate from collections", () => {
     useApiMock.mockImplementation((path: string) => {

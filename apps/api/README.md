@@ -307,6 +307,30 @@ both permanent and pending R2 objects before their Mongo ownership rows.
 A browser backup PUTs directly to the private bucket, so that bucket needs a
 CORS rule allowing `PUT` from the web origin with the signed headers
 `content-type`, `cache-control`, `content-md5` and `x-amz-meta-sha256`.
+The API manages it (`src/services/replayFilesCors.js`):
+
+- **Automatic setup.** After listen, when the replay store is on, the API
+  reads the bucket's CORS configuration and, if no rule already covers the
+  exact http(s) origins in `CORS_ALLOWED_ORIGINS` (localhost only outside
+  production), writes the rule `sc2tools-browser-replay-upload` next to
+  every existing rule. It needs an R2 key that may change bucket settings;
+  a bucket-scoped Object Read & Write key cannot, and the status says
+  `no_permission`. `R2_BROWSER_CORS_AUTO=0` skips the write.
+- **Verification.** The API then sends the same OPTIONS preflight a browser
+  sends, to the same host/path style as the signed PUTs (a probe key under
+  `<R2_REPLAY_PREFIX>-pending/_cors-probe/`, nothing is written). Only a
+  passing preflight counts as `ready`. The result is cached and re-checked
+  in the background (every 10 minutes, 2 minutes while Admin Health is open).
+- **Reporting.** Boot logs one `replay_files_browser_cors` line
+  (`{status, configured}`), `GET /v1/admin/health` returns
+  `runtime.replayFilesBrowserUpload` (`{status, checkedAt, configuredAt?,
+  detail?}`; status `ready`, `missing_cors`, `no_permission`, `error`,
+  `disabled`, `unknown` or `checking`), and
+  `GET /v1/me/replay-archive-status` adds `browserUploadReady`, which the
+  web import uses to offer the backup at all.
+
+Manual fallback and the exact rule JSON: docs/instant-analysis.md, "Browser
+replay backup".
 
 ## Browser ingest
 

@@ -166,12 +166,12 @@ describe("backupReplays: failures", () => {
     expect(net.calls.filter((c) => c.url.includes("first"))).toHaveLength(3);
   });
 
-  it("retries a failed PUT (network) and fails when complete is not confirmed", async () => {
+  it("retries a PUT R2 answered with 503 and fails when complete is not confirmed", async () => {
     let putFailures = 0;
     const net = mockNetwork((call) => {
       if (call.url === R2 && putFailures === 0) {
         putFailures += 1;
-        return new TypeError("Failed to fetch");
+        return new Response(null, { status: 503 });
       }
       if (call.url.endsWith("/complete")) return json(200, { ok: true, replayAvailable: false });
       return happyPath(call);
@@ -179,6 +179,13 @@ describe("backupReplays: failures", () => {
     const summary = await backupReplays([item()], deps(net.fetchImpl));
     expect(net.calls.filter((c) => c.url === R2)).toHaveLength(2);
     expect(summary.failed).toHaveLength(1);
+  });
+
+  it("still retries an API call that fails at the network level", async () => {
+    const net = mockNetwork((call, n) => (n === 0 ? new TypeError("Failed to fetch") : happyPath(call)));
+    const summary = await backupReplays([item()], deps(net.fetchImpl));
+    expect(summary.backedUp).toHaveLength(1);
+    expect(net.calls.filter((c) => c.url.endsWith("/replay-upload"))).toHaveLength(2);
   });
 });
 
@@ -196,6 +203,16 @@ describe("backupReplays: stops", () => {
     });
     const aborted = await backupReplays([item("a"), item("b")], deps(net.fetchImpl, { signal: controller.signal }));
     expect(aborted.stoppedReason).toBe("aborted");
+  });
+
+  it("stops after one blocked PUT (a CORS TypeError) and keeps the rest untouched", async () => {
+    const net = mockNetwork((call) => (call.url === R2 ? new TypeError("Failed to fetch") : happyPath(call)));
+    const d = deps(net.fetchImpl);
+    const summary = await backupReplays([item("a"), item("b")], d);
+    expect(summary).toEqual({ backedUp: [], alreadyStored: [], skipped: [], failed: [], stoppedReason: "unavailable" });
+    expect(net.calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(net.calls).toHaveLength(2);
+    expect(d.sleep).not.toHaveBeenCalled();
   });
 
   it("stops the run when the server has no replay storage", async () => {

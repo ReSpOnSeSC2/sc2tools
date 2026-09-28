@@ -40,6 +40,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   metricsToken: string|null,
  *   gameDetailsStore: "mongo"|"r2",
  *   replayFilesStore: "disabled"|"r2",
+ *   r2BrowserCorsAuto: boolean,
  *   r2: {
  *     endpoint: string,
  *     region: string,
@@ -140,7 +141,7 @@ function loadConfig(env = process.env) {
     // Unset = endpoint disabled.
     metricsToken: env.METRICS_TOKEN || null,
     gameDetailsStore: parseGameDetailsStore(env.GAME_DETAILS_STORE),
-    replayFilesStore: parseReplayFilesStore(env.REPLAY_FILES_STORE),
+    ...parseReplayStoreConfig(env),
     r2: parseR2Config(env),
     cloudflareAnalytics: parseCloudflareAnalyticsConfig(env),
     atlasAdmin: parseAtlasAdminConfig(env),
@@ -656,6 +657,45 @@ function parseReplayFilesStore(raw) {
   return /** @type {'disabled'|'r2'} */ (value);
 }
 
+/**
+ * Original-replay store settings: which store holds the files, and whether
+ * the API may add the browser-upload CORS rule to its bucket.
+ *
+ * Example:
+ *   parseReplayStoreConfig({ REPLAY_FILES_STORE: "r2" });
+ *   // -> { replayFilesStore: "r2", r2BrowserCorsAuto: true }
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{ replayFilesStore: 'disabled'|'r2', r2BrowserCorsAuto: boolean }}
+ */
+function parseReplayStoreConfig(env) {
+  return {
+    replayFilesStore: parseReplayFilesStore(env.REPLAY_FILES_STORE),
+    r2BrowserCorsAuto: parseBrowserCorsAuto(env.R2_BROWSER_CORS_AUTO),
+  };
+}
+
+/** Spellings of R2_BROWSER_CORS_AUTO that turn the automatic rule write off. */
+const BROWSER_CORS_AUTO_OFF_VALUES = new Set(["0", "false", "off", "no"]);
+
+/**
+ * R2_BROWSER_CORS_AUTO (default on): may the API add the browser-upload
+ * CORS rule to the private replay bucket itself? Off still verifies the
+ * rule with a preflight probe (services/replayFilesCors.js).
+ *
+ * Example:
+ *   parseBrowserCorsAuto("false"); // -> false
+ *   parseBrowserCorsAuto(undefined); // -> true
+ *
+ * @param {string|undefined} raw
+ * @returns {boolean}
+ */
+function parseBrowserCorsAuto(raw) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (!value) return DEFAULTS.R2_BROWSER_CORS_AUTO;
+  return !BROWSER_CORS_AUTO_OFF_VALUES.has(value);
+}
+
 /** @param {NodeJS.ProcessEnv} env @param {string} name @returns {string} */
 function requireEnv(env, name) {
   const value = env[name];
@@ -712,6 +752,7 @@ module.exports = {
   loadConfig,
   parseGameDetailsStore,
   parseReplayFilesStore,
+  parseBrowserCorsAuto,
   parseR2Config,
   parseCloudflareAnalyticsConfig,
   parseAtlasAdminConfig,

@@ -37,6 +37,9 @@ const { GameVodLinksService } = require("./services/gameVodLinks");
 const { GameDetailsService } = require("./services/gameDetails");
 const { buildStoreFromConfig } = require("./services/gameDetailsStore");
 const { buildReplayFilesFromConfig } = require("./services/replayFiles");
+const {
+  buildBrowserUploadCorsStatus,
+} = require("./services/replayFilesCors");
 const { PlaybackArtifactsService } = require("./services/playbackArtifacts");
 const {
   InfrastructureUsageService,
@@ -321,6 +324,11 @@ function makeServices(deps) {
   });
   const gameDetails = new GameDetailsService(gameDetailsStore);
   const replayFiles = buildReplayFilesFromConfig(deps.db, deps.config);
+  // Verified R2 CORS status for browser replay backups; the first check is
+  // started by server.js after listen (see services/replayFilesCors.js).
+  const browserUploadCors = buildBrowserUploadCorsStatus({
+    replayFiles, config: deps.config, logger: deps.logger,
+  });
   // Per-user daily cap on browser (Clerk-session) ingest. Tests hand-build
   // config objects, so an absent cap falls back to the documented default.
   const browserIngestQuota = new BrowserIngestQuotaService(
@@ -774,6 +782,7 @@ function makeServices(deps) {
     gameVods,
     gameDetails,
     replayFiles,
+    browserUploadCors,
     playbackArtifacts,
     infrastructureUsage,
     customBuilds,
@@ -1165,6 +1174,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       imports: services.imports,
       multichatSounds: services.multichatSounds,
       replayArchiveEnabled: Boolean(services.replayFiles),
+      browserUploadCors: services.browserUploadCors,
       clerk,
       pulseMmr: services.pulseMmr,
       auth,
@@ -1288,6 +1298,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       },
       gameDetailsStoreKind: deps.config.gameDetailsStore,
       replayFilesStoreKind: deps.config.replayFilesStore,
+      browserUploadCors: services.browserUploadCors,
       guideNotes: services.guideNotes,
       guides: services.guides,
       guideStats: services.guideStats,

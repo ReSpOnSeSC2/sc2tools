@@ -36,6 +36,7 @@ const {
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
+const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
 
 async function main() {
   const config = loadConfig();
@@ -193,6 +194,14 @@ async function main() {
     logger.info({ port: config.port }, "listening");
     runtimeCapacity.start();
     /** @type {any} */ (services).platformIntegrations.start();
+    // Browser replay backups PUT straight to the private R2 bucket: add and
+    // verify its CORS rule in the background (never blocks or fails boot).
+    void startBrowserUploadCorsCheck(
+      /** @type {import('./services/replayFilesCors').BrowserUploadCorsStatus|null} */ (
+        services.browserUploadCors
+      ),
+      logger,
+    );
   });
 
   // Keep-alive heartbeat. Runs only when KEEPALIVE_TARGETS is configured —

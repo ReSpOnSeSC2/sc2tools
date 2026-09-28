@@ -209,6 +209,9 @@ describe("/v1/me/profile/battletag/detect", () => {
       backfillVersion: 0,
       resyncRequestedAt: null,
       requiresResync: true,
+      // The bucket's browser-upload CORS rule was never checked in this
+      // app (no boot hook), so browsers are not offered the backup.
+      browserUploadReady: false,
     });
 
     const doctor = await withAuth(request(app).get("/v1/me/doctor"));
