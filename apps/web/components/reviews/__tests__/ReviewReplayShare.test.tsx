@@ -28,7 +28,7 @@ describe("replay file download", () => {
   it("asks signed-out visitors to sign in, returning to the review", () => {
     harness.auth = { isLoaded: true, isSignedIn: false, getToken: async () => null };
     render(<ReviewReplayDownload requestId={ID} requestUrl={`/reviews/${ID}`} variant="page" />);
-    const link = screen.getByRole("link", { name: "Sign in to download the replay" });
+    const link = screen.getByRole("link", { name: "Sign in to download replay" });
     expect(link.getAttribute("href")).toBe(`/sign-in?redirect_url=${encodeURIComponent(`/reviews/${ID}`)}`);
   });
 
@@ -70,6 +70,7 @@ describe("asking with the replay file shared", () => {
     expect(screen.queryByRole("note")).toBeNull();
     fireEvent.click(box);
     expect(screen.getByRole("note").textContent).toContain("both players");
+    expect(screen.getByRole("note").textContent).toContain("chat");
     fireEvent.change(screen.getByRole("textbox", { name: /question/i }), { target: { value: "Why did my blink all-in fail against the roach defence?" } });
     fireEvent.click(screen.getByRole("button", { name: "Post request" }));
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalled());

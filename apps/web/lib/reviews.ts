@@ -170,7 +170,8 @@ export type ReviewRequestView = {
   stats: { reviewCount: number; commentCount: number; helpfulCount: number; upvoteTotal: number };
   bestCommentId: string | null;
   /** Replay file download: opted in by the asker, and backed up yet. */
-  replay?: { shared: boolean; available: boolean };
+  /** ``optedIn`` is the asker's saved choice (only sent to the asker). */
+  replay?: { shared: boolean; available: boolean; optedIn?: boolean };
   createdAt: string | null;
   lastActivityAt: string | null;
 };

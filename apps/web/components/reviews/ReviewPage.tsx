@@ -293,14 +293,19 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
           <label className="flex items-start gap-2 text-caption text-text-muted">
             <input
               type="checkbox"
-              checked={r.replay?.shared === true}
+              // The saved choice, not the effective state: while the request
+              // is hidden downloads pause, but the asker can still turn it off.
+              checked={r.replay?.optedIn ?? r.replay?.shared === true}
               disabled={sharing}
               onChange={(e) => void setReplaySharing(e.target.checked)}
               className="mt-0.5 h-4 w-4"
             />
             <span>
               Let reviewers download my replay file.{" "}
-              <span className="text-text-dim">It contains both players&apos; in-game names, including yours, even when you post anonymously.</span>
+              <span className="text-text-dim">It contains both players&apos; in-game names and any in-game chat, including yours, even when you post anonymously. Turning this off stops new downloads.</span>
+              {r.replay?.optedIn && r.hidden ? (
+                <span className="block text-text-dim">Downloads are paused while this request is hidden pending moderator review.</span>
+              ) : null}
               {shareError ? <span role="alert" className="block text-danger">{shareError}</span> : null}
             </span>
           </label>

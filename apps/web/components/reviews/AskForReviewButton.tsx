@@ -217,12 +217,12 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           <input type="checkbox" checked={shareReplay} onChange={(e) => setShareReplay(e.target.checked)} className="mt-0.5 h-4 w-4" />
           <span>
             Let reviewers download the replay file.{" "}
-            <span className="text-text-dim">Signed-in players can then open it in StarCraft II. You can stop sharing at any time.</span>
+            <span className="text-text-dim">Signed-in players can then open it in StarCraft II. You can stop sharing at any time, which stops new downloads.</span>
           </span>
         </label>
         {shareReplay ? (
           <p role="note" className="rounded-lg border border-warning/50 bg-warning/10 p-2 text-caption text-text">
-            The .SC2Replay file contains both players&apos; in-game names, including yours and your opponent&apos;s, even if you post anonymously.
+            The .SC2Replay file contains both players&apos; in-game names and any in-game chat, including yours and your opponent&apos;s, even if you post anonymously.
             If the desktop agent hasn&apos;t backed up this replay yet, the download appears once it has.
           </p>
         ) : null}

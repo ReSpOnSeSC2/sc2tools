@@ -80,8 +80,9 @@ own synced games, and helpful reviewers earn karma.
     immediately.
   - The file is served as `sc2tools-review-<id>.SC2Replay`. The normal
     download name includes the opponent's name.
-- **No chat.** Chat is not extracted from replays, so there is nothing to
-  redact. Keep it that way.
+- **No chat.** Chat is not extracted from replays, so no review page or
+  payload shows it. The raw file offered only when the asker opts in (see
+  above) does contain the game's chat, and the opt-in warning says so.
 - **Allow-lists everywhere.** Every public payload is rebuilt from an
   allow-list, never by spreading service output, so a field added upstream
   can't leak by default.

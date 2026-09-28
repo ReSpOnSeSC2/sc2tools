@@ -55,7 +55,12 @@ export function ReviewCard({ card, now }: { card: ReviewCardData; now: number })
       {card.replayShared ? (
         // A sibling of the card link (not inside it): its own control.
         <div className="absolute right-3 top-3 sm:right-4 sm:top-4">
-          <ReviewReplayDownload requestId={card.id} requestUrl={card.url} variant="card" />
+          <ReviewReplayDownload
+            requestId={card.id}
+            requestUrl={card.url}
+            variant="card"
+            contextLabel={`${card.matchup ? `[${card.matchup}] ` : ""}${card.question.slice(0, 60)}`}
+          />
         </div>
       ) : null}
     </li>

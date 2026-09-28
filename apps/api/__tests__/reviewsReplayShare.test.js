@@ -83,14 +83,45 @@ describe("reviews: opt-in replay file sharing", () => {
     const gameId = await seedStoredGame("share-toggle");
     const id = (await post("asker", { gameId, question: QUESTION, shareReplay: true })).body.id;
     expect((await share(id, "reviewer", true)).status).toBe(403);
-    expect((await share(id, "asker", false)).body).toEqual({ shared: false });
+    expect((await share(id, "asker", false)).body).toEqual({ shared: false, optedIn: false });
     expect((await download(id, "reviewer")).body.error.code).toBe("replay_not_shared");
-    expect((await share(id, "asker", true)).body).toEqual({ shared: true });
+    expect((await share(id, "asker", true)).body).toEqual({ shared: true, optedIn: true });
     expect((await download(id, "reviewer")).status).toBe(200);
     // A moderator may switch it off, not on.
     expect((await share(id, "mod", false)).status).toBe(200);
     expect((await share(id, "mod", true)).status).toBe(403);
     await request(h.app).post(`/v1/reviews/${id}/close`).set("authorization", h.bearer("asker")).expect(200);
+  });
+
+  test("while hidden, downloads pause but the asker still sees and controls their choice", async () => {
+    await h.seedUser("asker3", { displayName: "ThirdAsker" });
+    const gameId = await h.seedGame("asker3", { gameId: "share-hidden" });
+    await h.db.games.updateOne({ userId: h.userId("asker3"), gameId }, { $set: { replayFile: { storedAt: new Date() } } });
+    const id = (await post("asker3", { gameId, question: QUESTION, shareReplay: true })).body.id;
+    // Auto-hidden by reports: nobody can download…
+    await h.db.reviewRequests.updateOne({ _id: id }, { $set: { hidden: true } });
+    expect((await download(id, "reviewer")).status).toBe(404);
+    // …the asker sees their saved choice (on, paused) and can switch it off.
+    const askerView = await request(h.app).get(`/v1/reviews/${id}`).set("authorization", h.bearer("asker3"));
+    expect(askerView.body.request.replay).toEqual({ shared: false, available: false, optedIn: true });
+    expect((await share(id, "asker3", false)).body).toEqual({ shared: false, optedIn: false });
+    // A moderator restoring the request doesn't turn sharing back on.
+    await h.services.reviews.moderationTargets().review_request.restore(id);
+    expect((await download(id, "reviewer")).body.error.code).toBe("replay_not_shared");
+    // Other viewers never see the asker's saved choice.
+    expect((await request(h.app).get(`/v1/reviews/${id}`)).body.request.replay).toEqual({ shared: false, available: false });
+  });
+
+  test("board cards only offer a download when the file is actually stored", async () => {
+    await h.seedUser("asker4", { displayName: "FourthAsker" });
+    const stored = await h.seedGame("asker4", { gameId: "card-stored" });
+    await h.db.games.updateOne({ userId: h.userId("asker4"), gameId: stored }, { $set: { replayFile: { storedAt: new Date() } } });
+    const missing = await h.seedGame("asker4", { gameId: "card-missing" });
+    const withFile = (await post("asker4", { gameId: stored, question: QUESTION, shareReplay: true })).body.id;
+    const noFile = (await post("asker4", { gameId: missing, question: QUESTION, shareReplay: true })).body.id;
+    const cards = (await request(h.app).get("/v1/reviews?sort=new")).body.items;
+    expect(cards.find((c) => c.id === withFile).replayShared).toBe(true);
+    expect(cards.find((c) => c.id === noFile).replayShared).toBe(false);
   });
 
   test("shared but not uploaded yet, closed, or hidden: no link", async () => {

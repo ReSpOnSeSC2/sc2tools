@@ -22,12 +22,15 @@ export function ReviewReplayDownload({
   requestUrl,
   variant,
   available = true,
+  contextLabel,
 }: {
   requestId: string;
   requestUrl: string;
   variant: "page" | "card";
   /** False while the asker's desktop agent hasn't backed the file up. */
   available?: boolean;
+  /** Card only: what the icon belongs to, for its accessible name. */
+  contextLabel?: string;
 }) {
   const { getToken, isSignedIn } = useAuth();
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
@@ -36,16 +39,19 @@ export function ReviewReplayDownload({
   const cls = variant === "card"
     ? "grid h-9 w-9 place-items-center rounded-full border-2 border-line bg-bg-surface text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
     : "inline-flex min-h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
-  const label = "Download replay";
+  const suffix = variant === "card" && contextLabel ? `: ${contextLabel}` : "";
+  const label = `Download replay${suffix}`;
 
   if (!isSignedIn) {
+    // The page variant's visible text is its accessible name (label in name).
+    const signIn = `Sign in to download replay${suffix}`;
     return (
       <Link
         href={`/sign-in?redirect_url=${encodeURIComponent(requestUrl)}`}
         onClick={(e) => e.stopPropagation()}
         className={cls}
-        aria-label="Sign in to download the replay"
-        title="Sign in to download the replay"
+        aria-label={variant === "card" ? signIn : undefined}
+        title={signIn}
       >
         <Download className="h-4 w-4" aria-hidden />
         {variant === "page" ? <span>Sign in to download replay</span> : null}
@@ -97,14 +103,16 @@ export function ReviewReplayDownload({
         type="button"
         onClick={(e) => void download(e)}
         disabled={state === "loading"}
-        className={cls}
-        aria-label={label}
-        title={label}
+        className={`${cls} ${state === "error" ? "border-danger text-danger" : ""}`}
+        aria-label={variant === "card" ? (state === "error" ? `${label} — ${message}` : label) : undefined}
+        title={state === "error" ? message : label}
       >
         {state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
         {variant === "page" ? <span>{label}</span> : null}
       </button>
-      {state === "error" && variant === "page" ? <span role="status" className="text-micro text-danger">{message}</span> : null}
+      {state === "error" ? (
+        <span role="status" className={variant === "page" ? "text-micro text-danger" : "sr-only"}>{message}</span>
+      ) : null}
     </span>
   );
 }
