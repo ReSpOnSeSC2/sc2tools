@@ -91,6 +91,8 @@ export interface UnzippedEntry {
   /** Path inside the archive, `/`-separated. */
   name: string;
   bytes: ArrayBuffer;
+  /** The entry's stored modification time (epoch ms, read as UTC), when valid. */
+  lastModified?: number;
 }
 
 export interface UnzippedEvent {

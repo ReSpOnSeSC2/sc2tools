@@ -162,6 +162,33 @@ test("built bundle: boots in Pyodide and the worker glue parses a fixture", { ti
   t.diagnostic(`boot ${Math.round(bootMs)} ms, heap ${pyodide._module.HEAP8.length} B`);
 });
 
+/** A two-entry archive built with Python's own zipfile inside Pyodide (no JS zip dependency). */
+const ZIP_FIXTURE_PY = [
+  "import io, zipfile",
+  "_sc2t_zip_buffer = io.BytesIO()",
+  "with zipfile.ZipFile(_sc2t_zip_buffer, 'w') as _sc2t_zip:",
+  "    _sc2t_zip.writestr(zipfile.ZipInfo('Replays/old.SC2Replay', (2020, 1, 2, 3, 4, 6)), b'MPQ-old')",
+  "    _sc2t_zip.writestr(zipfile.ZipInfo('Replays/new.SC2Replay', (2026, 9, 1, 12, 0, 0)), b'MPQ-new')",
+  "    _sc2t_zip.writestr('notes.txt', b'junk')",
+  "_sc2t_zip_buffer.getvalue()",
+].join("\n");
+/** calendar.timegm of the two entry times above, in ms. */
+const ZIP_FIXTURE_TIMES = [1577934246000, 1788264000000];
+
+test("built bundle: the worker glue unzips replays with their entry times", { timeout: SLOW_TIMEOUT_MS }, async () => {
+  const { pyodide } = await engine();
+  const archive = pyodide.runPython(ZIP_FIXTURE_PY);
+  const bytes = archive.toJs();
+  archive.destroy();
+  const header = JSON.parse(pyodide.globals.get("_sc2t_unzip")(bytes));
+  pyodide.globals.get("_sc2t_unzip_done")();
+  assert.deepEqual(header, {
+    ok: true,
+    names: ["Replays/old.SC2Replay", "Replays/new.SC2Replay"],
+    lastModified: ZIP_FIXTURE_TIMES,
+  });
+});
+
 test(
   "built bundle: envelopes are identical to the CPython goldens",
   {

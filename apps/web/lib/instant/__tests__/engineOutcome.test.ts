@@ -57,4 +57,10 @@ describe("zipEntryFile", () => {
       key: "5:42:Downloads/r.zip/Accounts/1/1-S2-1-1/Replays/a.SC2Replay",
     });
   });
+
+  it("uses the entry's own stored time when the archive has one", () => {
+    const zip: IntakeFile = { key: "k", name: "r.zip", relativePath: "r.zip", size: 9, lastModified: 42, source: "drop", blob: new Blob([]) };
+    const file = zipEntryFile(zip, "a.SC2Replay", new ArrayBuffer(5), 1788264000000);
+    expect(file).toMatchObject({ lastModified: 1788264000000, key: "5:1788264000000:r.zip/a.SC2Replay" });
+  });
 });

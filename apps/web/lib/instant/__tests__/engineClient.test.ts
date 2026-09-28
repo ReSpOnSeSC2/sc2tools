@@ -90,7 +90,7 @@ const reply: Script = (worker, request) => {
     };
     worker.emit({ type: "parsed", id: request.id, outcome, heapBytes: HEAP_BYTES });
   } else {
-    worker.emit({ type: "unzipped", id: request.id, entries: [{ name: "a/b.SC2Replay", bytes: new ArrayBuffer(4) }] });
+    worker.emit({ type: "unzipped", id: request.id, entries: [{ name: "a/b.SC2Replay", bytes: new ArrayBuffer(4), lastModified: 1788264000000 }] });
   }
 };
 
@@ -388,7 +388,9 @@ describe("createEngineClient: zip and players", () => {
     const zip = intakeFile("replays.zip");
     const files = await client.expandZip(zip);
     expect(files).toHaveLength(1);
-    expect(files[0]).toMatchObject({ name: "b.SC2Replay", relativePath: "dir/replays.zip/a/b.SC2Replay", size: 4, source: "zip" });
+    expect(files[0]).toMatchObject({
+      name: "b.SC2Replay", relativePath: "dir/replays.zip/a/b.SC2Replay", size: 4, source: "zip", lastModified: 1788264000000,
+    });
   });
 
   it("rejects expandZip with the guard's error kind", async () => {

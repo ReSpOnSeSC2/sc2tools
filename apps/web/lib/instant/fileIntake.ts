@@ -24,6 +24,16 @@ export const MAX_TRY_FILES = 25;
  */
 export const MAX_REPLAY_BYTES = 32 * 1024 * 1024;
 
+/**
+ * Largest .zip we read at all. An archive is held in memory twice (the
+ * tab's copy, then the WebAssembly heap) BEFORE Python's zip-bomb guards
+ * run, so a big one could crash the tab instead of failing cleanly. This
+ * leaves room above the 128 MiB of extracted replays Python accepts
+ * (`MAX_ZIP_TOTAL_BYTES`) and stays well inside the ~700 MB worker budget.
+ * Bigger collections go through folder import, one file at a time.
+ */
+export const MAX_ZIP_ARCHIVE_BYTES = 256 * 1024 * 1024;
+
 /** `<input accept>` for desktop browsers. */
 export const REPLAY_INPUT_ACCEPT = ".SC2Replay,.zip";
 

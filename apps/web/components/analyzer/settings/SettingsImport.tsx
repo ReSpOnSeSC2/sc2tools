@@ -4,7 +4,7 @@
  * Settings · Import — browser import without the desktop agent (shown only
  * while the Instant Analysis rollout flag is on for this account):
  *
- *   - the import panel (files, folders, .zip; analysed in this tab),
+ *   - the import panel (files, folders, .zip; analyzed in this tab),
  *   - Folder Sync (Chrome/Edge keep syncing a picked StarCraft II folder;
  *     other browsers get a one-off folder import),
  *   - an honest browser-vs-agent comparison with a link to /download.
@@ -32,7 +32,7 @@ export function SettingsImport() {
     <div className="space-y-6">
       <Section
         title="Browser import (no agent)"
-        description="Analyse replays right here in your browser — on Windows, Mac, Chromebook or iPad — and upload the results to your account. Replay files stay on your device unless you choose to back them up."
+        description="Analyze replays right here in your browser — on Windows, Mac, Chromebook or iPad — and upload the results to your account. Replay files stay on your device unless the backup option below is on (it starts on when backups are available)."
       >
         <BrowserImportPanel folderSync={folderSync} intro={false} />
       </Section>

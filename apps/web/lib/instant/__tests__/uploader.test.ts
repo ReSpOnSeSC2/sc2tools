@@ -88,6 +88,24 @@ function deps(fetchImpl: typeof fetch, extra: Partial<UploadDeps> = {}): UploadD
 
 const gamesCalls = (calls: Call[]) => calls.filter((c) => c.path === "/v1/games");
 
+describe("uploadGames: engine version and progress", () => {
+  it("tags each game with its own engine version when it has one", async () => {
+    const api = mockApi({ "/v1/games/exists": noneExist, "/v1/games": acceptAll });
+    const [older, current] = games(2);
+    await uploadGames([{ ...older, engineVersion: "1.6.2" }, current], deps(api.fetchImpl));
+    const [upload] = gamesCalls(api.calls);
+    expect(upload.body).toMatchObject({ games: [{ engineVersion: "1.6.2" }, { engineVersion: "1.6.3" }] });
+  });
+
+  it("counts games already in the account as settled progress", async () => {
+    const api = mockApi({ "/v1/games/exists": () => json(200, { existing: ["g0", "g1"] }), "/v1/games": acceptAll });
+    const progress = vi.fn();
+    await uploadGames(games(3), deps(api.fetchImpl, { onProgress: progress }));
+    expect(progress).toHaveBeenCalledWith({ phase: "uploading", accepted: 0, settled: 2, total: 3 });
+    expect(progress).toHaveBeenLastCalledWith({ phase: "done", accepted: 1, settled: 3, total: 3 });
+  });
+});
+
 describe("uploadGames: existence check", () => {
   it("skips games the account already has and tags the rest", async () => {
     const api = mockApi({ "/v1/games/exists": () => json(200, { existing: ["g1"] }), "/v1/games": acceptAll });
@@ -277,6 +295,15 @@ describe("uploadGames: daily cap", () => {
     expect(summary.stoppedReason).toBe("daily_cap");
     expect(gamesCalls(api.calls)).toHaveLength(1);
     expect(summary.pending).toEqual(["g0", "g1", "g2"]);
+    expect(summary.dailyCap).toEqual({ limit: 500, remaining: null, resetAt: null });
+  });
+
+  it("keeps the cap's limit, remaining and reset time for the UI", async () => {
+    const resetAt = "2026-09-28T00:00:00.000Z";
+    const cap = { error: { code: "browser_ingest_daily_cap", limit: 5000, remaining: 0, resetAt } };
+    const api = mockApi({ "/v1/games/exists": noneExist, "/v1/games": () => json(429, cap) });
+    const summary = await uploadGames(games(2), deps(api.fetchImpl));
+    expect(summary.dailyCap).toEqual({ limit: 5000, remaining: 0, resetAt: Date.parse(resetAt) });
   });
 
   it("sends the games that still fit today as one smaller batch, then stops", async () => {

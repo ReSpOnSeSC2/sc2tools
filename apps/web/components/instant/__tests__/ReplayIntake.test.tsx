@@ -143,7 +143,7 @@ describe("ReplayIntake: folders, status and hints", () => {
 
   it("shows the file count, estimate and cap, and changes the date window", () => {
     const { props } = renderIntake({ fileCount: 3, estimate: { seconds: 11, label: "about 11 seconds" }, maxFiles: 25 });
-    expect(screen.getByRole("status").textContent).toBe("3 replays ready · about 11 seconds to analyse");
+    expect(screen.getByRole("status").textContent).toBe("3 replays ready · about 11 seconds to analyze");
     expect(screen.getByText(/Up to 25 replays per run/)).toBeTruthy();
     fireEvent.click(screen.getByLabelText("All time"));
     expect(props.onDateWindowChange).toHaveBeenCalledWith({ kind: "all" });
@@ -190,5 +190,35 @@ describe("ReplayIntake: dropping a folder", () => {
     const entry = fakeFile("/a.SC2Replay");
     fireEvent.drop(dropZone(), { dataTransfer: { files: [replay], items: [{ kind: "file", webkitGetAsEntry: () => entry }] } });
     expect(props.onFiles).toHaveBeenCalledWith([replay], "drop");
+  });
+});
+
+describe("ReplayIntake: warm-up intent and focus", () => {
+  it("signals intent on a button press, a drag over the zone or focus, never on mount", () => {
+    const onIntent = vi.fn();
+    renderIntake({ onIntent, allowFolderInput: true });
+    expect(onIntent).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Choose a folder" }), { key: "Enter" });
+    fireEvent.dragEnter(dropZone());
+    fireEvent.focus(screen.getByRole("button", { name: "Choose replays" }));
+    expect(onIntent).toHaveBeenCalledTimes(4);
+  });
+
+  it("stays quiet while disabled", () => {
+    const onIntent = vi.fn();
+    renderIntake({ onIntent, disabled: true });
+    fireEvent.dragEnter(dropZone());
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
+    expect(onIntent).not.toHaveBeenCalled();
+  });
+
+  it("moves focus to its heading when focusKey is bumped, without signalling intent", () => {
+    const onIntent = vi.fn();
+    const { rerender, props } = renderIntake({ onIntent });
+    expect(document.activeElement).toBe(document.body);
+    rerender(<ReplayIntake {...props} focusKey={1} />);
+    expect(document.activeElement?.textContent).toBe("Add your replays");
+    expect(onIntent).not.toHaveBeenCalled();
   });
 });

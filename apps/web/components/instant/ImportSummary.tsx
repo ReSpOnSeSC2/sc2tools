@@ -8,13 +8,20 @@
  * or failed replays grouped by kind. Counts only — never a file or player
  * name. Every row hides itself when its count is zero.
  *
+ * The headline is not a live region: the panel that shows the summary
+ * announces the result through its own always-mounted status region (a
+ * region inserted together with its text is often not read). With
+ * `autoFocus` the headline takes keyboard focus when the card appears.
+ *
  * Example:
  *   <ImportSummary counts={summary} backup={summary.backup} failed={session.failed}
  *     onImportMore={session.reset} />
  */
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, MinusCircle } from "lucide-react";
 import { Button } from "@/components/ui";
+import { uploadsResumeText } from "@/lib/instant/displayUnits";
 import { summarizeFailures, type ErrorCopy, type FailureGroup } from "@/lib/instant/errorCopy";
 import type { BackupSummary } from "@/lib/instant/replayBackup";
 import type { UploadCounts } from "@/lib/instant/importRunner";
@@ -29,6 +36,10 @@ export interface ImportSummaryProps {
   onImportMore?: () => void;
   /** Show "Open your dashboard" (off where the page has its own exit). */
   showDashboardLink?: boolean;
+  /** Replays left out of this run by the per-run cap (0 hides the line). */
+  truncatedCount?: number;
+  /** Move keyboard focus to the headline when the card mounts. */
+  autoFocus?: boolean;
   className?: string;
 }
 
@@ -54,13 +65,29 @@ const STOP_COPY: Record<UploadStopReason, ErrorCopy> = {
 };
 
 /**
- * Title + hint for an early stop of the upload.
+ * Title + hint for an early stop of the upload; for the daily cap the hint
+ * also says when uploads resume (local time) when the server said so.
  *
  * Example:
  *   stopCopy("daily_cap").title; // -> "Daily browser upload limit reached"
  */
-export function stopCopy(reason: UploadStopReason): ErrorCopy {
-  return STOP_COPY[reason];
+export function stopCopy(reason: UploadStopReason, resetAt?: number | null): ErrorCopy {
+  const copy = STOP_COPY[reason];
+  const resume = reason === "daily_cap" ? uploadsResumeText(resetAt) : null;
+  return resume ? { ...copy, hint: `${resume} ${copy.hint}` } : copy;
+}
+
+/**
+ * The one-line headline of a summary (also what the panel announces).
+ *
+ * Example:
+ *   importHeadline({ uploaded: 2, created: 2, skippedExisting: 0, rejected: 0, pending: 0 }); // -> "Import complete"
+ */
+export function importHeadline(counts: UploadCounts): string {
+  if (counts.stoppedReason === "aborted") return "Upload cancelled";
+  if (counts.stoppedReason) return "Import stopped early";
+  if (counts.uploaded === 0 && counts.skippedExisting === 0) return "No games were uploaded";
+  return "Import complete";
 }
 
 /**
@@ -81,15 +108,8 @@ export function summaryRows(counts: UploadCounts): Array<{ label: string; value:
   return rows.filter((row) => row.value > 0);
 }
 
-function headline(counts: UploadCounts): string {
-  if (counts.stoppedReason === "aborted") return "Upload cancelled";
-  if (counts.stoppedReason) return "Import stopped early";
-  if (counts.uploaded === 0 && counts.skippedExisting === 0) return "No games were uploaded";
-  return "Import complete";
-}
-
-function StopNotice({ reason }: { reason: UploadStopReason }) {
-  const copy = stopCopy(reason);
+function StopNotice({ reason, resetAt }: { reason: UploadStopReason; resetAt?: number }) {
+  const copy = stopCopy(reason, resetAt);
   return (
     <div role="alert" className="flex gap-2 rounded-lg border-2 border-warning/50 bg-warning/10 px-3 py-2 text-caption">
       <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" aria-hidden />
@@ -124,7 +144,7 @@ export function FailureGroups({ groups }: { groups: ReadonlyArray<FailureGroup> 
   if (groups.length === 0) return null;
   return (
     <div className="space-y-2">
-      <h3 className="text-caption font-semibold text-text">Skipped or not analysed</h3>
+      <h3 className="text-caption font-semibold text-text">Skipped or not analyzed</h3>
       <ul className="space-y-2">
         {groups.map((group) => {
           const Icon = group.skipped ? MinusCircle : AlertTriangle;
@@ -187,13 +207,29 @@ function SummaryActions({ counts, showDashboardLink, onImportMore }: {
   );
 }
 
-function Headline({ counts }: { counts: UploadCounts }) {
+function Headline({ counts, autoFocus }: { counts: UploadCounts; autoFocus: boolean }) {
   const Icon = counts.stoppedReason ? AlertTriangle : CheckCircle2;
+  const heading = useRef<HTMLHeadingElement | null>(null);
+  useEffect(() => {
+    if (autoFocus) heading.current?.focus();
+  }, [autoFocus]);
   return (
-    <div role="status" aria-live="polite" className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
       <Icon className={["h-5 w-5 flex-shrink-0", counts.stoppedReason ? "text-warning" : "text-success"].join(" ")} aria-hidden />
-      <h2 className="font-display text-h4 text-text">{headline(counts)}</h2>
+      <h2 ref={heading} tabIndex={-1} className="font-display text-h4 text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        {importHeadline(counts)}
+      </h2>
     </div>
+  );
+}
+
+function TruncatedNote({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const noun = count === 1 ? "replay was" : "replays were";
+  return (
+    <p className="text-caption text-text-muted">
+      {count} older {noun} left out of this run. Run the import again, or use Folder Sync, for the rest.
+    </p>
   );
 }
 
@@ -205,15 +241,17 @@ function Headline({ counts }: { counts: UploadCounts }) {
  */
 export function ImportSummary(props: ImportSummaryProps) {
   const { counts, failed, backup = null, onImportMore, showDashboardLink = true, className = "" } = props;
+  const { truncatedCount = 0, autoFocus = false } = props;
   const backupText = backup ? backupLine(backup) : null;
   return (
     <section
       aria-label="Import summary"
       className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
-      <Headline counts={counts} />
+      <Headline counts={counts} autoFocus={autoFocus} />
       <CountRows counts={counts} />
-      {counts.stoppedReason ? <StopNotice reason={counts.stoppedReason} /> : null}
+      {counts.stoppedReason ? <StopNotice reason={counts.stoppedReason} resetAt={counts.dailyCapResetAt} /> : null}
+      <TruncatedNote count={truncatedCount} />
       {backupText ? <p className="text-caption text-text-muted">{backupText}</p> : null}
       <FailureGroups groups={summarizeFailures(failed)} />
       <SummaryActions counts={counts} showDashboardLink={showDashboardLink} onImportMore={onImportMore} />

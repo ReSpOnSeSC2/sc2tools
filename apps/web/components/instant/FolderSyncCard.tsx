@@ -5,16 +5,19 @@
  * replay folder, straight from the browser.
  *
  *   Chrome / Edge (File System Access API): "Choose your StarCraft II
- *   folder" once; the read-only handle is remembered on this device, new
- *   replays are uploaded whenever an SC2 Tools tab is open (see
+ *   folder" once; the read-only handle is remembered on this device for
+ *   the signed-in account, new replays are uploaded each time the visitor
+ *   opens or returns to the SC2 Tools dashboard (see
  *   FolderSyncAutoRunner), and after a browser restart one click on
  *   "Resume sync" re-grants read access. "Stop syncing" forgets the folder
- *   and its ledger.
+ *   and its ledger. A folder remembered for another account shows a
+ *   "Use this folder for this account" prompt instead of any sync control.
  *   Firefox / Safari: no persistent folder access, so the card explains
  *   that and offers a one-off folder import (`<input webkitdirectory>`)
- *   through the same runner — the ledger still skips replays already done.
+ *   through the same runner — the ledger still skips replays already done,
+ *   and "Forget import history" clears it.
  *
- * `useFolderSync()` holds the state and actions so the import panel's
+ * State and actions live in `useFolderSync()` so the import panel's
  * "Sync a replay folder" button can start the same flow (the folder
  * picker must be opened synchronously inside that click).
  *
@@ -23,234 +26,23 @@
  *   <BrowserImportPanel folderSync={folderSync} />
  *   <FolderSyncCard controller={folderSync} />
  */
-import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useId, useRef, useState, type ChangeEvent } from "react";
 import { FolderSync, Play, RotateCcw, Square } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
 import { Badge, Button, ConfirmDialog } from "@/components/ui";
-import { API_BASE, apiCall } from "@/lib/clientApi";
 import { fmtAgo } from "@/lib/format";
-import { trackInstantError, trackInstantFolderSyncResume } from "@/lib/instant/analytics";
-import { createEngineClient } from "@/lib/instant/engineClient";
-import { EngineError } from "@/lib/instant/engineErrors";
-import { errorCopy } from "@/lib/instant/errorCopy";
-import {
-  filesFromDirectoryInput,
-  pickReplaysFolder,
-  queryReadPermission,
-  requestReadPermission,
-  supportsDirectoryPicker,
-  type DirectoryHandleLike,
-  type ReadPermission,
-} from "@/lib/instant/folderSync";
-import {
-  fetchProfileToons,
-  runFolderSyncExclusive,
-  syncedReplayCount,
-  type FolderSyncProgress,
-  type FolderSyncSource,
-  type FolderSyncSummary,
-} from "@/lib/instant/folderSyncRunner";
-import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
-import type { TokenGetter } from "@/lib/instant/httpRetry";
+import { percentOf } from "@/lib/instant/displayUnits";
+import { AUTO_SCAN_INTERVAL_MINUTES } from "@/lib/instant/folderSync";
+import type { FolderSyncProgress, FolderSyncSummary } from "@/lib/instant/folderSyncRunner";
 import type { UploadCounts } from "@/lib/instant/importRunner";
-import { clearFolderHandle, clearLedger, getLastFolderScanAt, loadFolderHandle, saveFolderHandle } from "@/lib/instant/localStore";
 import { ImportSummary } from "./ImportSummary";
 import { OsPathHints } from "./OsPathHints";
+import { NO_REPLAYS, useFolderSync, type FolderSyncController } from "./useFolderSync";
 
-interface FolderSyncState {
-  /** null until mounted: browser support is only known client-side. */
-  mode: "picker" | "input" | null;
-  loaded: boolean;
-  handle: DirectoryHandleLike | null;
-  permission: ReadPermission | null;
-  lastScanAt: number | null;
-  syncedCount: number | null;
-  running: boolean;
-  progress: FolderSyncProgress | null;
-  lastRun: FolderSyncSummary | null;
-  error: string | null;
-  /** False when IndexedDB is blocked (private window): nothing is remembered. */
-  storageAvailable: boolean;
-}
-
-export interface FolderSyncController extends Omit<FolderSyncState, "handle"> {
-  folderName: string | null;
-  /** Opens the folder picker; call directly from a click handler. */
-  pickFolder(): void;
-  /** Re-grants read access (click handler) and syncs. */
-  resume(): void;
-  syncNow(): void;
-  /** One-off import of an `<input webkitdirectory>` selection. */
-  importFiles(files: ReadonlyArray<File>): void;
-  /** Forget the folder and its ledger. */
-  stop(): Promise<void>;
-  cancel(): void;
-}
-
-const INITIAL: FolderSyncState = {
-  mode: null, loaded: false, handle: null, permission: null, lastScanAt: null, syncedCount: null,
-  running: false, progress: null, lastRun: null, error: null, storageAvailable: true,
-};
-
-const ALREADY_RUNNING = "Folder Sync is already running in another SC2 Tools tab.";
-const UNEXPECTED = "Folder Sync stopped unexpectedly. Try again.";
-const NO_REPLAYS =
-  "No ladder replays found in that folder. Choose your StarCraft II Accounts folder (or a player folder inside it).";
-const PICKER_FAILED = "Your browser didn't open the folder picker. Try again, or drag the folder onto the import area.";
-
-function syncErrorText(error: unknown): string {
-  if (!(error instanceof EngineError)) return UNEXPECTED;
-  const copy = errorCopy(error.kind);
-  return `${copy.title}. ${copy.hint}`;
-}
-
-async function loadStoredState(): Promise<Partial<FolderSyncState>> {
-  try {
-    const handle = await loadFolderHandle();
-    const permission = handle ? await queryReadPermission(handle) : null;
-    return { handle, permission, lastScanAt: await getLastFolderScanAt(), syncedCount: await syncedReplayCount() };
-  } catch {
-    trackInstantError({ kind: "storage_unavailable" });
-    return { storageAvailable: false };
-  }
-}
-
-type Patch = (next: Partial<FolderSyncState>) => void;
-type StateRef = { readonly current: FolderSyncState };
-
-/** One pass; resolves once its result (or error) is in state. */
-async function runOnePass(
-  source: FolderSyncSource,
-  getToken: TokenGetter,
-  signal: AbortSignal,
-  patch: Patch,
-  stateRef: StateRef,
-): Promise<void> {
-  try {
-    const summary = await runFolderSyncExclusive({
-      source, engineFactory: () => createEngineClient(), getToken, apiBase: API_BASE,
-      engineVersion: INSTANT_ENGINE_VERSION, profileToons: () => fetchProfileToons(getToken, apiCall),
-      now: Date.now, signal, onProgress: (progress) => patch({ progress }),
-    });
-    if (summary === null) patch({ error: ALREADY_RUNNING });
-    else patch({ lastRun: summary, lastScanAt: summary.aborted ? stateRef.current.lastScanAt : Date.now() });
-    patch({ syncedCount: await syncedReplayCount().catch(() => stateRef.current.syncedCount) });
-  } catch (error) {
-    if (error instanceof EngineError) trackInstantError({ kind: error.kind });
-    patch({ error: syncErrorText(error) });
-  }
-}
-
-/** The sync pass itself: one at a time, cancellable, result kept in state. */
-function useSyncRunner(patch: Patch, stateRef: StateRef) {
-  const { getToken } = useAuth();
-  const abortRef = useRef<AbortController | null>(null);
-  const passRef = useRef<Promise<void> | null>(null);
-  useEffect(() => () => abortRef.current?.abort(), []);
-  const sync = useCallback(
-    (source: FolderSyncSource): Promise<void> => {
-      if (passRef.current) return passRef.current;
-      const controller = new AbortController();
-      abortRef.current = controller;
-      patch({ running: true, progress: null, error: null });
-      const pass = runOnePass(source, getToken, controller.signal, patch, stateRef).finally(() => {
-        passRef.current = null;
-        if (abortRef.current === controller) abortRef.current = null;
-        patch({ running: false, progress: null });
-      });
-      passRef.current = pass;
-      return pass;
-    },
-    [getToken, patch, stateRef],
-  );
-  const cancel = useCallback(() => abortRef.current?.abort(), []);
-  /** Cancels the running pass (if any) and resolves once it has wound down. */
-  const cancelAndWait = useCallback(async (): Promise<void> => {
-    abortRef.current?.abort();
-    await passRef.current;
-  }, []);
-  return { sync, cancel, cancelAndWait };
-}
-
-/** Folder actions; the picker and permission prompts run inside the click. */
-function useFolderActions(patch: Patch, stateRef: StateRef, runner: ReturnType<typeof useSyncRunner>) {
-  const { sync, cancel, cancelAndWait } = runner;
-  const pickFolder = useCallback(() => {
-    // pickReplaysFolder opens the picker synchronously, inside the click.
-    void pickReplaysFolder()
-      .then(async (handle) => {
-        if (!handle) return;
-        await saveFolderHandle(handle).catch(() => patch({ storageAvailable: false }));
-        patch({ handle, permission: "granted" });
-        await sync({ handle });
-      })
-      .catch(() => patch({ error: PICKER_FAILED }));
-  }, [patch, sync]);
-  const resume = useCallback(() => {
-    const handle = stateRef.current.handle;
-    if (!handle) return;
-    void requestReadPermission(handle).then(async (permission) => {
-      patch({ permission });
-      if (permission !== "granted") return;
-      trackInstantFolderSyncResume();
-      await sync({ handle });
-    });
-  }, [patch, stateRef, sync]);
-  const syncNow = useCallback(() => {
-    const { handle, permission } = stateRef.current;
-    if (handle && permission === "granted") void sync({ handle });
-    else resume();
-  }, [resume, stateRef, sync]);
-  const importFiles = useCallback(
-    (files: ReadonlyArray<File>) => {
-      const replays = filesFromDirectoryInput(files);
-      if (replays.length === 0) patch({ error: NO_REPLAYS });
-      else void sync({ files: replays });
-    },
-    [patch, sync],
-  );
-  const stop = useCallback(async () => {
-    // Let a running pass wind down first, so none of its results land
-    // after the folder and its ledger are forgotten.
-    await cancelAndWait();
-    await Promise.all([clearFolderHandle(), clearLedger()]).catch(() => undefined);
-    patch({ handle: null, permission: null, syncedCount: 0, lastRun: null, error: null });
-  }, [cancelAndWait, patch]);
-  return { pickFolder, resume, syncNow, importFiles, stop, cancel };
-}
-
-/**
- * State + actions for Folder Sync (see module comment).
- *
- * Example:
- *   const folder = useFolderSync();
- *   <Button onClick={folder.pickFolder}>Choose your StarCraft II folder</Button>
- */
-export function useFolderSync(): FolderSyncController {
-  const [state, setState] = useState<FolderSyncState>(INITIAL);
-  const stateRef = useRef(state);
-  useEffect(() => {
-    stateRef.current = state;
-  });
-  const patch = useCallback<Patch>((next) => setState((prev) => ({ ...prev, ...next })), []);
-  useEffect(() => {
-    let alive = true;
-    const mode = supportsDirectoryPicker() ? "picker" : "input";
-    void loadStoredState().then((stored) => {
-      if (alive) patch({ ...stored, mode, loaded: true });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [patch]);
-  const actions = useFolderActions(patch, stateRef, useSyncRunner(patch, stateRef));
-  const { handle, ...rest } = state;
-  return { ...rest, folderName: handle?.name ?? null, ...actions };
-}
+export { useFolderSync, type FolderSyncController } from "./useFolderSync";
 
 const STAGE_LABELS: Record<FolderSyncProgress["stage"], string> = {
   walking: "Looking for replays",
-  reading: "Analysing new replays",
+  reading: "Analyzing new replays",
   uploading: "Uploading",
 };
 
@@ -276,7 +68,7 @@ function SyncBar({ progress }: { progress: FolderSyncProgress }) {
       aria-valuenow={done}
       className="h-2 overflow-hidden rounded-full border border-line bg-bg-surface"
     >
-      <div className="h-full bg-accent transition-[width] motion-reduce:transition-none" style={{ width: `${Math.round((done / progress.total) * 100)}%` }} />
+      <div className="h-full bg-accent transition-[width] motion-reduce:transition-none" style={{ width: `${percentOf(done, progress.total)}%` }} />
     </div>
   );
 }
@@ -346,7 +138,28 @@ function PickerActions({ folder, onStop }: { folder: FolderSyncController; onSto
   );
 }
 
-function InputFallback({ folder }: { folder: FolderSyncController }) {
+/** A folder is remembered, but for another account: nothing syncs until this account claims it. */
+function OwnerMismatch({ folder }: { folder: FolderSyncController }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-caption text-text-muted">
+        <span className="block font-semibold text-text">Folder Sync in this browser was set up by another account.</span>
+        Nothing from <strong className="break-all text-text">{folder.folderName}</strong> is synced into your account
+        until you choose to use it here. Its sync history on this device is cleared first.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={folder.claimForThisAccount} disabled={folder.running} iconLeft={<FolderSync className="h-4 w-4" aria-hidden />}>
+          Use this folder for this account
+        </Button>
+        <Button variant="ghost" onClick={folder.pickFolder} disabled={folder.running}>
+          Choose another folder
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function InputFallback({ folder, onForget }: { folder: FolderSyncController; onForget: () => void }) {
   const input = useRef<HTMLInputElement | null>(null);
   // `webkitdirectory` is non-standard and missing from React's input types.
   const attach = useCallback((node: HTMLInputElement | null) => {
@@ -364,9 +177,16 @@ function InputFallback({ folder }: { folder: FolderSyncController }) {
         This browser can&apos;t keep access to a folder between visits — automatic Folder Sync needs Chrome or Edge. You can
         still import a whole folder now; replays already imported are skipped next time.
       </p>
-      <Button onClick={() => input.current?.click()} disabled={folder.running} iconLeft={<FolderSync className="h-4 w-4" aria-hidden />}>
-        Import a replay folder
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => input.current?.click()} disabled={folder.running} iconLeft={<FolderSync className="h-4 w-4" aria-hidden />}>
+          Import a replay folder
+        </Button>
+        {(folder.historyCount ?? 0) > 0 ? (
+          <Button variant="ghost" onClick={onForget} disabled={folder.running}>
+            Forget import history
+          </Button>
+        ) : null}
+      </div>
       <input ref={attach} type="file" multiple onChange={onChange} tabIndex={-1} aria-label="Replay folder to import" className="sr-only" />
     </div>
   );
@@ -386,13 +206,23 @@ function LastRun({ run }: { run: FolderSyncSummary }) {
   return <ImportSummary counts={counts} failed={run.failed} />;
 }
 
+function ModeControls({ folder, onStop }: { folder: FolderSyncController; onStop: () => void }) {
+  if (folder.mode !== "picker") return <InputFallback folder={folder} onForget={onStop} />;
+  if (folder.ownerMismatch) return <OwnerMismatch folder={folder} />;
+  return (
+    <>
+      {folder.folderName ? <FolderStatus folder={folder} /> : null}
+      <PickerActions folder={folder} onStop={onStop} />
+    </>
+  );
+}
+
 /** Mode-specific controls, then progress, errors and the last result. */
 function FolderSyncBody({ folder, onStop }: { folder: FolderSyncController; onStop: () => void }) {
   if (!folder.loaded) return <p className="text-caption text-text-muted">Checking Folder Sync…</p>;
   return (
     <>
-      {folder.mode === "picker" && folder.folderName ? <FolderStatus folder={folder} /> : null}
-      {folder.mode === "picker" ? <PickerActions folder={folder} onStop={onStop} /> : <InputFallback folder={folder} />}
+      <ModeControls folder={folder} onStop={onStop} />
       {!folder.storageAvailable ? (
         <p className="text-caption text-text-muted">This browser won&apos;t let us remember the folder (private window?), so each sync starts fresh.</p>
       ) : null}
@@ -400,6 +230,46 @@ function FolderSyncBody({ folder, onStop }: { folder: FolderSyncController; onSt
       {folder.error ? <p role="alert" className="text-caption text-danger">{folder.error}</p> : null}
       {!folder.running && folder.lastRun ? <LastRun run={folder.lastRun} /> : null}
     </>
+  );
+}
+
+/**
+ * What the card promises, per mode: automatic sync only happens where the
+ * folder can be remembered, and only when the dashboard is opened or
+ * returned to (see FolderSyncAutoRunner).
+ *
+ * Example:
+ *   folderSyncIntro("picker"); // -> "Pick your StarCraft II folder once. Each time you open…"
+ */
+export function folderSyncIntro(mode: FolderSyncController["mode"]): string {
+  if (mode === "input") {
+    return "Import your whole StarCraft II folder at once; replays already imported from it are skipped next time. Nothing is written to the folder.";
+  }
+  return (
+    `Pick your StarCraft II folder once. Each time you open or return to your SC2 Tools dashboard (at most every ${AUTO_SCAN_INTERVAL_MINUTES} ` +
+    "minutes), new ladder replays are analyzed in the browser and uploaded — only files that changed. Nothing is written to the folder."
+  );
+}
+
+function StopDialog({ folder, open, onClose }: { folder: FolderSyncController; open: boolean; onClose: () => void }) {
+  const picker = folder.mode === "picker";
+  return (
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      onConfirm={() => {
+        onClose();
+        void folder.stop();
+      }}
+      title={picker ? "Stop syncing this folder?" : "Forget import history?"}
+      description={
+        picker
+          ? "This browser forgets the folder and which replays it already uploaded. Games already in your account stay there."
+          : "This browser forgets which replays it already imported (their file names and dates). Games already in your account stay there; a later import checks every replay again."
+      }
+      confirmLabel={picker ? "Stop syncing" : "Forget import history"}
+      intent="danger"
+    />
   );
 }
 
@@ -415,12 +285,9 @@ function FolderSyncCardView({ folder, className }: { folder: FolderSyncControlle
     >
       <div className="flex flex-wrap items-center gap-2">
         <h2 id={headingId} className="font-display text-h4 text-text">Folder Sync</h2>
-        <Badge variant="cyan" size="sm">Chrome &amp; Edge</Badge>
+        {folder.mode === "picker" ? <Badge variant="cyan" size="sm">Chrome &amp; Edge</Badge> : null}
       </div>
-      <p className="text-caption text-text-muted">
-        Pick your StarCraft II folder once. While an SC2 Tools tab is open, new ladder replays are analysed in the browser and
-        uploaded — at most every 10 minutes, and only files that changed. Nothing is written to the folder.
-      </p>
+      {folder.mode ? <p className="text-caption text-text-muted">{folderSyncIntro(folder.mode)}</p> : null}
       <FolderSyncBody folder={folder} onStop={() => setConfirmStop(true)} />
       <details className="rounded-lg border-2 border-line bg-bg-surface px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
@@ -428,18 +295,7 @@ function FolderSyncCardView({ folder, className }: { folder: FolderSyncControlle
         </summary>
         <OsPathHints className="pb-3" folderPicking />
       </details>
-      <ConfirmDialog
-        open={confirmStop}
-        onClose={() => setConfirmStop(false)}
-        onConfirm={() => {
-          setConfirmStop(false);
-          void folder.stop();
-        }}
-        title="Stop syncing this folder?"
-        description="This browser forgets the folder and which replays it already uploaded. Games already in your account stay there."
-        confirmLabel="Stop syncing"
-        intent="danger"
-      />
+      <StopDialog folder={folder} open={confirmStop} onClose={() => setConfirmStop(false)} />
     </section>
   );
 }

@@ -40,7 +40,7 @@ export const AGENT_LIVE_FEATURES = [
   {
     Icon: RefreshCw,
     title: "Syncing while you play, with no tab open",
-    detail: "The browser only syncs while an SC2 Tools tab is open.",
+    detail: "The browser only syncs when you open or return to your SC2 Tools dashboard.",
   },
   {
     Icon: Clapperboard,
@@ -103,7 +103,7 @@ function UpsellCard({ onDismiss, className }: { onDismiss?: () => void; classNam
             Install the agent for live features
           </h2>
           <p className="text-caption text-text-muted">
-            Your replays are analysed in the browser. These need the free desktop agent on your gaming PC:
+            Your replays are analyzed in the browser. These need the free desktop agent on your gaming PC:
           </p>
         </div>
         {onDismiss ? <DismissButton onDismiss={onDismiss} /> : null}

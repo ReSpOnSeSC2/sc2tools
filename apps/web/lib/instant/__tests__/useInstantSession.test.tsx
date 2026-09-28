@@ -7,7 +7,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EngineError } from "../engineErrors";
-import { MAX_REPLAY_BYTES } from "../fileIntake";
+import { MAX_REPLAY_BYTES, MAX_ZIP_ARCHIVE_BYTES } from "../fileIntake";
 import { PROGRESS_INTERVAL_MS } from "../sessionProgress";
 import type {
   EngineClient,
@@ -212,6 +212,50 @@ describe("useInstantSession: engine lifecycle", () => {
   });
 });
 
+describe("useInstantSession: prewarm on intent", () => {
+  it("boots the engine once on the first intent, never on mount, and the run reuses it", async () => {
+    const engine = new MockEngine();
+    engine.scans.set("a.SC2Replay", scan("2-S2-1-9", { toonFromPath: ME }));
+    const { result, factory } = mount(engine);
+    expect(factory).not.toHaveBeenCalled();
+    act(() => {
+      result.current.prewarm();
+      result.current.prewarm();
+    });
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(engine.boot).toHaveBeenCalledTimes(1);
+    await add(result, [replay("a.SC2Replay")]);
+    await start(result);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(result.current.phase).toBe("done");
+  });
+
+  it("keeps a failed warm-up silent until the run, which then reports the boot error", async () => {
+    const engine = new MockEngine();
+    engine.bootError = new EngineError("integrity_failed", "integrity check failed");
+    const { result } = mount(engine);
+    await act(async () => {
+      result.current.prewarm();
+    });
+    expect(result.current.phase).toBe("idle");
+    expect(result.current.error).toBeNull();
+    expect(events("instant_error")).toEqual([]);
+    await add(result, [replay("a.SC2Replay")]);
+    await start(result);
+    expect(result.current.error).toBe("integrity_failed");
+    expect(engine.boot).toHaveBeenCalledTimes(2);
+  });
+
+  it("does nothing after unmount", async () => {
+    const engine = new MockEngine();
+    const { result, factory, unmount } = mount(engine);
+    const { prewarm } = result.current;
+    unmount();
+    prewarm();
+    expect(factory).not.toHaveBeenCalled();
+  });
+});
+
 describe("useInstantSession: which player is me (resolved)", () => {
   it("parses straight away when the path names the toon", async () => {
     const engine = new MockEngine();
@@ -352,6 +396,9 @@ describe("useInstantSession: intake", () => {
     expect(result.current.failed.map((failure) => failure.errorKind)).toEqual(["too_large"]);
   });
 
+});
+
+describe("useInstantSession: .zip intake", () => {
   it("expands a .zip through the engine and reports the selection as source zip", async () => {
     const engine = new MockEngine();
     const entry: IntakeFile = {
@@ -366,6 +413,17 @@ describe("useInstantSession: intake", () => {
     expect(result.current.files.map((file) => file.relativePath)).toEqual(["b.SC2Replay", "r.zip/a.SC2Replay"]);
     expect(result.current.expanding).toBe(false);
     expect(events("instant_files_selected")).toEqual([{ count: 2, source: "zip" }]);
+  });
+
+  it("rejects an oversized .zip as too_large without starting the engine", async () => {
+    const engine = new MockEngine();
+    const { result, factory } = mount(engine);
+    const huge = new File(["z"], "library.zip");
+    Object.defineProperty(huge, "size", { value: MAX_ZIP_ARCHIVE_BYTES + 1 });
+    await add(result, [huge], "drop");
+    expect(factory).not.toHaveBeenCalled();
+    expect(engine.expandZip).not.toHaveBeenCalled();
+    expect(result.current.failed.map((failure) => failure.errorKind)).toEqual(["too_large"]);
   });
 
   it("never leaves intake locked when the engine cannot be created for a .zip", async () => {

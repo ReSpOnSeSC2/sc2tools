@@ -42,7 +42,10 @@ const FolderSyncAutoRunner = dynamic(
  *   - The onboarding gate: the checklist until pairing + first games
  *     complete, then the zero-games empty state, then the section.
  *     With browser import enabled (Instant Analysis flag) games alone
- *     complete it, and the empty state offers the browser path too.
+ *     complete it, and a new account that has not started the agent
+ *     path (no download, no pairing) sees the two options side by side
+ *     (NoGamesYet: desktop agent | import in the browser) instead of the
+ *     agent checklist.
  *   - A debounced router.refresh() while those first games land.
  *   - Background Folder Sync (browser import) while /app is open.
  *
@@ -60,6 +63,30 @@ export type DashboardMe = ChecklistMe & {
 };
 
 const MeContext = createContext<DashboardMe | null>(null);
+
+/** Which onboarding surface /app shows. */
+export interface OnboardingView {
+  /** The agent checklist (download → pair → first games). */
+  checklist: boolean;
+  /** The zero-games empty state (both import options when browser import is on). */
+  noGamesYet: boolean;
+}
+
+/**
+ * Decide between the checklist and the zero-games choice. With browser
+ * import on, an account with no games that has neither paired an agent
+ * nor started its download has not picked a path yet, so it gets both
+ * options side by side; the checklist stays for the agent path.
+ *
+ * Example:
+ *   onboardingView({ games: { total: 0 }, agentPaired: false }, true); // -> { checklist: false, noGamesYet: true }
+ */
+export function onboardingView(me: ChecklistMe, browserImportEnabled: boolean): OnboardingView {
+  const noGames = me.games.total === 0;
+  const undecided = browserImportEnabled && noGames && !me.agentPaired && !me.onboarding?.downloadStartedAt;
+  const checklist = !undecided && checklistVisible(me, { browserImportEnabled });
+  return { checklist, noGamesYet: noGames && !checklist };
+}
 
 /** The /v1/me snapshot fetched by the app layout. Analyzer routes only. */
 export function useDashboardMe(): DashboardMe {
@@ -85,8 +112,8 @@ export function AnalyzerFrame({
 
   const { enabled: browserImportEnabled } = useInstantImport();
   const noGames = me.games.total === 0;
-  const showChecklist = checklistVisible(me, { browserImportEnabled });
-  useRefreshWhileOnboarding(noGames || showChecklist);
+  const view = onboardingView(me, browserImportEnabled);
+  useRefreshWhileOnboarding(noGames || view.checklist);
 
   return (
     <MeContext.Provider value={me}>
@@ -106,7 +133,7 @@ export function AnalyzerFrame({
               <FilterBar />
             </div>
 
-            {showChecklist ? (
+            {view.checklist ? (
               <OnboardingChecklist
                 me={me}
                 onRefresh={() => router.refresh()}
@@ -116,13 +143,10 @@ export function AnalyzerFrame({
               <ActiveImportCard />
             )}
 
-            {noGames ? (
-              showChecklist ? null : (
-                <NoGamesYet browserImportEnabled={browserImportEnabled} />
-              )
-            ) : (
-              children
-            )}
+            {view.noGamesYet ? (
+              <NoGamesYet browserImportEnabled={browserImportEnabled} />
+            ) : null}
+            {noGames ? null : children}
           </div>
         )}
       </AnalyzerProvider>

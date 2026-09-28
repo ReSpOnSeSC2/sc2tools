@@ -28,7 +28,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: mocks.gaEvent }));
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.test" }));
-vi.mock("@/lib/instant/localStore", () => ({ loadTryGames: mocks.loadTryGames, clearTryData: mocks.clearTryData }));
+vi.mock("@/lib/instant/localStore", () => ({ TRY_TTL_DAYS: 7, loadTryGames: mocks.loadTryGames, clearTryData: mocks.clearTryData }));
 vi.mock("@/lib/instant/uploader", () => ({ uploadGames: mocks.uploadGames }));
 
 import { SaveGamesCta, TryResume, classifyUpload, useTryUpload } from "../TryResume";
@@ -38,8 +38,8 @@ const GAMES: UploadableGame[] = [
   { gameId: "g2", json: '{"gameId":"g2"}' },
 ];
 
-function stored(): StoredTryGame[] {
-  return GAMES.map((game) => ({ ...game, date: "2026-05-08T19:08:12Z", storedAt: 1, expiresAt: 2 }));
+function stored(engineVersion = "1.6.3"): StoredTryGame[] {
+  return GAMES.map((game) => ({ ...game, date: "2026-05-08T19:08:12Z", engineVersion, storedAt: 1, expiresAt: 2 }));
 }
 
 function summary(overrides: Partial<UploadSummary> = {}): UploadSummary {
@@ -88,7 +88,20 @@ describe("classifyUpload", () => {
       reason: "daily_cap",
       accepted: 1,
       pending: 1,
+      resetAt: null,
     });
+    expect(classifyUpload(summary({ pending: ["g2"], stoppedReason: "server" }))).toEqual({
+      status: "stopped",
+      reason: "server",
+      accepted: 0,
+      pending: 1,
+    });
+  });
+
+  it("keeps the daily cap's reset time", () => {
+    const resetAt = Date.parse("2026-09-29T00:00:00Z");
+    const capped = summary({ pending: ["g1"], stoppedReason: "daily_cap", dailyCap: { limit: 5000, remaining: 0, resetAt } });
+    expect(classifyUpload(capped)).toMatchObject({ reason: "daily_cap", resetAt });
   });
 
   it("treats an all-rejected run as rejected and an aborted run as nothing", () => {
@@ -158,10 +171,22 @@ describe("SaveGamesCta stopped uploads", () => {
     render(<Cta />);
     fireEvent.click(screen.getByRole("button", { name: "Save 2 games to my account" }));
     expect(await screen.findByText("You've reached today's upload limit")).toBeTruthy();
-    expect(screen.getByText(/Saved 1 game\. The other 1 game stay on this device/)).toBeTruthy();
+    expect(screen.getByText(/Saved 1 game\. The other 1 game stay on this device for up to 7 days\. Come back tomorrow/)).toBeTruthy();
     expect(mocks.clearTryData).not.toHaveBeenCalled();
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.gaEvent).toHaveBeenCalledWith("instant_error", { kind: "upload_daily_cap" });
+  });
+
+  it("says when uploads resume after the daily cap, in local time", async () => {
+    mocks.auth = { isLoaded: true, isSignedIn: true };
+    const resetAt = Date.parse("2026-09-29T00:00:00Z");
+    mocks.uploadGames.mockResolvedValue(summary({
+      pending: ["g1", "g2"], stoppedReason: "daily_cap", dailyCap: { limit: 5000, remaining: 0, resetAt },
+    }));
+    render(<Cta />);
+    fireEvent.click(screen.getByRole("button", { name: "Save 2 games to my account" }));
+    const expected = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(resetAt);
+    expect(await screen.findByText(new RegExp(`Uploads resume after ${expected}`))).toBeTruthy();
   });
 
   it("asks to sign in again after an auth stop", async () => {
@@ -201,10 +226,23 @@ describe("TryResume", () => {
     expect(onResume).toHaveBeenCalled();
     expect(mocks.loadTryGames).toHaveBeenCalledTimes(1);
     expect(mocks.uploadGames).toHaveBeenCalledTimes(1);
-    expect(mocks.uploadGames.mock.calls[0]?.[0]).toEqual(GAMES);
+    expect(mocks.uploadGames.mock.calls[0]?.[0]).toEqual(GAMES.map((game) => ({ ...game, engineVersion: "1.6.3" })));
     expect(mocks.clearTryData).toHaveBeenCalledTimes(1);
   });
 
+  it("uploads each stored game with the engine version that parsed it", async () => {
+    mocks.search = "resume=1";
+    mocks.auth = { isLoaded: true, isSignedIn: true };
+    mocks.loadTryGames.mockResolvedValue(stored("1.6.2"));
+    render(<Resume games={[]} />);
+    await waitFor(() => expect(mocks.uploadGames).toHaveBeenCalledTimes(1));
+    const [games] = mocks.uploadGames.mock.calls[0] as [UploadableGame[], UploadDeps];
+    expect(games).toEqual(GAMES.map((game) => ({ ...game, engineVersion: "1.6.2" })));
+  });
+
+});
+
+describe("TryResume: nothing stored or signed out", () => {
   it("says so when nothing is stored on this device", async () => {
     mocks.search = "resume=1";
     mocks.auth = { isLoaded: true, isSignedIn: true };

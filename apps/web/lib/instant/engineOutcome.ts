@@ -153,21 +153,25 @@ export function toPlayersResult(envelope: unknown): PlayersResult {
 /**
  * Wrap one unzipped replay as an `IntakeFile`. The path keeps the archive's
  * own path as a prefix, so entries of different zips never collide and a
- * `<toon>` folder inside the archive still identifies the player.
+ * `<toon>` folder inside the archive still identifies the player. The
+ * entry's own stored time is used when the archive has one, so the
+ * newest-first cap and the date pre-filter work on zips too; otherwise
+ * the archive's time.
  *
  * Example:
- *   zipEntryFile(zip, "Accounts/1/1-S2-1-1/Replays/a.SC2Replay", bytes).relativePath;
+ *   zipEntryFile(zip, "Accounts/1/1-S2-1-1/Replays/a.SC2Replay", bytes, 1788264000000).relativePath;
  *   // -> "replays.zip/Accounts/1/1-S2-1-1/Replays/a.SC2Replay"
  */
-export function zipEntryFile(zip: IntakeFile, entryName: string, bytes: ArrayBuffer): IntakeFile {
+export function zipEntryFile(zip: IntakeFile, entryName: string, bytes: ArrayBuffer, entryModified?: number): IntakeFile {
   const relativePath = `${zip.relativePath}/${entryName}`;
   const name = entryName.split("/").pop() || entryName;
+  const lastModified = entryModified ?? zip.lastModified;
   return {
-    key: intakeKey(relativePath, bytes.byteLength, zip.lastModified),
+    key: intakeKey(relativePath, bytes.byteLength, lastModified),
     name,
     relativePath,
     size: bytes.byteLength,
-    lastModified: zip.lastModified,
+    lastModified,
     source: "zip",
     blob: new Blob([bytes], { type: ZIP_ENTRY_MIME }),
   };

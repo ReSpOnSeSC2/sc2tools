@@ -18,7 +18,9 @@ export type OnboardingImportMode = "agent" | "browser";
  * lands before the dashboard opens, so it opens populated instead of
  * empty. In "agent" mode one click asks the freshly-paired agent to
  * import; in "browser" mode (chosen on the Download step, behind the
- * Instant Analysis flag) replays are analysed in this tab and uploaded.
+ * Instant Analysis flag) replays are analyzed in this tab and the results
+ * uploaded — plus a private copy of each replay file when the panel's
+ * backup box is ticked (it starts ticked when backups are available).
  * Skipping is fine either way.
  */
 export function OnboardingImport({ mode = "agent" }: { mode?: OnboardingImportMode }) {
@@ -40,9 +42,10 @@ function BrowserModeImport() {
           Import your replays
         </h1>
         <p className="text-body-lg text-text-muted">
-          Choose replays from your StarCraft II folder — they&apos;re analysed
-          right here in your browser, then only the results are uploaded to
-          your account.
+          Choose replays from your StarCraft II folder — they&apos;re analyzed
+          right here in your browser, then the results are uploaded to your
+          account (plus a private copy of each replay file if the backup box
+          below is ticked).
         </p>
       </header>
 

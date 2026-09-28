@@ -29,7 +29,7 @@ describe("ParseProgress", () => {
     expect(bar.getAttribute("aria-valuenow")).toBe("3");
     expect(bar.getAttribute("aria-valuemax")).toBe("8");
     expect(bar.getAttribute("aria-valuetext")).toBe("3 of 8");
-    expect(screen.getByRole("status").textContent).toBe("Analysing replays…");
+    expect(screen.getByRole("status").textContent).toBe("Analyzing replays…");
     expect(screen.queryByText(/secret-name/)).toBeNull();
   });
 
@@ -41,6 +41,14 @@ describe("ParseProgress", () => {
     expect(screen.getByRole("progressbar").getAttribute("aria-valuemax")).toBe("5");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes focus on mount only with autoFocus", () => {
+    const { unmount } = render(<ParseProgress phase="booting" progress={null} total={5} failed={[]} onCancel={vi.fn()} />);
+    expect(document.activeElement).toBe(document.body);
+    unmount();
+    render(<ParseProgress phase="booting" progress={null} total={5} failed={[]} onCancel={vi.fn()} autoFocus />);
+    expect(document.activeElement).toBe(screen.getByRole("status"));
   });
 
   it("groups failures by kind with counts and never lists file names", () => {

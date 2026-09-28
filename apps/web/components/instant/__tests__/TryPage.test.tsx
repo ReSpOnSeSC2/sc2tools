@@ -28,6 +28,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: mocks.gaEvent }));
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.test" }));
 vi.mock("@/lib/instant/localStore", () => ({
+  TRY_TTL_DAYS: 7,
   saveTryGames: mocks.saveTryGames,
   loadTryGames: mocks.loadTryGames,
   clearTryData: mocks.clearTryData,
@@ -40,6 +41,7 @@ vi.mock("@/lib/instant/useInstantSession", () => ({
   },
 }));
 
+import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
 import { PRIVACY_LINE, TryPage } from "../TryPage";
 
 const RAW = readFileSync(path.join(__dirname, "../../../lib/instant/__tests__/fixtures/warpgate_payload.json"), "utf8");
@@ -62,7 +64,7 @@ function parsedGame(): ParsedGame {
 }
 
 function storedGame(): StoredTryGame {
-  return { gameId: GAME_ID, json: RAW, date: DATE, storedAt: 1, expiresAt: 2 };
+  return { gameId: GAME_ID, json: RAW, date: DATE, engineVersion: "1.6.3", storedAt: 1, expiresAt: 2 };
 }
 
 function makeSession(overrides: Partial<InstantSession> = {}): InstantSession {
@@ -91,6 +93,7 @@ function makeSession(overrides: Partial<InstantSession> = {}): InstantSession {
     cancel: vi.fn(),
     reset: vi.fn(),
     lastHeapBytes: () => null,
+    prewarm: vi.fn(),
     ...overrides,
   };
 }
@@ -157,7 +160,10 @@ describe("TryPage report", () => {
     mocks.session = makeSession({ phase: "done", parsed: [parsedGame()] });
     rerender(<TryPage mode="all" />);
     expect(await screen.findByRole("heading", { name: "Your instant report" })).toBeTruthy();
-    expect(mocks.saveTryGames).toHaveBeenCalledWith([{ gameId: GAME_ID, json: RAW, date: DATE }], expect.any(Number));
+    expect(mocks.saveTryGames).toHaveBeenCalledWith(
+      [{ gameId: GAME_ID, json: RAW, date: DATE, engineVersion: INSTANT_ENGINE_VERSION }],
+      expect.any(Number),
+    );
     expect(screen.getByTestId("report-matchups")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Save these games to your free account" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Clear local data" })).toBeTruthy();
@@ -180,10 +186,25 @@ describe("TryPage report", () => {
     expect(document.activeElement).not.toBe(heading);
   });
 
-  it("announces when a selection holds no replays", () => {
+});
+
+describe("TryPage report storage and notes", () => {
+  it("announces when a selection holds no replays, with an icon and full-contrast text", () => {
     mocks.session = makeSession({ lastIntake: { found: 0, added: 0, ignored: 2, rejected: 0 } });
     render(<TryPage mode="all" />);
-    expect(screen.getByText(/didn't find any StarCraft II replays/).getAttribute("role")).toBe("status");
+    const note = screen.getByText(/didn't find any StarCraft II replays/).closest("[role=status]");
+    expect(note).not.toBeNull();
+    expect(note?.className).toContain("text-text");
+    expect(note?.className).not.toContain("text-warning");
+    expect(note?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("saves each game with the engine version that parsed it", async () => {
+    const engineInfo = { engineVersion: "1.6.2", pyodideVersion: "314.0.7", pythonVersion: "3.14", bundleId: "b", bootMs: 1 };
+    mocks.session = makeSession({ phase: "done", parsed: [parsedGame()], engineInfo });
+    render(<TryPage mode="all" />);
+    await waitFor(() => expect(mocks.saveTryGames).toHaveBeenCalled());
+    expect(mocks.saveTryGames.mock.calls[0]?.[0]).toEqual([{ gameId: GAME_ID, json: RAW, date: DATE, engineVersion: "1.6.2" }]);
   });
 
   it("keeps the report in memory with a note when storage is unavailable", async () => {
@@ -210,11 +231,52 @@ describe("TryPage report", () => {
 
 });
 
+describe("TryPage keyboard focus and warm-up", () => {
+  it("moves focus into the progress panel when a run starts", () => {
+    const { rerender } = render(<TryPage mode="all" />);
+    screen.getByRole("button", { name: "Choose replays" }).focus();
+    mocks.session = makeSession({ phase: "booting", busy: true });
+    rerender(<TryPage mode="all" />);
+    expect(document.activeElement?.textContent).toMatch(/Starting the analyzer/);
+  });
+
+  it("moves focus onto the intake after Analyze more replays", async () => {
+    mocks.loadTryGames.mockResolvedValue([storedGame()]);
+    render(<TryPage mode="all" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Analyze more replays" }));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Add your replays"));
+  });
+
+  it("moves focus onto the intake after clearing local data", async () => {
+    mocks.loadTryGames.mockResolvedValue([storedGame()]);
+    const session = makeSession();
+    mocks.session = session;
+    render(<TryPage mode="all" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Clear local data" }));
+    const confirm = Array.from(screen.getByRole("dialog").querySelectorAll("button")).find(
+      (button) => button.textContent === "Clear local data",
+    );
+    if (!confirm) throw new Error("confirm button missing");
+    fireEvent.click(confirm);
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Add your replays"));
+    expect(session.prewarm).not.toHaveBeenCalled();
+  });
+
+  it("warms the analyzer up on the first intent, never on mount", () => {
+    const session = makeSession();
+    mocks.session = session;
+    render(<TryPage mode="all" />);
+    expect(session.prewarm).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
+    expect(session.prewarm).toHaveBeenCalled();
+  });
+});
+
 describe("TryPage errors and rollout gate", () => {
-  it("says when nothing could be analysed", () => {
+  it("says when nothing could be analyzed", () => {
     mocks.session = makeSession({ phase: "done", failed: [{ ok: false, fileName: "", relativePath: "", errorKind: "ai_game", ms: 1 }] });
     render(<TryPage mode="all" />);
-    expect(screen.getByText("None of these replays could be analysed.")).toBeTruthy();
+    expect(screen.getByText("None of these replays could be analyzed.")).toBeTruthy();
     expect(screen.getByText(/Games vs the AI/)).toBeTruthy();
   });
 

@@ -8,14 +8,18 @@
  *
  * Only the stage label is a live region; the per-file count lives on the
  * progressbar (`aria-valuenow` / `aria-valuetext`) so screen readers are
- * not flooded with an announcement per replay.
+ * not flooded with an announcement per replay. With `autoFocus` the stage
+ * label takes keyboard focus when the panel appears (the intake that had
+ * focus is gone by then), so the next Tab reaches "Cancel".
  *
  * Example:
  *   <ParseProgress progress={session.progress} phase={session.phase}
  *     total={session.files.length} failed={session.failed} onCancel={session.cancel} />
  */
+import { useEffect, useRef } from "react";
 import { AlertTriangle, MinusCircle } from "lucide-react";
 import { Button } from "@/components/ui";
+import { percentOf } from "@/lib/instant/displayUnits";
 import { summarizeFailures, type FailureGroup } from "@/lib/instant/errorCopy";
 import { isRunningPhase, type InstantSessionPhase, type SessionProgress } from "@/lib/instant/sessionState";
 import type { FailedParse } from "@/lib/instant/types";
@@ -27,11 +31,12 @@ export interface ParseProgressProps {
   total: number;
   failed: FailedParse[];
   onCancel: () => void;
+  /** Focus the stage label on mount (off for the after-run summary). */
+  autoFocus?: boolean;
   className?: string;
 }
 
 export const BOOT_LABEL = "Starting the analyzer… (first run downloads about 8 MB, then it's cached)";
-const PERCENT = 100;
 
 const PHASE_LABELS: Record<InstantSessionPhase, string> = {
   idle: "Ready when you are",
@@ -39,7 +44,7 @@ const PHASE_LABELS: Record<InstantSessionPhase, string> = {
   booting: BOOT_LABEL,
   scanning: "Reading who played in each replay…",
   choosing: "Waiting for you to pick your player",
-  parsing: "Analysing replays…",
+  parsing: "Analyzing replays…",
   done: "Analysis complete",
   error: "The analyzer stopped",
 };
@@ -49,7 +54,7 @@ const PHASE_LABELS: Record<InstantSessionPhase, string> = {
  * since they can happen while the session is idle or ready).
  *
  * Example:
- *   stageLabel("parsing", null); // -> "Analysing replays…"
+ *   stageLabel("parsing", null); // -> "Analyzing replays…"
  */
 export function stageLabel(phase: InstantSessionPhase, progress: SessionProgress | null): string {
   if (progress?.phase === "boot") return BOOT_LABEL;
@@ -66,7 +71,7 @@ function barValues(phase: InstantSessionPhase, progress: SessionProgress | null,
 function FailureSummary({ groups }: { groups: FailureGroup[] }) {
   return (
     <div className="space-y-2">
-      <h3 className="text-caption font-semibold text-text">Skipped or not analysed</h3>
+      <h3 className="text-caption font-semibold text-text">Skipped or not analyzed</h3>
       <ul className="space-y-2">
         {groups.map((group) => {
           const Icon = group.skipped ? MinusCircle : AlertTriangle;
@@ -92,18 +97,29 @@ function FailureSummary({ groups }: { groups: FailureGroup[] }) {
  * Example:
  *   <ParseProgress progress={null} phase="booting" total={12} failed={[]} onCancel={cancel} />
  */
-export function ParseProgress({ progress, phase, total, failed, onCancel, className = "" }: ParseProgressProps) {
+export function ParseProgress(props: ParseProgressProps) {
+  const { progress, phase, total, failed, onCancel, autoFocus = false, className = "" } = props;
   const label = stageLabel(phase, progress);
   const { done, max } = barValues(phase, progress, total);
-  const percent = Math.round((Math.min(done, max) / max) * PERCENT);
+  const percent = percentOf(done, max);
   const cancellable = (isRunningPhase(phase) && phase !== "choosing") || progress?.phase === "unzip";
   const groups = summarizeFailures(failed);
+  const labelRef = useRef<HTMLParagraphElement | null>(null);
+  useEffect(() => {
+    if (autoFocus) labelRef.current?.focus();
+  }, [autoFocus]);
   return (
     <section
       aria-label="Analysis progress"
       className={["space-y-4 rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard", className].filter(Boolean).join(" ")}
     >
-      <p role="status" aria-live="polite" className="text-body font-semibold text-text">
+      <p
+        ref={labelRef}
+        tabIndex={-1}
+        role="status"
+        aria-live="polite"
+        className="text-body font-semibold text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
         {label}
       </p>
       <div className="space-y-1">

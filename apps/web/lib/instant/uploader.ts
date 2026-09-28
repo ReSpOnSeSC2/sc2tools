@@ -7,7 +7,8 @@
  *   1. `POST /v1/games/exists` (500 ids per call) drops games the
  *      account already has — no need to spend the upload budget on them.
  *   2. Each game's Python-produced JSON is tagged with browser
- *      provenance and packed into ≤ 50-game / ≤ 4.5 MiB bodies.
+ *      provenance (its own `engineVersion` when it has one, else the
+ *      caller's) and packed into ≤ 50-game / ≤ 4.5 MiB bodies.
  *   3. Batches go STRICTLY one at a time, each with a fresh Clerk token.
  *      Busy/timeout/5xx/network → retry the same batch after
  *      max(Retry-After, full-jitter exponential backoff), capped at 60 s;
@@ -15,7 +16,9 @@
  *   4. Daily cap (429 `browser_ingest_daily_cap`): the server refuses a
  *      whole batch that would cross today's cap and reports how many
  *      games still fit (`remaining`), so that many are sent once as a
- *      smaller batch; then the run stops and the rest stay pending.
+ *      smaller batch; then the run stops and the rest stay pending. The
+ *      cap details (`limit`, `remaining`, `resetAt`) are kept in the
+ *      summary so the UI can say when uploads resume.
  *   5. Per-game `retryable` rejections (and ids missing from the
  *      response) are requeued once into a later batch.
  *
@@ -61,6 +64,16 @@ const DAILY_CAP_CODE = "browser_ingest_daily_cap";
 
 export type UploadStopReason = "daily_cap" | "auth" | "aborted" | "server";
 
+/** What the daily-cap 429 said (null fields: missing from the body). */
+export interface DailyCapInfo {
+  /** Browser-uploaded games allowed per UTC day. */
+  limit: number | null;
+  /** Games that still fitted when the batch was refused. */
+  remaining: number | null;
+  /** Epoch ms when the cap resets. */
+  resetAt: number | null;
+}
+
 export interface UploadSummary {
   accepted: IngestResponse["accepted"];
   rejected: Array<{ gameId: string; errors: string[] }>;
@@ -69,11 +82,15 @@ export interface UploadSummary {
   /** Games not settled because the run stopped early (upload later). */
   pending: string[];
   stoppedReason?: UploadStopReason;
+  /** Set when the daily browser-upload cap was hit. */
+  dailyCap?: DailyCapInfo;
 }
 
 export interface UploadProgress {
   phase: "checking" | "uploading" | "waiting" | "done";
   accepted: number;
+  /** Games finished either way: accepted, already stored or refused. */
+  settled: number;
   total: number;
   /** Set while waiting to retry a batch. */
   retryInMs?: number;
@@ -123,8 +140,8 @@ type BatchOutcome =
   | { kind: "response"; response: IngestResponse }
   | { kind: "split" }
   | { kind: "rejected_all"; errors: string[] }
-  /** Daily cap hit; `remaining` = games the server says still fit today. */
-  | { kind: "cap"; remaining: number | null }
+  /** Daily cap hit; `cap.remaining` = games the server says still fit today. */
+  | { kind: "cap"; cap: DailyCapInfo }
   | { kind: "stop"; reason: UploadStopReason };
 
 interface QueueState {
@@ -159,7 +176,10 @@ export async function uploadGames(
     if (!existing.has(game.gameId)) fresh.push(game);
     else settle(ctx, game.gameId, () => ctx.summary.skippedExisting.push(game.gameId));
   }
-  if (!ctx.summary.stoppedReason) await runQueue(tagAll(fresh, deps.engineVersion, ctx), ctx);
+  if (!ctx.summary.stoppedReason) {
+    report(ctx, "uploading"); // games already stored count as done right away
+    await runQueue(tagAll(fresh, deps.engineVersion, ctx), ctx);
+  }
   ctx.summary.pending = unique.map((game) => game.gameId).filter((id) => !ctx.settled.has(id));
   report(ctx, "done");
   return ctx.summary;
@@ -205,6 +225,7 @@ function report(ctx: Ctx, phase: UploadProgress["phase"], retryInMs?: number): v
   ctx.onProgress?.({
     phase,
     accepted: ctx.summary.accepted.length,
+    settled: ctx.settled.size,
     total: ctx.total,
     ...(retryInMs === undefined ? {} : { retryInMs }),
   });
@@ -298,6 +319,7 @@ function parseExistsBody(body: unknown): ExistsResult {
   return { kind: "ok", existing: list.filter((id): id is string => typeof id === "string") };
 }
 
+/** Tag each game with its own engine version when it has one (stored /try games). */
 function tagAll(
   games: ReadonlyArray<UploadableGame>,
   engineVersion: string,
@@ -306,7 +328,7 @@ function tagAll(
   const pending: PendingGame[] = [];
   for (const game of games) {
     try {
-      const json = tagBrowserGame(game.json, engineVersion);
+      const json = tagBrowserGame(game.json, game.engineVersion ?? engineVersion);
       pending.push({ gameId: game.gameId, json, requeued: false });
     } catch (error) {
       if (!(error instanceof BrowserGameTagError)) throw error;
@@ -354,7 +376,8 @@ function applyOutcome(
     case "stop":
       return outcome.reason;
     case "cap":
-      return shrinkToDailyCap(batch, outcome.remaining, state, ctx);
+      ctx.summary.dailyCap = outcome.cap;
+      return shrinkToDailyCap(batch, outcome.cap.remaining, state, ctx);
     case "split":
       state.queue = [...splitBatch(batch, ctx), ...state.queue];
       return null;
@@ -498,9 +521,9 @@ async function classifyIngestResponse(res: Response, ctx: Ctx): Promise<AttemptS
   }
   if (res.status === HTTP_PAYLOAD_TOO_LARGE) return { kind: "done", outcome: { kind: "split" } };
   const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"), ctx.now());
-  const { code, remaining } = await readIngestError(res);
+  const { code, cap } = await readIngestError(res);
   if (res.status === HTTP_TOO_MANY_REQUESTS && code === DAILY_CAP_CODE) {
-    return { kind: "done", outcome: { kind: "cap", remaining } };
+    return { kind: "done", outcome: { kind: "cap", cap } };
   }
   if (isRetryableStatus(res.status)) {
     return { kind: "retry", retryAfterMs: retryAfterMs ?? busyFallbackMs(res.status) };
@@ -511,26 +534,38 @@ async function classifyIngestResponse(res: Response, ctx: Ctx): Promise<AttemptS
 
 interface IngestError {
   code: string | null;
-  /** Daily-cap 429 only: games that still fit today. */
-  remaining: number | null;
+  /** Daily-cap 429 only: `limit`, `remaining` and `resetAt`. */
+  cap: DailyCapInfo;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function integerOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
+
+function instantOrNull(value: unknown): number | null {
+  const at = typeof value === "string" ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(at) ? at : null;
+}
+
 /**
- * The API error envelope `{ error: { code, remaining? } }` (nulls for a
- * plain-text or empty body, e.g. the rate limiter's).
+ * The API error envelope `{ error: { code, limit?, remaining?, resetAt? } }`
+ * (nulls for a plain-text or empty body, e.g. the rate limiter's).
  */
 async function readIngestError(res: Response): Promise<IngestError> {
   const body = await readJson(res);
   const error = isRecord(body) ? body.error : null;
-  if (!isRecord(error)) return { code: null, remaining: null };
-  const { code, remaining } = error;
+  if (!isRecord(error)) return { code: null, cap: { limit: null, remaining: null, resetAt: null } };
   return {
-    code: typeof code === "string" ? code : null,
-    remaining: typeof remaining === "number" && Number.isInteger(remaining) ? remaining : null,
+    code: typeof error.code === "string" ? error.code : null,
+    cap: {
+      limit: integerOrNull(error.limit),
+      remaining: integerOrNull(error.remaining),
+      resetAt: instantOrNull(error.resetAt),
+    },
   };
 }
 

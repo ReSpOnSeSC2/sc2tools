@@ -15,12 +15,11 @@ import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { TRY_SIGN_IN_HREF } from "@/lib/instant/authRedirect";
+import { percentOf, secondsUntilRetry, uploadsResumeText } from "@/lib/instant/displayUnits";
+import { TRY_TTL_DAYS } from "@/lib/instant/localStore";
 import type { UploadProgress } from "@/lib/instant/uploader";
 import type { TryUploadState, TryUploadStop } from "../TryResume";
 import { gamesLabel } from "./ReportBits";
-
-const MS_PER_SECOND = 1000;
-const PERCENT = 100;
 
 const LINK_CLASS = [
   "inline-flex min-h-[44px] items-center font-semibold text-accent underline-offset-4 hover:underline",
@@ -28,24 +27,24 @@ const LINK_CLASS = [
 ].join(" ");
 
 /**
- * Label for one upload progress sample.
+ * Label for one upload progress sample (games already in the account
+ * count as saved).
  *
  * Example:
- *   uploadProgressLabel({ phase: "uploading", accepted: 2, total: 5 }); // -> "Saving games… 2 of 5"
+ *   uploadProgressLabel({ phase: "uploading", accepted: 2, settled: 3, total: 5 }); // -> "Saving games… 3 of 5"
  */
 export function uploadProgressLabel(progress: UploadProgress | null): string {
   if (!progress || progress.phase === "checking") return "Checking which games your account already has…";
   if (progress.phase === "waiting") {
-    const seconds = Math.max(1, Math.ceil((progress.retryInMs ?? 0) / MS_PER_SECOND));
-    return `Our servers are busy — trying again in ${seconds} s…`;
+    return `Our servers are busy — trying again in ${secondsUntilRetry(progress.retryInMs)} s…`;
   }
   if (progress.phase === "done") return "Finishing up…";
-  return `Saving games… ${progress.accepted} of ${progress.total}`;
+  return `Saving games… ${progress.settled} of ${progress.total}`;
 }
 
 function UploadBar({ progress }: { progress: UploadProgress | null }) {
   const total = Math.max(1, progress?.total ?? 1);
-  const done = Math.min(progress?.accepted ?? 0, total);
+  const done = Math.min(progress?.settled ?? 0, total);
   const label = uploadProgressLabel(progress);
   return (
     <div className="space-y-2">
@@ -60,18 +59,26 @@ function UploadBar({ progress }: { progress: UploadProgress | null }) {
       >
         <div
           className="h-full bg-accent transition-[width] duration-150 motion-reduce:transition-none"
-          style={{ width: `${Math.round((done / total) * PERCENT)}%` }}
+          style={{ width: `${percentOf(done, total)}%` }}
         />
       </div>
     </div>
   );
 }
 
-function StopMessage({ reason, accepted, pending, onRetry }: { reason: TryUploadStop; accepted: number; pending: number; onRetry: () => void }) {
+type StoppedState = Extract<TryUploadState, { status: "stopped" }>;
+
+function capBody({ accepted, pending, resetAt }: StoppedState): string {
+  const resume = uploadsResumeText(resetAt) ?? "Come back tomorrow to save them.";
+  return `Saved ${gamesLabel(accepted)}. The other ${gamesLabel(pending)} stay on this device for up to ${TRY_TTL_DAYS} days. ${resume}`;
+}
+
+function StopMessage({ state, onRetry }: { state: StoppedState; onRetry: () => void }) {
+  const { reason, pending } = state;
   const copy: Record<TryUploadStop, { title: string; body: string; action: ReactNode }> = {
     daily_cap: {
       title: "You've reached today's upload limit",
-      body: `Saved ${gamesLabel(accepted)}. The other ${gamesLabel(pending)} stay on this device for 7 days — come back tomorrow to save them.`,
+      body: capBody(state),
       action: <Link href="/app" className={LINK_CLASS}>Open your dashboard</Link>,
     },
     auth: {
@@ -114,7 +121,7 @@ function StatusBody({ state, onRetry }: { state: TryUploadState; onRetry: () => 
         <p className="text-body text-text-muted">
           {state.reason === "storage"
             ? "This browser isn't letting us read the games stored here. Analyze your replays again below to save them."
-            : "No games from this page are stored on this device — they're kept for 7 days in the browser you used. Analyze some replays below to save them."}
+            : `No games from this page are stored on this device — they're kept for ${TRY_TTL_DAYS} days in the browser you used. Analyze some replays below to save them.`}
         </p>
       );
     case "uploading":
@@ -127,7 +134,7 @@ function StatusBody({ state, onRetry }: { state: TryUploadState; onRetry: () => 
         </p>
       );
     case "stopped":
-      return <StopMessage reason={state.reason} accepted={state.accepted} pending={state.pending} onRetry={onRetry} />;
+      return <StopMessage state={state} onRetry={onRetry} />;
   }
 }
 

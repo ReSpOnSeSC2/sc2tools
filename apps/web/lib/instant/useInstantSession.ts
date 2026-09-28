@@ -7,7 +7,8 @@
  *   addFiles → (ready) → start → booting → scanning → [choosing → choose] → parsing → done
  *
  * The engine worker is created lazily by the first action that needs it
- * (`start()`, or adding a .zip) — never on mount — and disposed on unmount.
+ * (`prewarm()` on the visitor's first intent to add replays, `start()`, or
+ * adding a .zip) — never on mount — and disposed on unmount.
  * Files are read one at a time by the engine client, and progress reaches
  * React at most every 100 ms, so the main thread never blocks.
  *
@@ -99,11 +100,11 @@ export function useInstantSession(options: UseInstantSessionOptions = {}): Insta
   const [store] = useState(() =>
     createSessionStore(initialSessionState(options.initialDateWindow ?? DEFAULT_DATE_WINDOW)),
   );
-  const [controller] = useState(() => createSessionController(store, () => optionsRef.current));
+  const [{ actions, lifecycle }] = useState(() => createSessionController(store, () => optionsRef.current));
   useEffect(() => {
-    controller.activate();
-    return () => controller.dispose();
-  }, [controller]);
+    lifecycle.activate();
+    return () => lifecycle.dispose();
+  }, [lifecycle]);
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const { files, dateWindow, engineInfo } = state;
   const estimate = useMemo(() => estimateFor(files, dateWindow, engineInfo), [files, dateWindow, engineInfo]);
@@ -129,14 +130,8 @@ export function useInstantSession(options: UseInstantSessionOptions = {}): Insta
       failed,
       error: state.error,
       engineInfo,
-      addFiles: controller.addFiles,
-      setDateWindow: controller.setDateWindow,
-      start: controller.start,
-      choose: controller.choose,
-      cancel: controller.cancel,
-      reset: controller.reset,
-      lastHeapBytes: controller.lastHeapBytes,
+      ...actions,
     }),
-    [state, files, dateWindow, engineInfo, estimate, parsed, failed, controller],
+    [state, files, dateWindow, engineInfo, estimate, parsed, failed, actions],
   );
 }

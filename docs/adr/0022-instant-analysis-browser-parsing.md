@@ -39,7 +39,7 @@ A feasibility spike showed that Pyodide 314.0.7 (CPython 3.14.2 on
 WebAssembly) runs the **unmodified** pipeline in a browser Web Worker. With
 `state_dir=None` and `resolve_pulse=False`, the payload is byte-identical to
 CPython's. A parse takes about 1 s cold and 0.6 s warm for a 7:50 game on a
-desktop, after a download of roughly 15 MB.
+desktop, after a download of roughly 7.6 MB over the wire (14.6 MB decoded).
 
 ## Decision
 
@@ -118,7 +118,7 @@ self-hosted Pyodide and the agent's own Python:
 
 ### Negative
 
-- A first visit downloads about 15 MB of runtime files, and parse speed and
+- A first visit downloads about 7.6 MB of runtime files (14.6 MB decoded), and parse speed and
   memory depend on the visitor's device. Mobile Safari's memory limits make
   iOS and iPadOS the weakest platforms, and Firefox and Safari still need
   manual verification.

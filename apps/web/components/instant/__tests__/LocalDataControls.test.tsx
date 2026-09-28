@@ -1,11 +1,12 @@
 /**
- * LocalDataControls — 7-day note, confirm-before-clear, storage failures.
+ * LocalDataControls — expiry note, confirm-before-clear, storage failures.
+ * `clearTryData` (IndexedDB) is a MOCK.
  */
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ clearTryData: vi.fn(async () => undefined) }));
-vi.mock("@/lib/instant/localStore", () => ({ clearTryData: mocks.clearTryData }));
+vi.mock("@/lib/instant/localStore", () => ({ TRY_TTL_DAYS: 7, clearTryData: mocks.clearTryData }));
 
 import { LocalDataControls } from "../LocalDataControls";
 
@@ -15,10 +16,11 @@ afterEach(() => {
 });
 
 describe("LocalDataControls", () => {
-  it("says games expire after 7 days and clears them only after confirming", async () => {
+  it("says when expired games are removed and clears them only after confirming", async () => {
     const onCleared = vi.fn();
     render(<LocalDataControls persisted onCleared={onCleared} />);
-    expect(screen.getByText(/deleted automatically after 7 days/)).toBeTruthy();
+    expect(screen.getByText(/expire after 7 days and are removed the next time you open this page/)).toBeTruthy();
+    expect(screen.queryByText(/deleted automatically/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Clear local data" }));
     expect(mocks.clearTryData).not.toHaveBeenCalled();
     const dialog = screen.getByRole("dialog");

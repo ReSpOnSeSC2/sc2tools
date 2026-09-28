@@ -5,22 +5,25 @@
  *
  * Lifecycle rules:
  *   - The engine (and so the worker and Pyodide) is created on the first
- *     action that needs it — `start()` or adding a .zip — never on mount.
+ *     action that needs it — `prewarm()` on the visitor's first intent,
+ *     `start()` or adding a .zip — never on mount (see sessionEngine.ts).
  *   - Every run gets an id; `cancel()`, `reset()` and `dispose()` bump it,
  *     so late engine answers from a superseded run are dropped.
- *   - `dispose()` releases the engine; `activate()` makes the controller
- *     usable again (React StrictMode mounts effects twice in development).
+ *   - `lifecycle.dispose()` releases the engine; `lifecycle.activate()`
+ *     makes the controller usable again (React StrictMode mounts effects
+ *     twice in development).
  *
  * Example:
  *   const store = createSessionStore(initialSessionState({ kind: "days90" }));
- *   const controller = createSessionController(store, () => ({ maxFiles: 25 }));
- *   await controller.addFiles(files, "picker");
- *   await controller.start();
+ *   const { actions, lifecycle } = createSessionController(store, () => ({ maxFiles: 25 }));
+ *   await actions.addFiles(files, "picker");
+ *   await actions.start();
  */
 import { trackInstantError, trackInstantFilesSelected } from "./analytics";
 import { createEngineClient } from "./engineClient";
 import { EngineError } from "./engineErrors";
 import type { DateWindow } from "./fileIntake";
+import { SessionEngine } from "./sessionEngine";
 import { expandArchives, selectionSource, sortSelection, type ExpandResult } from "./sessionIntake";
 import type { RunRules } from "./sessionPipeline";
 import { createThrottle, toSessionProgress, type Throttle } from "./sessionProgress";
@@ -66,13 +69,24 @@ export interface SessionActions {
   cancel(): void;
   /** Forget the queue and all results (the warm engine is kept). */
   reset(): void;
+  /**
+   * Start booting the engine ahead of the first run. Call on the visitor's
+   * first intent to add replays, never on mount; idempotent and silent.
+   */
+  prewarm(): void;
   /** Engine heap after the latest boot/parse (memory budget), or null. */
   lastHeapBytes(): number | null;
 }
 
-export interface SessionController extends SessionActions {
+/** Mount/unmount hooks for the owning component. */
+export interface SessionLifecycle {
   activate(): void;
   dispose(): void;
+}
+
+export interface SessionController {
+  actions: SessionActions;
+  lifecycle: SessionLifecycle;
 }
 
 interface RunHandle extends RunDeps {
@@ -90,23 +104,24 @@ const SUPERSEDED = "the run was cancelled or replaced";
 /** `start()` runs from a queued selection, or re-runs it after a finish or an error. */
 const STARTABLE_PHASES: ReadonlySet<InstantSessionPhase> = new Set<InstantSessionPhase>(["ready", "done", "error"]);
 
-class InstantSessionController implements SessionController {
-  private engine: EngineClient | null = null;
+/** Seven public actions; the engine and its lifecycle live in `SessionEngine`. */
+class InstantSessionController {
   private runId = 0;
   private abort: AbortController | null = null;
   private pending: PendingChoice | null = null;
-  private disposed = false;
   private readonly throttle: Throttle<SessionProgress>;
 
   constructor(
     private readonly store: SessionStore,
     private readonly options: () => SessionControllerOptions,
+    private readonly engine: SessionEngine,
   ) {
     this.throttle = createThrottle((progress) => this.store.dispatch({ type: "progress", progress }));
+    engine.onDispose(() => this.supersede());
   }
 
   readonly addFiles = async (input: File[] | FileList, source: IntakeSource): Promise<void> => {
-    if (this.disposed || this.locked()) return;
+    if (this.engine.isDisposed() || this.locked()) return;
     const selection = sortSelection(Array.from(input), source);
     const expanded = selection.zips.length > 0 ? await this.expand(selection.zips) : NO_ARCHIVES;
     if (!expanded) return;
@@ -129,7 +144,7 @@ class InstantSessionController implements SessionController {
 
   readonly start = async (): Promise<void> => {
     const state = this.store.getState();
-    if (this.disposed || !STARTABLE_PHASES.has(state.phase) || state.expanding || state.files.length === 0) return;
+    if (this.engine.isDisposed() || !STARTABLE_PHASES.has(state.phase) || state.expanding || state.files.length === 0) return;
     const deps = this.beginRun();
     const options = this.options();
     const rules: RunRules = { dateWindow: state.dateWindow, now: Date.now(), onlyOneVsOne: options.onlyOneVsOne === true };
@@ -171,31 +186,15 @@ class InstantSessionController implements SessionController {
     this.settle({ type: "reset" });
   };
 
-  readonly lastHeapBytes = (): number | null => this.engine?.lastHeapBytes?.() ?? null;
-
-  activate(): void {
-    this.disposed = false;
-  }
-
-  dispose(): void {
-    this.supersede();
-    this.disposed = true;
-    this.engine?.dispose();
-    this.engine = null;
-  }
+  readonly prewarm = (): void => this.engine.prewarm();
 
   private locked(): boolean {
     const state = this.store.getState();
     return isRunningPhase(state.phase) || state.expanding;
   }
 
-  private getEngine(): EngineClient {
-    this.engine ??= (this.options().clientFactory ?? createEngineClient)();
-    return this.engine;
-  }
-
   private isCurrent(id: number): boolean {
-    return !this.disposed && id === this.runId;
+    return !this.engine.isDisposed() && id === this.runId;
   }
 
   /** Drop the pending progress sample, then apply `action`. */
@@ -224,7 +223,7 @@ class InstantSessionController implements SessionController {
       getEngine: () => {
         // A superseded run (cancel, reset, unmount) must never spawn a worker.
         if (!this.isCurrent(id)) throw new EngineError("cancelled", SUPERSEDED);
-        return this.getEngine();
+        return this.engine.get();
       },
       isCurrent: () => this.isCurrent(id),
       dispatch: (action) => {
@@ -282,15 +281,23 @@ class InstantSessionController implements SessionController {
 }
 
 /**
- * Create the controller behind `useInstantSession`. `options` is read
+ * Create the controller behind `useInstantSession`: bound actions for the
+ * views and lifecycle hooks for the owning component. `options` is read
  * lazily on every action, so the latest props always apply.
  *
  * Example:
- *   const controller = createSessionController(store, () => optionsRef.current);
+ *   const { actions, lifecycle } = createSessionController(store, () => optionsRef.current);
+ *   useEffect(() => { lifecycle.activate(); return lifecycle.dispose; }, []);
  */
 export function createSessionController(
   store: SessionStore,
   options: () => SessionControllerOptions,
 ): SessionController {
-  return new InstantSessionController(store, options);
+  const engine = new SessionEngine(() => (options().clientFactory ?? createEngineClient)());
+  const controller = new InstantSessionController(store, options, engine);
+  const { addFiles, setDateWindow, start, choose, cancel, reset, prewarm } = controller;
+  return {
+    actions: { addFiles, setDateWindow, start, choose, cancel, reset, prewarm, lastHeapBytes: () => engine.heapBytes() },
+    lifecycle: { activate: () => engine.activate(), dispose: () => engine.dispose() },
+  };
 }

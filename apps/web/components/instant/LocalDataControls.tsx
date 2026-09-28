@@ -2,9 +2,11 @@
 
 /**
  * LocalDataControls — what /try keeps on this device and how to delete it:
- * a note that analysed games are stored only in this browser and expire
- * after 7 days, and a "Clear local data" button (with a confirmation) that
- * forgets them now. Shows a gentler note when the browser refused storage.
+ * a note that analyzed games are stored only in this browser, expire after
+ * `TRY_TTL_DAYS` days and are removed the next time this page is opened
+ * after that (expiry is enforced when the games are read, not by a timer),
+ * and a "Clear local data" button (with a confirmation) that forgets them
+ * now. Shows a gentler note when the browser refused storage.
  *
  * Example:
  *   <LocalDataControls persisted={stored.persisted} onCleared={() => setGames([])} />
@@ -12,7 +14,15 @@
 import { useState } from "react";
 import { HardDrive, Trash2 } from "lucide-react";
 import { Button, ConfirmDialog } from "@/components/ui";
-import { clearTryData } from "@/lib/instant/localStore";
+import { TRY_TTL_DAYS, clearTryData } from "@/lib/instant/localStore";
+
+/**
+ * The stored-games note. Expired games are only deleted when this page
+ * reads them again, so the copy says exactly that.
+ */
+export const STORED_GAMES_NOTE =
+  `These games are stored only in this browser. They expire after ${TRY_TTL_DAYS} days and are removed the next ` +
+  "time you open this page — or clear them now.";
 
 export interface LocalDataControlsProps {
   /** False when this browser would not let us store the games. */
@@ -57,7 +67,7 @@ export function LocalDataControls({ persisted, onCleared, className = "" }: Loca
         <HardDrive className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
         <span>
           {persisted
-            ? "These games are stored only in this browser and are deleted automatically after 7 days."
+            ? STORED_GAMES_NOTE
             : "This browser isn't letting us store data, so this report disappears when you close the tab."}
         </span>
       </p>
@@ -71,7 +81,7 @@ export function LocalDataControls({ persisted, onCleared, className = "" }: Loca
         onClose={() => setConfirming(false)}
         onConfirm={() => void clear()}
         title="Clear local data?"
-        description="This deletes the games analysed on this page from this browser. Games you already saved to an account are not affected."
+        description="This deletes the games analyzed on this page from this browser. Games you already saved to an account are not affected."
         confirmLabel="Clear local data"
         intent="danger"
         loading={status === "clearing"}

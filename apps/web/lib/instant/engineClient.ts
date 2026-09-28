@@ -143,7 +143,7 @@ const unzipStep: FileStep<IntakeFile, UnzipResult> = {
   message: (_file, base) => ({ ...base, type: "unzip" }),
   fromResponse: (zip, event) => {
     if (event.type === "unzipped") {
-      return { ok: true, files: event.entries.map((entry) => zipEntryFile(zip, entry.name, entry.bytes)) };
+      return { ok: true, files: event.entries.map((entry) => zipEntryFile(zip, entry.name, entry.bytes, entry.lastModified)) };
     }
     return event.type === "request-error"
       ? { ok: false, errorKind: event.errorKind, detail: event.detail }
@@ -151,6 +151,13 @@ const unzipStep: FileStep<IntakeFile, UnzipResult> = {
   },
   failure: (_zip, kind, detail) => ({ ok: false, errorKind: kind, detail }),
 };
+
+type FilePosition = { index: number; total: number; fileName: string };
+
+/** Report one file's failure to the job's progress listener. */
+function emitFailure(job: Job, phase: EnginePhase, base: FilePosition, ms: number, errorKind: ErrorKind): void {
+  job.onProgress?.({ phase, ...base, ms, ok: false, errorKind });
+}
 
 class QueuedEngineClient implements EngineClient {
   private session: EngineSession | null = null;
@@ -162,11 +169,9 @@ class QueuedEngineClient implements EngineClient {
   /** Heap reported by the latest `ready` / `parsed` event (see EngineSession). */
   private heapBytes: number | null = null;
   private readonly bootListeners = new Set<(event: EngineProgress) => void>();
-  private readonly pointerUrl: string;
 
-  constructor(private readonly config: Required<Omit<EngineClientOptions, "pointerUrl">> & { pointerUrl: string }) {
-    this.pointerUrl = absoluteUrl(config.pointerUrl);
-  }
+  /** `config.pointerUrl` must already be absolute (see `createEngineClient`). */
+  constructor(private readonly config: Required<EngineClientOptions>) {}
 
   boot(options: ParseOptions = {}): Promise<EngineInfo> {
     if (this.disposed) return Promise.reject(new EngineError("cancelled", "the engine client was disposed"));
@@ -246,7 +251,7 @@ class QueuedEngineClient implements EngineClient {
     try {
       return new EngineSession({
         factory: this.config.workerFactory,
-        pointerUrl: this.pointerUrl,
+        pointerUrl: this.config.pointerUrl,
         onProgress: (event) => this.forwardProgress(event),
       });
     } catch (error) {
@@ -305,10 +310,6 @@ class QueuedEngineClient implements EngineClient {
     return results;
   }
 
-  private emitFailure(job: Job, phase: EnginePhase, base: { index: number; total: number; fileName: string }, ms: number, errorKind: ErrorKind): void {
-    job.onProgress?.({ phase, ...base, ms, ok: false, errorKind });
-  }
-
   private async runOnSession<I, R>(
     job: Job,
     session: EngineSession,
@@ -324,7 +325,7 @@ class QueuedEngineClient implements EngineClient {
     try {
       bytes = await file.blob.arrayBuffer();
     } catch (error) {
-      this.emitFailure(job, step.phase, base, elapsed(), "parse_failed");
+      emitFailure(job, step.phase, base, elapsed(), "parse_failed");
       return step.failure(item, "parse_failed", safeDetail(error, UNREADABLE), elapsed());
     }
     if (this.stopped(job)) return step.failure(item, "cancelled", undefined, elapsed());
@@ -341,7 +342,7 @@ class QueuedEngineClient implements EngineClient {
       session.terminate(failure);
       if (this.session === session) this.session = null;
       const kind: ErrorKind = this.stopped(job) ? "cancelled" : failure.kind;
-      this.emitFailure(job, step.phase, base, elapsed(), kind);
+      emitFailure(job, step.phase, base, elapsed(), kind);
       return step.failure(item, kind, kind === "cancelled" ? undefined : failure.detail, elapsed());
     }
   }
@@ -380,7 +381,7 @@ export function createEngineClient(options: EngineClientOptions = {}): EngineCli
     workerFactory: options.workerFactory ?? defaultWorkerFactory,
     perFileTimeoutMs: options.perFileTimeoutMs ?? DEFAULT_PER_FILE_TIMEOUT_MS,
     recycleEvery: options.recycleEvery ?? DEFAULT_RECYCLE_EVERY,
-    pointerUrl: options.pointerUrl ?? ENGINE_POINTER_URL,
+    pointerUrl: absoluteUrl(options.pointerUrl ?? ENGINE_POINTER_URL),
     bootTimeoutMs: options.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS,
   });
 }

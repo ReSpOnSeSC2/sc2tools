@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TryPage — the anonymous /try flow: pick replays, analyse them in this
+ * TryPage — the anonymous /try flow: pick replays, analyze them in this
  * browser, see an instant report, optionally save the games to a free
  * account.
  *
@@ -9,11 +9,16 @@
  *   → ParseProgress → games stored on this device (7 days) → InstantReport
  *   → "Save these games" card → (sign up → /try?resume=1 → upload → /app)
  *
- * The analyzer (worker + Pyodide) only loads once replays are selected,
- * never on page load. Replays never leave the device; saving uploads the
- * parsed games only. A revisit within 7 days shows the stored report at
- * once, with "Analyze more replays" to add to it. In "admins" rollout
- * mode everyone but admins sees a "Coming soon" panel instead.
+ * The analyzer (worker + Pyodide) starts warming up on the visitor's first
+ * intent to add replays (pressing "Choose replays", dragging files over
+ * the drop zone, focusing the intake), never on page load. Replays never
+ * leave the device; saving uploads the parsed games only, each tagged
+ * with the engine version that parsed it. A revisit within 7 days shows
+ * the stored report at once, with "Analyze more replays" to add to it.
+ * Keyboard focus follows the flow: into the progress panel when a run
+ * starts, onto the intake after "Analyze more replays" or clearing local
+ * data, and onto the report when it (re)appears. In "admins" rollout mode
+ * everyone but admins sees a "Coming soon" panel instead.
  *
  * Example:
  *   <TryPage mode="all" />
@@ -23,13 +28,13 @@ import Link from "next/link";
 import { AlertTriangle, FlaskConical, ShieldCheck } from "lucide-react";
 import { Button, EmptyStatePanel } from "@/components/ui";
 import { trackInstantError, trackInstantOpen, trackInstantReportView } from "@/lib/instant/analytics";
+import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
 import { errorCopy } from "@/lib/instant/errorCopy";
 import { MAX_TRY_FILES } from "@/lib/instant/fileIntake";
 import type { InstantImportMode } from "@/lib/instant/flag";
 import { loadTryGames, saveTryGames, type TryGameInput } from "@/lib/instant/localStore";
 import { buildInstantReport, parseInstantPayload, type InstantReport as InstantReportData } from "@/lib/instant/report";
-import type { InstantSessionPhase } from "@/lib/instant/sessionState";
-import type { ErrorKind, IntakeSource, ParsedGame } from "@/lib/instant/types";
+import type { EngineInfo, ErrorKind, IntakeSource, ParsedGame } from "@/lib/instant/types";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { useInstantSession, type InstantSession, type UseInstantSessionOptions } from "@/lib/instant/useInstantSession";
 import { BrowserVsAgentTable } from "./BrowserVsAgentTable";
@@ -114,13 +119,22 @@ function EngineErrorPanel({ kind, onRetry, onReset }: { kind: ErrorKind | null; 
   );
 }
 
-function IntakePanel({ session, onFiles }: { session: InstantSession; onFiles: (files: File[], source: IntakeSource) => void }) {
+interface ToolViewProps {
+  session: InstantSession;
+  onFiles: (files: File[], source: IntakeSource) => void;
+  /** Bumped to move keyboard focus onto the intake (0 = leave focus alone). */
+  intakeFocusKey: number;
+}
+
+function IntakePanel({ session, onFiles, intakeFocusKey }: ToolViewProps) {
   const count = session.files.length;
   const nothingFound = session.lastIntake !== null && session.lastIntake.found === 0;
   return (
     <div className="space-y-3">
       <ReplayIntake
         onFiles={onFiles}
+        onIntent={session.prewarm}
+        focusKey={intakeFocusKey}
         disabled={session.busy}
         maxFiles={MAX_TRY_FILES}
         dateWindow={session.dateWindow}
@@ -130,8 +144,13 @@ function IntakePanel({ session, onFiles }: { session: InstantSession; onFiles: (
         allowFolderInput
       />
       {/* Always mounted so assistive tech announces the note when it appears. */}
-      <p role="status" className="text-caption font-semibold text-warning empty:hidden">
-        {nothingFound ? "We didn't find any StarCraft II replays (.SC2Replay) in that selection." : null}
+      <p role="status" className="flex items-start gap-2 text-caption font-semibold text-text empty:hidden">
+        {nothingFound ? (
+          <>
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" aria-hidden />
+            <span>We didn&apos;t find any StarCraft II replays (.SC2Replay) in that selection.</span>
+          </>
+        ) : null}
       </p>
       {session.phase === "ready" ? (
         <Button onClick={() => void session.start()}>
@@ -142,7 +161,7 @@ function IntakePanel({ session, onFiles }: { session: InstantSession; onFiles: (
   );
 }
 
-function ToolBody({ session, onFiles }: { session: InstantSession; onFiles: (files: File[], source: IntakeSource) => void }) {
+function ToolBody({ session, onFiles, intakeFocusKey }: ToolViewProps) {
   const { phase } = session;
   if (phase === "choosing") {
     return <PlayerChooser candidates={session.candidates} onChoose={(toon) => void session.choose(toon)} onCancel={session.cancel} />;
@@ -153,23 +172,31 @@ function ToolBody({ session, onFiles }: { session: InstantSession; onFiles: (fil
   if (session.busy || phase === "done") {
     return (
       <div className="space-y-3">
-        <ParseProgress progress={session.progress} phase={phase} total={session.files.length} failed={session.failed} onCancel={session.cancel} />
+        <ParseProgress
+          progress={session.progress}
+          phase={phase}
+          total={session.files.length}
+          failed={session.failed}
+          onCancel={session.cancel}
+          autoFocus={session.busy}
+        />
         {phase === "done" && session.parsed.length === 0 ? (
           <div className="space-y-2">
-            <p className="text-body font-semibold text-text">None of these replays could be analysed.</p>
+            <p className="text-body font-semibold text-text">None of these replays could be analyzed.</p>
             <Button onClick={session.reset}>Choose other replays</Button>
           </div>
         ) : null}
       </div>
     );
   }
-  return <IntakePanel session={session} onFiles={onFiles} />;
+  return <IntakePanel session={session} onFiles={onFiles} intakeFocusKey={intakeFocusKey} />;
 }
 
 interface TryToolProps {
   session: InstantSession;
-  /** Shown while adding to an existing report: go back without analysing. */
+  /** Shown while adding to an existing report: go back without analyzing. */
   onCancelAdding?: () => void;
+  intakeFocusKey: number;
 }
 
 /**
@@ -178,7 +205,7 @@ interface TryToolProps {
  * Example:
  *   <TryTool session={session} />
  */
-function TryTool({ session, onCancelAdding }: TryToolProps) {
+function TryTool({ session, onCancelAdding, intakeFocusKey }: TryToolProps) {
   const { addFiles, start } = session;
   const onFiles = useCallback(
     (files: File[], source: IntakeSource) => {
@@ -188,10 +215,10 @@ function TryTool({ session, onCancelAdding }: TryToolProps) {
   );
   return (
     <section aria-label="Analyze replays" className="space-y-4">
-      <ToolBody session={session} onFiles={onFiles} />
+      <ToolBody session={session} onFiles={onFiles} intakeFocusKey={intakeFocusKey} />
       {session.truncatedCount > 0 ? (
         <p className="text-caption text-text-muted">
-          Only the newest {MAX_TRY_FILES} replays are analysed here; {session.truncatedCount} older{" "}
+          Only the newest {MAX_TRY_FILES} replays are analyzed here; {session.truncatedCount} older{" "}
           {session.truncatedCount === 1 ? "one was" : "ones were"} left out.
         </p>
       ) : null}
@@ -205,7 +232,13 @@ function TryTool({ session, onCancelAdding }: TryToolProps) {
 }
 
 function toInput(game: TryGameInput): TryGameInput {
-  return { gameId: game.gameId, json: game.json, date: game.date };
+  return { gameId: game.gameId, json: game.json, date: game.date, engineVersion: game.engineVersion };
+}
+
+/** A finished run's games, tagged with the engine that parsed them. */
+function fromParsed(parsed: ReadonlyArray<ParsedGame>, info: EngineInfo | null): TryGameInput[] {
+  const engineVersion = info?.engineVersion ?? INSTANT_ENGINE_VERSION;
+  return parsed.map((game) => ({ gameId: game.gameId, json: game.json, date: game.date, engineVersion }));
 }
 
 /** Union by gameId (newer wins), newest game first. */
@@ -239,9 +272,10 @@ interface TryGames {
  * plus each finished run's parsed games (saved, then re-read).
  *
  * Example:
- *   const stored = useTryGames(session.phase, session.parsed, () => setAdding(false));
+ *   const stored = useTryGames(session, () => setAdding(false));
  */
-function useTryGames(phase: InstantSessionPhase, parsed: ParsedGame[], onSaved: () => void): TryGames {
+function useTryGames(session: Pick<InstantSession, "phase" | "parsed" | "engineInfo">, onSaved: () => void): TryGames {
+  const { phase, parsed, engineInfo } = session;
   const [state, setState] = useState<{ games: TryGameInput[]; persisted: boolean }>({ games: [], persisted: true });
   const onSavedRef = useRef(onSaved);
   const handled = useRef<ParsedGame[] | null>(null);
@@ -263,12 +297,12 @@ function useTryGames(phase: InstantSessionPhase, parsed: ParsedGame[], onSaved: 
   useEffect(() => {
     if (phase !== "done" || parsed.length === 0 || handled.current === parsed) return;
     handled.current = parsed;
-    const fresh = parsed.map(toInput);
+    const fresh = fromParsed(parsed, engineInfo);
     void persist(fresh).then((saved) => {
       setState((prev) => ({ games: saved ?? mergeGames(prev.games, fresh), persisted: saved !== null }));
       onSavedRef.current();
     });
-  }, [phase, parsed]);
+  }, [phase, parsed, engineInfo]);
   const clear = useCallback(() => setState((prev) => ({ ...prev, games: [] })), []);
   return { ...state, clear };
 }
@@ -312,6 +346,8 @@ interface WorkspaceState {
   resumeMode: boolean;
   /** Bumped when a finished run refreshed the report (moves focus to it). */
   reportFocusKey: number;
+  /** Bumped when the intake should take focus (adding more, after clearing). */
+  intakeFocusKey: number;
   markResume(): void;
   startAdding(): void;
   stopAdding(): void;
@@ -332,7 +368,8 @@ function useWorkspace(): WorkspaceState {
   const [adding, setAdding] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [reportFocusKey, setReportFocusKey] = useState(0);
-  const stored = useTryGames(session.phase, session.parsed, () => {
+  const [intakeFocusKey, setIntakeFocusKey] = useState(0);
+  const stored = useTryGames(session, () => {
     setAdding(false);
     setReportFocusKey((key) => key + 1);
   });
@@ -340,21 +377,29 @@ function useWorkspace(): WorkspaceState {
   const report = useReport(stored.games);
   const markResume = useCallback(() => setResumeMode(true), []);
   const { reset } = session;
+  const focusIntake = () => setIntakeFocusKey((key) => key + 1);
   const startAdding = () => {
     reset();
     setAdding(true);
+    focusIntake();
   };
   const stopAdding = () => {
     reset();
     setAdding(false);
+    setReportFocusKey((key) => key + 1);
   };
   const onCleared = () => {
     stored.clear();
-    stopAdding();
+    reset();
+    setAdding(false);
+    focusIntake();
   };
   const active = session.busy || session.phase === "choosing" || session.phase === "error";
   const showTool = report === null || adding || active;
-  return { session, stored, upload, report, showTool, adding, resumeMode, reportFocusKey, markResume, startAdding, stopAdding, onCleared };
+  return {
+    session, stored, upload, report, showTool, adding, resumeMode, reportFocusKey, intakeFocusKey,
+    markResume, startAdding, stopAdding, onCleared,
+  };
 }
 
 /** The report, the save card and the local-data controls (only once a report exists). */
@@ -388,7 +433,11 @@ function Workspace() {
         <TryResume upload={ws.upload} games={ws.stored.games} onResume={ws.markResume} />
       </Suspense>
       {ws.showTool ? (
-        <TryTool session={ws.session} onCancelAdding={ws.report && ws.adding ? ws.stopAdding : undefined} />
+        <TryTool
+          session={ws.session}
+          onCancelAdding={ws.report && ws.adding ? ws.stopAdding : undefined}
+          intakeFocusKey={ws.intakeFocusKey}
+        />
       ) : (
         <RunFailures session={ws.session} />
       )}
