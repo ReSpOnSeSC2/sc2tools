@@ -12,7 +12,7 @@ import type { CommentTimelineMarker } from "@/components/analyzer/game/replay/Tr
 import { sanitizeMapPlayback } from "@/lib/mapReplay";
 import { sanitizePlaybackManifest } from "@/lib/segmentedPlayback";
 import { usePublicApi } from "@/lib/usePublicApi";
-import type { ReviewAnalysis } from "@/lib/reviews";
+import { reviewsRollout, type ReviewAnalysis } from "@/lib/reviews";
 
 const SegmentedReplayHost = dynamic(
   () => import("@/components/analyzer/game/replay/SegmentedReplayHost").then((m) => m.SegmentedReplayHost),
@@ -34,6 +34,7 @@ type StatsEvents = NonNullable<Parameters<typeof InteractiveTimeline>[0]["statsE
  */
 export function ReviewReplayPanel({
   requestId,
+  hidden = false,
   analysis,
   analysisError,
   seekRequest,
@@ -46,6 +47,8 @@ export function ReviewReplayPanel({
   onCommentMarker,
 }: {
   requestId: string;
+  /** Hidden pending moderation: the grant is suspended, nothing to load. */
+  hidden?: boolean;
   analysis: ReviewAnalysis | undefined;
   analysisError: { status: number; message: string } | undefined;
   seekRequest: { t: number; seq: number } | null;
@@ -59,13 +62,17 @@ export function ReviewReplayPanel({
 }) {
   const enc = encodeURIComponent(requestId);
   const mode = analysis?.playback.mode ?? "none";
+  // The admins-only stage 404s anonymous reads, so send the token then.
+  const adminStage = reviewsRollout() === "admins";
   const inlineReq = usePublicApi<Record<string, unknown>>(
     mode === "inline" ? `/v1/reviews/${enc}/analysis/map-playback` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false },
+    { personalized: adminStage },
   );
   const manifestReq = usePublicApi<Record<string, unknown>>(
     mode === "segmented" ? `/v1/reviews/${enc}/analysis/map-playback/manifest` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false },
+    { personalized: adminStage },
   );
   const playback = useMemo(() => (inlineReq.data ? sanitizeMapPlayback(inlineReq.data) : null), [inlineReq.data]);
   const manifest = useMemo(() => (manifestReq.data ? sanitizePlaybackManifest(manifestReq.data) : null), [manifestReq.data]);
@@ -77,6 +84,13 @@ export function ReviewReplayPanel({
     [enc],
   );
 
+  if (hidden) {
+    return (
+      <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
+        The replay isn&apos;t shared while this request is hidden pending moderator review.
+      </div>
+    );
+  }
   if (analysisError) {
     return (
       <div role="status" className="rounded-xl border-2 border-line bg-bg-surface p-4 text-body text-text-muted">
@@ -111,7 +125,7 @@ export function ReviewReplayPanel({
       <SegmentedReplayHost
         gameId={`review-${requestId}`}
         manifest={manifest}
-        anonymous
+        anonymous={!adminStage}
         segmentPath={segmentPath}
         onPlaybackTimeChange={onTimeChange}
         {...stageProps}

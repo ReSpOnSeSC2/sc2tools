@@ -80,5 +80,6 @@ test("a missing review is a real 404", async ({ page }) => {
   for (const path of ["/reviews/doesNotExist0000", "/reviews/not-a-review"]) {
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(404);
+    await expect(page.getByText("Review not found")).toBeVisible();
   }
 });

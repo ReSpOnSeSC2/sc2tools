@@ -20,8 +20,11 @@ import { reviewHeadline, reviewPageTitle, reviewsRollout, type ReviewPageData } 
  * QAPage + BreadcrumbList JSON-LD. Link-only requests are never indexed.
  * No loading boundary sits above this page (the board's lives in the
  * ``(board)`` route group) so a missing review is a real 404 status for
- * every user agent, not a streamed soft-404; an unreachable API renders
- * "unavailable" + noindex.
+ * every user agent, not a streamed soft-404. Only an API 404 is a 404:
+ * an unreachable API, a rate limit or a 5xx renders "unavailable" +
+ * noindex. The server read is anonymous, so a hidden or removed request
+ * 404s here even for its asker and admins; ``not-found.tsx`` retries
+ * with their token on the client.
  */
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -45,7 +48,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
   const { data, status } = await fetchReview(id);
   if (!data?.request) {
-    if (status !== null) notFound();
+    if (status === 404) notFound();
     return {
       title: "Replay review · SC2 Tools",
       description: "This replay review is temporarily unavailable.",
@@ -78,7 +81,7 @@ export default async function ReviewRoute({ params }: Params) {
   if (rollout === "admins") return <ReviewPageLoader id={id} />;
   const { data, status } = await fetchReview(id);
   if (!data?.request) {
-    if (status !== null) notFound();
+    if (status === 404) notFound();
     return (
       <EmptyStatePanel
         size="lg"

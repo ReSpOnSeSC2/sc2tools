@@ -136,8 +136,21 @@ function buildReviewsRouter(deps) {
     next();
   };
 
+  /**
+   * While the rollout is "off" every route 404s before auth runs, so a
+   * signed-out probe gets the same 404 as a missing page (not a 401 that
+   * hints the feature exists).
+   *
+   * @type {import('express').RequestHandler}
+   */
+  const offGate = (req, res, next) => {
+    if (deps.rollout !== "off") return next();
+    res.set("Cache-Control", "no-store");
+    res.status(404).json({ error: { code: "not_found", message: "Not found." } });
+  };
+
   const pub = [readLimiter, lenientAuth, gate];
-  const signedIn = [deps.auth, gate, browserOnly, writeLimiter];
+  const signedIn = [offGate, deps.auth, gate, browserOnly, writeLimiter];
 
   /** @param {import('express').Request} req */
   const viewerOf = (req) => ({

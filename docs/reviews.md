@@ -143,20 +143,35 @@ own synced games, and helpful reviewers earn karma.
 - **Rate limits.** 30 comments per hour and 200 per day, counted in Mongo
   so they survive restarts, plus a per-user burst limiter. There are at
   most 500 comments per request.
+  - Deleted comments still count, so deleting can't reset the limit.
+  - Every limit is re-checked after the insert (and the insert withdrawn
+    if it went over), so parallel posts can't slip past it. The same
+    applies to the 500-comment thread cap and the 3-open / 3-per-day
+    request caps.
 - **Editing and deleting.**
   - You can edit your own comment for **15 minutes**.
-  - Deleting a comment that has replies leaves a `[deleted]` placeholder;
-    otherwise the comment is removed.
+  - Deleting is always a soft delete: the text, pin and range are wiped
+    and the row stays. A deleted comment with replies shows a `[deleted]`
+    placeholder; without replies it disappears from the thread.
   - Either way, the karma it earned is revoked.
 
 ### Blocks
 
-- Anyone can block a comment's author:
-  - Their comments are hidden from the blocker. A comment with replies
-    shows a placeholder.
-  - They can't comment on the blocker's requests.
-- Blocks are created from a comment, because internal user ids never
-  reach the client. They're managed at `GET/DELETE /v1/me/review-blocks`.
+- Anyone can block the author of a visible reviewer comment. Blocks are
+  created from a comment, because internal user ids never reach the
+  client, and are managed at `GET/DELETE /v1/me/review-blocks`.
+- The blocker no longer sees the blocked person's comments (a comment
+  with replies shows a placeholder) and gets no notifications from them.
+  The blocked person can't reply to the blocker's comments.
+- On the blocker's **named** requests, the blocked person can't comment.
+- On the blocker's **anonymous** requests, a refusal would reveal who the
+  asker is. So the blocked person can still comment, but the asker never
+  sees those comments and is never notified about them.
+- **The asker is never blockable from their own request**, and a viewer's
+  blocks never hide the asker's replies, silence their reply
+  notifications, or drop an anonymous request from "Requests you can help
+  with". Any of these would let someone test whether a named user is the
+  anonymous asker.
 
 ## Reputation
 
@@ -169,7 +184,7 @@ own synced games, and helpful reviewers earn karma.
 | ----- | ------ | ------------- |
 | `helpful` | +5 | The asker. Reversible. |
 | `best` | +15 | The asker. One per request; moving it moves the points. Sets the request to `answered`. |
-| `upvote` | +1 | Any signed-in user except the author, capped at +10 per comment. The cap slot is reserved atomically; withdrawing a vote frees it. There are no downvotes; use Report. |
+| `upvote` | +1 | Any signed-in user except the author, capped at +10 per comment. The cap slot is reserved atomically; withdrawing a vote frees it. There are no downvotes; use Report. The asker's own replies can't be upvoted: karma is public, so it would reveal an anonymous asker's account. |
 | `removed` | −20 | Moderation, once per comment. The comment's earned helpful, best and upvote karma is revoked too. |
 
 - Totals are materialised on `users.reviewer`. `ReviewerReputationService.recomputeStats` rebuilds them from the ledger when they drift.
@@ -225,6 +240,13 @@ own synced games, and helpful reviewers earn karma.
   context, and whether it is hidden.
 - **Auto-hide.** When **3 different people** have open reports on the same
   item, it is hidden automatically, pending review.
+  - Each person can report a given review item **once ever**, so after a
+    dismissal the same accounts can't re-hide it; only new reporters
+    count.
+  - Review items enter the queue only through the review API (with its
+    rollout, visibility and own-content checks). The generic
+    `POST /v1/community/reports` still accepts only builds and
+    opponents.
   - **Hidden comments:** visible to their author (marked "Hidden pending
     moderator review") and to admins.
   - **Hidden requests:** visible only to the asker and admins. They leave
@@ -236,7 +258,9 @@ own synced games, and helpful reviewers earn karma.
     is revoked.
   - Comments become `removed`: a "[removed by a moderator]" placeholder
     stays only if they have replies. The author loses the comment's earned
-    karma, and −20 is applied once.
+    karma, and −20 is applied once. The asker's own replies carry no karma
+    either way, so removing one never changes an anonymous asker's public
+    karma.
 - **What to remove:** harassment, slurs, spam and off-topic content, plus
   **anything that identifies the opponent**, e.g. a comment naming them or
   linking their stream. Reporters can pick "Reveals someone's identity".

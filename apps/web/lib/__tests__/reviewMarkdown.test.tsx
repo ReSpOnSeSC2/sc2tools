@@ -59,4 +59,14 @@ describe("review markdown sanitizer", () => {
     expect(screen.queryByRole("button", { name: "Jump to 99:59" })).toBeNull();
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
+
+  it("never nests links or seek buttons inside a link label", () => {
+    const { container } = render(
+      <ReviewMarkdown text={"[see https://liquipedia.net/x at 5:12](https://liquipedia.net/x)"} onSeek={() => {}} maxSeconds={640} />,
+    );
+    const links = container.querySelectorAll("a");
+    expect(links).toHaveLength(1);
+    expect(links[0].querySelector("a, button")).toBeNull();
+    expect(links[0].textContent).toBe("see https://liquipedia.net/x at 5:12");
+  });
 });

@@ -1492,15 +1492,19 @@ class CommunityService {
   /**
    * @param {string} userId — reporter
    * @param {{targetType: string, targetId: string, reason: string, note?: string}} input
-   *   ``targetType`` must be 'build'|'opponent' or a kind registered via
-   *   ``registerReportTarget``; anything else is rejected with a 400. Typed wide because the route passes
+   *   ``targetType`` must be 'build'|'opponent'; anything else is
+   *   rejected with a 400 below. Typed wide because the route passes
    *   the raw request-body string through for exactly that check.
+   * @param {{registeredTarget?: boolean}} [opts] ``registeredTarget`` is
+   *   set only by the service that owns a ``registerReportTarget`` kind
+   *   (after its own rollout, visibility and ownership checks). The
+   *   public community route never sets it, so it keeps accepting only
+   *   build|opponent.
    */
-  async report(userId, input) {
-    const external = this.reportTargets.get(input.targetType) || null;
+  async report(userId, input, opts = {}) {
+    const external = opts.registeredTarget ? this.reportTargets.get(input.targetType) || null : null;
     if (!["build", "opponent"].includes(input.targetType) && !external) {
-      const allowed = ["build", "opponent", ...this.reportTargets.keys()].join("|");
-      const err = new Error(`targetType must be ${allowed}`);
+      const err = new Error("targetType must be build|opponent");
       /** @type {any} */ (err).status = 400;
       throw err;
     }
@@ -1519,14 +1523,19 @@ class CommunityService {
     // Per-(reporter, target) dedup: one open report per user per
     // target. Without it a single user could flood the moderation
     // queue with duplicate rows; the caller can also tell the user
-    // "already reported" instead of silently stacking.
+    // "already reported" instead of silently stacking. Registered
+    // targets auto-hide on distinct reporters, so there it is one report
+    // per user EVER: after a moderator dismisses, the same accounts
+    // can't immediately re-hide the content.
     const existing = await this.db.communityReports.findOne(
-      {
-        reporterUserId: userId,
-        targetType: input.targetType,
-        targetId,
-        resolvedAt: null,
-      },
+      external
+        ? { reporterUserId: userId, targetType: input.targetType, targetId }
+        : {
+          reporterUserId: userId,
+          targetType: input.targetType,
+          targetId,
+          resolvedAt: null,
+        },
       { projection: { _id: 1 } },
     );
     if (existing) {

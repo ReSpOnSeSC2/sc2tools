@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { usePublicApi } from "@/lib/usePublicApi";
 import {
+  reviewsRollout,
   verifiedLabel,
   type LeaderboardResponse,
   type ReviewBoardResponse,
@@ -52,7 +53,7 @@ export function ReviewLeaderboard({ initial }: { initial: LeaderboardResponse | 
   const board = usePublicApi<LeaderboardResponse>("/v1/reviews/leaderboard", {
     fallbackData: initial ?? undefined,
     revalidateOnFocus: false,
-  });
+  }, { personalized: reviewsRollout() === "admins" });
   const items = board.data?.items ?? [];
   return (
     <Card title="This week's top reviewers" right={<Trophy className="h-4 w-4 text-warning" aria-hidden />}>

@@ -17,6 +17,7 @@ import {
   levelLabel,
   pinNumbers,
   reviewHeadline,
+  reviewsRollout,
   tagLabel,
   type ReviewAnalysis,
   type ReviewPageData,
@@ -50,6 +51,8 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   const analysisReq = usePublicApi<ReviewAnalysis>(
     data.request.hidden ? null : `/v1/reviews/${enc}/analysis`,
     { revalidateOnFocus: false, shouldRetryOnError: false },
+    // The admins-only stage 404s anonymous reads, so send the token then.
+    { personalized: reviewsRollout() === "admins" },
   );
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -139,6 +142,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
         >
           <ReviewReplayPanel
             requestId={id}
+            hidden={data.request.hidden}
             analysis={analysisReq.data}
             analysisError={analysisReq.error}
             seekRequest={seekRequest}

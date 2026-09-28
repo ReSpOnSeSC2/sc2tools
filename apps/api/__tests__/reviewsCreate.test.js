@@ -123,6 +123,16 @@ describe("reviews: create eligibility and caps", () => {
     expect(page.body.request.asker.label).toBe("BlinkMaster");
   });
 
+  test("parallel posts can't get past the open/daily caps", async () => {
+    await h.seedUser("racer", { displayName: "Racer" });
+    const games = [];
+    for (let i = 0; i < 6; i += 1) games.push(await h.seedGame("racer", { gameId: `race-${i}` }));
+    const results = await Promise.all(games.map((gameId) => post("racer", { gameId, question: QUESTION })));
+    expect(results.filter((r) => r.status === 201).length).toBeLessThanOrEqual(3);
+    expect(results.every((r) => r.status === 201 || r.status === 429)).toBe(true);
+    expect(await h.db.reviewRequests.countDocuments({ userId: h.userId("racer") })).toBeLessThanOrEqual(3);
+  });
+
   test("requires a browser session: signed-out 401", async () => {
     const res = await request(h.app).post("/v1/reviews").send({ gameId: "x", question: QUESTION });
     expect(res.status).toBe(401);
@@ -134,6 +144,10 @@ describe("reviews: rollout flag", () => {
     const off = await createHarness({ rollout: "off" });
     try {
       expect((await request(off.app).get("/v1/reviews")).status).toBe(404);
+      // Signed-in routes 404 too (not 401), so nothing hints the feature exists.
+      expect((await request(off.app).post("/v1/reviews").send({})).status).toBe(404);
+      expect((await request(off.app).get("/v1/me/reviewer")).status).toBe(404);
+      expect((await request(off.app).get("/v1/me/notifications")).status).toBe(404);
     } finally {
       await off.close();
     }

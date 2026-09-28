@@ -114,15 +114,18 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
   const isAsker = data.viewer.isAsker;
   const open = data.request.status === "open" || data.request.status === "answered";
 
-  async function act(path: string, body: Record<string, unknown> = {}, method = "POST", event?: string) {
+  /** Resolves true on success; on failure shows the error and resolves false. */
+  async function act(path: string, body: Record<string, unknown> = {}, method = "POST", event?: string): Promise<boolean> {
     setBusy(true);
     setNotice(null);
     try {
       await apiCall(getToken, `${base}${path}`, { method, body: method === "DELETE" ? undefined : JSON.stringify(body) });
       if (event) gaEvent(event);
       await ctx.onChanged();
+      return true;
     } catch (err) {
       setNotice((err as { message?: string })?.message || "That didn't work.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -186,7 +189,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           <textarea id={`edit-${c.id}`} value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={4} className="w-full rounded-lg border-2 border-line bg-bg px-3 py-2 text-body text-text" />
           <div className="flex justify-end gap-2 text-caption font-semibold">
             <button type="button" onClick={() => { setEditing(false); setEditBody(c.body); }} className="min-h-[32px] px-2 text-text-muted">Cancel</button>
-            <button type="button" disabled={busy} onClick={() => void act("", { body: editBody }, "PATCH").then(() => setEditing(false))} className="min-h-[32px] rounded-full bg-accent px-3 text-white">Save</button>
+            <button type="button" disabled={busy} onClick={() => void act("", { body: editBody }, "PATCH").then((ok) => { if (ok) setEditing(false); })} className="min-h-[32px] rounded-full bg-accent px-3 text-white">Save</button>
           </div>
         </div>
       ) : (
@@ -194,7 +197,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
       )}
 
       <footer className="flex flex-wrap items-center gap-1 text-caption">
-        {isSignedIn && !c.mine ? (
+        {author?.isAsker ? null : isSignedIn && !c.mine ? (
           <button
             type="button"
             disabled={busy}
@@ -229,7 +232,15 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
         {c.mine ? (
           <button type="button" disabled={busy} onClick={() => { if (window.confirm("Delete this comment?")) void act("", {}, "DELETE"); }} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-danger">Delete</button>
         ) : null}
-        {isSignedIn && !c.mine && author ? <MoreMenu disabled={busy} onReport={(reason) => act("/report", { reason }, "POST", "review_report").then(() => setNotice("Thanks — a moderator will take a look."))} onBlock={() => act("/block", {}, "POST").then(() => setNotice(`You won't see ${author.label}'s comments any more.`))} /> : null}
+        {isSignedIn && !c.mine && author ? (
+          <MoreMenu
+            disabled={busy}
+            onReport={(reason) => act("/report", { reason }, "POST", "review_report").then((ok) => ok && setNotice("Thanks — a moderator will take a look."))}
+            // The asker can't be blocked from their own request (it would
+            // tie an anonymous asker to their account).
+            onBlock={author.isAsker ? null : () => act("/block", {}, "POST").then((ok) => ok && setNotice(`You won't see ${author.label}'s comments any more.`))}
+          />
+        ) : null}
         {notice ? <span role="status" className="basis-full text-micro text-text-muted">{notice}</span> : null}
       </footer>
 
@@ -259,7 +270,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
 
 const REPORT_REASONS = ["Spam", "Abusive or hateful", "Off-topic", "Reveals someone's identity", "Other"] as const;
 
-function MoreMenu({ onReport, onBlock, disabled }: { onReport: (reason: string) => Promise<unknown>; onBlock: () => Promise<unknown>; disabled: boolean }) {
+function MoreMenu({ onReport, onBlock, disabled }: { onReport: (reason: string) => Promise<unknown>; onBlock: (() => Promise<unknown>) | null; disabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
   return (
@@ -278,7 +289,9 @@ function MoreMenu({ onReport, onBlock, disabled }: { onReport: (reason: string) 
           ) : (
             <>
               <button type="button" role="menuitem" onClick={() => setReporting(true)} className="rounded px-2 py-2 text-left text-caption hover:bg-bg-elevated">Report…</button>
-              <button type="button" role="menuitem" disabled={disabled} onClick={() => { setOpen(false); if (window.confirm("Block this reviewer? You won't see their comments and they can't comment on your requests.")) void onBlock(); }} className="rounded px-2 py-2 text-left text-caption text-danger hover:bg-bg-elevated">Block reviewer</button>
+              {onBlock ? (
+                <button type="button" role="menuitem" disabled={disabled} onClick={() => { setOpen(false); if (window.confirm("Block this reviewer? You won't see their comments or get notified about them.")) void onBlock(); }} className="rounded px-2 py-2 text-left text-caption text-danger hover:bg-bg-elevated">Block reviewer</button>
+              ) : null}
             </>
           )}
         </span>

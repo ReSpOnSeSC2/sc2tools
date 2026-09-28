@@ -96,6 +96,23 @@ describe("pin placement", () => {
     expect(onWorldClick).not.toHaveBeenCalled();
   });
 
+  it("ignores pins that aren't drawn at the current time, so a new pin lands there", () => {
+    const onWorldClick = vi.fn();
+    const onMarkerClick = vi.fn();
+    render(
+      <MapReplayer
+        playback={payload()}
+        time={60}
+        onWorldClick={onWorldClick}
+        onMarkerClick={onMarkerClick}
+        markers={[{ id: "late", x: 100, y: 100, t: 460, label: "1" }]}
+      />,
+    );
+    fireEvent.click(canvas(), { clientX: 125, clientY: 118 });
+    expect(onMarkerClick).not.toHaveBeenCalled();
+    expect(onWorldClick).toHaveBeenCalledTimes(1);
+  });
+
   it("draws numbered pins only near their moment", () => {
     const fillText = vi.fn();
     const ctx = new Proxy(
