@@ -155,6 +155,10 @@ services:
       # on Starter; raise only after measuring production RSS under load.
       - key: REPLAY_INGEST_MAX_ACTIVE
         value: "1"
+      # Games per user per UTC day accepted from in-browser (Clerk-session)
+      # ingest. Desktop-agent uploads are never counted against it.
+      - key: BROWSER_INGEST_DAILY_CAP
+        value: "5000"
       - key: AGENT_RELEASE_ADMIN_TOKEN
         sync: false
       # Admin access. CSV of emails (case-insensitive) — any signed-in

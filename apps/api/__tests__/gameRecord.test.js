@@ -746,3 +746,41 @@ describe("validateGameRecord observed replay payloads", () => {
     expect(validateGameRecord(withPlayback({ ...BASE_PLAYBACK, v: 6, units })).valid).toBe(false);
   });
 });
+
+describe("validateGameRecord - upload provenance", () => {
+  const base = {
+    gameId: "provenance-fields",
+    date: "2026-09-27T12:00:00.000Z",
+    result: "Victory",
+    myRace: "Protoss",
+    map: "Site Delta LE",
+  };
+
+  test.each([
+    ["1.6.3", true],
+    ["1.6.3-rc.1", true],
+    ["1.6.3+build.5", true],
+    ["1.6.3-rc.1+build.5", true],
+    ["10.0.0", true],
+    ["1.6", false],
+    ["v1.6.3", false],
+    ["1.6.3-", false],
+    ["1.6.3+", false],
+    ["1.6.3-rc..1", false],
+    ["1.6.3 ", false],
+    [`1.6.3-${"a".repeat(35)}`, false],
+    [163, false],
+  ])("engineVersion %p valid=%p", (engineVersion, expected) => {
+    expect(validateGameRecord({ ...base, engineVersion }).valid).toBe(expected);
+  });
+
+  test.each([
+    ["agent", true],
+    ["browser", true],
+    ["desktop", false],
+    ["", false],
+    [true, false],
+  ])("ingestSource %p valid=%p", (ingestSource, expected) => {
+    expect(validateGameRecord({ ...base, ingestSource }).valid).toBe(expected);
+  });
+});

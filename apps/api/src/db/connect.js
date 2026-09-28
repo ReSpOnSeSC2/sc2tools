@@ -52,6 +52,7 @@ const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
  *   reviewKarmaEvents: import('mongodb').Collection<any>,
  *   reviewBlocks: import('mongodb').Collection<any>,
  *   notifications: import('mongodb').Collection<any>,
+ *   browserIngestDaily: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -134,6 +135,7 @@ async function connect({ uri, dbName }, observability = {}) {
     reviewKarmaEvents: db.collection(COLLECTIONS.REVIEW_KARMA_EVENTS),
     reviewBlocks: db.collection(COLLECTIONS.REVIEW_BLOCKS),
     notifications: db.collection(COLLECTIONS.NOTIFICATIONS),
+    browserIngestDaily: db.collection(COLLECTIONS.BROWSER_INGEST_DAILY),
     close: () => client.close(),
   };
   await ensureIndexes(ctx);
@@ -222,6 +224,21 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
 }
 
 /**
+ * Per-user, per-UTC-day browser-ingest counters. One row per (userId, day);
+ * the TTL index reclaims rows once their ``expiresAt`` (a few days after the
+ * counted day) passes. See ``services/browserIngestQuota.js``.
+ *
+ * Example:
+ *   await ensureBrowserIngestDailyIndexes(ctx);
+ *
+ * @param {{ browserIngestDaily: import('mongodb').Collection }} ctx
+ */
+async function ensureBrowserIngestDailyIndexes(ctx) {
+  await ctx.browserIngestDaily.createIndex({ userId: 1, day: 1 }, { unique: true });
+  await ctx.browserIngestDaily.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+}
+
+/**
  * Idempotent index setup. Safe to call on every boot — Mongo skips
  * indexes that already exist with the same spec.
  *
@@ -234,6 +251,7 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
  *   - device pairings:    {code} (unique, TTL)
  *   - device tokens:      {tokenHash} (unique)
  *   - overlay tokens:     {token} (unique)
+ *   - browser ingest cap: {userId, day} (unique, TTL on expiresAt)
  *
  * @param {DbContext} ctx
  */
@@ -467,6 +485,8 @@ async function ensureIndexes(ctx) {
   // MongoDB's asynchronous TTL sweep can never inflate the public counter.
   await ctx.sitePresence.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await ctx.sitePresence.createIndex({ lastSeenAt: -1, identityKey: 1 });
+
+  await ensureBrowserIngestDailyIndexes(ctx);
 
   await ctx.overlayTokens.createIndex({ token: 1 }, { unique: true });
   await ctx.overlayTokens.createIndex({ userId: 1, createdAt: -1 });

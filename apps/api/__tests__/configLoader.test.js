@@ -53,6 +53,26 @@ describe("config loader - replay ingest admission", () => {
   });
 });
 
+describe("config loader - browser ingest daily cap", () => {
+  test("defaults to 5000 games per user per UTC day", () => {
+    expect(loadConfig({ ...BASE_ENV }).browserIngestDailyCap).toBe(5000);
+  });
+
+  test("accepts an explicit override", () => {
+    expect(loadConfig({
+      ...BASE_ENV,
+      BROWSER_INGEST_DAILY_CAP: "250",
+    }).browserIngestDailyCap).toBe(250);
+  });
+
+  test.each(["0", "-5", "lots"])("rejects %p", (raw) => {
+    expect(() => loadConfig({
+      ...BASE_ENV,
+      BROWSER_INGEST_DAILY_CAP: raw,
+    })).toThrow(/BROWSER_INGEST_DAILY_CAP|integer/);
+  });
+});
+
 describe("config loader - original replay storage", () => {
   test("is explicitly disabled by default", () => {
     expect(loadConfig({ ...BASE_ENV }).replayFilesStore).toBe("disabled");

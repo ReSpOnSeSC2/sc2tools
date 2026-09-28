@@ -288,6 +288,12 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  // Short-lived (TTL) per-user/day browser-ingest counters.
+  [COLLECTIONS.BROWSER_INGEST_DAILY]: {
+    collection: COLLECTIONS.BROWSER_INGEST_DAILY,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.COACHING]: {
     collection: COLLECTIONS.COACHING,
     currentVersion: 1,

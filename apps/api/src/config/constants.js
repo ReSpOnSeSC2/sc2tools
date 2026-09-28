@@ -16,6 +16,11 @@ const DEFAULTS = Object.freeze({
   // Render Starter: excess requests receive a retryable 503 before their
   // multi-megabyte JSON bodies are parsed.
   REPLAY_INGEST_MAX_ACTIVE: 1,
+  // Games per user per UTC day accepted from in-browser (Clerk-session)
+  // ingest. Far above a real history import (~a few thousand replays), low
+  // enough that a scripted browser session cannot flood the single ingest
+  // lane indefinitely. Device-token (desktop agent) uploads are never capped.
+  BROWSER_INGEST_DAILY_CAP: 5000,
   // Keep-alive heartbeat for Render's "starter" idle timeout (15min). 13min
   // gives a healthy safety margin and stays just below typical CDN cache
   // windows so the upstream actually sees the request.
@@ -107,6 +112,9 @@ const COLLECTIONS = Object.freeze({
   // Per-user in-app notifications (the header bell). Distinct from the
   // admin-only ``admin_events`` feed above.
   NOTIFICATIONS: "notifications",
+  // Per-user, per-UTC-day counter of games accepted from browser ingest.
+  // Short-lived (TTL) rows; see ``services/browserIngestQuota.js``.
+  BROWSER_INGEST_DAILY: "browser_ingest_daily",
 });
 
 const LIMITS = Object.freeze({
@@ -155,6 +163,25 @@ const LIMITS = Object.freeze({
   ML_TRAINING_MAX_GAMES: 50000,
   IMPORT_JOB_HISTORY: 50,
   MACRO_JOB_HISTORY: 50,
+  // POST /v1/games/exists: ids per request. 500 ids x 200 ASCII chars is
+  // ~100 kB, well inside the ordinary 256 kB JSON parser; real ids (date |
+  // opponent | map | seconds) are far shorter even with non-Latin names.
+  GAMES_EXISTS_MAX_IDS: 500,
+  // Game ids are bounded to the same length everywhere they are accepted.
+  GAME_ID_MAX_LENGTH: 200,
+});
+
+// Upload provenance stamped on slim game rows. ``ingestSource`` is derived
+// server-side from the authenticated caller; ``engineVersion`` is the semver
+// of the in-browser analysis engine (MAJOR.MINOR.PATCH with an optional
+// pre-release and/or build suffix, e.g. 1.6.3-rc.1 or 1.6.3+build.5).
+const INGEST_PROVENANCE = Object.freeze({
+  SOURCES: Object.freeze(["agent", "browser"]),
+  SOURCE_AGENT: "agent",
+  SOURCE_BROWSER: "browser",
+  ENGINE_VERSION_MAX_LENGTH: 40,
+  ENGINE_VERSION_PATTERN:
+    "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$",
 });
 
 // Replay Review Exchange (docs/reviews.md). Every threshold the feature
@@ -213,4 +240,5 @@ module.exports = {
   REVIEWS,
   TIMEOUTS,
   PYTHON,
+  INGEST_PROVENANCE,
 };

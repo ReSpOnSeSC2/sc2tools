@@ -496,7 +496,7 @@ describe("replay file routes", () => {
     expect(response.body.code).toBe("replay_storage_unavailable");
   });
 
-  test("validates upload input and requires device auth for writes", async () => {
+  test("validates upload input and accepts device or browser sessions for writes", async () => {
     const replayFiles = { prepareUpload: jest.fn(async () => ({ url: "put" })) };
     const good = await request(routeApp(replayFiles))
       .post("/v1/games/g1/replay-upload")
@@ -526,9 +526,15 @@ describe("replay file routes", () => {
 
     const browser = await request(routeApp(replayFiles, "clerk"))
       .post("/v1/games/g1/replay-upload")
-      .send({ filename: "g.SC2Replay", sizeBytes: 8, sha256: SHA });
-    expect(browser.status).toBe(403);
-    expect(browser.body.code).toBe("device_auth_required");
+      .send({ filename: "g.SC2Replay", sizeBytes: 8, sha256: SHA, md5: MD5 });
+    expect(browser.status).toBe(200);
+    expect(browser.body).toEqual({ url: "put" });
+    expect(replayFiles.prepareUpload).toHaveBeenLastCalledWith("u1", "g1", {
+      filename: "g.SC2Replay",
+      sizeBytes: 8,
+      sha256: SHA,
+      md5: MD5,
+    });
   });
 
   test("complete advertises availability and browser auth may request download", async () => {
@@ -559,6 +565,69 @@ describe("replay file routes", () => {
     expect(download.headers["cache-control"]).toBe("private, no-store");
     expect(download.body.url).toBe("get");
     expect(replayFiles.prepareDownload).toHaveBeenCalledWith("u1", "g1");
+  });
+});
+
+describe("replay file routes - browser (Clerk) backup", () => {
+  const upload = { filename: "Site Delta LE.SC2Replay", sizeBytes: 8, sha256: SHA, md5: MD5 };
+
+  test("refuses replay uploads from any other credential source", async () => {
+    const replayFiles = {
+      prepareUpload: jest.fn(async () => ({ url: "put" })),
+      completeUpload: jest.fn(async () => ({ sizeBytes: 8, sha256: SHA })),
+    };
+    // null, not undefined: routeApp defaults an undefined source to "device".
+    for (const source of ["auto", null, ""]) {
+      const prepare = await request(routeApp(replayFiles, source))
+        .post("/v1/games/g1/replay-upload")
+        .send(upload);
+      expect(prepare.status).toBe(403);
+      expect(prepare.body.code).toBe("replay_upload_auth_required");
+      const complete = await request(routeApp(replayFiles, source))
+        .post("/v1/games/g1/replay-upload/complete")
+        .send({ uploadId: "A".repeat(24) });
+      expect(complete.status).toBe(403);
+    }
+    expect(replayFiles.prepareUpload).not.toHaveBeenCalled();
+    expect(replayFiles.completeUpload).not.toHaveBeenCalled();
+  });
+
+  test("a signed-in browser can prepare and complete its own replay backup", async () => {
+    const replayFiles = {
+      prepareUpload: jest.fn(async () => ({
+        url: "https://r2.example/put",
+        headers: { "content-type": "application/octet-stream" },
+        uploadId: "B".repeat(24),
+        expiresIn: 300,
+      })),
+      completeUpload: jest.fn(async () => ({
+        sizeBytes: 8,
+        sha256: SHA,
+        storedAt: new Date("2026-09-27T00:00:00Z"),
+      })),
+    };
+    const gameId = "2026-09-20T12:10:20|Opp|Site Delta LE|620";
+    const encoded = encodeURIComponent(gameId);
+    const prepare = await request(routeApp(replayFiles, "clerk"))
+      .post(`/v1/games/${encoded}/replay-upload`)
+      .send(upload);
+    expect(prepare.status).toBe(200);
+    expect(prepare.headers["cache-control"]).toBe("private, no-store");
+    expect(prepare.body.uploadId).toBe("B".repeat(24));
+    expect(replayFiles.prepareUpload).toHaveBeenCalledWith("u1", gameId, upload);
+
+    const complete = await request(routeApp(replayFiles, "clerk"))
+      .post(`/v1/games/${encoded}/replay-upload/complete`)
+      .send({ uploadId: "B".repeat(24) });
+    expect(complete.status).toBe(200);
+    expect(complete.headers["cache-control"]).toBe("private, no-store");
+    expect(complete.body).toEqual({
+      ok: true,
+      replayAvailable: true,
+      replay: { sizeBytes: 8, sha256: SHA, storedAt: "2026-09-27T00:00:00.000Z" },
+    });
+    expect(replayFiles.completeUpload)
+      .toHaveBeenCalledWith("u1", gameId, "B".repeat(24));
   });
 });
 
