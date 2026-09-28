@@ -91,9 +91,30 @@ export type ReviewCard = {
   createdAt: string | null;
   lastActivityAt: string | null;
   visibility?: "public" | "link";
+  /** Only on the asker's own list: hidden pending moderator review. */
+  hidden?: boolean;
 };
 
 export type ReviewBoardResponse = { items: ReviewCard[]; nextCursor: string | null };
+
+/** ``GET /v1/me/reviews``: your requests, and your reviews on others'. */
+export type MyReviewsResponse = {
+  asked: ReviewCard[];
+  answered: Array<{
+    request: ReviewCard;
+    commentId: string;
+    snippet: string;
+    helpful: boolean;
+    best: boolean;
+    upvotes: number;
+    createdAt: string | null;
+  }>;
+};
+
+/** ``GET /v1/me/review-blocks``. */
+export type ReviewBlocksResponse = {
+  items: Array<{ id: string; name: string; createdAt: string | null }>;
+};
 
 export type ReviewRequestView = {
   id: string;

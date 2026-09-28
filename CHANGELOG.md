@@ -33,7 +33,8 @@ corresponding GitHub Release.
   analysis until it closes. Reviewers' leagues are verified from their own
   synced ladder games; helpful, best and upvoted reviews earn karma, badges
   and an opt-in weekly leaderboard. Includes the public `/reviews` board
-  (Hot/New/Top), report-driven auto-hide wired into the existing moderation
+  (Hot/New/Top), a "My reviews" page (your requests, your reviews and
+  blocked reviewers), report-driven auto-hide wired into the existing moderation
   queue, blocks, database-backed rate limits, in-app notifications with a
   header bell, a weekly digest, Reddit/Discord sharing, dynamic OG images,
   QAPage JSON-LD and a quality-gated sitemap. Off by default behind `REVIEWS_ENABLED` /
