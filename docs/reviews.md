@@ -60,6 +60,11 @@ own synced games, and helpful reviewers earn karma.
     locate the game (and so the opponent) in public ladder history.
   - The asker's own replies always show the request's asker label, never
     their profile.
+- **No private build names.** A build or opponent-strategy label written
+  by the asker's own custom build library is a private, user-authored name.
+  A distinctive one could be matched to their public profile or published
+  builds, so requests only ever show the shared agent/community label, or
+  nothing.
 - **No replay file.** The original `.SC2Replay` contains every player's
   identity, so review pages never offer it.
 - **No chat.** Chat is not extracted from replays, so there is nothing to
@@ -167,6 +172,15 @@ own synced games, and helpful reviewers earn karma.
 - On the blocker's **anonymous** requests, a refusal would reveal who the
   asker is. So the blocked person can still comment, but the asker never
   sees those comments and is never notified about them.
+- **Blocks made as an anonymous asker are private.** A block the asker
+  makes on their own anonymous request is stored with
+  `origin: "anonymous_request"`. It hides the blocked person's comments
+  and notifications from the asker everywhere, but is never enforced as a
+  refusal the blocked person could see: replies, the asker's named
+  requests, or "Requests you can help with". Blocking the same person
+  again from a named context makes it an ordinary block.
+- Comment bodies are validated before any block check, so an invalid
+  throwaway comment can't be used to test who has blocked you.
 - **The asker is never blockable from their own request**, and a viewer's
   blocks never hide the asker's replies, silence their reply
   notifications, or drop an anonymous request from "Requests you can help
