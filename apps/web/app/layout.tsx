@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppShell } from "@/app/AppShell";
+import { siteVerification } from "@/lib/siteVerification";
 import "./globals.css";
 
 /**
@@ -101,6 +102,8 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: ["/og.jpg"],
   },
+  // Search Console ownership tag, only when NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION is set.
+  verification: siteVerification(),
 };
 
 export const viewport: Viewport = {

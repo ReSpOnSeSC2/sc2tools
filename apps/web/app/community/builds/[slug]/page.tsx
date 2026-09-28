@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar, Users } from "lucide-react";
@@ -13,10 +14,12 @@ import { CommunityBuildSignatureTimeline } from "@/components/community/Communit
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
 import { CommunityBuildOwnerControls } from "@/components/community/CommunityBuildOwnerControls";
 import { RelatedBuilds } from "@/components/community/RelatedBuilds";
+import { CommunityGuideLink } from "@/components/guides/CommunityGuideLink";
 import { SaveToLibraryButton } from "@/components/community/SaveToLibraryButton";
 import { ShareLinkButton } from "@/components/community/ShareLinkButton";
 import type { CommunityBuildDetail } from "@/components/community/types";
 import { rulesToSignature, type BuildRuleLike } from "@/lib/build-events";
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 
 export async function generateMetadata({
   params,
@@ -101,10 +104,12 @@ export default async function CommunityBuildPage({
 
   return (
     <article className="space-y-6">
+      {/* The title is author text: serializeJsonLd escapes "<", so a
+          title containing "</script>" can never close the tag. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd),
+          __html: serializeJsonLd(breadcrumbJsonLd),
         }}
       />
 
@@ -146,6 +151,11 @@ export default async function CommunityBuildPage({
         title={data.title}
         description={data.description}
       />
+
+      {/* Streams in: a slow guide API never holds up the build page. */}
+      <Suspense fallback={null}>
+        <CommunityGuideLink matchup={data.matchup} names={[build.name, data.title]} />
+      </Suspense>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">

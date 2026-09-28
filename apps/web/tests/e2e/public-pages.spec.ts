@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -6,7 +6,9 @@ import { expect, test } from "@playwright/test";
  *
  * Three invariants per page:
  *   1. It renders (a real h1/main, not a crash screen) with NO backend
- *      and a dummy Clerk key — i.e. graceful degradation works.
+ *      and a dummy Clerk key — i.e. graceful degradation works. (The
+ *      guide pages read synthetic fixtures from tests/e2e/mock-guides-api.mjs;
+ *      every other API call still fails.)
  *   2. No body-level horizontal scroll at any viewport — wide content
  *      must scroll inside its own container, never the page.
  *   3. The chrome (header nav) is present, so the layout mounted.
@@ -14,7 +16,9 @@ import { expect, test } from "@playwright/test";
 
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/", expectText: /opponent|build|replay/i },
-  { path: "/meta", expectText: /meta/i },
+  { path: "/guides", expectText: /build order guides/i },
+  { path: "/guides/pvz", expectText: /PvZ build orders/i },
+  { path: "/guides/pvz/stargate-into-glaives", expectText: /Stargate into Glaives/ },
   { path: "/download", expectText: /download|agent/i },
   { path: "/community", expectText: /community|build/i },
   { path: "/donate", expectText: /donate|chip in|free/i },
@@ -62,4 +66,55 @@ test("/p/<missing> is a real 404, not a soft-404", async ({ page }) => {
   // here but require the page not to crash and not to overflow.
   expect([200, 404]).toContain(response!.status());
   await expect(page.locator("main").first()).toBeVisible();
+});
+
+/**
+ * Guide pages against the synthetic fixture API (tests/e2e/mock-guides-api.mjs):
+ * the headline stat is on screen and nothing overflows at a small phone
+ * (375) and a wide desktop (1440). Viewports are set per test, so this
+ * block runs once (in the desktop project) instead of once per project.
+ */
+const GUIDE_STATS: Array<{ path: string; locate: (page: Page) => Locator; stat: string }> = [
+  // Fixture Diamond band: 88 wins / 150 games → 58.7%.
+  { path: "/guides/pvz/stargate-into-glaives", locate: (page) => page.getByTestId("guide-headline"), stat: "58.7%" },
+  // Fixture PvZ ranking: Stargate into Glaives 238 / 420 → 56.7%.
+  { path: "/guides/pvz", locate: (page) => page.getByRole("row", { name: /Stargate into Glaives/ }), stat: "56.7%" },
+  {
+    path: "/guides",
+    locate: (page) =>
+      page.getByRole("listitem").filter({ has: page.getByRole("link", { name: "Stargate into Glaives" }) }).last(),
+    stat: "56.7%",
+  },
+];
+
+test.describe("guide pages at 375 and 1440 px", () => {
+  for (const width of [375, 1440]) {
+    test(`headline stats visible with no horizontal scroll at ${width}px`, async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");
+      await page.setViewportSize({ width, height: 900 });
+      for (const { path, locate, stat } of GUIDE_STATS) {
+        const response = await page.goto(path);
+        expect(response?.status(), `${path} status`).toBe(200);
+        const target = locate(page);
+        await expect(target, `${path} headline`).toBeVisible();
+        await expect(target, `${path} stat`).toContainText(stat);
+        const overflow = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(overflow.scrollWidth, `${path} overflows at ${width}px`).toBeLessThanOrEqual(overflow.clientWidth + 1);
+      }
+    });
+  }
+});
+
+test("/meta permanently redirects to /guides", async ({ request }) => {
+  const response = await request.get("/meta?axis=league&band=4", { maxRedirects: 0 });
+  expect(response.status()).toBe(308);
+  expect(response.headers()["location"]).toMatch(/^\/guides(\?|$)/);
+});
+
+test("an impossible guide URL is a real 404 (the pages render per request)", async ({ request }) => {
+  const response = await request.get("/guides/not-a-matchup");
+  expect(response.status()).toBe(404);
 });

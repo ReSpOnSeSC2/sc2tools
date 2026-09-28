@@ -11,8 +11,8 @@
  *     "<Race> - Standard Play (Unclassified)" — the game reached the
  *     macro phase but matched no specific pattern (the catch-alls).
  *
- * Aggregation surfaces (Builds tab, Stock Market universe, meta radar
- * tables) may still show the catch-alls because they carry matchup info
+ * Aggregation surfaces (Builds tab, Stock Market universe) may still
+ * show the catch-alls because they carry matchup info
  * and their share of games is a real, factual slice of the corpus. But
  * surfaces that PROMOTE a build — "build heating up", "dust it off",
  * recent-form headings, meta movers — must never crown one: an

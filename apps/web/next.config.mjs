@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isGuidesFlagOn } from "./lib/guides/guidesFlag.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,6 +37,21 @@ const engineAssetHeaders = [
     headers: [{ key: "Cache-Control", value: "no-cache" }],
   },
 ];
+/**
+ * The old /meta radar page was replaced by the build guides. With guides
+ * on (same NEXT_PUBLIC_GUIDES_ENABLED parsing as lib/guides/flags.ts),
+ * /meta is a permanent redirect to /guides; with guides off it points
+ * home temporarily, so search engines don't learn a destination that
+ * may change once the flag flips. Read at build time, like the inlined
+ * NEXT_PUBLIC_* value the pages use.
+ *
+ * @param {boolean} guidesOn
+ * @returns {Array<{ source: string, destination: string, permanent: boolean }>}
+ */
+function metaRedirects(guidesOn) {
+  const destination = guidesOn ? "/guides" : "/";
+  return ["/meta", "/meta/:path*"].map((source) => ({ source, destination, permanent: guidesOn }));
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -46,6 +62,9 @@ const nextConfig = {
   // the server bundle so webpack never tries to compile its Node-side
   // sharp/onnxruntime-node requires.
   serverExternalPackages: ["@xenova/transformers"],
+  async redirects() {
+    return metaRedirects(isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED));
+  },
   // Tighten the cache for the analyzer page so it always reflects the
   // user's latest data, but let the marketing routes use Vercel's edge.
   async headers() {

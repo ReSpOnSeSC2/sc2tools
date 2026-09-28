@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import { filtersToQuery, useFilters } from "@/lib/filterContext";
@@ -8,6 +9,24 @@ import { Card } from "@/components/ui/Card";
 import { BuildDossier } from "@/components/builds/BuildDossier";
 import { BuildPublishModal } from "@/components/builds/BuildPublishModal";
 import type { CustomBuild } from "@/components/builds/types";
+import { guidesEnabled } from "@/lib/guides/flags";
+import { guideBuildPath, matchupFromBuildName } from "@/lib/guides/slugs";
+import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
+
+/**
+ * Public guide page for a classifier label, or null: only while guides
+ * are on, and only for matchup-prefixed catalog openers ("PvZ - Stargate
+ * into Glaives") — never custom names, race-generic or unclassified
+ * catch-alls.
+ *
+ * Example: `communityGuideHref("PvZ - Stargate into Glaives")` →
+ * "/guides/pvz/stargate-into-glaives".
+ */
+export function communityGuideHref(buildName: string): string | null {
+  if (!guidesEnabled() || isUnclassifiedBuild(buildName)) return null;
+  const matchup = matchupFromBuildName(buildName);
+  return matchup ? guideBuildPath(matchup, buildName) : null;
+}
 
 /**
  * Modal that opens from the analyzer's Builds tab. Shows the same rich
@@ -53,6 +72,7 @@ export function BuildEditorModal({
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const guideHref = communityGuideHref(buildName);
 
   // Resolve the clicked label to a saved custom build, if the user owns
   // one by that name. Falls back to a slug match for legacy builds whose
@@ -128,7 +148,17 @@ export function BuildEditorModal({
           <div className="rounded-xl border border-border bg-bg-surface flex items-center justify-between px-4 py-3">
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold">{buildName}</h2>
-              <p className="text-micro text-text-dim">Build dossier</p>
+              <p className="text-micro text-text-dim">
+                Build dossier
+                {guideHref ? (
+                  <>
+                    {" · "}
+                    <Link href={guideHref} className="font-semibold text-accent-cyan hover:underline">
+                      Community guide
+                    </Link>
+                  </>
+                ) : null}
+              </p>
             </div>
             <button
               type="button"

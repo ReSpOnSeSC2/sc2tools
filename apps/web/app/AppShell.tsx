@@ -41,7 +41,7 @@ function isPublicReplayRoute(pathname: string | null): boolean {
  * The toast context remains available because dock controls use the same app
  * primitives as the signed-in site.
  *
- * Every signed-in surface — /app, /builds, /meta, /community, /devices,
+ * Every signed-in surface — /app, /builds, /community, /devices,
  * /settings, /admin — renders inside AppChrome instead: one rail, one context
  * bar, and a mobile tab bar in place of the marketing hamburger. The chrome
  * supplies its own <main>, so the Header/Footer pair and the constrained

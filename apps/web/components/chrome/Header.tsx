@@ -8,10 +8,12 @@ import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useApi } from "@/lib/clientApi";
-import { MobileNav, type MobileNavLink } from "./MobileNav";
+import { MobileNav } from "./MobileNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
+import { guidesEnabled } from "@/lib/guides/flags";
+import { headerNavLinks } from "./headerNav";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -29,22 +31,6 @@ import { reviewsVisible } from "@/lib/reviews";
 
 type MeAdminProbe = { isAdmin?: boolean };
 
-const BASE_NAV_LINKS: readonly MobileNavLink[] = [
-  { href: "/app", label: "Dashboard", auth: "in" },
-  { href: "/builds", label: "Custom builds", auth: "in" },
-  { href: "/meta", label: "Meta", auth: "any" },
-  { href: "/community", label: "Community", auth: "any" },
-  { href: "/settings", label: "Settings", auth: "in" },
-];
-
-const REVIEWS_LINK: MobileNavLink = { href: "/reviews", label: "Reviews", auth: "any" };
-
-const ADMIN_LINK: MobileNavLink = {
-  href: "/admin",
-  label: "Admin",
-  auth: "admin",
-};
-
 function isActiveLink(href: string, pathname: string): boolean {
   if (href === pathname) return true;
   return pathname.startsWith(href + "/");
@@ -57,12 +43,11 @@ export function Header() {
   // useApi gates on isSignedIn internally, so this fetch is a no-op
   // for signed-out visitors — they never see the Admin link anyway.
   const { data: me } = useApi<MeAdminProbe>("/v1/me");
-  const withReviews: readonly MobileNavLink[] = reviewsVisible(me?.isAdmin)
-    ? [...BASE_NAV_LINKS.slice(0, 4), REVIEWS_LINK, ...BASE_NAV_LINKS.slice(4)]
-    : BASE_NAV_LINKS;
-  const navLinks: readonly MobileNavLink[] = me?.isAdmin
-    ? [...withReviews, ADMIN_LINK]
-    : withReviews;
+  const navLinks = headerNavLinks({
+    guides: guidesEnabled(),
+    reviews: reviewsVisible(me?.isAdmin),
+    isAdmin: me?.isAdmin === true,
+  });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);

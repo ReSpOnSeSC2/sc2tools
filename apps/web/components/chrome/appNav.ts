@@ -2,7 +2,6 @@ import type { ComponentType, SVGProps } from "react";
 import {
   CalendarClock,
   Cpu,
-  Globe2,
   Library,
   MessageSquareText,
   ShieldCheck,
@@ -18,9 +17,13 @@ import { TABS, hrefForTab, type TabId } from "@/components/analyzer/tabs";
  *
  * "Surfaces" are every signed-in destination in the product: the seven
  * analyzer sections plus Today, and the account-level pages that used
- * to hang off the marketing header (custom builds, meta, community,
+ * to hang off the marketing header (custom builds, community, reviews,
  * coaching, agent, settings, admin). Role-gated entries remain in this
  * shared model and are filtered before either responsive nav renders.
+ *
+ * The public build guides (/guides) are deliberately NOT an entry: they
+ * are search landing pages and keep the marketing Header/Footer (see
+ * isAppSurfacePath), linked from the marketing header and footer.
  * ------------------------------------------------------------------ */
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -37,7 +40,7 @@ export type NavEntry = {
   adminOnly?: boolean;
   /** Only rendered for a real admin, linked coach, or linked student. */
   coachingOnly?: boolean;
-  /** Signed-out visitors can reach these (shared community/meta links). */
+  /** Signed-out visitors can reach these (shared community links). */
   publicRoute?: boolean;
   /** Shown only while the Replay Review Exchange rollout exposes it
    *  to this viewer (NEXT_PUBLIC_REVIEWS_ENABLED). */
@@ -62,7 +65,6 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
 
 const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Custom builds", icon: Library, group: "utility" },
-  { key: "meta", href: "/meta", label: "Meta", icon: Globe2, group: "utility", publicRoute: true },
   { key: "community", href: "/community", label: "Community", icon: Users2, group: "utility", publicRoute: true },
   { key: "reviews", href: "/reviews", label: "Reviews", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
   {

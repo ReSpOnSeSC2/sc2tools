@@ -11,6 +11,7 @@ import {
   parseMatchup,
   parsePatchEra,
 } from "../meta";
+import { parseGuideBand, parseGuideEra } from "../guides/format";
 
 describe("parseMatchup", () => {
   it("accepts every canonical matchup unchanged", () => {
@@ -98,19 +99,33 @@ describe("opponent band helpers", () => {
     expect(parseBand("mmr", "4000junk")).toBe(4000);
   });
 
-  it("labels both axes and builds canonical round-trippable URLs", () => {
+  it("labels both axes", () => {
     expect(bandLabel("league", 5)).toBe("Master");
     expect(bandLabel("mmr", 1000)).toBe("<2000");
     expect(bandLabel("mmr", 4000)).toBe("4000–4500");
     expect(bandLabel("mmr", 6500)).toBe("6500+");
+  });
 
+  it("links to the guide matchup page in the query format the guide pages parse", () => {
     const href = metaHref("mmr", 4500, "tVz");
-    expect(href).toBe("/meta?axis=mmr&band=4500&matchup=TvZ&era=after");
+    expect(href).toBe("/guides/tvz?band=mmr:4500");
+    const url = new URL(href, "https://sc2tools.com");
+    expect(url.pathname).toBe("/guides/tvz");
+    expect(parseGuideBand(url.searchParams.get("band"))).toEqual({ type: "mmr", value: 4500 });
+    expect(parseGuideEra(url.searchParams.get("era"))).toBe("after");
+  });
+
+  it("spells out only the older patch era and canonicalises bad input", () => {
+    const href = metaHref("league", 4, "PvZ", "before");
+    expect(href).toBe("/guides/pvz?band=league:4&era=before");
     const params = new URL(href, "https://sc2tools.com").searchParams;
-    const axis = parseAxis(params.get("axis"));
-    expect(axis).toBe("mmr");
-    expect(parseBand(axis, params.get("band"))).toBe(4500);
-    expect(parseMatchup(params.get("matchup"))).toBe("TvZ");
-    expect(parsePatchEra(params.get("era"))).toBe("after");
+    expect(parseGuideBand(params.get("band"))).toEqual({ type: "league", value: 4 });
+    expect(parseGuideEra(params.get("era"))).toBe("before");
+    // Unknown matchup / band fall back to the same defaults the parsers use.
+    expect(metaHref("league", 99, "XvY")).toBe(
+      `/guides/${parseMatchup("XvY").toLowerCase()}?band=league:${parseBand("league", 99)}`,
+    );
+    expect(parseAxis("mmr")).toBe("mmr");
+    expect(parsePatchEra("before")).toBe("before");
   });
 });

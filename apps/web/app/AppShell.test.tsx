@@ -109,7 +109,6 @@ describe("app chrome routes", () => {
     "/app/macro",
     "/builds",
     "/builds/my-opener",
-    "/meta",
     "/community",
     "/community/builds/slug",
     "/devices",
@@ -149,6 +148,11 @@ describe("normal and protected routes", () => {
     "/overlay-tools",
     "/dockyard",
     "/apparel",
+    // Public build guides are search landing pages: marketing shell.
+    "/guides",
+    "/guides/pvz",
+    "/guides/pvz/stargate-into-glaives",
+    "/guides/maps/old-sun-temple",
   ])(
     "keeps Clerk and the complete site shell on %s",
     (pathname) => {

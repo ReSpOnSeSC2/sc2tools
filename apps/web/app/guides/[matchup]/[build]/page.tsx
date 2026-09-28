@@ -15,8 +15,16 @@ import { guidesEnabled } from "@/lib/guides/flags";
  * streaming): flag off or API 404 → real 404; alias slug → 308 to the
  * new URL; API down → 200 "temporarily unavailable" + noindex; below
  * the publishing floor → "Not enough games yet" + noindex.
+ *
+ * Rendered per request, like /guides: as an ISR page, an API blip would
+ * freeze the "temporarily unavailable" state for the whole 6 h window,
+ * and switching an ISR page to dynamic at runtime (noStore) is a 500 in
+ * Next 15. The API reads stay cached: lib/guides/api.ts fetches with
+ * `next.revalidate = GUIDE_REVALIDATE_SEC` + the "guides" tag (Next
+ * caches only 200s) and shares one call between generateMetadata and the
+ * page (React cache).
  */
-export const revalidate = 21600; // = GUIDE_REVALIDATE_SEC (literal: segment config must be static)
+export const dynamic = "force-dynamic";
 
 interface BuildPageProps {
   params: Promise<{ matchup: string; build: string }>;

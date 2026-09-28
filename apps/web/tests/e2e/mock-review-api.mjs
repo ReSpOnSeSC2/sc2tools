@@ -5,13 +5,16 @@
 // every route by DROPPING the connection (a network failure, exactly
 // like the absent API) — except the public Replay Review Exchange
 // routes, which answer from the fixtures below so the review board and
-// a review page can be exercised signed out, at every viewport.
+// a review page can be exercised signed out, at every viewport, and the
+// four public guide routes in ./mock-guides-api.mjs (hub, PvZ matchup,
+// one build guide, guide sitemap).
 //
 // All data here is synthetic test fixture data (a made-up question and
 // comments on a fake map); the redaction shape mirrors the real API
 // (the opponent only appears as "Opponent (Zerg, ~4,100 MMR)").
 
 import http from "node:http";
+import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
 const ID = "e2eReviewFixture";
@@ -117,6 +120,7 @@ const ROUTES = new Map([
   [`/v1/reviews/${ID}/analysis`, ANALYSIS],
   [`/v1/reviews/${ID}/analysis/map-playback`, PLAYBACK],
   [`/v1/reviews/${ID}/og`, { id: ID, question: REQUEST.question, matchup: "PvZ", map: REQUEST.game.map, result: "Loss", askerBand: "Diamond", reviewCount: 3, hasBest: true, status: "answered" }],
+  ...GUIDE_ROUTES,
 ]);
 
 const server = http.createServer((req, res) => {

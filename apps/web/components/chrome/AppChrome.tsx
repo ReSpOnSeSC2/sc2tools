@@ -25,8 +25,10 @@ import { SiteStats } from "./SiteStats";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
- * Today and the analyzer sections, the custom-build library, meta,
- * community, agent, settings and admin.
+ * Today and the analyzer sections, the custom-build library,
+ * community, reviews, agent, settings and admin. (The public build
+ * guides at /guides keep the marketing Header/Footer instead: they are
+ * search landing pages, not an app surface.)
  *
  *   - Desktop (md+): a 64px icon rail that expands to a labelled
  *     overlay on hover / keyboard focus. One navigation system for the
@@ -37,7 +39,7 @@ import { SiteStats } from "./SiteStats";
  *     back control on detail pages, theme and account. The activity bar
  *     immediately below groups live sync state with the public site counts.
  *
- * /meta and /community are reachable signed-out (shared links), so the
+ * /community is reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
  * signed-out visitors get the public destinations plus the sign-in
  * CTAs instead of the section rail and account button. Structure stays
@@ -61,8 +63,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const title = surfaceTitle(pathname);
   const showBack = Boolean(match?.isDetail);
   // Analyzer sections have no page-level title of their own, so the
-  // context bar is their <h1>. Settings, the build library, community,
-  // meta and admin all render their own heading below, so there the bar
+  // context bar is their <h1>. Settings, the build library, community
+  // and admin all render their own heading below, so there the bar
   // is a breadcrumb label and must not compete for the h1.
   const ownsHeading = match?.entry.group !== "utility";
   const backHref = match?.backHref ?? "/app";
@@ -70,7 +72,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   // useApi gates on isSignedIn internally and SWR dedupes it against the
   // rest of the app, so this costs nothing extra and is a no-op for
-  // signed-out visitors on /meta and /community.
+  // signed-out visitors on /community.
   const { data: me } = useApi<MeProbe>("/v1/me");
   // This is the same authoritative role probe used by the Coaching page.
   // It resolves persisted account links, fails closed for non-members, and
@@ -247,8 +249,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* Mobile: tab bar + More sheet. Signed-out visitors on /meta and
-          /community get the same bar with just the public destinations. */}
+      {/* Mobile: tab bar + More sheet. Signed-out visitors on /community
+          get the same bar with just the public destinations. */}
       <nav
         aria-label="Quick sections"
         className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"

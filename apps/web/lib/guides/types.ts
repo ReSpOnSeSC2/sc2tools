@@ -67,7 +67,12 @@ export type GuideTrend = GuideTrendValue | null;
 export interface GuideVideo {
   youtubeId: string;
   title: string;
-  publishedAt: string;
+  /**
+   * ISO upload time; null for an admin-added video the channel feed hasn't
+   * listed yet (the API never guesses a date). No VideoObject is emitted
+   * for it, and the date is simply omitted from the UI.
+   */
+  publishedAt: string | null;
   url: string;
   thumbnailUrl: string;
   embedUrl: string;
@@ -536,12 +541,14 @@ export interface GuideAdminNotesPayload {
   items: GuideAdminNote[];
 }
 
-/** PUT /v1/admin/guides/notes/:matchup/:build request body. */
-export interface GuideAdminNoteSaveBody {
-  /** ≤ GUIDE_NOTE_MAX_CHARS (4000). */
-  body: string;
-  videos?: GuideVideoOverrides;
-}
+/**
+ * PUT /v1/admin/guides/notes/:matchup/:build request body. The API
+ * MERGES: an absent field keeps the stored value, so the notes editor
+ * sends only `body` and the videos panel only `videos` (at least one).
+ */
+export type GuideAdminNoteSaveBody =
+  | { /** ≤ GUIDE_NOTE_MAX_CHARS (4000). */ body: string; videos?: GuideVideoOverrides }
+  | { body?: string; videos: GuideVideoOverrides };
 
 /** PUT /v1/admin/guides/notes/:matchup/:build response. */
 export interface GuideAdminNoteSaveResponse {
@@ -577,11 +584,21 @@ export interface GuideBackfillStatus {
   lastError: string | null;
 }
 
+/** State of the admin "Recompute now" runs (reason codes only). */
+export interface GuideRecomputeState {
+  running: boolean;
+  /** ISO time of the last "Recompute now" since the API started. */
+  requestedAt: string | null;
+  last: { ran: boolean; reason: string | null; finishedAt: string } | null;
+}
+
 /** GET /v1/admin/guides/status. */
 export interface GuideAdminStatusPayload {
   run: GuideRunSummary | null;
   backfill: GuideBackfillStatus | null;
   samples: { count: number };
+  /** Sent by routes/adminGuides.js (beyond the §6 contract). */
+  recompute?: GuideRecomputeState;
 }
 
 /** Where a video row came from. */
@@ -597,8 +614,22 @@ export interface GuideAdminVideo extends GuideVideo {
   source: GuideVideoSource;
   /** Hidden from every guide. */
   hidden: boolean;
+  /** A YouTube Short (never auto-matched to a guide). */
+  isShort?: boolean;
 }
 
 export interface GuideAdminVideosPayload {
   items: GuideAdminVideo[];
+}
+
+/** POST /v1/admin/guides/videos (201) and PATCH …/videos/:youtubeId (200). */
+export interface GuideAdminVideoResponse {
+  item: GuideAdminVideo;
+}
+
+/** POST /v1/admin/guides/videos/sync. */
+export interface GuideVideoSyncResult {
+  fetched: number;
+  inserted: number;
+  updated: number;
 }

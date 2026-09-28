@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
 import { ReportIssueLauncher } from "@/components/feedback/ReportIssueLauncher";
+import { guidesEnabled } from "@/lib/guides/flags";
 
 /**
  * Footer — three-column site footer.
@@ -30,7 +31,13 @@ const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/download", label: "Download agent" },
 ];
 
+/** The site owner's channel, where the build-order videos are published. */
+export const YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@ReSpOnSeSC2";
+
+const GUIDES_LINK: FooterLink = { href: "/guides", label: "Build guides" };
+
 const RESOURCES_LINKS: readonly FooterLink[] = [
+  { href: YOUTUBE_CHANNEL_URL, label: "YouTube build videos", external: true },
   { href: "/community", label: "Community" },
   { href: "/welcome", label: "Getting started" },
   { href: "/donate", label: "Donate / support" },
@@ -42,6 +49,11 @@ const LEGAL_LINKS: readonly FooterLink[] = [
   { href: "/legal/terms", label: "Terms" },
 ];
 
+/** Resources column; "Build guides" only while the guides flag is on. */
+export function resourcesLinks(guides: boolean): readonly FooterLink[] {
+  return guides ? [GUIDES_LINK, ...RESOURCES_LINKS] : RESOURCES_LINKS;
+}
+
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-border bg-bg-surface/40">
@@ -51,7 +63,7 @@ export function Footer() {
           <FooterColumn title="Product" links={PRODUCT_LINKS} />
           <FooterColumn
             title="Resources"
-            links={RESOURCES_LINKS}
+            links={resourcesLinks(guidesEnabled())}
             trailing={<ReportIssueLauncher />}
           />
           <FooterColumn

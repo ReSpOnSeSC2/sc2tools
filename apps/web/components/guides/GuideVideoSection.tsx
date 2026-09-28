@@ -45,7 +45,9 @@ function VideoNotes({ video }: { video: GuideVideo }) {
     <div className="min-w-0 space-y-3">
       <div>
         <h3 className="font-display text-h4 font-bold text-text">{video.title}</h3>
-        <p className="text-caption text-text-dim">Published {fmtGuideDate(video.publishedAt)}</p>
+        {video.publishedAt ? (
+          <p className="text-caption text-text-dim">Published {fmtGuideDate(video.publishedAt)}</p>
+        ) : null}
       </div>
       {video.excerpt || checklist.length > 0 ? (
         <figure className="space-y-2">
@@ -84,7 +86,9 @@ function MoreVideos({ videos }: { videos: ReadonlyArray<GuideVideo> }) {
             <a href={href} target="_blank" rel="noopener noreferrer" className={GUIDE_LINK_CLASS}>
               {video.title}
             </a>{" "}
-            <span className="text-text-dim">· {fmtGuideDate(video.publishedAt)}</span>
+            {video.publishedAt ? (
+              <span className="text-text-dim">· {fmtGuideDate(video.publishedAt)}</span>
+            ) : null}
           </li>
         ))}
       </ul>

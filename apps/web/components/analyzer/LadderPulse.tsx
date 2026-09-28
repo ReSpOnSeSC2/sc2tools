@@ -19,6 +19,7 @@ import {
 import { useApi } from "@/lib/clientApi";
 import { fmtAgo, fmtMinutes, pct1 } from "@/lib/format";
 import { useFilters } from "@/lib/filterContext";
+import { guidesEnabled } from "@/lib/guides/flags";
 import {
   formatOpenerLabel,
   metaHref,
@@ -453,18 +454,15 @@ function MetaMovementCard({
       <p className="mt-2 text-micro text-text-dim">
         Nightly aggregate · updated {fmtAgo(row.updatedAt)}
       </p>
-      <Link
-        href={metaHref(
-          selection.axis,
-          selection.band,
-          selection.matchup,
-          selection.era,
-        )}
-        className={`${secondaryActionClass()} mt-4`}
-      >
-        Open meta radar
-        <ArrowUpRight className="h-4 w-4" aria-hidden />
-      </Link>
+      {guidesEnabled() ? (
+        <Link
+          href={metaHref(selection.axis, selection.band, selection.matchup, selection.era)}
+          className={`${secondaryActionClass()} mt-4`}
+        >
+          Open build guide
+          <ArrowUpRight className="h-4 w-4" aria-hidden />
+        </Link>
+      ) : null}
     </aside>
   );
 }

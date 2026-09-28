@@ -13,12 +13,18 @@
  *                   error, timeout, 429, 5xx, malformed JSON) — never a
  *                   404 for real content during an outage.
  *
- * Responses are cached with ISR (`GUIDE_REVALIDATE_SEC`) under the
- * "guides" tag, which `app/api/revalidate-guides` purges after the
- * nightly recompute. `server-only` is not imported: it is not a direct
- * dependency of apps/web and throws under vitest; the module follows the
- * same server-by-convention rule as `lib/serverApi.ts`.
+ * Responses are kept in Next's data cache (`GUIDE_REVALIDATE_SEC`, 200s
+ * only) under the "guides" tag, which `app/api/revalidate-guides` purges
+ * after the nightly recompute. Within one server render every API path
+ * is fetched at most once (React `cache`): the timeout `signal` opts each
+ * call out of Next's built-in fetch dedupe, and without the memo a page's
+ * generateMetadata and body would each hit the API on a cold cache.
+ *
+ * `server-only` is not imported: it is not a direct dependency of
+ * apps/web and throws under vitest; the module follows the same
+ * server-by-convention rule as `lib/serverApi.ts`.
  */
+import { cache } from "react";
 import { matchupFromGuideSlug } from "@/lib/guides/slugs";
 import { guideBandQueryString, type GuideBandQuery } from "@/lib/guides/format";
 import type {
@@ -135,7 +141,7 @@ async function toResult<T>(res: Response): Promise<GuideFetchResult<T>> {
   return isRecord(body) ? { kind: "ok", data: body as T } : UNAVAILABLE;
 }
 
-async function fetchGuide<T>(apiPath: string): Promise<GuideFetchResult<T>> {
+async function fetchGuideUncached<T>(apiPath: string): Promise<GuideFetchResult<T>> {
   try {
     const res = await fetch(`${API_BASE}${apiPath}`, {
       headers: { accept: "application/json" },
@@ -148,6 +154,14 @@ async function fetchGuide<T>(apiPath: string): Promise<GuideFetchResult<T>> {
     return UNAVAILABLE;
   }
 }
+
+/**
+ * `fetchGuideUncached`, memoised per server request by API path (React
+ * `cache` is request-scoped on the server and a pass-through elsewhere).
+ * Keyed on the full path string, so callers that build equal query
+ * objects still share one call.
+ */
+const fetchGuide = cache(fetchGuideUncached);
 
 /**
  * Guides hub payload (`GET /v1/guides`).

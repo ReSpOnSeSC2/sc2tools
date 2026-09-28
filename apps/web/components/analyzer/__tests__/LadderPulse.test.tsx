@@ -134,6 +134,7 @@ const GAMES: PulseGamesPage = {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-07-18T16:00:00.000Z"));
+  vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
   window.localStorage.clear();
   mutateGames.mockReset();
   useApiMock.mockReset();
@@ -143,6 +144,7 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 function wire(args?: {
@@ -262,12 +264,20 @@ describe("LadderPulse", () => {
       within(daily).getByRole("link", { name: /Reopen replay/i }),
     ).toBeTruthy();
 
-    const metaLink = screen.getByRole("link", {
-      name: /Open meta radar/i,
+    const guideLink = screen.getByRole("link", {
+      name: /Open build guide/i,
     });
-    expect(metaLink.getAttribute("href")).toBe(
-      "/meta?axis=league&band=4&matchup=PvZ&era=after",
-    );
+    expect(guideLink.getAttribute("href")).toBe("/guides/pvz?band=league:4");
+  });
+
+  it("hides the build-guide link while guides are switched off", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
+    wire({ games: GAMES, meta: META_ROW });
+    render(<LadderPulse />);
+
+    expect(screen.getByText("Immortal Timing")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Open build guide/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /meta radar/i })).toBeNull();
   });
 
   it("shows Mineral Float as high-bank readings instead of a literal mineral balance", () => {

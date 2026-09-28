@@ -79,6 +79,7 @@ export function buildMetadata(data: GuideBuildPayload): Metadata {
     canonical: guidePaths.build(data.matchupSlug, data.buildSlug),
     noindex: !data.published,
     ogType: data.published ? "article" : "website",
+    routeOgImage: true,
   });
 }
 
@@ -105,6 +106,7 @@ export function counterMetadata(data: GuideCounterPayload): Metadata {
     description,
     canonical: guidePaths.counter(data.matchupSlug, data.strategySlug),
     noindex: !data.published,
+    routeOgImage: true,
   });
 }
 
@@ -126,6 +128,7 @@ export function matchupMetadata(data: GuideMatchupPayload): Metadata {
       description: `${data.matchup} build order guides ranked by real ladder win rate. Not enough games yet for published stats.`,
       canonical,
       noindex: true,
+      routeOgImage: true,
     });
   }
   const count = data.openers.length;
@@ -133,6 +136,7 @@ export function matchupMetadata(data: GuideMatchupPayload): Metadata {
     title: `${data.matchup} build orders${bandPhrase(data.band)} — ${fmtCount(count)} openers ranked by win rate ${tag}${SUFFIX}`,
     description: `${fmtCount(count)} ${data.matchup} openers ranked by real ladder win rate across ${fmtCount(data.games)} games from ${fmtCount(data.users)} players ${eraLabel(data.era, data.patch)}.${updated(data.computedAt)}`,
     canonical,
+    routeOgImage: true,
   });
 }
 

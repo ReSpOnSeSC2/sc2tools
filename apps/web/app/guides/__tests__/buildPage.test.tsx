@@ -22,7 +22,7 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: 
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, error: undefined, isLoading: false }) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 
-import BuildGuidePage, { generateMetadata, revalidate } from "@/app/guides/[matchup]/[build]/page";
+import BuildGuidePage, { dynamic, generateMetadata } from "@/app/guides/[matchup]/[build]/page";
 import { buildIntro, buildTimingsBlurb } from "@/lib/guides/guideCopy";
 import { FIXTURE_BUILD_PUBLISHED, FIXTURE_BUILD_UNPUBLISHED, fixtureCell } from "@/lib/guides/__fixtures__";
 
@@ -56,8 +56,9 @@ afterEach(() => {
 });
 
 describe("/guides/[matchup]/[build] metadata", () => {
-  it("revalidates every 6 hours", () => {
-    expect(revalidate).toBe(21600);
+  it("renders per request so an API blip never freezes the unavailable state", () => {
+    // The API read itself stays cached (fetch next.revalidate + "guides" tag).
+    expect(dynamic).toBe("force-dynamic");
   });
 
   it("titles a published guide with its real headline win rate and league", async () => {

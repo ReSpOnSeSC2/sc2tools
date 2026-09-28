@@ -18,7 +18,6 @@ describe("app surface matching", () => {
     "/app/game/g1",
     "/builds",
     "/builds/my-opener",
-    "/meta",
     "/community",
     "/community/builds/slug",
     "/devices",
@@ -43,6 +42,9 @@ describe("app surface matching", () => {
     "/definitions",
     "/sign-in",
     "/overlay/token",
+    "/guides",
+    "/guides/pvz/stargate-into-glaives",
+    "/meta",
     null,
   ])("leaves %s on the marketing shell", (pathname) => {
     expect(isAppSurfacePath(pathname)).toBe(false);
@@ -90,7 +92,7 @@ describe("app surface matching", () => {
     expect(isProtectedSurfacePath("/settings")).toBe(true);
     expect(isProtectedSurfacePath("/app/macro")).toBe(true);
     expect(isProtectedSurfacePath("/coaching")).toBe(true);
-    expect(isProtectedSurfacePath("/meta")).toBe(false);
+    expect(isProtectedSurfacePath("/guides")).toBe(false);
     expect(isProtectedSurfacePath("/community/builds/slug")).toBe(false);
   });
 
