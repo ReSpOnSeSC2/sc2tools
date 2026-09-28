@@ -11,7 +11,7 @@ import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, embeddedVideoJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, myRaceWord, oppRaceWord } from "@/components/guides/guideUi";
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
-import { fmtCount, fmtGuideDate, fmtPct } from "@/lib/guides/format";
+import { fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import { buildCounterIntro } from "@/lib/guides/guideCopy";
 import type { GuideCounterOpener, GuideCounterPayload, GuideCounterPublished } from "@/lib/guides/types";
 
@@ -56,7 +56,7 @@ function OpenerCard({ opener, rank, matchupSlug }: { opener: GuideCounterOpener;
           <WinRateCell winRate={opener.winRate} ci={opener.ci} />
         </div>
         <p className="text-micro tabular-nums text-text-dim">
-          n = {fmtCount(opener.games)} games from {fmtCount(opener.users)} players
+          n = {fmtCount(opener.games)} games from {fmtCountNoun(opener.users, "player")}
         </p>
         {description ? <p className="text-caption text-text-muted">{description}</p> : null}
       </div>
@@ -75,7 +75,7 @@ function PublishedCounter({ payload }: { payload: GuideCounterPublished }) {
           {fmtCount(overall.games)} games
         </p>
         <p className="text-caption tabular-nums text-text-dim">
-          n = {fmtCount(overall.games)} games from {fmtCount(overall.users)} players
+          n = {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
           {payload.computedAt ? ` · Stats updated ${fmtGuideDate(payload.computedAt)}` : ""}
         </p>
         <GuideCopyText lines={buildCounterIntro(payload)} />

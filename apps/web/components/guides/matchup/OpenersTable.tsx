@@ -12,7 +12,7 @@ import {
   GUIDE_TH_NUM_CLASS,
   GUIDE_THEAD_CLASS,
 } from "@/components/guides/guideUi";
-import { fmtCount, fmtPct } from "@/lib/guides/format";
+import { fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
 import type { GuideOpenerRow } from "@/lib/guides/types";
 
 /**
@@ -71,7 +71,7 @@ export function OpenersTable({
               </td>
               <td className={GUIDE_TD_NUM_CLASS}>
                 {fmtCount(row.games)}
-                <span className="block text-micro text-text-dim">{fmtCount(row.users)} players</span>
+                <span className="block text-micro text-text-dim">{fmtCountNoun(row.users, "player")}</span>
               </td>
               {hasPrevalence ? (
                 <td className={GUIDE_TD_NUM_CLASS}>{row.prevalence === null ? "—" : fmtPct(row.prevalence)}</td>

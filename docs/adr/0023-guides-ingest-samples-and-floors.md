@@ -50,6 +50,11 @@ Three constraints shape the design:
    - Below the page floor the API returns `published: false` with no
      numbers, and the web renders a noindex page.
    - Lists are ranked by the Wilson lower bound.
+   - Amended 2026-09-28: these are now the defaults. Each floor can be
+     set per deployment (`GUIDES_CELL_MIN_USERS`, `GUIDES_CELL_MIN_GAMES`,
+     `GUIDES_PAGE_MIN_USERS`, `GUIDES_PAGE_MIN_GAMES`), so a small player
+     base can publish a build from one player's 50 games. The 50-game
+     per-player cap is unchanged.
 4. **Allow-list catalog names.** Only openers in
    `config/guideCatalog.json` (exported from the web's build-definition
    catalog) count as builds or opponent strategies.

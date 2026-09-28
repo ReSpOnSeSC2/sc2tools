@@ -12,6 +12,12 @@
  * backed by at least GUIDE_CELL_MIN_GAMES games from GUIDE_CELL_MIN_USERS
  * distinct users. Below the floor the API returns nothing for that cell —
  * never a padded, smoothed or invented value.
+ *
+ * The four floors can be lowered or raised per deployment with
+ * GUIDES_CELL_MIN_USERS, GUIDES_CELL_MIN_GAMES, GUIDES_PAGE_MIN_USERS and
+ * GUIDES_PAGE_MIN_GAMES (whole numbers >= 1; anything else keeps the
+ * default). A page floor is never below the matching cell floor, because a
+ * page's headline number is itself a cell. Read once at startup.
  */
 
 const { PATCH_ERA_AFTER } = require("../util/patchEra");
@@ -19,15 +25,58 @@ const { PATCH_ERA_AFTER } = require("../util/patchEra");
 const DAY_SEC = 24 * 60 * 60;
 const DAY_MS = DAY_SEC * 1000;
 
+/**
+ * A floor from ``env[name]`` when it is a whole number >= 1, else
+ * ``fallback``.
+ *
+ * Example: `floorFromEnv({ GUIDES_PAGE_MIN_GAMES: "50" }, "GUIDES_PAGE_MIN_GAMES", 100)` → 50;
+ * `"0"`, `"2.5"`, `"lots"` or unset → 100.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} name
+ * @param {number} fallback
+ * @returns {number}
+ */
+function floorFromEnv(env, name, fallback) {
+  const raw = String(env[name] ?? "").trim();
+  if (!/^\d+$/.test(raw)) return fallback;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 1 ? value : fallback;
+}
+
+/**
+ * The four publish floors for ``env`` (defaults: cells 5 users / 30 games,
+ * pages 5 users / 100 games).
+ *
+ * Example: `guideFloors({ GUIDES_PAGE_MIN_USERS: "1", GUIDES_PAGE_MIN_GAMES: "50" })`
+ * → `{ cellMinUsers: 5, cellMinGames: 30, pageMinUsers: 5, pageMinGames: 50 }`
+ * (the page user floor is lifted back to the cell's 5).
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {{ cellMinUsers: number, cellMinGames: number, pageMinUsers: number, pageMinGames: number }}
+ */
+function guideFloors(env) {
+  const cellMinUsers = floorFromEnv(env, "GUIDES_CELL_MIN_USERS", 5);
+  const cellMinGames = floorFromEnv(env, "GUIDES_CELL_MIN_GAMES", 30);
+  return {
+    cellMinUsers,
+    cellMinGames,
+    pageMinUsers: Math.max(floorFromEnv(env, "GUIDES_PAGE_MIN_USERS", 5), cellMinUsers),
+    pageMinGames: Math.max(floorFromEnv(env, "GUIDES_PAGE_MIN_GAMES", 100), cellMinGames),
+  };
+}
+
+const FLOORS = guideFloors(process.env);
+
 /** Minimum distinct users behind any displayed number group ("cell"). */
-const GUIDE_CELL_MIN_USERS = 5;
+const GUIDE_CELL_MIN_USERS = FLOORS.cellMinUsers;
 /** Minimum games behind any displayed number group ("cell"). */
-const GUIDE_CELL_MIN_GAMES = 30;
+const GUIDE_CELL_MIN_GAMES = FLOORS.cellMinGames;
 
 /** Minimum distinct users for a build/counter/map page to be published (current era, whole page). */
-const GUIDE_PAGE_MIN_USERS = 5;
+const GUIDE_PAGE_MIN_USERS = FLOORS.pageMinUsers;
 /** Minimum games for a build/counter/map page to be published (current era, whole page). */
-const GUIDE_PAGE_MIN_GAMES = 100;
+const GUIDE_PAGE_MIN_GAMES = FLOORS.pageMinGames;
 
 /**
  * Max games one user contributes per build per era. Poisoning resistance:
@@ -83,6 +132,7 @@ const GUIDE_CURRENT_ERA = PATCH_ERA_AFTER;
 const GUIDE_PATCH_LABEL = "5.0.16";
 
 module.exports = {
+  guideFloors,
   GUIDE_CELL_MIN_USERS,
   GUIDE_CELL_MIN_GAMES,
   GUIDE_PAGE_MIN_USERS,

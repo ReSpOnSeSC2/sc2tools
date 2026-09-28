@@ -396,8 +396,9 @@ into one row; a 90-day TTL on `createdAt` keeps it a bell, not an archive.
 Public build guides (`/guides`, served by
 [`routes/guides.js`](../apps/api/src/routes/guides.js)). Floors and
 windows live in [`config/guides.js`](../apps/api/src/config/guides.js):
-a number is published only for ≥ 30 games from ≥ 5 users, a page only
-for ≥ 100 games from ≥ 5 users. No guide collection is part of the
+by default a number is published only for ≥ 30 games from ≥ 5 users, a
+page only for ≥ 100 games from ≥ 5 users (each floor can be set per
+deployment; see [guides.md](guides.md#floors-and-ranking)). No guide collection is part of the
 GDPR export; `guide_samples` rows are deleted with the account or a
 history wipe, the user's example replays are pulled from `guide_stats`,
 and `guide_notes.updatedBy` is scrubbed to `null`.

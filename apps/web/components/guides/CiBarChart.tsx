@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react";
-import { fmtCi, fmtCount, fmtPct } from "@/lib/guides/format";
+import { fmtCi, fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
 import type { GuideCi } from "@/lib/guides/types";
 
 /**
@@ -54,7 +54,7 @@ function barTone(datum: CiBarDatum): string {
 
 /** Full spoken reading of one row. */
 export function ciBarRowLabel(datum: CiBarDatum): string {
-  const players = typeof datum.users === "number" ? `, ${fmtCount(datum.users)} players` : "";
+  const players = typeof datum.users === "number" ? `, ${fmtCountNoun(datum.users, "player")}` : "";
   return `${datum.label}: ${fmtPct(datum.winRate)} win rate, likely range ${fmtCi(datum.ci)}, ${fmtCount(datum.games)} games${players}`;
 }
 
@@ -93,7 +93,7 @@ function RowTooltip({ id, datum }: { id: string; datum: CiBarDatum }) {
       <div className="tabular-nums text-text-muted">Likely range {fmtCi(datum.ci)}</div>
       <div className="tabular-nums text-text-muted">
         {fmtCount(datum.games)} games
-        {typeof datum.users === "number" ? ` · ${fmtCount(datum.users)} players` : ""}
+        {typeof datum.users === "number" ? ` · ${fmtCountNoun(datum.users, "player")}` : ""}
       </div>
     </div>
   );

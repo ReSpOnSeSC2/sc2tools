@@ -4,7 +4,7 @@ import { GuideMarkdown } from "@/lib/guides/markdown";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
-import { fmtClock, fmtCount, fmtGuideDate, fmtPct } from "@/lib/guides/format";
+import { fmtClock, fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import type {
   GuideCommunityBuildLink,
   GuideExampleReplay,
@@ -37,7 +37,7 @@ export function BuildLeaksSection({ leaks, macro }: { leaks: GuideLeaks | null; 
             <span className="font-semibold tabular-nums text-text">
               {macro.avgScore.toFixed(MACRO_SCORE_DECIMALS)}
             </span> over{" "}
-            {fmtCount(macro.games)} games from {fmtCount(macro.users)} players.
+            {fmtCount(macro.games)} games from {fmtCountNoun(macro.users, "player")}.
           </p>
         ) : null}
         {items.length > 0 && leaks ? (

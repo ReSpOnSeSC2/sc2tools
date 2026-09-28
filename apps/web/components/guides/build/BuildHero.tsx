@@ -5,7 +5,7 @@ import { GuideCtas } from "@/components/guides/GuideCtas";
 import { TrendBadge } from "@/components/guides/TrendBadge";
 import { eraLabel } from "@/components/guides/guideUi";
 import { guidePaths } from "@/components/guides/guideMetadata";
-import { fmtCount, fmtGuideDate, fmtPct } from "@/lib/guides/format";
+import { fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import type { GuideCopyLine } from "@/lib/guides/guideCopy";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import type { GuideBuildPublished } from "@/lib/guides/types";
@@ -57,7 +57,7 @@ export function BuildHero({
         {headlineSentence(payload)}
       </p>
       <p className="text-caption tabular-nums text-text-dim">
-        n = {fmtCount(overall.games)} games from {fmtCount(overall.users)} players
+        n = {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
         {payload.computedAt ? ` · Stats updated ${fmtGuideDate(payload.computedAt)}` : ""}
       </p>
       <GuideCopyText lines={intro} />
