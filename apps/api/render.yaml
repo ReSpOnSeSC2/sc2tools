@@ -217,6 +217,17 @@ services:
         sync: false
       - key: GUIDES_REVALIDATE_SECRET
         sync: false
+      # Guide publish floors (whole numbers >= 1; defaults 5 / 30 / 5 / 100).
+      # 1 / (unset) / 1 / 50 publishes a build from one player's 50 games.
+      # Read at startup: change, restart, then Recompute now on /admin/guides.
+      - key: GUIDES_CELL_MIN_USERS
+        sync: false
+      - key: GUIDES_CELL_MIN_GAMES
+        sync: false
+      - key: GUIDES_PAGE_MIN_USERS
+        sync: false
+      - key: GUIDES_PAGE_MIN_GAMES
+        sync: false
       # guide_stats job knobs: 1 = kill switch; interval (default 86400,
       # floor 3600) and first-check delay after boot (default 900) in seconds.
       - key: SC2TOOLS_GUIDE_STATS_DISABLED

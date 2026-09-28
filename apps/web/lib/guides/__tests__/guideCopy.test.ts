@@ -347,3 +347,32 @@ describe("buildMapIntro", () => {
     expect(buildMapIntro(undefined)).toEqual([]);
   });
 });
+
+describe("one-player guides", () => {
+  const onePlayer = (text: string) => {
+    expect(text).toContain("1 player");
+    expect(text).not.toMatch(/\b1 players\b/);
+    expect(text).not.toMatch(/\b1 player have\b/);
+  };
+
+  test("build, timings, counter and matchup copy say 1 player", () => {
+    const build: GuideBuildPublished = {
+      ...FIXTURE_BUILD_PUBLISHED,
+      overall: { ...FIXTURE_BUILD_PUBLISHED.overall, users: 1 },
+      timings: { ...FIXTURE_BUILD_PUBLISHED.timings!, users: 1 },
+    };
+    onePlayer(buildIntro(build)[0].text);
+    onePlayer(buildTimingsBlurb(build)[0].text);
+
+    const counter: GuideCounterPublished = {
+      ...FIXTURE_COUNTER_PUBLISHED,
+      overall: { ...FIXTURE_COUNTER_PUBLISHED.overall, users: 1 },
+    };
+    onePlayer(buildCounterIntro(counter)[0].text);
+
+    for (const slug of ["pvz", "pvt", "pvp", "zvp", "tvz"]) {
+      const matchup: GuideMatchupPayload = { ...FIXTURE_MATCHUP, slug, users: 1 };
+      onePlayer(buildMatchupIntro(matchup)[0].text);
+    }
+  });
+});

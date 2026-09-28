@@ -103,12 +103,24 @@ are ignored, and the canonical URL never carries a band.
 
 ## Floors and ranking
 
-| Constant (`apps/api/src/config/guides.js`) | Value | Meaning |
+| Constant (`apps/api/src/config/guides.js`) | Default | Meaning |
 |---|---|---|
 | `GUIDE_CELL_MIN_USERS` / `GUIDE_CELL_MIN_GAMES` | 5 / 30 | Any displayed number (a "cell") needs at least 5 distinct users AND 30 games. |
 | `GUIDE_PAGE_MIN_USERS` / `GUIDE_PAGE_MIN_GAMES` | 5 / 100 | A whole page publishes only with at least 5 users AND 100 games in the current patch. |
 | `GUIDE_USER_CELL_CAP` | 50 | At most 50 games per user per build per era count (most recently played first), so one account can't move a cell. Samples are ordered by `playedOn`, the UTC day the game was played (older rows without it fall back to their capture time), with `gameHash` breaking ties. |
 | `GUIDE_MILESTONE_MIN_PRESENCE` | 0.6 | A timing row appears only if the milestone occurs in at least 60% of samples. |
+
+The four floors can be set per deployment on the API:
+`GUIDES_CELL_MIN_USERS`, `GUIDES_CELL_MIN_GAMES`, `GUIDES_PAGE_MIN_USERS`
+and `GUIDES_PAGE_MIN_GAMES` (whole numbers of at least 1; anything else
+keeps the default). A page floor is never below the matching cell floor,
+because a page's headline number is itself a cell. They are read at
+startup, so change them, let the API restart, then **Recompute now** on
+`/admin/guides`. For example, `GUIDES_CELL_MIN_USERS=1`,
+`GUIDES_PAGE_MIN_USERS=1` and `GUIDES_PAGE_MIN_GAMES=50` publish a build
+as soon as one player has 50 games of it (still at most 50 games per
+player per build). A page from one player shows that player's results,
+unnamed, on a public page.
 
 - Below the page floor, the API returns the page with `published: false`
   and **no numbers at all**. The web renders a noindex "Not enough games

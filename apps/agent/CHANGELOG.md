@@ -2,6 +2,21 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.3
+
+### Fixed - APM matches StarCraft II
+
+- Each game's APM is the number StarCraft II records in the replay, for you
+  and your opponent. Counting the replay's events read about 14% low: one
+  game SC2 recorded at 221 APM showed 196. A hotkey plus a target click is
+  a single replay event, while SC2 most likely counts both inputs.
+- The APM timeline keeps its shape and is scaled to SC2's number. Replays
+  too old to record it are still counted from events, which now include a
+  command repeated with its hotkey (queueing a second and third Probe, for
+  example).
+
+Use **Re-sync** (or **Recompute** on a game) to refresh games already uploaded.
+
 ## 0.17.2
 
 ### Fixed - replay stats sent to the website

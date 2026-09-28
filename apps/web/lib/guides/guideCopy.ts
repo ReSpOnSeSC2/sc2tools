@@ -16,7 +16,7 @@
  * yet"). Samples under twice the page floor get a plain small-sample
  * caveat.
  */
-import { fmtClock, fmtCi, fmtCount, fmtPct, trendDirection } from "@/lib/guides/format";
+import { fmtClock, fmtCi, fmtCount, fmtCountNoun, fmtPct, trendDirection } from "@/lib/guides/format";
 import type {
   GuideBuildPayload,
   GuideBuildPublished,
@@ -146,16 +146,17 @@ interface BuildFacts {
   when: string;
   wr: string;
   games: string;
+  /** "1 player" / "63 players". */
   users: string;
 }
 
 const BUILD_OVERVIEW: ReadonlyArray<Variant<BuildFacts>> = [
   (f) =>
-    `${f.name} wins ${f.wr} of decided games across ${f.games} ${f.matchup} ladder games from ${f.users} players ${f.when}.`,
+    `${f.name} wins ${f.wr} of decided games across ${f.games} ${f.matchup} ladder games from ${f.users} ${f.when}.`,
   (f) =>
-    `Across ${f.games} ${f.matchup} ladder games from ${f.users} players ${f.when}, ${f.name} wins ${f.wr} of decided games.`,
+    `Across ${f.games} ${f.matchup} ladder games from ${f.users} ${f.when}, ${f.name} wins ${f.wr} of decided games.`,
   (f) =>
-    `${capitalize(f.when)}, ${f.users} players logged ${f.games} ${f.matchup} ladder games with ${f.name}, winning ${f.wr} of the decided ones.`,
+    `${capitalize(f.when)}, ${f.users} logged ${f.games} ${f.matchup} ladder games with ${f.name}, winning ${f.wr} of the decided ones.`,
 ];
 
 function buildSeed(payload: GuideBuildPayload): string {
@@ -169,7 +170,7 @@ function buildOverviewLine(p: GuideBuildPublished): GuideCopyLine {
     when: eraPhrase(p.era, p.patch),
     wr: fmtPct(p.overall.winRate),
     games: fmtCount(p.overall.games),
-    users: fmtCount(p.overall.users),
+    users: fmtCountNoun(p.overall.users, "player"),
   };
   const variant = pickVariant(BUILD_OVERVIEW, buildSeed(p), "overview");
   return line("intro-overview", variant(facts), [
@@ -286,7 +287,7 @@ function widestSplit(milestones: ReadonlyArray<GuideMilestone>): SplitMilestone 
 function timingsSampleLine(samples: number, users: number): GuideCopyLine {
   return line(
     "timings-sample",
-    `These timings come from ${fmtCount(samples)} recorded build orders by ${fmtCount(users)} players. Buildings are timed when construction starts, upgrades and morphs when they finish, exactly as the replay records them.`,
+    `These timings come from ${fmtCount(samples)} recorded build orders by ${fmtCountNoun(users, "player")}. Buildings are timed when construction starts, upgrades and morphs when they finish, exactly as the replay records them.`,
     [samples, users],
   );
 }
@@ -354,14 +355,15 @@ interface CounterFacts {
   matchup: string;
   wr: string;
   games: string;
+  /** "1 player" / "63 players". */
   users: string;
 }
 
 const COUNTER_OVERVIEW: ReadonlyArray<Variant<CounterFacts>> = [
   (f) =>
-    `Against ${f.name}, ${f.race} players win ${f.wr} of decided games across ${f.games} ${f.matchup} ladder games from ${f.users} players.`,
+    `Against ${f.name}, ${f.race} players win ${f.wr} of decided games across ${f.games} ${f.matchup} ladder games from ${f.users}.`,
   (f) =>
-    `When the opponent opens ${f.name}, ${f.race} players take ${f.wr} of decided games (${f.games} ${f.matchup} ladder games, ${f.users} players).`,
+    `When the opponent opens ${f.name}, ${f.race} players take ${f.wr} of decided games (${f.games} ${f.matchup} ladder games, ${f.users}).`,
 ];
 
 function openerLine(id: string, lead: string, row: GuideCell & { name: string }): GuideCopyLine {
@@ -390,7 +392,7 @@ export function buildCounterIntro(
     matchup: payload.matchup,
     wr: fmtPct(overall.winRate),
     games: fmtCount(overall.games),
-    users: fmtCount(overall.users),
+    users: fmtCountNoun(overall.users, "player"),
   };
   const seed = `${payload.matchupSlug}/counter/${payload.strategySlug}`;
   const overview = pickVariant(COUNTER_OVERVIEW, seed, "overview");
@@ -412,13 +414,16 @@ interface MatchupFacts {
   matchup: string;
   when: string;
   games: string;
+  /** "1 player" / "63 players". */
   users: string;
+  /** "has" for one player, else "have". */
+  have: string;
 }
 
 const MATCHUP_OVERVIEW: ReadonlyArray<Variant<MatchupFacts>> = [
   (f) =>
-    `The guide sample covers ${f.games} ${f.matchup} ladder games from ${f.users} players ${f.when}.`,
-  (f) => `${f.users} players have contributed ${f.games} ${f.matchup} ladder games ${f.when}.`,
+    `The guide sample covers ${f.games} ${f.matchup} ladder games from ${f.users} ${f.when}.`,
+  (f) => `${f.users} ${f.have} contributed ${f.games} ${f.matchup} ladder games ${f.when}.`,
 ];
 
 function matchupOverviewLine(p: GuideMatchupPayload, games: number, users: number): GuideCopyLine {
@@ -426,7 +431,8 @@ function matchupOverviewLine(p: GuideMatchupPayload, games: number, users: numbe
     matchup: p.matchup,
     when: eraPhrase(p.era, p.patch),
     games: fmtCount(games),
-    users: fmtCount(users),
+    users: fmtCountNoun(users, "player"),
+    have: users === 1 ? "has" : "have",
   };
   const variant = pickVariant(MATCHUP_OVERVIEW, p.slug, "overview");
   return line("matchup-overview", variant(facts), [games, users]);

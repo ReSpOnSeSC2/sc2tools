@@ -3140,8 +3140,8 @@ def _my_average_apm(
 ) -> Optional[float]:
     """Return the uploading player's average APM for the slim game row.
 
-    This is the curve's ``avg_apm`` (every action over the time the player
-    was in the game, as SC2 counts APM), the same number
+    This is the curve's ``avg_apm`` (StarCraft II's own APM when the
+    replay records it, else the event count), the same number
     ``player_stats.me.apm`` carries.
     ``None`` when the curve is missing, the player had no actions, or the
     value falls outside what the API schema accepts.
@@ -3205,8 +3205,9 @@ def _merge_apm_into_player_stats(
         averages = _active_rate_averages(player.get("samples") or [])
         if averages is None:
             continue
-        # APM is the whole-game average SC2 reports; SPM stays the
-        # active-window average of selections.
+        # APM is the curve's whole-game average (SC2's own figure when
+        # the replay has it); SPM stays the active-window average of
+        # selections.
         if isinstance(player.get("avg_apm"), (int, float)):
             averages["apm"] = float(player["avg_apm"])
         by_pid[int(player.get("pid"))] = averages
@@ -3329,13 +3330,23 @@ def _game_event_player_slot(ev: Any) -> Optional[int]:
     return None
 
 
-# apmCurve payload version. v2 (agent 0.17.2): actions are credited to the
-# issuing player slot, and ``apm`` counts every command, selection and
-# control-group action, the way StarCraft II's own APM counter does.
-# Earlier curves counted commands only and mis-attributed them, so the
-# website only displays curves at this version or later.
-APM_CURVE_VERSION = 2
+# apmCurve payload version.
+#   v2 (agent 0.17.2): actions are credited to the issuing player slot and
+#     counted as commands, selections and control-group actions. Earlier
+#     curves counted commands only and mis-attributed them, so the website
+#     only displays curves at v2 or later.
+#   v3 (agent 0.17.3): each player's ``avg_apm`` is the APM StarCraft II
+#     itself wrote into the replay (``replay.gamemetadata.json``) and the
+#     windows are scaled to it. Counting replay events can't reproduce
+#     SC2's number: across 774 ladder player-games v2 read a median 14%
+#     low (e.g. 196 against SC2's 221). SC2 most likely counts inputs,
+#     and a hotkey plus a target click is one replay event but two inputs.
+APM_CURVE_VERSION = 3
 _APM_WINDOW_SEC = 30
+# Where a player's ``avg_apm`` came from: StarCraft II's own figure, or
+# the replay-event estimate for replays without it (older game builds).
+APM_SOURCE_SC2 = "sc2"
+APM_SOURCE_EVENTS = "events"
 
 
 def _game_event_real_second(ev: Any, fps: float) -> Optional[int]:
@@ -3362,24 +3373,35 @@ def _count_player_actions(
 ) -> Dict[int, Dict[str, Any]]:
     """Per player slot: actions and selections per window, plus the total.
 
-    An action is any command, selection or control-group event (what SC2
-    counts as APM); camera moves are not actions. Each event counts once:
-    sc2reader's APMTracker counts control-group clear and steal events
-    (the base ``ControlGroupEvent``) twice, because its engine dispatches
-    ``handleControlGroupEvent`` both by type and by name for that class.
+    An action is any command, selection or control-group event, plus a
+    command repeated on its own (a ``CommandManagerStateEvent``: each
+    further press of the same hotkey, e.g. queueing a second and third
+    Probe). Camera moves are not actions. A repeat written in the same
+    game loop as a target update (right-click spam writes both) belongs
+    to that update's click, so it is not counted again. Each event counts
+    once: sc2reader's APMTracker counts control-group clear and steal
+    events (the base ``ControlGroupEvent``) twice, because its engine
+    dispatches ``handleControlGroupEvent`` both by type and by name.
     """
     try:
         from sc2reader.events.game import (  # type: ignore
             CommandEvent,
+            CommandManagerStateEvent,
             ControlGroupEvent,
             SelectionEvent,
+            UpdateTargetPointCommandEvent,
+            UpdateTargetUnitCommandEvent,
         )
     except Exception:  # noqa: BLE001
         return {}
-    action_types = (CommandEvent, SelectionEvent, ControlGroupEvent)
+    action_types = (CommandEvent, SelectionEvent, ControlGroupEvent, CommandManagerStateEvent)
+    updates = (UpdateTargetPointCommandEvent, UpdateTargetUnitCommandEvent)
     counts: Dict[int, Dict[str, Any]] = {
         pid: {"actions": {}, "selections": {}, "total": 0} for pid in pids
     }
+    # Per slot: the game loop of a target update that is still the
+    # player's latest action; a repeat in that same loop is its click.
+    open_update: Dict[int, Any] = {}
     for ev in events:
         if not isinstance(ev, action_types):
             continue
@@ -3387,6 +3409,14 @@ def _count_player_actions(
         sec = _game_event_real_second(ev, fps)
         if pid not in counts or sec is None or sec < 0:
             continue
+        frame = getattr(ev, "frame", None)
+        if isinstance(ev, CommandManagerStateEvent):
+            if frame is not None and open_update.pop(pid, None) == frame:
+                continue
+        elif isinstance(ev, updates):
+            open_update[pid] = frame
+        else:
+            open_update.pop(pid, None)
         bucket = sec // window_sec
         side = counts[pid]
         side["actions"][bucket] = side["actions"].get(bucket, 0) + 1
@@ -3431,10 +3461,14 @@ def _window_starts(game_length: int, window_sec: int) -> list:
 
 
 def _rate_samples(
-    side: Dict[str, Any], game_length: int, window_sec: int,
+    side: Dict[str, Any], game_length: int, window_sec: int, apm_scale: float = 1.0,
 ) -> list:
     """Per-window ``{t, apm, spm}`` rates, each divided by the window's
-    real length (the last window runs to the end of the game)."""
+    real length (the last window runs to the end of the game).
+
+    ``apm_scale`` multiplies every window's APM (not SPM), so a curve
+    counted from replay events can be put on StarCraft II's own scale.
+    """
     starts = _window_starts(game_length, window_sec)
     samples = []
     for i, t_sec in enumerate(starts):
@@ -3450,24 +3484,84 @@ def _rate_samples(
         span = max(end - t_sec, 1)
         samples.append({
             "t": t_sec,
-            "apm": round(actions * 60.0 / span, 1),
+            "apm": round(actions * 60.0 / span * apm_scale, 1),
             "spm": round(selections * 60.0 / span, 1),
         })
     return samples
 
 
+def _sc2_reported_apm(replay: Any) -> Dict[int, float]:
+    """Per player slot, the APM StarCraft II wrote into the replay.
+
+    SC2 stores each player's APM in ``replay.gamemetadata.json`` (the
+    figure behind its score screen), keyed by the same 1-based slot as
+    ``player.pid``. Returns ``{}`` when the replay has no metadata (older
+    game builds) or it can't be read. Zero, negative, non-numeric and
+    out-of-range values are dropped, so those players fall back to the
+    event count.
+
+    Example:
+        >>> _sc2_reported_apm(replay)  # "Players": [{"PlayerID": 2, "APM": 221.0}]
+        {2: 221.0}
+    """
+    try:
+        raw = replay.archive.read_file("replay.gamemetadata.json")
+        meta = json.loads(raw) if raw else None
+    except Exception:  # noqa: BLE001
+        return {}
+    players = meta.get("Players") if isinstance(meta, dict) else None
+    reported: Dict[int, float] = {}
+    for entry in players if isinstance(players, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        pid, apm = entry.get("PlayerID"), entry.get("APM")
+        if isinstance(pid, bool) or not isinstance(pid, int):
+            continue
+        if isinstance(apm, bool) or not isinstance(apm, (int, float)):
+            continue
+        if math.isfinite(apm) and 0 < apm <= _APM_SCHEMA_MAX:
+            reported[pid] = float(apm)
+    return reported
+
+
+def _average_apm(
+    counted: Optional[float], sc2_apm: Optional[float]
+) -> Tuple[Optional[float], Optional[str], float]:
+    """One player's ``(avg_apm, avg_apm_source, window scale)``.
+
+    StarCraft II's recorded APM wins when the replay has it, and the
+    counted 30-second windows are scaled by ``sc2_apm / counted`` so the
+    timeline agrees with it. Otherwise the event count is the average
+    and the windows keep their counted values. A player with neither has
+    no average.
+
+    Example:
+        >>> _average_apm(200.0, 221.0)
+        (221.0, 'sc2', 1.105)
+        >>> _average_apm(196.0, None)
+        (196.0, 'events', 1.0)
+    """
+    if sc2_apm is not None:
+        return round(sc2_apm, 1), APM_SOURCE_SC2, (sc2_apm / counted if counted else 1.0)
+    if counted:
+        return round(counted, 1), APM_SOURCE_EVENTS, 1.0
+    return None, None, 1.0
+
+
 def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     """Build the apmCurve payload: windowed APM/SPM samples per player.
 
-    ``apm`` is actions per minute as StarCraft II counts them (commands,
-    selections and control-group actions); ``spm`` is selections per
-    minute. Each player also carries ``avg_apm``: all their actions over
-    the time they were in the game (until they left, else the game's
-    length), the way SC2 and sc2reader's APMTracker average APM.
-    Returns None when the replay has no players or length.
+    Each player carries ``avg_apm``, the whole-game APM, and its
+    ``avg_apm_source`` (``_average_apm``): SC2's own figure when the
+    replay has it, else replay events (``_count_player_actions``) counted
+    over the time the player was in the game (until they left, else the
+    game's length). ``samples`` hold 30-second windows of APM and SPM
+    (selections per minute) counted from events, with the APM windows
+    scaled to agree with the average. Returns None when the replay has
+    no players or length.
     """
-    me = getattr(ctx, "me", None)
-    opp = getattr(ctx, "opponent", None)
+    me: Any = getattr(ctx, "me", None)
+    opp: Any = getattr(ctx, "opponent", None)
     replay = getattr(ctx, "raw", None)
     game_length = int(getattr(ctx, "length_seconds", 0) or 0)
     if me is None or replay is None or game_length <= 0:
@@ -3485,20 +3579,26 @@ def _compute_apm_curve(ctx: Any) -> Optional[Dict[str, Any]]:
     pids = tuple(getattr(p, "pid") for p, _ in sides)
     counts = _count_player_actions(events, pids, fps, _APM_WINDOW_SEC)
     left = _player_leave_seconds(events, pids, fps)
+    reported = _sc2_reported_apm(replay)
     players = []
     for player, is_me in sides:
         side = counts.get(player.pid) or {"actions": {}, "selections": {}, "total": 0}
         played = left.get(player.pid, 0.0)
         if not 0 < played < game_length:
             played = float(game_length)
-        players.append({
+        counted = side["total"] * 60.0 / played if side["total"] else None
+        avg_apm, source, scale = _average_apm(counted, reported.get(player.pid))
+        entry: Dict[str, Any] = {
             "pid": player.pid,
             "name": getattr(player, "name", "") or "",
             "race": getattr(player, "race", "") or "",
             "is_me": is_me,
-            "avg_apm": round(side["total"] * 60.0 / played, 1) if side["total"] else None,
-            "samples": _rate_samples(side, game_length, _APM_WINDOW_SEC),
-        })
+            "avg_apm": avg_apm,
+        }
+        if source is not None:
+            entry["avg_apm_source"] = source
+        entry["samples"] = _rate_samples(side, game_length, _APM_WINDOW_SEC, apm_scale=scale)
+        players.append(entry)
     return {
         "v": APM_CURVE_VERSION,
         "window_sec": _APM_WINDOW_SEC,

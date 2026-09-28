@@ -4,9 +4,11 @@
  * The agent uploads an ``apmCurve`` per game, served by
  * GET /v1/games/:gameId/apm-curve: 30-second windows of actions per
  * minute for both players, plus each player's whole-game average.
- * APM counts every command, selection and control-group action — what
- * StarCraft II's own APM counter shows. SPM (selections per minute) is
- * the selection share of those actions.
+ * From v3 (agent 0.17.3) the average is the APM StarCraft II recorded in
+ * the replay and the windows are scaled to it; v2 counted replay events
+ * (commands, selections, control groups), which read about 14% below
+ * SC2's own number. SPM (selections per minute) is the selection share
+ * of the counted actions, so it is not affected by that scaling.
  *
  * Only curves at version 2+ (agent 0.17.2) are trusted. Older curves
  * credited player 2's commands to player 1, showed player 2 at zero and

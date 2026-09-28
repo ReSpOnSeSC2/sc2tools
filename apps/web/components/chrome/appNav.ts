@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  BookOpen,
   CalendarClock,
   Cpu,
   Library,
@@ -21,9 +22,11 @@ import { TABS, hrefForTab, type TabId } from "@/components/analyzer/tabs";
  * coaching, agent, settings, admin). Role-gated entries remain in this
  * shared model and are filtered before either responsive nav renders.
  *
- * The public build guides (/guides) are deliberately NOT an entry: they
- * are search landing pages and keep the marketing Header/Footer (see
- * isAppSurfacePath), linked from the marketing header and footer.
+ * The public build guides (/guides) are an entry while the guides flag
+ * is on, so signed-in players can reach them from the rail, but they are
+ * not an app surface: they are search landing pages that keep the
+ * marketing Header/Footer. ``ownChrome`` keeps them out of
+ * isAppSurfacePath, isProtectedSurfacePath and matchSurface.
  * ------------------------------------------------------------------ */
 
 export type NavIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -45,6 +48,13 @@ export type NavEntry = {
   /** Shown only while the Replay Review Exchange rollout exposes it
    *  to this viewer (NEXT_PUBLIC_REVIEWS_ENABLED). */
   reviewsRollout?: boolean;
+  /** Shown only while the public build guides are switched on
+   *  (NEXT_PUBLIC_GUIDES_ENABLED). */
+  guidesFlag?: boolean;
+  /** A link out to a public page that renders its own marketing chrome:
+   *  it is in the rail but is never an app surface, a protected route or
+   *  the active section. */
+  ownChrome?: boolean;
 };
 
 export const TODAY_ENTRY: NavEntry = {
@@ -65,6 +75,16 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
 
 const UTILITY_ENTRIES: NavEntry[] = [
   { key: "builds-library", href: "/builds", label: "Custom builds", icon: Library, group: "utility" },
+  {
+    key: "guides",
+    href: "/guides",
+    label: "Guides",
+    icon: BookOpen,
+    group: "utility",
+    publicRoute: true,
+    guidesFlag: true,
+    ownChrome: true,
+  },
   { key: "community", href: "/community", label: "Community", icon: Users2, group: "utility", publicRoute: true },
   { key: "reviews", href: "/reviews", label: "Reviews", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
   {
@@ -86,6 +106,9 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   ...UTILITY_ENTRIES,
 ];
 
+/** The entries whose pages render inside the app chrome. */
+const SURFACE_ENTRIES: readonly NavEntry[] = NAV_ENTRIES.filter((e) => !e.ownChrome);
+
 /** The bottom tab bar carries the highest-traffic destinations. */
 export const MOBILE_TAB_KEYS: readonly string[] = [
   "today",
@@ -101,7 +124,7 @@ export const MOBILE_TAB_KEYS: readonly string[] = [
  */
 export function isAppSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return NAV_ENTRIES.some(
+  return SURFACE_ENTRIES.some(
     (e) => pathname === e.href || pathname.startsWith(`${e.href}/`),
   );
 }
@@ -109,7 +132,7 @@ export function isAppSurfacePath(pathname: string | null): boolean {
 /** Routes whose data is per-user and gated by middleware. */
 export function isProtectedSurfacePath(pathname: string | null): boolean {
   if (!pathname) return false;
-  return NAV_ENTRIES.some(
+  return SURFACE_ENTRIES.some(
     (e) =>
       !e.publicRoute &&
       (pathname === e.href || pathname.startsWith(`${e.href}/`)),
@@ -137,7 +160,7 @@ export function matchSurface(pathname: string | null): SurfaceMatch | null {
   }
 
   let best: NavEntry | null = null;
-  for (const entry of NAV_ENTRIES) {
+  for (const entry of SURFACE_ENTRIES) {
     if (pathname === entry.href || pathname.startsWith(`${entry.href}/`)) {
       if (!best || entry.href.length > best.href.length) best = entry;
     }

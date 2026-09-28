@@ -112,6 +112,25 @@ describe("app surface matching", () => {
     }
   });
 
+  it("links the public guides without making them an app surface", () => {
+    const guides = NAV_ENTRIES.find((entry) => entry.href === "/guides");
+    expect(guides).toMatchObject({
+      key: "guides",
+      label: "Guides",
+      group: "utility",
+      publicRoute: true,
+      guidesFlag: true,
+      ownChrome: true,
+    });
+    for (const pathname of ["/guides", "/guides/pvz/stargate-into-glaives"]) {
+      expect(isAppSurfacePath(pathname)).toBe(false);
+      expect(isProtectedSurfacePath(pathname)).toBe(false);
+      expect(matchSurface(pathname)).toBeNull();
+    }
+    expect(surfaceTitle("/guides")).toBe("SC2 Tools");
+    expect(MOBILE_TAB_KEYS).not.toContain("guides");
+  });
+
   it("keeps Coaching in the shared nav model behind its membership gate", () => {
     expect(isAppSurfacePath("/coaching")).toBe(true);
     expect(matchSurface("/coaching")?.entry.key).toBe("coaching");
